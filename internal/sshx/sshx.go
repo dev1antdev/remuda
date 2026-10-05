@@ -141,6 +141,32 @@ func (c *Conn) ExecBytes(script string, timeout time.Duration) ([]byte, error) {
 	return c.run(script, timeout)
 }
 
+// Put writes data to a remote file (creating its directory) by streaming it
+// into `cat` over the master.
+func (c *Conn) Put(path string, data []byte, timeout time.Duration) error {
+	script := "mkdir -p " + Quote(filepath.Dir(path)) + " && cat > " + Quote(path)
+	cmd := c.cmd(c.Host, script)
+	cmd.Stdin = bytes.NewReader(data)
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("ssh %s: %s", c.Host, strings.TrimSpace(errb.String()))
+		}
+		return nil
+	case <-time.After(timeout):
+		cmd.Process.Kill()
+		<-done
+		return fmt.Errorf("ssh %s: upload of %s timed out", c.Host, path)
+	}
+}
+
 // ForwardSocket forwards a local unix socket to a remote one over the master
 // and returns the local path.
 func (c *Conn) ForwardSocket(remoteSock string) (string, error) {

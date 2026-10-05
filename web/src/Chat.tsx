@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { fetchChat, sendKeys, submitPrompt, type ChatResponse, type Part, type Turn } from "./api";
+import { filesFrom, MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
 import { Markdown, type OpenFile } from "./markdown";
 import { errMsg, isTouch } from "./prefs";
 
@@ -114,18 +115,55 @@ export default function Chat({
 }
 
 // The composer owns the draft, so typing never re-renders the transcript.
+// Attachments (paperclip, a pasted screenshot, a drop) upload into the pane's
+// folder and put an @path mention at the caret; the agent reads the file
+// from there once the message is sent.
 function Composer({ machineId, paneId, working }: { machineId: string; paneId: string; working: boolean }) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const area = useRef<HTMLTextAreaElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const att = useAttachments(machineId, paneId);
+
+  const mention = (rel: string) => `@${rel}`;
+
+  // insertAt puts text at the caret (or the end), padded with spaces.
+  const insertAt = (text: string) => {
+    const el = area.current;
+    setDraft((d) => {
+      const at = el && document.activeElement === el ? el.selectionStart : d.length;
+      const before = d.slice(0, at);
+      const after = d.slice(at);
+      const pad = before && !/\s$/.test(before) ? " " : "";
+      const tail = after && !/^\s/.test(after) ? " " : "";
+      return before + pad + text + tail + after;
+    });
+  };
+
+  const attach = async (files: File[]) => {
+    setError(null);
+    const ups = await att.add(files);
+    for (const u of ups) insertAt(mention(u.rel));
+  };
+
+  const removeAttachment = (a: Attachment) => {
+    if (a.upload) {
+      const m = mention(a.upload.rel);
+      setDraft((d) => d.replace(new RegExp(`\\s?${m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\s|$)`), ""));
+    }
+    att.remove(a.id);
+  };
 
   const send = async () => {
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text || sending || att.uploading) return;
     setSending(true);
     try {
       await submitPrompt(machineId, paneId, text);
       setDraft("");
+      att.clear();
       setError(null);
     } catch (e) {
       setError(errMsg(e));
@@ -137,12 +175,69 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
   return (
     <>
       {error && <div className="chat-error">{error}</div>}
-      <div className="composer">
+      {att.items.length > 0 && (
+        <div className="attachments">
+          {att.items.map((a) => (
+            <div key={a.id} className={`attachment${a.error ? " failed" : ""}${a.upload ? "" : " pending"}`} title={a.error ?? a.upload?.rel ?? a.file.name}>
+              {a.thumb ? <img src={a.thumb} alt="" /> : <span className="attachment-icon">📄</span>}
+              <span className="attachment-name">{a.file.name}</span>
+              {!a.upload && !a.error && <span className="attachment-spin" />}
+              <button type="button" className="attachment-x" title="Remove" onClick={() => removeAttachment(a)}>
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div
+        className={`composer${dragOver ? " drag" : ""}`}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("Files")) {
+            e.preventDefault();
+            setDragOver(true);
+          }
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          const files = filesFrom(e.dataTransfer);
+          if (files.length === 0) return;
+          e.preventDefault();
+          setDragOver(false);
+          void attach(files);
+        }}
+      >
+        <input
+          ref={picker}
+          type="file"
+          multiple
+          hidden
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = "";
+            void attach(files);
+          }}
+        />
+        <button
+          type="button"
+          className="composer-attach"
+          title={`Attach files (up to ${MAX_ATTACHMENTS}) — they are uploaded into the pane's folder`}
+          disabled={att.items.length >= MAX_ATTACHMENTS}
+          onClick={() => picker.current?.click()}
+        >
+          📎
+        </button>
         <textarea
+          ref={area}
           value={draft}
           placeholder={isTouch ? "Message the agent… (Enter = new line)" : "Message the agent… (Shift+Enter = new line)"}
           rows={Math.min(6, Math.max(1, draft.split("\n").length))}
           onChange={(e) => setDraft(e.target.value)}
+          onPaste={(e) => {
+            const files = filesFrom(e.clipboardData);
+            if (files.length === 0) return;
+            e.preventDefault(); // a pasted screenshot is a file, not text
+            void attach(files);
+          }}
           onKeyDown={(e) => {
             // Phone keyboards have no Shift+Enter: there Enter breaks the line
             // and the Send button sends, like any messaging app.
@@ -153,8 +248,8 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
             }
           }}
         />
-        <button className="composer-send" disabled={sending || !draft.trim()} onClick={() => void send()}>
-          {sending ? "…" : "Send"}
+        <button className="composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()}>
+          {sending ? "…" : att.uploading ? "Uploading…" : "Send"}
         </button>
         {working && (
           <button

@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import { uploadFiles } from "./api";
+import { filesFrom, shellQuote } from "./attachments";
 import { findPaths } from "./paths";
 import type { FileTarget } from "./FileViewer";
 
@@ -204,6 +206,46 @@ export default function TerminalView({
       },
     });
 
+    // Files dropped or pasted onto the terminal upload into the pane's folder
+    // and their paths are typed, shell-quoted, as if pasted — never sent.
+    // Uploads are serialized so two drops don't interleave their paths.
+    let uploads: Promise<void> = Promise.resolve();
+    const typeFiles = (files: File[]) => {
+      uploads = uploads.then(async () => {
+        try {
+          const ups = await uploadFiles(machineId, paneId, files);
+          sendInput(ups.map((u) => shellQuote(u.path)).join(" ") + " ");
+        } catch (e) {
+          console.warn("upload failed:", e);
+        }
+      });
+    };
+    const onDragOver = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) {
+        e.preventDefault();
+        mount.classList.add("drag");
+      }
+    };
+    const onDragLeave = () => mount.classList.remove("drag");
+    const onDrop = (e: DragEvent) => {
+      mount.classList.remove("drag");
+      const files = filesFrom(e.dataTransfer);
+      if (files.length === 0) return;
+      e.preventDefault();
+      typeFiles(files);
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      const files = filesFrom(e.clipboardData);
+      if (files.length === 0) return; // plain text: xterm's own paste handles it
+      e.preventDefault();
+      e.stopPropagation();
+      typeFiles(files);
+    };
+    mount.addEventListener("dragover", onDragOver);
+    mount.addEventListener("dragleave", onDragLeave);
+    mount.addEventListener("drop", onDrop);
+    mount.addEventListener("paste", onPaste, true);
+
     // Debounced refit: a window-edge drag otherwise floods the agent with
     // resizes and Claude Code repaints its whole conversation per resize.
     let settle: ReturnType<typeof setTimeout> | null = null;
@@ -221,6 +263,10 @@ export default function TerminalView({
       live.current.onReady(null);
       onData.dispose();
       linkProvider.dispose();
+      mount.removeEventListener("dragover", onDragOver);
+      mount.removeEventListener("dragleave", onDragLeave);
+      mount.removeEventListener("drop", onDrop);
+      mount.removeEventListener("paste", onPaste, true);
       ro.disconnect();
       if (settle) clearTimeout(settle);
       ws?.close();

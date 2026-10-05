@@ -151,6 +151,12 @@ strip above the pane, machines mirrored from `herdr machine list`, and a
 open the file where it lives (local or remote), with a **Changes** tab
 showing its uncommitted `git diff`.
 
+**Attachments:** the paperclip, a pasted screenshot (Ctrl/Cmd+V) or a drop
+uploads into the pane's folder (`.herdr-ui/uploads/`) and mentions the file
+as `@path` in the message — Claude reads the image from there. In the
+terminal lens the paths are typed, shell-quoted. Works for remote machines
+too (the file goes over your SSH session).
+
 **Push alerts** (🔔 in the header): standard Web Push with herdr-ui's own
 VAPID keys — the only third party is your browser vendor's push service.
 herdr-ui watches every machine's agents itself, so alerts arrive with the
@@ -158,8 +164,8 @@ app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 a minute after a long turn. Answer at the desk first and nothing is sent.
 Needs HTTPS (tailscale serve) or localhost; on iPhone, the home-screen app.
 
-Planned: attachments from the phone, markdown rendering in chat, voice
-input (browser speech API).
+Planned: voice input (browser speech API), a remote-machine session picker,
+incremental transcript parsing for very long sessions.
 
 ## License
 

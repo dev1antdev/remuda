@@ -54,7 +54,15 @@ SPA. See README.md for the user story.
   `GitDiff` = `git diff HEAD -- file` in the file's repo (`untracked` for new
   files, no `repo` outside git). Routes: `/api/fs/stat` (resolve + kind),
   `/api/fs/file` (bytes; text is always `text/plain`, CSP-sandboxed, 512KB
-  text / 24MB raw caps), `/api/fs/diff`.
+  text / 24MB raw caps), `/api/fs/diff`, `POST /api/fs/upload` (multipart
+  `file` ×≤4, 25MB each → `<pane dir>/.herdr-ui/uploads/<time>-<name>`,
+  remote via `sshx.Conn.Put`). Uploads are the only thing herdr-ui writes
+  into a project, and only where the user dropped them.
+- `web/src/attachments.ts` — `useAttachments` (upload at once, chips with
+  thumbnails), `filesFrom` (drop/paste → files; a pasted screenshot gets a
+  name), `shellQuote`. The chat composer inserts `@<rel>` at the caret and
+  strips it when the chip is removed; the terminal lens types the absolute
+  paths shell-quoted. Nothing is sent until the user sends.
 - Terminal size modes (`web/src/Terminal.tsx`): **fit** resizes the shared
   pane to this screen (herdr follows the smallest attached client — a phone
   would squeeze the desktop's view), **keep** attaches at the pane's own

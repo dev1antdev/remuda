@@ -199,6 +199,18 @@ export async function fsText(
   };
 }
 
+export type Upload = { name: string; path: string; rel: string; size: number; kind: string };
+
+// uploadFiles stores files in the pane's folder (.herdr-ui/uploads) and
+// returns their paths; up to 4 per call, 25 MB each.
+export async function uploadFiles(machineId: string, paneId: string, files: File[]): Promise<Upload[]> {
+  const form = new FormData();
+  for (const f of files) form.append("file", f, f.name);
+  const q = new URLSearchParams({ machine: machineId, pane: paneId });
+  const res = await check(await fetch(`/api/fs/upload?${q}`, { method: "POST", body: form }));
+  return ((await res.json()) as { files: Upload[] }).files;
+}
+
 export async function fsDiff(machineId: string, path: string): Promise<FileDiff> {
   const q = new URLSearchParams({ machine: machineId, path });
   const res = await check(await fetch(`/api/fs/diff?${q}`));

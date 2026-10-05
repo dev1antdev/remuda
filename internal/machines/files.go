@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -208,6 +209,59 @@ func (mc *Machine) ReadRemote(p string, max int64) ([]byte, bool, error) {
 		return data[:max], true, nil
 	}
 	return data, false, nil
+}
+
+// Uploads land in the pane's folder under .herdr-ui/uploads, so the agent can
+// read them by a relative path; the name is sanitized and time-prefixed.
+const UploadDir = ".herdr-ui/uploads"
+
+type Upload struct {
+	Name string `json:"name"` // the stored file name
+	Path string `json:"path"` // absolute, on this machine
+	Rel  string `json:"rel"`  // relative to the pane folder, for the prompt
+	Size int    `json:"size"`
+	Kind string `json:"kind"` // image | media | pdf | binary | text (by extension)
+}
+
+var unsafeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
+
+// SaveUpload stores one uploaded file for a pane folder.
+func (mc *Machine) SaveUpload(cwd, name string, data []byte) (Upload, error) {
+	if cwd == "" {
+		return Upload{}, fmt.Errorf("the pane has no folder to upload into")
+	}
+	base := filepath.Base(strings.ReplaceAll(name, "\\", "/"))
+	base = unsafeName.ReplaceAllString(base, "_")
+	base = strings.Trim(base, "._")
+	if base == "" {
+		base = "file"
+	}
+	if len(base) > 80 {
+		ext := filepath.Ext(base)
+		base = base[:80-len(ext)] + ext
+	}
+	stored := time.Now().Format("20060102-150405") + "-" + base
+	rel := UploadDir + "/" + stored
+	abs := cleanPath(cwd + "/" + rel)
+
+	if mc.Local {
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			return Upload{}, err
+		}
+		if err := os.WriteFile(abs, data, 0o644); err != nil {
+			return Upload{}, err
+		}
+	} else {
+		conn, err := mc.remoteConn()
+		if err != nil {
+			return Upload{}, err
+		}
+		if err := conn.Put(abs, data, 2*time.Minute); err != nil {
+			return Upload{}, err
+		}
+	}
+	kind, _ := classify(abs, func() bool { return false })
+	return Upload{Name: stored, Path: abs, Rel: rel, Size: len(data), Kind: kind}, nil
 }
 
 type Diff struct {

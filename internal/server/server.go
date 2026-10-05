@@ -86,6 +86,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/fs/stat", s.handleFsStat)
 	api.HandleFunc("GET /api/fs/file", s.handleFsFile)
 	api.HandleFunc("GET /api/fs/diff", s.handleFsDiff)
+	api.HandleFunc("POST /api/fs/upload", s.handleFsUpload)
 	api.HandleFunc("GET /api/push", s.handlePushInfo)
 	api.HandleFunc("POST /api/push/subscribe", s.handlePushSubscribe)
 	api.HandleFunc("DELETE /api/push/subscribe", s.handlePushUnsubscribe)
@@ -670,6 +671,64 @@ func (s *Server) handleFsDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, d)
+}
+
+const (
+	maxUploadFiles = 4
+	maxUploadBytes = 25 << 20
+)
+
+// handleFsUpload stores up to four files from the phone or PC in the pane's
+// folder (multipart field "file", repeated) and returns their paths for the
+// prompt. Nothing is auto-sent: the files are only mentioned once the user
+// sends the message.
+func (s *Server) handleFsUpload(w http.ResponseWriter, r *http.Request) {
+	mc, err := s.machineFor(r, "")
+	if err != nil {
+		httpErr(w, 404, err)
+		return
+	}
+	pane, err := s.findPane(mc, r.URL.Query().Get("pane"))
+	if err != nil {
+		httpErr(w, 404, err)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadFiles*maxUploadBytes+1<<20)
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		httpErr(w, 400, fmt.Errorf("upload too large or malformed: %v", err))
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+	parts := r.MultipartForm.File["file"]
+	if len(parts) == 0 || len(parts) > maxUploadFiles {
+		httpErr(w, 400, fmt.Errorf("send 1–%d files as \"file\"", maxUploadFiles))
+		return
+	}
+	var out []machines.Upload
+	for _, fh := range parts {
+		if fh.Size > maxUploadBytes {
+			httpErr(w, 413, fmt.Errorf("%s is over %d MB", fh.Filename, maxUploadBytes>>20))
+			return
+		}
+		f, err := fh.Open()
+		if err != nil {
+			httpErr(w, 400, err)
+			return
+		}
+		data, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			httpErr(w, 400, err)
+			return
+		}
+		up, err := mc.SaveUpload(pane.Dir(), fh.Filename, data)
+		if err != nil {
+			httpErr(w, 500, err)
+			return
+		}
+		out = append(out, up)
+	}
+	writeJSON(w, map[string]any{"files": out})
 }
 
 // ---- web push ----
