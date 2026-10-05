@@ -360,12 +360,14 @@ button {
   position: relative;
 }
 
+/* background-color, not background: nested rows carry the tree line as a
+   background-image that hover/selection must not wipe */
 .ws-row:hover {
-  background: var(--bg-hover);
+  background-color: var(--bg-hover);
 }
 
 .ws-row.sel {
-  background: var(--bg-input);
+  background-color: var(--bg-input);
 }
 
 .ws-row.sel::before {
@@ -500,16 +502,24 @@ button {
   color: var(--red);
 }
 
-/* a repository's worktree workspaces hang under it on a hairline, each row
-   joined with a short tick — herdr's own tree glyphs, drawn in CSS */
+/* a repository's worktree workspaces hang under it like herdr's tree:
+   ├─ for every child, └─ for the last. Each nested row paints its own
+   stretch of the trunk (a 1px background-image down its left edge); the
+   last row's stretch stops at the tick, so nothing dangles below it. */
 .ws-children {
-  position: relative;
   margin-left: 22px;
-  border-left: 1px solid var(--line-strong);
 }
 
 .ws-row.nested {
   padding-left: 14px;
+  background-image: linear-gradient(var(--line-strong), var(--line-strong));
+  background-repeat: no-repeat;
+  background-size: 1px 100%;
+  background-position: 0 0;
+}
+
+.ws-row.nested:last-child {
+  background-size: 1px 50%;
 }
 
 .ws-row.nested::after {
@@ -522,8 +532,9 @@ button {
   background: var(--line-strong);
 }
 
+/* the selection bar sits just right of the trunk, so both stay visible */
 .ws-row.nested.sel::before {
-  left: -1px;
+  left: 3px;
   width: 2px;
 }
 
