@@ -129,23 +129,33 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
 
   const mention = (rel: string) => `@${rel}`;
 
-  // insertAt puts text at the caret (or the end), padded with spaces.
+  // the caret where the files were added: the paperclip steals focus, so it
+  // is remembered on every blur
+  const caret = useRef<number | null>(null);
+
+  // insertAt puts text at the remembered caret (or the end), padded with
+  // spaces, and moves the caret past it — one update for all mentions so
+  // several files keep their order.
   const insertAt = (text: string) => {
     const el = area.current;
     setDraft((d) => {
-      const at = el && document.activeElement === el ? el.selectionStart : d.length;
+      const at = Math.min(caret.current ?? d.length, d.length);
       const before = d.slice(0, at);
       const after = d.slice(at);
       const pad = before && !/\s$/.test(before) ? " " : "";
       const tail = after && !/^\s/.test(after) ? " " : "";
-      return before + pad + text + tail + after;
+      const next = before + pad + text + tail + after;
+      const end = before.length + pad.length + text.length + tail.length;
+      caret.current = end;
+      requestAnimationFrame(() => el?.setSelectionRange(end, end));
+      return next;
     });
   };
 
   const attach = async (files: File[]) => {
     setError(null);
     const ups = await att.add(files);
-    for (const u of ups) insertAt(mention(u.rel));
+    if (ups.length) insertAt(ups.map((u) => mention(u.rel)).join(" "));
   };
 
   const removeAttachment = (a: Attachment) => {
@@ -232,6 +242,8 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
           placeholder={isTouch ? "Message the agent… (Enter = new line)" : "Message the agent… (Shift+Enter = new line)"}
           rows={Math.min(6, Math.max(1, draft.split("\n").length))}
           onChange={(e) => setDraft(e.target.value)}
+          onBlur={(e) => (caret.current = e.target.selectionStart)}
+          onSelect={(e) => (caret.current = e.currentTarget.selectionStart)}
           onPaste={(e) => {
             const files = filesFrom(e.clipboardData);
             if (files.length === 0) return;

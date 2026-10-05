@@ -48,16 +48,17 @@ SPA. See README.md for the user story.
   files. Never write to `~/.claude`. Session resolution: herdr's
   `agent_session` (exact UUID) first, cwd-encoded dir scan as fallback.
 - `internal/machines/files.go` — the file viewer's reads, local or over
-  SSH, never writes. `ResolvePath` accepts absolute, `~/`, or pane-relative
+  SSH, plus the one write: `SaveUpload`. `ResolvePath` accepts absolute, `~/`, or pane-relative
   and, on a relative miss, searches the pane folder by suffix (agents say
   `demo.mp4` for `docs/demo.mp4`); several hits come back as `candidates`.
   `GitDiff` = `git diff HEAD -- file` in the file's repo (`untracked` for new
   files, no `repo` outside git). Routes: `/api/fs/stat` (resolve + kind),
   `/api/fs/file` (bytes; text is always `text/plain`, CSP-sandboxed, 512KB
   text / 24MB raw caps), `/api/fs/diff`, `POST /api/fs/upload` (multipart
-  `file` ×≤4, 25MB each → `<pane dir>/.herdr-ui/uploads/<time>-<name>`,
-  remote via `sshx.Conn.Put`). Uploads are the only thing herdr-ui writes
-  into a project, and only where the user dropped them.
+  `file` ×≤4, 25MB each → `<pane dir>/.herdr-ui/uploads/<time>-<tag>-<name>`,
+  stem and extension sanitized separately, remote via `sshx.Conn.Put`).
+  `.herdr-ui/.gitignore` (`*`) is written alongside so uploads never reach
+  a commit. Uploads are the only thing herdr-ui writes into a project.
 - `web/src/attachments.ts` — `useAttachments` (upload at once, chips with
   thumbnails), `filesFrom` (drop/paste → files; a pasted screenshot gets a
   name), `shellQuote`. The chat composer inserts `@<rel>` at the caret and

@@ -55,12 +55,9 @@ export function useAttachments(machineId: string, paneId: string) {
   const add = useCallback(
     async (files: File[]): Promise<Upload[]> => {
       if (files.length === 0) return [];
-      let room = MAX_ATTACHMENTS;
-      setItems((cur) => {
-        room = MAX_ATTACHMENTS - cur.length;
-        return cur;
-      });
-      const batch = files.slice(0, Math.max(0, room));
+      // itemsRef, not a setItems updater: updaters run at render time, so
+      // reading state through one here would see a stale count
+      const batch = files.slice(0, Math.max(0, MAX_ATTACHMENTS - itemsRef.current.length));
       if (batch.length === 0) return [];
       const fresh: Attachment[] = batch.map((file) => ({
         id: `a${++seq.current}`,
@@ -69,6 +66,7 @@ export function useAttachments(machineId: string, paneId: string) {
         upload: null,
         error: null,
       }));
+      itemsRef.current = [...itemsRef.current, ...fresh]; // a second drop in the same tick sees these
       setItems((cur) => [...cur, ...fresh]);
       try {
         const ups = await uploadFiles(machineId, paneId, batch);
@@ -78,7 +76,10 @@ export function useAttachments(machineId: string, paneId: string) {
             return i >= 0 ? { ...a, upload: ups[i] ?? null } : a;
           }),
         );
-        return ups;
+        // only the ones still wanted: a chip removed mid-upload must not
+        // come back as a mention in the draft
+        const kept = new Set(itemsRef.current.map((a) => a.id));
+        return ups.filter((_, i) => kept.has(fresh[i]!.id));
       } catch (e) {
         const msg = errMsg(e);
         setItems((cur) => cur.map((a) => (fresh.some((f) => f.id === a.id) ? { ...a, error: msg } : a)));
@@ -88,22 +89,18 @@ export function useAttachments(machineId: string, paneId: string) {
     [machineId, paneId],
   );
 
-  const remove = useCallback(
-    (id: string) =>
-      setItems((cur) => {
-        revoke(cur.filter((a) => a.id === id));
-        return cur.filter((a) => a.id !== id);
-      }),
-    [],
-  );
-  const clear = useCallback(
-    () =>
-      setItems((cur) => {
-        revoke(cur);
-        return [];
-      }),
-    [],
-  );
+  // remove/clear update the ref at once: an upload finishing a moment later
+  // checks it to decide whether its mention is still wanted
+  const remove = useCallback((id: string) => {
+    revoke(itemsRef.current.filter((a) => a.id === id));
+    itemsRef.current = itemsRef.current.filter((a) => a.id !== id);
+    setItems(itemsRef.current);
+  }, []);
+  const clear = useCallback(() => {
+    revoke(itemsRef.current);
+    itemsRef.current = [];
+    setItems([]);
+  }, []);
 
   return { items, add, remove, clear, uploading: items.some((a) => !a.upload && !a.error) };
 }

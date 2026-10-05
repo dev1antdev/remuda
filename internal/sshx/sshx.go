@@ -103,10 +103,12 @@ func Dial(host string) (*Conn, error) {
 // Alive reports whether the master still answers.
 func (c *Conn) Alive() bool { return c.cmd("-O", "check", c.Host).Run() == nil }
 
-// run executes a remote command over the master with a deadline.
-func (c *Conn) run(script string, timeout time.Duration) ([]byte, error) {
+// run executes a remote command over the master with a deadline; stdin, when
+// given, is streamed to it.
+func (c *Conn) run(script string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
 	cmd := c.cmd(c.Host, script)
 	var out, errb bytes.Buffer
+	cmd.Stdin = stdin
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Start(); err != nil {
 		return nil, err
@@ -132,39 +134,20 @@ func (c *Conn) run(script string, timeout time.Duration) ([]byte, error) {
 
 // Exec runs a command on the remote host and returns its stdout.
 func (c *Conn) Exec(script string, timeout time.Duration) (string, error) {
-	out, err := c.run(script, timeout)
+	out, err := c.run(script, timeout, nil)
 	return string(out), err
 }
 
 // ExecBytes is Exec for binary-safe stdout (transcript tails, file reads).
 func (c *Conn) ExecBytes(script string, timeout time.Duration) ([]byte, error) {
-	return c.run(script, timeout)
+	return c.run(script, timeout, nil)
 }
 
 // Put writes data to a remote file (creating its directory) by streaming it
 // into `cat` over the master.
 func (c *Conn) Put(path string, data []byte, timeout time.Duration) error {
-	script := "mkdir -p " + Quote(filepath.Dir(path)) + " && cat > " + Quote(path)
-	cmd := c.cmd(c.Host, script)
-	cmd.Stdin = bytes.NewReader(data)
-	var errb bytes.Buffer
-	cmd.Stderr = &errb
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	select {
-	case err := <-done:
-		if err != nil {
-			return fmt.Errorf("ssh %s: %s", c.Host, strings.TrimSpace(errb.String()))
-		}
-		return nil
-	case <-time.After(timeout):
-		cmd.Process.Kill()
-		<-done
-		return fmt.Errorf("ssh %s: upload of %s timed out", c.Host, path)
-	}
+	_, err := c.run("mkdir -p "+Quote(filepath.Dir(path))+" && cat > "+Quote(path), timeout, bytes.NewReader(data))
+	return err
 }
 
 // ForwardSocket forwards a local unix socket to a remote one over the master

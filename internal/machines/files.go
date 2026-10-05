@@ -2,6 +2,8 @@ package machines
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
@@ -18,7 +20,8 @@ import (
 
 // File access for the viewer: what the agent wrote, read back from the
 // machine it lives on. Local reads use the filesystem; remote reads go over
-// the SSH master. Nothing here writes.
+// the SSH master. The one write is SaveUpload, into the pane's own
+// .herdr-ui/uploads folder.
 
 const (
 	MaxTextBytes = 512 * 1024       // a text file is served up to this much
@@ -212,41 +215,65 @@ func (mc *Machine) ReadRemote(p string, max int64) ([]byte, bool, error) {
 }
 
 // Uploads land in the pane's folder under .herdr-ui/uploads, so the agent can
-// read them by a relative path; the name is sanitized and time-prefixed.
-const UploadDir = ".herdr-ui/uploads"
+// read them by a relative path without leaving its project. The folder
+// carries its own .gitignore so screenshots never end up in a commit.
+const (
+	UploadDir    = ".herdr-ui"
+	uploadSubdir = "uploads"
+)
 
 type Upload struct {
 	Name string `json:"name"` // the stored file name
 	Path string `json:"path"` // absolute, on this machine
 	Rel  string `json:"rel"`  // relative to the pane folder, for the prompt
 	Size int    `json:"size"`
-	Kind string `json:"kind"` // image | media | pdf | binary | text (by extension)
+	Kind string `json:"kind"` // image | media | pdf | binary | text
 }
 
 var unsafeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
+
+// storedName makes a safe, unique file name: time, a random tag, and the
+// original stem and extension sanitized separately — a non-ASCII stem must
+// not take the extension with it, and a silly extension must not panic.
+func storedName(name string) string {
+	base := filepath.Base(strings.ReplaceAll(name, "\\", "/"))
+	ext := filepath.Ext(base)
+	stem := strings.TrimSuffix(base, ext)
+	stem = strings.Trim(unsafeName.ReplaceAllString(stem, "_"), "._")
+	ext = strings.Trim(unsafeName.ReplaceAllString(ext, ""), ".")
+	if stem == "" {
+		stem = "file"
+	}
+	if len(stem) > 60 {
+		stem = stem[:60]
+	}
+	if ext != "" {
+		if len(ext) > 16 {
+			ext = ext[:16]
+		}
+		ext = "." + strings.ToLower(ext)
+	}
+	tag := make([]byte, 3)
+	rand.Read(tag)
+	return time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(tag) + "-" + stem + ext
+}
 
 // SaveUpload stores one uploaded file for a pane folder.
 func (mc *Machine) SaveUpload(cwd, name string, data []byte) (Upload, error) {
 	if cwd == "" {
 		return Upload{}, fmt.Errorf("the pane has no folder to upload into")
 	}
-	base := filepath.Base(strings.ReplaceAll(name, "\\", "/"))
-	base = unsafeName.ReplaceAllString(base, "_")
-	base = strings.Trim(base, "._")
-	if base == "" {
-		base = "file"
-	}
-	if len(base) > 80 {
-		ext := filepath.Ext(base)
-		base = base[:80-len(ext)] + ext
-	}
-	stored := time.Now().Format("20060102-150405") + "-" + base
-	rel := UploadDir + "/" + stored
+	stored := storedName(name)
+	rel := UploadDir + "/" + uploadSubdir + "/" + stored
 	abs := cleanPath(cwd + "/" + rel)
+	ignore := cleanPath(cwd + "/" + UploadDir + "/.gitignore")
 
 	if mc.Local {
 		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 			return Upload{}, err
+		}
+		if _, err := os.Stat(ignore); err != nil {
+			os.WriteFile(ignore, []byte("*\n"), 0o644)
 		}
 		if err := os.WriteFile(abs, data, 0o644); err != nil {
 			return Upload{}, err
@@ -259,8 +286,9 @@ func (mc *Machine) SaveUpload(cwd, name string, data []byte) (Upload, error) {
 		if err := conn.Put(abs, data, 2*time.Minute); err != nil {
 			return Upload{}, err
 		}
+		mc.exec("[ -f "+sshx.Quote(ignore)+" ] || printf '*\\n' > "+sshx.Quote(ignore), 10*time.Second)
 	}
-	kind, _ := classify(abs, func() bool { return false })
+	kind, _ := classify(abs, func() bool { return bytes.IndexByte(data[:min(len(data), 8192)], 0) >= 0 })
 	return Upload{Name: stored, Path: abs, Rel: rel, Size: len(data), Kind: kind}, nil
 }
 
