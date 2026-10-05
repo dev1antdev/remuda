@@ -1,0 +1,74 @@
+# herdr-ui in Docker / Portainer.
+#
+# herdr keeps running on the host; the container only bridges it to the
+# browser. Set these in Portainer's stack environment (or a .env file):
+#
+#   HOST_HOME      the host user's home (herdr socket, ~/.claude, ~/.ssh live there)
+#   UID / GID      that user's ids, so mounted files keep their ownership
+#   HERDR_UI_TOKEN optional; otherwise a token is generated into ${HOST_HOME}/.config/herdr-ui
+#   PROJECTS       optional: a projects root to mount at the same path for the file viewer
+#
+# Then open http://127.0.0.1:7317 (or put it behind `tailscale serve`).
+
+services:
+  herdr-ui:
+    build:
+      context: .
+      target: runtime
+    image: herdr-ui:local
+    container_name: herdr-ui
+    restart: unless-stopped
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      HOME: ${HOST_HOME:-/home/herdr}
+      HERDR_UI_TOKEN: ${HERDR_UI_TOKEN:-}
+    command: ["-addr", "0.0.0.0:7317", "-socket", "${HOST_HOME:-/home/herdr}/.config/herdr/herdr.sock"]
+    ports:
+      - "127.0.0.1:7317:7317"
+    volumes:
+      # herdr's socket + herdr-ui's own state (token, machines, push keys)
+      - ${HOST_HOME:-/home/herdr}/.config:${HOST_HOME:-/home/herdr}/.config
+      # Claude Code transcripts for the chat lens (read-only)
+      - ${HOST_HOME:-/home/herdr}/.claude:${HOST_HOME:-/home/herdr}/.claude:ro
+      # ssh config + keys for remote machines (read-only)
+      - ${HOST_HOME:-/home/herdr}/.ssh:${HOST_HOME:-/home/herdr}/.ssh:ro
+      # your projects at the same path, so the file viewer and git diff work
+      - ${PROJECTS:-${HOST_HOME:-/home/herdr}/Projects}:${PROJECTS:-${HOST_HOME:-/home/herdr}/Projects}:ro
+      # git's safe.directory check needs to see the repo owner; harmless otherwise
+      - /etc/passwd:/etc/passwd:ro
+
+  # docker compose --profile test run --rm test
+  test:
+    profiles: ["test"]
+    build:
+      context: .
+      target: test
+    image: herdr-ui:test
+
+  # docker compose --profile dev up dev
+  # Go API on :7317 and Vite (HMR) on :5173, source mounted live.
+  dev:
+    profiles: ["dev"]
+    image: golang:1.27-alpine
+    working_dir: /src
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      HOME: ${HOST_HOME:-/home/herdr}
+      GOCACHE: /tmp/gocache
+      GOMODCACHE: /tmp/gomod
+      npm_config_cache: /tmp/npm
+    command: >
+      sh -c "apk add --no-cache nodejs npm git openssh-client curl >/dev/null
+             && (HERDR_INSTALL_DIR=/tmp/bin sh -c 'curl -fsSL https://herdr.dev/install.sh | sh' || true)
+             && export PATH=/tmp/bin:$$PATH
+             && (cd web && npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0 &)
+             && mkdir -p web/dist && touch web/dist/index.html
+             && go run ./cmd/herdr-ui -addr 0.0.0.0:7317 -socket ${HOST_HOME:-/home/herdr}/.config/herdr/herdr.sock"
+    ports:
+      - "127.0.0.1:7317:7317"
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - .:/src
+      - ${HOST_HOME:-/home/herdr}/.config:${HOST_HOME:-/home/herdr}/.config
+      - ${HOST_HOME:-/home/herdr}/.claude:${HOST_HOME:-/home/herdr}/.claude:ro
+      - ${HOST_HOME:-/home/herdr}/.ssh:${HOST_HOME:-/home/herdr}/.ssh:ro
