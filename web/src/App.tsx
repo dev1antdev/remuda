@@ -19,6 +19,7 @@ import {
 import AlertsPanel from "./AlertsPanel";
 import Chat from "./Chat";
 import FileViewer, { type FileTarget } from "./FileViewer";
+import { hostOpensFile, installHostAPI, SELECT_FOLDER_EVENT } from "./host";
 import KeyBar from "./KeyBar";
 import { basename, errMsg, isTouch, readAlertPrefs, usePref } from "./prefs";
 import { resyncPush } from "./push";
@@ -75,16 +76,24 @@ function suggestBranch(): string {
   return `worktree/${pick(ADJ)}-${pick(NOUN)}-${1000 + Math.floor(Math.random() * 9000)}`;
 }
 
-// The pane a tapped notification asks for: ?machine=&pane= on a cold start.
-function requestedFromURL(): Selection | null {
+// What the URL asks to open: ?machine=&pane= (a tapped notification) or
+// ?cwd= (an IDE embedding herdr-ui for the project it has open).
+type Requested = Selection | { folder: string };
+
+function requestedFromURL(): Requested | null {
   const q = new URLSearchParams(location.search);
   const machineId = q.get("machine");
   const paneId = q.get("pane");
-  if (machineId && paneId) {
-    history.replaceState(null, "", "/");
-    return { machineId, paneId };
-  }
+  const cwd = q.get("cwd");
+  if (machineId || paneId || cwd) history.replaceState(null, "", "/");
+  if (machineId && paneId) return { machineId, paneId };
+  if (cwd) return { folder: cwd.replace(/\/+$/, "") };
   return null;
+}
+
+function matches(x: Located, r: Requested): boolean {
+  if ("folder" in r) return x.pane.cwd === r.folder || x.session.worktree?.checkout_path === r.folder;
+  return x.machine.id === r.machineId && x.pane.id === r.paneId;
 }
 
 export default function App() {
@@ -94,7 +103,7 @@ export default function App() {
   // The selection is a request; what is shown is derived: the requested
   // pane when the roster has it (a tapped notification may ask before the
   // roster loads), else the first agent pane.
-  const [requested, setRequested] = useState<Selection | null>(requestedFromURL);
+  const [requested, setRequested] = useState<Requested | null>(requestedFromURL);
   const [lens, setLens] = useState<Lens>(isTouch ? "chat" : "terminal");
   const [drawer, setDrawer] = useState(false);
   const [offline, setOffline] = useState(false);
@@ -143,16 +152,23 @@ export default function App() {
   }, [refresh]);
 
   // push: re-register this device on load; a tapped notification in an
-  // already open tab arrives as a message from the service worker
+  // already open tab arrives as a message from the service worker. A host
+  // (the IDE plugin) can also ask for the pane of a folder.
   useEffect(() => {
+    installHostAPI();
     void resyncPush(readAlertPrefs());
-    if (!("serviceWorker" in navigator)) return;
+    const onFolder = (e: Event) => setRequested({ folder: (e as CustomEvent<string>).detail.replace(/\/+$/, "") });
+    window.addEventListener(SELECT_FOLDER_EVENT, onFolder);
+    if (!("serviceWorker" in navigator)) return () => window.removeEventListener(SELECT_FOLDER_EVENT, onFolder);
     const onMsg = (e: MessageEvent) => {
       const d = e.data as { type?: string; machine?: string; pane?: string };
       if (d?.type === "select-pane" && d.machine && d.pane) setRequested({ machineId: d.machine, paneId: d.pane });
     };
     navigator.serviceWorker.addEventListener("message", onMsg);
-    return () => navigator.serviceWorker.removeEventListener("message", onMsg);
+    return () => {
+      window.removeEventListener(SELECT_FOLDER_EVENT, onFolder);
+      navigator.serviceWorker.removeEventListener("message", onMsg);
+    };
   }, []);
 
   // The row menu closes on any click elsewhere or Escape.
@@ -184,7 +200,7 @@ export default function App() {
 
   const current = useMemo(
     () =>
-      allPanes.find((x) => requested && x.machine.id === requested.machineId && x.pane.id === requested.paneId) ??
+      (requested && (allPanes.find((x) => matches(x, requested) && x.pane.agent) ?? allPanes.find((x) => matches(x, requested)))) ??
       allPanes.find((x) => x.pane.agent) ??
       allPanes[0] ??
       null,
@@ -205,7 +221,9 @@ export default function App() {
   currentRef.current = current;
   const openFile = useCallback((target: FileTarget) => {
     const c = currentRef.current;
-    if (c) setFile({ machineId: c.machine.id, paneId: c.pane.id, target });
+    if (!c) return;
+    if (hostOpensFile(c.machine.id, target)) return; // the IDE took it
+    setFile({ machineId: c.machine.id, paneId: c.pane.id, target });
   }, []);
   const closeFile = useCallback(() => setFile(null), []);
   const retargetFile = useCallback((target: FileTarget) => setFile((f) => (f ? { ...f, target } : f)), []);

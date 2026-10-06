@@ -80,6 +80,18 @@ SPA. See README.md for the user story.
   request. The App derives the shown pane from a *requested* one (deep link,
   notification, click) falling back to the first agent pane; nothing fixes
   selection up in effects.
+- `web/src/host.ts` — the host bridge for an embedding IDE: `?cwd=` opens
+  the project's pane; `window.herdrHost.openFile(path, line, machine)` lets
+  the host open files itself (herdr-ui falls back to its viewer when it
+  returns false or the file is on another machine); `window.herdrUI.insert`
+  / `selectFolder` let the host push text into the composer or pick a pane.
+- `plugin/` — the JetBrains plugin (Kotlin, IntelliJ Platform Gradle Plugin
+  2.x, platform APIs only). `HerdrUiService` finds/starts the `herdr-ui`
+  binary on the host and reads its token via `-print-token`;
+  `EmbeddedView` is a JBCefBrowser with the `herdrHost` bridge injected on
+  load; `FallbackView` is shown when JCEF is unavailable — in Remote
+  Development the backend's JCEF needs `REMOTE_DEV_SERVER_JCEF_ENABLED=true`.
+  Build: `make plugin`; the zip installs on the backend from disk.
 - `web/src/paths.ts` — one path-matching regex shared by the terminal link
   provider (`term.registerLinkProvider`) and the chat linkifier; keeps a
   `:line` suffix, drops trailing punctuation and URL paths.

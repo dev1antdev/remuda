@@ -103,6 +103,16 @@ docker compose --profile dev up dev           # go run on :7317, Vite HMR on :51
 docker build --target runtime -t herdr-ui .   # just the image
 ```
 
+## In the IDE (PhpStorm, GoLand, IDEA — incl. Remote Development)
+
+[`plugin/`](plugin/README.md) is a JetBrains plugin that embeds herdr-ui in a
+tool window next to your code: file paths the agent mentions open in the
+editor, **Ask Agent About This File** drops `@path` (and the selection) into
+the chat. It runs on the Remote Development backend, right beside herdr
+(`REMOTE_DEV_SERVER_JCEF_ENABLED=true` on the host enables the embedded
+browser there). `make deploy HOST=…` installs the herdr-ui binary on a
+remote host; `make plugin` builds the zip.
+
 ## From your phone
 
 Keep herdr-ui on loopback and bring your own transport:
