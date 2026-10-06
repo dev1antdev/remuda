@@ -51,8 +51,8 @@ deploy: release
 	@test -n "$(HOST)" || (echo "usage: make deploy HOST=<ssh host>"; exit 1)
 	@t=$$(ssh $(HOST) 'uname -sm' | tr 'A-Z' 'a-z' | sed 's/x86_64/amd64/; s/aarch64/arm64/; s/ /-/'); \
 	  echo "deploying bin/herdr-ui-$$t to $(HOST):~/.local/bin/herdr-ui"; \
-	  ssh $(HOST) 'mkdir -p ~/.local/bin' && scp -q bin/herdr-ui-$$t $(HOST):~/.local/bin/herdr-ui && \
-	  ssh $(HOST) '~/.local/bin/herdr-ui -version'
+	  ssh $(HOST) 'mkdir -p ~/.local/bin' && scp -q bin/herdr-ui-$$t $(HOST):~/.local/bin/herdr-ui.new && \
+	  ssh $(HOST) 'mv ~/.local/bin/herdr-ui.new ~/.local/bin/herdr-ui && ~/.local/bin/herdr-ui -version' # rename: safe while the old one runs
 
 # The JetBrains IDE plugin (plugin/build/distributions/*.zip).
 plugin:
