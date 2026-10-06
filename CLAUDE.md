@@ -97,9 +97,19 @@ SPA. See README.md for the user story.
   load; `FallbackView` is shown when JCEF is unavailable — in Remote
   Development the backend's JCEF needs `REMOTE_DEV_SERVER_JCEF_ENABLED=true`.
   Build: `make plugin`; the zip installs on the backend from disk.
-- `web/src/paths.ts` — one path-matching regex shared by the terminal link
+- `web/src/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
   provider (`term.registerLinkProvider`) and the chat linkifier; keeps a
-  `:line` suffix, drops trailing punctuation and URL paths.
+  `:line` suffix, drops trailing punctuation, never a path inside a URL.
+  **File links only in an agent's pane** (`agent` prop); URLs everywhere,
+  but Cmd/Ctrl+click in a shell pane — its clicks belong to the app. URLs
+  open through `openUrl` in `host.ts` (host bridge, else a new tab).
+- **The mouse model** (`Terminal.tsx`): herdr enables mouse tracking in
+  every attach stream, so the DECSET for the tracking modes is intercepted
+  and xterm never tracks — a plain drag selects. What the app asked for is
+  synthesized instead: the wheel as scroll reports, and a click (press and
+  release within 4px) as a press+release report at its cell, sent after
+  xterm's mouseup so a click that opened a link is not also an app click.
+  Drags never reach the app.
 - `internal/watch/` — **the only poller**: every machine's
   `session.snapshot` (2s local, 4s remote) whether or not a browser is
   open. Handlers read its cache (`Snapshot` returns the last good snapshot
