@@ -187,7 +187,7 @@ export default function TerminalView({
         onOpen();
       };
       ws.onmessage = (ev) => {
-        if (ev.data instanceof ArrayBuffer) term.write(new Uint8Array(ev.data), followBottom);
+        if (ev.data instanceof ArrayBuffer) term.write(new Uint8Array(ev.data), () => { followBottom(); scheduleLayer(); });
       };
       ws.onerror = () => ws?.close();
       ws.onclose = () => {
@@ -258,7 +258,7 @@ export default function TerminalView({
             }
             if (!res.ok) throw new Error(`read failed (${res.status})`);
             const buf = new Uint8Array(await res.arrayBuffer());
-            if (buf.length) term.write(buf, followBottom);
+            if (buf.length) term.write(buf, () => { followBottom(); scheduleLayer(); });
             if (res.headers.get("X-Herdr-UI-End") === "1") {
               note("terminal detached");
               return;
@@ -290,31 +290,91 @@ export default function TerminalView({
 
     const onData = term.onData(input);
 
-    // Copy on selection, like a terminal: the agent's mouse tracking makes
-    // selecting deliberate anyway (Option+drag, or selection mode).
-    let copyTimer: ReturnType<typeof setTimeout> | null = null;
-    const onSel = term.onSelectionChange(() => {
-      if (copyTimer) clearTimeout(copyTimer);
-      copyTimer = setTimeout(() => {
-        const text = term.getSelection();
-        if (text) void copyText(text).then((ok) => ok && live.current.onCopied(text.length));
-      }, 150);
-    });
-
-    // Selection mode pauses mouse reporting inside xterm only — the PTY
-    // never sees these sequences — and restores whatever mode the agent had.
+    // ---- selection and copy ----
+    // Two ways to select: Option/Alt+drag (xterm's own, even under the
+    // agent's mouse tracking), and selection mode — a transparent text layer
+    // over the grid whose selection is the browser's own, so it works where
+    // xterm's mouse handling doesn't (an embedded browser in Remote
+    // Development, a phone's long-press). Copy is Cmd+C / Ctrl+Shift+C, or
+    // the native menu, routed through the host's clipboard when embedded.
+    const layer = document.createElement("div");
+    layer.className = "term-select";
+    layer.hidden = true;
+    term.element!.appendChild(layer);
     let savedMouse: string | null = null;
+    let layerTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const cellHeight = () => {
+      const core = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { height: number } } } } } })._core;
+      return core?._renderService?.dimensions?.css?.cell?.height ?? term.options.fontSize! * 1.2;
+    };
+    // the layer mirrors the visible rows as text, one row per line
+    const paintLayer = () => {
+      layerTimer = null;
+      if (layer.hidden) return;
+      const screen = term.element!.querySelector(".xterm-screen") as HTMLElement | null;
+      if (screen) {
+        layer.style.width = `${screen.offsetWidth}px`;
+        layer.style.height = `${screen.offsetHeight}px`;
+      }
+      layer.style.fontSize = `${term.options.fontSize}px`;
+      layer.style.lineHeight = `${cellHeight()}px`;
+      const buf = term.buffer.active;
+      const lines: string[] = [];
+      for (let y = 0; y < term.rows; y++) {
+        lines.push(buf.getLine(buf.viewportY + y)?.translateToString(true) ?? "");
+      }
+      const text = lines.join("\n");
+      if (layer.textContent !== text) layer.textContent = text;
+    };
+    const scheduleLayer = () => {
+      if (!layer.hidden && !layerTimer) layerTimer = setTimeout(paintLayer, 80);
+    };
+    const onScroll = term.onScroll(scheduleLayer);
+
     selectRef.current = (on) => {
       if (on) {
-        if (savedMouse !== null) return;
-        savedMouse = term.modes.mouseTrackingMode;
-        term.write("\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?9l");
-      } else if (savedMouse !== null) {
-        const restore: Record<string, string> = { x10: "\x1b[?9h", vt200: "\x1b[?1000h", drag: "\x1b[?1002h", any: "\x1b[?1003h" };
-        if (restore[savedMouse]) term.write(restore[savedMouse]!);
-        savedMouse = null;
+        if (savedMouse === null) {
+          // pause the agent's mouse tracking inside xterm only — the PTY never
+          // sees this — so Option+drag isn't needed either
+          savedMouse = term.modes.mouseTrackingMode;
+          term.write("\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?9l");
+        }
+        layer.hidden = false;
+        paintLayer();
+      } else {
+        layer.hidden = true;
+        window.getSelection()?.removeAllRanges();
+        if (savedMouse !== null) {
+          const restore: Record<string, string> = { x10: "\x1b[?9h", vt200: "\x1b[?1000h", drag: "\x1b[?1002h", any: "\x1b[?1003h" };
+          if (restore[savedMouse]) term.write(restore[savedMouse]!);
+          savedMouse = null;
+        }
       }
     };
+
+    // what is selected right now: the layer's DOM selection, else xterm's
+    const selectedText = (): string => {
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed && layer.contains(sel.anchorNode)) return sel.toString();
+      return term.hasSelection() ? term.getSelection() : "";
+    };
+    const copySelection = (): boolean => {
+      const text = selectedText();
+      if (!text) return false;
+      void copyText(text).then((ok) => ok && live.current.onCopied(text.length));
+      return true;
+    };
+    // Cmd+C / the context menu: set the clipboard ourselves so the host
+    // bridge (embedded browser) sees it too, not just the page's clipboard
+    const onCopy = (e: ClipboardEvent) => {
+      const text = selectedText();
+      if (!text) return;
+      e.clipboardData?.setData("text/plain", text);
+      e.preventDefault();
+      void copyText(text).then((ok) => ok && live.current.onCopied(text.length));
+    };
+    mount.addEventListener("copy", onCopy);
 
     // Keys xterm gets wrong for agent TUIs: Shift+Enter is a newline in
     // Claude Code only as the Alt+Enter chord (ESC CR); Ctrl+V must reach the
@@ -331,7 +391,14 @@ export default function TerminalView({
       }
       if (ev.type !== "keydown") return true;
       if (ev.key === "v" && ev.ctrlKey && !ev.altKey) return false;
-      if (ev.key === "c" && ev.ctrlKey && term.hasSelection()) return false; // copy
+      // copy: Cmd+C on a Mac, Ctrl+Shift+C elsewhere, Ctrl+C with a selection
+      if ((ev.key === "c" || ev.key === "C") && (ev.metaKey || (ev.ctrlKey && (ev.shiftKey || term.hasSelection())))) {
+        if (copySelection()) {
+          ev.preventDefault();
+          return false;
+        }
+        return !ev.metaKey;
+      }
       return true;
     });
 
@@ -407,8 +474,9 @@ export default function TerminalView({
       closed = true;
       live.current.onReady(null);
       onData.dispose();
-      onSel.dispose();
-      if (copyTimer) clearTimeout(copyTimer);
+      onScroll.dispose();
+      if (layerTimer) clearTimeout(layerTimer);
+      mount.removeEventListener("copy", onCopy);
       linkProvider.dispose();
       mount.removeEventListener("dragover", onDragOver);
       mount.removeEventListener("dragleave", onDragLeave);

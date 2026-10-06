@@ -738,6 +738,28 @@ button {
   overflow: hidden;
 }
 
+/* selection mode: a transparent copy of the visible rows over the grid; the
+   browser's own selection paints over the real cells underneath */
+.term-select {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 10;
+  margin: 0;
+  overflow: hidden;
+  white-space: pre;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: transparent;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.term-select::selection {
+  background: rgba(217, 119, 69, 0.45);
+  color: #fff;
+}
+
 /* keep mode: the pane's grid may be wider or taller than the screen */
 .term-mount.keep {
   overflow: auto;
