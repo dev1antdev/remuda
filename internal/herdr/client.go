@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -20,6 +21,26 @@ import (
 // DefaultSocket is herdr's socket under a home directory.
 func DefaultSocket(home string) string {
 	return filepath.Join(home, ".config", "herdr", "herdr.sock")
+}
+
+// FindBinary resolves the herdr binary: the given name on PATH, else the
+// places installers put it — a process started by an IDE or a service has a
+// bare PATH without ~/.local/bin.
+func FindBinary(name string) (string, error) {
+	if p, err := exec.LookPath(name); err == nil {
+		return p, nil
+	}
+	if strings.Contains(name, "/") {
+		return "", fmt.Errorf("%s: not an executable", name)
+	}
+	home, _ := os.UserHomeDir()
+	for _, dir := range []string{filepath.Join(home, ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"} {
+		p := filepath.Join(dir, name)
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("%s not found in PATH, ~/.local/bin, /opt/homebrew/bin or /usr/local/bin", name)
 }
 
 // SocketPath returns $HERDR_SOCKET or herdr's default socket location.

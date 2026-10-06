@@ -23,6 +23,8 @@ class HerdrProjectState {
     }
 }
 
+private fun String.escapeHtml() = replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
 class HerdrToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val holder = JPanel(BorderLayout()).apply {
@@ -41,8 +43,8 @@ class HerdrToolWindowFactory : ToolWindowFactory, DumbAware {
                     null,
                 )
                 !svc.ensureRunning() -> FallbackView(
-                    "<b>herdr-ui did not start</b> on 127.0.0.1:${svc.port}.<br><br>Is herdr running? " +
-                        "See <code>\$TMPDIR/herdr-ui-plugin.log</code>.",
+                    "<b>herdr-ui did not start</b> on 127.0.0.1:${svc.port}.<br><br>Is herdr running on this host?<br><br>" +
+                        "<code>${svc.logFile.path}</code>:<pre>${svc.logTail().escapeHtml()}</pre>",
                     null,
                 )
                 EmbeddedView.supported() -> EmbeddedView(project, content, svc.loginUrl(project.basePath))

@@ -26,14 +26,31 @@ class HerdrUiService : Disposable {
     val port: Int = System.getenv("HERDR_UI_PORT")?.toIntOrNull() ?: 7317
     val baseUrl: String get() = "http://127.0.0.1:$port"
 
+    private val home: String get() = System.getProperty("user.home")
+
+    /** Where installers put binaries; an IDE backend's own PATH has none of these. */
+    private val extraBinDirs: List<String>
+        get() = listOf("$home/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "$home/go/bin")
+
+    private fun find(name: String, override: String?): File? {
+        override?.let { File(it) }?.takeIf { it.canExecute() }?.let { return it }
+        PathEnvironmentVariableUtil.findInPath(name)?.let { return it }
+        return extraBinDirs.map { File(it, name) }.firstOrNull { it.canExecute() }
+    }
+
     /** The herdr-ui binary, or null when none can be found. */
-    fun binary(): File? {
-        System.getenv("HERDR_UI_BIN")?.let { File(it) }?.takeIf { it.canExecute() }?.let { return it }
-        PathEnvironmentVariableUtil.findInPath("herdr-ui")?.let { return it }
-        val home = System.getProperty("user.home")
-        return listOf("$home/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "$home/go/bin")
-            .map { File(it, "herdr-ui") }
-            .firstOrNull { it.canExecute() }
+    fun binary(): File? = find("herdr-ui", System.getenv("HERDR_UI_BIN"))
+
+    /** The herdr binary herdr-ui needs for `terminal attach`. */
+    fun herdrBinary(): File? = find("herdr", System.getenv("HERDR_BIN"))
+
+    val logFile: File get() = File(System.getProperty("java.io.tmpdir"), "herdr-ui-plugin.log")
+
+    /** The last lines herdr-ui logged — the reason when it did not start. */
+    fun logTail(lines: Int = 5): String = try {
+        logFile.readLines().takeLast(lines).joinToString("\n")
+    } catch (_: Exception) {
+        ""
     }
 
     /** `herdr-ui -print-token`: honours HERDR_UI_TOKEN and the state dir. */
@@ -64,14 +81,19 @@ class HerdrUiService : Disposable {
         if (isUp()) return true
         val bin = binary() ?: return false
         if (started?.isAlive != true) {
-            log.info("starting ${bin.path} on 127.0.0.1:$port")
-            started = ProcessBuilder(bin.path, "-addr", "127.0.0.1:$port")
+            val args = mutableListOf(bin.path, "-addr", "127.0.0.1:$port")
+            herdrBinary()?.let { args += listOf("-herdr-bin", it.path) }
+            log.info("starting ${args.joinToString(" ")}")
+            val pb = ProcessBuilder(args)
                 .redirectErrorStream(true)
-                .redirectOutput(File(System.getProperty("java.io.tmpdir"), "herdr-ui-plugin.log"))
-                .start()
+                .redirectOutput(logFile)
+            // the backend's PATH is bare; herdr-ui and ssh/git it runs need the usual places
+            pb.environment()["PATH"] = (extraBinDirs + (pb.environment()["PATH"] ?: "/usr/bin:/bin")).joinToString(":")
+            started = pb.start()
         }
-        repeat(25) {
+        for (i in 0 until 25) {
             if (isUp()) return true
+            if (started?.isAlive == false) return false // died: the log says why
             Thread.sleep(200)
         }
         return false

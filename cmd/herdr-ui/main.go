@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
 	"syscall"
 
@@ -53,9 +52,11 @@ func main() {
 		return
 	}
 
-	if _, err := exec.LookPath(*herdrBin); err != nil {
-		log.Fatalf("herdr binary %q not found in PATH", *herdrBin)
+	bin, err := herdr.FindBinary(*herdrBin)
+	if err != nil {
+		log.Fatalf("herdr: %v", err)
 	}
+	*herdrBin = bin
 	if v, protocol, err := herdr.NewClient(*socket).Ping(); err != nil {
 		log.Printf("WARNING: herdr is not answering at %s (%v) — start herdr first; herdr-ui will keep retrying", *socket, err)
 	} else {
