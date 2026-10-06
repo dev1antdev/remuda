@@ -361,9 +361,11 @@ export default function TerminalView({
     const modifierBits = (e: MouseEvent) => (e.shiftKey ? 4 : 0) + (e.altKey ? 8 : 0) + (e.ctrlKey ? 16 : 0);
 
     const onWheel = (e: WheelEvent) => {
-      // a sideways gesture scrolls the mount (a grid wider than the screen),
-      // never the app or xterm
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      const sideways = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      // a grid wider than the screen (keep mode, a minimum width) scrolls
+      // here on a sideways gesture; otherwise the gesture is the app's —
+      // wheel left/right (buttons 6/7) is how a TUI scrolls its columns
+      if (sideways && mount.scrollWidth > mount.clientWidth) {
         e.stopPropagation();
         return;
       }
@@ -372,8 +374,10 @@ export default function TerminalView({
       if (!cell) return;
       e.preventDefault();
       e.stopPropagation();
-      const ticks = Math.min(3, Math.max(1, Math.round(Math.abs(e.deltaY) / 40)));
-      sendInput(report((e.deltaY < 0 ? 64 : 65) + modifierBits(e), cell, false).repeat(ticks));
+      const delta = sideways ? e.deltaX : e.deltaY;
+      const ticks = Math.min(3, Math.max(1, Math.round(Math.abs(delta) / 40)));
+      const code = sideways ? (delta < 0 ? 66 : 67) : delta < 0 ? 64 : 65;
+      sendInput(report(code + modifierBits(e), cell, false).repeat(ticks));
     };
     mount.addEventListener("wheel", onWheel, { capture: true, passive: false });
 
