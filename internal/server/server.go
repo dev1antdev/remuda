@@ -28,6 +28,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
+	"github.com/dev1antdev/herdr-ui/internal/tasks"
 	"github.com/dev1antdev/herdr-ui/internal/transcript"
 	"github.com/dev1antdev/herdr-ui/internal/watch"
 )
@@ -36,6 +37,7 @@ type Server struct {
 	Machines *machines.Manager
 	Watch    *watch.Watcher
 	Push     *push.Service
+	Tasks    *tasks.Service
 	Guard    *auth.Guard
 	UI       fs.FS // built SPA
 
@@ -44,8 +46,8 @@ type Server struct {
 	streams termStreams                  // HTTP-transport terminal sessions
 }
 
-func New(m *machines.Manager, w *watch.Watcher, p *push.Service, g *auth.Guard, ui fs.FS) *Server {
-	return &Server{Machines: m, Watch: w, Push: p, Guard: g, UI: ui, paneMu: map[push.PaneRef]*sync.Mutex{}}
+func New(m *machines.Manager, w *watch.Watcher, p *push.Service, t *tasks.Service, g *auth.Guard, ui fs.FS) *Server {
+	return &Server{Machines: m, Watch: w, Push: p, Tasks: t, Guard: g, UI: ui, paneMu: map[push.PaneRef]*sync.Mutex{}}
 }
 
 // agents herdr-ui offers to start, by herdr manifest kind. The list is also
@@ -92,6 +94,12 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/push/subscribe", s.handlePushSubscribe)
 	api.HandleFunc("DELETE /api/push/subscribe", s.handlePushUnsubscribe)
 	api.HandleFunc("POST /api/push/test", s.handlePushTest)
+	api.HandleFunc("GET /api/tasks/status", s.handleTasksStatus)
+	api.HandleFunc("PUT /api/tasks/config", s.handleTasksConnect)
+	api.HandleFunc("DELETE /api/tasks/config", s.handleTasksDisconnect)
+	for _, m := range []string{"GET", "PUT", "POST", "PATCH", "DELETE"} {
+		api.HandleFunc(m+" /api/tasks/v1/", s.handleTasksProxy)
+	}
 	api.HandleFunc("POST /api/submit", s.handleSubmit)
 	api.HandleFunc("POST /api/keys", s.handleKeys)
 	api.HandleFunc("GET /ws/pane", s.handlePaneWS)

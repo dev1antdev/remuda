@@ -19,6 +19,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/push"
 	"github.com/dev1antdev/herdr-ui/internal/server"
 	"github.com/dev1antdev/herdr-ui/internal/state"
+	"github.com/dev1antdev/herdr-ui/internal/tasks"
 	"github.com/dev1antdev/herdr-ui/internal/watch"
 	"github.com/dev1antdev/herdr-ui/web"
 )
@@ -77,7 +78,7 @@ func main() {
 	watcher := watch.New(mgr, pushSvc)
 	watcher.Start()
 
-	s := server.New(mgr, watcher, pushSvc, auth.NewGuard(token), ui)
+	s := server.New(mgr, watcher, pushSvc, tasks.New(dir), auth.NewGuard(token), ui)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

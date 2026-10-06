@@ -1,0 +1,896 @@
+// The Tasks mode: the user's Vikunja projects and tasks in herdr-ui's own
+// clothes. Projects on the left (with three smart lists above them), the
+// list in the middle, the open task on the right. Nothing is cached beyond
+// the screen: every change goes to Vikunja and the list is re-read.
+
+import { createElement, useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  addTaskLabel,
+  createLabel,
+  createProject,
+  createTask,
+  currentUser,
+  deleteTask,
+  hasDate,
+  listLabels,
+  listProjects,
+  listTasks,
+  listViewTasks,
+  NO_DATE,
+  patchTask,
+  PRIORITIES,
+  removeTaskLabel,
+  tasksConnect,
+  tasksDisconnect,
+  tasksStatus,
+  type Label,
+  type Project,
+  type Task,
+  type TasksStatus,
+} from "./tasksApi";
+import { errMsg, usePref } from "./prefs";
+import { openUrl } from "./host";
+
+type Smart = "today" | "upcoming" | "open";
+type Sel = { kind: "smart"; id: Smart } | { kind: "project"; id: number };
+
+const SMART: { id: Smart; label: string; glyph: string; filter: string }[] = [
+  { id: "today", label: "Today", glyph: "☀", filter: "done = false && due_date < now/d+1d" },
+  { id: "upcoming", label: "Upcoming", glyph: "▸", filter: "done = false && due_date < now+7d" },
+  { id: "open", label: "All open", glyph: "☐", filter: "done = false" },
+];
+
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+export default function Tasks({ drawer, closeDrawer, ask }: {
+  drawer: boolean;
+  closeDrawer: () => void;
+  ask: (text: string, label: string, run: () => void) => void;
+}) {
+  const [status, setStatus] = useState<TasksStatus | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [labels, setLabels] = useState<Label[]>([]);
+  const [defaultProject, setDefaultProject] = useState(0);
+  const [sel, setSel] = usePref<Sel>("tasks.sel", { kind: "smart", id: "today" });
+  const [showDone, setShowDone] = usePref("tasks.showDone", false);
+  const [search, setSearch] = useState("");
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [pages, setPages] = useState(1);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [newProject, setNewProject] = useState(false);
+  const [tick, setTick] = useState(0);
+  const refresh = useCallback(() => setTick((t) => t + 1), []);
+
+  useEffect(() => {
+    void tasksStatus().then(setStatus, (e) => setStatus({ configured: false, error: errMsg(e) }));
+  }, []);
+
+  // the sidebar's data, once connected
+  const connected = !!status?.configured;
+  useEffect(() => {
+    if (!connected) return;
+    let gone = false;
+    void Promise.all([listProjects(), listLabels(), currentUser().catch(() => null)]).then(
+      ([ps, ls, me]) => {
+        if (gone) return;
+        setProjects(ps);
+        setLabels(ls);
+        setDefaultProject(me?.settings?.default_project_id || ps.find((p) => p.title === "Inbox")?.id || ps[0]?.id || 0);
+      },
+      (e) => !gone && setError(errMsg(e)),
+    );
+    return () => {
+      gone = true;
+    };
+  }, [connected, tick]);
+
+  // the list: selection + done + search → one Vikunja query
+  const filter = useMemo(() => {
+    if (sel.kind === "smart") return SMART.find((s) => s.id === sel.id)!.filter;
+    if (sel.id < 0) return `view ${sel.id}`; // a saved filter: its view decides
+    return `project = ${sel.id}${showDone ? "" : " && done = false"}`;
+  }, [sel, showDone]);
+  const debounced = useDebounced(search, 250);
+  const isFilter = sel.kind === "project" && sel.id < 0;
+  const withDone = showDone && sel.kind === "project" && !isFilter;
+  useEffect(() => {
+    setPage(1);
+  }, [filter, debounced]);
+  useEffect(() => {
+    if (!connected) return;
+    let gone = false;
+    setLoading(true);
+    const sort = withDone
+      ? [{ by: "done", order: "asc" as const }, { by: "due_date", order: "asc" as const }, { by: "id", order: "desc" as const }]
+      : undefined;
+    const savedFilter = isFilter ? projects.find((p) => p.id === sel.id) : undefined;
+    const listView = savedFilter?.views.find((v) => v.view_kind === "list")?.id;
+    const req = isFilter
+      ? listView
+        ? listViewTasks(sel.id, listView, { search: debounced, page, timezone: TZ })
+        : Promise.resolve({ tasks: [], pages: 1 })
+      : listTasks({ filter, search: debounced, page, timezone: TZ, sort });
+    void req.then(
+      (r) => {
+        if (gone) return;
+        setTasks(r.tasks);
+        setPages(r.pages);
+        if (page > r.pages) setPage(Math.max(1, r.pages)); // the page emptied out
+        setError("");
+        setLoading(false);
+      },
+      (e) => {
+        if (gone) return;
+        setError(errMsg(e));
+        setLoading(false);
+      },
+    );
+    return () => {
+      gone = true;
+    };
+  }, [connected, filter, debounced, page, tick, withDone, isFilter, sel.id, projects]);
+
+  const byId = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+  const open = openId === null ? null : (tasks.find((t) => t.id === openId) ?? null);
+
+  // one task changed on the server: show it without re-reading the list
+  const replace = (t: Task) => setTasks((ts) => ts.map((x) => (x.id === t.id ? t : x)));
+
+  const toggleDone = async (t: Task) => {
+    const want = !t.done;
+    replace({ ...t, done: want });
+    try {
+      replace(await patchTask(t.id, { done: want }));
+    } catch (e) {
+      replace(t);
+      setError(errMsg(e));
+    }
+  };
+
+  const addTask = async (title: string) => {
+    const projectId = sel.kind === "project" && sel.id > 0 ? sel.id : defaultProject;
+    if (!projectId) throw new Error("no project to add to");
+    const fields: Partial<Task> & { title: string } = { title };
+    if (sel.kind === "smart" && sel.id === "today") fields.due_date = endOfToday();
+    await createTask(projectId, fields);
+    refresh();
+  };
+
+  const remove = (t: Task) =>
+    ask(`Delete “${t.title}”? This removes it from Vikunja.`, "Delete", () => {
+      void deleteTask(t.id).then(() => {
+        setOpenId(null);
+        refresh();
+      }, (e) => setError(errMsg(e)));
+    });
+
+  if (status === null) {
+    return (
+      <main className="pane-area">
+        <div className="placeholder">Loading…</div>
+      </main>
+    );
+  }
+  if (!status.configured) {
+    return (
+      <main className="pane-area">
+        <ConnectForm status={status} onConnected={setStatus} />
+      </main>
+    );
+  }
+
+  const addTarget = sel.kind === "project" && !isFilter ? byId.get(sel.id) : byId.get(defaultProject);
+  const savedFilters = projects.filter((p) => p.id < 0);
+  const title = sel.kind === "smart" ? SMART.find((s) => s.id === sel.id)!.label : (byId.get(sel.id)?.title ?? "…");
+
+  return (
+    <>
+      <aside className={drawer ? "sidebar open" : "sidebar"}>
+        <div className="sidebar-head">
+          <span>Lists</span>
+          <button onClick={() => setNewProject(true)} title="New project">
+            + Project
+          </button>
+        </div>
+        {SMART.map((s) => (
+          <button
+            key={s.id}
+            className={`tasks-nav${sel.kind === "smart" && sel.id === s.id ? " sel" : ""}`}
+            onClick={() => {
+              setSel({ kind: "smart", id: s.id });
+              setOpenId(null);
+              closeDrawer();
+            }}
+          >
+            <span className="tasks-nav-glyph">{s.glyph}</span>
+            {s.label}
+          </button>
+        ))}
+        {savedFilters.length > 0 && (
+          <>
+            <div className="sidebar-head">
+              <span>Filters</span>
+            </div>
+            {savedFilters.map((f) => (
+              <button
+                key={f.id}
+                className={`tasks-nav${sel.kind === "project" && sel.id === f.id ? " sel" : ""}`}
+                onClick={() => {
+                  setSel({ kind: "project", id: f.id });
+                  setOpenId(null);
+                  closeDrawer();
+                }}
+                title={f.description || f.title}
+              >
+                <span className="tasks-nav-glyph">⌕</span>
+                <span className="tasks-nav-label">{f.title}</span>
+              </button>
+            ))}
+          </>
+        )}
+        <div className="sidebar-head">
+          <span>Projects</span>
+        </div>
+        <ProjectTree
+          projects={projects.filter((p) => p.id > 0)}
+          selected={sel.kind === "project" ? sel.id : 0}
+          onSelect={(id) => {
+            setSel({ kind: "project", id });
+            setOpenId(null);
+            closeDrawer();
+          }}
+        />
+        <div className="tasks-sidebar-foot">
+          <button className="linkish" onClick={() => openUrl(status.url!)} title={status.url}>
+            Open Vikunja ↗
+          </button>
+          <button
+            className="linkish"
+            onClick={() =>
+              ask(`Disconnect from ${status.url}? The token is forgotten on this herdr-ui; your tasks stay in Vikunja.`, "Disconnect", () => {
+                void tasksDisconnect().then(setStatus);
+              })
+            }
+          >
+            Disconnect
+          </button>
+        </div>
+      </aside>
+      {drawer && <div className="scrim" onClick={closeDrawer} />}
+
+      <main className="pane-area tasks-main">
+        <div className="tasks-head">
+          <h1>{title}</h1>
+          {sel.kind === "project" && !isFilter && (
+            <label className="tasks-toggle">
+              <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> done
+            </label>
+          )}
+          <input className="tasks-search" type="search" placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <QuickAdd placeholder={addTarget ? `Add a task to ${addTarget.title}…` : "Add a task…"} disabled={!addTarget} onAdd={addTask} />
+        {error && <div className="chat-error">{error}</div>}
+        <div className={`tasks-list${loading ? " loading" : ""}`}>
+          {tasks.length === 0 && !loading && <div className="placeholder">Nothing here.</div>}
+          {tasks.map((t) => (
+            <TaskRow
+              key={t.id}
+              task={t}
+              project={sel.kind === "smart" || isFilter ? byId.get(t.project_id) : undefined}
+              selected={t.id === openId}
+              onToggle={() => void toggleDone(t)}
+              onOpen={() => setOpenId(t.id === openId ? null : t.id)}
+            />
+          ))}
+        </div>
+        {pages > 1 && (
+          <div className="tasks-pager">
+            <button disabled={page <= 1} onClick={() => setPage(page - 1)}>
+              ‹
+            </button>
+            <span>
+              {page} / {pages}
+            </span>
+            <button disabled={page >= pages} onClick={() => setPage(page + 1)}>
+              ›
+            </button>
+          </div>
+        )}
+      </main>
+
+      {open && (
+        <TaskDetail
+          key={open.id}
+          task={open}
+          projects={projects}
+          labels={labels}
+          vikunjaURL={status.url!}
+          onChange={replace}
+          onLabels={setLabels}
+          onClose={() => setOpenId(null)}
+          onDelete={() => remove(open)}
+          onError={setError}
+        />
+      )}
+      {newProject && (
+        <NewProjectDialog
+          projects={projects}
+          onClose={() => setNewProject(false)}
+          onCreated={(p) => {
+            setNewProject(false);
+            setProjects((ps) => [...ps, p]);
+            setSel({ kind: "project", id: p.id });
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+// ---- connect ----
+
+function ConnectForm({ status, onConnected }: { status: TasksStatus; onConnected: (s: TasksStatus) => void }) {
+  const [url, setUrl] = useState(status.url ?? "");
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(status.error ?? "");
+  return (
+    <form
+      className="tasks-connect"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setBusy(true);
+        setErr("");
+        tasksConnect(url, token).then(onConnected, (e) => setErr(errMsg(e))).finally(() => setBusy(false));
+      }}
+    >
+      <h2>Connect Vikunja</h2>
+      <p className="modal-hint">
+        Your tasks stay in your own Vikunja; herdr-ui only talks to its API with a token you create there under{" "}
+        <b>Settings → API Tokens</b>. Give it <code>projects</code>, <code>projects_views_tasks</code>, <code>tasks</code>,{" "}
+        <code>tasks_labels</code>, <code>labels</code> and <code>other: user</code>. The token is stored on this herdr-ui, never sent to a browser.
+      </p>
+      <label>
+        Vikunja URL
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://todo.example.com" autoFocus required />
+      </label>
+      <label>
+        API token
+        <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="tk_…" type="password" required />
+      </label>
+      {err && <div className="chat-error">{err}</div>}
+      <div className="modal-actions">
+        <button type="submit" className="primary" disabled={busy}>
+          {busy ? "…" : "Connect"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ---- sidebar ----
+
+function ProjectTree({ projects, selected, onSelect }: { projects: Project[]; selected: number; onSelect: (id: number) => void }) {
+  const children = useMemo(() => {
+    const m = new Map<number, Project[]>();
+    for (const p of projects) {
+      if (p.is_archived) continue;
+      const list = m.get(p.parent_project_id) ?? [];
+      list.push(p);
+      m.set(p.parent_project_id, list);
+    }
+    for (const list of m.values()) list.sort((a, b) => Number(b.is_favorite) - Number(a.is_favorite) || a.position - b.position);
+    return m;
+  }, [projects]);
+  const ids = new Set(projects.map((p) => p.id));
+  // roots: no parent, or a parent we cannot see
+  const roots = [...(children.get(0) ?? []), ...[...children.entries()].filter(([pid]) => pid !== 0 && !ids.has(pid)).flatMap(([, l]) => l)];
+  const render = (list: Project[], depth: number): ReactNode =>
+    list.map((p) => (
+      <div key={p.id}>
+        <button
+          className={`tasks-nav project${p.id === selected ? " sel" : ""}`}
+          style={{ paddingLeft: 12 + depth * 14 }}
+          onClick={() => onSelect(p.id)}
+          title={p.description || p.title}
+        >
+          <span className="tasks-dot" style={{ background: p.hex_color ? `#${p.hex_color}` : "var(--line-strong)" }} />
+          <span className="tasks-nav-label">{p.title}</span>
+          {p.is_favorite && <span className="tasks-star">★</span>}
+        </button>
+        {render(children.get(p.id) ?? [], depth + 1)}
+      </div>
+    ));
+  return <div className="tasks-tree">{render(roots, 0)}</div>;
+}
+
+function NewProjectDialog({ projects, onClose, onCreated }: { projects: Project[]; onClose: () => void; onCreated: (p: Project) => void }) {
+  const [title, setTitle] = useState("");
+  const [parent, setParent] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <form
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          setBusy(true);
+          createProject(title.trim(), parent).then(onCreated, (e) => {
+            setErr(errMsg(e));
+            setBusy(false);
+          });
+        }}
+      >
+        <h2>New project</h2>
+        <label>
+          Name
+          <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus required />
+        </label>
+        <label>
+          Inside
+          <select value={parent} onChange={(e) => setParent(Number(e.target.value))}>
+            <option value={0}>— top level —</option>
+            {projects.filter((p) => p.id > 0 && !p.is_archived).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        {err && <div className="chat-error">{err}</div>}
+        <div className="modal-actions">
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="primary" disabled={busy || !title.trim()}>
+            Create
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ---- list ----
+
+function QuickAdd({ placeholder, disabled, onAdd }: { placeholder: string; disabled: boolean; onAdd: (title: string) => Promise<void> }) {
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  return (
+    <form
+      className="tasks-add"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const title = value.trim();
+        if (!title || busy) return;
+        setBusy(true);
+        onAdd(title).then(
+          () => {
+            setValue("");
+            setErr("");
+            setBusy(false);
+          },
+          (e) => {
+            setErr(errMsg(e));
+            setBusy(false);
+          },
+        );
+      }}
+    >
+      <span className="tasks-add-plus">+</span>
+      <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} disabled={disabled || busy} />
+      {err && <span className="chat-error">{err}</span>}
+    </form>
+  );
+}
+
+function TaskRow({ task: t, project, selected, onToggle, onOpen }: {
+  task: Task;
+  project?: Project;
+  selected: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
+}) {
+  const due = dueLabel(t);
+  return (
+    <div className={`tasks-row${t.done ? " done" : ""}${selected ? " sel" : ""}`} onClick={onOpen}>
+      <input
+        type="checkbox"
+        className="tasks-check"
+        checked={t.done}
+        onChange={onToggle}
+        onClick={(e) => e.stopPropagation()}
+        title={t.done ? "Mark undone" : "Mark done"}
+      />
+      <span className="tasks-row-title">{t.title}</span>
+      {t.priority >= 3 && (
+        <span className={`tasks-prio p${t.priority}`} title={PRIORITIES[t.priority]}>
+          {"!".repeat(t.priority - 2)}
+        </span>
+      )}
+      {(t.labels ?? []).map((l) => (
+        <span key={l.id} className="tasks-label" style={labelStyle(l)}>
+          {l.title}
+        </span>
+      ))}
+      {due && <span className={`tasks-due${due.over && !t.done ? " over" : ""}`}>{due.text}</span>}
+      {project && <span className="tasks-row-project">{project.title}</span>}
+    </div>
+  );
+}
+
+// ---- detail ----
+
+function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels, onClose, onDelete, onError }: {
+  task: Task;
+  projects: Project[];
+  labels: Label[];
+  vikunjaURL: string;
+  onChange: (t: Task) => void;
+  onLabels: (ls: Label[]) => void;
+  onClose: () => void;
+  onDelete: () => void;
+  onError: (msg: string) => void;
+}) {
+  const [title, setTitle] = useState(t.title);
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [desc, setDesc] = useState("");
+  const [labelPick, setLabelPick] = useState(false);
+  const [labelQuery, setLabelQuery] = useState("");
+
+  const patch = async (fields: Partial<Task>) => {
+    try {
+      onChange(await patchTask(t.id, fields));
+    } catch (e) {
+      onError(errMsg(e));
+    }
+  };
+  const saveTitle = () => {
+    const v = title.trim();
+    if (v && v !== t.title) void patch({ title: v });
+    else setTitle(t.title);
+  };
+  const addLabel = async (l: Label) => {
+    setLabelPick(false);
+    setLabelQuery("");
+    try {
+      await addTaskLabel(t.id, l.id);
+      onChange({ ...t, labels: [...(t.labels ?? []), l] });
+    } catch (e) {
+      onError(errMsg(e));
+    }
+  };
+  const newLabel = async (name: string) => {
+    try {
+      const l = await createLabel(name, randomColor());
+      onLabels([...labels, l]);
+      await addLabel(l);
+    } catch (e) {
+      onError(errMsg(e));
+    }
+  };
+  const dropLabel = async (l: Label) => {
+    try {
+      await removeTaskLabel(t.id, l.id);
+      onChange({ ...t, labels: (t.labels ?? []).filter((x) => x.id !== l.id) });
+    } catch (e) {
+      onError(errMsg(e));
+    }
+  };
+  const have = new Set((t.labels ?? []).map((l) => l.id));
+  const candidates = labels.filter((l) => !have.has(l.id) && l.title.toLowerCase().includes(labelQuery.toLowerCase()));
+  const exact = candidates.find((l) => l.title.toLowerCase() === labelQuery.trim().toLowerCase());
+  const attached = (t.labels ?? []).some((l) => l.title.toLowerCase() === labelQuery.trim().toLowerCase());
+
+  return (
+    <aside className="tasks-detail">
+      <div className="tasks-detail-head">
+        <input type="checkbox" className="tasks-check" checked={t.done} onChange={() => void patch({ done: !t.done })} />
+        <span className="tasks-ident">{t.identifier || `#${t.index}`}</span>
+        <button className="linkish" onClick={() => openUrl(`${vikunjaURL}/tasks/${t.id}`)} title="Open this task in Vikunja">
+          Vikunja ↗
+        </button>
+        <button className="tasks-close" onClick={onClose} title="Close">
+          ×
+        </button>
+      </div>
+      <input
+        className="tasks-title"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onBlur={saveTitle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") setTitle(t.title);
+        }}
+      />
+
+      <div className="tasks-field">
+        <span className="tasks-field-name">Project</span>
+        <select value={t.project_id} onChange={(e) => void patch({ project_id: Number(e.target.value) })}>
+          {projects.filter((p) => p.id > 0 && (!p.is_archived || p.id === t.project_id)).map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.title}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="tasks-field">
+        <span className="tasks-field-name">Due</span>
+        <DueInput value={t.due_date} onCommit={(iso) => void patch({ due_date: iso })} />
+        {hasDate(t.due_date) && (
+          <button className="linkish" onClick={() => void patch({ due_date: NO_DATE })}>
+            clear
+          </button>
+        )}
+      </div>
+      <div className="tasks-field">
+        <span className="tasks-field-name">Priority</span>
+        <select value={t.priority} onChange={(e) => void patch({ priority: Number(e.target.value) })}>
+          {PRIORITIES.map((p, i) => (
+            <option key={i} value={i}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="tasks-field labels">
+        <span className="tasks-field-name">Labels</span>
+        <span className="tasks-labels">
+          {(t.labels ?? []).map((l) => (
+            <span key={l.id} className="tasks-label" style={labelStyle(l)}>
+              {l.title}
+              <button onClick={() => void dropLabel(l)} title="Remove">
+                ×
+              </button>
+            </span>
+          ))}
+          {labelPick ? (
+            <span className="tasks-label-pick">
+              <input
+                autoFocus
+                value={labelQuery}
+                placeholder="label…"
+                onChange={(e) => setLabelQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setLabelPick(false);
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const q = labelQuery.trim();
+                    if (exact) void addLabel(exact);
+                    else if (!q && candidates[0]) void addLabel(candidates[0]);
+                    else if (q && !attached) void newLabel(q);
+                  }
+                }}
+                onBlur={() => setTimeout(() => setLabelPick(false), 150)}
+              />
+              <span className="row-menu label-menu">
+                {candidates.slice(0, 8).map((l) => (
+                  <button key={l.id} onMouseDown={(e) => e.preventDefault()} onClick={() => void addLabel(l)}>
+                    <span className="tasks-dot" style={{ background: `#${l.hex_color || "888"}` }} /> {l.title}
+                  </button>
+                ))}
+                {labelQuery.trim() && !exact && !attached && (
+                  <button onMouseDown={(e) => e.preventDefault()} onClick={() => void newLabel(labelQuery.trim())}>
+                    + create “{labelQuery.trim()}”
+                  </button>
+                )}
+              </span>
+            </span>
+          ) : (
+            <button className="linkish" onClick={() => setLabelPick(true)}>
+              + label
+            </button>
+          )}
+        </span>
+      </div>
+
+      <div className="tasks-desc">
+        <div className="tasks-field-name">
+          Description
+          {!editingDesc && (
+            <button
+              className="linkish"
+              onClick={() => {
+                setDesc(htmlToText(t.description));
+                setEditingDesc(true);
+              }}
+            >
+              edit
+            </button>
+          )}
+        </div>
+        {editingDesc ? (
+          <>
+            <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={8} autoFocus />
+            <div className="modal-actions">
+              <button onClick={() => setEditingDesc(false)}>Cancel</button>
+              <button
+                className="primary"
+                onClick={() => {
+                  setEditingDesc(false);
+                  void patch({ description: textToHtml(desc) });
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </>
+        ) : t.description ? (
+          <div className="tasks-html">
+            <Html html={t.description} />
+          </div>
+        ) : (
+          <div className="placeholder small">No description.</div>
+        )}
+      </div>
+
+      <div className="tasks-detail-foot">
+        <span className="tasks-meta">
+          created {fmtDate(t.created)}
+          {t.done && hasDate(t.done_at) && <> · done {fmtDate(t.done_at)}</>}
+        </span>
+        <button className="linkish danger" onClick={onDelete}>
+          Delete
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+// A datetime-local field fires a change per segment typed (and reads as ""
+// while incomplete), so the value is kept here and sent when the user is
+// done: on blur or Enter, never while empty (the clear button unsets).
+function DueInput({ value, onCommit }: { value: string; onCommit: (iso: string) => void }) {
+  const [local, setLocal] = useState(toLocalInput(value));
+  useEffect(() => setLocal(toLocalInput(value)), [value]);
+  const commit = () => {
+    if (!local) return setLocal(toLocalInput(value));
+    const iso = new Date(local).toISOString();
+    if (iso !== (hasDate(value) ? new Date(value).toISOString() : "")) onCommit(iso);
+  };
+  return (
+    <input
+      type="datetime-local"
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") setLocal(toLocalInput(value));
+      }}
+    />
+  );
+}
+
+// ---- helpers ----
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return v;
+}
+
+function endOfToday(): string {
+  const d = new Date();
+  d.setHours(18, 0, 0, 0);
+  return d.toISOString();
+}
+
+// "Today 18:00", "Tomorrow", "Thu", "12 Oct", "12 Oct 2027"
+function dueLabel(t: Task): { text: string; over: boolean } | null {
+  if (!hasDate(t.due_date)) return null;
+  const d = new Date(t.due_date);
+  const now = new Date();
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((day(d) - day(now)) / 86400000);
+  const time = d.getHours() || d.getMinutes() ? ` ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "";
+  let text: string;
+  if (days === 0) text = `Today${time}`;
+  else if (days === 1) text = `Tomorrow${time}`;
+  else if (days === -1) text = "Yesterday";
+  else if (days > 1 && days < 7) text = d.toLocaleDateString([], { weekday: "short" });
+  else text = d.toLocaleDateString([], { day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" });
+  return { text, over: d.getTime() < now.getTime() };
+}
+
+const fmtDate = (s: string) => new Date(s).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+
+// a Date's local wall-clock for <input type=datetime-local>
+function toLocalInput(s: string): string {
+  if (!hasDate(s)) return "";
+  const d = new Date(s);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function labelStyle(l: Label): CSSProperties {
+  const hex = l.hex_color || "888888";
+  return { background: `#${hex}33`, borderColor: `#${hex}88` };
+}
+
+const PALETTE = ["e67e22", "2ecc71", "3498db", "9b59b6", "e74c3c", "1abc9c", "f1c40f", "95a5a6"];
+const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)]!;
+
+// Vikunja descriptions are HTML from its editor. Shown through a tiny
+// allow-list renderer (React nodes, never innerHTML); edited as plain text,
+// which goes back as paragraphs.
+const BLOCK = new Set(["p", "div", "li", "h1", "h2", "h3", "h4", "pre", "blockquote", "tr"]);
+
+export function htmlToText(html: string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  let out = "";
+  const walk = (n: Node) => {
+    if (n.nodeType === Node.TEXT_NODE) {
+      out += n.textContent;
+      return;
+    }
+    if (n.nodeType !== Node.ELEMENT_NODE) return;
+    const tag = (n as Element).tagName.toLowerCase();
+    if (tag === "br") {
+      out += "\n";
+      return;
+    }
+    if (tag === "li") out += "- ";
+    n.childNodes.forEach(walk);
+    if (BLOCK.has(tag)) out += "\n";
+  };
+  doc.body.childNodes.forEach(walk);
+  return out.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+export function textToHtml(text: string): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return text
+    .split(/\n{2,}/)
+    .map((para) => `<p>${esc(para).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+const ALLOWED = new Set(["p", "br", "strong", "b", "em", "i", "u", "s", "a", "ul", "ol", "li", "code", "pre", "h1", "h2", "h3", "h4", "blockquote", "hr", "input", "span", "div", "label"]);
+
+function Html({ html }: { html: string }) {
+  const nodes = useMemo(() => {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    let k = 0;
+    const render = (n: Node): ReactNode => {
+      if (n.nodeType === Node.TEXT_NODE) return n.textContent;
+      if (n.nodeType !== Node.ELEMENT_NODE) return null;
+      const el = n as Element;
+      const tag = el.tagName.toLowerCase();
+      const kids = Array.from(el.childNodes).map(render);
+      const key = k++;
+      if (!ALLOWED.has(tag)) return <span key={key}>{kids}</span>;
+      if (tag === "a") {
+        const href = el.getAttribute("href") ?? "";
+        if (!/^https?:\/\//.test(href)) return <span key={key}>{kids}</span>;
+        return (
+          <a
+            key={key}
+            href={href}
+            onClick={(e) => {
+              e.preventDefault();
+              openUrl(href);
+            }}
+          >
+            {kids}
+          </a>
+        );
+      }
+      if (tag === "input") return <input key={key} type="checkbox" checked={el.hasAttribute("checked")} readOnly />;
+      if (tag === "br" || tag === "hr") return createElement(tag, { key });
+      return createElement(tag, { key }, ...kids);
+    };
+    return Array.from(doc.body.childNodes).map(render);
+  }, [html]);
+  return <>{nodes}</>;
+}

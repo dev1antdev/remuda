@@ -24,6 +24,7 @@ import KeyBar from "./KeyBar";
 import { basename, errMsg, isTouch, readAlertPrefs, usePref } from "./prefs";
 import { resyncPush } from "./push";
 import TerminalView, { type Modifier, type SizeMode, type TermApi } from "./Terminal";
+import Tasks from "./Tasks";
 
 type Lens = "chat" | "terminal";
 type Selection = { machineId: string; paneId: string };
@@ -128,6 +129,19 @@ export default function App() {
   // A phone keeps the pane's own grid by default: resizing the shared pane
   // to a phone would squeeze the desktop's view of it too.
   const [sizeMode, setSizeMode] = usePref<SizeMode>("sizeMode", isTouch ? "keep" : "fit");
+  // what the window is for right now: herdr's sessions, or the task list
+  const [mode, setMode] = usePref<"herdr" | "tasks">("mode", "herdr");
+  // a pane asked for from outside (a tapped notification, the IDE's folder,
+  // a deep link) is a herdr-mode thing, whatever the device was left in
+  const requestPane = (r: Requested) => {
+    setRequested(r);
+    setMode("herdr");
+  };
+  // …including the one the page was opened with
+  useEffect(() => {
+    if (requested) setMode("herdr");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [termFont, setTermFont] = usePref("termFont", isTouch ? 12 : 13);
   // fit mode: a grid at least this wide, scrolling sideways on a narrower
   // screen — for diff viewers and tables that only truncate
@@ -171,12 +185,12 @@ export default function App() {
   useEffect(() => {
     installHostAPI();
     void resyncPush(readAlertPrefs());
-    const onFolder = (e: Event) => setRequested({ folder: (e as CustomEvent<string>).detail.replace(/\/+$/, "") });
+    const onFolder = (e: Event) => requestPane({ folder: (e as CustomEvent<string>).detail.replace(/\/+$/, "") });
     window.addEventListener(SELECT_FOLDER_EVENT, onFolder);
     if (!("serviceWorker" in navigator)) return () => window.removeEventListener(SELECT_FOLDER_EVENT, onFolder);
     const onMsg = (e: MessageEvent) => {
       const d = e.data as { type?: string; machine?: string; pane?: string };
-      if (d?.type === "select-pane" && d.machine && d.pane) setRequested({ machineId: d.machine, paneId: d.pane });
+      if (d?.type === "select-pane" && d.machine && d.pane) requestPane({ machineId: d.machine, paneId: d.pane });
     };
     navigator.serviceWorker.addEventListener("message", onMsg);
     return () => {
@@ -310,8 +324,16 @@ export default function App() {
         <button className="burger" onClick={() => setDrawer((d) => !d)}>
           ☰
         </button>
+        <nav className="mode-switch">
+          <button className={mode === "herdr" ? "on" : ""} onClick={() => setMode("herdr")} title="Agents and terminals">
+            herdr
+          </button>
+          <button className={mode === "tasks" ? "on" : ""} onClick={() => setMode("tasks")} title="Your Vikunja tasks">
+            Tasks
+          </button>
+        </nav>
         <span className="title">
-          {current ? (
+          {mode === "tasks" ? null : current ? (
             <>
               {current.machine.id !== "local" && (
                 <span className="title-machine">{current.machine.label} ›</span>
@@ -323,7 +345,7 @@ export default function App() {
             "herdr-ui"
           )}
         </span>
-        {current && (
+        {mode === "herdr" && current && (
           <nav className="lens-switch">
             <button className={lens === "chat" ? "on" : ""} onClick={() => setLens("chat")}>
               Chat
@@ -418,6 +440,8 @@ export default function App() {
       )}
 
       <div className="body">
+        {mode === "tasks" && <Tasks drawer={drawer} closeDrawer={() => setDrawer(false)} ask={ask} />}
+        {mode === "herdr" && (
         <aside className={drawer ? "sidebar open" : "sidebar"}>
           <div className="sidebar-head">
             <span>Machines</span>
@@ -490,8 +514,10 @@ export default function App() {
             </div>
           ))}
         </aside>
-        {drawer && <div className="scrim" onClick={() => setDrawer(false)} />}
+        )}
+        {mode === "herdr" && drawer && <div className="scrim" onClick={() => setDrawer(false)} />}
 
+        {mode === "herdr" && (
         <main className="pane-area">
           {current ? (
             <>
@@ -550,6 +576,7 @@ export default function App() {
             </div>
           )}
         </main>
+        )}
       </div>
 
       {file && (

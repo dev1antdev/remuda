@@ -132,6 +132,23 @@ SPA. See README.md for the user story.
   re-subscribes. `web/src/push.ts` is single-flight and re-registers on every
   load with permission granted. Push needs a secure context: localhost or
   `tailscale serve` HTTPS; iPhone needs the home-screen app.
+- `internal/tasks/` — the **Tasks mode**: the user's own Vikunja (2.x) behind
+  one proxy. `vikunja.json` (URL + API token, 0600) in the state dir;
+  `Configure` probes `/api/v1/info` and `/projects` before keeping it.
+  `/api/tasks/v1/<path>` forwards to `<url>/api/v1/<path>` with the token
+  added — the token never reaches a browser. **PATCH is ours**: Vikunja's
+  `POST /tasks/{id}` replaces the whole task (a body of `{done:true}` wipes
+  the due date), so a PATCH fetches, merges and POSTs. Vikunja facts the UI
+  relies on (verified on 2.7): `GET /tasks` is the cross-project list
+  (`filter=done = false && project = 3`, `due_date < now/d+1d`,
+  `labels in 1`, `s=` search, repeated `sort_by`/`order_by`, 50 per page,
+  `X-Pagination-Total-Pages`); create is `PUT /projects/{id}/tasks`; labels
+  go through `/tasks/{id}/labels`; saved filters arrive in `/projects` as
+  pseudo-projects with **negative ids** and list through their list view
+  (`/projects/{id}/views/{view}/tasks`). `web/src/Tasks.tsx` +
+  `tasksApi.ts`; descriptions are Vikunja's HTML, rendered through an
+  allow-list into React nodes (never innerHTML) and edited as plain text.
+  The top-bar `mode-switch` (herdr | Tasks) is a per-device pref.
 - `internal/auth/` — single bearer token; HttpOnly cookie; no accounts.
 - `internal/server/` — HTTP routes + the pane WebSocket. `/api/health` and
   `/api/login` are mounted outside the token guard; everything else behind

@@ -50,6 +50,16 @@ browser / phone ⇄ HTTP + WebSocket ⇄ herdr-ui (Go) ─┬─ local herdr.soc
   `pane.send_keys`.
 - **New workspace / close** — `workspace.create` + `agent.start` (any agent
   herdr has a manifest for), `workspace.close`.
+- **Tasks** — the **herdr | Tasks** switch in the top bar opens your own
+  [Vikunja](https://vikunja.io) (2.x) in herdr-ui's clothes: projects and
+  saved filters on the left, Today / Upcoming / All open, quick add, done,
+  due dates, priorities, labels, descriptions, search — and "Open in
+  Vikunja" for everything else. Connect once per herdr-ui with the Vikunja
+  URL and an API token (Settings → API Tokens there; scopes `projects`,
+  `projects_views_tasks`, `tasks`, `tasks_labels`, `labels`, `other: user`).
+  The token is stored on the herdr-ui host and never sent to a browser:
+  the page talks to Vikunja only through herdr-ui's own port, so the plugin,
+  a phone and a port forward need nothing extra.
 
 ## Install & run
 
