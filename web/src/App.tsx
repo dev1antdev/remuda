@@ -111,6 +111,10 @@ export default function App() {
   const [menu, setMenu] = useState<RowMenu>(null);
   const [alerts, setAlerts] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // an in-app confirmation: window.confirm() returns false without asking
+  // inside an embedded browser (JCEF), so nothing destructive may rely on it
+  const [confirmReq, setConfirmReq] = useState<{ text: string; label: string; run: () => void } | null>(null);
+  const ask = (text: string, label: string, run: () => void) => setConfirmReq({ text, label, run });
   const [termApi, setTermApi] = useState<TermApi | null>(null);
   const [modifier, setModifier] = useState<Modifier>(null);
   // selection mode: a plain drag selects text instead of reaching the agent
@@ -244,8 +248,9 @@ export default function App() {
 
   const closeWorkspace = (m: Machine, s: Session) => {
     const n = s.tabs.reduce((a, t) => a + t.panes.length, 0);
-    if (confirm(`Close “${s.name}”? ${n} pane${n === 1 ? "" : "s"} close and the agents in them stop.`))
-      void killSession(m.id, s.id).then(refresh);
+    ask(`Close “${s.name}”? ${n} pane${n === 1 ? "" : "s"} close and the agents in them stop.`, "Close workspace", () =>
+      void killSession(m.id, s.id).then(refresh),
+    );
   };
 
   const workspaceRow = (m: Machine, s: Session, nested: boolean) => {
@@ -428,10 +433,11 @@ export default function App() {
                   <button
                     className="icon-btn"
                     title="Remove machine (nothing on the PC is touched)"
-                    onClick={() => {
-                      if (confirm(`Remove machine “${m.label}”? Nothing on the PC is touched.`))
-                        void removeMachine(m.id).then(refresh);
-                    }}
+                    onClick={() =>
+                      ask(`Remove machine “${m.label}”? Nothing on the PC is touched.`, "Remove", () =>
+                        void removeMachine(m.id).then(refresh),
+                      )
+                    }
                   >
                     ×
                   </button>
@@ -474,7 +480,7 @@ export default function App() {
                   const msg = last
                     ? `Close the last tab? Workspace “${current.session.name}” closes with it.`
                     : `Close tab “${t.label}”? Its ${t.panes.length} pane${t.panes.length === 1 ? "" : "s"} and agents stop.`;
-                  if (confirm(msg)) void closeTab(current.machine.id, t.id).then(refresh);
+                  ask(msg, "Close tab", () => void closeTab(current.machine.id, t.id).then(refresh));
                 }}
               />
               {lens === "chat" ? (
@@ -538,6 +544,19 @@ export default function App() {
             Close workspace
           </button>
         </div>
+      )}
+
+      {confirmReq && (
+        <ConfirmDialog
+          text={confirmReq.text}
+          label={confirmReq.label}
+          onClose={() => setConfirmReq(null)}
+          onConfirm={() => {
+            const run = confirmReq.run;
+            setConfirmReq(null);
+            run();
+          }}
+        />
       )}
 
       {dialog?.kind === "workspace" && (
@@ -729,6 +748,24 @@ function Modal({ title, hint, children, onClose, submit, submitLabel }: {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function ConfirmDialog({ text, label, onClose, onConfirm }: { text: string; label: string; onClose: () => void; onConfirm: () => void }) {
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} role="alertdialog">
+        <p className="confirm-text">{text}</p>
+        <div className="modal-actions">
+          <button type="button" onClick={onClose} autoFocus>
+            Cancel
+          </button>
+          <button type="button" className="primary danger" onClick={onConfirm}>
+            {label}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

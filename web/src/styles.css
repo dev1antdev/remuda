@@ -1713,6 +1713,15 @@ button {
   gap: 8px;
 }
 
+.confirm-text {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.modal .primary.danger {
+  background: var(--red);
+}
+
 .modal-actions button {
   border: 1px solid var(--line);
   background: var(--bg-input);

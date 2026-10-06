@@ -290,6 +290,60 @@ export default function TerminalView({
 
     const onData = term.onData(input);
 
+    // ---- the mouse stays ours ----
+    // herdr enables mouse tracking in the attach stream (for its own
+    // scrollback). If xterm honoured that, every drag would become mouse
+    // reports and nothing could ever be selected. So the DECSET for the
+    // tracking modes is intercepted here — xterm never enters tracking, a
+    // plain drag selects — and the wheel is translated into the reports the
+    // app asked for, so herdr still scrolls.
+    const trackingModes = new Set([9, 1000, 1002, 1003]);
+    let appMouse = 0; // the tracking mode the app wants; 0 = none
+    let sgrMouse = false; // it asked for SGR (1006) reports
+    const mouseModeHandler = (enable: boolean) => (params: (number | number[])[]) => {
+      const rest: number[] = [];
+      let touched = false;
+      for (const p of params) {
+        const n = Array.isArray(p) ? p[0]! : p;
+        if (trackingModes.has(n)) {
+          touched = true;
+          appMouse = enable ? n : 0;
+        } else {
+          if (n === 1006) sgrMouse = enable;
+          rest.push(n);
+        }
+      }
+      if (!touched) return false; // nothing of ours: xterm handles it
+      if (rest.length) term.write(`\x1b[?${rest.join(";")}${enable ? "h" : "l"}`); // the other modes still apply
+      return true;
+    };
+    const decset = term.parser.registerCsiHandler({ prefix: "?", final: "h" }, mouseModeHandler(true));
+    const decrst = term.parser.registerCsiHandler({ prefix: "?", final: "l" }, mouseModeHandler(false));
+
+    const cellSize = () => {
+      const core = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } } })._core;
+      const c = core?._renderService?.dimensions?.css?.cell;
+      return { w: c?.width ?? term.options.fontSize! * 0.6, h: c?.height ?? term.options.fontSize! * 1.2 };
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (!appMouse) return; // no tracking wanted: xterm scrolls its own buffer
+      const screen = term.element!.querySelector(".xterm-screen") as HTMLElement | null;
+      if (!screen) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const r = screen.getBoundingClientRect();
+      const { w, h } = cellSize();
+      const col = Math.max(1, Math.min(term.cols, Math.floor((e.clientX - r.left) / w) + 1));
+      const row = Math.max(1, Math.min(term.rows, Math.floor((e.clientY - r.top) / h) + 1));
+      const up = e.deltaY < 0;
+      const ticks = Math.min(3, Math.max(1, Math.round(Math.abs(e.deltaY) / 40)));
+      const report = sgrMouse
+        ? `\x1b[<${up ? 64 : 65};${col};${row}M`
+        : "\x1b[M" + String.fromCharCode(32 + (up ? 64 : 65), 32 + col, 32 + row);
+      sendInput(report.repeat(ticks));
+    };
+    mount.addEventListener("wheel", onWheel, { capture: true, passive: false });
+
     // ---- selection and copy ----
     // Two ways to select: Option/Alt+drag (xterm's own, even under the
     // agent's mouse tracking), and selection mode — a transparent text layer
@@ -301,7 +355,6 @@ export default function TerminalView({
     layer.className = "term-select";
     layer.hidden = true;
     term.element!.appendChild(layer);
-    let savedMouse: string | null = null;
     let layerTimer: ReturnType<typeof setTimeout> | null = null;
 
     const cellHeight = () => {
@@ -334,22 +387,11 @@ export default function TerminalView({
 
     selectRef.current = (on) => {
       if (on) {
-        if (savedMouse === null) {
-          // pause the agent's mouse tracking inside xterm only — the PTY never
-          // sees this — so Option+drag isn't needed either
-          savedMouse = term.modes.mouseTrackingMode;
-          term.write("\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?9l");
-        }
         layer.hidden = false;
         paintLayer();
       } else {
         layer.hidden = true;
         window.getSelection()?.removeAllRanges();
-        if (savedMouse !== null) {
-          const restore: Record<string, string> = { x10: "\x1b[?9h", vt200: "\x1b[?1000h", drag: "\x1b[?1002h", any: "\x1b[?1003h" };
-          if (restore[savedMouse]) term.write(restore[savedMouse]!);
-          savedMouse = null;
-        }
       }
     };
 
@@ -475,6 +517,9 @@ export default function TerminalView({
       live.current.onReady(null);
       onData.dispose();
       onScroll.dispose();
+      decset.dispose();
+      decrst.dispose();
+      mount.removeEventListener("wheel", onWheel, { capture: true });
       if (layerTimer) clearTimeout(layerTimer);
       mount.removeEventListener("copy", onCopy);
       linkProvider.dispose();
