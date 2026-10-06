@@ -182,6 +182,17 @@ SPA. See README.md for the user story.
   share `closeHandler`. The roster carries an ETag (304 when unchanged) and
   the agent list. Local files stream through `http.ServeContent` (Range for
   video); the WS uses per-message compression and coalesces queued chunks.
+- `web/src/styles.css` — one design system, dark and warm: four surface
+  layers (`--bg` → `--bg-raised` → `--bg-input` → `--bg-overlay`, `--bg-active`
+  for a raised segment), hairlines as white at low alpha (`--line`,
+  `--line-strong`), every colour with a `-soft` fill, a radius scale, three
+  shadows, control heights `--ctl`/`--ctl-sm`/`--ctl-xs`, `--ease`/`--fast`/
+  `--base` for motion (and `prefers-reduced-motion`). Shared rules at the top
+  (filled `.primary`, quiet buttons, text fields, segmented controls, menus,
+  notice cards, the custom checkbox) — reuse them before writing new ones.
+  Icons are `web/src/icons.tsx` (inline 24px stroke paths, `<Icon name>`):
+  never an emoji or a font glyph as an icon. `Select.tsx` replaces every
+  native `<select>` (an icon per option, a portal so nothing clips it).
 - `web/` — React + Vite + xterm.js SPA, embedded via `web/embed.go`
   (`go:embed all:dist`). Build with `make web` before `go build`.
 

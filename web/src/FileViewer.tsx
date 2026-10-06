@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fileUrl, fsDiff, fsStat, fsText, type FileDiff, type FileInfo } from "./api";
 import { basename, errMsg } from "./prefs";
+import Icon from "./icons";
 
 export type FileTarget = { path: string; line?: number; prefer?: "file" | "changes" };
 
@@ -118,8 +119,8 @@ export default function FileViewer({
               </button>
             </nav>
           )}
-          <button className="fv-close" onClick={close} title="Close (Esc)">
-            ×
+          <button className="fv-close icon-btn" onClick={close} title="Close (Esc)">
+            <Icon name="x" size={18} />
           </button>
         </header>
 

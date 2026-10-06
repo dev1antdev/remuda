@@ -56,7 +56,7 @@ export type Task = {
 export const NO_DATE = "0001-01-01T00:00:00Z";
 export const hasDate = (d: string | undefined | null): d is string => !!d && !d.startsWith("0001-");
 
-export const PRIORITIES = ["—", "Low", "Medium", "High", "Urgent", "DO NOW"];
+export const PRIORITIES = ["None", "Low", "Medium", "High", "Urgent", "DO NOW"];
 
 export const tasksStatus = (checkNow = false) =>
   fetch(`/api/tasks/status${checkNow ? "?check=1" : ""}`)

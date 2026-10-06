@@ -31,6 +31,7 @@ import Sidebar from "./Sidebar";
 import Select from "./Select";
 import Logo from "./Logo";
 import { DEFAULT_RADAR, type RadarPrefs } from "./radar";
+import Icon from "./icons";
 
 type Lens = "chat" | "terminal";
 type Selection = { machineId: string; paneId: string };
@@ -288,8 +289,8 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <button className="burger" onClick={() => setDrawer((d) => !d)}>
-          ☰
+        <button className="burger icon-btn" onClick={() => setDrawer((d) => !d)} title="Menu">
+          <Icon name="menu" size={18} />
         </button>
         <nav className="mode-switch">
           <button className={mode === "herdr" ? "on" : ""} onClick={() => setMode("herdr")} title="Your agents and terminals, from herdr">
@@ -335,7 +336,7 @@ export default function App() {
                   }
                   onClick={() => setSizeMode(sizeMode === "keep" ? "fit" : "keep")}
                 >
-                  {sizeMode === "keep" ? "⊡" : "⤢"}
+                  <Icon name={sizeMode === "keep" ? "minimize" : "maximize"} />
                 </button>
                 {sizeMode === "fit" && (
                   <button
@@ -351,7 +352,8 @@ export default function App() {
                       setWidthMenu(widthMenu ? null : { x: r.left, y: r.bottom });
                     }}
                   >
-                    ↔{minCols ? ` ${minCols}` : ""}
+                    <Icon name="move-horizontal" />
+                    {minCols ? <span className="kb-toggle-num">{minCols}</span> : null}
                   </button>
                 )}
                 <button
@@ -363,20 +365,20 @@ export default function App() {
                   }
                   onClick={() => setSelectMode((v) => !v)}
                 >
-                  ⌖
+                  <Icon name="text-select" />
                 </button>
                 <button className="kb-toggle" title="Smaller text" onClick={() => setTermFont((f) => Math.max(8, f - 1))}>
-                  A−
+                  <Icon name="text-smaller" />
                 </button>
                 <button className="kb-toggle" title="Larger text" onClick={() => setTermFont((f) => Math.min(20, f + 1))}>
-                  A+
+                  <Icon name="text-larger" />
                 </button>
                 <button
                   className={`kb-toggle${keybar ? " on" : ""}`}
                   title="Key bar"
                   onClick={() => setKeybar((k) => !k)}
                 >
-                  ⌨
+                  <Icon name="keyboard" />
                 </button>
               </>
             )}
@@ -396,7 +398,7 @@ export default function App() {
             setAlerts((a) => !a);
           }}
         >
-          🔔
+          <Icon name="bell" size={17} />
         </button>
       </header>
       {alerts && (
@@ -639,13 +641,13 @@ function TabStrip({
                 {t.panes.length > 1 && <span className="tab-count">{t.panes.length}</span>}
               </button>
               <button className="tab-close" title="Close tab" onClick={() => onCloseTab(t)}>
-                ×
+                <Icon name="x" size={13} />
               </button>
             </div>
           );
         })}
         <button className="tab-add" title="New tab in this workspace" onClick={onNewTab}>
-          +
+          <Icon name="plus" size={14} />
         </button>
       </div>
       {tab.panes.length > 1 && (

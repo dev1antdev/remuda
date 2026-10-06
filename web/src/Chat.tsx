@@ -5,6 +5,7 @@ import { INSERT_EVENT } from "./host";
 import { Markdown, type OpenFile } from "./markdown";
 import { errMsg, isTouch } from "./prefs";
 import Select from "./Select";
+import Icon from "./icons";
 
 // Chat lens: the transcript comes from Claude Code's own session file (read
 // server-side), sending types into the live pane. Polls with ETag — every
@@ -197,11 +198,11 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
         <div className="attachments">
           {att.items.map((a) => (
             <div key={a.id} className={`attachment${a.error ? " failed" : ""}${a.upload ? "" : " pending"}`} title={a.error ?? a.upload?.rel ?? a.file.name}>
-              {a.thumb ? <img src={a.thumb} alt="" /> : <span className="attachment-icon">📄</span>}
+              {a.thumb ? <img src={a.thumb} alt="" /> : <span className="attachment-icon"><Icon name="file" size={18} /></span>}
               <span className="attachment-name">{a.file.name}</span>
               {!a.upload && !a.error && <span className="attachment-spin" />}
               <button type="button" className="attachment-x" title="Remove" onClick={() => removeAttachment(a)}>
-                ×
+                <Icon name="x" size={12} />
               </button>
             </div>
           ))}
@@ -242,7 +243,7 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
           disabled={att.items.length >= MAX_ATTACHMENTS}
           onClick={() => picker.current?.click()}
         >
-          📎
+          <Icon name="paperclip" size={17} />
         </button>
         <textarea
           ref={area}
@@ -268,8 +269,8 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
             }
           }}
         />
-        <button className="composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()}>
-          {sending ? "…" : att.uploading ? "Uploading…" : "Send"}
+        <button className="composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title="Send (Enter)">
+          {sending ? "…" : att.uploading ? "Uploading…" : <><span>Send</span><Icon name="send" size={14} /></>}
         </button>
         {working && (
           <button
@@ -277,7 +278,7 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
             title="Send Esc to interrupt"
             onClick={() => void sendKeys(machineId, paneId, ["esc"])}
           >
-            Stop
+            <Icon name="square" size={12} /> Stop
           </button>
         )}
       </div>
@@ -328,7 +329,7 @@ function PartView({ part, onOpenFile }: { part: Part; onOpenFile: OpenFile }) {
         className={part.is_error ? "part-tool part-tool-error" : "part-tool"}
         summary={
           <>
-            {part.is_error ? "✗ " : "▸ "}
+            <Icon name={part.is_error ? "alert-triangle" : "chevron-right"} size={12} className="icon part-tool-icon" />{" "}
             {name}
             {hint && " · "}
             {file ? (

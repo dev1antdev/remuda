@@ -24,6 +24,7 @@ import {
   type RadarPrefs,
 } from "./radar";
 import { basename } from "./prefs";
+import Icon from "./icons";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
 
@@ -78,15 +79,15 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
 
   const nextOrder = { active: "recent", recent: "herdr", herdr: "active" } as const;
   const orderTitle = { active: "Grouped by activity — click for a flat list by activity", recent: "Flat, by activity — click for herdr's own order", herdr: "herdr's own order — click to group by activity" };
-  const orderGlyph = { active: "⇅", recent: "≡", herdr: "☰" };
+  const orderIcon = { active: "arrow-up-down", recent: "list", herdr: "layers" } as const;
 
   return (
     <>
       <div className="sidebar-head">
         <span>Machines</span>
         <span className="sidebar-head-actions">
-          <button className={prefs.order !== "herdr" ? "on" : ""} title={orderTitle[prefs.order]} onClick={() => onPrefs({ ...prefs, order: nextOrder[prefs.order] })}>
-            {orderGlyph[prefs.order]}
+          <button className={prefs.order !== "active" ? "on" : ""} title={orderTitle[prefs.order]} onClick={() => onPrefs({ ...prefs, order: nextOrder[prefs.order] })}>
+            <Icon name={orderIcon[prefs.order]} size={14} />
           </button>
           <button
             className={settings ? "on" : ""}
@@ -96,11 +97,11 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
               setSettings(settings ? null : { x: Math.min(r.left, window.innerWidth - 246), y: r.bottom });
             }}
           >
-            ⚙
+            <Icon name="sliders" size={14} />
           </button>
           {settings && <RadarSettings at={settings} prefs={prefs} onPrefs={onPrefs} />}
           <button onClick={onAddMachine} title="Add a remote PC over SSH">
-            + PC
+            <Icon name="plus" size={13} /> PC
           </button>
         </span>
       </div>
@@ -123,8 +124,8 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
                     {!n.working && !n.blocked && !n.done && m.sessions.length > 0 && <span className="machine-count">{m.sessions.length}</span>}
                   </span>
                 )}
-                <span className="chevron" aria-hidden="true">
-                  {folded ? "▸" : "▾"}
+                <span className={`chevron${folded ? "" : " open"}`} aria-hidden="true">
+                  <Icon name="chevron-right" size={12} />
                 </span>
               </button>
               {m.source === "herdr" && (
@@ -133,11 +134,11 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
                 </span>
               )}
               <button className="icon-btn" title={`New workspace on ${m.label}`} disabled={m.state !== "connected"} onClick={() => onNewWorkspace(m)}>
-                +
+                <Icon name="plus" size={14} />
               </button>
               {m.id !== "local" && m.source !== "herdr" && (
                 <button className="icon-btn" title="Remove machine (nothing on the PC is touched)" onClick={() => onRemoveMachine(m)}>
-                  ×
+                  <Icon name="x" size={14} />
                 </button>
               )}
             </div>
@@ -243,7 +244,7 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, current, onSelect
           onMenu(m, s, r.right, r.bottom);
         }}
       >
-        ⋯
+        <Icon name="more" size={15} />
       </button>
     </div>
   );
@@ -285,7 +286,7 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
               onMenu(m, r.session, b.right, b.bottom);
             }}
           >
-            ⋯
+            <Icon name="more" size={15} />
           </button>
         </>
       )}
@@ -306,9 +307,9 @@ function RadarSettings({ at, prefs, onPrefs }: { at: { x: number; y: number }; p
           value={prefs.order}
           onChange={(order) => onPrefs({ ...prefs, order })}
           options={[
-            { value: "active", label: "grouped by activity", icon: "⇅" },
-            { value: "recent", label: "flat, by activity", icon: "≡" },
-            { value: "herdr", label: "herdr's own order", icon: "☰" },
+            { value: "active", label: "grouped by activity", icon: <Icon name="arrow-up-down" size={14} /> },
+            { value: "recent", label: "flat, by activity", icon: <Icon name="list" size={14} /> },
+            { value: "herdr", label: "herdr's own order", icon: <Icon name="layers" size={14} /> },
           ]}
         />
       </label>

@@ -10,6 +10,7 @@ import {
   type PushState,
 } from "./push";
 import Select from "./Select";
+import Icon from "./icons";
 
 // Push alerts for this device: enable, what to be told about, a test push.
 export default function AlertsPanel({ onClose }: { onClose: () => void }) {
@@ -48,7 +49,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
       <div className="alerts-head">
         <strong>Alerts on this device</strong>
         <button className="icon-btn" onClick={onClose} title="Close">
-          ×
+          <Icon name="x" size={16} />
         </button>
       </div>
 

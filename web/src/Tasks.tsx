@@ -32,14 +32,15 @@ import { errMsg, usePref } from "./prefs";
 import { openUrl } from "./host";
 import Select from "./Select";
 import Logo from "./Logo";
+import Icon, { type IconName } from "./icons";
 
 type Smart = "today" | "upcoming" | "open";
 type Sel = { kind: "smart"; id: Smart } | { kind: "project"; id: number };
 
-const SMART: { id: Smart; label: string; glyph: string; filter: string }[] = [
-  { id: "today", label: "Today", glyph: "☀", filter: "done = false && due_date < now/d+1d" },
-  { id: "upcoming", label: "Upcoming", glyph: "▸", filter: "done = false && due_date < now+7d" },
-  { id: "open", label: "All open", glyph: "☐", filter: "done = false" },
+const SMART: { id: Smart; label: string; icon: IconName; filter: string }[] = [
+  { id: "today", label: "Today", icon: "sun", filter: "done = false && due_date < now/d+1d" },
+  { id: "upcoming", label: "Upcoming", icon: "calendar", filter: "done = false && due_date < now+7d" },
+  { id: "open", label: "All open", icon: "circle-check", filter: "done = false" },
 ];
 
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -212,7 +213,7 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
         <div className="sidebar-head">
           <span>Lists</span>
           <button onClick={() => setNewProject(true)} title="New project">
-            + Project
+            <Icon name="plus" size={13} /> Project
           </button>
         </div>
         {SMART.map((s) => (
@@ -225,7 +226,9 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
               closeDrawer();
             }}
           >
-            <span className="tasks-nav-glyph">{s.glyph}</span>
+            <span className="tasks-nav-glyph">
+              <Icon name={s.icon} size={15} />
+            </span>
             {s.label}
           </button>
         ))}
@@ -245,7 +248,9 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
                 }}
                 title={f.description || f.title}
               >
-                <span className="tasks-nav-glyph">⌕</span>
+                <span className="tasks-nav-glyph">
+                  <Icon name="filter" size={14} />
+                </span>
                 <span className="tasks-nav-label">{f.title}</span>
               </button>
             ))}
@@ -265,7 +270,7 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
         />
         <div className="tasks-sidebar-foot">
           <button className="linkish" onClick={() => openUrl(status.url!)} title={status.url}>
-            Open Vikunja ↗
+            Open Vikunja <Icon name="external-link" size={12} />
           </button>
           <button
             className="linkish"
@@ -297,10 +302,10 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
           <div className="tasks-notice">
             {notice.text}
             <button className="linkish" onClick={() => onOpenPane(notice.machineId, notice.paneId)}>
-              Open ›
+              Open <Icon name="chevron-right" size={12} />
             </button>
-            <button className="tasks-close" onClick={() => setNotice(null)} title="Dismiss">
-              ×
+            <button className="tasks-close icon-btn" onClick={() => setNotice(null)} title="Dismiss">
+              <Icon name="x" size={14} />
             </button>
           </div>
         )}
@@ -320,13 +325,13 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
         {pages > 1 && (
           <div className="tasks-pager">
             <button disabled={page <= 1} onClick={() => setPage(page - 1)}>
-              ‹
+              <Icon name="chevron-left" size={14} />
             </button>
             <span>
               {page} / {pages}
             </span>
             <button disabled={page >= pages} onClick={() => setPage(page + 1)}>
-              ›
+              <Icon name="chevron-right" size={14} />
             </button>
           </div>
         )}
@@ -532,7 +537,9 @@ function QuickAdd({ placeholder, disabled, onAdd }: { placeholder: string; disab
         );
       }}
     >
-      <span className="tasks-add-plus">+</span>
+      <span className="tasks-add-plus">
+        <Icon name="plus" size={15} />
+      </span>
       <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} disabled={disabled || busy} />
       {err && <span className="chat-error">{err}</span>}
     </form>
@@ -652,10 +659,10 @@ function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels,
         <input type="checkbox" className="tasks-check" checked={t.done} onChange={() => void patch({ done: !t.done })} />
         <span className="tasks-ident">{t.identifier || `#${t.index}`}</span>
         <button className="linkish" onClick={() => openUrl(`${vikunjaURL}/tasks/${t.id}`)} title="Open this task in Vikunja">
-          Vikunja ↗
+          Vikunja <Icon name="external-link" size={12} />
         </button>
-        <button className="tasks-close" onClick={onClose} title="Close">
-          ×
+        <button className="tasks-close icon-btn" onClick={onClose} title="Close">
+          <Icon name="x" size={15} />
         </button>
       </div>
       <input
@@ -701,7 +708,7 @@ function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels,
             <span key={l.id} className="tasks-label" style={labelStyle(l)}>
               {l.title}
               <button onClick={() => void dropLabel(l)} title="Remove">
-                ×
+                <Icon name="x" size={11} />
               </button>
             </span>
           ))}
@@ -759,7 +766,7 @@ function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels,
             }}
             title="More ways to send"
           >
-            ▾
+            <Icon name="chevron-down" size={14} />
           </button>
           {sendMenu && (
             <span className="row-menu split-menu" onClick={(e) => e.stopPropagation()}>
@@ -819,7 +826,7 @@ function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels,
           {t.done && hasDate(t.done_at) && <> · done {fmtDate(t.done_at)}</>}
         </span>
         <button className="linkish danger" onClick={onDelete}>
-          Delete
+          <Icon name="trash" size={12} /> Delete
         </button>
       </div>
     </aside>
