@@ -39,8 +39,9 @@ type Server struct {
 	Guard    *auth.Guard
 	UI       fs.FS // built SPA
 
-	mu     sync.Mutex
-	paneMu map[push.PaneRef]*sync.Mutex // per-pane submit serialization
+	mu      sync.Mutex
+	paneMu  map[push.PaneRef]*sync.Mutex // per-pane submit serialization
+	streams termStreams                  // HTTP-transport terminal sessions
 }
 
 func New(m *machines.Manager, w *watch.Watcher, p *push.Service, g *auth.Guard, ui fs.FS) *Server {
@@ -94,6 +95,11 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/submit", s.handleSubmit)
 	api.HandleFunc("POST /api/keys", s.handleKeys)
 	api.HandleFunc("GET /ws/pane", s.handlePaneWS)
+	api.HandleFunc("POST /api/term/open", s.handleTermOpen)
+	api.HandleFunc("GET /api/term/read", s.handleTermRead)
+	api.HandleFunc("POST /api/term/input", s.handleTermInput)
+	api.HandleFunc("POST /api/term/resize", s.handleTermResize)
+	api.HandleFunc("DELETE /api/term/close", s.handleTermClose)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

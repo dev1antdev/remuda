@@ -27,6 +27,12 @@ export type TermApi = {
 
 const MIN_FONT = 8;
 
+// Transport decision for this page: once WebSockets prove unusable, every
+// terminal uses HTTP without trying again.
+let preferHTTP = false;
+let wsFailures = 0;
+let wsRetry = 0;
+
 // applyModifier encodes a single printable character under a one-shot
 // Ctrl (control code) or Alt (ESC prefix); anything else passes through.
 export function applyModifier(mod: Modifier, seq: string): string {
@@ -82,22 +88,26 @@ export default function TerminalView({
     term.loadAddon(fit);
     term.open(mount);
 
-    let ws: WebSocket | null = null;
     let closed = false;
-    let retry = 0;
     let lastSize = "";
 
-    const send = (obj: object) => {
-      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
-    };
+    // ---- transport: WebSocket, falling back to HTTP long-polling ----
+    // JetBrains' embedded browser in Remote Development (and some proxies)
+    // forward requests but not WebSockets: after two sockets that close
+    // before they open, the page switches to the HTTP transport for good.
+    type Transport = { input(data: string): void; resize(cols: number, rows: number): void; close(): void };
+    let transport: Transport | null = null;
+    const paneQuery = `machine=${encodeURIComponent(machineId)}&id=${encodeURIComponent(paneId)}`;
+    const note = (text: string) => term.write(`\r\n\x1b[2m[herdr-ui] ${text}\x1b[0m\r\n`);
+
     // the PTY is shared by every viewer: never re-send an unchanged size
     const sendResize = () => {
       const size = `${term.cols}x${term.rows}`;
       if (size === lastSize) return;
       lastSize = size;
-      send({ type: "resize", cols: term.cols, rows: term.rows });
+      transport?.resize(term.cols, term.rows);
     };
-    const sendInput = (data: string) => send({ type: "input", data });
+    const sendInput = (data: string) => transport?.input(data);
     const input = (seq: string) => {
       const m = live.current.modifier;
       sendInput(applyModifier(m, seq));
@@ -146,27 +156,127 @@ export default function TerminalView({
       });
     };
 
-    const connect = () => {
-      if (closed) return;
+    // a fresh stream repaints from the replay: reset, then size it
+    const onOpen = () => {
+      lastSize = "";
+      term.reset();
+      sendResize();
+    };
+
+    const connectWS = (): Transport => {
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      ws = new WebSocket(
-        `${proto}://${location.host}/ws/pane?machine=${encodeURIComponent(machineId)}&id=${encodeURIComponent(paneId)}&cols=${term.cols}&rows=${term.rows}`,
-      );
+      let ws: WebSocket | null = new WebSocket(`${proto}://${location.host}/ws/pane?${paneQuery}&cols=${term.cols}&rows=${term.rows}`);
       ws.binaryType = "arraybuffer";
+      let opened = false;
+      const send = (obj: object) => {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+      };
       ws.onopen = () => {
-        retry = 0;
-        lastSize = "";
-        term.reset();
-        sendResize();
+        opened = true;
+        wsFailures = 0;
+        wsRetry = 0;
+        onOpen();
       };
       ws.onmessage = (ev) => {
         if (ev.data instanceof ArrayBuffer) term.write(new Uint8Array(ev.data), followBottom);
       };
-      ws.onclose = () => {
-        if (closed) return;
-        setTimeout(connect, Math.min(5000, 250 * 2 ** retry++));
-      };
       ws.onerror = () => ws?.close();
+      ws.onclose = () => {
+        if (closed || ws === null) return;
+        if (!opened && ++wsFailures >= 2) {
+          preferHTTP = true;
+          note("WebSocket unavailable here — using the HTTP transport");
+          transport = connectHTTP();
+          return;
+        }
+        setTimeout(() => {
+          if (!closed) transport = connectWS();
+        }, Math.min(5000, 250 * 2 ** wsRetry++));
+      };
+      return {
+        input: (data) => send({ type: "input", data }),
+        resize: (cols, rows) => send({ type: "resize", cols, rows }),
+        close: () => {
+          const s = ws;
+          ws = null;
+          s?.close();
+        },
+      };
+    };
+
+    // HTTP: open a server-side stream, long-poll it for output, POST input
+    // in small batches. A 410 means the stream expired: reopen and repaint.
+    const connectHTTP = (): Transport => {
+      let sid: string | null = null;
+      let stopped = false;
+      let pending = "";
+      let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const open = async () => {
+        const res = await fetch(`/api/term/open?${paneQuery}&cols=${term.cols}&rows=${term.rows}`, { method: "POST" });
+        if (!res.ok) throw new Error(`open failed (${res.status})`);
+        sid = ((await res.json()) as { sid: string }).sid;
+        onOpen();
+      };
+      const flush = async () => {
+        flushTimer = null;
+        if (!sid || !pending) return;
+        const body = pending;
+        pending = "";
+        try {
+          await fetch(`/api/term/input?sid=${sid}`, { method: "POST", body });
+        } catch {
+          pending = body + pending;
+        }
+      };
+      const loop = async () => {
+        try {
+          await open();
+        } catch (e) {
+          if (!stopped) {
+            note(`cannot open the terminal stream (${e instanceof Error ? e.message : String(e)}) — retrying`);
+            setTimeout(loop, 2000);
+          }
+          return;
+        }
+        while (!stopped && sid) {
+          try {
+            const res = await fetch(`/api/term/read?sid=${sid}&wait=20`);
+            if (res.status === 410) {
+              sid = null;
+              setTimeout(loop, 500); // expired: reopen
+              return;
+            }
+            if (!res.ok) throw new Error(`read failed (${res.status})`);
+            const buf = new Uint8Array(await res.arrayBuffer());
+            if (buf.length) term.write(buf, followBottom);
+            if (res.headers.get("X-Herdr-UI-End") === "1") {
+              note("terminal detached");
+              return;
+            }
+          } catch {
+            if (stopped) return;
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+        }
+      };
+      void loop();
+      return {
+        input: (data) => {
+          pending += data;
+          if (!flushTimer) flushTimer = setTimeout(() => void flush(), 20);
+        },
+        resize: (cols, rows) => {
+          if (sid) void fetch(`/api/term/resize?sid=${sid}&cols=${cols}&rows=${rows}`, { method: "POST" });
+        },
+        close: () => {
+          stopped = true;
+          if (sid) {
+            void fetch(`/api/term/close?sid=${sid}`, { method: "DELETE", keepalive: true });
+            sid = null;
+          }
+        },
+      };
     };
 
     const onData = term.onData(input);
@@ -255,7 +365,7 @@ export default function TerminalView({
     });
     ro.observe(mount);
 
-    connect();
+    transport = preferHTTP ? connectHTTP() : connectWS();
     live.current.onReady({ input, appCursor: () => term.modes.applicationCursorKeysMode });
 
     return () => {
@@ -269,7 +379,8 @@ export default function TerminalView({
       mount.removeEventListener("paste", onPaste, true);
       ro.disconnect();
       if (settle) clearTimeout(settle);
-      ws?.close();
+      transport?.close();
+      transport = null;
       term.dispose();
     };
   }, [machineId, paneId]);

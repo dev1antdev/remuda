@@ -1,5 +1,8 @@
 package dev.mardeus.herdrui
 
+import com.intellij.icons.AllIcons
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -36,11 +39,26 @@ class HerdrToolWindowFactory : ToolWindowFactory, DumbAware {
     private val log = thisLogger()
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val status = JBLabel("Connecting to herdr-ui…").apply { border = JBUI.Borders.empty(16) }
-        val holder = JPanel(BorderLayout()).apply { add(status, BorderLayout.NORTH) }
+        val holder = JPanel(BorderLayout())
         val content = ContentFactory.getInstance().createContent(holder, "", false)
         toolWindow.contentManager.addContent(content)
+        // Reconnect: after a herdr-ui update or a dead backend, without an IDE restart
+        toolWindow.setTitleActions(listOf(object : AnAction("Reconnect", "Restart herdr-ui if needed and reload", AllIcons.Actions.Refresh) {
+            override fun actionPerformed(e: AnActionEvent) = connect(project, holder, content)
+        }))
+        connect(project, holder, content)
+    }
 
+    private fun connect(project: Project, holder: JPanel, content: com.intellij.ui.content.Content) {
+        val status = JBLabel("Connecting to herdr-ui…").apply { border = JBUI.Borders.empty(16) }
+        ApplicationManager.getApplication().invokeLater {
+            (HerdrProjectState.get(project).view as? EmbeddedView)?.dispose()
+            HerdrProjectState.get(project).view = null
+            holder.removeAll()
+            holder.add(status, BorderLayout.NORTH)
+            holder.revalidate()
+            holder.repaint()
+        }
         val say = { text: String -> ApplicationManager.getApplication().invokeLater { status.text = text } }
 
         // Probing and starting the binary happen off the EDT; Swing and the

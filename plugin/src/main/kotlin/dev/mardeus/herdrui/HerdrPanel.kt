@@ -37,15 +37,19 @@ interface HerdrView {
  * so a file path the agent mentions opens in this IDE's editor — files on
  * other machines fall back to herdr-ui's own viewer.
  */
-class EmbeddedView(private val project: Project, parent: Disposable, url: String) : HerdrView {
+class EmbeddedView(private val project: Project, parent: Disposable, url: String) : HerdrView, Disposable {
     private val browser: JBCefBrowser = JBCefBrowser.createBuilder().setUrl(url).build()
     private val openQuery: JBCefJSQuery = JBCefJSQuery.create(browser as JBCefBrowserBase)
 
     override val component: JComponent get() = browser.component
 
+    override fun dispose() {
+        Disposer.dispose(openQuery)
+        Disposer.dispose(browser)
+    }
+
     init {
-        Disposer.register(parent, browser)
-        Disposer.register(parent, openQuery)
+        Disposer.register(parent, this)
         openQuery.addHandler { payload ->
             // payload: "<line>\t<path>"
             val (line, path) = payload.split('\t', limit = 2).let { it[0].toIntOrNull() to it.getOrElse(1) { "" } }
