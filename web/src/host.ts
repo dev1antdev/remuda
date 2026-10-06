@@ -12,6 +12,9 @@ export type HerdrHost = {
   // put text on the user's clipboard — an embedded browser in Remote
   // Development writes to the wrong machine's clipboard otherwise
   copy?: (text: string) => boolean;
+  // open a web link in the user's browser — an embedded browser has no
+  // tabs, and window.open there would navigate herdr-ui away
+  openUrl?: (url: string) => boolean;
 };
 
 export type HerdrUI = {
@@ -64,6 +67,17 @@ export async function copyText(text: string): Promise<boolean> {
     ta.remove();
     return ok;
   }
+}
+
+// openUrl opens a link in a new tab: the host's browser when it offers one,
+// else this browser's.
+export function openUrl(url: string): void {
+  try {
+    if (window.herdrHost?.openUrl?.(url) === true) return;
+  } catch {
+    /* fall through */
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 export function installHostAPI(): void {

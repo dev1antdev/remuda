@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
-import { Terminal as XTerm } from "@xterm/xterm";
+import { Terminal as XTerm, type ILink } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { uploadFiles } from "./api";
 import { filesFrom, shellQuote } from "./attachments";
-import { copyText } from "./host";
-import { findPaths } from "./paths";
+import { copyText, openUrl } from "./host";
+import { findPaths, findUrls } from "./paths";
 import type { FileTarget } from "./FileViewer";
 
 export type Modifier = "ctrl" | "alt" | null;
@@ -48,6 +48,7 @@ export function applyModifier(mod: Modifier, seq: string): string {
 export default function TerminalView({
   machineId,
   paneId,
+  agent,
   cols,
   rows,
   mode,
@@ -64,6 +65,10 @@ export default function TerminalView({
   paneId: string;
   cols: number; // the pane's own grid, 0 when unknown
   rows: number;
+  // an agent's pane: file paths and links are clickable. A shell's pane
+  // belongs to whatever runs in it — clicks go to the app, only URLs with
+  // Cmd/Ctrl held are links.
+  agent: boolean;
   mode: SizeMode;
   minCols: number; // fit mode: never narrower than this many columns (0 = off)
   fontSize: number; // preferred size in fit mode
@@ -78,8 +83,8 @@ export default function TerminalView({
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   // props the running terminal reads without being recreated
-  const live = useRef({ cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied });
-  live.current = { cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied };
+  const live = useRef({ agent, cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied });
+  live.current = { agent, cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied };
   const applyRef = useRef<() => void>(() => {});
   const selectRef = useRef<(on: boolean) => void>(() => {});
 
@@ -336,6 +341,25 @@ export default function TerminalView({
     const decset = term.parser.registerCsiHandler({ prefix: "?", final: "h" }, mouseModeHandler(true));
     const decrst = term.parser.registerCsiHandler({ prefix: "?", final: "l" }, mouseModeHandler(false));
 
+    // the grid cell under a pointer event, 1-based
+    const cellAt = (e: MouseEvent): { col: number; row: number } | null => {
+      const screen = term.element?.querySelector(".xterm-screen") as HTMLElement | null;
+      if (!screen) return null;
+      const r = screen.getBoundingClientRect();
+      const { w, h } = cellSize();
+      return {
+        col: Math.max(1, Math.min(term.cols, Math.floor((e.clientX - r.left) / w) + 1)),
+        row: Math.max(1, Math.min(term.rows, Math.floor((e.clientY - r.top) / h) + 1)),
+      };
+    };
+    // one mouse report the way the app asked for it: SGR, else X10 (whose
+    // release is button 3 and whose coordinates stop at 223)
+    const report = (code: number, c: { col: number; row: number }, release: boolean) =>
+      sgrMouse
+        ? `\x1b[<${code};${c.col};${c.row}${release ? "m" : "M"}`
+        : "\x1b[M" + String.fromCharCode(32 + (release ? (code & ~3) | 3 : code), 32 + Math.min(c.col, 223), 32 + Math.min(c.row, 223));
+    const modifierBits = (e: MouseEvent) => (e.shiftKey ? 4 : 0) + (e.altKey ? 8 : 0) + (e.ctrlKey ? 16 : 0);
+
     const onWheel = (e: WheelEvent) => {
       // a sideways gesture scrolls the mount (a grid wider than the screen),
       // never the app or xterm
@@ -344,22 +368,39 @@ export default function TerminalView({
         return;
       }
       if (!appMouse) return; // no tracking wanted: xterm scrolls its own buffer
-      const screen = term.element!.querySelector(".xterm-screen") as HTMLElement | null;
-      if (!screen) return;
+      const cell = cellAt(e);
+      if (!cell) return;
       e.preventDefault();
       e.stopPropagation();
-      const r = screen.getBoundingClientRect();
-      const { w, h } = cellSize();
-      const col = Math.max(1, Math.min(term.cols, Math.floor((e.clientX - r.left) / w) + 1));
-      const row = Math.max(1, Math.min(term.rows, Math.floor((e.clientY - r.top) / h) + 1));
-      const up = e.deltaY < 0;
       const ticks = Math.min(3, Math.max(1, Math.round(Math.abs(e.deltaY) / 40)));
-      const report = sgrMouse
-        ? `\x1b[<${up ? 64 : 65};${col};${row}M`
-        : "\x1b[M" + String.fromCharCode(32 + (up ? 64 : 65), 32 + col, 32 + row);
-      sendInput(report.repeat(ticks));
+      sendInput(report((e.deltaY < 0 ? 64 : 65) + modifierBits(e), cell, false).repeat(ticks));
     };
     mount.addEventListener("wheel", onWheel, { capture: true, passive: false });
+
+    // Clicks still reach the app: a press and release on the same spot is
+    // reported at its cell (a TUI's buttons and lists work), while anything
+    // that moved is a selection and stays here. Reported after xterm's own
+    // mouseup, so a click that opened a link is not also a click for the app.
+    let pressed: { x: number; y: number; button: number } | null = null;
+    let linkUsed = false;
+    const onMouseDown = (e: MouseEvent) => {
+      pressed = { x: e.clientX, y: e.clientY, button: e.button };
+      linkUsed = false;
+    };
+    const onMouseUp = (e: MouseEvent) => {
+      const p = pressed;
+      pressed = null;
+      if (!p || !appMouse || layer.contains(e.target as Node)) return;
+      if (p.button !== e.button || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4) return;
+      const cell = cellAt(e);
+      if (!cell) return;
+      const code = e.button + modifierBits(e);
+      setTimeout(() => {
+        if (!linkUsed) sendInput(report(code, cell, false) + report(code, cell, true));
+      }, 0);
+    };
+    mount.addEventListener("mousedown", onMouseDown, true);
+    mount.addEventListener("mouseup", onMouseUp, true);
 
     // ---- selection and copy ----
     // Two ways to select: Option/Alt+drag (xterm's own, even under the
@@ -463,12 +504,31 @@ export default function TerminalView({
       provideLinks(y, callback) {
         const row = term.buffer.active.getLine(y - 1);
         if (!row) return callback(undefined);
-        const links = findPaths(row.translateToString(true)).map((m) => ({
+        const text = row.translateToString(true);
+        const decorations = { pointerCursor: true, underline: true };
+        const links: ILink[] = findUrls(text).map((m) => ({
           range: { start: { x: m.start + 1, y }, end: { x: m.end, y } },
           text: m.text,
-          decorations: { pointerCursor: true, underline: true },
-          activate: () => live.current.onOpenFile({ path: m.path, line: m.line }),
+          decorations,
+          activate: (e: MouseEvent) => {
+            if (!live.current.agent && !e.metaKey && !e.ctrlKey) return; // the app's click
+            linkUsed = true;
+            openUrl(m.url);
+          },
         }));
+        if (live.current.agent) {
+          for (const m of findPaths(text)) {
+            links.push({
+              range: { start: { x: m.start + 1, y }, end: { x: m.end, y } },
+              text: m.text,
+              decorations,
+              activate: () => {
+                linkUsed = true;
+                live.current.onOpenFile({ path: m.path, line: m.line });
+              },
+            });
+          }
+        }
         callback(links.length ? links : undefined);
       },
     });
@@ -533,6 +593,8 @@ export default function TerminalView({
       decset.dispose();
       decrst.dispose();
       mount.removeEventListener("wheel", onWheel, { capture: true });
+      mount.removeEventListener("mousedown", onMouseDown, true);
+      mount.removeEventListener("mouseup", onMouseUp, true);
       if (layerTimer) clearTimeout(layerTimer);
       mount.removeEventListener("copy", onCopy);
       linkProvider.dispose();

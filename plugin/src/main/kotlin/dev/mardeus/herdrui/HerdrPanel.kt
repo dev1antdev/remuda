@@ -44,12 +44,16 @@ class EmbeddedView(private val project: Project, parent: Disposable, url: String
     // the page's copies go through the IDE's clipboard, which Remote
     // Development mirrors to the client — the browser's own would stay on the host
     private val copyQuery: JBCefJSQuery = JBCefJSQuery.create(browser as JBCefBrowserBase)
+    // links open in the user's browser (Remote Development forwards that to
+    // the client); the embedded one has no tabs to open them in
+    private val urlQuery: JBCefJSQuery = JBCefJSQuery.create(browser as JBCefBrowserBase)
 
     override val component: JComponent get() = browser.component
 
     override fun dispose() {
         Disposer.dispose(openQuery)
         Disposer.dispose(copyQuery)
+        Disposer.dispose(urlQuery)
         Disposer.dispose(browser)
     }
 
@@ -67,11 +71,18 @@ class EmbeddedView(private val project: Project, parent: Disposable, url: String
             }
             null
         }
+        urlQuery.addHandler { url ->
+            if (url.startsWith("http://") || url.startsWith("https://")) {
+                ApplicationManager.getApplication().invokeLater { BrowserUtil.browse(url) }
+            }
+            null
+        }
         browser.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
             override fun onLoadEnd(cefBrowser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
                 if (!frame.isMain) return
                 val openCall = openQuery.inject("payload")
                 val copyCall = copyQuery.inject("text")
+                val urlCall = urlQuery.inject("url")
                 cefBrowser.executeJavaScript(
                     """
                     window.herdrHost = {
@@ -83,6 +94,10 @@ class EmbeddedView(private val project: Project, parent: Disposable, url: String
                       },
                       copy: function (text) {
                         $copyCall
+                        return true;
+                      },
+                      openUrl: function (url) {
+                        $urlCall
                         return true;
                       }
                     };

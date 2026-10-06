@@ -2,6 +2,14 @@ import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { findPaths } from "./paths";
 import type { FileTarget } from "./FileViewer";
 
+import { openUrl } from "./host";
+// links open where the host says (a new tab, or the IDE's browser when
+// embedded) — never by navigating this page
+const link = (url: string) => (e: React.MouseEvent) => {
+  e.preventDefault();
+  openUrl(url);
+};
+
 // A small Markdown renderer for agent answers. Builds React nodes directly —
 // no HTML string, nothing to sanitize. Covers what agents actually write:
 // headings, paragraphs, nested lists (incl. task lists), fenced code,
@@ -181,7 +189,7 @@ function renderInline(text: string, onOpenFile: OpenFile, key = "i"): ReactNode[
     if (m[2] !== undefined) out.push(<code key={k} className="md-code">{m[2]}</code>);
     else if (m[3] !== undefined) {
       out.push(
-        <a key={k} href={m[4]} target="_blank" rel="noopener noreferrer">
+        <a key={k} href={m[4]} onClick={link(m[4]!)}>
           {renderInline(m[3], onOpenFile, k)}
         </a>,
       );
@@ -193,7 +201,7 @@ function renderInline(text: string, onOpenFile: OpenFile, key = "i"): ReactNode[
     else if (m[10] !== undefined) {
       const url = m[10].replace(/[.,;:!?]+$/, "");
       out.push(
-        <a key={k} href={url} target="_blank" rel="noopener noreferrer">
+        <a key={k} href={url} onClick={link(url)}>
           {url}
         </a>,
       );

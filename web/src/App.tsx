@@ -526,6 +526,7 @@ export default function App() {
                     paneId={current.pane.id}
                     cols={current.pane.cols}
                     rows={current.pane.rows}
+                    agent={current.pane.agent !== ""}
                     mode={sizeMode}
                     minCols={minCols}
                     fontSize={termFont}
