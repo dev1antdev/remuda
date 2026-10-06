@@ -1,4 +1,4 @@
-.PHONY: all build web server dev run test typecheck docker docker-test release deploy service plugin clean
+.PHONY: all build web server dev run test typecheck docker docker-test release deploy service code clean
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
@@ -59,9 +59,15 @@ deploy: release
 service:
 	@if [ -n "$(HOST)" ]; then ssh $(HOST) 'sh -s install' < deploy/install-service.sh; else sh deploy/install-service.sh install; fi
 
-# The JetBrains IDE plugin (plugin/build/distributions/*.zip).
-plugin:
-	cd plugin && ./gradlew buildPlugin -q
+# make code [HOST=gog.remote] — installs code-server (VS Code in the browser)
+# as a per-user service on that host, bound to 127.0.0.1:7320 with no auth of
+# its own; herdr-ui proxies it under /code/<machine>/ behind its token.
+code:
+ifeq ($(HOST),)
+	sh deploy/install-code.sh
+else
+	ssh $(HOST) 'sh -s' < deploy/install-code.sh
+endif
 
 clean:
-	rm -rf bin web/dist plugin/build
+	rm -rf bin web/dist

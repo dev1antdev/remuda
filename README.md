@@ -9,7 +9,7 @@ A from-scratch, auditable replacement for
 [herdr-web-ui](https://github.com/devswha/herdr-web-ui):
 
 - **One Go binary.** The UI is embedded; `go build` from this repo is the
-  whole supply chain. No Bun, no npm at runtime, no plugin installer.
+  whole supply chain. No Bun, no npm at runtime, nothing phoning home.
 - **herdr owns the agents.** herdr-ui is only a bridge to herdr's local RPC
   socket — your workspaces, tabs, panes, worktrees and agent statuses are
   herdr's own, and nothing breaks if herdr-ui restarts.
@@ -69,7 +69,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ herdr-ui (Go) ─┬─ local herdr.soc
   Every task has **Send to agent** — the task's title, description and link
   go to a running agent as a prompt (the arrow offers "for grooming", which
   prefixes `/grill-me`). The token is stored on the herdr-ui host and never sent to a browser:
-  the page talks to Vikunja only through herdr-ui's own port, so the plugin,
+  the page talks to Vikunja only through herdr-ui's own port, so
   a phone and a port forward need nothing extra.
 
 ## Install & run
@@ -136,15 +136,25 @@ docker compose --profile dev up dev           # go run on :7317, Vite HMR on :51
 docker build --target runtime -t herdr-ui .   # just the image
 ```
 
-## In the IDE (PhpStorm, GoLand, IDEA — incl. Remote Development)
+## Code — VS Code in the browser
 
-[`plugin/`](plugin/README.md) is a JetBrains plugin that embeds herdr-ui in a
-tool window next to your code: file paths the agent mentions open in the
-editor, **Ask Agent About This File** drops `@path` (and the selection) into
-the chat. It runs on the Remote Development backend, right beside herdr
-(`REMOTE_DEV_SERVER_JCEF_ENABLED=true` on the host enables the embedded
-browser there). `make deploy HOST=…` installs the herdr-ui binary on a
-remote host; `make plugin` builds the zip.
+The **Code** mode frames [code-server](https://github.com/coder/code-server)
+(VS Code served over HTTP, MIT) running on the machine you pick — the editor
+for the workspace's folder, with its own terminal, git and extensions (from
+Open VSX). Each machine runs its own copy, bound to `127.0.0.1:7320` with
+no auth of its own; herdr-ui is the door: `/code/<machine>/` goes through
+the same bearer token, locally to the port, remotely through a port
+forwarded over the ssh master the roster already uses. Install it on a
+machine with
+
+```sh
+make code                   # this machine
+make code HOST=gog.remote   # a remote one, over ssh
+```
+
+(`deploy/install-code.sh`: downloads a pinned release, verifies its
+checksum, installs a launchd / systemd user service). The editor stays
+mounted behind the other modes, so switching back does not reload it.
 
 ## From your phone
 

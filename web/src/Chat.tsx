@@ -1,7 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { fetchChat, sendKeys, submitPrompt, type ChatResponse, type Part, type Turn } from "./api";
 import { filesFrom, MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
-import { INSERT_EVENT } from "./host";
 import { Markdown, type OpenFile } from "./markdown";
 import { errMsg, isTouch } from "./prefs";
 import Select from "./Select";
@@ -157,15 +156,6 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
   };
 
   // a host (the IDE plugin) pushing text into the composer
-  useEffect(() => {
-    const onInsert = (e: Event) => {
-      insertAt((e as CustomEvent<string>).detail);
-      area.current?.focus();
-    };
-    window.addEventListener(INSERT_EVENT, onInsert);
-    return () => window.removeEventListener(INSERT_EVENT, onInsert);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const removeAttachment = (a: Attachment) => {
     if (a.upload) {

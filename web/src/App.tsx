@@ -23,12 +23,12 @@ import {
 import AlertsPanel from "./AlertsPanel";
 import Chat from "./Chat";
 import FileViewer, { type FileTarget } from "./FileViewer";
-import { hostOpensFile, installHostAPI, SELECT_FOLDER_EVENT } from "./host";
 import KeyBar from "./KeyBar";
 import { errMsg, isTouch, readAlertPrefs, usePref } from "./prefs";
 import { resyncPush } from "./push";
 import TerminalView, { type Modifier, type SizeMode, type TermApi } from "./Terminal";
 import Tasks, { type AgentTarget } from "./Tasks";
+import Code from "./Code";
 import Sidebar from "./Sidebar";
 import Select from "./Select";
 import Logo from "./Logo";
@@ -60,23 +60,19 @@ function suggestBranch(): string {
   return `worktree/${pick(ADJ)}-${pick(NOUN)}-${1000 + Math.floor(Math.random() * 9000)}`;
 }
 
-// What the URL asks to open: ?machine=&pane= (a tapped notification) or
-// ?cwd= (an IDE embedding herdr-ui for the project it has open).
-type Requested = Selection | { folder: string };
+// What the URL asks to open: ?machine=&pane= (a tapped notification).
+type Requested = Selection;
 
 function requestedFromURL(): Requested | null {
   const q = new URLSearchParams(location.search);
   const machineId = q.get("machine");
   const paneId = q.get("pane");
-  const cwd = q.get("cwd");
-  if (machineId || paneId || cwd) history.replaceState(null, "", "/");
-  if (machineId && paneId) return { machineId, paneId };
-  if (cwd) return { folder: cwd.replace(/\/+$/, "") };
-  return null;
+  if (machineId || paneId) history.replaceState(null, "", "/");
+  if (!paneId) return null;
+  return { machineId: machineId || "local", paneId };
 }
 
 function matches(x: Located, r: Requested): boolean {
-  if ("folder" in r) return x.pane.cwd === r.folder || x.session.worktree?.checkout_path === r.folder;
   return x.machine.id === r.machineId && x.pane.id === r.paneId;
 }
 
@@ -110,9 +106,14 @@ export default function App() {
   // to a phone would squeeze the desktop's view of it too.
   const [sizeMode, setSizeMode] = usePref<SizeMode>("sizeMode", isTouch ? "keep" : "fit");
   // what the window is for right now: herdr's sessions, or the task list
-  const [mode, setMode] = usePref<"herdr" | "tasks">("mode", "herdr");
-  // a pane asked for from outside (a tapped notification, the IDE's folder,
-  // a deep link) is a herdr-mode thing, whatever the device was left in
+  const [mode, setMode] = usePref<"herdr" | "tasks" | "code">("mode", "herdr");
+  // the editor stays mounted once opened, so coming back does not reload it
+  const [codeOpened, setCodeOpened] = useState(false);
+  useEffect(() => {
+    if (mode === "code") setCodeOpened(true);
+  }, [mode]);
+  // a pane asked for from outside (a tapped notification, a deep link) is
+  // an Agents-mode thing, whatever the device was left in
   const requestPane = (r: Requested) => {
     setRequested(r);
     setMode("herdr");
@@ -165,18 +166,14 @@ export default function App() {
   // already open tab arrives as a message from the service worker. A host
   // (the IDE plugin) can also ask for the pane of a folder.
   useEffect(() => {
-    installHostAPI();
     void resyncPush(readAlertPrefs());
-    const onFolder = (e: Event) => requestPane({ folder: (e as CustomEvent<string>).detail.replace(/\/+$/, "") });
-    window.addEventListener(SELECT_FOLDER_EVENT, onFolder);
-    if (!("serviceWorker" in navigator)) return () => window.removeEventListener(SELECT_FOLDER_EVENT, onFolder);
+    if (!("serviceWorker" in navigator)) return;
     const onMsg = (e: MessageEvent) => {
       const d = e.data as { type?: string; machine?: string; pane?: string };
       if (d?.type === "select-pane" && d.machine && d.pane) requestPane({ machineId: d.machine, paneId: d.pane });
     };
     navigator.serviceWorker.addEventListener("message", onMsg);
     return () => {
-      window.removeEventListener(SELECT_FOLDER_EVENT, onFolder);
       navigator.serviceWorker.removeEventListener("message", onMsg);
     };
   }, []);
@@ -265,7 +262,6 @@ export default function App() {
   const openFile = useCallback((target: FileTarget) => {
     const c = currentRef.current;
     if (!c) return;
-    if (hostOpensFile(c.machine.id, target)) return; // the IDE took it
     setFile({ machineId: c.machine.id, paneId: c.pane.id, target });
   }, []);
   const closeFile = useCallback(() => setFile(null), []);
@@ -302,9 +298,12 @@ export default function App() {
           <button className={mode === "tasks" ? "on" : ""} onClick={() => setMode("tasks")} title="Your Vikunja tasks">
             Tasks
           </button>
+          <button className={mode === "code" ? "on" : ""} onClick={() => setMode("code")} title="VS Code on a machine, through herdr-ui">
+            Code
+          </button>
         </nav>
         <span className="title">
-          {mode === "tasks" ? null : current ? (
+          {mode !== "herdr" ? null : current ? (
             <>
               {current.machine.id !== "local" && (
                 <span className="title-machine">{current.machine.label} ›</span>
@@ -412,6 +411,16 @@ export default function App() {
       )}
 
       <div className="body">
+        {codeOpened && (
+          <div className="code-host" hidden={mode !== "code"}>
+            <Code
+              machines={machines}
+              currentMachine={current?.machine.id ?? null}
+              currentFolder={current ? current.session.worktree?.checkout_path || current.pane.cwd || null : null}
+              visible={mode === "code"}
+            />
+          </div>
+        )}
         {mode === "tasks" && (
           <Tasks
             drawer={drawer}

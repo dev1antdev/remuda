@@ -164,6 +164,25 @@ func (c *Conn) ForwardSocket(remoteSock string) (string, error) {
 	return local, nil
 }
 
+// ForwardTCP forwards a fresh local loopback port to 127.0.0.1:remotePort on
+// the host over the master and returns the local address. The forward lives
+// as long as the master does.
+func (c *Conn) ForwardTCP(remotePort int) (string, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+	local := l.Addr().String()
+	l.Close()
+	cmd := c.cmd("-O", "forward", "-L", fmt.Sprintf("%s:127.0.0.1:%d", local, remotePort), c.Host)
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("ssh forward: %s", strings.TrimSpace(errb.String()))
+	}
+	return local, nil
+}
+
 // DialExec runs a remote command over the master and exposes its stdin/stdout
 // as a net.Conn — the RPC transport for sshds that refuse unix-socket
 // forwarding (`nc -U <socket>` on the remote side bridges to herdr).

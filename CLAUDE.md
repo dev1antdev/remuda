@@ -80,23 +80,23 @@ SPA. See README.md for the user story.
   request. The App derives the shown pane from a *requested* one (deep link,
   notification, click) falling back to the first agent pane; nothing fixes
   selection up in effects.
-- `web/src/host.ts` — the host bridge for an embedding IDE: `?cwd=` opens
-  the project's pane; `window.herdrHost.openFile(path, line, machine)` lets
-  the host open files itself (herdr-ui falls back to its viewer when it
-  returns false or the file is on another machine); `window.herdrUI.insert`
-  / `selectFolder` let the host push text into the composer or pick a pane.
-- `plugin/` — the JetBrains plugin (Kotlin, IntelliJ Platform Gradle Plugin
-  2.19, `intellijIdea("2026.2.x")` — the Community/Ultimate split is gone
-  since 2025.3 — plus `bundledPlugin("com.intellij.modules.jcef")`: in 2026
-  JCEF is its own bundled plugin and `<depends>` on it is required, or
-  `JBCefApp` is a ClassNotFoundException at runtime). Views are built on the
-  EDT only; the probe runs on a pooled thread and every failure becomes a
-  FallbackView (never a stuck "Connecting…"). `HerdrUiService` finds/starts the `herdr-ui`
-  binary on the host and reads its token via `-print-token`;
-  `EmbeddedView` is a JBCefBrowser with the `herdrHost` bridge injected on
-  load; `FallbackView` is shown when JCEF is unavailable — in Remote
-  Development the backend's JCEF needs `REMOTE_DEV_SERVER_JCEF_ENABLED=true`.
-  Build: `make plugin`; the zip installs on the backend from disk.
+- `web/src/host.ts` — `copyText` (Clipboard API, else execCommand) and
+  `openUrl` (a new tab). Nothing embeds herdr-ui any more: the JetBrains
+  plugin is gone, and with it the `window.herdrHost` bridge and `?cwd=`.
+- `internal/code/` — the **Code mode**: each machine runs its own
+  code-server (VS Code in the browser) on `127.0.0.1:7320`, `auth: none`,
+  installed by `deploy/install-code.sh` (`make code [HOST=]`: a pinned
+  release, checksum verified, launchd / systemd user service). herdr-ui is
+  the only door: `/code/<machine>/…` is a `httputil.ReverseProxy` behind the
+  token guard — prefix stripped, Host kept, `X-Frame-Options` dropped,
+  absolute `Location`s re-prefixed, WebSocket upgrades passed; the target
+  is `Machine.CodeAddr(port)`: the port itself locally, a loopback port
+  forwarded over the ssh master (`sshx.Conn.ForwardTCP`) remotely, remembered
+  per master. `GET /api/code/{machine}` probes `/healthz` (a good answer is
+  cached 15s; `?check=1` re-probes). `web/src/Code.tsx` is the picker
+  (machine, then a folder from the roster's workspaces) and the iframe,
+  kept mounted behind the other modes once opened. The flag `-code-port`
+  changes the port on every machine at once.
 - `web/src/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
   provider (`term.registerLinkProvider`) and the chat linkifier; keeps a
   `:line` suffix, drops trailing punctuation, never a path inside a URL.
@@ -169,7 +169,7 @@ SPA. See README.md for the user story.
   (`/projects/{id}/views/{view}/tasks`). `web/src/Tasks.tsx` +
   `tasksApi.ts`; descriptions are Vikunja's HTML, rendered through an
   allow-list into React nodes (never innerHTML) and edited as plain text.
-  The top-bar `mode-switch` (Agents | Tasks) is a per-device pref. **Send to
+  The top-bar `mode-switch` (Agents | Tasks | Code) is a per-device pref. **Send to
   agent** (a split button in the task; "for grooming" prefixes `/grill-me`)
   composes `taskPrompt` (title, description as text, the Vikunja link) and
   submits it through the existing `/api/submit` to an agent pane from the

@@ -2,7 +2,7 @@
 // no task data: the Vikunja URL and an API token live in the state dir, and
 // the browser talks to Vikunja's REST API through one proxy route that adds
 // the token — so the token never reaches a browser, and one port (herdr-ui's)
-// is all a phone, a plugin or a port forward needs.
+// is all a phone or a port forward needs.
 package tasks
 
 import (

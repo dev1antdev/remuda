@@ -120,6 +120,14 @@ export async function fetchChat(
   return { body: (await res.json()) as ChatResponse, etag: res.headers.get("ETag") };
 }
 
+export type CodeStatus = { available: boolean; port: number; error?: string };
+
+// whether the machine's code-server answers (force re-probes a cached "no")
+export const codeStatus = (machineId: string, force = false): Promise<CodeStatus> =>
+  fetch(`/api/code/${encodeURIComponent(machineId)}${force ? "?check=1" : ""}`)
+    .then(check)
+    .then((r) => r.json() as Promise<CodeStatus>);
+
 // the pane is on screen: a held "done" in the sidebar comes down
 export function markSeen(machine: string, pane: string): Promise<void> {
   return sendJSON("POST", "/api/seen", { machine, pane });

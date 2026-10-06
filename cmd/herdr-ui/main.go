@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/herdr-ui/internal/auth"
+	"github.com/dev1antdev/herdr-ui/internal/code"
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
@@ -33,6 +34,7 @@ func main() {
 	addr := flag.String("addr", "127.0.0.1:7317", "listen address (keep it loopback; use tailscale serve or an SSH tunnel for remote access)")
 	herdrBin := flag.String("herdr-bin", "herdr", "herdr binary used for `terminal attach`")
 	socket := flag.String("socket", herdr.SocketPath(), "herdr server socket")
+	codePort := flag.Int("code-port", code.DefaultPort, "port each machine's code-server listens on (127.0.0.1, auth none; see deploy/install-code.sh)")
 	printToken := flag.Bool("print-token", false, "print the access token and exit")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
@@ -104,7 +106,7 @@ func main() {
 	watcher := watch.New(mgr, pushSvc, tracker)
 	watcher.Start()
 
-	s := server.New(mgr, watcher, pushSvc, tasks.New(dir), tracker, auth.NewGuard(token), ui)
+	s := server.New(mgr, watcher, pushSvc, tasks.New(dir), code.New(*codePort), tracker, auth.NewGuard(token), ui)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

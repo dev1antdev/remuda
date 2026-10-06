@@ -60,6 +60,16 @@ type Machine struct {
 
 	files    map[string]*remoteFile // remote transcript cache by path
 	sessPath map[string]string      // session uuid -> resolved path
+
+	codeFwd *tcpForward // the forward to the machine's code-server, once asked for
+}
+
+// tcpForward remembers a port forwarded over one master; a reconnect makes
+// a new master, and the forward with it.
+type tcpForward struct {
+	conn *sshx.Conn
+	port int
+	addr string
 }
 
 type remoteFile struct {
@@ -455,6 +465,33 @@ func (mc *Machine) Ready() (*herdr.Client, *herdr.AttachManager, error) {
 		}
 		return nil, nil, fmt.Errorf("machine %s: %s", mc.Cfg.ID, mc.errMsg)
 	}
+}
+
+// CodeAddr is where this machine's code-server (127.0.0.1:port on the
+// machine itself) is reachable from here: the port as is on the local
+// machine, a loopback port forwarded over the ssh master on a remote one.
+func (mc *Machine) CodeAddr(port int) (string, error) {
+	if mc.Local {
+		return fmt.Sprintf("127.0.0.1:%d", port), nil
+	}
+	conn, err := mc.remoteConn()
+	if err != nil {
+		return "", err
+	}
+	mc.mu.Lock()
+	if f := mc.codeFwd; f != nil && f.conn == conn && f.port == port {
+		mc.mu.Unlock()
+		return f.addr, nil
+	}
+	mc.mu.Unlock()
+	addr, err := conn.ForwardTCP(port)
+	if err != nil {
+		return "", err
+	}
+	mc.mu.Lock()
+	mc.codeFwd = &tcpForward{conn: conn, port: port, addr: addr}
+	mc.mu.Unlock()
+	return addr, nil
 }
 
 // ---- remote execution ----
