@@ -23,7 +23,7 @@ import {
   type Group,
   type RadarPrefs,
 } from "./radar";
-import { basename } from "./prefs";
+import { basename, usePref } from "./prefs";
 import Icon from "./icons";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
@@ -60,6 +60,10 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
   // the settings popover is fixed at its button: inside the sidebar it would
   // be clipped by the sidebar's own scrolling. A click outside closes it —
   // a click inside one of its own dropdowns (a portal) does not.
+  // workspaces folded shut, like the machines above them
+  const [wsFolded, setWsFolded] = usePref<Record<string, boolean>>("wsFolded", {});
+  const onFold = (key: string) => setWsFolded((f) => ({ ...f, [key]: !f[key] }));
+
   const [settings, setSettings] = useState<{ x: number; y: number } | null>(null);
   useEffect(() => {
     if (!settings) return;
@@ -147,10 +151,10 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
             {!folded && (
               <div className="ws-tree">
                 {prefs.order === "recent" ? (
-                  <Flat machine={m} current={current} prefs={prefs} step={step} now={now} onSelect={onSelect} onMenu={onMenu} />
+                  <Flat machine={m} current={current} prefs={prefs} step={step} now={now} onSelect={onSelect} onMenu={onMenu} folded={wsFolded} onFold={onFold} />
                 ) : (
                   groups(m, prefs).map((g) => (
-                    <GroupView key={g.session.id} machine={m} group={g} nested={false} current={current} prefs={prefs} step={step} now={now} onSelect={onSelect} onMenu={onMenu} />
+                    <GroupView key={g.session.id} machine={m} group={g} nested={false} current={current} prefs={prefs} step={step} now={now} onSelect={onSelect} onMenu={onMenu} folded={wsFolded} onFold={onFold} />
                   ))
                 )}
               </div>
@@ -170,20 +174,45 @@ type RowProps = {
   now: number;
   onSelect: (machineId: string, paneId: string) => void;
   onMenu: (m: Machine, s: Session, x: number, y: number) => void;
+  folded: Record<string, boolean>; // workspaces folded shut, by "machine|workspace"
+  onFold: (key: string) => void;
 };
 
+const foldKey = (m: Machine, s: Session) => `${m.id}|${s.id}`;
+
+// what a folded group still says: its agents' states, and its worktrees
+function groupSummary(g: Group): { working: number; blocked: number; done: number; agents: number; children: number } {
+  const n = { working: 0, blocked: 0, done: 0, agents: 0, children: 0 };
+  const walk = (x: Group) => {
+    for (const r of x.rows) {
+      if (!r.pane.agent) continue;
+      n.agents++;
+      const st = r.pane.radar?.state;
+      if (st === "working" || st === "blocked" || st === "done") n[st]++;
+    }
+    for (const c of x.children) {
+      n.children++;
+      walk(c);
+    }
+  };
+  walk(g);
+  return n;
+}
+
 function GroupView({ machine: m, group: g, nested, ...rest }: RowProps & { group: Group; nested: boolean }) {
+  const foldable = g.rows.length > 0 || g.children.length > 0;
+  const isFolded = foldable && !!rest.folded[foldKey(m, g.session)];
   return (
-    <div className="ws-group">
-      <WorkspaceHead machine={m} session={g.session} nested={nested} rows={g.rows} {...rest} />
-      {g.rows.length > 0 && (
+    <div className={`ws-group${isFolded ? " folded" : ""}`}>
+      <WorkspaceHead machine={m} session={g.session} nested={nested} rows={g.rows} summary={isFolded ? groupSummary(g) : null} foldable={foldable} {...rest} />
+      {!isFolded && g.rows.length > 0 && (
         <div className={`radar-rows${nested ? " nested" : ""}`}>
           {g.rows.map((r) => (
             <AgentRowView key={r.pane.id} machine={m} row={r} workspace={g.session.name} {...rest} />
           ))}
         </div>
       )}
-      {g.children.length > 0 && (
+      {!isFolded && g.children.length > 0 && (
         <div className="ws-children">
           {g.children.map((c) => (
             <GroupView key={c.session.id} machine={m} group={c} nested {...rest} />
@@ -211,20 +240,44 @@ function Flat({ machine: m, ...rest }: RowProps) {
 
 // A workspace's line: its name, dim, with herdr's own status for one that
 // runs no agent (a shell is still a place to go), and the ⋯ menu.
-function WorkspaceHead({ machine: m, session: s, nested, rows, current, onSelect, onMenu }: RowProps & { session: Session; nested: boolean; rows: AgentRow[] }) {
+function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable, current, step, onSelect, onMenu, folded, onFold }: RowProps & {
+  session: Session;
+  nested: boolean;
+  rows: AgentRow[];
+  summary?: ReturnType<typeof groupSummary> | null; // set while folded
+  foldable?: boolean;
+}) {
   const rep = representative(s);
-  const selected = current?.machineId === m.id && current.sessionId === s.id && !rows.some((r) => r.pane.id === current.paneId);
+  // a folded group's selected agent has no row of its own: the head shows it
+  const inside = summary ? current?.machineId === m.id && current.sessionId === s.id : false;
+  const selected = inside || (current?.machineId === m.id && current.sessionId === s.id && !rows.some((r) => r.pane.id === current.paneId));
   const folder = s.worktree?.checkout_path ?? rep?.cwd ?? "";
+  const isFolded = !!summary;
   return (
     <div
-      className={`ws-row radar-head${selected ? " sel" : ""}${nested ? " nested" : ""}${rows.length === 0 ? " quiet" : ""}`}
+      className={`ws-row radar-head${selected ? " sel" : ""}${nested ? " nested" : ""}${rows.length === 0 ? " quiet" : ""}${isFolded ? " is-folded" : ""}`}
       role="button"
       tabIndex={0}
       onClick={() => rep && onSelect(m.id, rep.id)}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && rep && onSelect(m.id, rep.id)}
       title={folder}
     >
-      {rows.length === 0 && <StatusDot status={s.status} />}
+      {foldable ? (
+        <button
+          type="button"
+          className={`ws-fold${isFolded ? "" : " open"}`}
+          title={isFolded ? "Show agents" : "Hide agents"}
+          aria-expanded={!isFolded}
+          onClick={(e) => {
+            e.stopPropagation();
+            onFold(foldKey(m, s));
+          }}
+        >
+          <Icon name="chevron-right" size={12} />
+        </button>
+      ) : (
+        rows.length === 0 && <StatusDot status={s.status} />
+      )}
       <span className="ws-copy">
         <span className="ws-label">{s.name}</span>
         {rows.length === 0 && (
@@ -234,6 +287,19 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, current, onSelect
           </span>
         )}
       </span>
+      {summary && (
+        <span className="machine-summary ws-summary">
+          {summary.working > 0 && <span className="radar-mark working">{markOf("working", step)} {summary.working}</span>}
+          {summary.blocked > 0 && <span className="radar-mark blocked">? {summary.blocked}</span>}
+          {summary.done > 0 && <span className="radar-mark done">✓ {summary.done}</span>}
+          {!summary.working && !summary.blocked && !summary.done && (
+            <span className="machine-count">
+              {summary.agents}
+              {summary.children ? ` · ${summary.children} wt` : ""}
+            </span>
+          )}
+        </span>
+      )}
       <button
         type="button"
         className="ws-menu-btn"

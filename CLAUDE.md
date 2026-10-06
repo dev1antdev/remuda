@@ -149,6 +149,8 @@ SPA. See README.md for the user story.
   agent, parent before worktrees, tabs by their liveliest pane, no-stamp
   last; a flat `recent` order; herdr's own), `web/src/Sidebar.tsx` draws it
   (one spinner clock for the braille frames and the pulsing question).
+  Machines and workspace groups fold (prefs `collapsed` / `wsFolded`); a
+  folded group's head carries its agents' states (working / ? / ✓ counts).
   `web/marks/*.svg` are the vendor logos (MIT packaging, see NOTICE.md),
   `npm run marks` regenerates `src/marks.ts`; drawn inline in currentColor.
 - `internal/tasks/` — the **Tasks mode**: the user's own Vikunja (2.x) behind

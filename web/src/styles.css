@@ -1020,6 +1020,51 @@ input[type="checkbox"]:hover:not(:checked) {
   box-shadow: none;
 }
 
+.ws-fold {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-left: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--fg-faint);
+  flex-shrink: 0;
+  transition: transform var(--base) var(--ease), background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.ws-fold.open {
+  transform: rotate(90deg);
+}
+
+.ws-fold:hover {
+  background: var(--bg-active);
+  color: var(--fg);
+}
+
+/* folded: the head is a row again, with the group's states on the right */
+.ws-row.radar-head.is-folded {
+  min-height: var(--ctl);
+  padding: 4px 6px 4px 8px;
+  cursor: pointer;
+}
+
+.ws-row.radar-head.is-folded:hover {
+  background-color: var(--bg-hover);
+}
+
+.ws-row.radar-head.is-folded.sel {
+  background-color: var(--bg-input);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.ws-summary {
+  margin-left: 0;
+  margin-right: 2px;
+}
+
 /* worktrees hang under their repository: a trunk down the left of each
    child group, stopping at the last child's tick */
 .ws-children {
