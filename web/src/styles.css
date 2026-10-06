@@ -748,6 +748,11 @@ button {
   overflow: hidden;
 }
 
+/* the app wants the mouse: an arrow, not an I-beam (links keep the hand) */
+.term-mount.app-mouse .xterm:not(.xterm-cursor-pointer) {
+  cursor: default;
+}
+
 /* selection mode: a transparent copy of the visible rows over the grid; the
    browser's own selection paints over the real cells underneath */
 .term-select {

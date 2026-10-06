@@ -336,6 +336,9 @@ export default function TerminalView({
       }
       if (!touched) return false; // nothing of ours: xterm handles it
       if (rest.length) term.write(`\x1b[?${rest.join(";")}${enable ? "h" : "l"}`); // the other modes still apply
+      // xterm only swaps its text cursor for an arrow when it tracks the
+      // mouse itself; the app owns the clicks, so the arrow is ours to show
+      mount.classList.toggle("app-mouse", appMouse !== 0);
       return true;
     };
     const decset = term.parser.registerCsiHandler({ prefix: "?", final: "h" }, mouseModeHandler(true));
