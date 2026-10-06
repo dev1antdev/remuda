@@ -8,6 +8,7 @@ import {
   fetchRoster,
   killSession,
   removeMachine,
+  submitPrompt,
   type AgentKind,
   type Created,
   type Machine,
@@ -24,7 +25,7 @@ import KeyBar from "./KeyBar";
 import { basename, errMsg, isTouch, readAlertPrefs, usePref } from "./prefs";
 import { resyncPush } from "./push";
 import TerminalView, { type Modifier, type SizeMode, type TermApi } from "./Terminal";
-import Tasks from "./Tasks";
+import Tasks, { type AgentTarget } from "./Tasks";
 
 type Lens = "chat" | "terminal";
 type Selection = { machineId: string; paneId: string };
@@ -239,6 +240,24 @@ export default function App() {
     [allPanes, requested],
   );
 
+  // what the Tasks mode can send a task to
+  const agentTargets = useMemo<AgentTarget[]>(
+    () =>
+      allPanes
+        .filter((x) => x.pane.agent)
+        .map((x) => ({
+          machineId: x.machine.id,
+          machineLabel: x.machine.label,
+          sessionName: x.session.name,
+          paneTitle: x.tab.named ? x.tab.label : x.pane.title || x.tab.label,
+          paneId: x.pane.id,
+          agent: x.pane.agent,
+          status: x.pane.status,
+          cwd: x.pane.cwd,
+        })),
+    [allPanes],
+  );
+
   const selectPane = useCallback((machineId: string, paneId: string) => {
     setRequested({ machineId, paneId });
     setDrawer(false);
@@ -440,7 +459,17 @@ export default function App() {
       )}
 
       <div className="body">
-        {mode === "tasks" && <Tasks drawer={drawer} closeDrawer={() => setDrawer(false)} ask={ask} />}
+        {mode === "tasks" && (
+          <Tasks
+            drawer={drawer}
+            closeDrawer={() => setDrawer(false)}
+            ask={ask}
+            agents={agentTargets}
+            currentPane={current ? { machineId: current.machine.id, paneId: current.pane.id } : null}
+            onOpenPane={(machineId, paneId) => requestPane({ machineId, paneId })}
+            onSend={(machineId, paneId, text) => submitPrompt(machineId, paneId, text)}
+          />
+        )}
         {mode === "herdr" && (
         <aside className={drawer ? "sidebar open" : "sidebar"}>
           <div className="sidebar-head">

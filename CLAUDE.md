@@ -148,7 +148,11 @@ SPA. See README.md for the user story.
   (`/projects/{id}/views/{view}/tasks`). `web/src/Tasks.tsx` +
   `tasksApi.ts`; descriptions are Vikunja's HTML, rendered through an
   allow-list into React nodes (never innerHTML) and edited as plain text.
-  The top-bar `mode-switch` (herdr | Tasks) is a per-device pref.
+  The top-bar `mode-switch` (herdr | Tasks) is a per-device pref. **Send to
+  agent** (a split button in the task; "for grooming" prefixes `/grill-me`)
+  composes `taskPrompt` (title, description as text, the Vikunja link) and
+  submits it through the existing `/api/submit` to an agent pane from the
+  roster, remembering the last target per Vikunja project.
 - `internal/auth/` — single bearer token; HttpOnly cookie; no accounts.
 - `internal/server/` — HTTP routes + the pane WebSocket. `/api/health` and
   `/api/login` are mounted outside the token guard; everything else behind

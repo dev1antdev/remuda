@@ -2172,6 +2172,113 @@ button {
   font-size: 13px;
 }
 
+/* send to an agent: a split button, the second way under the arrow */
+.tasks-send {
+  display: flex;
+}
+
+.split {
+  position: relative;
+  display: inline-flex;
+}
+
+.split-main,
+.split-arrow {
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 7px 12px;
+}
+
+.split-main {
+  border-radius: 8px 0 0 8px;
+}
+
+.split-arrow {
+  border-radius: 0 8px 8px 0;
+  padding: 7px 9px;
+  border-left: 1px solid rgba(0, 0, 0, 0.25);
+}
+
+.split-main:hover,
+.split-arrow:hover {
+  filter: brightness(1.1);
+}
+
+.split.off .split-main,
+.split.off .split-arrow {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.row-menu.split-menu {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  transform: none;
+  min-width: 240px;
+  z-index: 30;
+}
+
+.row-menu.split-menu button {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.split-hint {
+  color: var(--fg-faint);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+}
+
+.tasks-send-dialog {
+  width: min(92vw, 560px);
+}
+
+.tasks-send-dialog textarea {
+  background: var(--bg-input);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.tasks-send-cwd {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  margin: -6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.tasks-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 18px 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(95, 168, 109, 0.15);
+  border: 1px solid rgba(95, 168, 109, 0.4);
+  font-size: 13px;
+}
+
+.tasks-notice .linkish {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.tasks-notice .tasks-close {
+  margin-left: auto;
+}
+
 .tasks-desc {
   display: flex;
   flex-direction: column;

@@ -57,7 +57,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ herdr-ui (Go) ─┬─ local herdr.soc
   Vikunja" for everything else. Connect once per herdr-ui with the Vikunja
   URL and an API token (Settings → API Tokens there; scopes `projects`,
   `projects_views_tasks`, `tasks`, `tasks_labels`, `labels`, `other: user`).
-  The token is stored on the herdr-ui host and never sent to a browser:
+  Every task has **Send to agent** — the task's title, description and link
+  go to a running agent as a prompt (the arrow offers "for grooming", which
+  prefixes `/grill-me`). The token is stored on the herdr-ui host and never sent to a browser:
   the page talks to Vikunja only through herdr-ui's own port, so the plugin,
   a phone and a port forward need nothing extra.
 

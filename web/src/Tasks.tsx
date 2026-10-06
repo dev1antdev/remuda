@@ -42,10 +42,26 @@ const SMART: { id: Smart; label: string; glyph: string; filter: string }[] = [
 
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-export default function Tasks({ drawer, closeDrawer, ask }: {
+// an agent pane from herdr's roster, flattened for the picker
+export type AgentTarget = {
+  machineId: string;
+  machineLabel: string;
+  sessionName: string;
+  paneTitle: string; // the tab's name, or the agent's own title for its conversation
+  paneId: string;
+  agent: string;
+  status: string;
+  cwd: string;
+};
+
+export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, onOpenPane, onSend }: {
   drawer: boolean;
   closeDrawer: () => void;
   ask: (text: string, label: string, run: () => void) => void;
+  agents: AgentTarget[];
+  currentPane: { machineId: string; paneId: string } | null;
+  onOpenPane: (machineId: string, paneId: string) => void;
+  onSend: (machineId: string, paneId: string, text: string) => Promise<void>;
 }) {
   const [status, setStatus] = useState<TasksStatus | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -61,6 +77,8 @@ export default function Tasks({ drawer, closeDrawer, ask }: {
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState<number | null>(null);
   const [newProject, setNewProject] = useState(false);
+  const [sendReq, setSendReq] = useState<{ task: Task; groom: boolean } | null>(null);
+  const [notice, setNotice] = useState<{ text: string; machineId: string; paneId: string } | null>(null);
   const [tick, setTick] = useState(0);
   const refresh = useCallback(() => setTick((t) => t + 1), []);
 
@@ -273,6 +291,17 @@ export default function Tasks({ drawer, closeDrawer, ask }: {
         </div>
         <QuickAdd placeholder={addTarget ? `Add a task to ${addTarget.title}…` : "Add a task…"} disabled={!addTarget} onAdd={addTask} />
         {error && <div className="chat-error">{error}</div>}
+        {notice && (
+          <div className="tasks-notice">
+            {notice.text}
+            <button className="linkish" onClick={() => onOpenPane(notice.machineId, notice.paneId)}>
+              Open ›
+            </button>
+            <button className="tasks-close" onClick={() => setNotice(null)} title="Dismiss">
+              ×
+            </button>
+          </div>
+        )}
         <div className={`tasks-list${loading ? " loading" : ""}`}>
           {tasks.length === 0 && !loading && <div className="placeholder">Nothing here.</div>}
           {tasks.map((t) => (
@@ -313,6 +342,27 @@ export default function Tasks({ drawer, closeDrawer, ask }: {
           onClose={() => setOpenId(null)}
           onDelete={() => remove(open)}
           onError={setError}
+          canSend={agents.length > 0}
+          onSend={(groom) => setSendReq({ task: open, groom })}
+        />
+      )}
+      {sendReq && (
+        <SendDialog
+          task={sendReq.task}
+          groom={sendReq.groom}
+          vikunjaURL={status.url!}
+          agents={agents}
+          currentPane={currentPane}
+          onClose={() => setSendReq(null)}
+          onSend={async (target, text) => {
+            await onSend(target.machineId, target.paneId, text);
+            setSendReq(null);
+            setNotice({
+              text: `Sent “${sendReq.task.title}” to ${target.agent} in ${target.sessionName}${target.machineId !== "local" ? ` on ${target.machineLabel}` : ""}.`,
+              machineId: target.machineId,
+              paneId: target.paneId,
+            });
+          }}
         />
       )}
       {newProject && (
@@ -527,7 +577,7 @@ function TaskRow({ task: t, project, selected, onToggle, onOpen }: {
 
 // ---- detail ----
 
-function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels, onClose, onDelete, onError }: {
+function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels, onClose, onDelete, onError, canSend, onSend }: {
   task: Task;
   projects: Project[];
   labels: Label[];
@@ -537,8 +587,17 @@ function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels,
   onClose: () => void;
   onDelete: () => void;
   onError: (msg: string) => void;
+  canSend: boolean;
+  onSend: (groom: boolean) => void;
 }) {
   const [title, setTitle] = useState(t.title);
+  const [sendMenu, setSendMenu] = useState(false);
+  useEffect(() => {
+    if (!sendMenu) return;
+    const close = () => setSendMenu(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [sendMenu]);
   const [editingDesc, setEditingDesc] = useState(false);
   const [desc, setDesc] = useState("");
   const [labelPick, setLabelPick] = useState(false);
@@ -691,6 +750,34 @@ function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels,
         </span>
       </div>
 
+      <div className="tasks-send">
+        <span className={`split${canSend ? "" : " off"}`} title={canSend ? "" : "No agent is running in herdr"}>
+          <button className="split-main" disabled={!canSend} onClick={() => onSend(false)}>
+            Send to agent
+          </button>
+          <button
+            className="split-arrow"
+            disabled={!canSend}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSendMenu((m) => !m);
+            }}
+            title="More ways to send"
+          >
+            ▾
+          </button>
+          {sendMenu && (
+            <span className="row-menu split-menu" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => { setSendMenu(false); onSend(false); }}>Send to agent</button>
+              <button onClick={() => { setSendMenu(false); onSend(true); }}>
+                Send to agent for grooming
+                <span className="split-hint">/grill-me</span>
+              </button>
+            </span>
+          )}
+        </span>
+      </div>
+
       <div className="tasks-desc">
         <div className="tasks-field-name">
           Description
@@ -741,6 +828,92 @@ function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels,
         </button>
       </div>
     </aside>
+  );
+}
+
+// ---- send to an agent ----
+
+// taskPrompt is what the agent gets: the title, the description as text,
+// and where the task lives — with /grill-me in front for a grooming pass.
+export function taskPrompt(t: Task, vikunjaURL: string, groom: boolean): string {
+  const desc = t.description ? htmlToText(t.description) : "";
+  const parts = [t.title.trim(), desc, `Task ${t.identifier || `#${t.index}`} in Vikunja: ${vikunjaURL}/tasks/${t.id}`].filter(Boolean);
+  return (groom ? "/grill-me " : "") + parts.join("\n\n");
+}
+
+const targetKey = (a: { machineId: string; paneId: string }) => `${a.machineId}|${a.paneId}`;
+
+function SendDialog({ task, groom, vikunjaURL, agents, currentPane, onClose, onSend }: {
+  task: Task;
+  groom: boolean;
+  vikunjaURL: string;
+  agents: AgentTarget[];
+  currentPane: { machineId: string; paneId: string } | null;
+  onClose: () => void;
+  onSend: (target: AgentTarget, text: string) => Promise<void>;
+}) {
+  // the last agent each project's tasks went to, so the next one is one click
+  const [remembered, setRemembered] = usePref<Record<string, string>>("tasks.targets", {});
+  const initial =
+    agents.find((a) => targetKey(a) === remembered[task.project_id]) ??
+    (currentPane && agents.find((a) => targetKey(a) === targetKey(currentPane))) ??
+    agents[0];
+  const [target, setTarget] = useState(initial ? targetKey(initial) : "");
+  const [text, setText] = useState(() => taskPrompt(task, vikunjaURL, groom));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const chosen = agents.find((a) => targetKey(a) === target);
+  const machines = [...new Set(agents.map((a) => a.machineId))];
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <form
+        className="modal tasks-send-dialog"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!chosen || !text.trim()) return;
+          setBusy(true);
+          setErr("");
+          onSend(chosen, text).then(
+            () => setRemembered({ ...remembered, [task.project_id]: target }),
+            (e) => {
+              setErr(errMsg(e));
+              setBusy(false);
+            },
+          );
+        }}
+      >
+        <h2>{groom ? "Send for grooming" : "Send to agent"}</h2>
+        <label>
+          Agent
+          <select value={target} onChange={(e) => setTarget(e.target.value)}>
+            {machines.map((m) => (
+              <optgroup key={m} label={agents.find((a) => a.machineId === m)!.machineLabel}>
+                {agents.filter((a) => a.machineId === m).map((a) => (
+                  <option key={targetKey(a)} value={targetKey(a)}>
+                    {a.sessionName} › {a.paneTitle} — {a.agent} · {a.status}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+        {chosen && <p className="modal-hint tasks-send-cwd">{chosen.cwd}</p>}
+        <label>
+          Message
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={groom ? 10 : 8} />
+        </label>
+        {err && <div className="chat-error">{err}</div>}
+        <div className="modal-actions">
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="primary" disabled={busy || !chosen || !text.trim()}>
+            {busy ? "…" : "Send"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
