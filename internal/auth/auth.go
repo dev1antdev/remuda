@@ -8,6 +8,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"html/template"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -41,9 +42,15 @@ func LoadOrCreateToken(dir string) (string, error) {
 	return t, nil
 }
 
-type Guard struct{ token string }
+type Guard struct {
+	token string
+	host  string // shown on the sign-in page: which machine's herdr-ui this is
+}
 
-func NewGuard(token string) *Guard { return &Guard{token: token} }
+func NewGuard(token string) *Guard {
+	h, _ := os.Hostname()
+	return &Guard{token: token, host: strings.TrimSuffix(h, ".local")}
+}
 
 func (g *Guard) ok(presented string) bool {
 	return presented != "" &&
@@ -81,7 +88,7 @@ func (g *Guard) Middleware(next http.Handler) http.Handler {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		serveLogin(w)
+		g.serveLogin(w)
 	})
 }
 
@@ -112,15 +119,18 @@ func (g *Guard) setCookie(w http.ResponseWriter, r *http.Request, token string) 
 	})
 }
 
-func serveLogin(w http.ResponseWriter) {
+// serveLogin names the machine: with several herdr-uis reachable on
+// 127.0.0.1 through port forwards, "wrong token" usually means "wrong host".
+func (g *Guard) serveLogin(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusUnauthorized)
+	host := template.HTMLEscapeString(g.host)
 	fmt.Fprint(w, `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
-<title>herdr-ui — sign in</title>
+<title>herdr-ui on `+host+` — sign in</title>
 <body style="font-family:system-ui;background:#111;color:#ddd;display:grid;place-items:center;min-height:100vh;margin:0">
 <form method=post action=/api/login style="display:flex;flex-direction:column;gap:12px;width:min(90vw,360px)">
-<h1 style="font-size:20px;margin:0">herdr-ui</h1>
-<p style="margin:0;color:#999">Paste the access token printed by the server.</p>
+<h1 style="font-size:20px;margin:0">herdr-ui <span style="color:#999;font-weight:400">on `+host+`</span></h1>
+<p style="margin:0;color:#999">Paste the access token of <b style="color:#ddd">`+host+`</b> (<code>herdr-ui -print-token</code> there).</p>
 <input name=token type=password autofocus placeholder="token"
  style="padding:10px;border-radius:8px;border:1px solid #444;background:#1a1a1a;color:#eee">
 <button style="padding:10px;border-radius:8px;border:0;background:#3b82f6;color:#fff;font-weight:600">Sign in</button>

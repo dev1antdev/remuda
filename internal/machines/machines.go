@@ -87,8 +87,9 @@ type Manager struct {
 // machines.json lists. Machines saved in herdr itself are added by
 // SyncHerdr, which the watcher calls periodically.
 func NewManager(dir, localSocket, localHerdrBin string) *Manager {
+	host, _ := os.Hostname()
 	local := &Machine{
-		Cfg:    Config{ID: LocalID, Label: "This Mac"},
+		Cfg:    Config{ID: LocalID, Label: "This Mac · " + strings.TrimSuffix(host, ".local")},
 		Local:  true,
 		state:  StateConnected,
 		client: herdr.NewClient(localSocket),
