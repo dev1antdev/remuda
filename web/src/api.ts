@@ -9,6 +9,9 @@ export type Pane = {
   status: Status;
   cols: number;
   rows: number;
+  // an agent's lifecycle as the server reads it: held done, held question,
+  // the last moment it worked (unix ms) — absent for a shell
+  radar?: { state: "working" | "blocked" | "done" | "idle" | "unknown"; last_active?: number };
 };
 
 export type Tab = {
@@ -115,6 +118,11 @@ export async function fetchChat(
   if (res.status === 304) return null;
   await check(res);
   return { body: (await res.json()) as ChatResponse, etag: res.headers.get("ETag") };
+}
+
+// the pane is on screen: a held "done" in the sidebar comes down
+export function markSeen(machine: string, pane: string): Promise<void> {
+  return sendJSON("POST", "/api/seen", { machine, pane });
 }
 
 export function submitPrompt(machine: string, pane: string, text: string): Promise<void> {

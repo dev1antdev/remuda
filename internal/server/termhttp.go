@@ -112,6 +112,7 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
+	s.Radar.Seen(mc.Cfg.ID, pane.PaneID)
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
 	replay, ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)

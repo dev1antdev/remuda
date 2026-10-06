@@ -132,6 +132,25 @@ SPA. See README.md for the user story.
   re-subscribes. `web/src/push.ts` is single-flight and re-registers on every
   load with permission granted. Push needs a secure context: localhost or
   `tailscale serve` HTTPS; iPhone needs the home-screen app.
+- `internal/radar/` — the sidebar's reading of every agent, after
+  hhdebb/herdr-radar's design and written here (`radar_test.go` covers the
+  rules). The watcher feeds every snapshot into the `Tracker`; the roster
+  carries `pane.radar = {state, last_active}` for agent panes. Rules: a
+  blink through idle within 2.5s of working is still working; **done is held
+  until seen** (herdr focused the pane, or a client opened its terminal /
+  chat, or `POST /api/seen`); **a question is held until the agent works
+  again** (unless it never had worked — then the dialog simply closed);
+  `last_active` is the last moment herdr said working, recovered for panes
+  older than herdr-ui from the session file's mtime (`ResolveSession` +
+  `TranscriptVersion`, off the poller), persisted in `<state>/activity.json`.
+  The idle tiers (fresh ≤15 min, stale ≥120 min, dimmed) are the UI's, from
+  `last_active` and the clock. `web/src/radar.ts` is the pure model (vendor
+  hues, tiers, marks, row labels, ordering: families by their liveliest
+  agent, parent before worktrees, tabs by their liveliest pane, no-stamp
+  last; a flat `recent` order; herdr's own), `web/src/Sidebar.tsx` draws it
+  (one spinner clock for the braille frames and the pulsing question).
+  `web/marks/*.svg` are the vendor logos (MIT packaging, see NOTICE.md),
+  `npm run marks` regenerates `src/marks.ts`; drawn inline in currentColor.
 - `internal/tasks/` — the **Tasks mode**: the user's own Vikunja (2.x) behind
   one proxy. `vikunja.json` (URL + API token, 0600) in the state dir;
   `Configure` probes `/api/v1/info` and `/projects` before keeping it.
@@ -148,7 +167,7 @@ SPA. See README.md for the user story.
   (`/projects/{id}/views/{view}/tasks`). `web/src/Tasks.tsx` +
   `tasksApi.ts`; descriptions are Vikunja's HTML, rendered through an
   allow-list into React nodes (never innerHTML) and edited as plain text.
-  The top-bar `mode-switch` (herdr | Tasks) is a per-device pref. **Send to
+  The top-bar `mode-switch` (Agents | Tasks) is a per-device pref. **Send to
   agent** (a split button in the task; "for grooming" prefixes `/grill-me`)
   composes `taskPrompt` (title, description as text, the Vikunja link) and
   submits it through the existing `/api/submit` to an agent pane from the

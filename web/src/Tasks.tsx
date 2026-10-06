@@ -30,6 +30,8 @@ import {
 } from "./tasksApi";
 import { errMsg, usePref } from "./prefs";
 import { openUrl } from "./host";
+import Select from "./Select";
+import Logo from "./Logo";
 
 type Smart = "today" | "upcoming" | "open";
 type Sel = { kind: "smart"; id: Smart } | { kind: "project"; id: number };
@@ -483,14 +485,11 @@ function NewProjectDialog({ projects, onClose, onCreated }: { projects: Project[
         </label>
         <label>
           Inside
-          <select value={parent} onChange={(e) => setParent(Number(e.target.value))}>
-            <option value={0}>— top level —</option>
-            {projects.filter((p) => p.id > 0 && !p.is_archived).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={parent}
+            onChange={setParent}
+            options={[{ value: 0, label: "— top level —" }, ...projects.filter((p) => p.id > 0 && !p.is_archived).map(projectOption)]}
+          />
         </label>
         {err && <div className="chat-error">{err}</div>}
         <div className="modal-actions">
@@ -672,13 +671,11 @@ function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels,
 
       <div className="tasks-field">
         <span className="tasks-field-name">Project</span>
-        <select value={t.project_id} onChange={(e) => void patch({ project_id: Number(e.target.value) })}>
-          {projects.filter((p) => p.id > 0 && (!p.is_archived || p.id === t.project_id)).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.title}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={t.project_id}
+          onChange={(project_id) => void patch({ project_id })}
+          options={projects.filter((p) => p.id > 0 && (!p.is_archived || p.id === t.project_id)).map(projectOption)}
+        />
       </div>
       <div className="tasks-field">
         <span className="tasks-field-name">Due</span>
@@ -691,13 +688,11 @@ function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels,
       </div>
       <div className="tasks-field">
         <span className="tasks-field-name">Priority</span>
-        <select value={t.priority} onChange={(e) => void patch({ priority: Number(e.target.value) })}>
-          {PRIORITIES.map((p, i) => (
-            <option key={i} value={i}>
-              {p}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={t.priority}
+          onChange={(priority) => void patch({ priority })}
+          options={PRIORITIES.map((p, i) => ({ value: i, label: p, icon: <PrioMark level={i} /> }))}
+        />
       </div>
       <div className="tasks-field labels">
         <span className="tasks-field-name">Labels</span>
@@ -863,7 +858,6 @@ function SendDialog({ task, groom, vikunjaURL, agents, currentPane, onClose, onS
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const chosen = agents.find((a) => targetKey(a) === target);
-  const machines = [...new Set(agents.map((a) => a.machineId))];
   return (
     <div className="modal-scrim" onClick={onClose}>
       <form
@@ -886,17 +880,17 @@ function SendDialog({ task, groom, vikunjaURL, agents, currentPane, onClose, onS
         <h2>{groom ? "Send for grooming" : "Send to agent"}</h2>
         <label>
           Agent
-          <select value={target} onChange={(e) => setTarget(e.target.value)}>
-            {machines.map((m) => (
-              <optgroup key={m} label={agents.find((a) => a.machineId === m)!.machineLabel}>
-                {agents.filter((a) => a.machineId === m).map((a) => (
-                  <option key={targetKey(a)} value={targetKey(a)}>
-                    {a.sessionName} › {a.paneTitle} — {a.agent} · {a.status}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          <Select
+            value={target}
+            onChange={setTarget}
+            options={agents.map((a) => ({
+              value: targetKey(a),
+              label: `${a.sessionName} › ${a.paneTitle}`,
+              hint: `${a.agent} · ${a.status}`,
+              group: a.machineLabel,
+              icon: <Logo agent={a.agent} />,
+            }))}
+          />
         </label>
         {chosen && <p className="modal-hint tasks-send-cwd">{chosen.cwd}</p>}
         <label>
@@ -940,6 +934,20 @@ function DueInput({ value, onCommit }: { value: string; onCommit: (iso: string) 
       }}
     />
   );
+}
+
+// ---- pieces ----
+
+const projectOption = (p: Project) => ({
+  value: p.id,
+  label: p.title,
+  icon: <span className="tasks-dot" style={{ background: p.hex_color ? `#${p.hex_color}` : "var(--line-strong)" }} />,
+});
+
+// the priority's mark: nothing, then exclamation marks that redden
+function PrioMark({ level }: { level: number }) {
+  if (level === 0) return <span className="sel-glyph dim">—</span>;
+  return <span className={`tasks-prio p${level}`}>{"!".repeat(Math.max(1, level - 1))}</span>;
 }
 
 // ---- helpers ----

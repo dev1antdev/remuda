@@ -4,6 +4,7 @@ import { filesFrom, MAX_ATTACHMENTS, useAttachments, type Attachment } from "./a
 import { INSERT_EVENT } from "./host";
 import { Markdown, type OpenFile } from "./markdown";
 import { errMsg, isTouch } from "./prefs";
+import Select from "./Select";
 
 // Chat lens: the transcript comes from Claude Code's own session file (read
 // server-side), sending types into the live pane. Polls with ETag — every
@@ -76,17 +77,12 @@ export default function Chat({
   return (
     <div className="chat">
       {sessions.length > 1 && (
-        <select
+        <Select
           className="chat-session-pick"
           value={sessionId ?? chat?.session_id ?? ""}
-          onChange={(e) => setSessionId(e.target.value)}
-        >
-          {sessions.map((s) => (
-            <option key={s.id} value={s.id}>
-              {(s.title || s.id.slice(0, 8)) + " · " + new Date(s.mod_time).toLocaleString()}
-            </option>
-          ))}
-        </select>
+          onChange={setSessionId}
+          options={sessions.map((s) => ({ value: s.id, label: s.title || s.id.slice(0, 8), hint: new Date(s.mod_time).toLocaleString() }))}
+        />
       )}
       <div className="chat-log" ref={logRef} onScroll={onScroll}>
         {turns.length === 0 && (

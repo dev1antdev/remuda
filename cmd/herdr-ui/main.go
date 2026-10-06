@@ -12,11 +12,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/dev1antdev/herdr-ui/internal/auth"
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
+	"github.com/dev1antdev/herdr-ui/internal/radar"
 	"github.com/dev1antdev/herdr-ui/internal/server"
 	"github.com/dev1antdev/herdr-ui/internal/state"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
@@ -75,10 +77,34 @@ func main() {
 	if err != nil {
 		log.Fatalf("push: %v", err)
 	}
-	watcher := watch.New(mgr, pushSvc)
+	// a pane open since before herdr-ui started: its session file's mtime
+	// says when the agent last wrote
+	tracker := radar.New(dir, func(machineID string, p *herdr.PaneInfo) time.Time {
+		if p.AgentSession == nil {
+			return time.Time{}
+		}
+		mc, err := mgr.Get(machineID)
+		if err != nil {
+			return time.Time{}
+		}
+		path, err := mc.ResolveSession(p.Dir(), p.AgentSession.Kind, p.AgentSession.Value)
+		if err != nil {
+			return time.Time{}
+		}
+		v, err := mc.TranscriptVersion(path)
+		if err != nil {
+			return time.Time{}
+		}
+		if v.MTime > 1e12 { // nanoseconds from a local stat, seconds from a remote one
+			return time.Unix(0, v.MTime)
+		}
+		return time.Unix(v.MTime, 0)
+	})
+	defer tracker.Flush()
+	watcher := watch.New(mgr, pushSvc, tracker)
 	watcher.Start()
 
-	s := server.New(mgr, watcher, pushSvc, tasks.New(dir), auth.NewGuard(token), ui)
+	s := server.New(mgr, watcher, pushSvc, tasks.New(dir), tracker, auth.NewGuard(token), ui)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -87,7 +113,8 @@ func main() {
 	log.Printf("sign in with the token from `herdr-ui -print-token`, or open:")
 	log.Printf("  http://%s/?token=%s", *addr, token)
 
+	// log.Fatal would skip the deferred flush and close
 	if err := server.ListenAndServe(ctx, *addr, s.Handler()); err != nil {
-		log.Fatal(err)
+		log.Print(err)
 	}
 }

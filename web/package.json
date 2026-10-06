@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "marks": "node scripts/marks.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",

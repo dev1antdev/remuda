@@ -37,6 +37,15 @@ browser / phone ⇄ HTTP + WebSocket ⇄ herdr-ui (Go) ─┬─ local herdr.soc
                                              └─ `ssh host tail -c …` of the transcript
 ```
 
+- **Radar sidebar** — one row per agent, read the way a person would (after
+  [herdr-radar](https://github.com/hhdebb/herdr-radar)'s design, reimplemented
+  here): a braille spinner while it works, a pulsing `?` while it waits on
+  you, a green `✓` that **stays until you have looked at the pane**, a ring
+  that cools with the time since the last turn — fresh, plain, then the
+  whole row dims after two hours. Each agent wears its vendor's logo and
+  hue (27 vendors), workspaces are headers with worktrees as a tree, the
+  busiest project sorts first; `⇅` flips to a flat list by activity or
+  herdr's own order, `⚙` holds the thresholds and the row label.
 - **Roster** — workspaces, tabs and panes from `session.snapshot`, with
   herdr's own agent statuses: `RUN` (working), `NEEDS YOU` (blocked),
   `READY` (idle), `DONE`.
@@ -50,7 +59,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ herdr-ui (Go) ─┬─ local herdr.soc
   `pane.send_keys`.
 - **New workspace / close** — `workspace.create` + `agent.start` (any agent
   herdr has a manifest for), `workspace.close`.
-- **Tasks** — the **herdr | Tasks** switch in the top bar opens your own
+- **Tasks** — the **Agents | Tasks** switch in the top bar opens your own
   [Vikunja](https://vikunja.io) (2.x) in herdr-ui's clothes: projects and
   saved filters on the left, Today / Upcoming / All open, quick add, done,
   due dates, priorities, labels, descriptions, search — and "Open in

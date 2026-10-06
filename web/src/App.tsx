@@ -7,6 +7,7 @@ import {
   createWorktree,
   fetchRoster,
   killSession,
+  markSeen,
   removeMachine,
   submitPrompt,
   type AgentKind,
@@ -22,10 +23,14 @@ import Chat from "./Chat";
 import FileViewer, { type FileTarget } from "./FileViewer";
 import { hostOpensFile, installHostAPI, SELECT_FOLDER_EVENT } from "./host";
 import KeyBar from "./KeyBar";
-import { basename, errMsg, isTouch, readAlertPrefs, usePref } from "./prefs";
+import { errMsg, isTouch, readAlertPrefs, usePref } from "./prefs";
 import { resyncPush } from "./push";
 import TerminalView, { type Modifier, type SizeMode, type TermApi } from "./Terminal";
 import Tasks, { type AgentTarget } from "./Tasks";
+import Sidebar from "./Sidebar";
+import Select from "./Select";
+import Logo from "./Logo";
+import { DEFAULT_RADAR, type RadarPrefs } from "./radar";
 
 type Lens = "chat" | "terminal";
 type Selection = { machineId: string; paneId: string };
@@ -43,36 +48,6 @@ type Dialog =
 const MIN_WIDTHS = [0, 120, 160, 200, 240, 320];
 
 type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
-
-// The pane a workspace row stands for: the focused pane of its active tab,
-// else the first agent pane, else the first pane.
-function representativePane(s: Session): { tab: Tab; pane: Pane } | null {
-  const tab = s.tabs.find((t) => t.id === s.active_tab_id) ?? s.tabs[0];
-  if (!tab) return null;
-  const pane = tab.panes.find((p) => p.focused) ?? tab.panes.find((p) => p.agent) ?? tab.panes[0];
-  return pane ? { tab, pane } : null;
-}
-
-// herdr packs a repository's worktree workspaces under the one on its main
-// checkout; mirror that nesting.
-function worktreeGroups(sessions: Session[]): Array<{ session: Session; children: Session[] }> {
-  const parentByRepo = new Map<string, Session>();
-  for (const s of sessions) {
-    if (s.worktree && !s.worktree.linked && !parentByRepo.has(s.worktree.repo_key))
-      parentByRepo.set(s.worktree.repo_key, s);
-  }
-  const childrenOf = new Map<string, Session[]>();
-  const top: Session[] = [];
-  for (const s of sessions) {
-    const parent = s.worktree?.linked ? parentByRepo.get(s.worktree.repo_key) : undefined;
-    if (parent && parent !== s) {
-      childrenOf.set(parent.id, [...(childrenOf.get(parent.id) ?? []), s]);
-    } else {
-      top.push(s);
-    }
-  }
-  return top.map((session) => ({ session, children: childrenOf.get(session.id) ?? [] }));
-}
 
 const ADJ = ["clear", "quiet", "amber", "brisk", "calm", "early", "fresh", "keen", "mild", "swift"];
 const NOUN = ["forest", "river", "harbor", "meadow", "summit", "valley", "ridge", "grove", "lake", "field"];
@@ -150,6 +125,8 @@ export default function App() {
   const [widthMenu, setWidthMenu] = useState<{ x: number; y: number } | null>(null);
   // machines folded shut in the sidebar, like herdr's collapsed groups
   const [collapsed, setCollapsed] = usePref<Record<string, boolean>>("collapsed", {});
+  // how the sidebar reads and orders the agents (see radar.ts)
+  const [radarPrefs, setRadarPrefs] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
 
   const refresh = useCallback(async () => {
     try {
@@ -258,14 +235,25 @@ export default function App() {
     [allPanes],
   );
 
+  // Looking at a pane counts as having seen it finish: the server marks a
+  // terminal or chat open once, but a finish while the terminal stays open
+  // is only seen here. Not while the tab is hidden — a phone in a pocket
+  // has not looked.
+  const seenState = current?.pane.radar?.state;
+  useEffect(() => {
+    if (mode !== "herdr" || !current || seenState !== "done") return;
+    const look = () => {
+      if (document.visibilityState === "visible") void markSeen(current.machine.id, current.pane.id).catch(() => {});
+    };
+    look();
+    document.addEventListener("visibilitychange", look);
+    return () => document.removeEventListener("visibilitychange", look);
+  }, [mode, current?.machine.id, current?.pane.id, seenState]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const selectPane = useCallback((machineId: string, paneId: string) => {
     setRequested({ machineId, paneId });
     setDrawer(false);
   }, []);
-  const selectSession = (m: Machine, s: Session) => {
-    const rep = representativePane(s);
-    if (rep) selectPane(m.id, rep.pane.id);
-  };
 
   // stable for the memoized chat turns and the terminal's link provider
   const currentRef = useRef(current);
@@ -297,46 +285,6 @@ export default function App() {
     );
   };
 
-  const workspaceRow = (m: Machine, s: Session, nested: boolean) => {
-    const rep = representativePane(s);
-    const selected = current?.machine.id === m.id && current.session.id === s.id;
-    const folder = s.worktree?.checkout_path ?? rep?.pane.cwd ?? "";
-    const agent = rep?.pane.agent ?? "";
-    return (
-      <div
-        key={s.id}
-        className={`ws-row${selected ? " sel" : ""}${nested ? " nested" : ""}`}
-        role="button"
-        tabIndex={0}
-        onClick={() => selectSession(m, s)}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && selectSession(m, s)}
-        title={folder}
-      >
-        <StatusDot status={s.status} />
-        <span className="ws-copy">
-          <span className="ws-label">{s.name}</span>
-          <span className="ws-sub">
-            {agent && <span className={`ws-agent agent-${agent}`}>{agent}</span>}
-            {s.tabs.length > 1 && <span>{s.tabs.length} tabs</span>}
-            <span className="ws-folder">{basename(folder)}</span>
-          </span>
-        </span>
-        <button
-          type="button"
-          className="ws-menu-btn"
-          title="Workspace actions"
-          onClick={(e) => {
-            e.stopPropagation();
-            const r = e.currentTarget.getBoundingClientRect();
-            setMenu(menu?.session.id === s.id ? null : { machine: m, session: s, x: r.right, y: r.bottom });
-          }}
-        >
-          ⋯
-        </button>
-      </div>
-    );
-  };
-
   return (
     <div className="app">
       <header className="topbar">
@@ -344,8 +292,8 @@ export default function App() {
           ☰
         </button>
         <nav className="mode-switch">
-          <button className={mode === "herdr" ? "on" : ""} onClick={() => setMode("herdr")} title="Agents and terminals">
-            herdr
+          <button className={mode === "herdr" ? "on" : ""} onClick={() => setMode("herdr")} title="Your agents and terminals, from herdr">
+            Agents
           </button>
           <button className={mode === "tasks" ? "on" : ""} onClick={() => setMode("tasks")} title="Your Vikunja tasks">
             Tasks
@@ -472,76 +420,21 @@ export default function App() {
         )}
         {mode === "herdr" && (
         <aside className={drawer ? "sidebar open" : "sidebar"}>
-          <div className="sidebar-head">
-            <span>Machines</span>
-            <button onClick={() => setDialog({ kind: "machine" })} title="Add a remote PC over SSH">
-              + PC
-            </button>
-          </div>
-          {machines.map((m) => (
-            <div key={m.id} className={`machine${collapsed[m.id] ? " folded" : ""}`}>
-              <div className="machine-head">
-                <button
-                  className="machine-toggle"
-                  title={collapsed[m.id] ? "Show workspaces" : "Hide workspaces"}
-                  onClick={() => setCollapsed((c) => ({ ...c, [m.id]: !c[m.id] }))}
-                >
-                  <span className={`machine-state is-${m.state}`} title={m.error || m.state} />
-                  <span className="machine-label" title={m.host}>
-                    {m.label}
-                  </span>
-                  <span className="machine-count">
-                    {collapsed[m.id] && m.sessions.length > 0 ? m.sessions.length : ""}
-                  </span>
-                  <span className="chevron" aria-hidden="true">
-                    {collapsed[m.id] ? "▸" : "▾"}
-                  </span>
-                </button>
-                {m.source === "herdr" && (
-                  <span className="machine-tag" title="Mirrored from `herdr machine list`">
-                    herdr
-                  </span>
-                )}
-                <button
-                  className="icon-btn"
-                  title={`New workspace on ${m.label}`}
-                  disabled={m.state !== "connected"}
-                  onClick={() => setDialog({ kind: "workspace", machineId: m.id })}
-                >
-                  +
-                </button>
-                {m.id !== "local" && m.source !== "herdr" && (
-                  <button
-                    className="icon-btn"
-                    title="Remove machine (nothing on the PC is touched)"
-                    onClick={() =>
-                      ask(`Remove machine “${m.label}”? Nothing on the PC is touched.`, "Remove", () =>
-                        void removeMachine(m.id).then(refresh),
-                      )
-                    }
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              {m.state === "error" && <div className="machine-error">{m.error}</div>}
-              {m.state === "connecting" && <div className="machine-error dim">connecting…</div>}
-              {!collapsed[m.id] && (
-                <div className="ws-tree">
-                  {worktreeGroups(m.sessions).map(({ session, children }) => (
-                    <div key={session.id} className="ws-group">
-                      {workspaceRow(m, session, false)}
-                      {children.length > 0 && (
-                        <div className="ws-children">
-                          {children.map((c) => workspaceRow(m, c, true))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+          <Sidebar
+            machines={machines}
+            current={current ? { machineId: current.machine.id, sessionId: current.session.id, paneId: current.pane.id } : null}
+            prefs={radarPrefs}
+            collapsed={collapsed}
+            onToggle={(id) => setCollapsed((c) => ({ ...c, [id]: !c[id] }))}
+            onSelect={selectPane}
+            onMenu={(m, s, x, y) => setMenu(menu?.session.id === s.id ? null : { machine: m, session: s, x, y })}
+            onNewWorkspace={(m) => setDialog({ kind: "workspace", machineId: m.id })}
+            onRemoveMachine={(m) =>
+              ask(`Remove machine “${m.label}”? Nothing on the PC is touched.`, "Remove", () => void removeMachine(m.id).then(refresh))
+            }
+            onAddMachine={() => setDialog({ kind: "machine" })}
+            onPrefs={setRadarPrefs}
+          />
         </aside>
         )}
         {mode === "herdr" && drawer && <div className="scrim" onClick={() => setDrawer(false)} />}
@@ -788,14 +681,14 @@ function AgentSelect({ agents, value, onChange }: { agents: AgentKind[]; value: 
   return (
     <label>
       Agent
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
-        {agents.map((a) => (
-          <option key={a.id} value={a.id}>
-            {a.label}
-          </option>
-        ))}
-        <option value="shell">Plain shell</option>
-      </select>
+      <Select
+        value={value}
+        onChange={onChange}
+        options={[
+          ...agents.map((a) => ({ value: a.id, label: a.label, icon: <Logo agent={a.id} /> })),
+          { value: "shell", label: "Plain shell", icon: <span className="sel-glyph">$</span> },
+        ]}
+      />
     </label>
   );
 }
@@ -900,14 +793,17 @@ function NewWorkspaceDialog({
       {machines.length > 1 && (
         <label>
           Machine
-          <select value={machine} onChange={(e) => setMachine(e.target.value)}>
-            {machines.map((m) => (
-              <option key={m.id} value={m.id} disabled={m.state !== "connected"}>
-                {m.label}
-                {m.state !== "connected" ? ` (${m.state})` : ""}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={machine}
+            onChange={setMachine}
+            options={machines.map((m) => ({
+              value: m.id,
+              label: m.label,
+              hint: m.state !== "connected" ? m.state : m.host,
+              disabled: m.state !== "connected",
+              icon: <span className={`machine-state is-${m.state}`} />,
+            }))}
+          />
         </label>
       )}
       <label>

@@ -9,6 +9,7 @@ import {
   type Prefs,
   type PushState,
 } from "./push";
+import Select from "./Select";
 
 // Push alerts for this device: enable, what to be told about, a test push.
 export default function AlertsPanel({ onClose }: { onClose: () => void }) {
@@ -96,11 +97,15 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
           When an agent <b>finishes</b>
           <small>Turns ≥ 1 min, a minute after; "always" means every turn, after 10 s.</small>
         </span>
-        <select value={prefs.done} onChange={(e) => changePrefs({ ...prefs, done: e.target.value as Prefs["done"] })}>
-          <option value="off">never</option>
-          <option value="long">long turns</option>
-          <option value="always">always</option>
-        </select>
+        <Select
+          value={prefs.done}
+          onChange={(done) => changePrefs({ ...prefs, done })}
+          options={[
+            { value: "off", label: "never" },
+            { value: "long", label: "long turns" },
+            { value: "always", label: "always" },
+          ]}
+        />
       </label>
 
       {state?.subscribed && state.endpoint && (

@@ -12,6 +12,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
+	"github.com/dev1antdev/herdr-ui/internal/radar"
 )
 
 const (
@@ -37,13 +38,14 @@ type machineState struct {
 type Watcher struct {
 	machines *machines.Manager
 	push     *push.Service
+	radar    *radar.Tracker
 
 	mu     sync.Mutex
 	states map[string]*machineState
 }
 
-func New(m *machines.Manager, p *push.Service) *Watcher {
-	return &Watcher{machines: m, push: p, states: map[string]*machineState{}}
+func New(m *machines.Manager, p *push.Service, r *radar.Tracker) *Watcher {
+	return &Watcher{machines: m, push: p, radar: r, states: map[string]*machineState{}}
 }
 
 // Start polls forever; new machines are picked up on each discovery round.
@@ -121,6 +123,8 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 	for _, ws := range snap.Workspaces {
 		labels[ws.WorkspaceID] = ws.Label
 	}
+
+	w.radar.Observe(machineID, snap, now)
 
 	var events []push.Event
 	w.mu.Lock()

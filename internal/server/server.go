@@ -28,6 +28,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
+	"github.com/dev1antdev/herdr-ui/internal/radar"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
 	"github.com/dev1antdev/herdr-ui/internal/transcript"
 	"github.com/dev1antdev/herdr-ui/internal/watch"
@@ -38,6 +39,7 @@ type Server struct {
 	Watch    *watch.Watcher
 	Push     *push.Service
 	Tasks    *tasks.Service
+	Radar    *radar.Tracker
 	Guard    *auth.Guard
 	UI       fs.FS // built SPA
 
@@ -46,8 +48,8 @@ type Server struct {
 	streams termStreams                  // HTTP-transport terminal sessions
 }
 
-func New(m *machines.Manager, w *watch.Watcher, p *push.Service, t *tasks.Service, g *auth.Guard, ui fs.FS) *Server {
-	return &Server{Machines: m, Watch: w, Push: p, Tasks: t, Guard: g, UI: ui, paneMu: map[push.PaneRef]*sync.Mutex{}}
+func New(m *machines.Manager, w *watch.Watcher, p *push.Service, t *tasks.Service, r *radar.Tracker, g *auth.Guard, ui fs.FS) *Server {
+	return &Server{Machines: m, Watch: w, Push: p, Tasks: t, Radar: r, Guard: g, UI: ui, paneMu: map[push.PaneRef]*sync.Mutex{}}
 }
 
 // agents herdr-ui offers to start, by herdr manifest kind. The list is also
@@ -94,6 +96,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/push/subscribe", s.handlePushSubscribe)
 	api.HandleFunc("DELETE /api/push/subscribe", s.handlePushUnsubscribe)
 	api.HandleFunc("POST /api/push/test", s.handlePushTest)
+	api.HandleFunc("POST /api/seen", s.handleSeen)
 	api.HandleFunc("GET /api/tasks/status", s.handleTasksStatus)
 	api.HandleFunc("PUT /api/tasks/config", s.handleTasksConnect)
 	api.HandleFunc("DELETE /api/tasks/config", s.handleTasksDisconnect)
@@ -214,6 +217,9 @@ type rosterPane struct {
 	Status  string `json:"status"`  // run | input | idle | done | shell
 	Cols    int    `json:"cols"`    // the pane's own grid, so a phone can keep it
 	Rows    int    `json:"rows"`
+	// an agent's lifecycle as a person reads it (held done, held question,
+	// last activity) — nil for a shell
+	Radar *radar.Display `json:"radar,omitempty"`
 }
 
 type rosterTab struct {
@@ -253,13 +259,13 @@ type rosterMachine struct {
 
 // sessionsFromSnapshot keeps herdr's own hierarchy: workspace → tabs → panes,
 // in herdr's order, so the UI can draw the same tree herdr's sidebar does.
-func sessionsFromSnapshot(snap *herdr.Snapshot) []rosterSession {
+func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []rosterSession {
 	panesByTab := map[string][]rosterPane{}
 	agentInTab := map[string]bool{}
 	for i := range snap.Panes {
 		p := &snap.Panes[i]
 		cols, rows := snap.PaneSize(p.PaneID)
-		panesByTab[p.TabID] = append(panesByTab[p.TabID], rosterPane{
+		rp := rosterPane{
 			ID:      p.PaneID,
 			Title:   p.DisplayTitle(),
 			Agent:   p.AgentName(),
@@ -268,7 +274,12 @@ func sessionsFromSnapshot(snap *herdr.Snapshot) []rosterSession {
 			Status:  herdr.UIStatus(p.AgentStatus, p.Agent != ""),
 			Cols:    cols,
 			Rows:    rows,
-		})
+		}
+		if p.Agent != "" {
+			d := s.Radar.Display(machineID, p)
+			rp.Radar = &d
+		}
+		panesByTab[p.TabID] = append(panesByTab[p.TabID], rp)
 		if p.Agent != "" {
 			agentInTab[p.TabID] = true
 		}
@@ -327,7 +338,7 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 		if st == machines.StateConnected {
 			snap, err := s.Watch.Snapshot(mc.Cfg.ID)
 			if snap != nil {
-				rm.Sessions = sessionsFromSnapshot(snap)
+				rm.Sessions = s.sessionsFromSnapshot(mc.Cfg.ID, snap)
 			}
 			if err != nil {
 				rm.State, rm.Error = machines.StateError, err.Error()
@@ -508,6 +519,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
+	s.Radar.Seen(mc.Cfg.ID, pane.PaneID)
 	cwd := pane.Dir()
 
 	// herdr names the exact session when it knows it; the folder's session
@@ -812,6 +824,22 @@ func (s *Server) paneLock(ref push.PaneRef) *sync.Mutex {
 	return s.paneMu[ref]
 }
 
+// handleSeen: a client is looking at the pane, so a held "done" comes down.
+func (s *Server) handleSeen(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Machine string `json:"machine"`
+		Pane    string `json:"pane"`
+	}
+	if !decode(w, r, &req) || req.Pane == "" {
+		return
+	}
+	if req.Machine == "" {
+		req.Machine = "local"
+	}
+	s.Radar.Seen(req.Machine, req.Pane)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Machine string `json:"machine"`
@@ -922,6 +950,7 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
+	s.Radar.Seen(mc.Cfg.ID, pane.PaneID) // a terminal in view counts as looked at
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
 
