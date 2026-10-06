@@ -640,6 +640,8 @@ input[type="checkbox"]:hover:not(:checked) {
 }
 
 .title {
+  flex: 0 1 auto;
+  min-width: 0;
   font-weight: 600;
   letter-spacing: -0.005em;
   white-space: nowrap;
@@ -2199,15 +2201,37 @@ input[type="checkbox"]:hover:not(:checked) {
   gap: 12px;
 }
 
-.alerts-row span,
-.alerts-opt span {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.alerts-row > span,
+.alerts-opt > span {
+  display: block;
   flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.alerts-opt {
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.alerts-opt > input[type="checkbox"] {
+  order: 2;
+  margin-top: 3px;
+}
+
+.alerts-opt > .sel,
+.alerts-row > button {
+  flex-shrink: 0;
+}
+
+.alerts-opt > .sel {
+  min-width: 128px;
+  height: var(--ctl-sm);
 }
 
 .alerts small {
+  display: block;
+  margin-top: 2px;
   color: var(--fg-faint);
   font-size: 11.5px;
   line-height: 1.35;
@@ -3011,6 +3035,12 @@ input[type="checkbox"]:hover:not(:checked) {
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.015em;
+}
+
+@media (max-width: 920px) {
+  .lens-switch .kb-font {
+    display: none;
+  }
 }
 
 /* ---- mobile ---- */

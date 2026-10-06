@@ -94,10 +94,10 @@ export default function FileViewer({
         <header className="fv-head">
           <div className="fv-title">
             <span className="fv-name">{name}</span>
-            <span className="fv-path" title={info?.path ?? target.path}>
+            <span className="fv-path" title={info?.path ?? target.path} dir="rtl"><bdi>
               {info?.path ?? target.path}
               {target.line ? `:${target.line}` : ""}
-            </span>
+            </bdi></span>
           </div>
           {info?.kind === "text" && (
             <nav className="fv-tabs">

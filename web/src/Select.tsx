@@ -5,6 +5,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import Icon from "./icons";
 
 export type Option<T extends string | number> = {
   value: T;
@@ -114,7 +115,7 @@ export default function Select<T extends string | number>({ value, options, onCh
         {chosen?.icon && <span className="sel-icon">{chosen.icon}</span>}
         <span className="sel-label">{chosen ? chosen.label : (placeholder ?? "—")}</span>
         <span className="sel-chev" aria-hidden="true">
-          ▾
+          <Icon name="chevron-down" size={12} />
         </span>
       </button>
       {open &&

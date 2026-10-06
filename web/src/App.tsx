@@ -370,10 +370,10 @@ export default function App() {
                 >
                   <Icon name="text-select" />
                 </button>
-                <button className="kb-toggle" title="Smaller text" onClick={() => setTermFont((f) => Math.max(8, f - 1))}>
+                <button className="kb-toggle kb-font" title="Smaller text" onClick={() => setTermFont((f) => Math.max(8, f - 1))}>
                   <Icon name="text-smaller" />
                 </button>
-                <button className="kb-toggle" title="Larger text" onClick={() => setTermFont((f) => Math.min(20, f + 1))}>
+                <button className="kb-toggle kb-font" title="Larger text" onClick={() => setTermFont((f) => Math.min(20, f + 1))}>
                   <Icon name="text-larger" />
                 </button>
                 <button

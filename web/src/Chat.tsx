@@ -317,7 +317,7 @@ function PartView({ part, onOpenFile }: { part: Part; onOpenFile: OpenFile }) {
   }
   if (part.type === "thinking") {
     return (
-      <Folded className="part-thinking" summary="Thinking">
+      <Folded className="part-thinking" summary={<><Icon name="sparkles" size={12} className="icon part-tool-icon" /> Thinking</>}>
         <div className="part-text">{part.text}</div>
       </Folded>
     );
