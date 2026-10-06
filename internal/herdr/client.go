@@ -389,6 +389,16 @@ func (c *Client) TabCreate(workspaceID, label string) (*TabCreateResult, error) 
 	return &out, nil
 }
 
+// TabRename sets the tab's label (herdr labels an unnamed tab with its number).
+func (c *Client) TabRename(tabID, label string) error {
+	return c.Call("tab.rename", map[string]any{"tab_id": tabID, "label": label}, nil)
+}
+
+// WorkspaceRename sets the workspace's label.
+func (c *Client) WorkspaceRename(workspaceID, label string) error {
+	return c.Call("workspace.rename", map[string]any{"workspace_id": workspaceID, "label": label}, nil)
+}
+
 // TabClose closes the tab and every pane in it; a workspace's last tab takes
 // the workspace with it.
 func (c *Client) TabClose(tabID string) error {

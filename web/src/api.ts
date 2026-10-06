@@ -81,7 +81,7 @@ export async function check(res: Response): Promise<Response> {
   return res;
 }
 
-export async function sendJSON<T = unknown>(method: "POST" | "DELETE", url: string, body?: unknown): Promise<T> {
+export async function sendJSON<T = unknown>(method: "POST" | "DELETE" | "PATCH", url: string, body?: unknown): Promise<T> {
   const res = await check(
     await fetch(url, {
       method,
@@ -167,6 +167,12 @@ export const killSession = (machineId: string, id: string): Promise<void> =>
 
 export const closeTab = (machineId: string, id: string): Promise<void> =>
   sendJSON("DELETE", withMachine(`/api/tabs/${encodeURIComponent(id)}`, machineId));
+
+export const renameTab = (machineId: string, id: string, label: string): Promise<void> =>
+  sendJSON("PATCH", withMachine(`/api/tabs/${encodeURIComponent(id)}`, machineId), { label });
+
+export const renameSession = (machineId: string, id: string, label: string): Promise<void> =>
+  sendJSON("PATCH", withMachine(`/api/sessions/${encodeURIComponent(id)}`, machineId), { label });
 
 export const addMachine = (req: { label: string; host: string }): Promise<void> =>
   sendJSON("POST", "/api/machines", req);

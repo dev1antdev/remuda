@@ -86,6 +86,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("DELETE /api/sessions/{id}", s.closeHandler((*herdr.Client).WorkspaceClose))
 	api.HandleFunc("POST /api/tabs", s.handleNewTab)
 	api.HandleFunc("DELETE /api/tabs/{id}", s.closeHandler((*herdr.Client).TabClose))
+	api.HandleFunc("PATCH /api/tabs/{id}", s.renameHandler((*herdr.Client).TabRename))
+	api.HandleFunc("PATCH /api/sessions/{id}", s.renameHandler((*herdr.Client).WorkspaceRename))
 	api.HandleFunc("POST /api/worktrees", s.handleNewWorktree)
 	api.HandleFunc("GET /api/chat", s.handleChat)
 	api.HandleFunc("GET /api/fs/stat", s.handleFsStat)
@@ -493,6 +495,35 @@ func (s *Server) closeHandler(close func(*herdr.Client, string) error) http.Hand
 			return
 		}
 		if err := close(client, r.PathValue("id")); err != nil {
+			rpcErr(w, err)
+			return
+		}
+		s.Watch.Refresh(mc)
+		writeJSON(w, map[string]any{"ok": true})
+	}
+}
+
+// renameHandler serves the two renames: a tab's or a workspace's label,
+// from a JSON body {"label": …}.
+func (s *Server) renameHandler(rename func(*herdr.Client, string, string) error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Label   string `json:"label"`
+			Machine string `json:"machine"`
+		}
+		if !decode(w, r, &req) {
+			return
+		}
+		label := strings.TrimSpace(req.Label)
+		if label == "" {
+			httpErr(w, 400, errors.New("a label is required"))
+			return
+		}
+		mc, client, _, ok := s.ready(w, r, req.Machine)
+		if !ok {
+			return
+		}
+		if err := rename(client, r.PathValue("id"), label); err != nil {
 			rpcErr(w, err)
 			return
 		}

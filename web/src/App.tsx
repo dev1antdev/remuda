@@ -9,6 +9,8 @@ import {
   killSession,
   markSeen,
   removeMachine,
+  renameSession,
+  renameTab,
   submitPrompt,
   type AgentKind,
   type Created,
@@ -39,6 +41,7 @@ type Located = { machine: Machine; session: Session; tab: Tab; pane: Pane };
 
 // Every "make something" dialog, keyed so only one is open at a time.
 type Dialog =
+  | { kind: "rename"; machineId: string; what: "tab" | "workspace"; id: string; label: string }
   | { kind: "workspace"; machineId: string }
   | { kind: "tab"; machineId: string; session: Session }
   | { kind: "worktree"; machineId: string; session: Session }
@@ -453,6 +456,7 @@ export default function App() {
                 onNewTab={() =>
                   setDialog({ kind: "tab", machineId: current.machine.id, session: current.session })
                 }
+                onRename={(t, label) => void renameTab(current.machine.id, t.id, label).then(refresh, (e) => setNotice(errMsg(e)))}
                 onCloseTab={(t) => {
                   const last = current.session.tabs.length === 1;
                   const msg = last
@@ -521,10 +525,34 @@ export default function App() {
           <button onClick={() => { setMenu(null); setDialog({ kind: "worktree", machineId: menu.machine.id, session: menu.session }); }}>
             New worktree…
           </button>
+          <button onClick={() => { setMenu(null); setDialog({ kind: "rename", machineId: menu.machine.id, what: "workspace", id: menu.session.id, label: menu.session.name }); }}>
+            Rename workspace…
+          </button>
+          {(() => {
+            const t = menu.session.tabs.find((x) => x.id === menu.session.active_tab_id) ?? menu.session.tabs[0];
+            return t ? (
+              <button onClick={() => { setMenu(null); setDialog({ kind: "rename", machineId: menu.machine.id, what: "tab", id: t.id, label: t.named ? t.label : "" }); }}>
+                Rename tab {t.named ? `“${t.label}”` : t.number}…
+              </button>
+            ) : null;
+          })()}
           <button className="danger" onClick={() => { setMenu(null); closeWorkspace(menu.machine, menu.session); }}>
             Close workspace
           </button>
         </div>
+      )}
+
+      {dialog?.kind === "rename" && (
+        <RenameDialog
+          what={dialog.what}
+          label={dialog.label}
+          onClose={() => setDialog(null)}
+          onRename={async (label) => {
+            await (dialog.what === "tab" ? renameTab : renameSession)(dialog.machineId, dialog.id, label);
+            setDialog(null);
+            await refresh();
+          }}
+        />
       )}
 
       {widthMenu && (
@@ -619,6 +647,7 @@ function TabStrip({
   onSelect,
   onNewTab,
   onCloseTab,
+  onRename,
 }: {
   session: Session;
   tab: Tab;
@@ -626,15 +655,49 @@ function TabStrip({
   onSelect: (paneId: string) => void;
   onNewTab: () => void;
   onCloseTab: (t: Tab) => void;
+  onRename: (t: Tab, label: string) => void;
 }) {
+  // double-click a tab to name it in place; Enter keeps, Escape drops
+  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
+  const commit = () => {
+    if (!editing) return;
+    const t = session.tabs.find((x) => x.id === editing.id);
+    const v = editing.value.trim();
+    setEditing(null);
+    if (t && v && v !== (t.named ? t.label : "")) onRename(t, v);
+  };
   return (
     <div className="tabstrip">
       <div className="tabs" role="tablist">
         {session.tabs.map((t) => {
           const first = t.panes.find((p) => p.focused) ?? t.panes[0];
+          if (editing?.id === t.id) {
+            return (
+              <div key={t.id} role="tab" className="tab sel editing">
+                <input
+                  className="tab-edit"
+                  autoFocus
+                  value={editing.value}
+                  placeholder={`Tab ${t.number}`}
+                  onChange={(e) => setEditing({ id: t.id, value: e.target.value })}
+                  onBlur={commit}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commit();
+                    if (e.key === "Escape") setEditing(null);
+                  }}
+                />
+              </div>
+            );
+          }
           return (
             <div key={t.id} role="tab" aria-selected={t.id === tab.id} className={`tab${t.id === tab.id ? " sel" : ""}`}>
-              <button className="tab-main" disabled={!first} onClick={() => first && onSelect(first.id)}>
+              <button
+                className="tab-main"
+                disabled={!first}
+                title={t.named ? `${t.label} — double-click to rename` : "Double-click to name this tab"}
+                onClick={() => first && onSelect(first.id)}
+                onDoubleClick={() => setEditing({ id: t.id, value: t.named ? t.label : "" })}
+              >
                 <StatusDot status={t.status} />
                 <span className="tab-num">{t.number}</span>
                 {t.named && <span className="tab-label">{t.label}</span>}
@@ -747,6 +810,19 @@ function Modal({ title, hint, children, onClose, submit, submitLabel }: {
         </div>
       </form>
     </div>
+  );
+}
+
+function RenameDialog({ what, label, onClose, onRename }: { what: "tab" | "workspace"; label: string; onClose: () => void; onRename: (label: string) => Promise<void> }) {
+  const [value, setValue] = useState(label);
+  const submit = useSubmit(() => onRename(value.trim()));
+  return (
+    <Modal title={what === "tab" ? "Rename tab" : "Rename workspace"} onClose={onClose} submit={submit} submitLabel="Rename">
+      <label>
+        Name
+        <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} onFocus={(e) => e.target.select()} />
+      </label>
+    </Modal>
   );
 }
 

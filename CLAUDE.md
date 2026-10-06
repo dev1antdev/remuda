@@ -179,7 +179,10 @@ SPA. See README.md for the user story.
   `X-Herdr-UI-Machine` header → POST body `machine`) and `ready()`. The three
   create routes share `create()` (agent kind validated *before* any RPC,
   container made, agent started, watcher refreshed); the two close routes
-  share `closeHandler`. The roster carries an ETag (304 when unchanged) and
+  share `closeHandler`, the two renames (`PATCH /api/tabs/{id}`,
+  `PATCH /api/sessions/{id}`, body `{label}`) share `renameHandler` —
+  herdr's `tab.rename` / `workspace.rename`. In the UI a tab is renamed in
+  place by double-click, or from the workspace's ⋯ menu (touch). The roster carries an ETag (304 when unchanged) and
   the agent list. Local files stream through `http.ServeContent` (Range for
   video); the WS uses per-message compression and coalesces queued chunks.
 - `web/src/styles.css` — one design system, dark and warm: four surface
