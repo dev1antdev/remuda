@@ -16,6 +16,8 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <!-- the embedded browser ("Web Browser (JCEF)"), a separate bundled plugin since 2026 -->
+    <depends>com.intellij.modules.jcef</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="herdr" anchor="right" icon="/icons/herdr.svg"

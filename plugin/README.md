@@ -59,5 +59,7 @@ cd plugin
 ./gradlew runIde          # a sandbox IntelliJ Community with the plugin
 ```
 
-Platform APIs only (`com.intellij.modules.platform`), compiled against
-IntelliJ 2025.1, no upper build bound.
+Platform APIs plus the bundled JCEF plugin (`com.intellij.modules.jcef`,
+a separate plugin since 2026.x), compiled against IntelliJ 2026.2; needs
+build 262+ (PhpStorm 2026.2), no upper bound. Toolchain: JDK 21, Gradle 9.8
+(wrapper), Kotlin 2.4 — the 2026.2 platform ships Kotlin 2.4 metadata.

@@ -86,7 +86,12 @@ SPA. See README.md for the user story.
   returns false or the file is on another machine); `window.herdrUI.insert`
   / `selectFolder` let the host push text into the composer or pick a pane.
 - `plugin/` — the JetBrains plugin (Kotlin, IntelliJ Platform Gradle Plugin
-  2.x, platform APIs only). `HerdrUiService` finds/starts the `herdr-ui`
+  2.19, `intellijIdea("2026.2.x")` — the Community/Ultimate split is gone
+  since 2025.3 — plus `bundledPlugin("com.intellij.modules.jcef")`: in 2026
+  JCEF is its own bundled plugin and `<depends>` on it is required, or
+  `JBCefApp` is a ClassNotFoundException at runtime). Views are built on the
+  EDT only; the probe runs on a pooled thread and every failure becomes a
+  FallbackView (never a stuck "Connecting…"). `HerdrUiService` finds/starts the `herdr-ui`
   binary on the host and reads its token via `-print-token`;
   `EmbeddedView` is a JBCefBrowser with the `herdrHost` bridge injected on
   load; `FallbackView` is shown when JCEF is unavailable — in Remote
