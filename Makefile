@@ -1,4 +1,4 @@
-.PHONY: all build web server dev run test typecheck docker docker-test release deploy plugin clean
+.PHONY: all build web server dev run test typecheck docker docker-test release deploy service plugin clean
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
@@ -53,6 +53,11 @@ deploy: release
 	  echo "deploying bin/herdr-ui-$$t to $(HOST):~/.local/bin/herdr-ui"; \
 	  ssh $(HOST) 'mkdir -p ~/.local/bin' && scp -q bin/herdr-ui-$$t $(HOST):~/.local/bin/herdr-ui.new && \
 	  ssh $(HOST) 'mv ~/.local/bin/herdr-ui.new ~/.local/bin/herdr-ui && ~/.local/bin/herdr-ui -version' # rename: safe while the old one runs
+
+# make service HOST=gog.remote — herdr-ui as a background service there (launchd / systemd --user),
+# listening on 127.0.0.1:7317, starting at login. Without HOST: on this machine.
+service:
+	@if [ -n "$(HOST)" ]; then ssh $(HOST) 'sh -s install' < deploy/install-service.sh; else sh deploy/install-service.sh install; fi
 
 # The JetBrains IDE plugin (plugin/build/distributions/*.zip).
 plugin:

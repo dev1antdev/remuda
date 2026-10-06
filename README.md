@@ -80,6 +80,18 @@ On first run herdr-ui generates an access token (stored at
 Every request needs the token — as the printed `?token=` link once per device
 (it becomes an HttpOnly cookie), or `Authorization: Bearer`.
 
+## As a background service on a Mac or Linux box
+
+```bash
+make deploy HOST=gog.remote     # the right binary → ~/.local/bin/herdr-ui there
+make service HOST=gog.remote    # launchd LaunchAgent (macOS) / systemd --user (Linux):
+                                # 127.0.0.1:7317, starts at login, restarts if it exits
+make service                    # the same on this machine
+```
+
+Logs: `~/Library/Logs/herdr-ui.log` (macOS) or `journalctl --user -u herdr-ui`.
+Remove with `deploy/install-service.sh uninstall`.
+
 ## Docker / Portainer
 
 For a **Linux host** that runs herdr (the container shares the host's unix
