@@ -167,6 +167,7 @@ button {
   background: color-mix(in srgb, var(--amber) 22%, var(--bg-input));
   color: var(--amber);
   border: 1px solid var(--amber);
+  font-size: 12px;
   max-width: 40vw;
   white-space: nowrap;
   overflow: hidden;

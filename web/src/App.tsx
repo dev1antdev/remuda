@@ -113,6 +113,9 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [termApi, setTermApi] = useState<TermApi | null>(null);
   const [modifier, setModifier] = useState<Modifier>(null);
+  // selection mode: a plain drag selects text instead of reaching the agent
+  const [selectMode, setSelectMode] = useState(false);
+  const copied = useCallback((n: number) => setNotice(`Copied ${n} character${n === 1 ? "" : "s"}`), []);
   const [file, setFile] = useState<{ machineId: string; paneId: string; target: FileTarget } | null>(null);
   const [keybar, setKeybar] = usePref("keybar", isTouch);
   // A phone keeps the pane's own grid by default: resizing the shared pane
@@ -186,7 +189,7 @@ export default function App() {
 
   useEffect(() => {
     if (!notice) return;
-    const t = setTimeout(() => setNotice(null), 10000);
+    const t = setTimeout(() => setNotice(null), notice.startsWith("Copied") ? 2000 : 10000);
     return () => clearTimeout(t);
   }, [notice]);
 
@@ -328,6 +331,17 @@ export default function App() {
                   onClick={() => setSizeMode(sizeMode === "keep" ? "fit" : "keep")}
                 >
                   {sizeMode === "keep" ? "⊡" : "⤢"}
+                </button>
+                <button
+                  className={`kb-toggle${selectMode ? " on" : ""}`}
+                  title={
+                    selectMode
+                      ? "Selection mode is on: drag selects text and copies it. Click to give the mouse back to the agent."
+                      : "Selection mode: drag to select and copy text (otherwise hold Option/Alt while dragging)"
+                  }
+                  onClick={() => setSelectMode((v) => !v)}
+                >
+                  ⌖
                 </button>
                 <button className="kb-toggle" title="Smaller text" onClick={() => setTermFont((f) => Math.max(8, f - 1))}>
                   A−
@@ -481,9 +495,11 @@ export default function App() {
                     mode={sizeMode}
                     fontSize={termFont}
                     modifier={modifier}
+                    selectMode={selectMode}
                     onModifierUsed={modifierUsed}
                     onReady={setTermApi}
                     onOpenFile={openFile}
+                    onCopied={copied}
                   />
                   {keybar && <KeyBar term={termApi} modifier={modifier} setModifier={setModifier} />}
                 </>

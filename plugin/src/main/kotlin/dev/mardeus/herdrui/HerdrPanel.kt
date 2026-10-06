@@ -4,6 +4,7 @@ import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
+import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -40,11 +41,15 @@ interface HerdrView {
 class EmbeddedView(private val project: Project, parent: Disposable, url: String) : HerdrView, Disposable {
     private val browser: JBCefBrowser = JBCefBrowser.createBuilder().setUrl(url).build()
     private val openQuery: JBCefJSQuery = JBCefJSQuery.create(browser as JBCefBrowserBase)
+    // the page's copies go through the IDE's clipboard, which Remote
+    // Development mirrors to the client — the browser's own would stay on the host
+    private val copyQuery: JBCefJSQuery = JBCefJSQuery.create(browser as JBCefBrowserBase)
 
     override val component: JComponent get() = browser.component
 
     override fun dispose() {
         Disposer.dispose(openQuery)
+        Disposer.dispose(copyQuery)
         Disposer.dispose(browser)
     }
 
@@ -56,17 +61,28 @@ class EmbeddedView(private val project: Project, parent: Disposable, url: String
             if (path.isNotEmpty()) openInEditor(path, line)
             null
         }
+        copyQuery.addHandler { text ->
+            ApplicationManager.getApplication().invokeLater {
+                CopyPasteManager.getInstance().setContents(StringSelection(text))
+            }
+            null
+        }
         browser.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
             override fun onLoadEnd(cefBrowser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
                 if (!frame.isMain) return
-                val call = openQuery.inject("payload")
+                val openCall = openQuery.inject("payload")
+                val copyCall = copyQuery.inject("text")
                 cefBrowser.executeJavaScript(
                     """
                     window.herdrHost = {
                       openFile: function (path, line, machine) {
                         if (machine !== 'local') return false; // not this host's file
                         var payload = String(line || 0) + '\t' + path;
-                        $call
+                        $openCall
+                        return true;
+                      },
+                      copy: function (text) {
+                        $copyCall
                         return true;
                       }
                     };

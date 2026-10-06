@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { uploadFiles } from "./api";
 import { filesFrom, shellQuote } from "./attachments";
+import { copyText } from "./host";
 import { findPaths } from "./paths";
 import type { FileTarget } from "./FileViewer";
 
@@ -52,9 +53,11 @@ export default function TerminalView({
   mode,
   fontSize,
   modifier,
+  selectMode,
   onModifierUsed,
   onReady,
   onOpenFile,
+  onCopied,
 }: {
   machineId: string;
   paneId: string;
@@ -63,15 +66,20 @@ export default function TerminalView({
   mode: SizeMode;
   fontSize: number; // preferred size in fit mode
   modifier: Modifier;
+  // selection mode: mouse reporting to the agent is paused locally, so a
+  // plain drag selects text (otherwise Option/Alt+drag does)
+  selectMode: boolean;
   onModifierUsed: () => void;
   onReady: (api: TermApi | null) => void;
   onOpenFile: (t: FileTarget) => void;
+  onCopied: (chars: number) => void;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   // props the running terminal reads without being recreated
-  const live = useRef({ cols, rows, mode, fontSize, modifier, onModifierUsed, onReady, onOpenFile });
-  live.current = { cols, rows, mode, fontSize, modifier, onModifierUsed, onReady, onOpenFile };
+  const live = useRef({ cols, rows, mode, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied });
+  live.current = { cols, rows, mode, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied };
   const applyRef = useRef<() => void>(() => {});
+  const selectRef = useRef<(on: boolean) => void>(() => {});
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -82,6 +90,7 @@ export default function TerminalView({
       fontSize: live.current.fontSize,
       scrollback: 2000,
       allowProposedApi: true,
+      macOptionClickForcesSelection: true, // Option+drag selects even while the agent tracks the mouse
       theme: { background: "#14120f", selectionBackground: "#4a4138" },
     });
     const fit = new FitAddon();
@@ -281,6 +290,32 @@ export default function TerminalView({
 
     const onData = term.onData(input);
 
+    // Copy on selection, like a terminal: the agent's mouse tracking makes
+    // selecting deliberate anyway (Option+drag, or selection mode).
+    let copyTimer: ReturnType<typeof setTimeout> | null = null;
+    const onSel = term.onSelectionChange(() => {
+      if (copyTimer) clearTimeout(copyTimer);
+      copyTimer = setTimeout(() => {
+        const text = term.getSelection();
+        if (text) void copyText(text).then((ok) => ok && live.current.onCopied(text.length));
+      }, 150);
+    });
+
+    // Selection mode pauses mouse reporting inside xterm only — the PTY
+    // never sees these sequences — and restores whatever mode the agent had.
+    let savedMouse: string | null = null;
+    selectRef.current = (on) => {
+      if (on) {
+        if (savedMouse !== null) return;
+        savedMouse = term.modes.mouseTrackingMode;
+        term.write("\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?9l");
+      } else if (savedMouse !== null) {
+        const restore: Record<string, string> = { x10: "\x1b[?9h", vt200: "\x1b[?1000h", drag: "\x1b[?1002h", any: "\x1b[?1003h" };
+        if (restore[savedMouse]) term.write(restore[savedMouse]!);
+        savedMouse = null;
+      }
+    };
+
     // Keys xterm gets wrong for agent TUIs: Shift+Enter is a newline in
     // Claude Code only as the Alt+Enter chord (ESC CR); Ctrl+V must reach the
     // browser's paste event instead of becoming 0x16. The handler sees
@@ -372,6 +407,8 @@ export default function TerminalView({
       closed = true;
       live.current.onReady(null);
       onData.dispose();
+      onSel.dispose();
+      if (copyTimer) clearTimeout(copyTimer);
       linkProvider.dispose();
       mount.removeEventListener("dragover", onDragOver);
       mount.removeEventListener("dragleave", onDragLeave);
@@ -392,6 +429,10 @@ export default function TerminalView({
   useEffect(() => {
     applyRef.current();
   }, [keepCols, keepRows, mode, fontSize]);
+
+  useEffect(() => {
+    selectRef.current(selectMode);
+  }, [selectMode]);
 
   return <div ref={mountRef} className="term-mount" />;
 }

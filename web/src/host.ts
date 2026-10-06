@@ -9,6 +9,9 @@ export type HerdrHost = {
   // open a file in the host's editor instead of the web viewer; return false
   // to fall back to the viewer
   openFile?: (path: string, line: number | null, machineId: string) => boolean;
+  // put text on the user's clipboard — an embedded browser in Remote
+  // Development writes to the wrong machine's clipboard otherwise
+  copy?: (text: string) => boolean;
 };
 
 export type HerdrUI = {
@@ -36,6 +39,30 @@ export function hostOpensFile(machineId: string, t: FileTarget): boolean {
     return fn(t.path, t.line ?? null, machineId) === true;
   } catch {
     return false;
+  }
+}
+
+// copyText puts text on the clipboard: through the host when it offers to,
+// else the Clipboard API, else the old execCommand path.
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (window.herdrHost?.copy?.(text) === true) return true;
+  } catch {
+    /* fall through */
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
   }
 }
 
