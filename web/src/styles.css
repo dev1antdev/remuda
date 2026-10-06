@@ -503,6 +503,16 @@ button {
   color: var(--red);
 }
 
+.row-menu button.on {
+  color: var(--accent);
+}
+
+/* anchored at the button's left edge, under it */
+.row-menu.width-menu {
+  transform: none;
+  min-width: 160px;
+}
+
 /* a repository's worktree workspaces hang under it like herdr's tree:
    ├─ for every child, └─ for the last. Each nested row paints its own
    stretch of the trunk (a 1px background-image down its left edge); the
@@ -765,7 +775,15 @@ button {
   overflow: auto;
 }
 
-.term-mount.keep .xterm {
+/* a minimum width: the grid is wider than the screen on purpose; the
+   scrollbar is always there so the row count is measured under it */
+.term-mount.wide {
+  overflow-x: scroll;
+  overflow-y: hidden;
+}
+
+.term-mount.keep .xterm,
+.term-mount.wide .xterm {
   width: max-content;
 }
 

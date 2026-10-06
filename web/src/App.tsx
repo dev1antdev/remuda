@@ -37,6 +37,9 @@ type Dialog =
   | { kind: "machine" }
   | null;
 
+// minimum terminal widths on offer, in columns (0 = fit the screen)
+const MIN_WIDTHS = [0, 120, 160, 200, 240, 320];
+
 type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
 
 // The pane a workspace row stands for: the focused pane of its active tab,
@@ -126,6 +129,10 @@ export default function App() {
   // to a phone would squeeze the desktop's view of it too.
   const [sizeMode, setSizeMode] = usePref<SizeMode>("sizeMode", isTouch ? "keep" : "fit");
   const [termFont, setTermFont] = usePref("termFont", isTouch ? 12 : 13);
+  // fit mode: a grid at least this wide, scrolling sideways on a narrower
+  // screen — for diff viewers and tables that only truncate
+  const [minCols, setMinCols] = usePref("minCols", 0);
+  const [widthMenu, setWidthMenu] = useState<{ x: number; y: number } | null>(null);
   // machines folded shut in the sidebar, like herdr's collapsed groups
   const [collapsed, setCollapsed] = usePref<Record<string, boolean>>("collapsed", {});
 
@@ -178,10 +185,14 @@ export default function App() {
     };
   }, []);
 
-  // The row menu closes on any click elsewhere or Escape.
+  // A menu closes on any click elsewhere or Escape.
+  const menuOpen = !!menu || !!widthMenu;
   useEffect(() => {
-    if (!menu) return;
-    const close = () => setMenu(null);
+    if (!menuOpen) return;
+    const close = () => {
+      setMenu(null);
+      setWidthMenu(null);
+    };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     document.addEventListener("click", close);
     document.addEventListener("keydown", onKey);
@@ -189,7 +200,7 @@ export default function App() {
       document.removeEventListener("click", close);
       document.removeEventListener("keydown", onKey);
     };
-  }, [menu]);
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!notice) return;
@@ -337,6 +348,23 @@ export default function App() {
                 >
                   {sizeMode === "keep" ? "⊡" : "⤢"}
                 </button>
+                {sizeMode === "fit" && (
+                  <button
+                    className={`kb-toggle${minCols ? " on" : ""}`}
+                    title={
+                      minCols
+                        ? `At least ${minCols} columns wide; a narrower screen scrolls sideways`
+                        : "Minimum width: make the terminal wider than the screen for diffs and tables, scrolling sideways"
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setWidthMenu(widthMenu ? null : { x: r.left, y: r.bottom });
+                    }}
+                  >
+                    ↔{minCols ? ` ${minCols}` : ""}
+                  </button>
+                )}
                 <button
                   className={`kb-toggle${selectMode ? " on" : ""}`}
                   title={
@@ -499,6 +527,7 @@ export default function App() {
                     cols={current.pane.cols}
                     rows={current.pane.rows}
                     mode={sizeMode}
+                    minCols={minCols}
                     fontSize={termFont}
                     modifier={modifier}
                     selectMode={selectMode}
@@ -543,6 +572,23 @@ export default function App() {
           <button className="danger" onClick={() => { setMenu(null); closeWorkspace(menu.machine, menu.session); }}>
             Close workspace
           </button>
+        </div>
+      )}
+
+      {widthMenu && (
+        <div className="row-menu width-menu" style={{ left: widthMenu.x, top: widthMenu.y }} onClick={(e) => e.stopPropagation()}>
+          {MIN_WIDTHS.map((n) => (
+            <button
+              key={n}
+              className={n === minCols ? "on" : ""}
+              onClick={() => {
+                setMinCols(n);
+                setWidthMenu(null);
+              }}
+            >
+              {n ? `At least ${n} columns` : "Fit the screen"}
+            </button>
+          ))}
         </div>
       )}
 

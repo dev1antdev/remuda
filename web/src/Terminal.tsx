@@ -51,6 +51,7 @@ export default function TerminalView({
   cols,
   rows,
   mode,
+  minCols,
   fontSize,
   modifier,
   selectMode,
@@ -64,6 +65,7 @@ export default function TerminalView({
   cols: number; // the pane's own grid, 0 when unknown
   rows: number;
   mode: SizeMode;
+  minCols: number; // fit mode: never narrower than this many columns (0 = off)
   fontSize: number; // preferred size in fit mode
   modifier: Modifier;
   // selection mode: mouse reporting to the agent is paused locally, so a
@@ -76,8 +78,8 @@ export default function TerminalView({
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   // props the running terminal reads without being recreated
-  const live = useRef({ cols, rows, mode, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied });
-  live.current = { cols, rows, mode, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied };
+  const live = useRef({ cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied });
+  live.current = { cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied };
   const applyRef = useRef<() => void>(() => {});
   const selectRef = useRef<(on: boolean) => void>(() => {});
 
@@ -123,28 +125,42 @@ export default function TerminalView({
       if (m) live.current.onModifierUsed();
     };
 
-    // Cell width in px per font px, measured once from the renderer.
-    const cellRatio = () => {
-      const core = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number } } } } } })._core;
-      const w = core?._renderService?.dimensions?.css?.cell?.width;
-      return w && w > 0 ? w / term.options.fontSize! : 0.6;
+    // Cell size in px, measured from the renderer once it has drawn.
+    const cellSize = () => {
+      const core = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } } })._core;
+      const c = core?._renderService?.dimensions?.css?.cell;
+      const size = term.options.fontSize!;
+      return { w: c?.width || size * 0.6, h: c?.height || size * 1.2 };
     };
 
     // applyGeometry sizes the grid: fit → to the mount; keep → the pane's own
     // grid, with the font shrunk until the width fits (down to MIN_FONT, then
-    // the mount scrolls).
+    // the mount scrolls). A minimum width in fit mode makes the grid wider
+    // than the screen when the screen is narrower — the mount then scrolls
+    // sideways, which is how a TUI without horizontal scrolling (a diff
+    // viewer, a table) still shows its right-hand side.
+    const PAD = 8; // the mount's padding, both sides
     const applyGeometry = () => {
       const g = live.current;
+      mount.classList.remove("keep", "wide");
       if (g.mode === "keep" && g.cols > 0 && g.rows > 0) {
-        const avail = mount.clientWidth - 8;
-        const size = Math.max(MIN_FONT, Math.min(g.fontSize, Math.floor(avail / (g.cols * cellRatio()))));
+        const avail = mount.clientWidth - PAD;
+        const size = Math.max(MIN_FONT, Math.min(g.fontSize, Math.floor((avail * term.options.fontSize!) / (g.cols * cellSize().w))));
         if (term.options.fontSize !== size) term.options.fontSize = size;
         if (term.cols !== g.cols || term.rows !== g.rows) term.resize(g.cols, g.rows);
         mount.classList.add("keep");
       } else {
         if (term.options.fontSize !== g.fontSize) term.options.fontSize = g.fontSize;
-        mount.classList.remove("keep");
-        fit.fit();
+        const fits = fit.proposeDimensions();
+        if (g.minCols > 0 && fits && fits.cols < g.minCols) {
+          // the class brings the scrollbar first, so clientHeight already
+          // excludes it when the rows are measured — one resize, not two
+          mount.classList.add("wide");
+          const rows = Math.max(5, Math.floor((mount.clientHeight - PAD) / cellSize().h));
+          if (term.cols !== g.minCols || term.rows !== rows) term.resize(g.minCols, rows);
+        } else {
+          fit.fit();
+        }
       }
       sendResize();
     };
@@ -320,12 +336,13 @@ export default function TerminalView({
     const decset = term.parser.registerCsiHandler({ prefix: "?", final: "h" }, mouseModeHandler(true));
     const decrst = term.parser.registerCsiHandler({ prefix: "?", final: "l" }, mouseModeHandler(false));
 
-    const cellSize = () => {
-      const core = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } } })._core;
-      const c = core?._renderService?.dimensions?.css?.cell;
-      return { w: c?.width ?? term.options.fontSize! * 0.6, h: c?.height ?? term.options.fontSize! * 1.2 };
-    };
     const onWheel = (e: WheelEvent) => {
+      // a sideways gesture scrolls the mount (a grid wider than the screen),
+      // never the app or xterm
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        e.stopPropagation();
+        return;
+      }
       if (!appMouse) return; // no tracking wanted: xterm scrolls its own buffer
       const screen = term.element!.querySelector(".xterm-screen") as HTMLElement | null;
       if (!screen) return;
@@ -357,10 +374,6 @@ export default function TerminalView({
     term.element!.appendChild(layer);
     let layerTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const cellHeight = () => {
-      const core = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { height: number } } } } } })._core;
-      return core?._renderService?.dimensions?.css?.cell?.height ?? term.options.fontSize! * 1.2;
-    };
     // the layer mirrors the visible rows as text, one row per line
     const paintLayer = () => {
       layerTimer = null;
@@ -371,7 +384,7 @@ export default function TerminalView({
         layer.style.height = `${screen.offsetHeight}px`;
       }
       layer.style.fontSize = `${term.options.fontSize}px`;
-      layer.style.lineHeight = `${cellHeight()}px`;
+      layer.style.lineHeight = `${cellSize().h}px`;
       const buf = term.buffer.active;
       const lines: string[] = [];
       for (let y = 0; y < term.rows; y++) {
@@ -541,7 +554,7 @@ export default function TerminalView({
   const keepRows = mode === "keep" ? rows : 0;
   useEffect(() => {
     applyRef.current();
-  }, [keepCols, keepRows, mode, fontSize]);
+  }, [keepCols, keepRows, mode, minCols, fontSize]);
 
   useEffect(() => {
     selectRef.current(selectMode);
