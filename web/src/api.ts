@@ -12,6 +12,21 @@ export type Pane = {
   // an agent's lifecycle as the server reads it: held done, held question,
   // the last moment it worked (unix ms) — absent for a shell
   radar?: { state: "working" | "blocked" | "done" | "idle" | "unknown"; last_active?: number; since?: number; alert?: string };
+  // the model, how full its context is, what the session cost — once the
+  // server has read the transcript
+  usage?: PaneUsage;
+};
+
+export type PaneUsage = {
+  model: string;
+  name: string;
+  context: number; // tokens the last response read
+  window: number; // the model's context window
+  cost: number; // USD, API-equivalent
+  turns: number;
+  tokens: { input: number; output: number; cache_read: number; cache_write: number; cache_write_1h?: number; web_search?: number };
+  updated?: number;
+  unknown?: boolean;
 };
 
 export type Tab = {
@@ -163,6 +178,26 @@ export const searchTranscripts = (q: string, f: { machine?: string; dir?: string
   return fetch(`/api/search?${p}`, { signal })
     .then(check)
     .then((r) => r.json() as Promise<SearchResult>);
+};
+
+// ---- usage: what the agents cost over a period ----
+export type UsageTotals = { input: number; output: number; cache_read: number; cache_write: number; cache_write_1h?: number; cost: number; turns: number; unknown: number };
+export type UsageReport = {
+  since: string;
+  total: UsageTotals;
+  days: (UsageTotals & { date: string })[];
+  projects: (UsageTotals & { project: string; dir: string; sessions: number })[];
+  models: (UsageTotals & { model: string; name: string })[];
+  sessions: (UsageTotals & { session: string; project: string; dir: string; model: string; first: string; last: string })[];
+  files: number;
+};
+export type UsageMachine = { id: string; label: string; report?: UsageReport; error?: string };
+export const fetchUsage = (days: number, machine: string, tz: string): Promise<{ since: string; days: number; machines: UsageMachine[] }> => {
+  const p = new URLSearchParams({ days: String(days), tz });
+  if (machine) p.set("machine", machine);
+  return fetch(`/api/usage?${p}`)
+    .then(check)
+    .then((r) => r.json() as Promise<{ since: string; days: number; machines: UsageMachine[] }>);
 };
 
 // ---- quick prompts: saved texts for the composer ----

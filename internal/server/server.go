@@ -35,6 +35,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/schedule"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
 	"github.com/dev1antdev/herdr-ui/internal/transcript"
+	"github.com/dev1antdev/herdr-ui/internal/usage"
 	"github.com/dev1antdev/herdr-ui/internal/watch"
 )
 
@@ -47,6 +48,7 @@ type Server struct {
 	Review    *review.Store
 	Schedules *schedule.Store
 	Quick     *quick.Store
+	Usage     *usage.Tracker
 	Radar     *radar.Tracker
 	Guard     *auth.Guard
 	UI        fs.FS // built SPA
@@ -108,6 +110,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/push/test", s.handlePushTest)
 	api.HandleFunc("POST /api/seen", s.handleSeen)
 	api.HandleFunc("GET /api/search", s.handleSearch)
+	api.HandleFunc("GET /api/usage", s.handleUsage)
 	api.HandleFunc("GET /api/quick", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Quick.List()) })
 	api.HandleFunc("PUT /api/quick", func(w http.ResponseWriter, r *http.Request) {
 		var list []quick.Prompt
@@ -251,6 +254,8 @@ type rosterPane struct {
 	// an agent's lifecycle as a person reads it (held done, held question,
 	// last activity) — nil for a shell
 	Radar *radar.Display `json:"radar,omitempty"`
+	// the model, how full its context is, what the session cost — once read
+	Usage *usage.Display `json:"usage,omitempty"`
 }
 
 type rosterTab struct {
@@ -316,6 +321,11 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 		if p.Agent != "" {
 			d := s.Radar.Display(machineID, p)
 			rp.Radar = &d
+			if s.Usage != nil {
+				if u, ok := s.Usage.Display(machineID, p.PaneID); ok {
+					rp.Usage = &u
+				}
+			}
 		}
 		panesByTab[p.TabID] = append(panesByTab[p.TabID], rp)
 		if p.Agent != "" {

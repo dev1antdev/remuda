@@ -230,6 +230,14 @@ are saved texts, for every folder or one, shared by all your devices.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through herdr-ui.
 
+**Cost and context:** every agent pane shows how full its context is (a
+pill in the header and on the sidebar row from 50% up, red near the edge,
+with "Compact now" in the chat from 80%) and what the session has cost so
+far at Claude Code's own API prices. 📊 opens the report: by day, by
+project, by model, by machine, the sessions that cost the most — every
+machine reads its own transcripts, nothing is sent anywhere. On a
+subscription it is a measure of where the work went, not a bill.
+
 **Search** (🔍 or ⌘K): full text over every conversation on every
 machine — what you or an agent said, never tool output — filtered by
 machine, folder and period. A hit jumps to the turn in the running pane, or

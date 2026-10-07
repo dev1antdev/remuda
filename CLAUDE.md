@@ -229,6 +229,36 @@ SPA. See README.md for the user story.
   `data-ids~=uuid` → scroll + `.turn-hit`), else opens the transcript on
   its own: `GET /api/chat?dir=&session=` without a pane is read-only
   (`Turn.IDs` carry the record uuids; `sessionIDRe` guards the id).
+- `internal/usage/` — the **cost and context meter**. `prices.go` is Claude
+  Code's own baked model catalog (read from the installed 2.1.285: nine
+  price tiers, 21 models, 200k vs 1M windows) and its cost formula (the 1h
+  cache tier, fast mode (`usage.speed`) from its own table, ×1.1 when
+  `inference_geo` is "us" — not on web search); `transcript.UsageOf` reads
+  an assistant record's `message.usage` (`<synthetic>` records and
+  `isApiErrorMessage` ones are skipped: no API call behind them). One API response is written as
+  several records sharing `message.id` with the same usage — `Accumulator`
+  counts an id once (the records sit together; the last wins), holding the
+  pending one until the next id. **Live meter**: `Tracker` keeps a sum per
+  transcript file, reading only its growth (`Machine.ReadFrom`: a seek
+  locally, `tail -c +N` over ssh), at most every 20 s per file, whole lines
+  only; `watcher.Usage` hands it every snapshot (main.go: every agent pane's
+  session file, and the file it continues after a compaction, read once and
+  summed in — the whole `ContinuationChain`, so a second compaction loses
+  no file; the hook runs off the poll's path with one in-flight read per
+  machine, and a first read over 64 MB takes the tail only, `partial`);
+  the roster pane carries `usage{model,name,context,window,cost,turns,
+  tokens}` — context = the last response's input + cache tokens.
+  Sidechain records are not counted there (subagents cost in the report,
+  not in a pane's meter). **Report**: `Scan` (`GET /api/usage?days=&machine=
+  &tz=`, since = a local midnight) walks `~/.claude/projects` for files
+  written since, subagent files count toward their session, per day in
+  the viewer's zone, per project/model/session; remotely the deployed
+  binary runs `herdr-ui usage -since -tz` (gated on the version, like
+  search). UI: `Usage.tsx` (📊 in the sidebar head, or the header pill),
+  the pill in the header (fill bar · cost) and on radar rows from 50% up
+  (amber 70%, red 90%), Chat's compaction notice from 80% with "Compact
+  now" (`/compact` through submit). Prices are API-equivalent: on a
+  subscription a measure, not a bill.
 - `internal/quick/` — saved prompts (`quick.json`, `GET/PUT /api/quick`,
   the list replaced whole), each for every folder or one `dir`; the chat
   composer offers them under ⚡ and edits them in a dialog. The composer

@@ -60,6 +60,7 @@ type Machine struct {
 
 	files    map[string]*remoteFile // remote transcript cache by path
 	sessPath map[string]string      // session uuid -> resolved path
+	sessMiss map[string]time.Time   // session uuid -> when it was last not found
 
 	codeFwd *tcpForward // the forward to the machine's code-server, once asked for
 
@@ -480,31 +481,46 @@ func (mc *Machine) Ready() (*herdr.Client, *herdr.AttachManager, error) {
 // costs a directory listing and a read, so it is redone at most every
 // minute per file.
 func (mc *Machine) FollowContinuation(path string) string {
+	chain := mc.ContinuationChain(path)
+	return chain[len(chain)-1]
+}
+
+// ContinuationChain is the file and every file it went on in, oldest
+// first: path, its continuation, that one's continuation… up to 8 hops.
+func (mc *Machine) ContinuationChain(path string) []string {
+	chain := []string{path}
 	for hops := 0; hops < 8; hops++ {
-		mc.mu.Lock()
-		c, ok := mc.contPath[path]
-		mc.mu.Unlock()
-		if !ok || time.Since(c.at) > time.Minute {
-			var next string
-			if mc.Local {
-				next = transcript.Continuation(path)
-			} else if out, err := mc.exec(transcript.ContinuationScript(sshx.Quote(path)), 20*time.Second); err == nil {
-				next = strings.TrimSpace(out)
-			}
-			mc.mu.Lock()
-			if mc.contPath == nil {
-				mc.contPath = map[string]contCheck{}
-			}
-			mc.contPath[path] = contCheck{next: next, at: time.Now()}
-			mc.mu.Unlock()
-			c = contCheck{next: next}
+		next := mc.nextContinuation(path)
+		if next == "" {
+			break
 		}
-		if c.next == "" {
-			return path
-		}
-		path = c.next
+		chain = append(chain, next)
+		path = next
 	}
-	return path
+	return chain
+}
+
+// nextContinuation is one hop, cached for a minute.
+func (mc *Machine) nextContinuation(path string) string {
+	mc.mu.Lock()
+	c, ok := mc.contPath[path]
+	mc.mu.Unlock()
+	if ok && time.Since(c.at) <= time.Minute {
+		return c.next
+	}
+	var next string
+	if mc.Local {
+		next = transcript.Continuation(path)
+	} else if out, err := mc.exec(transcript.ContinuationScript(sshx.Quote(path)), 20*time.Second); err == nil {
+		next = strings.TrimSpace(out)
+	}
+	mc.mu.Lock()
+	if mc.contPath == nil {
+		mc.contPath = map[string]contCheck{}
+	}
+	mc.contPath[path] = contCheck{next: next, at: time.Now()}
+	mc.mu.Unlock()
+	return next
 }
 
 // CodeAddr is where this machine's code-server (127.0.0.1:port on the
@@ -662,6 +678,7 @@ func (mc *Machine) ResolveSession(cwd, kind, value string) (string, error) {
 	}
 	mc.mu.Lock()
 	cached, ok := mc.sessPath[value]
+	missedAt, missed := mc.sessMiss[value]
 	mc.mu.Unlock()
 	if ok {
 		if !mc.Local {
@@ -671,12 +688,24 @@ func (mc *Machine) ResolveSession(cwd, kind, value string) (string, error) {
 			return cached, nil
 		}
 	}
+	if missed && time.Since(missedAt) < 30*time.Second {
+		return "", os.ErrNotExist // a file not there yet is not looked for on every poll
+	}
 
 	var p string
+	miss := func(err error) (string, error) {
+		mc.mu.Lock()
+		if mc.sessMiss == nil {
+			mc.sessMiss = map[string]time.Time{}
+		}
+		mc.sessMiss[value] = time.Now()
+		mc.mu.Unlock()
+		return "", err
+	}
 	if mc.Local {
 		var err error
 		if p, err = transcript.FindSessionByID(cwd, value); err != nil {
-			return "", err
+			return miss(err)
 		}
 	} else {
 		projects := mc.Home() + "/.claude/projects"
@@ -685,10 +714,10 @@ func (mc *Machine) ResolveSession(cwd, kind, value string) (string, error) {
 			sshx.Quote(projects) + `/*/` + sshx.Quote(value+".jsonl") + ` 2>/dev/null | head -1; fi`
 		out, err := mc.exec(script, 15*time.Second)
 		if err != nil {
-			return "", err
+			return miss(err)
 		}
 		if p = strings.TrimSpace(out); p == "" {
-			return "", os.ErrNotExist
+			return miss(os.ErrNotExist)
 		}
 	}
 	mc.mu.Lock()
@@ -696,6 +725,7 @@ func (mc *Machine) ResolveSession(cwd, kind, value string) (string, error) {
 		mc.sessPath = map[string]string{}
 	}
 	mc.sessPath[value] = p
+	delete(mc.sessMiss, value)
 	mc.mu.Unlock()
 	return p, nil
 }

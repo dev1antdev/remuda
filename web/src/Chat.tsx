@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { fetchChat, fetchQuick, saveQuick, sendKeys, submitPrompt, type ChatResponse, type Part, type QuickPrompt, type Turn } from "./api";
+import { fetchChat, fetchQuick, saveQuick, sendKeys, submitPrompt, type ChatResponse, type PaneUsage, type Part, type QuickPrompt, type Turn } from "./api";
 import type { AgentTarget } from "./Tasks";
 import SendToAgent from "./SendToAgent";
 import { filesFrom, MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
@@ -21,6 +21,7 @@ export default function Chat({
   origin,
   dir,
   jump,
+  usage,
 }: {
   machineId: string;
   paneId: string; // "" shows a transcript on its own (a search jump), read-only
@@ -30,6 +31,7 @@ export default function Chat({
   origin: string; // "workspace on machine", named in a forwarded message
   dir: string; // the pane's folder, for its own quick prompts
   jump?: { session: string; turn: string; n: number } | null; // a search hit to scroll to
+  usage?: PaneUsage; // the context meter, for the compaction notice
 }) {
   const readOnly = !paneId;
   // forwarding a turn to another agent
@@ -54,8 +56,9 @@ export default function Chat({
   shownSession.current = chat?.session_id;
   useEffect(() => {
     if (!jump) return;
-    pendingTurn.current = jump.turn;
-    stickRef.current = false;
+    // no turn named: the transcript, landed at its end
+    pendingTurn.current = jump.turn || null;
+    stickRef.current = !jump.turn;
     setJumpMiss(false);
     // the transcript on screen already? then only the scroll below; a
     // refetch would blank the log first
@@ -194,6 +197,16 @@ export default function Chat({
         </div>
       )}
       {error && <div className="chat-error">{error}</div>}
+      {!readOnly && usage && usage.window > 0 && usage.context / usage.window >= 0.8 && status !== "run" && (
+        <div className={`chat-notice tasks-notice compact-notice${usage.context / usage.window >= 0.9 ? " is-red" : ""}`}>
+          <span>
+            Context {Math.round((100 * usage.context) / usage.window)}% full — Claude Code compacts on its own near the edge; compacting now keeps the summary yours to steer.
+          </span>
+          <button className="linkish" onClick={() => void submitPrompt(machineId, paneId, "/compact").catch((e) => setError(errMsg(e)))}>
+            Compact now
+          </button>
+        </div>
+      )}
       {jumpMiss && (
         <div className="tasks-notice chat-notice" onClick={() => setJumpMiss(false)}>
           That turn is older than the loaded part of this transcript (the last 16 MB).

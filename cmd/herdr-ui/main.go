@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -13,8 +14,10 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
+	_ "time/tzdata" // the usage report cuts days in the viewer's zone, wherever the binary runs
 
 	"github.com/dev1antdev/herdr-ui/internal/auth"
 	"github.com/dev1antdev/herdr-ui/internal/code"
@@ -29,6 +32,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/server"
 	"github.com/dev1antdev/herdr-ui/internal/state"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
+	"github.com/dev1antdev/herdr-ui/internal/usage"
 	"github.com/dev1antdev/herdr-ui/internal/watch"
 	"github.com/dev1antdev/herdr-ui/internal/watchdog"
 	"github.com/dev1antdev/herdr-ui/web"
@@ -43,6 +47,10 @@ func main() {
 	search.Version = version
 	if len(os.Args) > 1 && os.Args[1] == "search" {
 		searchCmd(os.Args[2:])
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "usage" {
+		usageCmd(os.Args[2:])
 		return
 	}
 	addr := flag.String("addr", "127.0.0.1:7317", "listen address (keep it loopback; use tailscale serve or an SSH tunnel for remote access)")
@@ -132,6 +140,30 @@ func main() {
 	reviews := review.New(dir)
 	watcher := watch.New(mgr, pushSvc, tracker)
 	watcher.Badges, watcher.Dirs = reviews.Badges, server.WorkspaceDirs
+	// the cost and context meter: each agent pane's transcript, read by
+	// its growth; a compacted session's earlier file rides along
+	meter := usage.NewTracker()
+	var meterBusy sync.Map // machine id → in flight: a slow read never holds the poll
+	watcher.Usage = func(mc *machines.Machine, snap *herdr.Snapshot) {
+		if _, running := meterBusy.LoadOrStore(mc.Cfg.ID, true); running {
+			return
+		}
+		panes := append([]herdr.PaneInfo(nil), snap.Panes...)
+		go func() {
+			defer meterBusy.Delete(mc.Cfg.ID)
+			for i := range panes {
+				p := &panes[i]
+				if p.Agent == "" || p.AgentSession == nil {
+					continue
+				}
+				orig, err := mc.ResolveSession(p.Dir(), p.AgentSession.Kind, p.AgentSession.Value)
+				if err != nil {
+					continue
+				}
+				meter.Observe(mc, p.PaneID, mc.ContinuationChain(orig))
+			}
+		}()
+	}
 	watcher.Start()
 
 	// the watchdog: a minute apart, over the radar's episodes
@@ -268,6 +300,7 @@ func main() {
 	}
 	go runs.Loop(15 * time.Second)
 	s := server.New(mgr, watcher, pushSvc, taskStore, code.New(*codePort), reviews, tracker, auth.NewGuard(token), ui)
+	s.Usage = meter
 	// schedules: prompts on a timetable, delivered through the server's own
 	// submit path to the agent in a folder
 	s.Schedules = schedule.New(dir, s.SubmitToFolder, pushSvc.Notify)
@@ -311,4 +344,32 @@ func searchCmd(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func usageCmd(args []string) {
+	fs := flag.NewFlagSet("usage", flag.ExitOnError)
+	sinceS := fs.String("since", "", "records from this time on (RFC 3339); default: 7 days")
+	tz := fs.String("tz", "", "the zone days are cut in (IANA name); default: this machine's")
+	_ = fs.Parse(args)
+	since := time.Now().AddDate(0, 0, -7)
+	if *sinceS != "" {
+		var err error
+		if since, err = time.Parse(time.RFC3339, *sinceS); err != nil {
+			fmt.Fprintln(os.Stderr, "bad -since:", err)
+			os.Exit(2)
+		}
+	}
+	loc := time.Local
+	if *tz != "" {
+		if l, err := time.LoadLocation(*tz); err == nil {
+			loc = l
+		}
+	}
+	home, _ := os.UserHomeDir()
+	rep, err := usage.Scan(filepath.Join(home, ".claude", "projects"), since, loc)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	_ = json.NewEncoder(os.Stdout).Encode(rep)
 }

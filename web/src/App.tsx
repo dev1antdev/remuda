@@ -31,6 +31,8 @@ import Code from "./Code";
 import Review from "./Review";
 import Schedules from "./Schedules";
 import Search from "./Search";
+import Usage, { tok, usd } from "./Usage";
+import { fillClass } from "./Sidebar";
 import Sidebar from "./Sidebar";
 import Select from "./Select";
 import Logo from "./Logo";
@@ -112,6 +114,7 @@ export default function App() {
   // the editor stays mounted once opened, so coming back does not reload it
   const [codeOpened, setCodeOpened] = useState(false);
   const [schedules, setSchedules] = useState(false);
+  const [usagePanel, setUsagePanel] = useState(false);
   useEffect(() => {
     if (mode === "code") setCodeOpened(true);
   }, [mode]);
@@ -381,6 +384,20 @@ export default function App() {
                 {current.session.review?.fresh ? <span className="lens-badge">{current.session.review.fresh}</span> : null}
               </button>
             )}
+            {current.pane.usage && current.pane.usage.window > 0 && (
+              <button
+                type="button"
+                className={`usage-pill${fillClass(current.pane.usage.context / current.pane.usage.window)}`}
+                title={`${current.pane.usage.name}: context ${tok(current.pane.usage.context)} of ${tok(current.pane.usage.window)} (${Math.round((100 * current.pane.usage.context) / current.pane.usage.window)}%) · ${current.pane.usage.turns} responses · ${usd(current.pane.usage.cost)} API-equivalent so far. Click for the usage report.`}
+                onClick={() => setUsagePanel(true)}
+              >
+                <span className="usage-pill-bar">
+                  <span style={{ width: `${Math.min(100, (100 * current.pane.usage.context) / current.pane.usage.window)}%` }} />
+                </span>
+                {Math.round((100 * current.pane.usage.context) / current.pane.usage.window)}%
+                <span className="usage-pill-cost"> · {usd(current.pane.usage.cost)}</span>
+              </button>
+            )}
             {lens === "terminal" && (
               <>
                 <span className="lens-sep" />
@@ -508,6 +525,7 @@ export default function App() {
             onAddMachine={() => setDialog({ kind: "machine" })}
             onPrefs={setRadarPrefs}
             onSchedules={() => setSchedules(true)}
+            onUsage={() => setUsagePanel(true)}
           />
         </aside>
         )}
@@ -580,6 +598,7 @@ export default function App() {
                   origin={`${current.session.name}${current.machine.id !== "local" ? ` on ${current.machine.label}` : ""}`}
                   dir={current.session.dir || current.pane.cwd}
                   jump={jumpFor(current.machine.id, current.pane.id)}
+                  usage={current.pane.usage}
                 />
               ) : (
                 <>
@@ -682,6 +701,16 @@ export default function App() {
 
       {schedules && <Schedules machines={machines} onClose={() => setSchedules(false)} ask={ask} />}
       {search && <Search machines={machines} onClose={() => setSearch(false)} onOpen={openHit} />}
+      {usagePanel && (
+        <Usage
+          machines={machines}
+          onClose={() => setUsagePanel(false)}
+          onOpenSession={(machine, project, session, dir) => {
+            setUsagePanel(false);
+            openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" });
+          }}
+        />
+      )}
 
       {confirmReq && (
         <ConfirmDialog

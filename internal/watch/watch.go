@@ -43,6 +43,9 @@ type Watcher struct {
 	// workspace folders — a minute apart, one shell per machine
 	Badges func(mc *machines.Machine, dirs []string)
 	Dirs   func(snap *herdr.Snapshot) []string
+	// Usage, when set, is handed every snapshot for the cost meter (it
+	// rate-limits its own reads)
+	Usage func(mc *machines.Machine, snap *herdr.Snapshot)
 
 	mu     sync.Mutex
 	states map[string]*machineState
@@ -97,6 +100,9 @@ func (w *Watcher) loop(mc *machines.Machine) {
 		if snap != nil && w.Badges != nil && w.Dirs != nil && time.Since(badgesAt) > time.Minute {
 			badgesAt = time.Now()
 			w.Badges(mc, w.Dirs(snap))
+		}
+		if snap != nil && w.Usage != nil {
+			w.Usage(mc, snap)
 		}
 		time.Sleep(every)
 	}

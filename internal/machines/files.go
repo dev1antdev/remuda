@@ -301,6 +301,23 @@ type Diff struct {
 // GitDiff shows the file's uncommitted change (staged + unstaged, against
 // HEAD) in its repository, or marks it untracked / outside any repo. The
 // same script runs locally and remotely; outside a repo it prints nothing.
+// ReadFrom returns a file's bytes from an offset to its end — a transcript's
+// growth since the last look. Remotely it is a tail over ssh.
+func (mc *Machine) ReadFrom(p string, offset int64) ([]byte, error) {
+	if mc.Local {
+		f, err := os.Open(p)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		if _, err := f.Seek(offset, 0); err != nil {
+			return nil, err
+		}
+		return io.ReadAll(io.LimitReader(f, 256<<20))
+	}
+	return mc.execBytes(fmt.Sprintf("tail -c +%d %s", offset+1, sshx.Quote(p)), 120*time.Second)
+}
+
 // Shell runs a POSIX shell script on the machine — `sh -c` here, over the
 // ssh master there — and returns its stdout.
 func (mc *Machine) Shell(script string, timeout time.Duration) (string, error) {

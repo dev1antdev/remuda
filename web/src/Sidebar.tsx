@@ -28,7 +28,7 @@ import Icon from "./icons";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
 
-export default function Sidebar({ machines, current, prefs, collapsed, onToggle, onSelect, onMenu, onNewWorkspace, onRemoveMachine, onAddMachine, onPrefs, onSchedules }: {
+export default function Sidebar({ machines, current, prefs, collapsed, onToggle, onSelect, onMenu, onNewWorkspace, onRemoveMachine, onAddMachine, onPrefs, onSchedules, onUsage }: {
   machines: Machine[];
   current: Current;
   prefs: RadarPrefs;
@@ -41,6 +41,7 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
   onAddMachine: () => void;
   onPrefs: (next: RadarPrefs) => void;
   onSchedules: () => void;
+  onUsage: () => void;
 }) {
   // one clock for every spinner and pulse; it only runs while something moves
   const moving = machines.some((m) => m.sessions.some((s) => s.tabs.some((t) => t.panes.some((p) => p.radar?.state === "working" || p.radar?.state === "blocked"))));
@@ -107,6 +108,9 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
           {settings && <RadarSettings at={settings} prefs={prefs} onPrefs={onPrefs} />}
           <button onClick={onSchedules} title="Schedules: prompts sent to agents on a timetable">
             <Icon name="calendar" size={14} />
+          </button>
+          <button onClick={onUsage} title="Usage: what the agents cost, by day, project and session">
+            <Icon name="chart" size={14} />
           </button>
           <button onClick={onAddMachine} title="Add a remote PC over SSH">
             <Icon name="plus" size={13} /> PC
@@ -351,6 +355,11 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
       <span className="radar-title" style={style}>
         {label}
       </span>
+      {p.usage && p.usage.window > 0 && p.usage.context / p.usage.window >= 0.5 && (
+        <span className={`radar-ctx${fillClass(p.usage.context / p.usage.window)}`} title={`Context ${Math.round((100 * p.usage.context) / p.usage.window)}% full · ${p.usage.name} · $${p.usage.cost.toFixed(2)}`}>
+          {Math.round((100 * p.usage.context) / p.usage.window)}%
+        </span>
+      )}
       {showWorkspace && (
         <>
           <span className="radar-ws">{r.session.name}</span>
@@ -456,3 +465,6 @@ function since(ms: number): string {
   if (h < 48) return `${h} h ago`;
   return `${Math.round(h / 24)} days ago`;
 }
+
+// the colour of a context fill: calm below 70%, amber, then red near the edge
+export const fillClass = (f: number) => (f >= 0.9 ? " is-red" : f >= 0.7 ? " is-amber" : "");
