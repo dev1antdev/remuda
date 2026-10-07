@@ -1003,18 +1003,12 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	c.SetReadLimit(1 << 20)
 
-	replay, ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
+	ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
 	if err != nil {
 		c.Close(websocket.StatusInternalError, "attach failed: "+err.Error())
 		return
 	}
 	defer cancel()
-
-	if len(replay) > 0 {
-		if err := c.Write(ctx, websocket.MessageBinary, replay); err != nil {
-			return
-		}
-	}
 
 	// The writer is stopped explicitly when the read loop ends: on a hijacked
 	// connection r.Context() stays alive until this handler returns, so

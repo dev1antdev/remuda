@@ -10,7 +10,6 @@ import (
 )
 
 const (
-	replayCap     = 256 * 1024
 	lingerAfter   = 45 * time.Second // keep an attach alive briefly after the last viewer leaves
 	subscriberBuf = 256
 )
@@ -34,7 +33,6 @@ type attach struct {
 
 	mu     sync.Mutex
 	subs   map[chan []byte]bool
-	replay []byte
 	dead   bool
 	linger *time.Timer
 }
@@ -61,8 +59,17 @@ func validSize(cols, rows int) bool {
 }
 
 // Subscribe attaches (or joins the existing attach of) a terminal. The caller
-// receives the replay tail, a live channel, and must call cancel when done.
-func (m *AttachManager) Subscribe(termID string, cols, rows int) (replay []byte, ch chan []byte, cancel func(), err error) {
+// receives a live channel and must call cancel when done.
+//
+// A fresh attach paints the screen itself (herdr draws the pane on attach).
+// A joined one cannot be caught up from a byte tail: TUIs like Claude Code
+// draw with cursor moves relative to where the cursor was, so a tail taken
+// from an arbitrary byte lands everything in the wrong place and every
+// later partial update on top of it — the footer and the prompt box gone,
+// typed text showing. Instead the pane is asked to repaint: a resize by a
+// row and back makes herdr and the app redraw the whole screen, which the
+// new viewer receives live.
+func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte, cancel func(), err error) {
 	m.mu.Lock()
 	a := m.attaches[termID]
 	if a != nil {
@@ -73,11 +80,12 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (replay []byte,
 			a = nil
 		}
 	}
+	joined := a != nil
 	if a == nil {
 		a, err = m.start(termID, cols, rows)
 		if err != nil {
 			m.mu.Unlock()
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 		m.attaches[termID] = a
 	}
@@ -90,8 +98,10 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (replay []byte,
 		a.linger = nil
 	}
 	a.subs[ch] = true
-	replay = append([]byte(nil), a.replay...)
 	a.mu.Unlock()
+	if joined && validSize(cols, rows) {
+		go a.repaint(cols, rows)
+	}
 
 	cancel = func() {
 		a.mu.Lock()
@@ -109,7 +119,24 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (replay []byte,
 		}
 		a.mu.Unlock()
 	}
-	return replay, ch, cancel, nil
+	return ch, cancel, nil
+}
+
+// repaint asks the pane to redraw itself for a joining viewer: one row
+// smaller, then the size asked for. The two resizes are spaced — back to
+// back, ssh and the app only ever see the final size (unchanged) and draw
+// nothing; a quarter second apart each one is a real resize, and the
+// second brings the whole screen.
+func (a *attach) repaint(cols, rows int) {
+	_ = pty.Setsize(a.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows - 1)})
+	time.Sleep(250 * time.Millisecond)
+	a.mu.Lock()
+	dead := a.dead
+	a.mu.Unlock()
+	if dead {
+		return
+	}
+	_ = pty.Setsize(a.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 }
 
 // start must be called with m.mu held.
@@ -134,16 +161,10 @@ func (a *attach) readLoop(m *AttachManager) {
 		if n > 0 {
 			data := append([]byte(nil), buf[:n]...)
 			a.mu.Lock()
-			a.replay = append(a.replay, data...)
-			// trim in big steps: slicing the front off on every chunk would
-			// make each append reallocate and copy the whole tail
-			if len(a.replay) > 2*replayCap {
-				a.replay = append(a.replay[:0:0], a.replay[len(a.replay)-replayCap:]...)
-			}
 			for ch := range a.subs {
 				select {
 				case ch <- data:
-				default: // slow viewer: drop; it resyncs from replay on reconnect
+				default: // slow viewer: drop; a reconnect repaints
 				}
 			}
 			a.mu.Unlock()

@@ -14,7 +14,11 @@ SPA. See README.md for the user story.
   the Unix socket, **one request = one connection** (herdr closes the socket
   after each response; never pool). `attach.go`: ref-counted
   `herdr terminal attach` PTYs (creack/pty), one per terminal shared by all
-  viewers, 256KB replay tail, 45s linger after the last viewer leaves.
+  viewers, 45s linger after the last viewer leaves. **No byte replay** for a
+  viewer joining a live attach: TUIs draw with relative cursor moves, so a
+  tail from an arbitrary byte misplaces everything after it (the footer
+  and prompt box of Claude Code vanish). A joiner gets a repaint instead —
+  the PTY is resized by a row and back, herdr and the app redraw.
   `AttachManager.NewCommand` builds the attach process, so the same manager
   serves a local herdr exec or an `ssh -tt` to a remote one.
   **Never pass `--takeover`** — stealing herdr's attach slot is the user's
@@ -220,7 +224,7 @@ SPA. See README.md for the user story.
   serialized via `paneLock`. Never queue or auto-send user input.
 - **Terminal bytes go over WS binary frames**, control messages over JSON
   text frames. The attach PTY paints the screen on start; late joiners get
-  the replay tail.
+  a repaint (see attach.go), never a byte replay.
 - herdr `pane.send_keys` grammar is lowercase with `+` modifiers: `enter`,
   `esc`, `up`, `down`, `tab`, `shift+tab`, `backspace`, `ctrl+c`… (verified
   live on 0.9.1; the server lowercases and allowlists). The REST `/api/keys`

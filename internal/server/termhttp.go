@@ -31,7 +31,6 @@ type termStream struct {
 	attach   *herdr.AttachManager
 	ch       chan []byte
 	cancel   func()
-	replay   []byte
 	mu       sync.Mutex // one reader at a time
 	lastRead time.Time
 	closed   bool
@@ -115,14 +114,14 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 	s.Radar.Seen(mc.Cfg.ID, pane.PaneID)
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
-	replay, ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
+	ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
 	if err != nil {
 		httpErr(w, 502, fmt.Errorf("attach failed: %w", err))
 		return
 	}
 	st := &termStream{
 		id: newStreamID(), termID: pane.TerminalID, attach: attach,
-		ch: ch, cancel: cancel, replay: replay, lastRead: time.Now(),
+		ch: ch, cancel: cancel, lastRead: time.Now(),
 	}
 	s.streams.add(st)
 	writeJSON(w, map[string]any{"sid": st.id})
@@ -150,20 +149,17 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 
 	var out []byte
 	ended := false
-	if len(st.replay) > 0 {
-		out, st.replay = st.replay, nil
-	} else {
-		select {
-		case data, ok := <-st.ch:
-			if !ok {
-				ended = true
-			} else {
-				out = append(out, data...)
-			}
-		case <-time.After(time.Duration(wait) * time.Second):
-		case <-r.Context().Done():
-			return
+	// wait for the first chunk, then drain whatever else is already queued
+	select {
+	case data, ok := <-st.ch:
+		if !ok {
+			ended = true
+		} else {
+			out = append(out, data...)
 		}
+	case <-time.After(time.Duration(wait) * time.Second):
+	case <-r.Context().Done():
+		return
 	}
 	for !ended && len(out) < streamMaxChunk {
 		select {
