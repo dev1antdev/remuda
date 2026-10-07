@@ -150,7 +150,7 @@ SPA. See README.md for the user story.
   carries `pane.radar = {state, last_active}` for agent panes. Rules: a
   blink through idle within 2.5s of working is still working; **done is held
   until seen** (herdr focused the pane, or a client opened its terminal /
-  chat, or `POST /api/seen`); **a question is held until the agent works
+  chat, or `POST /api/seen`) — and a seen finish stays seen until the agent works again, because herdr itself keeps reporting `done` for hours, until the pane is focused in herdr; **a question is held until the agent works
   again** (unless it never had worked — then the dialog simply closed);
   `last_active` is the last moment herdr said working, recovered for panes
   older than herdr-ui from the session file's mtime (`ResolveSession` +
