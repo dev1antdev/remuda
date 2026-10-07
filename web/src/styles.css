@@ -35,6 +35,12 @@
   --red: #d2655c;
   --red-soft: rgba(210, 101, 92, 0.16);
   --violet: #9f8ab8;
+  --amber-ring: rgba(220, 174, 74, 0.45);
+  --red-ring: rgba(210, 101, 92, 0.45);
+  --green-ring: rgba(108, 181, 122, 0.45);
+  --on-accent: #fff;
+  --line-hover: rgba(255, 255, 255, 0.2);
+  --scrim: rgba(0, 0, 0, 0.5);
   --thumb: #3b3630;
   --thumb-hover: #554e46;
 
@@ -51,9 +57,17 @@
   --inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
   /* controls */
+  --ctl-lg: 36px;
   --ctl: 32px;
   --ctl-sm: 28px;
   --ctl-xs: 24px;
+
+  /* layers: the drawer and the task panel sit under dialogs, menus and
+     select lists over everything */
+  --z-drawer: 30;
+  --z-dialog: 35;
+  --z-menu: 40;
+  --z-select: 60;
 
   /* motion */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -61,6 +75,8 @@
   --base: 180ms;
 
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+  --bg-elev: var(--bg-active); /* a raised chip on a raised surface */
 
   color-scheme: dark;
 }
@@ -182,9 +198,28 @@ button {
   transition: background var(--fast) var(--ease), color var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
 
+.icon-btn.sm {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+}
+
+.icon-btn.lg {
+  width: var(--ctl-lg);
+  height: var(--ctl-lg);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bg-input);
+}
+
 .icon-btn:hover {
   background: var(--bg-hover);
   color: var(--fg);
+}
+
+.icon-btn.danger:hover {
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 .icon-btn:active {
@@ -197,9 +232,87 @@ button {
   transform: none;
 }
 
+.icon-btn.on,
+.btn.ghost.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* the button family: quiet by default, .primary filled, .danger red,
+   .ghost bare, .sm and .lg sizes. Every <button> carries one of these;
+   nothing is styled by where it sits. */
+.btn,
+.modal-actions button,
+.prompt-card-keys button,
+.tasks-pager button,
+.fv-cand,
+.placeholder button,
+.alerts button:not(.icon-btn),
+.sidebar-head-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--ctl);
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--bg-input);
+  color: var(--fg);
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease), filter var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+
+.btn:hover:not(:disabled),
+.modal-actions button:hover:not(:disabled),
+.prompt-card-keys button:hover,
+.tasks-pager button:hover:not(:disabled),
+.fv-cand:hover,
+.placeholder button:hover,
+.alerts button:not(.icon-btn):hover:not(:disabled),
+.sidebar-head-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--line-hover);
+}
+
+.btn:disabled,
+.modal-actions button:disabled,
+.alerts button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn.sm,
+.sidebar-head-btn {
+  height: var(--ctl-sm);
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+
+.btn.lg {
+  height: var(--ctl-lg);
+  border-radius: 10px;
+}
+
+.btn.ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--fg-dim);
+}
+
+.btn.ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
 /* the filled button: one per surface, in the accent */
+.btn.primary,
 .primary,
 .composer-send,
+.modal-actions button.primary,
 .alerts button.primary,
 .split-main,
 .split-arrow {
@@ -210,83 +323,54 @@ button {
   height: var(--ctl);
   padding: 0 14px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--r-md);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
-  letter-spacing: 0.005em;
   box-shadow: var(--inset-top), var(--shadow-sm);
   transition: filter var(--fast) var(--ease), transform var(--fast) var(--ease), opacity var(--fast);
 }
 
-.primary:hover,
+.btn.primary:hover:not(:disabled),
+.primary:hover:not(:disabled),
 .composer-send:hover:not(:disabled),
-.alerts button.primary:hover,
+.modal-actions button.primary:hover:not(:disabled),
+.alerts button.primary:hover:not(:disabled),
 .split-main:hover:not(:disabled),
 .split-arrow:hover:not(:disabled) {
+  background: var(--accent);
   filter: brightness(1.08);
 }
 
+.btn.primary:active,
 .primary:active,
 .composer-send:active,
 .split-main:active {
   transform: translateY(1px);
 }
 
-/* inside a dialog's action row the filled one still wins */
-.modal-actions button.primary {
-  border: 0;
-  background: var(--accent);
-  color: #fff;
-  box-shadow: var(--inset-top), var(--shadow-sm);
-}
-
-.modal-actions button.primary:hover:not(:disabled) {
-  background: var(--accent);
-  filter: brightness(1.08);
-}
-
+.btn.primary:disabled,
+.primary:disabled,
 .modal-actions button.primary:disabled {
   opacity: 0.45;
   cursor: default;
+  filter: none;
+  transform: none;
 }
 
+.btn.danger,
 .primary.danger,
-.modal .primary.danger,
 .modal-actions button.primary.danger {
   background: var(--red);
+  color: var(--on-accent);
+  border: 0;
 }
 
-/* the quiet button: hairline, raised on hover */
-.modal-actions button,
-.prompt-card-keys button,
-.tasks-pager button,
-.fv-cand,
-.placeholder button,
-.sidebar-head button,
-.alerts button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: var(--ctl);
-  padding: 0 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  background: var(--bg-input);
-  color: var(--fg);
-  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
-}
-
-.modal-actions button:hover,
-.prompt-card-keys button:hover,
-.tasks-pager button:hover:not(:disabled),
-.fv-cand:hover,
-.placeholder button:hover,
-.sidebar-head button:hover,
-.alerts button:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: rgba(255, 255, 255, 0.18);
+.btn.danger.soft {
+  background: var(--red-soft);
+  color: var(--red);
+  border: 1px solid var(--red-ring);
+  box-shadow: none;
 }
 
 /* text fields */
@@ -344,7 +428,7 @@ button {
 
 .modal textarea:focus {
   outline: none;
-  border-color: var(--accent-ring);
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
@@ -494,7 +578,7 @@ input[type="checkbox"]:hover:not(:checked) {
 .row-menu,
 .sel-pop {
   position: fixed;
-  z-index: 40;
+  z-index: var(--z-menu);
   min-width: 190px;
   padding: 5px;
   border-radius: 10px;
@@ -596,7 +680,93 @@ input[type="checkbox"]:hover:not(:checked) {
   line-height: 1.4;
 }
 
-.chat-error {
+/* one notice block: a tone, an optional icon, an optional action, the X */
+.notice,
+.chat-error,
+.tasks-notice,
+.chat-notice,
+.compact-notice,
+.machine-error,
+.viewer-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notice-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.notice.error,
+.chat-error,
+.machine-error {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.notice.success,
+.tasks-notice,
+.chat-notice {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.notice.warn,
+.compact-notice {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.notice.info,
+.viewer-bar {
+  background: var(--bg-input);
+  border-color: var(--line);
+  color: var(--fg-dim);
+}
+
+.notice.hint {
+  padding: 2px 0;
+  color: var(--fg-faint);
+}
+
+.notice .linkish {
+  color: inherit;
+}
+
+.notice .icon-btn {
+  color: inherit;
+  opacity: 0.7;
+}
+
+/* empty states, centred and faint */
+.empty,
+.placeholder,
+.chat-empty,
+.fv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--fg-faint);
+  text-align: center;
+}
+
+.chat-error-legacy {
   margin: 0 14px 8px;
   background: var(--red-soft);
   color: var(--red);
@@ -874,18 +1044,6 @@ input[type="checkbox"]:hover:not(:checked) {
   gap: 3px;
 }
 
-.sess-kill {
-  border: 0;
-  background: none;
-  color: var(--fg-faint);
-  font-size: 15px;
-  line-height: 1;
-  padding: 0 2px;
-}
-
-.sess-kill:hover {
-  color: var(--red);
-}
 
 /* ---- workspace tree ---- */
 .ws-tree {
@@ -1155,9 +1313,6 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--fg-faint);
 }
 
-.radar-row {
-  height: 30px;
-}
 
 .radar-logo {
   width: 14px;
@@ -1314,7 +1469,7 @@ input[type="checkbox"]:hover:not(:checked) {
 }
 
 .sel-pop {
-  z-index: 60;
+  z-index: var(--z-select);
   max-height: 320px;
   overflow-y: auto;
   margin-top: 4px;
@@ -2471,8 +2626,9 @@ input[type="checkbox"]:hover:not(:checked) {
 .scrim {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 20;
+  background: var(--scrim);
+  z-index: var(--z-dialog);
+  overflow-y: auto;
 }
 
 .modal-scrim {
@@ -2482,20 +2638,54 @@ input[type="checkbox"]:hover:not(:checked) {
 
 .modal {
   position: relative;
-  margin: 12dvh auto 0;
-  width: min(92vw, 440px);
-  border-radius: 16px;
+  margin: 8dvh auto calc(16px + env(safe-area-inset-bottom));
+  width: min(94vw, 440px);
+  max-height: 84dvh;
+  overflow-y: auto;
+  border-radius: var(--r-xl);
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  z-index: 21;
+  z-index: calc(var(--z-dialog) + 1);
   animation: rise var(--base) var(--ease);
+  outline: none;
+}
+
+.modal > * {
+  flex-shrink: 0; /* the dialog scrolls; its parts keep their height */
+}
+
+.modal.md {
+  width: min(94vw, 640px);
+}
+
+.modal.lg {
+  width: min(96vw, 820px);
+}
+
+/* the head: a title with an icon, header controls, the X */
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.modal-head .sel {
+  min-width: 140px;
 }
 
 .modal h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -3265,9 +3455,6 @@ input[type="checkbox"]:hover:not(:checked) {
   flex: 1;
 }
 
-.review-comment-btn {
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-}
 
 .review-hunk .fv-ln {
   flex-basis: 44px;
@@ -3514,22 +3701,6 @@ input[type="checkbox"]:hover:not(:checked) {
   width: 110px;
 }
 
-.schedule-editor textarea {
-  background: var(--bg-input);
-  color: var(--fg);
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  padding: 8px 11px;
-  font: inherit;
-  line-height: 1.45;
-  resize: vertical;
-}
-
-.schedule-editor textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
 
 .schedule-editor .dim {
   color: var(--fg-faint);
@@ -3619,8 +3790,10 @@ input[type="checkbox"]:hover:not(:checked) {
   flex: 1;
 }
 
-.compact-notice.is-red {
-  border-color: rgba(210, 101, 92, 0.5);
+.compact-notice.is-red,
+.notice.warn.is-red {
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 .modal.usage {
@@ -3843,11 +4016,6 @@ button.usage-row:hover {
   flex-shrink: 0;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 
 .search-filters {
   display: flex;
@@ -3902,7 +4070,7 @@ button.usage-row:hover {
   color: var(--fg-dim);
 }
 
-.search-hit-who .logo {
+.search-hit-who .radar-logo {
   width: 15px;
   height: 15px;
 }
@@ -3993,7 +4161,7 @@ button.usage-row:hover {
   flex-shrink: 0;
 }
 
-.tasks-row-run .logo {
+.tasks-row-run .radar-logo {
   width: 12px;
   height: 12px;
 }
@@ -4031,7 +4199,7 @@ button.usage-row:hover {
   flex-shrink: 0;
 }
 
-.tasks-run-logo .logo {
+.tasks-run-logo .radar-logo {
   width: 16px;
   height: 16px;
 }
@@ -4084,7 +4252,7 @@ button.usage-row:hover {
   color: var(--fg-dim);
 }
 
-.tasks-comment-head .logo {
+.tasks-comment-head .radar-logo {
   width: 13px;
   height: 13px;
 }
@@ -4131,7 +4299,22 @@ button.usage-row:hover {
 .tasks-comment-add textarea {
   flex: 1;
   min-width: 0;
+  height: auto;
+  padding: 8px 11px;
+  line-height: 1.45;
   resize: vertical;
+  background: var(--bg-input);
+  color: var(--fg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  font: inherit;
+  font-size: 13px;
+}
+
+.tasks-comment-add textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .modal.tasks-start {
@@ -4489,5 +4672,18 @@ button.usage-row:hover {
     height: 34px;
     padding: 0 12px;
     font-size: 13px;
+  }
+}
+
+/* a coarse pointer has no hover: reveal-on-hover controls stay visible */
+@media (pointer: coarse) {
+  .tasks-comment-head .icon-btn,
+  .turn-forward {
+    opacity: 1;
+  }
+
+  input:not([type="checkbox"]):not([type="file"]):not([type="range"]),
+  textarea {
+    font-size: max(16px, 1em); /* iOS zooms into anything smaller */
   }
 }
