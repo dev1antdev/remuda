@@ -98,7 +98,10 @@ SPA. See README.md for the user story.
   the remembered rows (trailing spaces trimmed) wherever the screen went.
   xterm drops its own selection on any user input or a buffer switch; the
   content selection survives that and ends only on a new mousedown or
-  typing. The ⬚ selection layer (phone long-press) is screen-only.
+  typing. A drag is ours from its first move (xterm reports a selection
+  only on mouseup, so a wheel under a held button would go unseen): the
+  anchor is set on mousedown, the head follows the pointer, our select()
+  ends xterm's own drag; a click that never moves is left to xterm. The ⬚ selection layer (phone long-press) is screen-only.
 - The build's version is injected into the bundle (`__HERDR_UI_VERSION__`,
   from `HERDR_UI_VERSION` set by `make web`) and the roster answer carries
   the server's in `X-Herdr-UI-Version`; a page older than its server shows

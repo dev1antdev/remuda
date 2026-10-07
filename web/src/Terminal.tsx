@@ -508,6 +508,7 @@ export default function TerminalView({
       if (!cell) return;
       e.preventDefault();
       e.stopPropagation();
+      if (pressed) pointer = { x: e.clientX, y: e.clientY }; // a wheel under a held button
       scrollReport(wheelTicks(e, sideways), sideways, cell, modifierBits(e));
     };
     mount.addEventListener("wheel", onWheel, { capture: true, passive: false });
@@ -680,11 +681,18 @@ export default function TerminalView({
       if (found === null) {
         attached = false;
       } else {
+        const moved = found !== offset;
         offset = found;
         attached = true;
         remember(rows);
         if (edge === "down" && head) head = { row: offset + term.rows - 1, col: term.cols };
-        if (edge === "up" && head) head = { row: offset, col: 0 };
+        else if (edge === "up" && head) head = { row: offset, col: 0 };
+        else if (moved && dragAnchor && pointer) {
+          // the button is held and the text scrolled under the pointer (a
+          // wheel): the selection runs from where it began to what is now
+          // under the pointer, as in a native terminal
+          head = pointerPos() ?? head;
+        }
       }
       renderSelection();
     };
@@ -710,16 +718,29 @@ export default function TerminalView({
       const keepEnd = o && o[1].row > offset + term.rows - 1 && end.row === offset + term.rows - 1;
       const s = keepStart ? o![0] : start;
       const e = keepEnd ? o![1] : end;
-      if (dragAnchor) {
+      if (dragAnchor && dragMoved) {
         anchor = dragAnchor;
         head = before(anchor, s) || (anchor.row === s.row && anchor.col === s.col) ? e : s;
       } else {
-        anchor = s;
+        anchor = s; // a word or a line (double, triple click), a shift-click
         head = e;
       }
     });
     // the drag: its anchor, and the scroll when it leaves the screen
+    // A drag is ours from its first move: xterm reports a selection only on
+    // mouseup, so a scroll under a held button would go unseen until then
+    // and land on the wrong rows. The anchor is set on mousedown, the head
+    // follows the pointer, and the first select() ends xterm's own drag.
+    // A click that never moves is left to xterm (a double-click's word, a
+    // triple-click's line arrive through onSelectionChange).
     let dragAnchor: Pos | null = null;
+    let dragMoved = false;
+    let pointer: { x: number; y: number } | null = null; // where the held button is
+    const pointerPos = (): Pos | null => {
+      if (!pointer) return null;
+      const cell = cellAt({ clientX: pointer.x, clientY: pointer.y } as MouseEvent);
+      return cell ? { row: cell.row - 1 + offset, col: cell.col - 1 } : null;
+    };
     let edge: "up" | "down" | null = null;
     let edgeTimer: ReturnType<typeof setInterval> | null = null;
     const edgeTick = () => {
@@ -731,6 +752,12 @@ export default function TerminalView({
       if (cell) scrollReport(edge === "down" ? 1 : -1, false, cell);
     };
     const onDragMove = (e: MouseEvent) => {
+      pointer = { x: e.clientX, y: e.clientY };
+      dragMoved = true;
+      if (!edge) {
+        head = pointerPos() ?? head;
+        renderSelection();
+      }
       const screen = term.element?.querySelector(".xterm-screen") as HTMLElement | null;
       if (!screen) return;
       const r = screen.getBoundingClientRect();
@@ -743,11 +770,19 @@ export default function TerminalView({
     const dragStart = (e: MouseEvent) => {
       forgetSelection(); // a new selection starts over, with a fresh memory
       const cell = cellAt(e);
-      dragAnchor = cell ? { row: cell.row - 1 + offset, col: cell.col - 1 } : null;
+      dragAnchor = cell ? { row: cell.row - 1, col: cell.col - 1 } : null;
+      dragMoved = false;
+      pointer = { x: e.clientX, y: e.clientY };
+      if (dragAnchor) {
+        anchor = head = dragAnchor;
+        remember(screenRows());
+      }
       document.addEventListener("mousemove", onDragMove);
     };
     const dragEnd = () => {
+      if (!dragMoved) forgetSelection(); // a click; xterm's word or line may still follow
       dragAnchor = null;
+      pointer = null;
       edge = null;
       if (edgeTimer) clearInterval(edgeTimer);
       edgeTimer = null;
