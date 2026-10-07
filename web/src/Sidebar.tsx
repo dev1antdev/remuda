@@ -279,7 +279,14 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
         rows.length === 0 && <StatusDot status={s.status} />
       )}
       <span className="ws-copy">
-        <span className="ws-label">{s.name}</span>
+        <span className="ws-label">
+          {s.name}
+          {s.review?.fresh ? (
+            <span className="ws-badge" title={`${s.review.fresh} file${s.review.fresh === 1 ? "" : "s"} changed since you last reviewed`}>
+              {s.review.fresh}
+            </span>
+          ) : null}
+        </span>
         {rows.length === 0 && (
           <span className="ws-sub">
             {s.tabs.length > 1 && <span>{s.tabs.length} tabs</span>}

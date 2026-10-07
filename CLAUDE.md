@@ -95,6 +95,21 @@ SPA. See README.md for the user story.
 - `web/src/host.ts` — `copyText` (Clipboard API, else execCommand) and
   `openUrl` (a new tab). Nothing embeds herdr-ui any more: the JetBrains
   plugin is gone, and with it the `window.herdrHost` bridge and `?cwd=`.
+- `internal/review/` — the **Changes lens**: what moved in a workspace's
+  folder since the reviewer last looked. A baseline per `machine|folder`
+  (`review.json`: HEAD then + blob hashes of the files dirty then) is set
+  by `POST /api/review/seen`; `GET /api/review?dir=` runs one shell (local
+  `sh -c` or over ssh via `Machine.Shell`) for branch, HEAD, commits
+  `baseline..HEAD`, `git diff --numstat baseline`, untracked files and the
+  current blob hashes — a file is *fresh* when its hash moved since the
+  baseline (or there is none). `GET /api/review/diff?dir=&path=` is one
+  file's diff against the baseline commit (an untracked file whole). The
+  watcher refreshes `review.Badges` a minute apart, one shell per machine
+  over `server.WorkspaceDirs`, and the roster carries `session.dir` and
+  `session.review {changed, fresh}` for the sidebar badge. `Review.tsx`
+  draws it: commits, files (fresh first), hunks with a comment box whose
+  text goes to the pane's agent through `/api/submit` as
+  "Review feedback on path:line". Nothing is written into a repository.
 - `internal/code/` — the **Code mode**: each machine runs its own
   code-server (VS Code in the browser) on `127.0.0.1:7320`, `auth: none`,
   installed by `deploy/install-code.sh` (`make code [HOST=]`: a pinned

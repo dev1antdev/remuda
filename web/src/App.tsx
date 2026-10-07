@@ -29,13 +29,14 @@ import { resyncPush } from "./push";
 import TerminalView, { type Modifier, type SizeMode, type TermApi } from "./Terminal";
 import Tasks, { type AgentTarget } from "./Tasks";
 import Code from "./Code";
+import Review from "./Review";
 import Sidebar from "./Sidebar";
 import Select from "./Select";
 import Logo from "./Logo";
 import { DEFAULT_RADAR, type RadarPrefs } from "./radar";
 import Icon from "./icons";
 
-type Lens = "chat" | "terminal";
+type Lens = "chat" | "terminal" | "changes";
 type Selection = { machineId: string; paneId: string };
 type Located = { machine: Machine; session: Session; tab: Tab; pane: Pane };
 
@@ -326,6 +327,12 @@ export default function App() {
             >
               Terminal
             </button>
+            {(current.session.dir || current.pane.cwd) && (
+              <button className={lens === "changes" ? "on" : ""} onClick={() => setLens("changes")} title="What changed in this workspace's folder since you last looked">
+                Changes
+                {current.session.review?.fresh ? <span className="lens-badge">{current.session.review.fresh}</span> : null}
+              </button>
+            )}
             {lens === "terminal" && (
               <>
                 <span className="lens-sep" />
@@ -474,7 +481,16 @@ export default function App() {
                   ask(msg, "Close tab", () => void closeTab(current.machine.id, t.id).then(refresh));
                 }}
               />
-              {lens === "chat" ? (
+              {lens === "changes" ? (
+                <Review
+                  key={`${current.machine.id}|${current.session.id}`}
+                  machineId={current.machine.id}
+                  paneId={current.pane.id}
+                  dir={current.session.dir || current.pane.cwd}
+                  agent={current.pane.agent}
+                  onOpenFile={(path, line) => openFile({ path, line })}
+                />
+              ) : lens === "chat" ? (
                 <Chat
                   key={`${current.machine.id}|${current.pane.id}`} // fresh state per pane: no stale session pick
                   machineId={current.machine.id}

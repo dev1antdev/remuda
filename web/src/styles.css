@@ -3056,6 +3056,261 @@ input[type="checkbox"]:hover:not(:checked) {
   }
 }
 
+
+/* ---- review: changes since you looked ---- */
+.lens-badge,
+.ws-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  vertical-align: 1px;
+}
+
+.lens-switch button.on .lens-badge {
+  background: var(--accent);
+  color: #fff;
+}
+
+.ws-badge {
+  height: 16px;
+  min-width: 16px;
+}
+
+.review {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.review-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+.review-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.review-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.review-sub {
+  color: var(--fg-dim);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-seen {
+  height: var(--ctl-sm);
+  font-size: 13px;
+}
+
+.review-seen:disabled {
+  opacity: 0.4;
+  cursor: default;
+  filter: none;
+}
+
+.review-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.review-commits {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+
+.review-commit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  min-height: 24px;
+}
+
+.review-commit code {
+  font: 11.5px var(--mono);
+  color: var(--fg-faint);
+}
+
+.review-commit-subject {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-commit-when {
+  color: var(--fg-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.review-file {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.review-file.open {
+  border-color: var(--line-strong);
+}
+
+.review-file-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  text-align: left;
+  font-size: 13px;
+  transition: background var(--fast) var(--ease);
+}
+
+.review-file-head:hover {
+  background: var(--bg-hover);
+}
+
+.review-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  flex-shrink: 0;
+}
+
+.review-file:not(.fresh) .review-path {
+  color: var(--fg-dim);
+}
+
+.review-path {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.review-dir {
+  color: var(--fg-faint);
+}
+
+.review-counts {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.review-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.review-diff {
+  border-top: 1px solid var(--line);
+  padding: 4px 0 8px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.review-hunk .fv-line.hunk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px;
+  margin-top: 4px;
+  background: var(--bg-input);
+}
+
+.review-hunk .fv-line.hunk .fv-src {
+  flex: 1;
+}
+
+.review-comment-btn {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+.review-hunk .fv-ln {
+  flex-basis: 44px;
+  padding-right: 10px;
+}
+
+.review-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  background: var(--bg-input);
+  border-top: 1px solid var(--line);
+  white-space: normal;
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+.review-comment textarea {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  resize: vertical;
+}
+
+.review-comment textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 /* ---- code: the editor, framed ---- */
 .code-host {
   display: flex;

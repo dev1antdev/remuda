@@ -20,6 +20,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
 	"github.com/dev1antdev/herdr-ui/internal/radar"
+	"github.com/dev1antdev/herdr-ui/internal/review"
 	"github.com/dev1antdev/herdr-ui/internal/server"
 	"github.com/dev1antdev/herdr-ui/internal/state"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
@@ -103,10 +104,12 @@ func main() {
 		return time.Unix(v.MTime, 0)
 	})
 	defer tracker.Flush()
+	reviews := review.New(dir)
 	watcher := watch.New(mgr, pushSvc, tracker)
+	watcher.Badges, watcher.Dirs = reviews.Badges, server.WorkspaceDirs
 	watcher.Start()
 
-	s := server.New(mgr, watcher, pushSvc, tasks.New(dir), code.New(*codePort), tracker, auth.NewGuard(token), ui)
+	s := server.New(mgr, watcher, pushSvc, tasks.New(dir), code.New(*codePort), reviews, tracker, auth.NewGuard(token), ui)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

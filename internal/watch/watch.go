@@ -39,6 +39,10 @@ type Watcher struct {
 	machines *machines.Manager
 	push     *push.Service
 	radar    *radar.Tracker
+	// Badges, when set, refreshes a machine's review counts from its
+	// workspace folders — a minute apart, one shell per machine
+	Badges func(mc *machines.Machine, dirs []string)
+	Dirs   func(snap *herdr.Snapshot) []string
 
 	mu     sync.Mutex
 	states map[string]*machineState
@@ -87,8 +91,13 @@ func (w *Watcher) loop(mc *machines.Machine) {
 	if mc.Local {
 		every = localEvery
 	}
+	var badgesAt time.Time
 	for !mc.Removed() {
-		w.poll(mc)
+		snap, _ := w.poll(mc)
+		if snap != nil && w.Badges != nil && w.Dirs != nil && time.Since(badgesAt) > time.Minute {
+			badgesAt = time.Now()
+			w.Badges(mc, w.Dirs(snap))
+		}
 		time.Sleep(every)
 	}
 	// a removed machine: forget its state so re-adding the host starts clean

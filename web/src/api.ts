@@ -29,6 +29,8 @@ export type Session = {
   status: Status;
   active_tab_id: string;
   worktree?: { repo_key: string; repo_name: string; linked: boolean; checkout_path: string };
+  dir?: string; // the workspace's folder
+  review?: { changed: number; fresh: number }; // changes the reviewer has not looked at
   tabs: Tab[];
 };
 
@@ -94,7 +96,7 @@ export async function sendJSON<T = unknown>(method: "POST" | "DELETE" | "PATCH",
 }
 
 function withMachine(path: string, machineId: string): string {
-  return `${path}?machine=${encodeURIComponent(machineId)}`;
+  return `${path}${path.includes("?") ? "&" : "?"}machine=${encodeURIComponent(machineId)}`;
 }
 
 // fetchRoster returns null when the roster is unchanged (304 via ETag).
@@ -119,6 +121,30 @@ export async function fetchChat(
   await check(res);
   return { body: (await res.json()) as ChatResponse, etag: res.headers.get("ETag") };
 }
+
+// ---- review: what changed in a folder since the viewer last looked ----
+export type ReviewFile = { path: string; added: number; removed: number; untracked?: boolean; fresh: boolean };
+export type ReviewCommit = { sha: string; subject: string; when: number };
+export type Review = {
+  repo?: string;
+  branch?: string;
+  head?: string;
+  baseline?: { head: string; at: string };
+  commits: ReviewCommit[];
+  files: ReviewFile[];
+  fresh: number;
+  error?: string;
+};
+export const fetchReview = (machineId: string, dir: string): Promise<Review> =>
+  fetch(withMachine(`/api/review?dir=${encodeURIComponent(dir)}`, machineId))
+    .then(check)
+    .then((r) => r.json() as Promise<Review>);
+export const fetchReviewDiff = (machineId: string, dir: string, path: string): Promise<string> =>
+  fetch(withMachine(`/api/review/diff?dir=${encodeURIComponent(dir)}&path=${encodeURIComponent(path)}`, machineId))
+    .then(check)
+    .then((r) => r.json() as Promise<{ diff: string }>)
+    .then((d) => d.diff);
+export const markReviewed = (machineId: string, dir: string): Promise<void> => sendJSON("POST", "/api/review/seen", { machine: machineId, dir });
 
 export type CodeStatus = { available: boolean; port: number; error?: string };
 

@@ -301,20 +301,30 @@ type Diff struct {
 // GitDiff shows the file's uncommitted change (staged + unstaged, against
 // HEAD) in its repository, or marks it untracked / outside any repo. The
 // same script runs locally and remotely; outside a repo it prints nothing.
+// Shell runs a POSIX shell script on the machine — `sh -c` here, over the
+// ssh master there — and returns its stdout.
+func (mc *Machine) Shell(script string, timeout time.Duration) (string, error) {
+	if mc.Local {
+		cmd := exec.Command("sh", "-c", script)
+		var out, errb bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &out, &errb
+		if err := cmd.Run(); err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				return out.String(), &sshx.ExitError{Code: ee.ExitCode(), Stderr: strings.TrimSpace(errb.String())}
+			}
+			return out.String(), err
+		}
+		return out.String(), nil
+	}
+	return mc.exec(script, timeout)
+}
+
 func (mc *Machine) GitDiff(p string) (Diff, error) {
 	q := sshx.Quote(p)
 	script := `cd ` + sshx.Quote(filepath.Dir(p)) + ` 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
 		`printf '%s\n' "$root"; if git ls-files --error-unmatch ` + q + ` >/dev/null 2>&1; then echo tracked; ` +
 		`git -c color.ui=never diff HEAD -- ` + q + ` | head -c 400000; else echo untracked; fi`
-	var out string
-	var err error
-	if mc.Local {
-		var b []byte
-		b, err = exec.Command("sh", "-c", script).Output()
-		out = string(b)
-	} else {
-		out, err = mc.exec(script, 30*time.Second)
-	}
+	out, err := mc.Shell(script, 30*time.Second)
 	if err != nil {
 		return Diff{}, err
 	}

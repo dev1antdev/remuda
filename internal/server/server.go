@@ -30,6 +30,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
 	"github.com/dev1antdev/herdr-ui/internal/radar"
+	"github.com/dev1antdev/herdr-ui/internal/review"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
 	"github.com/dev1antdev/herdr-ui/internal/transcript"
 	"github.com/dev1antdev/herdr-ui/internal/watch"
@@ -41,6 +42,7 @@ type Server struct {
 	Push     *push.Service
 	Tasks    *tasks.Service
 	Code     *code.Service
+	Review   *review.Store
 	Radar    *radar.Tracker
 	Guard    *auth.Guard
 	UI       fs.FS // built SPA
@@ -50,8 +52,8 @@ type Server struct {
 	streams termStreams                  // HTTP-transport terminal sessions
 }
 
-func New(m *machines.Manager, w *watch.Watcher, p *push.Service, t *tasks.Service, c *code.Service, r *radar.Tracker, g *auth.Guard, ui fs.FS) *Server {
-	return &Server{Machines: m, Watch: w, Push: p, Tasks: t, Code: c, Radar: r, Guard: g, UI: ui, paneMu: map[push.PaneRef]*sync.Mutex{}}
+func New(m *machines.Manager, w *watch.Watcher, p *push.Service, t *tasks.Service, c *code.Service, rv *review.Store, r *radar.Tracker, g *auth.Guard, ui fs.FS) *Server {
+	return &Server{Machines: m, Watch: w, Push: p, Tasks: t, Code: c, Review: rv, Radar: r, Guard: g, UI: ui, paneMu: map[push.PaneRef]*sync.Mutex{}}
 }
 
 // agents herdr-ui offers to start, by herdr manifest kind. The list is also
@@ -101,6 +103,9 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("DELETE /api/push/subscribe", s.handlePushUnsubscribe)
 	api.HandleFunc("POST /api/push/test", s.handlePushTest)
 	api.HandleFunc("POST /api/seen", s.handleSeen)
+	api.HandleFunc("GET /api/review", s.handleReview)
+	api.HandleFunc("GET /api/review/diff", s.handleReviewDiff)
+	api.HandleFunc("POST /api/review/seen", s.handleReviewSeen)
 	api.HandleFunc("GET /api/code/{machine}", s.handleCodeStatus)
 	for _, m := range []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"} {
 		api.HandleFunc(m+" /code/{machine}", s.handleCodeProxy)
@@ -240,6 +245,11 @@ type rosterTab struct {
 	Panes  []rosterPane `json:"panes"`
 }
 
+type rosterReview struct {
+	Changed int `json:"changed"` // files changed vs the reviewer's baseline (HEAD without one)
+	Fresh   int `json:"fresh"`   // of those, moved since the reviewer looked
+}
+
 type rosterWorktree struct {
 	RepoKey      string `json:"repo_key"`
 	RepoName     string `json:"repo_name"`
@@ -253,6 +263,8 @@ type rosterSession struct {
 	Status      string          `json:"status"`
 	ActiveTabID string          `json:"active_tab_id"`
 	Worktree    *rosterWorktree `json:"worktree,omitempty"`
+	Dir         string          `json:"dir,omitempty"`    // the workspace's folder: its checkout, else its first pane's cwd
+	Review      *rosterReview   `json:"review,omitempty"` // what the reviewer has not looked at yet
 	Tabs        []rosterTab     `json:"tabs"`
 }
 
@@ -328,7 +340,41 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 				Linked: ws.Worktree.IsLinkedWorktree, CheckoutPath: ws.Worktree.CheckoutPath,
 			}
 		}
+		rs.Dir = workspaceDir(snap, &ws)
+		if b, ok := s.Review.Badge(machineID, rs.Dir); ok && rs.Dir != "" && b.Changed > 0 {
+			rs.Review = &rosterReview{Changed: b.Changed, Fresh: b.Fresh}
+		}
 		out = append(out, rs)
+	}
+	return out
+}
+
+// workspaceDir is the folder a workspace lives in: its git checkout when
+// herdr knows one, else the cwd of its first pane.
+func workspaceDir(snap *herdr.Snapshot, ws *herdr.WorkspaceInfo) string {
+	if ws.Worktree != nil && ws.Worktree.CheckoutPath != "" {
+		return ws.Worktree.CheckoutPath
+	}
+	for i := range snap.Panes {
+		if snap.Panes[i].WorkspaceID == ws.WorkspaceID {
+			if d := snap.Panes[i].Dir(); d != "" {
+				return d
+			}
+		}
+	}
+	return ""
+}
+
+// WorkspaceDirs lists the folders of a snapshot's workspaces (for the
+// review badges).
+func WorkspaceDirs(snap *herdr.Snapshot) []string {
+	var out []string
+	seen := map[string]bool{}
+	for i := range snap.Workspaces {
+		if d := workspaceDir(snap, &snap.Workspaces[i]); d != "" && !seen[d] {
+			seen[d] = true
+			out = append(out, d)
+		}
 	}
 	return out
 }
