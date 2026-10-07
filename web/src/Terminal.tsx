@@ -465,6 +465,29 @@ export default function TerminalView({
         : "\x1b[M" + String.fromCharCode(32 + (release ? (code & ~3) | 3 : code), 32 + Math.min(c.col, 223), 32 + Math.min(c.row, 223));
     const modifierBits = (e: MouseEvent) => (e.shiftKey ? 4 : 0) + (e.altKey ? 8 : 0) + (e.ctrlKey ? 16 : 0);
 
+    // A wheel report per row of movement, the way a native terminal does
+    // it: the pixels add up and every cell height sends one tick. A
+    // trackpad's stream of small events (and its momentum) then scrolls
+    // the app as far as the finger moved, not once per event.
+    let wheelAcc = { x: 0, y: 0 };
+    const wheelTicks = (e: WheelEvent, sideways: boolean): number => {
+      const { w, h } = cellSize();
+      let delta = sideways ? e.deltaX : e.deltaY;
+      if (e.deltaMode === 1) delta *= h; // lines
+      else if (e.deltaMode === 2) delta *= h * term.rows; // pages
+      const axis = sideways ? "x" : "y";
+      if (Math.sign(delta) !== Math.sign(wheelAcc[axis])) wheelAcc[axis] = 0; // a turn forgets the remainder
+      wheelAcc[axis] += delta;
+      const unit = sideways ? w * 2 : h;
+      const ticks = Math.trunc(wheelAcc[axis] / unit);
+      wheelAcc[axis] -= ticks * unit;
+      return ticks;
+    };
+    const scrollReport = (ticks: number, sideways: boolean, cell: { col: number; row: number }, mods = 0) => {
+      if (!ticks) return;
+      const code = sideways ? (ticks < 0 ? 66 : 67) : ticks < 0 ? 64 : 65;
+      sendInput(report(code + mods, cell, false).repeat(Math.min(40, Math.abs(ticks))));
+    };
     const onWheel = (e: WheelEvent) => {
       const sideways = Math.abs(e.deltaX) > Math.abs(e.deltaY);
       // a grid larger than the screen (keep mode, a minimum width) scrolls
@@ -479,12 +502,43 @@ export default function TerminalView({
       if (!cell) return;
       e.preventDefault();
       e.stopPropagation();
-      const delta = sideways ? e.deltaX : e.deltaY;
-      const ticks = Math.min(3, Math.max(1, Math.round(Math.abs(delta) / 40)));
-      const code = sideways ? (delta < 0 ? 66 : 67) : delta < 0 ? 64 : 65;
-      sendInput(report(code + modifierBits(e), cell, false).repeat(ticks));
+      scrollReport(wheelTicks(e, sideways), sideways, cell, modifierBits(e));
     };
     mount.addEventListener("wheel", onWheel, { capture: true, passive: false });
+
+    // A finger does the same: a drag over the screen is the app's scroll,
+    // one tick per row moved, so a phone can read back through an agent's
+    // output. Without this xterm would scroll its own (empty) buffer and
+    // the app would never know. A tap stays a tap: the browser's click
+    // follows and is reported below. Selection mode keeps the finger.
+    let touch: { y: number; x: number; acc: number } | null = null;
+    const onTouchStart = (e: TouchEvent) => {
+      touch = null;
+      if (!appMouse || !layer.hidden || e.touches.length !== 1) return;
+      const t = e.touches[0]!;
+      touch = { x: t.clientX, y: t.clientY, acc: 0 };
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!touch || e.touches.length !== 1) return;
+      const t = e.touches[0]!;
+      const dy = touch.y - t.clientY; // the finger goes up: the text follows it, the view scrolls down
+      touch.y = t.clientY;
+      touch.acc += dy;
+      const h = cellSize().h;
+      const ticks = Math.trunc(touch.acc / h);
+      touch.acc -= ticks * h;
+      e.preventDefault();
+      e.stopPropagation();
+      const cell = cellAt({ clientX: t.clientX, clientY: t.clientY } as MouseEvent);
+      if (cell) scrollReport(ticks, false, cell);
+    };
+    const onTouchEnd = () => {
+      touch = null;
+    };
+    mount.addEventListener("touchstart", onTouchStart, { capture: true, passive: true });
+    mount.addEventListener("touchmove", onTouchMove, { capture: true, passive: false });
+    mount.addEventListener("touchend", onTouchEnd, { capture: true, passive: true });
+    mount.addEventListener("touchcancel", onTouchEnd, { capture: true, passive: true });
 
     // Clicks still reach the app: a press and release on the same spot is
     // reported at its cell (a TUI's buttons and lists work), while anything
@@ -558,11 +612,17 @@ export default function TerminalView({
       }
     };
 
-    // what is selected right now: the layer's DOM selection, else xterm's
+    // what is selected right now: the layer's DOM selection, else xterm's.
+    // A full-screen app paints its rows out to the last column with real
+    // spaces, so a selection would carry every line padded to the width
+    // of the screen; the trailing run goes, as a native terminal drops it
     const selectedText = (): string => {
       const sel = window.getSelection();
-      if (sel && !sel.isCollapsed && layer.contains(sel.anchorNode)) return sel.toString();
-      return term.hasSelection() ? term.getSelection() : "";
+      const raw = sel && !sel.isCollapsed && layer.contains(sel.anchorNode) ? sel.toString() : term.hasSelection() ? term.getSelection() : "";
+      return raw
+        .split("\n")
+        .map((l) => l.replace(/[ \t\u00a0]+$/, ""))
+        .join("\n");
     };
     const copySelection = (): boolean => {
       const text = selectedText();
@@ -714,6 +774,10 @@ export default function TerminalView({
       decset.dispose();
       decrst.dispose();
       mount.removeEventListener("wheel", onWheel, { capture: true });
+      mount.removeEventListener("touchstart", onTouchStart, { capture: true });
+      mount.removeEventListener("touchmove", onTouchMove, { capture: true });
+      mount.removeEventListener("touchend", onTouchEnd, { capture: true });
+      mount.removeEventListener("touchcancel", onTouchEnd, { capture: true });
       mount.removeEventListener("mousedown", onMouseDown, true);
       mount.removeEventListener("mouseup", onMouseUp, true);
       if (layerTimer) clearTimeout(layerTimer);

@@ -1694,6 +1694,11 @@ input[type="checkbox"]:hover:not(:checked) {
   cursor: default;
 }
 
+/* a finger on the screen scrolls the app, not the page */
+.term-mount.app-mouse .xterm {
+  touch-action: none;
+}
+
 .term-select {
   position: absolute;
   left: 0;
