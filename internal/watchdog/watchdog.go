@@ -143,6 +143,9 @@ func (w *Watchdog) Sweep() {
 }
 
 func allSame(xs []string) bool {
+	if len(xs) == 0 {
+		return false
+	}
 	for _, x := range xs[1:] {
 		if x != xs[0] {
 			return false

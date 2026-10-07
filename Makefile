@@ -51,7 +51,7 @@ deploy: release
 	@test -n "$(HOST)" || (echo "usage: make deploy HOST=<ssh host>"; exit 1)
 	@t=$$(ssh $(HOST) 'uname -sm' | tr 'A-Z' 'a-z' | sed 's/x86_64/amd64/; s/aarch64/arm64/; s/ /-/'); \
 	  echo "deploying bin/herdr-ui-$$t to $(HOST):~/.local/bin/herdr-ui"; \
-	  ssh $(HOST) 'mkdir -p ~/.local/bin' && scp -q bin/herdr-ui-$$t $(HOST):~/.local/bin/herdr-ui.new && \
+	  ssh $(HOST) 'mkdir -p ~/.local/bin' && scp -q bin/herdr-ui-$$t $(HOST):.local/bin/herdr-ui.new && \
 	  ssh $(HOST) 'mv ~/.local/bin/herdr-ui.new ~/.local/bin/herdr-ui && ~/.local/bin/herdr-ui -version' # rename: safe while the old one runs
 
 # make service HOST=gog.remote — herdr-ui as a background service there (launchd / systemd --user),
@@ -63,11 +63,7 @@ service:
 # as a per-user service on that host, bound to 127.0.0.1:7320 with no auth of
 # its own; herdr-ui proxies it under /code/<machine>/ behind its token.
 code:
-ifeq ($(HOST),)
-	sh deploy/install-code.sh
-else
-	ssh $(HOST) 'sh -s' < deploy/install-code.sh
-endif
+	@if [ -n "$(HOST)" ]; then ssh $(HOST) 'sh -s' < deploy/install-code.sh; else sh deploy/install-code.sh; fi
 
 clean:
 	rm -rf bin web/dist

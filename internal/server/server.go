@@ -15,8 +15,10 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,8 +60,10 @@ type Server struct {
 	streams termStreams                  // HTTP-transport terminal sessions
 }
 
-func New(m *machines.Manager, w *watch.Watcher, p *push.Service, t *tasks.Store, c *code.Service, rv *review.Store, r *radar.Tracker, g *auth.Guard, ui fs.FS) *Server {
-	return &Server{Machines: m, Watch: w, Push: p, Tasks: t, Code: c, Review: rv, Radar: r, Guard: g, UI: ui, paneMu: map[push.PaneRef]*sync.Mutex{}}
+// New wires the server. Schedules is the one dependency set afterwards: it
+// delivers through the server's own SubmitToFolder.
+func New(m *machines.Manager, w *watch.Watcher, p *push.Service, t *tasks.Store, c *code.Service, rv *review.Store, r *radar.Tracker, q *quick.Store, u *usage.Tracker, g *auth.Guard, ui fs.FS) *Server {
+	return &Server{Machines: m, Watch: w, Push: p, Tasks: t, Code: c, Review: rv, Radar: r, Quick: q, Usage: u, Guard: g, UI: ui, paneMu: map[push.PaneRef]*sync.Mutex{}}
 }
 
 // agents herdr-ui offers to start, by herdr manifest kind. The list is also
@@ -155,12 +159,22 @@ func (s *Server) Handler() http.Handler {
 	return csrfGuard(root)
 }
 
-// csrfGuard rejects cross-origin mutations. The token cookie is SameSite=Lax,
-// so this is belt and braces for POST/DELETE.
+// csrfGuard rejects cross-origin mutations and WebSocket upgrades. The token
+// cookie is SameSite=Lax, which is per site, not per origin: another port on
+// the same host would get it — so an Origin that is not ours is refused
+// outright, and for a browser that sends no Sec-Fetch-* at all the Origin
+// check is the one that holds.
 func csrfGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		mutation := r.Method != http.MethodGet && r.Method != http.MethodHead || strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
+		if mutation {
 			if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
+				http.Error(w, "cross-origin request refused", http.StatusForbidden)
+				return
+			}
+		}
+		if origin := r.Header.Get("Origin"); origin != "" {
+			if u, err := url.Parse(origin); err != nil || !strings.EqualFold(u.Host, r.Host) {
 				http.Error(w, "cross-origin request refused", http.StatusForbidden)
 				return
 			}
@@ -229,15 +243,15 @@ func (s *Server) ready(w http.ResponseWriter, r *http.Request, bodyID string) (*
 	return mc, client, attach, true
 }
 
+// handleHealth answers from the watcher's cache: unauthenticated, so it
+// never asks herdr anything.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	local, _ := s.Machines.Get(machines.LocalID)
-	client, _, _ := local.Ready()
-	version, protocol, err := client.Ping()
-	if err != nil {
+	snap, err := s.Watch.Snapshot(machines.LocalID)
+	if snap == nil || err != nil {
 		writeJSON(w, map[string]any{"ok": true, "herdr": false})
 		return
 	}
-	writeJSON(w, map[string]any{"ok": true, "herdr": true, "herdr_version": version, "protocol": protocol})
+	writeJSON(w, map[string]any{"ok": true, "herdr": true, "herdr_version": snap.Version})
 }
 
 // ---- roster ----
@@ -368,7 +382,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			}
 		}
 		rs.Dir = workspaceDir(snap, &ws)
-		if b, ok := s.Review.Badge(machineID, rs.Dir); ok && rs.Dir != "" && b.Changed > 0 {
+		if b, ok := s.Review.Badge(machineID, rs.Dir); rs.Dir != "" && ok && b.Changed > 0 {
 			rs.Review = &rosterReview{Changed: b.Changed, Fresh: b.Fresh}
 		}
 		out = append(out, rs)
@@ -496,7 +510,7 @@ type createReq struct {
 // request: the agent kind is validated before any RPC (an unknown one must
 // not leave an orphaned container), the container is created, the agent is
 // started, the watcher is refreshed so the UI sees the new pane at once.
-func (s *Server) create(w http.ResponseWriter, r *http.Request, make func(*herdr.Client, *createReq) (id string, pane *herdr.PaneInfo, extra map[string]any, err error)) {
+func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*herdr.Client, *createReq) (id string, pane *herdr.PaneInfo, extra map[string]any, err error)) {
 	var req createReq
 	if !decode(w, r, &req) {
 		return
@@ -509,7 +523,7 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, make func(*herdr
 	if !ok {
 		return
 	}
-	id, pane, extra, err := make(client, &req)
+	id, pane, extra, err := build(client, &req)
 	if err != nil {
 		rpcErr(w, err)
 		return
@@ -628,6 +642,8 @@ func (s *Server) renameHandler(rename func(*herdr.Client, string, string) error)
 
 // ---- chat ----
 
+var sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9-]{1,80}$`)
+
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.machineFor(r, "")
 	if err != nil {
@@ -704,7 +720,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	version, err := mc.TranscriptVersion(path)
 	if err != nil {
-		httpErr(w, 500, err)
+		httpErr(w, http.StatusBadGateway, err)
 		return
 	}
 	id := transcript.SessionID(path)
@@ -715,7 +731,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	turns, err := mc.Transcript(path, version)
 	if err != nil {
-		httpErr(w, 500, err)
+		httpErr(w, http.StatusBadGateway, err)
 		return
 	}
 	if sessions == nil && mc.Local && paneID != "" { // the picker, only on a full response; a transcript on its own has none
@@ -944,7 +960,11 @@ func (s *Server) handlePushUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Endpoint string `json:"endpoint"`
 	}
-	if !decode(w, r, &req) || req.Endpoint == "" {
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.Endpoint == "" {
+		httpErr(w, 400, fmt.Errorf("endpoint required"))
 		return
 	}
 	s.Push.Unsubscribe(req.Endpoint)
@@ -982,11 +1002,15 @@ func (s *Server) handleSeen(w http.ResponseWriter, r *http.Request) {
 		Machine string `json:"machine"`
 		Pane    string `json:"pane"`
 	}
-	if !decode(w, r, &req) || req.Pane == "" {
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.Pane == "" {
+		httpErr(w, 400, fmt.Errorf("pane required"))
 		return
 	}
 	if req.Machine == "" {
-		req.Machine = "local"
+		req.Machine = machines.LocalID
 	}
 	s.Radar.Seen(req.Machine, req.Pane)
 	w.WriteHeader(http.StatusNoContent)
@@ -1056,6 +1080,22 @@ func (s *Server) submitTo(mc *machines.Machine, client *herdr.Client, paneID, te
 
 // SubmitToFolder finds the agent running in a machine's folder and gives it
 // the text — the scheduler's door. The pane's title names where it went.
+// agentPaneIn is the first agent pane of the first workspace in a folder.
+func agentPaneIn(snap *herdr.Snapshot, dir string) *herdr.PaneInfo {
+	for i := range snap.Workspaces {
+		ws := &snap.Workspaces[i]
+		if workspaceDir(snap, ws) != dir {
+			continue
+		}
+		for j := range snap.Panes {
+			if p := &snap.Panes[j]; p.WorkspaceID == ws.WorkspaceID && p.Agent != "" {
+				return p
+			}
+		}
+	}
+	return nil
+}
+
 func (s *Server) SubmitToFolder(machineID, dir, text string) (string, error) {
 	mc, err := s.Machines.Get(machineID)
 	if err != nil {
@@ -1069,20 +1109,7 @@ func (s *Server) SubmitToFolder(machineID, dir, text string) (string, error) {
 	if snap == nil {
 		return "", fmt.Errorf("%s has no snapshot yet", mc.Cfg.Label)
 	}
-	var pane *herdr.PaneInfo
-	for i := range snap.Workspaces {
-		ws := &snap.Workspaces[i]
-		if workspaceDir(snap, ws) != dir {
-			continue
-		}
-		for j := range snap.Panes {
-			p := &snap.Panes[j]
-			if p.WorkspaceID == ws.WorkspaceID && p.Agent != "" {
-				pane = p
-				break
-			}
-		}
-	}
+	pane := agentPaneIn(snap, dir)
 	if pane == nil {
 		return "", fmt.Errorf("no agent is running in %s on %s", dir, mc.Cfg.Label)
 	}
@@ -1110,6 +1137,10 @@ func (s *Server) handleKeys(w http.ResponseWriter, r *http.Request) {
 		Keys    []string `json:"keys"`
 	}
 	if !decode(w, r, &req) {
+		return
+	}
+	if req.Pane == "" || len(req.Keys) == 0 {
+		httpErr(w, 400, fmt.Errorf("pane and keys required"))
 		return
 	}
 	for i, k := range req.Keys {
@@ -1197,7 +1228,9 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 						if !ok {
 							more = false
 						} else {
-							data = append(data, extra...)
+							// the chunk is shared with every viewer: a full-slice
+							// expression makes this append copy before it writes
+							data = append(data[:len(data):len(data)], extra...)
 						}
 					default:
 						more = false

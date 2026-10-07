@@ -185,12 +185,14 @@ func (s *Server) handleTaskList(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) taskReply(w http.ResponseWriter, v any, err error) {
 	switch {
+	case err == nil:
+		writeJSON(w, v)
 	case errors.Is(err, tasks.ErrNotFound):
 		httpErr(w, http.StatusNotFound, err)
-	case err != nil:
+	case errors.Is(err, tasks.ErrInvalid):
 		httpErr(w, http.StatusBadRequest, err)
 	default:
-		writeJSON(w, v)
+		httpErr(w, http.StatusInternalServerError, err)
 	}
 }
 
@@ -362,7 +364,7 @@ func isTrustPrompt(screen, dir, home string) bool {
 		return true
 	}
 	want := []string{squash(dir)}
-	if home != "" && strings.HasPrefix(dir, home) {
+	if home != "" && (dir == home || strings.HasPrefix(dir, home+"/")) {
 		want = append(want, squash("~"+strings.TrimPrefix(dir, home)))
 	}
 	for _, w := range want {

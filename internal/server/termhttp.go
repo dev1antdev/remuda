@@ -8,16 +8,17 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
 )
 
 // The terminal over plain HTTP: for viewers whose path to the server passes
-// a proxy that forwards requests but not WebSockets (JetBrains' embedded
-// browser in Remote Development is one). A stream is a server-side
-// subscription to the pane's attach; the client long-polls it for output and
-// POSTs input. Same bytes, same attach sharing, a little more latency.
+// a proxy that forwards requests but not WebSockets. A stream is a
+// server-side subscription to the pane's attach; the client long-polls it
+// for output and POSTs input. Same bytes, same attach sharing, a little
+// more latency.
 
 const (
 	streamIdle     = 90 * time.Second // no read for this long → the stream is dropped
@@ -31,9 +32,20 @@ type termStream struct {
 	attach   *herdr.AttachManager
 	ch       chan []byte
 	cancel   func()
-	mu       sync.Mutex // one reader at a time
-	lastRead time.Time
+	readMu   sync.Mutex   // one long-poll at a time; never held by anyone else
+	lastRead atomic.Int64 // unix nanos of the last poll
+	mu       sync.Mutex   // closed
 	closed   bool
+}
+
+// end stops the subscription once.
+func (s *termStream) end() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.closed {
+		s.closed = true
+		s.cancel()
+	}
 }
 
 type termStreams struct {
@@ -64,28 +76,21 @@ func (ts *termStreams) remove(id string) {
 	delete(ts.streams, id)
 	ts.mu.Unlock()
 	if s != nil {
-		s.mu.Lock()
-		if !s.closed {
-			s.closed = true
-			s.cancel()
-		}
-		s.mu.Unlock()
+		s.end()
 	}
 }
 
 // sweep drops streams nobody has read for a while — a tab closed without
-// saying goodbye must not pin the attach open.
+// saying goodbye must not pin the attach open. It never waits on a poll.
 func (ts *termStreams) sweep() {
 	for {
 		time.Sleep(15 * time.Second)
 		var stale []string
 		ts.mu.Lock()
 		for id, s := range ts.streams {
-			s.mu.Lock()
-			if time.Since(s.lastRead) > streamIdle {
+			if time.Since(time.Unix(0, s.lastRead.Load())) > streamIdle {
 				stale = append(stale, id)
 			}
-			s.mu.Unlock()
 		}
 		ts.mu.Unlock()
 		for _, id := range stale {
@@ -119,10 +124,8 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 502, fmt.Errorf("attach failed: %w", err))
 		return
 	}
-	st := &termStream{
-		id: newStreamID(), termID: pane.TerminalID, attach: attach,
-		ch: ch, cancel: cancel, lastRead: time.Now(),
-	}
+	st := &termStream{id: newStreamID(), termID: pane.TerminalID, attach: attach, ch: ch, cancel: cancel}
+	st.lastRead.Store(time.Now().UnixNano())
 	s.streams.add(st)
 	writeJSON(w, map[string]any{"sid": st.id})
 }
@@ -141,9 +144,9 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 		wait = int(streamMaxWait / time.Second)
 	}
 
-	st.mu.Lock()
-	defer st.mu.Unlock()
-	st.lastRead = time.Now()
+	st.readMu.Lock()
+	defer st.readMu.Unlock()
+	st.lastRead.Store(time.Now().UnixNano())
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Cache-Control", "no-store")
 
@@ -176,8 +179,7 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 	}
 	if ended {
 		w.Header().Set("X-Herdr-UI-End", "1")
-		st.closed = true
-		st.cancel()
+		s.streams.remove(st.id) // the client stops polling; the map stays honest
 	}
 	w.Write(out)
 }

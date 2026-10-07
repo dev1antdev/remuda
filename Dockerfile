@@ -39,12 +39,14 @@ RUN go vet ./... && go test ./... && cd web && npm run typecheck
 
 # ---- runtime ----
 FROM debian:bookworm-slim AS runtime
-ARG HERDR_INSTALL=1
+ARG HERDR_INSTALL=0
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl openssh-client git \
  && rm -rf /var/lib/apt/lists/*
 # herdr's own installer: detects linux/{x86_64,aarch64} and verifies the checksum.
-# HERDR_INSTALL=0 skips it when you mount the host's binary instead.
+# HERDR_INSTALL=1 runs herdr's installer at build time — an unpinned
+# `curl | sh`, so it is off by default: mount the host's binary, or set it
+# knowing that.
 RUN if [ "$HERDR_INSTALL" = "1" ]; then \
       HERDR_INSTALL_DIR=/usr/local/bin sh -c "curl -fsSL https://herdr.dev/install.sh | sh"; \
     fi

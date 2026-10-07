@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/herdr-ui/internal/push"
+	"github.com/dev1antdev/herdr-ui/internal/text"
 )
 
 // RunWatch follows the agents started on tasks: once the prompt is in, every
@@ -25,6 +26,8 @@ type RunWatch struct {
 	LastAnswer func(machine, pane string) (text string, id string)
 	Notify     func(push.Payload)
 	Now        func() time.Time
+
+	missing map[int64]time.Time // run id → when its pane was first not seen
 }
 
 // startWindow is how long a starting run may wait for its prompt before
@@ -42,17 +45,28 @@ func (w *RunWatch) Sweep() {
 	if err != nil {
 		return
 	}
+	if w.missing == nil {
+		w.missing = map[int64]time.Time{}
+	}
 	for _, r := range runs {
 		state, _, ok := w.PaneState(r.Machine, r.Pane)
 		started, _ := time.Parse(time.RFC3339, r.Started)
 		if !ok {
-			// herdr needs a moment to show a new pane; after that, gone is gone
-			if now().Sub(started) > 2*time.Minute {
+			// herdr needs a moment to show a new pane, and one snapshot
+			// without it is not the end: gone is two minutes of absence
+			first, seen := w.missing[r.ID]
+			if !seen {
+				w.missing[r.ID] = now()
+				continue
+			}
+			if now().Sub(first) > 2*time.Minute && now().Sub(started) > 2*time.Minute {
 				_ = w.Store.SetRun(r.ID, RunGone, "the pane is no more")
 				_, _ = w.Store.AddComment(r.TaskID, "herdr-ui", "The agent's workspace was closed.")
+				delete(w.missing, r.ID)
 			}
 			continue
 		}
+		delete(w.missing, r.ID)
 		if r.State == RunStarting {
 			if now().Sub(started) > startWindow { // the deliverer gave up, or a restart lost it
 				_ = w.Store.SetRun(r.ID, RunFailed, "the prompt was never delivered")
@@ -98,9 +112,5 @@ func (w *RunWatch) Loop(every time.Duration) {
 }
 
 func firstLine(s string) string {
-	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
-	if r := []rune(line); len(r) > 120 {
-		line = string(r[:120]) + "…"
-	}
-	return line
+	return text.FirstLine(s, 120)
 }

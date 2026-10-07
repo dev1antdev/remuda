@@ -10,10 +10,9 @@
 package schedule
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
+	"log"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -23,6 +22,7 @@ import (
 
 	"github.com/dev1antdev/herdr-ui/internal/push"
 	"github.com/dev1antdev/herdr-ui/internal/state"
+	"github.com/dev1antdev/herdr-ui/internal/text"
 )
 
 const file = "schedules.json"
@@ -36,7 +36,8 @@ type Schedule struct {
 	Prompt  string `json:"prompt"` // what the agent gets
 	Enabled bool   `json:"enabled"`
 
-	LastRun    time.Time `json:"last_run,omitempty"`
+	Next       time.Time `json:"next,omitzero"` // the coming run, filled in by List
+	LastRun    time.Time `json:"last_run,omitzero"`
 	LastResult string    `json:"last_result,omitempty"` // "sent to <pane title>" or why not
 	LastOK     bool      `json:"last_ok"`
 }
@@ -51,26 +52,25 @@ type Store struct {
 	notify func(push.Payload)
 	now    func() time.Time
 
-	mu    sync.Mutex
-	items map[string]*Schedule
+	mu       sync.Mutex
+	items    map[string]*Schedule
+	inflight sync.WaitGroup
 }
 
 func New(dir string, submit Submit, notify func(push.Payload)) *Store {
 	st := &Store{dir: dir, submit: submit, notify: notify, now: time.Now, items: map[string]*Schedule{}}
-	if b, err := os.ReadFile(filepath.Join(dir, file)); err == nil {
-		var list []*Schedule
-		if json.Unmarshal(b, &list) == nil {
-			for _, s := range list {
-				st.items[s.ID] = s
-			}
-		}
+	var list []*Schedule
+	if err := state.LoadJSON(dir, file, &list); err != nil {
+		log.Printf("%s is unreadable (%v): no schedules until it is fixed", file, err)
+	}
+	for _, s := range list {
+		st.items[s.ID] = s
 	}
 	return st
 }
 
-func (st *Store) saveLocked() {
-	b, _ := json.MarshalIndent(st.listLocked(), "", "  ")
-	_ = state.WriteFile(filepath.Join(st.dir, file), b)
+func (st *Store) saveLocked() error {
+	return state.SaveJSON(st.dir, file, st.listLocked())
 }
 
 func (st *Store) listLocked() []*Schedule {
@@ -88,9 +88,16 @@ func (st *Store) listLocked() []*Schedule {
 func (st *Store) List() []Schedule {
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	now := st.now()
 	out := make([]Schedule, 0, len(st.items))
 	for _, s := range st.listLocked() {
-		out = append(out, *s)
+		cp := *s
+		if c, err := Parse(cp.Cron); err == nil && cp.Enabled {
+			if next, ok := c.Next(now); ok {
+				cp.Next = next
+			}
+		}
+		out = append(out, cp)
 	}
 	return out
 }
@@ -110,26 +117,28 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 		return s, err
 	}
 	if s.Label == "" {
-		s.Label = firstLine(s.Prompt)
+		s.Label = text.FirstLine(s.Prompt, 60)
 	}
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if s.ID == "" {
-		s.ID = newID()
+		s.ID = state.NewID()
 	} else if old, ok := st.items[s.ID]; ok {
 		s.LastRun, s.LastResult, s.LastOK = old.LastRun, old.LastResult, old.LastOK
 	}
 	cp := s
 	st.items[s.ID] = &cp
-	st.saveLocked()
+	if err := st.saveLocked(); err != nil {
+		return s, fmt.Errorf("the schedule could not be kept: %w", err)
+	}
 	return s, nil
 }
 
-func (st *Store) Delete(id string) {
+func (st *Store) Delete(id string) error {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	delete(st.items, id)
-	st.saveLocked()
+	return st.saveLocked()
 }
 
 // Run fires one schedule now, whatever the clock says.
@@ -143,20 +152,32 @@ func (st *Store) Run(id string) (Schedule, error) {
 	st.fire(s)
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	if cur, ok := st.items[id]; ok {
+		return *cur, nil
+	}
 	return *s, nil
 }
 
 func (st *Store) fire(s *Schedule) {
 	pane, err := st.submit(s.Machine, s.Dir, s.Prompt)
 	st.mu.Lock()
-	s.LastRun = st.now()
-	if err != nil {
-		s.LastOK, s.LastResult = false, err.Error()
-	} else {
-		s.LastOK, s.LastResult = true, "sent to "+pane
+	// the result goes on the schedule as it is now — an edit saved while
+	// the submit ran replaced the pointer; one deleted meanwhile is gone
+	cur, ok := st.items[s.ID]
+	if !ok {
+		st.mu.Unlock()
+		return
 	}
-	st.saveLocked()
-	label, machine, dir := s.Label, s.Machine, s.Dir
+	cur.LastRun = st.now()
+	if err != nil {
+		cur.LastOK, cur.LastResult = false, err.Error()
+	} else {
+		cur.LastOK, cur.LastResult = true, "sent to "+pane
+	}
+	if serr := st.saveLocked(); serr != nil {
+		log.Printf("schedules: %v", serr)
+	}
+	label, machine, dir := cur.Label, cur.Machine, cur.Dir
 	st.mu.Unlock()
 	if err != nil && st.notify != nil {
 		st.notify(push.Payload{
@@ -185,9 +206,16 @@ func (st *Store) Tick() {
 	}
 	st.mu.Unlock()
 	for _, s := range due {
-		st.fire(s)
+		st.inflight.Add(1)
+		go func(s *Schedule) { // one slow delivery must not hold the others past their minute
+			defer st.inflight.Done()
+			st.fire(s)
+		}(s)
 	}
 }
+
+// Wait blocks until the deliveries a Tick started are done (tests).
+func (st *Store) Wait() { st.inflight.Wait() }
 
 // Run loops Tick forever.
 func (st *Store) Loop() {
@@ -201,10 +229,13 @@ func (st *Store) Loop() {
 
 // Cron is a five-field expression: minute hour day-of-month month
 // day-of-week, each `*`, a number, a list `1,2`, a range `1-5`, or a step
-// `*/15`; day-of-week 0 and 7 are both Sunday. Local time.
+// `*/15`; day-of-week 0 and 7 are both Sunday. Local time. As in cron,
+// when both the day-of-month and the day-of-week are restricted, a day
+// matching either one fires.
 type Cron struct {
-	fields [5][]bool // allowed values per field, indexed by value
-	expr   string
+	fields  [5][]bool // allowed values per field, indexed by value
+	anyDay  bool      // day-of-month is `*`
+	anyWeek bool      // day-of-week is `*`
 }
 
 var ranges = [5][2]int{{0, 59}, {0, 23}, {1, 31}, {1, 12}, {0, 7}}
@@ -215,7 +246,7 @@ func Parse(expr string) (Cron, error) {
 		return Cron{}, fmt.Errorf("cron needs five fields (minute hour day month weekday), got %d", len(parts))
 	}
 	var c Cron
-	c.expr = strings.Join(parts, " ")
+	c.anyDay, c.anyWeek = parts[2] == "*", parts[4] == "*"
 	for i, part := range parts {
 		lo, hi := ranges[i][0], ranges[i][1]
 		allowed := make([]bool, hi+1)
@@ -265,7 +296,14 @@ func Parse(expr string) (Cron, error) {
 
 func (c Cron) Matches(t time.Time) bool {
 	f := c.fields
-	return f[0][t.Minute()] && f[1][t.Hour()] && f[2][t.Day()] && f[3][int(t.Month())] && f[4][int(t.Weekday())]
+	if !f[0][t.Minute()] || !f[1][t.Hour()] || !f[3][int(t.Month())] {
+		return false
+	}
+	day, week := f[2][t.Day()], f[4][int(t.Weekday())]
+	if !c.anyDay && !c.anyWeek {
+		return day || week
+	}
+	return day && week
 }
 
 // Next is the first matching minute after t, within a year.
@@ -278,16 +316,4 @@ func (c Cron) Next(t time.Time) (time.Time, bool) {
 		cur = cur.Add(time.Minute)
 	}
 	return time.Time{}, false
-}
-
-func firstLine(s string) string {
-	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
-	if len(line) > 60 {
-		line = line[:60] + "…"
-	}
-	return line
-}
-
-func newID() string {
-	return strconv.FormatInt(time.Now().UnixNano(), 36)
 }

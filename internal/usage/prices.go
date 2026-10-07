@@ -81,7 +81,6 @@ func Lookup(model string) (Model, bool) {
 		m = m[i:] // "us.anthropic.claude-…", "anthropic/claude-…"
 	}
 	m = dateSuffix.ReplaceAllString(m, "")
-	m = strings.TrimSuffix(strings.TrimSuffix(m, "-v1:0"), "@")
 	for _, c := range models {
 		if m == c.id || strings.HasPrefix(m, c.id+"-") || strings.HasPrefix(m, c.id+"@") {
 			return Model{ID: c.id, Name: c.name, Rates: tiers[c.tier], Window: c.window}, true

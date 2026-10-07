@@ -1,6 +1,7 @@
 package herdr
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"sync"
@@ -93,6 +94,10 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 
 	ch = make(chan []byte, subscriberBuf)
 	a.mu.Lock()
+	if a.dead { // it died between the lookup and here: start over
+		a.mu.Unlock()
+		return m.Subscribe(termID, cols, rows)
+	}
 	if a.linger != nil {
 		a.linger.Stop()
 		a.linger = nil
@@ -108,14 +113,7 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 		delete(a.subs, ch)
 		empty := len(a.subs) == 0 && !a.dead
 		if empty && a.linger == nil {
-			a.linger = time.AfterFunc(lingerAfter, func() {
-				a.mu.Lock()
-				idle := len(a.subs) == 0 && !a.dead
-				a.mu.Unlock()
-				if idle {
-					m.kill(a)
-				}
-			})
+			a.linger = time.AfterFunc(lingerAfter, func() { m.killIfIdle(a) })
 		}
 		a.mu.Unlock()
 	}
@@ -176,12 +174,28 @@ func (a *attach) readLoop(m *AttachManager) {
 	m.kill(a)
 }
 
+// killIfIdle ends an attach nobody watches — the test and the decision in
+// one critical section, so a viewer joining meanwhile is not cut off.
+func (m *AttachManager) killIfIdle(a *attach) {
+	a.mu.Lock()
+	if len(a.subs) > 0 || a.dead {
+		a.mu.Unlock()
+		return
+	}
+	m.killLocked(a)
+}
+
 func (m *AttachManager) kill(a *attach) {
 	a.mu.Lock()
 	if a.dead {
 		a.mu.Unlock()
 		return
 	}
+	m.killLocked(a)
+}
+
+// killLocked is kill with a.mu held; it releases it.
+func (m *AttachManager) killLocked(a *attach) {
 	a.dead = true
 	subs := a.subs
 	a.subs = map[chan []byte]bool{}
@@ -208,7 +222,7 @@ func (m *AttachManager) get(termID string) (*attach, error) {
 	a := m.attaches[termID]
 	m.mu.Unlock()
 	if a == nil {
-		return nil, os.ErrNotExist
+		return nil, fmt.Errorf("terminal %s is not attached", termID)
 	}
 	return a, nil
 }

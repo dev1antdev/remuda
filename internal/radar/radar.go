@@ -39,7 +39,7 @@ type Display struct {
 	State      string `json:"state"`                 // working | blocked | done | idle | unknown
 	LastActive int64  `json:"last_active,omitempty"` // unix ms of the last moment the agent worked; 0 = never seen working
 	Since      int64  `json:"since,omitempty"`       // unix ms when the shown state began
-	Alert      string `json:"alert,omitempty"`       // the watchdog's note: quiet for 25 min, waiting 40 min, looping
+	Alert      string `json:"alert,omitempty"`       // the watchdog's note: quiet for 20 min, waiting 15 min, looping
 }
 
 // Episode is one pane's current state and when it began, for the watchdog.
@@ -161,9 +161,8 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 	// for hours — so a finish that was looked at here stays looked at until
 	// the agent works again
 	if status == herdr.StatusWorking {
-		st.doneSeen = false
-	}
-	if !st.doneSeen && (p.AgentStatus == herdr.StatusDone || (st.status == herdr.StatusWorking && status == herdr.StatusIdle)) {
+		st.doneSeen, st.doneHeld = false, false
+	} else if !st.doneSeen && (p.AgentStatus == herdr.StatusDone || (st.status == herdr.StatusWorking && status == herdr.StatusIdle)) {
 		st.doneHeld = true
 	}
 	st.status = status
@@ -180,11 +179,21 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 	if p.Focused {
 		st.doneHeld, st.doneSeen = false, true // herdr's own focus counts as having looked
 	}
-	if status == herdr.StatusWorking {
-		st.doneHeld = false
-	}
 	if shown := shownState(st); shown != st.shown {
 		st.shown, st.since, st.alert = shown, now, ""
+	}
+}
+
+// Forget drops a machine's panes: it was removed, nothing of it is to be
+// watched or reminded about.
+func (t *Tracker) Forget(machineID string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for k := range t.panes {
+		if strings.HasPrefix(k, machineID+"|") {
+			delete(t.panes, k)
+			t.dirty = true
+		}
 	}
 }
 

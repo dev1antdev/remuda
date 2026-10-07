@@ -94,8 +94,13 @@ func TestRunLifecycleAndSweep(t *testing.T) {
 	if len(got.Labels) != 0 {
 		t.Fatalf("still in progress: %+v", got.Labels)
 	}
-	// the pane goes
+	// the pane goes: one snapshot without it is nothing, two minutes of it is gone
 	gone = true
+	w.Sweep()
+	if r, _ := st.Run(run.ID); r.State != RunFinished {
+		t.Fatalf("gone after one look: %+v", r)
+	}
+	clock = clock.Add(3 * time.Minute)
 	w.Sweep()
 	if r, _ := st.Run(run.ID); r.State != RunGone {
 		t.Fatalf("gone: %+v", r)

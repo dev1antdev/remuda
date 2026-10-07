@@ -5,16 +5,13 @@
 package quick
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
+	"log"
 	"strings"
 	"sync"
 
 	"github.com/dev1antdev/herdr-ui/internal/state"
+	"github.com/dev1antdev/herdr-ui/internal/text"
 )
 
 const file = "quick.json"
@@ -34,8 +31,8 @@ type Store struct {
 
 func New(dir string) *Store {
 	st := &Store{dir: dir}
-	if b, err := os.ReadFile(filepath.Join(dir, file)); err == nil {
-		_ = json.Unmarshal(b, &st.all)
+	if err := state.LoadJSON(dir, file, &st.all); err != nil {
+		log.Printf("%s is unreadable (%v): no quick prompts until it is fixed", file, err)
 	}
 	if st.all == nil {
 		st.all = []Prompt{}
@@ -65,34 +62,19 @@ func (st *Store) Replace(list []Prompt) ([]Prompt, error) {
 			return nil, errors.New("a prompt is empty")
 		}
 		if p.Label == "" {
-			p.Label = firstLine(p.Text)
+			p.Label = text.FirstLine(p.Text, 40)
 		}
 		for p.ID == "" || seen[p.ID] {
-			p.ID = newID()
+			p.ID = state.NewID()
 		}
 		seen[p.ID] = true
 		out = append(out, p)
 	}
-	b, _ := json.MarshalIndent(out, "", "  ")
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	if err := state.WriteFile(filepath.Join(st.dir, file), b); err != nil {
+	if err := state.SaveJSON(st.dir, file, out); err != nil {
 		return nil, err
 	}
 	st.all = out
 	return copyOf(out), nil
-}
-
-func newID() string {
-	var b [6]byte
-	_, _ = rand.Read(b[:])
-	return hex.EncodeToString(b[:])
-}
-
-func firstLine(s string) string {
-	line, _, _ := strings.Cut(s, "\n")
-	if r := []rune(line); len(r) > 40 {
-		line = string(r[:40]) + "…"
-	}
-	return line
 }

@@ -73,31 +73,30 @@ func Scan(projects, q, dir string, since time.Time, limit int, w io.Writer) erro
 	defer out.Flush()
 	n := 0
 	for _, f := range files {
-		data, err := os.ReadFile(filepath.Join(projects, filepath.FromSlash(f.rel)))
+		fh, err := os.Open(filepath.Join(projects, filepath.FromSlash(f.rel)))
 		if err != nil {
 			continue
 		}
-		for len(data) > 0 {
-			line := data
-			if i := bytes.IndexByte(data, '\n'); i >= 0 {
-				line, data = data[:i], data[i+1:]
-			} else {
-				data = nil
-			}
-			if len(line) > lineCap || !anyOf(line, pats) {
-				continue // the parser on the other end reads lines up to lineCap
+		done := false
+		_ = transcript.Lines(fh, lineCap, func(line []byte) { // lines past lineCap are dropped: the parser on the other end reads up to it
+			if done || !anyOf(line, pats) {
+				return
 			}
 			m, ok := transcript.MatchLine(line, q)
 			if !ok || (!since.IsZero() && m.Ts.Before(since)) {
-				continue
+				return
 			}
 			out.WriteString(f.rel)
 			out.WriteByte(':')
 			out.Write(line)
 			out.WriteByte('\n')
 			if n++; n >= limit {
-				return nil
+				done = true
 			}
+		})
+		fh.Close()
+		if done {
+			return nil
 		}
 	}
 	return nil

@@ -8,9 +8,8 @@
 package review
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
+	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -76,15 +75,14 @@ func key(machineID, dir string) string { return machineID + "|" + dir }
 
 func New(dir string) *Store {
 	st := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}}
-	if b, err := os.ReadFile(filepath.Join(dir, baselineFile)); err == nil {
-		_ = json.Unmarshal(b, &st.baselines)
+	if err := state.LoadJSON(dir, baselineFile, &st.baselines); err != nil {
+		log.Printf("%s is unreadable (%v): every folder counts as never reviewed", baselineFile, err)
 	}
 	return st
 }
 
-func (st *Store) save() {
-	b, _ := json.MarshalIndent(st.baselines, "", "  ")
-	_ = state.WriteFile(filepath.Join(st.dir, baselineFile), b)
+func (st *Store) save() error {
+	return state.SaveJSON(st.dir, baselineFile, st.baselines)
 }
 
 func (st *Store) baseline(machineID, dir string) (Baseline, bool) {
@@ -111,7 +109,7 @@ func summaryScript(dir, base string) string {
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
 		`base=` + b + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
 		`if [ "$base" != HEAD ]; then git log --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
-		`git -c core.quotepath=off diff --no-renames --numstat "$base" 2>/dev/null; printf '\036\n'; ` +
+		`git -c core.quotepath=off diff --no-renames --relative --numstat "$base" 2>/dev/null; printf '\036\n'; ` +
 		`git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
 		hashLoop("$base")
 }
@@ -120,10 +118,11 @@ func summaryScript(dir, base string) string {
 // base or untracked — one path per line, so a space in a name survives; a
 // deleted file is recorded as "gone", so its deletion can be looked at and
 // marked seen like any other change. Renames are a deletion plus an
-// addition throughout, so paths stay plain.
+// addition throughout, so paths stay plain, and every path is relative to
+// the folder (a workspace may sit below its repository's root).
 func hashLoop(base string) string {
-	return `{ git -c core.quotepath=off diff --no-renames --name-only ` + base + ` 2>/dev/null; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; } | ` +
-		`while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\037%s\n' "$f" "$(git hash-object "$f" 2>/dev/null)"; else printf '%s\037gone\n' "$f"; fi; done`
+	return `{ git -c core.quotepath=off diff --no-renames --relative --name-only ` + base + ` 2>/dev/null; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; } | ` +
+		`while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\037%s\n' "$f" "$(git hash-object -- "$f" 2>/dev/null)"; else printf '%s\037gone\n' "$f"; fi; done`
 }
 
 // Summary reviews one folder against its baseline.
@@ -221,8 +220,8 @@ func (st *Store) Diff(mc *machines.Machine, dir, path string) (string, error) {
 	q := sshx.Quote(path)
 	script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; base=` + sshx.Quote(base.Head) + `; ` +
 		`if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
-		`if git ls-files --error-unmatch ` + q + ` >/dev/null 2>&1 || git cat-file -e "$base:` + strings.Trim(q, "'") + `" 2>/dev/null; then ` +
-		`git -c color.ui=never -c core.quotepath=off diff "$base" -- ` + q + ` | head -c 600000; ` +
+		`if git ls-files --error-unmatch -- ` + q + ` >/dev/null 2>&1 || git cat-file -e "$base:./"` + q + ` 2>/dev/null; then ` +
+		`git -c color.ui=never -c core.quotepath=off diff --relative "$base" -- ` + q + ` | head -c 600000; ` +
 		`else git -c color.ui=never diff --no-index /dev/null ` + q + ` | head -c 600000; fi; exit 0`
 	return mc.Shell(script, 60*time.Second)
 }
@@ -245,8 +244,11 @@ func (st *Store) MarkSeen(mc *machines.Machine, dir string) (Baseline, error) {
 	st.mu.Lock()
 	st.baselines[key(mc.Cfg.ID, dir)] = b
 	st.badges[key(mc.Cfg.ID, dir)] = Badge{}
-	st.save()
+	err = st.save()
 	st.mu.Unlock()
+	if err != nil {
+		return b, fmt.Errorf("the baseline could not be kept: %w", err)
+	}
 	return b, nil
 }
 
@@ -275,10 +277,11 @@ func (st *Store) Badges(mc *machines.Machine, dirs []string) {
 		if !ok {
 			continue
 		}
-		base, hasBase := against[dir]
-		if hasBase {
-			hasBase = !base.At.IsZero()
+		base, ok := against[dir]
+		if !ok {
+			continue
 		}
+		hasBase := !base.At.IsZero()
 		badge := Badge{}
 		for _, line := range strings.Split(strings.TrimRight(body, "\n"), "\n") {
 			p, h, ok := strings.Cut(line, "\x1f")

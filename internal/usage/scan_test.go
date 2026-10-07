@@ -125,12 +125,24 @@ func TestTrackerReadsOnlyTheGrowth(t *testing.T) {
 	if d.Turns != 4 || d.Tokens.Output != 36 || d.Context != 1100 {
 		t.Fatalf("chained %+v", d)
 	}
+	// a subagent's transcript under the live session counts too
+	subdir := filepath.Join(dir, "s2", "subagents")
+	_ = os.MkdirAll(subdir, 0o755)
+	_ = os.WriteFile(filepath.Join(subdir, "agent-1.jsonl"), []byte(rec("sa1", "claude-haiku-4-5", "2026-10-07T11:30:00Z", 7)), 0o644)
+	tr.mu.Lock()
+	delete(tr.subsChecked, key("local", next))
+	tr.mu.Unlock()
+	tr.Observe(mc, "p1", []string{path, next})
+	d, _ = tr.Display("local", "p1")
+	if d.Turns != 5 || d.Tokens.Output != 43 {
+		t.Fatalf("with a subagent %+v", d)
+	}
 	// a second compaction: the middle file still counts
 	third := filepath.Join(dir, "s3.jsonl")
 	_ = os.WriteFile(third, []byte(rec("m10", "claude-fable-5-1", "2026-10-07T12:00:00Z", 2)), 0o644)
 	tr.Observe(mc, "p1", []string{path, next, third})
 	d, _ = tr.Display("local", "p1")
-	if d.Turns != 5 || d.Tokens.Output != 38 {
+	if d.Turns != 5 || d.Tokens.Output != 38 { // s3's subagents (none) replace s2's in the sum
 		t.Fatalf("twice chained %+v", d)
 	}
 }

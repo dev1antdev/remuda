@@ -46,10 +46,12 @@ Darwin)
 </dict>
 </plist>
 EOF
-        # replace a running instance of the agent (or a stray manual one on the port)
+        # replace a running instance of the agent; a stray herdr-ui on the port is yours to stop
         launchctl bootout "gui/$UID_NUM/$LABEL" 2>/dev/null || true
-        pkill -f "herdr-ui -addr $ADDR" 2>/dev/null || true
         sleep 1
+        if command -v lsof >/dev/null 2>&1 && lsof -ti "tcp:${ADDR##*:}" >/dev/null 2>&1; then
+            echo "something already listens on $ADDR (pid $(lsof -ti "tcp:${ADDR##*:}" | head -1)); stop it first"; exit 1
+        fi
         launchctl bootstrap "gui/$UID_NUM" "$PLIST" 2>/dev/null || launchctl load -w "$PLIST"
         sleep 2
         echo "installed $PLIST"
@@ -62,7 +64,7 @@ EOF
         ;;
     esac
     echo "--- status:"
-    launchctl print "gui/$UID_NUM/$LABEL" 2>/dev/null | grep -E "state =|pid =" | head -2 || echo "not loaded"
+    if launchctl print "gui/$UID_NUM/$LABEL" >/dev/null 2>&1; then launchctl print "gui/$UID_NUM/$LABEL" | grep -E "state =|pid =" | head -2; else echo "not loaded"; fi
     ;;
 Linux)
     UNIT_DIR="$HOME/.config/systemd/user"
@@ -84,9 +86,10 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 EOF
+        loginctl enable-linger "$(id -un)" 2>/dev/null || echo "warning: loginctl enable-linger failed; the service will stop at logout"
         systemctl --user daemon-reload
-        systemctl --user enable --now herdr-ui.service
-        loginctl enable-linger "$(id -un)" 2>/dev/null || true
+        systemctl --user enable herdr-ui.service
+        systemctl --user restart herdr-ui.service # a re-install (make deploy + make service) replaces the running one
         echo "installed $UNIT"
         ;;
     uninstall)

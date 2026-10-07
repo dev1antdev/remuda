@@ -33,6 +33,7 @@ type machineState struct {
 	err     error
 	panes   map[string]paneState
 	started bool
+	pollMu  sync.Mutex // one poll of this machine at a time: a snapshot never lands after a newer one
 }
 
 type Watcher struct {
@@ -95,11 +96,24 @@ func (w *Watcher) loop(mc *machines.Machine) {
 		every = localEvery
 	}
 	var badgesAt time.Time
+	badgesBusy := false // the review sweep is seconds of git over ssh: never on the poll's path
+	var badgesMu sync.Mutex
 	for !mc.Removed() {
 		snap, _ := w.poll(mc)
 		if snap != nil && w.Badges != nil && w.Dirs != nil && time.Since(badgesAt) > time.Minute {
-			badgesAt = time.Now()
-			w.Badges(mc, w.Dirs(snap))
+			badgesMu.Lock()
+			if !badgesBusy {
+				badgesBusy = true
+				badgesAt = time.Now()
+				dirs := w.Dirs(snap)
+				go func() {
+					w.Badges(mc, dirs)
+					badgesMu.Lock()
+					badgesBusy = false
+					badgesMu.Unlock()
+				}()
+			}
+			badgesMu.Unlock()
 		}
 		if snap != nil && w.Usage != nil {
 			w.Usage(mc, snap)
@@ -110,11 +124,17 @@ func (w *Watcher) loop(mc *machines.Machine) {
 	w.mu.Lock()
 	delete(w.states, mc.Cfg.ID)
 	w.mu.Unlock()
+	w.radar.Forget(mc.Cfg.ID)
 }
 
 // poll fetches one snapshot and applies it; the machine's client reports
 // transport failures to the machine itself.
 func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
+	w.mu.Lock()
+	st := w.stateFor(mc.Cfg.ID)
+	w.mu.Unlock()
+	st.pollMu.Lock() // the loop and Refresh may overlap; the RPC and its apply stay in order
+	defer st.pollMu.Unlock()
 	client, _, err := mc.Ready()
 	if err == nil {
 		var snap *herdr.Snapshot
@@ -124,7 +144,7 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 		}
 	}
 	w.mu.Lock()
-	w.stateFor(mc.Cfg.ID).err = err
+	st.err = err
 	w.mu.Unlock()
 	return nil, err
 }
@@ -145,6 +165,7 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 	w.mu.Lock()
 	st := w.stateFor(machineID)
 	seed := st.snap == nil
+	back := st.err != nil // the first good poll after an outage: the gap is not a turn
 	st.snap, st.at, st.err = snap, now, nil
 	seen := map[string]bool{}
 	for i := range snap.Panes {
@@ -156,6 +177,9 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 			continue
 		}
 		if prev.status == p.AgentStatus {
+			if back {
+				st.panes[p.PaneID] = paneState{status: prev.status, since: now}
+			}
 			continue
 		}
 		st.panes[p.PaneID] = paneState{status: p.AgentStatus, since: now}
@@ -198,13 +222,13 @@ func (w *Watcher) Snapshot(machineID string) (*herdr.Snapshot, error) {
 	if st == nil {
 		return nil, errNotWatched
 	}
-	if st.snap != nil && st.err == nil {
-		return st.snap, nil
-	}
 	if st.err != nil {
-		return st.snap, st.err
+		return st.snap, st.err // the last good snapshot, and why there is no newer one
 	}
-	return nil, errNotWatched
+	if st.snap == nil {
+		return nil, errNotWatched
+	}
+	return st.snap, nil
 }
 
 type watchErr string

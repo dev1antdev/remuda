@@ -1,14 +1,16 @@
 package usage
 
 import (
-	"bufio"
 	"bytes"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/dev1antdev/herdr-ui/internal/machines"
+	"github.com/dev1antdev/herdr-ui/internal/sshx"
 	"github.com/dev1antdev/herdr-ui/internal/transcript"
+	"github.com/dev1antdev/herdr-ui/internal/version"
 )
 
 // Display is a pane's meter for the roster: the model, how full its
@@ -30,10 +32,12 @@ type Display struct {
 // appended since the last look — locally from the file, remotely as a
 // `tail -c +N` over ssh — and at most every refreshEvery per file.
 type Tracker struct {
-	mu    sync.Mutex
-	files map[string]*fileState // machine|path
-	panes map[string]string     // machine|pane → path
-	pred  map[string]string     // machine|path → the file it continues
+	mu          sync.Mutex
+	files       map[string]*fileState // machine|path
+	panes       map[string]string     // machine|pane → path
+	pred        map[string]string     // machine|path → the file it continues
+	subs        map[string][]string   // machine|path → its subagent transcripts
+	subsChecked map[string]time.Time  // machine|path → when the subagent folder was last listed
 }
 
 type fileState struct {
@@ -50,7 +54,7 @@ const (
 )
 
 func NewTracker() *Tracker {
-	return &Tracker{files: map[string]*fileState{}, panes: map[string]string{}, pred: map[string]string{}}
+	return &Tracker{files: map[string]*fileState{}, panes: map[string]string{}, pred: map[string]string{}, subs: map[string][]string{}, subsChecked: map[string]time.Time{}}
 }
 
 func key(machineID, s string) string { return machineID + "|" + s }
@@ -73,6 +77,36 @@ func (t *Tracker) Observe(mc *machines.Machine, paneID string, chain []string) {
 	for _, p := range chain[:len(chain)-1] {
 		t.refresh(mc, p, true)
 	}
+	// the session's subagents (<session>/subagents/*.jsonl) spend too: what
+	// Claude Code's own counter shows includes them
+	t.observeSubagents(mc, live)
+}
+
+func (t *Tracker) observeSubagents(mc *machines.Machine, live string) {
+	k := key(mc.Cfg.ID, live)
+	t.mu.Lock()
+	last := t.subsChecked[k]
+	t.mu.Unlock()
+	if time.Since(last) < refreshEvery {
+		return
+	}
+	t.mu.Lock()
+	t.subsChecked[k] = time.Now()
+	t.mu.Unlock()
+	dir := strings.TrimSuffix(live, ".jsonl") + "/subagents"
+	vers, err := mc.DirVersions(dir)
+	if err != nil {
+		return
+	}
+	files := make([]string, 0, len(vers))
+	for p, v := range vers {
+		files = append(files, p)
+		t.read(mc, p, v)
+	}
+	sort.Strings(files)
+	t.mu.Lock()
+	t.subs[k] = files
+	t.mu.Unlock()
 }
 
 func (t *Tracker) refresh(mc *machines.Machine, path string, once bool) {
@@ -88,12 +122,29 @@ func (t *Tracker) refresh(mc *machines.Machine, path string, once bool) {
 		return
 	}
 	st.checked = time.Now()
-	have := st.version
-	offset := st.offset
 	t.mu.Unlock()
 
 	v, err := mc.TranscriptVersion(path)
-	if err != nil || v == have {
+	if err != nil {
+		return
+	}
+	t.read(mc, path, v)
+}
+
+// read brings a file's sum up to version v, reading only what was added
+// since the last look.
+func (t *Tracker) read(mc *machines.Machine, path string, v transcript.Version) {
+	k := key(mc.Cfg.ID, path)
+	t.mu.Lock()
+	st := t.files[k]
+	if st == nil {
+		st = &fileState{}
+		t.files[k] = st
+	}
+	have := st.version
+	offset := st.offset
+	t.mu.Unlock()
+	if v == have {
 		return
 	}
 	reset := false
@@ -123,17 +174,14 @@ func (t *Tracker) refresh(mc *machines.Machine, path string, once bool) {
 	data = data[:cut+1]
 	// parsed outside the lock: a big first read must not hold the roster
 	var recs []transcript.UsageRecord
-	sc := bufio.NewScanner(bytes.NewReader(data))
-	sc.Buffer(make([]byte, 64*1024), 64*1024*1024)
-	for sc.Scan() {
-		line := sc.Bytes()
+	_ = transcript.Lines(bytes.NewReader(data), 64*1024*1024, func(line []byte) {
 		if !bytes.Contains(line, []byte(`"usage"`)) {
-			continue
+			return
 		}
-		if r, ok := transcript.UsageOf(line); ok && !r.Sidechain {
+		if r, ok := transcript.UsageOf(line); ok { // sidechains spend too
 			recs = append(recs, r)
 		}
-	}
+	})
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if reset {
@@ -171,8 +219,12 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 	} else {
 		d.Unknown = true
 	}
-	// the files this one continues
+	// the files this one continues, and the subagents of the live one
+	more := t.subs[key(machineID, path)]
 	for p, n := t.pred[key(machineID, path)], 0; p != "" && n < 8; p, n = t.pred[key(machineID, p)], n+1 {
+		more = append(more, p)
+	}
+	for _, p := range more {
 		if ps := t.files[key(machineID, p)]; ps != nil {
 			a, _ := ps.acc.Sum()
 			d.Cost += a.Cost
@@ -185,13 +237,13 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 }
 
 // Script runs the report on a remote machine through its own herdr-ui.
-func Script(home string, since time.Time, tz, version string) string {
-	q := func(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
-	bin := q(home + "/.local/bin/herdr-ui")
+func Script(home string, since time.Time, tz string) string {
+	q := sshx.Quote
+	bin, guard := sshx.VersionedBin(home, version.Build)
 	tzFlag := ""
 	if tz != "" {
 		tzFlag = " -tz " + q(tz)
 	}
-	return "if [ -x " + bin + " ] && [ \"$(" + bin + " -version 2>/dev/null)\" = " + q("herdr-ui "+version) + " ]; then " +
-		bin + " usage -since " + q(since.UTC().Format(time.RFC3339)) + tzFlag + "; else echo 'no herdr-ui of this version on the machine (make deploy)' >&2; exit 3; fi"
+	return "if " + guard + "; then " + bin + " usage -since " + q(since.UTC().Format(time.RFC3339)) + tzFlag +
+		"; else echo 'no herdr-ui of this version on the machine (make deploy)' >&2; exit 3; fi"
 }

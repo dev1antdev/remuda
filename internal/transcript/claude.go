@@ -32,11 +32,10 @@ type Part struct {
 
 // Turn is one chat turn. Adjacent assistant records merge into one turn.
 type Turn struct {
-	Role   string   `json:"role"` // user | assistant
-	Ts     string   `json:"ts,omitempty"`
-	LastTs string   `json:"-"`             // the last merged record's time
-	IDs    []string `json:"ids,omitempty"` // the records merged into it, for a search jump
-	Parts  []Part   `json:"parts"`
+	Role  string   `json:"role"` // user | assistant
+	Ts    string   `json:"ts,omitempty"`
+	IDs   []string `json:"ids,omitempty"` // the records merged into it, for a search jump
+	Parts []Part   `json:"parts"`
 }
 
 // SessionInfo describes one session file for the picker.
@@ -158,23 +157,29 @@ func scanTitle(path string) (title string, final bool) {
 		return "", false
 	}
 	defer f.Close()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 64*1024), 8*1024*1024)
-	first := ""
+	first, title := "", ""
 	n := 0
-	for ; sc.Scan() && n < titleScanLines; n++ {
+	_ = Lines(f, 8*1024*1024, func(line []byte) {
+		if title != "" || n >= titleScanLines {
+			return
+		}
+		n++
 		var rec record
-		if json.Unmarshal(sc.Bytes(), &rec) != nil {
-			continue
+		if json.Unmarshal(line, &rec) != nil {
+			return
 		}
 		if rec.AiTitle != "" {
-			return rec.AiTitle, true
+			title = rec.AiTitle
+			return
 		}
 		if first == "" && rec.Type == "user" && !rec.IsMeta {
 			if t := plainUserText(rec.Message); t != "" {
 				first = truncate(t, 80)
 			}
 		}
+	})
+	if title != "" {
+		return title, true
 	}
 	return first, n >= titleScanLines
 }
@@ -212,6 +217,51 @@ type Version struct {
 
 // String is the HTTP ETag form.
 func (v Version) String() string { return fmt.Sprintf("%d-%d", v.Size, v.MTime) }
+
+// Time is the modification time: nanoseconds from a local stat, seconds
+// from a remote one.
+func (v Version) Time() time.Time {
+	if v.MTime > 1e12 {
+		return time.Unix(0, v.MTime)
+	}
+	return time.Unix(v.MTime, 0)
+}
+
+// Lines calls fn for every line of r (without the newline). A line longer
+// than max is dropped whole — and the rest of the file still arrives,
+// where a bufio.Scanner would have stopped at it in silence.
+func Lines(r io.Reader, max int, fn func(line []byte)) error {
+	br := bufio.NewReaderSize(r, 64*1024)
+	var acc []byte
+	skipping := false
+	for {
+		chunk, err := br.ReadSlice('\n')
+		if len(chunk) > 0 && !skipping {
+			if len(acc)+len(chunk) > max {
+				skipping = true
+				acc = acc[:0]
+			} else {
+				acc = append(acc, chunk...)
+			}
+		}
+		switch {
+		case err == nil:
+			if !skipping {
+				fn(bytes.TrimSuffix(acc, []byte("\n")))
+			}
+			acc, skipping = acc[:0], false
+		case err == bufio.ErrBufferFull:
+			continue
+		case err == io.EOF:
+			if len(acc) > 0 && !skipping {
+				fn(acc)
+			}
+			return nil
+		default:
+			return err
+		}
+	}
+}
 
 // Stat reads the local file's version.
 func Stat(path string) (Version, error) {
@@ -281,9 +331,6 @@ func ParseBytes(data []byte) ([]Turn, error) {
 }
 
 func parseStream(r io.Reader) ([]Turn, error) {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
-
 	var turns []Turn
 	// tool_use id -> where its part sits; indexes, not pointers, because a
 	// later append to the same turn reallocates Parts
@@ -297,32 +344,30 @@ func parseStream(r io.Reader) ([]Turn, error) {
 		if n > 0 && turns[n-1].Role == role {
 			t := &turns[n-1]
 			t.Parts = append(t.Parts, p)
-			t.LastTs = ts
 			if uuid != "" && t.IDs[len(t.IDs)-1] != uuid {
 				t.IDs = append(t.IDs, uuid)
 			}
 			return
 		}
-		turns = append(turns, Turn{Role: role, Ts: ts, LastTs: ts, IDs: []string{uuid}, Parts: []Part{p}})
+		turns = append(turns, Turn{Role: role, Ts: ts, IDs: []string{uuid}, Parts: []Part{p}})
 	}
 
-	for sc.Scan() {
-		line := sc.Bytes()
+	err := Lines(r, 16*1024*1024, func(line []byte) {
 		if len(line) == 0 {
-			continue
+			return
 		}
 		var rec record
 		if json.Unmarshal(line, &rec) != nil {
-			continue
+			return
 		}
 		if rec.IsSidechain || rec.IsMeta || rec.IsAPIError {
-			continue
+			return
 		}
 		switch rec.Type {
 		case "user":
 			var msg apiMessage
 			if json.Unmarshal(rec.Message, &msg) != nil {
-				continue
+				return
 			}
 			for _, b := range blocks(msg.Content) {
 				switch b.Type {
@@ -353,7 +398,7 @@ func parseStream(r io.Reader) ([]Turn, error) {
 		case "assistant":
 			var msg apiMessage
 			if json.Unmarshal(rec.Message, &msg) != nil {
-				continue
+				return
 			}
 			for _, b := range blocks(msg.Content) {
 				switch b.Type {
@@ -377,8 +422,8 @@ func parseStream(r io.Reader) ([]Turn, error) {
 				}
 			}
 		}
-	}
-	return turns, nil
+	})
+	return turns, err
 }
 
 // ---- search ----
@@ -611,14 +656,13 @@ func hasRecord(path, uuid string) bool {
 			return false
 		}
 	}
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
-	for sc.Scan() {
-		if bytes.Contains(sc.Bytes(), needle) {
-			return true
+	found := false
+	_ = Lines(f, 16*1024*1024, func(line []byte) {
+		if !found && bytes.Contains(line, needle) {
+			found = true
 		}
-	}
-	return false
+	})
+	return found
 }
 
 // Continuation returns the newer session file in path's folder that
@@ -655,6 +699,38 @@ func Continuation(path string) string {
 		}
 	}
 	return ""
+}
+
+// Predecessor is the older file in path's folder that path continues —
+// the one holding the record path's first parentUuid names — or "".
+func Predecessor(path string) string {
+	parent := firstParent(path)
+	if parent == "" {
+		return ""
+	}
+	dir := filepath.Dir(path)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		p := filepath.Join(dir, e.Name())
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") || p == path {
+			continue
+		}
+		if hasRecord(p, parent) {
+			return p
+		}
+	}
+	return ""
+}
+
+// PredecessorScript is Predecessor as a POSIX shell one-liner, for a
+// remote machine: prints the older file, or nothing.
+func PredecessorScript(quotedPath string) string {
+	return `new=` + quotedPath + `; dir=$(dirname "$new"); ` +
+		`p=$(head -c 65536 "$new" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$p" ] || exit 0; ` +
+		`for f in "$dir"/*.jsonl; do [ "$f" = "$new" ] && continue; if grep -q "\"uuid\":\"$p\"" "$f" 2>/dev/null; then printf %s "$f"; exit 0; fi; done`
 }
 
 // ContinuationScript is the same search as a POSIX shell one-liner, for a

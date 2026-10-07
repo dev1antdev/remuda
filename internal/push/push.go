@@ -56,7 +56,7 @@ type Payload struct {
 	Title   string   `json:"title"`
 	Body    string   `json:"body"`
 	Tag     string   `json:"tag"`
-	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop
+	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop | schedule | task
 	Actions []Action `json:"actions,omitempty"`
 }
 
@@ -135,7 +135,8 @@ func (s *Service) loadSubs() {
 		return
 	}
 	var list []*Subscription
-	if json.Unmarshal(b, &list) != nil {
+	if err := json.Unmarshal(b, &list); err != nil {
+		log.Printf("push-subscriptions.json is unreadable (%v): every device must enable alerts again", err)
 		return
 	}
 	for _, sub := range list {
@@ -303,14 +304,19 @@ type Event struct {
 // is the proxy for presence.
 func (s *Service) OnStatus(ev Event) {
 	key := ev.Pane
+	// cancel and schedule under one lock: two changes of the same pane
+	// arriving together must not leave a timer the later one meant to kill
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, t := range s.timers[key] {
 		t.Stop()
 	}
 	delete(s.timers, key)
-	s.mu.Unlock()
 
-	subs := s.list()
+	subs := make([]*Subscription, 0, len(s.subs))
+	for _, sub := range s.subs {
+		subs = append(subs, sub)
+	}
 	if len(subs) == 0 {
 		return
 	}
@@ -396,9 +402,7 @@ func (s *Service) OnStatus(ev Event) {
 		return
 	}
 	if len(pending) > 0 {
-		s.mu.Lock()
 		s.timers[key] = pending
-		s.mu.Unlock()
 	}
 }
 

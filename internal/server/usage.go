@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,7 +9,6 @@ import (
 	"time"
 
 	"github.com/dev1antdev/herdr-ui/internal/machines"
-	"github.com/dev1antdev/herdr-ui/internal/search"
 	"github.com/dev1antdev/herdr-ui/internal/usage"
 )
 
@@ -30,6 +28,8 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 	if tz != "" {
 		if l, err := time.LoadLocation(tz); err == nil {
 			loc = l
+		} else {
+			tz = "" // an unknown zone: every machine falls back the same way
 		}
 	}
 	if tz == "" && loc.String() != "Local" {
@@ -68,7 +68,7 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 					pm.Report = &rep
 				}
 			} else {
-				raw, err := mc.Shell(usage.Script(mc.Home(), since, tz, search.Version), 90*time.Second)
+				raw, err := mc.Shell(usage.Script(mc.Home(), since, tz), 90*time.Second)
 				var rep usage.Report
 				switch {
 				case err != nil:
@@ -90,5 +90,3 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{"since": since.UTC().Format(time.RFC3339), "days": days, "machines": out})
 }
-
-var _ = errors.New

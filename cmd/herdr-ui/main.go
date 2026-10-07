@@ -32,7 +32,9 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/server"
 	"github.com/dev1antdev/herdr-ui/internal/state"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
+	"github.com/dev1antdev/herdr-ui/internal/transcript"
 	"github.com/dev1antdev/herdr-ui/internal/usage"
+	buildversion "github.com/dev1antdev/herdr-ui/internal/version"
 	"github.com/dev1antdev/herdr-ui/internal/watch"
 	"github.com/dev1antdev/herdr-ui/internal/watchdog"
 	"github.com/dev1antdev/herdr-ui/web"
@@ -44,7 +46,7 @@ var version = "dev"
 func main() {
 	// `herdr-ui search`: the transcript scanner, run over ssh on a remote
 	// machine by the herdr-ui that serves the search (see internal/search)
-	search.Version = version
+	buildversion.Build = version
 	if len(os.Args) > 1 && os.Args[1] == "search" {
 		searchCmd(os.Args[2:])
 		return
@@ -127,10 +129,7 @@ func main() {
 		if err != nil {
 			return time.Time{}, false
 		}
-		if v.MTime > 1e12 { // nanoseconds from a local stat, seconds from a remote one
-			return time.Unix(0, v.MTime), true
-		}
-		return time.Unix(v.MTime, 0), true
+		return v.Time(), true
 	}
 	tracker := radar.New(dir, func(machineID string, p *herdr.PaneInfo) time.Time {
 		at, _ := lastWrite(machineID, p)
@@ -160,38 +159,72 @@ func main() {
 				if err != nil {
 					continue
 				}
-				meter.Observe(mc, p.PaneID, mc.ContinuationChain(orig))
+				// the whole conversation: what came before this file (a
+				// compaction's old file) and what came after
+				chain := mc.ContinuationChain(orig)
+				for n := 0; n < 8; n++ {
+					pred := mc.Predecessor(chain[0])
+					if pred == "" {
+						break
+					}
+					chain = append([]string{pred}, chain...)
+				}
+				meter.Observe(mc, p.PaneID, chain)
 			}
 		}()
 	}
 	watcher.Start()
 
 	// the watchdog: a minute apart, over the radar's episodes
-	paneOf := func(machineID, paneID string) *herdr.PaneInfo {
+	paneAndSnap := func(machineID, paneID string) (*herdr.PaneInfo, *herdr.Snapshot) {
 		snap, _ := watcher.Snapshot(machineID)
 		if snap == nil {
-			return nil
+			return nil, nil
 		}
 		for i := range snap.Panes {
 			if snap.Panes[i].PaneID == paneID {
-				return &snap.Panes[i]
+				return &snap.Panes[i], snap
 			}
 		}
-		return nil
+		return nil, snap
+	}
+	paneOf := func(machineID, paneID string) *herdr.PaneInfo {
+		p, _ := paneAndSnap(machineID, paneID)
+		return p
+	}
+	// the agent's latest turn in a pane's transcript, for the watchdog's
+	// loop check and the task runs' answers
+	lastTurn := func(machineID, paneID string) (transcript.Turn, bool) {
+		p := paneOf(machineID, paneID)
+		if p == nil {
+			return transcript.Turn{}, false
+		}
+		mc, path, ok := sessionFile(machineID, p)
+		if !ok {
+			return transcript.Turn{}, false
+		}
+		v, err := mc.TranscriptVersion(path)
+		if err != nil {
+			return transcript.Turn{}, false
+		}
+		turns, err := mc.Transcript(path, v)
+		if err != nil || len(turns) == 0 {
+			return transcript.Turn{}, false
+		}
+		last := turns[len(turns)-1]
+		return last, last.Role == "assistant"
 	}
 	wd := watchdog.New(watchdog.Inputs{
 		Episodes: tracker.Episodes,
 		Pane: func(machineID, paneID string) (watchdog.PaneInfo, bool) {
-			p := paneOf(machineID, paneID)
+			p, snap := paneAndSnap(machineID, paneID)
 			if p == nil {
 				return watchdog.PaneInfo{}, false
 			}
 			label := ""
-			if snap, _ := watcher.Snapshot(machineID); snap != nil {
-				for _, ws := range snap.Workspaces {
-					if ws.WorkspaceID == p.WorkspaceID {
-						label = ws.Label
-					}
+			for _, ws := range snap.Workspaces {
+				if ws.WorkspaceID == p.WorkspaceID {
+					label = ws.Label
 				}
 			}
 			return watchdog.PaneInfo{Title: p.DisplayTitle(), Workspace: label, Agent: p.AgentName()}, true
@@ -204,24 +237,8 @@ func main() {
 			return lastWrite(machineID, p)
 		},
 		LastTools: func(machineID, paneID string, n int) []string {
-			p := paneOf(machineID, paneID)
-			if p == nil {
-				return nil
-			}
-			mc, path, ok := sessionFile(machineID, p)
+			last, ok := lastTurn(machineID, paneID)
 			if !ok {
-				return nil
-			}
-			v, err := mc.TranscriptVersion(path)
-			if err != nil {
-				return nil
-			}
-			turns, err := mc.Transcript(path, v)
-			if err != nil || len(turns) == 0 {
-				return nil
-			}
-			last := turns[len(turns)-1]
-			if last.Role != "assistant" {
 				return nil
 			}
 			var out []string
@@ -249,10 +266,10 @@ func main() {
 	runs := &tasks.RunWatch{
 		Store: taskStore,
 		PaneState: func(machineID, paneID string) (string, time.Time, bool) {
-			if snap, _ := watcher.Snapshot(machineID); snap == nil {
+			p, snap := paneAndSnap(machineID, paneID)
+			if snap == nil {
 				return "unknown", time.Time{}, true // not seen yet (a restart, a reconnect): not gone
 			}
-			p := paneOf(machineID, paneID)
 			if p == nil {
 				return "", time.Time{}, false
 			}
@@ -263,24 +280,8 @@ func main() {
 		// tool call (a turn ending in a tool call is a stop, not an answer),
 		// and the record it ended with
 		LastAnswer: func(machineID, paneID string) (string, string) {
-			p := paneOf(machineID, paneID)
-			if p == nil {
-				return "", ""
-			}
-			mc, path, ok := sessionFile(machineID, p)
-			if !ok {
-				return "", ""
-			}
-			v, err := mc.TranscriptVersion(path)
-			if err != nil {
-				return "", ""
-			}
-			turns, err := mc.Transcript(path, v)
-			if err != nil || len(turns) == 0 {
-				return "", ""
-			}
-			last := turns[len(turns)-1]
-			if last.Role != "assistant" || len(last.IDs) == 0 {
+			last, ok := lastTurn(machineID, paneID)
+			if !ok || len(last.IDs) == 0 {
 				return "", ""
 			}
 			var texts []string
@@ -299,12 +300,10 @@ func main() {
 		Notify: pushSvc.Notify,
 	}
 	go runs.Loop(15 * time.Second)
-	s := server.New(mgr, watcher, pushSvc, taskStore, code.New(*codePort), reviews, tracker, auth.NewGuard(token), ui)
-	s.Usage = meter
+	s := server.New(mgr, watcher, pushSvc, taskStore, code.New(*codePort), reviews, tracker, quick.New(dir), meter, auth.NewGuard(token), ui)
 	// schedules: prompts on a timetable, delivered through the server's own
 	// submit path to the agent in a folder
 	s.Schedules = schedule.New(dir, s.SubmitToFolder, pushSvc.Notify)
-	s.Quick = quick.New(dir)
 	go s.Schedules.Loop()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

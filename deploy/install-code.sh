@@ -37,12 +37,13 @@ install_release() {
         echo "code-server $VERSION already at $DEST"
     else
         [ -n "$SHA" ] || { echo "no known checksum for code-server $VERSION $ASSET — set CODE_SHA256"; exit 1; }
-        TGZ="$(mktemp -t code-server.XXXXXX).tar.gz"
+        TGZ="$(mktemp -t code-server.XXXXXX)"
+        trap 'rm -f "$TGZ"' EXIT
         URL="https://github.com/coder/code-server/releases/download/v$VERSION/code-server-$VERSION-$ASSET.tar.gz"
         echo "downloading $URL"
         curl -fsSL -o "$TGZ" "$URL"
-        GOT="$(shasum -a 256 "$TGZ" 2>/dev/null | cut -d' ' -f1 || sha256sum "$TGZ" | cut -d' ' -f1)"
-        [ "$GOT" = "$SHA" ] || { echo "checksum mismatch: got $GOT, want $SHA"; rm -f "$TGZ"; exit 1; }
+        if command -v shasum >/dev/null 2>&1; then GOT=$(shasum -a 256 "$TGZ" | cut -d' ' -f1); else GOT=$(sha256sum "$TGZ" | cut -d' ' -f1); fi
+        [ "$GOT" = "$SHA" ] || { echo "checksum mismatch: got $GOT, want $SHA"; exit 1; }
         mkdir -p "$OPT"
         rm -rf "$DEST.tmp"; mkdir -p "$DEST.tmp"
         tar -xzf "$TGZ" -C "$DEST.tmp" --strip-components=1
@@ -127,7 +128,7 @@ EOF
         ;;
     esac
     echo "--- status:"
-    launchctl print "gui/$UID_NUM/$LABEL" 2>/dev/null | grep -E "state =|pid =" | head -2 || echo "not loaded"
+    if launchctl print "gui/$UID_NUM/$LABEL" >/dev/null 2>&1; then launchctl print "gui/$UID_NUM/$LABEL" | grep -E "state =|pid =" | head -2; else echo "not loaded"; fi
     ;;
 Linux)
     UNIT_DIR="$HOME/.config/systemd/user"
@@ -150,9 +151,11 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 EOF
+        # linger first: it is what brings the user manager up on a host reached only over ssh
+        loginctl enable-linger "$(id -un)" 2>/dev/null || echo "warning: loginctl enable-linger failed; the service will stop at logout"
         systemctl --user daemon-reload
-        systemctl --user enable --now code-server.service
-        loginctl enable-linger "$(id -un)" 2>/dev/null || true
+        systemctl --user enable code-server.service
+        systemctl --user restart code-server.service # a re-install replaces a running one too
         echo "installed $UNIT"
         ;;
     uninstall)

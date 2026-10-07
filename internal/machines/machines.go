@@ -65,6 +65,7 @@ type Machine struct {
 	codeFwd *tcpForward // the forward to the machine's code-server, once asked for
 
 	contPath map[string]contCheck // session file -> its continuation (if any), as last looked
+	predPath map[string]string    // session file -> the file it continues ("" when none)
 }
 
 type contCheck struct {
@@ -99,6 +100,7 @@ type Manager struct {
 	order    []string
 	path     string // machines.json
 	herdrBin string
+	saveMu   sync.Mutex // writes of machines.json, one at a time
 }
 
 // NewManager builds the registry: the local machine plus whatever
@@ -139,6 +141,8 @@ func (m *Manager) load() []Config {
 
 // save persists the manually added machines; herdr's own stay in herdr.
 func (m *Manager) save() error {
+	m.saveMu.Lock() // one save at a time, in order: a later Add must not lose to an earlier write
+	defer m.saveMu.Unlock()
 	m.mu.Lock()
 	cfgs := []Config{}
 	for _, id := range m.order {
@@ -187,12 +191,51 @@ func (m *Manager) SyncHerdr() {
 	if json.Unmarshal(out, &list) != nil {
 		return
 	}
+	live := map[string]bool{}
 	for _, h := range list {
-		if !h.Enabled || h.ID == "" || !hostRe.MatchString(h.Target) || m.has(h.ID) || m.hasHost(h.Target) {
+		if !h.Enabled || h.ID == "" || !hostRe.MatchString(h.Target) {
+			continue
+		}
+		live[h.ID] = true
+		if m.has(h.ID) || m.hasHost(h.Target) {
 			continue
 		}
 		m.add(Config{ID: h.ID, Label: h.Label, Host: h.Target, Source: SourceHerdr})
 	}
+	// one herdr no longer lists (removed, or disabled) goes here too
+	m.mu.Lock()
+	var gone []string
+	for id, mc := range m.machines {
+		if mc.Cfg.Source == SourceHerdr && !live[id] {
+			gone = append(gone, id)
+		}
+	}
+	m.mu.Unlock()
+	for _, id := range gone {
+		m.drop(id)
+	}
+}
+
+// drop takes a machine out of the registry and ends its connection; its
+// watcher loop and pollers stop on their own.
+func (m *Manager) drop(id string) *Machine {
+	m.mu.Lock()
+	mc := m.machines[id]
+	delete(m.machines, id)
+	for i, oid := range m.order {
+		if oid == id {
+			m.order = append(m.order[:i], m.order[i+1:]...)
+			break
+		}
+	}
+	m.mu.Unlock()
+	if mc != nil {
+		mc.mu.Lock()
+		mc.removed = true
+		mc.mu.Unlock()
+		mc.fail(fmt.Errorf("removed"))
+	}
+	return mc
 }
 
 func (m *Manager) has(id string) bool {
@@ -251,21 +294,10 @@ func (m *Manager) Remove(id string) error {
 		m.mu.Unlock()
 		return fmt.Errorf("%s comes from herdr's machine list — remove it with `herdr machine remove`", mc.Cfg.Label)
 	}
-	delete(m.machines, id)
-	for i, oid := range m.order {
-		if oid == id {
-			m.order = append(m.order[:i], m.order[i+1:]...)
-			break
-		}
-	}
 	m.mu.Unlock()
-	if mc == nil {
+	if m.drop(id) == nil {
 		return fmt.Errorf("machine %q not found", id)
 	}
-	mc.mu.Lock()
-	mc.removed = true
-	mc.mu.Unlock()
-	mc.fail(fmt.Errorf("removed"))
 	return m.save()
 }
 
@@ -352,9 +384,14 @@ func (mc *Machine) connect() {
 
 	// one round trip: home, then the herdr binary (non-interactive ssh often
 	// misses ~/.local/bin in PATH)
-	out, err := conn.Exec(`printf '%s\n' "$HOME"; command -v herdr 2>/dev/null || `+
-		`for p in "$HOME/.local/bin/herdr" /opt/homebrew/bin/herdr /usr/local/bin/herdr /usr/bin/herdr; do [ -x "$p" ] && printf '%s\n' "$p" && break; done`,
-		10*time.Second)
+	// the script ends true, so a missing binary is a blank line, not a
+	// failed exec; a configured herdr_bin skips the search
+	probe := `printf '%s\n' "$HOME"`
+	if mc.Cfg.HerdrBin == "" {
+		probe += `; command -v herdr 2>/dev/null || ` +
+			`for p in "$HOME/.local/bin/herdr" /opt/homebrew/bin/herdr /usr/local/bin/herdr /usr/bin/herdr; do [ -x "$p" ] && printf '%s\n' "$p" && break; done; true`
+	}
+	out, err := conn.Exec(probe, 10*time.Second)
 	if err != nil {
 		bail(fmt.Errorf("cannot read remote $HOME: %v", err))
 		return
@@ -367,7 +404,7 @@ func (mc *Machine) connect() {
 	}
 	bin := mc.Cfg.HerdrBin
 	if bin == "" {
-		bin = strings.TrimSpace(strings.Split(binLine, "\n")[0])
+		bin, _, _ = strings.Cut(strings.TrimSpace(binLine), "\n")
 	}
 	if bin == "" {
 		bail(fmt.Errorf("herdr not found on %s (set herdr_bin in machines.json)", mc.Cfg.Host))
@@ -439,12 +476,12 @@ func rpcClient(conn *sshx.Conn, sock string) (*herdr.Client, error) {
 func (mc *Machine) transportError(err error) {
 	mc.mu.Lock()
 	conn := mc.conn
-	recent := time.Since(mc.lastAlive) < 5*time.Second
-	mc.lastAlive = time.Now()
-	mc.mu.Unlock()
-	if conn == nil || recent {
+	if conn == nil || time.Since(mc.lastAlive) < 5*time.Second {
+		mc.mu.Unlock()
 		return
 	}
+	mc.lastAlive = time.Now() // stamped only when a check actually runs
+	mc.mu.Unlock()
 	if !conn.Alive() {
 		mc.fail(fmt.Errorf("connection lost: %v", err))
 	}
@@ -498,6 +535,32 @@ func (mc *Machine) ContinuationChain(path string) []string {
 		path = next
 	}
 	return chain
+}
+
+// Predecessor is the file a session file continues (after a compaction
+// the conversation went on in a new file; this finds the old one), cached
+// for good — the past does not move. "" when there is none.
+func (mc *Machine) Predecessor(path string) string {
+	mc.mu.Lock()
+	p, ok := mc.predPath[path]
+	mc.mu.Unlock()
+	if ok {
+		return p
+	}
+	if mc.Local {
+		p = transcript.Predecessor(path)
+	} else if out, err := mc.exec(transcript.PredecessorScript(sshx.Quote(path)), 30*time.Second); err == nil {
+		p = strings.TrimSpace(out)
+	} else {
+		return "" // not cached: asked again next time
+	}
+	mc.mu.Lock()
+	if mc.predPath == nil {
+		mc.predPath = map[string]string{}
+	}
+	mc.predPath[path] = p
+	mc.mu.Unlock()
+	return p
 }
 
 // nextContinuation is one hop, cached for a minute.
@@ -612,6 +675,47 @@ func (mc *Machine) TranscriptVersion(path string) (transcript.Version, error) {
 	return v, nil
 }
 
+// DirVersions is the size and mtime of every .jsonl file directly in dir —
+// a session's subagent transcripts — in one round trip; a missing dir is
+// an empty map.
+func (mc *Machine) DirVersions(dir string) (map[string]transcript.Version, error) {
+	out := map[string]transcript.Version{}
+	if mc.Local {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return out, nil
+			}
+			return nil, err
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+				continue
+			}
+			if info, err := e.Info(); err == nil {
+				out[filepath.Join(dir, e.Name())] = transcript.Version{Size: info.Size(), MTime: info.ModTime().UnixNano()}
+			}
+		}
+		return out, nil
+	}
+	q := sshx.Quote(dir)
+	script := `[ -d ` + q + ` ] || exit 0; for f in ` + q + `/*.jsonl; do [ -f "$f" ] || continue; stat -c '%s %Y %n' "$f" 2>/dev/null || stat -f '%z %m %N' "$f"; done`
+	raw, err := mc.exec(script, 20*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	for _, line := range strings.Split(strings.TrimRight(raw, "\n"), "\n") {
+		var v transcript.Version
+		rest := ""
+		if n, _ := fmt.Sscanf(line, "%d %d %s", &v.Size, &v.MTime, &rest); n == 3 {
+			// the path may hold spaces: everything after the two numbers
+			parts := strings.SplitN(line, " ", 3)
+			out[parts[2]] = v
+		}
+	}
+	return out, nil
+}
+
 // Transcript parses the session file at the given version — locally straight
 // from disk, remotely from a cached tail that grows by delta.
 func (mc *Machine) Transcript(path string, v transcript.Version) ([]transcript.Turn, error) {
@@ -635,18 +739,21 @@ func (mc *Machine) remoteTail(path string, v transcript.Version) ([]byte, error)
 		return cached.data, nil
 	}
 
+	// every read is cut at the size the stat saw: the agent may have written
+	// more since, and that part belongs to the next version
 	q := sshx.Quote(path)
 	var data []byte
 	if cached != nil && v.Size > cached.version.Size {
 		// grew: fetch the delta only (tail -c +N is 1-indexed)
-		if delta, err := mc.execBytes(fmt.Sprintf("tail -c +%d %s", cached.version.Size+1, q), 30*time.Second); err == nil {
-			data = append(cached.data, delta...)
+		delta, err := mc.execBytes(fmt.Sprintf("tail -c +%d %s | head -c %d", cached.version.Size+1, q, v.Size-cached.version.Size), 30*time.Second)
+		if err == nil {
+			data = append(cached.data[:len(cached.data):len(cached.data)], delta...) // the cached slice is shared: copy
 		}
 	}
 	if data == nil {
 		fetch := min(v.Size, remoteTailCap)
 		var err error
-		if data, err = mc.execBytes(fmt.Sprintf("tail -c %d %s", fetch, q), 60*time.Second); err != nil {
+		if data, err = mc.execBytes(fmt.Sprintf("head -c %d %s | tail -c %d", v.Size, q, fetch), 60*time.Second); err != nil {
 			return nil, err
 		}
 	}

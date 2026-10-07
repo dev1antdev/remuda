@@ -199,7 +199,7 @@ SPA. See README.md for the user story.
   (`push.Notify`, pref `watchdog`, default on) with a reminder every 30
   min; the notification carries `actions` — Open, and **Send Esc**, which
   the service worker posts to `/api/keys` itself.
-- `internal/schedule/` — prompts to agents on a timetable. A schedule names
+- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — prompts to agents on a timetable. A schedule names
   a machine and a **folder** (panes come and go; the project stays), a
   five-field cron in the server's local time (`Parse`/`Matches`/`Next`,
   tested), the prompt, and a switch. `Tick` every 30s fires what matches
@@ -248,8 +248,9 @@ SPA. See README.md for the user story.
   machine, and a first read over 64 MB takes the tail only, `partial`);
   the roster pane carries `usage{model,name,context,window,cost,turns,
   tokens}` — context = the last response's input + cache tokens.
-  Sidechain records are not counted there (subagents cost in the report,
-  not in a pane's meter). **Report**: `Scan` (`GET /api/usage?days=&machine=
+  The live session's `<session>/subagents/*.jsonl` (listed in one round
+  trip, `Machine.DirVersions`) and sidechain records count toward the pane
+  too — the number should agree with Claude Code's own. **Report**: `Scan` (`GET /api/usage?days=&machine=
   &tz=`, since = a local midnight) walks `~/.claude/projects` for files
   written since, subagent files count toward their session, per day in
   the viewer's zone, per project/model/session; remotely the deployed
@@ -299,8 +300,9 @@ SPA. See README.md for the user story.
   any other question of the agent's gets one push and waits; five minutes
   → `failed`. `tasks.RunWatch` (wired in main, every 15 s, injected
   radar/transcript/push) turns every finish — the pane not working and the
-  agent's last turn after the prompt (30 s clock slack) and after the last
-  one reported — into a comment by "agent" plus a push; a pane gone two
+  agent's latest turn ending in text, a record not reported yet (a fresh
+  session has no turn before the prompt) — into a comment by "agent" plus
+  a push; a pane gone two
   minutes → `gone`. Done takes the label off. `comments` are markdown;
   the UI re-reads an open task every 10 s while a run is live.
 - `internal/auth/` — single bearer token; HttpOnly cookie; no accounts.

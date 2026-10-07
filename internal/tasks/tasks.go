@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
-	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,7 +23,12 @@ const file = "tasks.db"
 // PageSize is how many tasks a page of the list holds.
 const PageSize = 50
 
-var ErrNotFound = errors.New("not found")
+var (
+	ErrNotFound = errors.New("not found")
+	ErrInvalid  = errors.New("invalid") // a request that cannot be honoured; the message says why
+)
+
+func invalid(msg string) error { return fmt.Errorf("%w: %s", ErrInvalid, msg) }
 
 type Project struct {
 	ID          int64   `json:"id"`
@@ -272,7 +277,7 @@ func (st *Store) Project(id int64) (Project, error) {
 func (st *Store) CreateProject(title string, parent int64) (Project, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
-		return Project{}, errors.New("a project needs a name")
+		return Project{}, invalid("a project needs a name")
 	}
 	if parent != 0 {
 		if _, err := st.Project(parent); err != nil {
@@ -297,7 +302,7 @@ func (st *Store) UpdateProject(id int64, p ProjectPatch) (Project, error) {
 	}
 	if p.Title != nil {
 		if cur.Title = strings.TrimSpace(*p.Title); cur.Title == "" {
-			return cur, errors.New("a project needs a name")
+			return cur, invalid("a project needs a name")
 		}
 	}
 	if p.Description != nil {
@@ -307,13 +312,16 @@ func (st *Store) UpdateProject(id int64, p ProjectPatch) (Project, error) {
 		cur.HexColor = strings.TrimPrefix(strings.TrimSpace(*p.HexColor), "#")
 	}
 	if p.ParentID != nil {
-		if *p.ParentID == id {
-			return cur, errors.New("a project cannot be inside itself")
-		}
-		if *p.ParentID != 0 {
-			if _, err := st.Project(*p.ParentID); err != nil {
+		// not itself, and not one of its own descendants
+		for pid := *p.ParentID; pid != 0; {
+			if pid == id {
+				return cur, invalid("a project cannot be inside itself")
+			}
+			parent, err := st.Project(pid)
+			if err != nil {
 				return cur, fmt.Errorf("parent project: %w", err)
 			}
+			pid = parent.ParentID
 		}
 		cur.ParentID = *p.ParentID
 	}
@@ -377,7 +385,7 @@ func (st *Store) Labels() ([]Label, error) {
 func (st *Store) CreateLabel(title, hexColor string) (Label, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
-		return Label{}, errors.New("a label needs a name")
+		return Label{}, invalid("a label needs a name")
 	}
 	all, err := st.Labels()
 	if err != nil {
@@ -407,12 +415,27 @@ func (st *Store) DeleteLabel(id int64) error {
 	return nil
 }
 
+// exists is Get as a yes/no: no labels, runs or comments loaded.
+func (st *Store) exists(id int64) error {
+	var n int
+	if err := st.db.QueryRow(`SELECT count(*) FROM tasks WHERE id = ?`, id).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (st *Store) AddLabel(taskID, labelID int64) error {
-	if _, err := st.Get(taskID); err != nil {
+	if err := st.exists(taskID); err != nil {
 		return err
 	}
 	var n int
-	if err := st.db.QueryRow(`SELECT count(*) FROM labels WHERE id = ?`, labelID).Scan(&n); err != nil || n == 0 {
+	if err := st.db.QueryRow(`SELECT count(*) FROM labels WHERE id = ?`, labelID).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
 		return fmt.Errorf("label: %w", ErrNotFound)
 	}
 	_, err := st.db.Exec(`INSERT OR IGNORE INTO task_labels (task_id, label_id) VALUES (?, ?)`, taskID, labelID)
@@ -461,13 +484,8 @@ func (st *Store) fillRuns(tasks []*Task) error {
 	if len(tasks) == 0 {
 		return nil
 	}
-	byID := map[int64]*Task{}
-	ids := make([]string, 0, len(tasks))
-	for _, t := range tasks {
-		byID[t.ID] = t
-		ids = append(ids, fmt.Sprint(t.ID))
-	}
-	rows, err := st.db.Query(`SELECT ` + runCols + ` FROM task_runs WHERE id IN (SELECT max(id) FROM task_runs WHERE task_id IN (` + strings.Join(ids, ",") + `) GROUP BY task_id)`)
+	byID, ids := index(tasks)
+	rows, err := st.db.Query(`SELECT ` + runCols + ` FROM task_runs WHERE id IN (SELECT max(id) FROM task_runs WHERE task_id IN (` + ids + `) GROUP BY task_id)`)
 	if err != nil {
 		return err
 	}
@@ -485,17 +503,23 @@ func (st *Store) fillRuns(tasks []*Task) error {
 	return rows.Err()
 }
 
-func (st *Store) fillLabels(tasks []*Task) error {
-	if len(tasks) == 0 {
-		return nil
-	}
+// index maps the tasks by id and lists the ids for an IN (…) clause.
+func index(tasks []*Task) (map[int64]*Task, string) {
 	byID := map[int64]*Task{}
 	ids := make([]string, 0, len(tasks))
 	for _, t := range tasks {
 		byID[t.ID] = t
-		ids = append(ids, fmt.Sprint(t.ID))
+		ids = append(ids, strconv.FormatInt(t.ID, 10))
 	}
-	rows, err := st.db.Query(`SELECT tl.task_id, l.id, l.title, l.hex_color FROM task_labels tl JOIN labels l ON l.id = tl.label_id WHERE tl.task_id IN (` + strings.Join(ids, ",") + `) ORDER BY l.title COLLATE NOCASE`)
+	return byID, strings.Join(ids, ",")
+}
+
+func (st *Store) fillLabels(tasks []*Task) error {
+	if len(tasks) == 0 {
+		return nil
+	}
+	byID, ids := index(tasks)
+	rows, err := st.db.Query(`SELECT tl.task_id, l.id, l.title, l.hex_color FROM task_labels tl JOIN labels l ON l.id = tl.label_id WHERE tl.task_id IN (` + ids + `) ORDER BY l.title COLLATE NOCASE`)
 	if err != nil {
 		return err
 	}
@@ -520,7 +544,7 @@ func (st *Store) Create(projectID int64, p Patch) (Task, error) {
 		title = strings.TrimSpace(*p.Title)
 	}
 	if title == "" {
-		return Task{}, errors.New("a task needs a title")
+		return Task{}, invalid("a task needs a title")
 	}
 	t := Task{ProjectID: projectID, Title: title}
 	if p.Description != nil {
@@ -556,7 +580,7 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 	}
 	if p.Title != nil {
 		if cur.Title = strings.TrimSpace(*p.Title); cur.Title == "" {
-			return cur, errors.New("a task needs a title")
+			return cur, invalid("a task needs a title")
 		}
 	}
 	if p.Description != nil {
@@ -585,13 +609,23 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 			cur.DoneAt = ""
 		}
 	}
-	_, err = st.db.Exec(`UPDATE tasks SET project_id=?, title=?, description=?, done=?, done_at=?, due_date=?, priority=?, updated=? WHERE id=?`,
-		cur.ProjectID, cur.Title, cur.Description, cur.Done, cur.DoneAt, cur.DueDate, cur.Priority, now, id)
+	// the row and its label in one transaction: done is not in progress
+	tx, err := st.db.Begin()
 	if err != nil {
 		return cur, err
 	}
-	if p.Done != nil && *p.Done { // done is not in progress
-		_, _ = st.db.Exec(`DELETE FROM task_labels WHERE task_id = ? AND label_id IN (SELECT id FROM labels WHERE title = ? COLLATE NOCASE)`, id, InProgress)
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE tasks SET project_id=?, title=?, description=?, done=?, done_at=?, due_date=?, priority=?, updated=? WHERE id=?`,
+		cur.ProjectID, cur.Title, cur.Description, cur.Done, cur.DoneAt, cur.DueDate, cur.Priority, now, id); err != nil {
+		return cur, err
+	}
+	if p.Done != nil && *p.Done {
+		if _, err := tx.Exec(`DELETE FROM task_labels WHERE task_id = ? AND label_id IN (SELECT id FROM labels WHERE title = ? COLLATE NOCASE)`, id, InProgress); err != nil {
+			return cur, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return cur, err
 	}
 	return st.Get(id)
 }
@@ -609,8 +643,9 @@ func (st *Store) Delete(id int64) error {
 
 // List is one page of the query, with how many pages there are. Order:
 // open before done, the nearest due date first, undated last, newest
-// first among equals. The search is case-folded on the Go side (SQLite's
-// own folding is ASCII only), so it finds Cyrillic either way.
+// first among equals. Today ends at the viewer's midnight; upcoming is the
+// next seven days from now. The search is case-folded on the Go side
+// (SQLite's own folding is ASCII only), so it finds Cyrillic either way.
 func (st *Store) List(q Query) ([]Task, int, error) {
 	now := q.Now
 	if now.IsZero() {
@@ -640,7 +675,7 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 			where = append(where, "done = 0")
 		}
 	default:
-		return nil, 0, fmt.Errorf("unknown view %q", q.View)
+		return nil, 0, invalid(fmt.Sprintf("unknown view %q", q.View))
 	}
 	rows, err := st.db.Query(`SELECT `+taskCols+` FROM tasks WHERE `+strings.Join(where, " AND ")+
 		` ORDER BY done ASC, CASE WHEN due_date = '' THEN 1 ELSE 0 END, due_date ASC, id DESC`, args...)
@@ -694,26 +729,35 @@ func scanRun(sc interface{ Scan(...any) error }) (Run, error) {
 	return r, err
 }
 
-// StartRun records an agent started on a task and puts the label on it.
+// StartRun records an agent started on a task and puts the label on it,
+// in one transaction.
 func (st *Store) StartRun(r Run) (Run, error) {
-	if _, err := st.Get(r.TaskID); err != nil {
+	if err := st.exists(r.TaskID); err != nil {
 		return r, err
 	}
 	if r.State == "" {
 		r.State = RunStarting
 	}
 	r.Started = st.stamp()
-	res, err := st.db.Exec(`INSERT INTO task_runs (task_id, machine, workspace, pane, dir, branch, agent, state, started) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	l, err := st.CreateLabel(InProgress, "3498db")
+	if err != nil {
+		return r, err
+	}
+	tx, err := st.db.Begin()
+	if err != nil {
+		return r, err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(`INSERT INTO task_runs (task_id, machine, workspace, pane, dir, branch, agent, state, started) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.TaskID, r.Machine, r.Workspace, r.Pane, r.Dir, r.Branch, r.Agent, r.State, r.Started)
 	if err != nil {
 		return r, err
 	}
 	r.ID, _ = res.LastInsertId()
-	l, err := st.CreateLabel(InProgress, "3498db")
-	if err != nil {
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO task_labels (task_id, label_id) VALUES (?, ?)`, r.TaskID, l.ID); err != nil {
 		return r, err
 	}
-	return r, st.AddLabel(r.TaskID, l.ID)
+	return r, tx.Commit()
 }
 
 func (st *Store) Run(id int64) (Run, error) {
@@ -769,9 +813,9 @@ func (st *Store) SetRun(id int64, state string, detail string) error {
 func (st *Store) AddComment(taskID int64, author, body string) (Comment, error) {
 	body = strings.TrimSpace(body)
 	if body == "" {
-		return Comment{}, errors.New("an empty comment")
+		return Comment{}, invalid("an empty comment")
 	}
-	if _, err := st.Get(taskID); err != nil {
+	if err := st.exists(taskID); err != nil {
 		return Comment{}, err
 	}
 	c := Comment{TaskID: taskID, Author: author, Body: body, Created: st.stamp()}
@@ -821,7 +865,7 @@ func normDate(s string) (string, error) {
 	}
 	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil {
-		return "", fmt.Errorf("bad date %q: want RFC 3339", s)
+		return "", invalid(fmt.Sprintf("bad date %q: want RFC 3339", s))
 	}
 	return t.UTC().Format(time.RFC3339), nil
 }
@@ -847,12 +891,4 @@ func stripTags(s string) string {
 		}
 	}
 	return b.String()
-}
-
-// Sorted returns projects as a tree would list them: by position, parents
-// first. (Exported for tests and the import.)
-func Sorted(ps []Project) []Project {
-	out := append([]Project(nil), ps...)
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Position < out[j].Position })
-	return out
 }

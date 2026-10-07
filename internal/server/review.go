@@ -10,8 +10,8 @@ import (
 
 // Review: what changed in a workspace's folder since the viewer last looked.
 
-func (s *Server) reviewTarget(w http.ResponseWriter, r *http.Request, dir string) (*machines.Machine, bool) {
-	m, err := s.machineFor(r, "")
+func (s *Server) reviewTarget(w http.ResponseWriter, r *http.Request, bodyMachine, dir string) (*machines.Machine, bool) {
+	m, err := s.machineFor(r, bodyMachine)
 	if err != nil {
 		httpErr(w, 404, err)
 		return nil, false
@@ -26,7 +26,7 @@ func (s *Server) reviewTarget(w http.ResponseWriter, r *http.Request, dir string
 // GET /api/review?machine=&dir= → the summary
 func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
 	dir := r.URL.Query().Get("dir")
-	mc, ok := s.reviewTarget(w, r, dir)
+	mc, ok := s.reviewTarget(w, r, "", dir)
 	if !ok {
 		return
 	}
@@ -36,7 +36,7 @@ func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
 // GET /api/review/diff?machine=&dir=&path= → one file's unified diff
 func (s *Server) handleReviewDiff(w http.ResponseWriter, r *http.Request) {
 	dir, path := r.URL.Query().Get("dir"), r.URL.Query().Get("path")
-	mc, ok := s.reviewTarget(w, r, dir)
+	mc, ok := s.reviewTarget(w, r, "", dir)
 	if !ok {
 		return
 	}
@@ -61,13 +61,8 @@ func (s *Server) handleReviewSeen(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	m, err := s.machineFor(r, req.Machine)
-	if err != nil {
-		httpErr(w, 404, err)
-		return
-	}
-	if !strings.HasPrefix(req.Dir, "/") {
-		httpErr(w, 400, errors.New("an absolute folder is required"))
+	m, ok := s.reviewTarget(w, r, req.Machine, req.Dir)
+	if !ok {
 		return
 	}
 	b, err := s.Review.MarkSeen(m, req.Dir)

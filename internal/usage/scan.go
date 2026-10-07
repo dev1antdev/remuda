@@ -1,7 +1,6 @@
 package usage
 
 import (
-	"bufio"
 	"bytes"
 	"io/fs"
 	"os"
@@ -133,19 +132,16 @@ func Scan(projects string, since time.Time, loc *time.Location) (Report, error) 
 				last = r.At
 			}
 		}}
-		sc := bufio.NewScanner(f)
-		sc.Buffer(make([]byte, 64*1024), 64*1024*1024)
-		for sc.Scan() {
-			line := sc.Bytes()
+		_ = transcript.Lines(f, 64*1024*1024, func(line []byte) {
 			if !bytes.Contains(line, []byte(`"usage"`)) {
-				continue
+				return
 			}
 			r, ok := transcript.UsageOf(line)
 			if !ok || (!since.IsZero() && r.At.Before(since)) {
-				continue
+				return
 			}
 			acc.Add(r)
-		}
+		})
 		acc.Flush()
 		if acc.Turns == 0 {
 			return nil

@@ -2,6 +2,7 @@ package schedule
 
 import (
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -56,30 +57,43 @@ func TestCron(t *testing.T) {
 }
 
 func TestTickFiresOncePerMatchingMinute(t *testing.T) {
+	var mu sync.Mutex
 	var sent []string
 	st := New(t.TempDir(), func(machine, dir, text string) (string, error) {
+		mu.Lock()
+		defer mu.Unlock()
 		sent = append(sent, text)
 		return "pane", nil
 	}, nil)
+	count := func() int {
+		st.Wait()
+		mu.Lock()
+		defer mu.Unlock()
+		return len(sent)
+	}
 	now := at("2026-10-07 09:00")
 	st.now = func() time.Time { return now }
 	if _, err := st.Put(Schedule{Machine: "local", Dir: "/tmp/x", Cron: "0 9 * * *", Prompt: "status", Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
 	st.Tick()
+	st.Wait()
 	now = now.Add(20 * time.Second)
 	st.Tick() // the same minute: not again
-	if len(sent) != 1 {
-		t.Fatalf("sent %d", len(sent))
+	if n := count(); n != 1 {
+		t.Fatalf("sent %d", n)
 	}
 	now = now.Add(time.Minute)
 	st.Tick() // 09:01: no match
-	if len(sent) != 1 {
-		t.Fatalf("sent %d after the minute passed", len(sent))
+	if n := count(); n != 1 {
+		t.Fatalf("sent %d after the minute passed", n)
 	}
 	list := st.List()
 	if !list[0].LastOK || list[0].LastResult != "sent to pane" {
 		t.Fatalf("result %+v", list[0])
+	}
+	if list[0].Next.IsZero() || !list[0].Next.Equal(at("2026-10-08 09:00")) {
+		t.Fatalf("next %v", list[0].Next)
 	}
 }
 
@@ -102,7 +116,25 @@ func TestDisabledNeverFires(t *testing.T) {
 	st.now = func() time.Time { return at("2026-10-07 09:00") }
 	_, _ = st.Put(Schedule{Machine: "local", Dir: "/tmp/x", Cron: "* * * * *", Prompt: "hi", Enabled: false})
 	st.Tick()
+	st.Wait()
 	if fired != 0 {
 		t.Fatal("a disabled schedule fired")
+	}
+}
+
+func TestCronDayFieldsOrLikeVixie(t *testing.T) {
+	c, _ := Parse("0 9 1 * 1")              // the 1st, or a Monday
+	if !c.Matches(at("2026-10-01 09:00")) { // a Thursday, the 1st
+		t.Fatal("the 1st did not match")
+	}
+	if !c.Matches(at("2026-10-05 09:00")) { // a Monday, the 5th
+		t.Fatal("a Monday did not match")
+	}
+	if c.Matches(at("2026-10-06 09:00")) { // a Tuesday, the 6th
+		t.Fatal("a plain Tuesday matched")
+	}
+	only, _ := Parse("0 9 1 * *")
+	if only.Matches(at("2026-10-05 09:00")) {
+		t.Fatal("a restricted day-of-month alone matched a Monday")
 	}
 }

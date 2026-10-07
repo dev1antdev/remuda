@@ -41,6 +41,16 @@ func (e *ExitError) Error() string {
 	return fmt.Sprintf("exit status %d", e.Code)
 }
 
+// VersionedBin is the shell test that a machine's own herdr-ui at
+// ~/.local/bin is this very version (an older one would not know the
+// subcommand — or would start a server instead), and the quoted path to
+// run it: `if <guard>; then <bin> …`.
+func VersionedBin(home, version string) (bin, guard string) {
+	bin = Quote(home + "/.local/bin/herdr-ui")
+	guard = "[ -x " + bin + " ] && [ \"$(" + bin + " -version 2>/dev/null)\" = " + Quote("herdr-ui "+version) + " ]"
+	return bin, guard
+}
+
 // Quote wraps s for a POSIX shell.
 func Quote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
@@ -80,17 +90,23 @@ func Dial(host string) (*Conn, error) {
 		return nil, err
 	}
 	c.master = cmd
-	go cmd.Wait() // reap whenever it exits
+	exited := make(chan struct{})
+	go func() { // reap whenever it exits
+		cmd.Wait()
+		close(exited)
+	}()
 
 	deadline := time.Now().Add(15 * time.Second)
+wait:
 	for time.Now().Before(deadline) {
 		if c.Alive() {
 			return c, nil
 		}
-		if cmd.ProcessState != nil { // master already died (auth failure etc.)
-			break
+		select {
+		case <-exited: // master already died (auth failure etc.)
+			break wait
+		case <-time.After(200 * time.Millisecond):
 		}
-		time.Sleep(200 * time.Millisecond)
 	}
 	cmd.Process.Kill()
 	msg := strings.TrimSpace(stderr.String())
@@ -106,7 +122,8 @@ func (c *Conn) Alive() bool { return c.cmd("-O", "check", c.Host).Run() == nil }
 // run executes a remote command over the master with a deadline; stdin, when
 // given, is streamed to it.
 func (c *Conn) run(script string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
-	cmd := c.cmd(c.Host, script)
+	// every script here is POSIX sh; the remote login shell may be anything
+	cmd := c.cmd(c.Host, "sh -c "+Quote(script))
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -188,6 +205,8 @@ func (c *Conn) ForwardTCP(remotePort int) (string, error) {
 // forwarding (`nc -U <socket>` on the remote side bridges to herdr).
 func (c *Conn) DialExec(script string, timeout time.Duration) (net.Conn, error) {
 	cmd := c.cmd(c.Host, script)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -199,22 +218,41 @@ func (c *Conn) DialExec(script string, timeout time.Duration) (net.Conn, error) 
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	cc := &cmdConn{cmd: cmd, stdin: stdin, stdout: stdout}
+	cc := &cmdConn{cmd: cmd, stdin: stdin, stdout: stdout, stderr: &stderr}
 	cc.SetDeadline(time.Now().Add(timeout))
 	return cc, nil
 }
 
 type cmdConn struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout io.ReadCloser
-	mu     sync.Mutex
-	timer  *time.Timer
-	closed bool
+	cmd      *exec.Cmd
+	stdin    io.WriteCloser
+	stdout   io.ReadCloser
+	stderr   *bytes.Buffer
+	mu       sync.Mutex
+	timer    *time.Timer
+	closed   bool
+	timedOut bool
 }
 
-func (c *cmdConn) Read(b []byte) (int, error)  { return c.stdout.Read(b) }
-func (c *cmdConn) Write(b []byte) (int, error) { return c.stdin.Write(b) }
+// a read or write after the deadline fired says so, with what ssh said
+func (c *cmdConn) wrap(n int, err error) (int, error) {
+	if err == nil {
+		return n, nil
+	}
+	c.mu.Lock()
+	timedOut := c.timedOut
+	c.mu.Unlock()
+	if timedOut {
+		return n, os.ErrDeadlineExceeded
+	}
+	if msg := strings.TrimSpace(c.stderr.String()); msg != "" {
+		return n, fmt.Errorf("%w (%s)", err, msg)
+	}
+	return n, err
+}
+
+func (c *cmdConn) Read(b []byte) (int, error)  { return c.wrap(c.stdout.Read(b)) }
+func (c *cmdConn) Write(b []byte) (int, error) { return c.wrap(c.stdin.Write(b)) }
 
 func (c *cmdConn) Close() error {
 	c.mu.Lock()
@@ -246,6 +284,9 @@ func (c *cmdConn) SetDeadline(t time.Time) error {
 	}
 	if !t.IsZero() && !c.closed {
 		c.timer = time.AfterFunc(time.Until(t), func() {
+			c.mu.Lock()
+			c.timedOut = true
+			c.mu.Unlock()
 			if c.cmd.Process != nil {
 				c.cmd.Process.Kill()
 			}

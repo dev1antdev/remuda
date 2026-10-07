@@ -3,7 +3,6 @@ package server
 import (
 	"errors"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -37,5 +36,3 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, search.Search(mcs, q, r.URL.Query().Get("dir"), since))
 }
-
-var sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9-]{1,80}$`)

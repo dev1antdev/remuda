@@ -34,13 +34,14 @@ func FindBinary(name string) (string, error) {
 		return "", fmt.Errorf("%s: not an executable", name)
 	}
 	home, _ := os.UserHomeDir()
-	for _, dir := range []string{filepath.Join(home, ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"} {
+	dirs := []string{filepath.Join(home, ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"}
+	for _, dir := range dirs {
 		p := filepath.Join(dir, name)
 		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
 			return p, nil
 		}
 	}
-	return "", fmt.Errorf("%s not found in PATH, ~/.local/bin, /opt/homebrew/bin or /usr/local/bin", name)
+	return "", fmt.Errorf("%s not found in PATH or %s", name, strings.Join(dirs, ", "))
 }
 
 // SocketPath returns $HERDR_SOCKET or herdr's default socket location.

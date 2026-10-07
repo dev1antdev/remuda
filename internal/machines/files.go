@@ -2,6 +2,7 @@ package machines
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -134,6 +135,9 @@ func (mc *Machine) stat(p string) (FileInfo, error) {
 	case f[0] == "dir":
 		return FileInfo{Path: p, Kind: "dir"}, nil
 	}
+	if len(f) < 2 {
+		return FileInfo{}, fmt.Errorf("stat %s: %q", p, out)
+	}
 	size, _ := strconv.ParseInt(f[1], 10, 64)
 	kind, mime := classify(p, func() bool { return len(f) > 2 && f[2] != "0" })
 	return FileInfo{Path: p, Kind: kind, MIME: mime, Size: size}, nil
@@ -218,7 +222,7 @@ func (mc *Machine) ReadRemote(p string, max int64) ([]byte, bool, error) {
 // read them by a relative path without leaving its project. The folder
 // carries its own .gitignore so screenshots never end up in a commit.
 const (
-	UploadDir    = ".herdr-ui"
+	uploadDir    = ".herdr-ui"
 	uploadSubdir = "uploads"
 )
 
@@ -264,9 +268,9 @@ func (mc *Machine) SaveUpload(cwd, name string, data []byte) (Upload, error) {
 		return Upload{}, fmt.Errorf("the pane has no folder to upload into")
 	}
 	stored := storedName(name)
-	rel := UploadDir + "/" + uploadSubdir + "/" + stored
+	rel := uploadDir + "/" + uploadSubdir + "/" + stored
 	abs := cleanPath(cwd + "/" + rel)
-	ignore := cleanPath(cwd + "/" + UploadDir + "/.gitignore")
+	ignore := cleanPath(cwd + "/" + uploadDir + "/.gitignore")
 
 	if mc.Local {
 		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
@@ -298,9 +302,6 @@ type Diff struct {
 	Diff      string `json:"diff"`
 }
 
-// GitDiff shows the file's uncommitted change (staged + unstaged, against
-// HEAD) in its repository, or marks it untracked / outside any repo. The
-// same script runs locally and remotely; outside a repo it prints nothing.
 // ReadFrom returns a file's bytes from an offset to its end — a transcript's
 // growth since the last look. Remotely it is a tail over ssh.
 func (mc *Machine) ReadFrom(p string, offset int64) ([]byte, error) {
@@ -318,14 +319,20 @@ func (mc *Machine) ReadFrom(p string, offset int64) ([]byte, error) {
 	return mc.execBytes(fmt.Sprintf("tail -c +%d %s", offset+1, sshx.Quote(p)), 120*time.Second)
 }
 
-// Shell runs a POSIX shell script on the machine — `sh -c` here, over the
-// ssh master there — and returns its stdout.
+// Shell runs a POSIX shell script on the machine — `sh -c` here, `sh -c`
+// over the ssh master there (whatever the login shell) — and returns its
+// stdout.
 func (mc *Machine) Shell(script string, timeout time.Duration) (string, error) {
 	if mc.Local {
-		cmd := exec.Command("sh", "-c", script)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "sh", "-c", script)
 		var out, errb bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &errb
 		if err := cmd.Run(); err != nil {
+			if ctx.Err() != nil {
+				return out.String(), fmt.Errorf("timed out after %s", timeout)
+			}
 			if ee, ok := err.(*exec.ExitError); ok {
 				return out.String(), &sshx.ExitError{Code: ee.ExitCode(), Stderr: strings.TrimSpace(errb.String())}
 			}
@@ -336,6 +343,9 @@ func (mc *Machine) Shell(script string, timeout time.Duration) (string, error) {
 	return mc.exec(script, timeout)
 }
 
+// GitDiff shows the file's uncommitted change (staged + unstaged, against
+// HEAD) in its repository, or marks it untracked / outside any repo. The
+// same script runs locally and remotely; outside a repo it prints nothing.
 func (mc *Machine) GitDiff(p string) (Diff, error) {
 	q := sshx.Quote(p)
 	script := `cd ` + sshx.Quote(filepath.Dir(p)) + ` 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +

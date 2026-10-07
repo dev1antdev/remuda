@@ -1,10 +1,10 @@
 // Package search finds what was said across every Claude transcript on
-// every machine. There is no index: a search runs one grep per machine over
-// ~/.claude/projects (the same shell path the review lens uses, so a
-// remote machine needs nothing but its own grep), and the matching records
-// come back raw to be parsed here by the transcript package — only the
-// user and assistant texts the chat shows count, not tool output. 114 MB
-// of transcripts grep in well under a second.
+// every machine. There is no index: each machine scans its own
+// ~/.claude/projects on demand — in-process here, and on a remote through
+// the herdr-ui deployed there (`herdr-ui search`), with a plain grep as
+// the fallback when that binary is missing or older. The matching records
+// come back raw to be parsed by the transcript package: only the user and
+// assistant texts the chat shows count, not tool output.
 package search
 
 import (
@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/sshx"
 	"github.com/dev1antdev/herdr-ui/internal/transcript"
+	"github.com/dev1antdev/herdr-ui/internal/version"
 )
 
 type Hit struct {
@@ -39,11 +41,6 @@ type Result struct {
 	Errors map[string]string `json:"errors,omitempty"` // per machine that could not be searched
 	More   bool              `json:"more"`             // cut at the limit; narrow it down
 }
-
-// Version is this build's; a remote binary is used only when it prints the
-// same, so an older herdr-ui there (one without the subcommand, which
-// would start a server instead) is never run.
-var Version = "dev"
 
 const (
 	perMachine = 400
@@ -150,19 +147,18 @@ func script(home, q, dir string, since time.Time) string {
 			pats = append(pats, "-e "+sshx.Quote(v))
 		}
 	}
-	bin := sshx.Quote(home + "/.local/bin/herdr-ui")
-	args := "search -q " + sshx.Quote(q) + " -limit " + itoa(perMachine)
+	bin, guard := sshx.VersionedBin(home, version.Build)
+	args := "search -q " + sshx.Quote(q) + " -limit " + strconv.Itoa(perMachine)
 	if dir != "" {
 		args += " -dir " + sshx.Quote(dir)
 	}
 	if !since.IsZero() {
 		args += " -since " + sshx.Quote(since.UTC().Format(time.RFC3339))
 	}
-	return "if [ -x " + bin + " ] && [ \"$(" + bin + " -version 2>/dev/null)\" = " + sshx.Quote("herdr-ui "+Version) + " ] && " +
-		bin + " " + args + "; then exit 0; fi; " +
+	return "if " + guard + " && " + bin + " " + args + "; then exit 0; fi; " +
 		"cd " + sshx.Quote(home+"/.claude/projects") + " 2>/dev/null || exit 0; " +
 		"grep -raF --include='*.jsonl' " + strings.Join(pats, " ") + " . 2>/dev/null | " +
-		"cut -b1-" + itoa(lineCap) + " | head -c " + itoa(outputCap) + "; exit 0"
+		"cut -b1-" + strconv.Itoa(lineCap) + " | head -c " + strconv.Itoa(outputCap) + "; exit 0"
 }
 
 // jsonText is s as it appears inside a JSON string, without the quotes
@@ -192,9 +188,4 @@ func capitalized(s string) string {
 		return s
 	}
 	return string(unicode.ToUpper(r)) + strings.ToLower(s[n:])
-}
-
-func itoa(n int) string {
-	b, _ := json.Marshal(n)
-	return string(b)
 }
