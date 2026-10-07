@@ -47,6 +47,7 @@ type pane struct {
 	status    string // herdr's, after the grace rule
 	lastWork  time.Time
 	doneHeld  bool // the tick is up until the pane is seen
+	doneSeen  bool // this finish was looked at; herdr may go on saying done for hours
 	blocked   bool // the question mark is up until the agent works again
 	recovered bool
 }
@@ -142,8 +143,14 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 	if (status == herdr.StatusIdle || status == herdr.StatusDone) && st.status == herdr.StatusWorking && now.Sub(st.lastWork) < idleGrace {
 		status = herdr.StatusWorking
 	}
-	// finished: herdr says so, or it was working a poll ago and is not now
-	if p.AgentStatus == herdr.StatusDone || (st.status == herdr.StatusWorking && status == herdr.StatusIdle) {
+	// finished: herdr says so, or it was working a poll ago and is not now.
+	// herdr keeps saying done until the pane is focused in herdr itself —
+	// for hours — so a finish that was looked at here stays looked at until
+	// the agent works again
+	if status == herdr.StatusWorking {
+		st.doneSeen = false
+	}
+	if !st.doneSeen && (p.AgentStatus == herdr.StatusDone || (st.status == herdr.StatusWorking && status == herdr.StatusIdle)) {
 		st.doneHeld = true
 	}
 	st.status = status
@@ -158,7 +165,7 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 		st.blocked = false
 	}
 	if p.Focused {
-		st.doneHeld = false // herdr's own focus counts as having looked
+		st.doneHeld, st.doneSeen = false, true // herdr's own focus counts as having looked
 	}
 	if status == herdr.StatusWorking {
 		st.doneHeld = false
@@ -170,7 +177,7 @@ func (t *Tracker) Seen(machineID, paneID string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if st := t.panes[key(machineID, paneID)]; st != nil {
-		st.doneHeld = false
+		st.doneHeld, st.doneSeen = false, true
 	}
 }
 

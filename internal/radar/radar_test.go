@@ -123,3 +123,28 @@ func TestGonePanesAreForgotten(t *testing.T) {
 		t.Fatal("closed pane kept")
 	}
 }
+
+func TestSeenHoldsWhileHerdrStillSaysDone(t *testing.T) {
+	tr := New(t.TempDir(), nil)
+	now := time.Now()
+	tr.Observe("m", snap(herdr.StatusWorking, false), now)
+	// herdr keeps reporting done for hours after a finish
+	for i := 0; i < 3; i++ {
+		tr.Observe("m", snap(herdr.StatusDone, false), now.Add(time.Duration(5+i)*time.Second))
+	}
+	tr.Seen("m", "p1")
+	for i := 0; i < 5; i++ {
+		s := snap(herdr.StatusDone, false)
+		tr.Observe("m", s, now.Add(time.Duration(20+i)*time.Second))
+		if d := display(tr, s); d.State != herdr.StatusIdle {
+			t.Fatalf("poll %d after seen: %s, want idle", i, d.State)
+		}
+	}
+	// the next finish is a new one
+	tr.Observe("m", snap(herdr.StatusWorking, false), now.Add(40*time.Second))
+	s := snap(herdr.StatusDone, false)
+	tr.Observe("m", s, now.Add(45*time.Second))
+	if d := display(tr, s); d.State != herdr.StatusDone {
+		t.Fatalf("a new finish: %s, want done", d.State)
+	}
+}
