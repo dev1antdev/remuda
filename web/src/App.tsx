@@ -23,7 +23,9 @@ import AlertsPanel from "./AlertsPanel";
 import Chat from "./Chat";
 import FileViewer, { type FileTarget } from "./FileViewer";
 import KeyBar from "./KeyBar";
-import { errMsg, isTouch, readAlertPrefs, usePref } from "./prefs";
+import { basename, errMsg, isTouch, readAlertPrefs, usePref } from "./prefs";
+import { machineLabel, machineOptions } from "./options";
+import { Dialog, Notice, StatusDot, useSubmit } from "./ui";
 import { resyncPush } from "./push";
 import TerminalView, { type Modifier, type SizeMode, type TermApi } from "./Terminal";
 import Tasks, { type AgentTarget } from "./Tasks";
@@ -31,13 +33,12 @@ import Code from "./Code";
 import Review from "./Review";
 import Schedules from "./Schedules";
 import Search from "./Search";
-import Usage, { tok, usd } from "./Usage";
-import { fillClass } from "./Sidebar";
+import Usage, { fillClass, tok, usd } from "./Usage";
 import Sidebar from "./Sidebar";
 import Select from "./Select";
 import Logo from "./Logo";
-import { DEFAULT_RADAR, type RadarPrefs } from "./radar";
-import Icon from "./icons";
+import { DEFAULT_RADAR, brandColor, type RadarPrefs } from "./radar";
+import Icon, { type IconName } from "./icons";
 
 type Lens = "chat" | "terminal" | "changes";
 type Selection = { machineId: string; paneId: string };
@@ -69,12 +70,18 @@ type Requested = Selection;
 
 function requestedFromURL(): Requested | null {
   const q = new URLSearchParams(location.search);
-  const machineId = q.get("machine");
   const paneId = q.get("pane");
-  if (machineId || paneId) history.replaceState(null, "", "/");
   if (!paneId) return null;
-  return { machineId: machineId || "local", paneId };
+  return { machineId: q.get("machine") || "local", paneId };
 }
+
+// the agent a "make something" dialog offers first: claude when herdr knows
+// it, else the first one herdr lists
+function defaultAgent(agents: AgentKind[], want: string): string {
+  return agents.some((a) => a.id === want) ? want : (agents[0]?.id ?? "shell");
+}
+
+type NoticeMsg = { text: string; error?: boolean };
 
 function matches(x: Located, r: Requested): boolean {
   return x.machine.id === r.machineId && x.pane.id === r.paneId;
@@ -94,16 +101,16 @@ export default function App() {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [menu, setMenu] = useState<RowMenu>(null);
   const [alerts, setAlerts] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  // an in-app confirmation: window.confirm() returns false without asking
-  // inside an embedded browser (JCEF), so nothing destructive may rely on it
+  const [notice, setNotice] = useState<NoticeMsg | null>(null);
+  // an in-app confirmation: window.confirm() is unreliable inside embedded
+  // browsers, and a dialog of our own matches the rest
   const [confirmReq, setConfirmReq] = useState<{ text: string; label: string; run: () => void } | null>(null);
   const ask = (text: string, label: string, run: () => void) => setConfirmReq({ text, label, run });
   const [termApi, setTermApi] = useState<TermApi | null>(null);
   const [modifier, setModifier] = useState<Modifier>(null);
   // selection mode: a plain drag selects text instead of reaching the agent
   const [selectMode, setSelectMode] = useState(false);
-  const copied = useCallback((n: number) => setNotice(`Copied ${n} character${n === 1 ? "" : "s"}`), []);
+  const copied = useCallback((n: number) => setNotice({ text: `Copied ${n} character${n === 1 ? "" : "s"}` }), []);
   const [file, setFile] = useState<{ machineId: string; paneId: string; target: FileTarget } | null>(null);
   const [keybar, setKeybar] = usePref("keybar", isTouch);
   // A phone keeps the pane's own grid by default: resizing the shared pane
@@ -112,7 +119,7 @@ export default function App() {
   // what the window is for right now: herdr's sessions, or the task list
   const [mode, setMode] = usePref<"herdr" | "tasks" | "code">("mode", "herdr");
   // the editor stays mounted once opened, so coming back does not reload it
-  const [codeOpened, setCodeOpened] = useState(false);
+  const [codeOpened, setCodeOpened] = useState(() => mode === "code");
   const [schedules, setSchedules] = useState(false);
   const [usagePanel, setUsagePanel] = useState(false);
   useEffect(() => {
@@ -146,9 +153,12 @@ export default function App() {
     setViewer(null);
     setMode("herdr");
   };
-  // …including the one the page was opened with
+  // …including the one the page was opened with; the query goes, so a
+  // reload does not ask for it again
   useEffect(() => {
-    if (requested) setMode("herdr");
+    if (!requested) return;
+    setMode("herdr");
+    history.replaceState(null, "", "/");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [termFont, setTermFont] = usePref("termFont", isTouch ? 12 : 13);
@@ -161,9 +171,12 @@ export default function App() {
   // how the sidebar reads and orders the agents (see radar.ts)
   const [radarPrefs, setRadarPrefs] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
 
+  const refreshSeq = useRef(0);
   const refresh = useCallback(async () => {
+    const seq = ++refreshSeq.current;
     try {
       const res = await fetchRoster(rosterEtag.current);
+      if (seq !== refreshSeq.current) return; // a later poll already answered
       if (res) {
         rosterEtag.current = res.etag;
         setMachines(res.roster.machines);
@@ -171,9 +184,12 @@ export default function App() {
       }
       setOffline(false);
     } catch {
-      setOffline(true);
+      if (seq === refreshSeq.current) setOffline(true);
     }
   }, []);
+
+  // a roster change that may fail: refresh on success, say why on failure
+  const act = useCallback((p: Promise<unknown>) => p.then(refresh, (e) => setNotice({ text: errMsg(e), error: true })), [refresh]);
 
   useEffect(() => {
     void refresh();
@@ -191,8 +207,7 @@ export default function App() {
   }, [refresh]);
 
   // push: re-register this device on load; a tapped notification in an
-  // already open tab arrives as a message from the service worker. A host
-  // (the IDE plugin) can also ask for the pane of a folder.
+  // already open tab arrives as a message from the service worker
   useEffect(() => {
     void resyncPush(readAlertPrefs());
     if (!("serviceWorker" in navigator)) return;
@@ -225,7 +240,7 @@ export default function App() {
 
   useEffect(() => {
     if (!notice) return;
-    const t = setTimeout(() => setNotice(null), notice.startsWith("Copied") ? 2000 : 10000);
+    const t = setTimeout(() => setNotice(null), notice.text.startsWith("Copied") ? 2000 : 10000);
     return () => clearTimeout(t);
   }, [notice]);
 
@@ -238,11 +253,7 @@ export default function App() {
   }, [machines]);
 
   const current = useMemo(
-    () =>
-      (requested && (allPanes.find((x) => matches(x, requested) && x.pane.agent) ?? allPanes.find((x) => matches(x, requested)))) ??
-      allPanes.find((x) => x.pane.agent) ??
-      allPanes[0] ??
-      null,
+    () => (requested && allPanes.find((x) => matches(x, requested))) ?? allPanes.find((x) => x.pane.agent) ?? allPanes[0] ?? null,
     [allPanes, requested],
   );
 
@@ -287,14 +298,14 @@ export default function App() {
   // has not looked.
   const seenState = current?.pane.radar?.state;
   useEffect(() => {
-    if (mode !== "herdr" || !current || seenState !== "done") return;
+    if (mode !== "herdr" || viewer || !current || seenState !== "done") return;
     const look = () => {
       if (document.visibilityState === "visible") void markSeen(current.machine.id, current.pane.id).catch(() => {});
     };
     look();
     document.addEventListener("visibilitychange", look);
     return () => document.removeEventListener("visibilitychange", look);
-  }, [mode, current?.machine.id, current?.pane.id, seenState]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, !!viewer, current?.machine.id, current?.pane.id, seenState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectPane = useCallback((machineId: string, paneId: string) => {
     setRequested({ machineId, paneId });
@@ -321,20 +332,18 @@ export default function App() {
     setDialog(null);
     await refresh();
     selectPane(machineId, made.pane);
-    if (made.warning) setNotice(made.warning);
+    if (made.warning) setNotice({ text: made.warning });
   };
 
   const closeWorkspace = (m: Machine, s: Session) => {
     const n = s.tabs.reduce((a, t) => a + t.panes.length, 0);
-    ask(`Close “${s.name}”? ${n} pane${n === 1 ? "" : "s"} close and the agents in them stop.`, "Close workspace", () =>
-      void killSession(m.id, s.id).then(refresh),
-    );
+    ask(`Close “${s.name}”? ${n} pane${n === 1 ? "" : "s"} close and the agents in them stop.`, "Close workspace", () => void act(killSession(m.id, s.id)));
   };
 
   return (
     <div className="app">
       <header className="topbar">
-        <button className="burger icon-btn" onClick={() => setDrawer((d) => !d)} title="Menu">
+        <button type="button" className="burger icon-btn" onClick={() => setDrawer((d) => !d)} title="Menu" aria-expanded={drawer}>
           <Icon name="menu" size={18} />
         </button>
         <nav className="mode-switch">
@@ -351,8 +360,8 @@ export default function App() {
         <span className="title">
           {mode !== "herdr" ? null : viewer ? (
             <>
-              {viewer.machine !== "local" && <span className="title-machine">{machines.find((m) => m.id === viewer.machine)?.label ?? viewer.machine} ›</span>}
-              {viewer.dir.split("/").filter(Boolean).pop()}
+              {viewer.machine !== "local" && <span className="title-machine">{machineLabel(machines, viewer.machine)} ›</span>}
+              {basename(viewer.dir)}
               <span className="title-agent"> · transcript</span>
             </>
           ) : current ? (
@@ -402,7 +411,7 @@ export default function App() {
               <>
                 <span className="lens-sep" />
                 <button
-                  className={`kb-toggle${sizeMode === "keep" ? " on" : ""}`}
+                  className={`icon-btn kb-toggle${sizeMode === "keep" ? " on" : ""}`}
                   title={
                     sizeMode === "keep"
                       ? `Keeping the pane's own size (${current.pane.cols}×${current.pane.rows}); click to resize it to this screen`
@@ -414,7 +423,8 @@ export default function App() {
                 </button>
                 {sizeMode === "fit" && (
                   <button
-                    className={`kb-toggle${minCols ? " on" : ""}`}
+                    className={`icon-btn kb-toggle${minCols ? " on" : ""}`}
+                    aria-expanded={!!widthMenu}
                     title={
                       minCols
                         ? `At least ${minCols} columns wide; a narrower screen scrolls sideways`
@@ -431,7 +441,7 @@ export default function App() {
                   </button>
                 )}
                 <button
-                  className={`kb-toggle${selectMode ? " on" : ""}`}
+                  className={`icon-btn kb-toggle${selectMode ? " on" : ""}`}
                   title={
                     selectMode
                       ? "Selection mode is on: drag selects text and copies it. Click to give the mouse back to the agent."
@@ -441,14 +451,14 @@ export default function App() {
                 >
                   <Icon name="text-select" />
                 </button>
-                <button className="kb-toggle kb-font" title="Smaller text" onClick={() => setTermFont((f) => Math.max(8, f - 1))}>
+                <button className="icon-btn kb-toggle kb-font" title="Smaller text" onClick={() => setTermFont((f) => Math.max(8, f - 1))}>
                   <Icon name="text-smaller" />
                 </button>
-                <button className="kb-toggle kb-font" title="Larger text" onClick={() => setTermFont((f) => Math.min(20, f + 1))}>
+                <button className="icon-btn kb-toggle kb-font" title="Larger text" onClick={() => setTermFont((f) => Math.min(20, f + 1))}>
                   <Icon name="text-larger" />
                 </button>
                 <button
-                  className={`kb-toggle${keybar ? " on" : ""}`}
+                  className={`icon-btn kb-toggle${keybar ? " on" : ""}`}
                   title="Key bar"
                   onClick={() => setKeybar((k) => !k)}
                 >
@@ -460,30 +470,18 @@ export default function App() {
         )}
         {offline && <span className="pill pill-off">reconnecting…</span>}
         {notice && (
-          <span className="pill pill-warn" title={notice} onClick={() => setNotice(null)}>
-            {notice}
-          </span>
+          <button type="button" className={`pill ${notice.error ? "pill-off" : "pill-warn"}`} title={`${notice.text} — click to dismiss`} onClick={() => setNotice(null)}>
+            {notice.text}
+          </button>
         )}
-        <button className="bell" title="Search every conversation (⌘K / Ctrl+K)" onClick={() => setSearch(true)}>
-          <Icon name="search" size={17} />
+        <button type="button" className="icon-btn bell" title="Search every conversation (⌘K / Ctrl+K)" onClick={() => setSearch(true)}>
+          <Icon name="search" size={18} />
         </button>
-        <button
-          className={`bell${alerts ? " on" : ""}`}
-          title="Alerts on this device"
-          onClick={(e) => {
-            e.stopPropagation();
-            setAlerts((a) => !a);
-          }}
-        >
-          <Icon name="bell" size={17} />
+        <button type="button" className={`icon-btn bell${alerts ? " on" : ""}`} title="Alerts on this device" aria-expanded={alerts} onClick={() => setAlerts((a) => !a)}>
+          <Icon name="bell" size={18} />
         </button>
       </header>
-      {alerts && (
-        <>
-          <div className="scrim clear" onClick={() => setAlerts(false)} />
-          <AlertsPanel onClose={() => setAlerts(false)} />
-        </>
-      )}
+      {alerts && <AlertsPanel onClose={() => setAlerts(false)} />}
 
       <div className="body">
         {codeOpened && (
@@ -519,9 +517,7 @@ export default function App() {
             onSelect={selectPane}
             onMenu={(m, s, x, y) => setMenu(menu?.session.id === s.id ? null : { machine: m, session: s, x, y })}
             onNewWorkspace={(m) => setDialog({ kind: "workspace", machineId: m.id })}
-            onRemoveMachine={(m) =>
-              ask(`Remove machine “${m.label}”? Nothing on the PC is touched.`, "Remove", () => void removeMachine(m.id).then(refresh))
-            }
+            onRemoveMachine={(m) => ask(`Remove machine “${m.label}”? Nothing on the PC is touched.`, "Remove", () => void act(removeMachine(m.id)))}
             onAddMachine={() => setDialog({ kind: "machine" })}
             onPrefs={setRadarPrefs}
             onSchedules={() => setSchedules(true)}
@@ -535,15 +531,9 @@ export default function App() {
         <main className="pane-area">
           {viewer ? (
             <>
-              <div className="viewer-bar">
-                <Icon name="search" size={14} className="icon" />
-                <span>
-                  A transcript from <b>{viewer.dir.split("/").filter(Boolean).pop()}</b> — no agent runs there now, so it reads only.
-                </span>
-                <button className="icon-btn" onClick={() => setViewer(null)} title="Close">
-                  <Icon name="x" size={16} />
-                </button>
-              </div>
+              <Notice tone="info" icon="search" className="viewer-bar" onDismiss={() => setViewer(null)}>
+                A transcript from <b>{basename(viewer.dir)}</b> — no agent runs there now, so it reads only.
+              </Notice>
               <Chat
                 key={`viewer|${viewer.machine}|${viewer.session}`}
                 machineId={viewer.machine}
@@ -551,7 +541,7 @@ export default function App() {
                 status=""
                 onOpenFile={openFile}
                 agents={agentTargets}
-                origin={`${viewer.dir.split("/").filter(Boolean).pop()} (an old transcript)`}
+                origin={`${basename(viewer.dir)} (an old transcript)`}
                 dir={viewer.dir}
                 jump={jumpFor(viewer.machine, "")}
               />
@@ -566,13 +556,13 @@ export default function App() {
                 onNewTab={() =>
                   setDialog({ kind: "tab", machineId: current.machine.id, session: current.session })
                 }
-                onRename={(t, label) => void renameTab(current.machine.id, t.id, label).then(refresh, (e) => setNotice(errMsg(e)))}
+                onRename={(t, label) => void act(renameTab(current.machine.id, t.id, label))}
                 onCloseTab={(t) => {
                   const last = current.session.tabs.length === 1;
                   const msg = last
                     ? `Close the last tab? Workspace “${current.session.name}” closes with it.`
                     : `Close tab “${t.label}”? Its ${t.panes.length} pane${t.panes.length === 1 ? "" : "s"} and agents stop.`;
-                  ask(msg, "Close tab", () => void closeTab(current.machine.id, t.id).then(refresh));
+                  ask(msg, "Close tab", () => void act(closeTab(current.machine.id, t.id)));
                 }}
               />
               {lens === "changes" ? (
@@ -625,7 +615,7 @@ export default function App() {
           ) : (
             <div className="placeholder">
               <p>No pane selected.</p>
-              <button onClick={() => setDialog({ kind: "workspace", machineId: "local" })}>
+              <button type="button" className="btn" onClick={() => setDialog({ kind: "workspace", machineId: "local" })}>
                 Start an agent
               </button>
             </div>
@@ -645,25 +635,25 @@ export default function App() {
       )}
 
       {menu && (
-        <div className="row-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
-          <button onClick={() => { setMenu(null); setDialog({ kind: "tab", machineId: menu.machine.id, session: menu.session }); }}>
+        <div className="row-menu" role="menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
+          <button type="button" role="menuitem" onClick={() => { setMenu(null); setDialog({ kind: "tab", machineId: menu.machine.id, session: menu.session }); }}>
             New tab…
           </button>
-          <button onClick={() => { setMenu(null); setDialog({ kind: "worktree", machineId: menu.machine.id, session: menu.session }); }}>
+          <button type="button" role="menuitem" onClick={() => { setMenu(null); setDialog({ kind: "worktree", machineId: menu.machine.id, session: menu.session }); }}>
             New worktree…
           </button>
-          <button onClick={() => { setMenu(null); setDialog({ kind: "rename", machineId: menu.machine.id, what: "workspace", id: menu.session.id, label: menu.session.name }); }}>
+          <button type="button" role="menuitem" onClick={() => { setMenu(null); setDialog({ kind: "rename", machineId: menu.machine.id, what: "workspace", id: menu.session.id, label: menu.session.name }); }}>
             Rename workspace…
           </button>
           {(() => {
             const t = menu.session.tabs.find((x) => x.id === menu.session.active_tab_id) ?? menu.session.tabs[0];
             return t ? (
-              <button onClick={() => { setMenu(null); setDialog({ kind: "rename", machineId: menu.machine.id, what: "tab", id: t.id, label: t.named ? t.label : "" }); }}>
+              <button type="button" role="menuitem" onClick={() => { setMenu(null); setDialog({ kind: "rename", machineId: menu.machine.id, what: "tab", id: t.id, label: t.named ? t.label : "" }); }}>
                 Rename tab {t.named ? `“${t.label}”` : t.number}…
               </button>
             ) : null;
           })()}
-          <button className="danger" onClick={() => { setMenu(null); closeWorkspace(menu.machine, menu.session); }}>
+          <button type="button" role="menuitem" className="danger" onClick={() => { setMenu(null); closeWorkspace(menu.machine, menu.session); }}>
             Close workspace
           </button>
         </div>
@@ -683,10 +673,13 @@ export default function App() {
       )}
 
       {widthMenu && (
-        <div className="row-menu width-menu" style={{ left: widthMenu.x, top: widthMenu.y }} onClick={(e) => e.stopPropagation()}>
+        <div className="row-menu width-menu" role="menu" style={{ left: widthMenu.x, top: widthMenu.y }} onClick={(e) => e.stopPropagation()}>
           {MIN_WIDTHS.map((n) => (
             <button
               key={n}
+              type="button"
+              role="menuitemradio"
+              aria-checked={n === minCols}
               className={n === minCols ? "on" : ""}
               onClick={() => {
                 setMinCols(n);
@@ -813,7 +806,7 @@ function TabStrip({
           const first = t.panes.find((p) => p.focused) ?? t.panes[0];
           if (editing?.id === t.id) {
             return (
-              <div key={t.id} role="tab" className="tab sel editing">
+              <div key={t.id} className="tab sel editing">
                 <input
                   className="tab-edit"
                   autoFocus
@@ -830,26 +823,29 @@ function TabStrip({
             );
           }
           return (
-            <div key={t.id} role="tab" aria-selected={t.id === tab.id} className={`tab${t.id === tab.id ? " sel" : ""}`}>
+            <div key={t.id} className={`tab${t.id === tab.id ? " sel" : ""}`}>
               <button
+                type="button"
+                role="tab"
+                aria-selected={t.id === tab.id}
                 className="tab-main"
                 disabled={!first}
                 title={t.named ? `${t.label} — double-click to rename` : "Double-click to name this tab"}
                 onClick={() => first && onSelect(first.id)}
                 onDoubleClick={() => setEditing({ id: t.id, value: t.named ? t.label : "" })}
               >
-                <StatusDot status={t.status} />
+                <StatusDot status={t.status} title={STATUS_LABEL[t.status]} />
                 <span className="tab-num">{t.number}</span>
-                {t.named && <span className="tab-label">{t.label}</span>}
+                {t.named && <span>{t.label}</span>}
                 {t.panes.length > 1 && <span className="tab-count">{t.panes.length}</span>}
               </button>
-              <button className="tab-close" title="Close tab" onClick={() => onCloseTab(t)}>
-                <Icon name="x" size={13} />
+              <button type="button" className="icon-btn tab-close" title="Close tab" aria-label={`Close tab ${t.named ? t.label : t.number}`} onClick={() => onCloseTab(t)}>
+                <Icon name="x" size={12} />
               </button>
             </div>
           );
         })}
-        <button className="tab-add" title="New tab in this workspace" onClick={onNewTab}>
+        <button type="button" className="icon-btn tab-add" title="New tab in this workspace" onClick={onNewTab}>
           <Icon name="plus" size={14} />
         </button>
       </div>
@@ -858,14 +854,16 @@ function TabStrip({
           {tab.panes.map((p, i) => (
             <button
               key={p.id}
+              type="button"
               className={`split-pane${p.id === pane.id ? " sel" : ""}`}
+              aria-pressed={p.id === pane.id}
               onClick={() => onSelect(p.id)}
               title={p.cwd}
             >
               <span className="tree-glyph">{i === tab.panes.length - 1 ? "└" : "├"}</span>
-              <StatusDot status={p.status} />
-              <span className="split-label">{p.title}</span>
-              {p.agent && <span className={`ws-agent agent-${p.agent}`}>{p.agent}</span>}
+              <StatusDot status={p.status} title={STATUS_LABEL[p.status]} />
+              <span>{p.title}</span>
+              {p.agent && <span className="ws-agent" style={{ color: brandColor(p.agent) }}>{p.agent}</span>}
             </button>
           ))}
         </div>
@@ -878,10 +876,6 @@ const STATUS_LABEL: Record<Status, string> = {
   run: "working", input: "needs you", idle: "ready", done: "done", shell: "shell",
 };
 
-function StatusDot({ status }: { status: Status }) {
-  return <span className={`dot dot-${status}`} title={STATUS_LABEL[status]} />;
-}
-
 function AgentSelect({ agents, value, onChange }: { agents: AgentKind[]; value: string; onChange: (v: string) => void }) {
   return (
     <label>
@@ -891,35 +885,20 @@ function AgentSelect({ agents, value, onChange }: { agents: AgentKind[]; value: 
         onChange={onChange}
         options={[
           ...agents.map((a) => ({ value: a.id, label: a.label, icon: <Logo agent={a.id} /> })),
-          { value: "shell", label: "Plain shell", icon: <span className="sel-glyph">$</span> },
+          { value: "shell", label: "Plain shell", icon: <Icon name="terminal" size={14} /> },
         ]}
       />
     </label>
   );
 }
 
-// useSubmit wraps a dialog's create action with busy/error state.
-type Submit = { err: string | null; busy: boolean; run: () => Promise<void> };
+// A dialog that is a form: fields, an error if the action failed, Cancel
+// and the one filled button.
+type Submit = { err: string; busy: boolean; run: () => Promise<void> };
 
-function useSubmit(action: () => Promise<void>): Submit {
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const run = async () => {
-    setBusy(true);
-    setErr(null);
-    try {
-      await action();
-    } catch (e) {
-      setErr(errMsg(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return { err, busy, run };
-}
-
-function Modal({ title, hint, children, onClose, submit, submitLabel }: {
+function FormDialog({ title, icon, hint, children, onClose, submit, submitLabel }: {
   title: string;
+  icon?: IconName;
   hint?: ReactNode;
   children: ReactNode;
   onClose: () => void;
@@ -927,29 +906,28 @@ function Modal({ title, hint, children, onClose, submit, submitLabel }: {
   submitLabel: string;
 }) {
   return (
-    <div className="modal-scrim" onClick={onClose}>
-      <form
-        className="modal"
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit.run();
-        }}
-      >
-        <h2>{title}</h2>
-        {hint && <p className="modal-hint">{hint}</p>}
-        {children}
-        {submit.err && <div className="chat-error">{submit.err}</div>}
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="primary" disabled={submit.busy}>
-            {submit.busy ? "…" : submitLabel}
-          </button>
-        </div>
-      </form>
-    </div>
+    <Dialog
+      as="form"
+      title={title}
+      icon={icon}
+      onClose={onClose}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit.run();
+      }}
+    >
+      {hint && <p className="modal-hint">{hint}</p>}
+      {children}
+      {submit.err && <Notice tone="error">{submit.err}</Notice>}
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="submit" className="btn primary" disabled={submit.busy}>
+          {submit.busy ? "…" : submitLabel}
+        </button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -957,30 +935,29 @@ function RenameDialog({ what, label, onClose, onRename }: { what: "tab" | "works
   const [value, setValue] = useState(label);
   const submit = useSubmit(() => onRename(value.trim()));
   return (
-    <Modal title={what === "tab" ? "Rename tab" : "Rename workspace"} onClose={onClose} submit={submit} submitLabel="Rename">
+    <FormDialog title={what === "tab" ? "Rename tab" : "Rename workspace"} icon="edit" onClose={onClose} submit={submit} submitLabel="Rename">
       <label>
         Name
         <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} onFocus={(e) => e.target.select()} />
       </label>
-    </Modal>
+    </FormDialog>
   );
 }
 
+// a yes/no before something destructive; focus starts on Cancel
 function ConfirmDialog({ text, label, onClose, onConfirm }: { text: string; label: string; onClose: () => void; onConfirm: () => void }) {
   return (
-    <div className="modal-scrim" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="alertdialog">
-        <p className="confirm-text">{text}</p>
-        <div className="modal-actions">
-          <button type="button" onClick={onClose} autoFocus>
-            Cancel
-          </button>
-          <button type="button" className="primary danger" onClick={onConfirm}>
-            {label}
-          </button>
-        </div>
+    <Dialog onClose={onClose}>
+      <p className="confirm-text">{text}</p>
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="btn danger" onClick={onConfirm}>
+          {label}
+        </button>
       </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -1000,28 +977,23 @@ function NewWorkspaceDialog({
   const [machine, setMachine] = useState(defaultMachine);
   const [dir, setDir] = useState("");
   const [name, setName] = useState("");
-  const [agent, setAgent] = useState("claude");
+  const [agent, setAgent] = useState(() => defaultAgent(agents, "claude"));
   const submit = useSubmit(async () => {
     if (!dir.trim()) throw new Error("Project folder is required");
     await onCreate(machine, dir.trim(), name.trim(), agent);
   });
   const target = machines.find((m) => m.id === machine);
+  // every machine is listed; one that is not connected cannot be picked
+  const options = machineOptions(machines, { onlyConnected: false }).map((o) => {
+    const m = machines.find((x) => x.id === o.value);
+    return m && m.state !== "connected" ? { ...o, hint: m.state, disabled: true } : { ...o, hint: m?.host };
+  });
   return (
-    <Modal title="New workspace" onClose={onClose} submit={submit} submitLabel="Create">
+    <FormDialog title="New workspace" icon="folder" onClose={onClose} submit={submit} submitLabel="Create">
       {machines.length > 1 && (
         <label>
           Machine
-          <Select
-            value={machine}
-            onChange={setMachine}
-            options={machines.map((m) => ({
-              value: m.id,
-              label: m.label,
-              hint: m.state !== "connected" ? m.state : m.host,
-              disabled: m.state !== "connected",
-              icon: <span className={`machine-state is-${m.state}`} />,
-            }))}
-          />
+          <Select value={machine} onChange={setMachine} options={options} />
         </label>
       )}
       <label>
@@ -1033,7 +1005,7 @@ function NewWorkspaceDialog({
         <input value={name} placeholder="checkout-api" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={setAgent} />
-    </Modal>
+    </FormDialog>
   );
 }
 
@@ -1052,8 +1024,9 @@ function NewTabDialog({
   const [agent, setAgent] = useState("shell");
   const submit = useSubmit(() => onCreate(name.trim(), agent));
   return (
-    <Modal
+    <FormDialog
       title={`New tab in ${session.name}`}
+      icon="plus"
       hint="Opens in the workspace's folder, like herdr's prefix+c."
       onClose={onClose}
       submit={submit}
@@ -1064,7 +1037,7 @@ function NewTabDialog({
         <input autoFocus value={name} placeholder="tests" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={setAgent} />
-    </Modal>
+    </FormDialog>
   );
 }
 
@@ -1082,15 +1055,16 @@ function NewWorktreeDialog({
   const [branch, setBranch] = useState(suggestBranch);
   const [base, setBase] = useState("");
   const [name, setName] = useState("");
-  const [agent, setAgent] = useState("claude");
+  const [agent, setAgent] = useState(() => defaultAgent(agents, "claude"));
   const submit = useSubmit(async () => {
     if (!branch.trim()) throw new Error("Branch name is required");
     await onCreate(branch.trim(), base.trim(), name.trim(), agent);
   });
   const repo = session.worktree?.repo_name ?? session.name;
   return (
-    <Modal
+    <FormDialog
       title={`New worktree of ${repo}`}
+      icon="git-branch"
       hint={
         <>
           <code>git worktree add</code> creates the branch's own checkout; it opens as a workspace
@@ -1114,7 +1088,7 @@ function NewWorktreeDialog({
         <input value={name} placeholder="defaults to the branch" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={setAgent} />
-    </Modal>
+    </FormDialog>
   );
 }
 
@@ -1132,8 +1106,9 @@ function AddMachineDialog({
     await onAdd(label.trim(), host.trim());
   });
   return (
-    <Modal
+    <FormDialog
       title="Add a remote PC"
+      icon="monitor"
       hint={
         <>
           Machines saved in herdr appear on their own. This adds another: any host your{" "}
@@ -1152,6 +1127,6 @@ function AddMachineDialog({
         Label (optional)
         <input value={label} placeholder="Build box" onChange={(e) => setLabel(e.target.value)} />
       </label>
-    </Modal>
+    </FormDialog>
   );
 }

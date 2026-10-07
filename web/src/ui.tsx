@@ -9,6 +9,10 @@ import { errMsg } from "./prefs";
 
 // ---- dialog ----
 
+// how many dialogs are open: the page behind them is inert until the last
+// one closes
+let openDialogs = 0;
+
 export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit, controls, children, className, labelledBy }: {
   title?: ReactNode;
   icon?: IconName;
@@ -27,15 +31,25 @@ export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit
     // focus moves in; the page behind is inert; both undone on close
     const opener = document.activeElement as HTMLElement | null;
     const root = document.getElementById("root");
+    openDialogs++;
     root?.setAttribute("inert", "");
-    const first = box.current?.querySelector<HTMLElement>("[autofocus], input:not([type=hidden]), textarea, select, button:not(.icon-btn)");
-    (first ?? box.current)?.focus();
+    // React's autoFocus focuses without writing the attribute: a field it
+    // already focused keeps the focus
+    if (!box.current?.contains(document.activeElement)) {
+      const first = box.current?.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select, button:not(.icon-btn)");
+      (first ?? box.current)?.focus();
+    }
     return () => {
-      root?.removeAttribute("inert");
+      if (--openDialogs === 0) root?.removeAttribute("inert");
       opener?.focus?.();
     };
   }, []);
-  useEscape(onClose);
+  // Escape closes this dialog only when it is the topmost one
+  const topmost = useCallback(() => {
+    const scrims = document.querySelectorAll(".modal-scrim");
+    return scrims[scrims.length - 1] === box.current?.parentElement;
+  }, []);
+  useEscape(onClose, topmost);
   const Tag = as;
   const node = (
     <div className="modal-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -55,7 +69,7 @@ export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit
                 {icon && <Icon name={icon} size={16} />} {title}
               </h2>
             )}
-            {controls}
+            {controls && <div className="modal-head-controls">{controls}</div>}
             <button type="button" className="icon-btn" onClick={onClose} title="Close" aria-label="Close">
               <Icon name="x" size={16} />
             </button>
@@ -69,17 +83,18 @@ export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit
 }
 
 // Escape closes the topmost thing: a dialog, unless a Select's list is open
-// (its own listener runs first and stops the event)
-export function useEscape(onClose: () => void) {
+// (its own listener runs first and stops the event) or `when` says another
+// layer is above this one
+export function useEscape(onClose: () => void, when?: () => boolean) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || document.querySelector(".sel-pop")) return;
+      if (e.key !== "Escape" || document.querySelector(".sel-pop") || (when && !when())) return;
       e.stopPropagation();
       onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, when]);
 }
 
 // a popover or menu: a pointer outside it, or Escape, closes it
@@ -92,7 +107,9 @@ export function useDismiss(open: boolean, close: () => void, ignore: string[] = 
       close();
     };
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      // a Select's open list takes the Escape; its listener is a sibling
+      // on the same node, so stopPropagation alone would not keep us out
+      if (e.key === "Escape" && !document.querySelector(".sel-pop")) {
         e.stopPropagation();
         close();
       }

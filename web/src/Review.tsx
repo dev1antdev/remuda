@@ -4,12 +4,13 @@
 // comment on any hunk that goes to the pane's agent as a prompt with the
 // file and line, and "Mark reviewed" to move the baseline to now.
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchReview, fetchReviewDiff, markReviewed, submitPrompt, type Review as ReviewData, type ReviewFile } from "./api";
 import type { AgentTarget } from "./Tasks";
 import SendToAgent from "./SendToAgent";
-import { usePref } from "./prefs";
-import { errMsg } from "./prefs";
+import { basename, dirname, errMsg, usePref } from "./prefs";
+import { ago } from "./time";
+import { Notice, useTimedNotice } from "./ui";
 import Icon from "./icons";
 
 // A review comment: a line of a file's diff and what should change there.
@@ -23,6 +24,8 @@ export type DraftComment = {
   code: string; // the diff row, prefix included
   text: string;
 };
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 export default function Review({ machineId, paneId, dir, agent, agents, currentPane, onOpenFile, onSeen }: {
   machineId: string;
@@ -42,8 +45,9 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false); // marking reviewed
+  const [sending, setSending] = useState(false);
+  const [notice, showNotice] = useTimedNotice(5000);
 
   useEffect(() => {
     let gone = false;
@@ -60,6 +64,9 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
       gone = true;
     };
   }, [machineId, dir, tick]);
+  // one loader for every file row, stable across renders: a row's effect
+  // keys on it and must not fire again on each render of the list
+  const loadDiff = useCallback((path: string) => fetchReviewDiff(machineId, dir, path), [machineId, dir]);
 
   const seen = async () => {
     setBusy(true);
@@ -68,8 +75,7 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
       setOpen(null);
       setTick((t) => t + 1);
       onSeen?.();
-      setNotice("Reviewed — the next look starts from here.");
-      setTimeout(() => setNotice(""), 4000);
+      showNotice("Reviewed — the next look starts from here.");
     } catch (e) {
       setError(errMsg(e));
     } finally {
@@ -83,50 +89,57 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
       `Review comments (${draft.length}) on ${dir}${data?.branch ? ` (${data.branch})` : ""}:`,
       ...draft.map((c, i) => `${i + 1}. ${c.file}:${c.line}${c.removed ? " (removed line)" : ""}\n   > ${c.code}\n   ${c.text.replace(/\n/g, "\n   ")}`),
     ].join("\n\n");
-  const sendDraft = async (target: { machineId: string; paneId: string; agent: string; sessionName?: string }) => {
-    await submitPrompt(target.machineId, target.paneId, reviewMessage());
-    setDraft([]);
-    setPick(false);
-    setNotice(`Sent ${draft.length} comment${draft.length === 1 ? "" : "s"} to ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""}.`);
-    setTimeout(() => setNotice(""), 5000);
+  // the draft goes to an agent as one prompt; a second tap while it is on
+  // its way does nothing. A failure is thrown to the caller: the picker
+  // dialog shows it in place, the direct button on the panel
+  const sendDraft = async (target: { machineId: string; paneId: string; agent: string; sessionName?: string }, text = reviewMessage()) => {
+    if (sending) return;
+    setSending(true);
+    try {
+      await submitPrompt(target.machineId, target.paneId, text);
+      setDraft([]);
+      setPick(false);
+      showNotice(`Sent ${plural(draft.length, "comment")} to ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""}.`);
+    } finally {
+      setSending(false);
+    }
   };
 
-  if (data === null && !error) return <div className="placeholder">Looking at the folder…</div>;
-  if (data && !data.repo) {
-    return (
-      <div className="placeholder">
-        <div>{basename(dir)} is not a git checkout — nothing to review.</div>
-      </div>
-    );
-  }
+  if (data === null && !error) return <div className="empty">Looking at the folder…</div>;
+  if (data && !data.repo) return <div className="empty">{basename(dir)} is not a git checkout — nothing to review.</div>;
   const files = data?.files ?? [];
   const commits = data?.commits ?? [];
   const since = data?.baseline ? new Date(data.baseline.at) : null;
   const added = files.reduce((a, f) => a + f.added, 0);
   const removed = files.reduce((a, f) => a + f.removed, 0);
+  const orphans = draft.filter((c) => !files.some((f) => f.path === c.file));
 
   return (
     <div className="review">
       <div className="review-head">
         <div className="review-title">
           <span className="review-branch">
-            <Icon name="layers" size={13} /> {data?.branch || "detached"}
+            <Icon name="git-branch" size={12} /> {data?.branch || "detached"}
           </span>
           <span className="review-sub">
             {since ? `since you looked ${ago(since)}` : "no baseline yet — everything uncommitted counts"}
-            {commits.length > 0 && ` · ${commits.length} commit${commits.length === 1 ? "" : "s"}`}
-            {files.length > 0 && ` · ${files.length} file${files.length === 1 ? "" : "s"} +${added} −${removed}`}
+            {commits.length > 0 && ` · ${plural(commits.length, "commit")}`}
+            {files.length > 0 && ` · ${plural(files.length, "file")} +${added} −${removed}`}
           </span>
         </div>
-        <button className="icon-btn" title="Look again" onClick={() => setTick((t) => t + 1)}>
-          <Icon name="arrow-up-down" size={14} />
+        <button type="button" className="icon-btn" title="Look again" onClick={() => setTick((t) => t + 1)}>
+          <Icon name="refresh-cw" size={14} />
         </button>
-        <button className="primary review-seen" disabled={busy || (!files.length && !commits.length)} onClick={() => void seen()} title="Everything here is reviewed: the next look starts from now">
+        <button type="button" className="btn primary review-seen" disabled={busy || (!files.length && !commits.length)} onClick={() => void seen()} title="Everything here is reviewed: the next look starts from now">
           <Icon name="check" size={14} /> Mark reviewed
         </button>
       </div>
-      {error && <div className="chat-error">{error}</div>}
-      {notice && <div className="tasks-notice">{notice}</div>}
+      {error && (
+        <Notice tone="error" onDismiss={() => setError("")}>
+          {error}
+        </Notice>
+      )}
+      {notice && <Notice tone="success">{notice}</Notice>}
       <div className="review-body">
         {commits.length > 0 && (
           <div className="review-commits">
@@ -134,19 +147,19 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
               <div key={c.sha} className="review-commit">
                 <code>{c.sha}</code>
                 <span className="review-commit-subject">{c.subject}</span>
-                <span className="review-commit-when">{ago(new Date(c.when * 1000))}</span>
+                <span className="review-commit-when">{ago(c.when * 1000)}</span>
               </div>
             ))}
           </div>
         )}
-        {files.length === 0 && commits.length === 0 && <div className="placeholder">Nothing has changed here{since ? " since you looked" : ""}.</div>}
+        {files.length === 0 && commits.length === 0 && <div className="empty">Nothing has changed here{since ? " since you looked" : ""}.</div>}
         {files.map((f) => (
           <FileRow
             key={`${f.path}|${tick}`} // a new look re-reads the diff
             file={f}
             open={open === f.path}
             onToggle={() => setOpen(open === f.path ? null : f.path)}
-            load={() => fetchReviewDiff(machineId, dir, f.path)}
+            load={loadDiff}
             canComment={!!agent || agents.length > 0}
             draft={draft.filter((c) => c.file === f.path)}
             onComment={(c) => addComment({ ...c, file: f.path })}
@@ -154,39 +167,37 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
             onOpen={(line) => onOpenFile(`${dir}/${f.path}`, line)}
           />
         ))}
-        {data && draft.some((c) => !files.some((f) => f.path === c.file)) && (
+        {data && orphans.length > 0 && (
           <div className="review-orphans">
-            <div className="review-orphans-head">Comments on files no longer in this list — still in the draft:</div>
-            {draft
-              .filter((c) => !files.some((f) => f.path === c.file))
-              .map((c) => (
-                <Note key={c.id} comment={c} where={`${c.file}:${c.line}`} onRemove={removeComment} />
-              ))}
+            <Notice tone="hint">Comments on files no longer in this list — still in the draft:</Notice>
+            {orphans.map((c) => (
+              <Note key={c.id} comment={c} where={`${c.file}:${c.line}`} onRemove={removeComment} />
+            ))}
           </div>
         )}
       </div>
       {draft.length > 0 && (
         <div className="review-draft-bar">
           <span className="review-draft-count">
-            <Icon name="message" size={14} /> {draft.length} comment{draft.length === 1 ? "" : "s"}
+            <Icon name="message" size={14} /> {plural(draft.length, "comment")}
           </span>
-          <button className="linkish" onClick={() => setDraft([])}>
+          <button type="button" className="linkish" onClick={() => setDraft([])}>
             Clear
           </button>
           {agent ? (
             <>
-              <button className="primary" onClick={() => void sendDraft({ machineId, paneId, agent }).catch((e) => setError(errMsg(e)))}>
-                <Icon name="send" size={13} /> Send to {agent}
+              <button type="button" className="btn primary" disabled={sending} onClick={() => sendDraft({ machineId, paneId, agent }).catch((e) => setError(errMsg(e)))}>
+                <Icon name="send" size={12} /> Send to {agent}
               </button>
               {agents.length > 1 && (
-                <button className="icon-btn" title="Send to another agent" onClick={() => setPick(true)}>
+                <button type="button" className="icon-btn" title="Send to another agent" disabled={sending} onClick={() => setPick(true)}>
                   <Icon name="chevron-down" size={14} />
                 </button>
               )}
             </>
           ) : (
-            <button className="primary" disabled={agents.length === 0} onClick={() => setPick(true)}>
-              <Icon name="send" size={13} /> Send to an agent…
+            <button type="button" className="btn primary" disabled={agents.length === 0 || sending} onClick={() => setPick(true)}>
+              <Icon name="send" size={12} /> Send to an agent…
             </button>
           )}
         </div>
@@ -199,13 +210,7 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
           currentPane={currentPane}
           rememberKey={`review:${machineId}|${dir}`}
           onClose={() => setPick(false)}
-          onSend={async (target, text) => {
-            await submitPrompt(target.machineId, target.paneId, text);
-            setDraft([]);
-            setPick(false);
-            setNotice(`Sent ${draft.length} comment${draft.length === 1 ? "" : "s"} to ${target.agent} in ${target.sessionName}.`);
-            setTimeout(() => setNotice(""), 5000);
-          }}
+          onSend={(target, text) => sendDraft(target, text)}
         />
       )}
     </div>
@@ -218,7 +223,7 @@ function FileRow({ file: f, open, onToggle, load, canComment, draft, onComment, 
   file: ReviewFile;
   open: boolean;
   onToggle: () => void;
-  load: () => Promise<string>;
+  load: (path: string) => Promise<string>;
   canComment: boolean;
   draft: DraftComment[]; // this file's comments
   onComment: (c: NewComment) => void;
@@ -227,40 +232,65 @@ function FileRow({ file: f, open, onToggle, load, canComment, draft, onComment, 
 }) {
   const [diff, setDiff] = useState<string | null>(null);
   const [err, setErr] = useState("");
+  // the diff is read once, when the row first opens; a failure stays on
+  // the row until "Try again", it is not retried on every render
   useEffect(() => {
-    if (!open || diff !== null) return;
-    load().then(setDiff, (e) => setErr(errMsg(e)));
-  }, [open, diff, load]);
+    if (!open || diff !== null || err) return;
+    let gone = false;
+    load(f.path).then(
+      (d) => !gone && setDiff(d),
+      (e) => !gone && setErr(errMsg(e)),
+    );
+    return () => {
+      gone = true;
+    };
+  }, [open, diff, err, load, f.path]);
   return (
     <div className={`review-file${f.fresh ? " fresh" : ""}${open ? " open" : ""}`}>
-      <button type="button" className="review-file-head" onClick={onToggle}>
-        <span className={`chevron${open ? " open" : ""}`}>
-          <Icon name="chevron-right" size={12} />
-        </span>
-        {f.fresh && <span className="review-dot" title="Changed since you looked" />}
-        <span className="review-path">
-          <span className="review-dir">{dirname(f.path)}</span>
-          {basename(f.path)}
-        </span>
-        {draft.length > 0 && (
-          <span className="review-tag review-tag-comments" title={`${draft.length} comment${draft.length === 1 ? "" : "s"} in the draft`}>
-            {draft.length}
+      <div className="review-file-row">
+        <button type="button" className="review-file-head" onClick={onToggle} aria-expanded={open}>
+          <span className={`chevron${open ? " open" : ""}`}>
+            <Icon name="chevron-right" size={12} />
           </span>
-        )}
-        {f.untracked ? <span className="review-tag">new</span> : <span className="review-counts">+{f.added} −{f.removed}</span>}
-        <span
-          className="linkish"
-          role="button"
-          title="Open the file"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpen();
-          }}
-        >
+          {f.fresh && <span className="review-dot" title="Changed since you looked" />}
+          <span className="review-path">
+            <span className="review-dir">{dirname(f.path)}</span>
+            {basename(f.path)}
+          </span>
+          {draft.length > 0 && (
+            <span className="review-tag review-tag-comments" title={`${plural(draft.length, "comment")} in the draft`}>
+              {draft.length}
+            </span>
+          )}
+          {f.untracked ? (
+            <span className="review-tag">new</span>
+          ) : (
+            <span className="review-counts">
+              +{f.added} −{f.removed}
+            </span>
+          )}
+        </button>
+        <button type="button" className="icon-btn sm" title="Open the file" onClick={() => onOpen()}>
           <Icon name="external-link" size={12} />
-        </span>
-      </button>
-      {open && (err ? <div className="chat-error">{err}</div> : diff === null ? <div className="placeholder small">Loading…</div> : <Diff text={diff} canComment={canComment} draft={draft} onComment={onComment} onRemove={onRemove} />)}
+        </button>
+      </div>
+      {open &&
+        (err ? (
+          <Notice
+            tone="error"
+            action={
+              <button type="button" className="linkish" onClick={() => setErr("")}>
+                Try again
+              </button>
+            }
+          >
+            {err}
+          </Notice>
+        ) : diff === null ? (
+          <div className="empty">Loading…</div>
+        ) : (
+          <Diff text={diff} canComment={canComment} draft={draft} onComment={onComment} onRemove={onRemove} />
+        ))}
     </div>
   );
 }
@@ -277,7 +307,7 @@ function Diff({ text, canComment, draft, onComment, onRemove }: { text: string; 
     return keys;
   }, [hunks]);
   const stray = draft.filter((c) => !placed.has(commentKey(c)));
-  if (hunks.length === 0 && stray.length === 0) return <div className="placeholder small">No textual diff (binary, or identical).</div>;
+  if (hunks.length === 0 && stray.length === 0) return <div className="empty">No textual diff (binary, or identical).</div>;
   return (
     <div className={`fv-code fv-diff review-diff${canComment ? " can-comment" : ""}`}>
       {hunks.map((h, i) => (
@@ -285,7 +315,7 @@ function Diff({ text, canComment, draft, onComment, onRemove }: { text: string; 
       ))}
       {stray.length > 0 && (
         <div className="review-orphans">
-          <div className="review-orphans-head">No longer on a line of this diff — still in the draft:</div>
+          <Notice tone="hint">No longer on a line of this diff — still in the draft:</Notice>
           {stray.map((c) => (
             <Note key={c.id} comment={c} where={`line ${c.line}${c.removed ? " (removed)" : ""}`} onRemove={onRemove} />
           ))}
@@ -307,7 +337,7 @@ function Note({ comment: c, where, onRemove }: { comment: DraftComment; where?: 
         )}
         {c.text}
       </span>
-      <button type="button" className="icon-btn" title="Remove this comment" onClick={() => onRemove(c.id)}>
+      <button type="button" className="icon-btn sm" title="Remove this comment" onClick={() => onRemove(c.id)}>
         <Icon name="x" size={12} />
       </button>
     </div>
@@ -365,6 +395,13 @@ function Hunk({ hunk, canComment, draft, onComment, onRemove }: { hunk: HunkT; c
     const k = rowKey(r);
     return draft.filter((c) => commentKey(c) === k);
   };
+  // a tap on a row opens the box under it; a drag that selected text is
+  // a copy, not a tap
+  const toggle = (i: number) => {
+    if (window.getSelection()?.toString()) return;
+    setAt(at === i ? null : i);
+    setText("");
+  };
   const submit = (r: Row) => {
     const t = text.trim();
     if (!t) return;
@@ -377,69 +414,66 @@ function Hunk({ hunk, canComment, draft, onComment, onRemove }: { hunk: HunkT; c
       <div className="fv-line hunk">
         <span className="fv-src">{hunk.header}</span>
       </div>
-      {rows.map((r, i) => (
-        <div key={i} className="review-row">
-          <div
-            className={`fv-line ${r.kind}${canComment && r.kind !== "meta" ? " commentable" : ""}${at === i ? " composing" : ""}`}
-            onClick={() => {
-              if (!canComment || r.kind === "meta") return;
-              setAt(at === i ? null : i);
-              setText("");
-            }}
-            title={canComment && r.kind !== "meta" ? "Comment on this line" : undefined}
-          >
-            <span className="fv-ln">{r.n ?? r.o ?? ""}</span>
-            <span className="fv-src">{r.l}</span>
-          </div>
-          {commentsAt(r).map((c) => (
-            <Note key={c.id} comment={c} onRemove={onRemove} />
-          ))}
-          {at === i && (
-            <form
-              className="review-comment"
-              onSubmit={(e) => {
-                e.preventDefault();
-                submit(r);
-              }}
+      {rows.map((r, i) => {
+        const commentable = canComment && r.kind !== "meta";
+        return (
+          <div key={i}>
+            <div
+              className={`fv-line ${r.kind}${commentable ? " commentable" : ""}${at === i ? " composing" : ""}`}
+              role={commentable ? "button" : undefined}
+              tabIndex={commentable ? 0 : undefined}
+              onClick={commentable ? () => toggle(i) : undefined}
+              onKeyDown={
+                commentable
+                  ? (e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggle(i);
+                      }
+                    }
+                  : undefined
+              }
+              title={commentable ? "Comment on this line" : undefined}
             >
-              <textarea
-                autoFocus
-                rows={3}
-                value={text}
-                placeholder={`What should change at line ${r.n ?? r.o}? It joins the draft; everything goes to the agent in one message.`}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setAt(null);
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(r);
+              <span className="fv-ln">{r.n ?? r.o ?? ""}</span>
+              <span className="fv-src">{r.l}</span>
+            </div>
+            {commentsAt(r).map((c) => (
+              <Note key={c.id} comment={c} onRemove={onRemove} />
+            ))}
+            {at === i && (
+              <form
+                className="review-comment"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submit(r);
                 }}
-              />
-              <div className="modal-actions">
-                <button type="button" onClick={() => setAt(null)}>
-                  Cancel
-                </button>
-                <button type="submit" className="primary" disabled={!text.trim()}>
-                  <Icon name="plus" size={13} /> Add to the review
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      ))}
+              >
+                <textarea
+                  autoFocus
+                  rows={3}
+                  value={text}
+                  placeholder={`What should change at line ${r.n ?? r.o}? It joins the draft; everything goes to the agent in one message.`}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setAt(null);
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(r);
+                  }}
+                />
+                <div className="modal-actions">
+                  <button type="button" className="btn" onClick={() => setAt(null)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn primary" disabled={!text.trim()}>
+                    <Icon name="plus" size={12} /> Add to the review
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
-}
-
-const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
-const dirname = (p: string) => {
-  const i = p.lastIndexOf("/");
-  return i < 0 ? "" : p.slice(0, i + 1);
-};
-
-function ago(d: Date): string {
-  const m = Math.round((Date.now() - d.getTime()) / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m} min ago`;
-  const h = Math.round(m / 60);
-  if (h < 48) return `${h} h ago`;
-  return `${Math.round(h / 24)} days ago`;
 }

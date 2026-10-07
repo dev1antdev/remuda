@@ -87,8 +87,9 @@ SPA. See README.md for the user story.
   strings, nothing to sanitize). `parseBlocks` is pure (task-list state is
   decided there, not in render) and memoized per text; testable via
   esbuild + node.
-- `web/src/prefs.ts` — `usePref` (localStorage-backed state), `isTouch`,
-  `errMsg`, `basename`; `web/src/api.ts` — `check`/`sendJSON` for every
+- `web/src/prefs.ts` — `usePref` (localStorage-backed state; `readPref`
+  keeps a stored value only in the fallback's shape), `isTouch`, `errMsg`,
+  `basename`/`dirname`, `useDebounced`; `web/src/api.ts` — `check`/`sendJSON` for every
   request. The App derives the shown pane from a *requested* one (deep link,
   notification, click) falling back to the first agent pane; nothing fixes
   selection up in effects.
@@ -320,15 +321,38 @@ SPA. See README.md for the user story.
   video); the WS uses per-message compression and coalesces queued chunks.
 - `web/src/styles.css` — one design system, dark and warm: four surface
   layers (`--bg` → `--bg-raised` → `--bg-input` → `--bg-overlay`, `--bg-active`
-  for a raised segment), hairlines as white at low alpha (`--line`,
-  `--line-strong`), every colour with a `-soft` fill, a radius scale, three
-  shadows, control heights `--ctl`/`--ctl-sm`/`--ctl-xs`, `--ease`/`--fast`/
-  `--base` for motion (and `prefers-reduced-motion`). Shared rules at the top
-  (filled `.primary`, quiet buttons, text fields, segmented controls, menus,
-  notice cards, the custom checkbox) — reuse them before writing new ones.
-  Icons are `web/src/icons.tsx` (inline 24px stroke paths, `<Icon name>`):
-  never an emoji or a font glyph as an icon. `Select.tsx` replaces every
-  native `<select>` (an icon per option, a portal so nothing clips it).
+  / `--bg-elev` for a raised chip), hairlines as white at low alpha (`--line`,
+  `--line-strong`, `--line-hover`), every colour with a `-soft` fill and a
+  `-ring`, a radius scale (`--r-xs` 4 … `--r-xl` 16 — never a px radius),
+  a type scale (11 / 12 / 13 / 13.5 body / 15 / 18 / 20 — never another
+  size), control heights `--ctl-lg`/`--ctl`/`--ctl-sm`/`--ctl-xs`, a layer
+  ladder (`--z-drawer` < `--z-dialog` < `--z-menu` < `--z-select`), three
+  shadows, `--ease`/`--fast`/`--base` for motion (and
+  `prefers-reduced-motion`). **Every `<button>` carries one family class**:
+  `btn` (quiet), `btn primary` (the one filled button of a surface), `btn
+  danger`, `btn ghost`, `icon-btn` (+ `sm`/`lg`), or `linkish`; `.on` marks a
+  toggled one. Fields have one base rule (every input, textarea and `.sel`;
+  `.sm`, `.bare`), one placeholder, one focus ring. Rows share a radius,
+  hover and focus ring; cards are `.card`; counts are `.badge` (`.quiet`);
+  state dots are `.dot.dot-<status>` / `.dot.machine-state.is-<state>`. On
+  a coarse pointer the small controls grow and hover-revealed ones stay
+  visible. A button is styled by its family class, not by where it sits;
+  the only context rules left are the components whose children *are* the
+  component — segmented controls (`.mode-switch`, `.lens-switch`,
+  `.fv-tabs`), menus (`.row-menu`), the key bar (`.keybar .key`). Reuse
+  these before writing new rules.
+- `web/src/ui.tsx` — the shared pieces: `Dialog` (one scrim over the
+  drawer, a head with icon/title/controls/X, Escape, focus in and back out,
+  `#root` inert while open, `as="form"` + `onSubmit`, sizes sm/md/lg),
+  `Notice` (tones error/success/warn/info/hint, optional icon, action and
+  dismiss), `useTimedNotice`, `useDismiss` (popovers), `useSubmit`,
+  `useAsync`, `StatusDot`. `time.ts` (`ago`, `whenShort`, `fmtDate`,
+  `fmtDay`) and `options.tsx` (`machineOptions`, `folderOptions`,
+  `machineLabel`) are the one way to say a time or build a roster select.
+  Icons are `web/src/icons.tsx` (inline 24px stroke paths, `<Icon name
+  size={12|14|16}>`): never an emoji or a font glyph as an icon.
+  `Select.tsx` replaces every native `<select>` (an icon per option, a
+  portal so nothing clips it).
 - `web/` — React + Vite + xterm.js SPA, embedded via `web/embed.go`
   (`go:embed all:dist`). Build with `make web` before `go build`. **Paste**: xterm brackets a paste only once it has seen the app's
   DECSET 2004 — and a viewer that attaches later gets no replay, so it

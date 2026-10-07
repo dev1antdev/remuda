@@ -9,8 +9,10 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     const ta = document.createElement("textarea");
     ta.value = text;
+    ta.readOnly = true; // no keyboard on a phone
     ta.style.position = "fixed";
     ta.style.opacity = "0";
+    ta.style.fontSize = "16px"; // iOS zooms into a smaller field
     document.body.appendChild(ta);
     ta.select();
     const ok = document.execCommand("copy");

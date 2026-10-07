@@ -4,8 +4,9 @@
 // finished agent keeps its tick until the pane is looked at; one that asks
 // keeps its question until it works again; a parked one cools with time.
 
-import { useEffect, useState } from "react";
-import type { Machine, Session, Status } from "./api";
+import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
+import type { Machine, Session } from "./api";
+import { fillClass } from "./Usage";
 import Logo from "./Logo";
 import Select from "./Select";
 import {
@@ -24,6 +25,8 @@ import {
   type RadarPrefs,
 } from "./radar";
 import { basename, usePref } from "./prefs";
+import { ago } from "./time";
+import { Notice, StatusDot, useDismiss } from "./ui";
 import Icon from "./icons";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
@@ -59,28 +62,23 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
   }, []);
   useEffect(() => setNow(Date.now()), [machines]);
 
-  // the settings popover is fixed at its button: inside the sidebar it would
-  // be clipped by the sidebar's own scrolling. A click outside closes it —
-  // a click inside one of its own dropdowns (a portal) does not.
   // workspaces folded shut, like the machines above them
   const [wsFolded, setWsFolded] = usePref<Record<string, boolean>>("wsFolded", {});
   const onFold = (key: string) => setWsFolded((f) => ({ ...f, [key]: !f[key] }));
 
+  // the settings popover is fixed at its button: inside the sidebar it would
+  // be clipped by the sidebar's own scrolling. A pointer outside closes it —
+  // not one on its own button (that toggles) or inside its dropdowns (a
+  // portal) — and so does a dialog opening over the page.
   const [settings, setSettings] = useState<{ x: number; y: number } | null>(null);
+  const closeSettings = useCallback(() => setSettings(null), []);
+  useDismiss(!!settings, closeSettings, [".radar-settings", ".radar-settings-btn", ".sel-pop"]);
   useEffect(() => {
-    if (!settings) return;
-    const close = (e: MouseEvent) => {
-      const t = e.target as Element;
-      if (t.closest(".radar-settings") || t.closest(".sel-pop")) return;
-      setSettings(null);
-    };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSettings(null);
-    document.addEventListener("mousedown", close);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", close);
-      document.removeEventListener("keydown", onKey);
-    };
+    const root = document.getElementById("root");
+    if (!settings || !root) return;
+    const mo = new MutationObserver(() => root.hasAttribute("inert") && setSettings(null));
+    mo.observe(root, { attributes: true, attributeFilter: ["inert"] });
+    return () => mo.disconnect();
   }, [settings]);
 
   const nextOrder = { active: "recent", recent: "herdr", herdr: "active" } as const;
@@ -92,12 +90,14 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
       <div className="sidebar-head">
         <span>Machines</span>
         <span className="sidebar-head-actions">
-          <button className={prefs.order !== "active" ? "on" : ""} title={orderTitle[prefs.order]} onClick={() => onPrefs({ ...prefs, order: nextOrder[prefs.order] })}>
+          <button type="button" className={`icon-btn${prefs.order !== "active" ? " on" : ""}`} title={orderTitle[prefs.order]} onClick={() => onPrefs({ ...prefs, order: nextOrder[prefs.order] })}>
             <Icon name={orderIcon[prefs.order]} size={14} />
           </button>
           <button
-            className={settings ? "on" : ""}
+            type="button"
+            className={`icon-btn radar-settings-btn${settings ? " on" : ""}`}
             title="Sidebar settings"
+            aria-expanded={!!settings}
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect();
               setSettings(settings ? null : { x: Math.min(r.left, window.innerWidth - 246), y: r.bottom });
@@ -106,14 +106,14 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
             <Icon name="sliders" size={14} />
           </button>
           {settings && <RadarSettings at={settings} prefs={prefs} onPrefs={onPrefs} />}
-          <button onClick={onSchedules} title="Schedules: prompts sent to agents on a timetable">
+          <button type="button" className="icon-btn" onClick={onSchedules} title="Schedules: prompts sent to agents on a timetable">
             <Icon name="calendar" size={14} />
           </button>
-          <button onClick={onUsage} title="Usage: what the agents cost, by day, project and session">
+          <button type="button" className="icon-btn" onClick={onUsage} title="Usage: what the agents cost, by day, project and session">
             <Icon name="chart" size={14} />
           </button>
-          <button onClick={onAddMachine} title="Add a remote PC over SSH">
-            <Icon name="plus" size={13} /> PC
+          <button type="button" className="sidebar-head-btn" onClick={onAddMachine} title="Add a remote PC over SSH">
+            <Icon name="plus" size={12} /> PC
           </button>
         </span>
       </div>
@@ -123,7 +123,7 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
         return (
           <div key={m.id} className={`machine${folded ? " folded" : ""}`}>
             <div className="machine-head">
-              <button className="machine-toggle" title={folded ? "Show workspaces" : "Hide workspaces"} onClick={() => onToggle(m.id)}>
+              <button type="button" className="machine-toggle" title={folded ? "Show workspaces" : "Hide workspaces"} aria-expanded={!folded} onClick={() => onToggle(m.id)}>
                 <span className={`machine-state is-${m.state}`} title={m.error || m.state} />
                 <span className="machine-label" title={m.host}>
                   {m.label}
@@ -132,7 +132,7 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
                   <span className="machine-summary">
                     {n.working > 0 && <span className="radar-mark working">{markOf("working", step)} {n.working}</span>}
                     {n.blocked > 0 && <span className="radar-mark blocked">? {n.blocked}</span>}
-                    {n.done > 0 && <span className="radar-mark done">✓ {n.done}</span>}
+                    {n.done > 0 && <span className="radar-mark done"><Icon name="check" size={12} /> {n.done}</span>}
                     {!n.working && !n.blocked && !n.done && m.sessions.length > 0 && <span className="machine-count">{m.sessions.length}</span>}
                   </span>
                 )}
@@ -145,17 +145,25 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
                   herdr
                 </span>
               )}
-              <button className="icon-btn" title={`New workspace on ${m.label}`} disabled={m.state !== "connected"} onClick={() => onNewWorkspace(m)}>
+              <button type="button" className="icon-btn" title={`New workspace on ${m.label}`} disabled={m.state !== "connected"} onClick={() => onNewWorkspace(m)}>
                 <Icon name="plus" size={14} />
               </button>
               {m.id !== "local" && m.source !== "herdr" && (
-                <button className="icon-btn" title="Remove machine (nothing on the PC is touched)" onClick={() => onRemoveMachine(m)}>
+                <button type="button" className="icon-btn danger" title="Remove machine (nothing on the PC is touched)" onClick={() => onRemoveMachine(m)}>
                   <Icon name="x" size={14} />
                 </button>
               )}
             </div>
-            {m.state === "error" && <div className="machine-error">{m.error}</div>}
-            {m.state === "connecting" && <div className="machine-error dim">connecting…</div>}
+            {m.state === "error" && (
+              <Notice tone="error" className="machine-error">
+                {m.error}
+              </Notice>
+            )}
+            {m.state === "connecting" && (
+              <Notice tone="hint" className="machine-error dim">
+                connecting…
+              </Notice>
+            )}
             {!folded && (
               <div className="ws-tree">
                 {prefs.order === "recent" ? (
@@ -187,6 +195,14 @@ type RowProps = {
 };
 
 const foldKey = (m: Machine, s: Session) => `${m.id}|${s.id}`;
+
+// a row is a button made of a div: Enter or Space on the row itself picks
+// it; the same keys on a button inside it are that button's
+function rowKey(e: KeyboardEvent<HTMLDivElement>, pick: () => void) {
+  if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+  e.preventDefault();
+  pick();
+}
 
 // what a folded group still says: its agents' states, and its worktrees
 function groupSummary(g: Group): { working: number; blocked: number; done: number; agents: number; children: number } {
@@ -237,10 +253,10 @@ function Flat({ machine: m, ...rest }: RowProps) {
   return (
     <>
       {rows.map((r) => (
-        <AgentRowView key={r.pane.id} machine={m} row={r} workspace="" showWorkspace {...rest} />
+        <AgentRowView key={`p:${r.pane.id}`} machine={m} row={r} workspace="" showWorkspace {...rest} />
       ))}
       {quiet.map((s) => (
-        <WorkspaceHead key={s.id} machine={m} session={s} nested={false} rows={[]} {...rest} />
+        <WorkspaceHead key={`s:${s.id}`} machine={m} session={s} nested={false} rows={[]} {...rest} />
       ))}
     </>
   );
@@ -267,13 +283,13 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
       role="button"
       tabIndex={0}
       onClick={() => rep && onSelect(m.id, rep.id)}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && rep && onSelect(m.id, rep.id)}
+      onKeyDown={(e) => rowKey(e, () => rep && onSelect(m.id, rep.id))}
       title={folder}
     >
       {foldable ? (
         <button
           type="button"
-          className={`ws-fold${isFolded ? "" : " open"}`}
+          className={`icon-btn ws-fold${isFolded ? "" : " open"}`}
           title={isFolded ? "Show agents" : "Hide agents"}
           aria-expanded={!isFolded}
           onClick={(e) => {
@@ -306,7 +322,7 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
         <span className="machine-summary ws-summary">
           {summary.working > 0 && <span className="radar-mark working">{markOf("working", step)} {summary.working}</span>}
           {summary.blocked > 0 && <span className="radar-mark blocked">? {summary.blocked}</span>}
-          {summary.done > 0 && <span className="radar-mark done">✓ {summary.done}</span>}
+          {summary.done > 0 && <span className="radar-mark done"><Icon name="check" size={12} /> {summary.done}</span>}
           {!summary.working && !summary.blocked && !summary.done && (
             <span className="machine-count">
               {summary.agents}
@@ -317,15 +333,16 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
       )}
       <button
         type="button"
-        className="ws-menu-btn"
+        className="icon-btn ws-menu-btn"
         title="Workspace actions"
+        aria-haspopup="menu"
         onClick={(e) => {
           e.stopPropagation();
           const r = e.currentTarget.getBoundingClientRect();
           onMenu(m, s, r.right, r.bottom);
         }}
       >
-        <Icon name="more" size={15} />
+        <Icon name="more" size={14} />
       </button>
     </div>
   );
@@ -345,7 +362,7 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
       role="button"
       tabIndex={0}
       onClick={() => onSelect(m.id, p.id)}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect(m.id, p.id)}
+      onKeyDown={(e) => rowKey(e, () => onSelect(m.id, p.id))}
       title={`${p.agent || "shell"} · ${alert ? alert : stateWords(d, p.radar?.last_active, now)}\n${p.cwd}`}
     >
       <span className="radar-mark" style={style}>
@@ -365,15 +382,16 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
           <span className="radar-ws">{r.session.name}</span>
           <button
             type="button"
-            className="ws-menu-btn"
+            className="icon-btn ws-menu-btn"
             title="Workspace actions"
+            aria-haspopup="menu"
             onClick={(e) => {
               e.stopPropagation();
               const b = e.currentTarget.getBoundingClientRect();
               onMenu(m, r.session, b.right, b.bottom);
             }}
           >
-            <Icon name="more" size={15} />
+            <Icon name="more" size={14} />
           </button>
         </>
       )}
@@ -382,12 +400,8 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
 }
 
 function RadarSettings({ at, prefs, onPrefs }: { at: { x: number; y: number }; prefs: RadarPrefs; onPrefs: (p: RadarPrefs) => void }) {
-  const num = (v: string, fallback: number) => {
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? n : fallback;
-  };
   return (
-    <div className="row-menu radar-settings" style={{ left: at.x, top: at.y }}>
+    <div className="row-menu radar-settings" role="dialog" aria-label="Sidebar settings" style={{ left: at.x, top: at.y }}>
       <label>
         Order
         <Select
@@ -414,11 +428,11 @@ function RadarSettings({ at, prefs, onPrefs }: { at: { x: number; y: number }; p
       </label>
       <label>
         Fresh for (min)
-        <input type="number" min={1} value={prefs.freshMinutes} onChange={(e) => onPrefs({ ...prefs, freshMinutes: num(e.target.value, prefs.freshMinutes) })} />
+        <MinutesInput value={prefs.freshMinutes} onChange={(freshMinutes) => onPrefs({ ...prefs, freshMinutes })} />
       </label>
       <label>
         Stale after (min)
-        <input type="number" min={1} value={prefs.staleMinutes} onChange={(e) => onPrefs({ ...prefs, staleMinutes: num(e.target.value, prefs.staleMinutes) })} />
+        <MinutesInput value={prefs.staleMinutes} onChange={(staleMinutes) => onPrefs({ ...prefs, staleMinutes })} />
       </label>
       <label className="row">
         <input type="checkbox" checked={prefs.shells} onChange={(e) => onPrefs({ ...prefs, shells: e.target.checked })} /> list shell panes too
@@ -427,8 +441,26 @@ function RadarSettings({ at, prefs, onPrefs }: { at: { x: number; y: number }; p
   );
 }
 
-function StatusDot({ status }: { status: Status }) {
-  return <span className={`dot dot-${status}`} />;
+// a number field that lets you clear it and retype: the text is local, a
+// whole positive number is saved as it is typed, anything else is dropped
+// on the way out
+function MinutesInput({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  return (
+    <input
+      type="number"
+      min={1}
+      inputMode="numeric"
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const n = Number(e.target.value);
+        if (e.target.value !== "" && Number.isInteger(n) && n > 0) onChange(n);
+      }}
+      onBlur={() => setText(String(value))}
+    />
+  );
 }
 
 function representative(s: Session) {
@@ -438,33 +470,23 @@ function representative(s: Session) {
 }
 
 function stateWords(d: Display, last: number | undefined, now: number): string {
-  const ago = last ? ` · last turn ${since(now - last)}` : "";
+  const when = last ? ` · last turn ${ago(last, now)}` : "";
   switch (d) {
     case "working":
       return "working";
     case "blocked":
       return "waiting on you";
     case "done":
-      return `done${ago}`;
+      return `done${when}`;
     case "idle_fresh":
-      return `idle, just stopped${ago}`;
+      return `idle, just stopped${when}`;
     case "idle_stale":
-      return `idle for a long time${ago}`;
+      return `idle for a long time${when}`;
     case "unknown":
       return "state unknown";
     default:
-      return `idle${ago}`;
+      return `idle${when}`;
   }
 }
 
-function since(ms: number): string {
-  const m = Math.round(ms / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m} min ago`;
-  const h = Math.round(m / 60);
-  if (h < 48) return `${h} h ago`;
-  return `${Math.round(h / 24)} days ago`;
-}
-
 // the colour of a context fill: calm below 70%, amber, then red near the edge
-export const fillClass = (f: number) => (f >= 0.9 ? " is-red" : f >= 0.7 ? " is-amber" : "");

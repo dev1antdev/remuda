@@ -1,14 +1,19 @@
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { findPaths } from "./paths";
 import type { FileTarget } from "./FileViewer";
+import Icon from "./icons";
+import { copyText, openUrl } from "./host";
 
-import { openUrl } from "./host";
-// links open where the host says (a new tab, or the IDE's browser when
-// embedded) — never by navigating this page
-const link = (url: string) => (e: React.MouseEvent) => {
+// links open in a new tab — never by navigating this page
+const link = (url: string) => (e: MouseEvent) => {
   e.preventDefault();
   openUrl(url);
 };
+const anchor = (url: string, children: ReactNode, key: string) => (
+  <a key={key} href={url} onClick={link(url)}>
+    {children}
+  </a>
+);
 
 // A small Markdown renderer for agent answers. Builds React nodes directly —
 // no HTML string, nothing to sanitize. Covers what agents actually write:
@@ -178,7 +183,10 @@ const INLINE = new RegExp(
   "g",
 );
 
-function renderInline(text: string, onOpenFile: OpenFile, key = "i"): ReactNode[] {
+// Inside a link's text nothing else is clickable: no path buttons, no
+// nested anchors (a click would open the file AND the link, and an
+// interactive element inside another is invalid markup).
+function renderInline(text: string, onOpenFile: OpenFile | null, key = "i"): ReactNode[] {
   const out: ReactNode[] = [];
   let at = 0;
   let n = 0;
@@ -188,11 +196,8 @@ function renderInline(text: string, onOpenFile: OpenFile, key = "i"): ReactNode[
     const k = `${key}${n++}`;
     if (m[2] !== undefined) out.push(<code key={k} className="md-code">{m[2]}</code>);
     else if (m[3] !== undefined) {
-      out.push(
-        <a key={k} href={m[4]} onClick={link(m[4]!)}>
-          {renderInline(m[3], onOpenFile, k)}
-        </a>,
-      );
+      if (onOpenFile) out.push(anchor(m[4]!, renderInline(m[3], null, k), k));
+      else out.push(<Fragment key={k}>{m[0]}</Fragment>);
     } else if (m[5] !== undefined || m[6] !== undefined)
       out.push(<strong key={k}>{renderInline((m[5] ?? m[6])!, onOpenFile, k)}</strong>);
     else if (m[7] !== undefined || m[8] !== undefined)
@@ -200,11 +205,7 @@ function renderInline(text: string, onOpenFile: OpenFile, key = "i"): ReactNode[
     else if (m[9] !== undefined) out.push(<s key={k}>{renderInline(m[9], onOpenFile, k)}</s>);
     else if (m[10] !== undefined) {
       const url = m[10].replace(/[.,;:!?]+$/, "");
-      out.push(
-        <a key={k} href={url} onClick={link(url)}>
-          {url}
-        </a>,
-      );
+      out.push(onOpenFile ? anchor(url, url, k) : <Fragment key={k}>{url}</Fragment>);
       if (url.length < m[10].length) out.push(m[10].slice(url.length));
     }
     at = idx + m[0].length;
@@ -213,16 +214,16 @@ function renderInline(text: string, onOpenFile: OpenFile, key = "i"): ReactNode[
   return out;
 }
 
-// plain text: file paths become buttons
-function plain(text: string, onOpenFile: OpenFile, key: string): ReactNode[] {
-  const matches = findPaths(text);
+// plain text: file paths become buttons (none inside a link's text)
+function plain(text: string, onOpenFile: OpenFile | null, key: string): ReactNode[] {
+  const matches = onOpenFile ? findPaths(text) : [];
   if (matches.length === 0) return [<Fragment key={key}>{text}</Fragment>];
   const out: ReactNode[] = [];
   let at = 0;
   matches.forEach((m, i) => {
     if (m.start > at) out.push(<Fragment key={`${key}t${i}`}>{text.slice(at, m.start)}</Fragment>);
     out.push(
-      <button key={`${key}p${i}`} className="path-link" onClick={() => onOpenFile({ path: m.path, line: m.line })}>
+      <button key={`${key}p${i}`} type="button" className="path-link" onClick={() => onOpenFile!({ path: m.path, line: m.line })}>
         {m.text}
       </button>,
     );
@@ -293,7 +294,7 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string): React
           <Tag key={k} start={b.ordered ? b.start : undefined}>
             {b.items.map(({ blocks, checked }, j) => (
               <li key={j} className={checked === null ? undefined : checked ? "task done" : "task"}>
-                {checked !== null && <input type="checkbox" checked={checked} readOnly />}
+                {checked !== null && <input type="checkbox" checked={checked} disabled />}
                 {renderBlocks(blocks, onOpenFile, `${k}i${j}`)}
               </li>
             ))}
@@ -309,27 +310,33 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const long = lines.length > 40;
   const [open, setOpen] = useState(!long);
   const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
   const shown = open ? code : lines.slice(0, 40).join("\n");
   return (
     <div className="md-pre">
       <div className="md-pre-bar">
         <span>{lang || "code"}</span>
         <button
+          type="button"
+          className="linkish"
           onClick={() => {
-            void navigator.clipboard?.writeText(code).then(() => {
+            void copyText(code).then((ok) => {
+              if (!ok) return;
               setCopied(true);
-              setTimeout(() => setCopied(false), 1200);
+              clearTimeout(copiedTimer.current);
+              copiedTimer.current = setTimeout(() => setCopied(false), 1200);
             });
           }}
         >
-          {copied ? "copied" : "copy"}
+          <Icon name={copied ? "check" : "copy"} size={12} /> {copied ? "copied" : "copy"}
         </button>
       </div>
       <pre>
         <code>{shown}</code>
       </pre>
       {long && (
-        <button className="md-more" onClick={() => setOpen((o) => !o)}>
+        <button type="button" className="linkish md-more" onClick={() => setOpen((o) => !o)}>
           {open ? "Show less" : `Show all ${lines.length} lines`}
         </button>
       )}

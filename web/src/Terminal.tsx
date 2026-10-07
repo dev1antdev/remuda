@@ -27,6 +27,7 @@ export type TermApi = {
 };
 
 const MIN_FONT = 8;
+const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 
 // Transport decision for this page: once WebSockets prove unusable, every
 // terminal uses HTTP without trying again.
@@ -35,10 +36,33 @@ let wsFailures = 0;
 let wsRetry = 0;
 
 // applyModifier encodes a single printable character under a one-shot
-// Ctrl (control code) or Alt (ESC prefix); anything else passes through.
+// Ctrl (control code) or Alt (ESC prefix), and an arrow as the modified CSI
+// form (ESC [ 1 ; 5 A for Ctrl, ; 3 for Alt); anything else passes through
+// unchanged, and the caller keeps the modifier armed.
 export function applyModifier(mod: Modifier, seq: string): string {
-  if (!mod || seq.length !== 1 || seq < " " || seq > "~") return seq;
+  if (!mod) return seq;
+  const arrow = /^\x1b[[O]([ABCD])$/.exec(seq);
+  if (arrow) return `\x1b[1;${mod === "ctrl" ? 5 : 3}${arrow[1]}`;
+  if (seq.length !== 1 || seq < " " || seq > "~") return seq;
   return mod === "ctrl" ? String.fromCharCode(seq.toUpperCase().charCodeAt(0) & 0x1f) : "\x1b" + seq;
+}
+
+// A DECSET that mixes a mouse-tracking mode with other modes is split in
+// two before xterm sees it — the others first — so the handler below only
+// ever meets pure sequences and never has to re-inject (a re-injected
+// sequence would land behind the rest of the chunk, out of order).
+const TRACKING = new Set([9, 1000, 1002, 1003]);
+const DECSET = /\x1b\[\?([\d;]+)([hl])/g;
+export function splitTracking(s: string): string {
+  if (!s.includes("\x1b[?")) return s;
+  return s.replace(DECSET, (all, params: string, final: string) => {
+    if (!params.includes(";")) return all;
+    const ns = params.split(";");
+    const ours = ns.filter((n) => TRACKING.has(Number(n)));
+    if (ours.length === 0 || ours.length === ns.length) return all;
+    const theirs = ns.filter((n) => !TRACKING.has(Number(n)));
+    return `\x1b[?${theirs.join(";")}${final}\x1b[?${ours.join(";")}${final}`;
+  });
 }
 
 // Live terminal for one herdr pane: raw pane bytes arrive as binary WS frames,
@@ -73,8 +97,9 @@ export default function TerminalView({
   minCols: number; // fit mode: never narrower than this many columns (0 = off)
   fontSize: number; // preferred size in fit mode
   modifier: Modifier;
-  // selection mode: mouse reporting to the agent is paused locally, so a
-  // plain drag selects text (otherwise Option/Alt+drag does)
+  // selection mode: a transparent text layer over the grid whose selection
+  // is the browser's own — for a phone's long-press and the places where
+  // xterm's own selection does not work
   selectMode: boolean;
   onModifierUsed: () => void;
   onReady: (api: TermApi | null) => void;
@@ -97,7 +122,6 @@ export default function TerminalView({
       fontSize: live.current.fontSize,
       scrollback: 2000,
       allowProposedApi: true,
-      macOptionClickForcesSelection: true, // Option+drag selects even while the agent tracks the mouse
       theme: { background: "#14120f", selectionBackground: "#4a4138" },
     });
     const fit = new FitAddon();
@@ -108,15 +132,17 @@ export default function TerminalView({
     let lastSize = "";
 
     // ---- transport: WebSocket, falling back to HTTP long-polling ----
-    // JetBrains' embedded browser in Remote Development (and some proxies)
-    // forward requests but not WebSockets: after two sockets that close
-    // before they open, the page switches to the HTTP transport for good.
+    // Some proxies forward requests but not WebSockets: after two sockets
+    // that close before they open while the same request works as plain
+    // HTTP, the page switches to the HTTP transport for good.
     type Transport = { input(data: string): void; resize(cols: number, rows: number): void; close(): void };
     let transport: Transport | null = null;
     const paneQuery = `machine=${encodeURIComponent(machineId)}&id=${encodeURIComponent(paneId)}`;
     const note = (text: string) => term.write(`\r\n\x1b[2m[herdr-ui] ${text}\x1b[0m\r\n`);
 
-    // the PTY is shared by every viewer: never re-send an unchanged size
+    // the PTY is shared by every viewer: never re-send an unchanged size.
+    // The connect request already carries the size, so lastSize is set
+    // there and a fresh connection sends nothing until the grid changes.
     const sendResize = () => {
       const size = `${term.cols}x${term.rows}`;
       if (size === lastSize) return;
@@ -126,8 +152,9 @@ export default function TerminalView({
     const sendInput = (data: string) => transport?.input(data);
     const input = (seq: string) => {
       const m = live.current.modifier;
-      sendInput(applyModifier(m, seq));
-      if (m) live.current.onModifierUsed();
+      const out = applyModifier(m, seq);
+      sendInput(out);
+      if (m && out !== seq) live.current.onModifierUsed(); // armed until a key it can apply to
     };
 
     // Cell size in px, measured from the renderer once it has drawn.
@@ -186,47 +213,94 @@ export default function TerminalView({
       });
     };
 
-    // a fresh stream repaints from the replay: reset, then size it
-    const onOpen = () => {
-      lastSize = "";
-      term.reset();
-      sendResize();
+    // Output from either transport: the mixed DECSETs split (see
+    // splitTracking), then the follow-up work once it is on screen. One
+    // decoder for the stream, so a character cut by a chunk boundary joins.
+    const decoder = new TextDecoder();
+    const paint = (buf: Uint8Array) => {
+      const text = decoder.decode(buf, { stream: true });
+      term.write(splitTracking(text), () => {
+        followBottom();
+        scheduleLayer();
+      });
     };
+
+    // A fresh stream starts from a blank screen (there is no replay; the
+    // server nudges the app into a repaint). The reset forgets the modes
+    // the app set, and nobody will set them again: what was known is
+    // re-applied, and the paste rule falls back to "bracket when unsure".
+    const onOpen = (sentSize: string) => {
+      const appCursor = term.modes.applicationCursorKeysMode;
+      const bracketed = term.modes.bracketedPasteMode;
+      decoder.decode(); // a character cut by the old stream's end is dropped
+      term.reset();
+      pasteModeSeen = false;
+      if (appCursor) term.write("\x1b[?1h");
+      if (bracketed) term.write("\x1b[?2004h");
+      lastSize = sentSize; // what the connect request carried
+      sendResize(); // only when the grid changed since then
+    };
+
+    // wsWouldAccept tells a proxy that drops WebSockets from everything
+    // else that ends a socket before it opens — a server restarting, a pane
+    // gone (404), a dead remote (503). The same URL as a plain request
+    // passes the handler's checks and fails only at the upgrade itself (426
+    // Upgrade Required): then, and only then, the proxy is the problem.
+    const wsWouldAccept = () => fetch(`/ws/pane?${paneQuery}`).then((r) => r.status === 426, () => false);
 
     const connectWS = (): Transport => {
       const proto = location.protocol === "https:" ? "wss" : "ws";
+      const sentSize = `${term.cols}x${term.rows}`;
       let ws: WebSocket | null = new WebSocket(`${proto}://${location.host}/ws/pane?${paneQuery}&cols=${term.cols}&rows=${term.rows}`);
       ws.binaryType = "arraybuffer";
       let opened = false;
+      let retryTimer: ReturnType<typeof setTimeout> | null = null;
       const send = (obj: object) => {
         if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+      };
+      const retry = () => {
+        retryTimer = setTimeout(() => {
+          if (!closed) transport = connectWS();
+        }, Math.min(5000, 250 * 2 ** wsRetry++));
       };
       ws.onopen = () => {
         opened = true;
         wsFailures = 0;
-        wsRetry = 0;
-        onOpen();
+        onOpen(sentSize);
       };
       ws.onmessage = (ev) => {
-        if (ev.data instanceof ArrayBuffer) term.write(new Uint8Array(ev.data), () => { followBottom(); scheduleLayer(); });
+        if (!(ev.data instanceof ArrayBuffer)) return;
+        wsRetry = 0; // output flowing: the back-off starts over
+        paint(new Uint8Array(ev.data));
       };
       ws.onerror = () => ws?.close();
-      ws.onclose = () => {
+      ws.onclose = (ev) => {
         if (closed || ws === null) return;
-        if (!opened && ++wsFailures >= 2) {
-          preferHTTP = true;
-          note("WebSocket unavailable here — using the HTTP transport");
-          transport = connectHTTP();
+        if (opened) {
+          // a normal close means the attach ended — herdr restarted, the
+          // SSH session blinked, the pane went away. The next connect
+          // starts a fresh attach; a pane that is gone fails that connect
+          // and the roster drops the terminal soon after
+          if (ev.code === 1000) note("terminal detached — reconnecting");
+          retry();
           return;
         }
-        setTimeout(() => {
-          if (!closed) transport = connectWS();
-        }, Math.min(5000, 250 * 2 ** wsRetry++));
+        void wsWouldAccept().then((would) => {
+          if (closed) return;
+          if (would && ++wsFailures >= 2) {
+            preferHTTP = true;
+            note("WebSocket unavailable here — using the HTTP transport");
+            transport = connectHTTP();
+            return;
+          }
+          retry();
+        });
       };
       return {
         input: (data) => send({ type: "input", data }),
         resize: (cols, rows) => send({ type: "resize", cols, rows }),
         close: () => {
+          if (retryTimer) clearTimeout(retryTimer);
           const s = ws;
           ws = null;
           s?.close();
@@ -241,46 +315,68 @@ export default function TerminalView({
       let stopped = false;
       let pending = "";
       let flushTimer: ReturnType<typeof setTimeout> | null = null;
+      let reopenTimer: ReturnType<typeof setTimeout> | null = null;
 
+      const closeStream = () => {
+        if (!sid) return;
+        void fetch(`/api/term/close?sid=${sid}`, { method: "DELETE", keepalive: true });
+        sid = null;
+      };
       const open = async () => {
+        const sentSize = `${term.cols}x${term.rows}`;
         const res = await fetch(`/api/term/open?${paneQuery}&cols=${term.cols}&rows=${term.rows}`, { method: "POST" });
         if (!res.ok) throw new Error(`open failed (${res.status})`);
         sid = ((await res.json()) as { sid: string }).sid;
-        onOpen();
+        if (stopped) {
+          closeStream(); // closed while opening: nothing may pin the attach
+          return;
+        }
+        onOpen(sentSize);
       };
+      // input goes in small batches; a batch that failed is queued again
+      // and retried, so nothing waits for the next keystroke
       const flush = async () => {
         flushTimer = null;
-        if (!sid || !pending) return;
+        if (stopped || !sid || !pending) return;
         const body = pending;
         pending = "";
         try {
           await fetch(`/api/term/input?sid=${sid}`, { method: "POST", body });
         } catch {
           pending = body + pending;
+          if (!stopped && !flushTimer) flushTimer = setTimeout(() => void flush(), 500);
         }
       };
+      const later = (ms: number) => {
+        if (!stopped) reopenTimer = setTimeout(() => void loop(), ms);
+      };
       const loop = async () => {
+        reopenTimer = null;
+        if (stopped) return;
         try {
           await open();
         } catch (e) {
           if (!stopped) {
             note(`cannot open the terminal stream (${e instanceof Error ? e.message : String(e)}) — retrying`);
-            setTimeout(loop, 2000);
+            later(2000);
           }
           return;
         }
         while (!stopped && sid) {
           try {
             const res = await fetch(`/api/term/read?sid=${sid}&wait=20`);
+            if (stopped) return;
             if (res.status === 410) {
               sid = null;
-              setTimeout(loop, 500); // expired: reopen
+              later(500); // expired: reopen
               return;
             }
             if (!res.ok) throw new Error(`read failed (${res.status})`);
             const buf = new Uint8Array(await res.arrayBuffer());
-            if (buf.length) term.write(buf, () => { followBottom(); scheduleLayer(); });
+            if (stopped) return;
+            if (buf.length) paint(buf);
             if (res.headers.get("X-Herdr-UI-End") === "1") {
+              sid = null; // the server dropped it already
               note("terminal detached");
               return;
             }
@@ -301,10 +397,9 @@ export default function TerminalView({
         },
         close: () => {
           stopped = true;
-          if (sid) {
-            void fetch(`/api/term/close?sid=${sid}`, { method: "DELETE", keepalive: true });
-            sid = null;
-          }
+          if (reopenTimer) clearTimeout(reopenTimer);
+          if (flushTimer) clearTimeout(flushTimer);
+          closeStream();
         },
       };
     };
@@ -318,7 +413,6 @@ export default function TerminalView({
     // tracking modes is intercepted here — xterm never enters tracking, a
     // plain drag selects — and the wheel is translated into the reports the
     // app asked for, so herdr still scrolls.
-    const trackingModes = new Set([9, 1000, 1002, 1003]);
     let appMouse = 0; // the tracking mode the app wants; 0 = none
     let sgrMouse = false; // it asked for SGR (1006) reports
     // Whether the app ever said how it wants pastes (DECSET 2004). A viewer
@@ -331,7 +425,7 @@ export default function TerminalView({
       let touched = false;
       for (const p of params) {
         const n = Array.isArray(p) ? p[0]! : p;
-        if (trackingModes.has(n)) {
+        if (TRACKING.has(n)) {
           touched = true;
           appMouse = enable ? n : 0;
         } else {
@@ -341,7 +435,9 @@ export default function TerminalView({
         }
       }
       if (!touched) return false; // nothing of ours: xterm handles it
-      if (rest.length) term.write(`\x1b[?${rest.join(";")}${enable ? "h" : "l"}`); // the other modes still apply
+      // a mixed sequence only gets here when a chunk boundary cut it before
+      // splitTracking could; the other modes are re-applied, late
+      if (rest.length) term.write(`\x1b[?${rest.join(";")}${enable ? "h" : "l"}`);
       // xterm only swaps its text cursor for an arrow when it tracks the
       // mouse itself; the app owns the clicks, so the arrow is ours to show
       mount.classList.toggle("app-mouse", appMouse !== 0);
@@ -371,10 +467,10 @@ export default function TerminalView({
 
     const onWheel = (e: WheelEvent) => {
       const sideways = Math.abs(e.deltaX) > Math.abs(e.deltaY);
-      // a grid wider than the screen (keep mode, a minimum width) scrolls
-      // here on a sideways gesture; otherwise the gesture is the app's —
+      // a grid larger than the screen (keep mode, a minimum width) scrolls
+      // here, in that direction; otherwise the gesture is the app's —
       // wheel left/right (buttons 6/7) is how a TUI scrolls its columns
-      if (sideways && mount.scrollWidth > mount.clientWidth) {
+      if (sideways ? mount.scrollWidth > mount.clientWidth : mount.classList.contains("keep") && mount.scrollHeight > mount.clientHeight) {
         e.stopPropagation();
         return;
       }
@@ -416,12 +512,12 @@ export default function TerminalView({
     mount.addEventListener("mouseup", onMouseUp, true);
 
     // ---- selection and copy ----
-    // Two ways to select: Option/Alt+drag (xterm's own, even under the
-    // agent's mouse tracking), and selection mode — a transparent text layer
-    // over the grid whose selection is the browser's own, so it works where
-    // xterm's mouse handling doesn't (an embedded browser in Remote
-    // Development, a phone's long-press). Copy is Cmd+C / Ctrl+Shift+C, or
-    // the native menu, routed through the host's clipboard when embedded.
+    // Two ways to select: a plain drag (xterm's own — the app's mouse
+    // tracking is intercepted above, so a drag is never a mouse report), and
+    // selection mode — a transparent text layer over the grid whose
+    // selection is the browser's own, for a phone's long-press and the
+    // places where xterm's does not work. Copy is Cmd+C / Ctrl+Shift+C, or
+    // the native menu.
     const layer = document.createElement("div");
     layer.className = "term-select";
     layer.hidden = true;
@@ -474,22 +570,23 @@ export default function TerminalView({
       void copyText(text).then((ok) => ok && live.current.onCopied(text.length));
       return true;
     };
-    // Cmd+C / the context menu: set the clipboard ourselves so the host
-    // bridge (embedded browser) sees it too, not just the page's clipboard
+    // the native copy (the context menu, a phone's Copy): the selection may
+    // live in the layer, so the text is set on the event ourselves
     const onCopy = (e: ClipboardEvent) => {
       const text = selectedText();
       if (!text) return;
       e.clipboardData?.setData("text/plain", text);
       e.preventDefault();
-      void copyText(text).then((ok) => ok && live.current.onCopied(text.length));
+      live.current.onCopied(text.length);
     };
     mount.addEventListener("copy", onCopy);
 
     // Keys xterm gets wrong for agent TUIs: Shift+Enter is a newline in
-    // Claude Code only as the Alt+Enter chord (ESC CR); Ctrl+V must reach the
-    // browser's paste event instead of becoming 0x16. The handler sees
-    // keydown, keypress AND keyup — Enter's keypress would still emit "\r"
-    // and send the prompt, so every phase of the chord is swallowed.
+    // Claude Code only as the Alt+Enter chord (ESC CR); where Ctrl+V is the
+    // paste chord it must reach the browser's paste event instead of
+    // becoming 0x16 (on a Mac it is a keystroke for the app). The handler
+    // sees keydown, keypress AND keyup — Enter's keypress would still emit
+    // "\r" and send the prompt, so every phase of the chord is swallowed.
     term.attachCustomKeyEventHandler((ev) => {
       if (ev.key === "Enter" && ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
         if (ev.type === "keydown") {
@@ -499,7 +596,7 @@ export default function TerminalView({
         return false;
       }
       if (ev.type !== "keydown") return true;
-      if (ev.key === "v" && ev.ctrlKey && !ev.altKey) return false;
+      if (!MAC && ev.key === "v" && ev.ctrlKey && !ev.altKey) return false;
       // copy: Cmd+C on a Mac, Ctrl+Shift+C elsewhere, Ctrl+C with a selection
       if ((ev.key === "c" || ev.key === "C") && (ev.metaKey || (ev.ctrlKey && (ev.shiftKey || term.hasSelection())))) {
         if (copySelection()) {

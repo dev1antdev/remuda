@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { errMsg, readAlertPrefs, writePref } from "./prefs";
 import {
   disablePush,
@@ -10,14 +10,15 @@ import {
   type PushState,
 } from "./push";
 import Select from "./Select";
-import Icon from "./icons";
+import { Dialog, Notice, useTimedNotice } from "./ui";
 
 // Push alerts for this device: enable, what to be told about, a test push.
 export default function AlertsPanel({ onClose }: { onClose: () => void }) {
   const [state, setState] = useState<PushState | null>(null);
   const [prefs, setPrefs] = useState<Prefs>(readAlertPrefs);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState("");
+  const [done, showDone] = useTimedNotice(6000);
 
   const reload = async () => setState(await getPushState());
   useEffect(() => {
@@ -26,39 +27,34 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
 
   const run = async (fn: () => Promise<void>, ok?: string) => {
     setBusy(true);
-    setMsg(null);
+    setErr("");
     try {
       await fn();
-      if (ok) setMsg(ok);
+      if (ok) showDone(ok);
     } catch (e) {
-      setMsg(errMsg(e));
+      setErr(errMsg(e));
     } finally {
       setBusy(false);
       await reload();
     }
   };
 
+  // preference changes reach the server one after another: two quick
+  // toggles must not race, the last one sent is the one that holds
+  const queue = useRef(Promise.resolve());
   const changePrefs = (next: Prefs) => {
     setPrefs(next);
     writePref("alerts", next);
-    if (state?.subscribed) void run(() => updatePrefs(next));
+    if (!state?.subscribed) return;
+    queue.current = queue.current.then(() => updatePrefs(next)).catch((e) => setErr(errMsg(e)));
   };
 
   return (
-    <div className="alerts" onClick={(e) => e.stopPropagation()}>
-      <div className="alerts-head">
-        <strong>Alerts on this device</strong>
-        <button className="icon-btn" onClick={onClose} title="Close">
-          <Icon name="x" size={16} />
-        </button>
-      </div>
-
-      {!state && <div className="alerts-note">Checking…</div>}
-      {state && !state.supported && <div className="alerts-note warn">{state.reason}</div>}
+    <Dialog title="Alerts on this device" icon="bell" onClose={onClose} className="alerts-dialog">
+      {!state && <Notice tone="hint">Checking…</Notice>}
+      {state && !state.supported && <Notice tone="warn">{state.reason}</Notice>}
       {state?.supported && state.permission === "denied" && (
-        <div className="alerts-note warn">
-          Notifications are blocked for this site — allow them in the browser's site settings.
-        </div>
+        <Notice tone="warn">Notifications are blocked for this site — allow them in the browser's site settings.</Notice>
       )}
 
       {state?.supported && (
@@ -68,7 +64,8 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
             <small>Delivered with the app closed, through your browser's push service.</small>
           </span>
           <button
-            className={state.subscribed ? "" : "primary"}
+            type="button"
+            className={state.subscribed ? "btn" : "btn primary"}
             disabled={busy || state.permission === "denied"}
             onClick={() =>
               void run(
@@ -83,11 +80,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
       )}
 
       <label className="alerts-opt">
-        <input
-          type="checkbox"
-          checked={prefs.input}
-          onChange={(e) => changePrefs({ ...prefs, input: e.target.checked })}
-        />
+        <input type="checkbox" checked={prefs.input} onChange={(e) => changePrefs({ ...prefs, input: e.target.checked })} />
         <span>
           When an agent <b>needs you</b>
           <small>A question or approval still open after 10 s — answered at the desk, it's never sent.</small>
@@ -118,14 +111,16 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
 
       {state?.subscribed && state.endpoint && (
         <button
-          className="alerts-test"
+          type="button"
+          className="btn sm alerts-test"
           disabled={busy}
           onClick={() => void run(() => sendTestPush(state.endpoint!), "Test push sent — it should appear in a moment.")}
         >
           Send a test push
         </button>
       )}
-      {msg && <div className="alerts-note">{msg}</div>}
-    </div>
+      {err && <Notice tone="error" onDismiss={() => setErr("")}>{err}</Notice>}
+      {done && <Notice tone="success">{done}</Notice>}
+    </Dialog>
   );
 }

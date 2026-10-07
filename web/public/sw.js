@@ -1,6 +1,7 @@
 // herdr-ui service worker: network-first for navigations (a fresh build always
-// wins online), cache-first for content-addressed assets, and Web Push.
-// /api and /ws are never intercepted. Nothing is precached.
+// wins online), cache-first for the content-addressed bundle under /assets/
+// and the app icons, and Web Push. /api, /ws and the editor under /code/
+// are never intercepted. Nothing is precached.
 const CACHE = "herdr-ui-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
@@ -18,18 +19,19 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== location.origin) return;
-  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/ws/")) return;
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/ws/") || url.pathname === "/code" || url.pathname.startsWith("/code/")) return;
+
+  // a cache write outlives the response; the worker stays alive for it
+  const keep = (req, res) => event.waitUntil(caches.open(CACHE).then((cache) => cache.put(req, res)));
 
   if (event.request.mode === "navigate") {
     event.respondWith(
       (async () => {
         try {
           const res = await fetch(event.request);
-          // only a real shell goes in — never the 401 sign-in page
-          if (res.ok) {
-            const cache = await caches.open(CACHE);
-            cache.put("/", res.clone());
-          }
+          // only the app shell at "/" goes in, and only a real one — never
+          // the 401 sign-in page, never some other path's answer
+          if (res.ok && url.pathname === "/") keep("/", res.clone());
           return res;
         } catch {
           const cached = await caches.match("/");
@@ -46,10 +48,7 @@ self.addEventListener("fetch", (event) => {
         const cached = await caches.match(event.request);
         if (cached) return cached;
         const res = await fetch(event.request);
-        if (res.ok) {
-          const cache = await caches.open(CACHE);
-          cache.put(event.request, res.clone());
-        }
+        if (res.ok) keep(event.request, res.clone());
         return res;
       })(),
     );

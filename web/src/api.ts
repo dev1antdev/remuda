@@ -220,6 +220,7 @@ export type Schedule = {
   cron: string;
   prompt: string;
   enabled: boolean;
+  next?: string; // the coming run, filled in by the list
   last_run?: string;
   last_result?: string;
   last_ok?: boolean;

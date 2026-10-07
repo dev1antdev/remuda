@@ -14,29 +14,29 @@ import {
   deleteComment,
   deleteTask,
   getTask,
-  hasDate,
   listLabels,
   listProjects,
   listTasks,
-  NO_DATE,
   patchTask,
   PRIORITIES,
   removeTaskLabel,
   startTask,
-  type Comment,
   type Label,
   type Project,
   type Run,
   type Task,
 } from "./tasksApi";
 import type { Machine } from "./api";
-import { errMsg, usePref } from "./prefs";
+import { errMsg, useDebounced, usePref } from "./prefs";
 import { openUrl } from "./host";
 import { Markdown } from "./markdown";
 import Select from "./Select";
 import SendToAgent from "./SendToAgent";
 import Logo from "./Logo";
 import Icon, { type IconName } from "./icons";
+import { Dialog, Notice, useDismiss, useSubmit, useTimedNotice } from "./ui";
+import { machineLabel, machineOptions } from "./options";
+import { fmtDate, whenShort } from "./time";
 
 type Smart = "today" | "upcoming" | "open";
 type Sel = { kind: "smart"; id: Smart } | { kind: "project"; id: number };
@@ -87,7 +87,13 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
   const [newProject, setNewProject] = useState(false);
   const [sendReq, setSendReq] = useState<{ task: Task; groom: boolean } | null>(null);
   const [startReq, setStartReq] = useState<Task | null>(null);
-  const [notice, setNotice] = useState<{ text: string; machineId: string; paneId: string } | null>(null);
+  // "started…" / "sent…", with the pane it points at, gone after a while
+  const [notice, showNotice, clearNotice] = useTimedNotice(12000);
+  const [noticeAt, setNoticeAt] = useState<{ machineId: string; paneId: string } | null>(null);
+  const announce = (text: string, at: { machineId: string; paneId: string }) => {
+    setNoticeAt(at);
+    showNotice(text);
+  };
   const [tick, setTick] = useState(0);
   const refresh = useCallback(() => setTick((t) => t + 1), []);
 
@@ -115,9 +121,13 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
     [sel, withDone],
   );
   const debounced = useDebounced(search, 250);
-  useEffect(() => {
+  // a new list starts on its first page; the open task belongs to the old one
+  const select = (next: Sel) => {
+    setSel(next);
     setPage(1);
-  }, [query, debounced]);
+    setOpenId(null);
+    closeDrawer();
+  };
   useEffect(() => {
     let gone = false;
     setLoading(true);
@@ -147,6 +157,12 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
 
   // one task changed on the server: show it without re-reading the list
   const replace = (t: Task) => setTasks((ts) => ts.map((x) => (x.id === t.id ? t : x)));
+  // …unless it left the list: another project, another due date
+  const replaceOrMove = (t: Task) => {
+    const was = tasks.find((x) => x.id === t.id);
+    replace(t);
+    if (was && (was.project_id !== t.project_id || was.due_date !== t.due_date)) refresh();
+  };
 
   // the open task in full (its comments), re-read while an agent is on it
   const live = !!open?.run && open.run.state !== "gone" && open.run.state !== "failed";
@@ -193,7 +209,13 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
   if (projects === null) {
     return (
       <main className="pane-area">
-        <div className="placeholder">{error || "Loading…"}</div>
+        {error ? (
+          <Notice tone="error" icon="alert-triangle" className="tasks-notice">
+            {error}
+          </Notice>
+        ) : (
+          <div className="placeholder">Loading…</div>
+        )}
       </main>
     );
   }
@@ -206,22 +228,14 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
       <aside className={drawer ? "sidebar open" : "sidebar"}>
         <div className="sidebar-head">
           <span>Lists</span>
-          <button onClick={() => setNewProject(true)} title="New project">
-            <Icon name="plus" size={13} /> Project
+          <button type="button" className="btn sm" onClick={() => setNewProject(true)} title="New project">
+            <Icon name="plus" size={12} /> Project
           </button>
         </div>
         {SMART.map((s) => (
-          <button
-            key={s.id}
-            className={`tasks-nav${sel.kind === "smart" && sel.id === s.id ? " sel" : ""}`}
-            onClick={() => {
-              setSel({ kind: "smart", id: s.id });
-              setOpenId(null);
-              closeDrawer();
-            }}
-          >
+          <button key={s.id} type="button" className={`tasks-nav${sel.kind === "smart" && sel.id === s.id ? " sel" : ""}`} onClick={() => select({ kind: "smart", id: s.id })}>
             <span className="tasks-nav-glyph">
-              <Icon name={s.icon} size={15} />
+              <Icon name={s.icon} size={14} />
             </span>
             {s.label}
           </button>
@@ -229,15 +243,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
         <div className="sidebar-head">
           <span>Projects</span>
         </div>
-        <ProjectTree
-          projects={projects}
-          selected={sel.kind === "project" ? sel.id : 0}
-          onSelect={(id) => {
-            setSel({ kind: "project", id });
-            setOpenId(null);
-            closeDrawer();
-          }}
-        />
+        <ProjectTree projects={projects} selected={sel.kind === "project" ? sel.id : 0} onSelect={(id) => select({ kind: "project", id })} />
       </aside>
       {drawer && <div className="scrim" onClick={closeDrawer} />}
 
@@ -246,23 +252,50 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
           <h1>{title}</h1>
           {sel.kind === "project" && (
             <label className="tasks-toggle">
-              <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> done
+              <input
+                type="checkbox"
+                checked={showDone}
+                onChange={(e) => {
+                  setShowDone(e.target.checked);
+                  setPage(1);
+                }}
+              />{" "}
+              done
             </label>
           )}
-          <input className="tasks-search" type="search" placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input
+            className="tasks-search"
+            type="search"
+            placeholder="Search…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+          />
         </div>
         <QuickAdd placeholder={addTarget ? `Add a task to ${addTarget.title}…` : "Add a task…"} disabled={!addTarget} onAdd={addTask} />
-        {error && <div className="chat-error">{error}</div>}
+        {error && (
+          <Notice tone="error" icon="alert-triangle" className="tasks-notice" onDismiss={() => setError("")}>
+            {error}
+          </Notice>
+        )}
         {notice && (
-          <div className="tasks-notice">
-            {notice.text}
-            <button className="linkish" onClick={() => onOpenPane(notice.machineId, notice.paneId)}>
-              Open <Icon name="chevron-right" size={12} />
-            </button>
-            <button className="tasks-close icon-btn" onClick={() => setNotice(null)} title="Dismiss">
-              <Icon name="x" size={14} />
-            </button>
-          </div>
+          <Notice
+            tone="success"
+            icon="circle-check"
+            className="tasks-notice"
+            onDismiss={clearNotice}
+            action={
+              noticeAt && (
+                <button type="button" className="linkish" onClick={() => onOpenPane(noticeAt.machineId, noticeAt.paneId)}>
+                  Open <Icon name="chevron-right" size={12} />
+                </button>
+              )
+            }
+          >
+            {notice}
+          </Notice>
         )}
         <div className={`tasks-list${loading ? " loading" : ""}`}>
           {tasks.length === 0 && !loading && <div className="placeholder">Nothing here.</div>}
@@ -279,13 +312,13 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
         </div>
         {pages > 1 && (
           <div className="tasks-pager">
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)}>
+            <button type="button" className="btn sm" disabled={page <= 1} onClick={() => setPage(page - 1)} title="Previous page" aria-label="Previous page">
               <Icon name="chevron-left" size={14} />
             </button>
             <span>
               {page} / {pages}
             </span>
-            <button disabled={page >= pages} onClick={() => setPage(page + 1)}>
+            <button type="button" className="btn sm" disabled={page >= pages} onClick={() => setPage(page + 1)} title="Next page" aria-label="Next page">
               <Icon name="chevron-right" size={14} />
             </button>
           </div>
@@ -298,7 +331,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
           task={open}
           projects={projects}
           labels={labels}
-          onChange={replace}
+          onChange={replaceOrMove}
           onLabels={setLabels}
           onClose={() => setOpenId(null)}
           onDelete={() => remove(open)}
@@ -307,7 +340,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
           onSend={(groom) => setSendReq({ task: open, groom })}
           canStart={machines.some((m) => m.state === "connected" && m.sessions.some((s) => s.dir))}
           onStart={() => setStartReq(open)}
-          machineLabel={(id) => machines.find((m) => m.id === id)?.label ?? id}
+          machineLabel={(id) => machineLabel(machines, id)}
           liveStatus={(r) => agents.find((a) => a.machineId === r.machine && a.paneId === r.pane)?.status ?? null}
           onOpenPane={onOpenPane}
         />
@@ -322,7 +355,10 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
           onStarted={(t, where) => {
             setStartReq(null);
             replace(t);
-            setNotice({ text: `Started ${t.run?.agent ?? "an agent"} on ${t.run?.branch ?? "a worktree"} — ${where}. The task follows once it is up.`, machineId: t.run?.machine ?? "", paneId: t.run?.pane ?? "" });
+            announce(`Started ${t.run?.agent ?? "an agent"} on ${t.run?.branch ?? "a worktree"} — ${where}. The task follows once it is up.`, {
+              machineId: t.run?.machine ?? "",
+              paneId: t.run?.pane ?? "",
+            });
           }}
         />
       )}
@@ -337,11 +373,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
           onSend={async (target, text) => {
             await onSend(target.machineId, target.paneId, text);
             setSendReq(null);
-            setNotice({
-              text: `Sent “${sendReq.task.title}” to ${target.agent} in ${target.sessionName}${target.machineId !== "local" ? ` on ${target.machineLabel}` : ""}.`,
-              machineId: target.machineId,
-              paneId: target.paneId,
-            });
+            announce(`Sent “${sendReq.task.title}” to ${target.agent} in ${target.sessionName}${target.machineId !== "local" ? ` on ${target.machineLabel}` : ""}.`, target);
           }}
         />
       )}
@@ -352,7 +384,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
           onCreated={(p) => {
             setNewProject(false);
             setProjects((ps) => [...(ps ?? []), p]);
-            setSel({ kind: "project", id: p.id });
+            select({ kind: "project", id: p.id });
           }}
         />
       )}
@@ -374,13 +406,14 @@ function ProjectTree({ projects, selected, onSelect }: { projects: Project[]; se
     for (const list of m.values()) list.sort((a, b) => Number(b.is_favorite) - Number(a.is_favorite) || a.position - b.position);
     return m;
   }, [projects]);
-  const ids = new Set(projects.map((p) => p.id));
-  // roots: no parent, or a parent we cannot see
-  const roots = [...(children.get(0) ?? []), ...[...children.entries()].filter(([pid]) => pid !== 0 && !ids.has(pid)).flatMap(([, l]) => l)];
+  // roots: no parent, or a parent that is not shown (gone, or archived)
+  const shown = new Set(projects.filter((p) => !p.is_archived).map((p) => p.id));
+  const roots = [...(children.get(0) ?? []), ...[...children.entries()].filter(([pid]) => pid !== 0 && !shown.has(pid)).flatMap(([, l]) => l)];
   const render = (list: Project[], depth: number): ReactNode =>
     list.map((p) => (
       <div key={p.id}>
         <button
+          type="button"
           className={`tasks-nav project${p.id === selected ? " sel" : ""}`}
           style={{ paddingLeft: 12 + depth * 14 }}
           onClick={() => onSelect(p.id)}
@@ -388,7 +421,7 @@ function ProjectTree({ projects, selected, onSelect }: { projects: Project[]; se
         >
           <span className="tasks-dot" style={{ background: p.hex_color ? `#${p.hex_color}` : "var(--line-strong)" }} />
           <span className="tasks-nav-label">{p.title}</span>
-          {p.is_favorite && <span className="tasks-star">★</span>}
+          {p.is_favorite && <Icon name="star" size={12} className="tasks-star" />}
         </button>
         {render(children.get(p.id) ?? [], depth + 1)}
       </div>
@@ -399,46 +432,36 @@ function ProjectTree({ projects, selected, onSelect }: { projects: Project[]; se
 function NewProjectDialog({ projects, onClose, onCreated }: { projects: Project[]; onClose: () => void; onCreated: (p: Project) => void }) {
   const [title, setTitle] = useState("");
   const [parent, setParent] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
+  const { busy, err, run } = useSubmit(async () => onCreated(await createProject(title.trim(), parent)));
   return (
-    <div className="modal-scrim" onClick={onClose}>
-      <form
-        className="modal"
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={(e) => {
-          e.preventDefault();
-          setBusy(true);
-          createProject(title.trim(), parent).then(onCreated, (e) => {
-            setErr(errMsg(e));
-            setBusy(false);
-          });
-        }}
-      >
-        <h2>New project</h2>
-        <label>
-          Name
-          <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus required />
-        </label>
-        <label>
-          Inside
-          <Select
-            value={parent}
-            onChange={setParent}
-            options={[{ value: 0, label: "— top level —" }, ...projects.filter((p) => !p.is_archived).map(projectOption)]}
-          />
-        </label>
-        {err && <div className="chat-error">{err}</div>}
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="primary" disabled={busy || !title.trim()}>
-            Create
-          </button>
-        </div>
-      </form>
-    </div>
+    <Dialog
+      title="New project"
+      icon="folder"
+      as="form"
+      onClose={onClose}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (title.trim()) void run();
+      }}
+    >
+      <label>
+        Name
+        <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus required />
+      </label>
+      <label>
+        Inside
+        <Select value={parent} onChange={setParent} options={[{ value: 0, label: "— top level —" }, ...projects.filter((p) => !p.is_archived).map(projectOption)]} />
+      </label>
+      {err && <Notice tone="error">{err}</Notice>}
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="submit" className="btn primary" disabled={busy || !title.trim()}>
+          {busy ? "Creating…" : "Create"}
+        </button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -446,35 +469,30 @@ function NewProjectDialog({ projects, onClose, onCreated }: { projects: Project[
 
 function QuickAdd({ placeholder, disabled, onAdd }: { placeholder: string; disabled: boolean; onAdd: (title: string) => Promise<void> }) {
   const [value, setValue] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
+  const { busy, err, run, setErr } = useSubmit(async () => {
+    await onAdd(value.trim());
+    setValue("");
+  });
   return (
-    <form
-      className="tasks-add"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const title = value.trim();
-        if (!title || busy) return;
-        setBusy(true);
-        onAdd(title).then(
-          () => {
-            setValue("");
-            setErr("");
-            setBusy(false);
-          },
-          (e) => {
-            setErr(errMsg(e));
-            setBusy(false);
-          },
-        );
-      }}
-    >
-      <span className="tasks-add-plus">
-        <Icon name="plus" size={15} />
-      </span>
-      <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} disabled={disabled || busy} />
-      {err && <span className="chat-error">{err}</span>}
-    </form>
+    <>
+      <form
+        className="tasks-add"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (value.trim() && !busy) void run();
+        }}
+      >
+        <span className="tasks-add-plus">
+          <Icon name="plus" size={14} />
+        </span>
+        <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} disabled={disabled || busy} />
+      </form>
+      {err && (
+        <Notice tone="error" className="tasks-notice" onDismiss={() => setErr("")}>
+          {err}
+        </Notice>
+      )}
+    </>
   );
 }
 
@@ -487,7 +505,20 @@ function TaskRow({ task: t, project, selected, onToggle, onOpen }: {
 }) {
   const due = dueLabel(t);
   return (
-    <div className={`tasks-row${t.done ? " done" : ""}${selected ? " sel" : ""}`} onClick={onOpen}>
+    <div
+      className={`tasks-row${t.done ? " done" : ""}${selected ? " sel" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-expanded={selected}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return; // the checkbox handles its own keys
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+    >
       <input
         type="checkbox"
         className="tasks-check"
@@ -495,6 +526,7 @@ function TaskRow({ task: t, project, selected, onToggle, onOpen }: {
         onChange={onToggle}
         onClick={(e) => e.stopPropagation()}
         title={t.done ? "Mark undone" : "Mark done"}
+        aria-label={t.done ? "Mark undone" : "Mark done"}
       />
       <span className="tasks-row-title">{t.title}</span>
       {t.run && t.run.state !== "gone" && t.run.state !== "failed" && (
@@ -545,7 +577,7 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
   const runLabel = !run ? "" : run.state === "starting" ? "starting…" : run.state === "failed" ? "failed" : run.state === "gone" ? "closed" : paneStatus === "run" ? "working" : paneStatus === "input" ? "waiting for you" : paneStatus === null ? "closed" : run.state === "finished" ? "finished" : "running";
   const postComment = async () => {
     const body = comment.trim();
-    if (!body) return;
+    if (!body || commenting) return;
     setCommenting(true);
     try {
       const c = await addComment(t.id, body);
@@ -559,12 +591,8 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
   };
   const [title, setTitle] = useState(t.title);
   const [sendMenu, setSendMenu] = useState(false);
-  useEffect(() => {
-    if (!sendMenu) return;
-    const close = () => setSendMenu(false);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [sendMenu]);
+  const closeSendMenu = useCallback(() => setSendMenu(false), []);
+  useDismiss(sendMenu, closeSendMenu, [".split"]);
   const [editingDesc, setEditingDesc] = useState(false);
   const [desc, setDesc] = useState("");
   const [labelPick, setLabelPick] = useState(false);
@@ -593,6 +621,8 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
     }
   };
   const newLabel = async (name: string) => {
+    name = name.trim();
+    if (!name) return;
     try {
       const l = await createLabel(name, randomColor());
       onLabels([...labels, l]);
@@ -610,17 +640,25 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
     }
   };
   const have = new Set((t.labels ?? []).map((l) => l.id));
-  const candidates = labels.filter((l) => !have.has(l.id) && l.title.toLowerCase().includes(labelQuery.toLowerCase()));
-  const exact = candidates.find((l) => l.title.toLowerCase() === labelQuery.trim().toLowerCase());
-  const attached = (t.labels ?? []).some((l) => l.title.toLowerCase() === labelQuery.trim().toLowerCase());
+  const wanted = labelQuery.trim().toLowerCase();
+  const candidates = labels.filter((l) => !have.has(l.id) && l.title.toLowerCase().includes(wanted));
+  const exact = candidates.find((l) => l.title.toLowerCase() === wanted);
+  const attached = (t.labels ?? []).some((l) => l.title.toLowerCase() === wanted);
 
   return (
     <aside className="tasks-detail">
       <div className="tasks-detail-head">
-        <input type="checkbox" className="tasks-check" checked={t.done} onChange={() => void patch({ done: !t.done })} />
+        <input
+          type="checkbox"
+          className="tasks-check"
+          checked={t.done}
+          onChange={() => void patch({ done: !t.done })}
+          title={t.done ? "Mark undone" : "Mark done"}
+          aria-label={t.done ? "Mark undone" : "Mark done"}
+        />
         <span className="tasks-ident">{t.identifier}</span>
-        <button className="tasks-close icon-btn" onClick={onClose} title="Close">
-          <Icon name="x" size={15} />
+        <button type="button" className="icon-btn tasks-close" onClick={onClose} title="Close" aria-label="Close">
+          <Icon name="x" size={16} />
         </button>
       </div>
       <input
@@ -645,8 +683,8 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
       <div className="tasks-field">
         <span className="tasks-field-name">Due</span>
         <DueInput value={t.due_date} onCommit={(iso) => void patch({ due_date: iso })} />
-        {hasDate(t.due_date) && (
-          <button className="linkish" onClick={() => void patch({ due_date: NO_DATE })}>
+        {t.due_date && (
+          <button type="button" className="linkish" onClick={() => void patch({ due_date: "" })}>
             clear
           </button>
         )}
@@ -665,8 +703,8 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
           {(t.labels ?? []).map((l) => (
             <span key={l.id} className="tasks-label" style={labelStyle(l)}>
               {l.title}
-              <button onClick={() => void dropLabel(l)} title="Remove">
-                <Icon name="x" size={11} />
+              <button type="button" className="icon-btn sm tasks-label-x" onClick={() => void dropLabel(l)} title="Remove" aria-label={`Remove ${l.title}`}>
+                <Icon name="x" size={12} />
               </button>
             </span>
           ))}
@@ -689,22 +727,22 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
                 }}
                 onBlur={() => setTimeout(() => setLabelPick(false), 150)}
               />
-              <span className="row-menu label-menu">
+              <span className="row-menu label-menu" role="listbox">
                 {candidates.slice(0, 8).map((l) => (
-                  <button key={l.id} onMouseDown={(e) => e.preventDefault()} onClick={() => void addLabel(l)}>
+                  <button key={l.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => void addLabel(l)}>
                     <span className="tasks-dot" style={{ background: `#${l.hex_color || "888"}` }} /> {l.title}
                   </button>
                 ))}
                 {labelQuery.trim() && !exact && !attached && (
-                  <button onMouseDown={(e) => e.preventDefault()} onClick={() => void newLabel(labelQuery.trim())}>
-                    + create “{labelQuery.trim()}”
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => void newLabel(labelQuery)}>
+                    <Icon name="plus" size={12} /> create “{labelQuery.trim()}”
                   </button>
                 )}
               </span>
             </span>
           ) : (
-            <button className="linkish" onClick={() => setLabelPick(true)}>
-              + label
+            <button type="button" className="linkish" onClick={() => setLabelPick(true)}>
+              <Icon name="plus" size={12} /> label
             </button>
           )}
         </span>
@@ -712,35 +750,29 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
 
       <div className="tasks-send">
         <span className={`split${canSend ? "" : " off"}`} title={canSend ? "" : "No agent is running in herdr"}>
-          <button className="split-main" disabled={!canSend} onClick={() => onSend(false)}>
+          <button type="button" className="split-main" disabled={!canSend} onClick={() => onSend(false)}>
             Send to agent
           </button>
-          <button
-            className="split-arrow"
-            disabled={!canSend}
-            onClick={(e) => {
-              e.stopPropagation();
-              setSendMenu((m) => !m);
-            }}
-            title="More ways to send"
-          >
+          <button type="button" className="split-arrow" disabled={!canSend} onClick={() => setSendMenu((m) => !m)} title="More ways to send" aria-haspopup="menu" aria-expanded={sendMenu}>
             <Icon name="chevron-down" size={14} />
           </button>
           {sendMenu && (
-            <span className="row-menu split-menu" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => { setSendMenu(false); onSend(false); }}>Send to agent</button>
-              <button onClick={() => { setSendMenu(false); onSend(true); }}>
+            <span className="row-menu split-menu" role="menu">
+              <button type="button" role="menuitem" onClick={() => { setSendMenu(false); onSend(false); }}>
+                Send to agent
+              </button>
+              <button type="button" role="menuitem" onClick={() => { setSendMenu(false); onSend(true); }}>
                 Send to agent for grooming
                 <span className="split-hint">/grill-me</span>
               </button>
-              <button disabled={!canStart} onClick={() => { setSendMenu(false); onStart(); }} title={canStart ? "" : "No connected machine has a workspace to branch off"}>
+              <button type="button" role="menuitem" disabled={!canStart} onClick={() => { setSendMenu(false); onStart(); }} title={canStart ? "" : "No connected machine has a workspace to branch off"}>
                 Start an agent in a new worktree…
               </button>
             </span>
           )}
         </span>
         {!run && canStart && (
-          <button className="linkish" onClick={onStart}>
+          <button type="button" className="linkish" onClick={onStart}>
             <Icon name="git-branch" size={12} /> Start an agent on it
           </button>
         )}
@@ -762,7 +794,7 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
             </span>
           </span>
           {paneStatus !== null && (
-            <button className="linkish" onClick={() => onOpenPane(run.machine, run.pane)}>
+            <button type="button" className="linkish" onClick={() => onOpenPane(run.machine, run.pane)}>
               Open <Icon name="chevron-right" size={12} />
             </button>
           )}
@@ -774,13 +806,14 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
           Description
           {!editingDesc && (
             <button
+              type="button"
               className="linkish"
               onClick={() => {
                 setDesc(htmlToText(t.description));
                 setEditingDesc(true);
               }}
             >
-              edit
+              <Icon name="edit" size={12} /> edit
             </button>
           )}
         </div>
@@ -788,9 +821,12 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
           <>
             <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={8} autoFocus />
             <div className="modal-actions">
-              <button onClick={() => setEditingDesc(false)}>Cancel</button>
+              <button type="button" className="btn" onClick={() => setEditingDesc(false)}>
+                Cancel
+              </button>
               <button
-                className="primary"
+                type="button"
+                className="btn primary"
                 onClick={() => {
                   setEditingDesc(false);
                   void patch({ description: textToHtml(desc) });
@@ -809,53 +845,76 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
         )}
       </div>
 
-      {(comments.length > 0 || run) && (
-        <div className="tasks-comments">
-          <div className="tasks-field-name">Comments</div>
-          {comments.map((c) => (
-            <div key={c.id} className={`tasks-comment by-${c.author}`}>
-              <div className="tasks-comment-head">
+      <div className="tasks-comments">
+        <div className="tasks-field-name">Comments</div>
+        {comments.map((c) => (
+          <div key={c.id} className={`tasks-comment by-${c.author}`}>
+            <div className="tasks-comment-head">
+              <span className="tasks-comment-who">
                 {c.author === "agent" ? (
                   <>
                     <Logo agent={run?.agent ?? "claude"} /> {run?.agent ?? "agent"}
                   </>
                 ) : c.author === "you" ? (
                   <>
-                    <Icon name="user" size={13} /> you
+                    <Icon name="user" size={12} /> you
                   </>
                 ) : (
-                  "herdr-ui"
+                  <>
+                    <Icon name="info" size={12} /> herdr-ui
+                  </>
                 )}
-                <span className="tasks-comment-when">{fmtWhen(c.created)}</span>
-                <button className="icon-btn" title="Delete" onClick={() => void deleteComment(c.id).then(() => onChange({ ...t, comments: comments.filter((x) => x.id !== c.id) }), (e) => onError(errMsg(e)))}>
-                  <Icon name="x" size={12} />
-                </button>
-              </div>
-              <div className="tasks-comment-body">
-                <Markdown text={c.body} onOpenFile={() => {}} />
-              </div>
+              </span>
+              <span className="tasks-comment-when" title={new Date(c.created).toLocaleString()}>
+                {whenShort(c.created)}
+              </span>
+              <button
+                type="button"
+                className="icon-btn sm"
+                title="Delete comment"
+                aria-label="Delete comment"
+                onClick={() =>
+                  void deleteComment(c.id).then(
+                    () => onChange({ ...t, comments: comments.filter((x) => x.id !== c.id) }),
+                    (e) => onError(errMsg(e)),
+                  )
+                }
+              >
+                <Icon name="x" size={12} />
+              </button>
             </div>
-          ))}
-          {run?.state === "finished" && !t.done && (
-            <button className="primary tasks-comment-done" onClick={() => void patch({ done: true })}>
-              <Icon name="check" size={14} /> Mark done
-            </button>
-          )}
-          <div className="tasks-comment-add">
-            <textarea rows={2} value={comment} placeholder="A note on this task…" onChange={(e) => setComment(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void postComment(); }} />
-            <button disabled={commenting || !comment.trim()} onClick={() => void postComment()}>
-              Comment
-            </button>
+            <div className="tasks-comment-body">
+              <Markdown text={c.body} onOpenFile={() => {}} />
+            </div>
           </div>
+        ))}
+        {run?.state === "finished" && !t.done && (
+          <button type="button" className="btn primary tasks-comment-done" onClick={() => void patch({ done: true })}>
+            <Icon name="check" size={14} /> Mark done
+          </button>
+        )}
+        <div className="tasks-comment-add">
+          <textarea
+            rows={2}
+            value={comment}
+            placeholder="A note on this task…"
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void postComment();
+            }}
+          />
+          <button type="button" className="btn" disabled={commenting || !comment.trim()} onClick={() => void postComment()}>
+            Comment
+          </button>
         </div>
-      )}
+      </div>
 
       <div className="tasks-detail-foot">
         <span className="tasks-meta">
           created {fmtDate(t.created)}
-          {t.done && hasDate(t.done_at) && <> · done {fmtDate(t.done_at)}</>}
+          {t.done && t.done_at && <> · done {fmtDate(t.done_at)}</>}
         </span>
-        <button className="linkish danger" onClick={onDelete}>
+        <button type="button" className="linkish danger" onClick={onDelete}>
           <Icon name="trash" size={12} /> Delete
         </button>
       </div>
@@ -917,81 +976,77 @@ function StartAgentDialog({ task: t, project, machines, currentPane, onClose, on
     // an edited prompt keeps its words; only the prefix comes and goes
     setPrompt((p) => (edited ? (on ? (p.startsWith("/grill-me") ? p : `/grill-me ${p}`) : p.replace(/^\/grill-me\s*/, "")) : taskPrompt(t, project, on)));
   };
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
   const ws = workspaces.find((w) => w.value === workspace);
   const m = machines.find((x) => x.id === machine);
+  const ready = !!workspace && !!branch.trim() && !!prompt.trim();
+  const { busy, err, run } = useSubmit(async () => {
+    setRemembered({ ...remembered, [String(t.project_id)]: { machine, workspace } });
+    const task = await startTask(t.id, { machine, workspace, branch: branch.trim(), base: base.trim(), agent: "claude", groom, prompt });
+    onStarted(task, `${ws?.label ?? "the workspace"}${m && m.id !== "local" ? ` on ${m.label}` : ""}`);
+  });
   return (
-    <div className="modal-scrim" onClick={onClose}>
-      <form
-        className="modal tasks-start"
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={(e) => {
-          e.preventDefault();
-          setBusy(true);
-          setErr("");
-          setRemembered({ ...remembered, [String(t.project_id)]: { machine, workspace } });
-          startTask(t.id, { machine, workspace, branch: branch.trim(), base: base.trim(), agent: "claude", groom, prompt }).then(
-            (task) => onStarted(task, `${ws?.label ?? "the workspace"}${m && m.id !== "local" ? ` on ${m.label}` : ""}`),
-            (e) => {
-              setErr(errMsg(e));
-              setBusy(false);
-            },
-          );
-        }}
-      >
-        <h2>Start an agent on {t.identifier}</h2>
-        <p className="modal-hint">
-          A worktree branches off the workspace's repository, Claude starts in it and gets the task once it is up. The task wears <b>in progress</b>; every answer the
-          agent finishes comes back here as a comment.
-        </p>
-        <div className="schedule-row">
-          {connected.length > 1 && (
-            <label>
-              Machine
-              <Select value={machine} onChange={setMachine} options={connected.map((x) => ({ value: x.id, label: x.label, icon: <span className={`machine-state is-${x.state}`} /> }))} />
-            </label>
-          )}
-          <label className="grow">
-            Workspace
-            <Select value={workspace} onChange={setWorkspace} placeholder="Pick a repository" options={workspaces} />
+    <Dialog
+      title={<>Start an agent on {t.identifier}</>}
+      icon="git-branch"
+      size="md"
+      as="form"
+      className="tasks-start"
+      onClose={onClose}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (ready && !busy) void run();
+      }}
+    >
+      <p className="modal-hint">
+        A worktree branches off the workspace's repository, Claude starts in it and gets the task once it is up. The task wears <b>in progress</b>; every answer the agent
+        finishes comes back here as a comment.
+      </p>
+      <div className="schedule-row">
+        {connected.length > 1 && (
+          <label>
+            Machine
+            <Select value={machine} onChange={setMachine} options={machineOptions(connected, { onlyConnected: false })} />
           </label>
-        </div>
-        <div className="schedule-row">
-          <label className="grow">
-            Branch
-            <input value={branch} onChange={(e) => setBranch(e.target.value)} spellCheck={false} required />
-          </label>
-          <label className="grow">
-            From
-            <input value={base} onChange={(e) => setBase(e.target.value)} placeholder="the current branch" spellCheck={false} />
-          </label>
-        </div>
-        <label className="tasks-toggle">
-          <input type="checkbox" checked={groom} onChange={(e) => toggleGroom(e.target.checked)} /> groom first (<code>/grill-me</code>)
+        )}
+        <label className="grow">
+          Workspace
+          <Select value={workspace} onChange={setWorkspace} placeholder="Pick a repository" options={workspaces} />
         </label>
-        <label>
-          Prompt
-          <textarea
-            rows={6}
-            value={prompt}
-            onChange={(e) => {
-              setPrompt(e.target.value);
-              setEdited(true);
-            }}
-          />
+      </div>
+      <div className="schedule-row">
+        <label className="grow">
+          Branch
+          <input value={branch} onChange={(e) => setBranch(e.target.value)} spellCheck={false} required />
         </label>
-        {err && <div className="chat-error">{err}</div>}
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="primary" disabled={busy || !workspace || !branch.trim() || !prompt.trim()}>
-            {busy ? "Starting…" : "Start"}
-          </button>
-        </div>
-      </form>
-    </div>
+        <label className="grow">
+          From
+          <input value={base} onChange={(e) => setBase(e.target.value)} placeholder="the current branch" spellCheck={false} />
+        </label>
+      </div>
+      <label className="tasks-toggle">
+        <input type="checkbox" checked={groom} onChange={(e) => toggleGroom(e.target.checked)} /> groom first (<code>/grill-me</code>)
+      </label>
+      <label>
+        Prompt
+        <textarea
+          rows={6}
+          value={prompt}
+          onChange={(e) => {
+            setPrompt(e.target.value);
+            setEdited(true);
+          }}
+        />
+      </label>
+      {err && <Notice tone="error">{err}</Notice>}
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="submit" className="btn primary" disabled={busy || !ready}>
+          {busy ? "Starting…" : "Start"}
+        </button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -1002,9 +1057,9 @@ function DueInput({ value, onCommit }: { value: string; onCommit: (iso: string) 
   const [local, setLocal] = useState(toLocalInput(value));
   useEffect(() => setLocal(toLocalInput(value)), [value]);
   const commit = () => {
-    if (!local) return setLocal(toLocalInput(value));
-    const iso = new Date(local).toISOString();
-    if (iso !== (hasDate(value) ? new Date(value).toISOString() : "")) onCommit(iso);
+    if (!local) return setLocal(toLocalInput(value)); // emptied: the clear button unsets
+    if (local === toLocalInput(value)) return; // untouched: no patch for a blur
+    onCommit(new Date(local).toISOString());
   };
   return (
     <input
@@ -1036,15 +1091,6 @@ function PrioMark({ level }: { level: number }) {
 
 // ---- helpers ----
 
-function useDebounced<T>(value: T, ms: number): T {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const id = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(id);
-  }, [value, ms]);
-  return v;
-}
-
 function endOfToday(): string {
   const d = new Date();
   d.setHours(18, 0, 0, 0);
@@ -1053,7 +1099,7 @@ function endOfToday(): string {
 
 // "Today 18:00", "Tomorrow", "Thu", "12 Oct", "12 Oct 2027"
 function dueLabel(t: Task): { text: string; over: boolean } | null {
-  if (!hasDate(t.due_date)) return null;
+  if (!t.due_date) return null;
   const d = new Date(t.due_date);
   const now = new Date();
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
@@ -1068,16 +1114,9 @@ function dueLabel(t: Task): { text: string; over: boolean } | null {
   return { text, over: d.getTime() < now.getTime() };
 }
 
-const fmtDate = (s: string) => new Date(s).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
-const fmtWhen = (s: string) => {
-  const d = new Date(s);
-  const today = d.toDateString() === new Date().toDateString();
-  return today ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : d.toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-};
-
 // a Date's local wall-clock for <input type=datetime-local>
 function toLocalInput(s: string): string {
-  if (!hasDate(s)) return "";
+  if (!s) return "";
   const d = new Date(s);
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;

@@ -1,42 +1,41 @@
+import type { ReactNode } from "react";
+import Icon from "./icons";
 import type { Modifier, TermApi } from "./Terminal";
 
-type Key =
-  | { label: string; seq: string; title?: string; wide?: boolean }
-  | { label: string; arrow: "A" | "B" | "C" | "D"; title?: string }
-  | { label: string; mod: Exclude<Modifier, null>; title?: string };
+type Key = { id: string; label: ReactNode; title?: string; wide?: boolean } & ({ seq: string } | { arrow: "A" | "B" | "C" | "D" } | { mod: Exclude<Modifier, null> });
 
 // Row 1: what a phone keyboard lacks and an agent TUI needs constantly.
 // Row 2: the rest of a keyboard. Sequences are what a terminal would send;
 // arrows follow DECCKM, so they match whatever the TUI asked for.
 const ROW1: Key[] = [
-  { label: "Esc", seq: "\x1b" },
-  { label: "Tab", seq: "\t" },
-  { label: "↑", arrow: "A" },
-  { label: "↓", arrow: "B" },
-  { label: "←", arrow: "D" },
-  { label: "→", arrow: "C" },
-  { label: "⏎", seq: "\x1b\r", title: "Newline without sending (Alt+Enter)" },
-  { label: "Enter", seq: "\r", wide: true },
-  { label: "Ctrl", mod: "ctrl", title: "Hold Ctrl for the next key" },
-  { label: "^C", seq: "\x03", title: "Interrupt" },
+  { id: "Esc", label: "Esc", seq: "\x1b" },
+  { id: "Tab", label: "Tab", seq: "\t" },
+  { id: "Up", label: <Icon name="chevron-up" size={14} />, arrow: "A" },
+  { id: "Down", label: <Icon name="chevron-down" size={14} />, arrow: "B" },
+  { id: "Left", label: <Icon name="chevron-left" size={14} />, arrow: "D" },
+  { id: "Right", label: <Icon name="chevron-right" size={14} />, arrow: "C" },
+  { id: "Newline", label: <Icon name="corner-down-left" size={14} />, seq: "\x1b\r", title: "Newline without sending (Alt+Enter)" },
+  { id: "Enter", label: "Enter", seq: "\r", wide: true },
+  { id: "Ctrl", label: "Ctrl", mod: "ctrl", title: "Hold Ctrl for the next key" },
+  { id: "^C", label: "^C", seq: "\x03", title: "Interrupt" },
 ];
 
 const ROW2: Key[] = [
-  { label: "Alt", mod: "alt", title: "Hold Alt for the next key" },
-  { label: "⇤", seq: "\x1b[Z", title: "Shift+Tab" },
-  { label: "Home", seq: "\x1b[H" },
-  { label: "End", seq: "\x1b[F" },
-  { label: "PgUp", seq: "\x1b[5~" },
-  { label: "PgDn", seq: "\x1b[6~" },
-  { label: "⌫", seq: "\x7f", title: "Backspace" },
-  { label: "Del", seq: "\x1b[3~" },
-  { label: "^D", seq: "\x04" },
-  { label: "^Z", seq: "\x1a" },
-  { label: "^L", seq: "\x0c", title: "Clear screen" },
-  { label: "^U", seq: "\x15", title: "Clear line" },
-  { label: "^R", seq: "\x12", title: "Search history" },
-  { label: "^A", seq: "\x01" },
-  { label: "^E", seq: "\x05" },
+  { id: "Alt", label: "Alt", mod: "alt", title: "Hold Alt for the next key" },
+  { id: "Shift+Tab", label: "⇤", seq: "\x1b[Z", title: "Shift+Tab" },
+  { id: "Home", label: "Home", seq: "\x1b[H" },
+  { id: "End", label: "End", seq: "\x1b[F" },
+  { id: "PgUp", label: "PgUp", seq: "\x1b[5~" },
+  { id: "PgDn", label: "PgDn", seq: "\x1b[6~" },
+  { id: "Backspace", label: "⌫", seq: "\x7f", title: "Backspace" },
+  { id: "Del", label: "Del", seq: "\x1b[3~" },
+  { id: "^D", label: "^D", seq: "\x04" },
+  { id: "^Z", label: "^Z", seq: "\x1a" },
+  { id: "^L", label: "^L", seq: "\x0c", title: "Clear screen" },
+  { id: "^U", label: "^U", seq: "\x15", title: "Clear line" },
+  { id: "^R", label: "^R", seq: "\x12", title: "Search history" },
+  { id: "^A", label: "^A", seq: "\x01" },
+  { id: "^E", label: "^E", seq: "\x05" },
 ];
 
 // Key bar for the terminal lens. Every key goes through the live terminal's
@@ -65,13 +64,13 @@ export default function KeyBar({
   const row = (keys: Key[]) =>
     keys.map((k) => (
       <button
-        key={k.label}
+        key={k.id}
         type="button"
         tabIndex={-1}
-        title={k.title}
-        className={
-          ("mod" in k && modifier === k.mod ? "kb-on " : "") + ("wide" in k && k.wide ? "kb-wide" : "")
-        }
+        title={k.title ?? (typeof k.label === "string" ? undefined : k.id)}
+        aria-label={typeof k.label === "string" ? undefined : k.id}
+        aria-pressed={"mod" in k ? modifier === k.mod : undefined}
+        className={"key" + ("mod" in k && modifier === k.mod ? " kb-on" : "") + (k.wide ? " kb-wide" : "")}
         disabled={!term}
         onPointerDown={(e) => e.preventDefault()}
         onMouseDown={(e) => e.preventDefault()}

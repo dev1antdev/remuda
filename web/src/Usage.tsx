@@ -3,11 +3,13 @@
 // prices from Claude Code's own catalog; on a subscription a measure, not
 // a bill.
 
-import { useEffect, useMemo, useState } from "react";
-import { fetchUsage, type Machine, type UsageMachine, type UsageTotals } from "./api";
-import { errMsg } from "./prefs";
+import { useMemo, useState } from "react";
+import { fetchUsage, type Machine, type UsageTotals } from "./api";
+import { basename } from "./prefs";
+import { connected, machineLabel, machineOptions } from "./options";
+import { ago, fmtDay } from "./time";
+import { Dialog, Notice, useAsync } from "./ui";
 import Select from "./Select";
-import Icon from "./icons";
 
 const PERIODS = [
   { value: "1", label: "Today" },
@@ -19,6 +21,11 @@ const PERIODS = [
 export const usd = (n: number) => (n >= 100 ? `$${Math.round(n)}` : n >= 10 ? `$${n.toFixed(1)}` : `$${n.toFixed(2)}`);
 export const tok = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n));
 
+// how full a context window is: nothing, amber past 70%, red past 90%
+export const fillClass = (f: number) => (f >= 0.9 ? " is-red" : f >= 0.7 ? " is-amber" : "");
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
 export default function Usage({ machines, onClose, onOpenSession }: {
   machines: Machine[];
   onClose: () => void;
@@ -26,31 +33,9 @@ export default function Usage({ machines, onClose, onOpenSession }: {
 }) {
   const [days, setDays] = useState("7");
   const [machine, setMachine] = useState("all");
-  const [data, setData] = useState<{ since: string; machines: UsageMachine[] } | null>(null);
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  useEffect(() => {
-    let gone = false;
-    setBusy(true);
-    fetchUsage(Number(days), machine === "all" ? "" : machine, tz).then(
-      (d) => {
-        if (gone) return;
-        setData(d);
-        setErr("");
-        setBusy(false);
-      },
-      (e) => {
-        if (gone) return;
-        setErr(errMsg(e));
-        setBusy(false);
-      },
-    );
-    return () => {
-      gone = true;
-    };
-  }, [days, machine, tz]);
-  const label = (id: string) => machines.find((m) => m.id === id)?.label ?? id;
+  const { data, error, loading } = useAsync(() => fetchUsage(Number(days), machine === "all" ? "" : machine, tz), [days, machine, tz]);
+  const several = connected(machines).length > 1;
 
   // everything summed over the machines that answered
   const sum = useMemo(() => {
@@ -97,7 +82,6 @@ export default function Usage({ machines, onClose, onOpenSession }: {
       }
       for (const s of r.sessions) sessions.push({ machine: m.id, project: s.project, session: s.session, dir: s.dir, model: s.model, cost: s.cost, turns: s.turns, last: s.last });
     }
-    const dayList = [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]));
     // every day of the period, empty ones too
     const n = Number(days);
     const all: { date: string; cost: number; turns: number }[] = [];
@@ -111,7 +95,6 @@ export default function Usage({ machines, onClose, onOpenSession }: {
     return {
       total,
       days: all,
-      dayList,
       projects: [...byProject.values()].sort((a, b) => b.cost - a.cost),
       models: [...byModel.entries()].map(([model, t]) => ({ model, ...t })).sort((a, b) => b.cost - a.cost),
       sessions: sessions.sort((a, b) => b.cost - a.cost).slice(0, 25),
@@ -119,131 +102,122 @@ export default function Usage({ machines, onClose, onOpenSession }: {
     };
   }, [data, days]);
   const maxDay = Math.max(1e-9, ...sum.days.map((d) => d.cost));
-  const fmtDay = (iso: string) => {
-    const [y, m, d] = iso.split("-").map(Number);
-    return new Date(y!, m! - 1, d!).toLocaleDateString([], { day: "numeric", month: "short" });
-  };
+  const read = sum.total.input + sum.total.cache_read + sum.total.cache_write;
+  const who = (id: string) => (sum.perMachine.length > 1 ? ` · ${machineLabel(machines, id)}` : "");
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
-      <div className="modal usage" onClick={(e) => e.stopPropagation()}>
-        <div className="schedules-head">
-          <h2>
-            <Icon name="chart" size={16} /> Usage
-          </h2>
+    <Dialog
+      title="Usage"
+      icon="chart"
+      size="lg"
+      className="usage"
+      onClose={onClose}
+      controls={
+        <>
           <Select value={days} onChange={setDays} options={PERIODS} />
-          {machines.filter((m) => m.state === "connected").length > 1 && (
-            <Select
-              value={machine}
-              onChange={setMachine}
-              options={[{ value: "all", label: "All machines" }, ...machines.filter((m) => m.state === "connected").map((m) => ({ value: m.id, label: m.label, icon: <span className={`machine-state is-${m.state}`} /> }))]}
-            />
-          )}
-          {busy && <span className="search-busy" />}
-          <button className="icon-btn" onClick={onClose} title="Close">
-            <Icon name="x" size={16} />
-          </button>
-        </div>
-        <p className="modal-hint">
-          What the agents' transcripts say they cost, at Claude Code's own API prices — on a subscription a measure of where the work went, not a bill. Each
-          machine reads its own history.
-        </p>
-        {err && <div className="chat-error">{err}</div>}
-        {sum.perMachine.filter((m) => m.error).map((m) => (
-          <div key={m.id} className="chat-error">
+          {several && <Select value={machine} onChange={setMachine} options={machineOptions(machines, { all: "All machines" })} />}
+          {loading && <span className="search-busy" />}
+        </>
+      }
+    >
+      <Notice tone="hint">
+        What the agents' transcripts say they cost, at Claude Code's own API prices — on a subscription a measure of where the work went, not a bill. Each
+        machine reads its own history.
+      </Notice>
+      {error && <Notice tone="error">{error}</Notice>}
+      {sum.perMachine
+        .filter((m) => m.error)
+        .map((m) => (
+          <Notice key={m.id} tone="error">
             {m.label}: {m.error}
-          </div>
+          </Notice>
         ))}
-        <div className="usage-cards">
-          <div className="usage-card">
-            <span className="usage-card-n">{usd(sum.total.cost)}</span>
-            <span className="usage-card-l">API-equivalent</span>
-          </div>
-          <div className="usage-card">
-            <span className="usage-card-n">{sum.total.turns.toLocaleString()}</span>
-            <span className="usage-card-l">responses</span>
-          </div>
-          <div className="usage-card">
-            <span className="usage-card-n">{tok(sum.total.output)}</span>
-            <span className="usage-card-l">tokens written</span>
-          </div>
-          <div className="usage-card">
-            <span className="usage-card-n">{tok(sum.total.input + sum.total.cache_read + sum.total.cache_write)}</span>
-            <span className="usage-card-l">tokens read{sum.total.cache_read > 0 && ` · ${Math.round((100 * sum.total.cache_read) / Math.max(1, sum.total.input + sum.total.cache_read + sum.total.cache_write))}% from cache`}</span>
-          </div>
+      <div className="usage-cards">
+        <div className="usage-card">
+          <span className="usage-card-n">{usd(sum.total.cost)}</span>
+          <span className="usage-card-l">API-equivalent</span>
         </div>
-        {sum.total.unknown > 0 && <div className="placeholder small">{sum.total.unknown} responses came from a model with no price here and are counted, not priced.</div>}
-        <div className="usage-chart" aria-label="cost per day">
-          {sum.days.map((d) => (
-            <div key={d.date} className="usage-bar" title={`${fmtDay(d.date)}: ${usd(d.cost)} · ${d.turns} responses`}>
-              <div className="usage-bar-fill" style={{ height: `${Math.max(d.cost > 0 ? 3 : 0, (100 * d.cost) / maxDay)}%` }} />
-              {(sum.days.length <= 14 || d === sum.days[0] || d === sum.days[sum.days.length - 1]) && <span className="usage-bar-l">{fmtDay(d.date)}</span>}
-            </div>
-          ))}
+        <div className="usage-card">
+          <span className="usage-card-n">{sum.total.turns.toLocaleString()}</span>
+          <span className="usage-card-l">responses</span>
         </div>
-        <div className="usage-tables">
-          <section>
-            <h3>Projects</h3>
-            {sum.projects.length === 0 && <div className="placeholder small">Nothing in this period.</div>}
-            {sum.projects.slice(0, 12).map((p) => (
-              <div key={`${p.machine}|${p.project}`} className="usage-row" title={p.dir || p.project}>
-                <span className="usage-row-name">
-                  {p.dir ? (p.dir.split("/").filter(Boolean).pop() ?? p.project) : p.project}
-                  {sum.perMachine.length > 1 && <span className="usage-row-sub"> · {label(p.machine)}</span>}
-                </span>
-                <span className="usage-row-meta">{p.sessions} session{p.sessions === 1 ? "" : "s"}</span>
-                <span className="usage-row-cost">{usd(p.cost)}</span>
-              </div>
-            ))}
-          </section>
-          <section>
-            <h3>Models</h3>
-            {sum.models.map((m) => (
-              <div key={m.model} className="usage-row">
-                <span className="usage-row-name">{m.name}</span>
-                <span className="usage-row-meta">{tok(m.output)} out · {tok(m.input + m.cache_read + m.cache_write)} in</span>
-                <span className="usage-row-cost">{usd(m.cost)}</span>
-              </div>
-            ))}
-            {sum.perMachine.length > 1 && (
-              <>
-                <h3>Machines</h3>
-                {sum.perMachine.map((m) => (
-                  <div key={m.id} className="usage-row">
-                    <span className="usage-row-name">{m.label}</span>
-                    <span className="usage-row-meta">{m.error ? "no report" : `${m.turns} responses`}</span>
-                    <span className="usage-row-cost">{m.error ? "—" : usd(m.cost)}</span>
-                  </div>
-                ))}
-              </>
-            )}
-          </section>
-          <section className="usage-sessions">
-            <h3>Sessions</h3>
-            {sum.sessions.map((s) => (
-              <button key={`${s.machine}|${s.session}`} className="usage-row usage-session" onClick={() => onOpenSession(s.machine, s.project, s.session, s.dir)} title="Open the transcript">
-                <span className="usage-row-name">
-                  {s.dir.split("/").filter(Boolean).pop() ?? s.project}
-                  <span className="usage-row-sub"> · {s.session.slice(0, 8)}{sum.perMachine.length > 1 ? ` · ${label(s.machine)}` : ""}</span>
-                </span>
-                <span className="usage-row-meta">
-                  {s.turns} responses · {ago(s.last)}
-                </span>
-                <span className="usage-row-cost">{usd(s.cost)}</span>
-              </button>
-            ))}
-          </section>
+        <div className="usage-card">
+          <span className="usage-card-n">{tok(sum.total.output)}</span>
+          <span className="usage-card-l">tokens written</span>
+        </div>
+        <div className="usage-card">
+          <span className="usage-card-n">{tok(read)}</span>
+          <span className="usage-card-l">tokens read{sum.total.cache_read > 0 && ` · ${Math.round((100 * sum.total.cache_read) / Math.max(1, read))}% from cache`}</span>
         </div>
       </div>
-    </div>
+      {sum.total.unknown > 0 && <Notice tone="hint">{sum.total.unknown} responses came from a model with no price here and are counted, not priced.</Notice>}
+      <div className="usage-chart" aria-label="cost per day">
+        {sum.days.map((d) => (
+          <div key={d.date} className="usage-bar" title={`${fmtDay(d.date)}: ${usd(d.cost)} · ${plural(d.turns, "response")}`}>
+            <div className="usage-bar-fill" style={{ height: `${Math.max(d.cost > 0 ? 3 : 0, (100 * d.cost) / maxDay)}%` }} />
+            {(sum.days.length <= 14 || d === sum.days[0] || d === sum.days[sum.days.length - 1]) && <span className="usage-bar-l">{fmtDay(d.date)}</span>}
+          </div>
+        ))}
+      </div>
+      <div className="usage-tables">
+        <section>
+          <h3>Projects</h3>
+          {sum.projects.length === 0 && <div className="empty">Nothing in this period.</div>}
+          {sum.projects.slice(0, 12).map((p) => (
+            <div key={`${p.machine}|${p.project}`} className="usage-row" title={p.dir || p.project}>
+              <span className="usage-row-name">
+                {p.dir ? basename(p.dir) : p.project}
+                <span className="usage-row-sub">{who(p.machine)}</span>
+              </span>
+              <span className="usage-row-meta">{plural(p.sessions, "session")}</span>
+              <span className="usage-row-cost">{usd(p.cost)}</span>
+            </div>
+          ))}
+        </section>
+        <section>
+          <h3>Models</h3>
+          {sum.models.map((m) => (
+            <div key={m.model} className="usage-row">
+              <span className="usage-row-name">{m.name}</span>
+              <span className="usage-row-meta">
+                {tok(m.output)} out · {tok(m.input + m.cache_read + m.cache_write)} in
+              </span>
+              <span className="usage-row-cost">{usd(m.cost)}</span>
+            </div>
+          ))}
+          {sum.perMachine.length > 1 && (
+            <>
+              <h3>Machines</h3>
+              {sum.perMachine.map((m) => (
+                <div key={m.id} className="usage-row">
+                  <span className="usage-row-name">{m.label}</span>
+                  <span className="usage-row-meta">{m.error ? "no report" : plural(m.turns, "response")}</span>
+                  <span className="usage-row-cost">{m.error ? "—" : usd(m.cost)}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </section>
+        <section className="usage-sessions">
+          <h3>Sessions</h3>
+          {sum.sessions.map((s) => (
+            <button key={`${s.machine}|${s.session}`} type="button" className="usage-row" onClick={() => onOpenSession(s.machine, s.project, s.session, s.dir)} title="Open the transcript">
+              <span className="usage-row-name">
+                {s.dir ? basename(s.dir) : s.project}
+                <span className="usage-row-sub">
+                  {" "}
+                  · {s.session.slice(0, 8)}
+                  {who(s.machine)}
+                </span>
+              </span>
+              <span className="usage-row-meta">
+                {plural(s.turns, "response")} · {ago(s.last)}
+              </span>
+              <span className="usage-row-cost">{usd(s.cost)}</span>
+            </button>
+          ))}
+        </section>
+      </div>
+    </Dialog>
   );
-}
-
-function ago(iso: string): string {
-  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m} min ago`;
-  const h = Math.round(m / 60);
-  if (h < 48) return `${h} h ago`;
-  return `${Math.round(h / 24)} days ago`;
 }

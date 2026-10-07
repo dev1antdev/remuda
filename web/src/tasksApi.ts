@@ -54,9 +54,6 @@ export type Run = {
 
 export type Comment = { id: number; task_id: number; author: "agent" | "you" | "herdr-ui"; body: string; created: string };
 
-export const NO_DATE = "";
-export const hasDate = (d: string | undefined | null): d is string => !!d;
-
 export const PRIORITIES = ["None", "Low", "Medium", "High", "Urgent", "DO NOW"];
 
 const get = <T,>(path: string): Promise<T> =>
@@ -66,8 +63,6 @@ const get = <T,>(path: string): Promise<T> =>
 
 export const listProjects = () => get<Project[]>("/api/tasks/projects");
 export const createProject = (title: string, parent_project_id = 0) => sendJSON<Project>("POST", "/api/tasks/projects", { title, parent_project_id });
-export const patchProject = (id: number, fields: Partial<Project>) => sendJSON<Project>("PATCH", `/api/tasks/projects/${id}`, fields);
-export const deleteProject = (id: number) => sendJSON<unknown>("DELETE", `/api/tasks/projects/${id}`);
 
 export const listLabels = () => get<Label[]>("/api/tasks/labels");
 export const createLabel = (title: string, hex_color: string) => sendJSON<Label>("POST", "/api/tasks/labels", { title, hex_color });

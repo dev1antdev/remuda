@@ -1,7 +1,8 @@
 // A select that can show an icon beside each option — a native <select>
 // cannot. A button shows the chosen option; the list opens in a portal at
-// the button (fixed, flipping upward when the screen runs out), so no
-// scrolling parent clips it. Arrow keys move, Enter picks, Escape closes.
+// the button (fixed, kept inside the viewport, flipping upward when the
+// screen runs out), so no scrolling parent clips it. Arrow keys move,
+// Enter picks, Escape closes, Tab closes and moves on.
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -16,31 +17,44 @@ export type Option<T extends string | number> = {
   disabled?: boolean;
 };
 
-export default function Select<T extends string | number>({ value, options, onChange, className, placeholder, title }: {
+const MIN_WIDTH = 180;
+const MAX_HEIGHT = 320;
+const EDGE = 8; // the list stays this far from the viewport's edge
+
+export default function Select<T extends string | number>({ value, options, onChange, className, placeholder }: {
   value: T;
   options: Option<T>[];
   onChange: (v: T) => void;
   className?: string;
   placeholder?: string;
-  title?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [at, setAt] = useState<{ x: number; y: number; w: number; up: boolean } | null>(null);
-  const [focus, setFocus] = useState(-1);
+  const [at, setAt] = useState<{ x: number; y: number; w: number; up: boolean; maxH: number } | null>(null);
+  const [focus, setFocus] = useState(-1); // an index into the enabled options
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   const chosen = options.find((o) => o.value === value);
+  const enabled = options.filter((o) => !o.disabled);
 
   const place = () => {
     const r = btn.current?.getBoundingClientRect();
     if (!r) return;
-    const want = Math.min(320, 8 + options.length * 30 + 8);
-    const up = r.bottom + want > window.innerHeight - 8 && r.top > want;
-    setAt({ x: r.left, y: up ? r.top : r.bottom, w: r.width, up });
+    const want = Math.min(MAX_HEIGHT, 8 + options.length * 30 + 8);
+    const below = window.innerHeight - r.bottom - EDGE;
+    const above = r.top - EDGE;
+    const up = want > below && above > below;
+    const w = Math.max(r.width, MIN_WIDTH);
+    setAt({
+      x: Math.max(EDGE, Math.min(r.left, window.innerWidth - EDGE - w)),
+      y: up ? r.top : r.bottom,
+      w,
+      up,
+      maxH: Math.max(120, Math.min(MAX_HEIGHT, up ? above : below)),
+    });
   };
   const show = () => {
     place();
-    setFocus(Math.max(0, options.findIndex((o) => o.value === value)));
+    setFocus(Math.max(0, enabled.findIndex((o) => o.value === value)));
     setOpen(true);
   };
   const hide = () => {
@@ -50,7 +64,7 @@ export default function Select<T extends string | number>({ value, options, onCh
 
   useLayoutEffect(() => {
     if (!open) return;
-    const onAway = (e: MouseEvent) => {
+    const onAway = (e: Event) => {
       if (pop.current?.contains(e.target as Node) || btn.current?.contains(e.target as Node)) return;
       setOpen(false);
     };
@@ -61,11 +75,13 @@ export default function Select<T extends string | number>({ value, options, onCh
       }
     };
     document.addEventListener("mousedown", onAway, true);
+    document.addEventListener("touchstart", onAway, { capture: true, passive: true });
     document.addEventListener("keydown", onKey, true);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
     return () => {
       document.removeEventListener("mousedown", onAway, true);
+      document.removeEventListener("touchstart", onAway, true);
       document.removeEventListener("keydown", onKey, true);
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
@@ -81,11 +97,9 @@ export default function Select<T extends string | number>({ value, options, onCh
 
   const pick = (o: Option<T>) => {
     if (o.disabled) return;
-    setOpen(false);
-    btn.current?.focus();
+    hide();
     if (o.value !== value) onChange(o.value);
   };
-  const enabled = options.filter((o) => !o.disabled);
   const move = (d: number) => setFocus((f) => (enabled.length ? (f + d + enabled.length) % enabled.length : -1));
 
   // group headers in first-seen order
@@ -102,7 +116,8 @@ export default function Select<T extends string | number>({ value, options, onCh
         ref={btn}
         type="button"
         className={`sel${open ? " open" : ""}${className ? ` ${className}` : ""}`}
-        title={title}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         onClick={() => (open ? setOpen(false) : show())}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -124,19 +139,26 @@ export default function Select<T extends string | number>({ value, options, onCh
           <div
             ref={pop}
             className={`sel-pop${at.up ? " up" : ""}`}
-            style={{ left: at.x, top: at.up ? undefined : at.y, bottom: at.up ? window.innerHeight - at.y : undefined, minWidth: Math.max(at.w, 180) }}
+            style={{
+              left: at.x,
+              top: at.up ? undefined : at.y,
+              bottom: at.up ? window.innerHeight - at.y : undefined,
+              minWidth: at.w,
+              maxWidth: window.innerWidth - 2 * EDGE,
+              maxHeight: at.maxH,
+            }}
             role="listbox"
             onKeyDown={(e) => {
               if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                 e.preventDefault();
                 move(e.key === "ArrowDown" ? 1 : -1);
               } else if (e.key === "Tab") {
-                setOpen(false);
+                hide(); // focus returns to the button, then Tab moves on from there
               }
             }}
           >
             {groups.map((g, gi) => (
-              <div key={g.name ?? gi} className="sel-group">
+              <div key={g.name ?? gi} role={g.name ? "group" : undefined} aria-label={g.name}>
                 {g.name && <div className="sel-group-name">{g.name}</div>}
                 {g.items.map((o) => (
                   <button
@@ -152,7 +174,11 @@ export default function Select<T extends string | number>({ value, options, onCh
                     {o.icon !== undefined && <span className="sel-icon">{o.icon}</span>}
                     <span className="sel-label">{o.label}</span>
                     {o.hint && <span className="sel-hint">{o.hint}</span>}
-                    {o.value === value && <span className="sel-check">✓</span>}
+                    {o.value === value && (
+                      <span className="sel-check">
+                        <Icon name="check" size={12} />
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

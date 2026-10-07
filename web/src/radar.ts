@@ -4,6 +4,7 @@
 // looks like and in what order. Pure functions over the roster.
 
 import type { Machine, Pane, Session, Tab } from "./api";
+import { basename } from "./prefs";
 
 // ---- vendors ----
 
@@ -124,7 +125,7 @@ export function markOf(d: Display, step: number): string {
 // header that already shows it loses that prefix.
 export function rowLabel(p: Pane, tab: Tab, workspace: string, prefs: RadarPrefs): string {
   let title = p.title.trim();
-  const folder = p.cwd.split("/").filter(Boolean).pop() ?? "";
+  const folder = p.cwd ? basename(p.cwd) : "";
   if (!title || title === p.cwd || title === folder || title.startsWith(`${p.cwd}: `)) title = VENDOR_NAME[p.agent] || p.agent || folder || "shell";
   if (workspace && title.length > workspace.length + 1) {
     const rest = title.slice(workspace.length);

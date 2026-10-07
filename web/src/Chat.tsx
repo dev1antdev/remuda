@@ -1,12 +1,14 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { fetchChat, fetchQuick, saveQuick, sendKeys, submitPrompt, type ChatResponse, type PaneUsage, type Part, type QuickPrompt, type Turn } from "./api";
 import type { AgentTarget } from "./Tasks";
 import SendToAgent from "./SendToAgent";
 import { filesFrom, MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
 import { Markdown, type OpenFile } from "./markdown";
-import { errMsg, isTouch } from "./prefs";
+import { basename, errMsg, isTouch } from "./prefs";
 import Select from "./Select";
 import Icon from "./icons";
+import { whenShort } from "./time";
+import { Dialog, Notice, useTimedNotice } from "./ui";
 
 // Chat lens: the transcript comes from Claude Code's own session file (read
 // server-side), sending types into the live pane. Polls with ETag — every
@@ -38,9 +40,7 @@ export default function Chat({
   const [forward, setForward] = useState<string | null>(null);
   const onForward = useCallback((text: string) => setForward(`From ${origin}:\n\n${text}`), [origin]);
   const others = agents.some((a) => a.machineId !== machineId || a.paneId !== paneId);
-  const [forwarded, setForwarded] = useState("");
-  const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(noticeTimer.current), []);
+  const [forwarded, showForwarded, clearForwarded] = useTimedNotice(4000);
   const [chat, setChat] = useState<ChatResponse | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(jump?.session ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +48,8 @@ export default function Chat({
   const logRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(!jump);
   const busy = status === "run" || status === "input";
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
 
   // a search hit: its session, then its turn once the transcript is there
   const pendingTurn = useRef<string | null>(jump?.turn ?? null);
@@ -65,18 +67,32 @@ export default function Chat({
     if (shownSession.current !== jump.session) setSessionId(jump.session);
   }, [jump]);
 
+  // The poll restarts (and the log clears) only when the transcript itself
+  // changes. The pane's status sets the pace through a ref, so a flip never
+  // blanks the log — it only asks for a poll at once.
+  const pollNow = useRef<() => void>(() => {});
   useEffect(() => {
     etagRef.current = null;
     setChat(null);
     let stop = false;
+    let inflight = false;
+    let again = false; // a poll was asked for while one was running
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const poll = async () => {
       if (stop) return;
+      if (inflight) {
+        again = true;
+        return;
+      }
+      if (timer) clearTimeout(timer);
+      timer = null;
+      inflight = true;
       try {
         if (document.visibilityState === "visible") {
           const res = await fetchChat(machineId, paneId, sessionId, etagRef.current, dir);
-          if (res && !stop) {
+          if (stop) return;
+          if (res) {
             etagRef.current = res.etag;
             setChat(res.body);
           }
@@ -85,15 +101,31 @@ export default function Chat({
       } catch (e) {
         if (!stop) setError(errMsg(e));
       } finally {
-        if (!stop) timer = setTimeout(poll, busy ? 2000 : 10000);
+        inflight = false;
+        if (!stop) {
+          timer = setTimeout(poll, again ? 0 : busyRef.current ? 2000 : 10000);
+          again = false;
+        }
       }
     };
+    pollNow.current = () => void poll();
     void poll();
     return () => {
       stop = true;
+      pollNow.current = () => {};
       if (timer) clearTimeout(timer);
     };
-  }, [machineId, paneId, sessionId, busy, dir]);
+  }, [machineId, paneId, sessionId, dir]);
+  // a status flip asks for a poll now; the first run is the mount, where
+  // the poll above has just gone out
+  const busySeen = useRef(false);
+  useEffect(() => {
+    if (!busySeen.current) {
+      busySeen.current = true;
+      return;
+    }
+    pollNow.current();
+  }, [busy]);
 
   useEffect(() => {
     const id = pendingTurn.current;
@@ -109,9 +141,12 @@ export default function Chat({
     }
     stickRef.current = false;
     el.scrollIntoView({ block: "start" });
+    // the highlight is a one-shot animation: restarted even when the class
+    // is still there from a previous jump to the same turn
+    el.classList.remove("turn-hit");
+    void (el as HTMLElement).offsetWidth;
     el.classList.add("turn-hit");
-    const t = setTimeout(() => el.classList.remove("turn-hit"), 2600);
-    return () => clearTimeout(t);
+    setTimeout(() => el.classList.remove("turn-hit"), 2600); // harmless on a detached node
   }, [chat, jump]);
 
   // Follow the bottom only while the reader is there and not busy with the
@@ -121,6 +156,7 @@ export default function Chat({
   // reader's.
   const ownScroll = useRef(false);
   const dragging = useRef(false);
+  const released = useRef(false); // an upward gesture: scrolling near the bottom does not re-stick
   useEffect(() => {
     const log = logRef.current;
     if (!log || !stickRef.current || dragging.current) return;
@@ -134,14 +170,17 @@ export default function Chat({
   const onScroll = () => {
     const log = logRef.current;
     if (!log || ownScroll.current) return;
-    stickRef.current = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
-  };
-  const letGo = (up: boolean) => {
-    if (up) stickRef.current = false;
+    const d = log.scrollHeight - log.scrollTop - log.clientHeight;
+    if (d < 1) released.current = false; // back at the very bottom: following again
+    stickRef.current = !released.current && d < 60;
   };
   useEffect(() => {
     const log = logRef.current;
     if (!log) return;
+    const letGo = (up: boolean) => {
+      released.current = up;
+      if (up) stickRef.current = false;
+    };
     const onWheel = (e: WheelEvent) => letGo(e.deltaY < 0);
     let touchY = 0;
     const onTouchStart = (e: TouchEvent) => (touchY = e.touches[0]?.clientY ?? 0);
@@ -164,6 +203,8 @@ export default function Chat({
 
   const turns = chat?.turns ?? [];
   const sessions = chat?.sessions ?? [];
+  const keys = (ks: string[]) => void sendKeys(machineId, paneId, ks).catch((e) => setError(errMsg(e)));
+  const context = usage && usage.window > 0 ? usage.context / usage.window : 0;
 
   return (
     <div className="chat">
@@ -172,48 +213,68 @@ export default function Chat({
           className="chat-session-pick"
           value={sessionId ?? chat?.session_id ?? ""}
           onChange={setSessionId}
-          options={sessions.map((s) => ({ value: s.id, label: s.title || s.id.slice(0, 8), hint: new Date(s.mod_time).toLocaleString() }))}
+          options={sessions.map((s) => ({ value: s.id, label: s.title || s.id.slice(0, 8), hint: whenShort(s.mod_time) }))}
         />
       )}
       <div className="chat-log" ref={logRef} onScroll={onScroll}>
         {turns.length === 0 && (
-          <div className="chat-empty">
+          <div className="empty chat-empty">
             {chat === null ? "Loading…" : readOnly ? "This transcript is empty." : "No transcript for this pane's folder yet."}
           </div>
         )}
         {turns.map((t, i) => (
-          <TurnView key={i} turn={t} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} />
+          <TurnView key={t.ids?.[0] || i} turn={t} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} />
         ))}
       </div>
       {!readOnly && status === "input" && (
-        <div className="prompt-card">
-          <span>The agent is waiting for an answer — check the terminal, or:</span>
-          <div className="prompt-card-keys">
-            <button onClick={() => void sendKeys(machineId, paneId, ["up"])}>↑</button>
-            <button onClick={() => void sendKeys(machineId, paneId, ["down"])}>↓</button>
-            <button onClick={() => void sendKeys(machineId, paneId, ["enter"])}>Enter</button>
-            <button onClick={() => void sendKeys(machineId, paneId, ["esc"])}>Esc</button>
-          </div>
-        </div>
-      )}
-      {error && <div className="chat-error">{error}</div>}
-      {!readOnly && usage && usage.window > 0 && usage.context / usage.window >= 0.8 && status !== "run" && (
-        <div className={`chat-notice tasks-notice compact-notice${usage.context / usage.window >= 0.9 ? " is-red" : ""}`}>
-          <span>
-            Context {Math.round((100 * usage.context) / usage.window)}% full — Claude Code compacts on its own near the edge; compacting now keeps the summary yours to steer.
+        <Notice tone="warn" icon="alert-triangle" className="chat-notice">
+          The agent is waiting for an answer — check the terminal, or:
+          <span className="prompt-card-keys">
+            <button type="button" className="btn sm" title="Up" aria-label="Up" onClick={() => keys(["up"])}>
+              <Icon name="chevron-up" size={14} />
+            </button>
+            <button type="button" className="btn sm" title="Down" aria-label="Down" onClick={() => keys(["down"])}>
+              <Icon name="chevron-down" size={14} />
+            </button>
+            <button type="button" className="btn sm" onClick={() => keys(["enter"])}>
+              Enter
+            </button>
+            <button type="button" className="btn sm" onClick={() => keys(["esc"])}>
+              Esc
+            </button>
           </span>
-          <button className="linkish" onClick={() => void submitPrompt(machineId, paneId, "/compact").catch((e) => setError(errMsg(e)))}>
-            Compact now
-          </button>
-        </div>
+        </Notice>
+      )}
+      {error && (
+        <Notice tone="error" className="chat-notice" onDismiss={() => setError(null)}>
+          {error}
+        </Notice>
+      )}
+      {!readOnly && context >= 0.8 && status !== "run" && (
+        <Notice
+          tone="warn"
+          icon="chart"
+          className={`chat-notice${context >= 0.9 ? " is-red" : ""}`}
+          action={
+            <button type="button" className="linkish" onClick={() => void submitPrompt(machineId, paneId, "/compact").catch((e) => setError(errMsg(e)))}>
+              Compact now
+            </button>
+          }
+        >
+          Context {Math.round(100 * context)}% full — Claude Code compacts on its own near the edge; compacting now keeps the summary yours to steer.
+        </Notice>
       )}
       {jumpMiss && (
-        <div className="tasks-notice chat-notice" onClick={() => setJumpMiss(false)}>
+        <Notice tone="info" className="chat-notice" onDismiss={() => setJumpMiss(false)}>
           That turn is older than the loaded part of this transcript (the last 16 MB).
-        </div>
+        </Notice>
       )}
       {!readOnly && <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} />}
-      {forwarded && <div className="tasks-notice chat-notice">{forwarded}</div>}
+      {forwarded && (
+        <Notice tone="success" icon="check" className="chat-notice" onDismiss={clearForwarded}>
+          {forwarded}
+        </Notice>
+      )}
       {forward !== null && (
         <SendToAgent
           title="Forward to another agent"
@@ -226,9 +287,7 @@ export default function Chat({
           onSend={async (target, text) => {
             await submitPrompt(target.machineId, target.paneId, text);
             setForward(null);
-            setForwarded(`Forwarded to ${target.agent} in ${target.sessionName}.`);
-            clearTimeout(noticeTimer.current);
-            noticeTimer.current = setTimeout(() => setForwarded(""), 4000);
+            showForwarded(`Forwarded to ${target.agent} in ${target.sessionName}.`);
           }}
         />
       )}
@@ -241,16 +300,31 @@ export default function Chat({
 // folder and put an @path mention at the caret; the agent reads the file
 // from there once the message is sent.
 function Composer({ machineId, paneId, working, dir }: { machineId: string; paneId: string; working: boolean; dir: string }) {
-  const [draft, setDraft] = useState("");
+  // the draft is read through a ref by the insertions, so they compose
+  // without side effects inside a state updater
+  const [draft, setDraftState] = useState("");
+  const draftRef = useRef("");
+  const setDraft = (next: string | ((d: string) => string)) => {
+    const v = typeof next === "function" ? next(draftRef.current) : next;
+    draftRef.current = v;
+    setDraftState(v);
+  };
   const [quick, setQuick] = useState<{ x: number; y: number } | null>(null);
   const [manage, setManage] = useState(false);
   const [prompts, setPrompts] = useState<QuickPrompt[] | null>(null); // null: not loaded (yet)
   const [quickErr, setQuickErr] = useState("");
   useEffect(() => {
     if (!quick) return;
+    let stop = false;
     setPrompts(null);
     setQuickErr("");
-    fetchQuick().then(setPrompts, (e) => setQuickErr(errMsg(e)));
+    fetchQuick().then(
+      (list) => !stop && setPrompts(list),
+      (e) => !stop && setQuickErr(errMsg(e)),
+    );
+    return () => {
+      stop = true;
+    };
   }, [quick]);
   useEffect(() => {
     if (!quick) return;
@@ -276,31 +350,33 @@ function Composer({ machineId, paneId, working, dir }: { machineId: string; pane
   });
 
   // insertAt puts text at the remembered caret (or the end), padded with
-  // spaces, and moves the caret past it — one update for all mentions so
-  // several files keep their order.
+  // spaces, and moves the caret past it once the draft has rendered — one
+  // update for all mentions so several files keep their order.
+  const moveCaret = useRef<number | null>(null);
   const insertAt = (text: string) => {
-    const el = area.current;
-    setDraft((d) => {
-      const at = Math.min(caret.current ?? d.length, d.length);
-      const before = d.slice(0, at);
-      const after = d.slice(at);
-      const pad = before && !/\s$/.test(before) ? " " : "";
-      const tail = after && !/^\s/.test(after) ? " " : "";
-      const next = before + pad + text + tail + after;
-      const end = before.length + pad.length + text.length + tail.length;
-      caret.current = end;
-      requestAnimationFrame(() => el?.setSelectionRange(end, end));
-      return next;
-    });
+    const d = draftRef.current;
+    const at = Math.min(caret.current ?? d.length, d.length);
+    const before = d.slice(0, at);
+    const after = d.slice(at);
+    const pad = before && !/\s$/.test(before) ? " " : "";
+    const tail = after && !/^\s/.test(after) ? " " : "";
+    const end = before.length + pad.length + text.length + tail.length;
+    caret.current = end;
+    moveCaret.current = end;
+    setDraft(before + pad + text + tail + after);
   };
+  useLayoutEffect(() => {
+    const at = moveCaret.current;
+    if (at === null) return;
+    moveCaret.current = null;
+    area.current?.setSelectionRange(at, at);
+  }, [draft]);
 
   const attach = async (files: File[]) => {
     setError(null);
     const ups = await att.add(files);
     if (ups.length) insertAt(ups.map((u) => mention(u.rel)).join(" "));
   };
-
-  // a host (the IDE plugin) pushing text into the composer
 
   const removeAttachment = (a: Attachment) => {
     if (a.upload) {
@@ -326,9 +402,15 @@ function Composer({ machineId, paneId, working, dir }: { machineId: string; pane
     }
   };
 
+  const visible = (prompts ?? []).filter((q) => !q.dir || q.dir === dir);
+
   return (
     <>
-      {error && <div className="chat-error">{error}</div>}
+      {error && (
+        <Notice tone="error" className="chat-notice" onDismiss={() => setError(null)}>
+          {error}
+        </Notice>
+      )}
       {att.items.length > 0 && (
         <div className="attachments">
           {att.items.map((a) => (
@@ -336,7 +418,7 @@ function Composer({ machineId, paneId, working, dir }: { machineId: string; pane
               {a.thumb ? <img src={a.thumb} alt="" /> : <span className="attachment-icon"><Icon name="file" size={18} /></span>}
               <span className="attachment-name">{a.file.name}</span>
               {!a.upload && !a.error && <span className="attachment-spin" />}
-              <button type="button" className="attachment-x" title="Remove" onClick={() => removeAttachment(a)}>
+              <button type="button" className="icon-btn sm danger attachment-x" title="Remove" aria-label="Remove" onClick={() => removeAttachment(a)}>
                 <Icon name="x" size={12} />
               </button>
             </div>
@@ -373,17 +455,20 @@ function Composer({ machineId, paneId, working, dir }: { machineId: string; pane
         />
         <button
           type="button"
-          className="composer-attach"
+          className="icon-btn lg composer-attach"
           title={`Attach files (up to ${MAX_ATTACHMENTS}) — they are uploaded into the pane's folder`}
+          aria-label="Attach files"
           disabled={att.items.length >= MAX_ATTACHMENTS}
           onClick={() => picker.current?.click()}
         >
-          <Icon name="paperclip" size={17} />
+          <Icon name="paperclip" size={16} />
         </button>
         <button
           type="button"
-          className={`composer-attach${quick ? " on" : ""}`}
+          className={`icon-btn lg composer-attach${quick ? " on" : ""}`}
           title="Quick prompts"
+          aria-label="Quick prompts"
+          aria-expanded={!!quick}
           onClick={(e) => {
             e.stopPropagation();
             const r = e.currentTarget.getBoundingClientRect();
@@ -395,33 +480,51 @@ function Composer({ machineId, paneId, working, dir }: { machineId: string; pane
         {dictation.supported && (
           <button
             type="button"
-            className={`composer-attach composer-mic${dictation.listening ? " listening" : ""}`}
+            className={`icon-btn lg composer-attach composer-mic${dictation.listening ? " listening" : ""}`}
             title={dictation.listening ? "Stop dictating" : "Dictate (on this device's speech recognition)"}
+            aria-label={dictation.listening ? "Stop dictating" : "Dictate"}
+            aria-pressed={dictation.listening}
             onClick={dictation.toggle}
           >
             <Icon name="mic" size={16} />
           </button>
         )}
         {quick && (
-          <div className="row-menu quick-menu" style={{ left: quick.x, top: quick.y }} onClick={(e) => e.stopPropagation()}>
-            {(prompts ?? [])
-              .filter((q) => !q.dir || q.dir === dir)
-              .map((q) => (
-                <button key={q.id ?? q.label} title={q.text} onClick={() => { insertAt(q.text); setQuick(null); area.current?.focus(); }}>
-                  <Icon name="zap" size={12} className="icon quick-icon" />
-                  <span className="quick-label">{q.label}</span>
-                  {q.dir && <span className="sel-hint">this folder</span>}
-                </button>
-              ))}
+          <div className="row-menu quick-menu" role="menu" style={{ left: quick.x, top: quick.y }} onClick={(e) => e.stopPropagation()}>
+            {visible.map((q) => (
+              <button
+                key={q.id ?? q.label}
+                type="button"
+                role="menuitem"
+                title={q.text}
+                onClick={() => {
+                  insertAt(q.text);
+                  setQuick(null);
+                  area.current?.focus();
+                }}
+              >
+                <Icon name="zap" size={12} className="quick-icon" />
+                <span className="quick-label">{q.label}</span>
+                {q.dir && <span className="sel-hint">this folder</span>}
+              </button>
+            ))}
             {quickErr ? (
-              <div className="chat-error">{quickErr}</div>
+              <Notice tone="error">{quickErr}</Notice>
             ) : !prompts ? (
-              <div className="placeholder small">Loading…</div>
+              <Notice tone="hint">Loading…</Notice>
             ) : (
-              prompts.filter((q) => !q.dir || q.dir === dir).length === 0 && <div className="placeholder small">No quick prompts yet.</div>
+              visible.length === 0 && <Notice tone="hint">No quick prompts yet.</Notice>
             )}
-            <button className="quick-manage" onClick={() => { setQuick(null); setManage(true); }}>
-              <Icon name="sliders" size={12} className="icon quick-icon" /> Manage…
+            <button
+              type="button"
+              role="menuitem"
+              className="quick-manage"
+              onClick={() => {
+                setQuick(null);
+                setManage(true);
+              }}
+            >
+              <Icon name="sliders" size={12} className="quick-icon" /> Manage…
             </button>
           </div>
         )}
@@ -450,15 +553,11 @@ function Composer({ machineId, paneId, working, dir }: { machineId: string; pane
             }
           }}
         />
-        <button className="composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title="Send (Enter)">
+        <button type="button" className="btn primary composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title={isTouch ? "Send" : "Send (Enter)"}>
           {sending ? "…" : att.uploading ? "Uploading…" : <><span>Send</span><Icon name="send" size={14} /></>}
         </button>
         {working && (
-          <button
-            className="composer-stop"
-            title="Send Esc to interrupt"
-            onClick={() => void sendKeys(machineId, paneId, ["esc"])}
-          >
+          <button type="button" className="btn danger soft composer-stop" title="Send Esc to interrupt" onClick={() => void sendKeys(machineId, paneId, ["esc"]).catch((e) => setError(errMsg(e)))}>
             <Icon name="square" size={12} /> <span>Stop</span>
           </button>
         )}
@@ -476,56 +575,66 @@ function QuickPromptsDialog({ dir, onClose }: { dir: string; onClose: () => void
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   useEffect(() => {
-    fetchQuick().then(setList, (e) => setErr(errMsg(e)));
+    let stop = false;
+    fetchQuick().then(
+      (l) => !stop && setList(l),
+      (e) => !stop && setErr(errMsg(e)),
+    );
+    return () => {
+      stop = true;
+    };
   }, []);
   const edit = (i: number, patch: Partial<QuickPrompt>) => setList((l) => (l ?? []).map((q, j) => (j === i ? { ...q, ...patch } : q)));
-  const folder = dir.split("/").filter(Boolean).pop() ?? dir;
+  const folder = basename(dir);
   return (
-    <div className="modal-scrim" onClick={onClose}>
-      <form
-        className="modal quick-dialog"
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!list) return;
-          setBusy(true);
-          setErr("");
-          saveQuick(list.filter((q) => q.text.trim()))
-            .then(onClose, (er) => setErr(errMsg(er)))
-            .finally(() => setBusy(false));
-        }}
-      >
-        <h2>Quick prompts</h2>
-        <p className="modal-hint">Offered under ⚡ in the composer; one tap puts the text in. Shared by every device that uses this herdr-ui.</p>
-        {!list && !err && <div className="placeholder small">Loading…</div>}
-        <div className="quick-list">
-          {(list ?? []).map((q, i) => (
-            <div key={i} className="quick-row">
-              <input value={q.label} placeholder="Label" onChange={(e) => edit(i, { label: e.target.value })} />
-              <textarea rows={2} value={q.text} placeholder="The prompt" onChange={(e) => edit(i, { text: e.target.value })} />
-              <label className="quick-scope">
-                <input type="checkbox" checked={!!q.dir} onChange={(e) => edit(i, { dir: e.target.checked ? dir : "" })} /> only {folder}
-              </label>
-              <button type="button" className="icon-btn" title="Remove" onClick={() => setList((l) => (l ?? []).filter((_, j) => j !== i))}>
-                <Icon name="trash" size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-        <button type="button" className="sidebar-head-btn" disabled={!list} onClick={() => setList((l) => [...(l ?? []), { label: "", text: "" }])}>
-          <Icon name="plus" size={13} /> Add
+    <Dialog
+      title="Quick prompts"
+      icon="zap"
+      size="md"
+      as="form"
+      className="quick-dialog"
+      onClose={onClose}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!list || busy) return;
+        setBusy(true);
+        setErr("");
+        saveQuick(list.filter((q) => q.text.trim()))
+          .then(onClose, (er) => setErr(errMsg(er)))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <p className="modal-hint">
+        Offered under <Icon name="zap" size={12} /> in the composer; one tap puts the text in. Shared by every device that uses this herdr-ui.
+      </p>
+      {!list && !err && <Notice tone="hint">Loading…</Notice>}
+      <div className="quick-list">
+        {(list ?? []).map((q, i) => (
+          <div key={i} className="quick-row">
+            <input value={q.label} placeholder="Label" onChange={(e) => edit(i, { label: e.target.value })} />
+            <textarea rows={2} value={q.text} placeholder="The prompt" onChange={(e) => edit(i, { text: e.target.value })} />
+            <label className="quick-scope">
+              <input type="checkbox" checked={!!q.dir} onChange={(e) => edit(i, { dir: e.target.checked ? dir : "" })} /> only {folder}
+            </label>
+            <button type="button" className="icon-btn danger" title="Remove" aria-label="Remove" onClick={() => setList((l) => (l ?? []).filter((_, j) => j !== i))}>
+              <Icon name="trash" size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button type="button" className="btn sm" disabled={!list} onClick={() => setList((l) => [...(l ?? []), { label: "", text: "" }])}>
+        <Icon name="plus" size={12} /> Add
+      </button>
+      {err && <Notice tone="error">{err}</Notice>}
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
         </button>
-        {err && <div className="chat-error">{err}</div>}
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="primary" disabled={busy || !list}>
-            Save
-          </button>
-        </div>
-      </form>
-    </div>
+        <button type="submit" className="btn primary" disabled={busy || !list}>
+          Save
+        </button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -542,18 +651,20 @@ type SpeechRecognitionLike = {
   start: () => void;
   stop: () => void;
 };
+type SpeechCtor = new () => SpeechRecognitionLike;
+const speech = window as unknown as { SpeechRecognition?: SpeechCtor; webkitSpeechRecognition?: SpeechCtor };
+const SPEECH = speech.SpeechRecognition ?? speech.webkitSpeechRecognition;
+
 function useDictation(onText: (text: string) => void) {
-  const ctor = (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition
-    ?? (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition;
   const [listening, setListening] = useState(false);
   const rec = useRef<SpeechRecognitionLike | null>(null);
   const toggle = () => {
-    if (!ctor) return;
+    if (!SPEECH) return;
     if (rec.current) {
       rec.current.stop();
       return;
     }
-    const r = new ctor();
+    const r = new SPEECH();
     r.lang = navigator.language || "en-US";
     r.continuous = true;
     r.interimResults = false;
@@ -590,7 +701,7 @@ function useDictation(onText: (text: string) => void) {
     },
     [],
   );
-  return { supported: !!ctor, listening, toggle };
+  return { supported: !!SPEECH, listening, toggle };
 }
 
 const TurnView = memo(
@@ -603,7 +714,7 @@ const TurnView = memo(
           <PartView key={i} part={p} onOpenFile={onOpenFile} />
         ))}
         {onForward && text && turn.role === "assistant" && (
-          <button type="button" className="turn-forward" title="Forward this to another agent" onClick={() => onForward(text)}>
+          <button type="button" className="linkish turn-forward" title="Forward this to another agent" onClick={() => onForward(text)}>
             <Icon name="send" size={12} /> forward
           </button>
         )}
@@ -629,7 +740,7 @@ const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 
 // Folded renders its body only once opened: thinking and tool I/O can be
 // kilobytes per turn, and most are never looked at.
-function Folded({ className, summary, children }: { className: string; summary: React.ReactNode; children: React.ReactNode }) {
+function Folded({ className, summary, children }: { className: string; summary: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <details className={className} open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
@@ -645,7 +756,7 @@ function PartView({ part, onOpenFile }: { part: Part; onOpenFile: OpenFile }) {
   }
   if (part.type === "thinking") {
     return (
-      <Folded className="part-thinking" summary={<><Icon name="sparkles" size={12} className="icon part-tool-icon" /> Thinking</>}>
+      <Folded className="part-thinking" summary={<><Icon name="sparkles" size={12} className="part-tool-icon" /> Thinking</>}>
         <div className="part-text">{part.text}</div>
       </Folded>
     );
@@ -657,11 +768,12 @@ function PartView({ part, onOpenFile }: { part: Part; onOpenFile: OpenFile }) {
         className={part.is_error ? "part-tool part-tool-error" : "part-tool"}
         summary={
           <>
-            <Icon name={part.is_error ? "alert-triangle" : "chevron-right"} size={12} className="icon part-tool-icon" />{" "}
+            <Icon name={part.is_error ? "alert-triangle" : "chevron-right"} size={12} className="part-tool-icon" />{" "}
             {name}
             {hint && " · "}
             {file ? (
               <button
+                type="button"
                 className="path-link"
                 onClick={(e) => {
                   e.preventDefault();
@@ -678,7 +790,7 @@ function PartView({ part, onOpenFile }: { part: Part; onOpenFile: OpenFile }) {
         }
       >
         {part.input !== undefined && <pre className="tool-io">{pretty(part.input)}</pre>}
-        {part.output && <pre className="tool-io tool-out">{part.output}</pre>}
+        {part.output && <pre className="tool-io">{part.output}</pre>}
       </Folded>
     );
   }

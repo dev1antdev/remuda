@@ -5,9 +5,10 @@
 
 import { useState } from "react";
 import type { AgentTarget } from "./Tasks";
-import { errMsg, usePref } from "./prefs";
+import { usePref } from "./prefs";
 import Select from "./Select";
 import Logo from "./Logo";
+import { Dialog, Notice, useSubmit } from "./ui";
 
 export const targetKey = (a: { machineId: string; paneId: string }) => `${a.machineId}|${a.paneId}`;
 
@@ -29,60 +30,57 @@ export default function SendToAgent({ title, text: initialText, agents, currentP
     choices[0];
   const [target, setTarget] = useState(initial ? targetKey(initial) : "");
   const [text, setText] = useState(initialText);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
   const chosen = choices.find((a) => targetKey(a) === target);
+  const { busy, err, run } = useSubmit(async () => {
+    if (!chosen || !text.trim()) return;
+    setRemembered({ ...remembered, [rememberKey]: target }); // before the dialog goes away
+    await onSend(chosen, text);
+  });
   return (
-    <div className="modal-scrim" onClick={onClose}>
-      <form
-        className="modal tasks-send-dialog"
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!chosen || !text.trim()) return;
-          setBusy(true);
-          setErr("");
-          setRemembered({ ...remembered, [rememberKey]: target }); // before the dialog goes away
-          onSend(chosen, text).catch((e) => {
-            setErr(errMsg(e));
-            setBusy(false);
-          });
-        }}
-      >
-        <h2>{title}</h2>
-        {choices.length === 0 ? (
-          <p className="modal-hint">No other agent is running.</p>
-        ) : (
-          <label>
-            Agent
-            <Select
-              value={target}
-              onChange={setTarget}
-              options={choices.map((a) => ({
-                value: targetKey(a),
-                label: `${a.sessionName} › ${a.paneTitle}`,
-                hint: `${a.agent} · ${a.status}`,
-                group: a.machineLabel,
-                icon: <Logo agent={a.agent} />,
-              }))}
-            />
-          </label>
-        )}
-        {chosen && <p className="modal-hint tasks-send-cwd">{chosen.cwd}</p>}
+    <Dialog
+      title={title}
+      icon="send"
+      size="md"
+      as="form"
+      className="tasks-send-dialog"
+      onClose={onClose}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void run();
+      }}
+    >
+      {choices.length === 0 ? (
+        <Notice tone="hint">No other agent is running.</Notice>
+      ) : (
         <label>
-          Message
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={9} />
+          Agent
+          <Select
+            value={target}
+            onChange={setTarget}
+            options={choices.map((a) => ({
+              value: targetKey(a),
+              label: `${a.sessionName} › ${a.paneTitle}`,
+              hint: `${a.agent} · ${a.status}`,
+              group: a.machineLabel,
+              icon: <Logo agent={a.agent} />,
+            }))}
+          />
         </label>
-        {err && <div className="chat-error">{err}</div>}
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="primary" disabled={busy || !chosen || !text.trim()}>
-            {busy ? "…" : "Send"}
-          </button>
-        </div>
-      </form>
-    </div>
+      )}
+      {chosen && <p className="modal-hint tasks-send-cwd">{chosen.cwd}</p>}
+      <label>
+        Message
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={9} />
+      </label>
+      {err && <Notice tone="error">{err}</Notice>}
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="submit" className="btn primary" disabled={busy || !chosen || !text.trim()}>
+          {busy ? "Sending…" : "Send"}
+        </button>
+      </div>
+    </Dialog>
   );
 }
