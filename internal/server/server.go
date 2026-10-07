@@ -27,7 +27,6 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/dev1antdev/herdr-ui/internal/auth"
-	buildversion "github.com/dev1antdev/herdr-ui/internal/version"
 	"github.com/dev1antdev/herdr-ui/internal/code"
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
@@ -39,6 +38,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
 	"github.com/dev1antdev/herdr-ui/internal/transcript"
 	"github.com/dev1antdev/herdr-ui/internal/usage"
+	buildversion "github.com/dev1antdev/herdr-ui/internal/version"
 	"github.com/dev1antdev/herdr-ui/internal/watch"
 )
 
