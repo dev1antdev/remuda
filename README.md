@@ -65,7 +65,12 @@ browser / phone ⇄ HTTP + WebSocket ⇄ herdr-ui (Go) ─┬─ local herdr.soc
   in one SQLite file (`tasks.db`) in herdr-ui's state dir — no account, no
   other server, nothing leaves the machine. Every task has **Send to
   agent** — the task's title and description go to a running agent as a
-  prompt (the arrow offers "for grooming", which prefixes `/grill-me`).
+  prompt (the arrow offers "for grooming", which prefixes `/grill-me`) —
+  and **Start an agent on it**: a worktree branches off one of your
+  workspaces, Claude starts there and gets the task once it is up (its
+  "trust this folder" question for the new worktree is answered for you),
+  the task wears *in progress*, and every answer the agent finishes comes
+  back to the task as a comment, with a push. Mark it done from there.
 
 ## Install & run
 

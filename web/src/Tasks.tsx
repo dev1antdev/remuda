@@ -6,11 +6,14 @@
 
 import { createElement, useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
+  addComment,
   addTaskLabel,
   createLabel,
   createProject,
   createTask,
+  deleteComment,
   deleteTask,
+  getTask,
   hasDate,
   listLabels,
   listProjects,
@@ -19,14 +22,20 @@ import {
   patchTask,
   PRIORITIES,
   removeTaskLabel,
+  startTask,
+  type Comment,
   type Label,
   type Project,
+  type Run,
   type Task,
 } from "./tasksApi";
+import type { Machine } from "./api";
 import { errMsg, usePref } from "./prefs";
 import { openUrl } from "./host";
+import { Markdown } from "./markdown";
 import Select from "./Select";
 import SendToAgent from "./SendToAgent";
+import Logo from "./Logo";
 import Icon, { type IconName } from "./icons";
 
 type Smart = "today" | "upcoming" | "open";
@@ -53,10 +62,11 @@ export type AgentTarget = {
   cwd: string;
 };
 
-export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, onOpenPane, onSend }: {
+export default function Tasks({ drawer, closeDrawer, ask, machines, agents, currentPane, onOpenPane, onSend }: {
   drawer: boolean;
   closeDrawer: () => void;
   ask: (text: string, label: string, run: () => void) => void;
+  machines: Machine[];
   agents: AgentTarget[];
   currentPane: { machineId: string; paneId: string } | null;
   onOpenPane: (machineId: string, paneId: string) => void;
@@ -76,6 +86,7 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
   const [openId, setOpenId] = useState<number | null>(null);
   const [newProject, setNewProject] = useState(false);
   const [sendReq, setSendReq] = useState<{ task: Task; groom: boolean } | null>(null);
+  const [startReq, setStartReq] = useState<Task | null>(null);
   const [notice, setNotice] = useState<{ text: string; machineId: string; paneId: string } | null>(null);
   const [tick, setTick] = useState(0);
   const refresh = useCallback(() => setTick((t) => t + 1), []);
@@ -113,7 +124,8 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
     void listTasks({ ...query, search: debounced, page, timezone: TZ }).then(
       (r) => {
         if (gone) return;
-        setTasks(r.tasks);
+        // the list knows no comments; an open task keeps the ones it loaded
+        setTasks((prev) => r.tasks.map((t) => ({ ...t, comments: t.comments ?? prev.find((p) => p.id === t.id)?.comments })));
         setPages(r.pages);
         if (page > r.pages) setPage(Math.max(1, r.pages)); // the page emptied out
         setError("");
@@ -135,6 +147,20 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
 
   // one task changed on the server: show it without re-reading the list
   const replace = (t: Task) => setTasks((ts) => ts.map((x) => (x.id === t.id ? t : x)));
+
+  // the open task in full (its comments), re-read while an agent is on it
+  const live = !!open?.run && open.run.state !== "gone" && open.run.state !== "failed";
+  useEffect(() => {
+    if (openId === null) return;
+    let gone = false;
+    const load = () => void getTask(openId).then((t) => !gone && replace(t), () => {});
+    load();
+    const timer = live ? setInterval(load, 10000) : null;
+    return () => {
+      gone = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [openId, live, tick]);
 
   const toggleDone = async (t: Task) => {
     const want = !t.done;
@@ -279,6 +305,25 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
           onError={setError}
           canSend={agents.length > 0}
           onSend={(groom) => setSendReq({ task: open, groom })}
+          canStart={machines.some((m) => m.state === "connected" && m.sessions.some((s) => s.dir))}
+          onStart={() => setStartReq(open)}
+          machineLabel={(id) => machines.find((m) => m.id === id)?.label ?? id}
+          liveStatus={(r) => agents.find((a) => a.machineId === r.machine && a.paneId === r.pane)?.status ?? null}
+          onOpenPane={onOpenPane}
+        />
+      )}
+      {startReq && (
+        <StartAgentDialog
+          task={startReq}
+          project={byId.get(startReq.project_id)?.title ?? ""}
+          machines={machines}
+          currentPane={currentPane}
+          onClose={() => setStartReq(null)}
+          onStarted={(t, where) => {
+            setStartReq(null);
+            replace(t);
+            setNotice({ text: `Started ${t.run?.agent ?? "an agent"} on ${t.run?.branch ?? "a worktree"} — ${where}. The task follows once it is up.`, machineId: t.run?.machine ?? "", paneId: t.run?.pane ?? "" });
+          }}
         />
       )}
       {sendReq && (
@@ -452,6 +497,11 @@ function TaskRow({ task: t, project, selected, onToggle, onOpen }: {
         title={t.done ? "Mark undone" : "Mark done"}
       />
       <span className="tasks-row-title">{t.title}</span>
+      {t.run && t.run.state !== "gone" && t.run.state !== "failed" && (
+        <span className={`tasks-row-run is-${t.run.state}`} title={`${t.run.agent} on ${t.run.branch}: ${t.run.state}`}>
+          <Logo agent={t.run.agent} />
+        </span>
+      )}
       {t.priority >= 3 && (
         <span className={`tasks-prio p${t.priority}`} title={PRIORITIES[t.priority]}>
           {"!".repeat(t.priority - 2)}
@@ -470,7 +520,7 @@ function TaskRow({ task: t, project, selected, onToggle, onOpen }: {
 
 // ---- detail ----
 
-function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, onDelete, onError, canSend, onSend }: {
+function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, onDelete, onError, canSend, onSend, canStart, onStart, machineLabel, liveStatus, onOpenPane }: {
   task: Task;
   projects: Project[];
   labels: Label[];
@@ -481,7 +531,32 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
   onError: (msg: string) => void;
   canSend: boolean;
   onSend: (groom: boolean) => void;
+  canStart: boolean; // a connected machine with a workspace to branch off
+  onStart: () => void;
+  machineLabel: (id: string) => string;
+  liveStatus: (r: Run) => string | null; // the pane's status from the roster, null when it is not there
+  onOpenPane: (machineId: string, paneId: string) => void;
 }) {
+  const [comment, setComment] = useState("");
+  const [commenting, setCommenting] = useState(false);
+  const comments = t.comments ?? [];
+  const run = t.run ?? null;
+  const paneStatus = run ? liveStatus(run) : null;
+  const runLabel = !run ? "" : run.state === "starting" ? "starting…" : run.state === "failed" ? "failed" : run.state === "gone" ? "closed" : paneStatus === "run" ? "working" : paneStatus === "input" ? "waiting for you" : paneStatus === null ? "closed" : run.state === "finished" ? "finished" : "running";
+  const postComment = async () => {
+    const body = comment.trim();
+    if (!body) return;
+    setCommenting(true);
+    try {
+      const c = await addComment(t.id, body);
+      onChange({ ...t, comments: [...comments, c] });
+      setComment("");
+    } catch (e) {
+      onError(errMsg(e));
+    } finally {
+      setCommenting(false);
+    }
+  };
   const [title, setTitle] = useState(t.title);
   const [sendMenu, setSendMenu] = useState(false);
   useEffect(() => {
@@ -658,10 +733,41 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
                 Send to agent for grooming
                 <span className="split-hint">/grill-me</span>
               </button>
+              <button disabled={!canStart} onClick={() => { setSendMenu(false); onStart(); }} title={canStart ? "" : "No connected machine has a workspace to branch off"}>
+                Start an agent in a new worktree…
+              </button>
             </span>
           )}
         </span>
+        {!run && canStart && (
+          <button className="linkish" onClick={onStart}>
+            <Icon name="git-branch" size={12} /> Start an agent on it
+          </button>
+        )}
       </div>
+
+      {run && (
+        <div className={`tasks-run is-${run.state}`}>
+          <span className="tasks-run-logo">
+            <Logo agent={run.agent} />
+          </span>
+          <span className="tasks-run-copy">
+            <span className="tasks-run-title">
+              {run.agent} on <code>{run.branch}</code>
+              {run.machine !== "local" && <> · {machineLabel(run.machine)}</>}
+            </span>
+            <span className="tasks-run-sub">
+              {runLabel}
+              {run.error && <> — {run.error}</>}
+            </span>
+          </span>
+          {paneStatus !== null && (
+            <button className="linkish" onClick={() => onOpenPane(run.machine, run.pane)}>
+              Open <Icon name="chevron-right" size={12} />
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="tasks-desc">
         <div className="tasks-field-name">
@@ -703,6 +809,47 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
         )}
       </div>
 
+      {(comments.length > 0 || run) && (
+        <div className="tasks-comments">
+          <div className="tasks-field-name">Comments</div>
+          {comments.map((c) => (
+            <div key={c.id} className={`tasks-comment by-${c.author}`}>
+              <div className="tasks-comment-head">
+                {c.author === "agent" ? (
+                  <>
+                    <Logo agent={run?.agent ?? "claude"} /> {run?.agent ?? "agent"}
+                  </>
+                ) : c.author === "you" ? (
+                  <>
+                    <Icon name="user" size={13} /> you
+                  </>
+                ) : (
+                  "herdr-ui"
+                )}
+                <span className="tasks-comment-when">{fmtWhen(c.created)}</span>
+                <button className="icon-btn" title="Delete" onClick={() => void deleteComment(c.id).then(() => onChange({ ...t, comments: comments.filter((x) => x.id !== c.id) }), (e) => onError(errMsg(e)))}>
+                  <Icon name="x" size={12} />
+                </button>
+              </div>
+              <div className="tasks-comment-body">
+                <Markdown text={c.body} onOpenFile={() => {}} />
+              </div>
+            </div>
+          ))}
+          {run?.state === "finished" && !t.done && (
+            <button className="primary tasks-comment-done" onClick={() => void patch({ done: true })}>
+              <Icon name="check" size={14} /> Mark done
+            </button>
+          )}
+          <div className="tasks-comment-add">
+            <textarea rows={2} value={comment} placeholder="A note on this task…" onChange={(e) => setComment(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void postComment(); }} />
+            <button disabled={commenting || !comment.trim()} onClick={() => void postComment()}>
+              Comment
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="tasks-detail-foot">
         <span className="tasks-meta">
           created {fmtDate(t.created)}
@@ -724,6 +871,128 @@ export function taskPrompt(t: Task, project: string, groom: boolean): string {
   const desc = t.description ? htmlToText(t.description) : "";
   const parts = [t.title.trim(), desc, `(herdr-ui task ${t.identifier}${project ? ` in ${project}` : ""})`].filter(Boolean);
   return (groom ? "/grill-me " : "") + parts.join("\n\n");
+}
+
+// ---- start an agent on a task ----
+
+// a branch name from a title: "task-12-fix-the-login-page"
+function branchFor(t: Task): string {
+  const slug = t.title
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
+  return `task-${t.id}${slug ? `-${slug}` : ""}`;
+}
+
+function StartAgentDialog({ task: t, project, machines, currentPane, onClose, onStarted }: {
+  task: Task;
+  project: string;
+  machines: Machine[];
+  currentPane: { machineId: string; paneId: string } | null;
+  onClose: () => void;
+  onStarted: (t: Task, where: string) => void;
+}) {
+  const connected = machines.filter((m) => m.state === "connected" && m.sessions.some((s) => s.dir));
+  const [remembered, setRemembered] = usePref<Record<string, { machine: string; workspace: string }>>("tasks.start", {});
+  const last = remembered[String(t.project_id)];
+  const [machine, setMachine] = useState(() => (connected.find((m) => m.id === last?.machine) ?? connected.find((m) => m.id === currentPane?.machineId) ?? connected[0])?.id ?? "");
+  const workspaces = useMemo(() => {
+    const m = machines.find((x) => x.id === machine);
+    // the repos themselves, not their worktrees: a worktree branches off its repo
+    return (m?.sessions ?? []).filter((s) => s.dir && !s.worktree?.linked).map((s) => ({ value: s.id, label: s.name, hint: s.dir, icon: <Icon name="folder" size={14} /> }));
+  }, [machines, machine]);
+  const [workspace, setWorkspace] = useState(() => (workspaces.find((w) => w.value === last?.workspace) ?? workspaces[0])?.value ?? "");
+  useEffect(() => {
+    if (!workspaces.some((w) => w.value === workspace)) setWorkspace(workspaces[0]?.value ?? "");
+  }, [workspaces, workspace]);
+  const [branch, setBranch] = useState(branchFor(t));
+  const [base, setBase] = useState("");
+  const [groom, setGroom] = useState(false);
+  const [prompt, setPrompt] = useState(() => taskPrompt(t, project, false));
+  const [edited, setEdited] = useState(false);
+  const toggleGroom = (on: boolean) => {
+    setGroom(on);
+    // an edited prompt keeps its words; only the prefix comes and goes
+    setPrompt((p) => (edited ? (on ? (p.startsWith("/grill-me") ? p : `/grill-me ${p}`) : p.replace(/^\/grill-me\s*/, "")) : taskPrompt(t, project, on)));
+  };
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const ws = workspaces.find((w) => w.value === workspace);
+  const m = machines.find((x) => x.id === machine);
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <form
+        className="modal tasks-start"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          setBusy(true);
+          setErr("");
+          setRemembered({ ...remembered, [String(t.project_id)]: { machine, workspace } });
+          startTask(t.id, { machine, workspace, branch: branch.trim(), base: base.trim(), agent: "claude", groom, prompt }).then(
+            (task) => onStarted(task, `${ws?.label ?? "the workspace"}${m && m.id !== "local" ? ` on ${m.label}` : ""}`),
+            (e) => {
+              setErr(errMsg(e));
+              setBusy(false);
+            },
+          );
+        }}
+      >
+        <h2>Start an agent on {t.identifier}</h2>
+        <p className="modal-hint">
+          A worktree branches off the workspace's repository, Claude starts in it and gets the task once it is up. The task wears <b>in progress</b>; every answer the
+          agent finishes comes back here as a comment.
+        </p>
+        <div className="schedule-row">
+          {connected.length > 1 && (
+            <label>
+              Machine
+              <Select value={machine} onChange={setMachine} options={connected.map((x) => ({ value: x.id, label: x.label, icon: <span className={`machine-state is-${x.state}`} /> }))} />
+            </label>
+          )}
+          <label className="grow">
+            Workspace
+            <Select value={workspace} onChange={setWorkspace} placeholder="Pick a repository" options={workspaces} />
+          </label>
+        </div>
+        <div className="schedule-row">
+          <label className="grow">
+            Branch
+            <input value={branch} onChange={(e) => setBranch(e.target.value)} spellCheck={false} required />
+          </label>
+          <label className="grow">
+            From
+            <input value={base} onChange={(e) => setBase(e.target.value)} placeholder="the current branch" spellCheck={false} />
+          </label>
+        </div>
+        <label className="tasks-toggle">
+          <input type="checkbox" checked={groom} onChange={(e) => toggleGroom(e.target.checked)} /> groom first (<code>/grill-me</code>)
+        </label>
+        <label>
+          Prompt
+          <textarea
+            rows={6}
+            value={prompt}
+            onChange={(e) => {
+              setPrompt(e.target.value);
+              setEdited(true);
+            }}
+          />
+        </label>
+        {err && <div className="chat-error">{err}</div>}
+        <div className="modal-actions">
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="primary" disabled={busy || !workspace || !branch.trim() || !prompt.trim()}>
+            {busy ? "Starting…" : "Start"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }
 
 // A datetime-local field fires a change per segment typed (and reads as ""
@@ -800,6 +1069,11 @@ function dueLabel(t: Task): { text: string; over: boolean } | null {
 }
 
 const fmtDate = (s: string) => new Date(s).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+const fmtWhen = (s: string) => {
+  const d = new Date(s);
+  const today = d.toDateString() === new Date().toDateString();
+  return today ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : d.toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+};
 
 // a Date's local wall-clock for <input type=datetime-local>
 function toLocalInput(s: string): string {

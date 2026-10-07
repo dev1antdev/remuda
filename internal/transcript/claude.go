@@ -32,10 +32,11 @@ type Part struct {
 
 // Turn is one chat turn. Adjacent assistant records merge into one turn.
 type Turn struct {
-	Role  string   `json:"role"` // user | assistant
-	Ts    string   `json:"ts,omitempty"`
-	IDs   []string `json:"ids,omitempty"` // the records merged into it, for a search jump
-	Parts []Part   `json:"parts"`
+	Role   string   `json:"role"` // user | assistant
+	Ts     string   `json:"ts,omitempty"`
+	LastTs string   `json:"-"`             // the last merged record's time
+	IDs    []string `json:"ids,omitempty"` // the records merged into it, for a search jump
+	Parts  []Part   `json:"parts"`
 }
 
 // SessionInfo describes one session file for the picker.
@@ -296,12 +297,13 @@ func parseStream(r io.Reader) ([]Turn, error) {
 		if n > 0 && turns[n-1].Role == role {
 			t := &turns[n-1]
 			t.Parts = append(t.Parts, p)
+			t.LastTs = ts
 			if uuid != "" && t.IDs[len(t.IDs)-1] != uuid {
 				t.IDs = append(t.IDs, uuid)
 			}
 			return
 		}
-		turns = append(turns, Turn{Role: role, Ts: ts, IDs: []string{uuid}, Parts: []Part{p}})
+		turns = append(turns, Turn{Role: role, Ts: ts, LastTs: ts, IDs: []string{uuid}, Parts: []Part{p}})
 	}
 
 	for sc.Scan() {

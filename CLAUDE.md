@@ -251,6 +251,21 @@ SPA. See README.md for the user story.
   `/grill-me`) composes `taskPrompt` (title, description as text, the task
   id and project) and submits it through the existing `/api/submit` to an
   agent pane from the roster, remembering the last target per project.
+  **Start an agent on it** (`POST /api/tasks/{id}/start`): a worktree off
+  a workspace's repo (`WorktreeCreate`, branch `task-<id>-<slug>`), the
+  agent in it (`startAgent` retries herdr's `agent_pane_busy` while the
+  new pane's shell comes up — the generic create path uses it too), a
+  `task_runs` row and the label **in progress**; then `deliverTaskPrompt`
+  in a goroutine: `AgentPrompt` every 2 s until the agent takes it. Claude
+  Code's "trust this folder" question for that very worktree is answered
+  yes (`PaneRead` → `isTrustPrompt` → keys down+enter, noted as a comment);
+  any other question of the agent's gets one push and waits; five minutes
+  → `failed`. `tasks.RunWatch` (wired in main, every 15 s, injected
+  radar/transcript/push) turns every finish — the pane not working and the
+  agent's last turn after the prompt (30 s clock slack) and after the last
+  one reported — into a comment by "agent" plus a push; a pane gone two
+  minutes → `gone`. Done takes the label off. `comments` are markdown;
+  the UI re-reads an open task every 10 s while a run is live.
 - `internal/auth/` — single bearer token; HttpOnly cookie; no accounts.
 - `internal/server/` — HTTP routes + the pane WebSocket. `/api/health` and
   `/api/login` are mounted outside the token guard; everything else behind

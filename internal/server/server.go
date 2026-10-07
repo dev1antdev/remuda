@@ -511,12 +511,26 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, make func(*herdr
 	// the container exists either way; an agent that failed to start is
 	// reported, not rolled back
 	if req.Agent != "" && req.Agent != "shell" {
-		if err := client.AgentStart(pane.PaneID, req.Agent); err != nil {
+		if err := startAgent(client, pane.PaneID, req.Agent); err != nil {
 			resp["agent_error"] = err.Error()
 		}
 	}
 	s.Watch.Refresh(mc)
 	writeJSON(w, resp)
+}
+
+// startAgent starts an agent in a pane whose shell may still be coming up
+// (a new worktree's pane is "not an available shell" for a moment): the
+// busy answer is retried for a few seconds.
+func startAgent(client *herdr.Client, paneID, kind string) error {
+	deadline := time.Now().Add(12 * time.Second)
+	for {
+		err := client.AgentStart(paneID, kind)
+		if err == nil || !(herdr.IsCode(err, "agent_pane_busy") || herdr.IsCode(err, "agent_not_ready")) || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 func (s *Server) handleNewWorkspace(w http.ResponseWriter, r *http.Request) {

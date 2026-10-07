@@ -484,6 +484,7 @@ export default function App() {
             drawer={drawer}
             closeDrawer={() => setDrawer(false)}
             ask={ask}
+            machines={machines}
             agents={agentTargets}
             currentPane={current ? { machineId: current.machine.id, paneId: current.pane.id } : null}
             onOpenPane={(machineId, paneId) => requestPane({ machineId, paneId })}

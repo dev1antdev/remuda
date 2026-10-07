@@ -335,6 +335,19 @@ func (c *Client) PaneSendText(paneID, text string) error {
 	return c.Call("pane.send_text", map[string]any{"pane_id": paneID, "text": text}, nil)
 }
 
+// PaneRead is the pane's visible screen as text.
+func (c *Client) PaneRead(paneID string) (string, error) {
+	var out struct {
+		Read struct {
+			Text string `json:"text"`
+		} `json:"read"`
+	}
+	if err := c.Call("pane.read", map[string]any{"pane_id": paneID, "source": "visible"}, &out); err != nil {
+		return "", err
+	}
+	return out.Read.Text, nil
+}
+
 func (c *Client) PaneSendKeys(paneID string, keys []string) error {
 	return c.Call("pane.send_keys", map[string]any{"pane_id": paneID, "keys": keys}, nil)
 }

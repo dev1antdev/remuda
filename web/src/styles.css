@@ -290,6 +290,7 @@ button {
 }
 
 /* text fields */
+.modal textarea,
 .modal input,
 .tasks-search,
 .tasks-label-pick input,
@@ -331,6 +332,7 @@ button {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.modal textarea,
 .tasks-send-dialog textarea,
 .tasks-desc textarea,
 .composer textarea {
@@ -338,6 +340,12 @@ button {
   padding: 8px 11px;
   line-height: 1.45;
   resize: vertical;
+}
+
+.modal textarea:focus {
+  outline: none;
+  border-color: var(--accent-ring);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* a small label above a field */
@@ -3623,6 +3631,172 @@ input[type="checkbox"]:hover:not(:checked) {
   100% {
     box-shadow: none;
   }
+}
+
+
+/* ---- an agent on a task ---- */
+.tasks-row-run {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: var(--bg-elev);
+  flex-shrink: 0;
+}
+
+.tasks-row-run .logo {
+  width: 12px;
+  height: 12px;
+}
+
+.tasks-row-run.is-finished {
+  background: var(--green-soft);
+}
+
+.tasks-run {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-input);
+}
+
+.tasks-run.is-finished {
+  border-color: rgba(103, 178, 118, 0.4);
+}
+
+.tasks-run.is-failed,
+.tasks-run.is-gone {
+  opacity: 0.75;
+}
+
+.tasks-run-logo {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--bg-elev);
+  flex-shrink: 0;
+}
+
+.tasks-run-logo .logo {
+  width: 16px;
+  height: 16px;
+}
+
+.tasks-run-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+  font-size: 13px;
+}
+
+.tasks-run-title code {
+  font: 12px var(--mono);
+  background: var(--bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.tasks-run-sub {
+  color: var(--fg-dim);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.tasks-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tasks-comment {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-input);
+}
+
+.tasks-comment.by-agent {
+  border-color: var(--line-strong);
+}
+
+.tasks-comment-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.tasks-comment-head .logo {
+  width: 13px;
+  height: 13px;
+}
+
+.tasks-comment-when {
+  color: var(--fg-faint);
+  flex: 1;
+}
+
+.tasks-comment-head .icon-btn {
+  width: 22px;
+  height: 22px;
+  opacity: 0;
+}
+
+.tasks-comment:hover .tasks-comment-head .icon-btn {
+  opacity: 1;
+}
+
+.tasks-comment-body {
+  font-size: 13.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.tasks-comment-body > :first-child {
+  margin-top: 0;
+}
+
+.tasks-comment-body > :last-child {
+  margin-bottom: 0;
+}
+
+.tasks-comment-done {
+  align-self: flex-start;
+}
+
+.tasks-comment-add {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.tasks-comment-add textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+}
+
+.modal.tasks-start {
+  width: min(94vw, 600px);
+  max-height: 88dvh;
+  overflow-y: auto;
+}
+
+.tasks-start .tasks-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
 }
 
 /* ---- forward, quick prompts, dictation ---- */

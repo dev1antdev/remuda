@@ -31,7 +31,28 @@ export type Task = {
   identifier: string; // "#12"
   created: string;
   updated: string;
+  run?: Run | null; // the latest agent started on it
+  comments?: Comment[]; // on a single-task fetch
 };
+
+// an agent started on a task: a worktree off a workspace, the agent in it
+export type Run = {
+  id: number;
+  task_id: number;
+  machine: string;
+  workspace: string;
+  pane: string;
+  dir: string;
+  branch: string;
+  agent: string;
+  state: "starting" | "running" | "finished" | "gone" | "failed";
+  started: string;
+  prompt_sent?: string;
+  finished?: string;
+  error?: string;
+};
+
+export type Comment = { id: number; task_id: number; author: "agent" | "you" | "herdr-ui"; body: string; created: string };
 
 export const NO_DATE = "";
 export const hasDate = (d: string | undefined | null): d is string => !!d;
@@ -77,3 +98,8 @@ export const deleteTask = (id: number) => sendJSON<unknown>("DELETE", `/api/task
 
 export const addTaskLabel = (taskId: number, labelId: number) => sendJSON<Task>("PUT", `/api/tasks/${taskId}/labels`, { label_id: labelId });
 export const removeTaskLabel = (taskId: number, labelId: number) => sendJSON<Task>("DELETE", `/api/tasks/${taskId}/labels/${labelId}`);
+
+export const startTask = (id: number, req: { machine: string; workspace: string; branch: string; base: string; agent: string; groom: boolean; prompt: string }) =>
+  sendJSON<Task>("POST", `/api/tasks/${id}/start`, req);
+export const addComment = (id: number, body: string) => sendJSON<Comment>("POST", `/api/tasks/${id}/comments`, { body });
+export const deleteComment = (id: number) => sendJSON<unknown>("DELETE", `/api/tasks/comments/${id}`);

@@ -213,6 +213,60 @@ func main() {
 		log.Fatalf("tasks: %v", err)
 	}
 	defer taskStore.Close()
+	// agents started on tasks: their finishes come back as comments
+	runs := &tasks.RunWatch{
+		Store: taskStore,
+		PaneState: func(machineID, paneID string) (string, time.Time, bool) {
+			if snap, _ := watcher.Snapshot(machineID); snap == nil {
+				return "unknown", time.Time{}, true // not seen yet (a restart, a reconnect): not gone
+			}
+			p := paneOf(machineID, paneID)
+			if p == nil {
+				return "", time.Time{}, false
+			}
+			d := tracker.Display(machineID, p)
+			return d.State, time.UnixMilli(d.Since), true
+		},
+		// what the agent's latest turn ended with: the text after its last
+		// tool call (a turn ending in a tool call is a stop, not an answer),
+		// and the record it ended with
+		LastAnswer: func(machineID, paneID string) (string, string) {
+			p := paneOf(machineID, paneID)
+			if p == nil {
+				return "", ""
+			}
+			mc, path, ok := sessionFile(machineID, p)
+			if !ok {
+				return "", ""
+			}
+			v, err := mc.TranscriptVersion(path)
+			if err != nil {
+				return "", ""
+			}
+			turns, err := mc.Transcript(path, v)
+			if err != nil || len(turns) == 0 {
+				return "", ""
+			}
+			last := turns[len(turns)-1]
+			if last.Role != "assistant" || len(last.IDs) == 0 {
+				return "", ""
+			}
+			var texts []string
+			for _, part := range last.Parts {
+				switch part.Type {
+				case "tool":
+					texts = texts[:0]
+				case "text":
+					if t := strings.TrimSpace(part.Text); t != "" {
+						texts = append(texts, t)
+					}
+				}
+			}
+			return strings.Join(texts, "\n\n"), last.IDs[len(last.IDs)-1]
+		},
+		Notify: pushSvc.Notify,
+	}
+	go runs.Loop(15 * time.Second)
 	s := server.New(mgr, watcher, pushSvc, taskStore, code.New(*codePort), reviews, tracker, auth.NewGuard(token), ui)
 	// schedules: prompts on a timetable, delivered through the server's own
 	// submit path to the agent in a folder
