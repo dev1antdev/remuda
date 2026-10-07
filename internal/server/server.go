@@ -27,6 +27,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/dev1antdev/herdr-ui/internal/auth"
+	buildversion "github.com/dev1antdev/herdr-ui/internal/version"
 	"github.com/dev1antdev/herdr-ui/internal/code"
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
@@ -251,7 +252,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": true, "herdr": false})
 		return
 	}
-	writeJSON(w, map[string]any{"ok": true, "herdr": true, "herdr_version": snap.Version})
+	writeJSON(w, map[string]any{"ok": true, "herdr": true, "herdr_version": snap.Version, "version": buildversion.Build})
 }
 
 // ---- roster ----
@@ -445,6 +446,7 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 	body, _ := json.Marshal(map[string]any{"machines": out, "agents": agents})
 	sum := sha256.Sum256(body)
 	etag := `"` + hex.EncodeToString(sum[:12]) + `"`
+	w.Header().Set("X-Herdr-UI-Version", buildversion.Build) // a page older than the server offers a reload
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return

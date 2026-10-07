@@ -115,11 +115,12 @@ function withMachine(path: string, machineId: string): string {
 }
 
 // fetchRoster returns null when the roster is unchanged (304 via ETag).
-export async function fetchRoster(etag: string | null): Promise<{ roster: Roster; etag: string | null } | null> {
+export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null }> {
   const res = await fetch("/api/roster", { headers: etag ? { "If-None-Match": etag } : {} });
-  if (res.status === 304) return null;
+  const version = res.headers.get("X-Herdr-UI-Version");
+  if (res.status === 304) return { roster: null, etag, version };
   await check(res);
-  return { roster: (await res.json()) as Roster, etag: res.headers.get("ETag") };
+  return { roster: (await res.json()) as Roster, etag: res.headers.get("ETag"), version };
 }
 
 // fetchChat returns null when unchanged (304 via ETag).

@@ -407,7 +407,10 @@ export default function TerminalView({
       };
     };
 
-    const onData = term.onData(input);
+    const onData = term.onData((data) => {
+      forgetSelection(); // typing ends a selection, as in any terminal
+      input(data);
+    });
 
     // ---- the mouse stays ours ----
     // herdr enables mouse tracking in the attach stream (for its own
@@ -694,10 +697,9 @@ export default function TerminalView({
     const onSelection = term.onSelectionChange(() => {
       if (applying) return;
       const pos = term.getSelectionPosition();
-      if (!pos) {
-        if (!pressed) forgetSelection();
-        return;
-      }
+      // xterm drops its own selection on any user input and on a buffer
+      // switch; ours stays until a new drag (mousedown) or typing says so
+      if (!pos) return;
       const baseY = term.buffer.active.baseY;
       const start: Pos = { row: pos.start.y - baseY + offset, col: pos.start.x };
       const end: Pos = { row: pos.end.y - baseY + offset, col: pos.end.x };

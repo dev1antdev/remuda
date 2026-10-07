@@ -96,7 +96,13 @@ SPA. See README.md for the user story.
   there or hidden when the screen is somewhere unseen, a drag past the
   top/bottom edge scrolls the app and grows the selection, and copy reads
   the remembered rows (trailing spaces trimmed) wherever the screen went.
-  The ⬚ selection layer (phone long-press) is screen-only.
+  xterm drops its own selection on any user input or a buffer switch; the
+  content selection survives that and ends only on a new mousedown or
+  typing. The ⬚ selection layer (phone long-press) is screen-only.
+- The build's version is injected into the bundle (`__HERDR_UI_VERSION__`,
+  from `HERDR_UI_VERSION` set by `make web`) and the roster answer carries
+  the server's in `X-Herdr-UI-Version`; a page older than its server shows
+  a "new version — reload" pill. After a deploy, a stale tab is told.
 - `web/src/markdown.tsx` — dependency-free Markdown → React nodes (no HTML
   strings, nothing to sanitize). `parseBlocks` is pure (task-list state is
   decided there, not in render) and memoized per text; testable via

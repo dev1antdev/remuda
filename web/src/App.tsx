@@ -98,6 +98,7 @@ export default function App() {
   const [lens, setLens] = useState<Lens>(isTouch ? "chat" : "terminal");
   const [drawer, setDrawer] = useState(false);
   const [offline, setOffline] = useState(false);
+  const [stale, setStale] = useState<string | null>(null); // the server's version when newer than this page
   const [dialog, setDialog] = useState<Dialog>(null);
   const [menu, setMenu] = useState<RowMenu>(null);
   const [alerts, setAlerts] = useState(false);
@@ -177,11 +178,13 @@ export default function App() {
     try {
       const res = await fetchRoster(rosterEtag.current);
       if (seq !== refreshSeq.current) return; // a later poll already answered
-      if (res) {
+      if (res.roster) {
         rosterEtag.current = res.etag;
         setMachines(res.roster.machines);
         setAgents(res.roster.agents);
       }
+      // the server was updated under this page: say so, once per version
+      if (res.version && res.version !== __HERDR_UI_VERSION__ && __HERDR_UI_VERSION__ !== "dev") setStale(res.version);
       setOffline(false);
     } catch {
       if (seq === refreshSeq.current) setOffline(true);
@@ -469,6 +472,11 @@ export default function App() {
           </nav>
         )}
         {offline && <span className="pill pill-off">reconnecting…</span>}
+        {stale && !offline && (
+          <button type="button" className="pill pill-warn" title={`This page runs ${__HERDR_UI_VERSION__}; the server is ${stale}. Click to reload.`} onClick={() => location.reload()}>
+            new version — reload
+          </button>
+        )}
         {notice && (
           <button type="button" className={`pill ${notice.error ? "pill-off" : "pill-warn"}`} title={`${notice.text} — click to dismiss`} onClick={() => setNotice(null)}>
             {notice.text}

@@ -8,7 +8,7 @@ web/node_modules: web/package.json
 	cd web && npm install
 
 web: web/node_modules
-	cd web && npm run build
+	cd web && HERDR_UI_VERSION=$(VERSION) npm run build
 
 build: web
 	go build -ldflags "-X main.version=$(VERSION)" -o bin/herdr-ui ./cmd/herdr-ui
