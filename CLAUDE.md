@@ -47,6 +47,14 @@ SPA. See README.md for the user story.
 - `internal/transcript/` — read-only parser for Claude Code JSONL session
   files. Never write to `~/.claude`. Session resolution: herdr's
   `agent_session` (exact UUID) first, cwd-encoded dir scan as fallback.
+  **Compaction moves the conversation to a new file** (its first message's
+  `parentUuid` is a record `uuid` in the old one) while herdr keeps naming
+  the old id, so the chat follows `Machine.FollowContinuation(path)` —
+  `transcript.Continuation` locally, `ContinuationScript` over ssh —
+  re-checked a minute at a time per file. The chat lens follows the bottom
+  only when the reader is there and not selecting or dragging; an upward
+  wheel or finger lets go at once, and `TurnView` re-renders only when a
+  turn's content changed, so a selection survives the polls.
 - `internal/machines/files.go` — the file viewer's reads, local or over
   SSH, plus the one write: `SaveUpload`. `ResolvePath` accepts absolute, `~/`, or pane-relative
   and, on a relative miss, searches the pane folder by suffix (agents say

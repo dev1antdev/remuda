@@ -59,17 +59,53 @@ export default function Chat({
     };
   }, [machineId, paneId, sessionId, busy]);
 
-  // Follow the bottom only while the reader is already there.
+  // Follow the bottom only while the reader is there and not busy with the
+  // text: a wheel or a finger moving up lets go at once (not after 60px, so
+  // a poll landing mid-gesture cannot yank the view back), a drag or a
+  // selection in the log holds it, and our own scroll never counts as the
+  // reader's.
+  const ownScroll = useRef(false);
+  const dragging = useRef(false);
   useEffect(() => {
     const log = logRef.current;
-    if (log && stickRef.current) log.scrollTop = log.scrollHeight;
+    if (!log || !stickRef.current || dragging.current) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed && sel.anchorNode && log.contains(sel.anchorNode)) return;
+    ownScroll.current = true;
+    log.scrollTop = log.scrollHeight;
+    requestAnimationFrame(() => (ownScroll.current = false));
   }, [chat]);
 
   const onScroll = () => {
     const log = logRef.current;
-    if (!log) return;
+    if (!log || ownScroll.current) return;
     stickRef.current = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
   };
+  const letGo = (up: boolean) => {
+    if (up) stickRef.current = false;
+  };
+  useEffect(() => {
+    const log = logRef.current;
+    if (!log) return;
+    const onWheel = (e: WheelEvent) => letGo(e.deltaY < 0);
+    let touchY = 0;
+    const onTouchStart = (e: TouchEvent) => (touchY = e.touches[0]?.clientY ?? 0);
+    const onTouchMove = (e: TouchEvent) => letGo((e.touches[0]?.clientY ?? 0) > touchY + 4);
+    const onDown = () => (dragging.current = true);
+    const onUp = () => (dragging.current = false);
+    log.addEventListener("wheel", onWheel, { passive: true });
+    log.addEventListener("touchstart", onTouchStart, { passive: true });
+    log.addEventListener("touchmove", onTouchMove, { passive: true });
+    log.addEventListener("mousedown", onDown);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      log.removeEventListener("wheel", onWheel);
+      log.removeEventListener("touchstart", onTouchStart);
+      log.removeEventListener("touchmove", onTouchMove);
+      log.removeEventListener("mousedown", onDown);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, []);
 
   const turns = chat?.turns ?? [];
   const sessions = chat?.sessions ?? [];
@@ -276,16 +312,31 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
   );
 }
 
-const TurnView = memo(function TurnView({ turn, onOpenFile }: { turn: Turn; onOpenFile: OpenFile }) {
-  const cls = turn.role === "user" ? "turn turn-user" : "turn turn-assistant";
-  return (
-    <div className={cls}>
-      {turn.parts.map((p, i) => (
-        <PartView key={i} part={p} onOpenFile={onOpenFile} />
-      ))}
-    </div>
-  );
-});
+const TurnView = memo(
+  function TurnView({ turn, onOpenFile }: { turn: Turn; onOpenFile: OpenFile }) {
+    const cls = turn.role === "user" ? "turn turn-user" : "turn turn-assistant";
+    return (
+      <div className={cls}>
+        {turn.parts.map((p, i) => (
+          <PartView key={i} part={p} onOpenFile={onOpenFile} />
+        ))}
+      </div>
+    );
+  },
+  (a, b) => a.onOpenFile === b.onOpenFile && sameTurn(a.turn, b.turn),
+);
+
+// every poll brings new objects; only the content tells turns apart (a
+// tool's input never changes once written, so it is not compared)
+function sameTurn(a: Turn, b: Turn): boolean {
+  if (a.role !== b.role || a.ts !== b.ts || a.parts.length !== b.parts.length) return false;
+  for (let i = 0; i < a.parts.length; i++) {
+    const p = a.parts[i]!;
+    const q = b.parts[i]!;
+    if (p.type !== q.type || p.text !== q.text || p.output !== q.output || p.is_error !== q.is_error || p.tool_name !== q.tool_name) return false;
+  }
+  return true;
+}
 
 const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 

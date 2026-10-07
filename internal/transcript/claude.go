@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -435,4 +436,108 @@ func truncateJSON(raw json.RawMessage, n int) json.RawMessage {
 	}
 	b, _ := json.Marshal(truncate(string(raw), n))
 	return b
+}
+
+// ---- continuations ----
+//
+// When Claude Code compacts a conversation it goes on in a NEW session file
+// whose first message points, through parentUuid, at a record of the old
+// one — while herdr keeps reporting the session id it saw at start. So a
+// resolved file may be stale: Continuation finds the newer file in the same
+// project folder that carries on from it, if any.
+
+var parentRe = regexp.MustCompile(`"parentUuid":"([0-9a-f-]{36})"`)
+
+// firstParent is the first parentUuid in the head of a session file.
+func firstParent(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	head := make([]byte, 64*1024)
+	n, _ := io.ReadFull(f, head)
+	m := parentRe.FindSubmatch(head[:n])
+	if m == nil {
+		return ""
+	}
+	return string(m[1])
+}
+
+// hasRecord says whether the file holds a record with this uuid. The parent
+// of a continuation is near the old file's end, so the tail is read first.
+func hasRecord(path, uuid string) bool {
+	needle := []byte(`"uuid":"` + uuid + `"`)
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	const tail = 4 << 20
+	if st.Size() > tail {
+		buf := make([]byte, tail)
+		if n, _ := f.ReadAt(buf, st.Size()-tail); bytes.Contains(buf[:n], needle) {
+			return true
+		}
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return false
+		}
+	}
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
+	for sc.Scan() {
+		if bytes.Contains(sc.Bytes(), needle) {
+			return true
+		}
+	}
+	return false
+}
+
+// Continuation returns the newer session file in path's folder that
+// continues it, or "" when there is none. One step; callers loop.
+func Continuation(path string) string {
+	st, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	dir := filepath.Dir(path)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	type cand struct {
+		path string
+		mod  time.Time
+	}
+	var cands []cand
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") || filepath.Join(dir, e.Name()) == path {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || !info.ModTime().After(st.ModTime()) {
+			continue
+		}
+		cands = append(cands, cand{filepath.Join(dir, e.Name()), info.ModTime()})
+	}
+	sort.Slice(cands, func(i, j int) bool { return cands[i].mod.Before(cands[j].mod) })
+	for _, c := range cands {
+		if p := firstParent(c.path); p != "" && hasRecord(path, p) {
+			return c.path
+		}
+	}
+	return ""
+}
+
+// ContinuationScript is the same search as a POSIX shell one-liner, for a
+// remote machine: prints the continuing file, or nothing.
+func ContinuationScript(quotedPath string) string {
+	return `old=` + quotedPath + `; dir=$(dirname "$old"); for f in $(ls -t "$dir"/*.jsonl 2>/dev/null); do ` +
+		`[ "$f" = "$old" ] && break; [ "$f" -nt "$old" ] || continue; ` +
+		`p=$(head -c 65536 "$f" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$p" ] || continue; ` +
+		`if grep -q "\"uuid\":\"$p\"" "$old"; then printf %s "$f"; exit 0; fi; done`
 }

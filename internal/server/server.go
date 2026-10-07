@@ -588,6 +588,8 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// a compacted conversation went on in a newer file
+	path = mc.FollowContinuation(path)
 	version, err := mc.TranscriptVersion(path)
 	if err != nil {
 		httpErr(w, 500, err)

@@ -62,6 +62,13 @@ type Machine struct {
 	sessPath map[string]string      // session uuid -> resolved path
 
 	codeFwd *tcpForward // the forward to the machine's code-server, once asked for
+
+	contPath map[string]contCheck // session file -> its continuation (if any), as last looked
+}
+
+type contCheck struct {
+	next string
+	at   time.Time
 }
 
 // tcpForward remembers a port forwarded over one master; a reconnect makes
@@ -465,6 +472,39 @@ func (mc *Machine) Ready() (*herdr.Client, *herdr.AttachManager, error) {
 		}
 		return nil, nil, fmt.Errorf("machine %s: %s", mc.Cfg.ID, mc.errMsg)
 	}
+}
+
+// FollowContinuation returns the live end of a session's chain of files: a
+// compacted conversation continues in a new file (see
+// transcript.Continuation), and herdr goes on naming the first. The search
+// costs a directory listing and a read, so it is redone at most every
+// minute per file.
+func (mc *Machine) FollowContinuation(path string) string {
+	for hops := 0; hops < 8; hops++ {
+		mc.mu.Lock()
+		c, ok := mc.contPath[path]
+		mc.mu.Unlock()
+		if !ok || time.Since(c.at) > time.Minute {
+			var next string
+			if mc.Local {
+				next = transcript.Continuation(path)
+			} else if out, err := mc.exec(transcript.ContinuationScript(sshx.Quote(path)), 20*time.Second); err == nil {
+				next = strings.TrimSpace(out)
+			}
+			mc.mu.Lock()
+			if mc.contPath == nil {
+				mc.contPath = map[string]contCheck{}
+			}
+			mc.contPath[path] = contCheck{next: next, at: time.Now()}
+			mc.mu.Unlock()
+			c = contCheck{next: next}
+		}
+		if c.next == "" {
+			return path
+		}
+		path = c.next
+	}
+	return path
 }
 
 // CodeAddr is where this machine's code-server (127.0.0.1:port on the
