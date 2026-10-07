@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +38,15 @@ const (
 type Display struct {
 	State      string `json:"state"`                 // working | blocked | done | idle | unknown
 	LastActive int64  `json:"last_active,omitempty"` // unix ms of the last moment the agent worked; 0 = never seen working
+	Since      int64  `json:"since,omitempty"`       // unix ms when the shown state began
+	Alert      string `json:"alert,omitempty"`       // the watchdog's note: quiet for 25 min, waiting 40 min, looping
+}
+
+// Episode is one pane's current state and when it began, for the watchdog.
+type Episode struct {
+	Machine, Pane string
+	State         string
+	Since         time.Time
 }
 
 // Recover finds a last-activity time for a pane the tracker has no stamp
@@ -50,6 +60,9 @@ type pane struct {
 	doneSeen  bool // this finish was looked at; herdr may go on saying done for hours
 	blocked   bool // the question mark is up until the agent works again
 	recovered bool
+	since     time.Time // when the shown state began
+	shown     string    // the state shown last, to notice a change
+	alert     string    // the watchdog's note, cleared when the state moves on
 }
 
 type Tracker struct {
@@ -170,6 +183,9 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 	if status == herdr.StatusWorking {
 		st.doneHeld = false
 	}
+	if shown := shownState(st); shown != st.shown {
+		st.shown, st.since, st.alert = shown, now, ""
+	}
 }
 
 // Seen records that someone looked at the pane: the held tick comes down.
@@ -199,17 +215,46 @@ func (t *Tracker) Display(machineID string, p *herdr.PaneInfo) Display {
 			d.LastActive = st.lastWork.Truncate(time.Minute).UnixMilli()
 		}
 	}
+	d.State = shownState(st)
+	if !st.since.IsZero() {
+		d.Since = st.since.UnixMilli()
+	}
+	d.Alert = st.alert
+	return d
+}
+
+func shownState(st *pane) string {
 	switch {
 	case st.status == herdr.StatusWorking:
-		d.State = herdr.StatusWorking
+		return herdr.StatusWorking
 	case st.blocked:
-		d.State = herdr.StatusBlocked
+		return herdr.StatusBlocked
 	case st.doneHeld:
-		d.State = herdr.StatusDone
+		return herdr.StatusDone
 	default:
-		d.State = plain(st.status)
+		return plain(st.status)
 	}
-	return d
+}
+
+// Episodes lists every tracked pane's shown state and when it began.
+func (t *Tracker) Episodes() []Episode {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]Episode, 0, len(t.panes))
+	for k, st := range t.panes {
+		m, p, _ := strings.Cut(k, "|")
+		out = append(out, Episode{Machine: m, Pane: p, State: shownState(st), Since: st.since})
+	}
+	return out
+}
+
+// SetAlert attaches the watchdog's note to a pane ("" clears it).
+func (t *Tracker) SetAlert(machineID, paneID, note string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if st := t.panes[key(machineID, paneID)]; st != nil {
+		st.alert = note
+	}
 }
 
 // plain maps herdr's status to a display state without any holding: a

@@ -94,6 +94,13 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
         </span>
       </label>
       <label className="alerts-opt">
+        <input type="checkbox" checked={prefs.watchdog ?? true} onChange={(e) => changePrefs({ ...prefs, watchdog: e.target.checked })} />
+        <span>
+          When an agent <b>looks stuck</b>
+          <small>Working 20 min with nothing written, waiting for an answer 15 min, or looping on one tool call — with an Esc button on the notification.</small>
+        </span>
+      </label>
+      <label className="alerts-opt">
         <span>
           When an agent <b>finishes</b>
           <small>Turns ≥ 1 min, a minute after; "always" means every turn, after 10 s.</small>

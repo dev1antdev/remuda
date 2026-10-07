@@ -5,7 +5,7 @@
 
 import { check, sendJSON } from "./api";
 
-export type Prefs = { input: boolean; done: "off" | "long" | "always" };
+export type Prefs = { input: boolean; done: "off" | "long" | "always"; watchdog?: boolean };
 
 export type PushState = {
   supported: boolean;

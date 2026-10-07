@@ -25,6 +25,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/state"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
 	"github.com/dev1antdev/herdr-ui/internal/watch"
+	"github.com/dev1antdev/herdr-ui/internal/watchdog"
 	"github.com/dev1antdev/herdr-ui/web"
 )
 
@@ -80,34 +81,120 @@ func main() {
 	if err != nil {
 		log.Fatalf("push: %v", err)
 	}
-	// a pane open since before herdr-ui started: its session file's mtime
-	// says when the agent last wrote
-	tracker := radar.New(dir, func(machineID string, p *herdr.PaneInfo) time.Time {
+	// a pane's session file (following a compaction's continuation) and
+	// when it was last written — the radar recovers an old pane's last turn
+	// from it, the watchdog reads an agent's silence off it
+	sessionFile := func(machineID string, p *herdr.PaneInfo) (*machines.Machine, string, bool) {
 		if p.AgentSession == nil {
-			return time.Time{}
+			return nil, "", false
 		}
 		mc, err := mgr.Get(machineID)
 		if err != nil {
-			return time.Time{}
+			return nil, "", false
 		}
 		path, err := mc.ResolveSession(p.Dir(), p.AgentSession.Kind, p.AgentSession.Value)
 		if err != nil {
-			return time.Time{}
+			return nil, "", false
+		}
+		return mc, mc.FollowContinuation(path), true
+	}
+	lastWrite := func(machineID string, p *herdr.PaneInfo) (time.Time, bool) {
+		mc, path, ok := sessionFile(machineID, p)
+		if !ok {
+			return time.Time{}, false
 		}
 		v, err := mc.TranscriptVersion(path)
 		if err != nil {
-			return time.Time{}
+			return time.Time{}, false
 		}
 		if v.MTime > 1e12 { // nanoseconds from a local stat, seconds from a remote one
-			return time.Unix(0, v.MTime)
+			return time.Unix(0, v.MTime), true
 		}
-		return time.Unix(v.MTime, 0)
+		return time.Unix(v.MTime, 0), true
+	}
+	tracker := radar.New(dir, func(machineID string, p *herdr.PaneInfo) time.Time {
+		at, _ := lastWrite(machineID, p)
+		return at
 	})
 	defer tracker.Flush()
 	reviews := review.New(dir)
 	watcher := watch.New(mgr, pushSvc, tracker)
 	watcher.Badges, watcher.Dirs = reviews.Badges, server.WorkspaceDirs
 	watcher.Start()
+
+	// the watchdog: a minute apart, over the radar's episodes
+	paneOf := func(machineID, paneID string) *herdr.PaneInfo {
+		snap, _ := watcher.Snapshot(machineID)
+		if snap == nil {
+			return nil
+		}
+		for i := range snap.Panes {
+			if snap.Panes[i].PaneID == paneID {
+				return &snap.Panes[i]
+			}
+		}
+		return nil
+	}
+	wd := watchdog.New(watchdog.Inputs{
+		Episodes: tracker.Episodes,
+		Pane: func(machineID, paneID string) (watchdog.PaneInfo, bool) {
+			p := paneOf(machineID, paneID)
+			if p == nil {
+				return watchdog.PaneInfo{}, false
+			}
+			label := ""
+			if snap, _ := watcher.Snapshot(machineID); snap != nil {
+				for _, ws := range snap.Workspaces {
+					if ws.WorkspaceID == p.WorkspaceID {
+						label = ws.Label
+					}
+				}
+			}
+			return watchdog.PaneInfo{Title: p.DisplayTitle(), Workspace: label, Agent: p.AgentName()}, true
+		},
+		LastWrite: func(machineID, paneID string) (time.Time, bool) {
+			p := paneOf(machineID, paneID)
+			if p == nil {
+				return time.Time{}, false
+			}
+			return lastWrite(machineID, p)
+		},
+		LastTools: func(machineID, paneID string, n int) []string {
+			p := paneOf(machineID, paneID)
+			if p == nil {
+				return nil
+			}
+			mc, path, ok := sessionFile(machineID, p)
+			if !ok {
+				return nil
+			}
+			v, err := mc.TranscriptVersion(path)
+			if err != nil {
+				return nil
+			}
+			turns, err := mc.Transcript(path, v)
+			if err != nil || len(turns) == 0 {
+				return nil
+			}
+			last := turns[len(turns)-1]
+			if last.Role != "assistant" {
+				return nil
+			}
+			var out []string
+			for _, part := range last.Parts {
+				if part.Type == "tool" {
+					out = append(out, part.ToolName+"\x00"+string(part.Input))
+				}
+			}
+			if len(out) > n {
+				out = out[len(out)-n:]
+			}
+			return out
+		},
+		Note:   tracker.SetAlert,
+		Notify: pushSvc.Notify,
+	})
+	go wd.Run(time.Minute)
 
 	s := server.New(mgr, watcher, pushSvc, tasks.New(dir), code.New(*codePort), reviews, tracker, auth.NewGuard(token), ui)
 

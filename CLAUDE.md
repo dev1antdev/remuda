@@ -180,6 +180,18 @@ SPA. See README.md for the user story.
   folded group's head carries its agents' states (working / ? / ✓ counts).
   `web/marks/*.svg` are the vendor logos (MIT packaging, see NOTICE.md),
   `npm run marks` regenerates `src/marks.ts`; drawn inline in currentColor.
+- `internal/watchdog/` — notices agents that need a person: **stuck**
+  (working ≥ 20 min with no transcript write for 20 min), **loop** (the
+  last 6 tool calls of the current turn identical), **waiting** (blocked ≥
+  15 min). A sweep a minute over `radar.Episodes()`; the inputs are
+  functions wired in `main.go` (session file + mtime shared with the
+  radar's recovery, the transcript's last turn for the loop check), so
+  `watchdog_test.go` drives the rules without herdr. A note goes on the
+  pane (`radar.SetAlert` → `pane.radar.alert`, an amber `!` in the
+  sidebar, cleared when the state moves on) and one push per episode
+  (`push.Notify`, pref `watchdog`, default on) with a reminder every 30
+  min; the notification carries `actions` — Open, and **Send Esc**, which
+  the service worker posts to `/api/keys` itself.
 - `internal/tasks/` — the **Tasks mode**: the user's own Vikunja (2.x) behind
   one proxy. `vikunja.json` (URL + API token, 0600) in the state dir;
   `Configure` probes `/api/v1/info` and `/projects` before keeping it.

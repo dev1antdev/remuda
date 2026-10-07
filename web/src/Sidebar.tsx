@@ -329,18 +329,19 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
   const selected = current?.machineId === m.id && current.paneId === p.id;
   const label = rowLabel(p, r.tab, workspace, prefs);
   const hue = p.agent ? brandColor(p.agent) : undefined;
-  const style = d === "working" && hue ? { color: hue } : undefined;
+  const alert = p.radar?.alert;
+  const style = d === "working" && hue && !alert ? { color: hue } : undefined;
   return (
     <div
-      className={`radar-row is-${d}${selected ? " sel" : ""}${p.agent ? "" : " shell"}`}
+      className={`radar-row is-${d}${selected ? " sel" : ""}${p.agent ? "" : " shell"}${alert ? " is-alert" : ""}`}
       role="button"
       tabIndex={0}
       onClick={() => onSelect(m.id, p.id)}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect(m.id, p.id)}
-      title={`${p.agent || "shell"} · ${stateWords(d, p.radar?.last_active, now)}\n${p.cwd}`}
+      title={`${p.agent || "shell"} · ${alert ? alert : stateWords(d, p.radar?.last_active, now)}\n${p.cwd}`}
     >
       <span className="radar-mark" style={style}>
-        {p.agent ? markOf(d, step) : "$"}
+        {alert ? "!" : p.agent ? markOf(d, step) : "$"}
       </span>
       {p.agent && <Logo agent={p.agent} />}
       <span className="radar-title" style={style}>

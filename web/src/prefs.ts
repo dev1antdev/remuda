@@ -39,7 +39,7 @@ export function usePref<T>(key: string, fallback: T): [T, (next: T | ((prev: T) 
   return [value, set];
 }
 
-export const DEFAULT_ALERT_PREFS: Prefs = { input: true, done: "long" };
+export const DEFAULT_ALERT_PREFS: Prefs = { input: true, done: "long", watchdog: true };
 
 export function readAlertPrefs(): Prefs {
   return { ...DEFAULT_ALERT_PREFS, ...readPref<Partial<Prefs>>("alerts", {}) };

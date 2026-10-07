@@ -25,8 +25,9 @@ import (
 // Prefs are per-device: alert when an agent waits for an answer, and when it
 // finishes a turn — never, only long turns (≥60s), or always.
 type Prefs struct {
-	Input bool   `json:"input"`
-	Done  string `json:"done"` // off | long | always
+	Watchdog *bool  `json:"watchdog,omitempty"` // a stuck or long-waiting agent; nil = on
+	Input    bool   `json:"input"`
+	Done     string `json:"done"` // off | long | always
 }
 
 // Normalize fills the default and rejects unknown values.
@@ -50,12 +51,19 @@ type Subscription struct {
 }
 
 type Payload struct {
-	Machine string `json:"machine"`
-	Pane    string `json:"pane"`
-	Title   string `json:"title"`
-	Body    string `json:"body"`
-	Tag     string `json:"tag"`
-	Kind    string `json:"kind"` // input | done | test
+	Machine string   `json:"machine"`
+	Pane    string   `json:"pane"`
+	Title   string   `json:"title"`
+	Body    string   `json:"body"`
+	Tag     string   `json:"tag"`
+	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop
+	Actions []Action `json:"actions,omitempty"`
+}
+
+// Action is a button on the notification; the service worker performs it.
+type Action struct {
+	Action string `json:"action"` // open | esc
+	Title  string `json:"title"`
 }
 
 // PaneRef identifies a pane across machines.
@@ -251,6 +259,20 @@ func topic(tag string) string {
 		t = t[:32]
 	}
 	return t
+}
+
+// Notify sends one payload now to every device that wants the watchdog's
+// word (the pref defaults to on). It is the watchdog's door; the status
+// scheduler above is untouched by it.
+func (s *Service) Notify(p Payload) {
+	for _, sub := range s.list() {
+		if sub.Prefs.Watchdog != nil && !*sub.Prefs.Watchdog {
+			continue
+		}
+		if err := s.send(sub, p); err != nil {
+			log.Printf("push to %.40s…: %v", sub.Endpoint, err)
+		}
+	}
 }
 
 // SendTest proves the whole path for one device.

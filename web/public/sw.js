@@ -79,6 +79,7 @@ self.addEventListener("push", (event) => {
         silent: visible,
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
+        actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
         data: { machine: data.machine, pane: data.pane },
       });
     })(),
@@ -90,6 +91,15 @@ self.addEventListener("notificationclick", (event) => {
   const { machine, pane } = event.notification.data || {};
   event.waitUntil(
     (async () => {
+      // a button on a watchdog notification: Esc goes straight to the pane
+      if (event.action === "esc" && machine && pane) {
+        await fetch("/api/keys", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ machine, pane, keys: ["esc"] }),
+        }).catch(() => {});
+        return;
+      }
       const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       const win = wins.find((w) => w.visibilityState === "visible") || wins[0];
       if (win) {

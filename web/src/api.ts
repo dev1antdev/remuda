@@ -11,7 +11,7 @@ export type Pane = {
   rows: number;
   // an agent's lifecycle as the server reads it: held done, held question,
   // the last moment it worked (unix ms) — absent for a shell
-  radar?: { state: "working" | "blocked" | "done" | "idle" | "unknown"; last_active?: number };
+  radar?: { state: "working" | "blocked" | "done" | "idle" | "unknown"; last_active?: number; since?: number; alert?: string };
 };
 
 export type Tab = {

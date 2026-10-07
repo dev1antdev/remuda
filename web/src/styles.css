@@ -1221,6 +1221,17 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--accent);
 }
 
+/* the watchdog's note: the mark turns into an amber exclamation */
+.radar-row.is-alert .radar-mark,
+.radar-row.is-alert .radar-title {
+  color: var(--amber);
+}
+
+.radar-row.is-alert .radar-mark {
+  font-weight: 700;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
 .radar-settings {
   width: 236px;
   padding: 12px;
