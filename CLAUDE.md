@@ -88,12 +88,15 @@ SPA. See README.md for the user story.
   intercepted so xterm never tracks (a drag selects), and the wheel / a
   finger on a phone become mouse reports — the pixels add up, one report
   per cell height, as a native terminal does. Because the app repaints the
-  screen on every scroll, the **selection is kept in content rows**: each
-  settled repaint is diffed against the last (the shift that lines up the
-  most unique rows), the selection moves by it, rows scrolled off are
-  remembered by text, a drag past the top/bottom edge scrolls the app and
-  grows the selection, and copy assembles the remembered rows with trailing
-  spaces trimmed. The ⬚ selection layer (phone long-press) is screen-only.
+  screen on every scroll, the **selection is kept in content rows** and
+  every row seen while it exists is remembered by text: each settled
+  repaint is located in that memory (the offset most unique rows agree on,
+  and at least 30% of the screen must be recognised — the app's own header
+  and status rows always vote for the old place), the selection is drawn
+  there or hidden when the screen is somewhere unseen, a drag past the
+  top/bottom edge scrolls the app and grows the selection, and copy reads
+  the remembered rows (trailing spaces trimmed) wherever the screen went.
+  The ⬚ selection layer (phone long-press) is screen-only.
 - `web/src/markdown.tsx` — dependency-free Markdown → React nodes (no HTML
   strings, nothing to sanitize). `parseBlocks` is pure (task-list state is
   decided there, not in render) and memoized per text; testable via

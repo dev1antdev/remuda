@@ -573,16 +573,19 @@ export default function TerminalView({
     // ---- a selection that stays with the text ----
     // The app owns the scrollback: a wheel is a report to it and it repaints
     // the screen, so a selection on screen rows would sit still while the
-    // text moved under it. Here the selection is kept in content rows:
-    // every settled repaint is compared with the last one (which shift of
-    // lines matches the most rows?), the selection moves by that shift,
-    // rows scrolled off the screen are remembered by their text, and a drag
-    // past the top or bottom edge scrolls the app and grows the selection.
+    // text moved under it. Here the selection is kept in content rows, and
+    // every row seen while it exists is remembered by its text. When the
+    // screen settles after a repaint, the rows on it are looked up in that
+    // memory: the offset most unique rows agree on is where the screen is
+    // now, the selection is drawn there (or not at all, when the screen
+    // shows nothing remembered — a jump far away), and a drag held past the
+    // top or bottom edge scrolls the app and grows the selection. Copy
+    // reads the remembered rows, so it is right wherever the screen went.
     type Pos = { row: number; col: number }; // content row, 0-based col
     let offset = 0; // content row = screen row + offset
+    let attached = true; // the screen's place in the content is known
     let anchor: Pos | null = null; // where the selection began
     let head: Pos | null = null; // where it is being dragged to
-    let lastRows: string[] = [];
     const rowText = new Map<number, string>(); // content row → its text when last seen
     let applying = false; // our own term.select, not the user's
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -592,40 +595,55 @@ export default function TerminalView({
       for (let y = 0; y < term.rows; y++) out.push(buf.getLine(buf.baseY + y)?.translateToString(false) ?? "");
       return out;
     };
+    const remember = (rows: string[]) => {
+      for (let y = 0; y < rows.length; y++) rowText.set(y + offset, rows[y]!);
+    };
     const before = (a: Pos, b: Pos) => a.row < b.row || (a.row === b.row && a.col < b.col);
     const ordered = (): [Pos, Pos] | null => (anchor && head ? (before(anchor, head) ? [anchor, head] : [head, anchor]) : null);
     const forgetSelection = () => {
       anchor = head = null;
       offset = 0;
+      attached = true;
       rowText.clear();
-      lastRows = [];
     };
-    // the shift that lines the two screens up best, by the rows that are
-    // unique on the old screen (a repeated line fits anywhere); 0 when the
-    // screen did not scroll, or nothing can be told
-    const shiftBetween = (prev: string[], cur: string[]): number => {
-      const counts = new Map<string, number>();
-      for (const r of prev) if (r.trim().length >= 4) counts.set(r, (counts.get(r) ?? 0) + 1);
-      const index = new Map<string, number[]>();
-      for (let i = 0; i < cur.length; i++) {
-        const r = cur[i]!;
-        if (counts.get(r) === 1) (index.get(r) ?? index.set(r, []).get(r)!).push(i);
+    // where the screen is in the content: the offset that the most rows
+    // agree on, among rows whose text is unique both on screen and in the
+    // memory (a repeated line fits anywhere). null when nothing is known.
+    const relocate = (rows: string[]): number | null => {
+      const onScreen = new Map<string, number>();
+      const twice = new Set<string>();
+      rows.forEach((r, y) => {
+        if (r.trim().length < 4) return;
+        if (onScreen.has(r)) twice.add(r);
+        else onScreen.set(r, y);
+      });
+      const inMemory = new Map<string, number>();
+      for (const [row, text] of rowText) {
+        if (!onScreen.has(text) || twice.has(text)) continue;
+        if (inMemory.has(text)) twice.add(text);
+        else inMemory.set(text, row);
       }
       const votes = new Map<number, number>();
-      let usable = 0;
-      for (let i = 0; i < prev.length; i++) {
-        const r = prev[i]!;
-        if (counts.get(r) !== 1) continue;
-        usable++;
-        for (const j of index.get(r) ?? []) {
-          const k = i - j; // content moved up by k rows
-          votes.set(k, (votes.get(k) ?? 0) + 1);
-        }
+      let total = 0;
+      for (const [text, row] of inMemory) {
+        if (twice.has(text)) continue;
+        const o = row - onScreen.get(text)!;
+        votes.set(o, (votes.get(o) ?? 0) + 1);
+        total++;
       }
-      let best = 0;
-      let bestVotes = votes.get(0) ?? 0;
-      for (const [k, v] of votes) if (v > bestVotes) [best, bestVotes] = [k, v];
-      return bestVotes >= Math.max(3, usable / 4) ? best : 0;
+      let best: number | null = null;
+      let bestVotes = 0;
+      for (const [o, v] of votes) {
+        if (v > bestVotes || (v === bestVotes && o === offset)) [best, bestVotes] = [o, v];
+      }
+      // a few rows agreeing is not enough: the app's own frame — a header
+      // row, the status lines — sits on the same screen rows whatever the
+      // content, and after a jump into unseen text those would be the only
+      // matches, all voting for the old place. A good share of the screen
+      // has to be recognised.
+      let unique = 0;
+      for (const r of onScreen.keys()) if (!twice.has(r)) unique++;
+      return best !== null && bestVotes >= 2 && bestVotes * 2 > total && bestVotes >= unique * 0.3 ? best : null;
     };
     // draw the part of the selection that is on screen
     const renderSelection = () => {
@@ -636,7 +654,7 @@ export default function TerminalView({
       const bottom = offset + term.rows - 1;
       applying = true;
       try {
-        if (e0.row < top || s0.row > bottom) {
+        if (!attached || e0.row < top || s0.row > bottom) {
           if (term.hasSelection()) term.clearSelection();
           return;
         }
@@ -649,24 +667,23 @@ export default function TerminalView({
         applying = false;
       }
     };
-    // a settled screen: the rows remembered, the selection moved along
+    // a settled screen: found in the memory (then remembered and the
+    // selection drawn), or not (the selection waits, unseen)
     const settled = () => {
       settleTimer = null;
+      if (!anchor) return;
       const rows = screenRows();
-      if (anchor && lastRows.length === rows.length) {
-        const k = shiftBetween(lastRows, rows);
-        if (k) {
-          offset += k;
-          if (edge === "down" && head) head = { row: offset + term.rows - 1, col: term.cols };
-          if (edge === "up" && head) head = { row: offset, col: 0 };
-        }
+      const found = relocate(rows);
+      if (found === null) {
+        attached = false;
+      } else {
+        offset = found;
+        attached = true;
+        remember(rows);
+        if (edge === "down" && head) head = { row: offset + term.rows - 1, col: term.cols };
+        if (edge === "up" && head) head = { row: offset, col: 0 };
       }
-      lastRows = rows;
-      if (anchor) {
-        for (let y = 0; y < rows.length; y++) rowText.set(y + offset, rows[y]!);
-        if (rowText.size > 20000) forgetSelection();
-        else renderSelection();
-      }
+      renderSelection();
     };
     onPainted = () => {
       if (!anchor) return;
@@ -684,10 +701,7 @@ export default function TerminalView({
       const baseY = term.buffer.active.baseY;
       const start: Pos = { row: pos.start.y - baseY + offset, col: pos.start.x };
       const end: Pos = { row: pos.end.y - baseY + offset, col: pos.end.x };
-      if (!anchor) {
-        lastRows = screenRows();
-        for (let y = 0; y < lastRows.length; y++) rowText.set(y + offset, lastRows[y]!);
-      }
+      if (!anchor) remember(screenRows());
       // an end clipped at the screen's edge keeps the rows beyond it
       const o = ordered();
       const keepStart = o && o[0].row < offset && start.row === offset && start.col === 0;
@@ -725,6 +739,7 @@ export default function TerminalView({
       edgeTimer = edge ? setInterval(edgeTick, 90) : null;
     };
     const dragStart = (e: MouseEvent) => {
+      forgetSelection(); // a new selection starts over, with a fresh memory
       const cell = cellAt(e);
       dragAnchor = cell ? { row: cell.row - 1 + offset, col: cell.col - 1 } : null;
       document.addEventListener("mousemove", onDragMove);
