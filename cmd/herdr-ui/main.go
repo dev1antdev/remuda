@@ -21,6 +21,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/push"
 	"github.com/dev1antdev/herdr-ui/internal/radar"
 	"github.com/dev1antdev/herdr-ui/internal/review"
+	"github.com/dev1antdev/herdr-ui/internal/schedule"
 	"github.com/dev1antdev/herdr-ui/internal/server"
 	"github.com/dev1antdev/herdr-ui/internal/state"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
@@ -197,6 +198,10 @@ func main() {
 	go wd.Run(time.Minute)
 
 	s := server.New(mgr, watcher, pushSvc, tasks.New(dir), code.New(*codePort), reviews, tracker, auth.NewGuard(token), ui)
+	// schedules: prompts on a timetable, delivered through the server's own
+	// submit path to the agent in a folder
+	s.Schedules = schedule.New(dir, s.SubmitToFolder, pushSvc.Notify)
+	go s.Schedules.Loop()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

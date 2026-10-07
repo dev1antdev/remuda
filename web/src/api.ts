@@ -146,6 +146,30 @@ export const fetchReviewDiff = (machineId: string, dir: string, path: string): P
     .then((d) => d.diff);
 export const markReviewed = (machineId: string, dir: string): Promise<void> => sendJSON("POST", "/api/review/seen", { machine: machineId, dir });
 
+// ---- schedules: prompts to an agent on a timetable ----
+export type Schedule = {
+  id?: string;
+  machine: string;
+  dir: string;
+  label: string;
+  cron: string;
+  prompt: string;
+  enabled: boolean;
+  last_run?: string;
+  last_result?: string;
+  last_ok?: boolean;
+};
+export const fetchSchedules = (): Promise<Schedule[]> =>
+  fetch("/api/schedules")
+    .then(check)
+    .then((r) => r.json() as Promise<Schedule[]>);
+export const putSchedule = (s: Schedule): Promise<Schedule> =>
+  fetch("/api/schedules", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) })
+    .then(check)
+    .then((r) => r.json() as Promise<Schedule>);
+export const deleteSchedule = (id: string): Promise<void> => sendJSON("DELETE", `/api/schedules/${encodeURIComponent(id)}`);
+export const runSchedule = (id: string): Promise<Schedule> => sendJSON<Schedule>("POST", `/api/schedules/${encodeURIComponent(id)}/run`);
+
 export type CodeStatus = { available: boolean; port: number; error?: string };
 
 // whether the machine's code-server answers (force re-probes a cached "no")

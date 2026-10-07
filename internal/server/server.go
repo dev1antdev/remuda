@@ -31,21 +31,23 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/push"
 	"github.com/dev1antdev/herdr-ui/internal/radar"
 	"github.com/dev1antdev/herdr-ui/internal/review"
+	"github.com/dev1antdev/herdr-ui/internal/schedule"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
 	"github.com/dev1antdev/herdr-ui/internal/transcript"
 	"github.com/dev1antdev/herdr-ui/internal/watch"
 )
 
 type Server struct {
-	Machines *machines.Manager
-	Watch    *watch.Watcher
-	Push     *push.Service
-	Tasks    *tasks.Service
-	Code     *code.Service
-	Review   *review.Store
-	Radar    *radar.Tracker
-	Guard    *auth.Guard
-	UI       fs.FS // built SPA
+	Machines  *machines.Manager
+	Watch     *watch.Watcher
+	Push      *push.Service
+	Tasks     *tasks.Service
+	Code      *code.Service
+	Review    *review.Store
+	Schedules *schedule.Store
+	Radar     *radar.Tracker
+	Guard     *auth.Guard
+	UI        fs.FS // built SPA
 
 	mu      sync.Mutex
 	paneMu  map[push.PaneRef]*sync.Mutex // per-pane submit serialization
@@ -103,6 +105,10 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("DELETE /api/push/subscribe", s.handlePushUnsubscribe)
 	api.HandleFunc("POST /api/push/test", s.handlePushTest)
 	api.HandleFunc("POST /api/seen", s.handleSeen)
+	api.HandleFunc("GET /api/schedules", s.handleSchedules)
+	api.HandleFunc("PUT /api/schedules", s.handleSchedulePut)
+	api.HandleFunc("DELETE /api/schedules/{id}", s.handleScheduleDelete)
+	api.HandleFunc("POST /api/schedules/{id}/run", s.handleScheduleRun)
 	api.HandleFunc("GET /api/review", s.handleReview)
 	api.HandleFunc("GET /api/review/diff", s.handleReviewDiff)
 	api.HandleFunc("POST /api/review/seen", s.handleReviewSeen)
@@ -943,35 +949,87 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	lock := s.paneLock(push.PaneRef{Machine: mc.Cfg.ID, Pane: req.Pane})
-	lock.Lock()
-	defer lock.Unlock()
-
-	// Preferred: herdr's own submit (bracketed paste, Enter 300ms later). It
-	// refuses while the agent shows a menu — the message must not land there.
-	err := client.AgentPrompt(req.Pane, req.Text)
-	switch {
-	case err == nil:
-	case herdr.IsCode(err, "agent_blocked"):
-		httpErr(w, http.StatusConflict, fmt.Errorf("the agent is waiting for an answer — answer its prompt first"))
-		return
-	case herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_not_ready"):
-		// No agent in front: type like a keyboard. The settle gap lives server-
-		// side so a TUI still redrawing doesn't take the Enter as a newline.
-		if err := client.PaneSendText(req.Pane, req.Text); err != nil {
-			rpcErr(w, err)
+	if err := s.submitTo(mc, client, req.Pane, req.Text); err != nil {
+		var busy errAgentBusy
+		if errors.As(err, &busy) {
+			httpErr(w, http.StatusConflict, err)
 			return
 		}
-		time.Sleep(150 * time.Millisecond)
-		if err := client.PaneSendKeys(req.Pane, []string{"enter"}); err != nil {
-			rpcErr(w, err)
-			return
-		}
-	default:
 		rpcErr(w, err)
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+// errAgentBusy: the agent shows a menu; the message must not land in it.
+type errAgentBusy struct{}
+
+func (errAgentBusy) Error() string {
+	return "the agent is waiting for an answer — answer its prompt first"
+}
+
+// submitTo delivers text to a pane the way the chat does: herdr's own
+// submit (bracketed paste, Enter 300ms later) for an agent, typing like a
+// keyboard for a shell. Serialized per pane.
+func (s *Server) submitTo(mc *machines.Machine, client *herdr.Client, paneID, text string) error {
+	lock := s.paneLock(push.PaneRef{Machine: mc.Cfg.ID, Pane: paneID})
+	lock.Lock()
+	defer lock.Unlock()
+	err := client.AgentPrompt(paneID, text)
+	switch {
+	case err == nil:
+		return nil
+	case herdr.IsCode(err, "agent_blocked"):
+		return errAgentBusy{}
+	case herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_not_ready"):
+		// No agent in front: type like a keyboard. The settle gap lives server-
+		// side so a TUI still redrawing doesn't take the Enter as a newline.
+		if err := client.PaneSendText(paneID, text); err != nil {
+			return err
+		}
+		time.Sleep(150 * time.Millisecond)
+		return client.PaneSendKeys(paneID, []string{"enter"})
+	default:
+		return err
+	}
+}
+
+// SubmitToFolder finds the agent running in a machine's folder and gives it
+// the text — the scheduler's door. The pane's title names where it went.
+func (s *Server) SubmitToFolder(machineID, dir, text string) (string, error) {
+	mc, err := s.Machines.Get(machineID)
+	if err != nil {
+		return "", err
+	}
+	client, _, err := mc.Ready()
+	if err != nil {
+		return "", err
+	}
+	snap, _ := s.Watch.Snapshot(machineID)
+	if snap == nil {
+		return "", fmt.Errorf("%s has no snapshot yet", mc.Cfg.Label)
+	}
+	var pane *herdr.PaneInfo
+	for i := range snap.Workspaces {
+		ws := &snap.Workspaces[i]
+		if workspaceDir(snap, ws) != dir {
+			continue
+		}
+		for j := range snap.Panes {
+			p := &snap.Panes[j]
+			if p.WorkspaceID == ws.WorkspaceID && p.Agent != "" {
+				pane = p
+				break
+			}
+		}
+	}
+	if pane == nil {
+		return "", fmt.Errorf("no agent is running in %s on %s", dir, mc.Cfg.Label)
+	}
+	if err := s.submitTo(mc, client, pane.PaneID, text); err != nil {
+		return "", err
+	}
+	return pane.DisplayTitle(), nil
 }
 
 // herdr's pane.send_keys grammar: lowercase names, "+" for modifiers

@@ -30,6 +30,7 @@ import TerminalView, { type Modifier, type SizeMode, type TermApi } from "./Term
 import Tasks, { type AgentTarget } from "./Tasks";
 import Code from "./Code";
 import Review from "./Review";
+import Schedules from "./Schedules";
 import Sidebar from "./Sidebar";
 import Select from "./Select";
 import Logo from "./Logo";
@@ -110,6 +111,7 @@ export default function App() {
   const [mode, setMode] = usePref<"herdr" | "tasks" | "code">("mode", "herdr");
   // the editor stays mounted once opened, so coming back does not reload it
   const [codeOpened, setCodeOpened] = useState(false);
+  const [schedules, setSchedules] = useState(false);
   useEffect(() => {
     if (mode === "code") setCodeOpened(true);
   }, [mode]);
@@ -455,6 +457,7 @@ export default function App() {
             }
             onAddMachine={() => setDialog({ kind: "machine" })}
             onPrefs={setRadarPrefs}
+            onSchedules={() => setSchedules(true)}
           />
         </aside>
         )}
@@ -596,6 +599,8 @@ export default function App() {
           ))}
         </div>
       )}
+
+      {schedules && <Schedules machines={machines} onClose={() => setSchedules(false)} ask={ask} />}
 
       {confirmReq && (
         <ConfirmDialog

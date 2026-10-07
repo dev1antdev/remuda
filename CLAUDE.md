@@ -192,6 +192,17 @@ SPA. See README.md for the user story.
   (`push.Notify`, pref `watchdog`, default on) with a reminder every 30
   min; the notification carries `actions` — Open, and **Send Esc**, which
   the service worker posts to `/api/keys` itself.
+- `internal/schedule/` — prompts to agents on a timetable. A schedule names
+  a machine and a **folder** (panes come and go; the project stays), a
+  five-field cron in the server's local time (`Parse`/`Matches`/`Next`,
+  tested), the prompt, and a switch. `Tick` every 30s fires what matches
+  the minute and has not run this minute; delivery is
+  `Server.SubmitToFolder` → the agent pane in that folder → `submitTo`,
+  the chat's own path (an agent busy with a question refuses: noted, never
+  queued). A failed run is pushed (`Kind: "schedule"`). `schedules.json`
+  in the state dir; routes `GET/PUT /api/schedules`, `DELETE
+  /api/schedules/{id}`, `POST /api/schedules/{id}/run`. `Schedules.tsx` is
+  the panel behind the calendar button in the sidebar head.
 - `internal/tasks/` — the **Tasks mode**: the user's own Vikunja (2.x) behind
   one proxy. `vikunja.json` (URL + API token, 0600) in the state dir;
   `Configure` probes `/api/v1/info` and `/projects` before keeping it.

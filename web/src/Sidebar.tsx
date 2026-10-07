@@ -28,7 +28,7 @@ import Icon from "./icons";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
 
-export default function Sidebar({ machines, current, prefs, collapsed, onToggle, onSelect, onMenu, onNewWorkspace, onRemoveMachine, onAddMachine, onPrefs }: {
+export default function Sidebar({ machines, current, prefs, collapsed, onToggle, onSelect, onMenu, onNewWorkspace, onRemoveMachine, onAddMachine, onPrefs, onSchedules }: {
   machines: Machine[];
   current: Current;
   prefs: RadarPrefs;
@@ -40,6 +40,7 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
   onRemoveMachine: (m: Machine) => void;
   onAddMachine: () => void;
   onPrefs: (next: RadarPrefs) => void;
+  onSchedules: () => void;
 }) {
   // one clock for every spinner and pulse; it only runs while something moves
   const moving = machines.some((m) => m.sessions.some((s) => s.tabs.some((t) => t.panes.some((p) => p.radar?.state === "working" || p.radar?.state === "blocked"))));
@@ -104,6 +105,9 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
             <Icon name="sliders" size={14} />
           </button>
           {settings && <RadarSettings at={settings} prefs={prefs} onPrefs={onPrefs} />}
+          <button onClick={onSchedules} title="Schedules: prompts sent to agents on a timetable">
+            <Icon name="calendar" size={14} />
+          </button>
           <button onClick={onAddMachine} title="Add a remote PC over SSH">
             <Icon name="plus" size={13} /> PC
           </button>
