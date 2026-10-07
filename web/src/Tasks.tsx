@@ -31,7 +31,7 @@ import {
 import { errMsg, usePref } from "./prefs";
 import { openUrl } from "./host";
 import Select from "./Select";
-import Logo from "./Logo";
+import SendToAgent from "./SendToAgent";
 import Icon, { type IconName } from "./icons";
 
 type Smart = "today" | "upcoming" | "open";
@@ -354,12 +354,12 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
         />
       )}
       {sendReq && (
-        <SendDialog
-          task={sendReq.task}
-          groom={sendReq.groom}
-          vikunjaURL={status.url!}
+        <SendToAgent
+          title={sendReq.groom ? "Send for grooming" : "Send to agent"}
+          text={taskPrompt(sendReq.task, status.url!, sendReq.groom)}
           agents={agents}
           currentPane={currentPane}
+          rememberKey={`task-project:${sendReq.task.project_id}`}
           onClose={() => setSendReq(null)}
           onSend={async (target, text) => {
             await onSend(target.machineId, target.paneId, text);
@@ -841,81 +841,6 @@ export function taskPrompt(t: Task, vikunjaURL: string, groom: boolean): string 
   const desc = t.description ? htmlToText(t.description) : "";
   const parts = [t.title.trim(), desc, `Task ${t.identifier || `#${t.index}`} in Vikunja: ${vikunjaURL}/tasks/${t.id}`].filter(Boolean);
   return (groom ? "/grill-me " : "") + parts.join("\n\n");
-}
-
-const targetKey = (a: { machineId: string; paneId: string }) => `${a.machineId}|${a.paneId}`;
-
-function SendDialog({ task, groom, vikunjaURL, agents, currentPane, onClose, onSend }: {
-  task: Task;
-  groom: boolean;
-  vikunjaURL: string;
-  agents: AgentTarget[];
-  currentPane: { machineId: string; paneId: string } | null;
-  onClose: () => void;
-  onSend: (target: AgentTarget, text: string) => Promise<void>;
-}) {
-  // the last agent each project's tasks went to, so the next one is one click
-  const [remembered, setRemembered] = usePref<Record<string, string>>("tasks.targets", {});
-  const initial =
-    agents.find((a) => targetKey(a) === remembered[task.project_id]) ??
-    (currentPane && agents.find((a) => targetKey(a) === targetKey(currentPane))) ??
-    agents[0];
-  const [target, setTarget] = useState(initial ? targetKey(initial) : "");
-  const [text, setText] = useState(() => taskPrompt(task, vikunjaURL, groom));
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const chosen = agents.find((a) => targetKey(a) === target);
-  return (
-    <div className="modal-scrim" onClick={onClose}>
-      <form
-        className="modal tasks-send-dialog"
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!chosen || !text.trim()) return;
-          setBusy(true);
-          setErr("");
-          onSend(chosen, text).then(
-            () => setRemembered({ ...remembered, [task.project_id]: target }),
-            (e) => {
-              setErr(errMsg(e));
-              setBusy(false);
-            },
-          );
-        }}
-      >
-        <h2>{groom ? "Send for grooming" : "Send to agent"}</h2>
-        <label>
-          Agent
-          <Select
-            value={target}
-            onChange={setTarget}
-            options={agents.map((a) => ({
-              value: targetKey(a),
-              label: `${a.sessionName} › ${a.paneTitle}`,
-              hint: `${a.agent} · ${a.status}`,
-              group: a.machineLabel,
-              icon: <Logo agent={a.agent} />,
-            }))}
-          />
-        </label>
-        {chosen && <p className="modal-hint tasks-send-cwd">{chosen.cwd}</p>}
-        <label>
-          Message
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={groom ? 10 : 8} />
-        </label>
-        {err && <div className="chat-error">{err}</div>}
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="primary" disabled={busy || !chosen || !text.trim()}>
-            {busy ? "…" : "Send"}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
 }
 
 // A datetime-local field fires a change per segment typed (and reads as ""

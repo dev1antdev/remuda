@@ -1,5 +1,7 @@
-import { memo, useEffect, useRef, useState } from "react";
-import { fetchChat, sendKeys, submitPrompt, type ChatResponse, type Part, type Turn } from "./api";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { fetchChat, fetchQuick, saveQuick, sendKeys, submitPrompt, type ChatResponse, type Part, type QuickPrompt, type Turn } from "./api";
+import type { AgentTarget } from "./Tasks";
+import SendToAgent from "./SendToAgent";
 import { filesFrom, MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
 import { Markdown, type OpenFile } from "./markdown";
 import { errMsg, isTouch } from "./prefs";
@@ -15,12 +17,25 @@ export default function Chat({
   paneId,
   status,
   onOpenFile,
+  agents,
+  origin,
+  dir,
 }: {
   machineId: string;
   paneId: string;
   status: string;
   onOpenFile: OpenFile;
+  agents: AgentTarget[]; // where a turn can be forwarded
+  origin: string; // "workspace on machine", named in a forwarded message
+  dir: string; // the pane's folder, for its own quick prompts
 }) {
+  // forwarding a turn to another agent
+  const [forward, setForward] = useState<string | null>(null);
+  const onForward = useCallback((text: string) => setForward(`From ${origin}:\n\n${text}`), [origin]);
+  const others = agents.some((a) => a.machineId !== machineId || a.paneId !== paneId);
+  const [forwarded, setForwarded] = useState("");
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(noticeTimer.current), []);
   const [chat, setChat] = useState<ChatResponse | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +142,7 @@ export default function Chat({
           </div>
         )}
         {turns.map((t, i) => (
-          <TurnView key={i} turn={t} onOpenFile={onOpenFile} />
+          <TurnView key={i} turn={t} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} />
         ))}
       </div>
       {status === "input" && (
@@ -142,7 +157,26 @@ export default function Chat({
         </div>
       )}
       {error && <div className="chat-error">{error}</div>}
-      <Composer machineId={machineId} paneId={paneId} working={status === "run"} />
+      <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} />
+      {forwarded && <div className="tasks-notice chat-notice">{forwarded}</div>}
+      {forward !== null && (
+        <SendToAgent
+          title="Forward to another agent"
+          text={forward}
+          agents={agents}
+          currentPane={{ machineId, paneId }}
+          exclude={{ machineId, paneId }}
+          rememberKey={`forward:${machineId}|${paneId}`}
+          onClose={() => setForward(null)}
+          onSend={async (target, text) => {
+            await submitPrompt(target.machineId, target.paneId, text);
+            setForward(null);
+            setForwarded(`Forwarded to ${target.agent} in ${target.sessionName}.`);
+            clearTimeout(noticeTimer.current);
+            noticeTimer.current = setTimeout(() => setForwarded(""), 4000);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -151,8 +185,24 @@ export default function Chat({
 // Attachments (paperclip, a pasted screenshot, a drop) upload into the pane's
 // folder and put an @path mention at the caret; the agent reads the file
 // from there once the message is sent.
-function Composer({ machineId, paneId, working }: { machineId: string; paneId: string; working: boolean }) {
+function Composer({ machineId, paneId, working, dir }: { machineId: string; paneId: string; working: boolean; dir: string }) {
   const [draft, setDraft] = useState("");
+  const [quick, setQuick] = useState<{ x: number; y: number } | null>(null);
+  const [manage, setManage] = useState(false);
+  const [prompts, setPrompts] = useState<QuickPrompt[] | null>(null); // null: not loaded (yet)
+  const [quickErr, setQuickErr] = useState("");
+  useEffect(() => {
+    if (!quick) return;
+    setPrompts(null);
+    setQuickErr("");
+    fetchQuick().then(setPrompts, (e) => setQuickErr(errMsg(e)));
+  }, [quick]);
+  useEffect(() => {
+    if (!quick) return;
+    const close = () => setQuick(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [quick]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -165,6 +215,10 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
   // the caret where the files were added: the paperclip steals focus, so it
   // is remembered on every blur
   const caret = useRef<number | null>(null);
+  const dictation = useDictation((text) => {
+    caret.current = null; // the next insertion goes after the dictated text
+    setDraft((d) => (d ? d.replace(/\s*$/, " ") : "") + text);
+  });
 
   // insertAt puts text at the remembered caret (or the end), padded with
   // spaces, and moves the caret past it — one update for all mentions so
@@ -271,6 +325,52 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
         >
           <Icon name="paperclip" size={17} />
         </button>
+        <button
+          type="button"
+          className={`composer-attach${quick ? " on" : ""}`}
+          title="Quick prompts"
+          onClick={(e) => {
+            e.stopPropagation();
+            const r = e.currentTarget.getBoundingClientRect();
+            setQuick(quick ? null : { x: r.left, y: r.top - 6 });
+          }}
+        >
+          <Icon name="zap" size={16} />
+        </button>
+        {dictation.supported && (
+          <button
+            type="button"
+            className={`composer-attach composer-mic${dictation.listening ? " listening" : ""}`}
+            title={dictation.listening ? "Stop dictating" : "Dictate (on this device's speech recognition)"}
+            onClick={dictation.toggle}
+          >
+            <Icon name="mic" size={16} />
+          </button>
+        )}
+        {quick && (
+          <div className="row-menu quick-menu" style={{ left: quick.x, top: quick.y }} onClick={(e) => e.stopPropagation()}>
+            {(prompts ?? [])
+              .filter((q) => !q.dir || q.dir === dir)
+              .map((q) => (
+                <button key={q.id ?? q.label} title={q.text} onClick={() => { insertAt(q.text); setQuick(null); area.current?.focus(); }}>
+                  <Icon name="zap" size={12} className="icon quick-icon" />
+                  <span className="quick-label">{q.label}</span>
+                  {q.dir && <span className="sel-hint">this folder</span>}
+                </button>
+              ))}
+            {quickErr ? (
+              <div className="chat-error">{quickErr}</div>
+            ) : !prompts ? (
+              <div className="placeholder small">Loading…</div>
+            ) : (
+              prompts.filter((q) => !q.dir || q.dir === dir).length === 0 && <div className="placeholder small">No quick prompts yet.</div>
+            )}
+            <button className="quick-manage" onClick={() => { setQuick(null); setManage(true); }}>
+              <Icon name="sliders" size={12} className="icon quick-icon" /> Manage…
+            </button>
+          </div>
+        )}
+        {manage && <QuickPromptsDialog dir={dir} onClose={() => setManage(false)} />}
         <textarea
           ref={area}
           value={draft}
@@ -304,7 +404,7 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
             title="Send Esc to interrupt"
             onClick={() => void sendKeys(machineId, paneId, ["esc"])}
           >
-            <Icon name="square" size={12} /> Stop
+            <Icon name="square" size={12} /> <span>Stop</span>
           </button>
         )}
       </div>
@@ -312,18 +412,150 @@ function Composer({ machineId, paneId, working }: { machineId: string; paneId: s
   );
 }
 
+// Saved prompts: edit the whole list in one place — a label, the text, and
+// whether it is for every folder or this one.
+function QuickPromptsDialog({ dir, onClose }: { dir: string; onClose: () => void }) {
+  // the list is replaced whole on save, so nothing is saved until the
+  // current one has loaded
+  const [list, setList] = useState<QuickPrompt[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    fetchQuick().then(setList, (e) => setErr(errMsg(e)));
+  }, []);
+  const edit = (i: number, patch: Partial<QuickPrompt>) => setList((l) => (l ?? []).map((q, j) => (j === i ? { ...q, ...patch } : q)));
+  const folder = dir.split("/").filter(Boolean).pop() ?? dir;
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <form
+        className="modal quick-dialog"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!list) return;
+          setBusy(true);
+          setErr("");
+          saveQuick(list.filter((q) => q.text.trim()))
+            .then(onClose, (er) => setErr(errMsg(er)))
+            .finally(() => setBusy(false));
+        }}
+      >
+        <h2>Quick prompts</h2>
+        <p className="modal-hint">Offered under ⚡ in the composer; one tap puts the text in. Shared by every device that uses this herdr-ui.</p>
+        {!list && !err && <div className="placeholder small">Loading…</div>}
+        <div className="quick-list">
+          {(list ?? []).map((q, i) => (
+            <div key={i} className="quick-row">
+              <input value={q.label} placeholder="Label" onChange={(e) => edit(i, { label: e.target.value })} />
+              <textarea rows={2} value={q.text} placeholder="The prompt" onChange={(e) => edit(i, { text: e.target.value })} />
+              <label className="quick-scope">
+                <input type="checkbox" checked={!!q.dir} onChange={(e) => edit(i, { dir: e.target.checked ? dir : "" })} /> only {folder}
+              </label>
+              <button type="button" className="icon-btn" title="Remove" onClick={() => setList((l) => (l ?? []).filter((_, j) => j !== i))}>
+                <Icon name="trash" size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button type="button" className="sidebar-head-btn" disabled={!list} onClick={() => setList((l) => [...(l ?? []), { label: "", text: "" }])}>
+          <Icon name="plus" size={13} /> Add
+        </button>
+        {err && <div className="chat-error">{err}</div>}
+        <div className="modal-actions">
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="primary" disabled={busy || !list}>
+            Save
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// Dictation through the browser's own speech recognition (Safari and
+// Chrome ship one; it runs on the device or the platform's service, not
+// through herdr-ui). Final results are handed over as they come.
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+function useDictation(onText: (text: string) => void) {
+  const ctor = (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition
+    ?? (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition;
+  const [listening, setListening] = useState(false);
+  const rec = useRef<SpeechRecognitionLike | null>(null);
+  const toggle = () => {
+    if (!ctor) return;
+    if (rec.current) {
+      rec.current.stop();
+      return;
+    }
+    const r = new ctor();
+    r.lang = navigator.language || "en-US";
+    r.continuous = true;
+    r.interimResults = false;
+    r.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i]!;
+        if (res.isFinal) onText(res[0].transcript.trim());
+      }
+    };
+    r.onend = () => {
+      rec.current = null;
+      setListening(false);
+    };
+    r.onerror = () => {
+      rec.current = null;
+      setListening(false);
+    };
+    rec.current = r;
+    try {
+      r.start();
+      setListening(true);
+    } catch {
+      rec.current = null;
+    }
+  };
+  // leaving the pane stops the microphone and nothing lands afterwards
+  useEffect(
+    () => () => {
+      const r = rec.current;
+      if (!r) return;
+      r.onresult = r.onend = r.onerror = null;
+      r.stop();
+      rec.current = null;
+    },
+    [],
+  );
+  return { supported: !!ctor, listening, toggle };
+}
+
 const TurnView = memo(
-  function TurnView({ turn, onOpenFile }: { turn: Turn; onOpenFile: OpenFile }) {
+  function TurnView({ turn, onOpenFile, onForward }: { turn: Turn; onOpenFile: OpenFile; onForward?: (text: string) => void }) {
     const cls = turn.role === "user" ? "turn turn-user" : "turn turn-assistant";
+    const text = turn.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n\n").trim();
     return (
       <div className={cls}>
         {turn.parts.map((p, i) => (
           <PartView key={i} part={p} onOpenFile={onOpenFile} />
         ))}
+        {onForward && text && turn.role === "assistant" && (
+          <button type="button" className="turn-forward" title="Forward this to another agent" onClick={() => onForward(text)}>
+            <Icon name="send" size={12} /> forward
+          </button>
+        )}
       </div>
     );
   },
-  (a, b) => a.onOpenFile === b.onOpenFile && sameTurn(a.turn, b.turn),
+  (a, b) => a.onOpenFile === b.onOpenFile && a.onForward === b.onForward && sameTurn(a.turn, b.turn),
 );
 
 // every poll brings new objects; only the content tells turns apart (a

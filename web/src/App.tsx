@@ -500,6 +500,9 @@ export default function App() {
                   paneId={current.pane.id}
                   status={current.pane.status}
                   onOpenFile={openFile}
+                  agents={agentTargets}
+                  origin={`${current.session.name}${current.machine.id !== "local" ? ` on ${current.machine.label}` : ""}`}
+                  dir={current.session.dir || current.pane.cwd}
                 />
               ) : (
                 <>

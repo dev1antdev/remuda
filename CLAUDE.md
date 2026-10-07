@@ -203,6 +203,14 @@ SPA. See README.md for the user story.
   in the state dir; routes `GET/PUT /api/schedules`, `DELETE
   /api/schedules/{id}`, `POST /api/schedules/{id}/run`. `Schedules.tsx` is
   the panel behind the calendar button in the sidebar head.
+- `internal/quick/` — saved prompts (`quick.json`, `GET/PUT /api/quick`,
+  the list replaced whole), each for every folder or one `dir`; the chat
+  composer offers them under ⚡ and edits them in a dialog. The composer
+  also dictates through the browser's own `SpeechRecognition` (nothing
+  passes through herdr-ui) and every assistant turn has **forward** — the
+  turn's text, headed "From <workspace on machine>:", to another agent
+  through `SendToAgent.tsx`, the one dialog Tasks and Chat share
+  (`send.targets` pref remembers the last target per key).
 - `internal/tasks/` — the **Tasks mode**: the user's own Vikunja (2.x) behind
   one proxy. `vikunja.json` (URL + API token, 0600) in the state dir;
   `Configure` probes `/api/v1/info` and `/projects` before keeping it.

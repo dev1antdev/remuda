@@ -29,6 +29,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
+	"github.com/dev1antdev/herdr-ui/internal/quick"
 	"github.com/dev1antdev/herdr-ui/internal/radar"
 	"github.com/dev1antdev/herdr-ui/internal/review"
 	"github.com/dev1antdev/herdr-ui/internal/schedule"
@@ -45,6 +46,7 @@ type Server struct {
 	Code      *code.Service
 	Review    *review.Store
 	Schedules *schedule.Store
+	Quick     *quick.Store
 	Radar     *radar.Tracker
 	Guard     *auth.Guard
 	UI        fs.FS // built SPA
@@ -105,6 +107,19 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("DELETE /api/push/subscribe", s.handlePushUnsubscribe)
 	api.HandleFunc("POST /api/push/test", s.handlePushTest)
 	api.HandleFunc("POST /api/seen", s.handleSeen)
+	api.HandleFunc("GET /api/quick", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Quick.List()) })
+	api.HandleFunc("PUT /api/quick", func(w http.ResponseWriter, r *http.Request) {
+		var list []quick.Prompt
+		if !decode(w, r, &list) {
+			return
+		}
+		out, err := s.Quick.Replace(list)
+		if err != nil {
+			httpErr(w, http.StatusBadRequest, err)
+			return
+		}
+		writeJSON(w, out)
+	})
 	api.HandleFunc("GET /api/schedules", s.handleSchedules)
 	api.HandleFunc("PUT /api/schedules", s.handleSchedulePut)
 	api.HandleFunc("DELETE /api/schedules/{id}", s.handleScheduleDelete)

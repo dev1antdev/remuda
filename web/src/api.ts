@@ -146,6 +146,17 @@ export const fetchReviewDiff = (machineId: string, dir: string, path: string): P
     .then((d) => d.diff);
 export const markReviewed = (machineId: string, dir: string): Promise<void> => sendJSON("POST", "/api/review/seen", { machine: machineId, dir });
 
+// ---- quick prompts: saved texts for the composer ----
+export type QuickPrompt = { id?: string; label: string; text: string; dir?: string };
+export const fetchQuick = (): Promise<QuickPrompt[]> =>
+  fetch("/api/quick")
+    .then(check)
+    .then((r) => r.json() as Promise<QuickPrompt[]>);
+export const saveQuick = (list: QuickPrompt[]): Promise<QuickPrompt[]> =>
+  fetch("/api/quick", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(list) })
+    .then(check)
+    .then((r) => r.json() as Promise<QuickPrompt[]>);
+
 // ---- schedules: prompts to an agent on a timetable ----
 export type Schedule = {
   id?: string;

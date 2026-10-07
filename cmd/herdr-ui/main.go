@@ -19,6 +19,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
+	"github.com/dev1antdev/herdr-ui/internal/quick"
 	"github.com/dev1antdev/herdr-ui/internal/radar"
 	"github.com/dev1antdev/herdr-ui/internal/review"
 	"github.com/dev1antdev/herdr-ui/internal/schedule"
@@ -201,6 +202,7 @@ func main() {
 	// schedules: prompts on a timetable, delivered through the server's own
 	// submit path to the agent in a folder
 	s.Schedules = schedule.New(dir, s.SubmitToFolder, pushSvc.Notify)
+	s.Quick = quick.New(dir)
 	go s.Schedules.Loop()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

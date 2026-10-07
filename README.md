@@ -217,8 +217,15 @@ app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 a minute after a long turn. Answer at the desk first and nothing is sent.
 Needs HTTPS (tailscale serve) or localhost; on iPhone, the home-screen app.
 
-Planned: voice input (browser speech API), a remote-machine session picker,
-incremental transcript parsing for very long sessions.
+**Between agents:** every assistant turn has a *forward* link that sends its
+text, headed "From *workspace*:", to any other agent on any machine — the
+same dialog Tasks uses to send a task. **Quick prompts** (⚡ in the composer)
+are saved texts, for every folder or one, shared by all your devices.
+**Dictation** (🎤) uses the browser's own speech recognition — Safari on
+iPhone, Chrome on the desk; nothing passes through herdr-ui.
+
+Planned: a remote-machine session picker, incremental transcript parsing for
+very long sessions.
 
 ## License
 
