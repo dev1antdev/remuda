@@ -321,6 +321,11 @@ export default function TerminalView({
     const trackingModes = new Set([9, 1000, 1002, 1003]);
     let appMouse = 0; // the tracking mode the app wants; 0 = none
     let sgrMouse = false; // it asked for SGR (1006) reports
+    // Whether the app ever said how it wants pastes (DECSET 2004). A viewer
+    // that attaches later gets no replay, so it never sees Claude Code's
+    // "bracketed paste on" from startup — and xterm would then paste a
+    // multi-line text raw, every newline an Enter that sends the prompt.
+    let pasteModeSeen = false;
     const mouseModeHandler = (enable: boolean) => (params: (number | number[])[]) => {
       const rest: number[] = [];
       let touched = false;
@@ -331,6 +336,7 @@ export default function TerminalView({
           appMouse = enable ? n : 0;
         } else {
           if (n === 1006) sgrMouse = enable;
+          if (n === 2004) pasteModeSeen = true;
           rest.push(n);
         }
       }
@@ -570,10 +576,21 @@ export default function TerminalView({
     };
     const onPaste = (e: ClipboardEvent) => {
       const files = filesFrom(e.clipboardData);
-      if (files.length === 0) return; // plain text: xterm's own paste handles it
+      if (files.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        typeFiles(files);
+        return;
+      }
+      // Plain text: xterm's own paste, which brackets it when the app asked.
+      // When nobody knows what the app asked (a late attach), a text with
+      // line breaks is bracketed anyway — every shell and agent TUI reads
+      // that as one paste; the alternative sends line one and loses the rest.
+      const text = e.clipboardData?.getData("text/plain") ?? "";
+      if (!text.includes("\n") || term.modes.bracketedPasteMode || pasteModeSeen) return;
       e.preventDefault();
       e.stopPropagation();
-      typeFiles(files);
+      sendInput("\x1b[200~" + text.replace(/\r\n/g, "\r").replace(/\n/g, "\r") + "\x1b[201~");
     };
     mount.addEventListener("dragover", onDragOver);
     mount.addEventListener("dragleave", onDragLeave);

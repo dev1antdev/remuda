@@ -298,7 +298,15 @@ SPA. See README.md for the user story.
   never an emoji or a font glyph as an icon. `Select.tsx` replaces every
   native `<select>` (an icon per option, a portal so nothing clips it).
 - `web/` — React + Vite + xterm.js SPA, embedded via `web/embed.go`
-  (`go:embed all:dist`). Build with `make web` before `go build`.
+  (`go:embed all:dist`). Build with `make web` before `go build`. **Paste**: xterm brackets a paste only once it has seen the app's
+  DECSET 2004 — and a viewer that attaches later gets no replay, so it
+  never sees Claude Code's "bracketed paste on" from startup and would
+  paste a multi-line text raw (every newline an Enter: the prompt goes
+  off line by line). `Terminal.tsx` tracks whether 2004 ever passed and,
+  when nobody knows, wraps a text with line breaks in `ESC[200~ … ESC[201~`
+  itself (CRLF/LF → CR, as xterm does); a single line stays raw. herdr's
+  attach forwards the markers only to a pane that enabled the mode, so a
+  plain `cat` sees none.
 
 ## Invariants
 
