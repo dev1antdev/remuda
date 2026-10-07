@@ -217,6 +217,12 @@ app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 a minute after a long turn. Answer at the desk first and nothing is sent.
 Needs HTTPS (tailscale serve) or localhost; on iPhone, the home-screen app.
 
+**Changes:** a third lens next to Chat and Terminal shows what moved in the
+workspace since you last looked — commits, files, each file's diff. Tap a
+line of a diff and write what should change; a few of those make a review,
+and one button sends them all to the agent as a single numbered message
+(or to any other agent). "Mark reviewed" sets the baseline for next time.
+
 **Between agents:** every assistant turn has a *forward* link that sends its
 text, headed "From *workspace*:", to any other agent on any machine — the
 same dialog Tasks uses to send a task. **Quick prompts** (⚡ in the composer)

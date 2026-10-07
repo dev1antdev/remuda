@@ -3301,6 +3301,99 @@ input[type="checkbox"]:hover:not(:checked) {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/* a tap on a row: a comment; the comments wait under their rows */
+.review-diff.can-comment .fv-line.commentable {
+  cursor: pointer;
+}
+
+.review-diff.can-comment .fv-line.commentable:hover,
+.review-diff .fv-line.composing {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.review-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 2px 8px 6px 44px;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid var(--accent-ring);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  white-space: pre-wrap;
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+.review-note-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.review-note .icon-btn {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.review-orphans {
+  padding: 8px 10px 4px;
+  white-space: normal;
+  font: 12.5px/1.45 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  color: var(--fg-dim);
+}
+
+.review-orphans .review-note {
+  margin: 6px 0;
+}
+
+.review-note-where {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--fg-dim);
+  font-size: 12px;
+}
+
+.review-note-where code {
+  font: 12px var(--mono);
+  background: var(--bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.review-tag-comments {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-ring);
+}
+
+.review-draft-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-md);
+}
+
+.review-draft-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+
+.review-draft-bar .primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 
 /* ---- schedules ---- */
 .modal.schedules {

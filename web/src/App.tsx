@@ -559,11 +559,13 @@ export default function App() {
               />
               {lens === "changes" ? (
                 <Review
-                  key={`${current.machine.id}|${current.session.id}`}
+                  key={`${current.machine.id}|${current.session.id}|${current.session.dir || current.pane.cwd}`} // the draft is per folder
                   machineId={current.machine.id}
                   paneId={current.pane.id}
                   dir={current.session.dir || current.pane.cwd}
                   agent={current.pane.agent}
+                  agents={agentTargets}
+                  currentPane={{ machineId: current.machine.id, paneId: current.pane.id }}
                   onOpenFile={(path, line) => openFile({ path, line })}
                   onSeen={() => void refresh()}
                 />

@@ -110,6 +110,13 @@ SPA. See README.md for the user story.
   draws it: commits, files (fresh first), hunks with a comment box whose
   text goes to the pane's agent through `/api/submit` as
   "Review feedback on path:line". Nothing is written into a repository.
+  **Review comments**: in the lens a tap on a diff row opens a comment box
+  under it; comments gather in a draft (`usePref("review.draft:<machine>|
+  <dir>")`, this device, per folder), sit under their rows (`.review-note`,
+  matched by new-line number, or old-line number for a removed row) and a
+  bar at the foot sends them as one numbered message (`reviewMessage`:
+  `file:line`, the row quoted, the text) to the pane's agent, or through
+  `SendToAgent` to any agent. Nothing goes until that button.
 - `internal/code/` — the **Code mode**: each machine runs its own
   code-server (VS Code in the browser) on `127.0.0.1:7320`, `auth: none`,
   installed by `deploy/install-code.sh` (`make code [HOST=]`: a pinned
