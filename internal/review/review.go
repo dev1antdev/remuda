@@ -111,10 +111,19 @@ func summaryScript(dir, base string) string {
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
 		`base=` + b + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
 		`if [ "$base" != HEAD ]; then git log --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
-		`git -c core.quotepath=off diff --numstat "$base" 2>/dev/null; printf '\036\n'; ` +
+		`git -c core.quotepath=off diff --no-renames --numstat "$base" 2>/dev/null; printf '\036\n'; ` +
 		`git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
-		`for f in $(git -c core.quotepath=off diff --name-only "$base" 2>/dev/null; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null); do ` +
-		`[ -f "$f" ] && printf '%s\037%s\n' "$f" "$(git hash-object "$f" 2>/dev/null)"; done`
+		hashLoop("$base")
+}
+
+// hashLoop prints "<path>\x1f<blob hash>" for every file changed against
+// base or untracked — one path per line, so a space in a name survives; a
+// deleted file is recorded as "gone", so its deletion can be looked at and
+// marked seen like any other change. Renames are a deletion plus an
+// addition throughout, so paths stay plain.
+func hashLoop(base string) string {
+	return `{ git -c core.quotepath=off diff --no-renames --name-only ` + base + ` 2>/dev/null; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; } | ` +
+		`while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\037%s\n' "$f" "$(git hash-object "$f" 2>/dev/null)"; else printf '%s\037gone\n' "$f"; fi; done`
 }
 
 // Summary reviews one folder against its baseline.
@@ -189,10 +198,20 @@ func (st *Store) Summary(mc *machines.Machine, dir string) Summary {
 			sum.Fresh++
 		}
 	}
-	st.mu.Lock()
-	st.badges[key(mc.Cfg.ID, dir)] = Badge{Changed: len(sum.Files), Fresh: sum.Fresh}
-	st.mu.Unlock()
+	st.setBadge(key(mc.Cfg.ID, dir), base, Badge{Changed: len(sum.Files), Fresh: sum.Fresh})
 	return sum
+}
+
+// setBadge keeps a count computed against a baseline — unless the baseline
+// moved meanwhile ("mark reviewed" during a sweep that takes seconds over
+// ssh): a stale count would bring a cleared badge back.
+func (st *Store) setBadge(k string, against Baseline, b Badge) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if !st.baselines[k].At.Equal(against.At) {
+		return
+	}
+	st.badges[k] = b
 }
 
 // Diff is one file's change against the baseline commit (HEAD without one);
@@ -211,9 +230,7 @@ func (st *Store) Diff(mc *machines.Machine, dir, path string) (string, error) {
 // MarkSeen sets the folder's baseline to now: HEAD, and the hash of every
 // file that is changed or untracked at this moment.
 func (st *Store) MarkSeen(mc *machines.Machine, dir string) (Baseline, error) {
-	script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
-		`for f in $(git -c core.quotepath=off diff --name-only HEAD 2>/dev/null; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null); do ` +
-		`[ -f "$f" ] && printf '%s\037%s\n' "$f" "$(git hash-object "$f" 2>/dev/null)"; done`
+	script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` + hashLoop("HEAD")
 	out, err := mc.Shell(script, 60*time.Second)
 	if err != nil {
 		return Baseline{}, err
@@ -241,25 +258,27 @@ func (st *Store) Badges(mc *machines.Machine, dirs []string) {
 		return
 	}
 	var sb strings.Builder
+	against := map[string]Baseline{}
 	for _, d := range dirs {
 		base, _ := st.baseline(mc.Cfg.ID, d)
+		against[d] = base
 		sb.WriteString(`( cd ` + sshx.Quote(d) + ` 2>/dev/null || exit 0; git rev-parse --show-toplevel >/dev/null 2>&1 || exit 0; base=` + sshx.Quote(base.Head) + `; ` +
 			`if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
-			`printf '%s\036' ` + sshx.Quote(d) + `; for f in $(git -c core.quotepath=off diff --name-only "$base" 2>/dev/null; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null); do ` +
-			`[ -f "$f" ] && printf '%s\037%s\n' "$f" "$(git hash-object "$f" 2>/dev/null)"; done; printf '\035\n' ); `)
+			`printf '%s\036' ` + sshx.Quote(d) + `; ` + hashLoop("$base") + `; printf '\035\n' ); `)
 	}
 	out, err := mc.Shell(sb.String(), 90*time.Second)
 	if err != nil {
 		return
 	}
-	st.mu.Lock()
-	defer st.mu.Unlock()
 	for _, rec := range strings.Split(out, "\x1d\n") {
 		dir, body, ok := strings.Cut(rec, "\x1e")
 		if !ok {
 			continue
 		}
-		base, hasBase := st.baselines[key(mc.Cfg.ID, dir)]
+		base, hasBase := against[dir]
+		if hasBase {
+			hasBase = !base.At.IsZero()
+		}
 		badge := Badge{}
 		for _, line := range strings.Split(strings.TrimRight(body, "\n"), "\n") {
 			p, h, ok := strings.Cut(line, "\x1f")
@@ -271,6 +290,6 @@ func (st *Store) Badges(mc *machines.Machine, dirs []string) {
 				badge.Fresh++
 			}
 		}
-		st.badges[key(mc.Cfg.ID, dir)] = badge
+		st.setBadge(key(mc.Cfg.ID, dir), base, badge)
 	}
 }

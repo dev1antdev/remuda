@@ -9,12 +9,13 @@ import { fetchReview, fetchReviewDiff, markReviewed, submitPrompt, type Review a
 import { errMsg } from "./prefs";
 import Icon from "./icons";
 
-export default function Review({ machineId, paneId, dir, agent, onOpenFile }: {
+export default function Review({ machineId, paneId, dir, agent, onOpenFile, onSeen }: {
   machineId: string;
   paneId: string;
   dir: string;
   agent: string; // "" for a shell: nobody to send feedback to
   onOpenFile: (path: string, line?: number) => void;
+  onSeen?: () => void; // the roster's badges follow at once
 }) {
   const [data, setData] = useState<ReviewData | null>(null);
   const [error, setError] = useState("");
@@ -45,6 +46,7 @@ export default function Review({ machineId, paneId, dir, agent, onOpenFile }: {
       await markReviewed(machineId, dir);
       setOpen(null);
       setTick((t) => t + 1);
+      onSeen?.();
       setNotice("Reviewed — the next look starts from here.");
       setTimeout(() => setNotice(""), 4000);
     } catch (e) {

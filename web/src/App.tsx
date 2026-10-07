@@ -564,6 +564,7 @@ export default function App() {
                   dir={current.session.dir || current.pane.cwd}
                   agent={current.pane.agent}
                   onOpenFile={(path, line) => openFile({ path, line })}
+                  onSeen={() => void refresh()}
                 />
               ) : lens === "chat" ? (
                 <Chat
