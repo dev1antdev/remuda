@@ -230,27 +230,27 @@ SPA. See README.md for the user story.
   turn's text, headed "From <workspace on machine>:", to another agent
   through `SendToAgent.tsx`, the one dialog Tasks and Chat share
   (`send.targets` pref remembers the last target per key).
-- `internal/tasks/` — the **Tasks mode**: the user's own Vikunja (2.x) behind
-  one proxy. `vikunja.json` (URL + API token, 0600) in the state dir;
-  `Configure` probes `/api/v1/info` and `/projects` before keeping it.
-  `/api/tasks/v1/<path>` forwards to `<url>/api/v1/<path>` with the token
-  added — the token never reaches a browser. **PATCH is ours**: Vikunja's
-  `POST /tasks/{id}` replaces the whole task (a body of `{done:true}` wipes
-  the due date), so a PATCH fetches, merges and POSTs. Vikunja facts the UI
-  relies on (verified on 2.7): `GET /tasks` is the cross-project list
-  (`filter=done = false && project = 3`, `due_date < now/d+1d`,
-  `labels in 1`, `s=` search, repeated `sort_by`/`order_by`, 50 per page,
-  `X-Pagination-Total-Pages`); create is `PUT /projects/{id}/tasks`; labels
-  go through `/tasks/{id}/labels`; saved filters arrive in `/projects` as
-  pseudo-projects with **negative ids** and list through their list view
-  (`/projects/{id}/views/{view}/tasks`). `web/src/Tasks.tsx` +
-  `tasksApi.ts`; descriptions are Vikunja's HTML, rendered through an
-  allow-list into React nodes (never innerHTML) and edited as plain text.
-  The top-bar `mode-switch` (Agents | Tasks | Code) is a per-device pref. **Send to
-  agent** (a split button in the task; "for grooming" prefixes `/grill-me`)
-  composes `taskPrompt` (title, description as text, the Vikunja link) and
-  submits it through the existing `/api/submit` to an agent pane from the
-  roster, remembering the last target per Vikunja project.
+- `internal/tasks/` — the **Tasks mode**: herdr-ui's own list in
+  `tasks.db` (SQLite, WAL, `modernc.org/sqlite` — pure Go, so the four
+  static builds keep `CGO_ENABLED=0`) in the state dir of **the herdr-ui
+  that serves the page** (each instance has its own list). Projects (a
+  tree: `parent_project_id`, archived, favorite, position), tasks (HTML
+  description, done/done_at, due_date, priority 0–5, labels), labels.
+  Dates are RFC 3339 UTC strings, "" when unset. `GET /api/tasks?view=
+  today|upcoming|open|project&project=&done=1&q=&page=&tz=` — the smart
+  views cut by the viewer's local day (`tz`), the search case-folds in Go
+  (SQLite's `lower()` is ASCII only), 50 a page; `POST /api/tasks`,
+  `GET/PATCH/DELETE /api/tasks/{id}` (PATCH is partial: nil keeps, `""`
+  clears a date), `PUT /api/tasks/{id}/labels {label_id}`, `DELETE
+  …/labels/{label}`, `/api/tasks/projects[/{id}]`, `/api/tasks/labels`.
+  An empty database gets an "Inbox". `web/src/Tasks.tsx` + `tasksApi.ts`;
+  descriptions are rendered through an allow-list into React nodes (never
+  innerHTML) and edited as plain text that goes back as paragraphs. The
+  top-bar `mode-switch` (Agents | Tasks | Code) is a per-device pref.
+  **Send to agent** (a split button in the task; "for grooming" prefixes
+  `/grill-me`) composes `taskPrompt` (title, description as text, the task
+  id and project) and submits it through the existing `/api/submit` to an
+  agent pane from the roster, remembering the last target per project.
 - `internal/auth/` — single bearer token; HttpOnly cookie; no accounts.
 - `internal/server/` — HTTP routes + the pane WebSocket. `/api/health` and
   `/api/login` are mounted outside the token guard; everything else behind

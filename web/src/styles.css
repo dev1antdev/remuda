@@ -201,7 +201,6 @@ button {
 .primary,
 .composer-send,
 .alerts button.primary,
-.tasks-connect .primary,
 .split-main,
 .split-arrow {
   display: inline-flex;
@@ -223,7 +222,6 @@ button {
 .primary:hover,
 .composer-send:hover:not(:disabled),
 .alerts button.primary:hover,
-.tasks-connect .primary:hover,
 .split-main:hover:not(:disabled),
 .split-arrow:hover:not(:disabled) {
   filter: brightness(1.08);
@@ -294,7 +292,6 @@ button {
 /* text fields */
 .modal input,
 .tasks-search,
-.tasks-connect input,
 .tasks-label-pick input,
 .radar-settings input[type="number"],
 .tasks-field input[type="datetime-local"],
@@ -313,7 +310,6 @@ button {
 
 .modal input::placeholder,
 .tasks-search::placeholder,
-.tasks-connect input::placeholder,
 .composer textarea::placeholder,
 .tasks-add input::placeholder,
 .tasks-label-pick input::placeholder {
@@ -322,7 +318,6 @@ button {
 
 .modal input:focus,
 .tasks-search:focus,
-.tasks-connect input:focus,
 .tasks-label-pick input:focus,
 .radar-settings input[type="number"]:focus,
 .tasks-field input[type="datetime-local"]:focus,
@@ -347,7 +342,6 @@ button {
 
 /* a small label above a field */
 .modal label,
-.tasks-connect label,
 .radar-settings label {
   display: flex;
   flex-direction: column;
@@ -1853,8 +1847,7 @@ input[type="checkbox"]:hover:not(:checked) {
 }
 
 .md-code,
-.tasks-html code,
-.tasks-connect code {
+.tasks-html code {
   font: 12.5px/1.4 var(--mono);
   background: var(--bg-input);
   border: 1px solid var(--line);
@@ -2613,13 +2606,6 @@ input[type="checkbox"]:hover:not(:checked) {
   font-size: 11px;
 }
 
-.tasks-sidebar-foot {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 8px 0;
-  margin: 10px 8px 0;
-  border-top: 1px solid var(--line);
-}
 
 .tasks-main {
   padding: 0 0 8px;
@@ -3045,21 +3031,6 @@ input[type="checkbox"]:hover:not(:checked) {
   font-size: 13px;
 }
 
-/* connecting */
-.tasks-connect {
-  margin: auto;
-  width: min(92vw, 440px);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.tasks-connect h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-}
 
 @media (max-width: 920px) {
   .lens-switch .kb-font {

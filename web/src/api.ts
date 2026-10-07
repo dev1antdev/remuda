@@ -83,7 +83,7 @@ export async function check(res: Response): Promise<Response> {
   return res;
 }
 
-export async function sendJSON<T = unknown>(method: "POST" | "DELETE" | "PATCH", url: string, body?: unknown): Promise<T> {
+export async function sendJSON<T = unknown>(method: "POST" | "PUT" | "DELETE" | "PATCH", url: string, body?: unknown): Promise<T> {
   const res = await check(
     await fetch(url, {
       method,

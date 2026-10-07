@@ -208,7 +208,12 @@ func main() {
 	})
 	go wd.Run(time.Minute)
 
-	s := server.New(mgr, watcher, pushSvc, tasks.New(dir), code.New(*codePort), reviews, tracker, auth.NewGuard(token), ui)
+	taskStore, err := tasks.Open(dir)
+	if err != nil {
+		log.Fatalf("tasks: %v", err)
+	}
+	defer taskStore.Close()
+	s := server.New(mgr, watcher, pushSvc, taskStore, code.New(*codePort), reviews, tracker, auth.NewGuard(token), ui)
 	// schedules: prompts on a timetable, delivered through the server's own
 	// submit path to the agent in a folder
 	s.Schedules = schedule.New(dir, s.SubmitToFolder, pushSvc.Notify)

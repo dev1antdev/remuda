@@ -59,18 +59,13 @@ browser / phone ⇄ HTTP + WebSocket ⇄ herdr-ui (Go) ─┬─ local herdr.soc
   `pane.send_keys`.
 - **New workspace / close** — `workspace.create` + `agent.start` (any agent
   herdr has a manifest for), `workspace.close`.
-- **Tasks** — the **Agents | Tasks** switch in the top bar opens your own
-  [Vikunja](https://vikunja.io) (2.x) in herdr-ui's clothes: projects and
-  saved filters on the left, Today / Upcoming / All open, quick add, done,
-  due dates, priorities, labels, descriptions, search — and "Open in
-  Vikunja" for everything else. Connect once per herdr-ui with the Vikunja
-  URL and an API token (Settings → API Tokens there; scopes `projects`,
-  `projects_views_tasks`, `tasks`, `tasks_labels`, `labels`, `other: user`).
-  Every task has **Send to agent** — the task's title, description and link
-  go to a running agent as a prompt (the arrow offers "for grooming", which
-  prefixes `/grill-me`). The token is stored on the herdr-ui host and never sent to a browser:
-  the page talks to Vikunja only through herdr-ui's own port, so
-  a phone and a port forward need nothing extra.
+- **Tasks** — the **Agents | Tasks** switch in the top bar opens herdr-ui's
+  own task list: projects on the left, Today / Upcoming / All open, quick
+  add, done, due dates, priorities, labels, descriptions, search. It lives
+  in one SQLite file (`tasks.db`) in herdr-ui's state dir — no account, no
+  other server, nothing leaves the machine. Every task has **Send to
+  agent** — the task's title and description go to a running agent as a
+  prompt (the arrow offers "for grooming", which prefixes `/grill-me`).
 
 ## Install & run
 

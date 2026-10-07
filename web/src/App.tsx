@@ -338,7 +338,7 @@ export default function App() {
           <button className={mode === "herdr" ? "on" : ""} onClick={() => setMode("herdr")} title="Your agents and terminals, from herdr">
             Agents
           </button>
-          <button className={mode === "tasks" ? "on" : ""} onClick={() => setMode("tasks")} title="Your Vikunja tasks">
+          <button className={mode === "tasks" ? "on" : ""} onClick={() => setMode("tasks")} title="Your tasks, kept on this herdr-ui">
             Tasks
           </button>
           <button className={mode === "code" ? "on" : ""} onClick={() => setMode("code")} title="VS Code on a machine, through herdr-ui">

@@ -1,7 +1,8 @@
-// The Tasks mode: the user's Vikunja projects and tasks in herdr-ui's own
-// clothes. Projects on the left (with three smart lists above them), the
-// list in the middle, the open task on the right. Nothing is cached beyond
-// the screen: every change goes to Vikunja and the list is re-read.
+// The Tasks mode: herdr-ui's own task list (internal/tasks, SQLite on the
+// herdr-ui host). Projects on the left (with three smart lists above them),
+// the list in the middle, the open task on the right. Nothing is cached
+// beyond the screen: every change goes to the server and the list is
+// re-read.
 
 import { createElement, useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
@@ -9,24 +10,18 @@ import {
   createLabel,
   createProject,
   createTask,
-  currentUser,
   deleteTask,
   hasDate,
   listLabels,
   listProjects,
   listTasks,
-  listViewTasks,
   NO_DATE,
   patchTask,
   PRIORITIES,
   removeTaskLabel,
-  tasksConnect,
-  tasksDisconnect,
-  tasksStatus,
   type Label,
   type Project,
   type Task,
-  type TasksStatus,
 } from "./tasksApi";
 import { errMsg, usePref } from "./prefs";
 import { openUrl } from "./host";
@@ -37,10 +32,11 @@ import Icon, { type IconName } from "./icons";
 type Smart = "today" | "upcoming" | "open";
 type Sel = { kind: "smart"; id: Smart } | { kind: "project"; id: number };
 
-const SMART: { id: Smart; label: string; icon: IconName; filter: string }[] = [
-  { id: "today", label: "Today", icon: "sun", filter: "done = false && due_date < now/d+1d" },
-  { id: "upcoming", label: "Upcoming", icon: "calendar", filter: "done = false && due_date < now+7d" },
-  { id: "open", label: "All open", icon: "circle-check", filter: "done = false" },
+// the smart lists: due by the end of today, due within a week, everything open
+const SMART: { id: Smart; label: string; icon: IconName }[] = [
+  { id: "today", label: "Today", icon: "sun" },
+  { id: "upcoming", label: "Upcoming", icon: "calendar" },
+  { id: "open", label: "All open", icon: "circle-check" },
 ];
 
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -66,8 +62,7 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
   onOpenPane: (machineId: string, paneId: string) => void;
   onSend: (machineId: string, paneId: string, text: string) => Promise<void>;
 }) {
-  const [status, setStatus] = useState<TasksStatus | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<Project[] | null>(null);
   const [labels, setLabels] = useState<Label[]>([]);
   const [defaultProject, setDefaultProject] = useState(0);
   const [sel, setSel] = usePref<Sel>("tasks.sel", { kind: "smart", id: "today" });
@@ -85,56 +80,37 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
   const [tick, setTick] = useState(0);
   const refresh = useCallback(() => setTick((t) => t + 1), []);
 
+  // the sidebar's data
   useEffect(() => {
-    void tasksStatus().then(setStatus, (e) => setStatus({ configured: false, error: errMsg(e) }));
-  }, []);
-
-  // the sidebar's data, once connected
-  const connected = !!status?.configured;
-  useEffect(() => {
-    if (!connected) return;
     let gone = false;
-    void Promise.all([listProjects(), listLabels(), currentUser().catch(() => null)]).then(
-      ([ps, ls, me]) => {
+    void Promise.all([listProjects(), listLabels()]).then(
+      ([ps, ls]) => {
         if (gone) return;
         setProjects(ps);
         setLabels(ls);
-        setDefaultProject(me?.settings?.default_project_id || ps.find((p) => p.title === "Inbox")?.id || ps[0]?.id || 0);
+        setDefaultProject(ps.find((p) => p.title === "Inbox" && !p.is_archived)?.id || ps.find((p) => !p.is_archived)?.id || 0);
       },
       (e) => !gone && setError(errMsg(e)),
     );
     return () => {
       gone = true;
     };
-  }, [connected, tick]);
+  }, [tick]);
 
-  // the list: selection + done + search → one Vikunja query
-  const filter = useMemo(() => {
-    if (sel.kind === "smart") return SMART.find((s) => s.id === sel.id)!.filter;
-    if (sel.id < 0) return `view ${sel.id}`; // a saved filter: its view decides
-    return `project = ${sel.id}${showDone ? "" : " && done = false"}`;
-  }, [sel, showDone]);
+  // the list: selection + done + search → one query
+  const withDone = showDone && sel.kind === "project";
+  const query = useMemo(
+    () => (sel.kind === "smart" ? { view: sel.id } : { view: "project" as const, project: sel.id, done: withDone }),
+    [sel, withDone],
+  );
   const debounced = useDebounced(search, 250);
-  const isFilter = sel.kind === "project" && sel.id < 0;
-  const withDone = showDone && sel.kind === "project" && !isFilter;
   useEffect(() => {
     setPage(1);
-  }, [filter, debounced]);
+  }, [query, debounced]);
   useEffect(() => {
-    if (!connected) return;
     let gone = false;
     setLoading(true);
-    const sort = withDone
-      ? [{ by: "done", order: "asc" as const }, { by: "due_date", order: "asc" as const }, { by: "id", order: "desc" as const }]
-      : undefined;
-    const savedFilter = isFilter ? projects.find((p) => p.id === sel.id) : undefined;
-    const listView = savedFilter?.views.find((v) => v.view_kind === "list")?.id;
-    const req = isFilter
-      ? listView
-        ? listViewTasks(sel.id, listView, { search: debounced, page, timezone: TZ })
-        : Promise.resolve({ tasks: [], pages: 1 })
-      : listTasks({ filter, search: debounced, page, timezone: TZ, sort });
-    void req.then(
+    void listTasks({ ...query, search: debounced, page, timezone: TZ }).then(
       (r) => {
         if (gone) return;
         setTasks(r.tasks);
@@ -152,9 +128,9 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
     return () => {
       gone = true;
     };
-  }, [connected, filter, debounced, page, tick, withDone, isFilter, sel.id, projects]);
+  }, [query, debounced, page, tick]);
 
-  const byId = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+  const byId = useMemo(() => new Map((projects ?? []).map((p) => [p.id, p])), [projects]);
   const open = openId === null ? null : (tasks.find((t) => t.id === openId) ?? null);
 
   // one task changed on the server: show it without re-reading the list
@@ -181,30 +157,22 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
   };
 
   const remove = (t: Task) =>
-    ask(`Delete “${t.title}”? This removes it from Vikunja.`, "Delete", () => {
+    ask(`Delete “${t.title}”?`, "Delete", () => {
       void deleteTask(t.id).then(() => {
         setOpenId(null);
         refresh();
       }, (e) => setError(errMsg(e)));
     });
 
-  if (status === null) {
+  if (projects === null) {
     return (
       <main className="pane-area">
-        <div className="placeholder">Loading…</div>
-      </main>
-    );
-  }
-  if (!status.configured) {
-    return (
-      <main className="pane-area">
-        <ConnectForm status={status} onConnected={setStatus} />
+        <div className="placeholder">{error || "Loading…"}</div>
       </main>
     );
   }
 
-  const addTarget = sel.kind === "project" && !isFilter ? byId.get(sel.id) : byId.get(defaultProject);
-  const savedFilters = projects.filter((p) => p.id < 0);
+  const addTarget = sel.kind === "project" ? byId.get(sel.id) : byId.get(defaultProject);
   const title = sel.kind === "smart" ? SMART.find((s) => s.id === sel.id)!.label : (byId.get(sel.id)?.title ?? "…");
 
   return (
@@ -232,35 +200,11 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
             {s.label}
           </button>
         ))}
-        {savedFilters.length > 0 && (
-          <>
-            <div className="sidebar-head">
-              <span>Filters</span>
-            </div>
-            {savedFilters.map((f) => (
-              <button
-                key={f.id}
-                className={`tasks-nav${sel.kind === "project" && sel.id === f.id ? " sel" : ""}`}
-                onClick={() => {
-                  setSel({ kind: "project", id: f.id });
-                  setOpenId(null);
-                  closeDrawer();
-                }}
-                title={f.description || f.title}
-              >
-                <span className="tasks-nav-glyph">
-                  <Icon name="filter" size={14} />
-                </span>
-                <span className="tasks-nav-label">{f.title}</span>
-              </button>
-            ))}
-          </>
-        )}
         <div className="sidebar-head">
           <span>Projects</span>
         </div>
         <ProjectTree
-          projects={projects.filter((p) => p.id > 0)}
+          projects={projects}
           selected={sel.kind === "project" ? sel.id : 0}
           onSelect={(id) => {
             setSel({ kind: "project", id });
@@ -268,28 +212,13 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
             closeDrawer();
           }}
         />
-        <div className="tasks-sidebar-foot">
-          <button className="linkish" onClick={() => openUrl(status.url!)} title={status.url}>
-            Open Vikunja <Icon name="external-link" size={12} />
-          </button>
-          <button
-            className="linkish"
-            onClick={() =>
-              ask(`Disconnect from ${status.url}? The token is forgotten on this herdr-ui; your tasks stay in Vikunja.`, "Disconnect", () => {
-                void tasksDisconnect().then(setStatus);
-              })
-            }
-          >
-            Disconnect
-          </button>
-        </div>
       </aside>
       {drawer && <div className="scrim" onClick={closeDrawer} />}
 
       <main className="pane-area tasks-main">
         <div className="tasks-head">
           <h1>{title}</h1>
-          {sel.kind === "project" && !isFilter && (
+          {sel.kind === "project" && (
             <label className="tasks-toggle">
               <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> done
             </label>
@@ -315,7 +244,7 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
             <TaskRow
               key={t.id}
               task={t}
-              project={sel.kind === "smart" || isFilter ? byId.get(t.project_id) : undefined}
+              project={sel.kind === "smart" ? byId.get(t.project_id) : undefined}
               selected={t.id === openId}
               onToggle={() => void toggleDone(t)}
               onOpen={() => setOpenId(t.id === openId ? null : t.id)}
@@ -343,7 +272,6 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
           task={open}
           projects={projects}
           labels={labels}
-          vikunjaURL={status.url!}
           onChange={replace}
           onLabels={setLabels}
           onClose={() => setOpenId(null)}
@@ -356,7 +284,7 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
       {sendReq && (
         <SendToAgent
           title={sendReq.groom ? "Send for grooming" : "Send to agent"}
-          text={taskPrompt(sendReq.task, status.url!, sendReq.groom)}
+          text={taskPrompt(sendReq.task, byId.get(sendReq.task.project_id)?.title ?? "", sendReq.groom)}
           agents={agents}
           currentPane={currentPane}
           rememberKey={`task-project:${sendReq.task.project_id}`}
@@ -378,53 +306,12 @@ export default function Tasks({ drawer, closeDrawer, ask, agents, currentPane, o
           onClose={() => setNewProject(false)}
           onCreated={(p) => {
             setNewProject(false);
-            setProjects((ps) => [...ps, p]);
+            setProjects((ps) => [...(ps ?? []), p]);
             setSel({ kind: "project", id: p.id });
           }}
         />
       )}
     </>
-  );
-}
-
-// ---- connect ----
-
-function ConnectForm({ status, onConnected }: { status: TasksStatus; onConnected: (s: TasksStatus) => void }) {
-  const [url, setUrl] = useState(status.url ?? "");
-  const [token, setToken] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(status.error ?? "");
-  return (
-    <form
-      className="tasks-connect"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setBusy(true);
-        setErr("");
-        tasksConnect(url, token).then(onConnected, (e) => setErr(errMsg(e))).finally(() => setBusy(false));
-      }}
-    >
-      <h2>Connect Vikunja</h2>
-      <p className="modal-hint">
-        Your tasks stay in your own Vikunja; herdr-ui only talks to its API with a token you create there under{" "}
-        <b>Settings → API Tokens</b>. Give it <code>projects</code>, <code>projects_views_tasks</code>, <code>tasks</code>,{" "}
-        <code>tasks_labels</code>, <code>labels</code> and <code>other: user</code>. The token is stored on this herdr-ui, never sent to a browser.
-      </p>
-      <label>
-        Vikunja URL
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://todo.example.com" autoFocus required />
-      </label>
-      <label>
-        API token
-        <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="tk_…" type="password" required />
-      </label>
-      {err && <div className="chat-error">{err}</div>}
-      <div className="modal-actions">
-        <button type="submit" className="primary" disabled={busy}>
-          {busy ? "…" : "Connect"}
-        </button>
-      </div>
-    </form>
   );
 }
 
@@ -493,7 +380,7 @@ function NewProjectDialog({ projects, onClose, onCreated }: { projects: Project[
           <Select
             value={parent}
             onChange={setParent}
-            options={[{ value: 0, label: "— top level —" }, ...projects.filter((p) => p.id > 0 && !p.is_archived).map(projectOption)]}
+            options={[{ value: 0, label: "— top level —" }, ...projects.filter((p) => !p.is_archived).map(projectOption)]}
           />
         </label>
         {err && <div className="chat-error">{err}</div>}
@@ -583,11 +470,10 @@ function TaskRow({ task: t, project, selected, onToggle, onOpen }: {
 
 // ---- detail ----
 
-function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels, onClose, onDelete, onError, canSend, onSend }: {
+function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, onDelete, onError, canSend, onSend }: {
   task: Task;
   projects: Project[];
   labels: Label[];
-  vikunjaURL: string;
   onChange: (t: Task) => void;
   onLabels: (ls: Label[]) => void;
   onClose: () => void;
@@ -657,10 +543,7 @@ function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels,
     <aside className="tasks-detail">
       <div className="tasks-detail-head">
         <input type="checkbox" className="tasks-check" checked={t.done} onChange={() => void patch({ done: !t.done })} />
-        <span className="tasks-ident">{t.identifier || `#${t.index}`}</span>
-        <button className="linkish" onClick={() => openUrl(`${vikunjaURL}/tasks/${t.id}`)} title="Open this task in Vikunja">
-          Vikunja <Icon name="external-link" size={12} />
-        </button>
+        <span className="tasks-ident">{t.identifier}</span>
         <button className="tasks-close icon-btn" onClick={onClose} title="Close">
           <Icon name="x" size={15} />
         </button>
@@ -681,7 +564,7 @@ function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels,
         <Select
           value={t.project_id}
           onChange={(project_id) => void patch({ project_id })}
-          options={projects.filter((p) => p.id > 0 && (!p.is_archived || p.id === t.project_id)).map(projectOption)}
+          options={projects.filter((p) => !p.is_archived || p.id === t.project_id).map(projectOption)}
         />
       </div>
       <div className="tasks-field">
@@ -836,10 +719,10 @@ function TaskDetail({ task: t, projects, labels, vikunjaURL, onChange, onLabels,
 // ---- send to an agent ----
 
 // taskPrompt is what the agent gets: the title, the description as text,
-// and where the task lives — with /grill-me in front for a grooming pass.
-export function taskPrompt(t: Task, vikunjaURL: string, groom: boolean): string {
+// and which task it is — with /grill-me in front for a grooming pass.
+export function taskPrompt(t: Task, project: string, groom: boolean): string {
   const desc = t.description ? htmlToText(t.description) : "";
-  const parts = [t.title.trim(), desc, `Task ${t.identifier || `#${t.index}`} in Vikunja: ${vikunjaURL}/tasks/${t.id}`].filter(Boolean);
+  const parts = [t.title.trim(), desc, `(herdr-ui task ${t.identifier}${project ? ` in ${project}` : ""})`].filter(Boolean);
   return (groom ? "/grill-me " : "") + parts.join("\n\n");
 }
 
@@ -934,9 +817,9 @@ function labelStyle(l: Label): CSSProperties {
 const PALETTE = ["e67e22", "2ecc71", "3498db", "9b59b6", "e74c3c", "1abc9c", "f1c40f", "95a5a6"];
 const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)]!;
 
-// Vikunja descriptions are HTML from its editor. Shown through a tiny
-// allow-list renderer (React nodes, never innerHTML); edited as plain text,
-// which goes back as paragraphs.
+// Descriptions are HTML (paragraphs; older ones may carry more). Shown
+// through a tiny allow-list renderer (React nodes, never innerHTML); edited
+// as plain text, which goes back as paragraphs.
 const BLOCK = new Set(["p", "div", "li", "h1", "h2", "h3", "h4", "pre", "blockquote", "tr"]);
 
 export function htmlToText(html: string): string {

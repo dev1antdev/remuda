@@ -3,50 +3,177 @@ package server
 import (
 	"errors"
 	"net/http"
-	"strings"
+	"strconv"
+	"time"
+
+	"github.com/dev1antdev/herdr-ui/internal/tasks"
 )
 
-// Tasks: the Vikunja connection. The status and the connect/disconnect
-// routes are herdr-ui's; everything under /api/tasks/v1/ is Vikunja's own
-// API, proxied with the user's token added (PATCH merges, see tasks.Proxy).
+// Tasks: herdr-ui's own list (internal/tasks), plain JSON over SQLite.
 
-func (s *Server) handleTasksStatus(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Query().Get("check") != "" {
-		writeJSON(w, s.Tasks.Check())
-		return
-	}
-	writeJSON(w, s.Tasks.Status())
+func (s *Server) tasksRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/tasks/projects", func(w http.ResponseWriter, r *http.Request) {
+		ps, err := s.Tasks.Projects()
+		s.taskReply(w, ps, err)
+	})
+	api.HandleFunc("POST /api/tasks/projects", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Title  string `json:"title"`
+			Parent int64  `json:"parent_project_id"`
+		}
+		if !decode(w, r, &req) {
+			return
+		}
+		p, err := s.Tasks.CreateProject(req.Title, req.Parent)
+		s.taskReply(w, p, err)
+	})
+	api.HandleFunc("PATCH /api/tasks/projects/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		var p tasks.ProjectPatch
+		if !decode(w, r, &p) {
+			return
+		}
+		out, err := s.Tasks.UpdateProject(id, p)
+		s.taskReply(w, out, err)
+	})
+	api.HandleFunc("DELETE /api/tasks/projects/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if id, ok := pathID(w, r, "id"); ok {
+			s.taskReply(w, map[string]bool{"ok": true}, s.Tasks.DeleteProject(id))
+		}
+	})
+	api.HandleFunc("GET /api/tasks/labels", func(w http.ResponseWriter, r *http.Request) {
+		ls, err := s.Tasks.Labels()
+		s.taskReply(w, ls, err)
+	})
+	api.HandleFunc("POST /api/tasks/labels", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Title    string `json:"title"`
+			HexColor string `json:"hex_color"`
+		}
+		if !decode(w, r, &req) {
+			return
+		}
+		l, err := s.Tasks.CreateLabel(req.Title, req.HexColor)
+		s.taskReply(w, l, err)
+	})
+	api.HandleFunc("DELETE /api/tasks/labels/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if id, ok := pathID(w, r, "id"); ok {
+			s.taskReply(w, map[string]bool{"ok": true}, s.Tasks.DeleteLabel(id))
+		}
+	})
+	api.HandleFunc("GET /api/tasks", s.handleTaskList)
+	api.HandleFunc("POST /api/tasks", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ProjectID int64 `json:"project_id"`
+			tasks.Patch
+		}
+		if !decode(w, r, &req) {
+			return
+		}
+		t, err := s.Tasks.Create(req.ProjectID, req.Patch)
+		s.taskReply(w, t, err)
+	})
+	api.HandleFunc("GET /api/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if id, ok := pathID(w, r, "id"); ok {
+			t, err := s.Tasks.Get(id)
+			s.taskReply(w, t, err)
+		}
+	})
+	api.HandleFunc("PATCH /api/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		var p tasks.Patch
+		if !decode(w, r, &p) {
+			return
+		}
+		t, err := s.Tasks.Update(id, p)
+		s.taskReply(w, t, err)
+	})
+	api.HandleFunc("DELETE /api/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if id, ok := pathID(w, r, "id"); ok {
+			s.taskReply(w, map[string]bool{"ok": true}, s.Tasks.Delete(id))
+		}
+	})
+	api.HandleFunc("PUT /api/tasks/{id}/labels", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		var req struct {
+			LabelID int64 `json:"label_id"`
+		}
+		if !decode(w, r, &req) {
+			return
+		}
+		if err := s.Tasks.AddLabel(id, req.LabelID); err != nil {
+			s.taskReply(w, nil, err)
+			return
+		}
+		t, err := s.Tasks.Get(id)
+		s.taskReply(w, t, err)
+	})
+	api.HandleFunc("DELETE /api/tasks/{id}/labels/{label}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		label, ok := pathID(w, r, "label")
+		if !ok {
+			return
+		}
+		if err := s.Tasks.RemoveLabel(id, label); err != nil {
+			s.taskReply(w, nil, err)
+			return
+		}
+		t, err := s.Tasks.Get(id)
+		s.taskReply(w, t, err)
+	})
 }
 
-func (s *Server) handleTasksConnect(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		URL   string `json:"url"`
-		Token string `json:"token"`
+// GET /api/tasks?view=today|upcoming|open|project&project=&done=1&q=&page=&tz=
+func (s *Server) handleTaskList(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	project, _ := strconv.ParseInt(q.Get("project"), 10, 64)
+	page, _ := strconv.Atoi(q.Get("page"))
+	loc := time.Local
+	if tz := q.Get("tz"); tz != "" {
+		if l, err := time.LoadLocation(tz); err == nil {
+			loc = l
+		}
 	}
-	if !decode(w, r, &req) {
-		return
+	view := q.Get("view")
+	if view == "" {
+		view = "open"
 	}
-	st, err := s.Tasks.Configure(req.URL, req.Token)
+	list, pages, err := s.Tasks.List(tasks.Query{View: view, Project: project, Done: q.Get("done") == "1", Search: q.Get("q"), Page: page, Loc: loc})
 	if err != nil {
+		s.taskReply(w, nil, err)
+		return
+	}
+	writeJSON(w, map[string]any{"tasks": list, "pages": pages})
+}
+
+func (s *Server) taskReply(w http.ResponseWriter, v any, err error) {
+	switch {
+	case errors.Is(err, tasks.ErrNotFound):
+		httpErr(w, http.StatusNotFound, err)
+	case err != nil:
 		httpErr(w, http.StatusBadRequest, err)
-		return
+	default:
+		writeJSON(w, v)
 	}
-	writeJSON(w, st)
 }
 
-func (s *Server) handleTasksDisconnect(w http.ResponseWriter, r *http.Request) {
-	if err := s.Tasks.Disconnect(); err != nil {
-		httpErr(w, http.StatusInternalServerError, err)
-		return
+func pathID(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue(name), 10, 64)
+	if err != nil || id <= 0 {
+		httpErr(w, http.StatusBadRequest, errors.New("bad id"))
+		return 0, false
 	}
-	writeJSON(w, s.Tasks.Status())
-}
-
-func (s *Server) handleTasksProxy(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/tasks/v1/")
-	if path == "" || strings.Contains(path, "..") {
-		httpErr(w, http.StatusBadRequest, errors.New("bad path"))
-		return
-	}
-	s.Tasks.Proxy(w, r, path)
+	return id, true
 }

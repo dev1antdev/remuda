@@ -42,7 +42,7 @@ type Server struct {
 	Machines  *machines.Manager
 	Watch     *watch.Watcher
 	Push      *push.Service
-	Tasks     *tasks.Service
+	Tasks     *tasks.Store
 	Code      *code.Service
 	Review    *review.Store
 	Schedules *schedule.Store
@@ -56,7 +56,7 @@ type Server struct {
 	streams termStreams                  // HTTP-transport terminal sessions
 }
 
-func New(m *machines.Manager, w *watch.Watcher, p *push.Service, t *tasks.Service, c *code.Service, rv *review.Store, r *radar.Tracker, g *auth.Guard, ui fs.FS) *Server {
+func New(m *machines.Manager, w *watch.Watcher, p *push.Service, t *tasks.Store, c *code.Service, rv *review.Store, r *radar.Tracker, g *auth.Guard, ui fs.FS) *Server {
 	return &Server{Machines: m, Watch: w, Push: p, Tasks: t, Code: c, Review: rv, Radar: r, Guard: g, UI: ui, paneMu: map[push.PaneRef]*sync.Mutex{}}
 }
 
@@ -133,12 +133,7 @@ func (s *Server) Handler() http.Handler {
 		api.HandleFunc(m+" /code/{machine}", s.handleCodeProxy)
 		api.HandleFunc(m+" /code/{machine}/", s.handleCodeProxy)
 	}
-	api.HandleFunc("GET /api/tasks/status", s.handleTasksStatus)
-	api.HandleFunc("PUT /api/tasks/config", s.handleTasksConnect)
-	api.HandleFunc("DELETE /api/tasks/config", s.handleTasksDisconnect)
-	for _, m := range []string{"GET", "PUT", "POST", "PATCH", "DELETE"} {
-		api.HandleFunc(m+" /api/tasks/v1/", s.handleTasksProxy)
-	}
+	s.tasksRoutes(api)
 	api.HandleFunc("POST /api/submit", s.handleSubmit)
 	api.HandleFunc("POST /api/keys", s.handleKeys)
 	api.HandleFunc("GET /ws/pane", s.handlePaneWS)

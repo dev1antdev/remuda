@@ -9,20 +9,20 @@ import (
 func strconvQuote(s string) string { return strconv.Quote(s) }
 
 func TestMatchLine(t *testing.T) {
-	user := `{"type":"user","uuid":"u1","cwd":"/p","timestamp":"2026-10-07T10:00:00Z","message":{"role":"user","content":"Давай подключим Vikunja к задачам"}}`
-	m, ok := MatchLine([]byte(user), "vikunja")
-	if !ok || m.UUID != "u1" || m.Role != "user" || m.Cwd != "/p" || m.Ts.IsZero() || !strings.Contains(m.Snippet, "Vikunja") {
+	user := `{"type":"user","uuid":"u1","cwd":"/p","timestamp":"2026-10-07T10:00:00Z","message":{"role":"user","content":"Давай подключим Hexagon к задачам"}}`
+	m, ok := MatchLine([]byte(user), "hexagon")
+	if !ok || m.UUID != "u1" || m.Role != "user" || m.Cwd != "/p" || m.Ts.IsZero() || !strings.Contains(m.Snippet, "Hexagon") {
 		t.Fatalf("user: %+v %v", m, ok)
 	}
-	if _, ok := MatchLine([]byte(user), "ВИКУНЬЯ"); ok {
+	if _, ok := MatchLine([]byte(user), "ШЕСТИГРАННИК"); ok {
 		t.Fatal("matched a different word")
 	}
 	if m, ok := MatchLine([]byte(user), "ДАВАЙ"); !ok || !strings.HasPrefix(m.Snippet, "Давай") {
 		t.Fatalf("cyrillic fold: %+v %v", m, ok)
 	}
-	asst := `{"type":"assistant","uuid":"a1","cwd":"/p","timestamp":"2026-10-07T10:01:00Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"secret vikunja"},{"type":"tool_use","id":"t","name":"Bash","input":{"command":"grep vikunja"}},{"type":"text","text":"Done.\n\nThe Vikunja token stays server-side."}]}}`
+	asst := `{"type":"assistant","uuid":"a1","cwd":"/p","timestamp":"2026-10-07T10:01:00Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"secret hexagon"},{"type":"tool_use","id":"t","name":"Bash","input":{"command":"grep hexagon"}},{"type":"text","text":"Done.\n\nThe Hexagon token stays server-side."}]}}`
 	m, ok = MatchLine([]byte(asst), "token stays")
-	if !ok || m.Role != "assistant" || m.Snippet != "Done. The Vikunja token stays server-side." {
+	if !ok || m.Role != "assistant" || m.Snippet != "Done. The Hexagon token stays server-side." {
 		t.Fatalf("assistant: %+v %v", m, ok)
 	}
 	if _, ok := MatchLine([]byte(asst), "secret"); ok {
@@ -31,12 +31,12 @@ func TestMatchLine(t *testing.T) {
 	if _, ok := MatchLine([]byte(asst), "grep"); ok {
 		t.Fatal("matched tool input")
 	}
-	toolResult := `{"type":"user","uuid":"u2","cwd":"/p","timestamp":"2026-10-07T10:02:00Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"vikunja vikunja"}]}}`
-	if _, ok := MatchLine([]byte(toolResult), "vikunja"); ok {
+	toolResult := `{"type":"user","uuid":"u2","cwd":"/p","timestamp":"2026-10-07T10:02:00Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"hexagon hexagon"}]}}`
+	if _, ok := MatchLine([]byte(toolResult), "hexagon"); ok {
 		t.Fatal("matched a tool result")
 	}
-	side := `{"type":"user","isSidechain":true,"uuid":"u3","cwd":"/p","message":{"role":"user","content":"vikunja"}}`
-	if _, ok := MatchLine([]byte(side), "vikunja"); ok {
+	side := `{"type":"user","isSidechain":true,"uuid":"u3","cwd":"/p","message":{"role":"user","content":"hexagon"}}`
+	if _, ok := MatchLine([]byte(side), "hexagon"); ok {
 		t.Fatal("matched a sidechain")
 	}
 	long := `{"type":"assistant","uuid":"a2","cwd":"/p","timestamp":"2026-10-07T10:03:00Z","message":{"role":"assistant","content":[{"type":"text","text":"` + strings.Repeat("x ", 200) + `needle` + strings.Repeat(" y", 200) + `"}]}}`
