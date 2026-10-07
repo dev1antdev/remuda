@@ -217,11 +217,13 @@ export default function TerminalView({
     // splitTracking), then the follow-up work once it is on screen. One
     // decoder for the stream, so a character cut by a chunk boundary joins.
     const decoder = new TextDecoder();
+    let onPainted = () => {}; // the content-anchored selection, below
     const paint = (buf: Uint8Array) => {
       const text = decoder.decode(buf, { stream: true });
       term.write(splitTracking(text), () => {
         followBottom();
         scheduleLayer();
+        onPainted();
       });
     };
 
@@ -234,6 +236,7 @@ export default function TerminalView({
       const bracketed = term.modes.bracketedPasteMode;
       decoder.decode(); // a character cut by the old stream's end is dropped
       term.reset();
+      forgetSelection();
       pasteModeSeen = false;
       if (appCursor) term.write("\x1b[?1h");
       if (bracketed) term.write("\x1b[?2004h");
@@ -549,10 +552,12 @@ export default function TerminalView({
     const onMouseDown = (e: MouseEvent) => {
       pressed = { x: e.clientX, y: e.clientY, button: e.button };
       linkUsed = false;
+      if (e.button === 0 && !e.shiftKey && !layer.contains(e.target as Node)) dragStart(e);
     };
     const onMouseUp = (e: MouseEvent) => {
       const p = pressed;
       pressed = null;
+      dragEnd();
       if (!p || !appMouse || layer.contains(e.target as Node)) return;
       if (p.button !== e.button || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4) return;
       const cell = cellAt(e);
@@ -564,6 +569,187 @@ export default function TerminalView({
     };
     mount.addEventListener("mousedown", onMouseDown, true);
     mount.addEventListener("mouseup", onMouseUp, true);
+
+    // ---- a selection that stays with the text ----
+    // The app owns the scrollback: a wheel is a report to it and it repaints
+    // the screen, so a selection on screen rows would sit still while the
+    // text moved under it. Here the selection is kept in content rows:
+    // every settled repaint is compared with the last one (which shift of
+    // lines matches the most rows?), the selection moves by that shift,
+    // rows scrolled off the screen are remembered by their text, and a drag
+    // past the top or bottom edge scrolls the app and grows the selection.
+    type Pos = { row: number; col: number }; // content row, 0-based col
+    let offset = 0; // content row = screen row + offset
+    let anchor: Pos | null = null; // where the selection began
+    let head: Pos | null = null; // where it is being dragged to
+    let lastRows: string[] = [];
+    const rowText = new Map<number, string>(); // content row → its text when last seen
+    let applying = false; // our own term.select, not the user's
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    const screenRows = (): string[] => {
+      const buf = term.buffer.active;
+      const out: string[] = [];
+      for (let y = 0; y < term.rows; y++) out.push(buf.getLine(buf.baseY + y)?.translateToString(false) ?? "");
+      return out;
+    };
+    const before = (a: Pos, b: Pos) => a.row < b.row || (a.row === b.row && a.col < b.col);
+    const ordered = (): [Pos, Pos] | null => (anchor && head ? (before(anchor, head) ? [anchor, head] : [head, anchor]) : null);
+    const forgetSelection = () => {
+      anchor = head = null;
+      offset = 0;
+      rowText.clear();
+      lastRows = [];
+    };
+    // the shift that lines the two screens up best, by the rows that are
+    // unique on the old screen (a repeated line fits anywhere); 0 when the
+    // screen did not scroll, or nothing can be told
+    const shiftBetween = (prev: string[], cur: string[]): number => {
+      const counts = new Map<string, number>();
+      for (const r of prev) if (r.trim().length >= 4) counts.set(r, (counts.get(r) ?? 0) + 1);
+      const index = new Map<string, number[]>();
+      for (let i = 0; i < cur.length; i++) {
+        const r = cur[i]!;
+        if (counts.get(r) === 1) (index.get(r) ?? index.set(r, []).get(r)!).push(i);
+      }
+      const votes = new Map<number, number>();
+      let usable = 0;
+      for (let i = 0; i < prev.length; i++) {
+        const r = prev[i]!;
+        if (counts.get(r) !== 1) continue;
+        usable++;
+        for (const j of index.get(r) ?? []) {
+          const k = i - j; // content moved up by k rows
+          votes.set(k, (votes.get(k) ?? 0) + 1);
+        }
+      }
+      let best = 0;
+      let bestVotes = votes.get(0) ?? 0;
+      for (const [k, v] of votes) if (v > bestVotes) [best, bestVotes] = [k, v];
+      return bestVotes >= Math.max(3, usable / 4) ? best : 0;
+    };
+    // draw the part of the selection that is on screen
+    const renderSelection = () => {
+      const o = ordered();
+      if (!o) return;
+      const [s0, e0] = o;
+      const top = offset;
+      const bottom = offset + term.rows - 1;
+      applying = true;
+      try {
+        if (e0.row < top || s0.row > bottom) {
+          if (term.hasSelection()) term.clearSelection();
+          return;
+        }
+        const s = s0.row < top ? { row: top, col: 0 } : s0;
+        const e = e0.row > bottom ? { row: bottom, col: term.cols } : e0;
+        const length = (e.row - s.row) * term.cols + (e.col - s.col);
+        if (length > 0) term.select(s.col, term.buffer.active.baseY + s.row - offset, length);
+        else if (term.hasSelection()) term.clearSelection();
+      } finally {
+        applying = false;
+      }
+    };
+    // a settled screen: the rows remembered, the selection moved along
+    const settled = () => {
+      settleTimer = null;
+      const rows = screenRows();
+      if (anchor && lastRows.length === rows.length) {
+        const k = shiftBetween(lastRows, rows);
+        if (k) {
+          offset += k;
+          if (edge === "down" && head) head = { row: offset + term.rows - 1, col: term.cols };
+          if (edge === "up" && head) head = { row: offset, col: 0 };
+        }
+      }
+      lastRows = rows;
+      if (anchor) {
+        for (let y = 0; y < rows.length; y++) rowText.set(y + offset, rows[y]!);
+        if (rowText.size > 20000) forgetSelection();
+        else renderSelection();
+      }
+    };
+    onPainted = () => {
+      if (!anchor) return;
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = setTimeout(settled, 40);
+    };
+    // the user's own selection changes: a drag, a double-click, a shift-click
+    const onSelection = term.onSelectionChange(() => {
+      if (applying) return;
+      const pos = term.getSelectionPosition();
+      if (!pos) {
+        if (!pressed) forgetSelection();
+        return;
+      }
+      const baseY = term.buffer.active.baseY;
+      const start: Pos = { row: pos.start.y - baseY + offset, col: pos.start.x };
+      const end: Pos = { row: pos.end.y - baseY + offset, col: pos.end.x };
+      if (!anchor) {
+        lastRows = screenRows();
+        for (let y = 0; y < lastRows.length; y++) rowText.set(y + offset, lastRows[y]!);
+      }
+      // an end clipped at the screen's edge keeps the rows beyond it
+      const o = ordered();
+      const keepStart = o && o[0].row < offset && start.row === offset && start.col === 0;
+      const keepEnd = o && o[1].row > offset + term.rows - 1 && end.row === offset + term.rows - 1;
+      const s = keepStart ? o![0] : start;
+      const e = keepEnd ? o![1] : end;
+      if (dragAnchor) {
+        anchor = dragAnchor;
+        head = before(anchor, s) || (anchor.row === s.row && anchor.col === s.col) ? e : s;
+      } else {
+        anchor = s;
+        head = e;
+      }
+    });
+    // the drag: its anchor, and the scroll when it leaves the screen
+    let dragAnchor: Pos | null = null;
+    let edge: "up" | "down" | null = null;
+    let edgeTimer: ReturnType<typeof setInterval> | null = null;
+    const edgeTick = () => {
+      if (!edge || !appMouse) return;
+      const screen = term.element?.querySelector(".xterm-screen") as HTMLElement | null;
+      if (!screen) return;
+      const r = screen.getBoundingClientRect();
+      const cell = cellAt({ clientX: r.left + 1, clientY: edge === "down" ? r.bottom - 1 : r.top + 1 } as MouseEvent);
+      if (cell) scrollReport(edge === "down" ? 1 : -1, false, cell);
+    };
+    const onDragMove = (e: MouseEvent) => {
+      const screen = term.element?.querySelector(".xterm-screen") as HTMLElement | null;
+      if (!screen) return;
+      const r = screen.getBoundingClientRect();
+      const next: typeof edge = e.clientY > r.bottom ? "down" : e.clientY < r.top ? "up" : null;
+      if (next === edge) return;
+      edge = next;
+      if (edgeTimer) clearInterval(edgeTimer);
+      edgeTimer = edge ? setInterval(edgeTick, 90) : null;
+    };
+    const dragStart = (e: MouseEvent) => {
+      const cell = cellAt(e);
+      dragAnchor = cell ? { row: cell.row - 1 + offset, col: cell.col - 1 } : null;
+      document.addEventListener("mousemove", onDragMove);
+    };
+    const dragEnd = () => {
+      dragAnchor = null;
+      edge = null;
+      if (edgeTimer) clearInterval(edgeTimer);
+      edgeTimer = null;
+      document.removeEventListener("mousemove", onDragMove);
+    };
+    // the selected text, on screen or remembered
+    const contentSelection = (): string => {
+      const o = ordered();
+      if (!o) return "";
+      const [s, e] = o;
+      const lines: string[] = [];
+      for (let r = s.row; r <= e.row; r++) {
+        let t = rowText.get(r) ?? "";
+        if (r === e.row) t = t.slice(0, e.col);
+        if (r === s.row) t = t.slice(s.col);
+        lines.push(t.replace(/[ \t\u00a0]+$/, ""));
+      }
+      return lines.join("\n");
+    };
 
     // ---- selection and copy ----
     // Two ways to select: a plain drag (xterm's own — the app's mouse
@@ -618,7 +804,7 @@ export default function TerminalView({
     // of the screen; the trailing run goes, as a native terminal drops it
     const selectedText = (): string => {
       const sel = window.getSelection();
-      const raw = sel && !sel.isCollapsed && layer.contains(sel.anchorNode) ? sel.toString() : term.hasSelection() ? term.getSelection() : "";
+      const raw = sel && !sel.isCollapsed && layer.contains(sel.anchorNode) ? sel.toString() : anchor ? contentSelection() : term.hasSelection() ? term.getSelection() : "";
       return raw
         .split("\n")
         .map((l) => l.replace(/[ \t\u00a0]+$/, ""))
@@ -771,6 +957,9 @@ export default function TerminalView({
       live.current.onReady(null);
       onData.dispose();
       onScroll.dispose();
+      onSelection.dispose();
+      dragEnd();
+      if (settleTimer) clearTimeout(settleTimer);
       decset.dispose();
       decrst.dispose();
       mount.removeEventListener("wheel", onWheel, { capture: true });
