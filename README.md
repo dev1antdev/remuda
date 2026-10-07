@@ -224,6 +224,13 @@ are saved texts, for every folder or one, shared by all your devices.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through herdr-ui.
 
+**Search** (🔍 or ⌘K): full text over every conversation on every
+machine — what you or an agent said, never tool output — filtered by
+machine, folder and period. A hit jumps to the turn in the running pane, or
+opens the old transcript read-only. No index, no database: each machine
+scans its own `~/.claude/projects` on demand (herdr-ui's scanner where the
+binary is deployed, grep otherwise).
+
 Planned: a remote-machine session picker, incremental transcript parsing for
 very long sessions.
 

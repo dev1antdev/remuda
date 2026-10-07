@@ -20,15 +20,18 @@ export default function Chat({
   agents,
   origin,
   dir,
+  jump,
 }: {
   machineId: string;
-  paneId: string;
+  paneId: string; // "" shows a transcript on its own (a search jump), read-only
   status: string;
   onOpenFile: OpenFile;
   agents: AgentTarget[]; // where a turn can be forwarded
   origin: string; // "workspace on machine", named in a forwarded message
   dir: string; // the pane's folder, for its own quick prompts
+  jump?: { session: string; turn: string; n: number } | null; // a search hit to scroll to
 }) {
+  const readOnly = !paneId;
   // forwarding a turn to another agent
   const [forward, setForward] = useState<string | null>(null);
   const onForward = useCallback((text: string) => setForward(`From ${origin}:\n\n${text}`), [origin]);
@@ -37,12 +40,27 @@ export default function Chat({
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(noticeTimer.current), []);
   const [chat, setChat] = useState<ChatResponse | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(jump?.session ?? null);
   const [error, setError] = useState<string | null>(null);
   const etagRef = useRef<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
-  const stickRef = useRef(true);
+  const stickRef = useRef(!jump);
   const busy = status === "run" || status === "input";
+
+  // a search hit: its session, then its turn once the transcript is there
+  const pendingTurn = useRef<string | null>(jump?.turn ?? null);
+  const [jumpMiss, setJumpMiss] = useState(false);
+  const shownSession = useRef<string | undefined>(undefined);
+  shownSession.current = chat?.session_id;
+  useEffect(() => {
+    if (!jump) return;
+    pendingTurn.current = jump.turn;
+    stickRef.current = false;
+    setJumpMiss(false);
+    // the transcript on screen already? then only the scroll below; a
+    // refetch would blank the log first
+    if (shownSession.current !== jump.session) setSessionId(jump.session);
+  }, [jump]);
 
   useEffect(() => {
     etagRef.current = null;
@@ -54,7 +72,7 @@ export default function Chat({
       if (stop) return;
       try {
         if (document.visibilityState === "visible") {
-          const res = await fetchChat(machineId, paneId, sessionId, etagRef.current);
+          const res = await fetchChat(machineId, paneId, sessionId, etagRef.current, dir);
           if (res && !stop) {
             etagRef.current = res.etag;
             setChat(res.body);
@@ -72,7 +90,26 @@ export default function Chat({
       stop = true;
       if (timer) clearTimeout(timer);
     };
-  }, [machineId, paneId, sessionId, busy]);
+  }, [machineId, paneId, sessionId, busy, dir]);
+
+  useEffect(() => {
+    const id = pendingTurn.current;
+    const log = logRef.current;
+    if (!id || !log || !chat || !jump || chat.session_id !== jump.session) return;
+    const el = log.querySelector(`[data-ids~="${CSS.escape(id)}"]`);
+    pendingTurn.current = null;
+    if (!el) {
+      // older than the loaded tail of the transcript
+      setJumpMiss(true);
+      stickRef.current = true;
+      return;
+    }
+    stickRef.current = false;
+    el.scrollIntoView({ block: "start" });
+    el.classList.add("turn-hit");
+    const t = setTimeout(() => el.classList.remove("turn-hit"), 2600);
+    return () => clearTimeout(t);
+  }, [chat, jump]);
 
   // Follow the bottom only while the reader is there and not busy with the
   // text: a wheel or a finger moving up lets go at once (not after 60px, so
@@ -138,14 +175,14 @@ export default function Chat({
       <div className="chat-log" ref={logRef} onScroll={onScroll}>
         {turns.length === 0 && (
           <div className="chat-empty">
-            {chat === null ? "Loading…" : "No transcript for this pane's folder yet."}
+            {chat === null ? "Loading…" : readOnly ? "This transcript is empty." : "No transcript for this pane's folder yet."}
           </div>
         )}
         {turns.map((t, i) => (
           <TurnView key={i} turn={t} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} />
         ))}
       </div>
-      {status === "input" && (
+      {!readOnly && status === "input" && (
         <div className="prompt-card">
           <span>The agent is waiting for an answer — check the terminal, or:</span>
           <div className="prompt-card-keys">
@@ -157,7 +194,12 @@ export default function Chat({
         </div>
       )}
       {error && <div className="chat-error">{error}</div>}
-      <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} />
+      {jumpMiss && (
+        <div className="tasks-notice chat-notice" onClick={() => setJumpMiss(false)}>
+          That turn is older than the loaded part of this transcript (the last 16 MB).
+        </div>
+      )}
+      {!readOnly && <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} />}
       {forwarded && <div className="tasks-notice chat-notice">{forwarded}</div>}
       {forward !== null && (
         <SendToAgent
@@ -543,7 +585,7 @@ const TurnView = memo(
     const cls = turn.role === "user" ? "turn turn-user" : "turn turn-assistant";
     const text = turn.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n\n").trim();
     return (
-      <div className={cls}>
+      <div className={cls} data-ids={turn.ids?.join(" ")}>
         {turn.parts.map((p, i) => (
           <PartView key={i} part={p} onOpenFile={onOpenFile} />
         ))}
@@ -561,7 +603,7 @@ const TurnView = memo(
 // every poll brings new objects; only the content tells turns apart (a
 // tool's input never changes once written, so it is not compared)
 function sameTurn(a: Turn, b: Turn): boolean {
-  if (a.role !== b.role || a.ts !== b.ts || a.parts.length !== b.parts.length) return false;
+  if (a.role !== b.role || a.ts !== b.ts || a.parts.length !== b.parts.length || a.ids?.length !== b.ids?.length) return false;
   for (let i = 0; i < a.parts.length; i++) {
     const p = a.parts[i]!;
     const q = b.parts[i]!;

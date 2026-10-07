@@ -18,8 +18,7 @@ import {
   type Pane,
   type Session,
   type Status,
-  type Tab,
-} from "./api";
+  type Tab, type SearchHit, encodePath } from "./api";
 import AlertsPanel from "./AlertsPanel";
 import Chat from "./Chat";
 import FileViewer, { type FileTarget } from "./FileViewer";
@@ -31,6 +30,7 @@ import Tasks, { type AgentTarget } from "./Tasks";
 import Code from "./Code";
 import Review from "./Review";
 import Schedules from "./Schedules";
+import Search from "./Search";
 import Sidebar from "./Sidebar";
 import Select from "./Select";
 import Logo from "./Logo";
@@ -115,10 +115,32 @@ export default function App() {
   useEffect(() => {
     if (mode === "code") setCodeOpened(true);
   }, [mode]);
+  // search across every transcript; a hit opens in the pane living in that
+  // folder, or — none there — as a transcript on its own, read-only
+  const [search, setSearch] = useState(false);
+  const [viewer, setViewer] = useState<SearchHit | null>(null);
+  // the jump names its pane ("" = the viewer): a Chat gets it only when it is that pane's
+  const [jump, setJump] = useState<{ machineId: string; paneId: string; session: string; turn: string; n: number } | null>(null);
+  const jumps = useRef(0);
+  const jumpFor = (machineId: string, paneId: string) => (jump && jump.machineId === machineId && jump.paneId === paneId ? jump : null);
+  useEffect(() => {
+    // ⌘K on a Mac, Ctrl+K elsewhere — by key code, whatever the layout; a
+    // terminal keeps its own Ctrl+K
+    const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyK" || e.altKey || e.shiftKey || (mac ? !e.metaKey : !e.ctrlKey)) return;
+      if (!mac && (e.target as Element | null)?.closest?.(".xterm")) return;
+      e.preventDefault();
+      setSearch((o) => !o);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
   // a pane asked for from outside (a tapped notification, a deep link) is
   // an Agents-mode thing, whatever the device was left in
   const requestPane = (r: Requested) => {
     setRequested(r);
+    setViewer(null);
     setMode("herdr");
   };
   // …including the one the page was opened with
@@ -221,6 +243,23 @@ export default function App() {
     [allPanes, requested],
   );
 
+  const openHit = (hit: SearchHit) => {
+    setSearch(false);
+    // the pane whose folder is the hit's project (a cd inside the session
+    // does not move the transcript)
+    const there = allPanes.filter((x) => x.machine.id === hit.machine && (encodePath(x.session.dir ?? "") === hit.project || encodePath(x.pane.cwd) === hit.project));
+    const pick = there.find((x) => x.pane.agent === "claude") ?? there.find((x) => x.pane.agent) ?? there[0];
+    setJump({ machineId: hit.machine, paneId: pick ? pick.pane.id : "", session: hit.session, turn: hit.uuid, n: ++jumps.current });
+    setLens("chat");
+    if (pick) {
+      setViewer(null);
+      requestPane({ machineId: pick.machine.id, paneId: pick.pane.id });
+    } else {
+      setViewer(hit);
+      setMode("herdr");
+    }
+  };
+
   // what the Tasks mode can send a task to
   const agentTargets = useMemo<AgentTarget[]>(
     () =>
@@ -256,6 +295,7 @@ export default function App() {
 
   const selectPane = useCallback((machineId: string, paneId: string) => {
     setRequested({ machineId, paneId });
+    setViewer(null);
     setDrawer(false);
   }, []);
 
@@ -306,7 +346,13 @@ export default function App() {
           </button>
         </nav>
         <span className="title">
-          {mode !== "herdr" ? null : current ? (
+          {mode !== "herdr" ? null : viewer ? (
+            <>
+              {viewer.machine !== "local" && <span className="title-machine">{machines.find((m) => m.id === viewer.machine)?.label ?? viewer.machine} ›</span>}
+              {viewer.dir.split("/").filter(Boolean).pop()}
+              <span className="title-agent"> · transcript</span>
+            </>
+          ) : current ? (
             <>
               {current.machine.id !== "local" && (
                 <span className="title-machine">{current.machine.label} ›</span>
@@ -318,7 +364,7 @@ export default function App() {
             "herdr-ui"
           )}
         </span>
-        {mode === "herdr" && current && (
+        {mode === "herdr" && current && !viewer && (
           <nav className="lens-switch">
             <button className={lens === "chat" ? "on" : ""} onClick={() => setLens("chat")}>
               Chat
@@ -401,6 +447,9 @@ export default function App() {
             {notice}
           </span>
         )}
+        <button className="bell" title="Search every conversation (⌘K / Ctrl+K)" onClick={() => setSearch(true)}>
+          <Icon name="search" size={17} />
+        </button>
         <button
           className={`bell${alerts ? " on" : ""}`}
           title="Alerts on this device"
@@ -465,7 +514,30 @@ export default function App() {
 
         {mode === "herdr" && (
         <main className="pane-area">
-          {current ? (
+          {viewer ? (
+            <>
+              <div className="viewer-bar">
+                <Icon name="search" size={14} className="icon" />
+                <span>
+                  A transcript from <b>{viewer.dir.split("/").filter(Boolean).pop()}</b> — no agent runs there now, so it reads only.
+                </span>
+                <button className="icon-btn" onClick={() => setViewer(null)} title="Close">
+                  <Icon name="x" size={16} />
+                </button>
+              </div>
+              <Chat
+                key={`viewer|${viewer.machine}|${viewer.session}`}
+                machineId={viewer.machine}
+                paneId=""
+                status=""
+                onOpenFile={openFile}
+                agents={agentTargets}
+                origin={`${viewer.dir.split("/").filter(Boolean).pop()} (an old transcript)`}
+                dir={viewer.dir}
+                jump={jumpFor(viewer.machine, "")}
+              />
+            </>
+          ) : current ? (
             <>
               <TabStrip
                 session={current.session}
@@ -503,6 +575,7 @@ export default function App() {
                   agents={agentTargets}
                   origin={`${current.session.name}${current.machine.id !== "local" ? ` on ${current.machine.label}` : ""}`}
                   dir={current.session.dir || current.pane.cwd}
+                  jump={jumpFor(current.machine.id, current.pane.id)}
                 />
               ) : (
                 <>
@@ -604,6 +677,7 @@ export default function App() {
       )}
 
       {schedules && <Schedules machines={machines} onClose={() => setSchedules(false)} ask={ask} />}
+      {search && <Search machines={machines} onClose={() => setSearch(false)} onOpen={openHit} />}
 
       {confirmReq && (
         <ConfirmDialog

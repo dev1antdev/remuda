@@ -11,6 +11,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/radar"
 	"github.com/dev1antdev/herdr-ui/internal/review"
 	"github.com/dev1antdev/herdr-ui/internal/schedule"
+	"github.com/dev1antdev/herdr-ui/internal/search"
 	"github.com/dev1antdev/herdr-ui/internal/server"
 	"github.com/dev1antdev/herdr-ui/internal/state"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
@@ -35,6 +38,13 @@ import (
 var version = "dev"
 
 func main() {
+	// `herdr-ui search`: the transcript scanner, run over ssh on a remote
+	// machine by the herdr-ui that serves the search (see internal/search)
+	search.Version = version
+	if len(os.Args) > 1 && os.Args[1] == "search" {
+		searchCmd(os.Args[2:])
+		return
+	}
 	addr := flag.String("addr", "127.0.0.1:7317", "listen address (keep it loopback; use tailscale serve or an SSH tunnel for remote access)")
 	herdrBin := flag.String("herdr-bin", "herdr", "herdr binary used for `terminal attach`")
 	socket := flag.String("socket", herdr.SocketPath(), "herdr server socket")
@@ -215,5 +225,31 @@ func main() {
 	// log.Fatal would skip the deferred flush and close
 	if err := server.ListenAndServe(ctx, *addr, s.Handler()); err != nil {
 		log.Print(err)
+	}
+}
+
+func searchCmd(args []string) {
+	fs := flag.NewFlagSet("search", flag.ExitOnError)
+	q := fs.String("q", "", "text to find")
+	dir := fs.String("dir", "", "only conversations in this folder")
+	sinceS := fs.String("since", "", "only records after this time (RFC 3339)")
+	limit := fs.Int("limit", 400, "stop after this many hits, newest first")
+	_ = fs.Parse(args)
+	if strings.TrimSpace(*q) == "" {
+		fmt.Fprintln(os.Stderr, "herdr-ui search -q <text> [-dir <folder>] [-since <RFC3339>] [-limit N]")
+		os.Exit(2)
+	}
+	var since time.Time
+	if *sinceS != "" {
+		var err error
+		if since, err = time.Parse(time.RFC3339, *sinceS); err != nil {
+			fmt.Fprintln(os.Stderr, "bad -since:", err)
+			os.Exit(2)
+		}
+	}
+	home, _ := os.UserHomeDir()
+	if err := search.Scan(filepath.Join(home, ".claude", "projects"), *q, *dir, since, *limit, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }

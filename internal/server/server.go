@@ -107,6 +107,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("DELETE /api/push/subscribe", s.handlePushUnsubscribe)
 	api.HandleFunc("POST /api/push/test", s.handlePushTest)
 	api.HandleFunc("POST /api/seen", s.handleSeen)
+	api.HandleFunc("GET /api/search", s.handleSearch)
 	api.HandleFunc("GET /api/quick", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Quick.List()) })
 	api.HandleFunc("PUT /api/quick", func(w http.ResponseWriter, r *http.Request) {
 		var list []quick.Prompt
@@ -615,39 +616,61 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	paneID := r.URL.Query().Get("pane")
-	if paneID == "" {
-		httpErr(w, 400, fmt.Errorf("pane required"))
+	want := r.URL.Query().Get("session")
+	if want != "" && !sessionIDRe.MatchString(want) {
+		httpErr(w, 400, fmt.Errorf("bad session id"))
 		return
 	}
-	pane, err := s.findPane(mc, paneID)
-	if err != nil {
-		httpErr(w, 404, err)
-		return
-	}
-	s.Radar.Seen(mc.Cfg.ID, pane.PaneID)
-	cwd := pane.Dir()
 
-	// herdr names the exact session when it knows it; the folder's session
-	// list is the fallback and the picker (local machines only, for now).
-	var path string
+	// Either a pane (its folder, its agent's session) or — a search jump,
+	// read-only — a folder and a session id.
+	var path, cwd string
 	var sessions []transcript.SessionInfo
-	if want := r.URL.Query().Get("session"); want != "" && mc.Local {
-		sessions, _ = transcript.Sessions(cwd)
-		for _, c := range sessions {
-			if c.ID == want {
-				path = c.Path
+	if paneID == "" {
+		cwd = r.URL.Query().Get("dir")
+		if cwd == "" || want == "" {
+			httpErr(w, 400, fmt.Errorf("pane, or dir and session, required"))
+			return
+		}
+		p, err := mc.ResolveSession(cwd, "id", want)
+		if err != nil {
+			httpErr(w, 404, fmt.Errorf("session %s: %w", want, err))
+			return
+		}
+		path = p
+	} else {
+		pane, err := s.findPane(mc, paneID)
+		if err != nil {
+			httpErr(w, 404, err)
+			return
+		}
+		s.Radar.Seen(mc.Cfg.ID, pane.PaneID)
+		cwd = pane.Dir()
+
+		// herdr names the exact session when it knows it; the folder's session
+		// list is the fallback and the picker (local machines only, for now).
+		if want != "" { // only a session of this folder: another folder's is the viewer's business
+			if mc.Local {
+				sessions, _ = transcript.Sessions(cwd)
+				for _, c := range sessions {
+					if c.ID == want {
+						path = c.Path
+					}
+				}
+			} else if p, err := mc.ResolveSession(cwd, "id", want); err == nil && strings.Contains(p, "/"+transcript.EncodePath(cwd)+"/") {
+				path = p
 			}
 		}
-	}
-	if path == "" && pane.AgentSession != nil && pane.AgentSession.Agent == "claude" {
-		path, _ = mc.ResolveSession(cwd, pane.AgentSession.Kind, pane.AgentSession.Value)
-	}
-	if path == "" && mc.Local {
-		if sessions == nil {
-			sessions, _ = transcript.Sessions(cwd)
+		if path == "" && pane.AgentSession != nil && pane.AgentSession.Agent == "claude" {
+			path, _ = mc.ResolveSession(cwd, pane.AgentSession.Kind, pane.AgentSession.Value)
 		}
-		if len(sessions) > 0 {
-			path = sessions[0].Path
+		if path == "" && mc.Local {
+			if sessions == nil {
+				sessions, _ = transcript.Sessions(cwd)
+			}
+			if len(sessions) > 0 {
+				path = sessions[0].Path
+			}
 		}
 	}
 	if path == "" {
@@ -655,8 +678,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// a compacted conversation went on in a newer file
-	path = mc.FollowContinuation(path)
+	// a compacted conversation went on in a newer file — unless this very
+	// file was asked for (the picker, a search hit in it)
+	if want == "" {
+		path = mc.FollowContinuation(path)
+	}
 	version, err := mc.TranscriptVersion(path)
 	if err != nil {
 		httpErr(w, 500, err)
@@ -673,7 +699,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 500, err)
 		return
 	}
-	if sessions == nil && mc.Local { // the picker, only on a full response
+	if sessions == nil && mc.Local && paneID != "" { // the picker, only on a full response; a transcript on its own has none
 		sessions, _ = transcript.Sessions(cwd)
 	}
 	if sessions == nil {

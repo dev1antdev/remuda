@@ -57,7 +57,7 @@ export type Part = {
   is_error?: boolean;
 };
 
-export type Turn = { role: "user" | "assistant"; ts?: string; parts: Part[] };
+export type Turn = { role: "user" | "assistant"; ts?: string; ids?: string[]; parts: Part[] };
 
 export type SessionInfo = { id: string; mod_time: string; title?: string };
 
@@ -110,11 +110,14 @@ export async function fetchRoster(etag: string | null): Promise<{ roster: Roster
 // fetchChat returns null when unchanged (304 via ETag).
 export async function fetchChat(
   machineId: string,
-  paneId: string,
+  paneId: string, // "" with a dir: a transcript on its own, read-only
   sessionId: string | null,
   etag: string | null,
+  dir?: string,
 ): Promise<{ body: ChatResponse; etag: string | null } | null> {
-  const q = new URLSearchParams({ machine: machineId, pane: paneId });
+  const q = new URLSearchParams({ machine: machineId });
+  if (paneId) q.set("pane", paneId);
+  else if (dir) q.set("dir", dir);
   if (sessionId) q.set("session", sessionId);
   const res = await fetch(`/api/chat?${q}`, { headers: etag ? { "If-None-Match": etag } : {} });
   if (res.status === 304) return null;
@@ -145,6 +148,22 @@ export const fetchReviewDiff = (machineId: string, dir: string, path: string): P
     .then((r) => r.json() as Promise<{ diff: string }>)
     .then((d) => d.diff);
 export const markReviewed = (machineId: string, dir: string): Promise<void> => sendJSON("POST", "/api/review/seen", { machine: machineId, dir });
+
+// ---- search: full text over every transcript ----
+export type SearchHit = { machine: string; project: string; dir: string; session: string; uuid: string; ts: string; role: "user" | "assistant"; snippet: string };
+// encodePath is the name Claude Code gives a folder's project directory —
+// the same rule as transcript.EncodePath on the server
+export const encodePath = (dir: string) => dir.replace(/[^A-Za-z0-9]/g, "-");
+export type SearchResult = { hits: SearchHit[]; errors?: Record<string, string>; more: boolean };
+export const searchTranscripts = (q: string, f: { machine?: string; dir?: string; days?: number }, signal?: AbortSignal): Promise<SearchResult> => {
+  const p = new URLSearchParams({ q });
+  if (f.machine) p.set("machine", f.machine);
+  if (f.dir) p.set("dir", f.dir);
+  if (f.days) p.set("days", String(f.days));
+  return fetch(`/api/search?${p}`, { signal })
+    .then(check)
+    .then((r) => r.json() as Promise<SearchResult>);
+};
 
 // ---- quick prompts: saved texts for the composer ----
 export type QuickPrompt = { id?: string; label: string; text: string; dir?: string };

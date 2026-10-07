@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // Part is one piece of a turn, a tagged union.
@@ -30,9 +32,10 @@ type Part struct {
 
 // Turn is one chat turn. Adjacent assistant records merge into one turn.
 type Turn struct {
-	Role  string `json:"role"` // user | assistant
-	Ts    string `json:"ts,omitempty"`
-	Parts []Part `json:"parts"`
+	Role  string   `json:"role"` // user | assistant
+	Ts    string   `json:"ts,omitempty"`
+	IDs   []string `json:"ids,omitempty"` // the records merged into it, for a search jump
+	Parts []Part   `json:"parts"`
 }
 
 // SessionInfo describes one session file for the picker.
@@ -52,13 +55,21 @@ func SessionID(path string) string {
 // EncodePath mirrors Claude Code's project-dir encoding: every character
 // outside [A-Za-z0-9] becomes '-'.
 func EncodePath(cwd string) string {
-	b := []byte(cwd)
-	for i, c := range b {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9') {
-			b[i] = '-'
+	// Claude Code replaces per UTF-16 code unit (a JavaScript regexp), so a
+	// non-ASCII letter is one dash, an astral rune two
+	var b strings.Builder
+	for _, r := range cwd {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			continue
 		}
+		n := utf16.RuneLen(r)
+		if n < 1 {
+			n = 1
+		}
+		b.WriteString(strings.Repeat("-", n))
 	}
-	return string(b)
+	return b.String()
 }
 
 func projectsDir() string {
@@ -212,6 +223,8 @@ func Stat(path string) (Version, error) {
 
 // record is the JSONL envelope; message holds Anthropic API content blocks.
 type record struct {
+	UUID        string          `json:"uuid"`
+	Cwd         string          `json:"cwd"`
 	Type        string          `json:"type"`
 	IsMeta      bool            `json:"isMeta"`
 	IsSidechain bool            `json:"isSidechain"`
@@ -276,15 +289,19 @@ func parseStream(r io.Reader) ([]Turn, error) {
 	type partRef struct{ turn, part int }
 	pending := map[string]partRef{}
 
-	appendPart := func(role string, ts string, p Part) {
+	appendPart := func(role, ts, uuid string, p Part) {
 		n := len(turns)
 		// Merge consecutive same-role records into one turn; a user turn that
 		// only carried tool_results never opens a bubble.
 		if n > 0 && turns[n-1].Role == role {
-			turns[n-1].Parts = append(turns[n-1].Parts, p)
+			t := &turns[n-1]
+			t.Parts = append(t.Parts, p)
+			if uuid != "" && t.IDs[len(t.IDs)-1] != uuid {
+				t.IDs = append(t.IDs, uuid)
+			}
 			return
 		}
-		turns = append(turns, Turn{Role: role, Ts: ts, Parts: []Part{p}})
+		turns = append(turns, Turn{Role: role, Ts: ts, IDs: []string{uuid}, Parts: []Part{p}})
 	}
 
 	for sc.Scan() {
@@ -315,7 +332,7 @@ func parseStream(r io.Reader) ([]Turn, error) {
 					if skipUserText(t) {
 						continue
 					}
-					appendPart("user", rec.Timestamp, Part{Type: "text", Text: t})
+					appendPart("user", rec.Timestamp, rec.UUID, Part{Type: "text", Text: userText(t)})
 				case "tool_result":
 					if ref, ok := pending[b.ToolUseID]; ok {
 						p := &turns[ref.turn].Parts[ref.part]
@@ -324,12 +341,12 @@ func parseStream(r io.Reader) ([]Turn, error) {
 						delete(pending, b.ToolUseID)
 					}
 				case "image":
-					appendPart("user", rec.Timestamp, Part{Type: "text", Text: "[image]"})
+					appendPart("user", rec.Timestamp, rec.UUID, Part{Type: "text", Text: "[image]"})
 				}
 			}
 			// string-content user messages
 			if s := stringContent(msg.Content); s != "" && !skipUserText(s) {
-				appendPart("user", rec.Timestamp, Part{Type: "text", Text: s})
+				appendPart("user", rec.Timestamp, rec.UUID, Part{Type: "text", Text: userText(s)})
 			}
 		case "assistant":
 			var msg apiMessage
@@ -342,14 +359,14 @@ func parseStream(r io.Reader) ([]Turn, error) {
 					if strings.TrimSpace(b.Text) == "" {
 						continue
 					}
-					appendPart("assistant", rec.Timestamp, Part{Type: "text", Text: b.Text})
+					appendPart("assistant", rec.Timestamp, rec.UUID, Part{Type: "text", Text: b.Text})
 				case "thinking":
 					if strings.TrimSpace(b.Thinking) == "" {
 						continue
 					}
-					appendPart("assistant", rec.Timestamp, Part{Type: "thinking", Text: b.Thinking})
+					appendPart("assistant", rec.Timestamp, rec.UUID, Part{Type: "thinking", Text: b.Thinking})
 				case "tool_use":
-					appendPart("assistant", rec.Timestamp, Part{
+					appendPart("assistant", rec.Timestamp, rec.UUID, Part{
 						Type: "tool", ToolName: b.Name,
 						Input: truncateJSON(b.Input, 8*1024),
 					})
@@ -360,6 +377,85 @@ func parseStream(r io.Reader) ([]Turn, error) {
 		}
 	}
 	return turns, nil
+}
+
+// ---- search ----
+
+// Match is one record that contains a searched text.
+type Match struct {
+	UUID    string
+	Ts      time.Time
+	Role    string // user | assistant
+	Cwd     string
+	Snippet string // the text around the first occurrence, one line
+}
+
+// MatchLine parses one raw record and says whether a user or assistant
+// text in it contains q, case-folded — the same texts the chat shows: no
+// sidechains, no meta, no injected prompts, no tool output.
+func MatchLine(line []byte, q string) (Match, bool) {
+	var rec record
+	if json.Unmarshal(line, &rec) != nil || rec.IsSidechain || rec.IsMeta || rec.IsAPIError {
+		return Match{}, false
+	}
+	if rec.Type != "user" && rec.Type != "assistant" {
+		return Match{}, false
+	}
+	var msg apiMessage
+	if json.Unmarshal(rec.Message, &msg) != nil {
+		return Match{}, false
+	}
+	var texts []string
+	if t := stringContent(msg.Content); t != "" {
+		texts = append(texts, t)
+	}
+	for _, b := range blocks(msg.Content) {
+		if b.Type == "text" || (b.Type == "" && b.Text != "") {
+			texts = append(texts, b.Text)
+		}
+	}
+	needle := strings.ToLower(q)
+	for _, t := range texts {
+		if rec.Type == "user" {
+			if skipUserText(t) {
+				continue
+			}
+			t = userText(t)
+		}
+		folded := strings.ToLower(t)
+		i := strings.Index(folded, needle)
+		if i < 0 {
+			continue
+		}
+		if len(folded) != len(t) { // folding changed byte lengths; show the folded text then
+			t = folded
+		}
+		ts, _ := time.Parse(time.RFC3339Nano, rec.Timestamp)
+		return Match{UUID: rec.UUID, Ts: ts, Role: rec.Type, Cwd: rec.Cwd, Snippet: snippet(t, i, len(needle))}, true
+	}
+	return Match{}, false
+}
+
+// snippet is the text around [at, at+n): up to 90 runes before and 160
+// after, whitespace collapsed, with an ellipsis where it was cut.
+func snippet(t string, at, n int) string {
+	start, end := at, at+n
+	for i := 0; i < 90 && start > 0; i++ {
+		_, size := utf8.DecodeLastRuneInString(t[:start])
+		start -= size
+	}
+	for i := 0; i < 160 && end < len(t); i++ {
+		_, size := utf8.DecodeRuneInString(t[end:])
+		end += size
+	}
+	out := strings.Join(strings.Fields(t[start:end]), " ")
+	if start > 0 {
+		out = "…" + out
+	}
+	if end < len(t) {
+		out += "…"
+	}
+	return out
 }
 
 // blocks decodes an array-form content field; nil for string form.
@@ -386,6 +482,32 @@ func skipUserText(t string) bool {
 		strings.HasPrefix(tt, "<local-command-stdout>") ||
 		strings.HasPrefix(tt, "<system-reminder>") ||
 		strings.HasPrefix(tt, "Caveat: The messages below")
+}
+
+var (
+	commandNameRe = regexp.MustCompile(`<command-name>([^<]*)</command-name>`)
+	commandArgsRe = regexp.MustCompile(`(?s)<command-args>(.*?)</command-args>`)
+	commandTagRe  = regexp.MustCompile(`(?s)<command-message>.*?</command-message>\s*`)
+)
+
+// userText is what a user record reads as: a slash command, which Claude
+// Code logs wrapped in tags, becomes "/name args"; the rest is as typed.
+func userText(t string) string {
+	if !strings.Contains(t, "<command-message>") {
+		return t
+	}
+	name := ""
+	if m := commandNameRe.FindStringSubmatch(t); m != nil {
+		name = strings.TrimSpace(m[1])
+	}
+	args := ""
+	if m := commandArgsRe.FindStringSubmatch(t); m != nil {
+		args = strings.TrimSpace(m[1])
+	}
+	if name == "" {
+		return strings.TrimSpace(commandTagRe.ReplaceAllString(t, ""))
+	}
+	return strings.TrimSpace(name + " " + args)
 }
 
 func plainUserText(raw json.RawMessage) string {

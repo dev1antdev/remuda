@@ -203,6 +203,25 @@ SPA. See README.md for the user story.
   in the state dir; routes `GET/PUT /api/schedules`, `DELETE
   /api/schedules/{id}`, `POST /api/schedules/{id}/run`. `Schedules.tsx` is
   the panel behind the calendar button in the sidebar head.
+- `internal/search/` — **full-text search** over every transcript on every
+  machine (`GET /api/search?q=&machine=&dir=&days=`; ⌘K / Ctrl+K, the 🔍
+  in the header). No index: `Scan` walks `~/.claude/projects` newest-first,
+  sieves lines by four spellings of the query (as typed, lower, UPPER,
+  Capitalized — a byte search folds nothing), then `transcript.MatchLine`
+  parses the candidates: only user/assistant texts count, never tool
+  output, thinking or sidechains. Locally Scan runs in-process; on a
+  remote the script runs `~/.local/bin/herdr-ui search …` (the same Scan,
+  a hidden subcommand — `make deploy` puts the binary there; 400 MB scan
+  in well under a second) and falls back to a four-pattern grep when the
+  binary is missing (BSD grep: seconds per hundred MB). Both print
+  `./<project>/<session>.jsonl:<raw line>`, one parser reads either. A
+  hit carries `project` (the project dir name = `EncodePath` of the
+  folder the agent started in; a `cd` in the session moves the record's
+  `cwd` but not the file) — the UI matches it to a pane by
+  `encodePath(session.dir|pane.cwd)` and jumps (`jump` prop on Chat →
+  `data-ids~=uuid` → scroll + `.turn-hit`), else opens the transcript on
+  its own: `GET /api/chat?dir=&session=` without a pane is read-only
+  (`Turn.IDs` carry the record uuids; `sessionIDRe` guards the id).
 - `internal/quick/` — saved prompts (`quick.json`, `GET/PUT /api/quick`,
   the list replaced whole), each for every folder or one `dir`; the chat
   composer offers them under ⚡ and edits them in a dialog. The composer
