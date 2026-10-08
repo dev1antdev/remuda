@@ -24,6 +24,7 @@ export default function Chat({
   dir,
   jump,
   usage,
+  active = true,
 }: {
   machineId: string;
   paneId: string; // "" shows a transcript on its own (a search jump), read-only
@@ -34,8 +35,11 @@ export default function Chat({
   dir: string; // the pane's folder, for its own quick prompts
   jump?: { session: string; turn: string; n: number } | null; // a search hit to scroll to
   usage?: PaneUsage; // the context meter, for the compaction notice
+  active?: boolean; // the lens on screen; a hidden one keeps its state and waits
 }) {
   const readOnly = !paneId;
+  const activeRef = useRef(active);
+  activeRef.current = active;
   // forwarding a turn to another agent
   const [forward, setForward] = useState<string | null>(null);
   const onForward = useCallback((text: string) => setForward(`From ${origin}:\n\n${text}`), [origin]);
@@ -89,7 +93,7 @@ export default function Chat({
       timer = null;
       inflight = true;
       try {
-        if (document.visibilityState === "visible") {
+        if (document.visibilityState === "visible" && activeRef.current) {
           const res = await fetchChat(machineId, paneId, sessionId, etagRef.current, dir);
           if (stop) return;
           if (res) {
@@ -116,16 +120,28 @@ export default function Chat({
       if (timer) clearTimeout(timer);
     };
   }, [machineId, paneId, sessionId, dir]);
-  // a status flip asks for a poll now; the first run is the mount, where
-  // the poll above has just gone out
+  // a status flip, or the lens coming back on screen, asks for a poll now;
+  // the first run is the mount, where the poll above has just gone out
   const busySeen = useRef(false);
   useEffect(() => {
     if (!busySeen.current) {
       busySeen.current = true;
       return;
     }
-    pollNow.current();
-  }, [busy]);
+    if (active) pollNow.current();
+  }, [busy, active]);
+
+  // back on screen: a hidden element forgets its scroll, so the place is
+  // put back — the bottom when following, else where the reader was. This
+  // runs before the jump below, so a search hit that opens the lens wins.
+  const savedTop = useRef<number | null>(null); // the reader's place, kept while the lens is hidden
+  useEffect(() => {
+    const log = logRef.current;
+    if (!active || !log) return;
+    ownScroll.current = true;
+    log.scrollTop = stickRef.current ? log.scrollHeight : (savedTop.current ?? log.scrollTop);
+    requestAnimationFrame(() => (ownScroll.current = false));
+  }, [active]);
 
   useEffect(() => {
     const id = pendingTurn.current;
@@ -170,6 +186,7 @@ export default function Chat({
   const onScroll = () => {
     const log = logRef.current;
     if (!log || ownScroll.current) return;
+    if (log.clientHeight > 0) savedTop.current = log.scrollTop; // a hidden log reads 0: not a place
     const d = log.scrollHeight - log.scrollTop - log.clientHeight;
     if (d < 1) released.current = false; // back at the very bottom: following again
     stickRef.current = !released.current && d < 60;

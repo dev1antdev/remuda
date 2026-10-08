@@ -528,13 +528,13 @@ input[type="checkbox"]:hover:not(:checked) {
 }
 
 /* the terminal's own toggles, inside the lens switch */
-.lens-switch .kb-toggle {
+.tabs-tools .kb-toggle {
   width: 28px;
   padding: 0;
   gap: 4px;
 }
 
-.lens-switch .kb-toggle:has(.kb-toggle-num) {
+.tabs-tools .kb-toggle:has(.kb-toggle-num) {
   width: auto;
   padding: 0 8px 0 6px;
 }
@@ -544,18 +544,12 @@ input[type="checkbox"]:hover:not(:checked) {
   font-family: var(--mono);
 }
 
-.lens-switch .kb-toggle.on {
+.tabs-tools .kb-toggle.on {
   background: var(--accent-soft);
   color: var(--accent);
   box-shadow: none;
 }
 
-.lens-sep {
-  width: 1px;
-  height: 16px;
-  margin: 0 3px;
-  background: var(--line-strong);
-}
 
 /* menus: a floating list */
 .row-menu,
@@ -762,7 +756,7 @@ input[type="checkbox"]:hover:not(:checked) {
 }
 
 .title {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
   font-weight: 600;
   letter-spacing: -0.005em;
@@ -782,8 +776,24 @@ input[type="checkbox"]:hover:not(:checked) {
   font-weight: 400;
 }
 
-.lens-switch {
-  margin-left: auto;
+/* the lens group sits right, before the search and the bell: the switch
+   keeps its place whatever the pane shows, the pill grows leftwards */
+.lenses {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* equal lens buttons: a badge on one of them widens nothing */
+.lens-switch > button {
+  min-width: 92px;
+  justify-content: center;
+}
+
+.lens-switch > button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .bell {
@@ -1507,6 +1517,17 @@ input[type="checkbox"]:hover:not(:checked) {
   min-height: 0;
 }
 
+.lens-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lens-pane[hidden] {
+  display: none;
+}
+
 .tabstrip {
   display: flex;
   flex-direction: column;
@@ -1514,7 +1535,22 @@ input[type="checkbox"]:hover:not(:checked) {
   background: var(--bg-raised);
 }
 
+.tabs-row {
+  display: flex;
+  align-items: center;
+}
+
+.tabs-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 0 8px 0 4px;
+}
+
 .tabs {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 3px;
@@ -3049,11 +3085,6 @@ input[type="checkbox"]:hover:not(:checked) {
   font-size: 13px;
 }
 
-@media (max-width: 920px) {
-  .lens-switch .kb-font {
-    display: none;
-  }
-}
 
 /* ---- review: changes since you looked ---- */
 .badge,
@@ -3556,18 +3587,10 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--red);
 }
 
-.lens-switch button.usage-pill {
-  flex: 0 0 auto;
-  height: 26px;
-  margin-left: 4px;
-}
-
-.usage-pill,
-.lens-switch button.usage-pill {
+.usage-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-left: 10px;
   padding: 2px 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -3580,8 +3603,7 @@ input[type="checkbox"]:hover:not(:checked) {
   cursor: pointer;
 }
 
-.usage-pill:hover,
-.lens-switch button.usage-pill:hover {
+.usage-pill:hover {
   background: var(--bg-hover);
 }
 
@@ -4391,34 +4413,18 @@ button.usage-row:hover {
     flex: 1 1 0;
   }
 
-  .lens-switch {
+  .lenses {
     order: 10;
     flex: 1 0 100%;
+  }
+
+  .lens-switch {
+    flex: 1;
     margin: 0;
-    display: flex;
-    flex-wrap: wrap; /* the terminal's tool buttons take a line of their own */
-    row-gap: 4px;
   }
 
   .lens-switch button {
     flex: 1;
-  }
-
-  /* the separator breaks the line; the tool buttons sit to the right below */
-  .lens-switch .lens-sep {
-    flex: 1 0 100%;
-    width: auto;
-    height: 0;
-    margin: 0;
-  }
-
-  .lens-switch .kb-toggle,
-  .lens-switch .usage-pill {
-    flex: 0 0 auto;
-  }
-
-  .lens-switch .lens-sep + .kb-toggle {
-    margin-left: auto;
   }
 
   .sidebar {
@@ -4561,4 +4567,81 @@ button.usage-row:hover {
 .linkish:focus-visible {
   outline: 2px solid var(--accent-ring);
   outline-offset: 1px;
+}
+
+/* a narrow screen: the text-size buttons go, the tabs keep their room */
+@media (max-width: 920px) {
+  .tabs-tools .kb-font {
+    display: none;
+  }
+}
+
+/* ---- toasts: status in a corner, never in a bar ---- */
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: var(--z-menu);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(420px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--bg-overlay);
+  color: var(--fg);
+  font-size: 13px;
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+  animation: rise var(--base) var(--ease);
+}
+
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast.error {
+  border-color: var(--red-ring);
+  color: var(--red);
+}
+
+.toast.success {
+  border-color: var(--green-ring);
+}
+
+.toast.warn {
+  border-color: var(--amber-ring);
+}
+
+.toast .spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .toasts {
+    left: 16px;
+    right: 16px;
+    bottom: calc(76px + env(safe-area-inset-bottom)); /* above the composer and the key bar */
+    max-width: none;
+  }
+
+  .lens-switch > button {
+    min-width: 0;
+  }
 }

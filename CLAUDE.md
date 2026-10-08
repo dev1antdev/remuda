@@ -102,6 +102,21 @@ SPA. See README.md for the user story.
   only on mouseup, so a wheel under a held button would go unseen): the
   anchor is set on mousedown, the head follows the pointer, our select()
   ends xterm's own drag; a click that never moves is left to xterm. The ⬚ selection layer (phone long-press) is screen-only.
+- **Nothing in a bar moves when state changes.** The header is
+  `[burger][modes][title — takes the slack][usage pill][lens switch][search][bell]`:
+  the lens group is anchored right, the pill grows leftwards into the
+  title's slack, the three lens buttons have equal widths so a badge
+  widens nothing, and the Changes button is disabled (not removed) when
+  there is no folder. A lens's own controls (the terminal's size, width,
+  selection, text size, key bar) live in the tab strip's right slot
+  (`TabStrip tools=`), never in the header. Transient status — offline,
+  a newer server, errors, "Copied N" — is a toast in the bottom corner
+  (`Toasts` in ui.tsx), never a pill in a bar. Lenses stay mounted once the
+  selected pane has shown them (`.lens-pane[hidden]`, scoped to that pane
+  — a lens never mounts hidden, since a terminal opened unseen would
+  attach at 80×24 and resize the shared pane): the terminal keeps its
+  attach, the chat its scroll and no refetch, Changes its draft; a lens
+  gets `active` and polls or refits only when on screen.
 - The build's version is injected into the bundle (`__HERDR_UI_VERSION__`,
   from `HERDR_UI_VERSION` set by `make web`) and the roster answer carries
   the server's in `X-Herdr-UI-Version`; a page older than its server shows

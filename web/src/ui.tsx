@@ -224,6 +224,34 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): { data: T | 
   return { data, error, loading, reload: () => setTick((t) => t + 1) };
 }
 
+// ---- toasts ----
+// Status that comes and goes lives in a corner, never in a bar: a pill in
+// the header would move everything beside it. Sticky ones (offline, a new
+// version) carry no timer; the rest the caller clears.
+
+export type ToastItem = { id: string; tone: Tone; text: ReactNode; action?: ReactNode; onDismiss?: () => void; busy?: boolean };
+
+export function Toasts({ items }: { items: ToastItem[] }) {
+  if (items.length === 0) return null;
+  return createPortal(
+    <div className="toasts" role="status" aria-live="polite">
+      {items.map((t) => (
+        <div key={t.id} className={`toast ${t.tone}`}>
+          {t.busy && <span className="spinner" aria-hidden="true" />}
+          <span className="toast-text">{t.text}</span>
+          {t.action}
+          {t.onDismiss && (
+            <button type="button" className="icon-btn sm" onClick={t.onDismiss} title="Dismiss" aria-label="Dismiss">
+              <Icon name="x" size={12} />
+            </button>
+          )}
+        </div>
+      ))}
+    </div>,
+    document.body,
+  );
+}
+
 // ---- small marks ----
 
 export function StatusDot({ status, title }: { status: string; title?: string }) {

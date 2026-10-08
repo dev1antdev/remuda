@@ -25,7 +25,7 @@ import FileViewer, { type FileTarget } from "./FileViewer";
 import KeyBar from "./KeyBar";
 import { basename, errMsg, isTouch, readAlertPrefs, usePref } from "./prefs";
 import { machineLabel, machineOptions } from "./options";
-import { Dialog, Notice, StatusDot, useSubmit } from "./ui";
+import { Dialog, Notice, StatusDot, Toasts, useSubmit, type ToastItem } from "./ui";
 import { resyncPush } from "./push";
 import TerminalView, { type Modifier, type SizeMode, type TermApi } from "./Terminal";
 import Tasks, { type AgentTarget } from "./Tasks";
@@ -81,7 +81,7 @@ function defaultAgent(agents: AgentKind[], want: string): string {
   return agents.some((a) => a.id === want) ? want : (agents[0]?.id ?? "shell");
 }
 
-type NoticeMsg = { text: string; error?: boolean };
+type NoticeMsg = { text: string; error?: boolean; brief?: boolean };
 
 function matches(x: Located, r: Requested): boolean {
   return x.machine.id === r.machineId && x.pane.id === r.paneId;
@@ -111,7 +111,13 @@ export default function App() {
   const [modifier, setModifier] = useState<Modifier>(null);
   // selection mode: a plain drag selects text instead of reaching the agent
   const [selectMode, setSelectMode] = useState(false);
-  const copied = useCallback((n: number) => setNotice({ text: `Copied ${n} character${n === 1 ? "" : "s"}` }), []);
+  const copied = useCallback((n: number) => setNotice({ text: `Copied ${n} character${n === 1 ? "" : "s"}`, brief: true }), []);
+  // the lenses the selected pane has shown: each stays mounted once seen,
+  // so flipping back is instant — the terminal keeps its attach, the chat
+  // its scroll. Scoped to the pane: a lens never mounts hidden (a terminal
+  // opened unseen would attach at xterm's default 80×24 and resize the
+  // shared pane for everyone)
+  const [seenLenses, setSeenLenses] = useState<{ pane: string; lenses: Partial<Record<Lens, true>> }>({ pane: "", lenses: {} });
   const [file, setFile] = useState<{ machineId: string; paneId: string; target: FileTarget } | null>(null);
   const [keybar, setKeybar] = usePref("keybar", isTouch);
   // A phone keeps the pane's own grid by default: resizing the shared pane
@@ -242,10 +248,25 @@ export default function App() {
   }, [menuOpen]);
 
   useEffect(() => {
-    if (!notice) return;
-    const t = setTimeout(() => setNotice(null), notice.text.startsWith("Copied") ? 2000 : 10000);
+    if (!notice || notice.error) return; // an error stays until dismissed
+    const t = setTimeout(() => setNotice(null), notice.brief ? 2000 : 6000);
     return () => clearTimeout(t);
   }, [notice]);
+  // what the corner shows: the connection, a newer server, the last note
+  const toasts: ToastItem[] = [];
+  if (offline) toasts.push({ id: "offline", tone: "warn", text: "Reconnecting to herdr-ui…", busy: true });
+  if (stale && !offline)
+    toasts.push({
+      id: "stale",
+      tone: "info",
+      text: `herdr-ui ${stale} is on the server; this page runs ${__HERDR_UI_VERSION__}.`,
+      action: (
+        <button type="button" className="btn sm primary" onClick={() => location.reload()}>
+          Reload
+        </button>
+      ),
+    });
+  if (notice) toasts.push({ id: "notice", tone: notice.error ? "error" : "success", text: notice.text, onDismiss: () => setNotice(null) });
 
   const allPanes = useMemo(() => {
     const out: Located[] = [];
@@ -338,6 +359,76 @@ export default function App() {
     if (made.warning) setNotice({ text: made.warning });
   };
 
+  // the terminal's own controls: size, width, selection, text size, key
+  // bar. They live in the tab strip's right slot, so showing and hiding
+  // them with the lens moves nothing in the header.
+  const terminalTools = current && (
+    <>
+      <button
+        type="button"
+        className={`icon-btn kb-toggle${sizeMode === "keep" ? " on" : ""}`}
+        title={
+          sizeMode === "keep"
+            ? `Keeping the pane's own size (${current.pane.cols}×${current.pane.rows}); click to resize it to this screen`
+            : "Resizing the shared pane to this screen; click to keep its own size"
+        }
+        onClick={() => setSizeMode(sizeMode === "keep" ? "fit" : "keep")}
+      >
+        <Icon name={sizeMode === "keep" ? "minimize" : "maximize"} />
+      </button>
+      <button
+        type="button"
+        className={`icon-btn kb-toggle${minCols ? " on" : ""}`}
+        disabled={sizeMode !== "fit"}
+        aria-expanded={!!widthMenu}
+        title={
+          sizeMode !== "fit"
+            ? "Minimum width applies when the pane is resized to this screen"
+            : minCols
+              ? `At least ${minCols} columns wide; a narrower screen scrolls sideways`
+              : "Minimum width: make the terminal wider than the screen for diffs and tables, scrolling sideways"
+        }
+        onClick={(e) => {
+          e.stopPropagation();
+          const r = e.currentTarget.getBoundingClientRect();
+          setWidthMenu(widthMenu ? null : { x: Math.min(r.left, window.innerWidth - 198), y: r.bottom });
+        }}
+      >
+        <Icon name="move-horizontal" />
+        {minCols ? <span className="kb-toggle-num">{minCols}</span> : null}
+      </button>
+      <button
+        type="button"
+        className={`icon-btn kb-toggle${selectMode ? " on" : ""}`}
+        title={
+          selectMode
+            ? "Selection mode is on: drag selects text and copies it. Click to give the mouse back to the agent."
+            : "Selection mode: drag to select and copy text (otherwise hold Option/Alt while dragging)"
+        }
+        onClick={() => setSelectMode((v) => !v)}
+      >
+        <Icon name="text-select" />
+      </button>
+      <button type="button" className="icon-btn kb-toggle kb-font" title="Smaller text" onClick={() => setTermFont((f) => Math.max(8, f - 1))}>
+        <Icon name="text-smaller" />
+      </button>
+      <button type="button" className="icon-btn kb-toggle kb-font" title="Larger text" onClick={() => setTermFont((f) => Math.min(20, f + 1))}>
+        <Icon name="text-larger" />
+      </button>
+      <button type="button" className={`icon-btn kb-toggle${keybar ? " on" : ""}`} title="Key bar" aria-pressed={keybar} onClick={() => setKeybar((k) => !k)}>
+        <Icon name="keyboard" />
+      </button>
+    </>
+  );
+
+  // a lens counts as seen for this pane once it is the one on screen
+  const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
+  useEffect(() => {
+    if (!paneKey) return;
+    setSeenLenses((m) => (m.pane === paneKey && m.lenses[lens] ? m : { pane: paneKey, lenses: { ...(m.pane === paneKey ? m.lenses : {}), [lens]: true } }));
+  }, [paneKey, lens]);
+  const seen = (l: Lens) => lens === l || (seenLenses.pane === paneKey && !!seenLenses.lenses[l]);
+
   const closeWorkspace = (m: Machine, s: Session) => {
     const n = s.tabs.reduce((a, t) => a + t.panes.length, 0);
     ask(`Close “${s.name}”? ${n} pane${n === 1 ? "" : "s"} close and the agents in them stop.`, "Close workspace", () => void act(killSession(m.id, s.id)));
@@ -380,22 +471,7 @@ export default function App() {
           )}
         </span>
         {mode === "herdr" && current && !viewer && (
-          <nav className="lens-switch">
-            <button className={lens === "chat" ? "on" : ""} onClick={() => setLens("chat")}>
-              Chat
-            </button>
-            <button
-              className={lens === "terminal" ? "on" : ""}
-              onClick={() => setLens("terminal")}
-            >
-              Terminal
-            </button>
-            {(current.session.dir || current.pane.cwd) && (
-              <button className={lens === "changes" ? "on" : ""} onClick={() => setLens("changes")} title="What changed in this workspace's folder since you last looked">
-                Changes
-                {current.session.review?.fresh ? <span className="lens-badge">{current.session.review.fresh}</span> : null}
-              </button>
-            )}
+          <div className="lenses">
             {current.pane.usage && current.pane.usage.window > 0 && (
               <button
                 type="button"
@@ -410,77 +486,26 @@ export default function App() {
                 <span className="usage-pill-cost"> · {usd(current.pane.usage.cost)}</span>
               </button>
             )}
-            {lens === "terminal" && (
-              <>
-                <span className="lens-sep" />
-                <button
-                  className={`icon-btn kb-toggle${sizeMode === "keep" ? " on" : ""}`}
-                  title={
-                    sizeMode === "keep"
-                      ? `Keeping the pane's own size (${current.pane.cols}×${current.pane.rows}); click to resize it to this screen`
-                      : "Resizing the shared pane to this screen; click to keep its own size"
-                  }
-                  onClick={() => setSizeMode(sizeMode === "keep" ? "fit" : "keep")}
-                >
-                  <Icon name={sizeMode === "keep" ? "minimize" : "maximize"} />
-                </button>
-                {sizeMode === "fit" && (
-                  <button
-                    className={`icon-btn kb-toggle${minCols ? " on" : ""}`}
-                    aria-expanded={!!widthMenu}
-                    title={
-                      minCols
-                        ? `At least ${minCols} columns wide; a narrower screen scrolls sideways`
-                        : "Minimum width: make the terminal wider than the screen for diffs and tables, scrolling sideways"
-                    }
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const r = e.currentTarget.getBoundingClientRect();
-                      setWidthMenu(widthMenu ? null : { x: r.left, y: r.bottom });
-                    }}
-                  >
-                    <Icon name="move-horizontal" />
-                    {minCols ? <span className="kb-toggle-num">{minCols}</span> : null}
-                  </button>
-                )}
-                <button
-                  className={`icon-btn kb-toggle${selectMode ? " on" : ""}`}
-                  title={
-                    selectMode
-                      ? "Selection mode is on: drag selects text and copies it. Click to give the mouse back to the agent."
-                      : "Selection mode: drag to select and copy text (otherwise hold Option/Alt while dragging)"
-                  }
-                  onClick={() => setSelectMode((v) => !v)}
-                >
-                  <Icon name="text-select" />
-                </button>
-                <button className="icon-btn kb-toggle kb-font" title="Smaller text" onClick={() => setTermFont((f) => Math.max(8, f - 1))}>
-                  <Icon name="text-smaller" />
-                </button>
-                <button className="icon-btn kb-toggle kb-font" title="Larger text" onClick={() => setTermFont((f) => Math.min(20, f + 1))}>
-                  <Icon name="text-larger" />
-                </button>
-                <button
-                  className={`icon-btn kb-toggle${keybar ? " on" : ""}`}
-                  title="Key bar"
-                  onClick={() => setKeybar((k) => !k)}
-                >
-                  <Icon name="keyboard" />
-                </button>
-              </>
-            )}
-          </nav>
-        )}
-        {offline && <span className="pill pill-off">reconnecting…</span>}
-        {stale && !offline && (
-          <button type="button" className="pill pill-warn" title={`This page runs ${__HERDR_UI_VERSION__}; the server is ${stale}. Click to reload.`} onClick={() => location.reload()}>
-            new version — reload
-          </button>
-        )}
-        {notice && (
-          <button type="button" className={`pill ${notice.error ? "pill-off" : "pill-warn"}`} title={`${notice.text} — click to dismiss`} onClick={() => setNotice(null)}>
-            {notice.text}
-          </button>
+            <nav className="lens-switch" role="tablist" aria-label="View">
+              <button role="tab" aria-selected={lens === "chat"} className={lens === "chat" ? "on" : ""} onClick={() => setLens("chat")}>
+                Chat
+              </button>
+              <button role="tab" aria-selected={lens === "terminal"} className={lens === "terminal" ? "on" : ""} onClick={() => setLens("terminal")}>
+                Terminal
+              </button>
+              <button
+                role="tab"
+                aria-selected={lens === "changes"}
+                className={lens === "changes" ? "on" : ""}
+                disabled={!(current.session.dir || current.pane.cwd)}
+                onClick={() => setLens("changes")}
+                title="What changed in this workspace's folder since you last looked"
+              >
+                Changes
+                {current.session.review?.fresh ? <span className="lens-badge">{current.session.review.fresh}</span> : null}
+              </button>
+            </nav>
+          </div>
         )}
         <button type="button" className="icon-btn bell" title="Search every conversation (⌘K / Ctrl+K)" onClick={() => setSearch(true)}>
           <Icon name="search" size={18} />
@@ -560,6 +585,7 @@ export default function App() {
                 session={current.session}
                 tab={current.tab}
                 pane={current.pane}
+                tools={lens === "terminal" ? terminalTools : null}
                 onSelect={(paneId) => selectPane(current.machine.id, paneId)}
                 onNewTab={() =>
                   setDialog({ kind: "tab", machineId: current.machine.id, session: current.session })
@@ -573,34 +599,42 @@ export default function App() {
                   ask(msg, "Close tab", () => void act(closeTab(current.machine.id, t.id)));
                 }}
               />
-              {lens === "changes" ? (
-                <Review
-                  key={`${current.machine.id}|${current.session.id}|${current.session.dir || current.pane.cwd}`} // the draft is per folder
-                  machineId={current.machine.id}
-                  paneId={current.pane.id}
-                  dir={current.session.dir || current.pane.cwd}
-                  agent={current.pane.agent}
-                  agents={agentTargets}
-                  currentPane={{ machineId: current.machine.id, paneId: current.pane.id }}
-                  onOpenFile={(path, line) => openFile({ path, line })}
-                  onSeen={() => void refresh()}
-                />
-              ) : lens === "chat" ? (
-                <Chat
-                  key={`${current.machine.id}|${current.pane.id}`} // fresh state per pane: no stale session pick
-                  machineId={current.machine.id}
-                  paneId={current.pane.id}
-                  status={current.pane.status}
-                  onOpenFile={openFile}
-                  agents={agentTargets}
-                  origin={`${current.session.name}${current.machine.id !== "local" ? ` on ${current.machine.label}` : ""}`}
-                  dir={current.session.dir || current.pane.cwd}
-                  jump={jumpFor(current.machine.id, current.pane.id)}
-                  usage={current.pane.usage}
-                />
-              ) : (
-                <>
+              {seen("changes") && (
+                <div className="lens-pane" hidden={lens !== "changes"}>
+                  <Review
+                    key={`${current.machine.id}|${current.session.id}|${current.session.dir || current.pane.cwd}`} // the draft is per folder
+                    machineId={current.machine.id}
+                    paneId={current.pane.id}
+                    dir={current.session.dir || current.pane.cwd}
+                    agent={current.pane.agent}
+                    agents={agentTargets}
+                    currentPane={{ machineId: current.machine.id, paneId: current.pane.id }}
+                    onOpenFile={(path, line) => openFile({ path, line })}
+                    onSeen={() => void refresh()}
+                  />
+                </div>
+              )}
+              {seen("chat") && (
+                <div className="lens-pane" hidden={lens !== "chat"}>
+                  <Chat
+                    key={`${current.machine.id}|${current.pane.id}`} // fresh state per pane: no stale session pick
+                    machineId={current.machine.id}
+                    paneId={current.pane.id}
+                    status={current.pane.status}
+                    onOpenFile={openFile}
+                    agents={agentTargets}
+                    origin={`${current.session.name}${current.machine.id !== "local" ? ` on ${current.machine.label}` : ""}`}
+                    dir={current.session.dir || current.pane.cwd}
+                    jump={jumpFor(current.machine.id, current.pane.id)}
+                    usage={current.pane.usage}
+                    active={lens === "chat"}
+                  />
+                </div>
+              )}
+              {seen("terminal") && (
+                <div className="lens-pane" hidden={lens !== "terminal"}>
                   <TerminalView
+                    key={`${current.machine.id}|${current.pane.id}`}
                     machineId={current.machine.id}
                     paneId={current.pane.id}
                     cols={current.pane.cols}
@@ -615,9 +649,10 @@ export default function App() {
                     onReady={setTermApi}
                     onOpenFile={openFile}
                     onCopied={copied}
+                    active={lens === "terminal"}
                   />
                   {keybar && <KeyBar term={termApi} modifier={modifier} setModifier={setModifier} />}
-                </>
+                </div>
               )}
             </>
           ) : (
@@ -632,6 +667,7 @@ export default function App() {
         )}
       </div>
 
+      <Toasts items={toasts} />
       {file && (
         <FileViewer
           machineId={file.machineId}
@@ -789,10 +825,12 @@ function TabStrip({
   onNewTab,
   onCloseTab,
   onRename,
+  tools,
 }: {
   session: Session;
   tab: Tab;
   pane: Pane;
+  tools?: ReactNode; // the lens's own controls, right of the tabs
   onSelect: (paneId: string) => void;
   onNewTab: () => void;
   onCloseTab: (t: Tab) => void;
@@ -809,6 +847,7 @@ function TabStrip({
   };
   return (
     <div className="tabstrip">
+      <div className="tabs-row">
       <div className="tabs" role="tablist">
         {session.tabs.map((t) => {
           const first = t.panes.find((p) => p.focused) ?? t.panes[0];
@@ -856,6 +895,8 @@ function TabStrip({
         <button type="button" className="icon-btn tab-add" title="New tab in this workspace" onClick={onNewTab}>
           <Icon name="plus" size={14} />
         </button>
+      </div>
+      {tools && <div className="tabs-tools">{tools}</div>}
       </div>
       {tab.panes.length > 1 && (
         <div className="split-panes">

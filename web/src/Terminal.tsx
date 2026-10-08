@@ -5,6 +5,7 @@ import "@xterm/xterm/css/xterm.css";
 import { uploadFiles } from "./api";
 import { filesFrom, shellQuote } from "./attachments";
 import { copyText, openUrl } from "./host";
+import { isTouch } from "./prefs";
 import { findPaths, findUrls } from "./paths";
 import type { FileTarget } from "./FileViewer";
 
@@ -84,6 +85,7 @@ export default function TerminalView({
   onReady,
   onOpenFile,
   onCopied,
+  active = true,
 }: {
   machineId: string;
   paneId: string;
@@ -105,12 +107,14 @@ export default function TerminalView({
   onReady: (api: TermApi | null) => void;
   onOpenFile: (t: FileTarget) => void;
   onCopied: (chars: number) => void;
+  active?: boolean; // the lens on screen; hidden, the attach stays and output keeps arriving
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   // props the running terminal reads without being recreated
   const live = useRef({ agent, cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied });
   live.current = { agent, cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied };
   const applyRef = useRef<() => void>(() => {});
+  const focusRef = useRef<() => void>(() => {});
   const selectRef = useRef<(on: boolean) => void>(() => {});
 
   useEffect(() => {
@@ -173,6 +177,7 @@ export default function TerminalView({
     // viewer, a table) still shows its right-hand side.
     const PAD = 8; // the mount's padding, both sides
     const applyGeometry = () => {
+      if (mount.clientWidth === 0) return; // hidden: nothing to measure, sized again when shown
       const g = live.current;
       mount.classList.remove("keep", "wide");
       if (g.mode === "keep" && g.cols > 0 && g.rows > 0) {
@@ -197,6 +202,7 @@ export default function TerminalView({
       sendResize();
     };
     applyRef.current = applyGeometry;
+    focusRef.current = () => term.focus();
     applyGeometry();
 
     // In keep mode the grid may be taller than the screen: follow the bottom
@@ -1047,6 +1053,16 @@ export default function TerminalView({
   useEffect(() => {
     selectRef.current(selectMode);
   }, [selectMode]);
+  // back on screen (not the first show): the grid is measured again and,
+  // with a keyboard, the keys go here — a touch screen's keyboard must not pop
+  const wasActive = useRef(active);
+  useEffect(() => {
+    const was = wasActive.current;
+    wasActive.current = active;
+    if (!active || was) return;
+    applyRef.current();
+    if (!isTouch) focusRef.current();
+  }, [active]);
 
   return <div ref={mountRef} className="term-mount" />;
 }
