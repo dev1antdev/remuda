@@ -3153,6 +3153,16 @@ input[type="checkbox"]:hover:not(:checked) {
   gap: 6px;
 }
 
+/* a scrolling column keeps its children's height: a flex item with its
+   own overflow has no minimum, so without this the files, turns and hits
+   would be squeezed to fit the screen instead of scrolling past it */
+.review-body > *,
+.chat-log > *,
+.search-list > *,
+.tasks-detail > * {
+  flex-shrink: 0;
+}
+
 .review-commits {
   display: flex;
   flex-direction: column;
