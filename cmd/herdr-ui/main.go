@@ -21,6 +21,7 @@ import (
 
 	"github.com/dev1antdev/herdr-ui/internal/auth"
 	"github.com/dev1antdev/herdr-ui/internal/code"
+	"github.com/dev1antdev/herdr-ui/internal/health"
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
@@ -33,6 +34,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/state"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
 	"github.com/dev1antdev/herdr-ui/internal/transcript"
+	"github.com/dev1antdev/herdr-ui/internal/tsnetx"
 	"github.com/dev1antdev/herdr-ui/internal/usage"
 	buildversion "github.com/dev1antdev/herdr-ui/internal/version"
 	"github.com/dev1antdev/herdr-ui/internal/watch"
@@ -61,6 +63,9 @@ func main() {
 	codePort := flag.Int("code-port", code.DefaultPort, "port each machine's code-server listens on (127.0.0.1, auth none; see deploy/install-code.sh)")
 	printToken := flag.Bool("print-token", false, "print the access token and exit")
 	showVersion := flag.Bool("version", false, "print the version and exit")
+	tailscale := flag.Bool("tailscale", false, "join your tailnet as a node of its own and serve HTTPS there (no tailscale serve needed); first run prints a login URL unless TS_AUTHKEY is set")
+	tsName := flag.String("tailscale-hostname", "herdr-ui", "the node's name on the tailnet (https://<name>.<tailnet>.ts.net)")
+	noCheck := flag.Bool("no-version-check", false, "never ask npm and GitHub what the newest Claude Code and herdr are")
 	flag.Parse()
 
 	if *showVersion {
@@ -309,6 +314,16 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// the machines' vitals for the sidebar, and the newest versions out there
+	vitals := health.New(mgr, version, !*noCheck)
+	vitals.Start(15 * time.Minute)
+	s.Health = vitals
+	if *tailscale {
+		var node *tsnetx.Node
+		s.Tailscale = func() tsnetx.Status { return node.Status() } // set before the handler is handed out
+		node = tsnetx.Start(dir, *tsName, os.Getenv("TS_AUTHKEY"), s.Handler())
+		defer node.Close()
+	}
 	log.Printf("herdr-ui %s listening on http://%s", version, *addr)
 	log.Printf("sign in with the token from `herdr-ui -print-token`, or open:")
 	log.Printf("  http://%s/?token=%s", *addr, token)

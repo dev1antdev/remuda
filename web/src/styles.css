@@ -239,6 +239,10 @@ button {
   color: var(--accent);
 }
 
+a.btn {
+  text-decoration: none; /* a link dressed as a button */
+}
+
 /* the button family: quiet by default, .primary filled, .danger red,
    .ghost bare, .sm and .lg sizes. Every <button> carries one of these;
    nothing is styled by where it sits. */
@@ -622,7 +626,8 @@ input[type="checkbox"]:hover:not(:checked) {
 .row-menu.width-menu,
 .row-menu.radar-settings,
 .row-menu.split-menu,
-.row-menu.label-menu {
+.row-menu.label-menu,
+.row-menu.health-pop {
   transform: none;
 }
 
@@ -4644,4 +4649,93 @@ button.usage-row:hover {
   .lens-switch > button {
     min-width: 0;
   }
+}
+
+/* ---- a machine's vitals ---- */
+.health-warn {
+  color: var(--amber);
+}
+
+.health-bad {
+  color: var(--red);
+}
+
+.health-count {
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: -2px;
+}
+
+.health-pop {
+  width: 290px;
+  padding: 12px;
+  gap: 10px;
+  font-size: 12px;
+  cursor: default;
+}
+
+.health-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.health-head b {
+  color: var(--fg);
+}
+
+.health-head .dim {
+  flex: 1;
+  color: var(--fg-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.health-rows dt {
+  color: var(--fg-faint);
+}
+
+.health-rows dd {
+  margin: 0;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.health-new {
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.health-list {
+  margin: 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--amber);
+}
+
+.health-list li.bad {
+  color: var(--red);
+}
+
+.health-list code {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
+.icon.spin {
+  animation: spin 0.9s linear infinite;
 }

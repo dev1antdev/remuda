@@ -28,6 +28,7 @@ import (
 
 	"github.com/dev1antdev/herdr-ui/internal/auth"
 	"github.com/dev1antdev/herdr-ui/internal/code"
+	"github.com/dev1antdev/herdr-ui/internal/health"
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
@@ -37,6 +38,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/schedule"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
 	"github.com/dev1antdev/herdr-ui/internal/transcript"
+	"github.com/dev1antdev/herdr-ui/internal/tsnetx"
 	"github.com/dev1antdev/herdr-ui/internal/usage"
 	buildversion "github.com/dev1antdev/herdr-ui/internal/version"
 	"github.com/dev1antdev/herdr-ui/internal/watch"
@@ -52,6 +54,10 @@ type Server struct {
 	Schedules *schedule.Store
 	Quick     *quick.Store
 	Usage     *usage.Tracker
+	// Health and Tailscale are set after New, like Schedules: the machines'
+	// vitals, and the tailnet node's status when -tailscale is on
+	Health    *health.Collector
+	Tailscale func() tsnetx.Status
 	Radar     *radar.Tracker
 	Guard     *auth.Guard
 	UI        fs.FS // built SPA
@@ -97,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/roster", s.handleRoster)
 	api.HandleFunc("POST /api/machines", s.handleAddMachine)
 	api.HandleFunc("DELETE /api/machines/{id}", s.handleRemoveMachine)
+	api.HandleFunc("POST /api/machines/{id}/health", s.handleMachineHealth)
 	api.HandleFunc("POST /api/sessions", s.handleNewWorkspace)
 	api.HandleFunc("DELETE /api/sessions/{id}", s.closeHandler((*herdr.Client).WorkspaceClose))
 	api.HandleFunc("POST /api/tabs", s.handleNewTab)
@@ -255,6 +262,21 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "herdr": true, "herdr_version": snap.Version, "version": buildversion.Build})
 }
 
+// POST /api/machines/{id}/health — read the machine's vitals now.
+func (s *Server) handleMachineHealth(w http.ResponseWriter, r *http.Request) {
+	mc, err := s.Machines.Get(r.PathValue("id"))
+	if err != nil {
+		httpErr(w, 404, err)
+		return
+	}
+	if s.Health == nil {
+		httpErr(w, 503, fmt.Errorf("health checks are off"))
+		return
+	}
+	s.Health.Refresh(mc)
+	writeJSON(w, map[string]any{"health": s.Health.Report(mc.Cfg.ID), "latest": s.Health.Latest()})
+}
+
 // ---- roster ----
 
 type rosterPane struct {
@@ -313,6 +335,7 @@ type rosterMachine struct {
 	State    string          `json:"state"`            // connected | connecting | error
 	Error    string          `json:"error,omitempty"`
 	Sessions []rosterSession `json:"sessions"`
+	Health   *health.Report  `json:"health,omitempty"` // versions, disk, load — see internal/health
 }
 
 // sessionsFromSnapshot keeps herdr's own hierarchy: workspace → tabs → panes,
@@ -441,9 +464,19 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 				rm.State, rm.Error = machines.StateError, err.Error()
 			}
 		}
+		if s.Health != nil {
+			rm.Health = s.Health.Report(mc.Cfg.ID)
+		}
 		out = append(out, rm)
 	}
-	body, _ := json.Marshal(map[string]any{"machines": out, "agents": agents})
+	roster := map[string]any{"machines": out, "agents": agents, "version": buildversion.Build}
+	if s.Health != nil {
+		roster["latest"] = s.Health.Latest()
+	}
+	if s.Tailscale != nil {
+		roster["tailscale"] = s.Tailscale()
+	}
+	body, _ := json.Marshal(roster)
 	sum := sha256.Sum256(body)
 	etag := `"` + hex.EncodeToString(sum[:12]) + `"`
 	w.Header().Set("X-Herdr-UI-Version", buildversion.Build) // a page older than the server offers a reload

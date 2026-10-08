@@ -6,8 +6,11 @@ SPA. See README.md for the user story.
 ## Layout
 
 - `cmd/herdr-ui/` — main; flags `-addr` (default `127.0.0.1:7317`), `-socket`,
-  `-herdr-bin`, `-print-token`, `-version`.
-- `internal/state/` — the one state dir (`<user config dir>/herdr-ui`, 0700)
+  `-herdr-bin`, `-print-token`, `-version`, `-tailscale` /
+  `-tailscale-hostname`, `-no-version-check`, `-code-port`; subcommands
+  `search` and `usage` for the deployed binary on a remote machine.
+- `internal/state/` — the one state dir (`<user config dir>/herdr-ui`, 0700,
+  or `HERDR_UI_STATE_DIR` for a second instance beside the real one)
   and the one atomic 0600 writer; token, machines.json, vapid.json and
   push-subscriptions.json all live there.
 - `internal/herdr/` — everything herdr. `client.go`: newline-JSON RPC over
@@ -117,6 +120,22 @@ SPA. See README.md for the user story.
   attach at 80×24 and resize the shared pane): the terminal keeps its
   attach, the chat its scroll and no refetch, Changes its draft; a lens
   gets `active` and polls or refits only when on screen.
+- `internal/health` — each machine's vitals (Claude Code / herdr /
+  herdr-ui versions, how Claude Code was installed, disk, load, uptime)
+  from one POSIX script per machine through `Machine.Shell`, every 15
+  minutes and on demand (`POST /api/machines/{id}/health`); the newest
+  Claude Code (npm registry) and herdr (GitHub releases) every 6 hours
+  unless `-no-version-check` — the only outbound requests herdr-ui makes.
+  The roster carries `health` per machine and `latest`; the sidebar's ⓘ
+  (`HealthButton` in Sidebar.tsx) turns amber on an update, a lagging
+  remote herdr-ui, or a nearly full disk.
+- `internal/tsnetx` — `-tailscale` joins the tailnet as a tsnet node
+  (userspace, no tailscaled) named `-tailscale-hostname`, serves the same
+  handler over HTTPS on :443 with the tailnet's certificate (:80
+  redirects), state under `<state dir>/tailscale/`. The status
+  (needs_login with the URL, running with the URL, error) rides on the
+  roster as `tailscale`; the App shows a login toast. `TS_AUTHKEY` skips
+  the login. The loopback listener stays.
 - The build's version is injected into the bundle (`__HERDR_UI_VERSION__`,
   from `HERDR_UI_VERSION` set by `make web`) and the roster answer carries
   the server's in `X-Herdr-UI-Version`; a page older than its server shows

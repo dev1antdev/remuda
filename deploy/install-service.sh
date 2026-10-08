@@ -9,6 +9,17 @@ set -e
 ACTION="${1:-install}"
 BIN="$HOME/.local/bin/herdr-ui"
 ADDR="${HERDR_UI_ADDR:-127.0.0.1:7317}"
+# HERDR_UI_TAILSCALE=1 makes the service join your tailnet by itself and
+# serve HTTPS there (see README "From your phone"); the node's name is
+# HERDR_UI_TAILSCALE_HOSTNAME (default herdr-ui). The first start logs a
+# login URL — or set TS_AUTHKEY when installing: use a one-off key, it is
+# written into the service file (mode 0600) and ignored once the node has
+# its state.
+umask 077
+TS_ARGS=""
+if [ "${HERDR_UI_TAILSCALE:-0}" = "1" ]; then
+    TS_ARGS="-tailscale -tailscale-hostname ${HERDR_UI_TAILSCALE_HOSTNAME:-herdr-ui}"
+fi
 LABEL="dev.mardeus.herdr-ui"
 PATH_FOR_SERVICE="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
@@ -31,12 +42,12 @@ Darwin)
   <key>ProgramArguments</key>
   <array>
     <string>$BIN</string>
-    <string>-addr</string><string>$ADDR</string>
+    <string>-addr</string><string>$ADDR</string>$(for a in $TS_ARGS; do printf '\n    <string>%s</string>' "$a"; done)
   </array>
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key><string>$PATH_FOR_SERVICE</string>
-    <key>HOME</key><string>$HOME</string>
+    <key>HOME</key><string>$HOME</string>$([ -n "$TS_AUTHKEY" ] && printf '\n    <key>TS_AUTHKEY</key><string>%s</string>' "$TS_AUTHKEY")
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -78,8 +89,8 @@ Description=herdr-ui — browser/phone client for herdr
 After=default.target
 
 [Service]
-ExecStart=$BIN -addr $ADDR
-Environment=PATH=$PATH_FOR_SERVICE
+ExecStart=$BIN -addr $ADDR $TS_ARGS
+Environment=PATH=$PATH_FOR_SERVICE$([ -n "$TS_AUTHKEY" ] && printf '\nEnvironment=TS_AUTHKEY=%s' "$TS_AUTHKEY")
 Restart=always
 RestartSec=3
 

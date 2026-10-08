@@ -5,7 +5,7 @@
 // keeps its question until it works again; a parked one cools with time.
 
 import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
-import type { Machine, Session } from "./api";
+import { refreshHealth, type Health, type Latest, type Machine, type Session } from "./api";
 import { fillClass } from "./Usage";
 import Logo from "./Logo";
 import Select from "./Select";
@@ -24,15 +24,17 @@ import {
   type Group,
   type RadarPrefs,
 } from "./radar";
-import { basename, usePref } from "./prefs";
+import { basename, errMsg, usePref } from "./prefs";
 import { ago } from "./time";
 import { Notice, StatusDot, useDismiss } from "./ui";
 import Icon from "./icons";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
 
-export default function Sidebar({ machines, current, prefs, collapsed, onToggle, onSelect, onMenu, onNewWorkspace, onRemoveMachine, onAddMachine, onPrefs, onSchedules, onUsage }: {
+export default function Sidebar({ machines, latest, serverVersion, current, prefs, collapsed, onToggle, onSelect, onMenu, onNewWorkspace, onRemoveMachine, onAddMachine, onPrefs, onSchedules, onUsage }: {
   machines: Machine[];
+  latest?: Latest; // the newest Claude Code and herdr out there
+  serverVersion?: string; // this herdr-ui, to compare with the ones deployed remotely
   current: Current;
   prefs: RadarPrefs;
   collapsed: Record<string, boolean>;
@@ -145,6 +147,7 @@ export default function Sidebar({ machines, current, prefs, collapsed, onToggle,
                   herdr
                 </span>
               )}
+              <HealthButton machine={m} latest={latest} serverVersion={serverVersion} />
               <button type="button" className="icon-btn" title={`New workspace on ${m.label}`} disabled={m.state !== "connected"} onClick={() => onNewWorkspace(m)}>
                 <Icon name="plus" size={14} />
               </button>
@@ -490,3 +493,128 @@ function stateWords(d: Display, last: number | undefined, now: number): string {
 }
 
 // the colour of a context fill: calm below 70%, amber, then red near the edge
+
+// ---- a machine's vitals ----
+// Claude Code, herdr and herdr-ui versions against the newest known, disk
+// and load. Quiet when all is well; an amber chip when something wants a
+// look — an update, a full disk — and a popover with the details either way.
+
+type Concern = { key: string; text: string; hint?: string; bad?: boolean };
+
+function concerns(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean): Concern[] {
+  if (!h) return [];
+  const out: Concern[] = [];
+  if (h.claude && latest?.claude && newer(h.claude, latest.claude)) out.push({ key: "claude", text: `Claude Code ${latest.claude} is out (${h.claude} here)`, hint: updateHint(h.claude_via) });
+  if (h.herdr && latest?.herdr && newer(h.herdr, latest.herdr)) out.push({ key: "herdr", text: `herdr ${latest.herdr} is out (${h.herdr} here)`, hint: "herdr update" });
+  if (remote && serverVersion && h.herdr_ui && h.herdr_ui !== serverVersion) out.push({ key: "ui", text: `herdr-ui there is ${h.herdr_ui}; this one is ${serverVersion}`, hint: "make deploy HOST=…" });
+  if (remote && serverVersion && !h.herdr_ui) out.push({ key: "ui", text: "no herdr-ui deployed there — search and usage fall back to slower paths", hint: "make deploy HOST=…" });
+  if (h.disk_used_pct >= 90 || (h.disk_free_gb > 0 && h.disk_free_gb < 10)) out.push({ key: "disk", text: `Disk ${h.disk_used_pct}% full, ${h.disk_free_gb.toFixed(0)} GB free`, bad: h.disk_used_pct >= 95 });
+  if (h.error && !h.claude && !h.herdr) out.push({ key: "err", text: h.error, bad: true });
+  return out;
+}
+
+// b is a newer x.y.z than a
+function newer(a: string, b: string): boolean {
+  const pa = a.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
+  const pb = b.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
+  if (pa.length < 3 || pb.length < 3) return false;
+  for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pb[i]! > pa[i]!;
+  return false;
+}
+
+const updateHint = (via: Health["claude_via"]) => (via === "brew" ? "brew upgrade claude-code" : via === "npm" ? "npm i -g @anthropic-ai/claude-code" : "claude update");
+
+function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine; latest?: Latest; serverVersion?: string }) {
+  const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [fresh, setFresh] = useState<{ health: Health | null; latest: Latest } | null>(null);
+  const close = useCallback(() => setOpen(null), []);
+  useDismiss(!!open, close, [".health-pop", `[data-health-btn="${CSS.escape(m.id)}"]`]);
+  // a manual read stands until the collector's next one
+  useEffect(() => setFresh(null), [m.health?.at]);
+  const h = fresh?.health ?? m.health;
+  const l = fresh?.latest ?? latest;
+  const list = concerns(h, l, serverVersion, m.id !== "local");
+  const worst = list.some((c) => c.bad) ? "bad" : list.length ? "warn" : "";
+  if (!h && m.state !== "connected") return null;
+  const refresh = async () => {
+    setBusy(true);
+    try {
+      setFresh(await refreshHealth(m.id));
+    } catch (e) {
+      setFresh({ health: { ...(h ?? { at: "", disk_free_gb: 0, disk_used_pct: 0, load1: 0 }), error: errMsg(e) }, latest: l ?? { at: "" } });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className={`icon-btn${worst ? ` health-${worst}` : ""}${open ? " on" : ""}`}
+        data-health-btn={m.id}
+        title={list.length ? list.map((c) => c.text).join("\n") : h ? `${m.label}: all good — ${h.os ?? ""}` : "Vitals not read yet"}
+        aria-expanded={!!open}
+        onClick={(e) => {
+          e.stopPropagation();
+          const r = e.currentTarget.getBoundingClientRect();
+          setOpen(open ? null : { x: Math.min(r.left, window.innerWidth - 300), y: r.bottom + 4 });
+        }}
+      >
+        <Icon name={list.length ? "alert-triangle" : "info"} size={14} />
+        {list.length > 0 && <span className="health-count">{list.length}</span>}
+      </button>
+      {open && (
+        <div className="row-menu health-pop" role="dialog" aria-label={`${m.label} vitals`} style={{ left: open.x, top: open.y }} onClick={(e) => e.stopPropagation()}>
+          <div className="health-head">
+            <b>{m.label}</b>
+            <span className="dim">{h?.os}</span>
+            <button type="button" className="icon-btn sm" title="Read again now" disabled={busy} onClick={() => void refresh()}>
+              <Icon name="refresh-cw" size={12} className={busy ? "spin" : undefined} />
+            </button>
+          </div>
+          {h ? (
+            <dl className="health-rows">
+              <dt>Claude Code</dt>
+              <dd>
+                {h.claude ?? "—"}
+                {h.claude && l?.claude && newer(h.claude, l.claude) ? <span className="health-new"> → {l.claude}</span> : null}
+              </dd>
+              <dt>herdr</dt>
+              <dd>
+                {h.herdr ?? "—"}
+                {h.herdr && l?.herdr && newer(h.herdr, l.herdr) ? <span className="health-new"> → {l.herdr}</span> : null}
+              </dd>
+              <dt>herdr-ui</dt>
+              <dd>{h.herdr_ui ?? (m.id === "local" ? serverVersion : "not deployed")}</dd>
+              <dt>Disk</dt>
+              <dd>
+                {h.disk_free_gb.toFixed(0)} GB free · {h.disk_used_pct}% used
+              </dd>
+              <dt>Load</dt>
+              <dd>
+                {h.load1.toFixed(2)}
+                {h.uptime ? ` · up ${h.uptime}` : ""}
+              </dd>
+              <dt>Read</dt>
+              <dd>{ago(h.at)}</dd>
+            </dl>
+          ) : (
+            <div className="dim">Not read yet.</div>
+          )}
+          {list.length > 0 && (
+            <ul className="health-list">
+              {list.map((c) => (
+                <li key={c.key} className={c.bad ? "bad" : ""}>
+                  {c.text}
+                  {c.hint && <code>{c.hint}</code>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {h?.error && h.claude && <div className="dim">{h.error}</div>}
+        </div>
+      )}
+    </>
+  );
+}

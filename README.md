@@ -158,7 +158,22 @@ mounted behind the other modes, so switching back does not reload it.
 
 ## From your phone
 
-Keep herdr-ui on loopback and bring your own transport:
+The simplest way: let herdr-ui join your tailnet by itself.
+
+```bash
+herdr-ui -tailscale                      # or: HERDR_UI_TAILSCALE=1 make service
+```
+
+The binary becomes a node of its own (no `tailscaled`, no `tailscale
+serve`), gets a MagicDNS name and a real certificate, and serves
+`https://herdr-ui.<your-tailnet>.ts.net`. The first start logs a login URL
+(the desk's page shows it as a toast too); after that it reconnects on its
+own. `-tailscale-hostname` names the node, `TS_AUTHKEY` skips the login
+(an auth key from the Tailscale admin console). HTTPS certificates and
+MagicDNS must be enabled in the tailnet's DNS settings. The loopback
+listener stays for the desk.
+
+Or keep herdr-ui on loopback and bring your own transport:
 
 ```bash
 tailscale serve --bg --https=443 http://127.0.0.1:7317   # your tailnet only
@@ -166,19 +181,27 @@ tailscale serve --bg --https=443 http://127.0.0.1:7317   # your tailnet only
 ssh -L 7317:127.0.0.1:7317 your-mac                       # plain SSH tunnel
 ```
 
-Open the address in the phone browser, sign in with the token once, then
-"Add to Home Screen" — it installs as a PWA.
+Either way, open the address in the phone browser, sign in with the token
+once, then "Add to Home Screen" — it installs as a PWA.
 
 **Never** expose the port directly to the internet.
 
 ## Security model
 
 - Binds `127.0.0.1` by default; remote access is your tunnel's problem
-  (Tailscale/SSH), not an auth system invented here.
+  (Tailscale/SSH), not an auth system invented here. `-tailscale` is that
+  tunnel built in: the node is only reachable from your tailnet, and the
+  token is still asked for.
+- Outbound: nothing, except (unless `-no-version-check`) one request to
+  the npm registry and one to GitHub every six hours to learn the newest
+  Claude Code and herdr, so a machine can say it wants an update.
 - Single bearer token, constant-time compared, HttpOnly cookie, no accounts.
 - Cross-origin mutations rejected (`Sec-Fetch-Site`).
 - Anyone with the token can type into your terminals — treat it like an SSH
   key.
+
+A second copy beside the real one (to try `-tailscale`, say) gets its own
+token, tasks and push subscriptions with `HERDR_UI_STATE_DIR=/some/dir`.
 
 ## Development
 
@@ -229,6 +252,11 @@ same dialog Tasks uses to send a task. **Quick prompts** (⚡ in the composer)
 are saved texts, for every folder or one, shared by all your devices.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through herdr-ui.
+
+**Machine vitals:** the ⓘ next to each machine shows which Claude Code,
+herdr and herdr-ui run there, disk and load; it turns amber when an update
+is out (with the right command for how it was installed), a remote
+herdr-ui is behind this one, or the disk is nearly full.
 
 **Cost and context:** every agent pane shows how full its context is (a
 pill in the header and on the sidebar row from 50% up, red near the edge,

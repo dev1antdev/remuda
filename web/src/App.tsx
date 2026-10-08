@@ -18,7 +18,7 @@ import {
   type Pane,
   type Session,
   type Status,
-  type Tab, type SearchHit, encodePath } from "./api";
+  type Tab, type SearchHit, encodePath, type Latest, type Tailscale } from "./api";
 import AlertsPanel from "./AlertsPanel";
 import Chat from "./Chat";
 import FileViewer, { type FileTarget } from "./FileViewer";
@@ -99,6 +99,7 @@ export default function App() {
   const [drawer, setDrawer] = useState(false);
   const [offline, setOffline] = useState(false);
   const [stale, setStale] = useState<string | null>(null); // the server's version when newer than this page
+  const [rosterInfo, setRosterInfo] = useState<{ latest?: Latest; tailscale?: Tailscale }>({});
   const [dialog, setDialog] = useState<Dialog>(null);
   const [menu, setMenu] = useState<RowMenu>(null);
   const [alerts, setAlerts] = useState(false);
@@ -188,6 +189,7 @@ export default function App() {
         rosterEtag.current = res.etag;
         setMachines(res.roster.machines);
         setAgents(res.roster.agents);
+        setRosterInfo({ latest: res.roster.latest, tailscale: res.roster.tailscale });
       }
       // the server was updated under this page: say so, once per version
       if (res.version && res.version !== __HERDR_UI_VERSION__ && __HERDR_UI_VERSION__ !== "dev") setStale(res.version);
@@ -267,6 +269,20 @@ export default function App() {
       ),
     });
   if (notice) toasts.push({ id: "notice", tone: notice.error ? "error" : "success", text: notice.text, onDismiss: () => setNotice(null) });
+  // the tailnet node needs a login (first run), or could not start
+  const ts = rosterInfo.tailscale;
+  if (ts?.state === "needs_login" && ts.login_url)
+    toasts.push({
+      id: "tailscale",
+      tone: "info",
+      text: "Tailscale: this herdr-ui is not on your tailnet yet.",
+      action: (
+        <a className="btn sm primary" href={ts.login_url} target="_blank" rel="noreferrer">
+          Log in
+        </a>
+      ),
+    });
+  if (ts?.state === "error") toasts.push({ id: "tailscale", tone: "error", text: `Tailscale: ${ts.error}` });
 
   const allPanes = useMemo(() => {
     const out: Located[] = [];
@@ -543,6 +559,8 @@ export default function App() {
         <aside className={drawer ? "sidebar open" : "sidebar"}>
           <Sidebar
             machines={machines}
+            latest={rosterInfo.latest}
+            serverVersion={__HERDR_UI_VERSION__ === "dev" ? undefined : __HERDR_UI_VERSION__}
             current={current ? { machineId: current.machine.id, sessionId: current.session.id, paneId: current.pane.id } : null}
             prefs={radarPrefs}
             collapsed={collapsed}

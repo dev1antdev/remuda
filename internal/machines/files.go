@@ -327,6 +327,7 @@ func (mc *Machine) Shell(script string, timeout time.Duration) (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, "sh", "-c", script)
+		cmd.WaitDelay = 2 * time.Second // a killed sh may leave children on the pipes; do not wait for them
 		var out, errb bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &errb
 		if err := cmd.Run(); err != nil {

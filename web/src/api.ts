@@ -49,6 +49,25 @@ export type Session = {
   tabs: Tab[];
 };
 
+// a machine's vitals, read by internal/health a few minutes apart
+export type Health = {
+  at: string;
+  os?: string;
+  claude?: string; // installed Claude Code
+  claude_via?: "brew" | "npm" | "native" | "";
+  herdr?: string;
+  herdr_ui?: string; // the binary deployed there
+  disk_free_gb: number;
+  disk_used_pct: number;
+  load1: number;
+  uptime?: string;
+  error?: string;
+};
+
+export type Latest = { at: string; claude?: string; herdr?: string };
+
+export type Tailscale = { state: "starting" | "needs_login" | "running" | "error"; login_url?: string; url?: string; hostname?: string; error?: string };
+
 export type Machine = {
   id: string;
   label: string;
@@ -57,11 +76,18 @@ export type Machine = {
   state: "connected" | "connecting" | "error";
   error?: string;
   sessions: Session[];
+  health?: Health;
 };
 
 export type AgentKind = { id: string; label: string };
 
-export type Roster = { machines: Machine[]; agents: AgentKind[] };
+export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale };
+
+export async function refreshHealth(machineId: string): Promise<{ health: Health | null; latest: Latest }> {
+  const res = await fetch(`/api/machines/${encodeURIComponent(machineId)}/health`, { method: "POST" });
+  await check(res);
+  return (await res.json()) as { health: Health | null; latest: Latest };
+}
 
 export type Part = {
   type: "text" | "thinking" | "tool";

@@ -13,13 +13,18 @@ import (
 	"path/filepath"
 )
 
-// Dir is <user config dir>/herdr-ui, created on first use.
+// Dir is <user config dir>/herdr-ui, created on first use — or
+// HERDR_UI_STATE_DIR, for a second instance beside the real one (a test,
+// a trial of -tailscale) that must not share its token, tasks and pushes.
 func Dir() (string, error) {
-	base, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
+	dir := os.Getenv("HERDR_UI_STATE_DIR")
+	if dir == "" {
+		base, err := os.UserConfigDir()
+		if err != nil {
+			return "", err
+		}
+		dir = filepath.Join(base, "herdr-ui")
 	}
-	dir := filepath.Join(base, "herdr-ui")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
