@@ -3216,6 +3216,23 @@ input[type="checkbox"]:hover:not(:checked) {
   min-height: 24px;
 }
 
+.review-commit.seen {
+  color: var(--fg-faint);
+}
+
+.review-fold {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.review-fold > .linkish {
+  align-self: flex-start;
+  color: var(--fg-faint);
+  font-size: 12px;
+}
+
 .review-commit code {
   font: 11.5px var(--mono);
   color: var(--fg-faint);

@@ -148,3 +148,46 @@ func TestSeenHoldsWhileHerdrStillSaysDone(t *testing.T) {
 		t.Fatalf("a new finish: %s, want done", d.State)
 	}
 }
+
+func TestRestartKeepsTicksAndRaisesNone(t *testing.T) {
+	dir := t.TempDir()
+	tr := New(dir, nil)
+	now := time.Now()
+	// p1 finished and was not looked at; p2 finished and was
+	two := &herdr.Snapshot{Panes: []herdr.PaneInfo{
+		{PaneID: "p1", Agent: "claude", AgentStatus: herdr.StatusWorking},
+		{PaneID: "p2", Agent: "claude", AgentStatus: herdr.StatusWorking},
+	}}
+	tr.Observe("m", two, now)
+	two.Panes[0].AgentStatus, two.Panes[1].AgentStatus = herdr.StatusDone, herdr.StatusDone
+	tr.Observe("m", two, now.Add(5*time.Second))
+	tr.Seen("m", "p2")
+	tr.Flush()
+
+	// herdr-ui restarts; herdr still says done for both, and knows a third
+	// pane that finished before herdr-ui ever ran
+	tr2 := New(dir, nil)
+	three := &herdr.Snapshot{Panes: []herdr.PaneInfo{
+		{PaneID: "p1", Agent: "claude", AgentStatus: herdr.StatusDone},
+		{PaneID: "p2", Agent: "claude", AgentStatus: herdr.StatusDone},
+		{PaneID: "p3", Agent: "claude", AgentStatus: herdr.StatusDone},
+	}}
+	tr2.Observe("m", three, now.Add(time.Minute))
+	if d := tr2.Display("m", &three.Panes[0]); d.State != herdr.StatusDone {
+		t.Fatalf("p1 (unseen before the restart): %s, want done held", d.State)
+	}
+	if d := tr2.Display("m", &three.Panes[1]); d.State != herdr.StatusIdle {
+		t.Fatalf("p2 (seen before the restart): %s, want idle", d.State)
+	}
+	if d := tr2.Display("m", &three.Panes[2]); d.State != herdr.StatusIdle {
+		t.Fatalf("p3 (finished before herdr-ui ran): %s, want idle", d.State)
+	}
+	// a finish after the restart is news again
+	three.Panes[2].AgentStatus = herdr.StatusWorking
+	tr2.Observe("m", three, now.Add(2*time.Minute))
+	three.Panes[2].AgentStatus = herdr.StatusDone
+	tr2.Observe("m", three, now.Add(3*time.Minute))
+	if d := tr2.Display("m", &three.Panes[2]); d.State != herdr.StatusDone {
+		t.Fatalf("p3 new finish: %s, want done", d.State)
+	}
+}

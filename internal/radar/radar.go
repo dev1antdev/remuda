@@ -63,6 +63,7 @@ type pane struct {
 	since     time.Time // when the shown state began
 	shown     string    // the state shown last, to notice a change
 	alert     string    // the watchdog's note, cleared when the state moves on
+	known     bool      // observed at least once (or loaded from the file)
 }
 
 type Tracker struct {
@@ -77,15 +78,33 @@ type Tracker struct {
 
 func key(machineID, paneID string) string { return machineID + "|" + paneID }
 
+// stamp is what activity.json keeps per pane: when the agent last worked,
+// and whether its finish is still waiting to be looked at — so a restart
+// neither forgets a tick that was up nor raises one for every finish herdr
+// is still reporting from before.
+type stamp struct {
+	LastActive int64 `json:"last_active,omitempty"`
+	Held       bool  `json:"held,omitempty"`
+}
+
 func New(dir string, recover Recover) *Tracker {
 	t := &Tracker{dir: dir, recover: recover, panes: map[string]*pane{}}
 	if b, err := os.ReadFile(filepath.Join(dir, activityFile)); err == nil {
-		var stamps map[string]int64
-		if json.Unmarshal(b, &stamps) == nil {
-			for k, ms := range stamps {
-				if ms > 0 {
-					t.panes[k] = &pane{lastWork: time.UnixMilli(ms), recovered: true}
+		var stamps map[string]stamp
+		if json.Unmarshal(b, &stamps) != nil {
+			// the older file: a bare unix-ms stamp per pane
+			var old map[string]int64
+			if json.Unmarshal(b, &old) == nil {
+				for k, ms := range old {
+					stamps[k] = stamp{LastActive: ms}
 				}
+			}
+		}
+		for k, st := range stamps {
+			if st.LastActive > 0 || st.Held {
+				// a pane known from before: its tick stands as it stood; a
+				// finish it had not raised is one that was looked at
+				t.panes[k] = &pane{lastWork: time.UnixMilli(st.LastActive), recovered: true, doneHeld: st.Held, doneSeen: !st.Held, known: true}
 			}
 		}
 	}
@@ -160,9 +179,24 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 	// herdr keeps saying done until the pane is focused in herdr itself —
 	// for hours — so a finish that was looked at here stays looked at until
 	// the agent works again
+	if !st.known {
+		// first sight of this pane — a restart, or one that was there before
+		// herdr-ui: a finish herdr is still reporting from before is not news
+		st.known = true
+		if status != herdr.StatusWorking && !st.doneHeld {
+			st.doneSeen = true
+		}
+		t.dirty = true
+	}
 	if status == herdr.StatusWorking {
+		if st.doneSeen || st.doneHeld {
+			t.dirty = true
+		}
 		st.doneSeen, st.doneHeld = false, false
 	} else if !st.doneSeen && (p.AgentStatus == herdr.StatusDone || (st.status == herdr.StatusWorking && status == herdr.StatusIdle)) {
+		if !st.doneHeld {
+			t.dirty = true
+		}
 		st.doneHeld = true
 	}
 	st.status = status
@@ -176,8 +210,9 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 		// simply gone
 		st.blocked = false
 	}
-	if p.Focused {
+	if p.Focused && st.doneHeld {
 		st.doneHeld, st.doneSeen = false, true // herdr's own focus counts as having looked
+		t.dirty = true
 	}
 	if shown := shownState(st); shown != st.shown {
 		st.shown, st.since, st.alert = shown, now, ""
@@ -201,8 +236,9 @@ func (t *Tracker) Forget(machineID string) {
 func (t *Tracker) Seen(machineID, paneID string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if st := t.panes[key(machineID, paneID)]; st != nil {
+	if st := t.panes[key(machineID, paneID)]; st != nil && st.doneHeld {
 		st.doneHeld, st.doneSeen = false, true
+		t.dirty = true
 	}
 }
 
@@ -289,10 +325,14 @@ func (t *Tracker) saveLocked(now time.Time, force bool) {
 	if !t.dirty || (!force && now.Sub(t.lastSave) < saveInterval) {
 		return
 	}
-	stamps := map[string]int64{}
+	stamps := map[string]stamp{}
 	for k, st := range t.panes {
-		if !st.lastWork.IsZero() {
-			stamps[k] = st.lastWork.UnixMilli()
+		if !st.lastWork.IsZero() || st.doneHeld {
+			var ms int64
+			if !st.lastWork.IsZero() {
+				ms = st.lastWork.UnixMilli()
+			}
+			stamps[k] = stamp{LastActive: ms, Held: st.doneHeld}
 		}
 	}
 	b, _ := json.Marshal(stamps)

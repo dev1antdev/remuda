@@ -44,6 +44,7 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
   const [data, setData] = useState<ReviewData | null>(null);
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
+  const [showOld, setShowOld] = useState(false);
   const [tick, setTick] = useState(0);
   const [busy, setBusy] = useState(false); // marking reviewed
   const [sending, setSending] = useState(false);
@@ -113,6 +114,23 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
   const added = files.reduce((a, f) => a + f.added, 0);
   const removed = files.reduce((a, f) => a + f.removed, 0);
   const orphans = draft.filter((c) => !files.some((f) => f.path === c.file));
+  // what moved since the look comes first; the rest waits behind a fold
+  const freshFiles = since ? files.filter((f) => f.fresh) : files;
+  const oldFiles = since ? files.filter((f) => !f.fresh) : [];
+  const fileRow = (f: ReviewFile) => (
+    <FileRow
+      key={`${f.path}|${tick}`} // a new look re-reads the diff
+      file={f}
+      open={open === f.path}
+      onToggle={() => setOpen(open === f.path ? null : f.path)}
+      load={loadDiff}
+      canComment={!!agent || agents.length > 0}
+      draft={draft.filter((c) => c.file === f.path)}
+      onComment={(c) => addComment({ ...c, file: f.path })}
+      onRemove={removeComment}
+      onOpen={(line) => onOpenFile(`${dir}/${f.path}`, line)}
+    />
+  );
 
   return (
     <div className="review">
@@ -144,29 +162,25 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
         {commits.length > 0 && (
           <div className="review-commits">
             {commits.map((c) => (
-              <div key={c.sha} className="review-commit">
+              <div key={c.sha} className={`review-commit${c.seen ? " seen" : ""}`} title={c.seen ? "A commit of work you already reviewed" : undefined}>
                 <code>{c.sha}</code>
                 <span className="review-commit-subject">{c.subject}</span>
+                {c.seen && <span className="review-tag">reviewed</span>}
                 <span className="review-commit-when">{ago(c.when * 1000)}</span>
               </div>
             ))}
           </div>
         )}
         {files.length === 0 && commits.length === 0 && <div className="empty">Nothing has changed here{since ? " since you looked" : ""}.</div>}
-        {files.map((f) => (
-          <FileRow
-            key={`${f.path}|${tick}`} // a new look re-reads the diff
-            file={f}
-            open={open === f.path}
-            onToggle={() => setOpen(open === f.path ? null : f.path)}
-            load={loadDiff}
-            canComment={!!agent || agents.length > 0}
-            draft={draft.filter((c) => c.file === f.path)}
-            onComment={(c) => addComment({ ...c, file: f.path })}
-            onRemove={removeComment}
-            onOpen={(line) => onOpenFile(`${dir}/${f.path}`, line)}
-          />
-        ))}
+        {freshFiles.map((f) => fileRow(f))}
+        {oldFiles.length > 0 && (
+          <div className="review-fold">
+            <button type="button" className="linkish" aria-expanded={showOld} onClick={() => setShowOld((v) => !v)}>
+              <Icon name={showOld ? "chevron-down" : "chevron-right"} size={12} /> {plural(oldFiles.length, "file")} unchanged since you looked
+            </button>
+            {showOld && oldFiles.map((f) => fileRow(f))}
+          </div>
+        )}
         {data && orphans.length > 0 && (
           <div className="review-orphans">
             <Notice tone="hint">Comments on files no longer in this list — still in the draft:</Notice>

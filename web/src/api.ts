@@ -170,7 +170,7 @@ export async function fetchChat(
 
 // ---- review: what changed in a folder since the viewer last looked ----
 export type ReviewFile = { path: string; added: number; removed: number; untracked?: boolean; fresh: boolean };
-export type ReviewCommit = { sha: string; subject: string; when: number };
+export type ReviewCommit = { sha: string; subject: string; when: number; seen?: boolean }; // seen: a commit of work already reviewed
 export type Review = {
   repo?: string;
   branch?: string;

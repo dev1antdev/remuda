@@ -10,6 +10,7 @@ package review
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,7 +34,8 @@ type Baseline struct {
 type Commit struct {
 	SHA     string `json:"sha"`
 	Subject string `json:"subject"`
-	When    int64  `json:"when"` // unix seconds
+	When    int64  `json:"when"`           // unix seconds
+	Seen    bool   `json:"seen,omitempty"` // every file it brought matches what was reviewed (a commit of reviewed work, an amend, a rebase)
 }
 
 type File struct {
@@ -111,7 +113,10 @@ func summaryScript(dir, base string) string {
 		`if [ "$base" != HEAD ]; then git log --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
 		`git -c core.quotepath=off diff --no-renames --relative --numstat "$base" 2>/dev/null; printf '\036\n'; ` +
 		`git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
-		hashLoop("$base")
+		hashLoop("$base") + `; printf '\036\n'; ` +
+		// per commit since the baseline: the blob every file ends up with, so
+		// a commit of work already reviewed can be told from new work
+		`if [ "$base" != HEAD ]; then for c in $(git rev-list "$base"..HEAD 2>/dev/null); do printf '%s\n' "$c"; git -c core.quotepath=off diff-tree --no-commit-id -r --relative --no-renames "$c" 2>/dev/null | while IFS= read -r l; do printf '\037%s\n' "$l"; done; done; fi`
 }
 
 // hashLoop prints "<path>\x1f<blob hash>" for every file changed against
@@ -172,6 +177,45 @@ func (st *Store) Summary(mc *machines.Machine, dir string) Summary {
 		}
 		return true
 	}
+	// a commit is seen when every blob it brought is the one reviewed
+	if hasBase && len(sections) > 5 {
+		seen := map[string]bool{}
+		var sha string
+		var all, any bool
+		flush := func() {
+			if sha != "" && any && all {
+				seen[sha] = true
+			}
+		}
+		for _, line := range strings.Split(strings.TrimRight(sections[5], "\n"), "\n") {
+			if line == "" {
+				continue
+			}
+			if !strings.HasPrefix(line, "\x1f") {
+				flush()
+				sha, all, any = line, true, false
+				continue
+			}
+			// :100644 100644 <old> <new> M\tpath
+			meta, path, ok := strings.Cut(line[1:], "\t")
+			f := strings.Fields(meta)
+			if !ok || len(f) < 4 {
+				continue
+			}
+			any = true
+			if old, ok := base.Files[path]; !ok || old != f[3] {
+				all = false
+			}
+		}
+		flush()
+		for i := range sum.Commits {
+			for full := range seen {
+				if strings.HasPrefix(full, sum.Commits[i].SHA) {
+					sum.Commits[i].Seen = true
+				}
+			}
+		}
+	}
 	for _, line := range strings.Split(strings.TrimRight(sections[2], "\n"), "\n") {
 		f := strings.Split(line, "\t")
 		if len(f) != 3 {
@@ -213,11 +257,29 @@ func (st *Store) setBadge(k string, against Baseline, b Badge) {
 	st.badges[k] = b
 }
 
-// Diff is one file's change against the baseline commit (HEAD without one);
-// an untracked file comes back whole, as additions.
+// Diff is one file's change since the viewer looked: from the blob the
+// baseline recorded for it when there is one (so a commit of reviewed work
+// and the edits after it show only the edits), else against the baseline
+// commit (HEAD without one); an untracked file comes back whole.
 func (st *Store) Diff(mc *machines.Machine, dir, path string) (string, error) {
 	base, _ := st.baseline(mc.Cfg.ID, dir)
 	q := sshx.Quote(path)
+	seen := base.Files[path]
+	if seen != "" && seen != "gone" && hexRe.MatchString(seen) {
+		// the seen blob, written out, against the file as it is now; the
+		// temp file's name is reported first and taken out of the headers
+		script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; t=$(mktemp "${TMPDIR:-/tmp}/herdr-ui-seen.XXXXXX") || exit 0; printf '%s\n' "$t"; ` +
+			`if git cat-file -p ` + seen + ` > "$t" 2>/dev/null; then git -c color.ui=never -c core.quotepath=off diff --no-index -- "$t" ` + q + ` | head -c 600000; fi; rm -f "$t"; exit 0`
+		out, err := mc.Shell(script, 60*time.Second)
+		if err != nil {
+			return out, err
+		}
+		tmp, rest, ok := strings.Cut(out, "\n")
+		if !ok {
+			return "", nil
+		}
+		return strings.ReplaceAll(rest, "a"+tmp, "a/"+path), nil
+	}
 	script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; base=` + sshx.Quote(base.Head) + `; ` +
 		`if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
 		`if git ls-files --error-unmatch -- ` + q + ` >/dev/null 2>&1 || git cat-file -e "$base:./"` + q + ` 2>/dev/null; then ` +
@@ -226,10 +288,16 @@ func (st *Store) Diff(mc *machines.Machine, dir, path string) (string, error) {
 	return mc.Shell(script, 60*time.Second)
 }
 
-// MarkSeen sets the folder's baseline to now: HEAD, and the hash of every
-// file that is changed or untracked at this moment.
+var hexRe = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
+
+// MarkSeen sets the folder's baseline to now: HEAD, and the blob of every
+// file the review showed — changed since the previous baseline's commit
+// (committed meanwhile or not) and untracked. A later commit of that very
+// content, an amend or a rebase then brings nothing new.
 func (st *Store) MarkSeen(mc *machines.Machine, dir string) (Baseline, error) {
-	script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` + hashLoop("HEAD")
+	prev, _ := st.baseline(mc.Cfg.ID, dir)
+	script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
+		`base=` + sshx.Quote(prev.Head) + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` + hashLoop("$base")
 	out, err := mc.Shell(script, 60*time.Second)
 	if err != nil {
 		return Baseline{}, err

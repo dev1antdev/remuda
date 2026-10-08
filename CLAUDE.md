@@ -179,10 +179,19 @@ SPA. See README.md for the user story.
   (`review.json`: HEAD then + blob hashes of the files dirty then) is set
   by `POST /api/review/seen`; `GET /api/review?dir=` runs one shell (local
   `sh -c` or over ssh via `Machine.Shell`) for branch, HEAD, commits
-  `baseline..HEAD`, `git diff --numstat baseline`, untracked files and the
-  current blob hashes — a file is *fresh* when its hash moved since the
-  baseline (or there is none). `GET /api/review/diff?dir=&path=` is one
-  file's diff against the baseline commit (an untracked file whole). The
+  `baseline..HEAD`, `git diff --numstat baseline`, untracked files, the
+  current blob hashes and each commit's resulting blobs — a file is
+  *fresh* when its blob moved since the baseline (or there is none); a
+  commit is *seen* when every blob it brought is the one reviewed (a
+  commit of reviewed work, an amend, a rebase). "Mark reviewed" records
+  the blob of every file the review showed — changed since the previous
+  baseline's commit, committed meanwhile or not, and untracked — so that
+  history rewritten under the reviewer brings nothing new. `GET
+  /api/review/diff?dir=&path=` is one file's diff from the blob the
+  baseline recorded for it (only the edits since the look, not the whole
+  commit), else against the baseline commit (an untracked file whole).
+  The lens shows fresh files first and folds the rest behind "N files
+  unchanged since you looked"; seen commits are dimmed. The
   watcher refreshes `review.Badges` a minute apart, one shell per machine
   over `server.WorkspaceDirs`, and the roster carries `session.dir` and
   `session.review {changed, fresh}` for the sidebar badge. `Review.tsx`
@@ -255,7 +264,11 @@ SPA. See README.md for the user story.
   again** (unless it never had worked — then the dialog simply closed);
   `last_active` is the last moment herdr said working, recovered for panes
   older than herdr-ui from the session file's mtime (`ResolveSession` +
-  `TranscriptVersion`, off the poller), persisted in `<state>/activity.json`.
+  `TranscriptVersion`, off the poller), persisted in `<state>/activity.json`
+  together with whether the tick is still up (`held`), so a restart keeps
+  the ticks as they stood and raises none for finishes herdr is still
+  reporting from before; a pane first seen already finished (there before
+  herdr-ui ran) counts as looked at.
   The idle tiers (fresh ≤15 min, stale ≥120 min, dimmed) are the UI's, from
   `last_active` and the clock. `web/src/radar.ts` is the pure model (vendor
   hues, tiers, marks, row labels, ordering: families by their liveliest
