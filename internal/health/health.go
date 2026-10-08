@@ -33,6 +33,7 @@ type Report struct {
 	ClaudeVia   string  `json:"claude_via,omitempty"` // brew | npm | native | "" — how to update it
 	Herdr       string  `json:"herdr,omitempty"`      // installed herdr version
 	HerdrUI     string  `json:"herdr_ui,omitempty"`   // the herdr-ui binary deployed there (remote machines)
+	Running     bool    `json:"herdr_ui_running"`     // a herdr-ui answers on the machine\'s own port: terminals go through it
 	DiskFreeGB  float64 `json:"disk_free_gb"`
 	DiskUsedPct int     `json:"disk_used_pct"`
 	Load1       float64 `json:"load1"`
@@ -122,10 +123,16 @@ func (c *Collector) Refresh(mc *machines.Machine) {
 	l.Lock()
 	defer l.Unlock()
 	out, err := mc.Shell(Script(), 30*time.Second)
-	r := Parse(out)
+	r, peer := Parse(out)
 	r.At = time.Now()
 	if err != nil && r.Claude == "" && r.Herdr == "" {
 		r.Error = err.Error()
+	}
+	if peer != nil {
+		peer.At = r.At
+	}
+	if err == nil || peer != nil {
+		mc.SetPeer(peer) // a probe that failed outright says nothing about the peer
 	}
 	c.mu.Lock()
 	c.reports[mc.Cfg.ID] = &r
@@ -145,6 +152,8 @@ if command -v herdr >/dev/null 2>&1; then echo "herdr=$(herdr --version 2>/dev/n
 if [ -x "$HOME/.local/bin/herdr-ui" ]; then echo "herdr_ui=$("$HOME/.local/bin/herdr-ui" -version 2>/dev/null)"; fi
 echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
 echo "uptime=$(uptime 2>/dev/null)"
+tf=""; for f in "$HOME/Library/Application Support/herdr-ui/token" "$HOME/.config/herdr-ui/token"; do [ -r "$f" ] && { tf="$f"; break; }; done
+if [ -n "$tf" ] && command -v curl >/dev/null 2>&1; then ph=$(curl -s -m 2 http://127.0.0.1:7317/api/health 2>/dev/null); case "$ph" in *'"ok":true'*) echo "peer=$ph"; echo "peer_token=$(cat "$tf")";; esac; fi
 `
 }
 
@@ -155,9 +164,11 @@ var (
 	fieldsRe = regexp.MustCompile(`\s+`)
 )
 
-// Parse reads the script's output.
-func Parse(out string) Report {
+// Parse reads the script's output: the report, and the herdr-ui running
+// there when the script found one (its health answer and its token).
+func Parse(out string) (Report, *machines.Peer) {
 	var r Report
+	var peer *machines.Peer
 	for _, line := range strings.Split(out, "\n") {
 		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
 		if !ok {
@@ -193,9 +204,29 @@ func Parse(out string) Report {
 			if m := upRe.FindStringSubmatch(v); m != nil {
 				r.Uptime = strings.TrimSpace(m[1])
 			}
+		case "peer":
+			var ph struct {
+				OK      bool   `json:"ok"`
+				Version string `json:"version"`
+			}
+			if json.Unmarshal([]byte(v), &ph) == nil && ph.OK {
+				r.Running = true
+				if peer == nil {
+					peer = &machines.Peer{Port: 7317}
+				}
+				peer.Version = ph.Version
+			}
+		case "peer_token":
+			if peer == nil {
+				peer = &machines.Peer{Port: 7317}
+			}
+			peer.Token = v
 		}
 	}
-	return r
+	if peer != nil && (peer.Token == "" || !r.Running) {
+		peer = nil // half a peer is none: no token to speak with, or no answer
+	}
+	return r, peer
 }
 
 // installedVia guesses the package manager from where the binary really

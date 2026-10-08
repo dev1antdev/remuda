@@ -586,7 +586,10 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
                 {h.herdr && l?.herdr && newer(h.herdr, l.herdr) ? <span className="health-new"> → {l.herdr}</span> : null}
               </dd>
               <dt>herdr-ui</dt>
-              <dd>{h.herdr_ui ?? (m.id === "local" ? serverVersion : "not deployed")}</dd>
+              <dd>
+                {h.herdr_ui ?? (m.id === "local" ? serverVersion : "not deployed")}
+                {m.id !== "local" && h.herdr_ui ? <span className="dim"> · {h.herdr_ui_running ? "running, terminals go through it" : "not running"}</span> : null}
+              </dd>
               <dt>Disk</dt>
               <dd>
                 {h.disk_free_gb.toFixed(0)} GB free · {h.disk_used_pct}% used

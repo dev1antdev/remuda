@@ -62,7 +62,8 @@ type Machine struct {
 	sessPath map[string]string      // session uuid -> resolved path
 	sessMiss map[string]time.Time   // session uuid -> when it was last not found
 
-	codeFwd *tcpForward // the forward to the machine's code-server, once asked for
+	fwds map[int]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer herdr-ui)
+	peer *Peer               // the herdr-ui running on the machine itself, when one does
 
 	contPath map[string]contCheck // session file -> its continuation (if any), as last looked
 	predPath map[string]string    // session file -> the file it continues ("" when none)
@@ -79,6 +80,18 @@ type tcpForward struct {
 	conn *sshx.Conn
 	port int
 	addr string
+}
+
+// Peer is a herdr-ui running on a remote machine. herdr lets one client
+// attach to a terminal at a time, so when the machine's own herdr-ui holds
+// that attach, this one reaches the terminal through it (the pane
+// WebSocket and the HTTP transport are relayed over the master, with the
+// peer's token), and both sides can look at the same pane.
+type Peer struct {
+	Port    int
+	Token   string
+	Version string
+	At      time.Time
 }
 
 type remoteFile struct {
@@ -589,7 +602,12 @@ func (mc *Machine) nextContinuation(path string) string {
 // CodeAddr is where this machine's code-server (127.0.0.1:port on the
 // machine itself) is reachable from here: the port as is on the local
 // machine, a loopback port forwarded over the ssh master on a remote one.
-func (mc *Machine) CodeAddr(port int) (string, error) {
+func (mc *Machine) CodeAddr(port int) (string, error) { return mc.ForwardAddr(port) }
+
+// ForwardAddr is a loopback address that reaches 127.0.0.1:port on the
+// machine: the port itself locally, a port forwarded over the master
+// remotely, remembered per master.
+func (mc *Machine) ForwardAddr(port int) (string, error) {
 	if mc.Local {
 		return fmt.Sprintf("127.0.0.1:%d", port), nil
 	}
@@ -598,7 +616,7 @@ func (mc *Machine) CodeAddr(port int) (string, error) {
 		return "", err
 	}
 	mc.mu.Lock()
-	if f := mc.codeFwd; f != nil && f.conn == conn && f.port == port {
+	if f := mc.fwds[port]; f != nil && f.conn == conn {
 		mc.mu.Unlock()
 		return f.addr, nil
 	}
@@ -608,9 +626,34 @@ func (mc *Machine) CodeAddr(port int) (string, error) {
 		return "", err
 	}
 	mc.mu.Lock()
-	mc.codeFwd = &tcpForward{conn: conn, port: port, addr: addr}
+	if mc.fwds == nil {
+		mc.fwds = map[int]*tcpForward{}
+	}
+	mc.fwds[port] = &tcpForward{conn: conn, port: port, addr: addr}
 	mc.mu.Unlock()
 	return addr, nil
+}
+
+// SetPeer records the herdr-ui found running on the machine (nil: none).
+func (mc *Machine) SetPeer(p *Peer) {
+	mc.mu.Lock()
+	mc.peer = p
+	mc.mu.Unlock()
+}
+
+// Peer is the machine's own herdr-ui, nil when none runs there, this is
+// the local machine, or the reading is over an hour old.
+func (mc *Machine) Peer() *Peer {
+	if mc.Local {
+		return nil
+	}
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	if mc.peer == nil || time.Since(mc.peer.At) > time.Hour {
+		return nil
+	}
+	cp := *mc.peer
+	return &cp
 }
 
 // ---- remote execution ----

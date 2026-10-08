@@ -129,6 +129,27 @@ SPA. See README.md for the user story.
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
   (`HealthButton` in Sidebar.tsx) turns amber on an update, a lagging
   remote herdr-ui, or a nearly full disk.
+- **Peers** (`internal/server/peer.go`): herdr allows one attached client
+  per terminal ("already has an attached client; retry with --takeover"),
+  so two herdr-ui reaching the same pane — the machine's own and this one
+  over SSH — collide. The health script also probes `127.0.0.1:7317/api/
+  health` on the machine and reads its token file; a running herdr-ui
+  becomes `Machine.Peer()` (port, token, version; stale after an hour).
+  With a peer, `/ws/pane` is relayed to the peer's `/ws/pane` (frames
+  piped both ways, its close reason passed on) and the HTTP transport's
+  stream is opened there (`sid = <machine>~<peer sid>`, every later
+  request forwarded), over `Machine.ForwardAddr(port)` — the same port
+  forward as code-server. herdr prints its refusal *into the PTY* and
+  exits, so `attach.go` watches a fresh attach's first chunks
+  (`watchStart`: a refusal, or 300 ms / 512 bytes of real output) and
+  `Subscribe` returns a `*RefusedError` (`herdr.Refused(err)`) instead
+  of painting it; a refusal triggers one more probe (`peerAfterRefusal`,
+  at most every 30 s); still no peer → the refusal is the WebSocket close
+  reason (≤120 bytes; the client writes it on the screen at every retry)
+  or a 409 on the HTTP transport. A plain GET of `/ws/pane` (the client's
+  proxy probe) is 426 before anything attaches. A peer's requests carry
+  the bearer token and no Origin, so csrfGuard lets them through. Never
+  `--takeover`.
 - `internal/tsnetx` — `-tailscale` joins the tailnet as a tsnet node
   (userspace, no tailscaled) named `-tailscale-hostname`, serves the same
   handler over HTTPS on :443 with the tailnet's certificate (:80

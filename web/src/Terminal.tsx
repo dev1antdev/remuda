@@ -289,8 +289,12 @@ export default function TerminalView({
           // a normal close means the attach ended — herdr restarted, the
           // SSH session blinked, the pane went away. The next connect
           // starts a fresh attach; a pane that is gone fails that connect
-          // and the roster drops the terminal soon after
+          // and the roster drops the terminal soon after. A reason (an
+          // attach refused: another client holds the terminal) is written
+          // on the screen — every retry starts from a blank one, so it is
+          // written each time and the screen always shows it
           if (ev.code === 1000) note("terminal detached — reconnecting");
+          else if (ev.reason) note(ev.reason);
           retry();
           return;
         }

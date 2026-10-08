@@ -253,6 +253,15 @@ are saved texts, for every folder or one, shared by all your devices.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through herdr-ui.
 
+**Several herdr-ui at once:** each machine may run its own (the phone on
+GOG's, the desk on the Mac's). herdr lets one client attach to a terminal
+at a time, so when a remote machine's own herdr-ui is running (and
+reachable on its loopback port 7317), this one reaches that machine's
+terminals through it instead of attaching directly — both sides can look
+at the same pane, and nobody gets "already has an attached client". The
+vitals probe finds it and reads its token over your SSH; without it the
+direct attach stays.
+
 **Machine vitals:** the ⓘ next to each machine shows which Claude Code,
 herdr and herdr-ui run there, disk and load; it turns amber when an update
 is out (with the right command for how it was installed), a remote

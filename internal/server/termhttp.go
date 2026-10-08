@@ -119,9 +119,26 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 	s.Radar.Seen(mc.Cfg.ID, pane.PaneID)
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
+	// the machine's own herdr-ui, when it runs, holds the one attach: the
+	// stream is opened there and its id carries the machine, so every later
+	// request of the transport finds its way back
+	open := func(pc *peerClient) {
+		s.peerOpen(w, r, pc, mc.Cfg.ID, pane.PaneID, cols, rows)
+	}
+	if pc, err := s.peerFor(mc); err != nil {
+		httpErr(w, 502, err)
+		return
+	} else if pc != nil {
+		open(pc)
+		return
+	}
 	ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
 	if err != nil {
-		httpErr(w, 502, fmt.Errorf("attach failed: %w", err))
+		if pc := s.peerAfterRefusal(mc, err); pc != nil {
+			open(pc)
+			return
+		}
+		httpErr(w, 409, fmt.Errorf("%s", attachRefused(mc, err)))
 		return
 	}
 	st := &termStream{id: newStreamID(), termID: pane.TerminalID, attach: attach, ch: ch, cancel: cancel}
@@ -134,6 +151,9 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 // chunk, then drains what else is queued. X-Herdr-UI-End: 1 when the attach
 // is gone, 410 when the stream is unknown (the client reopens).
 func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
+	if s.peerStream(w, r, "/api/term/read") {
+		return
+	}
 	st := s.streams.get(r.URL.Query().Get("sid"))
 	if st == nil {
 		httpErr(w, http.StatusGone, fmt.Errorf("stream expired"))
@@ -186,6 +206,9 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/term/input?sid — body is what the keyboard typed.
 func (s *Server) handleTermInput(w http.ResponseWriter, r *http.Request) {
+	if s.peerStream(w, r, "/api/term/input") {
+		return
+	}
 	st := s.streams.get(r.URL.Query().Get("sid"))
 	if st == nil {
 		httpErr(w, http.StatusGone, fmt.Errorf("stream expired"))
@@ -207,6 +230,9 @@ func (s *Server) handleTermInput(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/term/resize?sid&cols&rows
 func (s *Server) handleTermResize(w http.ResponseWriter, r *http.Request) {
+	if s.peerStream(w, r, "/api/term/resize") {
+		return
+	}
 	st := s.streams.get(r.URL.Query().Get("sid"))
 	if st == nil {
 		httpErr(w, http.StatusGone, fmt.Errorf("stream expired"))
@@ -220,6 +246,9 @@ func (s *Server) handleTermResize(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/term/close?sid
 func (s *Server) handleTermClose(w http.ResponseWriter, r *http.Request) {
+	if s.peerStream(w, r, "/api/term/close") {
+		return
+	}
 	s.streams.remove(r.URL.Query().Get("sid"))
 	w.WriteHeader(http.StatusNoContent)
 }

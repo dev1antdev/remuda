@@ -57,6 +57,7 @@ export type Health = {
   claude_via?: "brew" | "npm" | "native" | "";
   herdr?: string;
   herdr_ui?: string; // the binary deployed there
+  herdr_ui_running?: boolean; // and it answers on the machine's own port: terminals there go through it
   disk_free_gb: number;
   disk_used_pct: number;
   load1: number;

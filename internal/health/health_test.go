@@ -11,7 +11,7 @@ herdr_ui=herdr-ui v0.4.0-8-g3262e05
 df=/dev/disk3s5   482797652 188483048 271706504    41% 1511806 2717065040    0%   /System/Volumes/Data
 uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 `
-	r := Parse(out)
+	r, peer := Parse(out)
 	if r.OS != "macOS 26.6.2" || r.Claude != "2.1.285" || r.ClaudeVia != "brew" || r.Herdr != "0.9.3" || r.HerdrUI != "v0.4.0-8-g3262e05" {
 		t.Fatalf("versions: %+v", r)
 	}
@@ -22,12 +22,23 @@ uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 		t.Fatalf("load/uptime: %+v", r)
 	}
 	// Linux: "up 5 days, 3:02, 1 user, load average: 0.52, 0.58, 0.59"
-	l := Parse("os=Linux 6.8.0\nuptime= 10:11:12 up 5 days,  3:02,  1 user,  load average: 0.52, 0.58, 0.59\ndf=/dev/sda1 100000000 50000000 50000000 50% /\n")
+	l, _ := Parse("os=Linux 6.8.0\nuptime= 10:11:12 up 5 days,  3:02,  1 user,  load average: 0.52, 0.58, 0.59\ndf=/dev/sda1 100000000 50000000 50000000 50% /\n")
 	if l.Load1 != 0.52 || l.Uptime != "5 days,  3:02" || l.DiskUsedPct != 50 {
 		t.Fatalf("linux: %+v", l)
 	}
-	if Parse("").Claude != "" {
+	if e, _ := Parse(""); e.Claude != "" {
 		t.Fatal("empty")
+	}
+	if peer != nil || r.Running {
+		t.Fatal("no peer lines, no peer")
+	}
+	// a running herdr-ui with its token is a peer; a token alone is not
+	p, peer2 := Parse("peer={\"herdr\":true,\"ok\":true,\"version\":\"v0.4.0-9-gabc\"}\npeer_token=abc123\n")
+	if !p.Running || peer2 == nil || peer2.Token != "abc123" || peer2.Version != "v0.4.0-9-gabc" || peer2.Port != 7317 {
+		t.Fatalf("peer: %+v %+v", p, peer2)
+	}
+	if _, none := Parse("peer_token=abc123\n"); none != nil {
+		t.Fatal("a token without an answer is no peer")
 	}
 }
 

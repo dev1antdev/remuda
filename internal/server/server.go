@@ -1220,22 +1220,47 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
+	// the client's probe of this URL (a plain GET: "would a socket be
+	// accepted?") must cost no attach, here or on a peer
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		http.Error(w, "upgrade required", http.StatusUpgradeRequired)
+		return
+	}
 	s.Radar.Seen(mc.Cfg.ID, pane.PaneID) // a terminal in view counts as looked at
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
 
-	// ANSI output compresses 3-10×; no context takeover keeps it cheap per connection
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{CompressionMode: websocket.CompressionNoContextTakeover})
+	// the machine's own herdr-ui, when it runs, holds the one attach: relay
+	if pc, err := s.peerFor(mc); err != nil {
+		httpErr(w, 502, err)
+		return
+	} else if pc != nil {
+		s.relayPaneWS(w, r, pc, pane.PaneID, cols, rows)
+		return
+	}
+	ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
 	if err != nil {
+		// refused because another client holds it — a herdr-ui that started
+		// since the last probe? one more look, then the relay
+		if pc := s.peerAfterRefusal(mc, err); pc != nil {
+			s.relayPaneWS(w, r, pc, pane.PaneID, cols, rows)
+			return
+		}
+	}
+
+	// ANSI output compresses 3-10×; no context takeover keeps it cheap per connection
+	c, err2 := websocket.Accept(w, r, &websocket.AcceptOptions{CompressionMode: websocket.CompressionNoContextTakeover})
+	if err2 != nil {
+		if err == nil {
+			cancel()
+		}
 		return
 	}
 	defer c.CloseNow()
 	ctx := r.Context()
 	c.SetReadLimit(1 << 20)
-
-	ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
 	if err != nil {
-		c.Close(websocket.StatusInternalError, "attach failed: "+err.Error())
+		c.Close(websocket.StatusInternalError, attachRefused(mc, err)) // the reason reaches the viewer
 		return
 	}
 	defer cancel()

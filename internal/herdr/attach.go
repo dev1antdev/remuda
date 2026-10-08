@@ -1,10 +1,14 @@
 package herdr
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/creack/pty"
@@ -31,11 +35,91 @@ type attach struct {
 	termID string
 	cmd    *exec.Cmd
 	pty    *os.File
+	early  chan []byte   // the attach's first chunks, while watched (herdr's refusal shows up here)
+	watch  atomic.Bool   // the readLoop still copies chunks into early
+	exited chan struct{} // closed when the attach process has gone
 
 	mu     sync.Mutex
 	subs   map[chan []byte]bool
 	dead   bool
 	linger *time.Timer
+}
+
+// RefusedError is herdr declining the attach — "already has an attached
+// client; retry with --takeover" — reported where it can be acted on
+// instead of painted into the viewer as text.
+type RefusedError struct{ Msg string }
+
+func (e *RefusedError) Error() string { return e.Msg }
+
+// Refused reports whether err is herdr declining an attach because another
+// client holds the terminal.
+func Refused(err error) bool {
+	var r *RefusedError
+	return errors.As(err, &r) && strings.Contains(r.Msg, "already has an attached client")
+}
+
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b[()][A-Z0-9]`)
+
+// refusal finds herdr's own verdict in the attach's first output: a line
+// "herdr: server shut down: terminal attach failed: …", or any "attach
+// failed". The text comes back without escape sequences.
+func refusal(first []byte) (string, bool) {
+	text := ansiRe.ReplaceAllString(string(first), "")
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
+		if strings.Contains(line, "attach failed") {
+			if i := strings.Index(line, "terminal attach failed: "); i >= 0 {
+				line = line[i+len("terminal attach failed: "):]
+			}
+			return line, true
+		}
+	}
+	return "", false
+}
+
+// firstWait is how long a fresh attach that prints nothing is watched
+// for herdr's refusal; once it prints, a few hundred milliseconds or half
+// a kilobyte without a refusal mean it is a real attach.
+const firstWait = 1500 * time.Millisecond
+
+// watchStart reads the attach's first output for herdr's verdict. The
+// refusal comes in a chunk or two and the process exits right after; a
+// real attach paints the screen and stays. The subscriber is already
+// registered, so nothing painted meanwhile is lost to it.
+func (a *attach) watchStart() error {
+	defer a.watch.Store(false)
+	var acc []byte
+	deadline := time.After(firstWait)
+	var settle <-chan time.Time
+	for {
+		select {
+		case chunk := <-a.early:
+			acc = append(acc, chunk...)
+			if msg, refused := refusal(acc); refused {
+				select {
+				case <-a.exited:
+				case <-time.After(2 * time.Second):
+				}
+				return &RefusedError{Msg: msg}
+			}
+			if len(acc) > 512 {
+				return nil
+			}
+			if settle == nil {
+				settle = time.After(300 * time.Millisecond)
+			}
+		case <-settle:
+			return nil
+		case <-a.exited:
+			if msg, refused := refusal(acc); refused {
+				return &RefusedError{Msg: msg}
+			}
+			return fmt.Errorf("attach ended before it began")
+		case <-deadline:
+			return nil
+		}
+	}
 }
 
 func NewAttachManager(newCommand func(terminalID string) *exec.Cmd) *AttachManager {
@@ -104,6 +188,15 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 	}
 	a.subs[ch] = true
 	a.mu.Unlock()
+
+	// a fresh attach: herdr answers at once when it will not have us —
+	// the verdict is an error here, never a screenful of text for the viewer
+	if !joined {
+		if err := a.watchStart(); err != nil {
+			m.kill(a)
+			return nil, nil, err
+		}
+	}
 	if joined && validSize(cols, rows) {
 		go a.repaint(cols, rows)
 	}
@@ -147,17 +240,25 @@ func (m *AttachManager) start(termID string, cols, rows int) (*attach, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &attach{termID: termID, cmd: cmd, pty: f, subs: map[chan []byte]bool{}}
+	a := &attach{termID: termID, cmd: cmd, pty: f, subs: map[chan []byte]bool{}, early: make(chan []byte, 64), exited: make(chan struct{})}
+	a.watch.Store(true)
 	go a.readLoop(m)
 	return a, nil
 }
 
 func (a *attach) readLoop(m *AttachManager) {
+	defer close(a.exited)
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := a.pty.Read(buf)
 		if n > 0 {
 			data := append([]byte(nil), buf[:n]...)
+			if a.watch.Load() {
+				select {
+				case a.early <- data:
+				default:
+				}
+			}
 			a.mu.Lock()
 			for ch := range a.subs {
 				select {
