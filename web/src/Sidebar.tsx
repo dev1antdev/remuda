@@ -31,7 +31,7 @@ import Icon from "./icons";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
 
-export default function Sidebar({ machines, latest, serverVersion, current, prefs, collapsed, onToggle, onSelect, onMenu, onNewWorkspace, onRemoveMachine, onAddMachine, onPrefs, onSchedules, onUsage }: {
+export default function Sidebar({ machines, latest, serverVersion, current, prefs, collapsed, onToggle, onSelect, onMenu, onNewWorkspace, onRemoveMachine, onRenameMachine, onAddMachine, onPrefs, onSchedules, onUsage }: {
   machines: Machine[];
   latest?: Latest; // the newest Claude Code and herdr out there
   serverVersion?: string; // this herdr-ui, to compare with the ones deployed remotely
@@ -43,6 +43,7 @@ export default function Sidebar({ machines, latest, serverVersion, current, pref
   onMenu: (m: Machine, s: Session, x: number, y: number) => void;
   onNewWorkspace: (m: Machine) => void;
   onRemoveMachine: (m: Machine) => void;
+  onRenameMachine: (m: Machine) => void;
   onAddMachine: () => void;
   onPrefs: (next: RadarPrefs) => void;
   onSchedules: () => void;
@@ -151,11 +152,7 @@ export default function Sidebar({ machines, latest, serverVersion, current, pref
               <button type="button" className="icon-btn" title={`New workspace on ${m.label}`} disabled={m.state !== "connected"} onClick={() => onNewWorkspace(m)}>
                 <Icon name="plus" size={14} />
               </button>
-              {m.id !== "local" && m.source !== "herdr" && (
-                <button type="button" className="icon-btn danger" title="Remove machine (nothing on the PC is touched)" onClick={() => onRemoveMachine(m)}>
-                  <Icon name="x" size={14} />
-                </button>
-              )}
+              <MachineMenu machine={m} onRename={() => onRenameMachine(m)} onRemove={m.id !== "local" && m.source !== "herdr" ? () => onRemoveMachine(m) : undefined} />
             </div>
             {m.state === "error" && (
               <Notice tone="error" className="machine-error">
@@ -616,6 +613,53 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
             </ul>
           )}
           {h?.error && h.claude && <div className="dim">{h.error}</div>}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ---- the machine's own menu ----
+function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machine; onRename: () => void; onRemove?: () => void }) {
+  const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
+  const close = useCallback(() => setOpen(null), []);
+  useDismiss(!!open, close, [".machine-menu", `[data-machine-menu="${CSS.escape(m.id)}"]`]);
+  const pick = (fn: () => void) => () => {
+    setOpen(null);
+    fn();
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className={`icon-btn${open ? " on" : ""}`}
+        data-machine-menu={m.id}
+        title="Machine…"
+        aria-haspopup="menu"
+        aria-expanded={!!open}
+        onClick={(e) => {
+          e.stopPropagation();
+          const r = e.currentTarget.getBoundingClientRect();
+          setOpen(open ? null : { x: Math.min(r.left, window.innerWidth - 230), y: r.bottom + 4 });
+        }}
+      >
+        <Icon name="more" size={14} />
+      </button>
+      {open && (
+        <div className="row-menu machine-menu" role="menu" style={{ left: open.x, top: open.y }} onClick={(e) => e.stopPropagation()}>
+          <button type="button" role="menuitem" onClick={pick(onRename)}>
+            <Icon name="edit" size={14} /> Rename…
+          </button>
+          {m.host && (
+            <button type="button" role="menuitem" onClick={pick(() => void navigator.clipboard?.writeText(m.host!))}>
+              <Icon name="copy" size={14} /> Copy SSH host
+            </button>
+          )}
+          {onRemove && (
+            <button type="button" role="menuitem" className="danger" onClick={pick(onRemove)}>
+              <Icon name="trash" size={14} /> Remove machine
+            </button>
+          )}
         </div>
       )}
     </>

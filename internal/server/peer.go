@@ -44,7 +44,7 @@ func (s *Server) peerFor(mc *machines.Machine) (*peerClient, error) {
 	}
 	addr, err := mc.ForwardAddr(p.Port)
 	if err != nil {
-		return nil, fmt.Errorf("reach herdr-ui on %s: %w", mc.Cfg.Label, err)
+		return nil, fmt.Errorf("reach herdr-ui on %s: %w", mc.Label(), err)
 	}
 	return &peerClient{base: "http://" + addr, token: p.Token}, nil
 }
@@ -74,7 +74,7 @@ func (s *Server) peerAfterRefusal(mc *machines.Machine, err error) *peerClient {
 func attachRefused(mc *machines.Machine, err error) string {
 	msg := "attach failed: " + err.Error()
 	if herdr.Refused(err) {
-		msg = "another client holds this terminal on " + mc.Cfg.Label + " — start herdr-ui there to share it"
+		msg = "another client holds this terminal on " + mc.Label() + " — start herdr-ui there to share it"
 	}
 	if len(msg) > 120 {
 		msg = msg[:117] + "…"

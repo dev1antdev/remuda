@@ -8,7 +8,7 @@ import {
   fetchRoster,
   killSession,
   markSeen,
-  removeMachine,
+  removeMachine, renameMachine,
   renameSession,
   renameTab,
   submitPrompt,
@@ -52,6 +52,7 @@ type Dialog =
   | { kind: "tab"; machineId: string; session: Session }
   | { kind: "worktree"; machineId: string; session: Session }
   | { kind: "machine" }
+  | { kind: "renameMachine"; machine: Machine }
   | null;
 
 // minimum terminal widths on offer, in columns (0 = fit the screen)
@@ -570,6 +571,7 @@ export default function App() {
             onMenu={(m, s, x, y) => setMenu(menu?.session.id === s.id ? null : { machine: m, session: s, x, y })}
             onNewWorkspace={(m) => setDialog({ kind: "workspace", machineId: m.id })}
             onRemoveMachine={(m) => ask(`Remove machine “${m.label}”? Nothing on the PC is touched.`, "Remove", () => void act(removeMachine(m.id)))}
+            onRenameMachine={(m) => setDialog({ kind: "renameMachine", machine: m })}
             onAddMachine={() => setDialog({ kind: "machine" })}
             onPrefs={setRadarPrefs}
             onSchedules={() => setSchedules(true)}
@@ -817,6 +819,17 @@ export default function App() {
                 machine: dialog.machineId, workspace: dialog.session.id, branch, base, name, agent,
               }),
             );
+          }}
+        />
+      )}
+      {dialog?.kind === "renameMachine" && (
+        <RenameMachineDialog
+          machine={dialog.machine}
+          onClose={() => setDialog(null)}
+          onRename={async (label) => {
+            await renameMachine(dialog.machine.id, label);
+            setDialog(null);
+            await refresh();
           }}
         />
       )}
@@ -1174,6 +1187,20 @@ function NewWorktreeDialog({
         <input value={name} placeholder="defaults to the branch" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={setAgent} />
+    </FormDialog>
+  );
+}
+
+function RenameMachineDialog({ machine, onRename, onClose }: { machine: Machine; onRename: (label: string) => Promise<void>; onClose: () => void }) {
+  const [label, setLabel] = useState(machine.label);
+  const submit = useSubmit(() => onRename(label.trim()));
+  const registered = machine.id === "local" ? "this host's name" : machine.source === "herdr" ? "the name in herdr's machine list" : "the name it was added with";
+  return (
+    <FormDialog title="Rename machine" icon="edit" hint={`Shown everywhere in herdr-ui. Leave it empty to go back to ${registered}.`} onClose={onClose} submit={submit} submitLabel="Rename">
+      <label>
+        Name
+        <input autoFocus value={label} maxLength={60} placeholder={machine.host || machine.label} onChange={(e) => setLabel(e.target.value)} />
+      </label>
     </FormDialog>
   );
 }

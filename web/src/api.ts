@@ -329,6 +329,9 @@ export const renameSession = (machineId: string, id: string, label: string): Pro
 export const addMachine = (req: { label: string; host: string }): Promise<void> =>
   sendJSON("POST", "/api/machines", req);
 
+export const renameMachine = (id: string, label: string): Promise<void> =>
+  sendJSON("PATCH", `/api/machines/${encodeURIComponent(id)}`, { label }).then(() => undefined);
+
 export const removeMachine = (id: string): Promise<void> =>
   sendJSON("DELETE", `/api/machines/${encodeURIComponent(id)}`);
 

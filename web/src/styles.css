@@ -627,7 +627,8 @@ input[type="checkbox"]:hover:not(:checked) {
 .row-menu.radar-settings,
 .row-menu.split-menu,
 .row-menu.label-menu,
-.row-menu.health-pop {
+.row-menu.health-pop,
+.row-menu.machine-menu {
   transform: none;
 }
 

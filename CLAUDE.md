@@ -40,7 +40,12 @@ SPA. See README.md for the user story.
   --json` (the watcher calls it every 30s, with a 5s timeout) and adds
   enabled machines under **herdr's own id** with `Source: "herdr"` (not
   persisted, not removable here — `herdr machine remove` is the way).
-  Manually added ones live in `machines.json`. Each remote connects in the
+  Manually added ones live in `machines.json`. A name of the user's own
+  for any machine (the local one too) lives in `labels.json` and shows
+  through `Machine.Label()` everywhere (`Cfg.Label` stays what the
+  registry said); `PATCH /api/machines/{id} {label}` sets it, empty goes
+  back. The sidebar's per-machine ⋯ menu (`MachineMenu`) has Rename, Copy
+  SSH host and, for a manually added one, Remove. Each remote connects in the
   background: dial master → one script reads `$HOME` and finds the herdr
   bin (incl. `~/.local/bin`) → RPC transport → `Ping`. **Two RPC
   transports**: a forwarded unix socket when the sshd allows streamlocal

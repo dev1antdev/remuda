@@ -71,7 +71,7 @@ func (s *Service) probe(mc *machines.Machine) Status {
 	}
 	res, err := s.client.Get("http://" + addr + "/healthz")
 	if err != nil {
-		st.Error = fmt.Sprintf("code-server is not answering on %s:%d", mc.Cfg.Label, s.Port)
+		st.Error = fmt.Sprintf("code-server is not answering on %s:%d", mc.Label(), s.Port)
 		return st
 	}
 	defer res.Body.Close()
@@ -82,7 +82,7 @@ func (s *Service) probe(mc *machines.Machine) Status {
 	// "alive" with a client connected, "expired" without one: both are a
 	// code-server answering
 	if res.StatusCode != http.StatusOK || body.Status == "" {
-		st.Error = fmt.Sprintf("%s:%d answers, but not like a code-server (%s)", mc.Cfg.Label, s.Port, res.Status)
+		st.Error = fmt.Sprintf("%s:%d answers, but not like a code-server (%s)", mc.Label(), s.Port, res.Status)
 		return st
 	}
 	st.Available = true

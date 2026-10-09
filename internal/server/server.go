@@ -103,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/roster", s.handleRoster)
 	api.HandleFunc("POST /api/machines", s.handleAddMachine)
 	api.HandleFunc("DELETE /api/machines/{id}", s.handleRemoveMachine)
+	api.HandleFunc("PATCH /api/machines/{id}", s.handleRenameMachine)
 	api.HandleFunc("POST /api/machines/{id}/health", s.handleMachineHealth)
 	api.HandleFunc("POST /api/sessions", s.handleNewWorkspace)
 	api.HandleFunc("DELETE /api/sessions/{id}", s.closeHandler((*herdr.Client).WorkspaceClose))
@@ -453,7 +454,7 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 	for _, mc := range list {
 		st, errMsg := mc.State()
 		rm := rosterMachine{
-			ID: mc.Cfg.ID, Label: mc.Cfg.Label, Host: mc.Cfg.Host, Source: mc.Cfg.Source,
+			ID: mc.Cfg.ID, Label: mc.Label(), Host: mc.Cfg.Host, Source: mc.Cfg.Source,
 			State: st, Error: errMsg, Sessions: []rosterSession{},
 		}
 		if st == machines.StateConnected {
@@ -528,6 +529,28 @@ func (s *Server) handleRemoveMachine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+// PATCH /api/machines/{id} {label} — a name of the user's own for the
+// machine (the local one too); empty goes back to the registry's.
+func (s *Server) handleRenameMachine(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Label string `json:"label"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req); err != nil {
+		httpErr(w, 400, err)
+		return
+	}
+	mc, err := s.Machines.Rename(r.PathValue("id"), req.Label)
+	if err != nil {
+		if mc == nil {
+			httpErr(w, 404, err)
+		} else {
+			httpErr(w, 500, err)
+		}
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "label": mc.Label()})
 }
 
 // ---- workspace / tab / worktree create and close ----
@@ -1159,11 +1182,11 @@ func (s *Server) SubmitToFolder(machineID, dir, text string) (string, error) {
 	}
 	snap, _ := s.Watch.Snapshot(machineID)
 	if snap == nil {
-		return "", fmt.Errorf("%s has no snapshot yet", mc.Cfg.Label)
+		return "", fmt.Errorf("%s has no snapshot yet", mc.Label())
 	}
 	pane := agentPaneIn(snap, dir)
 	if pane == nil {
-		return "", fmt.Errorf("no agent is running in %s on %s", dir, mc.Cfg.Label)
+		return "", fmt.Errorf("no agent is running in %s on %s", dir, mc.Label())
 	}
 	if err := s.submitTo(mc, client, pane.PaneID, text); err != nil {
 		return "", err

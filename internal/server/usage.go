@@ -59,7 +59,7 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(mc *machines.Machine) {
 			defer wg.Done()
-			pm := perMachine{ID: mc.Cfg.ID, Label: mc.Cfg.Label}
+			pm := perMachine{ID: mc.Cfg.ID, Label: mc.Label()}
 			if mc.Local {
 				rep, err := usage.Scan(mc.Home()+"/.claude/projects", since, loc)
 				if err != nil {

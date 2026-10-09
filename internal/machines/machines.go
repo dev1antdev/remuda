@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
@@ -26,7 +27,8 @@ import (
 
 const (
 	LocalID     = "local"
-	SourceHerdr = "herdr" // mirrored from `herdr machine list`
+	labelsFile  = "labels.json" // the user's own names for machines, by id
+	SourceHerdr = "herdr"       // mirrored from `herdr machine list`
 
 	StateConnected  = "connected"
 	StateConnecting = "connecting"
@@ -43,8 +45,9 @@ type Config struct {
 }
 
 type Machine struct {
-	Cfg   Config
+	Cfg   Config // as registered: herdr's list, machines.json, or this host's name
 	Local bool
+	label atomic.Value // the label shown — the user's own when set, else Cfg.Label
 
 	mu          sync.Mutex
 	state       string
@@ -112,8 +115,51 @@ type Manager struct {
 	machines map[string]*Machine
 	order    []string
 	path     string // machines.json
+	dir      string // the state dir, where labels.json (the user's own names for machines) lives
+	names    map[string]string
 	herdrBin string
 	saveMu   sync.Mutex // writes of machines.json, one at a time
+}
+
+// Label is the machine's name as shown: the user's own when they gave
+// one, else what the registry says.
+func (mc *Machine) Label() string {
+	if l, ok := mc.label.Load().(string); ok && l != "" {
+		return l
+	}
+	return mc.Cfg.Label
+}
+
+func (mc *Machine) setLabel(l string) { mc.label.Store(l) }
+
+// Rename gives the machine a name of the user's own; an empty name goes
+// back to the registry's. Kept in labels.json, so it survives a restart
+// and herdr's own list.
+func (m *Manager) Rename(id, label string) (*Machine, error) {
+	label = strings.TrimSpace(label)
+	if len(label) > 60 {
+		return nil, fmt.Errorf("a name has 60 characters at most")
+	}
+	mc, err := m.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	if label == "" {
+		delete(m.names, id)
+	} else {
+		m.names[id] = label
+	}
+	names := map[string]string{}
+	for k, v := range m.names {
+		names[k] = v
+	}
+	m.mu.Unlock()
+	mc.setLabel(label)
+	if err := state.SaveJSON(m.dir, labelsFile, names); err != nil {
+		return mc, fmt.Errorf("the name could not be kept: %w", err)
+	}
+	return mc, nil
 }
 
 // NewManager builds the registry: the local machine plus whatever
@@ -132,8 +178,15 @@ func NewManager(dir, localSocket, localHerdrBin string) *Manager {
 		machines: map[string]*Machine{LocalID: local},
 		order:    []string{LocalID},
 		path:     filepath.Join(dir, "machines.json"),
+		dir:      dir,
+		names:    map[string]string{},
 		herdrBin: localHerdrBin,
 	}
+	_ = state.LoadJSON(m.dir, labelsFile, &m.names)
+	if m.names == nil {
+		m.names = map[string]string{}
+	}
+	local.setLabel(m.names[LocalID])
 	for _, cfg := range m.load() {
 		m.add(cfg)
 	}
@@ -171,6 +224,7 @@ func (m *Manager) save() error {
 func (m *Manager) add(cfg Config) *Machine {
 	mc := newRemote(cfg)
 	m.mu.Lock()
+	mc.setLabel(m.names[cfg.ID])
 	m.machines[cfg.ID] = mc
 	m.order = append(m.order, cfg.ID)
 	m.mu.Unlock()
@@ -305,7 +359,7 @@ func (m *Manager) Remove(id string) error {
 	mc := m.machines[id]
 	if mc != nil && mc.Cfg.Source == SourceHerdr {
 		m.mu.Unlock()
-		return fmt.Errorf("%s comes from herdr's machine list — remove it with `herdr machine remove`", mc.Cfg.Label)
+		return fmt.Errorf("%s comes from herdr's machine list — remove it with `herdr machine remove`", mc.Label())
 	}
 	m.mu.Unlock()
 	if m.drop(id) == nil {
