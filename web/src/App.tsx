@@ -23,7 +23,7 @@ import AlertsPanel from "./AlertsPanel";
 import Chat from "./Chat";
 import FileViewer, { type FileTarget } from "./FileViewer";
 import KeyBar from "./KeyBar";
-import { basename, errMsg, isTouch, readAlertPrefs, usePref } from "./prefs";
+import { basename, dirname, errMsg, isTouch, readAlertPrefs, usePref } from "./prefs";
 import { machineLabel, machineOptions } from "./options";
 import { Dialog, Notice, StatusDot, Toasts, useSubmit, type ToastItem } from "./ui";
 import { resyncPush } from "./push";
@@ -35,6 +35,7 @@ import Schedules from "./Schedules";
 import Search from "./Search";
 import Usage, { fillClass, tok, usd } from "./Usage";
 import Sidebar from "./Sidebar";
+import FolderPicker from "./FolderPicker";
 import Select from "./Select";
 import Logo from "./Logo";
 import { DEFAULT_RADAR, brandColor, type RadarPrefs } from "./radar";
@@ -1045,6 +1046,7 @@ function NewWorkspaceDialog({
   const [dir, setDir] = useState("");
   const [name, setName] = useState("");
   const [agent, setAgent] = useState(() => defaultAgent(agents, "claude"));
+  const [picking, setPicking] = useState(false); // the folder picker, over this dialog
   const submit = useSubmit(async () => {
     if (!dir.trim()) throw new Error("Project folder is required");
     await onCreate(machine, dir.trim(), name.trim(), agent);
@@ -1065,8 +1067,25 @@ function NewWorkspaceDialog({
       )}
       <label>
         Project folder{target && target.id !== "local" ? ` on ${target.label}` : ""}
-        <input autoFocus value={dir} placeholder="/Users/you/Projects/app" onChange={(e) => setDir(e.target.value)} />
+        <span className="field-row">
+          <input autoFocus value={dir} placeholder="/Users/you/Projects/app" onChange={(e) => setDir(e.target.value)} />
+          <button type="button" className="icon-btn lg" title="Browse the folders on the machine" disabled={!target || target.state !== "connected"} onClick={() => setPicking(true)}>
+            <Icon name="folder" size={16} />
+          </button>
+        </span>
       </label>
+      {picking && target && (
+        <FolderPicker
+          machine={target}
+          machines={machines}
+          start={dir.trim() ? dirname(dir.trim()) || dir.trim() : ""}
+          onPick={(p) => {
+            setDir(p);
+            setPicking(false);
+          }}
+          onClose={() => setPicking(false)}
+        />
+      )}
       <label>
         Name (optional)
         <input value={name} placeholder="checkout-api" onChange={(e) => setName(e.target.value)} />

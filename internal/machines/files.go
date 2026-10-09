@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -359,4 +360,59 @@ func (mc *Machine) GitDiff(p string) (Diff, error) {
 	root, rest, _ := strings.Cut(out, "\n")
 	state, diff, _ := strings.Cut(rest, "\n")
 	return Diff{Repo: strings.TrimSpace(root), Untracked: strings.TrimSpace(state) == "untracked", Diff: diff}, nil
+}
+
+// ---- browsing folders ----
+
+// DirEntry is one subfolder of a listed folder.
+type DirEntry struct {
+	Name string `json:"name"`
+	Git  bool   `json:"git"` // a repository (a .git inside)
+}
+
+// DirListing is a folder and its subfolders, for the folder picker.
+type DirListing struct {
+	Path   string     `json:"path"`             // resolved, absolute
+	Parent string     `json:"parent,omitempty"` // "" at the root
+	Home   string     `json:"home,omitempty"`
+	Dirs   []DirEntry `json:"dirs"`
+}
+
+// ListDirs lists the subfolders of path on the machine ("" or "~" is
+// home; "~/x" is under it). Hidden folders only when asked.
+func (mc *Machine) ListDirs(path string, hidden bool) (DirListing, error) {
+	q := sshx.Quote(path)
+	glob := "*/"
+	if hidden {
+		glob = "*/ .*/"
+	}
+	script := `p=` + q + `; [ -z "$p" ] && p="$HOME"; case "$p" in "~") p="$HOME";; "~/"*) p="$HOME/${p#"~/"}";; esac; ` +
+		`cd "$p" 2>/dev/null || { printf 'ERR\037not a folder: %s\n' "$p"; exit 0; }; printf '%s\n' "$(pwd -P)"; printf '%s\n' "$HOME"; printf '\036\n'; ` +
+		`for d in ` + glob + `; do case "$d" in ./|../) continue;; esac; [ -d "$d" ] || continue; n=${d%/}; g=0; [ -e "$d.git" ] && g=1; printf '%s\037%s\n' "$n" "$g"; done`
+	out, err := mc.Shell(script, 30*time.Second)
+	if err != nil {
+		return DirListing{}, err
+	}
+	if strings.HasPrefix(out, "ERR\x1f") {
+		return DirListing{}, fmt.Errorf("%s", strings.TrimSpace(strings.TrimPrefix(out, "ERR\x1f")))
+	}
+	head, rest, _ := strings.Cut(out, "\x1e\n")
+	lines := strings.Split(strings.TrimRight(head, "\n"), "\n")
+	l := DirListing{Dirs: []DirEntry{}}
+	if len(lines) > 0 {
+		l.Path = lines[0]
+	}
+	if len(lines) > 1 {
+		l.Home = lines[1]
+	}
+	if l.Path != "" && l.Path != "/" {
+		l.Parent = filepath.Dir(l.Path)
+	}
+	for _, line := range strings.Split(strings.TrimRight(rest, "\n"), "\n") {
+		if n, g, ok := strings.Cut(line, "\x1f"); ok && n != "" {
+			l.Dirs = append(l.Dirs, DirEntry{Name: n, Git: g == "1"})
+		}
+	}
+	sort.Slice(l.Dirs, func(i, j int) bool { return strings.ToLower(l.Dirs[i].Name) < strings.ToLower(l.Dirs[j].Name) })
+	return l, nil
 }

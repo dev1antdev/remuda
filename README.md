@@ -253,6 +253,10 @@ are saved texts, for every folder or one, shared by all your devices.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through herdr-ui.
 
+**A new workspace** names a machine and a folder; the folder is picked
+from the machine's own folders (repositories marked, the workspaces
+already there as quick picks) or typed.
+
 **Several herdr-ui at once:** each machine may run its own (the phone on
 GOG's, the desk on the Mac's). herdr lets one client attach to a terminal
 at a time, so when a remote machine's own herdr-ui is running (and

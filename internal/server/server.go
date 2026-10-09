@@ -113,6 +113,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/worktrees", s.handleNewWorktree)
 	api.HandleFunc("GET /api/chat", s.handleChat)
 	api.HandleFunc("GET /api/fs/stat", s.handleFsStat)
+	api.HandleFunc("GET /api/fs/dirs", s.handleFsDirs)
 	api.HandleFunc("GET /api/fs/file", s.handleFsFile)
 	api.HandleFunc("GET /api/fs/diff", s.handleFsDiff)
 	api.HandleFunc("POST /api/fs/upload", s.handleFsUpload)
@@ -802,6 +803,22 @@ func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, info)
+}
+
+// GET /api/fs/dirs?machine&path&hidden — a folder's subfolders on the
+// machine, for picking a project folder instead of typing it.
+func (s *Server) handleFsDirs(w http.ResponseWriter, r *http.Request) {
+	mc, err := s.machineFor(r, "")
+	if err != nil {
+		httpErr(w, 404, err)
+		return
+	}
+	l, err := mc.ListDirs(r.URL.Query().Get("path"), r.URL.Query().Get("hidden") == "1")
+	if err != nil {
+		httpErr(w, 400, err)
+		return
+	}
+	writeJSON(w, l)
 }
 
 // handleFsFile serves the bytes. Text is always text/plain whatever the

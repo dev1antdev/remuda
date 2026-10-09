@@ -67,7 +67,12 @@ SPA. See README.md for the user story.
   and, on a relative miss, searches the pane folder by suffix (agents say
   `demo.mp4` for `docs/demo.mp4`); several hits come back as `candidates`.
   `GitDiff` = `git diff HEAD -- file` in the file's repo (`untracked` for new
-  files, no `repo` outside git). Routes: `/api/fs/stat` (resolve + kind),
+  files, no `repo` outside git). `ListDirs(path, hidden)` lists a folder's
+  subfolders (repositories marked by a `.git`; `""`/`~` is home) for the
+  folder picker behind the New workspace dialog's browse button
+  (`web/src/FolderPicker.tsx`: crumbs, subfolders, the machine's known
+  workspaces as quick picks, hidden on request). Routes: `/api/fs/dirs`,
+  `/api/fs/stat` (resolve + kind),
   `/api/fs/file` (bytes; text is always `text/plain`, CSP-sandboxed, 512KB
   text / 24MB raw caps), `/api/fs/diff`, `POST /api/fs/upload` (multipart
   `file` ×≤4, 25MB each → `<pane dir>/.herdr-ui/uploads/<time>-<tag>-<name>`,

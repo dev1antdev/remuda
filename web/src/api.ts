@@ -349,6 +349,15 @@ export async function fsStat(machineId: string, paneId: string, path: string): P
   return (await res.json()) as FileInfo;
 }
 
+export type DirListing = { path: string; parent?: string; home?: string; dirs: { name: string; git: boolean }[] };
+
+// the subfolders of a folder on a machine ("" is home), for the picker
+export async function listDirs(machineId: string, path: string, hidden: boolean): Promise<DirListing> {
+  const q = new URLSearchParams({ machine: machineId, path, hidden: hidden ? "1" : "0" });
+  const res = await check(await fetch(`/api/fs/dirs?${q}`));
+  return (await res.json()) as DirListing;
+}
+
 export function fileUrl(machineId: string, path: string): string {
   return `/api/fs/file?${new URLSearchParams({ machine: machineId, path })}`;
 }
