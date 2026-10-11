@@ -11,6 +11,7 @@ claude=2.1.285 (Claude Code)
 claude_path=/opt/homebrew/bin/claude
 herdr=herdr 0.9.3
 herdr_path=/opt/homebrew/bin/herdr
+herdr_server=0.9.1
 arch=arm64
 codex=codex-cli 0.153.0
 codex_path=/opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js
@@ -22,7 +23,7 @@ uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 	if r.OS != "macOS 26.6.2" || r.Claude != "2.1.285" || r.ClaudeVia != "brew" || r.Herdr != "0.9.3" || r.HerdrUI != "v0.4.0-8-g3262e05" {
 		t.Fatalf("versions: %+v", r)
 	}
-	if r.HerdrVia != "brew" || r.Arch != "arm64" || r.Codex != "0.153.0" || r.CodexVia != "npm" {
+	if r.HerdrVia != "brew" || r.Arch != "arm64" || r.Codex != "0.153.0" || r.CodexVia != "npm" || r.HerdrServer != "0.9.1" {
 		t.Fatalf("via/arch: %+v", r)
 	}
 	if r.DiskUsedPct != 41 || r.DiskFreeGB < 259 || r.DiskFreeGB > 260 {
@@ -97,8 +98,11 @@ func TestPlan(t *testing.T) {
 	if u, _ := Plan("agents", r); strings.Count(u.Command, "brew update ||") != 1 || strings.Contains(u.Command, "brew update && brew upgrade") {
 		t.Fatalf("agents: brew update once, up front: %s", u.Command)
 	}
-	if u, _ := Plan("herdr", &Report{Herdr: "0.9.3", HerdrVia: "brew"}); !strings.HasSuffix(u.Command, "brew update && brew upgrade herdr && herdr --version") {
+	if u, _ := Plan("herdr", &Report{Herdr: "0.9.3", HerdrVia: "brew"}); !strings.Contains(u.Command, "brew update && brew upgrade herdr && herdr --version\n#") {
 		t.Fatalf("herdr brew: %s", u.Command)
+	}
+	if ups := Updates(&Report{Herdr: "0.9.3", HerdrVia: "installer", HerdrServer: "0.9.1"}, Latest{}); len(ups) != 1 || !strings.HasPrefix(ups[0].Note, "The server runs 0.9.1 while 0.9.3 is installed.") {
+		t.Fatalf("server note: %+v", ups)
 	}
 	ups := Updates(r, Latest{Claude: "2.1.296", Herdr: "0.9.3"})
 	if len(ups) != 3 || !strings.Contains(ups[0].Note, "0.9.1 → 0.9.3") || !strings.Contains(ups[1].Note, "→ 2.1.296") {

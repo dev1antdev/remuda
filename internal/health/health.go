@@ -38,11 +38,12 @@ type Report struct {
 	CodexVia    string  `json:"codex_via,omitempty"`
 	Gemini      string  `json:"gemini,omitempty"`
 	GeminiVia   string  `json:"gemini_via,omitempty"`
-	HerdrVia    string  `json:"herdr_via,omitempty"` // brew | installer | "" — how herdr is updated
-	Arch        string  `json:"arch,omitempty"`      // arm64 | amd64
-	Herdr       string  `json:"herdr,omitempty"`     // installed herdr version
-	HerdrUI     string  `json:"herdr_ui,omitempty"`  // the herdr-ui binary deployed there (remote machines)
-	Running     bool    `json:"herdr_ui_running"`    // a herdr-ui answers on the machine\'s own port: terminals go through it
+	HerdrVia    string  `json:"herdr_via,omitempty"`    // brew | installer | "" — how herdr is updated
+	Arch        string  `json:"arch,omitempty"`         // arm64 | amd64
+	Herdr       string  `json:"herdr,omitempty"`        // installed herdr version
+	HerdrServer string  `json:"herdr_server,omitempty"` // the version the running server is on, when one runs
+	HerdrUI     string  `json:"herdr_ui,omitempty"`     // the herdr-ui binary deployed there (remote machines)
+	Running     bool    `json:"herdr_ui_running"`       // a herdr-ui answers on the machine\'s own port: terminals go through it
 	DiskFreeGB  float64 `json:"disk_free_gb"`
 	DiskUsedPct int     `json:"disk_used_pct"`
 	Load1       float64 `json:"load1"`
@@ -159,7 +160,7 @@ func Script() string {
 LC_ALL=C; export LC_ALL
 if command -v sw_vers >/dev/null 2>&1; then echo "os=macOS $(sw_vers -productVersion 2>/dev/null)"; else echo "os=$(uname -s) $(uname -r)"; fi
 for a in claude codex gemini; do c=$(command -v "$a" 2>/dev/null); if [ -n "$c" ]; then echo "$a=$("$a" --version 2>/dev/null | head -1)"; echo "${a}_path=$(readlink "$c" 2>/dev/null || printf %s "$c")"; fi; done
-h=$(command -v herdr 2>/dev/null); if [ -n "$h" ]; then echo "herdr=$(herdr --version 2>/dev/null | head -1)"; echo "herdr_path=$(readlink "$h" 2>/dev/null || printf %s "$h")"; fi
+h=$(command -v herdr 2>/dev/null); if [ -n "$h" ]; then echo "herdr=$(herdr --version 2>/dev/null | head -1)"; echo "herdr_path=$(readlink "$h" 2>/dev/null || printf %s "$h")"; echo "herdr_server=$(herdr status server 2>/dev/null | sed -n 's/^version: //p' | head -1)"; fi
 echo "arch=$(uname -m)"
 if [ -x "$HOME/.local/bin/herdr-ui" ]; then echo "herdr_ui=$("$HOME/.local/bin/herdr-ui" -version 2>/dev/null)"; fi
 echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
@@ -204,6 +205,8 @@ func Parse(out string) (Report, *machines.Peer) {
 			r.GeminiVia = installedVia(v)
 		case "herdr":
 			r.Herdr = semver.FindString(v)
+		case "herdr_server":
+			r.HerdrServer = semver.FindString(v)
 		case "herdr_path":
 			if installedVia(v) == "brew" {
 				r.HerdrVia = "brew"
@@ -404,6 +407,13 @@ type Update struct {
 // installed" while a newer version is out.
 const brewUpdate = "brew update && "
 
+// serverStep is the line after an install of herdr, a comment for the
+// shell and a promise for the person: the running server ends up on the
+// new version too (server.go in internal/restart does it).
+const serverStep = "\n# then the running server onto it: kept when herdr's handoff already did that, else restarted with every chat started again on its session"
+
+const serverNote = "When the running server is still on the old version afterwards (Homebrew, or a handoff that did not happen) it is restarted: herdr restores the workspaces, tabs and panes, and herdr-ui starts every chat again with its session resumed; shells and other pane processes come back as fresh shells."
+
 func Plan(what string, r *Report) (Update, error) {
 	path := `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH; `
 	via := func(cmdVia, brew, npm, native string) (string, error) {
@@ -423,11 +433,11 @@ func Plan(what string, r *Report) (Update, error) {
 			return Update{}, fmt.Errorf("herdr is not installed there")
 		}
 		if r.HerdrVia == "brew" {
-			return Update{What: what, Title: "Update herdr", Command: path + brewUpdate + "brew upgrade herdr && herdr --version",
-				Note: "Installed with Homebrew: the formulae are refreshed first, then the upgrade. The running server keeps the old version until it is restarted (`herdr server stop`, then herdr-ui starts it again); a restart stops the panes and herdr restores the session shape."}, nil
+			return Update{What: what, Title: "Update herdr", Command: path + brewUpdate + "brew upgrade herdr && herdr --version" + serverStep,
+				Note: "Installed with Homebrew: the formulae are refreshed first, then the upgrade. " + serverNote}, nil
 		}
-		return Update{What: what, Title: "Update herdr", Command: path + "herdr update --handoff && herdr --version",
-			Note: "herdr's own updater, with a live handoff: the new server takes the running panes over."}, nil
+		return Update{What: what, Title: "Update herdr", Command: path + "herdr update --handoff && herdr --version" + serverStep,
+			Note: "herdr's own updater, with a live handoff: the new server takes the running panes over. " + serverNote}, nil
 	case "claude":
 		if r == nil || r.Claude == "" {
 			return Update{}, fmt.Errorf("Claude Code is not installed there")
@@ -499,6 +509,9 @@ func Updates(r *Report, l Latest) []Update {
 			u.Note = c.have + " → " + c.latest + ". " + u.Note
 		} else {
 			u.Note = c.have + " is the latest known. " + u.Note
+		}
+		if c.what == "herdr" && r.HerdrServer != "" && r.HerdrServer != r.Herdr {
+			u.Note = "The server runs " + r.HerdrServer + " while " + r.Herdr + " is installed. " + u.Note
 		}
 		out = append(out, u)
 	}

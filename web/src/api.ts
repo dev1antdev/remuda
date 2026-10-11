@@ -61,6 +61,7 @@ export type Health = {
   gemini_via?: "brew" | "npm" | "native" | "";
   herdr?: string;
   herdr_via?: "brew" | "installer" | "";
+  herdr_server?: string; // what the running server is on, when it differs from the binary
   arch?: string;
   herdr_ui?: string; // the binary deployed there
   herdr_ui_running?: boolean; // and it answers on the machine's own port: terminals there go through it

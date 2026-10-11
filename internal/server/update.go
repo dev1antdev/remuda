@@ -48,7 +48,56 @@ func (s *Server) handleMachineUpdates(w http.ResponseWriter, r *http.Request) {
 		ups = append(ups, u)
 	}
 	ups = append(ups, s.restartPlans(mc, snap)...)
+	if u, ok := s.serverRestartPlan(mc, rep, snap); ok {
+		ups = append(ups, u)
+	}
 	writeJSON(w, map[string]any{"updates": ups})
+}
+
+// serverRestartPlan offers a restart of herdr's server when it still runs
+// an older version than the one installed.
+func (s *Server) serverRestartPlan(mc *machines.Machine, rep *health.Report, snap *herdr.Snapshot) (health.Update, bool) {
+	if s.Restart == nil || rep == nil || rep.HerdrServer == "" || rep.Herdr == "" || rep.HerdrServer == rep.Herdr {
+		return health.Update{}, false
+	}
+	return serverRestartUpdate(mc, rep.HerdrServer, rep.Herdr, snap), true
+}
+
+func serverRestartUpdate(mc *machines.Machine, running, installed string, snap *herdr.Snapshot) health.Update {
+	ready, busy := restart.Count(snap, []string{"claude", "codex", "gemini"})
+	n := ready + busy
+	note := fmt.Sprintf("The server runs %s while %s is installed. A restart ends every pane process; herdr restores the workspaces, tabs and panes, and herdr-ui starts each of the %d chat(s) again with its session resumed. Shells and other processes in panes come back as fresh shells.", running, installed, n)
+	if busy > 0 {
+		note += fmt.Sprintf(" %d chat(s) are busy right now: whatever they are doing is cut short.", busy)
+	}
+	return health.Update{What: "restart-herdr", Title: "Restart herdr's server", Command: "# on " + mc.Label() + ", through herdr-ui:\nherdr server stop; herdr server   # " + running + " → " + installed + "; then every chat started again on its session", Note: note}
+}
+
+// herdrThen is the step after an install of herdr: the running server
+// onto the new version, unless the installer's handoff already did that.
+func (s *Server) herdrThen(mc *machines.Machine) func(say func(string)) error {
+	if s.Restart == nil {
+		return nil
+	}
+	return func(say func(string)) error {
+		installed, running, err := mc.ServerVersions()
+		if err != nil {
+			return fmt.Errorf("read herdr's versions: %v", err)
+		}
+		say("")
+		switch {
+		case installed == "":
+			return fmt.Errorf("cannot read the installed herdr's version")
+		case running == "":
+			say("no server runs; herdr-ui starts " + installed)
+			return mc.StartServer()
+		case running == installed:
+			say("the server runs " + installed + " already")
+			return nil
+		}
+		say(fmt.Sprintf("== the server still runs %s; onto %s", running, installed))
+		return s.Restart.Server(mc, say)
+	}
 }
 
 // restartNote says what an agent update does to the chats afterwards.
@@ -237,6 +286,26 @@ func (s *Server) handleMachineUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	rep := s.Health.Report(mc.Cfg.ID)
 	var u health.Update
+	if req.What == "restart-herdr" {
+		if s.Restart == nil {
+			httpErr(w, 503, fmt.Errorf("restarts are off"))
+			return
+		}
+		installed, running, err := mc.ServerVersions()
+		if err != nil || running == "" {
+			httpErr(w, 400, fmt.Errorf("no herdr server runs there (%v)", err))
+			return
+		}
+		snap, _ := s.Watch.Snapshot(mc.Cfg.ID)
+		u := serverRestartUpdate(mc, running, installed, snap)
+		if req.Command != "" && req.Command != u.Command {
+			httpErr(w, http.StatusConflict, fmt.Errorf("the versions changed since this was shown — look again"))
+			return
+		}
+		j := s.Jobs.Run(mc, u.Title, u.Command, func(say func(string)) error { return s.Restart.Server(mc, say) })
+		writeJSON(w, map[string]any{"job": j.ID})
+		return
+	}
 	if kind, isRestart := strings.CutPrefix(req.What, "restart-"); isRestart {
 		snap, _ := s.Watch.Snapshot(mc.Cfg.ID)
 		u, n := restartPlan(kind, snap)
@@ -278,6 +347,9 @@ func (s *Server) handleMachineUpdate(w http.ResponseWriter, r *http.Request) {
 		j = s.Jobs.Run(mc, u.Title, u.Command, func(say func(string)) error { return s.deploySelf(mc, say) })
 	} else {
 		first, then := s.restartHooks(mc, req.What)
+		if req.What == "herdr" {
+			then = s.herdrThen(mc)
+		}
 		j = s.Jobs.StartThen(mc, u.Title, u.Command, first, then)
 	}
 	writeJSON(w, map[string]any{"job": j.ID})

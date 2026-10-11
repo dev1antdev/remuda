@@ -206,6 +206,14 @@ SPA. See README.md for the user story.
   calls it off) because the person is likely reading or typing right
   then. This is the one place herdr-ui types text the person did not
   compose, and only because they pressed Run on an update or a restart.
+  `Restarter.Server` (restart/server.go) is the server onto a new binary
+  when no handoff happened: the chats with sessions noted and their panes
+  locked, `herdr server stop`, `Machine.StartServer`, a wait for the
+  restored session, then every pane that came back as a shell gets
+  `agent.start --resume`. The herdr update job ends with `herdrThen`
+  (`Machine.ServerVersions`: binary vs running server; equal → nothing,
+  else the restart); `what = restart-herdr` runs it alone and the vitals
+  probe's `herdr_server` line is what offers it.
 - `internal/tsnetx` — `-tailscale` joins the tailnet as a tsnet node
   (userspace, no tailscaled) named `-tailscale-hostname`, serves the same
   handler over HTTPS on :443 with the tailnet's certificate (:80

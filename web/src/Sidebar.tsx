@@ -506,6 +506,7 @@ function concerns(h: Health | undefined, latest: Latest | undefined, serverVersi
   if (h.codex && latest?.codex && newer(h.codex, latest.codex)) out.push({ key: "codex", text: `Codex ${latest.codex} is out (${h.codex} here)`, update: "codex" });
   if (h.gemini && latest?.gemini && newer(h.gemini, latest.gemini)) out.push({ key: "gemini", text: `Gemini CLI ${latest.gemini} is out (${h.gemini} here)`, update: "gemini" });
   if (h.herdr && latest?.herdr && newer(h.herdr, latest.herdr)) out.push({ key: "herdr", text: `herdr ${latest.herdr} is out (${h.herdr} here)`, update: "herdr" });
+  if (h.herdr && h.herdr_server && h.herdr_server !== h.herdr) out.push({ key: "herdr-server", text: `herdr's server still runs ${h.herdr_server}; ${h.herdr} is installed`, update: "restart-herdr" });
   if (remote && serverVersion && h.herdr_ui && h.herdr_ui !== serverVersion) out.push({ key: "ui", text: `herdr-ui there is ${h.herdr_ui}; this one is ${serverVersion}`, update: "herdr-ui" });
   if (remote && serverVersion && !h.herdr_ui) out.push({ key: "ui", text: "no herdr-ui deployed there — search and usage fall back to slower paths", update: "herdr-ui" });
   if (h.disk_used_pct >= 90 || (h.disk_free_gb > 0 && h.disk_free_gb < 10)) out.push({ key: "disk", text: `Disk ${h.disk_used_pct}% full, ${h.disk_free_gb.toFixed(0)} GB free`, bad: h.disk_used_pct >= 95 });
@@ -601,6 +602,7 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
               <dt>herdr</dt>
               <dd>
                 {h.herdr ?? "—"}
+                {h.herdr_server && h.herdr !== h.herdr_server ? <span className="health-new"> · server {h.herdr_server}</span> : null}
                 {h.herdr && l?.herdr && newer(h.herdr, l.herdr) ? <span className="health-new"> → {l.herdr}</span> : null}
               </dd>
               <dt>herdr-ui</dt>
@@ -630,7 +632,7 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
                   <span className="health-concern">{c.text}</span>
                   {c.update && (
                     <button type="button" className="btn sm" onClick={() => { setOpen(null); setUpdateWhat(c.update!); }}>
-                      {c.update === "herdr-ui" ? "Deploy" : "Update"}
+                      {c.update === "herdr-ui" ? "Deploy" : c.update.startsWith("restart-") ? "Restart" : "Update"}
                     </button>
                   )}
                 </li>

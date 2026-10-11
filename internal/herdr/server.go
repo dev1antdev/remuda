@@ -46,6 +46,23 @@ func EnsureServer(bin, socket string) error {
 	if time.Since(lastStart) < 2*time.Minute {
 		return fmt.Errorf("herdr server started %s ago and does not answer yet", time.Since(lastStart).Round(time.Second))
 	}
+	return start(bin, socket)
+}
+
+// StartServerNow is EnsureServer without the two-minute spacing: a person
+// asked for the restart (an update brought a new binary), so a server
+// that was started a moment ago is no reason to wait.
+func StartServerNow(bin, socket string) error {
+	startMu.Lock()
+	defer startMu.Unlock()
+	if _, _, err := NewClient(socket).Ping(); err == nil {
+		return nil
+	}
+	return start(bin, socket)
+}
+
+// start runs the server detached and waits for it to answer; startMu held.
+func start(bin, socket string) error {
 	lastStart = time.Now()
 	home, _ := os.UserHomeDir()
 	cmd := serverCommand(bin, socket, home)

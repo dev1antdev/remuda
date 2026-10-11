@@ -100,7 +100,11 @@ same pane with its session resumed (`claude --resume`, `codex resume`,
 `gemini --resume`); a busy chat is restarted a little after it finishes,
 and a message half-typed in a chat's box is lost. The same restart is
 offered on its own ("Restart Claude Code chats") for an agent that
-updated itself.
+updated itself. An update of herdr ends with its server on the new
+version: herdr's own live handoff when the installer did one, otherwise
+the server is restarted — herdr restores the workspaces and panes, and
+herdr-ui starts every chat again with its session resumed ("Restart
+herdr's server" is offered whenever the server lags the binary).
 
 The long way, piece by piece:
 

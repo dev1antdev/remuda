@@ -57,6 +57,8 @@ type Machine struct {
 	lastAlive   time.Time // last `ssh -O check`, so transport errors don't spawn one each
 	removed     bool      // taken out of the registry; never reconnect, pollers stop
 	serverStart time.Time // when herdr-ui last started `herdr server` there
+	herdrBin    string    // herdr's binary on the machine, once known
+	socket      string    // its server socket
 
 	conn   *sshx.Conn
 	client *herdr.Client
@@ -170,11 +172,13 @@ func (m *Manager) Rename(id, label string) (*Machine, error) {
 func NewManager(dir, localSocket, localHerdrBin string) *Manager {
 	host, _ := os.Hostname()
 	local := &Machine{
-		Cfg:    Config{ID: LocalID, Label: "This Mac · " + strings.TrimSuffix(host, ".local")},
-		Local:  true,
-		state:  StateConnected,
-		client: herdr.NewClient(localSocket),
-		attach: herdr.NewAttachManager(herdr.LocalAttachCommand(localHerdrBin, localSocket)),
+		Cfg:      Config{ID: LocalID, Label: "This Mac · " + strings.TrimSuffix(host, ".local")},
+		Local:    true,
+		state:    StateConnected,
+		herdrBin: localHerdrBin,
+		socket:   localSocket,
+		client:   herdr.NewClient(localSocket),
+		attach:   herdr.NewAttachManager(herdr.LocalAttachCommand(localHerdrBin, localSocket)),
 	}
 	m := &Manager{
 		machines: map[string]*Machine{LocalID: local},
@@ -435,6 +439,67 @@ func (mc *Machine) fail(err error) {
 // connect dials the master, learns the remote home and herdr binary, picks
 // the RPC transport and verifies herdr answers through it.
 
+// HerdrBin is herdr's binary on the machine, once known ("" before the
+// first connect of a remote).
+func (mc *Machine) HerdrBin() string {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	return mc.herdrBin
+}
+
+// ServerVersions reads the installed herdr's version and the running
+// server's ("" when none runs), freshly.
+func (mc *Machine) ServerVersions() (installed, running string, err error) {
+	bin, sock := mc.herdrPaths()
+	out, err := mc.Shell(`LC_ALL=C; `+sshx.Quote(bin)+` --version 2>/dev/null | head -1; HERDR_SOCKET_PATH=`+sshx.Quote(sock)+` `+sshx.Quote(bin)+` status server 2>/dev/null | sed -n 's/^version: //p' | head -1`, 20*time.Second)
+	if err != nil && strings.TrimSpace(out) == "" {
+		return "", "", err
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	installed = herdrSemver.FindString(lines[0])
+	if len(lines) > 1 {
+		running = herdrSemver.FindString(lines[1])
+	}
+	return installed, running, nil
+}
+
+var herdrSemver = regexp.MustCompile(`\d+\.\d+\.\d+`)
+
+// StopServer stops herdr's server on the machine. Every pane process ends
+// with it; the session shape is herdr's to restore on the next start.
+func (mc *Machine) StopServer() (string, error) {
+	bin, sock := mc.herdrPaths()
+	return mc.Shell(`HERDR_SOCKET_PATH=`+sshx.Quote(sock)+` `+sshx.Quote(bin)+` server stop 2>&1`, 30*time.Second)
+}
+
+// StartServer starts herdr's server on the machine now — the person asked
+// (an update), so the spacing of the automatic starts does not apply.
+func (mc *Machine) StartServer() error {
+	bin, sock := mc.herdrPaths()
+	if mc.Local {
+		return herdr.StartServerNow(bin, sock)
+	}
+	conn, err := mc.remoteConn()
+	if err != nil {
+		return err
+	}
+	mc.mu.Lock()
+	mc.serverStart = time.Now()
+	mc.mu.Unlock()
+	_, err = conn.Exec(herdr.StartServerScript(bin, sock), 25*time.Second)
+	return err
+}
+
+func (mc *Machine) herdrPaths() (bin, sock string) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	bin, sock = mc.herdrBin, mc.socket
+	if bin == "" {
+		bin = "herdr"
+	}
+	return bin, sock
+}
+
 // mayStartServer says whether herdr-ui may start `herdr server` on the
 // machine now — once per two minutes — and notes that it did.
 func (m *Machine) mayStartServer() bool {
@@ -523,6 +588,7 @@ func (mc *Machine) connect() {
 	mc.conn = conn
 	mc.client = client
 	mc.home = home
+	mc.herdrBin, mc.socket = bin, sock
 	mc.attach = herdr.NewAttachManager(func(termID string) *exec.Cmd {
 		return conn.AttachCmd(bin, termID)
 	})
