@@ -35,6 +35,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/push"
 	"github.com/dev1antdev/herdr-ui/internal/quick"
 	"github.com/dev1antdev/herdr-ui/internal/radar"
+	"github.com/dev1antdev/herdr-ui/internal/restart"
 	"github.com/dev1antdev/herdr-ui/internal/review"
 	"github.com/dev1antdev/herdr-ui/internal/schedule"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
@@ -59,7 +60,8 @@ type Server struct {
 	// vitals, and the tailnet node's status when -tailscale is on
 	Health    *health.Collector
 	Tailscale func() tsnetx.Status
-	Jobs      *jobs.Runner // the updates a person runs from the page
+	Jobs      *jobs.Runner       // the updates a person runs from the page
+	Restart   *restart.Restarter // chats onto a freshly updated agent
 	Radar     *radar.Tracker
 	Guard     *auth.Guard
 	UI        fs.FS // built SPA
@@ -110,6 +112,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/machines/{id}/updates", s.handleMachineUpdates)
 	api.HandleFunc("POST /api/machines/{id}/update", s.handleMachineUpdate)
 	api.HandleFunc("GET /api/jobs/{id}", s.handleJob)
+	api.HandleFunc("GET /api/machines/{id}/jobs", s.handleMachineJobs)
 	api.HandleFunc("POST /api/sessions", s.handleNewWorkspace)
 	api.HandleFunc("DELETE /api/sessions/{id}", s.closeHandler((*herdr.Client).WorkspaceClose))
 	api.HandleFunc("POST /api/tabs", s.handleNewTab)
@@ -1066,6 +1069,11 @@ func (s *Server) handlePushTest(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---- input ----
+
+// PaneLock is paneLock for the restarter, which types into a pane too.
+func (s *Server) PaneLock(machineID, paneID string) sync.Locker {
+	return s.paneLock(push.PaneRef{Machine: machineID, Pane: paneID})
+}
 
 func (s *Server) paneLock(ref push.PaneRef) *sync.Mutex {
 	s.mu.Lock()

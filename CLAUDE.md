@@ -185,9 +185,26 @@ SPA. See README.md for the user story.
   binary lives), or every agent; `GET /api/machines/{id}/updates` lists
   them, `POST …/update {what}` starts one; `what=herdr-ui` copies this
   very binary to a remote of the same OS/CPU and restarts its service.
-  `Updates.tsx` shows the list, the command before "Run", the live log.
-  Nothing uses sudo; everything runs as the user through the shell
-  herdr-ui already has on the machine.
+  `Updates.tsx` shows the list, the command before "Run", the live log,
+  and the machine's recent jobs. Nothing uses sudo; everything runs as
+  the user through the shell herdr-ui already has on the machine.
+- **Chats follow an agent update** (`internal/restart`). When an update
+  job changed an agent's version (the vitals re-read right after), every
+  pane running that agent is restarted onto it: `agent.prompt` with the
+  agent's own `/exit` (Ctrl-C twice if it lingers), a wait for the shell
+  prompt, then `agent.start` with `--resume <session id>` (`codex resume`,
+  `gemini --resume`) from the snapshot's `agent_session`. Idle/done chats
+  go at once; working/blocked/unknown ones are booked and restarted after
+  the watcher sees them settle (`Watcher.OnEvent` → `Restarter.OnStatus`,
+  a 25 s timer, then its own job via `Restarter.Later`). A pane without a session id
+  is left alone; a pane that closes with its agent is reported. `what =
+  restart-<kind>` runs the restart alone. A restart holds the pane's
+  `paneLock` from the exit to the resumed agent (nothing else lands in
+  the bare shell in between), a booking is tied to the session id it was
+  made for, and a settled chat waits 25 s more (any change in between
+  calls it off) because the person is likely reading or typing right
+  then. This is the one place herdr-ui types text the person did not
+  compose, and only because they pressed Run on an update or a restart.
 - `internal/tsnetx` — `-tailscale` joins the tailnet as a tsnet node
   (userspace, no tailscaled) named `-tailscale-hostname`, serves the same
   handler over HTTPS on :443 with the tailnet's certificate (:80

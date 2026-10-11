@@ -452,3 +452,12 @@ func (c *Client) AgentStart(paneID, kind string) error {
 		"pane_id": paneID, "kind": kind, "name": kind,
 	}, nil, 30*time.Second)
 }
+
+// AgentStartWith is AgentStart with the agent's own arguments (what the
+// CLI takes after `--`), a name of the caller's choosing and a longer
+// wait — a session resumed can take a while to be ready.
+func (c *Client) AgentStartWith(paneID, kind, name string, args []string, timeout time.Duration) error {
+	return c.CallTimeout("agent.start", map[string]any{
+		"pane_id": paneID, "kind": kind, "name": name, "args": args, "timeout_ms": timeout.Milliseconds(),
+	}, nil, timeout+10*time.Second)
+}

@@ -293,6 +293,7 @@ type Event struct {
 	Workspace string // label for the title
 	PaneTitle string
 	Agent     string
+	Kind      string        // the agent kind herdr detected ("claude"), "" for a shell
 	From, To  string        // herdr statuses; To "gone" when the pane closed
 	Worked    time.Duration // how long the pane was working before this
 }

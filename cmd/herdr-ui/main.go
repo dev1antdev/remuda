@@ -28,6 +28,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/push"
 	"github.com/dev1antdev/herdr-ui/internal/quick"
 	"github.com/dev1antdev/herdr-ui/internal/radar"
+	"github.com/dev1antdev/herdr-ui/internal/restart"
 	"github.com/dev1antdev/herdr-ui/internal/review"
 	"github.com/dev1antdev/herdr-ui/internal/schedule"
 	"github.com/dev1antdev/herdr-ui/internal/search"
@@ -355,6 +356,14 @@ func main() {
 		}
 	}
 	s.Jobs = runner
+	// chats onto a freshly updated agent: now when idle, else when they settle
+	restarter := restart.New(mgr)
+	restarter.Later = func(mc *machines.Machine, title string, fn func(say func(string)) error) {
+		runner.Run(mc, title, "", fn)
+	}
+	restarter.Lock = s.PaneLock
+	watcher.OnEvent = restarter.OnStatus
+	s.Restart = restarter
 	if *tailscale {
 		var node *tsnetx.Node
 		s.Tailscale = func() tsnetx.Status { return node.Status() } // set before the handler is handed out

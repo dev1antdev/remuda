@@ -55,6 +55,9 @@ type Watcher struct {
 	// LocalDown, when set, is called when the local herdr does not answer —
 	// herdr-ui starts its headless server (rate-limited inside)
 	LocalDown func(err error)
+	// OnEvent, when set, sees every status change after push does (chats
+	// booked for a restart)
+	OnEvent func(ev push.Event)
 
 	mu     sync.Mutex
 	states map[string]*machineState
@@ -210,7 +213,7 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 		}
 		events = append(events, push.Event{
 			Pane: push.PaneRef{Machine: machineID, Pane: p.PaneID}, Workspace: labels[p.WorkspaceID],
-			PaneTitle: p.DisplayTitle(), Agent: p.AgentName(),
+			PaneTitle: p.DisplayTitle(), Agent: p.AgentName(), Kind: p.Agent,
 			From: prev.status, To: p.AgentStatus, Worked: worked,
 		})
 	}
@@ -228,6 +231,9 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 			log.Printf("status %s (%s): %s → %s", ev.Pane, ev.Workspace, ev.From, ev.To)
 		}
 		w.push.OnStatus(ev)
+		if w.OnEvent != nil {
+			w.OnEvent(ev)
+		}
 	}
 }
 

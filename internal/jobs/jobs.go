@@ -52,7 +52,48 @@ func New() *Runner { return &Runner{jobs: map[string]*job{}} }
 
 // Start runs the script on the machine in the background.
 func (r *Runner) Start(mc *machines.Machine, title, command string) Job {
-	return r.launch(mc, title, command, func(j *job) error { return mc.Stream(command, timeout, j.write) })
+	return r.StartThen(mc, title, command, nil, nil)
+}
+
+// StartThen is Start with Go work around the script, writing to the same
+// log: first before it (a look at the versions), then after it whatever
+// its exit status — an update of every agent that half failed still has
+// the other half to bring the chats onto. The script's failure is the
+// job's verdict.
+func (r *Runner) StartThen(mc *machines.Machine, title, command string, first func(say func(string)), then func(say func(string)) error) Job {
+	return r.launch(mc, title, command, func(j *job) error {
+		say := func(line string) { j.write([]byte(line + "\n")) }
+		if first != nil {
+			first(say)
+		}
+		err := mc.Stream(command, timeout, j.write)
+		if then != nil {
+			if terr := then(say); terr != nil && err == nil {
+				err = terr
+			}
+		}
+		return err
+	})
+}
+
+// List is the machine's jobs, newest first, without their output.
+func (r *Runner) List(machineID string, n int) []Job {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []Job
+	for i := len(r.order) - 1; i >= 0 && len(out) < n; i-- {
+		j := r.jobs[r.order[i]]
+		if j == nil {
+			continue
+		}
+		v := j.snapshot()
+		if v.Machine != machineID {
+			continue
+		}
+		v.Output = ""
+		out = append(out, v)
+	}
+	return out
 }
 
 // Run is Start for a job written in Go rather than a script: fn streams

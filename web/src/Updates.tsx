@@ -5,7 +5,7 @@
 // is refused when the plan has changed since.
 
 import { useEffect, useRef, useState } from "react";
-import { fetchJob, listUpdates, startUpdate, type Job, type Machine, type Update } from "./api";
+import { fetchJob, listJobs, listUpdates, startUpdate, type Job, type Machine, type Update } from "./api";
 import Icon from "./icons";
 import { errMsg } from "./prefs";
 import { Dialog, Notice, useAsync } from "./ui";
@@ -21,6 +21,9 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
   onDone?: () => void;
 }) {
   const { data, error, loading } = useAsync(() => listUpdates(machine.id), [machine.id]);
+  // what ran here lately — a chat restarted after it settled shows up here
+  const [listTick, setListTick] = useState(0);
+  const recent = useAsync(() => listJobs(machine.id), [machine.id, listTick]);
   const [picked, setPicked] = useState<Update | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [err, setErr] = useState("");
@@ -76,14 +79,29 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
     setJob(null);
     setPicked(null);
     setErr("");
+    setListTick((n) => n + 1);
   };
+  const open = (id: string) => {
+    fetchJob(id).then((j) => {
+      if (!j.done) lastJob.set(machine.id, id);
+      setJob(j);
+    }, (e) => setErr(errMsg(e)));
+  };
+  // the list view follows what runs: a chat restarted after it settled shows up
+  const listShown = !job && !picked;
+  useEffect(() => {
+    if (!listShown) return;
+    const t = setInterval(() => setListTick((n) => n + 1), 4000);
+    return () => clearInterval(t);
+  }, [listShown]);
+  const when = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return (
     <Dialog title={job ? job.title : picked ? picked.title : `Updates on ${label}`} icon="refresh-cw" size="md" onClose={onClose} className="updates">
       {error && <Notice tone="error">{error}</Notice>}
       {err && <Notice tone="error" onDismiss={() => setErr("")}>{err}</Notice>}
       {job ? (
         <>
-          <code className="updates-cmd">{job.command}</code>
+          {job.command && <code className="updates-cmd">{job.command}</code>}
           <pre className="updates-log" ref={log}>
             {job.output || (job.done ? "" : "…")}
           </pre>
@@ -112,7 +130,9 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
       ) : picked ? (
         <>
           <p className="updates-note">{picked.note}</p>
-          <p className="dim">This runs on {label}, as you, through the shell herdr-ui already uses there:</p>
+          <p className="dim">
+            {picked.what.startsWith("restart-") ? `This goes through herdr on ${label}, pane by pane:` : `This runs on ${label}, as you, through the shell herdr-ui already uses there:`}
+          </p>
           <code className="updates-cmd">{picked.command}</code>
           <div className="modal-actions">
             <button type="button" className="btn" onClick={back}>
@@ -131,7 +151,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           <div className="updates-list">
             {data?.map((u) => (
               <button key={u.what} type="button" className="updates-row" onClick={() => setPicked(u)}>
-                <Icon name={u.what === "herdr" || u.what === "herdr-ui" ? "refresh-cw" : "sparkles"} size={14} />
+                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "herdr" || u.what === "herdr-ui" ? "refresh-cw" : "sparkles"} size={14} />
                 <span className="updates-row-text">
                   <span>{u.title}</span>
                   <span className="dim">{u.note?.split(". ")[0]}</span>
@@ -140,6 +160,19 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
               </button>
             ))}
           </div>
+          {recent.data && recent.data.jobs.length > 0 && (
+            <div className="updates-recent">
+              <span className="dim">
+                Ran here lately
+                {recent.data.pending > 0 ? ` · ${recent.data.pending} chat${recent.data.pending > 1 ? "s" : ""} waiting to restart` : ""}
+              </span>
+              {recent.data.jobs.map((j) => (
+                <button key={j.id} type="button" className="linkish updates-job" onClick={() => open(j.id)} title={j.error || (j.done ? (j.ok ? "done" : "failed") : "running")}>
+                  <Icon name={j.done ? (j.ok ? "check" : "x") : "refresh-cw"} size={12} className={j.done ? (j.ok ? "ok" : "bad") : "spin"} /> {j.title} · {when(j.started)}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="modal-actions">
             <button type="button" className="btn" onClick={onClose}>
               Close

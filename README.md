@@ -93,7 +93,14 @@ environment, so its panes see the PATH and exports your terminal has.
 Updates — herdr, Claude Code, Codex, Gemini CLI, and herdr-ui itself
 on a remote machine — run from the page: the ⓘ beside a machine shows
 what is out of date with an Update button, the ⋯ menu has "Updates…";
-each shows the exact command first and streams its output.
+each shows the exact command first and streams its output. After an
+agent update, the chats running that agent are restarted onto the new
+version: each is asked to leave (its own `/exit`) and started again in the
+same pane with its session resumed (`claude --resume`, `codex resume`,
+`gemini --resume`); a busy chat is restarted a little after it finishes,
+and a message half-typed in a chat's box is lost. The same restart is
+offered on its own ("Restart Claude Code chats") for an agent that
+updated itself.
 
 The long way, piece by piece:
 

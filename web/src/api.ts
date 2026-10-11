@@ -100,6 +100,10 @@ export async function listUpdates(machineId: string): Promise<Update[]> {
 }
 // the command shown goes back with the request: the server runs that or refuses
 export const startUpdate = (machineId: string, what: string, command: string): Promise<{ job: string }> => sendJSON("POST", `/api/machines/${encodeURIComponent(machineId)}/update`, { what, command });
+export async function listJobs(machineId: string): Promise<{ jobs: Job[]; pending: number }> {
+  const res = await check(await fetch(`/api/machines/${encodeURIComponent(machineId)}/jobs`));
+  return (await res.json()) as { jobs: Job[]; pending: number };
+}
 export async function fetchJob(id: string): Promise<Job> {
   const res = await check(await fetch(`/api/jobs/${encodeURIComponent(id)}`));
   return (await res.json()) as Job;

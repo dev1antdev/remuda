@@ -5006,3 +5006,25 @@ button.usage-row:hover {
   padding-top: 6px;
   border-top: 1px solid var(--line);
 }
+
+.updates-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.updates-job {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.updates-recent .icon.ok {
+  color: var(--green);
+}
+
+.updates-recent .icon.bad {
+  color: var(--red);
+}
