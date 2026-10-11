@@ -24,14 +24,17 @@ import {
   type Label,
   type Project,
   type Run,
+  type Status,
   type Task,
 } from "./tasksApi";
 import type { Machine } from "./api";
-import { errMsg, useDebounced, usePref } from "./prefs";
+import { errMsg, isTouch, useDebounced, usePref } from "./prefs";
 import { openUrl } from "./host";
 import { Markdown } from "./markdown";
 import Select from "./Select";
 import SendToAgent from "./SendToAgent";
+import Board from "./Board";
+import ProjectSettings, { randomColor } from "./ProjectSettings";
 import Logo from "./Logo";
 import Icon, { type IconName } from "./icons";
 import { Dialog, Notice, useDismiss, useSubmit, useTimedNotice } from "./ui";
@@ -77,6 +80,8 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
   const [defaultProject, setDefaultProject] = useState(0);
   const [sel, setSel] = usePref<Sel>("tasks.sel", { kind: "smart", id: "today" });
   const [showDone, setShowDone] = usePref("tasks.showDone", false);
+  const [view, setView] = usePref<"list" | "board">("tasks.view", "board"); // a project as a list or a board
+  const [settings, setSettings] = useState(false);
   const [search, setSearch] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [pages, setPages] = useState(1);
@@ -96,6 +101,9 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
   };
   const [tick, setTick] = useState(0);
   const refresh = useCallback(() => setTick((t) => t + 1), []);
+  // the list alone, re-read: a card moved, a column changed
+  const [listTick, setListTick] = useState(0);
+  const reloadList = useCallback(() => setListTick((t) => t + 1), []);
 
   // the sidebar's data
   useEffect(() => {
@@ -114,11 +122,13 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
     };
   }, [tick]);
 
-  // the list: selection + done + search → one query
-  const withDone = showDone && sel.kind === "project";
+  // the list: selection + done + search → one query; a project on its
+  // board is read whole, in column order
+  const board = sel.kind === "project" && view === "board";
+  const withDone = showDone && sel.kind === "project" && !board;
   const query = useMemo(
-    () => (sel.kind === "smart" ? { view: sel.id } : { view: "project" as const, project: sel.id, done: withDone }),
-    [sel, withDone],
+    () => (sel.kind === "smart" ? { view: sel.id } : board ? { view: "board" as const, project: sel.id } : { view: "project" as const, project: sel.id, done: withDone }),
+    [sel, withDone, board],
   );
   const debounced = useDebounced(search, 250);
   // a new list starts on its first page; the open task belongs to the old one
@@ -150,18 +160,31 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
     return () => {
       gone = true;
     };
-  }, [query, debounced, page, tick]);
+  }, [query, debounced, page, tick, listTick]);
+  // the board moves by itself when an agent starts or finishes: re-read
+  // it now and then while it is on screen
+  useEffect(() => {
+    if (!board) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") reloadList();
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [board, reloadList]);
 
   const byId = useMemo(() => new Map((projects ?? []).map((p) => [p.id, p])), [projects]);
+  const project = sel.kind === "project" ? byId.get(sel.id) : undefined;
+  const statusOf = (t: Task) => byId.get(t.project_id)?.statuses.find((s) => s.id === t.status_id);
   const open = openId === null ? null : (tasks.find((t) => t.id === openId) ?? null);
 
   // one task changed on the server: show it without re-reading the list
   const replace = (t: Task) => setTasks((ts) => ts.map((x) => (x.id === t.id ? t : x)));
-  // …unless it left the list: another project, another due date
+  // …unless it left the list: another project, another due date — or
+  // another column, where the server knows the place
   const replaceOrMove = (t: Task) => {
     const was = tasks.find((x) => x.id === t.id);
     replace(t);
     if (was && (was.project_id !== t.project_id || was.due_date !== t.due_date)) refresh();
+    else if (was && was.status_id !== t.status_id) reloadList();
   };
 
   // the open task in full (its comments), re-read while an agent is on it
@@ -196,6 +219,37 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
     if (sel.kind === "smart" && sel.id === "today") fields.due_date = endOfToday();
     await createTask(projectId, fields);
     refresh();
+  };
+  // a task typed into a column of the board
+  const addTo = async (title: string, statusId: number) => {
+    if (sel.kind !== "project") return;
+    await createTask(sel.id, { title, status_id: statusId });
+    reloadList();
+  };
+  // a card dropped: shown there at once, the server told, the list put
+  // back as it was if it refuses
+  const moveCard = (t: Task, statusId: number, after: number | undefined) => {
+    const before = tasks;
+    setTasks((ts) => {
+      const rest = ts.filter((x) => x.id !== t.id);
+      const moved = { ...t, status_id: statusId };
+      let at: number;
+      if (after === undefined) {
+        at = rest.reduce((last, x, i) => (x.status_id === statusId ? i + 1 : last), -1); // after the column's last card
+        if (at < 0) at = rest.length;
+      } else if (after === 0) {
+        at = rest.findIndex((x) => x.status_id === statusId);
+        if (at < 0) at = rest.length;
+      } else {
+        at = rest.findIndex((x) => x.id === after) + 1;
+      }
+      rest.splice(at, 0, moved);
+      return rest;
+    });
+    void patchTask(t.id, { status_id: statusId, after }).then(replace, (e) => {
+      setTasks(before);
+      setError(errMsg(e));
+    });
   };
 
   const remove = (t: Task) =>
@@ -251,6 +305,16 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
         <div className="tasks-head">
           <h1>{title}</h1>
           {sel.kind === "project" && (
+            <nav className="tasks-view" aria-label="View">
+              <button type="button" className={view === "list" ? "on" : ""} onClick={() => setView("list")} title="As a list">
+                <Icon name="list" size={14} /> List
+              </button>
+              <button type="button" className={view === "board" ? "on" : ""} onClick={() => setView("board")} title="As a board: a column per status">
+                <Icon name="layers" size={14} /> Board
+              </button>
+            </nav>
+          )}
+          {sel.kind === "project" && !board && (
             <label className="tasks-toggle">
               <input
                 type="checkbox"
@@ -273,6 +337,11 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
               setPage(1);
             }}
           />
+          {project && (
+            <button type="button" className="icon-btn" title="Project settings: name, colour, columns" aria-label="Project settings" onClick={() => setSettings(true)}>
+              <Icon name="settings" size={16} />
+            </button>
+          )}
         </div>
         <QuickAdd placeholder={addTarget ? `Add a task to ${addTarget.title}…` : "Add a task…"} disabled={!addTarget} onAdd={addTask} />
         {error && (
@@ -297,20 +366,36 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
             {notice}
           </Notice>
         )}
-        <div className={`tasks-list${loading ? " loading" : ""}`}>
-          {tasks.length === 0 && !loading && <div className="placeholder">Nothing here.</div>}
-          {tasks.map((t) => (
-            <TaskRow
-              key={t.id}
-              task={t}
-              project={sel.kind === "smart" ? byId.get(t.project_id) : undefined}
-              selected={t.id === openId}
-              onToggle={() => void toggleDone(t)}
-              onOpen={() => setOpenId(t.id === openId ? null : t.id)}
+        {board && project ? (
+          <div className={`board-host${loading ? " loading" : ""}`}>
+            <Board
+              project={project}
+              tasks={tasks}
+              openId={openId}
+              draggable={!isTouch}
+              onOpen={(id) => setOpenId(id === openId ? null : id)}
+              onMove={moveCard}
+              onAdd={addTo}
+              chips={(t) => <TaskChips task={t} />}
             />
-          ))}
-        </div>
-        {pages > 1 && (
+          </div>
+        ) : (
+          <div className={`tasks-list${loading ? " loading" : ""}`}>
+            {tasks.length === 0 && !loading && <div className="placeholder">Nothing here.</div>}
+            {tasks.map((t) => (
+              <TaskRow
+                key={t.id}
+                task={t}
+                project={sel.kind === "smart" ? byId.get(t.project_id) : undefined}
+                status={statusOf(t)}
+                selected={t.id === openId}
+                onToggle={() => void toggleDone(t)}
+                onOpen={() => setOpenId(t.id === openId ? null : t.id)}
+              />
+            ))}
+          </div>
+        )}
+        {!board && pages > 1 && (
           <div className="tasks-pager">
             <button type="button" className="btn sm" disabled={page <= 1} onClick={() => setPage(page - 1)} title="Previous page" aria-label="Previous page">
               <Icon name="chevron-left" size={14} />
@@ -330,6 +415,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
           key={open.id}
           task={open}
           projects={projects}
+          statuses={byId.get(open.project_id)?.statuses ?? []}
           labels={labels}
           onChange={replaceOrMove}
           onLabels={setLabels}
@@ -349,6 +435,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
         <StartAgentDialog
           task={startReq}
           project={byId.get(startReq.project_id)?.title ?? ""}
+          moveTo={byId.get(startReq.project_id)?.statuses.find((s) => s.on_start)?.title}
           machines={machines}
           currentPane={currentPane}
           onClose={() => setStartReq(null)}
@@ -385,6 +472,17 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
             setNewProject(false);
             setProjects((ps) => [...(ps ?? []), p]);
             select({ kind: "project", id: p.id });
+          }}
+        />
+      )}
+      {settings && project && (
+        <ProjectSettings
+          project={project}
+          onClose={() => setSettings(false)}
+          onSaved={(p) => {
+            setSettings(false);
+            setProjects((ps) => (ps ?? []).map((x) => (x.id === p.id ? p : x)));
+            reloadList();
           }}
         />
       )}
@@ -496,14 +594,14 @@ function QuickAdd({ placeholder, disabled, onAdd }: { placeholder: string; disab
   );
 }
 
-function TaskRow({ task: t, project, selected, onToggle, onOpen }: {
+function TaskRow({ task: t, project, status, selected, onToggle, onOpen }: {
   task: Task;
   project?: Project;
+  status?: Status;
   selected: boolean;
   onToggle: () => void;
   onOpen: () => void;
 }) {
-  const due = dueLabel(t);
   return (
     <div
       className={`tasks-row${t.done ? " done" : ""}${selected ? " sel" : ""}`}
@@ -529,6 +627,18 @@ function TaskRow({ task: t, project, selected, onToggle, onOpen }: {
         aria-label={t.done ? "Mark undone" : "Mark done"}
       />
       <span className="tasks-row-title">{t.title}</span>
+      <TaskChips task={t} project={project} status={status} />
+    </div>
+  );
+}
+
+// what a task shows beside its title — on a list row and on a board card
+// alike: the agent on it, priority, labels, the due date, and when asked
+// the column it is in and its project
+function TaskChips({ task: t, project, status }: { task: Task; project?: Project; status?: Status }) {
+  const due = dueLabel(t);
+  return (
+    <>
       {t.run && t.run.state !== "gone" && t.run.state !== "failed" && (
         <span className={`tasks-row-run is-${t.run.state}`} title={`${t.run.agent} on ${t.run.branch}: ${t.run.state}`}>
           <Logo agent={t.run.agent} />
@@ -545,16 +655,23 @@ function TaskRow({ task: t, project, selected, onToggle, onOpen }: {
         </span>
       ))}
       {due && <span className={`tasks-due${due.over && !t.done ? " over" : ""}`}>{due.text}</span>}
+      {status && (
+        <span className="tasks-status" title="The column it is in">
+          <span className="tasks-dot" style={{ background: `#${status.hex_color || "888"}` }} />
+          {status.title}
+        </span>
+      )}
       {project && <span className="tasks-row-project">{project.title}</span>}
-    </div>
+    </>
   );
 }
 
 // ---- detail ----
 
-function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, onDelete, onError, canSend, onSend, canStart, onStart, machineLabel, liveStatus, onOpenPane }: {
+function TaskDetail({ task: t, projects, statuses, labels, onChange, onLabels, onClose, onDelete, onError, canSend, onSend, canStart, onStart, machineLabel, liveStatus, onOpenPane }: {
   task: Task;
   projects: Project[];
+  statuses: Status[]; // its project's columns
   labels: Label[];
   onChange: (t: Task) => void;
   onLabels: (ls: Label[]) => void;
@@ -672,6 +789,10 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
         }}
       />
 
+      <div className="tasks-field">
+        <span className="tasks-field-name">Status</span>
+        <Select value={t.status_id} onChange={(status_id) => void patch({ status_id })} options={statuses.map(statusOption)} />
+      </div>
       <div className="tasks-field">
         <span className="tasks-field-name">Project</span>
         <Select
@@ -945,9 +1066,10 @@ function branchFor(t: Task): string {
   return `task-${t.id}${slug ? `-${slug}` : ""}`;
 }
 
-function StartAgentDialog({ task: t, project, machines, currentPane, onClose, onStarted }: {
+function StartAgentDialog({ task: t, project, moveTo, machines, currentPane, onClose, onStarted }: {
   task: Task;
   project: string;
+  moveTo?: string; // the column the start moves the task to, when the project has one
   machines: Machine[];
   currentPane: { machineId: string; paneId: string } | null;
   onClose: () => void;
@@ -998,8 +1120,15 @@ function StartAgentDialog({ task: t, project, machines, currentPane, onClose, on
       }}
     >
       <p className="modal-hint">
-        A worktree branches off the workspace's repository, Claude starts in it and gets the task once it is up. The task wears <b>in progress</b>; every answer the agent
-        finishes comes back here as a comment.
+        A worktree branches off the workspace's repository, Claude starts in it and gets the task once it is up.{" "}
+        {moveTo ? (
+          <>
+            The task moves to <b>{moveTo}</b>;
+          </>
+        ) : (
+          "The task stays where it is;"
+        )}{" "}
+        every answer the agent finishes comes back here as a comment.
       </p>
       <div className="schedule-row">
         {connected.length > 1 && (
@@ -1083,6 +1212,13 @@ const projectOption = (p: Project) => ({
   icon: <span className="tasks-dot" style={{ background: p.hex_color ? `#${p.hex_color}` : "var(--line-strong)" }} />,
 });
 
+const statusOption = (s: Status) => ({
+  value: s.id,
+  label: s.title,
+  hint: s.kind === "done" ? "done" : undefined,
+  icon: <span className="tasks-dot" style={{ background: `#${s.hex_color || "888"}` }} />,
+});
+
 // the priority's mark: nothing, then exclamation marks that redden
 function PrioMark({ level }: { level: number }) {
   if (level === 0) return <span className="sel-glyph dim">—</span>;
@@ -1126,9 +1262,6 @@ function labelStyle(l: Label): CSSProperties {
   const hex = l.hex_color || "888888";
   return { background: `#${hex}33`, borderColor: `#${hex}88` };
 }
-
-const PALETTE = ["e67e22", "2ecc71", "3498db", "9b59b6", "e74c3c", "1abc9c", "f1c40f", "95a5a6"];
-const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)]!;
 
 // Descriptions are HTML (paragraphs; older ones may carry more). Shown
 // through a tiny allow-list renderer (React nodes, never innerHTML); edited

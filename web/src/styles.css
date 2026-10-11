@@ -479,7 +479,8 @@ input[type="checkbox"]:hover:not(:checked) {
 /* the segmented control: a well with one raised segment */
 .mode-switch,
 .lens-switch,
-.fv-tabs {
+.fv-tabs,
+.tasks-view {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -492,7 +493,8 @@ input[type="checkbox"]:hover:not(:checked) {
 
 .mode-switch button,
 .lens-switch button,
-.fv-tabs button {
+.fv-tabs button,
+.tasks-view button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -510,12 +512,14 @@ input[type="checkbox"]:hover:not(:checked) {
 
 .mode-switch button:hover,
 .lens-switch button:hover,
-.fv-tabs button:hover {
+.fv-tabs button:hover,
+.tasks-view button:hover {
   color: var(--fg);
 }
 
 .lens-switch button.on,
-.fv-tabs button.on {
+.fv-tabs button.on,
+.tasks-view button.on {
   background: var(--bg-active);
   color: var(--fg);
   box-shadow: var(--inset-top), var(--shadow-sm);
@@ -627,6 +631,7 @@ input[type="checkbox"]:hover:not(:checked) {
 .row-menu.radar-settings,
 .row-menu.split-menu,
 .row-menu.label-menu,
+.row-menu.color-menu,
 .row-menu.health-pop,
 .row-menu.machine-menu {
   transform: none;
@@ -3801,6 +3806,253 @@ button.usage-row:hover {
   text-align: right;
 }
 
+/* ---- the board: a project's columns side by side, its tasks as cards ---- */
+
+.board-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  transition: opacity var(--base) var(--ease);
+}
+
+.board-host.loading {
+  opacity: 0.6;
+}
+
+.board {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 0 20px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.board-col {
+  flex: 0 0 272px;
+  max-height: 100%;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.board-col.over {
+  border-color: var(--accent);
+  background: var(--bg-elev);
+}
+
+.board-col-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.board-col-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-col.kind-done .board-col-title {
+  color: var(--fg-dim);
+}
+
+.board-col-body {
+  flex: 1;
+  min-height: 40px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8px 8px;
+}
+
+.board-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease), opacity var(--fast) var(--ease);
+}
+
+.board-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--line-hover);
+}
+
+.board-card.sel {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.board-card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.board-card.dragging {
+  opacity: 0.4;
+}
+
+.board-card.done .board-card-title {
+  color: var(--fg-faint);
+  text-decoration: line-through;
+}
+
+/* where a dragged card would land: a line above the card, or at the foot */
+.board-card.drop-before::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: -5px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.board-drop-end {
+  height: 2px;
+  margin: 0 4px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.board-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.board-card-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.board-card-menu {
+  position: relative;
+  margin: -4px -6px -4px 0;
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.board-card:hover .board-card-menu,
+.board-card:focus-within .board-card-menu,
+.board-card-menu:has([aria-expanded="true"]) {
+  opacity: 1;
+}
+
+.board-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.board-card-chips .tasks-ident {
+  flex: none;
+}
+
+.board-add input {
+  width: 100%;
+  height: var(--ctl-sm);
+}
+
+/* the column a task is in, on a list row */
+.tasks-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fg-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ---- project settings: the columns, each with its marks ---- */
+
+.ps-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ps-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ps-row .ps-name {
+  flex: 1;
+  min-width: 120px;
+  height: var(--ctl-sm);
+}
+
+.ps-row.removed .ps-name {
+  text-decoration: line-through;
+}
+
+.ps-flags {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.ps-moves {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tasks-dot.lg {
+  width: 14px;
+  height: 14px;
+}
+
+.color-pick {
+  position: relative;
+  display: inline-flex;
+}
+
+.row-menu.color-menu {
+  flex-direction: row;
+  flex-wrap: wrap;
+  min-width: 0;
+  width: 138px;
+  gap: 2px;
+}
+
+.row-menu.color-menu button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+.row-menu.color-menu button.on {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
 @media (max-width: 768px) {
   .usage-cards {
     grid-template-columns: 1fr 1fr;
@@ -4492,6 +4744,18 @@ button.usage-row:hover {
     max-width: none;
   }
 
+  /* one column a screen, swiped through, the next one peeking */
+  .board {
+    padding: 0 12px 12px;
+    gap: 10px;
+    scroll-snap-type: x mandatory;
+  }
+
+  .board-col {
+    flex: 0 0 calc(100% - 28px);
+    scroll-snap-align: start;
+  }
+
   .scrim {
     z-index: 29;
   }
@@ -4531,6 +4795,7 @@ button.usage-row:hover {
 /* a coarse pointer has no hover: reveal-on-hover controls stay visible */
 @media (pointer: coarse) {
   .tasks-comment-head .icon-btn,
+  .board-card-menu,
   .turn-forward {
     opacity: 1;
   }
