@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -55,6 +56,7 @@ type Machine struct {
 	lastAttempt time.Time
 	lastAlive   time.Time // last `ssh -O check`, so transport errors don't spawn one each
 	removed     bool      // taken out of the registry; never reconnect, pollers stop
+	serverStart time.Time // when herdr-ui last started `herdr server` there
 
 	conn   *sshx.Conn
 	client *herdr.Client
@@ -432,6 +434,19 @@ func (mc *Machine) fail(err error) {
 
 // connect dials the master, learns the remote home and herdr binary, picks
 // the RPC transport and verifies herdr answers through it.
+
+// mayStartServer says whether herdr-ui may start `herdr server` on the
+// machine now — once per two minutes — and notes that it did.
+func (m *Machine) mayStartServer() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if time.Since(m.serverStart) < 2*time.Minute {
+		return false
+	}
+	m.serverStart = time.Now()
+	return true
+}
+
 func (mc *Machine) connect() {
 	mc.mu.Lock()
 	mc.state = StateConnecting
@@ -483,6 +498,16 @@ func (mc *Machine) connect() {
 		sock = herdr.DefaultSocket(home)
 	}
 	client, err := rpcClient(conn, sock)
+	if err != nil && mc.mayStartServer() {
+		// no server there? herdr-ui runs one: the headless `herdr server`,
+		// detached, then one more try (at most once per two minutes, so a
+		// herdr that cannot come up is not started on every reconnect)
+		if _, serr := conn.Exec(herdr.StartServerScript(bin, sock), 25*time.Second); serr == nil {
+			client, err = rpcClient(conn, sock)
+		} else {
+			log.Printf("%s: start herdr server: %v", mc.Cfg.Host, serr)
+		}
+	}
 	if err != nil {
 		bail(fmt.Errorf("herdr on %s not answering through %s: %v", mc.Cfg.Host, sock, err))
 		return
@@ -711,6 +736,9 @@ func (mc *Machine) Peer() *Peer {
 }
 
 // ---- remote execution ----
+
+// RemoteConn is the ssh master to the machine (an error for the local one).
+func (mc *Machine) RemoteConn() (*sshx.Conn, error) { return mc.remoteConn() }
 
 func (mc *Machine) remoteConn() (*sshx.Conn, error) {
 	mc.mu.Lock()

@@ -55,7 +55,13 @@ export type Health = {
   os?: string;
   claude?: string; // installed Claude Code
   claude_via?: "brew" | "npm" | "native" | "";
+  codex?: string;
+  codex_via?: "brew" | "npm" | "native" | "";
+  gemini?: string;
+  gemini_via?: "brew" | "npm" | "native" | "";
   herdr?: string;
+  herdr_via?: "brew" | "installer" | "";
+  arch?: string;
   herdr_ui?: string; // the binary deployed there
   herdr_ui_running?: boolean; // and it answers on the machine's own port: terminals there go through it
   disk_free_gb: number;
@@ -65,7 +71,7 @@ export type Health = {
   error?: string;
 };
 
-export type Latest = { at: string; claude?: string; herdr?: string };
+export type Latest = { at: string; claude?: string; codex?: string; gemini?: string; herdr?: string };
 
 export type Tailscale = { state: "starting" | "needs_login" | "running" | "error"; login_url?: string; url?: string; hostname?: string; error?: string };
 
@@ -83,6 +89,21 @@ export type Machine = {
 export type AgentKind = { id: string; label: string };
 
 export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale };
+
+// an update the machine can run: the command the person sees before saying yes
+export type Update = { what: string; title: string; command: string; note?: string };
+export type Job = { id: string; machine: string; title: string; command: string; started: string; ended?: string; done: boolean; ok: boolean; error?: string; output: string };
+
+export async function listUpdates(machineId: string): Promise<Update[]> {
+  const res = await check(await fetch(`/api/machines/${encodeURIComponent(machineId)}/updates`));
+  return ((await res.json()) as { updates: Update[] }).updates;
+}
+// the command shown goes back with the request: the server runs that or refuses
+export const startUpdate = (machineId: string, what: string, command: string): Promise<{ job: string }> => sendJSON("POST", `/api/machines/${encodeURIComponent(machineId)}/update`, { what, command });
+export async function fetchJob(id: string): Promise<Job> {
+  const res = await check(await fetch(`/api/jobs/${encodeURIComponent(id)}`));
+  return (await res.json()) as Job;
+}
 
 export async function refreshHealth(machineId: string): Promise<{ health: Health | null; latest: Latest }> {
   const res = await fetch(`/api/machines/${encodeURIComponent(machineId)}/health`, { method: "POST" });

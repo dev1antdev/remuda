@@ -30,6 +30,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/code"
 	"github.com/dev1antdev/herdr-ui/internal/health"
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
+	"github.com/dev1antdev/herdr-ui/internal/jobs"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
 	"github.com/dev1antdev/herdr-ui/internal/quick"
@@ -58,6 +59,7 @@ type Server struct {
 	// vitals, and the tailnet node's status when -tailscale is on
 	Health    *health.Collector
 	Tailscale func() tsnetx.Status
+	Jobs      *jobs.Runner // the updates a person runs from the page
 	Radar     *radar.Tracker
 	Guard     *auth.Guard
 	UI        fs.FS // built SPA
@@ -105,6 +107,9 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("DELETE /api/machines/{id}", s.handleRemoveMachine)
 	api.HandleFunc("PATCH /api/machines/{id}", s.handleRenameMachine)
 	api.HandleFunc("POST /api/machines/{id}/health", s.handleMachineHealth)
+	api.HandleFunc("GET /api/machines/{id}/updates", s.handleMachineUpdates)
+	api.HandleFunc("POST /api/machines/{id}/update", s.handleMachineUpdate)
+	api.HandleFunc("GET /api/jobs/{id}", s.handleJob)
 	api.HandleFunc("POST /api/sessions", s.handleNewWorkspace)
 	api.HandleFunc("DELETE /api/sessions/{id}", s.closeHandler((*herdr.Client).WorkspaceClose))
 	api.HandleFunc("POST /api/tabs", s.handleNewTab)

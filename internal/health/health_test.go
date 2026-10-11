@@ -1,12 +1,19 @@
 package health
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParse(t *testing.T) {
 	out := `os=macOS 26.6.2
 claude=2.1.285 (Claude Code)
 claude_path=/opt/homebrew/bin/claude
 herdr=herdr 0.9.3
+herdr_path=/opt/homebrew/bin/herdr
+arch=arm64
+codex=codex-cli 0.153.0
+codex_path=/opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js
 herdr_ui=herdr-ui v0.4.0-8-g3262e05
 df=/dev/disk3s5   482797652 188483048 271706504    41% 1511806 2717065040    0%   /System/Volumes/Data
 uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
@@ -14,6 +21,9 @@ uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 	r, peer := Parse(out)
 	if r.OS != "macOS 26.6.2" || r.Claude != "2.1.285" || r.ClaudeVia != "brew" || r.Herdr != "0.9.3" || r.HerdrUI != "v0.4.0-8-g3262e05" {
 		t.Fatalf("versions: %+v", r)
+	}
+	if r.HerdrVia != "brew" || r.Arch != "arm64" || r.Codex != "0.153.0" || r.CodexVia != "npm" {
+		t.Fatalf("via/arch: %+v", r)
 	}
 	if r.DiskUsedPct != 41 || r.DiskFreeGB < 259 || r.DiskFreeGB > 260 {
 		t.Fatalf("disk: %+v", r)
@@ -64,5 +74,28 @@ func TestNewer(t *testing.T) {
 func TestInstalledVia(t *testing.T) {
 	if installedVia("../Cellar/claude-code/2.1.285/bin/claude") != "brew" || installedVia("/opt/homebrew/bin/claude") != "brew" || installedVia("../lib/node_modules/@anthropic-ai/claude-code/cli.js") != "npm" || installedVia("/Users/x/.local/bin/claude") != "native" || installedVia("/Users/x/.nvm/versions/node/v22/bin/claude") != "npm" || installedVia("/usr/bin/claude") != "" {
 		t.Fatal("via")
+	}
+}
+
+func TestPlan(t *testing.T) {
+	r := &Report{Claude: "2.1.285", ClaudeVia: "brew", Codex: "0.160.0", CodexVia: "npm", Herdr: "0.9.1", HerdrVia: "installer"}
+	if u, err := Plan("claude", r); err != nil || !strings.Contains(u.Command, "brew upgrade claude-code") {
+		t.Fatalf("claude: %+v %v", u, err)
+	}
+	if u, err := Plan("codex", r); err != nil || !strings.Contains(u.Command, "@openai/codex@latest") {
+		t.Fatalf("codex: %+v %v", u, err)
+	}
+	if u, err := Plan("herdr", r); err != nil || !strings.Contains(u.Command, "herdr update --handoff") {
+		t.Fatalf("herdr: %+v %v", u, err)
+	}
+	if _, err := Plan("gemini", r); err == nil {
+		t.Fatal("gemini is not installed")
+	}
+	if u, err := Plan("agents", r); err != nil || !strings.Contains(u.Command, "Update Claude Code") || strings.Contains(u.Command, "Gemini") {
+		t.Fatalf("agents: %+v %v", u, err)
+	}
+	ups := Updates(r, Latest{Claude: "2.1.296", Herdr: "0.9.3"})
+	if len(ups) != 3 || !strings.Contains(ups[0].Note, "0.9.1 → 0.9.3") || !strings.Contains(ups[1].Note, "→ 2.1.296") {
+		t.Fatalf("updates: %+v", ups)
 	}
 }

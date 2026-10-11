@@ -23,6 +23,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/code"
 	"github.com/dev1antdev/herdr-ui/internal/health"
 	"github.com/dev1antdev/herdr-ui/internal/herdr"
+	"github.com/dev1antdev/herdr-ui/internal/jobs"
 	"github.com/dev1antdev/herdr-ui/internal/machines"
 	"github.com/dev1antdev/herdr-ui/internal/push"
 	"github.com/dev1antdev/herdr-ui/internal/quick"
@@ -31,6 +32,7 @@ import (
 	"github.com/dev1antdev/herdr-ui/internal/schedule"
 	"github.com/dev1antdev/herdr-ui/internal/search"
 	"github.com/dev1antdev/herdr-ui/internal/server"
+	"github.com/dev1antdev/herdr-ui/internal/setup"
 	"github.com/dev1antdev/herdr-ui/internal/state"
 	"github.com/dev1antdev/herdr-ui/internal/tasks"
 	"github.com/dev1antdev/herdr-ui/internal/transcript"
@@ -51,6 +53,10 @@ func main() {
 	buildversion.Build = version
 	if len(os.Args) > 1 && os.Args[1] == "search" {
 		searchCmd(os.Args[2:])
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "setup" {
+		setupCmd(os.Args[2:])
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "usage" {
@@ -91,9 +97,11 @@ func main() {
 		log.Fatalf("herdr: %v", err)
 	}
 	*herdrBin = bin
-	if v, protocol, err := herdr.NewClient(*socket).Ping(); err != nil {
-		log.Printf("WARNING: herdr is not answering at %s (%v) — start herdr first; herdr-ui will keep retrying", *socket, err)
-	} else {
+	// no herdr server? herdr-ui runs one (headless, detached) — the agents
+	// are there whether or not a terminal window is
+	if err := herdr.EnsureServer(bin, *socket); err != nil {
+		log.Printf("WARNING: herdr is not answering at %s (%v); herdr-ui will keep trying", *socket, err)
+	} else if v, protocol, err := herdr.NewClient(*socket).Ping(); err == nil {
 		log.Printf("connected to herdr %s (protocol %d) at %s", v, protocol, *socket)
 	}
 
@@ -318,6 +326,35 @@ func main() {
 	vitals := health.New(mgr, version, !*noCheck)
 	vitals.Start(15 * time.Minute)
 	s.Health = vitals
+	// the local herdr gone quiet: its server is started again (every
+	// failed poll calls this; the same complaint is logged once)
+	var downMu sync.Mutex
+	var lastDown string
+	watcher.LocalDown = func(err error) {
+		e := herdr.EnsureServer(bin, *socket)
+		msg := ""
+		if e != nil {
+			msg = e.Error()
+		}
+		downMu.Lock()
+		defer downMu.Unlock()
+		if msg != lastDown {
+			lastDown = msg
+			if e != nil {
+				log.Printf("herdr server: %v", e)
+			} else {
+				log.Printf("herdr server: answering again")
+			}
+		}
+	}
+	// updates run from the page; a finished one re-reads the machine
+	runner := jobs.New()
+	runner.OnDone = func(j jobs.Job) {
+		if mc, err := mgr.Get(j.Machine); err == nil {
+			vitals.Refresh(mc)
+		}
+	}
+	s.Jobs = runner
 	if *tailscale {
 		var node *tsnetx.Node
 		s.Tailscale = func() tsnetx.Status { return node.Status() } // set before the handler is handed out
@@ -386,4 +423,31 @@ func usageCmd(args []string) {
 		os.Exit(1)
 	}
 	_ = json.NewEncoder(os.Stdout).Encode(rep)
+}
+
+// setupCmd is `herdr-ui setup [-host H] [-tailscale] …`: herdr installed
+// and its server running, the agent integrations, the herdr-ui service —
+// here or on a remote machine over ssh (where the binary must already be
+// at ~/.local/bin/herdr-ui: `make deploy HOST=…`, or "Deploy" from the
+// page). Afterwards the token's URL, for a local setup.
+func setupCmd(args []string) {
+	fs := flag.NewFlagSet("setup", flag.ExitOnError)
+	host := fs.String("host", "", "set up a remote machine over ssh instead of this one")
+	ts := fs.Bool("tailscale", false, "the service joins your tailnet by itself (see -tailscale on the server)")
+	tsName := fs.String("tailscale-hostname", "herdr-ui", "the node's name on the tailnet")
+	addr := fs.String("addr", "127.0.0.1:7317", "the service's loopback address")
+	noService := fs.Bool("no-service", false, "herdr and its server only; no herdr-ui service")
+	fs.Parse(args)
+	err := setup.Run(setup.Options{Host: *host, Tailscale: *ts, TSName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"), Addr: *addr, NoService: *noService}, os.Stdout)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if *host == "" && !*noService {
+		if dir, err := state.Dir(); err == nil {
+			if token, err := auth.LoadOrCreateToken(dir); err == nil {
+				fmt.Printf("\nopen http://%s/?token=%s\n", *addr, token)
+			}
+		}
+	}
 }

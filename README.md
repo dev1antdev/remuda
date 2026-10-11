@@ -74,7 +74,31 @@ browser / phone ⇄ HTTP + WebSocket ⇄ herdr-ui (Go) ─┬─ local herdr.soc
 
 ## Install & run
 
-Requirements: Go 1.22+, Node 18+ (build only), herdr 0.9+ running.
+The short way, on a machine with nothing on it yet:
+
+```bash
+herdr-ui setup                      # herdr installed if missing, its server
+                                    # started, the agent hooks, this binary to
+                                    # ~/.local/bin and the service running it
+herdr-ui setup -host gog.remote     # the same on a remote machine over ssh
+                                    # (its herdr-ui binary already at ~/.local/bin)
+```
+
+herdr is installed with Homebrew when there is one, else with herdr's own
+installer into `~/.local/bin`. herdr-ui also starts herdr's headless
+server whenever none answers — at its own start, and on a remote machine
+when it connects — so agents are there whether or not a terminal window
+is. The server is started through your login shell with a clean
+environment, so its panes see the PATH and exports your terminal has.
+Updates — herdr, Claude Code, Codex, Gemini CLI, and herdr-ui itself
+on a remote machine — run from the page: the ⓘ beside a machine shows
+what is out of date with an Update button, the ⋯ menu has "Updates…";
+each shows the exact command first and streams its output.
+
+The long way, piece by piece:
+
+Requirements: Go 1.22+, Node 18+ (build only), herdr 0.9+ installed (its
+server need not be running: herdr-ui starts it).
 
 ```bash
 make build        # builds web UI + go binary into bin/herdr-ui
@@ -93,7 +117,8 @@ the remote herdr binary (incl. `~/.local/bin/herdr`) and socket, reaches its
 RPC through a forwarded unix socket — or through `nc -U` over the same
 connection when that sshd refuses socket forwarding — and runs
 `herdr terminal attach` over the master for live terminals. Nothing is
-installed on the remote; removing a machine tears the SSH connection down and
+installed on the remote (when no herdr server answers there, herdr-ui starts
+one, as the user); removing a machine tears the SSH connection down and
 touches nothing there.
 
 On first run herdr-ui generates an access token (stored at
@@ -111,7 +136,7 @@ make service                    # the same on this machine
 ```
 
 Logs: `~/Library/Logs/herdr-ui.log` (macOS) or `journalctl --user -u herdr-ui`.
-Remove with `deploy/install-service.sh uninstall`.
+Remove the service with `sh internal/setup/scripts/install-service.sh uninstall` (the script `herdr-ui setup` carries embedded).
 
 ## Docker / Portainer
 

@@ -27,6 +27,7 @@ import {
 import { basename, errMsg, usePref } from "./prefs";
 import { ago } from "./time";
 import { Notice, StatusDot, useDismiss } from "./ui";
+import UpdatesDialog from "./Updates";
 import Icon from "./icons";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
@@ -496,15 +497,17 @@ function stateWords(d: Display, last: number | undefined, now: number): string {
 // and load. Quiet when all is well; an amber chip when something wants a
 // look — an update, a full disk — and a popover with the details either way.
 
-type Concern = { key: string; text: string; hint?: string; bad?: boolean };
+type Concern = { key: string; text: string; bad?: boolean; update?: string };
 
 function concerns(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean): Concern[] {
   if (!h) return [];
   const out: Concern[] = [];
-  if (h.claude && latest?.claude && newer(h.claude, latest.claude)) out.push({ key: "claude", text: `Claude Code ${latest.claude} is out (${h.claude} here)`, hint: updateHint(h.claude_via) });
-  if (h.herdr && latest?.herdr && newer(h.herdr, latest.herdr)) out.push({ key: "herdr", text: `herdr ${latest.herdr} is out (${h.herdr} here)`, hint: "herdr update" });
-  if (remote && serverVersion && h.herdr_ui && h.herdr_ui !== serverVersion) out.push({ key: "ui", text: `herdr-ui there is ${h.herdr_ui}; this one is ${serverVersion}`, hint: "make deploy HOST=…" });
-  if (remote && serverVersion && !h.herdr_ui) out.push({ key: "ui", text: "no herdr-ui deployed there — search and usage fall back to slower paths", hint: "make deploy HOST=…" });
+  if (h.claude && latest?.claude && newer(h.claude, latest.claude)) out.push({ key: "claude", text: `Claude Code ${latest.claude} is out (${h.claude} here)`, update: "claude" });
+  if (h.codex && latest?.codex && newer(h.codex, latest.codex)) out.push({ key: "codex", text: `Codex ${latest.codex} is out (${h.codex} here)`, update: "codex" });
+  if (h.gemini && latest?.gemini && newer(h.gemini, latest.gemini)) out.push({ key: "gemini", text: `Gemini CLI ${latest.gemini} is out (${h.gemini} here)`, update: "gemini" });
+  if (h.herdr && latest?.herdr && newer(h.herdr, latest.herdr)) out.push({ key: "herdr", text: `herdr ${latest.herdr} is out (${h.herdr} here)`, update: "herdr" });
+  if (remote && serverVersion && h.herdr_ui && h.herdr_ui !== serverVersion) out.push({ key: "ui", text: `herdr-ui there is ${h.herdr_ui}; this one is ${serverVersion}`, update: "herdr-ui" });
+  if (remote && serverVersion && !h.herdr_ui) out.push({ key: "ui", text: "no herdr-ui deployed there — search and usage fall back to slower paths", update: "herdr-ui" });
   if (h.disk_used_pct >= 90 || (h.disk_free_gb > 0 && h.disk_free_gb < 10)) out.push({ key: "disk", text: `Disk ${h.disk_used_pct}% full, ${h.disk_free_gb.toFixed(0)} GB free`, bad: h.disk_used_pct >= 95 });
   if (h.error && !h.claude && !h.herdr) out.push({ key: "err", text: h.error, bad: true });
   return out;
@@ -519,12 +522,11 @@ function newer(a: string, b: string): boolean {
   return false;
 }
 
-const updateHint = (via: Health["claude_via"]) => (via === "brew" ? "brew upgrade claude-code" : via === "npm" ? "npm i -g @anthropic-ai/claude-code" : "claude update");
-
 function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine; latest?: Latest; serverVersion?: string }) {
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [fresh, setFresh] = useState<{ health: Health | null; latest: Latest } | null>(null);
+  const [updateWhat, setUpdateWhat] = useState<string | null>(null); // the updates dialog, on one thing or all
   const close = useCallback(() => setOpen(null), []);
   useDismiss(!!open, close, [".health-pop", `[data-health-btn="${CSS.escape(m.id)}"]`]);
   // a manual read stands until the collector's next one
@@ -561,6 +563,7 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
         <Icon name={list.length ? "alert-triangle" : "info"} size={14} />
         {list.length > 0 && <span className="health-count">{list.length}</span>}
       </button>
+      {updateWhat !== null && <UpdatesDialog machine={m} what={updateWhat || undefined} onClose={() => setUpdateWhat(null)} onDone={() => void refresh()} />}
       {open && (
         <div className="row-menu health-pop" role="dialog" aria-label={`${m.label} vitals`} style={{ left: open.x, top: open.y }} onClick={(e) => e.stopPropagation()}>
           <div className="health-head">
@@ -577,6 +580,24 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
                 {h.claude ?? "—"}
                 {h.claude && l?.claude && newer(h.claude, l.claude) ? <span className="health-new"> → {l.claude}</span> : null}
               </dd>
+              {h.codex && (
+                <>
+                  <dt>Codex</dt>
+                  <dd>
+                    {h.codex}
+                    {l?.codex && newer(h.codex, l.codex) ? <span className="health-new"> → {l.codex}</span> : null}
+                  </dd>
+                </>
+              )}
+              {h.gemini && (
+                <>
+                  <dt>Gemini CLI</dt>
+                  <dd>
+                    {h.gemini}
+                    {l?.gemini && newer(h.gemini, l.gemini) ? <span className="health-new"> → {l.gemini}</span> : null}
+                  </dd>
+                </>
+              )}
               <dt>herdr</dt>
               <dd>
                 {h.herdr ?? "—"}
@@ -606,12 +627,21 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
             <ul className="health-list">
               {list.map((c) => (
                 <li key={c.key} className={c.bad ? "bad" : ""}>
-                  {c.text}
-                  {c.hint && <code>{c.hint}</code>}
+                  <span className="health-concern">{c.text}</span>
+                  {c.update && (
+                    <button type="button" className="btn sm" onClick={() => { setOpen(null); setUpdateWhat(c.update!); }}>
+                      {c.update === "herdr-ui" ? "Deploy" : "Update"}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
           )}
+          <div className="health-foot">
+            <button type="button" className="linkish" onClick={() => { setOpen(null); setUpdateWhat(""); }}>
+              <Icon name="refresh-cw" size={12} /> All updates…
+            </button>
+          </div>
           {h?.error && h.claude && <div className="dim">{h.error}</div>}
         </div>
       )}
@@ -622,6 +652,7 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
 // ---- the machine's own menu ----
 function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machine; onRename: () => void; onRemove?: () => void }) {
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
+  const [updates, setUpdates] = useState(false);
   const close = useCallback(() => setOpen(null), []);
   useDismiss(!!open, close, [".machine-menu", `[data-machine-menu="${CSS.escape(m.id)}"]`]);
   const pick = (fn: () => void) => () => {
@@ -650,6 +681,9 @@ function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machine; onR
           <button type="button" role="menuitem" onClick={pick(onRename)}>
             <Icon name="edit" size={14} /> Rename…
           </button>
+          <button type="button" role="menuitem" onClick={pick(() => setUpdates(true))} disabled={m.state !== "connected"}>
+            <Icon name="refresh-cw" size={14} /> Updates…
+          </button>
           {m.host && (
             <button type="button" role="menuitem" onClick={pick(() => void navigator.clipboard?.writeText(m.host!))}>
               <Icon name="copy" size={14} /> Copy SSH host
@@ -662,6 +696,7 @@ function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machine; onR
           )}
         </div>
       )}
+      {updates && <UpdatesDialog machine={m} onClose={() => setUpdates(false)} />}
     </>
   );
 }

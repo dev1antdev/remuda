@@ -149,6 +149,55 @@ func (c *Conn) run(script string, timeout time.Duration, stdin io.Reader) ([]byt
 	}
 }
 
+// Stream runs a command on the remote host and hands its output (stdout and
+// stderr together, as it comes) to sink; the exit status is the error.
+func (c *Conn) Stream(script string, timeout time.Duration, sink func([]byte)) error {
+	cmd := c.cmd(c.Host, "sh -c "+Quote("exec 2>&1; "+script))
+	pr, pw := io.Pipe()
+	cmd.Stdout, cmd.Stderr = pw, pw
+	if err := cmd.Start(); err != nil {
+		pw.Close()
+		return err
+	}
+	done := make(chan error, 1)
+	go func() {
+		err := cmd.Wait()
+		pw.Close()
+		done <- err
+	}()
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		buf := make([]byte, 8192)
+		for {
+			n, err := pr.Read(buf)
+			if n > 0 {
+				sink(append([]byte(nil), buf[:n]...))
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case err := <-done:
+		<-readDone
+		if err != nil {
+			var ee *exec.ExitError
+			if errors.As(err, &ee) {
+				return &ExitError{Code: ee.ExitCode()}
+			}
+			return fmt.Errorf("ssh %s: %w", c.Host, err)
+		}
+		return nil
+	case <-time.After(timeout):
+		cmd.Process.Kill()
+		<-done
+		<-readDone
+		return fmt.Errorf("ssh %s: timed out after %s", c.Host, timeout)
+	}
+}
+
 // Exec runs a command on the remote host and returns its stdout.
 func (c *Conn) Exec(script string, timeout time.Duration) (string, error) {
 	out, err := c.run(script, timeout, nil)

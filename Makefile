@@ -57,7 +57,7 @@ deploy: release
 # make service HOST=gog.remote — herdr-ui as a background service there (launchd / systemd --user),
 # listening on 127.0.0.1:7317, starting at login. Without HOST: on this machine.
 service:
-	@if [ -n "$(HOST)" ]; then ssh $(HOST) 'HERDR_UI_TAILSCALE=$(HERDR_UI_TAILSCALE) HERDR_UI_TAILSCALE_HOSTNAME=$(HERDR_UI_TAILSCALE_HOSTNAME) TS_AUTHKEY=$(TS_AUTHKEY) sh -s install' < deploy/install-service.sh; else sh deploy/install-service.sh install; fi
+	@if [ -n "$(HOST)" ]; then ssh $(HOST) 'HERDR_UI_TAILSCALE=$(HERDR_UI_TAILSCALE) HERDR_UI_TAILSCALE_HOSTNAME=$(HERDR_UI_TAILSCALE_HOSTNAME) TS_AUTHKEY=$(TS_AUTHKEY) sh -s install' < internal/setup/scripts/install-service.sh; else sh internal/setup/scripts/install-service.sh install; fi
 
 # make code [HOST=gog.remote] — installs code-server (VS Code in the browser)
 # as a per-user service on that host, bound to 127.0.0.1:7320 with no auth of

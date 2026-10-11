@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/dev1antdev/herdr-ui/internal/sshx"
@@ -343,6 +344,58 @@ func (mc *Machine) Shell(script string, timeout time.Duration) (string, error) {
 		return out.String(), nil
 	}
 	return mc.exec(script, timeout)
+}
+
+// Stream runs a POSIX script on the machine and hands its output (stdout
+// and stderr together, as it comes) to sink — for the long jobs a person
+// watches: an install, an update. The exit status is the error.
+func (mc *Machine) Stream(script string, timeout time.Duration, sink func([]byte)) error {
+	if !mc.Local {
+		conn, err := mc.remoteConn()
+		if err != nil {
+			return err
+		}
+		return conn.Stream(script, timeout, sink)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "sh", "-c", script)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // its own group: a timeout ends the children too
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
+	cmd.WaitDelay = 2 * time.Second
+	pr, pw := io.Pipe()
+	cmd.Stdout, cmd.Stderr = pw, pw
+	if err := cmd.Start(); err != nil {
+		pw.Close()
+		return err
+	}
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		buf := make([]byte, 8192)
+		for {
+			n, err := pr.Read(buf)
+			if n > 0 {
+				sink(append([]byte(nil), buf[:n]...))
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	err := cmd.Wait()
+	pw.Close()
+	<-readDone
+	if err != nil {
+		if ctx.Err() != nil {
+			return fmt.Errorf("timed out after %s", timeout)
+		}
+		if ee, ok := err.(*exec.ExitError); ok {
+			return &sshx.ExitError{Code: ee.ExitCode()}
+		}
+		return err
+	}
+	return nil
 }
 
 // GitDiff shows the file's uncommitted change (staged + unstaged, against

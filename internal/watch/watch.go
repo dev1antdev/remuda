@@ -27,10 +27,15 @@ type paneState struct {
 	since  time.Time // when this status began
 }
 
+// localDownAfter is how many failed polls in a row (two seconds apart)
+// mean the local herdr is really gone.
+const localDownAfter = 4
+
 type machineState struct {
 	snap    *herdr.Snapshot
 	at      time.Time
 	err     error
+	fails   int // failed polls in a row
 	panes   map[string]paneState
 	started bool
 	pollMu  sync.Mutex // one poll of this machine at a time: a snapshot never lands after a newer one
@@ -47,6 +52,9 @@ type Watcher struct {
 	// Usage, when set, is handed every snapshot for the cost meter (it
 	// rate-limits its own reads)
 	Usage func(mc *machines.Machine, snap *herdr.Snapshot)
+	// LocalDown, when set, is called when the local herdr does not answer —
+	// herdr-ui starts its headless server (rate-limited inside)
+	LocalDown func(err error)
 
 	mu     sync.Mutex
 	states map[string]*machineState
@@ -139,13 +147,23 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 	if err == nil {
 		var snap *herdr.Snapshot
 		if snap, err = client.SessionSnapshot(); err == nil {
+			w.mu.Lock()
+			st.fails = 0
+			w.mu.Unlock()
 			w.apply(mc.Cfg.ID, snap)
 			return snap, nil
 		}
 	}
 	w.mu.Lock()
 	st.err = err
+	st.fails++
+	fails := st.fails
 	w.mu.Unlock()
+	// a few misses in a row before a server is started: herdr's own
+	// restart or update handoff unbinds the socket for a moment
+	if mc.Local && w.LocalDown != nil && fails >= localDownAfter {
+		go w.LocalDown(err)
+	}
 	return nil, err
 }
 

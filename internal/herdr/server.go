@@ -1,0 +1,124 @@
+package herdr
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/dev1antdev/herdr-ui/internal/sshx"
+)
+
+// herdr keeps panes in a headless server (`herdr server`); the TUI is one
+// client of it, herdr-ui another. When herdr-ui runs and no server
+// answers, it starts one — detached, so it outlives herdr-ui — and the
+// agents are there whether or not a terminal window is.
+//
+// The server is started through the user's login shell with a clean
+// environment: every pane inherits the server's environment, so it must
+// be the one the user's own terminal would have (PATH from the profile,
+// their exports) and never the service's (a TS_AUTHKEY, HERDR_ENV from a
+// pane herdr-ui itself runs in). herdr reads HERDR_SOCKET_PATH for where
+// to listen; it ignores HOME for that.
+
+var (
+	startMu   sync.Mutex
+	lastStart time.Time
+)
+
+// EnsureServer makes sure a herdr server answers at socket: a ping, and
+// when it fails, `bin server` started in the background and waited for.
+// Starts are at least two minutes apart, so a server that cannot come up
+// is not restarted in a loop.
+func EnsureServer(bin, socket string) error {
+	if _, _, err := NewClient(socket).Ping(); err == nil {
+		return nil
+	}
+	startMu.Lock()
+	defer startMu.Unlock()
+	if _, _, err := NewClient(socket).Ping(); err == nil {
+		return nil
+	}
+	if time.Since(lastStart) < 2*time.Minute {
+		return fmt.Errorf("herdr server started %s ago and does not answer yet", time.Since(lastStart).Round(time.Second))
+	}
+	lastStart = time.Now()
+	home, _ := os.UserHomeDir()
+	cmd := serverCommand(bin, socket, home)
+	logPath := filepath.Join(filepath.Dir(socket), "herdr-server.out")
+	if f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); err == nil {
+		cmd.Stdout, cmd.Stderr = f, f
+		defer f.Close()
+	}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start herdr server: %w", err)
+	}
+	go cmd.Wait() // reaped when it ends; nothing waits for it
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(500 * time.Millisecond)
+		if _, _, err := NewClient(socket).Ping(); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("herdr server started but does not answer at %s yet", socket)
+}
+
+// serverCommand is `bin server` the way the user's terminal would start
+// it: through their login shell, in their home, with only the environment
+// a login gets plus where to listen.
+func serverCommand(bin, socket, home string) *exec.Cmd {
+	var cmd *exec.Cmd
+	if sh := os.Getenv("SHELL"); loginShell(sh) {
+		cmd = exec.Command(sh, "-l", "-c", "exec "+sshx.Quote(bin)+" server")
+	} else {
+		cmd = exec.Command(bin, "server")
+	}
+	cmd.Env = append(cleanEnv(), "HERDR_SOCKET="+socket, "HERDR_SOCKET_PATH="+socket)
+	if home != "" {
+		cmd.Dir = home
+	}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // its own session: it stays when herdr-ui exits
+	return cmd
+}
+
+func loginShell(sh string) bool {
+	if sh == "" || !filepath.IsAbs(sh) {
+		return false
+	}
+	st, err := os.Stat(sh)
+	return err == nil && !st.IsDir() && st.Mode()&0o111 != 0
+}
+
+// cleanEnv is what a fresh login has — the service's own variables stay
+// behind.
+func cleanEnv() []string {
+	keep := map[string]bool{"HOME": true, "PATH": true, "USER": true, "LOGNAME": true, "SHELL": true, "TMPDIR": true, "LANG": true, "SSH_AUTH_SOCK": true, "TERM": true}
+	var out []string
+	for _, kv := range os.Environ() {
+		k, _, _ := strings.Cut(kv, "=")
+		if keep[k] || strings.HasPrefix(k, "LC_") || strings.HasPrefix(k, "XDG_") {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
+// StartServerScript is the same for a remote machine, as a POSIX script run
+// over ssh: unless `herdr status server` says one runs, the server in the
+// background through the login shell, then a short wait for it to answer.
+// Nothing is thrown away: a stale socket file is herdr's to replace.
+func StartServerScript(bin, socket string) string {
+	q := sshx.Quote(bin)
+	s := sshx.Quote(socket)
+	up := `HERDR_SOCKET_PATH=` + s + ` ` + q + ` status server 2>/dev/null | grep -q "status: running"`
+	return `if ` + up + `; then exit 0; fi; ` +
+		`mkdir -p "$(dirname ` + s + `)"; cd "$HOME" 2>/dev/null; export HERDR_SOCKET=` + s + ` HERDR_SOCKET_PATH=` + s + `; unset HERDR_ENV HERDR_PANE_ID TS_AUTHKEY; ` +
+		`if [ -n "${SHELL:-}" ] && [ -x "$SHELL" ]; then nohup "$SHELL" -l -c ` + sshx.Quote("exec "+q+" server") + ` >> "$(dirname ` + s + `)/herdr-server.out" 2>&1 < /dev/null & ` +
+		`else nohup ` + q + ` server >> "$(dirname ` + s + `)/herdr-server.out" 2>&1 < /dev/null & fi; ` +
+		`i=0; while [ $i -lt 30 ]; do if ` + up + `; then exit 0; fi; sleep 0.5; i=$((i+1)); done; exit 1`
+}

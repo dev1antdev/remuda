@@ -5,14 +5,17 @@
 //
 // One POSIX script per machine, a few minutes apart, through the same
 // shell the rest of herdr-ui uses (local exec or the SSH master). The
-// latest versions come from the npm registry and GitHub's releases API,
-// once every few hours, and only when version checks are on: those two
-// requests are the only thing herdr-ui ever sends anywhere.
+// latest versions come from the npm registry (Claude Code, Codex, Gemini
+// CLI) and GitHub's releases API (herdr), once every few hours, and only
+// when version checks are on: those four requests are the only thing
+// herdr-ui ever sends anywhere. Plan and Updates turn a report into the
+// update commands the page offers.
 package health
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"regexp"
@@ -31,9 +34,15 @@ type Report struct {
 
 	Claude      string  `json:"claude,omitempty"`     // installed Claude Code version
 	ClaudeVia   string  `json:"claude_via,omitempty"` // brew | npm | native | "" — how to update it
-	Herdr       string  `json:"herdr,omitempty"`      // installed herdr version
-	HerdrUI     string  `json:"herdr_ui,omitempty"`   // the herdr-ui binary deployed there (remote machines)
-	Running     bool    `json:"herdr_ui_running"`     // a herdr-ui answers on the machine\'s own port: terminals go through it
+	Codex       string  `json:"codex,omitempty"`
+	CodexVia    string  `json:"codex_via,omitempty"`
+	Gemini      string  `json:"gemini,omitempty"`
+	GeminiVia   string  `json:"gemini_via,omitempty"`
+	HerdrVia    string  `json:"herdr_via,omitempty"` // brew | installer | "" — how herdr is updated
+	Arch        string  `json:"arch,omitempty"`      // arm64 | amd64
+	Herdr       string  `json:"herdr,omitempty"`     // installed herdr version
+	HerdrUI     string  `json:"herdr_ui,omitempty"`  // the herdr-ui binary deployed there (remote machines)
+	Running     bool    `json:"herdr_ui_running"`    // a herdr-ui answers on the machine\'s own port: terminals go through it
 	DiskFreeGB  float64 `json:"disk_free_gb"`
 	DiskUsedPct int     `json:"disk_used_pct"`
 	Load1       float64 `json:"load1"`
@@ -45,6 +54,8 @@ type Report struct {
 type Latest struct {
 	At     time.Time `json:"at"`
 	Claude string    `json:"claude,omitempty"`
+	Codex  string    `json:"codex,omitempty"`
+	Gemini string    `json:"gemini,omitempty"`
 	Herdr  string    `json:"herdr,omitempty"`
 }
 
@@ -147,8 +158,9 @@ func Script() string {
 	return `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH
 LC_ALL=C; export LC_ALL
 if command -v sw_vers >/dev/null 2>&1; then echo "os=macOS $(sw_vers -productVersion 2>/dev/null)"; else echo "os=$(uname -s) $(uname -r)"; fi
-c=$(command -v claude 2>/dev/null); if [ -n "$c" ]; then echo "claude=$(claude --version 2>/dev/null | head -1)"; echo "claude_path=$(readlink "$c" 2>/dev/null || printf %s "$c")"; fi
-if command -v herdr >/dev/null 2>&1; then echo "herdr=$(herdr --version 2>/dev/null | head -1)"; fi
+for a in claude codex gemini; do c=$(command -v "$a" 2>/dev/null); if [ -n "$c" ]; then echo "$a=$("$a" --version 2>/dev/null | head -1)"; echo "${a}_path=$(readlink "$c" 2>/dev/null || printf %s "$c")"; fi; done
+h=$(command -v herdr 2>/dev/null); if [ -n "$h" ]; then echo "herdr=$(herdr --version 2>/dev/null | head -1)"; echo "herdr_path=$(readlink "$h" 2>/dev/null || printf %s "$h")"; fi
+echo "arch=$(uname -m)"
 if [ -x "$HOME/.local/bin/herdr-ui" ]; then echo "herdr_ui=$("$HOME/.local/bin/herdr-ui" -version 2>/dev/null)"; fi
 echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
 echo "uptime=$(uptime 2>/dev/null)"
@@ -182,8 +194,31 @@ func Parse(out string) (Report, *machines.Peer) {
 			r.Claude = semver.FindString(v)
 		case "claude_path":
 			r.ClaudeVia = installedVia(v)
+		case "codex":
+			r.Codex = semver.FindString(v)
+		case "codex_path":
+			r.CodexVia = installedVia(v)
+		case "gemini":
+			r.Gemini = semver.FindString(v)
+		case "gemini_path":
+			r.GeminiVia = installedVia(v)
 		case "herdr":
 			r.Herdr = semver.FindString(v)
+		case "herdr_path":
+			if installedVia(v) == "brew" {
+				r.HerdrVia = "brew"
+			} else {
+				r.HerdrVia = "installer"
+			}
+		case "arch":
+			switch v {
+			case "arm64", "aarch64":
+				r.Arch = "arm64"
+			case "x86_64", "amd64":
+				r.Arch = "amd64"
+			default:
+				r.Arch = v
+			}
 		case "herdr_ui":
 			r.HerdrUI = strings.TrimPrefix(v, "herdr-ui ")
 		case "df":
@@ -245,18 +280,6 @@ func installedVia(path string) string {
 	return ""
 }
 
-// UpdateHint is the command that updates Claude Code installed that way.
-func UpdateHint(via string) string {
-	switch via {
-	case "brew":
-		return "brew upgrade claude-code"
-	case "npm":
-		return "npm i -g @anthropic-ai/claude-code"
-	default:
-		return "claude update"
-	}
-}
-
 func (c *Collector) refreshLatest() {
 	c.mu.Lock()
 	fresh := time.Since(c.latest.At) < 6*time.Hour
@@ -273,6 +296,16 @@ func (c *Collector) refreshLatest() {
 	} else {
 		log.Printf("health: claude code latest: %v", err)
 	}
+	for _, a := range []struct {
+		pkg string
+		dst *string
+	}{{"@openai/codex", &l.Codex}, {"@google/gemini-cli", &l.Gemini}} {
+		if v, err := fetchJSON(ctx, "https://registry.npmjs.org/"+a.pkg+"/latest", "version"); err == nil {
+			*a.dst = semver.FindString(v)
+		} else {
+			log.Printf("health: %s latest: %v", a.pkg, err)
+		}
+	}
 	if v, err := fetchJSON(ctx, "https://api.github.com/repos/herdrdev/herdr/releases/latest", "tag_name"); err == nil {
 		l.Herdr = semver.FindString(v)
 	} else {
@@ -285,6 +318,12 @@ func (c *Collector) refreshLatest() {
 	}
 	if l.Herdr == "" {
 		l.Herdr = c.latest.Herdr
+	}
+	if l.Codex == "" {
+		l.Codex = c.latest.Codex
+	}
+	if l.Gemini == "" {
+		l.Gemini = c.latest.Gemini
 	}
 	c.latest = l
 	c.mu.Unlock()
@@ -342,6 +381,110 @@ func parts(v string) []int {
 	out := make([]int, 3)
 	for i, p := range strings.SplitN(v, ".", 3) {
 		out[i], _ = strconv.Atoi(p)
+	}
+	return out
+}
+
+// Update is what the UI may run on a machine: the command, as the person
+// sees it before saying yes, and a title.
+type Update struct {
+	What    string `json:"what"`
+	Title   string `json:"title"`
+	Command string `json:"command"`
+	Note    string `json:"note,omitempty"`
+}
+
+// Plan is the update for one thing on a machine with this report, or an
+// error when it is not installed there or herdr-ui has no way to do it.
+// Everything runs as the user, through the package manager that put it
+// there; nothing asks for sudo.
+func Plan(what string, r *Report) (Update, error) {
+	path := `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH; `
+	via := func(cmdVia, brew, npm, native string) (string, error) {
+		switch cmdVia {
+		case "brew":
+			return path + brew, nil
+		case "npm":
+			return path + npm, nil
+		case "native", "":
+			return path + native, nil
+		}
+		return "", fmt.Errorf("unknown install")
+	}
+	switch what {
+	case "herdr":
+		if r == nil || r.Herdr == "" {
+			return Update{}, fmt.Errorf("herdr is not installed there")
+		}
+		if r.HerdrVia == "brew" {
+			return Update{What: what, Title: "Update herdr", Command: path + "brew upgrade herdr && herdr --version",
+				Note: "Installed with Homebrew. The running server keeps the old version until it is restarted (`herdr server stop`, then herdr-ui starts it again); a restart stops the panes and herdr restores the session shape."}, nil
+		}
+		return Update{What: what, Title: "Update herdr", Command: path + "herdr update --handoff && herdr --version",
+			Note: "herdr's own updater, with a live handoff: the new server takes the running panes over."}, nil
+	case "claude":
+		if r == nil || r.Claude == "" {
+			return Update{}, fmt.Errorf("Claude Code is not installed there")
+		}
+		c, err := via(r.ClaudeVia, "brew upgrade claude-code", "npm install -g @anthropic-ai/claude-code@latest", "claude update")
+		if err != nil {
+			return Update{}, err
+		}
+		return Update{What: what, Title: "Update Claude Code", Command: c + " && claude --version", Note: "Running agents keep the old version until they are restarted."}, nil
+	case "codex":
+		if r == nil || r.Codex == "" {
+			return Update{}, fmt.Errorf("Codex is not installed there")
+		}
+		c, err := via(r.CodexVia, "brew upgrade codex", "npm install -g @openai/codex@latest", "npm install -g @openai/codex@latest")
+		if err != nil {
+			return Update{}, err
+		}
+		return Update{What: what, Title: "Update Codex", Command: c + " && codex --version", Note: "Running agents keep the old version until they are restarted."}, nil
+	case "gemini":
+		if r == nil || r.Gemini == "" {
+			return Update{}, fmt.Errorf("Gemini CLI is not installed there")
+		}
+		c, err := via(r.GeminiVia, "brew upgrade gemini-cli", "npm install -g @google/gemini-cli@latest", "npm install -g @google/gemini-cli@latest")
+		if err != nil {
+			return Update{}, err
+		}
+		return Update{What: what, Title: "Update Gemini CLI", Command: c + " && gemini --version", Note: "Running agents keep the old version until they are restarted."}, nil
+	case "agents":
+		var parts []string
+		for _, w := range []string{"claude", "codex", "gemini"} {
+			if u, err := Plan(w, r); err == nil {
+				parts = append(parts, `echo "== `+u.Title+`"; `+strings.TrimPrefix(u.Command, path)+` || { echo "!! failed"; rc=1; }`)
+			}
+		}
+		if len(parts) == 0 {
+			return Update{}, fmt.Errorf("no agent is installed there")
+		}
+		return Update{What: what, Title: "Update every agent", Command: path + "rc=0; " + strings.Join(parts, "; ") + "; exit $rc", Note: "Running agents keep the old version until they are restarted."}, nil
+	}
+	return Update{}, fmt.Errorf("nothing to update called %q", what)
+}
+
+// Updates lists what the machine can update right now — herdr, then the
+// agents installed — each noting whether a newer version is out.
+func Updates(r *Report, l Latest) []Update {
+	var out []Update
+	type cand struct {
+		what, have, latest string
+	}
+	for _, c := range []cand{{"herdr", r.Herdr, l.Herdr}, {"claude", r.Claude, l.Claude}, {"codex", r.Codex, l.Codex}, {"gemini", r.Gemini, l.Gemini}} {
+		if c.have == "" {
+			continue
+		}
+		u, err := Plan(c.what, r)
+		if err != nil {
+			continue
+		}
+		if c.latest != "" && Newer(c.have, c.latest) {
+			u.Note = c.have + " → " + c.latest + ". " + u.Note
+		} else {
+			u.Note = c.have + " is the latest known. " + u.Note
+		}
+		out = append(out, u)
 	}
 	return out
 }

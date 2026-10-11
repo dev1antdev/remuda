@@ -8,7 +8,8 @@ SPA. See README.md for the user story.
 - `cmd/herdr-ui/` — main; flags `-addr` (default `127.0.0.1:7317`), `-socket`,
   `-herdr-bin`, `-print-token`, `-version`, `-tailscale` /
   `-tailscale-hostname`, `-no-version-check`, `-code-port`; subcommands
-  `search` and `usage` for the deployed binary on a remote machine.
+  `search` and `usage` for the deployed binary on a remote machine, and
+  `setup` (see herdr below).
 - `internal/state/` — the one state dir (`<user config dir>/herdr-ui`, 0700,
   or `HERDR_UI_STATE_DIR` for a second instance beside the real one)
   and the one atomic 0600 writer; token, machines.json, vapid.json and
@@ -134,8 +135,9 @@ SPA. See README.md for the user story.
   herdr-ui versions, how Claude Code was installed, disk, load, uptime)
   from one POSIX script per machine through `Machine.Shell`, every 15
   minutes and on demand (`POST /api/machines/{id}/health`); the newest
-  Claude Code (npm registry) and herdr (GitHub releases) every 6 hours
-  unless `-no-version-check` — the only outbound requests herdr-ui makes.
+  Claude Code, Codex and Gemini CLI (npm registry) and herdr (GitHub
+  releases) every 6 hours unless `-no-version-check` — the only outbound
+  requests herdr-ui makes.
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
   (`HealthButton` in Sidebar.tsx) turns amber on an update, a lagging
   remote herdr-ui, or a nearly full disk.
@@ -160,6 +162,32 @@ SPA. See README.md for the user story.
   proxy probe) is 426 before anything attaches. A peer's requests carry
   the bearer token and no Origin, so csrfGuard lets them through. Never
   `--takeover`.
+- **A throwaway herdr server for a test needs `HERDR_SOCKET_PATH`, never a
+  changed `HOME`.** herdr ignores `HOME` for its socket: `HOME=/tmp/x herdr
+  server stop` stops the user's real server (it happened). The env var is
+  what `herdr server`, `status server` and `server stop` all honour;
+  `internal/herdr/server_test.go` is the pattern.
+- **herdr is herdr-ui's to run.** `herdr.EnsureServer(bin, socket)` pings
+  and, when nothing answers, starts `herdr server` (the headless server)
+  detached, at most once per two minutes — at startup and whenever the
+  watcher's local poll fails (`Watcher.LocalDown`); a remote machine's
+  `connect()` does the same over ssh (`herdr.StartServerScript`) before
+  giving up. `herdr-ui setup [-host H] [-tailscale]` (`internal/setup`,
+  two embedded POSIX scripts: `setup.sh` installs herdr with brew or its
+  installer, starts the server, installs `herdr integration` hooks for
+  the agents present; `install-service.sh` is the service installer that
+  used to live in deploy/) is the one-command install, locally or over
+  ssh. `internal/jobs` runs a shell script on a machine in the background
+  with its output streamed (`Machine.Stream`, `sshx.Conn.Stream`) for
+  the page to poll (`GET /api/jobs/{id}`); `health.Plan(what, report)`
+  is the update command for herdr (brew or `herdr update --handoff`),
+  claude / codex / gemini (brew, npm or the native updater, by where the
+  binary lives), or every agent; `GET /api/machines/{id}/updates` lists
+  them, `POST …/update {what}` starts one; `what=herdr-ui` copies this
+  very binary to a remote of the same OS/CPU and restarts its service.
+  `Updates.tsx` shows the list, the command before "Run", the live log.
+  Nothing uses sudo; everything runs as the user through the shell
+  herdr-ui already has on the machine.
 - `internal/tsnetx` — `-tailscale` joins the tailnet as a tsnet node
   (userspace, no tailscaled) named `-tailscale-hostname`, serves the same
   handler over HTTPS on :443 with the tailnet's certificate (:80

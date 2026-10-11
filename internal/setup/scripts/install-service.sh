@@ -3,7 +3,7 @@
 #   macOS → launchd LaunchAgent (starts at login, restarts if it exits)
 #   Linux → systemd --user unit (enable-linger so it survives logout)
 # Usage: install-service.sh [install|uninstall|status]   (run as the user who runs herdr)
-# Remote: ssh host 'sh -s' < deploy/install-service.sh   (or `make service HOST=…`)
+# Remote: `herdr-ui setup -host H` feeds it over ssh (or `make service HOST=…`)
 set -e
 
 ACTION="${1:-install}"
@@ -90,6 +90,7 @@ After=default.target
 
 [Service]
 ExecStart=$BIN -addr $ADDR $TS_ARGS
+KillMode=process
 Environment=PATH=$PATH_FOR_SERVICE$([ -n "$TS_AUTHKEY" ] && printf '\nEnvironment=TS_AUTHKEY=%s' "$TS_AUTHKEY")
 Restart=always
 RestartSec=3
