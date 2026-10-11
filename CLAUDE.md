@@ -9,6 +9,11 @@ by themselves (`state.Dir`, install-service.sh, prefs.ts); the binary,
 module path, headers (`X-Remuda-*`), env vars (`REMUDA_*`), the
 `.remuda/uploads` folder and the Tailscale hostname are the new name.
 
+How to build, check and work here — the rules every agent follows and the
+tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
+— the same file Codex, Cursor and Copilot read, and Gemini through the
+`GEMINI.md` symlink.
+
 ## Layout
 
 - `cmd/remuda/` — main; flags `-addr` (default `127.0.0.1:7317`), `-socket`,
@@ -447,15 +452,55 @@ module path, headers (`X-Remuda-*`), env vars (`REMUDA_*`), the
   descriptions are rendered through an allow-list into React nodes (never
   innerHTML) and edited as plain text that goes back as paragraphs. The
   top-bar `mode-switch` (Agents | Tasks | Code) is a per-device pref.
+  **Workflow**: every project has its columns (`statuses`: title, colour,
+  `kind` open|done, position, the flags `on_new` / `on_start` /
+  `on_finish` on at most one column each) — New / In progress / Testing /
+  Done by default (`DefaultStatuses`), a copy of the parent's for a
+  sub-project (`CreateProject`); a store from before is seeded by
+  `seedWorkflows` at every open (done → the done column, the old "in
+  progress" label → on_start, else on_new; the label is read once and
+  never written again). A task is always in one column (`status_id`) and
+  `done`/`done_at` **follow the column's kind**, so the smart lists and
+  the checkbox stand: `Patch{Done}` moves to the done column or to where
+  new tasks land, `Patch{StatusID}` sets done by kind, a move to another
+  project maps the column by name (else by state). `Patch{After}` places a
+  task in its column (0 = top; `placeAfter` takes the midpoint between the
+  neighbours and renumbers the column when two of them touch); a changed
+  column without After goes to the bottom. `PUT /api/tasks/projects/{id}/
+  statuses {statuses, moves}` replaces the list whole (`SetStatuses`: id
+  0 creates, a missing id is removed and its tasks go to `moves[old]`,
+  required while it has any; ≥1 open and ≥1 done; each flag at most
+  once). `view=board` lists a project whole in column order, one page,
+  done columns capped at `BoardDone` (50 latest). **Fields**
+  (`fields.go`): per project, `kind` text|number|select|multi|date|check|
+  link, `options`, `on_card`, `in_prompt`; values sit in `task_fields` as
+  JSON and only meaningful ones (an empty text, false, nothing chosen is
+  no row); a task carries `fields{"<field id>": value}`, `Patch.Fields` is
+  partial with null clearing; `PUT …/{id}/fields` replaces whole (a kind
+  change drops the values, shrunk options prune them — `fit`); a task
+  moved to another project keeps the values whose field there has the
+  same name and kind (`carryFields`). `Prompt(task, project, groom)` adds
+  a `Title: value` line per `in_prompt` field with a value. UI:
+  `Board.tsx` — a column per status, cards, HTML5 drag-and-drop on a
+  mouse, a ⋯ "Move to…" menu on touch, swipe-snapped columns a screen
+  wide on a phone, quick add per column; the order shown is the array's
+  (a drop reorders it at once, `patchTask({status_id, after})` confirms,
+  a refusal puts it back) and the board re-reads itself every 15 s while
+  on screen — the List | Board switch is the `tasks.view` pref, ⚙ opens
+  `ProjectSettings.tsx` (name, colour, columns with their marks, fields;
+  saved whole, a removed column asked where its tasks go), `fields.tsx`
+  holds `FieldChip` / `FieldInput` / `valueText`.
   **Send to agent** (a split button in the task; "for grooming" prefixes
-  `/grill-me`) composes `taskPrompt` (title, description as text, the task
-  id and project) and submits it through the existing `/api/submit` to an
+  `/grill-me`) composes `taskPrompt` (title, description as text, the
+  `in_prompt` fields with a value, the task id and project) and submits it
+  through the existing `/api/submit` to an
   agent pane from the roster, remembering the last target per project.
   **Start an agent on it** (`POST /api/tasks/{id}/start`): a worktree off
   a workspace's repo (`WorktreeCreate`, branch `task-<id>-<slug>`), the
   agent in it (`startAgent` retries herdr's `agent_pane_busy` while the
   new pane's shell comes up — the generic create path uses it too), a
-  `task_runs` row and the label **in progress**; then `deliverTaskPrompt`
+  `task_runs` row and the task moved to its project's `on_start` column
+  (`StartRun`); then `deliverTaskPrompt`
   in a goroutine: `AgentPrompt` every 2 s until the agent takes it. Claude
   Code's "trust this folder" question for that very worktree is answered
   yes (`PaneRead` → `isTrustPrompt` → keys down+enter, noted as a comment);
@@ -464,9 +509,11 @@ module path, headers (`X-Remuda-*`), env vars (`REMUDA_*`), the
   radar/transcript/push) turns every finish — the pane not working and the
   agent's latest turn ending in text, a record not reported yet (a fresh
   session has no turn before the prompt) — into a comment by "agent" plus
-  a push; a pane gone two
-  minutes → `gone`. Done takes the label off. `comments` are markdown;
-  the UI re-reads an open task every 10 s while a run is live.
+  a push, and `Store.OnFinish` moves the task to the `on_finish` column
+  when it still sits in `on_start` (a card the person moved meanwhile
+  stays; the push title says `→ Testing`); a pane gone two minutes →
+  `gone`. `comments` are markdown; the UI re-reads an open task every
+  10 s while a run is live.
 - `internal/auth/` — single bearer token; HttpOnly cookie; no accounts.
 - `internal/server/` — HTTP routes + the pane WebSocket. `/api/health` and
   `/api/login` are mounted outside the token guard; everything else behind

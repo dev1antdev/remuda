@@ -64,16 +64,25 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   herdr has a manifest for), `workspace.close`.
 - **Tasks** — the **Agents | Tasks** switch in the top bar opens remuda's
   own task list: projects on the left, Today / Upcoming / All open, quick
-  add, done, due dates, priorities, labels, descriptions, search. It lives
-  in one SQLite file (`tasks.db`) in remuda's state dir — no account, no
-  other server, nothing leaves the machine. Every task has **Send to
-  agent** — the task's title and description go to a running agent as a
-  prompt (the arrow offers "for grooming", which prefixes `/grill-me`) —
-  and **Start an agent on it**: a worktree branches off one of your
-  workspaces, Claude starts there and gets the task once it is up (its
-  "trust this folder" question for the new worktree is answered for you),
-  the task wears *in progress*, and every answer the agent finishes comes
-  back to the task as a comment, with a push. Mark it done from there.
+  add, done, due dates, priorities, labels, descriptions, search — and a
+  **board** per project: the columns a task moves through (New → In
+  progress → Testing → Done out of the box; yours to rename, recolour,
+  reorder and add to, in the project's ⚙), cards dragged between them on
+  a desk, swiped through a column at a time on a phone. Each project can
+  carry its **own fields** (text, number, one choice, several, a date, a
+  checkbox, a link), shown on the card and handed to the agent with the
+  task. It lives in one SQLite file (`tasks.db`) in remuda's state dir —
+  no account, no other server, nothing leaves the machine. Every task has
+  **Send to agent** — the task's title, description and fields go to a
+  running agent as a prompt (the arrow offers "for grooming", which
+  prefixes `/grill-me`) — and **Start an agent on it**: a worktree
+  branches off one of your workspaces, Claude starts there and gets the
+  task once it is up (its "trust this folder" question for the new
+  worktree is answered for you), the task moves to *In progress*, and
+  every answer the agent finishes comes back to the task as a comment
+  with a push — and moves it on to *Testing*, unless you moved it first.
+  Which columns do what is the project's own setting. Mark it done from
+  there.
 
 ## Install & run
 
