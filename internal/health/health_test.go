@@ -79,7 +79,7 @@ func TestInstalledVia(t *testing.T) {
 
 func TestPlan(t *testing.T) {
 	r := &Report{Claude: "2.1.285", ClaudeVia: "brew", Codex: "0.160.0", CodexVia: "npm", Herdr: "0.9.1", HerdrVia: "installer"}
-	if u, err := Plan("claude", r); err != nil || !strings.Contains(u.Command, "brew upgrade claude-code") {
+	if u, err := Plan("claude", r); err != nil || !strings.Contains(u.Command, "brew update && brew upgrade claude-code") {
 		t.Fatalf("claude: %+v %v", u, err)
 	}
 	if u, err := Plan("codex", r); err != nil || !strings.Contains(u.Command, "@openai/codex@latest") {
@@ -93,6 +93,12 @@ func TestPlan(t *testing.T) {
 	}
 	if u, err := Plan("agents", r); err != nil || !strings.Contains(u.Command, "Update Claude Code") || strings.Contains(u.Command, "Gemini") {
 		t.Fatalf("agents: %+v %v", u, err)
+	}
+	if u, _ := Plan("agents", r); strings.Count(u.Command, "brew update ||") != 1 || strings.Contains(u.Command, "brew update && brew upgrade") {
+		t.Fatalf("agents: brew update once, up front: %s", u.Command)
+	}
+	if u, _ := Plan("herdr", &Report{Herdr: "0.9.3", HerdrVia: "brew"}); !strings.HasSuffix(u.Command, "brew update && brew upgrade herdr && herdr --version") {
+		t.Fatalf("herdr brew: %s", u.Command)
 	}
 	ups := Updates(r, Latest{Claude: "2.1.296", Herdr: "0.9.3"})
 	if len(ups) != 3 || !strings.Contains(ups[0].Note, "0.9.1 → 0.9.3") || !strings.Contains(ups[1].Note, "→ 2.1.296") {

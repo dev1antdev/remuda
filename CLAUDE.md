@@ -180,7 +180,8 @@ SPA. See README.md for the user story.
   ssh. `internal/jobs` runs a shell script on a machine in the background
   with its output streamed (`Machine.Stream`, `sshx.Conn.Stream`) for
   the page to poll (`GET /api/jobs/{id}`); `health.Plan(what, report)`
-  is the update command for herdr (brew or `herdr update --handoff`),
+  is the update command for herdr (brew or `herdr update --handoff`;
+  every brew path runs `brew update` first, once per job),
   claude / codex / gemini (brew, npm or the native updater, by where the
   binary lives), or every agent; `GET /api/machines/{id}/updates` lists
   them, `POST …/update {what}` starts one; `what=herdr-ui` copies this

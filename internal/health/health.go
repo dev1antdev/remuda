@@ -398,12 +398,18 @@ type Update struct {
 // error when it is not installed there or herdr-ui has no way to do it.
 // Everything runs as the user, through the package manager that put it
 // there; nothing asks for sudo.
+// brewUpdate goes before every `brew upgrade`: Homebrew's own auto-update
+// runs only once a day (and not at all with HOMEBREW_NO_AUTO_UPDATE), so
+// without it the upgrade can look at stale formulae and say "already
+// installed" while a newer version is out.
+const brewUpdate = "brew update && "
+
 func Plan(what string, r *Report) (Update, error) {
 	path := `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH; `
 	via := func(cmdVia, brew, npm, native string) (string, error) {
 		switch cmdVia {
 		case "brew":
-			return path + brew, nil
+			return path + brewUpdate + brew, nil
 		case "npm":
 			return path + npm, nil
 		case "native", "":
@@ -417,8 +423,8 @@ func Plan(what string, r *Report) (Update, error) {
 			return Update{}, fmt.Errorf("herdr is not installed there")
 		}
 		if r.HerdrVia == "brew" {
-			return Update{What: what, Title: "Update herdr", Command: path + "brew upgrade herdr && herdr --version",
-				Note: "Installed with Homebrew. The running server keeps the old version until it is restarted (`herdr server stop`, then herdr-ui starts it again); a restart stops the panes and herdr restores the session shape."}, nil
+			return Update{What: what, Title: "Update herdr", Command: path + brewUpdate + "brew upgrade herdr && herdr --version",
+				Note: "Installed with Homebrew: the formulae are refreshed first, then the upgrade. The running server keeps the old version until it is restarted (`herdr server stop`, then herdr-ui starts it again); a restart stops the panes and herdr restores the session shape."}, nil
 		}
 		return Update{What: what, Title: "Update herdr", Command: path + "herdr update --handoff && herdr --version",
 			Note: "herdr's own updater, with a live handoff: the new server takes the running panes over."}, nil
@@ -451,15 +457,25 @@ func Plan(what string, r *Report) (Update, error) {
 		return Update{What: what, Title: "Update Gemini CLI", Command: c + " && gemini --version", Note: "Running agents keep the old version until they are restarted."}, nil
 	case "agents":
 		var parts []string
+		brew := false // one refresh of the formulae for all of them
 		for _, w := range []string{"claude", "codex", "gemini"} {
 			if u, err := Plan(w, r); err == nil {
-				parts = append(parts, `echo "== `+u.Title+`"; `+strings.TrimPrefix(u.Command, path)+` || { echo "!! failed"; rc=1; }`)
+				c := strings.TrimPrefix(u.Command, path)
+				if strings.HasPrefix(c, brewUpdate) {
+					brew = true
+					c = strings.TrimPrefix(c, brewUpdate)
+				}
+				parts = append(parts, `echo "== `+u.Title+`"; `+c+` || { echo "!! failed"; rc=1; }`)
 			}
 		}
 		if len(parts) == 0 {
 			return Update{}, fmt.Errorf("no agent is installed there")
 		}
-		return Update{What: what, Title: "Update every agent", Command: path + "rc=0; " + strings.Join(parts, "; ") + "; exit $rc", Note: "Running agents keep the old version until they are restarted."}, nil
+		head := "rc=0; "
+		if brew {
+			head += `echo "== brew update"; brew update || { echo "!! brew update failed"; rc=1; }; `
+		}
+		return Update{What: what, Title: "Update every agent", Command: path + head + strings.Join(parts, "; ") + "; exit $rc", Note: "Running agents keep the old version until they are restarted."}, nil
 	}
 	return Update{}, fmt.Errorf("nothing to update called %q", what)
 }
