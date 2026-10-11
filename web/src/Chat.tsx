@@ -622,7 +622,7 @@ function QuickPromptsDialog({ dir, onClose }: { dir: string; onClose: () => void
       }}
     >
       <p className="modal-hint">
-        Offered under <Icon name="zap" size={12} /> in the composer; one tap puts the text in. Shared by every device that uses this herdr-ui.
+        Offered under <Icon name="zap" size={12} /> in the composer; one tap puts the text in. Shared by every device that uses this remuda.
       </p>
       {!list && !err && <Notice tone="hint">Loading…</Notice>}
       <div className="quick-list">
@@ -657,7 +657,7 @@ function QuickPromptsDialog({ dir, onClose }: { dir: string; onClose: () => void
 
 // Dictation through the browser's own speech recognition (Safari and
 // Chrome ship one; it runs on the device or the platform's service, not
-// through herdr-ui). Final results are handed over as they come.
+// through remuda). Final results are handed over as they come.
 type SpeechRecognitionLike = {
   lang: string;
   continuous: boolean;

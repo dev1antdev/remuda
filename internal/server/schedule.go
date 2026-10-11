@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/dev1antdev/herdr-ui/internal/schedule"
+	"github.com/dev1antdev/remuda/internal/schedule"
 )
 
 // Schedules: prompts sent to an agent on a timetable (internal/schedule).

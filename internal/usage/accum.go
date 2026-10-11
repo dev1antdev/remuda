@@ -1,7 +1,7 @@
 package usage
 
 import (
-	"github.com/dev1antdev/herdr-ui/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 // Totals is a sum with its price.

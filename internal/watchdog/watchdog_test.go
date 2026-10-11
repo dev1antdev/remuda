@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
-	"github.com/dev1antdev/herdr-ui/internal/push"
-	"github.com/dev1antdev/herdr-ui/internal/radar"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/radar"
 )
 
 type harness struct {

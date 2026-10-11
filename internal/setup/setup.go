@@ -1,6 +1,6 @@
-// Package setup is `herdr-ui setup`: what a machine needs to serve
-// herdr-ui, done for it — herdr installed and its headless server running,
-// its agent integrations, the herdr-ui service — locally or over ssh. The
+// Package setup is `remuda setup`: what a machine needs to serve
+// remuda, done for it — herdr installed and its headless server running,
+// its agent integrations, the remuda service — locally or over ssh. The
 // two POSIX scripts are embedded, so the binary alone is enough.
 package setup
 
@@ -38,12 +38,12 @@ func Run(o Options, out io.Writer) error {
 		env = append(env, "HERDR_INSTALL="+v)
 	}
 	if o.Addr != "" {
-		env = append(env, "HERDR_UI_ADDR="+o.Addr)
+		env = append(env, "REMUDA_ADDR="+o.Addr)
 	}
 	if o.Tailscale {
-		env = append(env, "HERDR_UI_TAILSCALE=1")
+		env = append(env, "REMUDA_TAILSCALE=1")
 		if o.TSName != "" {
-			env = append(env, "HERDR_UI_TAILSCALE_HOSTNAME="+o.TSName)
+			env = append(env, "REMUDA_TAILSCALE_HOSTNAME="+o.TSName)
 		}
 		if o.AuthKey != "" {
 			env = append(env, "TS_AUTHKEY="+o.AuthKey)
@@ -57,12 +57,12 @@ func Run(o Options, out io.Writer) error {
 		return nil
 	}
 	if o.Host == "" {
-		// the service runs ~/.local/bin/herdr-ui: this very binary, put there
+		// the service runs ~/.local/bin/remuda: this very binary, put there
 		if err := installSelf(out); err != nil {
-			return fmt.Errorf("install herdr-ui: %w", err)
+			return fmt.Errorf("install remuda: %w", err)
 		}
 	}
-	fmt.Fprintf(out, "— the herdr-ui service%s\n", where(o.Host))
+	fmt.Fprintf(out, "— the remuda service%s\n", where(o.Host))
 	if err := run(o.Host, env, serviceScript, []string{"install"}, out); err != nil {
 		return fmt.Errorf("service: %w", err)
 	}
@@ -76,7 +76,7 @@ func where(host string) string {
 	return " on " + host
 }
 
-// installSelf puts this binary at ~/.local/bin/herdr-ui when what is there
+// installSelf puts this binary at ~/.local/bin/remuda when what is there
 // is missing or different, so the service runs the one that ran setup.
 func installSelf(out io.Writer) error {
 	exe, err := os.Executable()
@@ -87,7 +87,7 @@ func installSelf(out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	dst := filepath.Join(home, ".local", "bin", "herdr-ui")
+	dst := filepath.Join(home, ".local", "bin", "remuda")
 	if same, _ := sameFile(exe, dst); same {
 		return nil
 	}
@@ -98,7 +98,7 @@ func installSelf(out io.Writer) error {
 	if have, err := os.ReadFile(dst); err == nil && bytes.Equal(have, data) {
 		return nil
 	}
-	fmt.Fprintf(out, "— herdr-ui → %s\n", dst)
+	fmt.Fprintf(out, "— remuda → %s\n", dst)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}

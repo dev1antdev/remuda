@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 func TestLookupSpellings(t *testing.T) {

@@ -63,8 +63,8 @@ export type Health = {
   herdr_via?: "brew" | "installer" | "";
   herdr_server?: string; // what the running server is on, when it differs from the binary
   arch?: string;
-  herdr_ui?: string; // the binary deployed there
-  herdr_ui_running?: boolean; // and it answers on the machine's own port: terminals there go through it
+  remuda?: string; // the binary deployed there
+  remuda_running?: boolean; // and it answers on the machine's own port: terminals there go through it
   disk_free_gb: number;
   disk_used_pct: number;
   load1: number;
@@ -170,7 +170,7 @@ function withMachine(path: string, machineId: string): string {
 // fetchRoster returns null when the roster is unchanged (304 via ETag).
 export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null }> {
   const res = await fetch("/api/roster", { headers: etag ? { "If-None-Match": etag } : {} });
-  const version = res.headers.get("X-Herdr-UI-Version");
+  const version = res.headers.get("X-Remuda-Version");
   if (res.status === 304) return { roster: null, etag, version };
   await check(res);
   return { roster: (await res.json()) as Roster, etag: res.headers.get("ETag"), version };
@@ -398,14 +398,14 @@ export async function fsText(
   const res = await check(await fetch(fileUrl(machineId, path)));
   return {
     text: await res.text(),
-    truncated: res.headers.get("X-Herdr-UI-Truncated") === "true",
-    max: Number(res.headers.get("X-Herdr-UI-Max") ?? 0),
+    truncated: res.headers.get("X-Remuda-Truncated") === "true",
+    max: Number(res.headers.get("X-Remuda-Max") ?? 0),
   };
 }
 
 export type Upload = { name: string; path: string; rel: string; size: number; kind: string };
 
-// uploadFiles stores files in the pane's folder (.herdr-ui/uploads) and
+// uploadFiles stores files in the pane's folder (.remuda/uploads) and
 // returns their paths; up to 4 per call, 25 MB each.
 export async function uploadFiles(machineId: string, paneId: string, files: File[]): Promise<Upload[]> {
   const form = new FormData();

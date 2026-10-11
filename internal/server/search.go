@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/machines"
-	"github.com/dev1antdev/herdr-ui/internal/search"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/search"
 )
 
 // GET /api/search?q=&machine=<id|all>&dir=&days= — full text over the

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/push"
+	"github.com/dev1antdev/remuda/internal/push"
 )
 
 func at(s string) time.Time {

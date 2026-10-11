@@ -1,4 +1,4 @@
-// Package machines gives herdr-ui its multi-PC view: the local herdr plus any
+// Package machines gives remuda its multi-PC view: the local herdr plus any
 // number of remote ones, each a machine with its own herdr server, reached
 // over the user's own SSH. Per machine there is one ControlMaster, one RPC
 // transport, shared terminal attaches, and a transcript cache that fetches
@@ -20,10 +20,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
-	"github.com/dev1antdev/herdr-ui/internal/sshx"
-	"github.com/dev1antdev/herdr-ui/internal/state"
-	"github.com/dev1antdev/herdr-ui/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/state"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 const (
@@ -56,7 +56,7 @@ type Machine struct {
 	lastAttempt time.Time
 	lastAlive   time.Time // last `ssh -O check`, so transport errors don't spawn one each
 	removed     bool      // taken out of the registry; never reconnect, pollers stop
-	serverStart time.Time // when herdr-ui last started `herdr server` there
+	serverStart time.Time // when remuda last started `herdr server` there
 	herdrBin    string    // herdr's binary on the machine, once known
 	socket      string    // its server socket
 
@@ -69,8 +69,8 @@ type Machine struct {
 	sessPath map[string]string      // session uuid -> resolved path
 	sessMiss map[string]time.Time   // session uuid -> when it was last not found
 
-	fwds map[int]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer herdr-ui)
-	peer *Peer               // the herdr-ui running on the machine itself, when one does
+	fwds map[int]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda)
+	peer *Peer               // the remuda running on the machine itself, when one does
 
 	contPath map[string]contCheck // session file -> its continuation (if any), as last looked
 	predPath map[string]string    // session file -> the file it continues ("" when none)
@@ -89,8 +89,8 @@ type tcpForward struct {
 	addr string
 }
 
-// Peer is a herdr-ui running on a remote machine. herdr lets one client
-// attach to a terminal at a time, so when the machine's own herdr-ui holds
+// Peer is a remuda running on a remote machine. herdr lets one client
+// attach to a terminal at a time, so when the machine's own remuda holds
 // that attach, this one reaches the terminal through it (the pane
 // WebSocket and the HTTP transport are relayed over the master, with the
 // peer's token), and both sides can look at the same pane.
@@ -500,7 +500,7 @@ func (mc *Machine) herdrPaths() (bin, sock string) {
 	return bin, sock
 }
 
-// mayStartServer says whether herdr-ui may start `herdr server` on the
+// mayStartServer says whether remuda may start `herdr server` on the
 // machine now — once per two minutes — and notes that it did.
 func (m *Machine) mayStartServer() bool {
 	m.mu.Lock()
@@ -564,7 +564,7 @@ func (mc *Machine) connect() {
 	}
 	client, err := rpcClient(conn, sock)
 	if err != nil && mc.mayStartServer() {
-		// no server there? herdr-ui runs one: the headless `herdr server`,
+		// no server there? remuda runs one: the headless `herdr server`,
 		// detached, then one more try (at most once per two minutes, so a
 		// herdr that cannot come up is not started on every reconnect)
 		if _, serr := conn.Exec(herdr.StartServerScript(bin, sock), 25*time.Second); serr == nil {
@@ -779,14 +779,14 @@ func (mc *Machine) ForwardAddr(port int) (string, error) {
 	return addr, nil
 }
 
-// SetPeer records the herdr-ui found running on the machine (nil: none).
+// SetPeer records the remuda found running on the machine (nil: none).
 func (mc *Machine) SetPeer(p *Peer) {
 	mc.mu.Lock()
 	mc.peer = p
 	mc.mu.Unlock()
 }
 
-// Peer is the machine's own herdr-ui, nil when none runs there, this is
+// Peer is the machine's own remuda, nil when none runs there, this is
 // the local machine, or the reading is over an hour old.
 func (mc *Machine) Peer() *Peer {
 	if mc.Local {

@@ -1,5 +1,5 @@
 // The Code mode: a machine's code-server (VS Code in the browser) framed
-// under herdr-ui's own origin and token. Pick the machine and the folder —
+// under remuda's own origin and token. Pick the machine and the folder —
 // the workspaces herdr knows are offered — and the editor fills the screen.
 // Once opened it stays mounted behind the other modes, so switching back
 // does not reload the editor.
@@ -109,12 +109,12 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
           </h2>
           <p className="modal-hint">{status.error}</p>
           <p className="modal-hint">
-            Install it there as a background service (VS Code in the browser, bound to 127.0.0.1:{status.port || "7320"} with no auth of its own — herdr-ui's
+            Install it there as a background service (VS Code in the browser, bound to 127.0.0.1:{status.port || "7320"} with no auth of its own — remuda's
             token is the door):
           </p>
           <pre className="code-cmd">{machine.id === "local" ? "make code" : `make code HOST=${machine.host ?? machine.label}`}</pre>
           <p className="modal-hint">
-            …from a checkout of herdr-ui, or <code>sh deploy/install-code.sh</code> on the machine itself. It downloads a pinned release of code-server and
+            …from a checkout of remuda, or <code>sh deploy/install-code.sh</code> on the machine itself. It downloads a pinned release of code-server and
             verifies its checksum.
           </p>
           <div className="modal-actions">

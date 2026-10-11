@@ -1,10 +1,10 @@
 #!/bin/sh
-# herdr-ui setup: everything a machine needs, idempotent.
+# remuda setup: everything a machine needs, idempotent.
 #   1. herdr — installed if missing (Homebrew when there is one, else
 #      herdr's own installer into ~/.local/bin)
 #   2. its headless server, started if none answers
 #   3. herdr's agent integrations (the status hooks) for the agents found
-# The herdr-ui service itself is installed by install-service.sh after this.
+# The remuda service itself is installed by install-service.sh after this.
 # Env: HERDR_INSTALL=brew|installer (default: brew if present, else installer)
 set -e
 PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH

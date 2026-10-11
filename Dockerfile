@@ -1,4 +1,4 @@
-# herdr-ui — browser/phone client for herdr.
+# remuda — browser/phone client for herdr.
 #
 # Stages:
 #   web      builds the React SPA
@@ -29,7 +29,7 @@ RUN go mod download
 COPY . .
 COPY --from=web /src/web/dist ./web/dist
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/herdr-ui ./cmd/herdr-ui
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/remuda ./cmd/remuda
 
 # ---- test ----
 FROM build AS test
@@ -50,7 +50,7 @@ RUN apt-get update \
 RUN if [ "$HERDR_INSTALL" = "1" ]; then \
       HERDR_INSTALL_DIR=/usr/local/bin sh -c "curl -fsSL https://herdr.dev/install.sh | sh"; \
     fi
-COPY --from=build /out/herdr-ui /usr/local/bin/herdr-ui
+COPY --from=build /out/remuda /usr/local/bin/remuda
 
 # Runs as the uid you pass (compose: `user: "${UID}:${GID}"`) so files under
 # the mounted home keep your ownership; HOME must match the mount point.
@@ -60,5 +60,5 @@ WORKDIR /home/herdr
 EXPOSE 7317
 # Loopback-only is the binary's default; inside a container the port mapping
 # is the boundary, so listen on all interfaces here.
-ENTRYPOINT ["herdr-ui"]
+ENTRYPOINT ["remuda"]
 CMD ["-addr", "0.0.0.0:7317"]

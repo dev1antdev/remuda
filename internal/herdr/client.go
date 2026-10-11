@@ -1,5 +1,5 @@
 // Package herdr speaks herdr's newline-JSON RPC over its Unix socket and owns
-// the `herdr terminal attach` PTYs. herdr-ui is a bridge: herdr keeps every
+// the `herdr terminal attach` PTYs. remuda is a bridge: herdr keeps every
 // process, pane and agent status; nothing here mutates state beyond what the
 // user asked for (send text/keys, create/close workspaces).
 package herdr
@@ -128,7 +128,7 @@ func (c *Client) call(method string, params any, out any, timeout time.Duration)
 		params = map[string]any{}
 	}
 	req := map[string]any{
-		"id":     fmt.Sprintf("herdr-ui-%d", c.reqSeq.Add(1)),
+		"id":     fmt.Sprintf("remuda-%d", c.reqSeq.Add(1)),
 		"method": method,
 		"params": params,
 	}
@@ -201,7 +201,7 @@ func UIStatus(status string, hasAgent bool) string {
 	return UIIdle
 }
 
-// ---- snapshot types (herdr protocol 22; only the fields herdr-ui reads) ----
+// ---- snapshot types (herdr protocol 22; only the fields remuda reads) ----
 
 type AgentSession struct {
 	Agent string `json:"agent"`

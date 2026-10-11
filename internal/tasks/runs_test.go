@@ -5,17 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/push"
+	"github.com/dev1antdev/remuda/internal/push"
 )
 
 func TestPromptFlattensHTML(t *testing.T) {
 	tk := Task{Title: " Fix login ", Identifier: "#7", Description: "<p>Steps:</p><ul><li>open &lt;app&gt;</li><li>click<br>twice</li></ul>"}
 	got := Prompt(tk, "Work", true)
-	want := "/grill-me Fix login\n\nSteps:\n- open <app>\n- click\ntwice\n\n(herdr-ui task #7 in Work)"
+	want := "/grill-me Fix login\n\nSteps:\n- open <app>\n- click\ntwice\n\n(remuda task #7 in Work)"
 	if got != want {
 		t.Fatalf("got %q\nwant %q", got, want)
 	}
-	if Prompt(Task{Title: "x", Identifier: "#1"}, "", false) != "x\n\n(herdr-ui task #1)" {
+	if Prompt(Task{Title: "x", Identifier: "#1"}, "", false) != "x\n\n(remuda task #1)" {
 		t.Fatal("plain")
 	}
 }
@@ -105,7 +105,7 @@ func TestRunLifecycleAndSweep(t *testing.T) {
 	if r, _ := st.Run(run.ID); r.State != RunGone {
 		t.Fatalf("gone: %+v", r)
 	}
-	if cs, _ := st.Comments(tk.ID); len(cs) != 3 || cs[2].Author != "herdr-ui" {
+	if cs, _ := st.Comments(tk.ID); len(cs) != 3 || cs[2].Author != "remuda" {
 		t.Fatalf("gone comment: %+v", cs)
 	}
 	w.Sweep()

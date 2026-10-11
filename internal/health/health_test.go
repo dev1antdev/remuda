@@ -15,12 +15,12 @@ herdr_server=0.9.1
 arch=arm64
 codex=codex-cli 0.153.0
 codex_path=/opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js
-herdr_ui=herdr-ui v0.4.0-8-g3262e05
+remuda=remuda v0.4.0-8-g3262e05
 df=/dev/disk3s5   482797652 188483048 271706504    41% 1511806 2717065040    0%   /System/Volumes/Data
 uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 `
 	r, peer := Parse(out)
-	if r.OS != "macOS 26.6.2" || r.Claude != "2.1.285" || r.ClaudeVia != "brew" || r.Herdr != "0.9.3" || r.HerdrUI != "v0.4.0-8-g3262e05" {
+	if r.OS != "macOS 26.6.2" || r.Claude != "2.1.285" || r.ClaudeVia != "brew" || r.Herdr != "0.9.3" || r.Remuda != "v0.4.0-8-g3262e05" {
 		t.Fatalf("versions: %+v", r)
 	}
 	if r.HerdrVia != "brew" || r.Arch != "arm64" || r.Codex != "0.153.0" || r.CodexVia != "npm" || r.HerdrServer != "0.9.1" {
@@ -43,7 +43,7 @@ uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 	if peer != nil || r.Running {
 		t.Fatal("no peer lines, no peer")
 	}
-	// a running herdr-ui with its token is a peer; a token alone is not
+	// a running remuda with its token is a peer; a token alone is not
 	p, peer2 := Parse("peer={\"herdr\":true,\"ok\":true,\"version\":\"v0.4.0-9-gabc\"}\npeer_token=abc123\n")
 	if !p.Running || peer2 == nil || peer2.Token != "abc123" || peer2.Version != "v0.4.0-9-gabc" || peer2.Port != 7317 {
 		t.Fatalf("peer: %+v %+v", p, peer2)

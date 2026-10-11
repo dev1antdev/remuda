@@ -18,13 +18,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/sshx"
 )
 
 // File access for the viewer: what the agent wrote, read back from the
 // machine it lives on. Local reads use the filesystem; remote reads go over
 // the SSH master. The one write is SaveUpload, into the pane's own
-// .herdr-ui/uploads folder.
+// .remuda/uploads folder.
 
 const (
 	MaxTextBytes = 512 * 1024       // a text file is served up to this much
@@ -220,11 +220,11 @@ func (mc *Machine) ReadRemote(p string, max int64) ([]byte, bool, error) {
 	return data, false, nil
 }
 
-// Uploads land in the pane's folder under .herdr-ui/uploads, so the agent can
+// Uploads land in the pane's folder under .remuda/uploads, so the agent can
 // read them by a relative path without leaving its project. The folder
 // carries its own .gitignore so screenshots never end up in a commit.
 const (
-	uploadDir    = ".herdr-ui"
+	uploadDir    = ".remuda"
 	uploadSubdir = "uploads"
 )
 

@@ -1,6 +1,6 @@
 // Package transcript reads Claude Code session files (JSONL under
 // ~/.claude/projects/<encoded-cwd>/<uuid>.jsonl) into chat turns. Read-only:
-// herdr-ui never writes to Claude's files; prompts are typed into the pane.
+// remuda never writes to Claude's files; prompts are typed into the pane.
 package transcript
 
 import (

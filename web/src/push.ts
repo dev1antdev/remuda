@@ -22,9 +22,9 @@ const standalone =
   (navigator as unknown as { standalone?: boolean }).standalone === true;
 
 function support(): { ok: boolean; reason?: string } {
-  if (!("serviceWorker" in navigator)) return { ok: false, reason: "Needs HTTPS (or localhost): open herdr-ui through tailscale serve." };
+  if (!("serviceWorker" in navigator)) return { ok: false, reason: "Needs HTTPS (or localhost): open remuda through tailscale serve." };
   if (!("PushManager" in window) || !("Notification" in window)) {
-    if (isIOS && !standalone) return { ok: false, reason: "On iPhone and iPad, add herdr-ui to the Home Screen first — push only works in the installed app." };
+    if (isIOS && !standalone) return { ok: false, reason: "On iPhone and iPad, add remuda to the Home Screen first — push only works in the installed app." };
     return { ok: false, reason: "This browser has no Web Push." };
   }
   return { ok: true };

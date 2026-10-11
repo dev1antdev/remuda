@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/push"
-	"github.com/dev1antdev/herdr-ui/internal/text"
+	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 // RunWatch follows the agents started on tasks: once the prompt is in, every
@@ -61,7 +61,7 @@ func (w *RunWatch) Sweep() {
 			}
 			if now().Sub(first) > 2*time.Minute && now().Sub(started) > 2*time.Minute {
 				_ = w.Store.SetRun(r.ID, RunGone, "the pane is no more")
-				_, _ = w.Store.AddComment(r.TaskID, "herdr-ui", "The agent's workspace was closed.")
+				_, _ = w.Store.AddComment(r.TaskID, "remuda", "The agent's workspace was closed.")
 				delete(w.missing, r.ID)
 			}
 			continue
@@ -70,7 +70,7 @@ func (w *RunWatch) Sweep() {
 		if r.State == RunStarting {
 			if now().Sub(started) > startWindow { // the deliverer gave up, or a restart lost it
 				_ = w.Store.SetRun(r.ID, RunFailed, "the prompt was never delivered")
-				_, _ = w.Store.AddComment(r.TaskID, "herdr-ui", "The task was never handed to the agent. The worktree is there; send it by hand.")
+				_, _ = w.Store.AddComment(r.TaskID, "remuda", "The task was never handed to the agent. The worktree is there; send it by hand.")
 			}
 			continue
 		}

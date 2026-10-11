@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/machines"
+	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 func rec(id, model, ts string, out int64) string {

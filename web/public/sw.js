@@ -1,8 +1,8 @@
-// herdr-ui service worker: network-first for navigations (a fresh build always
+// remuda service worker: network-first for navigations (a fresh build always
 // wins online), cache-first for the content-addressed bundle under /assets/
 // and the app icons, and Web Push. /api, /ws and the editor under /code/
 // are never intercepted. Nothing is precached.
-const CACHE = "herdr-ui-v2";
+const CACHE = "remuda-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -65,15 +65,15 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "herdr-ui", body: event.data ? event.data.text() : "" };
+    data = { title: "remuda", body: event.data ? event.data.text() : "" };
   }
   event.waitUntil(
     (async () => {
       const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       const visible = wins.some((w) => w.visibilityState === "visible");
-      await self.registration.showNotification(data.title || "herdr-ui", {
+      await self.registration.showNotification(data.title || "remuda", {
         body: data.body || "",
-        tag: data.tag || "herdr-ui",
+        tag: data.tag || "remuda",
         renotify: true,
         silent: visible,
         icon: "/icons/icon-192.png",

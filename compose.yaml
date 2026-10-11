@@ -1,32 +1,32 @@
-# herdr-ui in Docker / Portainer.
+# remuda in Docker / Portainer.
 #
 # herdr keeps running on the host; the container only bridges it to the
 # browser. Set these in Portainer's stack environment (or a .env file):
 #
 #   HOST_HOME      the host user's home (herdr socket, ~/.claude, ~/.ssh live there)
 #   UID / GID      that user's ids, so mounted files keep their ownership
-#   HERDR_UI_TOKEN optional; otherwise a token is generated into ${HOST_HOME}/.config/herdr-ui
+#   REMUDA_TOKEN optional; otherwise a token is generated into ${HOST_HOME}/.config/remuda
 #   PROJECTS       optional: a projects root to mount at the same path for the file viewer
 #
 # Then open http://127.0.0.1:7317 (or put it behind `tailscale serve`).
 
 services:
-  herdr-ui:
+  remuda:
     build:
       context: .
       target: runtime
-    image: herdr-ui:local
-    container_name: herdr-ui
+    image: remuda:local
+    container_name: remuda
     restart: unless-stopped
     user: "${UID:-1000}:${GID:-1000}"
     environment:
       HOME: ${HOST_HOME:-/home/herdr}
-      HERDR_UI_TOKEN: ${HERDR_UI_TOKEN:-}
+      REMUDA_TOKEN: ${REMUDA_TOKEN:-}
     command: ["-addr", "0.0.0.0:7317", "-socket", "${HOST_HOME:-/home/herdr}/.config/herdr/herdr.sock"]
     ports:
       - "127.0.0.1:7317:7317"
     volumes:
-      # herdr's socket + herdr-ui's own state (token, machines, push keys)
+      # herdr's socket + remuda's own state (token, machines, push keys)
       - ${HOST_HOME:-/home/herdr}/.config:${HOST_HOME:-/home/herdr}/.config
       # Claude Code transcripts for the chat lens (read-only)
       - ${HOST_HOME:-/home/herdr}/.claude:${HOST_HOME:-/home/herdr}/.claude:ro
@@ -43,7 +43,7 @@ services:
     build:
       context: .
       target: test
-    image: herdr-ui:test
+    image: remuda:test
 
   # docker compose --profile dev up dev
   # Go API on :7317 and Vite (HMR) on :5173, source mounted live.
@@ -63,7 +63,7 @@ services:
              && export PATH=/tmp/bin:$$PATH
              && (cd web && npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0 &)
              && mkdir -p web/dist && touch web/dist/index.html
-             && go run ./cmd/herdr-ui -addr 0.0.0.0:7317 -socket ${HOST_HOME:-/home/herdr}/.config/herdr/herdr.sock"
+             && go run ./cmd/remuda -addr 0.0.0.0:7317 -socket ${HOST_HOME:-/home/herdr}/.config/herdr/herdr.sock"
     ports:
       - "127.0.0.1:7317:7317"
       - "127.0.0.1:5173:5173"

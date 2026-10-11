@@ -1,4 +1,4 @@
-// Package state is where herdr-ui keeps its own files: the access token,
+// Package state is where remuda keeps its own files: the access token,
 // manually added machines, push keys and subscriptions, the radar's
 // stamps, review baselines, schedules, quick prompts, the task database.
 // One directory, 0700, every file written atomically with 0600.
@@ -9,26 +9,41 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 )
 
-// Dir is <user config dir>/herdr-ui, created on first use — or
-// HERDR_UI_STATE_DIR, for a second instance beside the real one (a test,
+// Dir is <user config dir>/remuda, created on first use — or
+// REMUDA_STATE_DIR, for a second instance beside the real one (a test,
 // a trial of -tailscale) that must not share its token, tasks and pushes.
 func Dir() (string, error) {
-	dir := os.Getenv("HERDR_UI_STATE_DIR")
+	dir := os.Getenv("REMUDA_STATE_DIR")
 	if dir == "" {
 		base, err := os.UserConfigDir()
 		if err != nil {
 			return "", err
 		}
-		dir = filepath.Join(base, "herdr-ui")
+		dir = filepath.Join(base, "remuda")
+		// the state kept under the previous name (herdr-ui) is carried
+		// over once: token, machines, tasks, radar — the same files
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			if old := filepath.Join(base, "herdr-ui"); isDir(old) {
+				if err := os.Rename(old, dir); err == nil {
+					log.Printf("state: %s → %s", old, dir)
+				}
+			}
+		}
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	return dir, nil
+}
+
+func isDir(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && st.IsDir()
 }
 
 // WriteFile writes data to path via a private temp file + rename, mode

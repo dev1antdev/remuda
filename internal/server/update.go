@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/health"
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
-	"github.com/dev1antdev/herdr-ui/internal/jobs"
-	"github.com/dev1antdev/herdr-ui/internal/machines"
-	"github.com/dev1antdev/herdr-ui/internal/restart"
+	"github.com/dev1antdev/remuda/internal/health"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/jobs"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/restart"
 )
 
-// Updates from the page: herdr, the agents, and herdr-ui itself on a
+// Updates from the page: herdr, the agents, and remuda itself on a
 // remote machine — each a job the person first sees as a command, then
 // watches run. Everything runs as the user through the package manager
 // that installed the thing; nothing asks for sudo.
@@ -66,11 +66,11 @@ func (s *Server) serverRestartPlan(mc *machines.Machine, rep *health.Report, sna
 func serverRestartUpdate(mc *machines.Machine, running, installed string, snap *herdr.Snapshot) health.Update {
 	ready, busy := restart.Count(snap, []string{"claude", "codex", "gemini"})
 	n := ready + busy
-	note := fmt.Sprintf("The server runs %s while %s is installed. A restart ends every pane process; herdr restores the workspaces, tabs and panes, and herdr-ui starts each of the %d chat(s) again with its session resumed. Shells and other processes in panes come back as fresh shells.", running, installed, n)
+	note := fmt.Sprintf("The server runs %s while %s is installed. A restart ends every pane process; herdr restores the workspaces, tabs and panes, and remuda starts each of the %d chat(s) again with its session resumed. Shells and other processes in panes come back as fresh shells.", running, installed, n)
 	if busy > 0 {
 		note += fmt.Sprintf(" %d chat(s) are busy right now: whatever they are doing is cut short.", busy)
 	}
-	return health.Update{What: "restart-herdr", Title: "Restart herdr's server", Command: "# on " + mc.Label() + ", through herdr-ui:\nherdr server stop; herdr server   # " + running + " → " + installed + "; then every chat started again on its session", Note: note}
+	return health.Update{What: "restart-herdr", Title: "Restart herdr's server", Command: "# on " + mc.Label() + ", through remuda:\nherdr server stop; herdr server   # " + running + " → " + installed + "; then every chat started again on its session", Note: note}
 }
 
 // herdrThen is the step after an install of herdr: the running server
@@ -89,7 +89,7 @@ func (s *Server) herdrThen(mc *machines.Machine) func(say func(string)) error {
 		case installed == "":
 			return fmt.Errorf("cannot read the installed herdr's version")
 		case running == "":
-			say("no server runs; herdr-ui starts " + installed)
+			say("no server runs; remuda starts " + installed)
 			return mc.StartServer()
 		case running == installed:
 			say("the server runs " + installed + " already")
@@ -325,10 +325,10 @@ func (s *Server) handleMachineUpdate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"job": j.ID})
 		return
 	}
-	if req.What == "herdr-ui" {
+	if req.What == "remuda" {
 		var ok bool
 		if u, ok = s.deployPlan(mc, rep); !ok {
-			httpErr(w, 400, fmt.Errorf("this herdr-ui cannot be deployed there (a remote machine of the same OS and CPU is needed)"))
+			httpErr(w, 400, fmt.Errorf("this remuda cannot be deployed there (a remote machine of the same OS and CPU is needed)"))
 			return
 		}
 	} else {
@@ -343,7 +343,7 @@ func (s *Server) handleMachineUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var j jobs.Job
-	if req.What == "herdr-ui" {
+	if req.What == "remuda" {
 		j = s.Jobs.Run(mc, u.Title, u.Command, func(say func(string)) error { return s.deploySelf(mc, say) })
 	} else {
 		first, then := s.restartHooks(mc, req.What)
@@ -370,7 +370,7 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 }
 
 // deployPlan: this very binary can go to a remote machine of the same OS
-// and CPU when its herdr-ui is behind (or missing).
+// and CPU when its remuda is behind (or missing).
 func (s *Server) deployPlan(mc *machines.Machine, rep *health.Report) (health.Update, bool) {
 	if mc.Local || rep == nil || rep.Arch == "" || rep.Arch != runtime.GOARCH {
 		return health.Update{}, false
@@ -379,22 +379,22 @@ func (s *Server) deployPlan(mc *machines.Machine, rep *health.Report) (health.Up
 		return health.Update{}, false
 	}
 	me := s.version()
-	if me == "" || me == "dev" || rep.HerdrUI == me {
+	if me == "" || me == "dev" || rep.Remuda == me {
 		return health.Update{}, false
 	}
-	have := rep.HerdrUI
+	have := rep.Remuda
 	if have == "" {
 		have = "not deployed"
 	}
-	return health.Update{What: "herdr-ui", Title: "Deploy this herdr-ui there", Command: "# this herdr-ui binary → " + mc.Cfg.Host + ":~/.local/bin/herdr-ui.new over the ssh connection, then there:\n" + deployScript,
+	return health.Update{What: "remuda", Title: "Deploy this remuda there", Command: "# this remuda binary → " + mc.Cfg.Host + ":~/.local/bin/remuda.new over the ssh connection, then there:\n" + deployScript,
 		Note: have + " → " + me + ". The binary this page is served by is copied over your SSH and its service restarted; the peer relay reconnects by itself."}, true
 }
 
 // deployScript installs the copied binary and restarts the service — the
 // part of a deploy that runs as a shell script on the machine.
-const deployScript = `chmod +x "$HOME/.local/bin/herdr-ui.new" && mv "$HOME/.local/bin/herdr-ui.new" "$HOME/.local/bin/herdr-ui" && "$HOME/.local/bin/herdr-ui" -version && ` +
-	`if command -v launchctl >/dev/null 2>&1; then launchctl kickstart -k "gui/$(id -u)/dev.mardeus.herdr-ui" 2>&1 || echo "(no launchd service; start herdr-ui there yourself)"; ` +
-	`elif command -v systemctl >/dev/null 2>&1; then systemctl --user restart herdr-ui.service 2>&1 || echo "(no systemd service; start herdr-ui there yourself)"; fi`
+const deployScript = `chmod +x "$HOME/.local/bin/remuda.new" && mv "$HOME/.local/bin/remuda.new" "$HOME/.local/bin/remuda" && "$HOME/.local/bin/remuda" -version && ` +
+	`if command -v launchctl >/dev/null 2>&1; then launchctl kickstart -k "gui/$(id -u)/dev.mardeus.remuda" 2>&1 || echo "(no launchd service; start remuda there yourself)"; ` +
+	`elif command -v systemctl >/dev/null 2>&1; then systemctl --user restart remuda.service 2>&1 || echo "(no systemd service; start remuda there yourself)"; fi`
 
 // deploySelf copies this binary to the machine and restarts the service.
 func (s *Server) deploySelf(mc *machines.Machine, say func(string)) error {
@@ -406,12 +406,12 @@ func (s *Server) deploySelf(mc *machines.Machine, say func(string)) error {
 	if err != nil {
 		return err
 	}
-	say(fmt.Sprintf("copying %s (%.1f MB) to %s:~/.local/bin/herdr-ui.new…", exe, float64(len(data))/1048576, mc.Cfg.Host))
+	say(fmt.Sprintf("copying %s (%.1f MB) to %s:~/.local/bin/remuda.new…", exe, float64(len(data))/1048576, mc.Cfg.Host))
 	conn, err := mc.RemoteConn()
 	if err != nil {
 		return err
 	}
-	if err := conn.Put(mc.Home()+"/.local/bin/herdr-ui.new", data, 5*time.Minute); err != nil {
+	if err := conn.Put(mc.Home()+"/.local/bin/remuda.new", data, 5*time.Minute); err != nil {
 		return fmt.Errorf("copy: %w", err)
 	}
 	say("installing and restarting the service…")
@@ -422,17 +422,17 @@ func (s *Server) deploySelf(mc *machines.Machine, say func(string)) error {
 	if err != nil {
 		return err
 	}
-	// the job ends when the new herdr-ui answers there, so the vitals read
+	// the job ends when the new remuda answers there, so the vitals read
 	// that follows finds the peer again
-	say("waiting for herdr-ui there…")
+	say("waiting for remuda there…")
 	for i := 0; i < 30; i++ {
 		time.Sleep(time.Second)
 		if out, err := mc.Shell(`curl -s -m 2 http://127.0.0.1:7317/api/health 2>/dev/null`, 10*time.Second); err == nil && strings.Contains(out, `"ok":true`) {
-			say("herdr-ui there answers: " + strings.TrimSpace(out))
+			say("remuda there answers: " + strings.TrimSpace(out))
 			return nil
 		}
 	}
-	say("herdr-ui there has not answered yet; the next vitals read will tell")
+	say("remuda there has not answered yet; the next vitals read will tell")
 	return nil
 }
 

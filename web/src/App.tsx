@@ -194,7 +194,7 @@ export default function App() {
         setRosterInfo({ latest: res.roster.latest, tailscale: res.roster.tailscale });
       }
       // the server was updated under this page: say so, once per version
-      if (res.version && res.version !== __HERDR_UI_VERSION__ && __HERDR_UI_VERSION__ !== "dev") setStale(res.version);
+      if (res.version && res.version !== __REMUDA_VERSION__ && __REMUDA_VERSION__ !== "dev") setStale(res.version);
       setOffline(false);
     } catch {
       if (seq === refreshSeq.current) setOffline(true);
@@ -258,12 +258,12 @@ export default function App() {
   }, [notice]);
   // what the corner shows: the connection, a newer server, the last note
   const toasts: ToastItem[] = [];
-  if (offline) toasts.push({ id: "offline", tone: "warn", text: "Reconnecting to herdr-ui…", busy: true });
+  if (offline) toasts.push({ id: "offline", tone: "warn", text: "Reconnecting to remuda…", busy: true });
   if (stale && !offline)
     toasts.push({
       id: "stale",
       tone: "info",
-      text: `herdr-ui ${stale} is on the server; this page runs ${__HERDR_UI_VERSION__}.`,
+      text: `remuda ${stale} is on the server; this page runs ${__REMUDA_VERSION__}.`,
       action: (
         <button type="button" className="btn sm primary" onClick={() => location.reload()}>
           Reload
@@ -277,7 +277,7 @@ export default function App() {
     toasts.push({
       id: "tailscale",
       tone: "info",
-      text: "Tailscale: this herdr-ui is not on your tailnet yet.",
+      text: "Tailscale: this remuda is not on your tailnet yet.",
       action: (
         <a className="btn sm primary" href={ts.login_url} target="_blank" rel="noreferrer">
           Log in
@@ -462,10 +462,10 @@ export default function App() {
           <button className={mode === "herdr" ? "on" : ""} onClick={() => setMode("herdr")} title="Your agents and terminals, from herdr">
             Agents
           </button>
-          <button className={mode === "tasks" ? "on" : ""} onClick={() => setMode("tasks")} title="Your tasks, kept on this herdr-ui">
+          <button className={mode === "tasks" ? "on" : ""} onClick={() => setMode("tasks")} title="Your tasks, kept on this remuda">
             Tasks
           </button>
-          <button className={mode === "code" ? "on" : ""} onClick={() => setMode("code")} title="VS Code on a machine, through herdr-ui">
+          <button className={mode === "code" ? "on" : ""} onClick={() => setMode("code")} title="VS Code on a machine, through remuda">
             Code
           </button>
         </nav>
@@ -485,7 +485,7 @@ export default function App() {
               <span className="title-agent"> · {current.pane.agent || "shell"}</span>
             </>
           ) : (
-            "herdr-ui"
+            "remuda"
           )}
         </span>
         {mode === "herdr" && current && !viewer && (
@@ -562,7 +562,7 @@ export default function App() {
           <Sidebar
             machines={machines}
             latest={rosterInfo.latest}
-            serverVersion={__HERDR_UI_VERSION__ === "dev" ? undefined : __HERDR_UI_VERSION__}
+            serverVersion={__REMUDA_VERSION__ === "dev" ? undefined : __REMUDA_VERSION__}
             current={current ? { machineId: current.machine.id, sessionId: current.session.id, paneId: current.pane.id } : null}
             prefs={radarPrefs}
             collapsed={collapsed}
@@ -1196,7 +1196,7 @@ function RenameMachineDialog({ machine, onRename, onClose }: { machine: Machine;
   const submit = useSubmit(() => onRename(label.trim()));
   const registered = machine.id === "local" ? "this host's name" : machine.source === "herdr" ? "the name in herdr's machine list" : "the name it was added with";
   return (
-    <FormDialog title="Rename machine" icon="edit" hint={`Shown everywhere in herdr-ui. Leave it empty to go back to ${registered}.`} onClose={onClose} submit={submit} submitLabel="Rename">
+    <FormDialog title="Rename machine" icon="edit" hint={`Shown everywhere in remuda. Leave it empty to go back to ${registered}.`} onClose={onClose} submit={submit} submitLabel="Rename">
       <label>
         Name
         <input autoFocus value={label} maxLength={60} placeholder={machine.host || machine.label} onChange={(e) => setLabel(e.target.value)} />

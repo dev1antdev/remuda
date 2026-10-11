@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   // the build's version, so a page can tell it is older than the server
-  define: { __HERDR_UI_VERSION__: JSON.stringify(process.env.HERDR_UI_VERSION ?? "dev") },
+  define: { __REMUDA_VERSION__: JSON.stringify(process.env.REMUDA_VERSION ?? "dev") },
   server: {
     proxy: {
       "/api": "http://127.0.0.1:7317",

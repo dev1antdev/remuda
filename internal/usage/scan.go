@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 // Report is what a period cost on one machine: by day, by project, by

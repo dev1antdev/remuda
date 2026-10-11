@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
-	"github.com/dev1antdev/herdr-ui/internal/machines"
-	"github.com/dev1antdev/herdr-ui/internal/push"
-	"github.com/dev1antdev/herdr-ui/internal/radar"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/radar"
 )
 
 const (
@@ -53,7 +53,7 @@ type Watcher struct {
 	// rate-limits its own reads)
 	Usage func(mc *machines.Machine, snap *herdr.Snapshot)
 	// LocalDown, when set, is called when the local herdr does not answer —
-	// herdr-ui starts its headless server (rate-limited inside)
+	// remuda starts its headless server (rate-limited inside)
 	LocalDown func(err error)
 	// OnEvent, when set, sees every status change after push does (chats
 	// booked for a restart)

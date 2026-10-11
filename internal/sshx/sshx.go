@@ -1,6 +1,6 @@
 // Package sshx drives OpenSSH for remote machines: one ControlMaster per
 // machine, and everything else — RPC socket forwarding, remote execs, the
-// terminal attach — multiplexed over it. herdr-ui never implements SSH
+// terminal attach — multiplexed over it. remuda never implements SSH
 // itself: the user's own ssh config, keys and agent do the authentication,
 // and BatchMode guarantees we fail instead of prompting.
 package sshx
@@ -41,13 +41,13 @@ func (e *ExitError) Error() string {
 	return fmt.Sprintf("exit status %d", e.Code)
 }
 
-// VersionedBin is the shell test that a machine's own herdr-ui at
+// VersionedBin is the shell test that a machine's own remuda at
 // ~/.local/bin is this very version (an older one would not know the
 // subcommand — or would start a server instead), and the quoted path to
 // run it: `if <guard>; then <bin> …`.
 func VersionedBin(home, version string) (bin, guard string) {
-	bin = Quote(home + "/.local/bin/herdr-ui")
-	guard = "[ -x " + bin + " ] && [ \"$(" + bin + " -version 2>/dev/null)\" = " + Quote("herdr-ui "+version) + " ]"
+	bin = Quote(home + "/.local/bin/remuda")
+	guard = "[ -x " + bin + " ] && [ \"$(" + bin + " -version 2>/dev/null)\" = " + Quote("remuda "+version) + " ]"
 	return bin, guard
 }
 
@@ -77,9 +77,9 @@ func (c *Conn) cmd(args ...string) *exec.Cmd {
 
 // Dial starts (or reuses) a ControlMaster to host and verifies it answers.
 func Dial(host string) (*Conn, error) {
-	c := &Conn{Host: host, ctl: tmpPath("herdr-ui-ssh-", host) + ".ctl"}
+	c := &Conn{Host: host, ctl: tmpPath("remuda-ssh-", host) + ".ctl"}
 	if c.Alive() {
-		return c, nil // a previous herdr-ui run left a live master; reuse it
+		return c, nil // a previous remuda run left a live master; reuse it
 	}
 	os.Remove(c.ctl)
 
@@ -219,7 +219,7 @@ func (c *Conn) Put(path string, data []byte, timeout time.Duration) error {
 // ForwardSocket forwards a local unix socket to a remote one over the master
 // and returns the local path.
 func (c *Conn) ForwardSocket(remoteSock string) (string, error) {
-	local := tmpPath("herdr-ui-fw-", c.Host+"\x00"+remoteSock) + ".sock"
+	local := tmpPath("remuda-fw-", c.Host+"\x00"+remoteSock) + ".sock"
 	os.Remove(local)
 	cmd := c.cmd("-O", "forward", "-L", local+":"+remoteSock, c.Host)
 	var errb bytes.Buffer

@@ -1,25 +1,28 @@
-# herdr-ui
+# remuda
 
-Self-hosted browser and phone client for **herdr**. Read and reply to the
-agent sessions herdr runs on your computer — Claude Code and the rest — as
-chat, with the live terminal a click away, from any of your devices. Every
-byte stays on hardware you control.
+*A remuda is the herd of spare horses on a cattle drive; each morning a
+rider picks the one for the day.* This one is yours: every AI coding
+agent on every computer you own, from your browser or your phone —
+chat, live terminal, the changes they made, tasks, schedules, the
+machines' vitals and updates. Self-hosted; every byte stays on hardware
+you control. (Formerly herdr-ui; it runs on top of **herdr**, which it
+installs, starts and updates for you.)
 
 A from-scratch, auditable replacement for
 [herdr-web-ui](https://github.com/devswha/herdr-web-ui):
 
 - **One Go binary.** The UI is embedded; `go build` from this repo is the
   whole supply chain. No Bun, no npm at runtime, nothing phoning home.
-- **herdr owns the agents.** herdr-ui is only a bridge to herdr's local RPC
+- **herdr owns the agents.** remuda is only a bridge to herdr's local RPC
   socket — your workspaces, tabs, panes, worktrees and agent statuses are
-  herdr's own, and nothing breaks if herdr-ui restarts.
-- **Every PC you SSH to.** Add a remote machine by its ssh host; herdr-ui
+  herdr's own, and nothing breaks if remuda restarts.
+- **Every PC you SSH to.** Add a remote machine by its ssh host; remuda
   reaches its herdr over one OpenSSH ControlMaster (your keys, your
   ~/.ssh/config, your tunnels) and shows its workspaces, terminals and chat
   beside the local ones. No daemon to install on the remote.
 - **Read-only on your data.** The chat view reads Claude Code's own session
   files under `~/.claude/projects/` (resolved through herdr's exact session
-  id); herdr-ui never writes them. Sending a message goes through herdr's
+  id); remuda never writes them. Sending a message goes through herdr's
   `agent.prompt`, exactly like typing into the pane.
 - **No telemetry, no third-party services.** The server talks to your
   browser, to herdr, and to the SSH hosts you add. That's the complete list.
@@ -27,7 +30,7 @@ A from-scratch, auditable replacement for
 ## How it works
 
 ```
-browser / phone ⇄ HTTP + WebSocket ⇄ herdr-ui (Go) ─┬─ local herdr.sock (RPC)
+browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock (RPC)
                                         │          ├─ `herdr terminal attach` PTY
                                         │          └─ reads ~/.claude/projects/…
                                         │
@@ -59,10 +62,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ herdr-ui (Go) ─┬─ local herdr.soc
   `pane.send_keys`.
 - **New workspace / close** — `workspace.create` + `agent.start` (any agent
   herdr has a manifest for), `workspace.close`.
-- **Tasks** — the **Agents | Tasks** switch in the top bar opens herdr-ui's
+- **Tasks** — the **Agents | Tasks** switch in the top bar opens remuda's
   own task list: projects on the left, Today / Upcoming / All open, quick
   add, done, due dates, priorities, labels, descriptions, search. It lives
-  in one SQLite file (`tasks.db`) in herdr-ui's state dir — no account, no
+  in one SQLite file (`tasks.db`) in remuda's state dir — no account, no
   other server, nothing leaves the machine. Every task has **Send to
   agent** — the task's title and description go to a running agent as a
   prompt (the arrow offers "for grooming", which prefixes `/grill-me`) —
@@ -77,20 +80,20 @@ browser / phone ⇄ HTTP + WebSocket ⇄ herdr-ui (Go) ─┬─ local herdr.soc
 The short way, on a machine with nothing on it yet:
 
 ```bash
-herdr-ui setup                      # herdr installed if missing, its server
+remuda setup                      # herdr installed if missing, its server
                                     # started, the agent hooks, this binary to
                                     # ~/.local/bin and the service running it
-herdr-ui setup -host gog.remote     # the same on a remote machine over ssh
-                                    # (its herdr-ui binary already at ~/.local/bin)
+remuda setup -host gog.remote     # the same on a remote machine over ssh
+                                    # (its remuda binary already at ~/.local/bin)
 ```
 
 herdr is installed with Homebrew when there is one, else with herdr's own
-installer into `~/.local/bin`. herdr-ui also starts herdr's headless
+installer into `~/.local/bin`. remuda also starts herdr's headless
 server whenever none answers — at its own start, and on a remote machine
 when it connects — so agents are there whether or not a terminal window
 is. The server is started through your login shell with a clean
 environment, so its panes see the PATH and exports your terminal has.
-Updates — herdr, Claude Code, Codex, Gemini CLI, and herdr-ui itself
+Updates — herdr, Claude Code, Codex, Gemini CLI, and remuda itself
 on a remote machine — run from the page: the ⓘ beside a machine shows
 what is out of date with an Update button, the ⋯ menu has "Updates…";
 each shows the exact command first and streams its output. After an
@@ -103,17 +106,17 @@ offered on its own ("Restart Claude Code chats") for an agent that
 updated itself. An update of herdr ends with its server on the new
 version: herdr's own live handoff when the installer did one, otherwise
 the server is restarted — herdr restores the workspaces and panes, and
-herdr-ui starts every chat again with its session resumed ("Restart
+remuda starts every chat again with its session resumed ("Restart
 herdr's server" is offered whenever the server lags the binary).
 
 The long way, piece by piece:
 
 Requirements: Go 1.22+, Node 18+ (build only), herdr 0.9+ installed (its
-server need not be running: herdr-ui starts it).
+server need not be running: remuda starts it).
 
 ```bash
-make build        # builds web UI + go binary into bin/herdr-ui
-./bin/herdr-ui      # listens on http://127.0.0.1:7317
+make build        # builds web UI + go binary into bin/remuda
+./bin/remuda      # listens on http://127.0.0.1:7317
 ```
 
 Flags: `-addr`, `-socket` (herdr socket path), `-herdr-bin`.
@@ -121,33 +124,33 @@ Flags: `-addr`, `-socket` (herdr socket path), `-herdr-bin`.
 ### Remote machines
 
 Every machine saved in herdr (`herdr machine list`) appears automatically —
-add a PC in herdr and herdr-ui picks it up within 30s, tagged *herdr*. **+ PC**
+add a PC in herdr and remuda picks it up within 30s, tagged *herdr*. **+ PC**
 in the sidebar adds an extra one by any ssh destination your OpenSSH reaches
-with keys. Either way herdr-ui brings up one `ControlMaster` to it, autodetects
+with keys. Either way remuda brings up one `ControlMaster` to it, autodetects
 the remote herdr binary (incl. `~/.local/bin/herdr`) and socket, reaches its
 RPC through a forwarded unix socket — or through `nc -U` over the same
 connection when that sshd refuses socket forwarding — and runs
 `herdr terminal attach` over the master for live terminals. Nothing is
-installed on the remote (when no herdr server answers there, herdr-ui starts
+installed on the remote (when no herdr server answers there, remuda starts
 one, as the user); removing a machine tears the SSH connection down and
 touches nothing there.
 
-On first run herdr-ui generates an access token (stored at
-`~/Library/Application Support/herdr-ui/token`, 0600) and prints a sign-in URL.
+On first run remuda generates an access token (stored at
+`~/Library/Application Support/remuda/token`, 0600) and prints a sign-in URL.
 Every request needs the token — as the printed `?token=` link once per device
 (it becomes an HttpOnly cookie), or `Authorization: Bearer`.
 
 ## As a background service on a Mac or Linux box
 
 ```bash
-make deploy HOST=gog.remote     # the right binary → ~/.local/bin/herdr-ui there
+make deploy HOST=gog.remote     # the right binary → ~/.local/bin/remuda there
 make service HOST=gog.remote    # launchd LaunchAgent (macOS) / systemd --user (Linux):
                                 # 127.0.0.1:7317, starts at login, restarts if it exits
 make service                    # the same on this machine
 ```
 
-Logs: `~/Library/Logs/herdr-ui.log` (macOS) or `journalctl --user -u herdr-ui`.
-Remove the service with `sh internal/setup/scripts/install-service.sh uninstall` (the script `herdr-ui setup` carries embedded).
+Logs: `~/Library/Logs/remuda.log` (macOS) or `journalctl --user -u remuda`.
+Remove the service with `sh internal/setup/scripts/install-service.sh uninstall` (the script `remuda setup` carries embedded).
 
 ## Docker / Portainer
 
@@ -160,16 +163,16 @@ docker compose up -d     # http://127.0.0.1:7317
 ```
 
 In Portainer: add the repository as a stack, set the same variables in the
-stack environment. The image carries `herdr-ui`, `herdr` (for `terminal
+stack environment. The image carries `remuda`, `herdr` (for `terminal
 attach`), `ssh` and `git`; it mounts the host user's `~/.config` (herdr's
-socket + herdr-ui's state), `~/.claude` (transcripts), `~/.ssh` (remote
+socket + remuda's state), `~/.claude` (transcripts), `~/.ssh` (remote
 machines) and the projects root (file viewer), all at the same paths as on
 the host, running as that user's uid.
 
 ```bash
 docker compose --profile test run --rm test   # go vet + go test + tsc
 docker compose --profile dev up dev           # go run on :7317, Vite HMR on :5173
-docker build --target runtime -t herdr-ui .   # just the image
+docker build --target runtime -t remuda .   # just the image
 ```
 
 ## Code — VS Code in the browser
@@ -178,7 +181,7 @@ The **Code** mode frames [code-server](https://github.com/coder/code-server)
 (VS Code served over HTTP, MIT) running on the machine you pick — the editor
 for the workspace's folder, with its own terminal, git and extensions (from
 Open VSX). Each machine runs its own copy, bound to `127.0.0.1:7320` with
-no auth of its own; herdr-ui is the door: `/code/<machine>/` goes through
+no auth of its own; remuda is the door: `/code/<machine>/` goes through
 the same bearer token, locally to the port, remotely through a port
 forwarded over the ssh master the roster already uses. Install it on a
 machine with
@@ -194,22 +197,22 @@ mounted behind the other modes, so switching back does not reload it.
 
 ## From your phone
 
-The simplest way: let herdr-ui join your tailnet by itself.
+The simplest way: let remuda join your tailnet by itself.
 
 ```bash
-herdr-ui -tailscale                      # or: HERDR_UI_TAILSCALE=1 make service
+remuda -tailscale                      # or: REMUDA_TAILSCALE=1 make service
 ```
 
 The binary becomes a node of its own (no `tailscaled`, no `tailscale
 serve`), gets a MagicDNS name and a real certificate, and serves
-`https://herdr-ui.<your-tailnet>.ts.net`. The first start logs a login URL
+`https://remuda.<your-tailnet>.ts.net`. The first start logs a login URL
 (the desk's page shows it as a toast too); after that it reconnects on its
 own. `-tailscale-hostname` names the node, `TS_AUTHKEY` skips the login
 (an auth key from the Tailscale admin console). HTTPS certificates and
 MagicDNS must be enabled in the tailnet's DNS settings. The loopback
 listener stays for the desk.
 
-Or keep herdr-ui on loopback and bring your own transport:
+Or keep remuda on loopback and bring your own transport:
 
 ```bash
 tailscale serve --bg --https=443 http://127.0.0.1:7317   # your tailnet only
@@ -237,7 +240,7 @@ once, then "Add to Home Screen" — it installs as a PWA.
   key.
 
 A second copy beside the real one (to try `-tailscale`, say) gets its own
-token, tasks and push subscriptions with `HERDR_UI_STATE_DIR=/some/dir`.
+token, tasks and push subscriptions with `REMUDA_STATE_DIR=/some/dir`.
 
 ## Development
 
@@ -264,14 +267,14 @@ open the file where it lives (local or remote), with a **Changes** tab
 showing its uncommitted `git diff`.
 
 **Attachments:** the paperclip, a pasted screenshot (Ctrl/Cmd+V) or a drop
-uploads into the pane's folder (`.herdr-ui/uploads/`) and mentions the file
+uploads into the pane's folder (`.remuda/uploads/`) and mentions the file
 as `@path` in the message — Claude reads the image from there. In the
 terminal lens the paths are typed, shell-quoted. Works for remote machines
 too (the file goes over your SSH session).
 
-**Push alerts** (🔔 in the header): standard Web Push with herdr-ui's own
+**Push alerts** (🔔 in the header): standard Web Push with remuda's own
 VAPID keys — the only third party is your browser vendor's push service.
-herdr-ui watches every machine's agents itself, so alerts arrive with the
+remuda watches every machine's agents itself, so alerts arrive with the
 app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 a minute after a long turn. Answer at the desk first and nothing is sent.
 Needs HTTPS (tailscale serve) or localhost; on iPhone, the home-screen app.
@@ -287,19 +290,19 @@ text, headed "From *workspace*:", to any other agent on any machine — the
 same dialog Tasks uses to send a task. **Quick prompts** (⚡ in the composer)
 are saved texts, for every folder or one, shared by all your devices.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
-iPhone, Chrome on the desk; nothing passes through herdr-ui.
+iPhone, Chrome on the desk; nothing passes through remuda.
 
 **Machines** carry the names herdr gave them; the ⋯ beside a machine
-renames it for herdr-ui (the Mac you sit at too), copies its SSH host, or
+renames it for remuda (the Mac you sit at too), copies its SSH host, or
 removes one you added here.
 
 **A new workspace** names a machine and a folder; the folder is picked
 from the machine's own folders (repositories marked, the workspaces
 already there as quick picks) or typed.
 
-**Several herdr-ui at once:** each machine may run its own (the phone on
+**Several remuda at once:** each machine may run its own (the phone on
 GOG's, the desk on the Mac's). herdr lets one client attach to a terminal
-at a time, so when a remote machine's own herdr-ui is running (and
+at a time, so when a remote machine's own remuda is running (and
 reachable on its loopback port 7317), this one reaches that machine's
 terminals through it instead of attaching directly — both sides can look
 at the same pane, and nobody gets "already has an attached client". The
@@ -307,9 +310,9 @@ vitals probe finds it and reads its token over your SSH; without it the
 direct attach stays.
 
 **Machine vitals:** the ⓘ next to each machine shows which Claude Code,
-herdr and herdr-ui run there, disk and load; it turns amber when an update
+herdr and remuda run there, disk and load; it turns amber when an update
 is out (with the right command for how it was installed), a remote
-herdr-ui is behind this one, or the disk is nearly full.
+remuda is behind this one, or the disk is nearly full.
 
 **Cost and context:** every agent pane shows how full its context is (a
 pill in the header and on the sidebar row from 50% up, red near the edge,
@@ -323,7 +326,7 @@ subscription it is a measure of where the work went, not a bill.
 machine — what you or an agent said, never tool output — filtered by
 machine, folder and period. A hit jumps to the turn in the running pane, or
 opens the old transcript read-only. No index, no database: each machine
-scans its own `~/.claude/projects` on demand (herdr-ui's scanner where the
+scans its own `~/.claude/projects` on demand (remuda's scanner where the
 binary is deployed, grep otherwise).
 
 Planned: a remote-machine session picker, incremental transcript parsing for

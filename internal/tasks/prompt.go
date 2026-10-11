@@ -14,7 +14,7 @@ func Prompt(t Task, project string, groom bool) string {
 	if d := HTMLToText(t.Description); d != "" {
 		parts = append(parts, d)
 	}
-	where := "(herdr-ui task " + t.Identifier
+	where := "(remuda task " + t.Identifier
 	if project != "" {
 		where += " in " + project
 	}

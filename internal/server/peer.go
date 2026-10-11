@@ -14,16 +14,16 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
-	"github.com/dev1antdev/herdr-ui/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/machines"
 )
 
-// A terminal through the machine's own herdr-ui.
+// A terminal through the machine's own remuda.
 //
 // herdr lets one client attach to a terminal at a time: when GOG's own
-// herdr-ui holds the attach (someone looks at the pane there), an attach
+// remuda holds the attach (someone looks at the pane there), an attach
 // from here over SSH is refused — "already has an attached client". So
-// when a remote machine runs its own herdr-ui (the health probe finds it
+// when a remote machine runs its own remuda (the health probe finds it
 // on 127.0.0.1:7317 and reads its token), the pane WebSocket and the HTTP
 // transport are relayed to it over the master's port forward, and the one
 // attach there serves every viewer on both sides. Without a peer the
@@ -44,13 +44,13 @@ func (s *Server) peerFor(mc *machines.Machine) (*peerClient, error) {
 	}
 	addr, err := mc.ForwardAddr(p.Port)
 	if err != nil {
-		return nil, fmt.Errorf("reach herdr-ui on %s: %w", mc.Label(), err)
+		return nil, fmt.Errorf("reach remuda on %s: %w", mc.Label(), err)
 	}
 	return &peerClient{base: "http://" + addr, token: p.Token}, nil
 }
 
 // peerAfterRefusal is the second look: a direct attach was refused because
-// another client holds the terminal — maybe a herdr-ui that started since
+// another client holds the terminal — maybe a remuda that started since
 // the last probe. The machine is read again, now.
 func (s *Server) peerAfterRefusal(mc *machines.Machine, err error) *peerClient {
 	if mc.Local || !herdr.Refused(err) || s.Health == nil {
@@ -74,7 +74,7 @@ func (s *Server) peerAfterRefusal(mc *machines.Machine, err error) *peerClient {
 func attachRefused(mc *machines.Machine, err error) string {
 	msg := "attach failed: " + err.Error()
 	if herdr.Refused(err) {
-		msg = "another client holds this terminal on " + mc.Label() + " — start herdr-ui there to share it"
+		msg = "another client holds this terminal on " + mc.Label() + " — start remuda there to share it"
 	}
 	if len(msg) > 120 {
 		msg = msg[:117] + "…"
@@ -100,7 +100,7 @@ func (s *Server) relayPaneWS(w http.ResponseWriter, r *http.Request, pc *peerCli
 			msg = fmt.Sprintf("%s (HTTP %d)", msg, res.StatusCode)
 		}
 		log.Printf("peer relay %s/%s: %s", pc.base, paneID, msg)
-		httpErr(w, 502, fmt.Errorf("herdr-ui on the machine: %s", msg))
+		httpErr(w, 502, fmt.Errorf("remuda on the machine: %s", msg))
 		return
 	}
 	defer up.CloseNow()
@@ -126,7 +126,7 @@ func (s *Server) relayPaneWS(w http.ResponseWriter, r *http.Request, pc *peerCli
 				if errors.As(err, &ce) {
 					c.Close(ce.Code, ce.Reason)
 				} else {
-					c.Close(websocket.StatusGoingAway, "herdr-ui on the machine went away")
+					c.Close(websocket.StatusGoingAway, "remuda on the machine went away")
 				}
 				return
 			}
@@ -169,11 +169,11 @@ func (s *Server) peerHTTP(w http.ResponseWriter, r *http.Request, pc *peerClient
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		httpErr(w, 502, fmt.Errorf("herdr-ui on the machine: %w", err))
+		httpErr(w, 502, fmt.Errorf("remuda on the machine: %w", err))
 		return
 	}
 	defer res.Body.Close()
-	for _, h := range []string{"Content-Type", "X-Herdr-UI-End", "Cache-Control"} {
+	for _, h := range []string{"Content-Type", "X-Remuda-End", "Cache-Control"} {
 		if v := res.Header.Get(h); v != "" {
 			w.Header().Set(h, v)
 		}
@@ -192,7 +192,7 @@ func (s *Server) peerOpen(w http.ResponseWriter, r *http.Request, pc *peerClient
 	req.Header.Set("Authorization", "Bearer "+pc.token)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		httpErr(w, 502, fmt.Errorf("herdr-ui on the machine: %w", err))
+		httpErr(w, 502, fmt.Errorf("remuda on the machine: %w", err))
 		return
 	}
 	defer res.Body.Close()
@@ -202,7 +202,7 @@ func (s *Server) peerOpen(w http.ResponseWriter, r *http.Request, pc *peerClient
 	}
 	body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<16))
 	if res.StatusCode != http.StatusOK || json.Unmarshal(body, &out) != nil || out.SID == "" {
-		httpErr(w, res.StatusCode, fmt.Errorf("herdr-ui on the machine: %s", strings.TrimSpace(string(body))))
+		httpErr(w, res.StatusCode, fmt.Errorf("remuda on the machine: %s", strings.TrimSpace(string(body))))
 		return
 	}
 	writeJSON(w, map[string]any{"sid": machineID + peerSep + out.SID})

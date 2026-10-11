@@ -142,7 +142,7 @@ export default function TerminalView({
     type Transport = { input(data: string): void; resize(cols: number, rows: number): void; close(): void };
     let transport: Transport | null = null;
     const paneQuery = `machine=${encodeURIComponent(machineId)}&id=${encodeURIComponent(paneId)}`;
-    const note = (text: string) => term.write(`\r\n\x1b[2m[herdr-ui] ${text}\x1b[0m\r\n`);
+    const note = (text: string) => term.write(`\r\n\x1b[2m[remuda] ${text}\x1b[0m\r\n`);
 
     // the PTY is shared by every viewer: never re-send an unchanged size.
     // The connect request already carries the size, so lastSize is set
@@ -388,7 +388,7 @@ export default function TerminalView({
             const buf = new Uint8Array(await res.arrayBuffer());
             if (stopped) return;
             if (buf.length) paint(buf);
-            if (res.headers.get("X-Herdr-UI-End") === "1") {
+            if (res.headers.get("X-Remuda-End") === "1") {
               sid = null; // the server dropped it already
               note("terminal detached");
               return;

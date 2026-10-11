@@ -1,9 +1,9 @@
 #!/bin/sh
 # Installs code-server (VS Code in the browser, MIT) as a per-user background
-# service on this machine, for herdr-ui's Code mode:
+# service on this machine, for remuda's Code mode:
 #   - a pinned release from github.com/coder/code-server, checksum verified
 #   - unpacked under ~/.local/opt, no root needed
-#   - bound to 127.0.0.1:$CODE_PORT with no auth of its own: herdr-ui's token
+#   - bound to 127.0.0.1:$CODE_PORT with no auth of its own: remuda's token
 #     guards it, and nothing else can reach a loopback port
 #   - macOS → launchd LaunchAgent, Linux → systemd --user unit
 # Usage: install-code.sh [install|uninstall|status]
@@ -53,7 +53,7 @@ install_release() {
     fi
     ln -sfn "$DEST" "$LINK"
     # first-run editor settings, only when the user has none yet: a dark
-    # theme like herdr-ui's, no telemetry, no Copilot chat in the way
+    # theme like remuda's, no telemetry, no Copilot chat in the way
     USER_DIR="$HOME/.local/share/code-server/User"
     if [ ! -f "$USER_DIR/settings.json" ]; then
         mkdir -p "$USER_DIR"
@@ -71,7 +71,7 @@ JSON
     fi
     mkdir -p "$CONF_DIR"
     cat > "$CONF_DIR/config.yaml" <<EOF
-# written by herdr-ui's deploy/install-code.sh — loopback only, herdr-ui's token is the door
+# written by remuda's deploy/install-code.sh — loopback only, remuda's token is the door
 bind-addr: 127.0.0.1:$PORT
 auth: none
 cert: false
@@ -139,7 +139,7 @@ Linux)
         mkdir -p "$UNIT_DIR"
         cat > "$UNIT" <<EOF
 [Unit]
-Description=code-server — VS Code in the browser, for herdr-ui
+Description=code-server — VS Code in the browser, for remuda
 After=default.target
 
 [Service]

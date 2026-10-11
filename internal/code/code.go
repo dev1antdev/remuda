@@ -1,6 +1,6 @@
 // Package code puts a machine's code-server (VS Code in the browser) behind
-// herdr-ui: each machine runs its own on 127.0.0.1:<port>, auth off, and
-// herdr-ui's bearer-token guard is the door — the browser reaches it at
+// remuda: each machine runs its own on 127.0.0.1:<port>, auth off, and
+// remuda's bearer-token guard is the door — the browser reaches it at
 // /code/<machine>/, locally straight to the port, remotely through a port
 // forwarded over the same ssh master the roster uses. One origin, one token,
 // nothing else to expose.
@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/machines"
+	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 const DefaultPort = 7320
@@ -120,7 +120,7 @@ func (s *Service) Proxy(w http.ResponseWriter, r *http.Request, mc *machines.Mac
 			pr.Out.URL.RawPath = ""
 		},
 		ModifyResponse: func(res *http.Response) error {
-			// the editor is framed by herdr-ui
+			// the editor is framed by remuda
 			res.Header.Del("X-Frame-Options")
 			if loc := res.Header.Get("Location"); strings.HasPrefix(loc, "/") && !strings.HasPrefix(loc, prefix) {
 				res.Header.Set("Location", prefix+loc)

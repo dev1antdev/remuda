@@ -1,4 +1,4 @@
-// Package server is herdr-ui's HTTP + WebSocket bridge to herdr — the local
+// Package server is remuda's HTTP + WebSocket bridge to herdr — the local
 // one and any remote machine's — roster and chat over REST, live terminal
 // bytes over WS. herdr owns every process, pane and agent status; Claude Code
 // owns its transcript files; this server only connects them to the browser.
@@ -26,24 +26,24 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/dev1antdev/herdr-ui/internal/auth"
-	"github.com/dev1antdev/herdr-ui/internal/code"
-	"github.com/dev1antdev/herdr-ui/internal/health"
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
-	"github.com/dev1antdev/herdr-ui/internal/jobs"
-	"github.com/dev1antdev/herdr-ui/internal/machines"
-	"github.com/dev1antdev/herdr-ui/internal/push"
-	"github.com/dev1antdev/herdr-ui/internal/quick"
-	"github.com/dev1antdev/herdr-ui/internal/radar"
-	"github.com/dev1antdev/herdr-ui/internal/restart"
-	"github.com/dev1antdev/herdr-ui/internal/review"
-	"github.com/dev1antdev/herdr-ui/internal/schedule"
-	"github.com/dev1antdev/herdr-ui/internal/tasks"
-	"github.com/dev1antdev/herdr-ui/internal/transcript"
-	"github.com/dev1antdev/herdr-ui/internal/tsnetx"
-	"github.com/dev1antdev/herdr-ui/internal/usage"
-	buildversion "github.com/dev1antdev/herdr-ui/internal/version"
-	"github.com/dev1antdev/herdr-ui/internal/watch"
+	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/code"
+	"github.com/dev1antdev/remuda/internal/health"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/jobs"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/quick"
+	"github.com/dev1antdev/remuda/internal/radar"
+	"github.com/dev1antdev/remuda/internal/restart"
+	"github.com/dev1antdev/remuda/internal/review"
+	"github.com/dev1antdev/remuda/internal/schedule"
+	"github.com/dev1antdev/remuda/internal/tasks"
+	"github.com/dev1antdev/remuda/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/tsnetx"
+	"github.com/dev1antdev/remuda/internal/usage"
+	buildversion "github.com/dev1antdev/remuda/internal/version"
+	"github.com/dev1antdev/remuda/internal/watch"
 )
 
 type Server struct {
@@ -77,7 +77,7 @@ func New(m *machines.Manager, w *watch.Watcher, p *push.Service, t *tasks.Store,
 	return &Server{Machines: m, Watch: w, Push: p, Tasks: t, Code: c, Review: rv, Radar: r, Quick: q, Usage: u, Guard: g, UI: ui, paneMu: map[push.PaneRef]*sync.Mutex{}}
 }
 
-// agents herdr-ui offers to start, by herdr manifest kind. The list is also
+// agents remuda offers to start, by herdr manifest kind. The list is also
 // served to the UI so there is one copy.
 var agents = []agentKind{
 	{"claude", "Claude Code"}, {"codex", "Codex"}, {"gemini", "Gemini"}, {"pi", "pi"},
@@ -233,12 +233,12 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
-// machineFor finds the request's machine: ?machine=, the X-Herdr-UI-Machine
+// machineFor finds the request's machine: ?machine=, the X-Remuda-Machine
 // header, or the id a POST body carried. Empty means local.
 func (s *Server) machineFor(r *http.Request, bodyID string) (*machines.Machine, error) {
 	id := r.URL.Query().Get("machine")
 	if id == "" {
-		id = r.Header.Get("X-Herdr-UI-Machine")
+		id = r.Header.Get("X-Remuda-Machine")
 	}
 	if id == "" {
 		id = bodyID
@@ -489,7 +489,7 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 	body, _ := json.Marshal(roster)
 	sum := sha256.Sum256(body)
 	etag := `"` + hex.EncodeToString(sum[:12]) + `"`
-	w.Header().Set("X-Herdr-UI-Version", buildversion.Build) // a page older than the server offers a reload
+	w.Header().Set("X-Remuda-Version", buildversion.Build) // a page older than the server offers a reload
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
@@ -875,9 +875,9 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Type", info.MIME)
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Cache-Control", "private, no-store")
-	h.Set("X-Herdr-UI-Kind", info.Kind)
-	h.Set("X-Herdr-UI-Size", strconv.FormatInt(info.Size, 10))
-	h.Set("X-Herdr-UI-Max", strconv.FormatInt(info.MaxBytes(), 10))
+	h.Set("X-Remuda-Kind", info.Kind)
+	h.Set("X-Remuda-Size", strconv.FormatInt(info.Size, 10))
+	h.Set("X-Remuda-Max", strconv.FormatInt(info.MaxBytes(), 10))
 	if info.Kind != "pdf" { // the browser's PDF viewer refuses a sandboxed document
 		h.Set("Content-Security-Policy", "sandbox; default-src 'none'; img-src data:; media-src 'self'; style-src 'unsafe-inline'")
 	}
@@ -894,7 +894,7 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 		if fi != nil {
 			mod = fi.ModTime()
 		}
-		h.Set("X-Herdr-UI-Truncated", strconv.FormatBool(info.Size > max))
+		h.Set("X-Remuda-Truncated", strconv.FormatBool(info.Size > max))
 		http.ServeContent(w, r, filepath.Base(info.Path), mod, &cappedFile{f, min(info.Size, max)})
 		return
 	}
@@ -903,7 +903,7 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 500, err)
 		return
 	}
-	h.Set("X-Herdr-UI-Truncated", strconv.FormatBool(truncated))
+	h.Set("X-Remuda-Truncated", strconv.FormatBool(truncated))
 	w.Write(data)
 }
 
@@ -1283,7 +1283,7 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
 
-	// the machine's own herdr-ui, when it runs, holds the one attach: relay
+	// the machine's own remuda, when it runs, holds the one attach: relay
 	if pc, err := s.peerFor(mc); err != nil {
 		httpErr(w, 502, err)
 		return
@@ -1293,7 +1293,7 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	}
 	ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
 	if err != nil {
-		// refused because another client holds it — a herdr-ui that started
+		// refused because another client holds it — a remuda that started
 		// since the last probe? one more look, then the relay
 		if pc := s.peerAfterRefusal(mc, err); pc != nil {
 			s.relayPaneWS(w, r, pc, pane.PaneID, cols, rows)

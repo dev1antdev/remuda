@@ -36,12 +36,12 @@ export default function FileViewer({
   // the viewer goes away some other way the entry goes with it, or the
   // next Back would do nothing
   useEffect(() => {
-    history.pushState({ herdrUi: "file" }, "");
+    history.pushState({ remuda: "file" }, "");
     const onPop = () => onClose();
     window.addEventListener("popstate", onPop);
     return () => {
       window.removeEventListener("popstate", onPop);
-      if (history.state?.herdrUi === "file") history.back();
+      if (history.state?.remuda === "file") history.back();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -51,7 +51,7 @@ export default function FileViewer({
   }, []);
 
   const close = () => {
-    if (history.state?.herdrUi === "file") history.back();
+    if (history.state?.remuda === "file") history.back();
     else onClose();
   };
   // keys inside the viewer reach its own handler below; when the focus

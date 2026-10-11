@@ -1,13 +1,13 @@
-// Package tsnetx puts herdr-ui on the tailnet by itself: with -tailscale
+// Package tsnetx puts remuda on the tailnet by itself: with -tailscale
 // the binary joins as its own node (tsnet, userspace networking, no
 // tailscaled needed), gets a MagicDNS name and a real certificate, and
-// serves HTTPS there — a phone opens https://herdr-ui.<tailnet>.ts.net
+// serves HTTPS there — a phone opens https://remuda.<tailnet>.ts.net
 // with no `tailscale serve` or SSH tunnel beside it. The loopback
 // listener stays for the desk.
 //
 // The first run needs a login: the status carries the URL to visit (it
 // is logged, and the UI shows it as a toast on the loopback side) unless
-// TS_AUTHKEY is set. State lives under the herdr-ui state dir.
+// TS_AUTHKEY is set. State lives under the remuda state dir.
 package tsnetx
 
 import (

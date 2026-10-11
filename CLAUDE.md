@@ -1,17 +1,23 @@
-# herdr-ui — notes for agents
+# remuda — notes for agents
 
-Self-hosted web/phone client for **herdr** (0.9+). Go server + embedded React
-SPA. See README.md for the user story.
+Self-hosted web/phone cockpit for the AI coding agents on the user's
+machines, on top of **herdr** (0.9+), which it installs, starts and
+updates. Go server + embedded React SPA. See README.md for the user
+story. Renamed from herdr-ui on 2026-10-11 (before that: drover): the
+state dir, the service and the browser's localStorage keys carry over
+by themselves (`state.Dir`, install-service.sh, prefs.ts); the binary,
+module path, headers (`X-Remuda-*`), env vars (`REMUDA_*`), the
+`.remuda/uploads` folder and the Tailscale hostname are the new name.
 
 ## Layout
 
-- `cmd/herdr-ui/` — main; flags `-addr` (default `127.0.0.1:7317`), `-socket`,
+- `cmd/remuda/` — main; flags `-addr` (default `127.0.0.1:7317`), `-socket`,
   `-herdr-bin`, `-print-token`, `-version`, `-tailscale` /
   `-tailscale-hostname`, `-no-version-check`, `-code-port`; subcommands
   `search` and `usage` for the deployed binary on a remote machine, and
   `setup` (see herdr below).
-- `internal/state/` — the one state dir (`<user config dir>/herdr-ui`, 0700,
-  or `HERDR_UI_STATE_DIR` for a second instance beside the real one)
+- `internal/state/` — the one state dir (`<user config dir>/remuda`, 0700,
+  or `REMUDA_STATE_DIR` for a second instance beside the real one)
   and the one atomic 0600 writer; token, machines.json, vapid.json and
   push-subscriptions.json all live there.
 - `internal/herdr/` — everything herdr. `client.go`: newline-JSON RPC over
@@ -34,7 +40,7 @@ SPA. See README.md for the user story.
   mapping.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
   never prompt), with socket forwarding (`-O forward -L`), remote exec, and
-  the `ssh -tt … herdr terminal attach` command builder. herdr-ui implements
+  the `ssh -tt … herdr terminal attach` command builder. remuda implements
   no SSH itself.
 - `internal/machines/` — the multi-PC registry. `local` is always present.
   **Remotes come from herdr itself**: `SyncHerdr` reads `herdr machine list
@@ -81,10 +87,10 @@ SPA. See README.md for the user story.
   `/api/fs/stat` (resolve + kind),
   `/api/fs/file` (bytes; text is always `text/plain`, CSP-sandboxed, 512KB
   text / 24MB raw caps), `/api/fs/diff`, `POST /api/fs/upload` (multipart
-  `file` ×≤4, 25MB each → `<pane dir>/.herdr-ui/uploads/<time>-<tag>-<name>`,
+  `file` ×≤4, 25MB each → `<pane dir>/.remuda/uploads/<time>-<tag>-<name>`,
   stem and extension sanitized separately, remote via `sshx.Conn.Put`).
-  `.herdr-ui/.gitignore` (`*`) is written alongside so uploads never reach
-  a commit. Uploads are the only thing herdr-ui writes into a project.
+  `.remuda/.gitignore` (`*`) is written alongside so uploads never reach
+  a commit. Uploads are the only thing remuda writes into a project.
 - `web/src/attachments.ts` — `useAttachments` (upload at once, chips with
   thumbnails), `filesFrom` (drop/paste → files; a pasted screenshot gets a
   name), `shellQuote`. The chat composer inserts `@<rel>` at the caret and
@@ -132,20 +138,20 @@ SPA. See README.md for the user story.
   attach, the chat its scroll and no refetch, Changes its draft; a lens
   gets `active` and polls or refits only when on screen.
 - `internal/health` — each machine's vitals (Claude Code / herdr /
-  herdr-ui versions, how Claude Code was installed, disk, load, uptime)
+  remuda versions, how Claude Code was installed, disk, load, uptime)
   from one POSIX script per machine through `Machine.Shell`, every 15
   minutes and on demand (`POST /api/machines/{id}/health`); the newest
   Claude Code, Codex and Gemini CLI (npm registry) and herdr (GitHub
   releases) every 6 hours unless `-no-version-check` — the only outbound
-  requests herdr-ui makes.
+  requests remuda makes.
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
   (`HealthButton` in Sidebar.tsx) turns amber on an update, a lagging
-  remote herdr-ui, or a nearly full disk.
+  remote remuda, or a nearly full disk.
 - **Peers** (`internal/server/peer.go`): herdr allows one attached client
   per terminal ("already has an attached client; retry with --takeover"),
-  so two herdr-ui reaching the same pane — the machine's own and this one
+  so two remuda reaching the same pane — the machine's own and this one
   over SSH — collide. The health script also probes `127.0.0.1:7317/api/
-  health` on the machine and reads its token file; a running herdr-ui
+  health` on the machine and reads its token file; a running remuda
   becomes `Machine.Peer()` (port, token, version; stale after an hour).
   With a peer, `/ws/pane` is relayed to the peer's `/ws/pane` (frames
   piped both ways, its close reason passed on) and the HTTP transport's
@@ -167,12 +173,12 @@ SPA. See README.md for the user story.
   server stop` stops the user's real server (it happened). The env var is
   what `herdr server`, `status server` and `server stop` all honour;
   `internal/herdr/server_test.go` is the pattern.
-- **herdr is herdr-ui's to run.** `herdr.EnsureServer(bin, socket)` pings
+- **herdr is remuda's to run.** `herdr.EnsureServer(bin, socket)` pings
   and, when nothing answers, starts `herdr server` (the headless server)
   detached, at most once per two minutes — at startup and whenever the
   watcher's local poll fails (`Watcher.LocalDown`); a remote machine's
   `connect()` does the same over ssh (`herdr.StartServerScript`) before
-  giving up. `herdr-ui setup [-host H] [-tailscale]` (`internal/setup`,
+  giving up. `remuda setup [-host H] [-tailscale]` (`internal/setup`,
   two embedded POSIX scripts: `setup.sh` installs herdr with brew or its
   installer, starts the server, installs `herdr integration` hooks for
   the agents present; `install-service.sh` is the service installer that
@@ -184,11 +190,11 @@ SPA. See README.md for the user story.
   every brew path runs `brew update` first, once per job),
   claude / codex / gemini (brew, npm or the native updater, by where the
   binary lives), or every agent; `GET /api/machines/{id}/updates` lists
-  them, `POST …/update {what}` starts one; `what=herdr-ui` copies this
+  them, `POST …/update {what}` starts one; `what=remuda` copies this
   very binary to a remote of the same OS/CPU and restarts its service.
   `Updates.tsx` shows the list, the command before "Run", the live log,
   and the machine's recent jobs. Nothing uses sudo; everything runs as
-  the user through the shell herdr-ui already has on the machine.
+  the user through the shell remuda already has on the machine.
 - **Chats follow an agent update** (`internal/restart`). When an update
   job changed an agent's version (the vitals re-read right after), every
   pane running that agent is restarted onto it: `agent.prompt` with the
@@ -204,7 +210,7 @@ SPA. See README.md for the user story.
   the bare shell in between), a booking is tied to the session id it was
   made for, and a settled chat waits 25 s more (any change in between
   calls it off) because the person is likely reading or typing right
-  then. This is the one place herdr-ui types text the person did not
+  then. This is the one place remuda types text the person did not
   compose, and only because they pressed Run on an update or a restart.
   `Restarter.Server` (restart/server.go) is the server onto a new binary
   when no handoff happened: the chats with sessions noted and their panes
@@ -221,9 +227,9 @@ SPA. See README.md for the user story.
   (needs_login with the URL, running with the URL, error) rides on the
   roster as `tailscale`; the App shows a login toast. `TS_AUTHKEY` skips
   the login. The loopback listener stays.
-- The build's version is injected into the bundle (`__HERDR_UI_VERSION__`,
-  from `HERDR_UI_VERSION` set by `make web`) and the roster answer carries
-  the server's in `X-Herdr-UI-Version`; a page older than its server shows
+- The build's version is injected into the bundle (`__REMUDA_VERSION__`,
+  from `REMUDA_VERSION` set by `make web`) and the roster answer carries
+  the server's in `X-Remuda-Version`; a page older than its server shows
   a "new version — reload" pill. After a deploy, a stale tab is told.
 - `web/src/markdown.tsx` — dependency-free Markdown → React nodes (no HTML
   strings, nothing to sanitize). `parseBlocks` is pure (task-list state is
@@ -236,7 +242,7 @@ SPA. See README.md for the user story.
   notification, click) falling back to the first agent pane; nothing fixes
   selection up in effects.
 - `web/src/host.ts` — `copyText` (Clipboard API, else execCommand) and
-  `openUrl` (a new tab). Nothing embeds herdr-ui any more: the JetBrains
+  `openUrl` (a new tab). Nothing embeds remuda any more: the JetBrains
   plugin is gone, and with it the `window.herdrHost` bridge and `?cwd=`.
 - `internal/review/` — the **Changes lens**: what moved in a workspace's
   folder since the reviewer last looked. A baseline per `machine|folder`
@@ -272,7 +278,7 @@ SPA. See README.md for the user story.
 - `internal/code/` — the **Code mode**: each machine runs its own
   code-server (VS Code in the browser) on `127.0.0.1:7320`, `auth: none`,
   installed by `deploy/install-code.sh` (`make code [HOST=]`: a pinned
-  release, checksum verified, launchd / systemd user service). herdr-ui is
+  release, checksum verified, launchd / systemd user service). remuda is
   the only door: `/code/<machine>/…` is a `httputil.ReverseProxy` behind the
   token guard — prefix stripped, Host kept, `X-Frame-Options` dropped,
   absolute `Location`s re-prefixed, WebSocket upgrades passed; the target
@@ -303,7 +309,7 @@ SPA. See README.md for the user story.
   It emits a `push.Event` per pane status transition; the first snapshot of
   a machine only seeds state — a reconnect must not replay a day of alerts.
 - `internal/push/` — Web Push (RFC 8291/8292 via webpush-go). VAPID keys at
-  `<config>/herdr-ui/vapid.json` (a damaged file is an error, never a silent
+  `<config>/remuda/vapid.json` (a damaged file is an error, never a silent
   rotation — rotating orphans every device); subscriptions in
   `push-subscriptions.json`, 404/410 from the push service drops one. The
   scheduler is the point: `blocked` alerts after 10s, `done` (only from
@@ -327,12 +333,12 @@ SPA. See README.md for the user story.
   chat, or `POST /api/seen`) — and a seen finish stays seen until the agent works again, because herdr itself keeps reporting `done` for hours, until the pane is focused in herdr; **a question is held until the agent works
   again** (unless it never had worked — then the dialog simply closed);
   `last_active` is the last moment herdr said working, recovered for panes
-  older than herdr-ui from the session file's mtime (`ResolveSession` +
+  older than remuda from the session file's mtime (`ResolveSession` +
   `TranscriptVersion`, off the poller), persisted in `<state>/activity.json`
   together with whether the tick is still up (`held`), so a restart keeps
   the ticks as they stood and raises none for finishes herdr is still
   reporting from before; a pane first seen already finished (there before
-  herdr-ui ran) counts as looked at.
+  remuda ran) counts as looked at.
   The idle tiers (fresh ≤15 min, stale ≥120 min, dimmed) are the UI's, from
   `last_active` and the clock. `web/src/radar.ts` is the pure model (vendor
   hues, tiers, marks, row labels, ordering: families by their liveliest
@@ -373,7 +379,7 @@ SPA. See README.md for the user story.
   Capitalized — a byte search folds nothing), then `transcript.MatchLine`
   parses the candidates: only user/assistant texts count, never tool
   output, thinking or sidechains. Locally Scan runs in-process; on a
-  remote the script runs `~/.local/bin/herdr-ui search …` (the same Scan,
+  remote the script runs `~/.local/bin/remuda search …` (the same Scan,
   a hidden subcommand — `make deploy` puts the binary there; 400 MB scan
   in well under a second) and falls back to a four-pattern grep when the
   binary is missing (BSD grep: seconds per hundred MB). Both print
@@ -410,7 +416,7 @@ SPA. See README.md for the user story.
   &tz=`, since = a local midnight) walks `~/.claude/projects` for files
   written since, subagent files count toward their session, per day in
   the viewer's zone, per project/model/session; remotely the deployed
-  binary runs `herdr-ui usage -since -tz` (gated on the version, like
+  binary runs `remuda usage -since -tz` (gated on the version, like
   search). UI: `Usage.tsx` (📊 in the sidebar head, or the header pill),
   the pill in the header (fill bar · cost) and on radar rows from 50% up
   (amber 70%, red 90%), Chat's compaction notice from 80% with "Compact
@@ -420,13 +426,13 @@ SPA. See README.md for the user story.
   the list replaced whole), each for every folder or one `dir`; the chat
   composer offers them under ⚡ and edits them in a dialog. The composer
   also dictates through the browser's own `SpeechRecognition` (nothing
-  passes through herdr-ui) and every assistant turn has **forward** — the
+  passes through remuda) and every assistant turn has **forward** — the
   turn's text, headed "From <workspace on machine>:", to another agent
   through `SendToAgent.tsx`, the one dialog Tasks and Chat share
   (`send.targets` pref remembers the last target per key).
-- `internal/tasks/` — the **Tasks mode**: herdr-ui's own list in
+- `internal/tasks/` — the **Tasks mode**: remuda's own list in
   `tasks.db` (SQLite, WAL, `modernc.org/sqlite` — pure Go, so the four
-  static builds keep `CGO_ENABLED=0`) in the state dir of **the herdr-ui
+  static builds keep `CGO_ENABLED=0`) in the state dir of **the remuda
   that serves the page** (each instance has its own list). Projects (a
   tree: `parent_project_id`, archived, favorite, position), tasks (HTML
   description, done/done_at, due_date, priority 0–5, labels), labels.
@@ -465,7 +471,7 @@ SPA. See README.md for the user story.
 - `internal/server/` — HTTP routes + the pane WebSocket. `/api/health` and
   `/api/login` are mounted outside the token guard; everything else behind
   it. Every route resolves its machine through `machineFor` (query →
-  `X-Herdr-UI-Machine` header → POST body `machine`) and `ready()`. The three
+  `X-Remuda-Machine` header → POST body `machine`) and `ready()`. The three
   create routes share `create()` (agent kind validated *before* any RPC,
   container made, agent started, watcher refreshed); the two close routes
   share `closeHandler`, the two renames (`PATCH /api/tabs/{id}`,
@@ -521,7 +527,7 @@ SPA. See README.md for the user story.
 
 ## Invariants
 
-- **herdr owns every process and status.** herdr-ui holds no session state;
+- **herdr owns every process and status.** remuda holds no session state;
   it must keep working after a restart while agents run.
 - **The transcript is read-only**; input goes through herdr: `agent.prompt`
   preferred (refuses with `agent_blocked` while a menu is open — surface

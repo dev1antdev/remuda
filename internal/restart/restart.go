@@ -5,7 +5,7 @@
 // it settles otherwise. herdr does the typing (agent.prompt, agent.start):
 // nothing here writes raw bytes into a terminal, a pane without a session
 // id is left alone, and a restart holds the same per-pane lock the rest
-// of herdr-ui holds while it types, so nothing else lands in the shell
+// of remuda holds while it types, so nothing else lands in the shell
 // in between.
 package restart
 
@@ -17,9 +17,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
-	"github.com/dev1antdev/herdr-ui/internal/machines"
-	"github.com/dev1antdev/herdr-ui/internal/push"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/push"
 )
 
 const (
@@ -48,7 +48,7 @@ var agents = map[string]agent{
 }
 
 // Kinds says which agents an update called `what` touches: claude, codex,
-// gemini, or all three for "agents"; none for herdr or herdr-ui.
+// gemini, or all three for "agents"; none for herdr or remuda.
 func Kinds(what string) []string {
 	switch what {
 	case "claude", "codex", "gemini":
@@ -136,7 +136,7 @@ type Restarter struct {
 	// Later runs a deferred restart so the person can see it — a job, in
 	// main. Nil means it is logged only.
 	Later func(mc *machines.Machine, title string, fn func(say func(string)) error)
-	// Lock is the per-pane lock the rest of herdr-ui holds while it types
+	// Lock is the per-pane lock the rest of remuda holds while it types
 	// into a pane; a restart holds it from the exit to the resumed agent.
 	Lock func(machineID, paneID string) sync.Locker
 

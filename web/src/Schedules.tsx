@@ -72,7 +72,7 @@ export default function Schedules({ machines, onClose, ask }: {
       }
     >
       <Notice tone="hint">
-        A prompt sent to the agent running in a folder, on a timetable — in the herdr-ui host's local time. A minute with no agent there, or an agent busy
+        A prompt sent to the agent running in a folder, on a timetable — in the remuda host's local time. A minute with no agent there, or an agent busy
         with a question, is skipped and noted.
       </Notice>
       {error && (

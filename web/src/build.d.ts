@@ -1,2 +1,2 @@
-// injected by vite.config.ts from HERDR_UI_VERSION at build time
-declare const __HERDR_UI_VERSION__: string;
+// injected by vite.config.ts from REMUDA_VERSION at build time
+declare const __REMUDA_VERSION__: string;

@@ -10,19 +10,19 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/sshx"
 )
 
 // herdr keeps panes in a headless server (`herdr server`); the TUI is one
-// client of it, herdr-ui another. When herdr-ui runs and no server
-// answers, it starts one — detached, so it outlives herdr-ui — and the
+// client of it, remuda another. When remuda runs and no server
+// answers, it starts one — detached, so it outlives remuda — and the
 // agents are there whether or not a terminal window is.
 //
 // The server is started through the user's login shell with a clean
 // environment: every pane inherits the server's environment, so it must
 // be the one the user's own terminal would have (PATH from the profile,
 // their exports) and never the service's (a TS_AUTHKEY, HERDR_ENV from a
-// pane herdr-ui itself runs in). herdr reads HERDR_SOCKET_PATH for where
+// pane remuda itself runs in). herdr reads HERDR_SOCKET_PATH for where
 // to listen; it ignores HOME for that.
 
 var (
@@ -99,7 +99,7 @@ func serverCommand(bin, socket, home string) *exec.Cmd {
 	if home != "" {
 		cmd.Dir = home
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // its own session: it stays when herdr-ui exits
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // its own session: it stays when remuda exits
 	return cmd
 }
 

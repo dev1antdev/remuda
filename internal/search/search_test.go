@@ -63,7 +63,7 @@ func TestScriptQuotesAndSpellings(t *testing.T) {
 	if !strings.Contains(s, `-e 'SAY \"HI\"'`) || !strings.Contains(s, `-e 'Say \"hi\"'`) {
 		t.Fatalf("spellings: %s", s)
 	}
-	want := `if [ -x '/Users/me/.local/bin/herdr-ui' ] && [ "$('/Users/me/.local/bin/herdr-ui' -version 2>/dev/null)" = 'herdr-ui dev' ] && '/Users/me/.local/bin/herdr-ui' search -q 'say "hi"' -limit 400; then exit 0; fi; cd '/Users/me/.claude/projects'`
+	want := `if [ -x '/Users/me/.local/bin/remuda' ] && [ "$('/Users/me/.local/bin/remuda' -version 2>/dev/null)" = 'remuda dev' ] && '/Users/me/.local/bin/remuda' search -q 'say "hi"' -limit 400; then exit 0; fi; cd '/Users/me/.claude/projects'`
 	if !strings.HasPrefix(s, want) {
 		t.Fatalf("prefix:\n%s\nwant\n%s", s, want)
 	}

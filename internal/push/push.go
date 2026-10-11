@@ -18,8 +18,8 @@ import (
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
-	"github.com/dev1antdev/herdr-ui/internal/state"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/state"
 )
 
 // Prefs are per-device: alert when an agent waits for an answer, and when it
@@ -95,7 +95,7 @@ var (
 // New loads or creates the VAPID keypair and the subscription store in dir.
 func New(dir string) (*Service, error) {
 	s := &Service{dir: dir, subs: map[string]*Subscription{}, timers: map[PaneRef][]*time.Timer{},
-		subject: "https://github.com/dev1antdev/herdr-ui"}
+		subject: "https://github.com/dev1antdev/remuda"}
 	s.send = s.Send
 	if err := s.loadKeys(); err != nil {
 		return nil, err
@@ -284,7 +284,7 @@ func (s *Service) SendTest(endpoint string) error {
 	if sub == nil {
 		return fmt.Errorf("unknown subscription")
 	}
-	return s.Send(sub, Payload{Title: "herdr-ui", Body: "Alerts reach this device.", Tag: "test", Kind: "test"})
+	return s.Send(sub, Payload{Title: "remuda", Body: "Alerts reach this device.", Tag: "test", Kind: "test"})
 }
 
 // Event is a pane's status transition as the watcher saw it.

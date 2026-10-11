@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
-	"github.com/dev1antdev/herdr-ui/internal/machines"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 // Server restarts herdr's server on the machine onto the installed binary
@@ -66,7 +66,7 @@ func (r *Restarter) Server(mc *machines.Machine, say func(string)) error {
 	time.Sleep(2 * time.Second) // the old process lets go of the socket
 	say("herdr server — the installed binary")
 	if err := mc.StartServer(); err != nil {
-		return fmt.Errorf("start: %v (herdr-ui keeps trying by itself; the chats are listed above)", err)
+		return fmt.Errorf("start: %v (remuda keeps trying by itself; the chats are listed above)", err)
 	}
 
 	// herdr restores the shape at once and its own agents a moment later

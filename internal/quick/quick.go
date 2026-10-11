@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dev1antdev/herdr-ui/internal/state"
-	"github.com/dev1antdev/herdr-ui/internal/text"
+	"github.com/dev1antdev/remuda/internal/state"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 const file = "quick.json"

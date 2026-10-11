@@ -8,13 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/machines"
-	"github.com/dev1antdev/herdr-ui/internal/usage"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/usage"
 )
 
 // GET /api/usage?days=7&machine=<id|all>&tz= — what the agents cost over
 // a period, per machine: locally a scan of ~/.claude/projects, remotely
-// the same scan by the herdr-ui deployed there.
+// the same scan by the remuda deployed there.
 func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 	if days <= 0 {
@@ -74,7 +74,7 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 				case err != nil:
 					pm.Error = strings.TrimSpace(err.Error())
 				case json.Unmarshal([]byte(raw), &rep) != nil:
-					pm.Error = "the machine's herdr-ui gave no report"
+					pm.Error = "the machine's remuda gave no report"
 				default:
 					pm.Report = &rep
 				}

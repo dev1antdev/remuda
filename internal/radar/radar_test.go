@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 func snap(status string, focused bool) *herdr.Snapshot {
@@ -164,8 +164,8 @@ func TestRestartKeepsTicksAndRaisesNone(t *testing.T) {
 	tr.Seen("m", "p2")
 	tr.Flush()
 
-	// herdr-ui restarts; herdr still says done for both, and knows a third
-	// pane that finished before herdr-ui ever ran
+	// remuda restarts; herdr still says done for both, and knows a third
+	// pane that finished before remuda ever ran
 	tr2 := New(dir, nil)
 	three := &herdr.Snapshot{Panes: []herdr.PaneInfo{
 		{PaneID: "p1", Agent: "claude", AgentStatus: herdr.StatusDone},
@@ -180,7 +180,7 @@ func TestRestartKeepsTicksAndRaisesNone(t *testing.T) {
 		t.Fatalf("p2 (seen before the restart): %s, want idle", d.State)
 	}
 	if d := tr2.Display("m", &three.Panes[2]); d.State != herdr.StatusIdle {
-		t.Fatalf("p3 (finished before herdr-ui ran): %s, want idle", d.State)
+		t.Fatalf("p3 (finished before remuda ran): %s, want idle", d.State)
 	}
 	// a finish after the restart is news again
 	three.Panes[2].AgentStatus = herdr.StatusWorking

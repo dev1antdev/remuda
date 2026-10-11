@@ -8,17 +8,17 @@ web/node_modules: web/package.json
 	cd web && npm install
 
 web: web/node_modules
-	cd web && HERDR_UI_VERSION=$(VERSION) npm run build
+	cd web && REMUDA_VERSION=$(VERSION) npm run build
 
 build: web
-	go build -ldflags "-X main.version=$(VERSION)" -o bin/herdr-ui ./cmd/herdr-ui
+	go build -ldflags "-X main.version=$(VERSION)" -o bin/remuda ./cmd/remuda
 
 run: build
-	./bin/herdr-ui
+	./bin/remuda
 
 # Development: `make server` in one terminal, `make dev` in another (Vite on :5173).
 server:
-	go run ./cmd/herdr-ui
+	go run ./cmd/remuda
 
 dev: web/node_modules
 	cd web && npm run dev
@@ -32,10 +32,10 @@ typecheck: web/node_modules
 	go vet ./...
 
 docker:
-	docker build --target runtime --build-arg VERSION=$(VERSION) -t herdr-ui:local .
+	docker build --target runtime --build-arg VERSION=$(VERSION) -t remuda:local .
 
 docker-test:
-	docker build --target test -t herdr-ui:test .
+	docker build --target test -t remuda:test .
 
 # Binaries for every host you run herdr on (the SPA is embedded, so one file each).
 release: web
@@ -43,25 +43,25 @@ release: web
 	  os=$${t%/*}; arch=$${t#*/}; \
 	  echo "building $$os/$$arch"; \
 	  CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" \
-	    -o bin/herdr-ui-$$os-$$arch ./cmd/herdr-ui; \
+	    -o bin/remuda-$$os-$$arch ./cmd/remuda; \
 	done
 
 # make deploy HOST=gog.remote — puts the right binary into ~/.local/bin on that host.
 deploy: release
 	@test -n "$(HOST)" || (echo "usage: make deploy HOST=<ssh host>"; exit 1)
 	@t=$$(ssh $(HOST) 'uname -sm' | tr 'A-Z' 'a-z' | sed 's/x86_64/amd64/; s/aarch64/arm64/; s/ /-/'); \
-	  echo "deploying bin/herdr-ui-$$t to $(HOST):~/.local/bin/herdr-ui"; \
-	  ssh $(HOST) 'mkdir -p ~/.local/bin' && scp -q bin/herdr-ui-$$t $(HOST):.local/bin/herdr-ui.new && \
-	  ssh $(HOST) 'mv ~/.local/bin/herdr-ui.new ~/.local/bin/herdr-ui && ~/.local/bin/herdr-ui -version' # rename: safe while the old one runs
+	  echo "deploying bin/remuda-$$t to $(HOST):~/.local/bin/remuda"; \
+	  ssh $(HOST) 'mkdir -p ~/.local/bin' && scp -q bin/remuda-$$t $(HOST):.local/bin/remuda.new && \
+	  ssh $(HOST) 'mv ~/.local/bin/remuda.new ~/.local/bin/remuda && ~/.local/bin/remuda -version' # rename: safe while the old one runs
 
-# make service HOST=gog.remote — herdr-ui as a background service there (launchd / systemd --user),
+# make service HOST=gog.remote — remuda as a background service there (launchd / systemd --user),
 # listening on 127.0.0.1:7317, starting at login. Without HOST: on this machine.
 service:
-	@if [ -n "$(HOST)" ]; then ssh $(HOST) 'HERDR_UI_TAILSCALE=$(HERDR_UI_TAILSCALE) HERDR_UI_TAILSCALE_HOSTNAME=$(HERDR_UI_TAILSCALE_HOSTNAME) TS_AUTHKEY=$(TS_AUTHKEY) sh -s install' < internal/setup/scripts/install-service.sh; else sh internal/setup/scripts/install-service.sh install; fi
+	@if [ -n "$(HOST)" ]; then ssh $(HOST) 'REMUDA_TAILSCALE=$(REMUDA_TAILSCALE) REMUDA_TAILSCALE_HOSTNAME=$(REMUDA_TAILSCALE_HOSTNAME) TS_AUTHKEY=$(TS_AUTHKEY) sh -s install' < internal/setup/scripts/install-service.sh; else sh internal/setup/scripts/install-service.sh install; fi
 
 # make code [HOST=gog.remote] — installs code-server (VS Code in the browser)
 # as a per-user service on that host, bound to 127.0.0.1:7320 with no auth of
-# its own; herdr-ui proxies it under /code/<machine>/ behind its token.
+# its own; remuda proxies it under /code/<machine>/ behind its token.
 code:
 	@if [ -n "$(HOST)" ]; then ssh $(HOST) 'sh -s' < deploy/install-code.sh; else sh deploy/install-code.sh; fi
 

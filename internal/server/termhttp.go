@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // The terminal over plain HTTP: for viewers whose path to the server passes
@@ -119,7 +119,7 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 	s.Radar.Seen(mc.Cfg.ID, pane.PaneID)
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
-	// the machine's own herdr-ui, when it runs, holds the one attach: the
+	// the machine's own remuda, when it runs, holds the one attach: the
 	// stream is opened there and its id carries the machine, so every later
 	// request of the transport finds its way back
 	open := func(pc *peerClient) {
@@ -148,7 +148,7 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /api/term/read?sid&wait=<seconds> → raw bytes; waits for the first
-// chunk, then drains what else is queued. X-Herdr-UI-End: 1 when the attach
+// chunk, then drains what else is queued. X-Remuda-End: 1 when the attach
 // is gone, 410 when the stream is unknown (the client reopens).
 func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 	if s.peerStream(w, r, "/api/term/read") {
@@ -198,7 +198,7 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 		break
 	}
 	if ended {
-		w.Header().Set("X-Herdr-UI-End", "1")
+		w.Header().Set("X-Remuda-End", "1")
 		s.streams.remove(st.id) // the client stops polling; the map stays honest
 	}
 	w.Write(out)

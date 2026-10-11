@@ -1,5 +1,5 @@
 // Updates on a machine, from the page: what can be updated (herdr, the
-// agents, herdr-ui itself on a remote), each shown as the command it
+// agents, remuda itself on a remote), each shown as the command it
 // would run; a chosen one runs as a job whose output streams in. The
 // server runs the command shown and nothing else: Run sends it back and
 // is refused when the plan has changed since.
@@ -35,7 +35,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
     autoPicked.current = true;
     const u = data.find((u) => u.what === what);
     if (u) setPicked(u);
-    else setMissing(what === "herdr-ui" ? "This herdr-ui cannot be deployed there: that needs a remote machine of the same OS and CPU, and a released build here." : `Nothing to update called “${what}” there any more.`);
+    else setMissing(what === "remuda" ? "This remuda cannot be deployed there: that needs a remote machine of the same OS and CPU, and a released build here." : `Nothing to update called “${what}” there any more.`);
   }, [what, data]);
   // a job still running from last time
   useEffect(() => {
@@ -131,7 +131,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
         <>
           <p className="updates-note">{picked.note}</p>
           <p className="dim">
-            {picked.what.startsWith("restart-") ? `This goes through herdr on ${label}, pane by pane:` : `This runs on ${label}, as you, through the shell herdr-ui already uses there:`}
+            {picked.what.startsWith("restart-") ? `This goes through herdr on ${label}, pane by pane:` : `This runs on ${label}, as you, through the shell remuda already uses there:`}
           </p>
           <code className="updates-cmd">{picked.command}</code>
           <div className="modal-actions">
@@ -147,11 +147,11 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
         <>
           {missing && <Notice tone="warn" onDismiss={() => setMissing("")}>{missing}</Notice>}
           {loading && <div className="notice hint">Looking…</div>}
-          {data && data.length === 0 && <div className="empty">Nothing here that herdr-ui knows how to update.</div>}
+          {data && data.length === 0 && <div className="empty">Nothing here that remuda knows how to update.</div>}
           <div className="updates-list">
             {data?.map((u) => (
               <button key={u.what} type="button" className="updates-row" onClick={() => setPicked(u)}>
-                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "herdr" || u.what === "herdr-ui" ? "refresh-cw" : "sparkles"} size={14} />
+                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "herdr" || u.what === "remuda" ? "refresh-cw" : "sparkles"} size={14} />
                 <span className="updates-row-text">
                   <span>{u.title}</span>
                   <span className="dim">{u.note?.split(". ")[0]}</span>

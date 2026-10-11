@@ -4,6 +4,20 @@ import type { Prefs } from "./push";
 // Small shared things: per-device preferences in localStorage, the touch
 // test, and a couple of one-liners every component was re-typing.
 
+// The keys of the previous name (herdr-ui.*) carry over once, so a device
+// keeps its mode, widths and what it has seen.
+try {
+  for (const k of Object.keys(localStorage)) {
+    if (!k.startsWith("herdr-ui.")) continue;
+    const nk = "remuda." + k.slice("herdr-ui.".length);
+    const v = localStorage.getItem(k);
+    if (v !== null && localStorage.getItem(nk) === null) localStorage.setItem(nk, v);
+    localStorage.removeItem(k);
+  }
+} catch {
+  // no storage here
+}
+
 export const isTouch = matchMedia("(pointer: coarse)").matches;
 
 // readPref keeps a stored value only when it has the fallback's shape: a
@@ -11,7 +25,7 @@ export const isTouch = matchMedia("(pointer: coarse)").matches;
 // fallback) or be a different type altogether (dropped).
 export function readPref<T>(key: string, fallback: T): T {
   try {
-    const v = localStorage.getItem(`herdr-ui.${key}`);
+    const v = localStorage.getItem(`remuda.${key}`);
     if (v === null) return fallback;
     const parsed: unknown = JSON.parse(v);
     if (parsed === null || typeof parsed !== typeof fallback || Array.isArray(parsed) !== Array.isArray(fallback)) return fallback;
@@ -24,7 +38,7 @@ export function readPref<T>(key: string, fallback: T): T {
 
 export function writePref(key: string, value: unknown): void {
   try {
-    localStorage.setItem(`herdr-ui.${key}`, JSON.stringify(value));
+    localStorage.setItem(`remuda.${key}`, JSON.stringify(value));
   } catch {
     /* private mode etc. */
   }

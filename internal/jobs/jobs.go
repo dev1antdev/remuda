@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/machines"
+	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 const (

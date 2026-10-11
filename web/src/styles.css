@@ -1,4 +1,4 @@
-/* herdr-ui — one dark, warm-charcoal system.
+/* remuda — one dark, warm-charcoal system.
    Surfaces are four layers (ground → raised → input → overlay), hairlines are
    white at low alpha so they sit on any layer, every colour has a soft tint
    for fills, controls share one height scale, and motion is short and eased.

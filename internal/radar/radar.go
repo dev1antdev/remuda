@@ -2,12 +2,12 @@
 // would read it, not the way herdr reports it from moment to moment:
 //
 //   - done stays done until someone has looked at the pane (herdr focused it,
-//     or a herdr-ui client opened it), because `done` collapses into `idle`
+//     or a remuda client opened it), because `done` collapses into `idle`
 //     within seconds and the tick is the whole point;
 //   - a question (blocked) stays a question until the agent works again;
 //   - a flicker through idle right after working is still working (grace);
 //   - the time an agent last worked is remembered, so the UI can cool an
-//     idle row with age — and panes that were open before herdr-ui started
+//     idle row with age — and panes that were open before remuda started
 //     get that time recovered from their session file.
 //
 // The display states are working | blocked | done | idle | unknown; the idle
@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
-	"github.com/dev1antdev/herdr-ui/internal/state"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/state"
 )
 
 const (
@@ -181,7 +181,7 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 	// the agent works again
 	if !st.known {
 		// first sight of this pane — a restart, or one that was there before
-		// herdr-ui: a finish herdr is still reporting from before is not news
+		// remuda: a finish herdr is still reporting from before is not news
 		st.known = true
 		if status != herdr.StatusWorking && !st.doneHeld {
 			st.doneSeen = true

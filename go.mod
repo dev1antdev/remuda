@@ -1,4 +1,4 @@
-module github.com/dev1antdev/herdr-ui
+module github.com/dev1antdev/remuda
 
 go 1.27.1
 

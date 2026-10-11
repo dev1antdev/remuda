@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
-	"github.com/dev1antdev/herdr-ui/internal/machines"
-	"github.com/dev1antdev/herdr-ui/internal/push"
-	"github.com/dev1antdev/herdr-ui/internal/tasks"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/tasks"
 )
 
-// Tasks: herdr-ui's own list (internal/tasks), plain JSON over SQLite.
+// Tasks: remuda's own list (internal/tasks), plain JSON over SQLite.
 
 func (s *Server) tasksRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/tasks/projects", func(w http.ResponseWriter, r *http.Request) {
@@ -313,7 +313,7 @@ func (s *Server) deliverTaskPrompt(mc *machines.Machine, client *herdr.Client, r
 					}
 					_ = client.PaneSendKeys(run.Pane, []string{"enter"})
 					lock.Unlock()
-					_, _ = s.Tasks.AddComment(run.TaskID, "herdr-ui", "Answered Claude Code's trust question for the new worktree `"+run.Dir+"`.")
+					_, _ = s.Tasks.AddComment(run.TaskID, "remuda", "Answered Claude Code's trust question for the new worktree `"+run.Dir+"`.")
 					continue
 				}
 			}
@@ -346,7 +346,7 @@ func (s *Server) failTaskRun(run tasks.Run, note string) {
 		return
 	}
 	_ = s.Tasks.SetRun(run.ID, tasks.RunFailed, note)
-	_, _ = s.Tasks.AddComment(run.TaskID, "herdr-ui", note)
+	_, _ = s.Tasks.AddComment(run.TaskID, "remuda", note)
 }
 
 // isTrustPrompt recognises Claude Code's "do you trust this folder" screen

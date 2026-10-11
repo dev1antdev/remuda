@@ -17,9 +17,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/machines"
-	"github.com/dev1antdev/herdr-ui/internal/sshx"
-	"github.com/dev1antdev/herdr-ui/internal/state"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/state"
 )
 
 const baselineFile = "review.json"
@@ -268,7 +268,7 @@ func (st *Store) Diff(mc *machines.Machine, dir, path string) (string, error) {
 	if seen != "" && seen != "gone" && hexRe.MatchString(seen) {
 		// the seen blob, written out, against the file as it is now; the
 		// temp file's name is reported first and taken out of the headers
-		script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; t=$(mktemp "${TMPDIR:-/tmp}/herdr-ui-seen.XXXXXX") || exit 0; printf '%s\n' "$t"; ` +
+		script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; t=$(mktemp "${TMPDIR:-/tmp}/remuda-seen.XXXXXX") || exit 0; printf '%s\n' "$t"; ` +
 			`if git cat-file -p ` + seen + ` > "$t" 2>/dev/null; then git -c color.ui=never -c core.quotepath=off diff --no-index -- "$t" ` + q + ` | head -c 600000; fi; rm -f "$t"; exit 0`
 		out, err := mc.Shell(script, 60*time.Second)
 		if err != nil {

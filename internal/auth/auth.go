@@ -14,15 +14,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dev1antdev/herdr-ui/internal/state"
+	"github.com/dev1antdev/remuda/internal/state"
 )
 
-const CookieName = "herdr_ui_token"
+const CookieName = "remuda_token"
 
-// LoadOrCreateToken returns HERDR_UI_TOKEN if set, otherwise the token stored
+// LoadOrCreateToken returns REMUDA_TOKEN if set, otherwise the token stored
 // at <state dir>/token, creating it on first run.
 func LoadOrCreateToken(dir string) (string, error) {
-	if t := strings.TrimSpace(os.Getenv("HERDR_UI_TOKEN")); t != "" {
+	if t := strings.TrimSpace(os.Getenv("REMUDA_TOKEN")); t != "" {
 		return t, nil
 	}
 	path := filepath.Join(dir, "token")
@@ -44,7 +44,7 @@ func LoadOrCreateToken(dir string) (string, error) {
 
 type Guard struct {
 	token string
-	host  string // shown on the sign-in page: which machine's herdr-ui this is
+	host  string // shown on the sign-in page: which machine's remuda this is
 }
 
 func NewGuard(token string) *Guard {
@@ -119,18 +119,18 @@ func (g *Guard) setCookie(w http.ResponseWriter, r *http.Request, token string) 
 	})
 }
 
-// serveLogin names the machine: with several herdr-uis reachable on
+// serveLogin names the machine: with several remudas reachable on
 // 127.0.0.1 through port forwards, "wrong token" usually means "wrong host".
 func (g *Guard) serveLogin(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusUnauthorized)
 	host := template.HTMLEscapeString(g.host)
 	fmt.Fprint(w, `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
-<title>herdr-ui on `+host+` — sign in</title>
+<title>remuda on `+host+` — sign in</title>
 <body style="font-family:system-ui;background:#111;color:#ddd;display:grid;place-items:center;min-height:100vh;margin:0">
 <form method=post action=/api/login style="display:flex;flex-direction:column;gap:12px;width:min(90vw,360px)">
-<h1 style="font-size:20px;margin:0">herdr-ui <span style="color:#999;font-weight:400">on `+host+`</span></h1>
-<p style="margin:0;color:#999">Paste the access token of <b style="color:#ddd">`+host+`</b> (<code>herdr-ui -print-token</code> there).</p>
+<h1 style="font-size:20px;margin:0">remuda <span style="color:#999;font-weight:400">on `+host+`</span></h1>
+<p style="margin:0;color:#999">Paste the access token of <b style="color:#ddd">`+host+`</b> (<code>remuda -print-token</code> there).</p>
 <input name=token type=password autofocus placeholder="token"
  style="padding:10px;border-radius:8px;border:1px solid #444;background:#1a1a1a;color:#eee">
 <button style="padding:10px;border-radius:8px;border:0;background:#3b82f6;color:#fff;font-weight:600">Sign in</button>

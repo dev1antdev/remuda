@@ -1,5 +1,5 @@
-// The Tasks mode: herdr-ui's own task list (internal/tasks, SQLite on the
-// herdr-ui host). Projects on the left (with three smart lists above them),
+// The Tasks mode: remuda's own task list (internal/tasks, SQLite on the
+// remuda host). Projects on the left (with three smart lists above them),
 // the list in the middle, the open task on the right. Nothing is cached
 // beyond the screen: every change goes to the server and the list is
 // re-read.
@@ -861,7 +861,7 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
                   </>
                 ) : (
                   <>
-                    <Icon name="info" size={12} /> herdr-ui
+                    <Icon name="info" size={12} /> remuda
                   </>
                 )}
               </span>
@@ -928,7 +928,7 @@ function TaskDetail({ task: t, projects, labels, onChange, onLabels, onClose, on
 // and which task it is — with /grill-me in front for a grooming pass.
 export function taskPrompt(t: Task, project: string, groom: boolean): string {
   const desc = t.description ? htmlToText(t.description) : "";
-  const parts = [t.title.trim(), desc, `(herdr-ui task ${t.identifier}${project ? ` in ${project}` : ""})`].filter(Boolean);
+  const parts = [t.title.trim(), desc, `(remuda task ${t.identifier}${project ? ` in ${project}` : ""})`].filter(Boolean);
   return (groom ? "/grill-me " : "") + parts.join("\n\n");
 }
 

@@ -35,7 +35,7 @@ export type Current = { machineId: string; sessionId: string; paneId: string } |
 export default function Sidebar({ machines, latest, serverVersion, current, prefs, collapsed, onToggle, onSelect, onMenu, onNewWorkspace, onRemoveMachine, onRenameMachine, onAddMachine, onPrefs, onSchedules, onUsage }: {
   machines: Machine[];
   latest?: Latest; // the newest Claude Code and herdr out there
-  serverVersion?: string; // this herdr-ui, to compare with the ones deployed remotely
+  serverVersion?: string; // this remuda, to compare with the ones deployed remotely
   current: Current;
   prefs: RadarPrefs;
   collapsed: Record<string, boolean>;
@@ -493,7 +493,7 @@ function stateWords(d: Display, last: number | undefined, now: number): string {
 // the colour of a context fill: calm below 70%, amber, then red near the edge
 
 // ---- a machine's vitals ----
-// Claude Code, herdr and herdr-ui versions against the newest known, disk
+// Claude Code, herdr and remuda versions against the newest known, disk
 // and load. Quiet when all is well; an amber chip when something wants a
 // look — an update, a full disk — and a popover with the details either way.
 
@@ -507,8 +507,8 @@ function concerns(h: Health | undefined, latest: Latest | undefined, serverVersi
   if (h.gemini && latest?.gemini && newer(h.gemini, latest.gemini)) out.push({ key: "gemini", text: `Gemini CLI ${latest.gemini} is out (${h.gemini} here)`, update: "gemini" });
   if (h.herdr && latest?.herdr && newer(h.herdr, latest.herdr)) out.push({ key: "herdr", text: `herdr ${latest.herdr} is out (${h.herdr} here)`, update: "herdr" });
   if (h.herdr && h.herdr_server && h.herdr_server !== h.herdr) out.push({ key: "herdr-server", text: `herdr's server still runs ${h.herdr_server}; ${h.herdr} is installed`, update: "restart-herdr" });
-  if (remote && serverVersion && h.herdr_ui && h.herdr_ui !== serverVersion) out.push({ key: "ui", text: `herdr-ui there is ${h.herdr_ui}; this one is ${serverVersion}`, update: "herdr-ui" });
-  if (remote && serverVersion && !h.herdr_ui) out.push({ key: "ui", text: "no herdr-ui deployed there — search and usage fall back to slower paths", update: "herdr-ui" });
+  if (remote && serverVersion && h.remuda && h.remuda !== serverVersion) out.push({ key: "ui", text: `remuda there is ${h.remuda}; this one is ${serverVersion}`, update: "remuda" });
+  if (remote && serverVersion && !h.remuda) out.push({ key: "ui", text: "no remuda deployed there — search and usage fall back to slower paths", update: "remuda" });
   if (h.disk_used_pct >= 90 || (h.disk_free_gb > 0 && h.disk_free_gb < 10)) out.push({ key: "disk", text: `Disk ${h.disk_used_pct}% full, ${h.disk_free_gb.toFixed(0)} GB free`, bad: h.disk_used_pct >= 95 });
   if (h.error && !h.claude && !h.herdr) out.push({ key: "err", text: h.error, bad: true });
   return out;
@@ -605,10 +605,10 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
                 {h.herdr_server && h.herdr !== h.herdr_server ? <span className="health-new"> · server {h.herdr_server}</span> : null}
                 {h.herdr && l?.herdr && newer(h.herdr, l.herdr) ? <span className="health-new"> → {l.herdr}</span> : null}
               </dd>
-              <dt>herdr-ui</dt>
+              <dt>remuda</dt>
               <dd>
-                {h.herdr_ui ?? (m.id === "local" ? serverVersion : "not deployed")}
-                {m.id !== "local" && h.herdr_ui ? <span className="dim"> · {h.herdr_ui_running ? "running, terminals go through it" : "not running"}</span> : null}
+                {h.remuda ?? (m.id === "local" ? serverVersion : "not deployed")}
+                {m.id !== "local" && h.remuda ? <span className="dim"> · {h.remuda_running ? "running, terminals go through it" : "not running"}</span> : null}
               </dd>
               <dt>Disk</dt>
               <dd>
@@ -632,7 +632,7 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
                   <span className="health-concern">{c.text}</span>
                   {c.update && (
                     <button type="button" className="btn sm" onClick={() => { setOpen(null); setUpdateWhat(c.update!); }}>
-                      {c.update === "herdr-ui" ? "Deploy" : c.update.startsWith("restart-") ? "Restart" : "Update"}
+                      {c.update === "remuda" ? "Deploy" : c.update.startsWith("restart-") ? "Restart" : "Update"}
                     </button>
                   )}
                 </li>

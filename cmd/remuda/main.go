@@ -1,6 +1,6 @@
-// herdr-ui — self-hosted browser/phone client for herdr. One Go binary, no
+// remuda — self-hosted browser/phone client for herdr. One Go binary, no
 // external services: herdr owns the agents and panes, Claude Code owns its
-// transcripts, herdr-ui bridges them to your browser over localhost (or your
+// transcripts, remuda bridges them to your browser over localhost (or your
 // own tailnet / SSH tunnel).
 package main
 
@@ -19,38 +19,38 @@ import (
 	"time"
 	_ "time/tzdata" // the usage report cuts days in the viewer's zone, wherever the binary runs
 
-	"github.com/dev1antdev/herdr-ui/internal/auth"
-	"github.com/dev1antdev/herdr-ui/internal/code"
-	"github.com/dev1antdev/herdr-ui/internal/health"
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
-	"github.com/dev1antdev/herdr-ui/internal/jobs"
-	"github.com/dev1antdev/herdr-ui/internal/machines"
-	"github.com/dev1antdev/herdr-ui/internal/push"
-	"github.com/dev1antdev/herdr-ui/internal/quick"
-	"github.com/dev1antdev/herdr-ui/internal/radar"
-	"github.com/dev1antdev/herdr-ui/internal/restart"
-	"github.com/dev1antdev/herdr-ui/internal/review"
-	"github.com/dev1antdev/herdr-ui/internal/schedule"
-	"github.com/dev1antdev/herdr-ui/internal/search"
-	"github.com/dev1antdev/herdr-ui/internal/server"
-	"github.com/dev1antdev/herdr-ui/internal/setup"
-	"github.com/dev1antdev/herdr-ui/internal/state"
-	"github.com/dev1antdev/herdr-ui/internal/tasks"
-	"github.com/dev1antdev/herdr-ui/internal/transcript"
-	"github.com/dev1antdev/herdr-ui/internal/tsnetx"
-	"github.com/dev1antdev/herdr-ui/internal/usage"
-	buildversion "github.com/dev1antdev/herdr-ui/internal/version"
-	"github.com/dev1antdev/herdr-ui/internal/watch"
-	"github.com/dev1antdev/herdr-ui/internal/watchdog"
-	"github.com/dev1antdev/herdr-ui/web"
+	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/code"
+	"github.com/dev1antdev/remuda/internal/health"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/jobs"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/quick"
+	"github.com/dev1antdev/remuda/internal/radar"
+	"github.com/dev1antdev/remuda/internal/restart"
+	"github.com/dev1antdev/remuda/internal/review"
+	"github.com/dev1antdev/remuda/internal/schedule"
+	"github.com/dev1antdev/remuda/internal/search"
+	"github.com/dev1antdev/remuda/internal/server"
+	"github.com/dev1antdev/remuda/internal/setup"
+	"github.com/dev1antdev/remuda/internal/state"
+	"github.com/dev1antdev/remuda/internal/tasks"
+	"github.com/dev1antdev/remuda/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/tsnetx"
+	"github.com/dev1antdev/remuda/internal/usage"
+	buildversion "github.com/dev1antdev/remuda/internal/version"
+	"github.com/dev1antdev/remuda/internal/watch"
+	"github.com/dev1antdev/remuda/internal/watchdog"
+	"github.com/dev1antdev/remuda/web"
 )
 
 // version is set at build time: -ldflags "-X main.version=…".
 var version = "dev"
 
 func main() {
-	// `herdr-ui search`: the transcript scanner, run over ssh on a remote
-	// machine by the herdr-ui that serves the search (see internal/search)
+	// `remuda search`: the transcript scanner, run over ssh on a remote
+	// machine by the remuda that serves the search (see internal/search)
 	buildversion.Build = version
 	if len(os.Args) > 1 && os.Args[1] == "search" {
 		searchCmd(os.Args[2:])
@@ -71,12 +71,12 @@ func main() {
 	printToken := flag.Bool("print-token", false, "print the access token and exit")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	tailscale := flag.Bool("tailscale", false, "join your tailnet as a node of its own and serve HTTPS there (no tailscale serve needed); first run prints a login URL unless TS_AUTHKEY is set")
-	tsName := flag.String("tailscale-hostname", "herdr-ui", "the node's name on the tailnet (https://<name>.<tailnet>.ts.net)")
+	tsName := flag.String("tailscale-hostname", "remuda", "the node's name on the tailnet (https://<name>.<tailnet>.ts.net)")
 	noCheck := flag.Bool("no-version-check", false, "never ask npm and GitHub what the newest Claude Code and herdr are")
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println("herdr-ui", version)
+		fmt.Println("remuda", version)
 		return
 	}
 
@@ -98,10 +98,10 @@ func main() {
 		log.Fatalf("herdr: %v", err)
 	}
 	*herdrBin = bin
-	// no herdr server? herdr-ui runs one (headless, detached) — the agents
+	// no herdr server? remuda runs one (headless, detached) — the agents
 	// are there whether or not a terminal window is
 	if err := herdr.EnsureServer(bin, *socket); err != nil {
-		log.Printf("WARNING: herdr is not answering at %s (%v); herdr-ui will keep trying", *socket, err)
+		log.Printf("WARNING: herdr is not answering at %s (%v); remuda will keep trying", *socket, err)
 	} else if v, protocol, err := herdr.NewClient(*socket).Ping(); err == nil {
 		log.Printf("connected to herdr %s (protocol %d) at %s", v, protocol, *socket)
 	}
@@ -370,8 +370,8 @@ func main() {
 		node = tsnetx.Start(dir, *tsName, os.Getenv("TS_AUTHKEY"), s.Handler())
 		defer node.Close()
 	}
-	log.Printf("herdr-ui %s listening on http://%s", version, *addr)
-	log.Printf("sign in with the token from `herdr-ui -print-token`, or open:")
+	log.Printf("remuda %s listening on http://%s", version, *addr)
+	log.Printf("sign in with the token from `remuda -print-token`, or open:")
 	log.Printf("  http://%s/?token=%s", *addr, token)
 
 	// log.Fatal would skip the deferred flush and close
@@ -388,7 +388,7 @@ func searchCmd(args []string) {
 	limit := fs.Int("limit", 400, "stop after this many hits, newest first")
 	_ = fs.Parse(args)
 	if strings.TrimSpace(*q) == "" {
-		fmt.Fprintln(os.Stderr, "herdr-ui search -q <text> [-dir <folder>] [-since <RFC3339>] [-limit N]")
+		fmt.Fprintln(os.Stderr, "remuda search -q <text> [-dir <folder>] [-since <RFC3339>] [-limit N]")
 		os.Exit(2)
 	}
 	var since time.Time
@@ -434,18 +434,18 @@ func usageCmd(args []string) {
 	_ = json.NewEncoder(os.Stdout).Encode(rep)
 }
 
-// setupCmd is `herdr-ui setup [-host H] [-tailscale] …`: herdr installed
-// and its server running, the agent integrations, the herdr-ui service —
+// setupCmd is `remuda setup [-host H] [-tailscale] …`: herdr installed
+// and its server running, the agent integrations, the remuda service —
 // here or on a remote machine over ssh (where the binary must already be
-// at ~/.local/bin/herdr-ui: `make deploy HOST=…`, or "Deploy" from the
+// at ~/.local/bin/remuda: `make deploy HOST=…`, or "Deploy" from the
 // page). Afterwards the token's URL, for a local setup.
 func setupCmd(args []string) {
 	fs := flag.NewFlagSet("setup", flag.ExitOnError)
 	host := fs.String("host", "", "set up a remote machine over ssh instead of this one")
 	ts := fs.Bool("tailscale", false, "the service joins your tailnet by itself (see -tailscale on the server)")
-	tsName := fs.String("tailscale-hostname", "herdr-ui", "the node's name on the tailnet")
+	tsName := fs.String("tailscale-hostname", "remuda", "the node's name on the tailnet")
 	addr := fs.String("addr", "127.0.0.1:7317", "the service's loopback address")
-	noService := fs.Bool("no-service", false, "herdr and its server only; no herdr-ui service")
+	noService := fs.Bool("no-service", false, "herdr and its server only; no remuda service")
 	fs.Parse(args)
 	err := setup.Run(setup.Options{Host: *host, Tailscale: *ts, TSName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"), Addr: *addr, NoService: *noService}, os.Stdout)
 	if err != nil {

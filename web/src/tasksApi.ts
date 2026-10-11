@@ -1,4 +1,4 @@
-// herdr-ui's own tasks: /api/tasks/* over the SQLite store on the herdr-ui
+// remuda's own tasks: /api/tasks/* over the SQLite store on the remuda
 // host (internal/tasks). Dates are RFC 3339 UTC strings; an unset one is "".
 
 import { check, sendJSON } from "./api";
@@ -52,7 +52,7 @@ export type Run = {
   error?: string;
 };
 
-export type Comment = { id: number; task_id: number; author: "agent" | "you" | "herdr-ui"; body: string; created: string };
+export type Comment = { id: number; task_id: number; author: "agent" | "you" | "remuda"; body: string; created: string };
 
 export const PRIORITIES = ["None", "Low", "Medium", "High", "Urgent", "DO NOW"];
 

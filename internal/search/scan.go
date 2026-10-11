@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 // Scan is the scanner itself: every session file under projects (one
@@ -19,7 +19,7 @@ import (
 // fast) and then parsed by transcript.MatchLine. Matching records are
 // written as grep -r would print them — "./<rel path>:<raw line>" — so one
 // parser reads a scan and a grep alike. It stops after limit hits, so the
-// newest ones are the ones kept. `herdr-ui search` runs it on a remote
+// newest ones are the ones kept. `remuda search` runs it on a remote
 // machine; locally it runs in-process.
 func Scan(projects, q, dir string, since time.Time, limit int, w io.Writer) error {
 	type file struct {

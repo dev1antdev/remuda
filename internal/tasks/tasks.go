@@ -1,4 +1,4 @@
-// Package tasks is herdr-ui's own task list: projects, tasks, labels, in
+// Package tasks is remuda's own task list: projects, tasks, labels, in
 // one SQLite file in the state dir (tasks.db, WAL). No server but this one,
 // no account, nothing leaves the machine. The shapes are what the Tasks
 // mode shows: a project tree, tasks with a due date, a priority, labels
@@ -100,7 +100,7 @@ const InProgress = "in progress"
 type Comment struct {
 	ID      int64  `json:"id"`
 	TaskID  int64  `json:"task_id"`
-	Author  string `json:"author"` // agent | you | herdr-ui
+	Author  string `json:"author"` // agent | you | remuda
 	Body    string `json:"body"`   // markdown
 	Created string `json:"created"`
 }

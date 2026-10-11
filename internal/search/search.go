@@ -1,7 +1,7 @@
 // Package search finds what was said across every Claude transcript on
 // every machine. There is no index: each machine scans its own
 // ~/.claude/projects on demand — in-process here, and on a remote through
-// the herdr-ui deployed there (`herdr-ui search`), with a plain grep as
+// the remuda deployed there (`remuda search`), with a plain grep as
 // the fallback when that binary is missing or older. The matching records
 // come back raw to be parsed by the transcript package: only the user and
 // assistant texts the chat shows count, not tool output.
@@ -19,10 +19,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/dev1antdev/herdr-ui/internal/machines"
-	"github.com/dev1antdev/herdr-ui/internal/sshx"
-	"github.com/dev1antdev/herdr-ui/internal/transcript"
-	"github.com/dev1antdev/herdr-ui/internal/version"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/version"
 )
 
 type Hit struct {
@@ -130,7 +130,7 @@ func one(mc *machines.Machine, q, dir string, since time.Time) ([]Hit, error) {
 	return hits, sc.Err()
 }
 
-// script runs the scan on a remote machine: herdr-ui's own scanner where
+// script runs the scan on a remote machine: remuda's own scanner where
 // `make deploy` put the binary (fast — a 400 MB history in well under a
 // second), else grep over the project transcripts for the query as it
 // sits in the JSON (quotes and newlines escaped), in the four spellings

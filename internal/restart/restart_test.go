@@ -3,7 +3,7 @@ package restart
 import (
 	"testing"
 
-	"github.com/dev1antdev/herdr-ui/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 func TestKindsCountNames(t *testing.T) {

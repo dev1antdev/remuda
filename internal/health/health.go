@@ -1,14 +1,14 @@
 // Package health reads each machine's vital signs — which Claude Code,
-// herdr and herdr-ui it runs, how much disk is left, how loaded it is —
+// herdr and remuda it runs, how much disk is left, how loaded it is —
 // and what the newest Claude Code and herdr are, so the sidebar can say
 // when a machine wants an update or is running out of room.
 //
 // One POSIX script per machine, a few minutes apart, through the same
-// shell the rest of herdr-ui uses (local exec or the SSH master). The
+// shell the rest of remuda uses (local exec or the SSH master). The
 // latest versions come from the npm registry (Claude Code, Codex, Gemini
 // CLI) and GitHub's releases API (herdr), once every few hours, and only
 // when version checks are on: those four requests are the only thing
-// herdr-ui ever sends anywhere. Plan and Updates turn a report into the
+// remuda ever sends anywhere. Plan and Updates turn a report into the
 // update commands the page offers.
 package health
 
@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/machines"
+	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 // Report is one machine's vitals, as last read.
@@ -42,8 +42,8 @@ type Report struct {
 	Arch        string  `json:"arch,omitempty"`         // arm64 | amd64
 	Herdr       string  `json:"herdr,omitempty"`        // installed herdr version
 	HerdrServer string  `json:"herdr_server,omitempty"` // the version the running server is on, when one runs
-	HerdrUI     string  `json:"herdr_ui,omitempty"`     // the herdr-ui binary deployed there (remote machines)
-	Running     bool    `json:"herdr_ui_running"`       // a herdr-ui answers on the machine\'s own port: terminals go through it
+	Remuda      string  `json:"remuda,omitempty"`       // the remuda binary deployed there (remote machines)
+	Running     bool    `json:"remuda_running"`         // a remuda answers on the machine\'s own port: terminals go through it
 	DiskFreeGB  float64 `json:"disk_free_gb"`
 	DiskUsedPct int     `json:"disk_used_pct"`
 	Load1       float64 `json:"load1"`
@@ -63,7 +63,7 @@ type Latest struct {
 // Collector keeps the reports and the latest versions fresh.
 type Collector struct {
 	machines *machines.Manager
-	// Version is this server's own, for the "herdr-ui there is older" hint
+	// Version is this server's own, for the "remuda there is older" hint
 	Version string
 	// Check turns the outbound version lookups on
 	Check bool
@@ -162,10 +162,10 @@ if command -v sw_vers >/dev/null 2>&1; then echo "os=macOS $(sw_vers -productVer
 for a in claude codex gemini; do c=$(command -v "$a" 2>/dev/null); if [ -n "$c" ]; then echo "$a=$("$a" --version 2>/dev/null | head -1)"; echo "${a}_path=$(readlink "$c" 2>/dev/null || printf %s "$c")"; fi; done
 h=$(command -v herdr 2>/dev/null); if [ -n "$h" ]; then echo "herdr=$(herdr --version 2>/dev/null | head -1)"; echo "herdr_path=$(readlink "$h" 2>/dev/null || printf %s "$h")"; echo "herdr_server=$(herdr status server 2>/dev/null | sed -n 's/^version: //p' | head -1)"; fi
 echo "arch=$(uname -m)"
-if [ -x "$HOME/.local/bin/herdr-ui" ]; then echo "herdr_ui=$("$HOME/.local/bin/herdr-ui" -version 2>/dev/null)"; fi
+if [ -x "$HOME/.local/bin/remuda" ]; then echo "remuda=$("$HOME/.local/bin/remuda" -version 2>/dev/null)"; fi
 echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
 echo "uptime=$(uptime 2>/dev/null)"
-tf=""; for f in "$HOME/Library/Application Support/herdr-ui/token" "$HOME/.config/herdr-ui/token"; do [ -r "$f" ] && { tf="$f"; break; }; done
+tf=""; for f in "$HOME/Library/Application Support/remuda/token" "$HOME/.config/remuda/token"; do [ -r "$f" ] && { tf="$f"; break; }; done
 if [ -n "$tf" ] && command -v curl >/dev/null 2>&1; then ph=$(curl -s -m 2 http://127.0.0.1:7317/api/health 2>/dev/null); case "$ph" in *'"ok":true'*) echo "peer=$ph"; echo "peer_token=$(cat "$tf")";; esac; fi
 `
 }
@@ -177,7 +177,7 @@ var (
 	fieldsRe = regexp.MustCompile(`\s+`)
 )
 
-// Parse reads the script's output: the report, and the herdr-ui running
+// Parse reads the script's output: the report, and the remuda running
 // there when the script found one (its health answer and its token).
 func Parse(out string) (Report, *machines.Peer) {
 	var r Report
@@ -222,8 +222,8 @@ func Parse(out string) (Report, *machines.Peer) {
 			default:
 				r.Arch = v
 			}
-		case "herdr_ui":
-			r.HerdrUI = strings.TrimPrefix(v, "herdr-ui ")
+		case "remuda":
+			r.Remuda = strings.TrimPrefix(v, "remuda ")
 		case "df":
 			// Filesystem 1K-blocks Used Available Use% ... (macOS adds iused columns)
 			f := fieldsRe.Split(v, -1)
@@ -338,7 +338,7 @@ func fetchJSON(ctx context.Context, url, field string) (string, error) {
 		return "", err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "herdr-ui")
+	req.Header.Set("User-Agent", "remuda")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
@@ -398,7 +398,7 @@ type Update struct {
 }
 
 // Plan is the update for one thing on a machine with this report, or an
-// error when it is not installed there or herdr-ui has no way to do it.
+// error when it is not installed there or remuda has no way to do it.
 // Everything runs as the user, through the package manager that put it
 // there; nothing asks for sudo.
 // brewUpdate goes before every `brew upgrade`: Homebrew's own auto-update
@@ -412,7 +412,7 @@ const brewUpdate = "brew update && "
 // new version too (server.go in internal/restart does it).
 const serverStep = "\n# then the running server onto it: kept when herdr's handoff already did that, else restarted with every chat started again on its session"
 
-const serverNote = "When the running server is still on the old version afterwards (Homebrew, or a handoff that did not happen) it is restarted: herdr restores the workspaces, tabs and panes, and herdr-ui starts every chat again with its session resumed; shells and other pane processes come back as fresh shells."
+const serverNote = "When the running server is still on the old version afterwards (Homebrew, or a handoff that did not happen) it is restarted: herdr restores the workspaces, tabs and panes, and remuda starts every chat again with its session resumed; shells and other pane processes come back as fresh shells."
 
 func Plan(what string, r *Report) (Update, error) {
 	path := `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH; `

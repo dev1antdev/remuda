@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/herdr-ui/internal/machines"
-	"github.com/dev1antdev/herdr-ui/internal/sshx"
-	"github.com/dev1antdev/herdr-ui/internal/transcript"
-	"github.com/dev1antdev/herdr-ui/internal/version"
+	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/version"
 )
 
 // Display is a pane's meter for the roster: the model, how full its
@@ -236,7 +236,7 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 	return d, true
 }
 
-// Script runs the report on a remote machine through its own herdr-ui.
+// Script runs the report on a remote machine through its own remuda.
 func Script(home string, since time.Time, tz string) string {
 	q := sshx.Quote
 	bin, guard := sshx.VersionedBin(home, version.Build)
@@ -245,5 +245,5 @@ func Script(home string, since time.Time, tz string) string {
 		tzFlag = " -tz " + q(tz)
 	}
 	return "if " + guard + "; then " + bin + " usage -since " + q(since.UTC().Format(time.RFC3339)) + tzFlag +
-		"; else echo 'no herdr-ui of this version on the machine (make deploy)' >&2; exit 3; fi"
+		"; else echo 'no remuda of this version on the machine (make deploy)' >&2; exit 3; fi"
 }
