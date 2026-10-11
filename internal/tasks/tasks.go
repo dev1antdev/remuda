@@ -1,8 +1,10 @@
 // Package tasks is remuda's own task list: projects, tasks, labels, in
 // one SQLite file in the state dir (tasks.db, WAL). No server but this one,
 // no account, nothing leaves the machine. The shapes are what the Tasks
-// mode shows: a project tree, tasks with a due date, a priority, labels
-// and an HTML description, three smart lists over them.
+// mode shows: a project tree, each project with its own workflow — the
+// columns a task moves through — tasks with a due date, a priority, labels
+// and an HTML description, three smart lists over them and a board per
+// project.
 package tasks
 
 import (
@@ -23,6 +25,10 @@ const file = "tasks.db"
 // PageSize is how many tasks a page of the list holds.
 const PageSize = 50
 
+// BoardDone is how many done tasks a board column shows: the latest ones;
+// the rest are in the list with "done" ticked.
+const BoardDone = 50
+
 var (
 	ErrNotFound = errors.New("not found")
 	ErrInvalid  = errors.New("invalid") // a request that cannot be honoured; the message says why
@@ -31,17 +37,39 @@ var (
 func invalid(msg string) error { return fmt.Errorf("%w: %s", ErrInvalid, msg) }
 
 type Project struct {
-	ID          int64   `json:"id"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	HexColor    string  `json:"hex_color"`
-	ParentID    int64   `json:"parent_project_id"`
-	Archived    bool    `json:"is_archived"`
-	Favorite    bool    `json:"is_favorite"`
-	Position    float64 `json:"position"`
-	Created     string  `json:"created"`
-	Updated     string  `json:"updated"`
+	ID          int64    `json:"id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	HexColor    string   `json:"hex_color"`
+	ParentID    int64    `json:"parent_project_id"`
+	Archived    bool     `json:"is_archived"`
+	Favorite    bool     `json:"is_favorite"`
+	Position    float64  `json:"position"`
+	Created     string   `json:"created"`
+	Updated     string   `json:"updated"`
+	Statuses    []Status `json:"statuses"` // the workflow, in order
 }
+
+// Status is one column of a project's board. A task is always in exactly
+// one; done follows the column's kind. The flags say where the workflow's
+// own moves land — new tasks, a task an agent was started on, a task whose
+// agent finished — at most one column per flag.
+type Status struct {
+	ID        int64   `json:"id"`
+	ProjectID int64   `json:"project_id"`
+	Title     string  `json:"title"`
+	HexColor  string  `json:"hex_color"`
+	Kind      string  `json:"kind"` // open | done
+	Position  float64 `json:"position"`
+	OnNew     bool    `json:"on_new"`
+	OnStart   bool    `json:"on_start"`
+	OnFinish  bool    `json:"on_finish"`
+}
+
+const (
+	KindOpen = "open"
+	KindDone = "done"
+)
 
 type Label struct {
 	ID       int64  `json:"id"`
@@ -52,12 +80,14 @@ type Label struct {
 type Task struct {
 	ID          int64     `json:"id"`
 	ProjectID   int64     `json:"project_id"`
+	StatusID    int64     `json:"status_id"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"` // HTML: paragraphs from the editor
-	Done        bool      `json:"done"`
-	DoneAt      string    `json:"done_at"`  // RFC 3339 UTC, "" when open
-	DueDate     string    `json:"due_date"` // RFC 3339 UTC, "" when none
-	Priority    int       `json:"priority"` // 0 none … 5 do now
+	Done        bool      `json:"done"`        // the column's kind, kept here for the smart lists
+	DoneAt      string    `json:"done_at"`     // RFC 3339 UTC, "" when open
+	DueDate     string    `json:"due_date"`    // RFC 3339 UTC, "" when none
+	Priority    int       `json:"priority"`    // 0 none … 5 do now
+	Position    float64   `json:"position"`    // the place in its column
 	Labels      []Label   `json:"labels"`
 	Identifier  string    `json:"identifier"` // "#12"
 	Created     string    `json:"created"`
@@ -94,8 +124,10 @@ const (
 	RunFailed   = "failed"   // the prompt never got through
 )
 
-// InProgress is the label a task wears while an agent is on it.
-const InProgress = "in progress"
+// legacyInProgress is the label older versions put on a task while an
+// agent was on it; the workflow's on_start column took its place. It is
+// read once, to place such tasks, and never written again.
+const legacyInProgress = "in progress"
 
 type Comment struct {
 	ID      int64  `json:"id"`
@@ -106,7 +138,10 @@ type Comment struct {
 }
 
 // Patch is a partial update: a nil field stays as it is. A due date of ""
-// clears it.
+// clears it. StatusID moves the task to a column (done follows); Done
+// alone moves it to the project's done column, or back to where new tasks
+// land. After places it in its column: right after that task, 0 for the
+// top; without it a task that changed column goes to the bottom.
 type Patch struct {
 	Title       *string `json:"title"`
 	Description *string `json:"description"`
@@ -114,6 +149,8 @@ type Patch struct {
 	DueDate     *string `json:"due_date"`
 	Priority    *int    `json:"priority"`
 	ProjectID   *int64  `json:"project_id"`
+	StatusID    *int64  `json:"status_id"`
+	After       *int64  `json:"after"`
 }
 
 type ProjectPatch struct {
@@ -128,9 +165,9 @@ type ProjectPatch struct {
 
 // Query is one page of the list: a smart view or a project, open tasks or
 // all, a search, in the viewer's time zone (the smart views cut by local
-// days).
+// days). The board is a project whole, in column order, unpaged.
 type Query struct {
-	View    string // today | upcoming | open | project
+	View    string // today | upcoming | open | project | board
 	Project int64
 	Done    bool // include done tasks (project view)
 	Search  string
@@ -228,8 +265,27 @@ CREATE TABLE IF NOT EXISTS comments (
   body TEXT NOT NULL,
   created TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS comments_task ON comments(task_id, id);`)
+CREATE INDEX IF NOT EXISTS comments_task ON comments(task_id, id);
+CREATE TABLE IF NOT EXISTS statuses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  hex_color TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'open',
+  position REAL NOT NULL DEFAULT 0,
+  on_new INTEGER NOT NULL DEFAULT 0,
+  on_start INTEGER NOT NULL DEFAULT 0,
+  on_finish INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS statuses_project ON statuses(project_id, position);`)
 	if err != nil {
+		return err
+	}
+	// the column came with the workflow; a store from before gets it here
+	if err := st.addColumn("tasks", "status_id", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if _, err := st.db.Exec(`CREATE INDEX IF NOT EXISTS tasks_status ON tasks(project_id, status_id, position)`); err != nil {
 		return err
 	}
 	// a first list has somewhere to add to
@@ -238,50 +294,179 @@ CREATE INDEX IF NOT EXISTS comments_task ON comments(task_id, id);`)
 		return err
 	}
 	if n == 0 {
-		_, err = st.CreateProject("Inbox", 0)
+		if _, err := st.CreateProject("Inbox", 0); err != nil {
+			return err
+		}
 	}
+	return st.seedWorkflows()
+}
+
+// addColumn adds a column to a table that does not have it yet.
+func (st *Store) addColumn(table, col, def string) error {
+	rows, err := st.db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			return err
+		}
+		if name == col {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+	_, err = st.db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + col + ` ` + def)
 	return err
+}
+
+// seedWorkflows gives every project without columns the default workflow,
+// and every task without a column its place by what it was: done tasks in
+// the done column, those an agent was on (the old "in progress" label)
+// where a start lands, the rest where new tasks land. Runs at every open;
+// a store that is up to date does nothing.
+func (st *Store) seedWorkflows() error {
+	ps, err := st.Projects()
+	if err != nil {
+		return err
+	}
+	byProject := map[int64][]Status{}
+	for _, p := range ps {
+		ss := p.Statuses
+		if len(ss) == 0 {
+			if ss, err = st.SetStatuses(p.ID, DefaultStatuses(), nil); err != nil {
+				return err
+			}
+		}
+		byProject[p.ID] = ss
+	}
+	// without a column, or with one that is not its project's
+	rows, err := st.db.Query(`SELECT t.id, t.project_id, t.done,
+  EXISTS (SELECT 1 FROM task_labels tl JOIN labels l ON l.id = tl.label_id WHERE tl.task_id = t.id AND l.title = ? COLLATE NOCASE)
+  FROM tasks t WHERE NOT EXISTS (SELECT 1 FROM statuses s WHERE s.id = t.status_id AND s.project_id = t.project_id)`, legacyInProgress)
+	if err != nil {
+		return err
+	}
+	type placing struct {
+		id, project int64
+		done, busy  bool
+	}
+	var todo []placing
+	for rows.Next() {
+		var p placing
+		if err := rows.Scan(&p.id, &p.project, &p.done, &p.busy); err != nil {
+			rows.Close()
+			return err
+		}
+		todo = append(todo, p)
+	}
+	rows.Close()
+	for _, p := range todo {
+		ss := byProject[p.project]
+		var s *Status
+		switch {
+		case p.done:
+			s = doneStatus(ss)
+		case p.busy:
+			s = flagged(ss, func(x Status) bool { return x.OnStart })
+		}
+		if s == nil {
+			s = landing(ss)
+		}
+		if s == nil {
+			continue
+		}
+		if _, err := st.db.Exec(`UPDATE tasks SET status_id = ?, done = ?, done_at = CASE WHEN ? THEN done_at ELSE '' END WHERE id = ?`, s.ID, s.Kind == KindDone, s.Kind == KindDone, p.id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (st *Store) stamp() string { return st.now().UTC().Format(time.RFC3339) }
 
 // ---- projects ----
 
+const projectCols = `id, title, description, hex_color, parent_id, archived, favorite, position, created, updated`
+
+func scanProject(sc interface{ Scan(...any) error }) (Project, error) {
+	var p Project
+	err := sc.Scan(&p.ID, &p.Title, &p.Description, &p.HexColor, &p.ParentID, &p.Archived, &p.Favorite, &p.Position, &p.Created, &p.Updated)
+	p.Statuses = []Status{}
+	return p, err
+}
+
 func (st *Store) Projects() ([]Project, error) {
-	rows, err := st.db.Query(`SELECT id, title, description, hex_color, parent_id, archived, favorite, position, created, updated FROM projects ORDER BY position, id`)
+	rows, err := st.db.Query(`SELECT ` + projectCols + ` FROM projects ORDER BY position, id`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := []Project{}
 	for rows.Next() {
-		var p Project
-		if err := rows.Scan(&p.ID, &p.Title, &p.Description, &p.HexColor, &p.ParentID, &p.Archived, &p.Favorite, &p.Position, &p.Created, &p.Updated); err != nil {
+		p, err := scanProject(rows)
+		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 		out = append(out, p)
 	}
-	return out, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	all, err := st.statusesOf(0)
+	if err != nil {
+		return nil, err
+	}
+	byProject := map[int64][]Status{}
+	for _, s := range all {
+		byProject[s.ProjectID] = append(byProject[s.ProjectID], s)
+	}
+	for i := range out {
+		if ss := byProject[out[i].ID]; ss != nil {
+			out[i].Statuses = ss
+		}
+	}
+	return out, nil
 }
 
 func (st *Store) Project(id int64) (Project, error) {
-	var p Project
-	err := st.db.QueryRow(`SELECT id, title, description, hex_color, parent_id, archived, favorite, position, created, updated FROM projects WHERE id = ?`, id).
-		Scan(&p.ID, &p.Title, &p.Description, &p.HexColor, &p.ParentID, &p.Archived, &p.Favorite, &p.Position, &p.Created, &p.Updated)
+	p, err := scanProject(st.db.QueryRow(`SELECT `+projectCols+` FROM projects WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, ErrNotFound
 	}
-	return p, err
+	if err != nil {
+		return p, err
+	}
+	if p.Statuses, err = st.statusesOf(id); err != nil {
+		return p, err
+	}
+	return p, nil
 }
 
+// CreateProject makes a project with its parent's workflow — a copy, its
+// own from then on — or the default one at the top level.
 func (st *Store) CreateProject(title string, parent int64) (Project, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return Project{}, invalid("a project needs a name")
 	}
+	tpl := DefaultStatuses()
 	if parent != 0 {
-		if _, err := st.Project(parent); err != nil {
+		pp, err := st.Project(parent)
+		if err != nil {
 			return Project{}, fmt.Errorf("parent project: %w", err)
+		}
+		if len(pp.Statuses) > 0 {
+			tpl = pp.Statuses
 		}
 	}
 	now := st.stamp()
@@ -292,6 +477,14 @@ func (st *Store) CreateProject(title string, parent int64) (Project, error) {
 		return Project{}, err
 	}
 	id, _ := res.LastInsertId()
+	copies := make([]Status, len(tpl))
+	for i, s := range tpl {
+		s.ID, s.ProjectID = 0, 0
+		copies[i] = s
+	}
+	if _, err := st.SetStatuses(id, copies, nil); err != nil {
+		return Project{}, err
+	}
 	return st.Project(id)
 }
 
@@ -342,8 +535,8 @@ func (st *Store) UpdateProject(id int64, p ProjectPatch) (Project, error) {
 	return st.Project(id)
 }
 
-// DeleteProject removes a project with its tasks; projects inside it move
-// to the top level.
+// DeleteProject removes a project with its tasks and columns; projects
+// inside it move to the top level.
 func (st *Store) DeleteProject(id int64) error {
 	if _, err := st.Project(id); err != nil {
 		return err
@@ -360,6 +553,307 @@ func (st *Store) DeleteProject(id int64) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// ---- the workflow: a project's columns ----
+
+// DefaultStatuses is the workflow a project starts with when it has no
+// parent to copy: new tasks land in New, a started agent moves a task to
+// In progress, its finish to Testing, and Done is the done column.
+func DefaultStatuses() []Status {
+	return []Status{
+		{Title: "New", HexColor: "95a5a6", Kind: KindOpen, OnNew: true},
+		{Title: "In progress", HexColor: "3498db", Kind: KindOpen, OnStart: true},
+		{Title: "Testing", HexColor: "e67e22", Kind: KindOpen, OnFinish: true},
+		{Title: "Done", HexColor: "2ecc71", Kind: KindDone},
+	}
+}
+
+const statusCols = `id, project_id, title, hex_color, kind, position, on_new, on_start, on_finish`
+
+// statusesOf lists a project's columns in order; project 0 lists every
+// project's.
+func (st *Store) statusesOf(projectID int64) ([]Status, error) {
+	q := `SELECT ` + statusCols + ` FROM statuses`
+	var args []any
+	if projectID != 0 {
+		q += ` WHERE project_id = ?`
+		args = append(args, projectID)
+	}
+	rows, err := st.db.Query(q+` ORDER BY project_id, position, id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Status{}
+	for rows.Next() {
+		var s Status
+		if err := rows.Scan(&s.ID, &s.ProjectID, &s.Title, &s.HexColor, &s.Kind, &s.Position, &s.OnNew, &s.OnStart, &s.OnFinish); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+func statusByID(ss []Status, id int64) *Status {
+	for i := range ss {
+		if ss[i].ID == id {
+			return &ss[i]
+		}
+	}
+	return nil
+}
+
+func statusByTitle(ss []Status, title string) *Status {
+	for i := range ss {
+		if strings.EqualFold(ss[i].Title, title) {
+			return &ss[i]
+		}
+	}
+	return nil
+}
+
+func flagged(ss []Status, flag func(Status) bool) *Status {
+	for i := range ss {
+		if flag(ss[i]) {
+			return &ss[i]
+		}
+	}
+	return nil
+}
+
+// landing is where a new task goes: the on_new column, else the first open
+// one, else the first.
+func landing(ss []Status) *Status {
+	if s := flagged(ss, func(x Status) bool { return x.OnNew }); s != nil {
+		return s
+	}
+	if s := flagged(ss, func(x Status) bool { return x.Kind != KindDone }); s != nil {
+		return s
+	}
+	if len(ss) > 0 {
+		return &ss[0]
+	}
+	return nil
+}
+
+// doneStatus is the first done column, else nil.
+func doneStatus(ss []Status) *Status {
+	return flagged(ss, func(x Status) bool { return x.Kind == KindDone })
+}
+
+// SetStatuses replaces a project's columns with want, in that order: an id
+// of 0 is a new column, a known id keeps its tasks, a column left out is
+// removed and its tasks go to moves[old id] — a surviving column, required
+// while it has tasks. There is always at least one open and one done
+// column, and each flag sits on at most one. Done follows the kind for
+// every task.
+func (st *Store) SetStatuses(projectID int64, want []Status, moves map[int64]int64) ([]Status, error) {
+	var n int
+	if err := st.db.QueryRow(`SELECT count(*) FROM projects WHERE id = ?`, projectID).Scan(&n); err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, fmt.Errorf("project: %w", ErrNotFound)
+	}
+	if len(want) == 0 {
+		return nil, invalid("a project needs at least one column")
+	}
+	cur, err := st.statusesOf(projectID)
+	if err != nil {
+		return nil, err
+	}
+	open, done := 0, 0
+	flags := map[string]int{}
+	keep := map[int64]bool{}
+	for i := range want {
+		w := &want[i]
+		w.Title = strings.TrimSpace(w.Title)
+		if w.Title == "" {
+			return nil, invalid("a column needs a name")
+		}
+		w.HexColor = strings.TrimPrefix(strings.TrimSpace(w.HexColor), "#")
+		switch w.Kind {
+		case "", KindOpen:
+			w.Kind = KindOpen
+			open++
+		case KindDone:
+			done++
+		default:
+			return nil, invalid(fmt.Sprintf("column %q: a kind is open or done, not %q", w.Title, w.Kind))
+		}
+		if w.OnNew {
+			flags["take new tasks"]++
+		}
+		if w.OnStart {
+			flags["take a task its agent was started on"]++
+		}
+		if w.OnFinish {
+			flags["take a task its agent finished"]++
+		}
+		if w.ID != 0 {
+			if statusByID(cur, w.ID) == nil {
+				return nil, invalid(fmt.Sprintf("column %d is not this project's", w.ID))
+			}
+			if keep[w.ID] {
+				return nil, invalid(fmt.Sprintf("column %q is listed twice", w.Title))
+			}
+			keep[w.ID] = true
+		}
+	}
+	if open == 0 || done == 0 {
+		return nil, invalid("a project needs an open column and a done column")
+	}
+	for what, c := range flags {
+		if c > 1 {
+			return nil, invalid("only one column can " + what)
+		}
+	}
+	// the columns going, and whether their tasks have somewhere to go
+	counts := map[int64]int{}
+	rows, err := st.db.Query(`SELECT status_id, count(*) FROM tasks WHERE project_id = ? GROUP BY status_id`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var id int64
+		var c int
+		if err := rows.Scan(&id, &c); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		counts[id] = c
+	}
+	rows.Close()
+	type removal struct{ from, to int64 }
+	var gone []removal
+	for _, c := range cur {
+		if keep[c.ID] {
+			continue
+		}
+		to := moves[c.ID]
+		if counts[c.ID] > 0 && !keep[to] {
+			return nil, invalid(fmt.Sprintf("column %q has %d tasks: say which column they move to", c.Title, counts[c.ID]))
+		}
+		gone = append(gone, removal{c.ID, to})
+	}
+
+	tx, err := st.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	for i := range want {
+		w := &want[i]
+		w.ProjectID = projectID
+		w.Position = float64(i + 1)
+		if w.ID == 0 {
+			res, err := tx.Exec(`INSERT INTO statuses (project_id, title, hex_color, kind, position, on_new, on_start, on_finish) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				projectID, w.Title, w.HexColor, w.Kind, w.Position, w.OnNew, w.OnStart, w.OnFinish)
+			if err != nil {
+				return nil, err
+			}
+			w.ID, _ = res.LastInsertId()
+		} else if _, err := tx.Exec(`UPDATE statuses SET title=?, hex_color=?, kind=?, position=?, on_new=?, on_start=?, on_finish=? WHERE id=?`,
+			w.Title, w.HexColor, w.Kind, w.Position, w.OnNew, w.OnStart, w.OnFinish, w.ID); err != nil {
+			return nil, err
+		}
+	}
+	for _, g := range gone {
+		if g.to != 0 {
+			if _, err := tx.Exec(`UPDATE tasks SET status_id = ? WHERE status_id = ?`, g.to, g.from); err != nil {
+				return nil, err
+			}
+		}
+		if _, err := tx.Exec(`DELETE FROM statuses WHERE id = ?`, g.from); err != nil {
+			return nil, err
+		}
+	}
+	now := st.stamp()
+	for _, w := range want {
+		if w.Kind == KindDone {
+			_, err = tx.Exec(`UPDATE tasks SET done = 1, done_at = ?, updated = ? WHERE status_id = ? AND done = 0`, now, now, w.ID)
+		} else {
+			_, err = tx.Exec(`UPDATE tasks SET done = 0, done_at = '', updated = ? WHERE status_id = ? AND done = 1`, now, w.ID)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return st.statusesOf(projectID)
+}
+
+// placeAfter is the position for a task that goes right after `after` in
+// its column (0: the top) — the midpoint between its new neighbours, the
+// column renumbered first when two of them have no room between them.
+func placeAfter(tx *sql.Tx, projectID, statusID, self, after int64) (float64, error) {
+	rows, err := tx.Query(`SELECT id, position FROM tasks WHERE project_id = ? AND status_id = ? AND id <> ? ORDER BY position, id DESC`, projectID, statusID, self)
+	if err != nil {
+		return 0, err
+	}
+	var ids []int64
+	var poss []float64
+	for rows.Next() {
+		var id int64
+		var pos float64
+		if err := rows.Scan(&id, &pos); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		ids = append(ids, id)
+		poss = append(poss, pos)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	idx := -1
+	if after != 0 {
+		for i, id := range ids {
+			if id == after {
+				idx = i
+			}
+		}
+		if idx < 0 {
+			return 0, invalid("the task to follow is not in that column")
+		}
+	}
+	neighbours := func() (prev, next float64) {
+		switch {
+		case len(ids) == 0:
+			return 0, 2
+		case idx < 0:
+			return poss[0] - 2, poss[0]
+		case idx+1 < len(ids):
+			return poss[idx], poss[idx+1]
+		default:
+			return poss[idx], poss[idx] + 2
+		}
+	}
+	prev, next := neighbours()
+	if next-prev < 1e-6 {
+		for i, id := range ids {
+			poss[i] = float64(i + 1)
+			if _, err := tx.Exec(`UPDATE tasks SET position = ? WHERE id = ?`, poss[i], id); err != nil {
+				return 0, err
+			}
+		}
+		prev, next = neighbours()
+	}
+	return (prev + next) / 2, nil
+}
+
+// bottom is the position after the last task of a column.
+func bottom(q interface {
+	QueryRow(string, ...any) *sql.Row
+}, projectID, statusID int64) float64 {
+	var pos float64
+	_ = q.QueryRow(`SELECT coalesce(max(position), 0) + 1 FROM tasks WHERE project_id = ? AND status_id = ?`, projectID, statusID).Scan(&pos)
+	return pos
 }
 
 // ---- labels ----
@@ -449,11 +943,11 @@ func (st *Store) RemoveLabel(taskID, labelID int64) error {
 
 // ---- tasks ----
 
-const taskCols = `id, project_id, title, description, done, done_at, due_date, priority, created, updated`
+const taskCols = `id, project_id, status_id, title, description, done, done_at, due_date, priority, position, created, updated`
 
 func scanTask(sc interface{ Scan(...any) error }) (Task, error) {
 	var t Task
-	err := sc.Scan(&t.ID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.DoneAt, &t.DueDate, &t.Priority, &t.Created, &t.Updated)
+	err := sc.Scan(&t.ID, &t.ProjectID, &t.StatusID, &t.Title, &t.Description, &t.Done, &t.DoneAt, &t.DueDate, &t.Priority, &t.Position, &t.Created, &t.Updated)
 	t.Identifier = fmt.Sprintf("#%d", t.ID)
 	t.Labels = []Label{}
 	return t, err
@@ -535,8 +1029,11 @@ func (st *Store) fillLabels(tasks []*Task) error {
 	return rows.Err()
 }
 
+// Create makes a task in a project: in the column asked for, else the done
+// column for a task born done, else where new tasks land; at the bottom.
 func (st *Store) Create(projectID int64, p Patch) (Task, error) {
-	if _, err := st.Project(projectID); err != nil {
+	project, err := st.Project(projectID)
+	if err != nil {
 		return Task{}, fmt.Errorf("project: %w", err)
 	}
 	title := ""
@@ -560,12 +1057,29 @@ func (st *Store) Create(projectID int64, p Patch) (Task, error) {
 	if p.Priority != nil {
 		t.Priority = clampPriority(*p.Priority)
 	}
+	var s *Status
+	switch {
+	case p.StatusID != nil && *p.StatusID != 0:
+		if s = statusByID(project.Statuses, *p.StatusID); s == nil {
+			return Task{}, invalid("no such column in this project")
+		}
+	case p.Done != nil && *p.Done:
+		s = doneStatus(project.Statuses)
+	}
+	if s == nil {
+		s = landing(project.Statuses)
+	}
+	if s == nil {
+		return Task{}, invalid("the project has no columns")
+	}
 	now := st.stamp()
-	if p.Done != nil && *p.Done {
+	t.StatusID = s.ID
+	if s.Kind == KindDone {
 		t.Done, t.DoneAt = true, now
 	}
-	res, err := st.db.Exec(`INSERT INTO tasks (project_id, title, description, done, done_at, due_date, priority, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ProjectID, t.Title, t.Description, t.Done, t.DoneAt, t.DueDate, t.Priority, now, now)
+	t.Position = bottom(st.db, projectID, s.ID)
+	res, err := st.db.Exec(`INSERT INTO tasks (project_id, status_id, title, description, done, done_at, due_date, priority, position, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ProjectID, t.StatusID, t.Title, t.Description, t.Done, t.DoneAt, t.DueDate, t.Priority, t.Position, now, now)
 	if err != nil {
 		return Task{}, err
 	}
@@ -594,35 +1108,83 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 	if p.Priority != nil {
 		cur.Priority = clampPriority(*p.Priority)
 	}
+	// where it sits: the project, then the column — done follows the column
+	ss, err := st.statusesOf(cur.ProjectID)
+	if err != nil {
+		return cur, err
+	}
+	moved := false
 	if p.ProjectID != nil && *p.ProjectID != cur.ProjectID {
-		if _, err := st.Project(*p.ProjectID); err != nil {
+		target, err := st.Project(*p.ProjectID)
+		if err != nil {
 			return cur, fmt.Errorf("project: %w", err)
 		}
-		cur.ProjectID = *p.ProjectID
+		// the column of the same name over there, else the one its state calls for
+		var next *Status
+		if old := statusByID(ss, cur.StatusID); old != nil {
+			next = statusByTitle(target.Statuses, old.Title)
+		}
+		if next == nil && cur.Done {
+			next = doneStatus(target.Statuses)
+		}
+		if next == nil {
+			next = landing(target.Statuses)
+		}
+		if next == nil {
+			return cur, invalid("the project has no columns")
+		}
+		cur.ProjectID, cur.StatusID, ss, moved = target.ID, next.ID, target.Statuses, true
 	}
-	now := st.stamp()
-	if p.Done != nil && *p.Done != cur.Done {
-		cur.Done = *p.Done
-		if cur.Done {
-			cur.DoneAt = now
+	switch {
+	case p.StatusID != nil:
+		s := statusByID(ss, *p.StatusID)
+		if s == nil {
+			return cur, invalid("no such column in this project")
+		}
+		if s.ID != cur.StatusID {
+			cur.StatusID, moved = s.ID, true
+		}
+	case p.Done != nil && *p.Done != cur.Done:
+		var s *Status
+		if *p.Done {
+			s = doneStatus(ss)
 		} else {
-			cur.DoneAt = ""
+			s = landing(ss)
+		}
+		if s == nil {
+			return cur, invalid("the project has no column for that")
+		}
+		if s.ID != cur.StatusID {
+			cur.StatusID, moved = s.ID, true
 		}
 	}
-	// the row and its label in one transaction: done is not in progress
+	now := st.stamp()
+	if s := statusByID(ss, cur.StatusID); s != nil {
+		if done := s.Kind == KindDone; done != cur.Done {
+			cur.Done = done
+			if done {
+				cur.DoneAt = now
+			} else {
+				cur.DoneAt = ""
+			}
+		}
+	}
 	tx, err := st.db.Begin()
 	if err != nil {
 		return cur, err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`UPDATE tasks SET project_id=?, title=?, description=?, done=?, done_at=?, due_date=?, priority=?, updated=? WHERE id=?`,
-		cur.ProjectID, cur.Title, cur.Description, cur.Done, cur.DoneAt, cur.DueDate, cur.Priority, now, id); err != nil {
-		return cur, err
-	}
-	if p.Done != nil && *p.Done {
-		if _, err := tx.Exec(`DELETE FROM task_labels WHERE task_id = ? AND label_id IN (SELECT id FROM labels WHERE title = ? COLLATE NOCASE)`, id, InProgress); err != nil {
+	switch {
+	case p.After != nil:
+		if cur.Position, err = placeAfter(tx, cur.ProjectID, cur.StatusID, id, *p.After); err != nil {
 			return cur, err
 		}
+	case moved:
+		cur.Position = bottom(tx, cur.ProjectID, cur.StatusID)
+	}
+	if _, err := tx.Exec(`UPDATE tasks SET project_id=?, status_id=?, title=?, description=?, done=?, done_at=?, due_date=?, priority=?, position=?, updated=? WHERE id=?`,
+		cur.ProjectID, cur.StatusID, cur.Title, cur.Description, cur.Done, cur.DoneAt, cur.DueDate, cur.Priority, cur.Position, now, id); err != nil {
+		return cur, err
 	}
 	if err := tx.Commit(); err != nil {
 		return cur, err
@@ -646,6 +1208,8 @@ func (st *Store) Delete(id int64) error {
 // first among equals. Today ends at the viewer's midnight; upcoming is the
 // next seven days from now. The search is case-folded on the Go side
 // (SQLite's own folding is ASCII only), so it finds Cyrillic either way.
+// The board is a project in column order, every open task and the latest
+// done ones, on one page.
 func (st *Store) List(q Query) ([]Task, int, error) {
 	now := q.Now
 	if now.IsZero() {
@@ -657,6 +1221,7 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 	}
 	where := []string{"1=1"}
 	var args []any
+	from, order := `tasks`, ` ORDER BY done ASC, CASE WHEN due_date = '' THEN 1 ELSE 0 END, due_date ASC, id DESC`
 	switch q.View {
 	case "today":
 		y, m, d := now.In(loc).Date()
@@ -674,11 +1239,20 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 		if !q.Done {
 			where = append(where, "done = 0")
 		}
+	case "board":
+		where = append(where, "tasks.project_id = ?")
+		args = append(args, q.Project)
+		// a done column shows the latest finishes first; the others keep their order
+		from = `tasks LEFT JOIN statuses s ON s.id = tasks.status_id`
+		order = ` ORDER BY s.position, CASE WHEN s.kind = 'done' THEN tasks.done_at ELSE '' END DESC, tasks.position, tasks.id DESC`
 	default:
 		return nil, 0, invalid(fmt.Sprintf("unknown view %q", q.View))
 	}
-	rows, err := st.db.Query(`SELECT `+taskCols+` FROM tasks WHERE `+strings.Join(where, " AND ")+
-		` ORDER BY done ASC, CASE WHEN due_date = '' THEN 1 ELSE 0 END, due_date ASC, id DESC`, args...)
+	cols := taskCols
+	if q.View == "board" {
+		cols = "tasks." + strings.ReplaceAll(taskCols, ", ", ", tasks.")
+	}
+	rows, err := st.db.Query(`SELECT `+cols+` FROM `+from+` WHERE `+strings.Join(where, " AND ")+order, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -698,11 +1272,28 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
 	}
-	pages := max(1, (len(all)+PageSize-1)/PageSize)
-	page := min(max(q.Page, 1), pages)
-	from := (page - 1) * PageSize
-	to := min(from+PageSize, len(all))
-	out := all[from:to]
+	rows.Close()
+	var out []Task
+	pages := 1
+	if q.View == "board" {
+		// the latest BoardDone of each done column
+		seen := map[int64]int{}
+		for _, t := range all {
+			if t.Done {
+				seen[t.StatusID]++
+				if seen[t.StatusID] > BoardDone {
+					continue
+				}
+			}
+			out = append(out, t)
+		}
+	} else {
+		pages = max(1, (len(all)+PageSize-1)/PageSize)
+		page := min(max(q.Page, 1), pages)
+		from := (page - 1) * PageSize
+		to := min(from+PageSize, len(all))
+		out = all[from:to]
+	}
 	ptrs := make([]*Task, len(out))
 	for i := range out {
 		ptrs[i] = &out[i]
@@ -729,17 +1320,18 @@ func scanRun(sc interface{ Scan(...any) error }) (Run, error) {
 	return r, err
 }
 
-// StartRun records an agent started on a task and puts the label on it,
-// in one transaction.
+// StartRun records an agent started on a task and moves the task to the
+// column its project keeps for that, in one transaction.
 func (st *Store) StartRun(r Run) (Run, error) {
-	if err := st.exists(r.TaskID); err != nil {
+	t, err := st.Get(r.TaskID)
+	if err != nil {
 		return r, err
 	}
 	if r.State == "" {
 		r.State = RunStarting
 	}
 	r.Started = st.stamp()
-	l, err := st.CreateLabel(InProgress, "3498db")
+	ss, err := st.statusesOf(t.ProjectID)
 	if err != nil {
 		return r, err
 	}
@@ -754,10 +1346,58 @@ func (st *Store) StartRun(r Run) (Run, error) {
 		return r, err
 	}
 	r.ID, _ = res.LastInsertId()
-	if _, err := tx.Exec(`INSERT OR IGNORE INTO task_labels (task_id, label_id) VALUES (?, ?)`, r.TaskID, l.ID); err != nil {
-		return r, err
+	if s := flagged(ss, func(x Status) bool { return x.OnStart }); s != nil && s.ID != t.StatusID {
+		if err := moveTo(tx, t, *s, r.Started); err != nil {
+			return r, err
+		}
 	}
 	return r, tx.Commit()
+}
+
+// OnFinish moves a task whose agent finished to the column its project
+// keeps for that: only a task that is not done and still sits where the
+// start put it (or anywhere, when no column takes starts) — a card the
+// person moved by hand stays. It returns the column the task went to, or
+// nil.
+func (st *Store) OnFinish(taskID int64) (*Status, error) {
+	t, err := st.Get(taskID)
+	if err != nil {
+		return nil, err
+	}
+	ss, err := st.statusesOf(t.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	to := flagged(ss, func(x Status) bool { return x.OnFinish })
+	if to == nil || to.ID == t.StatusID || t.Done {
+		return nil, nil
+	}
+	if from := flagged(ss, func(x Status) bool { return x.OnStart }); from != nil && from.ID != t.StatusID {
+		return nil, nil
+	}
+	tx, err := st.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if err := moveTo(tx, t, *to, st.stamp()); err != nil {
+		return nil, err
+	}
+	return to, tx.Commit()
+}
+
+// moveTo puts a task at the bottom of a column, done following its kind.
+func moveTo(tx *sql.Tx, t Task, s Status, now string) error {
+	doneAt := ""
+	if s.Kind == KindDone {
+		doneAt = t.DoneAt
+		if doneAt == "" {
+			doneAt = now
+		}
+	}
+	_, err := tx.Exec(`UPDATE tasks SET status_id = ?, done = ?, done_at = ?, position = ?, updated = ? WHERE id = ?`,
+		s.ID, s.Kind == KindDone, doneAt, bottom(tx, t.ProjectID, s.ID), now, t.ID)
+	return err
 }
 
 func (st *Store) Run(id int64) (Run, error) {

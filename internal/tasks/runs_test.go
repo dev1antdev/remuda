@@ -30,9 +30,12 @@ func TestRunLifecycleAndSweep(t *testing.T) {
 	if err != nil || run.State != RunStarting || run.ID == 0 {
 		t.Fatalf("start %+v %v", run, err)
 	}
+	project, _ := st.Project(inbox[0].ID)
+	start := flagged(project.Statuses, func(s Status) bool { return s.OnStart })
+	finish := flagged(project.Statuses, func(s Status) bool { return s.OnFinish })
 	got, _ := st.Get(tk.ID)
-	if got.Run == nil || got.Run.ID != run.ID || len(got.Labels) != 1 || got.Labels[0].Title != InProgress {
-		t.Fatalf("task after start %+v %+v", got.Run, got.Labels)
+	if got.Run == nil || got.Run.ID != run.ID || got.StatusID != start.ID {
+		t.Fatalf("task after start %+v, column %d want %d", got.Run, got.StatusID, start.ID)
 	}
 	list, _, _ := st.List(Query{View: "open"})
 	if list[0].Run == nil {
@@ -69,8 +72,11 @@ func TestRunLifecycleAndSweep(t *testing.T) {
 	if r, _ := st.Run(run.ID); r.State != RunFinished || r.Finished == "" {
 		t.Fatalf("run %+v", r)
 	}
-	if len(pushed) != 1 || !strings.Contains(pushed[0].Title, "#1") || pushed[0].Kind != "task" {
+	if len(pushed) != 1 || !strings.Contains(pushed[0].Title, "#1") || !strings.Contains(pushed[0].Title, "→ Testing") || pushed[0].Kind != "task" {
 		t.Fatalf("pushed %+v", pushed)
+	}
+	if got, _ = st.Get(tk.ID); got.StatusID != finish.ID || got.Done {
+		t.Fatalf("the finish did not move the task: column %d want %d", got.StatusID, finish.ID)
 	}
 	w.Sweep() // the same finish again: silence
 	if cs, _ := st.Comments(tk.ID); len(cs) != 1 {
@@ -89,10 +95,14 @@ func TestRunLifecycleAndSweep(t *testing.T) {
 	if cs, _ := st.Comments(tk.ID); len(cs) != 2 {
 		t.Fatalf("second finish: %+v", cs)
 	}
-	// done takes the label off
+	// the second finish found the task in Testing already: it stays
+	if got, _ = st.Get(tk.ID); got.StatusID != finish.ID {
+		t.Fatalf("a second finish moved the task: column %d", got.StatusID)
+	}
+	// done is the done column
 	got, _ = st.Update(tk.ID, Patch{Done: boolp(true)})
-	if len(got.Labels) != 0 {
-		t.Fatalf("still in progress: %+v", got.Labels)
+	if !got.Done || got.StatusID != doneStatus(project.Statuses).ID {
+		t.Fatalf("done: %+v", got)
 	}
 	// the pane goes: one snapshot without it is nothing, two minutes of it is gone
 	gone = true

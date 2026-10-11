@@ -49,6 +49,26 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 			s.taskReply(w, map[string]bool{"ok": true}, s.Tasks.DeleteProject(id))
 		}
 	})
+	// the workflow, replaced whole: {statuses: [...], moves: {"<old id>": <new id>}}
+	api.HandleFunc("PUT /api/tasks/projects/{id}/statuses", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		var req struct {
+			Statuses []tasks.Status  `json:"statuses"`
+			Moves    map[int64]int64 `json:"moves"`
+		}
+		if !decode(w, r, &req) {
+			return
+		}
+		if _, err := s.Tasks.SetStatuses(id, req.Statuses, req.Moves); err != nil {
+			s.taskReply(w, nil, err)
+			return
+		}
+		p, err := s.Tasks.Project(id)
+		s.taskReply(w, p, err)
+	})
 	api.HandleFunc("GET /api/tasks/labels", func(w http.ResponseWriter, r *http.Request) {
 		ls, err := s.Tasks.Labels()
 		s.taskReply(w, ls, err)

@@ -90,11 +90,17 @@ func (w *RunWatch) Sweep() {
 		}
 		_, _ = w.Store.AddComment(r.TaskID, "agent", answer)
 		_ = w.Store.SetRun(r.ID, RunFinished, id)
+		// the workflow's own move, when the project has one for a finish
+		moved, _ := w.Store.OnFinish(r.TaskID)
 		if w.Notify != nil {
 			t, _ := w.Store.Get(r.TaskID)
+			title := fmt.Sprintf("Task %s: %s finished", t.Identifier, r.Agent)
+			if moved != nil {
+				title += " → " + moved.Title
+			}
 			w.Notify(push.Payload{
 				Machine: r.Machine, Pane: r.Pane, Kind: "task",
-				Title:   fmt.Sprintf("Task %s: %s finished", t.Identifier, r.Agent),
+				Title:   title,
 				Body:    firstLine(t.Title) + " — " + firstLine(answer),
 				Tag:     fmt.Sprintf("task|%d", r.TaskID),
 				Actions: []push.Action{{Action: "open", Title: "Open"}},
