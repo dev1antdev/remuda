@@ -9,6 +9,7 @@ package tasks
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -48,6 +49,7 @@ type Project struct {
 	Created     string   `json:"created"`
 	Updated     string   `json:"updated"`
 	Statuses    []Status `json:"statuses"` // the workflow, in order
+	Fields      []Field  `json:"fields"`   // its own fields, in order
 }
 
 // Status is one column of a project's board. A task is always in exactly
@@ -78,22 +80,23 @@ type Label struct {
 }
 
 type Task struct {
-	ID          int64     `json:"id"`
-	ProjectID   int64     `json:"project_id"`
-	StatusID    int64     `json:"status_id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"` // HTML: paragraphs from the editor
-	Done        bool      `json:"done"`        // the column's kind, kept here for the smart lists
-	DoneAt      string    `json:"done_at"`     // RFC 3339 UTC, "" when open
-	DueDate     string    `json:"due_date"`    // RFC 3339 UTC, "" when none
-	Priority    int       `json:"priority"`    // 0 none … 5 do now
-	Position    float64   `json:"position"`    // the place in its column
-	Labels      []Label   `json:"labels"`
-	Identifier  string    `json:"identifier"` // "#12"
-	Created     string    `json:"created"`
-	Updated     string    `json:"updated"`
-	Run         *Run      `json:"run,omitempty"`      // the latest agent started on it
-	Comments    []Comment `json:"comments,omitempty"` // on Get only
+	ID          int64          `json:"id"`
+	ProjectID   int64          `json:"project_id"`
+	StatusID    int64          `json:"status_id"`
+	Title       string         `json:"title"`
+	Description string         `json:"description"` // HTML: paragraphs from the editor
+	Done        bool           `json:"done"`        // the column's kind, kept here for the smart lists
+	DoneAt      string         `json:"done_at"`     // RFC 3339 UTC, "" when open
+	DueDate     string         `json:"due_date"`    // RFC 3339 UTC, "" when none
+	Priority    int            `json:"priority"`    // 0 none … 5 do now
+	Position    float64        `json:"position"`    // the place in its column
+	Labels      []Label        `json:"labels"`
+	Fields      map[string]any `json:"fields"`     // the project's fields' values, by field id
+	Identifier  string         `json:"identifier"` // "#12"
+	Created     string         `json:"created"`
+	Updated     string         `json:"updated"`
+	Run         *Run           `json:"run,omitempty"`      // the latest agent started on it
+	Comments    []Comment      `json:"comments,omitempty"` // on Get only
 }
 
 // Run is an agent started on a task: a worktree made from the task, the
@@ -141,16 +144,18 @@ type Comment struct {
 // clears it. StatusID moves the task to a column (done follows); Done
 // alone moves it to the project's done column, or back to where new tasks
 // land. After places it in its column: right after that task, 0 for the
-// top; without it a task that changed column goes to the bottom.
+// top; without it a task that changed column goes to the bottom. Fields
+// is partial too: a key is a field id, null clears its value.
 type Patch struct {
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
-	Done        *bool   `json:"done"`
-	DueDate     *string `json:"due_date"`
-	Priority    *int    `json:"priority"`
-	ProjectID   *int64  `json:"project_id"`
-	StatusID    *int64  `json:"status_id"`
-	After       *int64  `json:"after"`
+	Title       *string                    `json:"title"`
+	Description *string                    `json:"description"`
+	Done        *bool                      `json:"done"`
+	DueDate     *string                    `json:"due_date"`
+	Priority    *int                       `json:"priority"`
+	ProjectID   *int64                     `json:"project_id"`
+	StatusID    *int64                     `json:"status_id"`
+	After       *int64                     `json:"after"`
+	Fields      map[string]json.RawMessage `json:"fields"`
 }
 
 type ProjectPatch struct {
@@ -277,7 +282,24 @@ CREATE TABLE IF NOT EXISTS statuses (
   on_start INTEGER NOT NULL DEFAULT 0,
   on_finish INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS statuses_project ON statuses(project_id, position);`)
+CREATE INDEX IF NOT EXISTS statuses_project ON statuses(project_id, position);
+CREATE TABLE IF NOT EXISTS fields (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  options TEXT NOT NULL DEFAULT '[]',
+  position REAL NOT NULL DEFAULT 0,
+  on_card INTEGER NOT NULL DEFAULT 0,
+  in_prompt INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS fields_project ON fields(project_id, position);
+CREATE TABLE IF NOT EXISTS task_fields (
+  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  field_id INTEGER NOT NULL REFERENCES fields(id) ON DELETE CASCADE,
+  value TEXT NOT NULL,
+  PRIMARY KEY (task_id, field_id)
+);`)
 	if err != nil {
 		return err
 	}
@@ -401,6 +423,7 @@ func scanProject(sc interface{ Scan(...any) error }) (Project, error) {
 	var p Project
 	err := sc.Scan(&p.ID, &p.Title, &p.Description, &p.HexColor, &p.ParentID, &p.Archived, &p.Favorite, &p.Position, &p.Created, &p.Updated)
 	p.Statuses = []Status{}
+	p.Fields = []Field{}
 	return p, err
 }
 
@@ -430,9 +453,20 @@ func (st *Store) Projects() ([]Project, error) {
 	for _, s := range all {
 		byProject[s.ProjectID] = append(byProject[s.ProjectID], s)
 	}
+	allFields, err := st.fieldsOf(0)
+	if err != nil {
+		return nil, err
+	}
+	fieldsByProject := map[int64][]Field{}
+	for _, f := range allFields {
+		fieldsByProject[f.ProjectID] = append(fieldsByProject[f.ProjectID], f)
+	}
 	for i := range out {
 		if ss := byProject[out[i].ID]; ss != nil {
 			out[i].Statuses = ss
+		}
+		if fs := fieldsByProject[out[i].ID]; fs != nil {
+			out[i].Fields = fs
 		}
 	}
 	return out, nil
@@ -449,17 +483,21 @@ func (st *Store) Project(id int64) (Project, error) {
 	if p.Statuses, err = st.statusesOf(id); err != nil {
 		return p, err
 	}
+	if p.Fields, err = st.fieldsOf(id); err != nil {
+		return p, err
+	}
 	return p, nil
 }
 
-// CreateProject makes a project with its parent's workflow — a copy, its
-// own from then on — or the default one at the top level.
+// CreateProject makes a project with its parent's workflow and fields — a
+// copy, its own from then on — or the default workflow at the top level.
 func (st *Store) CreateProject(title string, parent int64) (Project, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return Project{}, invalid("a project needs a name")
 	}
 	tpl := DefaultStatuses()
+	var fields []Field
 	if parent != 0 {
 		pp, err := st.Project(parent)
 		if err != nil {
@@ -468,6 +506,7 @@ func (st *Store) CreateProject(title string, parent int64) (Project, error) {
 		if len(pp.Statuses) > 0 {
 			tpl = pp.Statuses
 		}
+		fields = pp.Fields
 	}
 	now := st.stamp()
 	var pos float64
@@ -484,6 +523,16 @@ func (st *Store) CreateProject(title string, parent int64) (Project, error) {
 	}
 	if _, err := st.SetStatuses(id, copies, nil); err != nil {
 		return Project{}, err
+	}
+	if len(fields) > 0 {
+		fcopies := make([]Field, len(fields))
+		for i, f := range fields {
+			f.ID, f.ProjectID = 0, 0
+			fcopies[i] = f
+		}
+		if _, err := st.SetFields(id, fcopies); err != nil {
+			return Project{}, err
+		}
 	}
 	return st.Project(id)
 }
@@ -950,6 +999,7 @@ func scanTask(sc interface{ Scan(...any) error }) (Task, error) {
 	err := sc.Scan(&t.ID, &t.ProjectID, &t.StatusID, &t.Title, &t.Description, &t.Done, &t.DoneAt, &t.DueDate, &t.Priority, &t.Position, &t.Created, &t.Updated)
 	t.Identifier = fmt.Sprintf("#%d", t.ID)
 	t.Labels = []Label{}
+	t.Fields = map[string]any{}
 	return t, err
 }
 
@@ -962,6 +1012,9 @@ func (st *Store) Get(id int64) (Task, error) {
 		return t, err
 	}
 	if err := st.fillLabels([]*Task{&t}); err != nil {
+		return t, err
+	}
+	if err := st.fillFields([]*Task{&t}); err != nil {
 		return t, err
 	}
 	if err := st.fillRuns([]*Task{&t}); err != nil {
@@ -1077,13 +1130,24 @@ func (st *Store) Create(projectID int64, p Patch) (Task, error) {
 	if s.Kind == KindDone {
 		t.Done, t.DoneAt = true, now
 	}
-	t.Position = bottom(st.db, projectID, s.ID)
-	res, err := st.db.Exec(`INSERT INTO tasks (project_id, status_id, title, description, done, done_at, due_date, priority, position, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	tx, err := st.db.Begin()
+	if err != nil {
+		return Task{}, err
+	}
+	defer tx.Rollback()
+	t.Position = bottom(tx, projectID, s.ID)
+	res, err := tx.Exec(`INSERT INTO tasks (project_id, status_id, title, description, done, done_at, due_date, priority, position, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ProjectID, t.StatusID, t.Title, t.Description, t.Done, t.DoneAt, t.DueDate, t.Priority, t.Position, now, now)
 	if err != nil {
 		return Task{}, err
 	}
 	id, _ := res.LastInsertId()
+	if err := applyFields(tx, id, project.Fields, p.Fields); err != nil {
+		return Task{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Task{}, err
+	}
 	return st.Get(id)
 }
 
@@ -1113,12 +1177,18 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 	if err != nil {
 		return cur, err
 	}
+	fields, err := st.fieldsOf(cur.ProjectID)
+	if err != nil {
+		return cur, err
+	}
 	moved := false
+	var carryTo []Field // another project's fields, when the task moves there
 	if p.ProjectID != nil && *p.ProjectID != cur.ProjectID {
 		target, err := st.Project(*p.ProjectID)
 		if err != nil {
 			return cur, fmt.Errorf("project: %w", err)
 		}
+		carryTo = target.Fields
 		// the column of the same name over there, else the one its state calls for
 		var next *Status
 		if old := statusByID(ss, cur.StatusID); old != nil {
@@ -1184,6 +1254,15 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 	}
 	if _, err := tx.Exec(`UPDATE tasks SET project_id=?, status_id=?, title=?, description=?, done=?, done_at=?, due_date=?, priority=?, position=?, updated=? WHERE id=?`,
 		cur.ProjectID, cur.StatusID, cur.Title, cur.Description, cur.Done, cur.DoneAt, cur.DueDate, cur.Priority, cur.Position, now, id); err != nil {
+		return cur, err
+	}
+	if carryTo != nil {
+		if err := carryFields(tx, id, fields, carryTo); err != nil {
+			return cur, err
+		}
+		fields = carryTo
+	}
+	if err := applyFields(tx, id, fields, p.Fields); err != nil {
 		return cur, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -1299,6 +1378,9 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 		ptrs[i] = &out[i]
 	}
 	if err := st.fillLabels(ptrs); err != nil {
+		return nil, 0, err
+	}
+	if err := st.fillFields(ptrs); err != nil {
 		return nil, 0, err
 	}
 	if err := st.fillRuns(ptrs); err != nil {

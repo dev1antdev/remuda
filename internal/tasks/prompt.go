@@ -3,20 +3,34 @@ package tasks
 import (
 	"html"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
 // Prompt is what an agent gets for a task: the title, the description as
-// text, and which task it is — with /grill-me in front for a grooming pass.
-// The same words the UI's "Send to agent" composes.
-func Prompt(t Task, project string, groom bool) string {
+// text, the project's fields that are meant for the prompt and have a
+// value, and which task it is — with /grill-me in front for a grooming
+// pass. The same words the UI's "Send to agent" composes.
+func Prompt(t Task, project Project, groom bool) string {
 	parts := []string{strings.TrimSpace(t.Title)}
 	if d := HTMLToText(t.Description); d != "" {
 		parts = append(parts, d)
 	}
+	var lines []string
+	for _, f := range project.Fields {
+		if !f.InPrompt {
+			continue
+		}
+		if v := ValueText(f, t.Fields[strconv.FormatInt(f.ID, 10)]); v != "" {
+			lines = append(lines, f.Title+": "+v)
+		}
+	}
+	if len(lines) > 0 {
+		parts = append(parts, strings.Join(lines, "\n"))
+	}
 	where := "(remuda task " + t.Identifier
-	if project != "" {
-		where += " in " + project
+	if project.Title != "" {
+		where += " in " + project.Title
 	}
 	parts = append(parts, where+")")
 	out := strings.Join(parts, "\n\n")

@@ -69,6 +69,25 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 		p, err := s.Tasks.Project(id)
 		s.taskReply(w, p, err)
 	})
+	// the project's own fields, replaced whole
+	api.HandleFunc("PUT /api/tasks/projects/{id}/fields", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		var req struct {
+			Fields []tasks.Field `json:"fields"`
+		}
+		if !decode(w, r, &req) {
+			return
+		}
+		if _, err := s.Tasks.SetFields(id, req.Fields); err != nil {
+			s.taskReply(w, nil, err)
+			return
+		}
+		p, err := s.Tasks.Project(id)
+		s.taskReply(w, p, err)
+	})
 	api.HandleFunc("GET /api/tasks/labels", func(w http.ResponseWriter, r *http.Request) {
 		ls, err := s.Tasks.Labels()
 		s.taskReply(w, ls, err)
@@ -286,10 +305,7 @@ func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 	}
 	prompt := strings.TrimSpace(req.Prompt)
 	if prompt == "" {
-		project := ""
-		if p, err := s.Tasks.Project(task.ProjectID); err == nil {
-			project = p.Title
-		}
+		project, _ := s.Tasks.Project(task.ProjectID) // its title and fields; a missing one leaves them out
 		prompt = tasks.Prompt(task, project, req.Groom)
 	} else if req.Groom && !strings.HasPrefix(prompt, "/grill-me") {
 		prompt = "/grill-me " + prompt

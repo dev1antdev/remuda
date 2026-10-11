@@ -21,12 +21,14 @@ import {
   PRIORITIES,
   removeTaskLabel,
   startTask,
+  type Field,
   type Label,
   type Project,
   type Run,
   type Status,
   type Task,
 } from "./tasksApi";
+import { FieldChip, FieldInput, valueText } from "./fields";
 import type { Machine } from "./api";
 import { errMsg, isTouch, useDebounced, usePref } from "./prefs";
 import { openUrl } from "./host";
@@ -376,7 +378,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
               onOpen={(id) => setOpenId(id === openId ? null : id)}
               onMove={moveCard}
               onAdd={addTo}
-              chips={(t) => <TaskChips task={t} />}
+              chips={(t) => <TaskChips task={t} fields={project.fields} />}
             />
           </div>
         ) : (
@@ -388,6 +390,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
                 task={t}
                 project={sel.kind === "smart" ? byId.get(t.project_id) : undefined}
                 status={statusOf(t)}
+                fields={byId.get(t.project_id)?.fields}
                 selected={t.id === openId}
                 onToggle={() => void toggleDone(t)}
                 onOpen={() => setOpenId(t.id === openId ? null : t.id)}
@@ -416,6 +419,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
           task={open}
           projects={projects}
           statuses={byId.get(open.project_id)?.statuses ?? []}
+          fields={byId.get(open.project_id)?.fields ?? []}
           labels={labels}
           onChange={replaceOrMove}
           onLabels={setLabels}
@@ -434,7 +438,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
       {startReq && (
         <StartAgentDialog
           task={startReq}
-          project={byId.get(startReq.project_id)?.title ?? ""}
+          project={byId.get(startReq.project_id)}
           moveTo={byId.get(startReq.project_id)?.statuses.find((s) => s.on_start)?.title}
           machines={machines}
           currentPane={currentPane}
@@ -452,7 +456,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
       {sendReq && (
         <SendToAgent
           title={sendReq.groom ? "Send for grooming" : "Send to agent"}
-          text={taskPrompt(sendReq.task, byId.get(sendReq.task.project_id)?.title ?? "", sendReq.groom)}
+          text={taskPrompt(sendReq.task, byId.get(sendReq.task.project_id), sendReq.groom)}
           agents={agents}
           currentPane={currentPane}
           rememberKey={`task-project:${sendReq.task.project_id}`}
@@ -594,10 +598,11 @@ function QuickAdd({ placeholder, disabled, onAdd }: { placeholder: string; disab
   );
 }
 
-function TaskRow({ task: t, project, status, selected, onToggle, onOpen }: {
+function TaskRow({ task: t, project, status, fields, selected, onToggle, onOpen }: {
   task: Task;
   project?: Project;
   status?: Status;
+  fields?: Field[];
   selected: boolean;
   onToggle: () => void;
   onOpen: () => void;
@@ -627,18 +632,22 @@ function TaskRow({ task: t, project, status, selected, onToggle, onOpen }: {
         aria-label={t.done ? "Mark undone" : "Mark done"}
       />
       <span className="tasks-row-title">{t.title}</span>
-      <TaskChips task={t} project={project} status={status} />
+      <TaskChips task={t} project={project} status={status} fields={fields} />
     </div>
   );
 }
 
 // what a task shows beside its title — on a list row and on a board card
-// alike: the agent on it, priority, labels, the due date, and when asked
-// the column it is in and its project
-function TaskChips({ task: t, project, status }: { task: Task; project?: Project; status?: Status }) {
+// alike: the agent on it, priority, labels, the due date, the project's
+// fields that ask to be on the card, and when asked the column it is in
+// and its project
+function TaskChips({ task: t, project, status, fields }: { task: Task; project?: Project; status?: Status; fields?: Field[] }) {
   const due = dueLabel(t);
   return (
     <>
+      {(fields ?? []).filter((f) => f.on_card).map((f) => (
+        <FieldChip key={f.id} field={f} value={t.fields?.[String(f.id)]} />
+      ))}
       {t.run && t.run.state !== "gone" && t.run.state !== "failed" && (
         <span className={`tasks-row-run is-${t.run.state}`} title={`${t.run.agent} on ${t.run.branch}: ${t.run.state}`}>
           <Logo agent={t.run.agent} />
@@ -668,10 +677,11 @@ function TaskChips({ task: t, project, status }: { task: Task; project?: Project
 
 // ---- detail ----
 
-function TaskDetail({ task: t, projects, statuses, labels, onChange, onLabels, onClose, onDelete, onError, canSend, onSend, canStart, onStart, machineLabel, liveStatus, onOpenPane }: {
+function TaskDetail({ task: t, projects, statuses, fields, labels, onChange, onLabels, onClose, onDelete, onError, canSend, onSend, canStart, onStart, machineLabel, liveStatus, onOpenPane }: {
   task: Task;
   projects: Project[];
   statuses: Status[]; // its project's columns
+  fields: Field[]; // its project's own fields
   labels: Label[];
   onChange: (t: Task) => void;
   onLabels: (ls: Label[]) => void;
@@ -868,6 +878,14 @@ function TaskDetail({ task: t, projects, statuses, labels, onChange, onLabels, o
           )}
         </span>
       </div>
+      {fields.map((f) => (
+        <div key={f.id} className={`tasks-field kind-${f.kind}`}>
+          <span className="tasks-field-name" title={f.in_prompt ? "Goes to the agent with the task" : undefined}>
+            {f.title}
+          </span>
+          <FieldInput field={f} value={t.fields?.[String(f.id)]} onCommit={(v) => void patch({ fields: { [String(f.id)]: v } })} />
+        </div>
+      ))}
 
       <div className="tasks-send">
         <span className={`split${canSend ? "" : " off"}`} title={canSend ? "" : "No agent is running in herdr"}>
@@ -1046,10 +1064,18 @@ function TaskDetail({ task: t, projects, statuses, labels, onChange, onLabels, o
 // ---- send to an agent ----
 
 // taskPrompt is what the agent gets: the title, the description as text,
-// and which task it is — with /grill-me in front for a grooming pass.
-export function taskPrompt(t: Task, project: string, groom: boolean): string {
+// the project's fields meant for the prompt that have a value, and which
+// task it is — with /grill-me in front for a grooming pass. The same words
+// the server composes (internal/tasks/prompt.go).
+export function taskPrompt(t: Task, project: Project | undefined, groom: boolean): string {
   const desc = t.description ? htmlToText(t.description) : "";
-  const parts = [t.title.trim(), desc, `(remuda task ${t.identifier}${project ? ` in ${project}` : ""})`].filter(Boolean);
+  const fields = (project?.fields ?? [])
+    .filter((f) => f.in_prompt)
+    .map((f) => ({ f, text: valueText(f, t.fields?.[String(f.id)]) }))
+    .filter((x) => x.text)
+    .map((x) => `${x.f.title}: ${x.text}`)
+    .join("\n");
+  const parts = [t.title.trim(), desc, fields, `(remuda task ${t.identifier}${project ? ` in ${project.title}` : ""})`].filter(Boolean);
   return (groom ? "/grill-me " : "") + parts.join("\n\n");
 }
 
@@ -1068,7 +1094,7 @@ function branchFor(t: Task): string {
 
 function StartAgentDialog({ task: t, project, moveTo, machines, currentPane, onClose, onStarted }: {
   task: Task;
-  project: string;
+  project: Project | undefined; // its name and fields, for the prompt
   moveTo?: string; // the column the start moves the task to, when the project has one
   machines: Machine[];
   currentPane: { machineId: string; paneId: string } | null;

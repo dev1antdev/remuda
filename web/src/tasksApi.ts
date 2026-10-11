@@ -20,6 +20,30 @@ export type Status = {
   on_finish: boolean; // a task whose agent finished moves here
 };
 
+// a project's own field: what its tasks carry besides what every task has
+export type FieldKind = "text" | "number" | "select" | "multi" | "date" | "check" | "link";
+export type Field = {
+  id: number;
+  project_id: number;
+  title: string;
+  kind: FieldKind;
+  options: string[]; // what select and multi choose from
+  position: number;
+  on_card: boolean; // shown on the board card and the list row
+  in_prompt: boolean; // goes to the agent with the task
+};
+export const FIELD_KINDS: { value: FieldKind; label: string }[] = [
+  { value: "text", label: "Text" },
+  { value: "number", label: "Number" },
+  { value: "select", label: "One choice" },
+  { value: "multi", label: "Several choices" },
+  { value: "date", label: "Date" },
+  { value: "check", label: "Checkbox" },
+  { value: "link", label: "Link" },
+];
+// a task's value for a field; null clears it in a patch
+export type FieldValue = string | number | boolean | string[] | null;
+
 export type Project = {
   id: number;
   title: string;
@@ -32,6 +56,7 @@ export type Project = {
   created: string;
   updated: string;
   statuses: Status[]; // the workflow, in order
+  fields: Field[]; // its own fields, in order
 };
 
 export type Task = {
@@ -46,6 +71,7 @@ export type Task = {
   priority: number; // 0 unset … 5 "do now"
   position: number; // the place in its column
   labels: Label[];
+  fields: Record<string, FieldValue>; // by field id; no key, no value
   identifier: string; // "#12"
   created: string;
   updated: string;
@@ -88,6 +114,8 @@ export const patchProject = (id: number, fields: Partial<Pick<Project, "title" |
 // while it has any
 export const putStatuses = (projectId: number, statuses: Status[], moves: Record<number, number>) =>
   sendJSON<Project>("PUT", `/api/tasks/projects/${projectId}/statuses`, { statuses, moves });
+// the fields replaced whole: a field with id 0 is new, one left out goes with its values
+export const putFields = (projectId: number, fields: Field[]) => sendJSON<Project>("PUT", `/api/tasks/projects/${projectId}/fields`, { fields });
 
 export const listLabels = () => get<Label[]>("/api/tasks/labels");
 export const createLabel = (title: string, hex_color: string) => sendJSON<Label>("POST", "/api/tasks/labels", { title, hex_color });

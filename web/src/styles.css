@@ -3978,6 +3978,54 @@ button.usage-row:hover {
   height: var(--ctl-sm);
 }
 
+/* a project's field on a card or a row, and its control in the detail */
+.tasks-fieldv {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  color: var(--fg-dim);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tasks-fieldv-name {
+  color: var(--fg-faint);
+}
+
+.tasks-field .field-text {
+  flex: 1;
+  min-width: 0;
+  height: var(--ctl-sm);
+}
+
+.tasks-field input[type="date"] {
+  height: var(--ctl-sm);
+  max-width: 100%;
+}
+
+.field-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.multi-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ps-row .ps-options {
+  flex: 1 1 160px;
+  min-width: 120px;
+  height: var(--ctl-sm);
+}
+
 /* the column a task is in, on a list row */
 .tasks-status {
   display: inline-flex;

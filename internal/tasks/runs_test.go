@@ -10,13 +10,28 @@ import (
 
 func TestPromptFlattensHTML(t *testing.T) {
 	tk := Task{Title: " Fix login ", Identifier: "#7", Description: "<p>Steps:</p><ul><li>open &lt;app&gt;</li><li>click<br>twice</li></ul>"}
-	got := Prompt(tk, "Work", true)
+	got := Prompt(tk, Project{Title: "Work"}, true)
 	want := "/grill-me Fix login\n\nSteps:\n- open <app>\n- click\ntwice\n\n(remuda task #7 in Work)"
 	if got != want {
 		t.Fatalf("got %q\nwant %q", got, want)
 	}
-	if Prompt(Task{Title: "x", Identifier: "#1"}, "", false) != "x\n\n(remuda task #1)" {
+	if Prompt(Task{Title: "x", Identifier: "#1"}, Project{}, false) != "x\n\n(remuda task #1)" {
 		t.Fatal("plain")
+	}
+	// the project's fields meant for the prompt, with a value, in order
+	project := Project{Title: "Work", Fields: []Field{
+		{ID: 1, Title: "Area", Kind: FieldSelect, InPrompt: true},
+		{ID: 2, Title: "Secret", Kind: FieldText, InPrompt: false},
+		{ID: 3, Title: "Estimate", Kind: FieldNumber, InPrompt: true},
+		{ID: 4, Title: "Tags", Kind: FieldMulti, InPrompt: true},
+		{ID: 5, Title: "Empty", Kind: FieldText, InPrompt: true},
+		{ID: 6, Title: "Blocking", Kind: FieldCheck, InPrompt: true},
+		{ID: 7, Title: "Due", Kind: FieldDate, InPrompt: true},
+	}}
+	tk = Task{Title: "x", Identifier: "#1", Fields: map[string]any{"1": "web", "2": "hidden", "3": 2.5, "4": []any{"a", "b"}, "6": true, "7": "2026-10-12T00:00:00Z"}}
+	want = "x\n\nArea: web\nEstimate: 2.5\nTags: a, b\nBlocking: yes\nDue: 2026-10-12\n\n(remuda task #1 in Work)"
+	if got := Prompt(tk, project, false); got != want {
+		t.Fatalf("with fields:\n%q\nwant\n%q", got, want)
 	}
 }
 
