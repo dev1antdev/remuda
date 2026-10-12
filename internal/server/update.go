@@ -287,6 +287,10 @@ func (s *Server) handleMachineUpdate(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 503, fmt.Errorf("updates are off"))
 		return
 	}
+	if req.Command == "" { // the promise is "what was shown is what runs": a run without the shown text is refused
+		httpErr(w, 400, fmt.Errorf("the command shown must come back with the request"))
+		return
+	}
 	rep := s.Health.Report(mc.Cfg.ID)
 	var u health.Update
 	if req.What == "restart-herdr" {

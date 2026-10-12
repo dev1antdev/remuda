@@ -20,6 +20,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 const (
@@ -116,8 +117,11 @@ func settled(status string) bool {
 	return status == herdr.StatusIdle || status == herdr.StatusDone
 }
 
+// sessionOf is the pane's session id, or "" — also for an id that does not
+// look like one: the value comes from the pane's own hooks, and it is about
+// to be typed after `--resume`.
 func sessionOf(p *herdr.PaneInfo) string {
-	if p.AgentSession == nil || p.AgentSession.Kind != "id" {
+	if p.AgentSession == nil || p.AgentSession.Kind != "id" || !text.SessionID(p.AgentSession.Value) {
 		return ""
 	}
 	return p.AgentSession.Value

@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
@@ -112,6 +113,16 @@ func (s *Service) Proxy(w http.ResponseWriter, r *http.Request, mc *machines.Mac
 			pr.SetURL(target)
 			pr.Out.Host = pr.In.Host // code-server reads the Host it was asked for
 			pr.SetXForwarded()
+			// remuda's own credential stays here: code-server runs with no
+			// auth of its own and needs neither, and on a remote machine
+			// whatever listens on that port would otherwise read the token
+			pr.Out.Header.Del("Authorization")
+			pr.Out.Header.Del("Cookie")
+			for _, c := range pr.In.Cookies() {
+				if c.Name != auth.CookieName {
+					pr.Out.AddCookie(c)
+				}
+			}
 			path := strings.TrimPrefix(pr.In.URL.Path, prefix)
 			if path == "" {
 				path = "/"
@@ -120,8 +131,8 @@ func (s *Service) Proxy(w http.ResponseWriter, r *http.Request, mc *machines.Mac
 			pr.Out.URL.RawPath = ""
 		},
 		ModifyResponse: func(res *http.Response) error {
-			// the editor is framed by remuda
-			res.Header.Del("X-Frame-Options")
+			// the editor is framed by remuda, and by nothing else
+			res.Header.Set("X-Frame-Options", "SAMEORIGIN")
 			if loc := res.Header.Get("Location"); strings.HasPrefix(loc, "/") && !strings.HasPrefix(loc, prefix) {
 				res.Header.Set("Location", prefix+loc)
 			}

@@ -277,9 +277,13 @@ func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadRequest, fmt.Errorf("an agent is required, not %q", req.Agent))
 		return
 	}
-	req.Branch = strings.TrimSpace(req.Branch)
+	req.Branch, req.Base = strings.TrimSpace(req.Branch), strings.TrimSpace(req.Base)
 	if req.Workspace == "" || req.Branch == "" {
 		httpErr(w, http.StatusBadRequest, errors.New("a workspace and a branch are required"))
+		return
+	}
+	if !refOK(req.Branch) || (req.Base != "" && !refOK(req.Base)) {
+		httpErr(w, http.StatusBadRequest, errors.New("branch names: no leading dash, no spaces, no .."))
 		return
 	}
 	mc, client, _, ok := s.ready(w, r, req.Machine)

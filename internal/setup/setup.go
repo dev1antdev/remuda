@@ -125,6 +125,20 @@ func sameFile(a, b string) (bool, error) {
 // stdin: a child that reads stdin (an installer's prompt) must not eat
 // the rest of the script.
 func run(host string, env []string, script string, args []string, out io.Writer) error {
+	// a secret never goes on a command line (ps shows those, on both ends):
+	// the Tailscale auth key travels on stdin as one line the script reads
+	// first; the installers after it then see an empty stdin, as before
+	var stdin io.Reader
+	kept := make([]string, 0, len(env))
+	for _, kv := range env {
+		if v, ok := strings.CutPrefix(kv, "TS_AUTHKEY="); ok && v != "" {
+			script = "IFS= read -r TS_AUTHKEY; export TS_AUTHKEY; " + script
+			stdin = strings.NewReader(v + "\n")
+			continue
+		}
+		kept = append(kept, kv)
+	}
+	env = kept
 	var cmd *exec.Cmd
 	if host == "" {
 		cmd = exec.Command("sh", append([]string{"-c", script, "sh"}, args...)...)
@@ -137,7 +151,7 @@ func run(host string, env []string, script string, args []string, out io.Writer)
 		}
 		cmd = exec.Command("ssh", "-o", "BatchMode=yes", host, strings.Join(words, " "))
 	}
-	cmd.Stdin = nil // /dev/null
+	cmd.Stdin = stdin // nil: /dev/null
 	cmd.Stdout, cmd.Stderr = out, out
 	return cmd.Run()
 }

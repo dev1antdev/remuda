@@ -56,11 +56,22 @@ func Quote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// tmpPath is a short, deterministic path under the temp dir — unix sockaddr
-// paths have ~100 bytes to work with.
+// SocketDir is where the control and forward sockets go when main sets
+// it: the state dir, 0700 and the person's own. Unset, the temp dir —
+// which on a shared Linux box is everyone's, where a socket of another
+// user's could sit at the name and be reused as the master.
+var SocketDir string
+
+// tmpPath is a short, deterministic socket path — unix sockaddr paths
+// have ~100 bytes to work with, so a long state dir falls back to the
+// temp dir.
 func tmpPath(prefix, seed string) string {
 	sum := sha256.Sum256([]byte(seed))
-	return filepath.Join(os.TempDir(), prefix+hex.EncodeToString(sum[:8]))
+	name := prefix + hex.EncodeToString(sum[:8])
+	if SocketDir != "" && len(SocketDir)+len(name)+6 < 100 {
+		return filepath.Join(SocketDir, name)
+	}
+	return filepath.Join(os.TempDir(), name)
 }
 
 func (c *Conn) cmd(args ...string) *exec.Cmd {

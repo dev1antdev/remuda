@@ -18,6 +18,8 @@ import (
 	"time"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 // Part is one piece of a turn, a tagged union.
@@ -187,6 +189,9 @@ func scanTitle(path string) (title string, final bool) {
 // FindSessionByID locates <uuid>.jsonl: first in the project dir encoded from
 // cwd, then by scanning every project dir (the UUID guarantees at most one hit).
 func FindSessionByID(cwd, id string) (string, error) {
+	if !text.SessionID(id) { // the id is the pane's word; a path in it names no file here
+		return "", os.ErrNotExist
+	}
 	if cwd != "" {
 		p := filepath.Join(projectsDir(), EncodePath(cwd), id+".jsonl")
 		if _, err := os.Stat(p); err == nil {

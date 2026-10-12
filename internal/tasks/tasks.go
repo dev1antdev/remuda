@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -551,7 +552,9 @@ func (st *Store) UpdateProject(id int64, p ProjectPatch) (Project, error) {
 		cur.Description = *p.Description
 	}
 	if p.HexColor != nil {
-		cur.HexColor = strings.TrimPrefix(strings.TrimSpace(*p.HexColor), "#")
+		if cur.HexColor, err = normColor(*p.HexColor); err != nil {
+			return cur, err
+		}
 	}
 	if p.ParentID != nil {
 		// not itself, and not one of its own descendants
@@ -722,7 +725,10 @@ func (st *Store) SetStatuses(projectID int64, want []Status, moves map[int64]int
 		if w.Title == "" {
 			return nil, invalid("a column needs a name")
 		}
-		w.HexColor = strings.TrimPrefix(strings.TrimSpace(w.HexColor), "#")
+		var err error
+		if w.HexColor, err = normColor(w.HexColor); err != nil {
+			return nil, err
+		}
 		switch w.Kind {
 		case "", KindOpen:
 			w.Kind = KindOpen
@@ -939,12 +945,16 @@ func (st *Store) CreateLabel(title, hexColor string) (Label, error) {
 			return l, nil
 		}
 	}
-	res, err := st.db.Exec(`INSERT INTO labels (title, hex_color, created) VALUES (?, ?, ?)`, title, strings.TrimPrefix(hexColor, "#"), st.stamp())
+	color, err := normColor(hexColor)
+	if err != nil {
+		return Label{}, err
+	}
+	res, err := st.db.Exec(`INSERT INTO labels (title, hex_color, created) VALUES (?, ?, ?)`, title, color, st.stamp())
 	if err != nil {
 		return Label{}, err
 	}
 	id, _ := res.LastInsertId()
-	return Label{ID: id, Title: title, HexColor: strings.TrimPrefix(hexColor, "#")}, nil
+	return Label{ID: id, Title: title, HexColor: color}, nil
 }
 
 func (st *Store) DeleteLabel(id int64) error {
@@ -1593,6 +1603,19 @@ func normDate(s string) (string, error) {
 }
 
 func clampPriority(p int) int { return min(max(p, 0), 5) }
+
+var colorRe = regexp.MustCompile(`^(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
+
+// normColor is a colour as the UI keeps it — six (or three) hex digits
+// without the "#", or nothing. The value lands in a style attribute, so
+// nothing else is a colour.
+func normColor(s string) (string, error) {
+	s = strings.TrimPrefix(strings.TrimSpace(s), "#")
+	if s != "" && !colorRe.MatchString(s) {
+		return "", invalid(fmt.Sprintf("colour %q: six hex digits, please", s))
+	}
+	return strings.ToLower(s), nil
+}
 
 // stripTags is enough of an HTML-to-text for searching a description.
 func stripTags(s string) string {

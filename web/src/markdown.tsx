@@ -10,7 +10,7 @@ const link = (url: string) => (e: MouseEvent) => {
   openUrl(url);
 };
 const anchor = (url: string, children: ReactNode, key: string) => (
-  <a key={key} href={url} onClick={link(url)}>
+  <a key={key} href={url} target="_blank" rel="noopener noreferrer" onClick={link(url)}>
     {children}
   </a>
 );

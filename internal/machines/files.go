@@ -274,14 +274,32 @@ func (mc *Machine) SaveUpload(cwd, name string, data []byte) (Upload, error) {
 	abs := cleanPath(cwd + "/" + rel)
 	ignore := cleanPath(cwd + "/" + uploadDir + "/.gitignore")
 
+	// the pane's folder is the agent's: a .remuda or an uploads folder it
+	// made a symlink would send the file (or the .gitignore) wherever it
+	// pointed, so neither may be one, and nothing here follows a link
+	holder, folder := cleanPath(cwd+"/"+uploadDir), filepath.Dir(abs)
 	if mc.Local {
-		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		for _, p := range []string{holder, folder} {
+			if fi, err := os.Lstat(p); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+				return Upload{}, fmt.Errorf("%s is a symlink; uploads go only into a real folder", p)
+			}
+		}
+		if err := os.MkdirAll(folder, 0o755); err != nil {
 			return Upload{}, err
 		}
-		if _, err := os.Stat(ignore); err != nil {
-			os.WriteFile(ignore, []byte("*\n"), 0o644)
+		if f, err := os.OpenFile(ignore, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o644); err == nil {
+			f.WriteString("*\n")
+			f.Close()
 		}
-		if err := os.WriteFile(abs, data, 0o644); err != nil {
+		f, err := os.OpenFile(abs, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o644)
+		if err != nil {
+			return Upload{}, err
+		}
+		if _, err := f.Write(data); err != nil {
+			f.Close()
+			return Upload{}, err
+		}
+		if err := f.Close(); err != nil {
 			return Upload{}, err
 		}
 	} else {
@@ -289,10 +307,13 @@ func (mc *Machine) SaveUpload(cwd, name string, data []byte) (Upload, error) {
 		if err != nil {
 			return Upload{}, err
 		}
+		if _, err := mc.exec("[ ! -L "+sshx.Quote(holder)+" ] && [ ! -L "+sshx.Quote(folder)+" ]", 10*time.Second); err != nil {
+			return Upload{}, fmt.Errorf("%s or its uploads folder is a symlink; uploads go only into a real folder", holder)
+		}
 		if err := conn.Put(abs, data, 2*time.Minute); err != nil {
 			return Upload{}, err
 		}
-		mc.exec("[ -f "+sshx.Quote(ignore)+" ] || printf '*\\n' > "+sshx.Quote(ignore), 10*time.Second)
+		mc.exec("[ -e "+sshx.Quote(ignore)+" ] || printf '*\\n' > "+sshx.Quote(ignore), 10*time.Second)
 	}
 	kind, _ := classify(abs, func() bool { return bytes.IndexByte(data[:min(len(data), 8192)], 0) >= 0 })
 	return Upload{Name: stored, Path: abs, Rel: rel, Size: len(data), Kind: kind}, nil
@@ -404,7 +425,7 @@ func (mc *Machine) Stream(script string, timeout time.Duration, sink func([]byte
 func (mc *Machine) GitDiff(p string) (Diff, error) {
 	q := sshx.Quote(p)
 	script := `cd ` + sshx.Quote(filepath.Dir(p)) + ` 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
-		`printf '%s\n' "$root"; if git ls-files --error-unmatch ` + q + ` >/dev/null 2>&1; then echo tracked; ` +
+		`printf '%s\n' "$root"; if git ls-files --error-unmatch -- ` + q + ` >/dev/null 2>&1; then echo tracked; ` +
 		`git -c color.ui=never diff HEAD -- ` + q + ` | head -c 400000; else echo untracked; fi`
 	out, err := mc.Shell(script, 30*time.Second)
 	if err != nil {

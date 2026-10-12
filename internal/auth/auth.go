@@ -9,37 +9,44 @@ import (
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
 const CookieName = "remuda_token"
 
-// LoadOrCreateToken returns REMUDA_TOKEN if set, otherwise the token stored
-// at <state dir>/token, creating it on first run.
-func LoadOrCreateToken(dir string) (string, error) {
+// LoadOrCreateToken returns REMUDA_TOKEN if set (32 characters or more: a
+// short one is guessable), otherwise the token stored at <state dir>/token,
+// creating it on first run — created says so, the one time the sign-in
+// link is worth printing.
+func LoadOrCreateToken(dir string) (token string, created bool, err error) {
 	if t := strings.TrimSpace(os.Getenv("REMUDA_TOKEN")); t != "" {
-		return t, nil
+		if len(t) < 32 {
+			return "", false, fmt.Errorf("REMUDA_TOKEN is %d characters; 32 or more, please", len(t))
+		}
+		return t, false, nil
 	}
 	path := filepath.Join(dir, "token")
 	if b, err := os.ReadFile(path); err == nil {
 		if t := strings.TrimSpace(string(b)); t != "" {
-			return t, nil
+			return t, false, nil
 		}
 	}
 	buf := make([]byte, 24)
 	if _, err := rand.Read(buf); err != nil {
-		return "", err
+		return "", false, err
 	}
 	t := hex.EncodeToString(buf)
 	if err := state.WriteFile(path, []byte(t+"\n")); err != nil {
-		return "", err
+		return "", false, err
 	}
-	return t, nil
+	return t, true, nil
 }
 
 type Guard struct {
@@ -71,14 +78,18 @@ func (g *Guard) fromRequest(r *http.Request) string {
 // pairing link) is exchanged for the cookie and stripped from the URL.
 func (g *Guard) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if qt := r.URL.Query().Get("token"); qt != "" && g.ok(qt) {
-			g.setCookie(w, r, qt)
-			q := r.URL.Query()
-			q.Del("token")
-			u := *r.URL
-			u.RawQuery = q.Encode()
-			http.Redirect(w, r, u.String(), http.StatusSeeOther)
-			return
+		if qt := r.URL.Query().Get("token"); qt != "" {
+			if !g.ok(qt) {
+				g.refused(r)
+			} else {
+				g.setCookie(w, r, qt)
+				q := r.URL.Query()
+				q.Del("token")
+				u := *r.URL
+				u.RawQuery = q.Encode()
+				http.Redirect(w, r, u.String(), http.StatusSeeOther)
+				return
+			}
 		}
 		if g.ok(g.fromRequest(r)) {
 			next.ServeHTTP(w, r)
@@ -100,11 +111,19 @@ func (g *Guard) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	t := strings.TrimSpace(r.PostFormValue("token"))
 	if !g.ok(t) {
+		g.refused(r)
 		http.Error(w, "wrong token", http.StatusForbidden)
 		return
 	}
 	g.setCookie(w, r, t)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// refused notes a wrong token — the one thing on this surface worth a line
+// in the log — and makes the caller wait a little, so guessing is slow.
+func (g *Guard) refused(r *http.Request) {
+	log.Printf("auth: wrong token from %s", r.RemoteAddr)
+	time.Sleep(500 * time.Millisecond)
 }
 
 func (g *Guard) setCookie(w http.ResponseWriter, r *http.Request, token string) {

@@ -496,3 +496,28 @@ func TestLegacyTasksFindTheirColumn(t *testing.T) {
 		t.Fatalf("after the reseed %+v", got)
 	}
 }
+
+func TestColoursAreHexOrNothing(t *testing.T) {
+	st := open(t)
+	inbox, _ := st.Projects()
+	id := inbox[0].ID
+	if _, err := st.CreateLabel("Bug", "fff url(https://x/p.png)"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("a label with CSS in its colour: %v", err)
+	}
+	l, err := st.CreateLabel("Bug", "#E74C3C")
+	if err != nil || l.HexColor != "e74c3c" {
+		t.Fatalf("label colour %+v %v", l, err)
+	}
+	if _, err := st.UpdateProject(id, ProjectPatch{HexColor: str("red")}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("a project colour by name: %v", err)
+	}
+	p, _ := st.UpdateProject(id, ProjectPatch{HexColor: str("#ABC")})
+	if p.HexColor != "abc" {
+		t.Fatalf("project colour %q", p.HexColor)
+	}
+	ss := inbox[0].Statuses
+	ss[0].HexColor = "123456; background: url(x)"
+	if _, err := st.SetStatuses(id, ss, nil); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("a column colour with CSS: %v", err)
+	}
+}

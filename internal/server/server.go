@@ -174,7 +174,38 @@ func (s *Server) Handler() http.Handler {
 	root.HandleFunc("GET /api/health", s.handleHealth)
 	root.HandleFunc("POST /api/login", s.Guard.HandleLogin)
 	root.Handle("/", s.Guard.Middleware(api))
-	return csrfGuard(root)
+	return secureHeaders(csrfGuard(root))
+}
+
+// appCSP is what the page may load and do: its own scripts, its own and
+// inline styles (xterm and React set styles on elements), images and
+// media from here or from memory (thumbnails of uploads), its own
+// WebSockets (ws:/wss: spelled out for browsers that do not read 'self'
+// for them), its own frames (the Code mode, a PDF) — framed by itself
+// only, no plugins, no base, forms to itself.
+const appCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; " +
+	"font-src 'self' data:; connect-src 'self' ws: wss:; worker-src 'self'; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'none'; form-action 'self'"
+
+// secureHeaders is the set every response carries: no sniffing of types,
+// no referrer to other sites, no framing by other origins, HSTS over TLS,
+// and the page's CSP — except on the code-server proxy, which has its own
+// headers, and the file viewer's bytes, which carry a stricter one.
+func secureHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		if r.TLS != nil {
+			h.Set("Strict-Transport-Security", "max-age=31536000")
+		}
+		if !strings.HasPrefix(r.URL.Path, "/code/") {
+			h.Set("X-Content-Type-Options", "nosniff")
+			h.Set("Referrer-Policy", "same-origin")
+			h.Set("X-Frame-Options", "SAMEORIGIN")
+			if !strings.HasPrefix(r.URL.Path, "/api/fs/file") {
+				h.Set("Content-Security-Policy", appCSP)
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // csrfGuard rejects cross-origin mutations and WebSocket upgrades. The token
@@ -226,6 +257,7 @@ func rpcErr(w http.ResponseWriter, err error) {
 }
 
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // a megabyte is more than any of these bodies
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		httpErr(w, 400, fmt.Errorf("bad request body: %v", err))
 		return false
@@ -269,7 +301,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": true, "herdr": false})
 		return
 	}
-	writeJSON(w, map[string]any{"ok": true, "herdr": true, "herdr_version": snap.Version, "version": buildversion.Build})
+	writeJSON(w, map[string]any{"ok": true, "herdr": true, "version": buildversion.Build}) // the one unauthenticated answer: what the peer probe needs, no more
 }
 
 // POST /api/machines/{id}/health — read the machine's vitals now.
@@ -649,13 +681,30 @@ func (s *Server) handleNewTab(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// refOK is a branch or base name git gets as an argument: never something
+// it would read as an option, nothing with spaces or control characters.
+func refOK(s string) bool {
+	if s == "" || strings.HasPrefix(s, "-") || strings.Contains(s, "..") {
+		return false
+	}
+	for _, r := range s {
+		if r <= ' ' || r == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Server) handleNewWorktree(w http.ResponseWriter, r *http.Request) {
 	s.create(w, r, func(c *herdr.Client, req *createReq) (string, *herdr.PaneInfo, map[string]any, error) {
-		branch := strings.TrimSpace(req.Branch)
+		branch, base := strings.TrimSpace(req.Branch), strings.TrimSpace(req.Base)
 		if req.Workspace == "" || branch == "" {
 			return "", nil, nil, &herdr.Error{Code: "invalid_request", Message: "workspace and branch required"}
 		}
-		res, err := c.WorktreeCreate(req.Workspace, branch, strings.TrimSpace(req.Base), req.Name)
+		if !refOK(branch) || (base != "" && !refOK(base)) {
+			return "", nil, nil, &herdr.Error{Code: "invalid_request", Message: "branch names: no leading dash, no spaces, no .."}
+		}
+		res, err := c.WorktreeCreate(req.Workspace, branch, base, req.Name)
 		if err != nil {
 			return "", nil, nil, err
 		}
@@ -1414,7 +1463,8 @@ func (s *Server) staticHandler() http.Handler {
 
 // ListenAndServe runs the server until ctx is cancelled.
 func ListenAndServe(ctx context.Context, addr string, h http.Handler) error {
-	srv := &http.Server{Addr: addr, Handler: h}
+	// header and idle timeouts only: WebSockets and the 25 s long-poll live longer than any read or write deadline
+	srv := &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 	select {

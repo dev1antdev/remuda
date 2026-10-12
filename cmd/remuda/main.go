@@ -84,7 +84,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("state dir: %v", err)
 	}
-	token, err := auth.LoadOrCreateToken(dir)
+	socketsUnder(dir)
+	token, created, err := auth.LoadOrCreateToken(dir)
 	if err != nil {
 		log.Fatalf("token: %v", err)
 	}
@@ -371,8 +372,14 @@ func main() {
 		defer node.Close()
 	}
 	log.Printf("remuda %s listening on http://%s", version, *addr)
-	log.Printf("sign in with the token from `remuda -print-token`, or open:")
-	log.Printf("  http://%s/?token=%s", *addr, token)
+	// the sign-in link once, on the first run, or to a person at a terminal
+	// — never into the service's log at every restart
+	if created || interactive() {
+		log.Printf("sign in with the token from `remuda -print-token`, or open:")
+		log.Printf("  http://%s/?token=%s", *addr, token)
+	} else {
+		log.Printf("sign in with the token from `remuda -print-token`")
+	}
 
 	// log.Fatal would skip the deferred flush and close
 	if err := server.ListenAndServe(ctx, *addr, s.Handler()); err != nil {
@@ -454,7 +461,7 @@ func setupCmd(args []string) {
 	}
 	if *host == "" && !*noService {
 		if dir, err := state.Dir(); err == nil {
-			if token, err := auth.LoadOrCreateToken(dir); err == nil {
+			if token, _, err := auth.LoadOrCreateToken(dir); err == nil {
 				fmt.Printf("\nopen http://%s/?token=%s\n", *addr, token)
 			}
 		}

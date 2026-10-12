@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
+
+	"github.com/dev1antdev/remuda/internal/sshx"
 )
 
 // remuda's own releases on GitHub. The newest is looked up with the other
@@ -102,7 +105,7 @@ func ReleaseUpdate(have, os, arch string, rel Release, local bool) (Update, bool
 	}
 	asset := AssetName(os, arch)
 	url := rel.Assets[asset]
-	if asset == "" || url == "" {
+	if asset == "" || url == "" || !releaseURLOK(url, rel.Tag) || (rel.Checksums != "" && !releaseURLOK(rel.Checksums, rel.Tag)) {
 		return Update{}, false
 	}
 	note := have + " → " + rel.Tag + ", the release on github.com/" + releasesRepo + ". The machine downloads the binary itself"
@@ -116,6 +119,21 @@ func ReleaseUpdate(have, os, arch string, rel Release, local bool) (Update, bool
 		note += " This is the remuda serving this page: it restarts two seconds after the install, and the page offers a reload once the new version answers."
 	}
 	return Update{What: "remuda-release", Title: "Download & install remuda " + rel.Tag, Command: ReleaseScript(url, rel.Checksums, asset, local), Note: note}, true
+}
+
+// releaseURLOK is a download URL as GitHub hands them out for this
+// repository's release, and nothing else: it goes into a shell script, so
+// an API answer that is not that (a hostile mirror, a quote, a subshell)
+// is no release at all.
+func releaseURLOK(raw, tag string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host != "github.com" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.String() != raw {
+		return false
+	}
+	if strings.ContainsAny(raw, "'\"\\ $`;|&<>()\n\r\t") {
+		return false
+	}
+	return strings.HasPrefix(u.Path, "/"+releasesRepo+"/releases/download/"+tag+"/") && !strings.Contains(u.Path, "/../")
 }
 
 const pathLine = `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH`
@@ -143,11 +161,11 @@ func ReleaseScript(url, sums, asset string, local bool) string {
 	var b strings.Builder
 	b.WriteString("set -e; " + pathLine + "\n")
 	b.WriteString(`mkdir -p "$HOME/.local/bin"` + "\n")
-	b.WriteString(`echo "downloading ` + url + `"` + "\n")
-	b.WriteString(`curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.new" "` + url + `"` + "\n")
+	b.WriteString(`echo downloading ` + sshx.Quote(url) + "\n")
+	b.WriteString(`curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.new" ` + sshx.Quote(url) + "\n")
 	if sums != "" {
-		b.WriteString(`if curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.sums" "` + sums + `"; then` + "\n")
-		b.WriteString(`  want=$(awk -v n="` + asset + `" '{ f=$NF; sub(/^\*/, "", f); if (f == n) print $1 }' "$HOME/.local/bin/remuda.sums" | head -1)` + "\n")
+		b.WriteString(`if curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.sums" ` + sshx.Quote(sums) + `; then` + "\n")
+		b.WriteString(`  want=$(awk -v n=` + sshx.Quote(asset) + ` '{ f=$NF; sub(/^\*/, "", f); if (f == n) print $1 }' "$HOME/.local/bin/remuda.sums" | head -1)` + "\n")
 		b.WriteString(`  have=$( (shasum -a 256 "$HOME/.local/bin/remuda.new" 2>/dev/null || sha256sum "$HOME/.local/bin/remuda.new") | cut -d' ' -f1)` + "\n")
 		b.WriteString(`  rm -f "$HOME/.local/bin/remuda.sums"` + "\n")
 		b.WriteString(`  if [ -z "$want" ] || [ "$want" != "$have" ]; then echo "!! checksum mismatch: the download is not what the release says (want ${want:-?}, got $have)"; rm -f "$HOME/.local/bin/remuda.new"; exit 1; fi` + "\n")

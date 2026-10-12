@@ -284,7 +284,7 @@ func (st *Store) Diff(mc *machines.Machine, dir, path string) (string, error) {
 		`if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
 		`if git ls-files --error-unmatch -- ` + q + ` >/dev/null 2>&1 || git cat-file -e "$base:./"` + q + ` 2>/dev/null; then ` +
 		`git -c color.ui=never -c core.quotepath=off diff --relative "$base" -- ` + q + ` | head -c 600000; ` +
-		`else git -c color.ui=never diff --no-index /dev/null ` + q + ` | head -c 600000; fi; exit 0`
+		`else git -c color.ui=never diff --no-index -- /dev/null ` + q + ` | head -c 600000; fi; exit 0`
 	return mc.Shell(script, 60*time.Second)
 }
 

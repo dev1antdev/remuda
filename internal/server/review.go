@@ -40,7 +40,9 @@ func (s *Server) handleReviewDiff(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if path == "" || strings.HasPrefix(path, "/") || strings.Contains(path, "..") {
+	// relative, inside the folder, and not something git would read as an
+	// option (a file named "--output=…" is a thing an agent can create)
+	if path == "" || strings.HasPrefix(path, "/") || strings.HasPrefix(path, "-") || strings.Contains(path, "..") {
 		httpErr(w, 400, errors.New("a path relative to the folder is required"))
 		return
 	}

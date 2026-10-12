@@ -34,3 +34,21 @@ func TestKindsCountNames(t *testing.T) {
 		t.Fatal("resume commands")
 	}
 }
+
+func TestSessionOfRefusesWhatIsNotAnID(t *testing.T) {
+	// the id is the pane's own word and goes after --resume: a flag, a
+	// path or a shell word in it is no session at all
+	for _, v := range []string{"--help", "-x", "a b", "../x", "", "x;rm", "x$(y)", ".hidden"} {
+		if got := sessionOf(&herdr.PaneInfo{AgentSession: &herdr.AgentSession{Kind: "id", Value: v}}); got != "" {
+			t.Errorf("sessionOf(%q) = %q, want none", v, got)
+		}
+	}
+	for _, v := range []string{"9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d", "abc", "s_1.2"} {
+		if sessionOf(&herdr.PaneInfo{AgentSession: &herdr.AgentSession{Kind: "id", Value: v}}) != v {
+			t.Errorf("sessionOf(%q) refused a plain id", v)
+		}
+	}
+	if sessionOf(&herdr.PaneInfo{AgentSession: &herdr.AgentSession{Kind: "path", Value: "/x.jsonl"}}) != "" {
+		t.Error("a path is not an id")
+	}
+}

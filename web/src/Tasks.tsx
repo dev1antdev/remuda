@@ -1345,6 +1345,8 @@ function Html({ html }: { html: string }) {
           <a
             key={key}
             href={href}
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={(e) => {
               e.preventDefault();
               openUrl(href);
