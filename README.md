@@ -184,11 +184,13 @@ machine downloads the binary for its OS and CPU itself, checks it against
 the release's `checksums.txt`, installs it as `~/.local/bin/remuda` and
 restarts the service; the remuda serving the page restarts itself two
 seconds after its install, and the page offers a reload. A release is
-`make publish`: the tag on HEAD is pushed, and the Release workflow
-(`.github/workflows/release.yml`) builds the four binaries and
-`checksums.txt` and publishes them under it. CI (`.github/workflows/
-ci.yml`) runs the build, the tests, the TypeScript check, `govulncheck`,
-`npm audit` and a secret scan of the whole history on every push.
+`make publish` on the `release` branch, which gets `main` once it has
+been built and tried as a whole: the tag on HEAD is pushed, and the
+Release workflow (`.github/workflows/release.yml`) builds the four
+binaries and `checksums.txt` and publishes them under it. CI
+(`.github/workflows/ci.yml`) runs the build, the tests, the TypeScript
+check, `govulncheck`, `npm audit` and a secret scan of the whole history
+on every push to `main` or `release` and every pull request.
 
 The long way, piece by piece:
 

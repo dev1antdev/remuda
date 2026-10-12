@@ -1,6 +1,7 @@
 .PHONY: all build web server dev run test typecheck docker docker-test release publish deploy service code clean
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+RELEASE_BRANCH ?= release
 
 all: build
 
@@ -56,6 +57,7 @@ release: web
 # "Download & install". Tag first:
 #   git tag -a vX.Y.Z -m 'remuda X.Y.Z'
 publish:
+	@test "$$(git rev-parse --abbrev-ref HEAD)" = "$(RELEASE_BRANCH)" || { echo "publish runs on $(RELEASE_BRANCH), the branch a release is built and tested from: git checkout $(RELEASE_BRANCH) && git merge --ff-only main (RELEASE_BRANCH=<branch> overrides)"; exit 1; }
 	@git describe --tags --exact-match >/dev/null 2>&1 || { echo "publish needs a tag on HEAD: git tag -a vX.Y.Z -m 'remuda X.Y.Z'"; exit 1; }
 	@test -z "$$(git status --porcelain)" || { echo "the tree is not clean: commit first"; exit 1; }
 	@$(MAKE) test typecheck
