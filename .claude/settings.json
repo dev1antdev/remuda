@@ -1,0 +1,54 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gofmt:*)",
+      "Bash(go vet:*)",
+      "Bash(go build:*)",
+      "Bash(go test:*)",
+      "Bash(go doc:*)",
+      "Bash(go list:*)",
+      "Bash(make web)",
+      "Bash(make build)",
+      "Bash(make test)",
+      "Bash(make typecheck)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git blame:*)",
+      "Bash(herdr --version)",
+      "Bash(herdr status:*)",
+      "Bash(herdr machine list:*)",
+      "Bash(herdr api snapshot:*)",
+      "Bash(herdr api schema:*)"
+    ],
+    "deny": [
+      "Edit(~/.claude/projects/**)",
+      "Write(~/.claude/projects/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-bash.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/gofmt.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
