@@ -56,6 +56,7 @@ publish:
 	@git describe --tags --exact-match >/dev/null 2>&1 || { echo "publish needs a tag on HEAD: git tag -a vX.Y.Z -m 'remuda X.Y.Z'"; exit 1; }
 	@test -z "$$(git status --porcelain)" || { echo "the tree is not clean: commit first"; exit 1; }
 	@$(MAKE) release
+	git push origin HEAD $(VERSION)   # gh wants the tag on GitHub before the release
 	gh release create $(VERSION) bin/remuda-darwin-arm64 bin/remuda-darwin-amd64 bin/remuda-linux-amd64 bin/remuda-linux-arm64 bin/checksums.txt --title "remuda $(VERSION)" --generate-notes
 
 # make deploy HOST=gog.remote — puts the right binary into ~/.local/bin on that host.
