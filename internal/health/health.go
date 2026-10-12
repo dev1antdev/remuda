@@ -6,10 +6,11 @@
 // One POSIX script per machine, a few minutes apart, through the same
 // shell the rest of remuda uses (local exec or the SSH master). The
 // latest versions come from the npm registry (Claude Code, Codex, Gemini
-// CLI) and GitHub's releases API (herdr), once every few hours, and only
-// when version checks are on: those four requests are the only thing
-// remuda ever sends anywhere. Plan and Updates turn a report into the
-// update commands the page offers.
+// CLI) and GitHub's releases API (herdr, and remuda itself), once every
+// few hours, and only when version checks are on: those five requests
+// are the only thing remuda ever sends anywhere by itself. Plan and
+// Updates turn a report into the update commands the page offers;
+// release.go is the offer of a newer remuda.
 package health
 
 import (
@@ -58,6 +59,7 @@ type Latest struct {
 	Codex  string    `json:"codex,omitempty"`
 	Gemini string    `json:"gemini,omitempty"`
 	Herdr  string    `json:"herdr,omitempty"`
+	Remuda string    `json:"remuda,omitempty"` // the newest release of remuda itself (release.go)
 }
 
 // Collector keeps the reports and the latest versions fresh.
@@ -71,6 +73,7 @@ type Collector struct {
 	mu      sync.Mutex
 	reports map[string]*Report
 	latest  Latest
+	release Release                // the newest release of remuda, with its assets
 	locks   map[string]*sync.Mutex // one read of a machine at a time; a second waits for it
 }
 
@@ -115,11 +118,34 @@ func (c *Collector) Report(id string) *Report {
 	return &cp
 }
 
-// Latest is the newest known Claude Code and herdr.
+// Latest is the newest known Claude Code, herdr and remuda.
 func (c *Collector) Latest() Latest {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.latest
+}
+
+// Release is the newest release of remuda as last read, with its assets;
+// empty before the first lookup or with checks off.
+func (c *Collector) Release() Release {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.release
+}
+
+// RefreshLatest looks the versions up again when the last look is older
+// than maxAge — for the person who just published a release and presses
+// "read again", rather than waiting out the six hours.
+func (c *Collector) RefreshLatest(maxAge time.Duration) {
+	if !c.Check {
+		return
+	}
+	c.mu.Lock()
+	old := time.Since(c.latest.At) >= maxAge
+	c.mu.Unlock()
+	if old {
+		c.fetchLatest()
+	}
 }
 
 // Refresh reads one machine now; a read already running is waited for,
@@ -287,9 +313,14 @@ func (c *Collector) refreshLatest() {
 	c.mu.Lock()
 	fresh := time.Since(c.latest.At) < 6*time.Hour
 	c.mu.Unlock()
-	if fresh {
-		return
+	if !fresh {
+		c.fetchLatest()
 	}
+}
+
+// fetchLatest asks npm and GitHub now; a lookup that fails keeps the last
+// known value.
+func (c *Collector) fetchLatest() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	var l Latest
@@ -314,6 +345,12 @@ func (c *Collector) refreshLatest() {
 	} else {
 		log.Printf("health: herdr latest: %v", err)
 	}
+	var rel Release
+	if r, err := fetchRelease(ctx, releasesURL); err == nil {
+		rel, l.Remuda = r, r.Version
+	} else {
+		log.Printf("health: remuda latest: %v", err)
+	}
 	c.mu.Lock()
 	// a lookup that failed keeps the last known value
 	if l.Claude == "" {
@@ -327,6 +364,11 @@ func (c *Collector) refreshLatest() {
 	}
 	if l.Gemini == "" {
 		l.Gemini = c.latest.Gemini
+	}
+	if l.Remuda == "" {
+		l.Remuda = c.latest.Remuda
+	} else {
+		c.release = rel
 	}
 	c.latest = l
 	c.mu.Unlock()

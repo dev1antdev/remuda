@@ -109,3 +109,103 @@ func TestPlan(t *testing.T) {
 		t.Fatalf("updates: %+v", ups)
 	}
 }
+
+// ---- remuda's own releases ----
+
+func TestNewerReadsTheVersionOutOfADescribe(t *testing.T) {
+	if !Newer("v0.4.0-24-g5dac31e", "v0.5.0") {
+		t.Fatal("a release past the tag the build sits on is newer")
+	}
+	if Newer("v0.4.0-24-g5dac31e", "v0.4.0") {
+		t.Fatal("the tag the build sits on is not newer than the build")
+	}
+	if Newer("dev", "v0.5.0") || Newer("v0.5.0", "") {
+		t.Fatal("no version, no comparison")
+	}
+}
+
+const releaseJSON = `{"tag_name":"v0.5.0","name":"remuda 0.5.0","assets":[
+ {"name":"remuda-darwin-arm64","browser_download_url":"https://github.com/dev1antdev/remuda/releases/download/v0.5.0/remuda-darwin-arm64"},
+ {"name":"remuda-linux-amd64","browser_download_url":"https://github.com/dev1antdev/remuda/releases/download/v0.5.0/remuda-linux-amd64"},
+ {"name":"checksums.txt","browser_download_url":"https://github.com/dev1antdev/remuda/releases/download/v0.5.0/checksums.txt"}]}`
+
+func TestParseRelease(t *testing.T) {
+	rel, err := parseRelease(strings.NewReader(releaseJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel.Tag != "v0.5.0" || rel.Version != "0.5.0" || len(rel.Assets) != 2 || !strings.HasSuffix(rel.Assets["remuda-darwin-arm64"], "/v0.5.0/remuda-darwin-arm64") || !strings.HasSuffix(rel.Checksums, "/checksums.txt") {
+		t.Fatalf("release %+v", rel)
+	}
+	if _, err := parseRelease(strings.NewReader(`{"tag_name":"nightly","assets":[]}`)); err == nil {
+		t.Fatal("a tag without a version was accepted")
+	}
+}
+
+func TestAssetName(t *testing.T) {
+	for _, c := range []struct{ os, arch, want string }{
+		{"macOS 26.6.2", "arm64", "remuda-darwin-arm64"},
+		{"darwin", "arm64", "remuda-darwin-arm64"},
+		{"Linux 6.8.0-45-generic", "amd64", "remuda-linux-amd64"},
+		{"linux", "arm64", "remuda-linux-arm64"},
+		{"Windows", "amd64", ""},
+		{"macOS 26.6.2", "", ""},
+		{"", "arm64", ""},
+	} {
+		if got := AssetName(c.os, c.arch); got != c.want {
+			t.Errorf("AssetName(%q, %q) = %q, want %q", c.os, c.arch, got, c.want)
+		}
+	}
+}
+
+func TestReleaseUpdate(t *testing.T) {
+	rel, _ := parseRelease(strings.NewReader(releaseJSON))
+	u, ok := ReleaseUpdate("v0.4.0-24-g5dac31e", "macOS 26.6.2", "arm64", rel, false)
+	if !ok || u.What != "remuda-release" || u.Title != "Download & install remuda v0.5.0" {
+		t.Fatalf("remote: %+v %v", u, ok)
+	}
+	for _, want := range []string{
+		`curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.new" "https://github.com/dev1antdev/remuda/releases/download/v0.5.0/remuda-darwin-arm64"`,
+		`/v0.5.0/checksums.txt`,
+		`awk -v n="remuda-darwin-arm64"`,
+		`mv "$HOME/.local/bin/remuda.new" "$HOME/.local/bin/remuda"`,
+		`launchctl kickstart -k`,
+	} {
+		if !strings.Contains(u.Command, want) {
+			t.Errorf("remote command lacks %q:\n%s", want, u.Command)
+		}
+	}
+	if strings.Contains(u.Command, "sleep 2") {
+		t.Error("a remote restart is not delayed")
+	}
+	if !strings.Contains(u.Note, "v0.4.0-24-g5dac31e → v0.5.0") || !strings.Contains(u.Note, "checksums") || strings.Contains(u.Note, "serving this page") {
+		t.Errorf("remote note: %s", u.Note)
+	}
+	// the machine serving the page restarts after the job, not during it
+	l, ok := ReleaseUpdate("v0.4.0-24-g5dac31e", "darwin", "arm64", rel, true)
+	if !ok || !strings.Contains(l.Command, "sleep 2") || !strings.Contains(l.Command, "launchctl print") || !strings.Contains(l.Note, "serving this page") {
+		t.Fatalf("local: %+v", l)
+	}
+	// not newer, no binary for the platform, nothing installed: no offer
+	if _, ok := ReleaseUpdate("v0.5.0", "darwin", "arm64", rel, false); ok {
+		t.Error("the same version was offered")
+	}
+	if _, ok := ReleaseUpdate("v0.5.0-3-gabc1234", "darwin", "arm64", rel, false); ok {
+		t.Error("a build past the release was offered the release")
+	}
+	if _, ok := ReleaseUpdate("v0.4.0", "macOS 26.6.2", "amd64", rel, false); ok {
+		t.Error("a platform without an asset was offered")
+	}
+	if _, ok := ReleaseUpdate("", "darwin", "arm64", rel, false); ok {
+		t.Error("a machine without remuda was offered a release")
+	}
+	if _, ok := ReleaseUpdate("v0.4.0", "darwin", "arm64", Release{}, false); ok {
+		t.Error("no release known, yet offered")
+	}
+	// a release without checksums installs, and says it is not verified
+	old, _ := parseRelease(strings.NewReader(`{"tag_name":"v0.6.0","assets":[{"name":"remuda-darwin-arm64","browser_download_url":"https://x/remuda-darwin-arm64"}]}`))
+	n, ok := ReleaseUpdate("v0.4.0", "darwin", "arm64", old, false)
+	if !ok || !strings.Contains(n.Command, "not verified") || strings.Contains(n.Command, "awk") || !strings.Contains(n.Note, "no checksums.txt") {
+		t.Fatalf("no checksums: %+v", n)
+	}
+}

@@ -34,7 +34,8 @@ import Review from "./Review";
 import Schedules from "./Schedules";
 import Search from "./Search";
 import Usage, { fillClass, tok, usd } from "./Usage";
-import Sidebar from "./Sidebar";
+import Sidebar, { newer } from "./Sidebar";
+import UpdatesDialog from "./Updates";
 import FolderPicker from "./FolderPicker";
 import Select from "./Select";
 import Logo from "./Logo";
@@ -101,7 +102,11 @@ export default function App() {
   const [drawer, setDrawer] = useState(false);
   const [offline, setOffline] = useState(false);
   const [stale, setStale] = useState<string | null>(null); // the server's version when newer than this page
-  const [rosterInfo, setRosterInfo] = useState<{ latest?: Latest; tailscale?: Tailscale }>({});
+  const [rosterInfo, setRosterInfo] = useState<{ latest?: Latest; tailscale?: Tailscale; version?: string }>({});
+  // a newer release of remuda than the one serving this page: one toast
+  // per version, gone once dismissed; its button opens the install
+  const [releaseSeen, setReleaseSeen] = usePref("release.seen", "");
+  const [releaseDialog, setReleaseDialog] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [menu, setMenu] = useState<RowMenu>(null);
   const [alerts, setAlerts] = useState(false);
@@ -191,7 +196,7 @@ export default function App() {
         rosterEtag.current = res.etag;
         setMachines(res.roster.machines);
         setAgents(res.roster.agents);
-        setRosterInfo({ latest: res.roster.latest, tailscale: res.roster.tailscale });
+        setRosterInfo({ latest: res.roster.latest, tailscale: res.roster.tailscale, version: res.roster.version });
       }
       // the server was updated under this page: say so, once per version
       if (res.version && res.version !== __REMUDA_VERSION__ && __REMUDA_VERSION__ !== "dev") setStale(res.version);
@@ -269,6 +274,20 @@ export default function App() {
           Reload
         </button>
       ),
+    });
+  const release = rosterInfo.latest?.remuda;
+  const localMachine = machines.find((m) => m.id === "local");
+  if (release && rosterInfo.version && newer(rosterInfo.version, release) && releaseSeen !== release && !offline)
+    toasts.push({
+      id: "release",
+      tone: "info",
+      text: `remuda ${release} is out; this one is ${rosterInfo.version}.`,
+      action: localMachine && (
+        <button type="button" className="btn sm primary" onClick={() => setReleaseDialog(true)}>
+          Download & install
+        </button>
+      ),
+      onDismiss: () => setReleaseSeen(release),
     });
   if (notice) toasts.push({ id: "notice", tone: notice.error ? "error" : "success", text: notice.text, onDismiss: () => setNotice(null) });
   // the tailnet node needs a login (first run), or could not start
@@ -688,6 +707,7 @@ export default function App() {
         )}
       </div>
 
+      {releaseDialog && localMachine && <UpdatesDialog machine={localMachine} what="remuda-release" onClose={() => setReleaseDialog(false)} />}
       <Toasts items={toasts} />
       {file && (
         <FileViewer

@@ -23,8 +23,7 @@
       "Bash(herdr api schema:*)"
     ],
     "deny": [
-      "Edit(~/.claude/projects/**)",
-      "Write(~/.claude/projects/**)"
+      "Edit(~/.claude/projects/**/*.jsonl)"
     ]
   },
   "hooks": {

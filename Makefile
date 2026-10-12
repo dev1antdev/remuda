@@ -1,4 +1,4 @@
-.PHONY: all build web server dev run test typecheck docker docker-test release deploy service code clean
+.PHONY: all build web server dev run test typecheck docker docker-test release publish deploy service code clean
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
@@ -37,7 +37,9 @@ docker:
 docker-test:
 	docker build --target test -t remuda:test .
 
-# Binaries for every host you run herdr on (the SPA is embedded, so one file each).
+# Binaries for every host you run herdr on (the SPA is embedded, so one file
+# each), and their sha256 sums — what a machine checks a release download
+# against (internal/health/release.go).
 release: web
 	@for t in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64; do \
 	  os=$${t%/*}; arch=$${t#*/}; \
@@ -45,6 +47,16 @@ release: web
 	  CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" \
 	    -o bin/remuda-$$os-$$arch ./cmd/remuda; \
 	done
+	@cd bin && shasum -a 256 remuda-darwin-arm64 remuda-darwin-amd64 remuda-linux-amd64 remuda-linux-arm64 > checksums.txt && echo "bin/checksums.txt written"
+
+# make publish — the release on GitHub: the four binaries and checksums.txt
+# under the tag HEAD carries. Every remuda out there then offers
+# "Download & install" for it. Tag first: git tag -a vX.Y.Z -m 'remuda X.Y.Z'
+publish:
+	@git describe --tags --exact-match >/dev/null 2>&1 || { echo "publish needs a tag on HEAD: git tag -a vX.Y.Z -m 'remuda X.Y.Z'"; exit 1; }
+	@test -z "$$(git status --porcelain)" || { echo "the tree is not clean: commit first"; exit 1; }
+	@$(MAKE) release
+	gh release create $(VERSION) bin/remuda-darwin-arm64 bin/remuda-darwin-amd64 bin/remuda-linux-amd64 bin/remuda-linux-arm64 bin/checksums.txt --title "remuda $(VERSION)" --generate-notes
 
 # make deploy HOST=gog.remote — puts the right binary into ~/.local/bin on that host.
 deploy: release

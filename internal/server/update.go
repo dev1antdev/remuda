@@ -47,6 +47,9 @@ func (s *Server) handleMachineUpdates(w http.ResponseWriter, r *http.Request) {
 	if u, ok := s.deployPlan(mc, rep); ok {
 		ups = append(ups, u)
 	}
+	if u, ok := s.releasePlan(mc, rep); ok {
+		ups = append(ups, u)
+	}
 	ups = append(ups, s.restartPlans(mc, snap)...)
 	if u, ok := s.serverRestartPlan(mc, rep, snap); ok {
 		ups = append(ups, u)
@@ -325,6 +328,20 @@ func (s *Server) handleMachineUpdate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"job": j.ID})
 		return
 	}
+	if req.What == "remuda-release" {
+		u, ok := s.releasePlan(mc, rep)
+		if !ok {
+			httpErr(w, 400, fmt.Errorf("no newer release of remuda is known for this machine"))
+			return
+		}
+		if req.Command != "" && req.Command != u.Command {
+			httpErr(w, http.StatusConflict, fmt.Errorf("the release changed since this was shown — look again"))
+			return
+		}
+		j := s.Jobs.Start(mc, u.Title, u.Command)
+		writeJSON(w, map[string]any{"job": j.ID})
+		return
+	}
 	if req.What == "remuda" {
 		var ok bool
 		if u, ok = s.deployPlan(mc, rep); !ok {
@@ -391,10 +408,26 @@ func (s *Server) deployPlan(mc *machines.Machine, rep *health.Report) (health.Up
 }
 
 // deployScript installs the copied binary and restarts the service — the
-// part of a deploy that runs as a shell script on the machine.
-const deployScript = `chmod +x "$HOME/.local/bin/remuda.new" && mv "$HOME/.local/bin/remuda.new" "$HOME/.local/bin/remuda" && "$HOME/.local/bin/remuda" -version && ` +
-	`if command -v launchctl >/dev/null 2>&1; then launchctl kickstart -k "gui/$(id -u)/dev.mardeus.remuda" 2>&1 || echo "(no launchd service; start remuda there yourself)"; ` +
-	`elif command -v systemctl >/dev/null 2>&1; then systemctl --user restart remuda.service 2>&1 || echo "(no systemd service; start remuda there yourself)"; fi`
+// part of a deploy that runs as a shell script on the machine; the same
+// two steps a release download ends with.
+const deployScript = health.InstallScript + " && " + health.RestartScript
+
+// releasePlan: a newer release of remuda on GitHub than the one this
+// machine runs — the one serving this page included, which restarts
+// itself a moment after the install.
+func (s *Server) releasePlan(mc *machines.Machine, rep *health.Report) (health.Update, bool) {
+	if s.Health == nil {
+		return health.Update{}, false
+	}
+	rel := s.Health.Release()
+	if mc.Local {
+		return health.ReleaseUpdate(s.version(), runtime.GOOS, runtime.GOARCH, rel, true)
+	}
+	if rep == nil {
+		return health.Update{}, false
+	}
+	return health.ReleaseUpdate(rep.Remuda, rep.OS, rep.Arch, rel, false)
+}
 
 // deploySelf copies this binary to the machine and restarts the service.
 func (s *Server) deploySelf(mc *machines.Machine, say func(string)) error {

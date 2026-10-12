@@ -72,7 +72,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	tailscale := flag.Bool("tailscale", false, "join your tailnet as a node of its own and serve HTTPS there (no tailscale serve needed); first run prints a login URL unless TS_AUTHKEY is set")
 	tsName := flag.String("tailscale-hostname", "remuda", "the node's name on the tailnet (https://<name>.<tailnet>.ts.net)")
-	noCheck := flag.Bool("no-version-check", false, "never ask npm and GitHub what the newest Claude Code and herdr are")
+	noCheck := flag.Bool("no-version-check", false, "never ask npm and GitHub what the newest Claude Code, herdr and remuda are")
 	flag.Parse()
 
 	if *showVersion {

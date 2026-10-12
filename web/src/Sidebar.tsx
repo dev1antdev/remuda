@@ -509,13 +509,17 @@ function concerns(h: Health | undefined, latest: Latest | undefined, serverVersi
   if (h.herdr && h.herdr_server && h.herdr_server !== h.herdr) out.push({ key: "herdr-server", text: `herdr's server still runs ${h.herdr_server}; ${h.herdr} is installed`, update: "restart-herdr" });
   if (remote && serverVersion && h.remuda && h.remuda !== serverVersion) out.push({ key: "ui", text: `remuda there is ${h.remuda}; this one is ${serverVersion}`, update: "remuda" });
   if (remote && serverVersion && !h.remuda) out.push({ key: "ui", text: "no remuda deployed there — search and usage fall back to slower paths", update: "remuda" });
+  // a newer release of remuda on GitHub than the one this machine runs
+  const have = remote ? h.remuda : serverVersion;
+  if (have && latest?.remuda && newer(have, latest.remuda)) out.push({ key: "release", text: `remuda ${latest.remuda} is out (${have} here)`, update: "remuda-release" });
   if (h.disk_used_pct >= 90 || (h.disk_free_gb > 0 && h.disk_free_gb < 10)) out.push({ key: "disk", text: `Disk ${h.disk_used_pct}% full, ${h.disk_free_gb.toFixed(0)} GB free`, bad: h.disk_used_pct >= 95 });
   if (h.error && !h.claude && !h.herdr) out.push({ key: "err", text: h.error, bad: true });
   return out;
 }
 
-// b is a newer x.y.z than a
-function newer(a: string, b: string): boolean {
+// b is a newer x.y.z than a (whatever either says after the numbers: a
+// build past a tag, "v0.4.0-24-g5dac31e", is 0.4.0)
+export function newer(a: string, b: string): boolean {
   const pa = a.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
   const pb = b.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
   if (pa.length < 3 || pb.length < 3) return false;
@@ -609,6 +613,10 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
               <dd>
                 {h.remuda ?? (m.id === "local" ? serverVersion : "not deployed")}
                 {m.id !== "local" && h.remuda ? <span className="dim"> · {h.remuda_running ? "running, terminals go through it" : "not running"}</span> : null}
+                {(() => {
+                  const have = m.id === "local" ? serverVersion : h.remuda;
+                  return have && l?.remuda && newer(have, l.remuda) ? <span className="health-new"> → {l.remuda}</span> : null;
+                })()}
               </dd>
               <dt>Disk</dt>
               <dd>
@@ -632,7 +640,7 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
                   <span className="health-concern">{c.text}</span>
                   {c.update && (
                     <button type="button" className="btn sm" onClick={() => { setOpen(null); setUpdateWhat(c.update!); }}>
-                      {c.update === "remuda" ? "Deploy" : c.update.startsWith("restart-") ? "Restart" : "Update"}
+                      {c.update === "remuda" ? "Deploy" : c.update === "remuda-release" ? "Download & install" : c.update.startsWith("restart-") ? "Restart" : "Update"}
                     </button>
                   )}
                 </li>

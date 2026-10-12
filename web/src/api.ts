@@ -72,7 +72,8 @@ export type Health = {
   error?: string;
 };
 
-export type Latest = { at: string; claude?: string; codex?: string; gemini?: string; herdr?: string };
+// the newest versions out there; remuda is its own newest release on GitHub
+export type Latest = { at: string; claude?: string; codex?: string; gemini?: string; herdr?: string; remuda?: string };
 
 export type Tailscale = { state: "starting" | "needs_login" | "running" | "error"; login_url?: string; url?: string; hostname?: string; error?: string };
 

@@ -146,9 +146,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   remuda versions, how Claude Code was installed, disk, load, uptime)
   from one POSIX script per machine through `Machine.Shell`, every 15
   minutes and on demand (`POST /api/machines/{id}/health`); the newest
-  Claude Code, Codex and Gemini CLI (npm registry) and herdr (GitHub
-  releases) every 6 hours unless `-no-version-check` — the only outbound
-  requests remuda makes.
+  Claude Code, Codex and Gemini CLI (npm registry), herdr and **remuda
+  itself** (GitHub releases) every 6 hours unless `-no-version-check` —
+  the only outbound requests remuda makes by itself (a read on demand
+  asks again when the last look is over 5 minutes old, `RefreshLatest`).
+  `release.go`: the newest release with its assets (`Collector.Release`),
+  `ReleaseUpdate(have, os, arch, rel, local)` offers `what =
+  remuda-release` ("Download & install remuda vX") when the release's
+  x.y.z is newer than the machine's (a build past a tag, `v0.4.0-24-g…`,
+  is 0.4.0) and it has `remuda-<os>-<arch>` for the machine;
+  `ReleaseScript` is what the machine runs on Run: curl the asset to
+  `~/.local/bin/remuda.new`, check it against the release's
+  `checksums.txt` when there is one (a mismatch keeps the old binary;
+  none → installed with a "not verified" line), `InstallScript` (chmod,
+  `-version`, mv) and `RestartScript` (launchctl kickstart / systemctl
+  restart) — the machine serving the page restarts detached two seconds
+  after the job instead, so the job ends first and the stale-page pill
+  does the rest. `make release` writes `bin/checksums.txt`; `make
+  publish` (a tag on HEAD, a clean tree) is the GitHub release.
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
   (`HealthButton` in Sidebar.tsx) turns amber on an update, a lagging
   remote remuda, or a nearly full disk.
@@ -196,7 +211,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   claude / codex / gemini (brew, npm or the native updater, by where the
   binary lives), or every agent; `GET /api/machines/{id}/updates` lists
   them, `POST …/update {what}` starts one; `what=remuda` copies this
-  very binary to a remote of the same OS/CPU and restarts its service.
+  very binary to a remote of the same OS/CPU and restarts its service;
+  `what=remuda-release` has the machine (the local one too) download the
+  newest GitHub release itself (`health.ReleaseUpdate`). The UI: the
+  concern "remuda vX is out" in the ⓘ with a Download & install button,
+  the row in Updates, and one toast per version in App.tsx (pref
+  `release.seen`) whose button opens the local machine's Updates on it.
   `Updates.tsx` shows the list, the command before "Run", the live log,
   and the machine's recent jobs. Nothing uses sudo; everything runs as
   the user through the shell remuda already has on the machine.

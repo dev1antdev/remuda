@@ -118,6 +118,17 @@ the server is restarted — herdr restores the workspaces and panes, and
 remuda starts every chat again with its session resumed ("Restart
 herdr's server" is offered whenever the server lags the binary).
 
+remuda watches its own releases on GitHub too (one request every six
+hours, none with `-no-version-check`). When a newer one is out, the ⓘ of
+every machine behind it says so with a **Download & install** button, the
+Updates dialog lists it, and a toast in the corner says it once. The
+machine downloads the binary for its OS and CPU itself, checks it against
+the release's `checksums.txt`, installs it as `~/.local/bin/remuda` and
+restarts the service; the remuda serving the page restarts itself two
+seconds after its install, and the page offers a reload. A release is
+`make publish`: the four binaries and `checksums.txt` under the tag on
+HEAD.
+
 The long way, piece by piece:
 
 Requirements: Go 1.22+, Node 18+ (build only), herdr 0.9+ installed (its

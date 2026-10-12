@@ -283,6 +283,8 @@ func (s *Server) handleMachineHealth(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 503, fmt.Errorf("health checks are off"))
 		return
 	}
+	// a read on demand also asks what is new, unless it was asked a moment ago
+	s.Health.RefreshLatest(5 * time.Minute)
 	s.Health.Refresh(mc)
 	writeJSON(w, map[string]any{"health": s.Health.Report(mc.Cfg.ID), "latest": s.Health.Latest()})
 }

@@ -35,7 +35,14 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
     autoPicked.current = true;
     const u = data.find((u) => u.what === what);
     if (u) setPicked(u);
-    else setMissing(what === "remuda" ? "This remuda cannot be deployed there: that needs a remote machine of the same OS and CPU, and a released build here." : `Nothing to update called “${what}” there any more.`);
+    else
+      setMissing(
+        what === "remuda"
+          ? "This remuda cannot be deployed there: that needs a remote machine of the same OS and CPU, and a released build here."
+          : what === "remuda-release"
+            ? "No newer release of remuda is known for this machine."
+            : `Nothing to update called “${what}” there any more.`,
+      );
   }, [what, data]);
   // a job still running from last time
   useEffect(() => {
@@ -107,7 +114,15 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           </pre>
           {job.done ? (
             job.ok ? (
-              <Notice tone="success" icon="check">Done.</Notice>
+              picked?.what === "remuda-release" && machine.id === "local" ? (
+                <Notice tone="info" icon="refresh-cw">
+                  Done. remuda is restarting here; the page offers a reload once the new version answers.
+                </Notice>
+              ) : (
+                <Notice tone="success" icon="check">
+                  Done.
+                </Notice>
+              )
             ) : (
               <Notice tone="error">{job.error || "failed"}</Notice>
             )
@@ -131,7 +146,11 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
         <>
           <p className="updates-note">{picked.note}</p>
           <p className="dim">
-            {picked.what.startsWith("restart-") ? `This goes through herdr on ${label}, pane by pane:` : `This runs on ${label}, as you, through the shell remuda already uses there:`}
+            {picked.what.startsWith("restart-")
+              ? `This goes through herdr on ${label}, pane by pane:`
+              : picked.what === "remuda-release"
+                ? `This runs on ${label}, as you: the download from GitHub, the check, the install, the restart of remuda there:`
+                : `This runs on ${label}, as you, through the shell remuda already uses there:`}
           </p>
           <code className="updates-cmd">{picked.command}</code>
           <div className="modal-actions">
@@ -151,7 +170,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           <div className="updates-list">
             {data?.map((u) => (
               <button key={u.what} type="button" className="updates-row" onClick={() => setPicked(u)}>
-                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "herdr" || u.what === "remuda" ? "refresh-cw" : "sparkles"} size={14} />
+                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "herdr" || u.what.startsWith("remuda") ? "refresh-cw" : "sparkles"} size={14} />
                 <span className="updates-row-text">
                   <span>{u.title}</span>
                   <span className="dim">{u.note?.split(". ")[0]}</span>
