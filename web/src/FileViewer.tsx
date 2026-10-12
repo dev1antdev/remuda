@@ -200,7 +200,7 @@ export default function FileViewer({
 }
 
 // CodeView splits once per text, not per render: a 512KB file is 10k rows.
-function CodeView({ text, line, lineRef }: { text: string; line?: number; lineRef: React.RefObject<HTMLDivElement> }) {
+function CodeView({ text, line, lineRef }: { text: string; line?: number; lineRef: React.RefObject<HTMLDivElement | null> }) {
   const lines = useMemo(() => text.split("\n"), [text]);
   return (
     <div className="fv-code">

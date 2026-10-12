@@ -129,6 +129,10 @@
   height: 0;
 }
 
+.xterm .xterm-scrollable-element > .scrollbar {
+  display: none;
+}
+
 html,
 body,
 #root {

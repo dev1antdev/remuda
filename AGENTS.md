@@ -87,7 +87,7 @@ not style.
   (`"GET /api/x"`), no framework. Errors go out through `httpErr` /
   `rpcErr`, JSON through `decode` / `writeJSON`. `go vet` is the linter,
   gofmt the formatter (a hook runs it in Claude Code). Tabs.
-- **TypeScript, React 18 function components**, 2-space indent, double
+- **TypeScript, React 19 function components**, 2-space indent, double
   quotes, semicolons. Dependencies are react, react-dom and xterm; add
   nothing without a reason that survives review. Never `innerHTML`:
   Markdown and task descriptions render to React nodes. Per-device state

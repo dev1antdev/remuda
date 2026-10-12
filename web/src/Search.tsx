@@ -2,7 +2,7 @@
 // folder, a period — and the matching turns, newest first, each a jump to
 // its place in the conversation.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { searchTranscripts, type Machine, type SearchHit, type SearchResult } from "./api";
 import { basename, errMsg } from "./prefs";
 import { connected, folderOptions, machineLabel, machineOptions } from "./options";
@@ -122,7 +122,7 @@ function highlight(text: string, q: string) {
   const lower = text.toLowerCase();
   const needle = q.toLowerCase();
   if (!needle || lower.length !== text.length) return text;
-  const out: (string | JSX.Element)[] = [];
+  const out: (string | ReactElement)[] = [];
   let i = 0;
   let k = 0;
   for (;;) {
