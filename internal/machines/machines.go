@@ -23,6 +23,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/sshx"
 	"github.com/dev1antdev/remuda/internal/state"
+	"github.com/dev1antdev/remuda/internal/text"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
@@ -39,7 +40,7 @@ const (
 type Config struct {
 	ID           string `json:"id"`
 	Label        string `json:"label"`
-	Host         string `json:"host"`                    // ssh destination, e.g. "gog.remote"
+	Host         string `json:"host"`                    // ssh destination, e.g. "studio.remote"
 	RemoteSocket string `json:"remote_socket,omitempty"` // default: herdr's socket under the remote home
 	HerdrBin     string `json:"herdr_bin,omitempty"`     // default: autodetected
 	Source       string `json:"source,omitempty"`        // SourceHerdr, or "" when added here
@@ -971,8 +972,19 @@ func (mc *Machine) remoteTail(path string, v transcript.Version) ([]byte, error)
 // agent_session (exact id first, then a glob across project dirs). Hits are
 // cached; a local hit is re-checked with one stat.
 func (mc *Machine) ResolveSession(cwd, kind, value string) (string, error) {
+	// both come from the pane's own hooks — the agent in it chose them — so
+	// a path is only a session file under the agent's own projects tree,
+	// and an id only what looks like one
 	if kind == "path" {
-		return value, nil
+		clean := filepath.Clean(value)
+		under := filepath.Join(mc.Home(), ".claude", "projects") + "/"
+		if !strings.HasSuffix(clean, ".jsonl") || !strings.HasPrefix(clean, under) {
+			return "", fmt.Errorf("session path %q is not a session file under ~/.claude/projects", value)
+		}
+		return clean, nil
+	}
+	if !text.SessionID(value) {
+		return "", fmt.Errorf("session id %q does not look like one", value)
 	}
 	mc.mu.Lock()
 	cached, ok := mc.sessPath[value]

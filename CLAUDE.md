@@ -61,8 +61,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   background: dial master → one script reads `$HOME` and finds the herdr
   bin (incl. `~/.local/bin`) → RPC transport → `Ping`. **Two RPC
   transports**: a forwarded unix socket when the sshd allows streamlocal
-  forwarding (gog), else one `ssh host nc -U <sock>` exec per request
-  (roofr's sshd on :2222 answers "unknown channel type"). Remote
+  forwarding, else one `ssh host nc -U <sock>` exec per request
+  (one sshd on :2222 answers "unknown channel type"). Remote
   transcripts are fetched by `stat` + `tail -c` delta into a small
   per-session byte cache (`Machine.Transcript` hides local vs remote);
   `ResolveSession` finds `<uuid>.jsonl` and caches the hit on both sides.
@@ -163,7 +163,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   restart) — the machine serving the page restarts detached two seconds
   after the job instead, so the job ends first and the stale-page pill
   does the rest. `make release` writes `bin/checksums.txt`; `make
-  publish` (a tag on HEAD, a clean tree) is the GitHub release.
+  publish` (a tag on HEAD, a clean tree, the checks green) pushes the
+  tag, and `.github/workflows/release.yml` builds the binaries and makes
+  the GitHub release from it; `.github/workflows/ci.yml` is /verify's
+  list plus govulncheck, npm audit and gitleaks on every push.
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
   (`HealthButton` in Sidebar.tsx) turns amber on an update, a lagging
   remote remuda, or a nearly full disk.
@@ -619,6 +622,28 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   dark` + thin custom scrollbars everywhere else.
 - Auth: every route except `/api/health` and `/api/login` requires the
   token. Keep it that way.
+- **Hardening (the 2026-10 review; keep every one):** `secureHeaders` in
+  `Handler()` puts nosniff, `Referrer-Policy: same-origin`, `X-Frame-Options:
+  SAMEORIGIN`, HSTS over TLS and the page's CSP (`appCSP`) on every
+  response but the code-server proxy's (its own headers; `X-Frame-Options`
+  forced to SAMEORIGIN there) and the file viewer's bytes (a stricter
+  sandbox CSP). The code proxy strips `Cookie`/`Authorization` before
+  forwarding — remuda's token never reaches a machine's code-server.
+  `decode` caps a JSON body at 1 MB; the `-addr` server has header and
+  idle timeouts. The sign-in URL is logged only on the first run or to a
+  terminal; a wrong token is logged with the remote address and answered
+  after 500 ms; `REMUDA_TOKEN` must be ≥ 32 characters. Session ids from
+  herdr go through `text.SessionID` before naming a file or following
+  `--resume` (the pane's own hooks report them: the agent chooses the
+  value), and a `path` session must be a `.jsonl` under
+  `~/.claude/projects`. Release asset URLs must be GitHub's for this
+  repository and tag (`releaseURLOK`) and are shell-quoted. Uploads refuse
+  a `.remuda`/`uploads` that is a symlink and write with `O_EXCL|O_NOFOLLOW`.
+  The review diff refuses a path starting with `-` and passes `--` to git.
+  Branch/base names for a worktree go through `refOK`. ssh control sockets
+  live under `<state>/ssh` (`sshx.SocketDir`). `TS_AUTHKEY` travels on
+  stdin, never on a command line. Colours are six hex digits or nothing
+  (`normColor`). A run of an update must send back the command shown.
 
 ## Testing
 

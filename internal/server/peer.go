@@ -20,7 +20,7 @@ import (
 
 // A terminal through the machine's own remuda.
 //
-// herdr lets one client attach to a terminal at a time: when GOG's own
+// herdr lets one client attach to a terminal at a time: when a remote Mac's own
 // remuda holds the attach (someone looks at the pane there), an attach
 // from here over SSH is refused — "already has an attached client". So
 // when a remote machine runs its own remuda (the health probe finds it

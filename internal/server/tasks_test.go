@@ -6,22 +6,22 @@ func TestTrustPromptMatchesAWrappedScreen(t *testing.T) {
 	screen := "╭────────────────────────────────────────╮\n" +
 		"│ Accessing workspace:                   │\n" +
 		"│                                        │\n" +
-		"│ /Users/dev1antdev/.herdr/worktrees/run │\n" +
+		"│ /Users/me/.herdr/worktrees/run │\n" +
 		"│ repo/task-test-hello                   │\n" +
 		"│                                        │\n" +
 		"│ Quick safety check: Is this a project  │\n" +
 		"│ ❯ No, exit                             │\n" +
 		"│   Yes, I trust this folder             │\n" +
 		"╰────────────────────────────────────────╯\n"
-	dir := "/Users/dev1antdev/.herdr/worktrees/runrepo/task-test-hello"
-	if !isTrustPrompt(screen, dir, "/Users/dev1antdev") {
+	dir := "/Users/me/.herdr/worktrees/runrepo/task-test-hello"
+	if !isTrustPrompt(screen, dir, "/Users/me") {
 		t.Fatal("a wrapped path was not recognised")
 	}
-	if isTrustPrompt(screen, "/Users/dev1antdev/other", "/Users/dev1antdev") {
+	if isTrustPrompt(screen, "/Users/me/other", "/Users/me") {
 		t.Fatal("another folder's prompt was taken")
 	}
 	tilde := "Accessing workspace:\n~/.herdr/worktrees/runrepo/task-test-hello\n❯ No, exit\n  Yes, I trust this folder\n"
-	if !isTrustPrompt(tilde, dir, "/Users/dev1antdev") {
+	if !isTrustPrompt(tilde, dir, "/Users/me") {
 		t.Fatal("a ~ path was not recognised")
 	}
 	if isTrustPrompt("Do you want to proceed?\n❯ Yes\n  No", dir, "") {

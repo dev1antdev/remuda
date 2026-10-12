@@ -41,7 +41,7 @@ func TestRunLifecycleAndSweep(t *testing.T) {
 	st.now = func() time.Time { return clock }
 	inbox, _ := st.Projects()
 	tk, _ := st.Create(inbox[0].ID, Patch{Title: str("Ship it")})
-	run, err := st.StartRun(Run{TaskID: tk.ID, Machine: "gog", Workspace: "wX", Pane: "wX:p1", Dir: "/w/x", Branch: "task-1-ship-it", Agent: "claude"})
+	run, err := st.StartRun(Run{TaskID: tk.ID, Machine: "studio", Workspace: "wX", Pane: "wX:p1", Dir: "/w/x", Branch: "task-1-ship-it", Agent: "claude"})
 	if err != nil || run.State != RunStarting || run.ID == 0 {
 		t.Fatalf("start %+v %v", run, err)
 	}

@@ -1,0 +1,47 @@
+# A tag vX.Y.Z pushed is a release: the four binaries built here with the
+# tag as their version, their sha256 sums, and the GitHub release that
+# every running remuda then offers as "Download & install"
+# (internal/health/release.go). `make publish` is how a tag gets pushed.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: dependencies
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: test
+        run: |
+          (cd web && npm run build)
+          go vet ./... && go test ./...
+      - name: binaries and checksums
+        run: make release VERSION=${{ github.ref_name }}
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          files="bin/remuda-darwin-arm64 bin/remuda-darwin-amd64 bin/remuda-linux-amd64 bin/remuda-linux-arm64 bin/checksums.txt"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" $files --clobber
+          else
+            gh release create "$TAG" $files --title "remuda $TAG" --generate-notes
+          fi

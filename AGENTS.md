@@ -20,7 +20,8 @@ once after cloning and after every change under `web/`.
 | Develop | `make server` (API on :7317) and `make dev` (Vite on :5173, proxies `/api` and `/ws`) |
 | Go checks | `gofmt -l ./cmd ./internal` (must print nothing), `go vet ./...`, `go test ./...` |
 | TypeScript check | `make typecheck` (`tsc --noEmit` + `go vet`) |
-| Everything, as CI would | `make test && make typecheck`, or `docker build --target test .` |
+| Everything, as CI does (`.github/workflows/ci.yml`) | `make test && make typecheck`, or `docker build --target test .` |
+| A release | `git tag -a vX.Y.Z -m 'remuda X.Y.Z' && make publish` — the Release workflow builds and publishes it |
 | Binaries for every host | `make release`; `make deploy HOST=<ssh host>` |
 
 Tests are plain `testing` and need no herdr: the ones that start a

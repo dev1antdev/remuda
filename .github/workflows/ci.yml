@@ -1,0 +1,59 @@
+# Every push and pull request: the SPA built (every Go compile embeds it),
+# the TypeScript check, gofmt, go vet, the tests, and the vulnerability
+# scans — the same list as /verify in .claude/skills, run where the
+# author's machine is not.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: build, test, scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: SPA
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          npm run typecheck
+      - name: gofmt
+        run: |
+          out="$(gofmt -l ./cmd ./internal)"
+          if [ -n "$out" ]; then echo "not gofmt'ed:"; echo "$out"; exit 1; fi
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - name: npm audit
+        working-directory: web
+        run: npm audit --audit-level=high
+
+  secrets:
+    name: secret scan (whole history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

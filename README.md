@@ -92,7 +92,7 @@ The short way, on a machine with nothing on it yet:
 remuda setup                      # herdr installed if missing, its server
                                     # started, the agent hooks, this binary to
                                     # ~/.local/bin and the service running it
-remuda setup -host gog.remote     # the same on a remote machine over ssh
+remuda setup -host studio.remote     # the same on a remote machine over ssh
                                     # (its remuda binary already at ~/.local/bin)
 ```
 
@@ -126,8 +126,11 @@ machine downloads the binary for its OS and CPU itself, checks it against
 the release's `checksums.txt`, installs it as `~/.local/bin/remuda` and
 restarts the service; the remuda serving the page restarts itself two
 seconds after its install, and the page offers a reload. A release is
-`make publish`: the four binaries and `checksums.txt` under the tag on
-HEAD.
+`make publish`: the tag on HEAD is pushed, and the Release workflow
+(`.github/workflows/release.yml`) builds the four binaries and
+`checksums.txt` and publishes them under it. CI (`.github/workflows/
+ci.yml`) runs the build, the tests, the TypeScript check, `govulncheck`,
+`npm audit` and a secret scan of the whole history on every push.
 
 The long way, piece by piece:
 
@@ -163,8 +166,8 @@ Every request needs the token — as the printed `?token=` link once per device
 ## As a background service on a Mac or Linux box
 
 ```bash
-make deploy HOST=gog.remote     # the right binary → ~/.local/bin/remuda there
-make service HOST=gog.remote    # launchd LaunchAgent (macOS) / systemd --user (Linux):
+make deploy HOST=studio.remote     # the right binary → ~/.local/bin/remuda there
+make service HOST=studio.remote    # launchd LaunchAgent (macOS) / systemd --user (Linux):
                                 # 127.0.0.1:7317, starts at login, restarts if it exits
 make service                    # the same on this machine
 ```
@@ -208,12 +211,20 @@ machine with
 
 ```sh
 make code                   # this machine
-make code HOST=gog.remote   # a remote one, over ssh
+make code HOST=studio.remote   # a remote one, over ssh
 ```
 
 (`deploy/install-code.sh`: downloads a pinned release, verifies its
 checksum, installs a launchd / systemd user service). The editor stays
 mounted behind the other modes, so switching back does not reload it.
+
+One thing to weigh before opening it on a machine: the editor runs inside
+remuda's page, as this origin, so whatever runs in it — an extension, a
+repository's own workspace settings — can reach remuda's API as you, on
+every machine here. remuda keeps its own token from the editor (the
+cookie is stripped on the way to code-server), but the editor itself is
+as trusted as this page. Open the Code mode only on machines you trust
+with everything remuda can do; see SECURITY.md.
 
 ## From your phone
 
@@ -321,7 +332,7 @@ from the machine's own folders (repositories marked, the workspaces
 already there as quick picks) or typed.
 
 **Several remuda at once:** each machine may run its own (the phone on
-GOG's, the desk on the Mac's). herdr lets one client attach to a terminal
+the studio Mac's, the desk on its own). herdr lets one client attach to a terminal
 at a time, so when a remote machine's own remuda is running (and
 reachable on its loopback port 7317), this one reaches that machine's
 terminals through it instead of attaching directly — both sides can look
