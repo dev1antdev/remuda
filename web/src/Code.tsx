@@ -112,10 +112,10 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
             Install it there as a background service (VS Code in the browser, bound to 127.0.0.1:{status.port || "7320"} with no auth of its own — remuda's
             token is the door):
           </p>
-          <pre className="code-cmd">{machine.id === "local" ? "make code" : `make code HOST=${machine.host ?? machine.label}`}</pre>
+          <pre className="code-cmd">{machine.id === "local" ? "remuda code" : `remuda code -host ${machine.host ?? machine.label}`}</pre>
           <p className="modal-hint">
-            …from a checkout of remuda, or <code>sh deploy/install-code.sh</code> on the machine itself. It downloads a pinned release of code-server and
-            verifies its checksum.
+            …in a terminal on the machine that serves this page (<code>~/.local/bin/remuda</code> when it is not on your PATH). It downloads a pinned
+            release of code-server and verifies its checksum.
           </p>
           <div className="modal-actions">
             <button type="button" className="btn" onClick={() => probe(true)} disabled={checking}>

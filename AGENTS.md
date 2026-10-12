@@ -55,7 +55,17 @@ not style.
 - **A test herdr needs `HERDR_SOCKET_PATH`, never a changed `HOME`
   alone.** herdr ignores `HOME` for its socket: `HOME=/tmp/x herdr server
   stop` stopped the person's real server once. `internal/herdr/
-  server_test.go` is the pattern.
+  server_test.go` is the pattern. An agent working inside a herdr pane
+  already has `HERDR_SOCKET_PATH` and `HERDR_SOCKET` in its environment,
+  naming the person's real server: a test sets both itself and never
+  counts on them being unset.
+- **Never run the uninstall for real on the person's machine.** `remuda
+  uninstall` and `scripts/uninstall.sh run` stop the service, and with
+  `-herdr` the server and every agent in it. To look, use `-n` (the plan
+  only reads). To test, `internal/setup/setup_test.go` is the pattern: a
+  temp `HOME` whose `~/.local/bin` holds stand-ins for `launchctl`,
+  `systemctl`, `herdr`, `brew` and `ssh`, checked to be what the script
+  finds before anything runs; a full run belongs in a container.
 - **Live checks touch only panes you created.** The person's own
   sessions are in the same roster. Create a scratch workspace through the
   API, drive that one, delete it when done (`/live-check` in Claude Code).
@@ -107,7 +117,7 @@ not style.
 | The Changes lens (review) | `internal/review/`, `web/src/Review.tsx` |
 | Tasks mode | `internal/tasks/`, `web/src/Tasks.tsx`, `tasksApi.ts` |
 | Updates and the restarts after them | `internal/health/`, `internal/jobs/`, `internal/restart/`, `web/src/Updates.tsx` |
-| Install scripts | `internal/setup/scripts/`, `deploy/install-code.sh` |
+| Installing and uninstalling: the installer, setup, the service, code-server | `internal/setup/` (the scripts in `scripts/`, embedded), `cmd/remuda/main.go` for the commands |
 | The look | `web/src/styles.css`, `ui.tsx`, `icons.tsx`, `Select.tsx` |
 
 ## Agent tooling in this repository

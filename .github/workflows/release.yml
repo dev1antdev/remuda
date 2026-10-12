@@ -1,6 +1,7 @@
 # A tag vX.Y.Z pushed is a release: the four binaries built here with the
-# tag as their version, their sha256 sums, and the GitHub release that
-# every running remuda then offers as "Download & install"
+# tag as their version, their sha256 sums, the installer people pipe to sh
+# (releases/latest/download/install.sh), and the GitHub release that every
+# running remuda then offers as "Download & install"
 # (internal/health/release.go). `make publish` is how a tag gets pushed.
 name: Release
 
@@ -39,7 +40,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          files="bin/remuda-darwin-arm64 bin/remuda-darwin-amd64 bin/remuda-linux-amd64 bin/remuda-linux-arm64 bin/checksums.txt"
+          files="bin/remuda-darwin-arm64 bin/remuda-darwin-amd64 bin/remuda-linux-amd64 bin/remuda-linux-arm64 bin/checksums.txt internal/setup/scripts/install.sh"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" $files --clobber
           else

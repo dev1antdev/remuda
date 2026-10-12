@@ -86,15 +86,73 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
 
 ## Install & run
 
-The short way, on a machine with nothing on it yet:
+On a Mac or a Linux box with nothing on it — no Go, no Node, no checkout:
+
+```bash
+curl -fsSL https://github.com/dev1antdev/remuda/releases/latest/download/install.sh | sh
+```
+
+The script ([`internal/setup/scripts/install.sh`](internal/setup/scripts/install.sh):
+read it first if you like) downloads the release binary for the machine's
+OS and CPU (macOS and Linux, arm64 and amd64), checks it against the
+release's `checksums.txt` and refuses a download that does not match, puts
+it at `~/.local/bin/remuda` and runs `remuda setup`: herdr installed if
+missing, its headless server started, the status hooks for the agents it
+finds, and remuda as a background service on `127.0.0.1:7317`. On a Mac
+the page then opens in your browser, signed in; elsewhere the sign-in link
+is printed. Nothing asks for sudo, and the same line run again is the
+upgrade. What it cannot do for you is install a coding agent — Claude Code,
+Codex or Gemini CLI — and sign you in to it: do that, then `remuda setup`
+once more for that agent's hooks. (git, which worktrees and the Changes
+lens use, comes with Apple's Command Line Tools: macOS offers them the
+first time git is called.)
+
+Arguments go to `remuda setup` (`… | sh -s -- -tailscale`);
+`REMUDA_INSTALL_VERSION=v0.5.1` picks a release instead of the newest and
+`REMUDA_INSTALL_ONLY=1` stops after the binary.
+
+With the binary in hand, the pieces by name:
 
 ```bash
 remuda setup                      # herdr installed if missing, its server
                                     # started, the agent hooks, this binary to
                                     # ~/.local/bin and the service running it
-remuda setup -host studio.remote     # the same on a remote machine over ssh
-                                    # (its remuda binary already at ~/.local/bin)
+remuda setup -host studio.remote     # the same on a remote machine over ssh; one
+                                    # without remuda fetches the release for
+                                    # its own OS and CPU
+remuda code [-host studio.remote]    # code-server, for the Code mode
+remuda uninstall                  # the way back (below)
+remuda -h                         # all of it, and the server's flags
 ```
+
+### Uninstall
+
+```bash
+remuda uninstall          # remuda: the service, the binary, the log
+remuda uninstall -all     # and your data, code-server and herdr: nothing left
+```
+
+It first lists what it found — what would go, and what stays unless you
+say so — and asks before removing anything (`-yes` skips the question,
+`-n` only shows the list, `-host` does it on a remote machine). remuda's
+own things always go: the launchd / systemd service, `~/.local/bin/remuda`,
+the log, the ssh connections it holds open. Three things are more than
+remuda's own and go only by their flags:
+
+- `-data` — the state folder: the token, your tasks, schedules, saved
+  prompts, push keys, the tailnet node's state (the node itself stays
+  listed in your Tailscale admin console until you remove it there).
+- `-code` — code-server: its service, the release under `~/.local/opt`,
+  and the editor's own settings and extensions.
+- `-herdr` — herdr: its hooks in your agents' settings, its server —
+  **which ends every agent and shell running in it** — the binary (through
+  Homebrew when that is where it came from) and `~/.config/herdr`. A
+  remuda you started by hand is stopped with it, since it would start
+  herdr's server again; without `-herdr` it is only pointed out.
+
+`-all` is the three together. What no command can reach is said at the
+end: the page's sign-in and preferences in your browser, and the files
+you attached in chats (each project's `.remuda/uploads`).
 
 herdr is installed with Homebrew when there is one, else with herdr's own
 installer into `~/.local/bin`. remuda also starts herdr's headless
@@ -173,7 +231,7 @@ make service                    # the same on this machine
 ```
 
 Logs: `~/Library/Logs/remuda.log` (macOS) or `journalctl --user -u remuda`.
-Remove the service with `sh internal/setup/scripts/install-service.sh uninstall` (the script `remuda setup` carries embedded).
+`remuda uninstall` removes the service and the rest (see Uninstall above).
 
 ## Docker / Portainer
 
@@ -210,12 +268,15 @@ forwarded over the ssh master the roster already uses. Install it on a
 machine with
 
 ```sh
-make code                   # this machine
-make code HOST=studio.remote   # a remote one, over ssh
+remuda code                      # this machine
+remuda code -host studio.remote     # a remote one, over ssh
+remuda code uninstall            # its service off again; status asks how it is
 ```
 
-(`deploy/install-code.sh`: downloads a pinned release, verifies its
-checksum, installs a launchd / systemd user service). The editor stays
+(the binary carries the script, `internal/setup/scripts/install-code.sh`:
+it downloads a pinned release, verifies its checksum on all four
+platforms, installs a launchd / systemd user service; `make code [HOST=]`
+from a checkout is the same thing). The editor stays
 mounted behind the other modes, so switching back does not reload it.
 
 One thing to weigh before opening it on a machine: the editor runs inside

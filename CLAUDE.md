@@ -20,7 +20,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `-herdr-bin`, `-print-token`, `-version`, `-tailscale` /
   `-tailscale-hostname`, `-no-version-check`, `-code-port`; subcommands
   `search` and `usage` for the deployed binary on a remote machine, and
-  `setup` (see herdr below).
+  `setup`, `uninstall` and `code` (see "Installing and uninstalling"
+  below); `remuda -h` lists them (`help` in main.go).
 - `internal/state/` — the one state dir (`<user config dir>/remuda`, 0700,
   or `REMUDA_STATE_DIR` for a second instance beside the real one)
   and the one atomic 0600 writer; token, machines.json, vapid.json and
@@ -196,17 +197,49 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   server stop` stops the user's real server (it happened). The env var is
   what `herdr server`, `status server` and `server stop` all honour;
   `internal/herdr/server_test.go` is the pattern.
+- **Installing and uninstalling need no checkout** (`internal/setup`: five
+  embedded POSIX scripts, and `setup_test.go` drives them in a temp HOME
+  with stand-ins for launchctl, systemctl, herdr, brew and ssh first on
+  PATH — never against the real machine). `install.sh` is the one line
+  people pipe to sh, a release asset (`releases/latest/download/
+  install.sh`, uploaded by release.yml): the binary for the OS and CPU,
+  checked against `checksums.txt` (no match, no install), put at
+  `~/.local/bin/remuda`, then `remuda setup -open`; its work sits in
+  `main`, called on the last line, so a download cut off half way runs
+  nothing. `REMUDA_INSTALL_VERSION` / `_ONLY` / `_MISSING` / `_BASE` steer
+  it, and `setup -host H` runs it on H with ONLY and MISSING (and this
+  build's tag when it is a release, `installEnv`), so a remote without
+  remuda fetches the binary for its own OS and CPU. `-open` waits for
+  `/api/health` and opens the page on a Mac at the desk, the address
+  handed to `osascript` on stdin (`openPage` in local.go: the token never
+  goes on a command line; on Linux the link is only printed). `remuda
+  uninstall [-host H] [-data] [-code] [-herdr] [-all] [-yes] [-n]` is
+  `uninstall.sh` behind `setup.Removal`: `plan` prints what would go and
+  what stays (exit 10 when nothing would), the person is asked
+  (`confirm`: no terminal means no), `run` removes — the service, the
+  binary, the log and the ssh masters always; the state dir, code-server
+  and herdr (its hooks first, then its server stopped, the binary through
+  brew or from under HOME, its folders) only by their flags. A folder is
+  deleted as the state dir only when remuda's files are in it.
+  `Removal.Remove` starts the local script in a session of its own
+  (`Setsid`): typed into a herdr pane, `-herdr` stops the server that
+  pane lives in, and herdr ends the pane's process group with it (seen in
+  a container: the script died right after the stop). A remuda the
+  service does not run (`by_hand`: pgrep minus this command and the
+  service's pid) is only pointed out — and stopped when herdr goes,
+  because its `EnsureServer` would start the server again. `remuda
+  code [-host H] [-port N] [install|uninstall|status]` is
+  `install-code.sh` (`setup.Code`).
 - **herdr is remuda's to run.** `herdr.EnsureServer(bin, socket)` pings
   and, when nothing answers, starts `herdr server` (the headless server)
   detached, at most once per two minutes — at startup and whenever the
   watcher's local poll fails (`Watcher.LocalDown`); a remote machine's
   `connect()` does the same over ssh (`herdr.StartServerScript`) before
-  giving up. `remuda setup [-host H] [-tailscale]` (`internal/setup`,
-  two embedded POSIX scripts: `setup.sh` installs herdr with brew or its
-  installer, starts the server, installs `herdr integration` hooks for
-  the agents present; `install-service.sh` is the service installer that
-  used to live in deploy/) is the one-command install, locally or over
-  ssh. `internal/jobs` runs a shell script on a machine in the background
+  giving up. `remuda setup [-host H] [-tailscale]` (`internal/setup`:
+  `setup.sh` installs herdr with brew or its installer, starts the
+  server, installs `herdr integration` hooks for the agents present;
+  `install-service.sh` is the launchd / systemd service) is the
+  one-command install, locally or over ssh. `internal/jobs` runs a shell script on a machine in the background
   with its output streamed (`Machine.Stream`, `sshx.Conn.Stream`) for
   the page to poll (`GET /api/jobs/{id}`); `health.Plan(what, report)`
   is the update command for herdr (brew or `herdr update --handoff`;
@@ -305,8 +338,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `SendToAgent` to any agent. Nothing goes until that button.
 - `internal/code/` — the **Code mode**: each machine runs its own
   code-server (VS Code in the browser) on `127.0.0.1:7320`, `auth: none`,
-  installed by `deploy/install-code.sh` (`make code [HOST=]`: a pinned
-  release, checksum verified, launchd / systemd user service). remuda is
+  installed by `remuda code [-host H]` (`internal/setup/scripts/
+  install-code.sh`, also `make code [HOST=]`: a pinned release, its
+  checksum known for all four platforms, launchd / systemd user service). remuda is
   the only door: `/code/<machine>/…` is a `httputil.ReverseProxy` behind the
   token guard — prefix stripped, Host kept, `X-Frame-Options` dropped,
   absolute `Location`s re-prefixed, WebSocket upgrades passed; the target
@@ -644,6 +678,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   live under `<state>/ssh` (`sshx.SocketDir`). `TS_AUTHKEY` travels on
   stdin, never on a command line. Colours are six hex digits or nothing
   (`normColor`). A run of an update must send back the command shown.
+  The installer installs nothing whose sha256 is not the release's; the
+  sign-in address reaches the browser through `osascript`'s stdin, never
+  an argument; `uninstall.sh` asks before anything goes and deletes a
+  state folder only when remuda's files are in it.
 
 ## Testing
 

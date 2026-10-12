@@ -51,8 +51,9 @@ release: web
 
 # make publish — a release: the tag on HEAD is pushed, and the Release
 # workflow (.github/workflows/release.yml) builds the four binaries and
-# checksums.txt there and makes the GitHub release every remuda out there
-# then offers as "Download & install". Tag first:
+# checksums.txt there and makes the GitHub release — with install.sh, the
+# one-line installer — that every remuda out there then offers as
+# "Download & install". Tag first:
 #   git tag -a vX.Y.Z -m 'remuda X.Y.Z'
 publish:
 	@git describe --tags --exact-match >/dev/null 2>&1 || { echo "publish needs a tag on HEAD: git tag -a vX.Y.Z -m 'remuda X.Y.Z'"; exit 1; }
@@ -79,9 +80,10 @@ service:
 
 # make code [HOST=studio.remote] — installs code-server (VS Code in the browser)
 # as a per-user service on that host, bound to 127.0.0.1:7320 with no auth of
-# its own; remuda proxies it under /code/<machine>/ behind its token.
+# its own; remuda proxies it under /code/<machine>/ behind its token. The
+# binary carries the same script: `remuda code [-host …]`.
 code:
-	@if [ -n "$(HOST)" ]; then ssh $(HOST) 'sh -s' < deploy/install-code.sh; else sh deploy/install-code.sh; fi
+	@if [ -n "$(HOST)" ]; then ssh $(HOST) 'sh -s' < internal/setup/scripts/install-code.sh; else sh internal/setup/scripts/install-code.sh; fi
 
 clean:
 	rm -rf bin web/dist

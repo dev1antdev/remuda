@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -60,6 +61,14 @@ func main() {
 		setupCmd(os.Args[2:])
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "uninstall" {
+		uninstallCmd(os.Args[2:])
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "code" {
+		codeCmd(os.Args[2:])
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "usage" {
 		usageCmd(os.Args[2:])
 		return
@@ -67,12 +76,13 @@ func main() {
 	addr := flag.String("addr", "127.0.0.1:7317", "listen address (keep it loopback; use tailscale serve or an SSH tunnel for remote access)")
 	herdrBin := flag.String("herdr-bin", "herdr", "herdr binary used for `terminal attach`")
 	socket := flag.String("socket", herdr.SocketPath(), "herdr server socket")
-	codePort := flag.Int("code-port", code.DefaultPort, "port each machine's code-server listens on (127.0.0.1, auth none; see deploy/install-code.sh)")
+	codePort := flag.Int("code-port", code.DefaultPort, "port each machine's code-server listens on (127.0.0.1, auth none; `remuda code` installs it)")
 	printToken := flag.Bool("print-token", false, "print the access token and exit")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	tailscale := flag.Bool("tailscale", false, "join your tailnet as a node of its own and serve HTTPS there (no tailscale serve needed); first run prints a login URL unless TS_AUTHKEY is set")
 	tsName := flag.String("tailscale-hostname", "remuda", "the node's name on the tailnet (https://<name>.<tailnet>.ts.net)")
 	noCheck := flag.Bool("no-version-check", false, "never ask npm and GitHub what the newest Claude Code, herdr and remuda are")
+	flag.Usage = help
 	flag.Parse()
 
 	if *showVersion {
@@ -441,11 +451,28 @@ func usageCmd(args []string) {
 	_ = json.NewEncoder(os.Stdout).Encode(rep)
 }
 
+// help is `remuda -h`: the server's flags, and the commands a person
+// with nothing but the binary needs to know are there.
+func help() {
+	w := flag.CommandLine.Output()
+	fmt.Fprint(w, `remuda — a browser and phone cockpit for the coding agents herdr runs
+
+  remuda [flags]       the server (the background service runs this)
+  remuda setup         herdr, its server, the agent hooks and the service, here or -host H
+  remuda code          code-server for the Code mode, here or -host H
+  remuda uninstall     take remuda off this machine again (-all: herdr and your data too)
+
+Each command lists its own flags with -h. The server's:
+
+`)
+	flag.PrintDefaults()
+}
+
 // setupCmd is `remuda setup [-host H] [-tailscale] …`: herdr installed
 // and its server running, the agent integrations, the remuda service —
-// here or on a remote machine over ssh (where the binary must already be
-// at ~/.local/bin/remuda: `make deploy HOST=…`, or "Deploy" from the
-// page). Afterwards the token's URL, for a local setup.
+// here or on a remote machine over ssh (a remote with no remuda fetches
+// the release for its own OS and CPU). Afterwards the token's URL, for a
+// local setup; -open, which the installer passes, shows it in the browser.
 func setupCmd(args []string) {
 	fs := flag.NewFlagSet("setup", flag.ExitOnError)
 	host := fs.String("host", "", "set up a remote machine over ssh instead of this one")
@@ -453,8 +480,9 @@ func setupCmd(args []string) {
 	tsName := fs.String("tailscale-hostname", "remuda", "the node's name on the tailnet")
 	addr := fs.String("addr", "127.0.0.1:7317", "the service's loopback address")
 	noService := fs.Bool("no-service", false, "herdr and its server only; no remuda service")
+	open := fs.Bool("open", false, "open the page in the browser once the service answers (a Mac at the desk only)")
 	fs.Parse(args)
-	err := setup.Run(setup.Options{Host: *host, Tailscale: *ts, TSName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"), Addr: *addr, NoService: *noService}, os.Stdout)
+	err := setup.Run(setup.Options{Host: *host, Tailscale: *ts, TSName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"), Addr: *addr, NoService: *noService, Version: version}, os.Stdout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -462,8 +490,67 @@ func setupCmd(args []string) {
 	if *host == "" && !*noService {
 		if dir, err := state.Dir(); err == nil {
 			if token, _, err := auth.LoadOrCreateToken(dir); err == nil {
-				fmt.Printf("\nopen http://%s/?token=%s\n", *addr, token)
+				page := "http://" + *addr + "/?token=" + url.QueryEscape(token)
+				fmt.Printf("\nopen %s\n", page)
+				if *open && answers(*addr, 15*time.Second) && openPage(page) {
+					fmt.Println("(it is open in your browser)")
+				}
 			}
 		}
+	}
+}
+
+// uninstallCmd is `remuda uninstall [-host H] [-data] [-code] [-herdr]
+// [-all] [-yes] [-n]`: what would go is shown first, then asked about —
+// the same promise as an update's "the command shown is the one that
+// runs". remuda itself always; the person's data, code-server and herdr
+// only by their flags, because each of those is more than remuda's own.
+func uninstallCmd(args []string) {
+	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
+	host := fs.String("host", "", "a remote machine over ssh instead of this one")
+	data := fs.Bool("data", false, "also your data: the token, tasks, schedules, push keys")
+	codeToo := fs.Bool("code", false, "also code-server, with the editor's settings and extensions")
+	herdrToo := fs.Bool("herdr", false, "also herdr: its hooks, its server and every agent running in it, the binary")
+	all := fs.Bool("all", false, "everything: -data -code -herdr")
+	yes := fs.Bool("yes", false, "do not ask")
+	dry := fs.Bool("n", false, "only say what would be removed")
+	fs.Parse(args)
+	r := setup.Removal{Host: *host, Data: *data || *all, Code: *codeToo || *all, Herdr: *herdrToo || *all}
+	some, err := r.Plan(os.Stdout)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "uninstall:", err)
+		os.Exit(1)
+	}
+	if !some || *dry {
+		return
+	}
+	if !*yes && !confirm("Remove these? [y/N] ") {
+		fmt.Println("nothing removed")
+		return
+	}
+	if err := r.Remove(os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, "uninstall: not everything could be removed:", err)
+		os.Exit(1)
+	}
+}
+
+// codeCmd is `remuda code [-host H] [-port N] [install|uninstall|status]`:
+// code-server for the Code mode, by the script the binary carries.
+func codeCmd(args []string) {
+	fs := flag.NewFlagSet("code", flag.ExitOnError)
+	host := fs.String("host", "", "a remote machine over ssh instead of this one")
+	port := fs.Int("port", code.DefaultPort, "the loopback port code-server listens on (the server's -code-port must say the same)")
+	fs.Parse(args)
+	action := "install"
+	if fs.NArg() > 0 {
+		action = fs.Arg(0)
+	}
+	if action != "install" && action != "uninstall" && action != "status" {
+		fmt.Fprintln(os.Stderr, "usage: remuda code [-host H] [-port N] [install|uninstall|status]")
+		os.Exit(2)
+	}
+	if err := setup.Code(*host, action, *port, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, "code:", err)
+		os.Exit(1)
 	}
 }

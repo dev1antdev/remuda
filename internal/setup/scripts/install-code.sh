@@ -7,7 +7,8 @@
 #     guards it, and nothing else can reach a loopback port
 #   - macOS → launchd LaunchAgent, Linux → systemd --user unit
 # Usage: install-code.sh [install|uninstall|status]
-# Remote: ssh host 'sh -s' < deploy/install-code.sh   (or `make code HOST=…`)
+# The binary carries it: `remuda code [-host H] [install|uninstall|status]`
+# (`make code [HOST=…]` from a checkout is the same script).
 set -e
 
 ACTION="${1:-install}"
@@ -20,13 +21,13 @@ LINK="$OPT/code-server"
 CONF_DIR="$HOME/.config/code-server"
 PATH_FOR_SERVICE="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
-# checksums of the release assets this script knows (sha256); another
-# version or platform needs CODE_SHA256 set by hand
+# checksums of the release assets this script knows (sha256, as GitHub
+# lists them for the release); another version needs CODE_SHA256 set by hand
 case "$(uname -s)-$(uname -m)" in
 Darwin-arm64) ASSET="macos-arm64"; KNOWN="82c7144406ac31c373acfa786b6705c7c5463d895f728fde2cb94402b945b301" ;;
-Darwin-x86_64) ASSET="macos-amd64"; KNOWN="" ;;
-Linux-aarch64 | Linux-arm64) ASSET="linux-arm64"; KNOWN="" ;;
-Linux-x86_64) ASSET="linux-amd64"; KNOWN="" ;;
+Darwin-x86_64) ASSET="macos-amd64"; KNOWN="a5393b6eed4aa68b084e724c3c565f805abd996c609356043119f0323e40cf52" ;;
+Linux-aarch64 | Linux-arm64) ASSET="linux-arm64"; KNOWN="ae4b07153f2037b06d24749bc8004221fcbf3ffe317038401be0452f541bf200" ;;
+Linux-x86_64) ASSET="linux-amd64"; KNOWN="864c5d01c808ade57e4d12c708717be7a187219fded60428f263b9e2da9f6b48" ;;
 *) echo "unsupported platform: $(uname -s) $(uname -m)"; exit 1 ;;
 esac
 [ "$VERSION" = "4.140.0" ] || KNOWN=""
@@ -71,7 +72,7 @@ JSON
     fi
     mkdir -p "$CONF_DIR"
     cat > "$CONF_DIR/config.yaml" <<EOF
-# written by remuda's deploy/install-code.sh — loopback only, remuda's token is the door
+# written by remuda (remuda code) — loopback only, remuda's token is the door
 bind-addr: 127.0.0.1:$PORT
 auth: none
 cert: false
@@ -123,7 +124,7 @@ EOF
     uninstall)
         launchctl bootout "gui/$UID_NUM/$LABEL" 2>/dev/null || launchctl unload -w "$PLIST" 2>/dev/null || true
         rm -f "$PLIST"
-        echo "removed $LABEL (the files under $OPT and $CONF_DIR stay; delete them by hand)"
+        echo "removed $LABEL (its files under $OPT and $CONF_DIR stay: remuda uninstall -code takes them too)"
         exit 0
         ;;
     esac

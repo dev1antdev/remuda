@@ -4,6 +4,7 @@
 #   Linux → systemd --user unit (enable-linger so it survives logout)
 # Usage: install-service.sh [install|uninstall|status]   (run as the user who runs herdr)
 # Remote: `remuda setup -host H` feeds it over ssh (or `make service HOST=…`)
+# `remuda uninstall` is the way back: this and everything else remuda put here.
 set -e
 
 ACTION="${1:-install}"
@@ -23,7 +24,7 @@ fi
 LABEL="dev.mardeus.remuda"
 PATH_FOR_SERVICE="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
-[ -x "$BIN" ] || { echo "remuda not found at $BIN (make deploy HOST=… first)"; exit 1; }
+[ -x "$BIN" ] || { echo "remuda not found at $BIN (the installer or remuda setup puts it there)"; exit 1; }
 
 case "$(uname -s)" in
 Darwin)
@@ -85,6 +86,10 @@ Linux)
     UNIT="$UNIT_DIR/remuda.service"
     case "$ACTION" in
     install)
+        # linger first: it is what brings the user manager up on a host reached only over ssh
+        loginctl enable-linger "$(id -un)" 2>/dev/null || echo "warning: loginctl enable-linger failed; the service will stop at logout"
+        # a container, WSL without systemd: no user manager to hand a unit to
+        systemctl --user show-environment >/dev/null 2>&1 || { echo "no systemd user session here, so no service: start $BIN yourself, or set up with remuda setup -no-service"; exit 1; }
         mkdir -p "$UNIT_DIR"
         cat > "$UNIT" <<EOF
 [Unit]
@@ -101,7 +106,6 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 EOF
-        loginctl enable-linger "$(id -un)" 2>/dev/null || echo "warning: loginctl enable-linger failed; the service will stop at logout"
         # the previous name (herdr-ui): its unit stopped and removed, its binary gone
         systemctl --user disable --now herdr-ui.service 2>/dev/null || true
         rm -f "$HOME/.config/systemd/user/herdr-ui.service" "$HOME/.local/bin/herdr-ui"

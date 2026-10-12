@@ -54,8 +54,10 @@ else
 fi
 
 # 3. integrations for the agents present
+agents=0
 for a in claude codex gemini; do
     command -v "$a" >/dev/null 2>&1 || continue
+    agents=$((agents + 1))
     st=$(herdr integration status 2>/dev/null | grep "^$a:" || true)
     case "$st" in
     *"not installed"*)
@@ -66,4 +68,8 @@ for a in claude codex gemini; do
     *) say "herdr integration for $a: $(printf '%s' "$st" | sed "s/^$a: //")" ;;
     esac
 done
+if [ "$agents" = 0 ]; then
+    say "no coding agent on this machine yet: install Claude Code, Codex or Gemini CLI and sign in to it,"
+    say "  then run remuda setup once more, for the hooks that tell remuda what the agent is doing"
+fi
 say "setup: done"

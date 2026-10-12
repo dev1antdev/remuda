@@ -15,6 +15,14 @@ registry and GitHub's releases API every six hours (off with
 `-no-version-check`), Web Push through your browser vendor's push service
 when you enable notifications, and nothing else.
 
+The one-line installer downloads over HTTPS from this repository's
+releases and refuses a binary whose sha256 is not the one in the release's
+`checksums.txt` — the same check the Download & install button makes. That
+catches a damaged or swapped download; it does not protect against a
+compromised release, since both files come from the same place. Read
+`internal/setup/scripts/install.sh` before piping it to a shell if you
+would rather not take that on trust.
+
 Two things to know about the trust boundaries:
 
 - The machines you add are trusted as much as this one. The remuda you
