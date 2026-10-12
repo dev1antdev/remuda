@@ -305,22 +305,28 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `web/src/host.ts` — `copyText` (Clipboard API, else execCommand) and
   `openUrl` (a new tab). Nothing embeds remuda any more: the JetBrains
   plugin is gone, and with it the `window.herdrHost` bridge and `?cwd=`.
-- `internal/review/` — the **Changes lens**: what moved in a workspace's
-  folder since the reviewer last looked. A baseline per `machine|folder`
-  (`review.json`: HEAD then + blob hashes of the files dirty then) is set
-  by `POST /api/review/seen`; `GET /api/review?dir=` runs one shell (local
-  `sh -c` or over ssh via `Machine.Shell`) for branch, HEAD, commits
-  `baseline..HEAD`, `git diff --numstat baseline`, untracked files, the
-  current blob hashes and each commit's resulting blobs — a file is
-  *fresh* when its blob moved since the baseline (or there is none); a
+- `internal/review/` — the **Changes lens**: a workspace folder's
+  uncommitted work, what `git diff HEAD` shows — files changed against
+  HEAD, staged or not, plus untracked ones — with the ones that moved
+  since the reviewer last looked marked fresh, and the commits made since
+  that look. Never what a merge, a pull or a rebase brought into HEAD: a
+  diff against the commit reviewed last once listed the five hundred
+  files a merge of staging carried in. A baseline per `machine|folder`
+  (`review.json`: HEAD then, blob hashes of the files dirty then, and the
+  verdict the agent was told, if any) is set by `POST /api/review/seen
+  {dir, verdict?}`; `GET /api/review?dir=` runs one shell (local `sh -c`
+  or over ssh via `Machine.Shell`) for branch, HEAD, the commits
+  `baseline..HEAD` along the first parent (a merge is one line, not the
+  history it brought), `git diff --numstat HEAD`, untracked files, the
+  current blob hashes and each listed commit's resulting blobs — a file
+  is *fresh* when its blob moved since the baseline (or there is none); a
   commit is *seen* when every blob it brought is the one reviewed (a
-  commit of reviewed work, an amend, a rebase). "Mark reviewed" records
-  the blob of every file the review showed — changed since the previous
-  baseline's commit, committed meanwhile or not, and untracked — so that
-  history rewritten under the reviewer brings nothing new. `GET
-  /api/review/diff?dir=&path=` is one file's diff from the blob the
-  baseline recorded for it (only the edits since the look, not the whole
-  commit), else against the baseline commit (an untracked file whole).
+  commit of reviewed work, an amend, a rebase). A look records the blob
+  of every file the review showed — changed against HEAD or untracked —
+  so that a commit of that very content brings nothing new and a file
+  committed as reviewed leaves the list. `GET /api/review/diff?dir=&path=`
+  is one file's diff from the blob the baseline recorded for it (only the
+  edits since the look), else against HEAD (an untracked file whole).
   The lens shows fresh files first and folds the rest behind "N files
   unchanged since you looked"; seen commits are dimmed. The
   watcher refreshes `review.Badges` a minute apart, one shell per machine
@@ -335,7 +341,17 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   matched by new-line number, or old-line number for a removed row) and a
   bar at the foot sends them as one numbered message (`reviewMessage`:
   `file:line`, the row quoted, the text) to the pane's agent, or through
-  `SendToAgent` to any agent. Nothing goes until that button.
+  `SendToAgent` to any agent. **Verdicts** end a review with a word to the
+  agent: Approve and Reject (`VerdictDialog`) each take a note and send
+  `verdictMessage` — the verdict, the note, the draft's comments, and
+  what it means (approved: reviewed, carry on, a task can move on;
+  rejected: work on it and say when it is ready for another look) —
+  through `/api/submit` first, then `markReviewed(verdict)`, so an
+  agent's refusal leaves the baseline alone; a rejection needs a comment
+  or a note. "Mark reviewed" is the silent one: the baseline moves, the
+  agent hears nothing. The subtitle says "approved" / "rejected" / "since
+  you looked" from the baseline's verdict. Nothing goes until one of
+  those buttons.
 - `internal/code/` — the **Code mode**: each machine runs its own
   code-server (VS Code in the browser) on `127.0.0.1:7320`, `auth: none`,
   installed by `remuda code [-host H]` (`internal/setup/scripts/

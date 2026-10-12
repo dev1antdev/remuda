@@ -1,16 +1,22 @@
-// The Changes lens: what moved in the workspace's folder since the reviewer
-// last looked — commits made since, files changed against that point (with
-// the ones that moved since marked fresh), each file's diff on demand, a
-// comment on any hunk that goes to the pane's agent as a prompt with the
-// file and line, and "Mark reviewed" to move the baseline to now.
+// The Changes lens: the workspace folder's uncommitted work — what git diff
+// shows against HEAD, plus untracked files, with what moved since the
+// reviewer last looked marked fresh — and the commits made since that look.
+// Each file's diff on demand; a comment on any hunk joins a draft, and the
+// draft goes to the pane's agent as a prompt with the files and lines — on
+// its own, or under a verdict: Approve tells the agent the work is reviewed
+// and it can carry on, Reject tells it what to fix, each with a note. Every
+// verdict moves the baseline to now; "Mark reviewed" moves it and tells
+// nobody.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchReview, fetchReviewDiff, markReviewed, submitPrompt, type Review as ReviewData, type ReviewFile } from "./api";
 import type { AgentTarget } from "./Tasks";
-import SendToAgent from "./SendToAgent";
+import SendToAgent, { targetKey } from "./SendToAgent";
+import Select from "./Select";
+import Logo from "./Logo";
 import { basename, dirname, errMsg, usePref } from "./prefs";
 import { ago } from "./time";
-import { Notice, useTimedNotice } from "./ui";
+import { Dialog, Notice, useSubmit, useTimedNotice } from "./ui";
 import Icon from "./icons";
 
 // A review comment: a line of a file's diff and what should change there.
@@ -24,6 +30,9 @@ export type DraftComment = {
   code: string; // the diff row, prefix included
   text: string;
 };
+
+// what a review ends with, when it ends with a word to the agent
+export type Verdict = "approved" | "changes";
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -39,6 +48,7 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
 }) {
   const [draft, setDraft] = usePref<DraftComment[]>(`review.draft:${machineId}|${dir}`, []);
   const [pick, setPick] = useState(false); // sending to another agent
+  const [verdict, setVerdict] = useState<Verdict | null>(null); // the verdict dialog, open for one
   const addComment = (c: Omit<DraftComment, "id">) => setDraft((d) => [...d, { ...c, id: d.reduce((m, x) => Math.max(m, x.id), 0) + 1 }]);
   const removeComment = (id: number) => setDraft((d) => d.filter((c) => c.id !== id));
   const [data, setData] = useState<ReviewData | null>(null);
@@ -69,6 +79,7 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
   // keys on it and must not fire again on each render of the list
   const loadDiff = useCallback((path: string) => fetchReviewDiff(machineId, dir, path), [machineId, dir]);
 
+  // the next look starts from now; nothing is said to anyone
   const seen = async () => {
     setBusy(true);
     try {
@@ -84,12 +95,25 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
     }
   };
 
-  // the draft as one message: numbered, each with its place and its line
-  const reviewMessage = () =>
-    [
-      `Review comments (${draft.length}) on ${dir}${data?.branch ? ` (${data.branch})` : ""}:`,
-      ...draft.map((c, i) => `${i + 1}. ${c.file}:${c.line}${c.removed ? " (removed line)" : ""}\n   > ${c.code}\n   ${c.text.replace(/\n/g, "\n   ")}`),
-    ].join("\n\n");
+  // the comments as a numbered list, each with its place and its line
+  const commentLines = () => draft.map((c, i) => `${i + 1}. ${c.file}:${c.line}${c.removed ? " (removed line)" : ""}\n   > ${c.code}\n   ${c.text.replace(/\n/g, "\n   ")}`);
+  const where = () => `${dir}${data?.branch ? ` (${data.branch}${data.head ? ` at ${data.head.slice(0, 7)}` : ""})` : ""}`;
+  // the draft as one message, no verdict
+  const reviewMessage = () => [`Review comments (${draft.length}) on ${where()}:`, ...commentLines()].join("\n\n");
+  // the draft under a verdict, with the reviewer's note and what the
+  // verdict means at the foot: approved work is done with, and a task it
+  // belongs to can move on; rejected work is the agent's next job
+  const verdictMessage = (v: Verdict, note: string) => {
+    const parts = [`Review of ${where()}: ${v === "approved" ? "approved" : "changes requested"}.`];
+    if (note.trim()) parts.push(note.trim());
+    if (draft.length > 0) parts.push(`Comments (${draft.length}):`, ...commentLines());
+    parts.push(
+      v === "approved"
+        ? "The changes reviewed are approved: carry on with your flow, and if this is part of a task, it can move on. Any comments above are notes to take along, not blockers."
+        : "Work on what is asked above, then say when the changes are ready for another look. The work is not finished until it is approved.",
+    );
+    return parts.join("\n\n");
+  };
   // the draft goes to an agent as one prompt; a second tap while it is on
   // its way does nothing. A failure is thrown to the caller: the picker
   // dialog shows it in place, the direct button on the panel
@@ -105,15 +129,30 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
       setSending(false);
     }
   };
+  // a verdict reaches the agent first, then the baseline moves: a refusal
+  // (the agent busy with a question) leaves everything as it was
+  const sendVerdict = async (v: Verdict, target: AgentTarget, note: string) => {
+    await submitPrompt(target.machineId, target.paneId, verdictMessage(v, note));
+    await markReviewed(machineId, dir, v);
+    setDraft([]);
+    setVerdict(null);
+    setOpen(null);
+    setTick((t) => t + 1);
+    onSeen?.();
+    showNotice(`${v === "approved" ? "Approved" : "Rejected"} — ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""} has been told.`);
+  };
 
   if (data === null && !error) return <div className="empty">Looking at the folder…</div>;
   if (data && !data.repo) return <div className="empty">{basename(dir)} is not a git checkout — nothing to review.</div>;
   const files = data?.files ?? [];
   const commits = data?.commits ?? [];
   const since = data?.baseline ? new Date(data.baseline.at) : null;
+  const lastVerdict = data?.baseline?.verdict;
+  const sinceText = !since ? "not reviewed yet" : lastVerdict === "approved" ? `approved ${ago(since)}` : lastVerdict === "changes" ? `rejected ${ago(since)}` : `since you looked ${ago(since)}`;
   const added = files.reduce((a, f) => a + f.added, 0);
   const removed = files.reduce((a, f) => a + f.removed, 0);
   const orphans = draft.filter((c) => !files.some((f) => f.path === c.file));
+  const canTell = !!agent || agents.length > 0; // somebody to send a review to
   // what moved since the look comes first; the rest waits behind a fold
   const freshFiles = since ? files.filter((f) => f.fresh) : files;
   const oldFiles = since ? files.filter((f) => !f.fresh) : [];
@@ -124,7 +163,7 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
       open={open === f.path}
       onToggle={() => setOpen(open === f.path ? null : f.path)}
       load={loadDiff}
-      canComment={!!agent || agents.length > 0}
+      canComment={canTell}
       draft={draft.filter((c) => c.file === f.path)}
       onComment={(c) => addComment({ ...c, file: f.path })}
       onRemove={removeComment}
@@ -140,15 +179,15 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
             <Icon name="git-branch" size={12} /> {data?.branch || "detached"}
           </span>
           <span className="review-sub">
-            {since ? `since you looked ${ago(since)}` : "no baseline yet — everything uncommitted counts"}
+            {sinceText}
             {commits.length > 0 && ` · ${plural(commits.length, "commit")}`}
-            {files.length > 0 && ` · ${plural(files.length, "file")} +${added} −${removed}`}
+            {files.length > 0 && ` · ${plural(files.length, "file")} uncommitted +${added} −${removed}`}
           </span>
         </div>
         <button type="button" className="icon-btn" title="Look again" onClick={() => setTick((t) => t + 1)}>
           <Icon name="refresh-cw" size={14} />
         </button>
-        <button type="button" className="btn primary review-seen" disabled={busy || (!files.length && !commits.length)} onClick={() => void seen()} title="Everything here is reviewed: the next look starts from now">
+        <button type="button" className="btn review-seen" disabled={busy || (!files.length && !commits.length)} onClick={() => void seen()} title="The counts clear and the next look starts from now; the agent hears nothing">
           <Icon name="check" size={14} /> Mark reviewed
         </button>
       </div>
@@ -171,7 +210,7 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
             ))}
           </div>
         )}
-        {files.length === 0 && commits.length === 0 && <div className="empty">Nothing has changed here{since ? " since you looked" : ""}.</div>}
+        {files.length === 0 && <div className="empty">{commits.length > 0 ? "Everything here is committed." : since ? "Nothing has changed here since you looked." : "Nothing is uncommitted here."}</div>}
         {freshFiles.map((f) => fileRow(f))}
         {oldFiles.length > 0 && (
           <div className="review-fold">
@@ -190,30 +229,46 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
           </div>
         )}
       </div>
-      {draft.length > 0 && (
+      {data && canTell && (files.length > 0 || commits.length > 0 || draft.length > 0) && (
         <div className="review-draft-bar">
           <span className="review-draft-count">
-            <Icon name="message" size={14} /> {plural(draft.length, "comment")}
+            {draft.length > 0 && (
+              <>
+                <Icon name="message" size={14} /> {plural(draft.length, "comment")}
+              </>
+            )}
           </span>
-          <button type="button" className="linkish" onClick={() => setDraft([])}>
-            Clear
-          </button>
-          {agent ? (
+          {draft.length > 0 && (
             <>
-              <button type="button" className="btn primary" disabled={sending} onClick={() => sendDraft({ machineId, paneId, agent }).catch((e) => setError(errMsg(e)))}>
-                <Icon name="send" size={12} /> Send to {agent}
+              <button type="button" className="linkish" onClick={() => setDraft([])}>
+                Clear
               </button>
-              {agents.length > 1 && (
-                <button type="button" className="icon-btn" title="Send to another agent" disabled={sending} onClick={() => setPick(true)}>
-                  <Icon name="chevron-down" size={14} />
+              {agent ? (
+                <>
+                  <button type="button" className="btn" disabled={sending} title={`Send the comments to ${agent}, with no verdict`} onClick={() => sendDraft({ machineId, paneId, agent }).catch((e) => setError(errMsg(e)))}>
+                    <Icon name="send" size={12} /> Send
+                  </button>
+                  {agents.length > 1 && (
+                    <button type="button" className="icon-btn" title="Send the comments to another agent" disabled={sending} onClick={() => setPick(true)}>
+                      <Icon name="chevron-down" size={14} />
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button type="button" className="btn" disabled={sending} title="Send the comments to an agent, with no verdict" onClick={() => setPick(true)}>
+                  <Icon name="send" size={12} /> Send…
                 </button>
               )}
             </>
-          ) : (
-            <button type="button" className="btn primary" disabled={agents.length === 0 || sending} onClick={() => setPick(true)}>
-              <Icon name="send" size={12} /> Send to an agent…
-            </button>
           )}
+          <span className="review-verdicts">
+            <button type="button" className="btn" onClick={() => setVerdict("changes")} title="Tell the agent what to change: the comments and a note go to it, and the next look starts from now">
+              <Icon name="x" size={12} /> Reject
+            </button>
+            <button type="button" className="btn primary" onClick={() => setVerdict("approved")} title="Tell the agent the changes are reviewed and it can carry on; the next look starts from now">
+              <Icon name="check" size={12} /> Approve
+            </button>
+          </span>
         </div>
       )}
       {pick && (
@@ -227,7 +282,108 @@ export default function Review({ machineId, paneId, dir, agent, agents, currentP
           onSend={(target, text) => sendDraft(target, text)}
         />
       )}
+      {verdict && (
+        <VerdictDialog
+          verdict={verdict}
+          paneAgent={agent}
+          agents={agents}
+          currentPane={currentPane}
+          comments={draft.length}
+          onClose={() => setVerdict(null)}
+          onSend={(target, note) => sendVerdict(verdict, target, note)}
+        />
+      )}
     </div>
+  );
+}
+
+// The verdict dialog: a note for the agent, the agent it goes to (this
+// pane's when it has one, else a choice among the running ones), and what
+// the agent will be told.
+function VerdictDialog({ verdict, paneAgent, agents, currentPane, comments, onClose, onSend }: {
+  verdict: Verdict;
+  paneAgent: string; // "" when this pane has none
+  agents: AgentTarget[];
+  currentPane: { machineId: string; paneId: string } | null;
+  comments: number; // in the draft, going along
+  onClose: () => void;
+  onSend: (target: AgentTarget, note: string) => Promise<void>;
+}) {
+  const approving = verdict === "approved";
+  const [note, setNote] = useState("");
+  // this pane's agent is the one, when it has one (a pane whose agent the
+  // roster has not listed yet is still a target); a shell pane's verdict
+  // goes to an agent chosen by hand, never to whichever came first
+  const own = currentPane && paneAgent ? agents.find((a) => targetKey(a) === targetKey(currentPane)) ?? { ...currentPane, agent: paneAgent, machineLabel: "", sessionName: "", paneTitle: "", status: "", cwd: "" } : null;
+  const choices = own && !agents.some((a) => targetKey(a) === targetKey(own)) ? [own, ...agents] : agents;
+  const [target, setTarget] = useState(own ? targetKey(own) : "");
+  const chosen = choices.find((a) => targetKey(a) === target);
+  // a rejection with nothing to fix says nothing: a comment or a note
+  const empty = !approving && comments === 0 && !note.trim();
+  const { busy, err, run } = useSubmit(async () => {
+    if (!chosen || empty) return;
+    await onSend(chosen, note);
+  });
+  return (
+    <Dialog
+      title={approving ? "Approve the changes" : "Reject the changes"}
+      icon={approving ? "check" : "x"}
+      size="md"
+      as="form"
+      onClose={onClose}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void run();
+      }}
+    >
+      {choices.length === 0 ? (
+        <Notice tone="hint">No agent is running to tell.</Notice>
+      ) : choices.length === 1 && chosen ? (
+        <p className="modal-hint">
+          To {chosen.agent}
+          {chosen.sessionName ? ` in ${chosen.sessionName}` : " in this pane"}.
+        </p>
+      ) : (
+        <label>
+          Agent
+          <Select
+            value={target}
+            onChange={setTarget}
+            placeholder="Choose the agent"
+            options={choices.map((a) => ({
+              value: targetKey(a),
+              label: a.sessionName ? `${a.sessionName} › ${a.paneTitle}` : "this pane",
+              hint: a.status ? `${a.agent} · ${a.status}` : a.agent,
+              group: a.machineLabel || undefined,
+              icon: <Logo agent={a.agent} />,
+            }))}
+          />
+        </label>
+      )}
+      <label>
+        {approving ? "A note for the agent (optional)" : "What should change"}
+        <textarea
+          autoFocus
+          rows={5}
+          value={note}
+          placeholder={approving ? "Anything to take along; it goes with the approval." : comments > 0 ? "Goes with the comments." : "No comments in the draft: say it here."}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </label>
+      <p className="modal-hint">
+        {comments > 0 ? `${plural(comments, "comment")} from the draft ${comments === 1 ? "goes" : "go"} along. ` : ""}
+        {approving ? "The agent is told the changes are reviewed and it can carry on; the next look starts from now." : "The agent is told to work on this and say when it is ready for another look; the next look starts from now."}
+      </p>
+      {err && <Notice tone="error">{err}</Notice>}
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="submit" className={`btn ${approving ? "primary" : "danger"}`} disabled={busy || !chosen || empty}>
+          {busy ? "Sending…" : approving ? "Approve" : "Reject"}
+        </button>
+      </div>
+    </Dialog>
   );
 }
 

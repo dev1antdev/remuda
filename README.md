@@ -371,11 +371,17 @@ app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 a minute after a long turn. Answer at the desk first and nothing is sent.
 Needs HTTPS (tailscale serve) or localhost; on iPhone, the home-screen app.
 
-**Changes:** a third lens next to Chat and Terminal shows what moved in the
-workspace since you last looked — commits, files, each file's diff. Tap a
-line of a diff and write what should change; a few of those make a review,
-and one button sends them all to the agent as a single numbered message
-(or to any other agent). "Mark reviewed" sets the baseline for next time.
+**Changes:** a third lens next to Chat and Terminal shows the workspace's
+uncommitted work — what `git diff` shows, plus new files — with what moved
+since you last looked marked, and the commits made since. A merge or a
+pull brings nothing into the list; only the work in the folder does. Tap a
+line of a diff and write what should change; a few of those make a review.
+**Approve** tells the agent the work is reviewed and it can carry on (a
+task it works on can move along), **Reject** tells it what to fix and to
+come back for another look; both take a note and carry your comments, and
+both start the next look from now. The comments can also go on their own,
+to this agent or any other. "Mark reviewed" just clears the counts — the
+agent hears nothing.
 
 **Between agents:** every assistant turn has a *forward* link that sends its
 text, headed "From *workspace*:", to any other agent on any machine — the

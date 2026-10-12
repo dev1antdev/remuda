@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/review"
 )
 
 // Review: what changed in a workspace's folder since the viewer last looked.
@@ -54,20 +55,27 @@ func (s *Server) handleReviewDiff(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"diff": diff})
 }
 
-// POST /api/review/seen {machine, dir} → the baseline moves to now
+// POST /api/review/seen {machine, dir, verdict?} → the baseline moves to
+// now; the verdict ("approved", "changes", or none for a silent look) is
+// what the page told the agent, kept for the next look's heading
 func (s *Server) handleReviewSeen(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Machine string `json:"machine"`
 		Dir     string `json:"dir"`
+		Verdict string `json:"verdict"`
 	}
 	if !decode(w, r, &req) {
+		return
+	}
+	if !review.VerdictOK(req.Verdict) {
+		httpErr(w, 400, errors.New("the verdict is approved, changes, or none"))
 		return
 	}
 	m, ok := s.reviewTarget(w, r, req.Machine, req.Dir)
 	if !ok {
 		return
 	}
-	b, err := s.Review.MarkSeen(m, req.Dir)
+	b, err := s.Review.MarkSeen(m, req.Dir, req.Verdict)
 	if err != nil {
 		httpErr(w, 502, err)
 		return

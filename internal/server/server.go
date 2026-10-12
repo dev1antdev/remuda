@@ -349,7 +349,7 @@ type rosterTab struct {
 }
 
 type rosterReview struct {
-	Changed int `json:"changed"` // files changed vs the reviewer's baseline (HEAD without one)
+	Changed int `json:"changed"` // uncommitted files in the folder: changed against HEAD, or untracked
 	Fresh   int `json:"fresh"`   // of those, moved since the reviewer looked
 }
 
