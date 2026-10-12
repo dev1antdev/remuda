@@ -1,15 +1,7 @@
-// Package review answers "what changed here since I last looked": for a
-// workspace's folder, the working tree's changes against HEAD — what git
-// diff shows, staged or not, plus untracked files — and the commits made
-// since a baseline the viewer set the last time they reviewed it. Never
-// what a merge, a pull or a rebase brought into HEAD: a diff against the
-// commit reviewed last once listed the five hundred files a merge carried
-// in. The baseline is the commit that was HEAD then plus the content
-// hashes of the files that were dirty then, so a file reads as fresh only
-// when its content moved since; it also keeps the verdict the review
-// ended with, when it ended with one. Everything is one shell script per
-// question, run locally or over ssh; nothing is written into the
-// repository.
+// Package review answers "what changed here since I last looked": a
+// folder's uncommitted work against HEAD, the commits since the viewer's
+// baseline, and the verdict the agent was told. Nothing is written into
+// the repository.
 package review
 
 import (
@@ -29,182 +21,179 @@ import (
 
 const baselineFile = "review.json"
 
-// The verdicts a review can end with. "" is a look without a word to the
-// agent ("Mark reviewed"): the counts clear, nothing is sent.
+// Verdicts a review can end with; "" is a look without a word to the agent.
 const (
 	VerdictApproved = "approved"
-	VerdictChanges  = "changes" // changes requested
+	VerdictChanges  = "changes"
 )
 
-// VerdictOK is whether a verdict is one of the three.
-func VerdictOK(v string) bool { return v == "" || v == VerdictApproved || v == VerdictChanges }
+// VerdictOK reports whether verdict is one of the three.
+func VerdictOK(verdict string) bool {
+	return verdict == "" || verdict == VerdictApproved || verdict == VerdictChanges
+}
 
 // Baseline is where the viewer last left off in a folder.
 type Baseline struct {
-	Head    string            `json:"head"`              // HEAD at the time: the commits since start there
-	Files   map[string]string `json:"files"`             // dirty files then, by blob hash
-	Verdict string            `json:"verdict,omitempty"` // what the agent was told, if anything
+	Head    string            `json:"head"`
+	Blobs   map[string]string `json:"files"` // blob hash by path of every file uncommitted then; "gone" for a deleted one
+	Verdict string            `json:"verdict,omitempty"`
 	At      time.Time         `json:"at"`
 }
 
+// Commit is one commit made since the baseline.
 type Commit struct {
-	SHA     string `json:"sha"`
-	Subject string `json:"subject"`
-	When    int64  `json:"when"`           // unix seconds
-	Seen    bool   `json:"seen,omitempty"` // every file it brought matches what was reviewed (a commit of reviewed work, an amend, a rebase)
+	SHA      string `json:"sha"`
+	Subject  string `json:"subject"`
+	WhenUnix int64  `json:"when"`
+	Seen     bool   `json:"seen,omitempty"` // every blob it brought is one the viewer reviewed
 }
 
+// File is one uncommitted file: changed against HEAD, or untracked.
 type File struct {
 	Path      string `json:"path"`
 	Added     int    `json:"added"`
 	Removed   int    `json:"removed"`
 	Untracked bool   `json:"untracked,omitempty"`
-	Fresh     bool   `json:"fresh"` // its content moved since the viewer looked
+	Fresh     bool   `json:"fresh"` // changed since the viewer looked
 }
 
 // Summary is the review of one folder.
 type Summary struct {
-	Repo     string    `json:"repo,omitempty"` // "" when not a git checkout
+	Repo     string    `json:"repo,omitempty"`
 	Branch   string    `json:"branch,omitempty"`
 	Head     string    `json:"head,omitempty"`
 	Baseline *Baseline `json:"baseline,omitempty"`
-	Commits  []Commit  `json:"commits"` // since the baseline, newest first
-	Files    []File    `json:"files"`   // uncommitted: changed against HEAD, plus untracked
-	Fresh    int       `json:"fresh"`   // how many of them moved since the viewer looked
+	Commits  []Commit  `json:"commits"`
+	Files    []File    `json:"files"`
+	Fresh    int       `json:"fresh"`
 	Error    string    `json:"error,omitempty"`
 	At       time.Time `json:"at"`
 }
 
-// Badge is what the roster carries per workspace.
+// Badge is the roster's count for one workspace.
 type Badge struct {
 	Changed int `json:"changed"`
 	Fresh   int `json:"fresh"`
 }
 
+// Store keeps every folder's baseline on disk and the roster's badges in memory.
 type Store struct {
 	dir string
 
 	mu        sync.Mutex
-	baselines map[string]Baseline // "machine|folder"
+	baselines map[string]Baseline // by machine|folder
 	badges    map[string]Badge
 }
 
 func key(machineID, dir string) string { return machineID + "|" + dir }
 
+// New loads the baselines kept in dir.
 func New(dir string) *Store {
-	st := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}}
-	if err := state.LoadJSON(dir, baselineFile, &st.baselines); err != nil {
+	store := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}}
+	if err := state.LoadJSON(dir, baselineFile, &store.baselines); err != nil {
 		log.Printf("%s is unreadable (%v): every folder counts as never reviewed", baselineFile, err)
 	}
-	return st
+	return store
 }
 
-func (st *Store) save() error {
-	return state.SaveJSON(st.dir, baselineFile, st.baselines)
+func (store *Store) save() error {
+	return state.SaveJSON(store.dir, baselineFile, store.baselines)
 }
 
-func (st *Store) baseline(machineID, dir string) (Baseline, bool) {
-	st.mu.Lock()
-	defer st.mu.Unlock()
-	b, ok := st.baselines[key(machineID, dir)]
-	return b, ok
+func (store *Store) baseline(machineID, dir string) (Baseline, bool) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	baseline, ok := store.baselines[key(machineID, dir)]
+	return baseline, ok
 }
 
 // Badge is the cached count for the roster.
-func (st *Store) Badge(machineID, dir string) (Badge, bool) {
-	st.mu.Lock()
-	defer st.mu.Unlock()
-	b, ok := st.badges[key(machineID, dir)]
-	return b, ok
+func (store *Store) Badge(machineID, dir string) (Badge, bool) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	badge, ok := store.badges[key(machineID, dir)]
+	return badge, ok
 }
 
-// the script: everything the summary needs, in one round trip. Fields are
-// separated by \x1f, records by lines; sections by a line of one \x1e. The
-// commits since the baseline follow the first parent, so a merge is one
-// line and not the history of the branch it brought in; the files are the
-// working tree against HEAD, whatever HEAD came to hold meanwhile.
-func summaryScript(dir, base string) string {
-	q := sshx.Quote(dir)
-	b := sshx.Quote(base)
-	return `cd ` + q + ` 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
+// summaryScript gathers everything Summary needs in one shell. Sections are
+// separated by a line of \x1e, fields by \x1f: repo/branch/HEAD, the commits
+// since the baseline along the first parent (a merge is one line), the
+// numstat against HEAD, the untracked files, every uncommitted file's blob,
+// and per commit the blobs it left (diff-tree, which prints nothing for a
+// merge), from which Summary tells a commit of reviewed work.
+func summaryScript(dir, baselineHead string) string {
+	return `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
-		`base=` + b + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
+		`base=` + sshx.Quote(baselineHead) + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
 		`if [ "$base" != HEAD ]; then git log --first-parent --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
 		`git -c core.quotepath=off diff --no-renames --relative --numstat HEAD 2>/dev/null; printf '\036\n'; ` +
 		`git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
-		hashLoop() + `; printf '\036\n'; ` +
-		// per listed commit: the blob every file ends up with, so a commit of
-		// work already reviewed can be told from new work (a merge shows no
-		// file of its own here and is never marked seen)
+		blobsScript() + `; printf '\036\n'; ` +
 		`if [ "$base" != HEAD ]; then for c in $(git rev-list --first-parent "$base"..HEAD 2>/dev/null); do printf '%s\n' "$c"; git -c core.quotepath=off diff-tree --no-commit-id -r --relative --no-renames "$c" 2>/dev/null | while IFS= read -r l; do printf '\037%s\n' "$l"; done; done; fi`
 }
 
-// hashLoop prints "<path>\x1f<blob hash>" for every file changed against
-// HEAD or untracked — one path per line, so a space in a name survives; a
-// deleted file is recorded as "gone", so its deletion can be looked at and
-// marked seen like any other change. Renames are a deletion plus an
-// addition throughout, so paths stay plain, and every path is relative to
-// the folder (a workspace may sit below its repository's root).
-func hashLoop() string {
+// blobsScript prints "<path>\x1f<blob hash>" per uncommitted file, one per
+// line, "gone" for a deleted one; paths are relative to the folder and
+// renames are a deletion plus an addition.
+func blobsScript() string {
 	return `{ git -c core.quotepath=off diff --no-renames --relative --name-only HEAD 2>/dev/null; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; } | ` +
 		`while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\037%s\n' "$f" "$(git hash-object -- "$f" 2>/dev/null)"; else printf '%s\037gone\n' "$f"; fi; done`
 }
 
 // Summary reviews one folder against its baseline.
-func (st *Store) Summary(mc *machines.Machine, dir string) Summary {
-	sum := Summary{At: time.Now(), Commits: []Commit{}, Files: []File{}}
-	base, hasBase := st.baseline(mc.Cfg.ID, dir)
-	if hasBase {
-		b := base
-		sum.Baseline = &b
+func (store *Store) Summary(machine *machines.Machine, dir string) Summary {
+	summary := Summary{At: time.Now(), Commits: []Commit{}, Files: []File{}}
+	baseline, hasBaseline := store.baseline(machine.Cfg.ID, dir)
+	if hasBaseline {
+		copied := baseline
+		summary.Baseline = &copied
 	}
-	out, err := mc.Shell(summaryScript(dir, base.Head), 60*time.Second)
+	output, err := machine.Shell(summaryScript(dir, baseline.Head), 60*time.Second)
 	if err != nil {
-		sum.Error = err.Error()
-		return sum
+		summary.Error = err.Error()
+		return summary
 	}
-	sections := strings.Split(out, "\x1e\n")
+	sections := strings.Split(output, "\x1e\n")
 	if len(sections) < 5 || strings.TrimSpace(sections[0]) == "" {
-		return sum // not a git checkout
+		return summary
 	}
-	head := strings.Split(strings.TrimRight(sections[0], "\n"), "\n")
-	sum.Repo = head[0]
-	if len(head) > 1 {
-		sum.Branch = head[1]
+	headLines := strings.Split(strings.TrimRight(sections[0], "\n"), "\n")
+	summary.Repo = headLines[0]
+	if len(headLines) > 1 {
+		summary.Branch = headLines[1]
 	}
-	if len(head) > 2 {
-		sum.Head = head[2]
+	if len(headLines) > 2 {
+		summary.Head = headLines[2]
 	}
 	for _, line := range strings.Split(strings.TrimRight(sections[1], "\n"), "\n") {
-		f := strings.Split(line, "\x1f")
-		if len(f) == 3 {
-			when, _ := strconv.ParseInt(f[2], 10, 64)
-			sum.Commits = append(sum.Commits, Commit{SHA: f[0], Subject: f[1], When: when})
+		fields := strings.Split(line, "\x1f")
+		if len(fields) == 3 {
+			whenUnix, _ := strconv.ParseInt(fields[2], 10, 64)
+			summary.Commits = append(summary.Commits, Commit{SHA: fields[0], Subject: fields[1], WhenUnix: whenUnix})
 		}
 	}
-	hashes := map[string]string{}
+	blobs := map[string]string{}
 	for _, line := range strings.Split(strings.TrimRight(sections[4], "\n"), "\n") {
-		if p, h, ok := strings.Cut(line, "\x1f"); ok {
-			hashes[p] = h
+		if path, blob, ok := strings.Cut(line, "\x1f"); ok {
+			blobs[path] = blob
 		}
 	}
-	fresh := func(p string) bool {
-		if !hasBase {
+	isFresh := func(path string) bool {
+		if !hasBaseline {
 			return true
 		}
-		if old, ok := base.Files[p]; ok {
-			return hashes[p] != old
+		if reviewed, ok := baseline.Blobs[path]; ok {
+			return blobs[path] != reviewed
 		}
 		return true
 	}
-	// a commit is seen when every blob it brought is the one reviewed
-	if hasBase && len(sections) > 5 {
-		seen := map[string]bool{}
-		var sha string
-		var all, any bool
-		flush := func() {
-			if sha != "" && any && all {
-				seen[sha] = true
+	if hasBaseline && len(sections) > 5 {
+		seenCommits := map[string]bool{}
+		var commitSHA string
+		var allReviewed, anyFile bool
+		closeCommit := func() {
+			if commitSHA != "" && anyFile && allReviewed {
+				seenCommits[commitSHA] = true
 			}
 		}
 		for _, line := range strings.Split(strings.TrimRight(sections[5], "\n"), "\n") {
@@ -212,175 +201,167 @@ func (st *Store) Summary(mc *machines.Machine, dir string) Summary {
 				continue
 			}
 			if !strings.HasPrefix(line, "\x1f") {
-				flush()
-				sha, all, any = line, true, false
+				closeCommit()
+				commitSHA, allReviewed, anyFile = line, true, false
 				continue
 			}
-			// :100644 100644 <old> <new> M\tpath
-			meta, path, ok := strings.Cut(line[1:], "\t")
-			f := strings.Fields(meta)
-			if !ok || len(f) < 4 {
+			// a diff-tree line: ":100644 100644 <old blob> <new blob> M\t<path>"
+			modes, path, ok := strings.Cut(line[1:], "\t")
+			fields := strings.Fields(modes)
+			if !ok || len(fields) < 4 {
 				continue
 			}
-			any = true
-			if old, ok := base.Files[path]; !ok || old != f[3] {
-				all = false
+			anyFile = true
+			if reviewed, ok := baseline.Blobs[path]; !ok || reviewed != fields[3] {
+				allReviewed = false
 			}
 		}
-		flush()
-		for i := range sum.Commits {
-			for full := range seen {
-				if strings.HasPrefix(full, sum.Commits[i].SHA) {
-					sum.Commits[i].Seen = true
+		closeCommit()
+		for i := range summary.Commits {
+			for fullSHA := range seenCommits {
+				if strings.HasPrefix(fullSHA, summary.Commits[i].SHA) {
+					summary.Commits[i].Seen = true
 				}
 			}
 		}
 	}
 	for _, line := range strings.Split(strings.TrimRight(sections[2], "\n"), "\n") {
-		f := strings.Split(line, "\t")
-		if len(f) != 3 {
+		fields := strings.Split(line, "\t")
+		if len(fields) != 3 {
 			continue
 		}
-		added, _ := strconv.Atoi(f[0])
-		removed, _ := strconv.Atoi(f[1])
-		sum.Files = append(sum.Files, File{Path: f[2], Added: added, Removed: removed, Fresh: fresh(f[2])})
+		added, _ := strconv.Atoi(fields[0])
+		removed, _ := strconv.Atoi(fields[1])
+		summary.Files = append(summary.Files, File{Path: fields[2], Added: added, Removed: removed, Fresh: isFresh(fields[2])})
 	}
-	for _, p := range strings.Split(strings.TrimRight(sections[3], "\n"), "\n") {
-		if p = strings.TrimSpace(p); p != "" {
-			sum.Files = append(sum.Files, File{Path: p, Untracked: true, Fresh: fresh(p)})
+	for _, path := range strings.Split(strings.TrimRight(sections[3], "\n"), "\n") {
+		if path = strings.TrimSpace(path); path != "" {
+			summary.Files = append(summary.Files, File{Path: path, Untracked: true, Fresh: isFresh(path)})
 		}
 	}
-	sort.Slice(sum.Files, func(i, j int) bool {
-		if sum.Files[i].Fresh != sum.Files[j].Fresh {
-			return sum.Files[i].Fresh
+	sort.Slice(summary.Files, func(i, j int) bool {
+		if summary.Files[i].Fresh != summary.Files[j].Fresh {
+			return summary.Files[i].Fresh
 		}
-		return sum.Files[i].Path < sum.Files[j].Path
+		return summary.Files[i].Path < summary.Files[j].Path
 	})
-	for _, f := range sum.Files {
-		if f.Fresh {
-			sum.Fresh++
+	for _, file := range summary.Files {
+		if file.Fresh {
+			summary.Fresh++
 		}
 	}
-	st.setBadge(key(mc.Cfg.ID, dir), base, Badge{Changed: len(sum.Files), Fresh: sum.Fresh})
-	return sum
+	store.setBadge(key(machine.Cfg.ID, dir), baseline, Badge{Changed: len(summary.Files), Fresh: summary.Fresh})
+	return summary
 }
 
-// setBadge keeps a count computed against a baseline — unless the baseline
-// moved meanwhile ("mark reviewed" during a sweep that takes seconds over
-// ssh): a stale count would bring a cleared badge back.
-func (st *Store) setBadge(k string, against Baseline, b Badge) {
-	st.mu.Lock()
-	defer st.mu.Unlock()
-	if !st.baselines[k].At.Equal(against.At) {
+// setBadge keeps a badge computed against a baseline, unless the baseline
+// moved meanwhile: a stale count would bring a cleared badge back.
+func (store *Store) setBadge(storeKey string, against Baseline, badge Badge) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if !store.baselines[storeKey].At.Equal(against.At) {
 		return
 	}
-	st.badges[k] = b
+	store.badges[storeKey] = badge
 }
 
-// Diff is one file's change since the viewer looked: from the blob the
-// baseline recorded for it when there is one (so a commit of reviewed work
-// and the edits after it show only the edits), else against HEAD; an
-// untracked file comes back whole.
-func (st *Store) Diff(mc *machines.Machine, dir, path string) (string, error) {
-	base, _ := st.baseline(mc.Cfg.ID, dir)
-	q := sshx.Quote(path)
-	seen := base.Files[path]
-	if seen != "" && seen != "gone" && hexRe.MatchString(seen) {
-		// the seen blob, written out, against the file as it is now; the
-		// temp file's name is reported first and taken out of the headers
+// Diff is one file's unified diff since the viewer looked: from the blob
+// the baseline recorded for it, else against HEAD; an untracked file whole.
+func (store *Store) Diff(machine *machines.Machine, dir, path string) (string, error) {
+	baseline, _ := store.baseline(machine.Cfg.ID, dir)
+	quotedPath := sshx.Quote(path)
+	reviewedBlob := baseline.Blobs[path]
+	if reviewedBlob != "" && reviewedBlob != "gone" && hexRe.MatchString(reviewedBlob) {
+		// the script prints the temp file's name first; the diff headers carry it
 		script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; t=$(mktemp "${TMPDIR:-/tmp}/remuda-seen.XXXXXX") || exit 0; printf '%s\n' "$t"; ` +
-			`if git cat-file -p ` + seen + ` > "$t" 2>/dev/null; then git -c color.ui=never -c core.quotepath=off diff --no-index -- "$t" ` + q + ` | head -c 600000; fi; rm -f "$t"; exit 0`
-		out, err := mc.Shell(script, 60*time.Second)
+			`if git cat-file -p ` + reviewedBlob + ` > "$t" 2>/dev/null; then git -c color.ui=never -c core.quotepath=off diff --no-index -- "$t" ` + quotedPath + ` | head -c 600000; fi; rm -f "$t"; exit 0`
+		output, err := machine.Shell(script, 60*time.Second)
 		if err != nil {
-			return out, err
+			return output, err
 		}
-		tmp, rest, ok := strings.Cut(out, "\n")
+		tempFile, diff, ok := strings.Cut(output, "\n")
 		if !ok {
 			return "", nil
 		}
-		return strings.ReplaceAll(rest, "a"+tmp, "a/"+path), nil
+		return strings.ReplaceAll(diff, "a"+tempFile, "a/"+path), nil
 	}
 	script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; ` +
-		`if git ls-files --error-unmatch -- ` + q + ` >/dev/null 2>&1 || git cat-file -e "HEAD:./"` + q + ` 2>/dev/null; then ` +
-		`git -c color.ui=never -c core.quotepath=off diff --relative HEAD -- ` + q + ` | head -c 600000; ` +
-		`else git -c color.ui=never diff --no-index -- /dev/null ` + q + ` | head -c 600000; fi; exit 0`
-	return mc.Shell(script, 60*time.Second)
+		`if git ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || git cat-file -e "HEAD:./"` + quotedPath + ` 2>/dev/null; then ` +
+		`git -c color.ui=never -c core.quotepath=off diff --relative HEAD -- ` + quotedPath + ` | head -c 600000; ` +
+		`else git -c color.ui=never diff --no-index -- /dev/null ` + quotedPath + ` | head -c 600000; fi; exit 0`
+	return machine.Shell(script, 60*time.Second)
 }
 
 var hexRe = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 
-// MarkSeen sets the folder's baseline to now: HEAD, the blob of every file
-// the review showed — changed against HEAD, or untracked — and the verdict
-// the agent was told, if any. A later commit of that very content, an amend
-// or a rebase then brings nothing new, and a file committed as reviewed
-// leaves the list.
-func (st *Store) MarkSeen(mc *machines.Machine, dir, verdict string) (Baseline, error) {
+// MarkSeen moves the folder's baseline to now: HEAD, the blob of every
+// uncommitted file, and the verdict the agent was told.
+func (store *Store) MarkSeen(machine *machines.Machine, dir, verdict string) (Baseline, error) {
 	if !VerdictOK(verdict) {
 		return Baseline{}, fmt.Errorf("no such verdict: %q", verdict)
 	}
-	script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` + hashLoop()
-	out, err := mc.Shell(script, 60*time.Second)
+	script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` + blobsScript()
+	output, err := machine.Shell(script, 60*time.Second)
 	if err != nil {
 		return Baseline{}, err
 	}
-	head, rest, _ := strings.Cut(out, "\x1e\n")
-	b := Baseline{Head: strings.TrimSpace(head), Files: map[string]string{}, Verdict: verdict, At: time.Now()}
-	for _, line := range strings.Split(strings.TrimRight(rest, "\n"), "\n") {
-		if p, h, ok := strings.Cut(line, "\x1f"); ok {
-			b.Files[p] = h
+	head, blobLines, _ := strings.Cut(output, "\x1e\n")
+	baseline := Baseline{Head: strings.TrimSpace(head), Blobs: map[string]string{}, Verdict: verdict, At: time.Now()}
+	for _, line := range strings.Split(strings.TrimRight(blobLines, "\n"), "\n") {
+		if path, blob, ok := strings.Cut(line, "\x1f"); ok {
+			baseline.Blobs[path] = blob
 		}
 	}
-	st.mu.Lock()
-	st.baselines[key(mc.Cfg.ID, dir)] = b
-	st.badges[key(mc.Cfg.ID, dir)] = Badge{}
-	err = st.save()
-	st.mu.Unlock()
+	store.mu.Lock()
+	store.baselines[key(machine.Cfg.ID, dir)] = baseline
+	store.badges[key(machine.Cfg.ID, dir)] = Badge{}
+	err = store.save()
+	store.mu.Unlock()
 	if err != nil {
-		return b, fmt.Errorf("the baseline could not be kept: %w", err)
+		return baseline, fmt.Errorf("the baseline could not be kept: %w", err)
 	}
-	return b, nil
+	return baseline, nil
 }
 
-// Badges refreshes the counts for many folders of one machine in a single
-// round trip (for the roster): each folder's uncommitted files, and how
-// many of those moved since the viewer looked.
-func (st *Store) Badges(mc *machines.Machine, dirs []string) {
+// Badges refreshes the roster's counts for many folders of one machine in
+// a single round trip.
+func (store *Store) Badges(machine *machines.Machine, dirs []string) {
 	if len(dirs) == 0 {
 		return
 	}
-	var sb strings.Builder
-	against := map[string]Baseline{}
-	for _, d := range dirs {
-		base, _ := st.baseline(mc.Cfg.ID, d)
-		against[d] = base
-		sb.WriteString(`( cd ` + sshx.Quote(d) + ` 2>/dev/null || exit 0; git rev-parse --show-toplevel >/dev/null 2>&1 || exit 0; ` +
-			`printf '%s\036' ` + sshx.Quote(d) + `; ` + hashLoop() + `; printf '\035\n' ); `)
+	var script strings.Builder
+	baselines := map[string]Baseline{}
+	for _, dir := range dirs {
+		baseline, _ := store.baseline(machine.Cfg.ID, dir)
+		baselines[dir] = baseline
+		script.WriteString(`( cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; git rev-parse --show-toplevel >/dev/null 2>&1 || exit 0; ` +
+			`printf '%s\036' ` + sshx.Quote(dir) + `; ` + blobsScript() + `; printf '\035\n' ); `)
 	}
-	out, err := mc.Shell(sb.String(), 90*time.Second)
+	output, err := machine.Shell(script.String(), 90*time.Second)
 	if err != nil {
 		return
 	}
-	for _, rec := range strings.Split(out, "\x1d\n") {
-		dir, body, ok := strings.Cut(rec, "\x1e")
+	for _, record := range strings.Split(output, "\x1d\n") {
+		dir, blobLines, ok := strings.Cut(record, "\x1e")
 		if !ok {
 			continue
 		}
-		base, ok := against[dir]
+		baseline, ok := baselines[dir]
 		if !ok {
 			continue
 		}
-		hasBase := !base.At.IsZero()
+		hasBaseline := !baseline.At.IsZero()
 		badge := Badge{}
-		for _, line := range strings.Split(strings.TrimRight(body, "\n"), "\n") {
-			p, h, ok := strings.Cut(line, "\x1f")
+		for _, line := range strings.Split(strings.TrimRight(blobLines, "\n"), "\n") {
+			path, blob, ok := strings.Cut(line, "\x1f")
 			if !ok {
 				continue
 			}
 			badge.Changed++
-			if old, had := base.Files[p]; !hasBase || !had || old != h {
+			if reviewed, wasReviewed := baseline.Blobs[path]; !hasBaseline || !wasReviewed || reviewed != blob {
 				badge.Fresh++
 			}
 		}
-		st.setBadge(key(mc.Cfg.ID, dir), base, badge)
+		store.setBadge(key(machine.Cfg.ID, dir), baseline, badge)
 	}
 }

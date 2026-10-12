@@ -93,8 +93,13 @@ not style.
   Markdown and task descriptions render to React nodes. Per-device state
   is `usePref` (`prefs.ts`); every request goes through `api.ts`
   (`check` / `sendJSON`); every time string through `time.ts`.
-- **Comments say why, in prose**, as the code does today. Keep that voice
-  and drop a comment that only restates the line under it.
+- **Names carry the meaning; comments are rare.** A variable, function or
+  type says what it is (`baseline`, `machine`, `summary` — never `b`,
+  `mc`, `sum`). A comment is a one-line doc comment on a function or type
+  saying what it does, or a note on a genuinely hard spot — a wire
+  protocol, an ordering the code cannot show. Nothing above a line that
+  restates it, no prose narrating why; if a block needs a paragraph,
+  split it into named pieces instead.
 - **Commit messages are one plain sentence** about what changed for the
   person, not a list of files: *"Chats follow an agent update: restarted
   with their sessions resumed"*, *"Machines can be renamed, the local one

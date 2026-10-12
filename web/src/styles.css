@@ -3460,9 +3460,6 @@ input[type="checkbox"]:hover:not(:checked) {
   border-color: var(--accent-ring);
 }
 
-/* the bar at the foot: the draft's count and its plain send on the left,
-   the verdicts anchored right — a comment added or sent moves neither; on
-   a narrow screen the verdicts wrap to a line of their own */
 .review-draft-bar {
   position: sticky;
   bottom: 0;

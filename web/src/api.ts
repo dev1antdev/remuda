@@ -45,7 +45,7 @@ export type Session = {
   active_tab_id: string;
   worktree?: { repo_key: string; repo_name: string; linked: boolean; checkout_path: string };
   dir?: string; // the workspace's folder
-  review?: { changed: number; fresh: number }; // uncommitted files, and how many moved since the reviewer looked
+  review?: { changed: number; fresh: number }; // uncommitted files; fresh = moved since the reviewer looked
   tabs: Tab[];
 };
 
@@ -202,7 +202,7 @@ export type Review = {
   repo?: string;
   branch?: string;
   head?: string;
-  baseline?: { head: string; at: string; verdict?: "approved" | "changes" }; // verdict: what the agent was told at the last look, if anything
+  baseline?: { head: string; at: string; verdict?: "approved" | "changes" };
   commits: ReviewCommit[];
   files: ReviewFile[];
   fresh: number;
@@ -217,8 +217,6 @@ export const fetchReviewDiff = (machineId: string, dir: string, path: string): P
     .then(check)
     .then((r) => r.json() as Promise<{ diff: string }>)
     .then((d) => d.diff);
-// the next look starts from now; a verdict is kept with it (the message to
-// the agent is the page's, sent through /api/submit before this)
 export const markReviewed = (machineId: string, dir: string, verdict?: "approved" | "changes"): Promise<void> =>
   sendJSON("POST", "/api/review/seen", { machine: machineId, dir, ...(verdict ? { verdict } : {}) });
 

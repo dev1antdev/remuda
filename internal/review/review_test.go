@@ -13,25 +13,23 @@ import (
 )
 
 func TestStaleBadgeDoesNotOverwriteAMovedBaseline(t *testing.T) {
-	st := New(t.TempDir())
-	k := key("local", "/x")
-	st.setBadge(k, Baseline{}, Badge{Changed: 3, Fresh: 2}) // no baseline yet: kept
-	if b, _ := st.Badge("local", "/x"); b.Fresh != 2 {
-		t.Fatalf("got %+v", b)
+	store := New(t.TempDir())
+	storeKey := key("local", "/x")
+	store.setBadge(storeKey, Baseline{}, Badge{Changed: 3, Fresh: 2})
+	if badge, _ := store.Badge("local", "/x"); badge.Fresh != 2 {
+		t.Fatalf("got %+v", badge)
 	}
-	st.mu.Lock()
-	st.baselines[k] = Baseline{At: time.Now(), Files: map[string]string{}}
-	st.badges[k] = Badge{}
-	st.mu.Unlock()
-	st.setBadge(k, Baseline{}, Badge{Changed: 3, Fresh: 2}) // computed before "seen": dropped
-	if b, _ := st.Badge("local", "/x"); b.Fresh != 0 || b.Changed != 0 {
-		t.Fatalf("a stale count came back: %+v", b)
+	store.mu.Lock()
+	store.baselines[storeKey] = Baseline{At: time.Now(), Blobs: map[string]string{}}
+	store.badges[storeKey] = Badge{}
+	store.mu.Unlock()
+	store.setBadge(storeKey, Baseline{}, Badge{Changed: 3, Fresh: 2})
+	if badge, _ := store.Badge("local", "/x"); badge.Fresh != 0 || badge.Changed != 0 {
+		t.Fatalf("a stale count came back: %+v", badge)
 	}
 }
 
-// a scratch checkout: git run in it with a throwaway identity, files
-// written into it
-func scratch(t *testing.T) (dir string, git func(args ...string) string, write func(name, body string)) {
+func scratchCheckout(t *testing.T) (dir string, git func(args ...string) string, write func(name, body string)) {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("no git")
@@ -40,21 +38,19 @@ func scratch(t *testing.T) (dir string, git func(args ...string) string, write f
 	git = func(args ...string) string {
 		cmd := exec.Command("git", append([]string{"-c", "user.email=t@t", "-c", "user.name=t"}, args...)...)
 		cmd.Dir = dir
-		out, err := cmd.CombinedOutput()
+		output, err := cmd.CombinedOutput()
 		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
+			t.Fatalf("git %v: %v\n%s", args, err, output)
 		}
-		return strings.TrimSpace(string(out))
+		return strings.TrimSpace(string(output))
 	}
 	write = func(name, body string) { _ = os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644) }
 	git("init", "-q")
 	return dir, git, write
 }
 
-// a scratch checkout with a modified file, a deleted one, a renamed one, a
-// new one and a name with a space: all count, all can be marked seen
 func TestSeenCoversEveryKindOfChange(t *testing.T) {
-	dir, git, write := scratch(t)
+	dir, git, write := scratchCheckout(t)
 	write("a.txt", "a")
 	write("b.txt", "b")
 	write("c d.txt", "c")
@@ -67,44 +63,41 @@ func TestSeenCoversEveryKindOfChange(t *testing.T) {
 	git("mv", "r.txt", "renamed.txt")
 	write("new.txt", "n")
 
-	mc := &machines.Machine{Cfg: machines.Config{ID: "local"}, Local: true}
-	st := New(t.TempDir())
-	sum := st.Summary(mc, dir)
-	if sum.Error != "" || len(sum.Files) != 6 || sum.Fresh != 6 {
-		t.Fatalf("before: %+v", sum)
+	machine := &machines.Machine{Cfg: machines.Config{ID: "local"}, Local: true}
+	store := New(t.TempDir())
+	summary := store.Summary(machine, dir)
+	if summary.Error != "" || len(summary.Files) != 6 || summary.Fresh != 6 {
+		t.Fatalf("before: %+v", summary)
 	}
-	if _, err := st.MarkSeen(mc, dir, ""); err != nil {
+	if _, err := store.MarkSeen(machine, dir, ""); err != nil {
 		t.Fatal(err)
 	}
-	sum = st.Summary(mc, dir)
-	if len(sum.Files) != 6 || sum.Fresh != 0 {
-		t.Fatalf("after seen: fresh %d of %d: %+v", sum.Fresh, len(sum.Files), sum.Files)
+	summary = store.Summary(machine, dir)
+	if len(summary.Files) != 6 || summary.Fresh != 0 {
+		t.Fatalf("after seen: fresh %d of %d: %+v", summary.Fresh, len(summary.Files), summary.Files)
 	}
-	if b, _ := st.Badge("local", dir); b.Fresh != 0 || b.Changed != 6 {
-		t.Fatalf("badge %+v", b)
+	if badge, _ := store.Badge("local", dir); badge.Fresh != 0 || badge.Changed != 6 {
+		t.Fatalf("badge %+v", badge)
 	}
 	write("c d.txt", "c3")
-	sum = st.Summary(mc, dir)
-	if sum.Fresh != 1 || !sum.Files[0].Fresh || sum.Files[0].Path != "c d.txt" {
-		t.Fatalf("after an edit: %+v", sum.Files)
+	summary = store.Summary(machine, dir)
+	if summary.Fresh != 1 || !summary.Files[0].Fresh || summary.Files[0].Path != "c d.txt" {
+		t.Fatalf("after an edit: %+v", summary.Files)
 	}
-	st.Badges(mc, []string{dir})
-	if b, _ := st.Badge("local", dir); b.Fresh != 1 || b.Changed != 6 {
-		t.Fatalf("badge after an edit %+v", b)
+	store.Badges(machine, []string{dir})
+	if badge, _ := store.Badge("local", dir); badge.Fresh != 1 || badge.Changed != 6 {
+		t.Fatalf("badge after an edit %+v", badge)
 	}
 }
 
-// a baseline set, a branch of a hundred files merged in, one more edit: the
-// list is that edit, never what the merge brought, and the commits since
-// the look follow the first parent — the merge is one line of them
 func TestAMergeBringsNoFilesOfItsOwn(t *testing.T) {
-	dir, git, write := scratch(t)
+	dir, git, write := scratchCheckout(t)
 	write("a.txt", "a\n")
 	git("add", "-A")
 	git("commit", "-qm", "init")
-	mc := &machines.Machine{Cfg: machines.Config{ID: "local"}, Local: true}
-	st := New(t.TempDir())
-	if _, err := st.MarkSeen(mc, dir, VerdictApproved); err != nil {
+	machine := &machines.Machine{Cfg: machines.Config{ID: "local"}, Local: true}
+	store := New(t.TempDir())
+	if _, err := store.MarkSeen(machine, dir, VerdictApproved); err != nil {
 		t.Fatal(err)
 	}
 	trunk := git("rev-parse", "--abbrev-ref", "HEAD")
@@ -123,37 +116,37 @@ func TestAMergeBringsNoFilesOfItsOwn(t *testing.T) {
 	git("merge", "-q", "--no-edit", "staging")
 	write("own.txt", "o2\n")
 
-	sum := st.Summary(mc, dir)
-	if sum.Error != "" {
-		t.Fatal(sum.Error)
+	summary := store.Summary(machine, dir)
+	if summary.Error != "" {
+		t.Fatal(summary.Error)
 	}
-	if len(sum.Files) != 1 || sum.Files[0].Path != "own.txt" || !sum.Files[0].Fresh || sum.Fresh != 1 {
-		t.Fatalf("files: %+v", sum.Files)
+	if len(summary.Files) != 1 || summary.Files[0].Path != "own.txt" || !summary.Files[0].Fresh || summary.Fresh != 1 {
+		t.Fatalf("files: %+v", summary.Files)
 	}
-	if len(sum.Commits) != 2 || !strings.HasPrefix(sum.Commits[0].Subject, "Merge branch 'staging'") || sum.Commits[1].Subject != "own work" || sum.Commits[0].Seen || sum.Commits[1].Seen {
-		t.Fatalf("commits: %+v", sum.Commits)
+	if len(summary.Commits) != 2 || !strings.HasPrefix(summary.Commits[0].Subject, "Merge branch 'staging'") || summary.Commits[1].Subject != "own work" || summary.Commits[0].Seen || summary.Commits[1].Seen {
+		t.Fatalf("commits: %+v", summary.Commits)
 	}
-	if sum.Baseline == nil || sum.Baseline.Verdict != VerdictApproved {
-		t.Fatalf("baseline: %+v", sum.Baseline)
+	if summary.Baseline == nil || summary.Baseline.Verdict != VerdictApproved {
+		t.Fatalf("baseline: %+v", summary.Baseline)
 	}
-	d, err := st.Diff(mc, dir, "own.txt")
-	if err != nil || !strings.Contains(d, "-o\n+o2\n") {
-		t.Fatalf("diff: %v\n%s", err, d)
+	diff, err := store.Diff(machine, dir, "own.txt")
+	if err != nil || !strings.Contains(diff, "-o\n+o2\n") {
+		t.Fatalf("diff: %v\n%s", err, diff)
 	}
-	st.Badges(mc, []string{dir})
-	if b, _ := st.Badge("local", dir); b.Changed != 1 || b.Fresh != 1 {
-		t.Fatalf("badge %+v", b)
+	store.Badges(machine, []string{dir})
+	if badge, _ := store.Badge("local", dir); badge.Changed != 1 || badge.Fresh != 1 {
+		t.Fatalf("badge %+v", badge)
 	}
-	// reviewed, then committed: a commit of reviewed work, nothing left
-	if _, err := st.MarkSeen(mc, dir, VerdictChanges); err != nil {
+
+	if _, err := store.MarkSeen(machine, dir, VerdictChanges); err != nil {
 		t.Fatal(err)
 	}
 	git("commit", "-qam", "committed as reviewed")
-	sum = st.Summary(mc, dir)
-	if len(sum.Files) != 0 || len(sum.Commits) != 1 || !sum.Commits[0].Seen || sum.Baseline.Verdict != VerdictChanges {
-		t.Fatalf("after the commit: files %+v commits %+v baseline %+v", sum.Files, sum.Commits, sum.Baseline)
+	summary = store.Summary(machine, dir)
+	if len(summary.Files) != 0 || len(summary.Commits) != 1 || !summary.Commits[0].Seen || summary.Baseline.Verdict != VerdictChanges {
+		t.Fatalf("after the commit: files %+v commits %+v baseline %+v", summary.Files, summary.Commits, summary.Baseline)
 	}
-	if _, err := st.MarkSeen(mc, dir, "lgtm"); err == nil {
+	if _, err := store.MarkSeen(machine, dir, "lgtm"); err == nil {
 		t.Fatal("an unknown verdict was taken")
 	}
 }

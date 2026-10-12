@@ -339,7 +339,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   under it; comments gather in a draft (`usePref("review.draft:<machine>|
   <dir>")`, this device, per folder), sit under their rows (`.review-note`,
   matched by new-line number, or old-line number for a removed row) and a
-  bar at the foot sends them as one numbered message (`reviewMessage`:
+  bar at the foot sends them as one numbered message (`commentsMessage`:
   `file:line`, the row quoted, the text) to the pane's agent, or through
   `SendToAgent` to any agent. **Verdicts** end a review with a word to the
   agent: Approve and Reject (`VerdictDialog`) each take a note and send

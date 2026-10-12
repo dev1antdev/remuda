@@ -9,8 +9,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/review"
 )
 
-// Review: what changed in a workspace's folder since the viewer last looked.
-
+// reviewTarget resolves the request's machine and insists on an absolute folder.
 func (s *Server) reviewTarget(w http.ResponseWriter, r *http.Request, bodyMachine, dir string) (*machines.Machine, bool) {
 	m, err := s.machineFor(r, bodyMachine)
 	if err != nil {
@@ -24,7 +23,7 @@ func (s *Server) reviewTarget(w http.ResponseWriter, r *http.Request, bodyMachin
 	return m, true
 }
 
-// GET /api/review?machine=&dir= → the summary
+// handleReview answers GET /api/review?machine=&dir= with the folder's Summary.
 func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
 	dir := r.URL.Query().Get("dir")
 	mc, ok := s.reviewTarget(w, r, "", dir)
@@ -34,15 +33,14 @@ func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.Review.Summary(mc, dir))
 }
 
-// GET /api/review/diff?machine=&dir=&path= → one file's unified diff
+// handleReviewDiff answers GET /api/review/diff?machine=&dir=&path= with one file's unified diff.
 func (s *Server) handleReviewDiff(w http.ResponseWriter, r *http.Request) {
 	dir, path := r.URL.Query().Get("dir"), r.URL.Query().Get("path")
 	mc, ok := s.reviewTarget(w, r, "", dir)
 	if !ok {
 		return
 	}
-	// relative, inside the folder, and not something git would read as an
-	// option (a file named "--output=…" is a thing an agent can create)
+	// a path starting with "-" would reach git as an option
 	if path == "" || strings.HasPrefix(path, "/") || strings.HasPrefix(path, "-") || strings.Contains(path, "..") {
 		httpErr(w, 400, errors.New("a path relative to the folder is required"))
 		return
@@ -55,9 +53,8 @@ func (s *Server) handleReviewDiff(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"diff": diff})
 }
 
-// POST /api/review/seen {machine, dir, verdict?} → the baseline moves to
-// now; the verdict ("approved", "changes", or none for a silent look) is
-// what the page told the agent, kept for the next look's heading
+// handleReviewSeen answers POST /api/review/seen {machine, dir, verdict?}: the
+// baseline moves to now, with the verdict the page told the agent, if any.
 func (s *Server) handleReviewSeen(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Machine string `json:"machine"`
