@@ -62,13 +62,20 @@ func Quote(s string) string {
 // user's could sit at the name and be reused as the master.
 var SocketDir string
 
-// tmpPath is a short, deterministic socket path — unix sockaddr paths
-// have ~100 bytes to work with, so a long state dir falls back to the
-// temp dir.
-func tmpPath(prefix, seed string) string {
+// socketPathMax is the longest socket path handed to ssh. A unix
+// sockaddr holds 104 bytes, and OpenSSH binds a master at the path plus
+// a 17-byte random suffix before renaming it into place ("too long for
+// Unix domain socket" otherwise), which leaves 86 for the path itself.
+const socketPathMax = 86
+
+// tmpPath is a short, deterministic socket path, the extension counted.
+// A state dir that leaves no room — a Mac's "Library/Application
+// Support" with a user name past eight letters — falls back to the temp
+// dir, which on a Mac is the person's own private one.
+func tmpPath(prefix, seed, ext string) string {
 	sum := sha256.Sum256([]byte(seed))
-	name := prefix + hex.EncodeToString(sum[:8])
-	if SocketDir != "" && len(SocketDir)+len(name)+6 < 100 {
+	name := prefix + hex.EncodeToString(sum[:8]) + ext
+	if SocketDir != "" && len(SocketDir)+1+len(name) <= socketPathMax {
 		return filepath.Join(SocketDir, name)
 	}
 	return filepath.Join(os.TempDir(), name)
@@ -88,7 +95,7 @@ func (c *Conn) cmd(args ...string) *exec.Cmd {
 
 // Dial starts (or reuses) a ControlMaster to host and verifies it answers.
 func Dial(host string) (*Conn, error) {
-	c := &Conn{Host: host, ctl: tmpPath("remuda-ssh-", host) + ".ctl"}
+	c := &Conn{Host: host, ctl: tmpPath("remuda-ssh-", host, ".ctl")}
 	if c.Alive() {
 		return c, nil // a previous remuda run left a live master; reuse it
 	}
@@ -230,7 +237,7 @@ func (c *Conn) Put(path string, data []byte, timeout time.Duration) error {
 // ForwardSocket forwards a local unix socket to a remote one over the master
 // and returns the local path.
 func (c *Conn) ForwardSocket(remoteSock string) (string, error) {
-	local := tmpPath("remuda-fw-", c.Host+"\x00"+remoteSock) + ".sock"
+	local := tmpPath("remuda-fw-", c.Host+"\x00"+remoteSock, ".sock")
 	os.Remove(local)
 	cmd := c.cmd("-O", "forward", "-L", local+":"+remoteSock, c.Host)
 	var errb bytes.Buffer
