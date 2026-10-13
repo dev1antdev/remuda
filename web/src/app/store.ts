@@ -40,7 +40,7 @@ export type AppState = {
   panel: Panel; // the one overlay panel open, if any
   notice: NoticeMsg | null;
   confirm: Confirm | null; // a dialog of our own: window.confirm() is unreliable inside embedded browsers
-  file: { machineId: string; paneId: string; target: FileTarget } | null;
+  file: { machineId: string; paneId: string; dir: string; target: FileTarget } | null; // dir stands in for the pane's folder when there is no pane
   viewer: SearchHit | null; // a transcript on its own, from a search hit
   jump: Jump | null;
   codeOpened: boolean; // the Code mode stays mounted once opened, so the editor never reloads
@@ -120,8 +120,8 @@ export const actions = {
   closeConfirm() {
     app.set({ confirm: null });
   },
-  openFile(machineId: string, paneId: string, target: FileTarget) {
-    app.set({ file: { machineId, paneId, target } });
+  openFile(machineId: string, paneId: string, target: FileTarget, dir = "") {
+    app.set({ file: { machineId, paneId, dir, target } });
   },
   retargetFile(target: FileTarget) {
     app.set((s) => ({ file: s.file ? { ...s.file, target } : s.file }));

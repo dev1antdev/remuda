@@ -12,12 +12,14 @@ type Tab = "file" | "changes";
 export default function FileViewer({
   machineId,
   paneId,
+  dir = "",
   target,
   onClose,
   onRetarget,
 }: {
   machineId: string;
   paneId: string;
+  dir?: string; // stands in for the pane's folder when there is no pane
   target: FileTarget;
   onClose: () => void;
   onRetarget: (t: FileTarget) => void;
@@ -71,7 +73,7 @@ export default function FileViewer({
     setTab(target.prefer ?? "file");
     (async () => {
       try {
-        const i = await fsStat(machineId, paneId, target.path);
+        const i = await fsStat(machineId, paneId, target.path, dir);
         if (stop) return;
         setInfo(i);
         if (i.kind === "text") {
@@ -88,7 +90,7 @@ export default function FileViewer({
     return () => {
       stop = true;
     };
-  }, [machineId, paneId, target.path, target.prefer]);
+  }, [machineId, paneId, dir, target.path, target.prefer]);
 
   useEffect(() => {
     if (tab === "file" && text && target.line) {

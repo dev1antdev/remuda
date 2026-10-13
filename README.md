@@ -363,7 +363,8 @@ Also: new tab / new worktree / close from a workspace's ⋯ menu, tabs in a
 strip above the pane, machines mirrored from `herdr machine list`, and a
 **file viewer** — click any path the agent prints in the terminal or chat to
 open the file where it lives (local or remote), with a **Changes** tab
-showing its uncommitted `git diff`.
+showing its uncommitted `git diff`. A path is a link when it names a file
+(`main.go`, `docs/plan.md`, `.env`), not a folder.
 
 **Attachments:** the paperclip, a pasted screenshot (Ctrl/Cmd+V) or a drop
 uploads into the pane's folder (`.remuda/uploads/`) and mentions the file

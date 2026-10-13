@@ -12,16 +12,31 @@ describe("findUrls", () => {
   });
 });
 
+const paths = (text: string) => findPaths(text).map((m) => m.path);
+
 describe("findPaths", () => {
   it("keeps a :line suffix and strips trailing punctuation", () => {
     const [m] = findPaths("edit internal/server/chat.go:42 now");
     expect(m).toMatchObject({ text: "internal/server/chat.go:42", path: "internal/server/chat.go", line: 42 });
     expect(findPaths("(see docs/README.md).")[0]).toMatchObject({ path: "docs/README.md", line: undefined });
   });
-  it("finds absolute, home and bare names with a known extension", () => {
-    expect(findPaths("~/.claude/projects")[0]!.path).toBe("~/.claude/projects");
-    expect(findPaths("/usr/local/bin/remuda")[0]!.path).toBe("/usr/local/bin/remuda");
-    expect(findPaths("run main.go")[0]!.path).toBe("main.go");
+  it("finds absolute, home and bare names with a known extension, in any alphabet", () => {
+    expect(paths("~/.claude/settings.json")).toEqual(["~/.claude/settings.json"]);
+    expect(paths("/var/log/remuda.log")).toEqual(["/var/log/remuda.log"]);
+    expect(paths("run main.go")).toEqual(["main.go"]);
+    expect(paths("Обновил README.md и docs/заметки.md, см. Заметки.md")).toEqual(["README.md", "docs/заметки.md", "Заметки.md"]);
+  });
+  it("links only names a file would have: a folder or a slashed phrase is none", () => {
+    expect(paths("look in internal/server and web/src/features/files/")).toEqual([]);
+    expect(paths("Approve/Reject/Mark, Send/Send, 1/1, v7/v7/v7, и/или, /dev/null, /usr/local/bin/remuda")).toEqual([]);
+    expect(paths("it is docs/. now")).toEqual([]);
+    expect(paths("~/.claude/projects holds them")).toEqual([]);
+  });
+  it("finds dotfiles, the dot kept", () => {
+    expect(paths("copy .env.example to .env and check .gitignore.")).toEqual([".env.example", ".env", ".gitignore"]);
+    expect(paths("settings in .mcp.json and ~/.zshrc")).toEqual([".mcp.json", "~/.zshrc"]);
+    expect(paths("config/.env.local too")).toEqual(["config/.env.local"]);
+    expect(paths("the .md files and .env2")).toEqual([]);
   });
   it("never takes the path part of a URL, nor a version number", () => {
     expect(findPaths("see https://x.com/a/b.go")).toEqual([]);
