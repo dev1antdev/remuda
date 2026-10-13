@@ -3,13 +3,11 @@
 // the last used for this key preselected), edit the text, send through the chat's own path.
 
 import { useState } from "react";
-import type { AgentTarget } from "@/features/agents/targets";
+import { targetKey, type AgentTarget } from "./targets";
 import { usePref } from "@/lib/prefs";
 import Select from "@/ui/Select";
 import Logo from "@/ui/Logo";
 import { Dialog, Notice, useSubmit } from "@/ui";
-
-export const targetKey = (a: { machineId: string; paneId: string }) => `${a.machineId}|${a.paneId}`;
 
 export default function SendToAgent({ title, text: initialText, agents, currentPane, rememberKey, exclude, onClose, onSend }: {
   title: string;

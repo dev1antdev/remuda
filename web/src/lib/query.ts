@@ -58,6 +58,7 @@ export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], {
       }
     }
   }, []);
+  const reload = useCallback(() => void run(), [run]);
 
   useEffect(() => {
     seq.current++;
@@ -84,5 +85,5 @@ export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], {
     };
   }, [every, enabled, run]);
 
-  return { data, error, loading, reload: () => void run() };
+  return { data, error, loading, reload };
 }
