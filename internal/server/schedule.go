@@ -8,6 +8,13 @@ import (
 
 // Schedules: prompts sent to an agent on a timetable (internal/schedule).
 
+func (s *Server) scheduleRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/schedules", s.handleSchedules)
+	api.HandleFunc("PUT /api/schedules", s.handleSchedulePut)
+	api.HandleFunc("DELETE /api/schedules/{id}", s.handleScheduleDelete)
+	api.HandleFunc("POST /api/schedules/{id}/run", s.handleScheduleRun)
+}
+
 func (s *Server) handleSchedules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.Schedules.List())
 }

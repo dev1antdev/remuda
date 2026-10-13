@@ -1,16 +1,18 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/usage"
 )
+
+func (s *Server) usageRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/usage", s.handleUsage)
+}
 
 // handleUsage is GET /api/usage?days=7&machine=<id|all>&tz=: what the agents cost over a period, per machine.
 func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
@@ -35,55 +37,21 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now().In(loc)
 	since := time.Date(now.Year(), now.Month(), now.Day()-(days-1), 0, 0, 0, 0, loc)
-	want := r.URL.Query().Get("machine")
+	reports := usage.Collect(s.connectedHosts(r.URL.Query().Get("machine")), since, loc, tz)
+	writeJSON(w, map[string]any{"since": since.UTC().Format(time.RFC3339), "days": days, "machines": reports})
+}
 
-	type perMachine struct {
-		ID     string        `json:"id"`
-		Label  string        `json:"label"`
-		Report *usage.Report `json:"report,omitempty"`
-		Error  string        `json:"error,omitempty"`
-	}
-	var out []perMachine
-	var mu sync.Mutex
-	var wg sync.WaitGroup
+// connectedHosts is the connected machines a fleet-wide question asks: one by id, or every one for "" and "all".
+func (s *Server) connectedHosts(want string) []shell.Host {
+	var hosts []shell.Host
 	for _, mc := range s.Machines.List() {
-		if want != "" && want != "all" && mc.Cfg.ID != want {
+		if want != "" && want != "all" && mc.ID() != want {
 			continue
 		}
-		if st, _ := mc.State(); st != machines.StateConnected {
+		if state, _ := mc.State(); state != machines.StateConnected {
 			continue
 		}
-		wg.Add(1)
-		go func(mc *machines.Machine) {
-			defer wg.Done()
-			pm := perMachine{ID: mc.Cfg.ID, Label: mc.Label()}
-			if mc.Local {
-				rep, err := usage.Scan(mc.Home()+"/.claude/projects", since, loc)
-				if err != nil {
-					pm.Error = err.Error()
-				} else {
-					pm.Report = &rep
-				}
-			} else {
-				raw, err := mc.Shell(usage.Script(mc.Home(), since, tz), 90*time.Second)
-				var rep usage.Report
-				switch {
-				case err != nil:
-					pm.Error = strings.TrimSpace(err.Error())
-				case json.Unmarshal([]byte(raw), &rep) != nil:
-					pm.Error = "the machine's remuda gave no report"
-				default:
-					pm.Report = &rep
-				}
-			}
-			mu.Lock()
-			out = append(out, pm)
-			mu.Unlock()
-		}(mc)
+		hosts = append(hosts, mc)
 	}
-	wg.Wait()
-	if out == nil {
-		out = []perMachine{}
-	}
-	writeJSON(w, map[string]any{"since": since.UTC().Format(time.RFC3339), "days": days, "machines": out})
+	return hosts
 }

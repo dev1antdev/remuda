@@ -7,9 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/search"
 )
+
+func (s *Server) searchRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/search", s.handleSearch)
+}
 
 // handleSearch is GET /api/search?q=&machine=<id|all>&dir=&days=: full text over every connected machine's transcripts, newest first.
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -22,16 +25,6 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	if d, _ := strconv.Atoi(r.URL.Query().Get("days")); d > 0 {
 		since = time.Now().AddDate(0, 0, -d)
 	}
-	want := r.URL.Query().Get("machine")
-	var mcs []*machines.Machine
-	for _, mc := range s.Machines.List() {
-		if want != "" && want != "all" && mc.Cfg.ID != want {
-			continue
-		}
-		if st, _ := mc.State(); st != machines.StateConnected {
-			continue
-		}
-		mcs = append(mcs, mc)
-	}
-	writeJSON(w, search.Search(mcs, q, r.URL.Query().Get("dir"), since))
+	hosts := s.connectedHosts(r.URL.Query().Get("machine"))
+	writeJSON(w, search.Search(hosts, q, r.URL.Query().Get("dir"), since))
 }

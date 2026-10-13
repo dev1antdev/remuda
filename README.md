@@ -56,6 +56,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   per pane (all viewers share one attach; replay buffer for late joiners).
 - **Chat lens** — the transcript herdr names via `agent_session`, parsed
   into turns (text, thinking, tool calls with outputs), polled with ETags.
+- **The address follows you** — `?machine=&pane=&mode=&lens=` is what you
+  are looking at, so a link, a reload or a notification lands on the same
+  pane in the same lens.
 - **Submit** — herdr's `agent.prompt` (bracketed paste + Enter), refused
   while the agent waits on a menu; falls back to `pane.send_text` for plain
   shells. Named keys (`Enter`, `Escape`, arrows, `Ctrl+C`) via
@@ -343,6 +346,7 @@ token, tasks and push subscriptions with `REMUDA_STATE_DIR=/some/dir`.
 make server    # go run, API on :7317
 make dev       # vite dev server on :5173, proxies /api and /ws
 make typecheck # tsc + go vet
+make webtest   # vitest on the page's pure modules
 ```
 
 ## Status / roadmap

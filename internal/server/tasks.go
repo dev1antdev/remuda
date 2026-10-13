@@ -2,15 +2,11 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
-	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/tasks"
 )
 
@@ -251,13 +247,8 @@ func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Machine   string `json:"machine"`
-		Workspace string `json:"workspace"`
-		Branch    string `json:"branch"`
-		Base      string `json:"base"`
-		Agent     string `json:"agent"`
-		Groom     bool   `json:"groom"`
-		Prompt    string `json:"prompt"`
+		Machine string `json:"machine"`
+		tasks.StartRequest
 	}
 	if !decode(w, r, &req) {
 		return
@@ -267,160 +258,22 @@ func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 		s.taskReply(w, nil, err)
 		return
 	}
-	if req.Agent == "" {
-		req.Agent = "claude"
-	}
-	if req.Agent == "shell" || !agentOK(req.Agent) {
-		httpErr(w, http.StatusBadRequest, fmt.Errorf("an agent is required, not %q", req.Agent))
-		return
-	}
-	req.Branch, req.Base = strings.TrimSpace(req.Branch), strings.TrimSpace(req.Base)
-	if req.Workspace == "" || req.Branch == "" {
-		httpErr(w, http.StatusBadRequest, errors.New("a workspace and a branch are required"))
-		return
-	}
-	if !refOK(req.Branch) || (req.Base != "" && !refOK(req.Base)) {
-		httpErr(w, http.StatusBadRequest, errors.New("branch names: no leading dash, no spaces, no .."))
+	if err := req.StartRequest.Normalize(); err != nil {
+		s.taskReply(w, nil, err)
 		return
 	}
 	mc, client, _, ok := s.ready(w, r, req.Machine)
 	if !ok {
 		return
 	}
-	res, err := client.WorktreeCreate(req.Workspace, req.Branch, strings.TrimSpace(req.Base), "")
-	if err != nil {
+	task, err = s.Launcher.Start(mc, client, task, req.StartRequest)
+	var refusal *herdr.Error
+	switch {
+	case errors.Is(err, tasks.ErrAgentStart):
+		httpErr(w, http.StatusBadGateway, err)
+	case errors.As(err, &refusal):
 		rpcErr(w, err)
-		return
+	default:
+		s.taskReply(w, task, err)
 	}
-	pane := res.RootPane.PaneID
-	if err := startAgent(client, pane, req.Agent); err != nil {
-		s.Watch.Refresh(mc)
-		httpErr(w, http.StatusBadGateway, fmt.Errorf("the worktree %s is there, but the agent did not start: %w", res.Worktree.Branch, err))
-		return
-	}
-	s.Watch.Refresh(mc)
-	run, err := s.Tasks.StartRun(tasks.Run{TaskID: id, Machine: mc.Cfg.ID, Workspace: res.Workspace.WorkspaceID, Pane: pane, Dir: res.Worktree.Path, Branch: res.Worktree.Branch, Agent: req.Agent})
-	if err != nil {
-		s.taskReply(w, nil, err)
-		return
-	}
-	prompt := strings.TrimSpace(req.Prompt)
-	if prompt == "" {
-		project, _ := s.Tasks.Project(task.ProjectID)
-		prompt = tasks.Prompt(task, project, req.Groom)
-	} else if req.Groom && !strings.HasPrefix(prompt, "/grill-me") {
-		prompt = "/grill-me " + prompt
-	}
-	go s.deliverTaskPrompt(mc, client, run, task, prompt)
-	t, err := s.Tasks.Get(id)
-	s.taskReply(w, t, err)
-}
-
-// deliverTaskPrompt waits for the fresh agent and hands it the task; Claude Code's "trust this folder"
-// question for the new worktree is answered yes, any other question is pushed to the person and waited for.
-func (s *Server) deliverTaskPrompt(mc *machines.Machine, client *herdr.Client, run tasks.Run, task tasks.Task, prompt string) {
-	lock := s.paneLock(push.PaneRef{Machine: mc.Cfg.ID, Pane: run.Pane})
-	deadline := time.Now().Add(5 * time.Minute)
-	nudged, trusted := false, false
-	var last error
-	for time.Now().Before(deadline) {
-		time.Sleep(2 * time.Second)
-		lock.Lock()
-		err := client.AgentPrompt(run.Pane, prompt)
-		lock.Unlock()
-		switch {
-		case err == nil:
-			_ = s.Tasks.SetRun(run.ID, tasks.RunRunning, "")
-			return
-		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found"):
-			last = err
-		case herdr.IsCode(err, "agent_blocked"):
-			last = err
-			if !trusted {
-				if screen, rerr := client.PaneRead(run.Pane); rerr == nil && isTrustPrompt(screen, run.Dir, mc.Home()) {
-					trusted = true
-					lock.Lock()
-					if !cursorOnYes(screen) { // "No, exit" sits first and focused; older builds put Yes first
-						_ = client.PaneSendKeys(run.Pane, []string{"down"})
-						time.Sleep(150 * time.Millisecond)
-					}
-					_ = client.PaneSendKeys(run.Pane, []string{"enter"})
-					lock.Unlock()
-					_, _ = s.Tasks.AddComment(run.TaskID, "remuda", "Answered Claude Code's trust question for the new worktree `"+run.Dir+"`.")
-					continue
-				}
-			}
-			if !nudged && s.Push != nil {
-				nudged = true
-				s.Push.Notify(push.Payload{
-					Machine: mc.Cfg.ID, Pane: run.Pane, Kind: "input",
-					Title:   "Task " + task.Identifier + ": the agent asks something first",
-					Body:    "Answer it in the pane and the task follows.",
-					Tag:     fmt.Sprintf("task|%d", run.TaskID),
-					Actions: []push.Action{{Action: "open", Title: "Open"}},
-				})
-			}
-		default:
-			s.failTaskRun(run, "The task could not be handed to the agent: "+err.Error())
-			return
-		}
-	}
-	msg := "the agent did not take the prompt within five minutes"
-	if last != nil {
-		msg += " (" + last.Error() + ")"
-	}
-	s.failTaskRun(run, "The task could not be handed to the agent: "+msg+". The worktree is there; send it by hand.")
-}
-
-// failTaskRun closes a starting run as failed, unless the sweep closed it meanwhile.
-func (s *Server) failTaskRun(run tasks.Run, note string) {
-	if cur, err := s.Tasks.Run(run.ID); err != nil || cur.State != tasks.RunStarting {
-		return
-	}
-	_ = s.Tasks.SetRun(run.ID, tasks.RunFailed, note)
-	_, _ = s.Tasks.AddComment(run.TaskID, "remuda", note)
-}
-
-// isTrustPrompt recognises Claude Code's "do you trust this folder" screen for the given folder, nothing else.
-// The dialog is boxed and wrapped at the pane's width, so whitespace and box runes are dropped; the path may start with ~.
-func isTrustPrompt(screen, dir, home string) bool {
-	flat := squash(screen)
-	if !strings.Contains(flat, "trustthisfolder") || !strings.Contains(flat, "Accessingworkspace") {
-		return false
-	}
-	if dir == "" {
-		return true
-	}
-	want := []string{squash(dir)}
-	if home != "" && (dir == home || strings.HasPrefix(dir, home+"/")) {
-		want = append(want, squash("~"+strings.TrimPrefix(dir, home)))
-	}
-	for _, w := range want {
-		if strings.Contains(flat, w) {
-			return true
-		}
-	}
-	return false
-}
-
-// cursorOnYes says whether the dialog's cursor already sits on the yes line.
-func cursorOnYes(screen string) bool {
-	for _, line := range strings.Split(screen, "\n") {
-		if strings.Contains(line, "❯") && strings.Contains(line, "Yes, I trust") {
-			return true
-		}
-	}
-	return false
-}
-
-// squash drops whitespace and box-drawing runes.
-func squash(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		if r == ' ' || r == '\n' || r == '\r' || r == '\t' || (r >= 0x2500 && r <= 0x257F) {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
 }

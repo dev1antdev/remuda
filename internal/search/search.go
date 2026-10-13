@@ -15,8 +15,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/version"
 )
@@ -47,22 +47,22 @@ const (
 )
 
 // Search runs on the given machines at once; dir narrows to one project folder, since to records after a time.
-func Search(mcs []*machines.Machine, q, dir string, since time.Time) Result {
+func Search(hosts []shell.Host, q, dir string, since time.Time) Result {
 	res := Result{Hits: []Hit{}, Errors: map[string]string{}}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for _, mc := range mcs {
+	for _, host := range hosts {
 		wg.Add(1)
-		go func(mc *machines.Machine) {
+		go func(host shell.Host) {
 			defer wg.Done()
-			hits, err := one(mc, q, dir, since)
+			hits, err := one(host, q, dir, since)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				res.Errors[mc.Cfg.ID] = err.Error()
+				res.Errors[host.ID()] = err.Error()
 			}
 			res.Hits = append(res.Hits, hits...)
-		}(mc)
+		}(host)
 	}
 	wg.Wait()
 	sort.Slice(res.Hits, func(i, j int) bool { return res.Hits[i].Ts.After(res.Hits[j].Ts) })
@@ -76,17 +76,17 @@ func Search(mcs []*machines.Machine, q, dir string, since time.Time) Result {
 	return res
 }
 
-func one(mc *machines.Machine, q, dir string, since time.Time) ([]Hit, error) {
+func one(host shell.Host, q, dir string, since time.Time) ([]Hit, error) {
 	var out string
-	if mc.Local {
+	if host.Local() {
 		var b strings.Builder
-		if err := Scan(mc.Home()+"/.claude/projects", q, dir, since, perMachine, &b); err != nil {
+		if err := Scan(host.Home()+"/.claude/projects", q, dir, since, perMachine, &b); err != nil {
 			return nil, err
 		}
 		out = b.String()
 	} else {
 		var err error
-		if out, err = mc.Shell(script(mc.Home(), q, dir, since), timeout); err != nil {
+		if out, err = shell.Text(host, remoteScript(host.Home(), q, dir, since), timeout); err != nil {
 			return nil, err
 		}
 	}
@@ -112,7 +112,7 @@ func one(mc *machines.Machine, q, dir string, since time.Time) ([]Hit, error) {
 		}
 		seen[path+m.UUID] = true
 		hits = append(hits, Hit{
-			Machine: mc.Cfg.ID, Project: project, Dir: m.Cwd, Session: transcript.SessionID(path),
+			Machine: host.ID(), Project: project, Dir: m.Cwd, Session: transcript.SessionID(path),
 			UUID: m.UUID, Ts: m.Ts, Role: m.Role, Snippet: m.Snippet,
 		})
 	}
@@ -124,27 +124,27 @@ func one(mc *machines.Machine, q, dir string, since time.Time) ([]Hit, error) {
 	return hits, sc.Err()
 }
 
-// script runs the scan on a remote machine: remuda's own scanner where `make deploy` put it, else grep.
+// remoteScript runs the scan on a remote machine: remuda's own scanner where `make deploy` put it, else grep.
 // The grep takes the four spellings as they sit in the JSON (grep -i folds ASCII only); BSD grep is seconds per hundred MB.
-func script(home, q, dir string, since time.Time) string {
+func remoteScript(home, q, dir string, since time.Time) string {
 	seen := map[string]bool{}
 	var pats []string
 	for _, v := range spellings(q) {
 		if !seen[v] {
 			seen[v] = true
-			pats = append(pats, "-e "+sshx.Quote(v))
+			pats = append(pats, "-e "+script.Quote(v))
 		}
 	}
-	bin, guard := sshx.VersionedBin(home, version.Build)
-	args := "search -q " + sshx.Quote(q) + " -limit " + strconv.Itoa(perMachine)
+	bin, guard := script.Remuda(home, version.Build)
+	args := "search -q " + script.Quote(q) + " -limit " + strconv.Itoa(perMachine)
 	if dir != "" {
-		args += " -dir " + sshx.Quote(dir)
+		args += " -dir " + script.Quote(dir)
 	}
 	if !since.IsZero() {
-		args += " -since " + sshx.Quote(since.UTC().Format(time.RFC3339))
+		args += " -since " + script.Quote(since.UTC().Format(time.RFC3339))
 	}
 	return "if " + guard + " && " + bin + " " + args + "; then exit 0; fi; " +
-		"cd " + sshx.Quote(home+"/.claude/projects") + " 2>/dev/null || exit 0; " +
+		"cd " + script.Quote(home+"/.claude/projects") + " 2>/dev/null || exit 0; " +
 		"grep -raF --include='*.jsonl' " + strings.Join(pats, " ") + " . 2>/dev/null | " +
 		"cut -b1-" + strconv.Itoa(lineCap) + " | head -c " + strconv.Itoa(outputCap) + "; exit 0"
 }

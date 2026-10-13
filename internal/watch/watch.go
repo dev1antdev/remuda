@@ -1,6 +1,6 @@
 // Package watch polls every machine's session snapshot, browser or not,
-// and turns pane status changes into events. It is the only poller:
-// handlers read its cache and never ask herdr inline.
+// and turns what it sees into events. It is the only poller: handlers read
+// its cache and never ask herdr inline.
 package watch
 
 import (
@@ -8,10 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/push"
-	"github.com/dev1antdev/remuda/internal/radar"
 )
 
 const (
@@ -41,24 +40,14 @@ type machineState struct {
 
 type Watcher struct {
 	machines *machines.Manager
-	push     *push.Service
-	radar    *radar.Tracker
-	// Badges, when set, refreshes a machine's review counts: a minute apart, one shell per machine
-	Badges func(mc *machines.Machine, dirs []string)
-	Dirs   func(snap *herdr.Snapshot) []string
-	// Usage, when set, is handed every snapshot for the cost meter; it rate-limits its own reads
-	Usage func(mc *machines.Machine, snap *herdr.Snapshot)
-	// LocalDown, when set, is called when the local herdr does not answer; it starts the server
-	LocalDown func(err error)
-	// OnEvent, when set, sees every status change after push does
-	OnEvent func(ev push.Event)
+	bus      *events.Bus
 
 	mu     sync.Mutex
 	states map[string]*machineState
 }
 
-func New(m *machines.Manager, p *push.Service, r *radar.Tracker) *Watcher {
-	return &Watcher{machines: m, push: p, radar: r, states: map[string]*machineState{}}
+func New(m *machines.Manager, bus *events.Bus) *Watcher {
+	return &Watcher{machines: m, bus: bus, states: map[string]*machineState{}}
 }
 
 // Start polls forever; new machines are picked up on each discovery round.
@@ -72,7 +61,7 @@ func (w *Watcher) Start() {
 			}
 			for _, mc := range w.machines.List() {
 				w.mu.Lock()
-				st := w.stateFor(mc.Cfg.ID)
+				st := w.stateFor(mc.ID())
 				started := st.started
 				st.started = true
 				w.mu.Unlock()
@@ -97,45 +86,24 @@ func (w *Watcher) stateFor(id string) *machineState {
 
 func (w *Watcher) loop(mc *machines.Machine) {
 	every := remoteEvery
-	if mc.Local {
+	if mc.Local() {
 		every = localEvery
 	}
-	var badgesAt time.Time
-	badgesBusy := false // the review sweep is seconds of git over ssh: never on the poll's path
-	var badgesMu sync.Mutex
 	for !mc.Removed() {
-		snap, _ := w.poll(mc)
-		if snap != nil && w.Badges != nil && w.Dirs != nil && time.Since(badgesAt) > time.Minute {
-			badgesMu.Lock()
-			if !badgesBusy {
-				badgesBusy = true
-				badgesAt = time.Now()
-				dirs := w.Dirs(snap)
-				go func() {
-					w.Badges(mc, dirs)
-					badgesMu.Lock()
-					badgesBusy = false
-					badgesMu.Unlock()
-				}()
-			}
-			badgesMu.Unlock()
-		}
-		if snap != nil && w.Usage != nil {
-			w.Usage(mc, snap)
-		}
+		w.poll(mc)
 		time.Sleep(every)
 	}
 	// a removed machine: forget its state so re-adding the host starts clean
 	w.mu.Lock()
-	delete(w.states, mc.Cfg.ID)
+	delete(w.states, mc.ID())
 	w.mu.Unlock()
-	w.radar.Forget(mc.Cfg.ID)
+	events.Publish(w.bus, events.MachineRemoved{Machine: mc.ID()})
 }
 
 // poll fetches one snapshot and applies it; transport failures reach the machine through its client.
 func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 	w.mu.Lock()
-	st := w.stateFor(mc.Cfg.ID)
+	st := w.stateFor(mc.ID())
 	w.mu.Unlock()
 	st.pollMu.Lock() // the loop and Refresh may overlap; the RPC and its apply stay in order
 	defer st.pollMu.Unlock()
@@ -146,7 +114,7 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 			w.mu.Lock()
 			st.fails = 0
 			w.mu.Unlock()
-			w.apply(mc.Cfg.ID, snap)
+			w.apply(mc.ID(), snap)
 			return snap, nil
 		}
 	}
@@ -156,24 +124,19 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 	fails := st.fails
 	w.mu.Unlock()
 	// herdr's own restart or update handoff unbinds the socket for a moment: a few misses first
-	if mc.Local && w.LocalDown != nil && fails >= localDownAfter {
-		go w.LocalDown(err)
+	if mc.Local() && fails >= localDownAfter {
+		go events.Publish(w.bus, events.LocalHerdrDown{Err: err})
 	}
 	return nil, err
 }
 
-// apply stores the snapshot and emits one event per pane whose status changed;
+// apply stores the snapshot, publishes it, and emits one event per pane whose status changed;
 // a machine's first snapshot only seeds state, so a reconnect replays no alerts.
 func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 	now := time.Now()
-	labels := map[string]string{}
-	for _, ws := range snap.Workspaces {
-		labels[ws.WorkspaceID] = ws.Label
-	}
+	events.Publish(w.bus, events.Snapshot{Machine: machineID, Snap: snap, At: now})
 
-	w.radar.Observe(machineID, snap, now)
-
-	var events []push.Event
+	var changes []events.PaneStatus
 	w.mu.Lock()
 	st := w.stateFor(machineID)
 	seed := st.snap == nil
@@ -181,20 +144,20 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 	st.snap, st.at, st.err = snap, now, nil
 	seen := map[string]bool{}
 	for i := range snap.Panes {
-		p := &snap.Panes[i]
-		seen[p.PaneID] = true
-		prev, known := st.panes[p.PaneID]
+		pane := &snap.Panes[i]
+		seen[pane.PaneID] = true
+		prev, known := st.panes[pane.PaneID]
 		if !known {
-			st.panes[p.PaneID] = paneState{status: p.AgentStatus, since: now}
+			st.panes[pane.PaneID] = paneState{status: pane.AgentStatus, since: now}
 			continue
 		}
-		if prev.status == p.AgentStatus {
+		if prev.status == pane.AgentStatus {
 			if back {
-				st.panes[p.PaneID] = paneState{status: prev.status, since: now}
+				st.panes[pane.PaneID] = paneState{status: prev.status, since: now}
 			}
 			continue
 		}
-		st.panes[p.PaneID] = paneState{status: p.AgentStatus, since: now}
+		st.panes[pane.PaneID] = paneState{status: pane.AgentStatus, since: now}
 		if seed {
 			continue
 		}
@@ -202,29 +165,26 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 		if prev.status == herdr.StatusWorking {
 			worked = now.Sub(prev.since)
 		}
-		events = append(events, push.Event{
-			Pane: push.PaneRef{Machine: machineID, Pane: p.PaneID}, Workspace: labels[p.WorkspaceID],
-			PaneTitle: p.DisplayTitle(), Agent: p.AgentName(), Kind: p.Agent,
-			From: prev.status, To: p.AgentStatus, Worked: worked,
+		changes = append(changes, events.PaneStatus{
+			Pane: events.PaneRef{Machine: machineID, Pane: pane.PaneID}, Workspace: snap.WorkspaceLabel(pane.WorkspaceID),
+			PaneTitle: pane.DisplayTitle(), Agent: pane.AgentName(), Kind: pane.Agent,
+			From: prev.status, To: pane.AgentStatus, Worked: worked,
 		})
 	}
 	for id := range st.panes {
 		if !seen[id] {
 			delete(st.panes, id)
 			// a closed pane cancels whatever was pending for it
-			events = append(events, push.Event{Pane: push.PaneRef{Machine: machineID, Pane: id}, To: "gone"})
+			changes = append(changes, events.PaneStatus{Pane: events.PaneRef{Machine: machineID, Pane: id}, To: events.Gone})
 		}
 	}
 	w.mu.Unlock()
 
-	for _, ev := range events {
-		if ev.To != "gone" {
-			log.Printf("status %s (%s): %s → %s", ev.Pane, ev.Workspace, ev.From, ev.To)
+	for _, change := range changes {
+		if change.To != events.Gone {
+			log.Printf("status %s (%s): %s → %s", change.Pane, change.Workspace, change.From, change.To)
 		}
-		w.push.OnStatus(ev)
-		if w.OnEvent != nil {
-			w.OnEvent(ev)
-		}
+		events.Publish(w.bus, change)
 	}
 }
 

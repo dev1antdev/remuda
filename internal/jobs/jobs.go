@@ -9,7 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/events"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 const (
@@ -38,31 +39,30 @@ type job struct {
 	out  strings.Builder
 }
 
-// Runner keeps the jobs.
+// Runner keeps the jobs and says on the bus when one ends.
 type Runner struct {
+	bus   *events.Bus
 	mu    sync.Mutex
 	jobs  map[string]*job
 	order []string
-	// OnDone, when set, is told of every finished job.
-	OnDone func(j Job)
 }
 
-func New() *Runner { return &Runner{jobs: map[string]*job{}} }
+func New(bus *events.Bus) *Runner { return &Runner{bus: bus, jobs: map[string]*job{}} }
 
 // Start runs the script on the machine in the background.
-func (r *Runner) Start(mc *machines.Machine, title, command string) Job {
-	return r.StartThen(mc, title, command, nil, nil)
+func (r *Runner) Start(host shell.Host, title, command string) Job {
+	return r.StartThen(host, title, command, nil, nil)
 }
 
 // StartThen is Start with Go work around the script in the same log: first
 // before it, then after it whatever its exit status, which stays the verdict.
-func (r *Runner) StartThen(mc *machines.Machine, title, command string, first func(say func(string)), then func(say func(string)) error) Job {
-	return r.launch(mc, title, command, func(j *job) error {
+func (r *Runner) StartThen(host shell.Host, title, command string, first func(say func(string)), then func(say func(string)) error) Job {
+	return r.launch(host, title, command, func(j *job) error {
 		say := func(line string) { j.write([]byte(line + "\n")) }
 		if first != nil {
 			first(say)
 		}
-		err := mc.Stream(command, timeout, j.write)
+		err := host.Stream(command, timeout, j.write)
 		if then != nil {
 			if terr := then(say); terr != nil && err == nil {
 				err = terr
@@ -93,14 +93,14 @@ func (r *Runner) List(machineID string, n int) []Job {
 }
 
 // Run is Start for a job written in Go: fn streams its own lines and returns the verdict.
-func (r *Runner) Run(mc *machines.Machine, title, command string, fn func(say func(string)) error) Job {
-	return r.launch(mc, title, command, func(j *job) error {
+func (r *Runner) Run(host shell.Host, title, command string, fn func(say func(string)) error) Job {
+	return r.launch(host, title, command, func(j *job) error {
 		return fn(func(line string) { j.write([]byte(line + "\n")) })
 	})
 }
 
-func (r *Runner) launch(mc *machines.Machine, title, command string, run func(j *job) error) Job {
-	j := &job{view: Job{ID: newID(), Machine: mc.Cfg.ID, Title: title, Command: command, Started: time.Now()}}
+func (r *Runner) launch(host shell.Host, title, command string, run func(j *job) error) Job {
+	j := &job{view: Job{ID: newID(), Machine: host.ID(), Title: title, Command: command, Started: time.Now()}}
 	r.mu.Lock()
 	r.jobs[j.view.ID] = j
 	r.order = append(r.order, j.view.ID)
@@ -123,9 +123,7 @@ func (r *Runner) launch(mc *machines.Machine, title, command string, run func(j 
 			j.view.OK = true
 		}
 		j.mu.Unlock()
-		if r.OnDone != nil {
-			r.OnDone(j.snapshot())
-		}
+		events.Publish(r.bus, events.JobDone{Machine: host.ID(), Title: title, OK: err == nil})
 	}()
 	return j.snapshot()
 }

@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 func rec(id, model, ts string, out int64) string {
@@ -82,9 +83,9 @@ func TestTrackerReadsOnlyTheGrowth(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "s.jsonl")
 	_ = os.WriteFile(path, []byte(rec("m1", "claude-fable-5-1", "2026-10-07T10:00:00Z", 10)), 0o644)
-	mc := &machines.Machine{Cfg: machines.Config{ID: "local"}, Local: true}
+	files := transcript.NewReader(shell.Local{Name: "local"})
 	tr := NewTracker()
-	tr.Observe(mc, "p1", []string{path})
+	tr.Observe("local", files, "p1", []string{path})
 	d, ok := tr.Display("local", "p1")
 	if !ok || d.Turns != 1 || d.Name != "Fable 5.1" || d.Window != 1000000 || d.Context != 1100 {
 		t.Fatalf("first %+v %v", d, ok)
@@ -96,7 +97,7 @@ func TestTrackerReadsOnlyTheGrowth(t *testing.T) {
 	tr.mu.Lock()
 	tr.files[key("local", path)].checked = time.Time{}
 	tr.mu.Unlock()
-	tr.Observe(mc, "p1", []string{path})
+	tr.Observe("local", files, "p1", []string{path})
 	d, _ = tr.Display("local", "p1")
 	if d.Turns != 2 || d.Tokens.Output != 30 {
 		t.Fatalf("after growth %+v", d)
@@ -107,14 +108,14 @@ func TestTrackerReadsOnlyTheGrowth(t *testing.T) {
 	tr.mu.Lock()
 	tr.files[key("local", path)].checked = time.Time{}
 	tr.mu.Unlock()
-	tr.Observe(mc, "p1", []string{path})
+	tr.Observe("local", files, "p1", []string{path})
 	d, _ = tr.Display("local", "p1")
 	if d.Turns != 3 || d.Tokens.Output != 35 {
 		t.Fatalf("after the partial line %+v", d)
 	}
 	next := filepath.Join(dir, "s2.jsonl")
 	_ = os.WriteFile(next, []byte(rec("m9", "claude-fable-5-1", "2026-10-07T11:00:00Z", 1)), 0o644)
-	tr.Observe(mc, "p1", []string{path, next})
+	tr.Observe("local", files, "p1", []string{path, next})
 	d, _ = tr.Display("local", "p1")
 	if d.Turns != 4 || d.Tokens.Output != 36 || d.Context != 1100 {
 		t.Fatalf("chained %+v", d)
@@ -125,14 +126,14 @@ func TestTrackerReadsOnlyTheGrowth(t *testing.T) {
 	tr.mu.Lock()
 	delete(tr.subsChecked, key("local", next))
 	tr.mu.Unlock()
-	tr.Observe(mc, "p1", []string{path, next})
+	tr.Observe("local", files, "p1", []string{path, next})
 	d, _ = tr.Display("local", "p1")
 	if d.Turns != 5 || d.Tokens.Output != 43 {
 		t.Fatalf("with a subagent %+v", d)
 	}
 	third := filepath.Join(dir, "s3.jsonl")
 	_ = os.WriteFile(third, []byte(rec("m10", "claude-fable-5-1", "2026-10-07T12:00:00Z", 2)), 0o644)
-	tr.Observe(mc, "p1", []string{path, next, third})
+	tr.Observe("local", files, "p1", []string{path, next, third})
 	d, _ = tr.Display("local", "p1")
 	if d.Turns != 5 || d.Tokens.Output != 38 { // s3's subagents (none) replace s2's in the sum
 		t.Fatalf("twice chained %+v", d)

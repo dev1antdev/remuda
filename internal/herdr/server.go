@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/script"
 )
 
 var (
@@ -73,7 +73,7 @@ func start(bin, socket string) error {
 func serverCommand(bin, socket, home string) *exec.Cmd {
 	var cmd *exec.Cmd
 	if sh := os.Getenv("SHELL"); loginShell(sh) {
-		cmd = exec.Command(sh, "-l", "-c", "exec "+sshx.Quote(bin)+" server")
+		cmd = exec.Command(sh, "-l", "-c", "exec "+script.Quote(bin)+" server")
 	} else {
 		cmd = exec.Command(bin, "server")
 	}
@@ -108,12 +108,12 @@ func cleanEnv() []string {
 
 // StartServerScript is the same start as a POSIX script over ssh: unless a server runs, start one and wait for it.
 func StartServerScript(bin, socket string) string {
-	q := sshx.Quote(bin)
-	s := sshx.Quote(socket)
+	q := script.Quote(bin)
+	s := script.Quote(socket)
 	up := `HERDR_SOCKET_PATH=` + s + ` ` + q + ` status server 2>/dev/null | grep -q "status: running"`
 	return `if ` + up + `; then exit 0; fi; ` +
 		`mkdir -p "$(dirname ` + s + `)"; cd "$HOME" 2>/dev/null; export HERDR_SOCKET=` + s + ` HERDR_SOCKET_PATH=` + s + `; unset HERDR_ENV HERDR_PANE_ID TS_AUTHKEY; ` +
-		`if [ -n "${SHELL:-}" ] && [ -x "$SHELL" ]; then nohup "$SHELL" -l -c ` + sshx.Quote("exec "+q+" server") + ` >> "$(dirname ` + s + `)/herdr-server.out" 2>&1 < /dev/null & ` +
+		`if [ -n "${SHELL:-}" ] && [ -x "$SHELL" ]; then nohup "$SHELL" -l -c ` + script.Quote("exec "+q+" server") + ` >> "$(dirname ` + s + `)/herdr-server.out" 2>&1 < /dev/null & ` +
 		`else nohup ` + q + ` server >> "$(dirname ` + s + `)/herdr-server.out" 2>&1 < /dev/null & fi; ` +
 		`i=0; while [ $i -lt 30 ]; do if ` + up + `; then exit 0; fi; sleep 0.5; i=$((i+1)); done; exit 1`
 }

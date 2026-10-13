@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/version"
 )
@@ -27,8 +27,23 @@ type Display struct {
 	Partial bool    `json:"partial,omitempty"` // only a tail was read: the cost is a floor
 }
 
+// Files is where a machine's transcript bytes come from: a stat, a folder's stats, a read from an offset.
+type Files interface {
+	Version(path string) (transcript.Version, error)
+	DirVersions(dir string) (map[string]transcript.Version, error)
+	ReadFrom(path string, offset int64) ([]byte, error)
+}
+
+// Source is a machine's transcripts as the meter reads them: the bytes, and which files a pane's conversation lives in.
+type Source interface {
+	Files
+	ResolveSession(cwd, kind, value string) (string, error)
+	Lineage(path string) []string
+}
+
 // Tracker keeps a running sum per transcript file, reading only what was appended since the last look.
 type Tracker struct {
+	busy        sync.Map // machine id → a read of its snapshot is under way
 	mu          sync.Mutex
 	files       map[string]*fileState // machine|path
 	panes       map[string]string     // machine|pane → path
@@ -56,28 +71,50 @@ func NewTracker() *Tracker {
 
 func key(machineID, s string) string { return machineID + "|" + s }
 
+// ObserveSnapshot keeps every agent pane's meter current, one read per machine at a time and off the poll's path.
+func (t *Tracker) ObserveSnapshot(machineID string, source Source, snap *herdr.Snapshot) {
+	if _, running := t.busy.LoadOrStore(machineID, true); running {
+		return
+	}
+	panes := append([]herdr.PaneInfo(nil), snap.Panes...)
+	go func() {
+		defer t.busy.Delete(machineID)
+		for i := range panes {
+			pane := &panes[i]
+			if pane.Agent == "" || pane.AgentSession == nil {
+				continue
+			}
+			first, err := source.ResolveSession(pane.Dir(), pane.AgentSession.Kind, pane.AgentSession.Value)
+			if err != nil {
+				continue
+			}
+			t.Observe(machineID, source, pane.PaneID, source.Lineage(first))
+		}
+	}()
+}
+
 // Observe keeps a pane's files current: the chain is oldest first, the last one live, each earlier one read once.
-func (t *Tracker) Observe(mc *machines.Machine, paneID string, chain []string) {
+func (t *Tracker) Observe(machineID string, files Files, paneID string, chain []string) {
 	if len(chain) == 0 {
 		return
 	}
 	live := chain[len(chain)-1]
 	t.mu.Lock()
-	t.panes[key(mc.Cfg.ID, paneID)] = live
+	t.panes[key(machineID, paneID)] = live
 	for i := 1; i < len(chain); i++ {
-		t.pred[key(mc.Cfg.ID, chain[i])] = chain[i-1]
+		t.pred[key(machineID, chain[i])] = chain[i-1]
 	}
 	t.mu.Unlock()
-	t.refresh(mc, live, false)
+	t.refresh(machineID, files, live, false)
 	for _, p := range chain[:len(chain)-1] {
-		t.refresh(mc, p, true)
+		t.refresh(machineID, files, p, true)
 	}
 	// Claude Code's own counter includes <session>/subagents/*.jsonl
-	t.observeSubagents(mc, live)
+	t.observeSubagents(machineID, files, live)
 }
 
-func (t *Tracker) observeSubagents(mc *machines.Machine, live string) {
-	k := key(mc.Cfg.ID, live)
+func (t *Tracker) observeSubagents(machineID string, files Files, live string) {
+	k := key(machineID, live)
 	t.mu.Lock()
 	last := t.subsChecked[k]
 	t.mu.Unlock()
@@ -88,23 +125,23 @@ func (t *Tracker) observeSubagents(mc *machines.Machine, live string) {
 	t.subsChecked[k] = time.Now()
 	t.mu.Unlock()
 	dir := strings.TrimSuffix(live, ".jsonl") + "/subagents"
-	vers, err := mc.DirVersions(dir)
+	vers, err := files.DirVersions(dir)
 	if err != nil {
 		return
 	}
-	files := make([]string, 0, len(vers))
+	paths := make([]string, 0, len(vers))
 	for p, v := range vers {
-		files = append(files, p)
-		t.read(mc, p, v)
+		paths = append(paths, p)
+		t.read(machineID, files, p, v)
 	}
-	sort.Strings(files)
+	sort.Strings(paths)
 	t.mu.Lock()
-	t.subs[k] = files
+	t.subs[k] = paths
 	t.mu.Unlock()
 }
 
-func (t *Tracker) refresh(mc *machines.Machine, path string, once bool) {
-	k := key(mc.Cfg.ID, path)
+func (t *Tracker) refresh(machineID string, files Files, path string, once bool) {
+	k := key(machineID, path)
 	t.mu.Lock()
 	st := t.files[k]
 	if st == nil {
@@ -118,16 +155,16 @@ func (t *Tracker) refresh(mc *machines.Machine, path string, once bool) {
 	st.checked = time.Now()
 	t.mu.Unlock()
 
-	v, err := mc.TranscriptVersion(path)
+	v, err := files.Version(path)
 	if err != nil {
 		return
 	}
-	t.read(mc, path, v)
+	t.read(machineID, files, path, v)
 }
 
 // read brings a file's sum up to version v, reading only what was added since the last look.
-func (t *Tracker) read(mc *machines.Machine, path string, v transcript.Version) {
-	k := key(mc.Cfg.ID, path)
+func (t *Tracker) read(machineID string, files Files, path string, v transcript.Version) {
+	k := key(machineID, path)
 	t.mu.Lock()
 	st := t.files[k]
 	if st == nil {
@@ -148,7 +185,7 @@ func (t *Tracker) read(mc *machines.Machine, path string, v transcript.Version) 
 	if v.Size-offset > readCap { // too much at once: the tail, from a line boundary
 		offset, reset, partial = v.Size-readCap, true, true
 	}
-	data, err := mc.ReadFrom(path, offset)
+	data, err := files.ReadFrom(path, offset)
 	if err != nil {
 		return
 	}
@@ -229,8 +266,8 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 
 // Script runs the report on a remote machine through its own remuda.
 func Script(home string, since time.Time, tz string) string {
-	q := sshx.Quote
-	bin, guard := sshx.VersionedBin(home, version.Build)
+	q := script.Quote
+	bin, guard := script.Remuda(home, version.Build)
 	tzFlag := ""
 	if tz != "" {
 		tzFlag = " -tz " + q(tz)

@@ -20,6 +20,7 @@ once after cloning and after every change under `web/`.
 | Develop | `make server` (API on :7317) and `make dev` (Vite on :5173, proxies `/api` and `/ws`) |
 | Go checks | `gofmt -l ./cmd ./internal` (must print nothing), `go vet ./...`, `go test ./...` |
 | TypeScript check | `make typecheck` (`tsc --noEmit` + `go vet`) |
+| The page's unit tests (Vitest on the pure modules) | `make webtest` (`npm test` in `web/`; `make test` runs it too) |
 | Everything, as CI does (`.github/workflows/ci.yml`) | `make test && make typecheck`, or `docker build --target test .` |
 | A pull request | against `release`: `gh pr create --base release` |
 | A release | `git checkout main && git merge --ff-only release && git tag -a vX.Y.Z -m 'remuda X.Y.Z' && make publish` — the Release workflow builds and publishes it |
@@ -38,11 +39,16 @@ agree. `make publish` refuses any branch but `main`
 merged into `release` the same day, or the next fast-forward fails.
 
 Tests are plain `testing` and need no herdr: the ones that start a
-throwaway herdr server skip when `herdr` is not on PATH. The web side has
-no test runner; `tsc` is the check, and `web/src/markdown.tsx` is written
-so it can be run through esbuild + node by hand.
+throwaway herdr server skip when `herdr` is not on PATH, and a package
+that runs scripts is tested on a `shell.Fake` with a recorded answer
+(`internal/review/wire_test.go`, `internal/jobs/jobs_test.go`). The web
+side runs Vitest on its pure modules, a `*.test.ts` beside each (`lib/`,
+`features/roster/radar.ts`, `features/review/hunks.ts`,
+`features/terminal/engine/selection.ts`, …) in a plain node environment:
+nothing under test touches the DOM, and a piece that would is split so
+the logic sits in a module without React.
 
-**Done means**: gofmt clean, `go vet`, `go test` and `tsc` all pass, and
+**Done means**: gofmt clean, `go vet`, `go test`, `tsc` and `npm test` all pass, and
 for anything a person sees, `make build && ./bin/remuda` and a look in
 the browser. Nothing is done on compile alone. In Claude Code, `/verify`
 runs the whole list.
@@ -58,7 +64,7 @@ not style.
 - **`~/.claude` is read-only.** Transcripts are parsed, never written.
   Input reaches an agent only through herdr — `agent.prompt`, else
   `pane.send_text` + `pane.send_keys` — serialized per pane by
-  `paneLock`. Never queue, retry or auto-send what a person typed. The one
+  `sessions.Input`. Never queue, retry or auto-send what a person typed. The one
   exception is the restart after an update the person ran (CLAUDE.md,
   `internal/restart`).
 - **Never `--takeover`.** herdr allows one attached client per terminal;
@@ -104,8 +110,12 @@ not style.
   quotes, semicolons. Dependencies are react, react-dom and xterm; add
   nothing without a reason that survives review. Never `innerHTML`:
   Markdown and task descriptions render to React nodes. Per-device state
-  is `usePref` (`prefs.ts`); every request goes through `api.ts`
-  (`check` / `sendJSON`); every time string through `time.ts`.
+  is `usePref` (`lib/prefs.ts`); every request goes through `lib/http.ts`
+  (`check` / `getJSON` / `sendJSON`) from a feature's own `api.ts`; a
+  screen reads the server through `useQuery` (`lib/query.ts`) and the
+  page's state through the store (`app/store.ts`); every time string
+  through `lib/time.ts`. A file stays under about three hundred lines: a
+  lens is a folder of pieces, not one component.
 - **Names carry the meaning; comments are rare.** A variable, function or
   type says what it is (`baseline`, `machine`, `summary` — never `b`,
   `mc`, `sum`). A comment is a one-line doc comment on a function or type
@@ -113,6 +123,25 @@ not style.
   protocol, an ordering the code cannot show. Nothing above a line that
   restates it, no prose narrating why; if a block needs a paragraph,
   split it into named pieces instead.
+- **Contexts, one port, one adapter.** `internal/server` is the HTTP
+  adapter and holds no logic: a handler reads the request, asks one
+  service and writes the answer; the use case lives in its context
+  package (`sessions`, `chat`, `review`, `updates`, `tasks`, …). A package
+  that only runs scripts on a machine takes a `shell.Host`, never a
+  `*machines.Machine`, and builds its scripts with `internal/script`.
+  Packages hear each other through `internal/events`; the subscriptions
+  are listed once, in `internal/app`. `docs/architecture.md` draws the
+  map; a new feature is a package with its use cases, a file in
+  `internal/server` with its routes, and a line in `app.go`.
+- **The page is laid out by feature.** `web/src/lib/` (what every screen
+  uses and no screen owns), `ui/` (the design system's pieces),
+  `features/<name>/` (one folder per lens or panel: its server calls in
+  its own `api.ts`, its pure logic in modules with tests beside them, its
+  screen in pieces), `app/` (the shell: the store, the URL, the header,
+  the pane area, the overlays). A dependency points down that list; a
+  feature never imports another feature's screens; `app/` is the only
+  place that composes them. The terminal is an engine outside React
+  (`features/terminal/engine/`) with `Terminal.tsx` as its mount.
 - **Commit messages are one plain sentence** about what changed for the
   person, not a list of files: *"Chats follow an agent update: restarted
   with their sessions resumed"*, *"Machines can be renamed, the local one
@@ -125,18 +154,24 @@ not style.
 
 | To change… | Start in |
 |---|---|
-| An HTTP route, the roster, the pane WebSocket | `internal/server/` (`server.go` holds the mux) |
+| How it all fits, where a new feature goes | `docs/architecture.md`, `internal/app/app.go` |
+| An HTTP route, the roster, the pane WebSocket | `internal/server/` (one file per context; `server.go` holds the mux and the helpers) |
+| What people type into panes, the agents remuda starts | `internal/sessions/` |
+| A script a machine runs, local or over ssh | `internal/script/` (building it), `internal/shell/` (the port, the fake for tests) |
+| Who hears what | `internal/events/`, the subscriptions in `internal/app/app.go` |
+| The page's own state: the selected pane, the mode, the lens, the URL | `web/src/app/store.ts`, `url.ts`, `current.ts` |
+| How a screen reads the server | `web/src/lib/query.ts` (`useQuery`), the feature's `api.ts`; the roster through `web/src/features/roster/useRoster.tsx` |
 | herdr RPC, the attach PTY, starting herdr | `internal/herdr/` |
 | Remote machines, SSH, remote files | `internal/machines/`, `internal/sshx/` |
-| What the sidebar says about an agent | `internal/radar/`, `web/src/radar.ts`, `Sidebar.tsx` |
-| Pushes and their timing | `internal/push/`, `web/public/sw.js`, `web/src/push.ts` |
-| Transcript parsing, chat turns | `internal/transcript/`, `web/src/Chat.tsx` |
-| The terminal lens: keys, selection, mouse | `web/src/Terminal.tsx`, `KeyBar.tsx` |
-| The Changes lens (review) | `internal/review/`, `web/src/Review.tsx` |
-| Tasks mode | `internal/tasks/`, `web/src/Tasks.tsx`, `tasksApi.ts` |
-| Updates and the restarts after them | `internal/health/`, `internal/jobs/`, `internal/restart/`, `web/src/Updates.tsx` |
+| What the sidebar says about an agent | `internal/radar/`, `web/src/features/roster/` (`radar.ts` the model, `Sidebar.tsx`, `rows.tsx`) |
+| Pushes and their timing | `internal/push/`, `web/public/sw.js`, `web/src/features/alerts/push.ts` |
+| Transcript parsing, the conversation behind a pane | `internal/transcript/`, `internal/chat/`, `web/src/features/chat/` |
+| The terminal lens: keys, selection, mouse | `web/src/features/terminal/engine/` (the terminal outside React), `Terminal.tsx`, `KeyBar.tsx` |
+| The Changes lens (review) | `internal/review/`, `web/src/features/review/` |
+| Tasks mode | `internal/tasks/` (`start.go` starts an agent on a task), `web/src/features/tasks/` |
+| Updates and the restarts after them | `internal/updates/`, `internal/health/`, `internal/jobs/`, `internal/restart/`, `web/src/features/updates/Updates.tsx` |
 | Installing and uninstalling: the installer, setup, the service, code-server | `internal/setup/` (the scripts in `scripts/`, embedded), `cmd/remuda/main.go` for the commands |
-| The look | `web/src/styles.css`, `ui.tsx`, `icons.tsx`, `Select.tsx` |
+| The look | `web/src/styles.css`, `web/src/ui/` |
 
 ## Agent tooling in this repository
 

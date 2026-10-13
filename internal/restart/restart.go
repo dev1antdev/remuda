@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
@@ -165,7 +165,7 @@ func (r *Restarter) Now(mc *machines.Machine, kinds []string, say func(string)) 
 			continue
 		}
 		if !settled(p.AgentStatus) {
-			r.book(mc.Cfg.ID, p.PaneID, p.Agent, sid)
+			r.book(mc.ID(), p.PaneID, p.Agent, sid)
 			say(fmt.Sprintf("· %s (%s): %s — restarts once it has settled for a while", p.DisplayTitle(), p.PaneID, p.AgentStatus))
 			continue
 		}
@@ -189,9 +189,9 @@ func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say 
 	if !ok {
 		return nil
 	}
-	key := mc.Cfg.ID + "|" + paneID
+	key := mc.ID() + "|" + paneID
 	if r.Lock != nil {
-		l := r.Lock(mc.Cfg.ID, paneID)
+		l := r.Lock(mc.ID(), paneID)
 		l.Lock()
 		defer l.Unlock()
 	}
@@ -204,7 +204,7 @@ func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say 
 	r.mu.Unlock()
 	client, _, err := mc.Ready()
 	if err != nil {
-		r.book(mc.Cfg.ID, paneID, kind, session)
+		r.book(mc.ID(), paneID, kind, session)
 		return fmt.Errorf("%s: %v — booked for later", paneID, err)
 	}
 	p, found := pane(client, paneID)
@@ -221,7 +221,7 @@ func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say 
 		say(fmt.Sprintf("· %s (%s): another session now — left as it is", title, paneID))
 		return nil
 	case !settled(p.AgentStatus):
-		r.book(mc.Cfg.ID, paneID, kind, session)
+		r.book(mc.ID(), paneID, kind, session)
 		say(fmt.Sprintf("· %s (%s): %s again — once it has settled", title, paneID, p.AgentStatus))
 		return nil
 	}
@@ -325,7 +325,7 @@ func (r *Restarter) book(machineID, paneID, kind, session string) {
 
 // OnStatus is the watcher's hook: a booked chat that settled is restarted a
 // little later, any change before then calling it off until the next settle.
-func (r *Restarter) OnStatus(ev push.Event) {
+func (r *Restarter) OnStatus(ev events.PaneStatus) {
 	key := ev.Pane.Machine + "|" + ev.Pane.Pane
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -337,7 +337,7 @@ func (r *Restarter) OnStatus(ev push.Event) {
 		b.timer.Stop()
 		b.timer = nil
 	}
-	if ev.To == "gone" || ev.Kind != b.kind || time.Since(b.at) > bookingTTL {
+	if ev.To == events.Gone || ev.Kind != b.kind || time.Since(b.at) > bookingTTL {
 		delete(r.pending, key)
 		return
 	}
@@ -348,7 +348,7 @@ func (r *Restarter) OnStatus(ev push.Event) {
 }
 
 // fire is the settle timer going off: the booking becomes a restart job.
-func (r *Restarter) fire(key string, ev push.Event) {
+func (r *Restarter) fire(key string, ev events.PaneStatus) {
 	r.mu.Lock()
 	b := r.pending[key]
 	if b == nil || b.timer == nil {

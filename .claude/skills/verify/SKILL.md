@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Run remuda's full check before calling work done — gofmt, go vet, go test, tsc and, when the SPA changed, a real build. Use after any code change, before a commit, or when asked whether the tree is green.
+description: Run remuda's full check before calling work done — gofmt, go vet, go test, tsc, the page's unit tests and, when the SPA changed, a real build. Use after any code change, before a commit, or when asked whether the tree is green.
 ---
 
 # Verify
@@ -20,7 +20,9 @@ you skipped is reported as skipped, never as passed.
    person's real socket is a bug in the test (`HERDR_SOCKET_PATH`, see
    `internal/herdr/server_test.go`).
 5. `make typecheck` — `tsc --noEmit` in `web/` plus `go vet`.
-6. For a change a person can see: build and look.
+6. `make webtest` — Vitest on the page's pure modules (`npm test` in
+   `web/`; `make test` runs it too).
+7. For a change a person can see: build and look.
 
    ```sh
    make build
@@ -35,14 +37,15 @@ you skipped is reported as skipped, never as passed.
    scratch workspace is what `/live-check` makes. For iterative UI work
    `make server` + `make dev` (Vite on :5173) is faster.
 
-7. Report the commands run and their result, in a line each.
+8. Report the commands run and their result, in a line each.
 
 ## When it fails
 
 - `pattern all:dist: no matching files found` → step 1.
 - A `go vet` complaint is fixed, not suppressed.
-- A `tsc` error in a component after an API change → the type in
-  `web/src/api.ts` changes first, the components follow.
+- A `tsc` error in a component after an API change → the type in the
+  feature's `api.ts` (`web/src/features/<name>/api.ts`; the roster's in
+  `features/roster/api.ts`) changes first, the components follow.
 - A test that passes alone and fails in `./...` shares state through the
   real state dir or the real herdr: scope it (`REMUDA_STATE_DIR`,
   `HERDR_SOCKET_PATH`, `t.TempDir()`).

@@ -1,0 +1,192 @@
+// Chat is the chat lens: the transcript from Claude Code's own session file, read server-side and polled
+// at the pane's pace; sending types into the live pane.
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { actions, app } from "@/app/store";
+import { useAgentTargets } from "@/features/agents/useAgentTargets";
+import SendToAgent from "@/features/agents/SendToAgent";
+import type { OpenFile } from "@/features/files/target";
+import { sendKeys, submitPrompt, type PaneUsage } from "@/features/roster/api";
+import { useQuery } from "@/lib/query";
+import { errMsg } from "@/lib/text";
+import { whenShort } from "@/lib/time";
+import { Icon, Notice, Select, useTimedNotice } from "@/ui";
+import { fetchChat, type ChatResponse } from "./api";
+import Composer from "./Composer";
+import { TurnView } from "./TurnView";
+import { useFollowBottom } from "./useFollowBottom";
+
+export default function Chat({ machineId, paneId, status, origin, dir, usage, active = true }: {
+  machineId: string;
+  paneId: string; // "" shows a transcript on its own (a search jump), read-only
+  status: string;
+  origin: string; // "workspace on machine", named in a forwarded message
+  dir: string;
+  usage?: PaneUsage;
+  active?: boolean; // the lens on screen; a hidden one keeps its state and waits
+}) {
+  const readOnly = !paneId;
+  const agents = useAgentTargets();
+  // the jump names its pane ("" = the viewer): this chat takes it only when it is that pane's
+  const anyJump = app.use((s) => s.jump);
+  const jump = anyJump && anyJump.machineId === machineId && anyJump.paneId === paneId ? anyJump : null;
+  const onOpenFile = useCallback<OpenFile>((target) => actions.openFile(machineId, paneId, target), [machineId, paneId]);
+  const [forward, setForward] = useState<string | null>(null);
+  const onForward = useCallback((text: string) => setForward(`From ${origin}:\n\n${text}`), [origin]);
+  const others = agents.some((a) => a.machineId !== machineId || a.paneId !== paneId);
+  const [forwarded, showForwarded, clearForwarded] = useTimedNotice(4000);
+  const [sessionId, setSessionId] = useState<string | null>(jump?.session ?? null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+  const busy = status === "run" || status === "input";
+
+  // the transcript, at the pane's pace: two seconds while the agent works or asks, ten otherwise
+  const etag = useRef<string | null>(null);
+  useEffect(() => {
+    etag.current = null;
+  }, [machineId, paneId, sessionId, dir]);
+  const { data: chat, error: fetchError, reload } = useQuery<ChatResponse>(
+    async () => {
+      const res = await fetchChat(machineId, paneId, sessionId, etag.current, dir);
+      if (!res) return undefined;
+      etag.current = res.etag;
+      return res.body;
+    },
+    [machineId, paneId, sessionId, dir],
+    { every: busy ? 2000 : 10000, enabled: active },
+  );
+  // a flip of the status or the lens coming on screen is a look at once; not on mount, the query has just gone out
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    if (active) reload();
+  }, [busy, active, reload]);
+
+  const follow = useFollowBottom(logRef, { active, chat, startAtBottom: !jump?.turn });
+
+  // a search hit: scroll to its turn once that session is on screen, or say it is older than the loaded tail
+  const pendingTurn = useRef<string | null>(jump?.turn ?? null);
+  const [jumpMiss, setJumpMiss] = useState(false);
+  const shownSession = useRef<string | undefined>(undefined);
+  shownSession.current = chat?.session_id;
+  useEffect(() => {
+    if (!jump) return;
+    pendingTurn.current = jump.turn || null;
+    follow.stick.current = !jump.turn;
+    setJumpMiss(false);
+    // the session on screen is not refetched: the query blanks the log first
+    if (shownSession.current !== jump.session) setSessionId(jump.session);
+  }, [jump]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const id = pendingTurn.current;
+    const log = logRef.current;
+    if (!id || !log || !chat || !jump || chat.session_id !== jump.session) return;
+    const el = log.querySelector(`[data-ids~="${CSS.escape(id)}"]`);
+    pendingTurn.current = null;
+    if (!el) {
+      setJumpMiss(true);
+      follow.stick.current = true;
+      return;
+    }
+    follow.stick.current = false;
+    el.scrollIntoView({ block: "start" });
+    // remove, reflow, add: the CSS animation restarts when the class is still there from a previous jump
+    el.classList.remove("turn-hit");
+    void (el as HTMLElement).offsetWidth;
+    el.classList.add("turn-hit");
+    setTimeout(() => el.classList.remove("turn-hit"), 2600);
+  }, [chat, jump]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const turns = chat?.turns ?? [];
+  const sessions = chat?.sessions ?? [];
+  const keys = (ks: string[]) => void sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
+  const context = usage && usage.window > 0 ? usage.context / usage.window : 0;
+  const error = actionError ?? (fetchError || null);
+
+  return (
+    <div className="chat">
+      {sessions.length > 1 && (
+        <Select
+          className="chat-session-pick"
+          value={sessionId ?? chat?.session_id ?? ""}
+          onChange={setSessionId}
+          options={sessions.map((s) => ({ value: s.id, label: s.title || s.id.slice(0, 8), hint: whenShort(s.mod_time) }))}
+        />
+      )}
+      <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
+        {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : readOnly ? "This transcript is empty." : "No transcript for this pane's folder yet."}</div>}
+        {turns.map((t, i) => (
+          <TurnView key={t.ids?.[0] || i} turn={t} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} />
+        ))}
+      </div>
+      {!readOnly && status === "input" && (
+        <Notice tone="warn" icon="alert-triangle" className="chat-notice">
+          The agent is waiting for an answer — check the terminal, or:
+          <span className="prompt-card-keys">
+            <button type="button" className="btn sm" title="Up" aria-label="Up" onClick={() => keys(["up"])}>
+              <Icon name="chevron-up" size={14} />
+            </button>
+            <button type="button" className="btn sm" title="Down" aria-label="Down" onClick={() => keys(["down"])}>
+              <Icon name="chevron-down" size={14} />
+            </button>
+            <button type="button" className="btn sm" onClick={() => keys(["enter"])}>
+              Enter
+            </button>
+            <button type="button" className="btn sm" onClick={() => keys(["esc"])}>
+              Esc
+            </button>
+          </span>
+        </Notice>
+      )}
+      {error && (
+        <Notice tone="error" className="chat-notice" onDismiss={() => setActionError(null)}>
+          {error}
+        </Notice>
+      )}
+      {!readOnly && context >= 0.8 && status !== "run" && (
+        <Notice
+          tone="warn"
+          icon="chart"
+          className={`chat-notice${context >= 0.9 ? " is-red" : ""}`}
+          action={
+            <button type="button" className="linkish" onClick={() => void submitPrompt(machineId, paneId, "/compact").catch((e) => setActionError(errMsg(e)))}>
+              Compact now
+            </button>
+          }
+        >
+          Context {Math.round(100 * context)}% full — Claude Code compacts on its own near the edge; compacting now keeps the summary yours to steer.
+        </Notice>
+      )}
+      {jumpMiss && (
+        <Notice tone="info" className="chat-notice" onDismiss={() => setJumpMiss(false)}>
+          That turn is older than the loaded part of this transcript (the last 16 MB).
+        </Notice>
+      )}
+      {!readOnly && <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} />}
+      {forwarded && (
+        <Notice tone="success" icon="check" className="chat-notice" onDismiss={clearForwarded}>
+          {forwarded}
+        </Notice>
+      )}
+      {forward !== null && (
+        <SendToAgent
+          title="Forward to another agent"
+          text={forward}
+          agents={agents}
+          currentPane={{ machineId, paneId }}
+          exclude={{ machineId, paneId }}
+          rememberKey={`forward:${machineId}|${paneId}`}
+          onClose={() => setForward(null)}
+          onSend={async (target, text) => {
+            await submitPrompt(target.machineId, target.paneId, text);
+            setForward(null);
+            showForwarded(`Forwarded to ${target.agent} in ${target.sessionName}.`);
+          }}
+        />
+      )}
+    </div>
+  );
+}
