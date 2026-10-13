@@ -1,8 +1,8 @@
 # How remuda is put together
 
-remuda is one Go binary with the React page inside. This is the map of the
-Go side: what the pieces are, how they may depend on each other, and where
-a change goes. `CLAUDE.md` says what each package does in detail;
+remuda is one Go binary with the React page inside. This is the map of
+both: what the pieces are, how they may depend on each other, and where a
+change goes. `CLAUDE.md` says what each package does in detail;
 `AGENTS.md` says how to work here.
 
 ## The shape
@@ -86,6 +86,54 @@ The contexts are the bounded contexts of the product, in its own words:
 | something one part must tell another | an event type in `internal/events`, a `Subscribe` line in `app.go` |
 | a new feature | a package with its use cases, a file in `server` with its routes, a line in `app.go`, a bullet in `CLAUDE.md` |
 
+## The page
+
+The same idea on the browser side: layers a dependency may only point
+down through, and one folder per lens.
+
+```
+┌─ app ────────────────────────────────────────────────────────────────┐
+│  app/   the shell: the store (what is selected, the lens, the mode,  │
+│         the overlays), the URL that follows it, Header, PaneArea,    │
+│         Overlays — the only place the features are composed          │
+├─ features ───────────────────────────────────────────────────────────┤
+│  roster · chat · terminal · review · tasks · updates · usage ·       │
+│  search · schedules · alerts · files · code · agents · quick         │
+│  one folder each: api.ts (its routes), pure modules with their       │
+│  tests, the screen in pieces                                         │
+├─ ui ─────────────────────────────────────────────────────────────────┤
+│  ui/    Dialog, Notice, Toasts, Select, Icon, Logo, Markdown, hooks  │
+├─ lib ────────────────────────────────────────────────────────────────┤
+│  lib/   http · query · store · prefs · text · time · paths · host ·  │
+│         transfer · version                                           │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+1. **A screen reads the server through `useQuery`** (`lib/query.ts`): a
+   fetch that follows its inputs, polls while on screen, drops an answer
+   that arrived too late, says "unchanged" on a 304, and takes a
+   `mutate` for what the screen already shows ahead of the server. The
+   roster is read once for the page (`features/roster/useRoster.tsx`)
+   and handed out.
+2. **The page's own state is one store** (`app/store.ts`): the requested
+   pane, the lens, the mode, the open dialog, the menu, the panel, the
+   notice, the confirm, the viewers. `actions` are the only writes, the
+   URL follows it (`app/url.ts`), and nothing fixes selection up in
+   effects — `current.ts` derives the shown pane every render.
+3. **A feature never imports another feature's screens.** Its `api.ts`
+   and pure modules are fair game, and the few pieces shared on purpose
+   live where they are named (`agents/SendToAgent`, `files/target`).
+   `app/` composes.
+4. **The terminal is an engine outside React.** `features/terminal/
+   engine/` is plain TypeScript — the transport, the intercepted modes,
+   the mouse reports, the selection that stays with the text, the layer,
+   copy, links, paste, the geometry — wired by `engine.ts`; `Terminal.tsx`
+   is the mount that owns one engine per pane and re-applies props.
+5. **Pure logic gets a test beside it** (`*.test.ts`, Vitest, node, no
+   DOM): what a label says, how a diff is cut, where the screen is in the
+   selection's memory. A piece that would need the DOM is split until the
+   logic does not.
+
 ## Why it is cut this way
 
 The product is a set of lenses on herdr and the transcripts: the roster,
@@ -96,4 +144,6 @@ vocabulary (`Input.Submit`, `Conversation`, `Baseline`, `Update`,
 session files — so there are no aggregates, repositories or command
 buses: a service with methods, a port for the one thing every context
 needs (a shell on a machine), and a bus for the few things they tell
-each other. Hexagonal in shape, light in weight.
+each other. Hexagonal in shape, light in weight. The page mirrors it:
+no global state manager, no router library — one small store, one
+query hook, folders named after the lenses.

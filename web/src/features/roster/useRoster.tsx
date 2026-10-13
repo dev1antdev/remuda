@@ -1,0 +1,56 @@
+// The roster, read once for the whole page: polled every three seconds while the tab is visible, with an
+// ETag so an unchanged roster costs nothing and re-renders nothing. Every screen reads it through useRoster.
+
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { setRosterRefresh } from "@/app/act";
+import { useQuery } from "@/lib/query";
+import { fetchRoster, type AgentKind, type Latest, type Machine, type Roster, type Tailscale } from "./api";
+
+export type RosterState = {
+  machines: Machine[];
+  agents: AgentKind[];
+  latest?: Latest;
+  tailscale?: Tailscale;
+  version?: string; // the server's
+  offline: boolean;
+  stale: string | null; // the server's version when this page is older
+  refresh: () => void;
+};
+
+const empty: RosterState = { machines: [], agents: [], offline: false, stale: null, refresh: () => {} };
+const RosterContext = createContext<RosterState>(empty);
+
+export function RosterProvider({ children }: { children: ReactNode }) {
+  const etag = useRef<string | null>(null);
+  const [stale, setStale] = useState<string | null>(null);
+  const { data, error, reload } = useQuery<Roster>(
+    async () => {
+      const res = await fetchRoster(etag.current);
+      if (res.version && res.version !== __REMUDA_VERSION__ && __REMUDA_VERSION__ !== "dev") setStale(res.version);
+      if (!res.roster) return undefined; // unchanged
+      etag.current = res.etag;
+      return res.roster;
+    },
+    [],
+    { every: 3000 },
+  );
+  useEffect(() => setRosterRefresh(reload), [reload]);
+  const value = useMemo<RosterState>(
+    () => ({
+      machines: data?.machines ?? [],
+      agents: data?.agents ?? [],
+      latest: data?.latest,
+      tailscale: data?.tailscale,
+      version: data?.version,
+      offline: !!error,
+      stale,
+      refresh: reload,
+    }),
+    [data, error, stale, reload],
+  );
+  return <RosterContext.Provider value={value}>{children}</RosterContext.Provider>;
+}
+
+export function useRoster(): RosterState {
+  return useContext(RosterContext);
+}

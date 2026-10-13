@@ -109,9 +109,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `ReadFrom`, `Turns`, `ResolveSession`, `Live` / `Chain` / `Lineage`
   (every file a conversation lived in) and `Predecessor`, in process here
   and by script over a `shell.Host` on a remote. `Turn.Answer`,
-  `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with. The chat lens follows the bottom
+  `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with. The chat lens (`features/chat/Chat.tsx`: the transcript on `useQuery`, every 2 s while the agent works or asks, 10 s otherwise, a 304 = unchanged; `Composer.tsx`, `TurnView.tsx`, `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
   only when the reader is there and not selecting or dragging; an upward
-  wheel or finger lets go at once, and `TurnView` re-renders only when a
+  wheel or finger lets go at once, and `TurnView` (`sameTurn`) re-renders only when a
   turn's content changed, so a selection survives the polls.
 - `internal/machines/files.go` — the file viewer's reads, local or over
   SSH, plus the one write: `SaveUpload`. `ResolvePath` accepts absolute, `~/`, or pane-relative
@@ -121,7 +121,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   files, no `repo` outside git). `ListDirs(path, hidden)` lists a folder's
   subfolders (repositories marked by a `.git`; `""`/`~` is home) for the
   folder picker behind the New workspace dialog's browse button
-  (`web/src/FolderPicker.tsx`: crumbs, subfolders, the machine's known
+  (`web/src/features/roster/FolderPicker.tsx`: crumbs, subfolders, the machine's known
   workspaces as quick picks, hidden on request). Routes: `/api/fs/dirs`,
   `/api/fs/stat` (resolve + kind),
   `/api/fs/file` (bytes; text is always `text/plain`, CSP-sandboxed, 512KB
@@ -130,19 +130,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   stem and extension sanitized separately, remote via `sshx.Conn.Put`).
   `.remuda/.gitignore` (`*`) is written alongside so uploads never reach
   a commit. Uploads are the only thing remuda writes into a project.
-- `web/src/attachments.ts` — `useAttachments` (upload at once, chips with
-  thumbnails), `filesFrom` (drop/paste → files; a pasted screenshot gets a
-  name), `shellQuote`. The chat composer inserts `@<rel>` at the caret and
-  strips it when the chip is removed; the terminal lens types the absolute
-  paths shell-quoted. Nothing is sent until the user sends.
-- Terminal size modes (`web/src/Terminal.tsx`): **fit** resizes the shared
+- `web/src/features/chat/attachments.ts` — `useAttachments` (upload at
+  once, chips with thumbnails); `lib/transfer.ts` has `filesFrom`
+  (drop/paste → files; a pasted screenshot gets a name), `lib/text.ts`
+  `shellQuote`. The chat composer (`chat/Composer.tsx`) inserts `@<rel>`
+  at the caret and strips it when the chip is removed; the terminal lens
+  (`terminal/engine/paste.ts`) types the absolute paths shell-quoted.
+  Nothing is sent until the user sends.
+- Terminal size modes (`web/src/features/terminal/engine/geometry.ts`): **fit** resizes the shared
   pane to this screen (herdr follows the smallest attached client — a phone
   would squeeze the desktop's view), **keep** attaches at the pane's own
   grid (`cols`/`rows` from the snapshot layouts, in the roster) and shrinks
   the font to fit the width, scrolling when it can't. Touch defaults to
   keep. Agent status lines (ccstatusline etc.) only fit in keep mode on a
   phone.
-- Terminal mouse and selection (`Terminal.tsx`): Claude Code's full-screen
+- Terminal mouse and selection (`features/terminal/engine/`: `modes.ts`
+  intercepts, `mouse.ts` encodes the reports, `pointer.ts` listens,
+  `selection.ts` keeps the selection, `layer.ts` is the ⬚ layer, `copy.ts`
+  reads whichever selection there is): Claude Code's full-screen
   mode keeps its own scrollback and tracks the mouse; its DECSETs are
   intercepted so xterm never tracks (a drag selects), and the wheel / a
   finger on a phone become mouse reports — the pixels add up, one report
@@ -170,7 +175,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   selection, text size, key bar) live in the tab strip's right slot
   (`TabStrip tools=`), never in the header. Transient status — offline,
   a newer server, errors, "Copied N" — is a toast in the bottom corner
-  (`Toasts` in ui.tsx), never a pill in a bar. Lenses stay mounted once the
+  (`Toasts` in `ui/Toasts.tsx`, fed by `app/toasts.tsx`), never a pill in a bar. Lenses stay mounted once the
   selected pane has shown them (`.lens-pane[hidden]`, scoped to that pane
   — a lens never mounts hidden, since a terminal opened unseen would
   attach at 80×24 and resize the shared pane): the terminal keeps its
@@ -210,7 +215,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   release and every pull request. Pull requests target `release`; `main`
   is what is out (AGENTS.md, "Build and check").
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
-  (`HealthButton` in Sidebar.tsx) turns amber on an update, a lagging
+  (`features/roster/HealthButton.tsx`; the rules in `concerns.ts`) turns amber on an update, a lagging
   remote remuda, or a nearly full disk.
 - **Peers** (`internal/server/peer.go`): herdr allows one attached client
   per terminal ("already has an attached client; retry with --takeover"),
@@ -296,7 +301,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   concern "remuda vX is out" in the ⓘ with a Download & install button,
   the row in Updates, and one toast per version in App.tsx (pref
   `release.seen`) whose button opens the local machine's Updates on it.
-  `Updates.tsx` shows the list, the command before "Run", the live log,
+  `features/updates/Updates.tsx` shows the list, the command before "Run", the live log,
   and the machine's recent jobs. Nothing uses sudo; everything runs as
   the user through the shell remuda already has on the machine.
 - **Chats follow an agent update** (`internal/restart`). When an update
@@ -335,19 +340,44 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   from `REMUDA_VERSION` set by `make web`) and the roster answer carries
   the server's in `X-Remuda-Version`; a page older than its server shows
   a "new version — reload" pill. After a deploy, a stale tab is told.
-- `web/src/markdown.tsx` — dependency-free Markdown → React nodes (no HTML
-  strings, nothing to sanitize). `parseBlocks` is pure (task-list state is
-  decided there, not in render) and memoized per text; testable via
-  esbuild + node.
-- `web/src/prefs.ts` — `usePref` (localStorage-backed state; `readPref`
-  keeps a stored value only in the fallback's shape), `isTouch`, `errMsg`,
-  `basename`/`dirname`, `useDebounced`; `web/src/api.ts` — `check`/`sendJSON` for every
-  request. The App derives the shown pane from a *requested* one (deep link,
-  notification, click) falling back to the first agent pane; nothing fixes
-  selection up in effects.
-- `web/src/host.ts` — `copyText` (Clipboard API, else execCommand) and
-  `openUrl` (a new tab). Nothing embeds remuda any more: the JetBrains
-  plugin is gone, and with it the `window.herdrHost` bridge and `?cwd=`.
+- `web/src/ui/Markdown.tsx` — dependency-free Markdown → React nodes (no
+  HTML strings, nothing to sanitize). `parseBlocks` is pure (task-list
+  state is decided there, not in render) and memoized per text;
+  `markdown.test.ts` covers it.
+- `web/src/lib/` — what every screen uses and no screen owns, React-free
+  but for the hooks: `http.ts` (`check` / `getJSON` / `sendJSON`, every
+  request), `query.ts` (`useQuery(fn, deps, {every, enabled, keep})` —
+  the one way a screen reads the server: a fetch that follows its inputs,
+  polls while enabled and the tab is visible, drops an answer that
+  arrives after the inputs changed; `undefined` from the fetcher means
+  unchanged (an ETag 304) and the data stays; `reload`, `fetching`, and
+  `mutate` for what the screen already shows ahead of the server — a
+  switch flipped, a card dropped), `store.ts` (`createStore` over
+  `useSyncExternalStore`: `get` / `set` / `subscribe` / `use(select)`),
+  `prefs.ts` (`usePref`, localStorage-backed; `readPref` keeps a stored
+  value only in the fallback's shape; `isTouch`), `text.ts` (`errMsg`,
+  `basename` / `dirname`, `plural`, `shellQuote`), `time.ts`, `paths.ts`,
+  `host.ts` (`copyText`: Clipboard API, else execCommand; `openUrl`: a
+  new tab — nothing embeds remuda any more, the JetBrains plugin and its
+  `window.herdrHost` bridge are gone), `transfer.ts` (`filesFrom`),
+  `version.ts` (`newer`).
+- `web/src/app/` — the shell. `store.ts` is the one page store: the
+  *requested* pane (a deep link, a notification, a click), the lens, the
+  mode, the drawer, the open dialog / menu / panel, the notice, the
+  confirm, the file viewer, the search viewer, a jump; `actions` are the
+  only writes. `current.ts` derives the shown pane from the requested
+  one, falling back to the first agent pane — nothing fixes selection up
+  in effects. `url.ts`: the address bar follows the store
+  (`?machine=&pane=&mode=&lens=`, `history.replaceState`) and is read
+  once at load, so a link or a reload lands on the same pane in the same
+  lens. `act.ts` (`act(promise)`: refresh the roster, else toast the
+  error), `toasts.tsx`, `Shell.tsx` (URL sync, ⌘K, the service worker's
+  select-pane, mark-seen, the three modes), `Header.tsx`, `PaneArea.tsx`
+  (the lenses, mounted once seen), `Overlays.tsx` (panels, dialogs, the
+  menu, the confirm, the file viewer). The roster is read once for the
+  page: `features/roster/useRoster.tsx` (`RosterProvider`: `useQuery`
+  every 3 s with the ETag, `stale` when the server is newer; `useRoster()`
+  hands out machines, agents, latest, tailscale, version, offline).
 - `internal/review/` — the **Changes lens**: a workspace folder's
   uncommitted work, what `git diff HEAD` shows — files changed against
   HEAD, staged or not, plus untracked ones — with the ones that moved
@@ -375,8 +405,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `events.Snapshot` goes to `review.RefreshBadges`, which runs `Badges` a
   minute apart and never two at once per machine, one shell over
   `Snapshot.WorkspaceDirs()`, and the roster carries `session.dir` and
-  `session.review {changed, fresh}` for the sidebar badge. `Review.tsx`
-  draws it: commits, files (fresh first), hunks with a comment box whose
+  `session.review {changed, fresh}` for the sidebar badge.
+  `features/review/Review.tsx` draws it (`Diff.tsx` the file rows and
+  hunks, `hunks.ts` the parsing, `VerdictDialog.tsx`, `draft.ts` the
+  comments and the messages they become): commits, files (fresh first), hunks with a comment box whose
   text goes to the pane's agent through `/api/submit` as
   "Review feedback on path:line". Nothing is written into a repository.
   **Review comments**: in the lens a tap on a diff row opens a comment box
@@ -407,17 +439,17 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   is `Machine.CodeAddr(port)`: the port itself locally, a loopback port
   forwarded over the ssh master (`sshx.Conn.ForwardTCP`) remotely, remembered
   per master. `GET /api/code/{machine}` probes `/healthz` (a good answer is
-  cached 15s; `?check=1` re-probes). `web/src/Code.tsx` is the picker
+  cached 15s; `?check=1` re-probes). `web/src/features/code/Code.tsx` is the picker
   (machine, then a folder from the roster's workspaces) and the iframe,
   kept mounted behind the other modes once opened. The flag `-code-port`
   changes the port on every machine at once.
-- `web/src/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
-  provider (`term.registerLinkProvider`) and the chat linkifier; keeps a
+- `web/src/lib/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
+  provider (`terminal/engine/links.ts`) and the chat linkifier; keeps a
   `:line` suffix, drops trailing punctuation, never a path inside a URL.
   **File links only in an agent's pane** (`agent` prop); URLs everywhere,
   but Cmd/Ctrl+click in a shell pane — its clicks belong to the app. URLs
   open through `openUrl` in `host.ts` (host bridge, else a new tab).
-- **The mouse model** (`Terminal.tsx`): herdr enables mouse tracking in
+- **The mouse model** (`terminal/engine/pointer.ts`, the reports encoded in `mouse.ts`): herdr enables mouse tracking in
   every attach stream, so the DECSET for the tracking modes is intercepted
   and xterm never tracks — a plain drag selects. What the app asked for is
   synthesized instead: the wheel as scroll reports, and a click (press and
@@ -445,7 +477,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `web/public/sw.js` shows every push (Safari revokes silent subscriptions),
   silent while a window is visible; click → `select-pane` message to an open
   window or `openWindow(/?machine=&pane=)`; `pushsubscriptionchange`
-  re-subscribes. `web/src/push.ts` is single-flight and re-registers on every
+  re-subscribes. `web/src/features/alerts/push.ts` is single-flight and re-registers on every
   load with permission granted. Push needs a secure context: localhost or
   `tailscale serve` HTTPS; iPhone needs the home-screen app.
 - `internal/radar/` — the sidebar's reading of every agent, after
@@ -464,15 +496,17 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   reporting from before; a pane first seen already finished (there before
   remuda ran) counts as looked at.
   The idle tiers (fresh ≤15 min, stale ≥120 min, dimmed) are the UI's, from
-  `last_active` and the clock. `web/src/radar.ts` is the pure model (vendor
+  `last_active` and the clock. `web/src/features/roster/radar.ts` is the pure model (vendor
   hues, tiers, marks, row labels, ordering: families by their liveliest
   agent, parent before worktrees, tabs by their liveliest pane, no-stamp
-  last; a flat `recent` order; herdr's own), `web/src/Sidebar.tsx` draws it
-  (one spinner clock for the braille frames and the pulsing question).
+  last; a flat `recent` order; herdr's own; `radar.test.ts`),
+  `features/roster/Sidebar.tsx` draws it (`rows.tsx` the rows,
+  `HealthButton.tsx`, `MachineMenu.tsx`, `RadarSettings.tsx`; one spinner
+  clock for the braille frames and the pulsing question).
   Machines and workspace groups fold (prefs `collapsed` / `wsFolded`); a
   folded group's head carries its agents' states (working / ? / ✓ counts).
   `web/marks/*.svg` are the vendor logos (MIT packaging, see NOTICE.md),
-  `npm run marks` regenerates `src/marks.ts`; drawn inline in currentColor.
+  `npm run marks` regenerates `src/ui/marks.ts`; drawn inline in currentColor.
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥
@@ -494,8 +528,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Input.Submit`, the chat's own path (an agent busy with a question refuses: noted, never
   queued). A failed run is pushed (`Kind: "schedule"`). `schedules.json`
   in the state dir; routes `GET/PUT /api/schedules`, `DELETE
-  /api/schedules/{id}`, `POST /api/schedules/{id}/run`. `Schedules.tsx` is
-  the panel behind the calendar button in the sidebar head.
+  /api/schedules/{id}`, `POST /api/schedules/{id}/run`. `features/schedules/Schedules.tsx` is
+  the panel behind the calendar button in the sidebar head (`cron.ts` the
+  presets and their parsing, `ScheduleEditor.tsx` the form).
 - `internal/search/` — **full-text search** over every transcript on every
   machine (`GET /api/search?q=&machine=&dir=&days=`; ⌘K / Ctrl+K, the 🔍
   in the header). No index: `Scan` walks `~/.claude/projects` newest-first,
@@ -542,7 +577,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   written since, subagent files count toward their session, per day in
   the viewer's zone, per project/model/session; `usage.Collect` asks every
   connected host at once, and remotely the deployed binary runs `remuda
-  usage -since -tz` (gated on the version, like search). UI: `Usage.tsx` (📊 in the sidebar head, or the header pill),
+  usage -since -tz` (gated on the version, like search). UI: `features/usage/Usage.tsx` (📊 in the sidebar head, or the header pill),
   the pill in the header (fill bar · cost) and on radar rows from 50% up
   (amber 70%, red 90%), Chat's compaction notice from 80% with "Compact
   now" (`/compact` through submit). Prices are API-equivalent: on a
@@ -553,7 +588,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   also dictates through the browser's own `SpeechRecognition` (nothing
   passes through remuda) and every assistant turn has **forward** — the
   turn's text, headed "From <workspace on machine>:", to another agent
-  through `SendToAgent.tsx`, the one dialog Tasks and Chat share
+  through `features/agents/SendToAgent.tsx`, the one dialog Tasks, Chat and the review share
   (`send.targets` pref remembers the last target per key).
 - `internal/tasks/` — the **Tasks mode**: remuda's own list in
   `tasks.db` (SQLite, WAL, `modernc.org/sqlite` — pure Go, so the four
@@ -568,7 +603,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `GET/PATCH/DELETE /api/tasks/{id}` (PATCH is partial: nil keeps, `""`
   clears a date), `PUT /api/tasks/{id}/labels {label_id}`, `DELETE
   …/labels/{label}`, `/api/tasks/projects[/{id}]`, `/api/tasks/labels`.
-  An empty database gets an "Inbox". `web/src/Tasks.tsx` + `tasksApi.ts`;
+  An empty database gets an "Inbox". `web/src/features/tasks/` (`Tasks.tsx`
+  the mode on `useQuery` — the catalog, the list, the open task — with
+  `mutate` for the optimistic moves; `ProjectTree.tsx`, `TaskList.tsx`,
+  `TaskDetail.tsx` with `Labels.tsx` and `Comments.tsx`,
+  `StartAgentDialog.tsx`, `prompt.ts`, `html.tsx`, `pieces.tsx`, `api.ts`);
   descriptions are rendered through an allow-list into React nodes (never
   innerHTML) and edited as plain text that goes back as paragraphs. The
   top-bar `mode-switch` (Agents | Tasks | Code) is a per-device pref.
@@ -689,26 +728,38 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   component — segmented controls (`.mode-switch`, `.lens-switch`,
   `.fv-tabs`), menus (`.row-menu`), the key bar (`.keybar .key`). Reuse
   these before writing new rules.
-- `web/src/ui.tsx` — the shared pieces: `Dialog` (one scrim over the
-  drawer, a head with icon/title/controls/X, Escape, focus in and back out,
-  `#root` inert while open, `as="form"` + `onSubmit`, sizes sm/md/lg),
-  `Notice` (tones error/success/warn/info/hint, optional icon, action and
-  dismiss), `useTimedNotice`, `useDismiss` (popovers), `useSubmit`,
-  `useAsync`, `StatusDot`. `time.ts` (`ago`, `whenShort`, `fmtDate`,
-  `fmtDay`) and `options.tsx` (`machineOptions`, `folderOptions`,
+- `web/src/ui/` — the shared pieces, `index.ts` the barrel: `Dialog` (one
+  scrim over the drawer, a head with icon/title/controls/X, Escape, focus
+  in and back out, `#root` inert while open, `as="form"` + `onSubmit`,
+  sizes sm/md/lg), `FormDialog`, `ConfirmDialog`, `Notice` (tones
+  error/success/warn/info/hint, optional icon, action and dismiss),
+  `Toasts`, `useTimedNotice`, `useDismiss` (popovers), `useSubmit`,
+  `useDebounced`, `StatusDot`, `Logo`, `brand.ts`, `Markdown`.
+  `lib/time.ts` (`ago`, `whenShort`, `fmtDate`, `fmtDay`) and
+  `features/roster/options.tsx` (`machineOptions`, `folderOptions`,
   `machineLabel`) are the one way to say a time or build a roster select.
-  Icons are `web/src/icons.tsx` (inline 24px stroke paths, `<Icon name
+  Icons are `ui/icons.tsx` (inline 24px stroke paths, `<Icon name
   size={12|14|16}>`): never an emoji or a font glyph as an icon.
   `Select.tsx` replaces every native `<select>` (an icon per option, a
   portal so nothing clips it).
 - `web/` — React + Vite + xterm.js SPA, embedded via `web/embed.go`
-  (`go:embed all:dist`). Build with `make web` before `go build`. **Paste**: xterm brackets a paste only once it has seen the app's
+  (`go:embed all:dist`). Build with `make web` before `go build`; `npm
+  test` runs Vitest on the pure modules (`*.test.ts` beside each; node,
+  no DOM). Laid out by feature: `lib/` → `ui/` → `features/<name>/` (one
+  folder per lens or panel, its server calls in its own `api.ts`) →
+  `app/`; a dependency points down that list, and a feature never imports
+  another feature's screens (its `api.ts` and pure modules, and the few
+  shared pieces `agents/SendToAgent`, `files/target`, are fine).
+  `features/terminal/engine/` is the terminal outside React (`engine.ts`
+  wires `transport`, `modes`, `mouse`, `pointer`, `selection`, `layer`,
+  `copy`, `links`, `paste`, `geometry`, `keys`); `Terminal.tsx` is the
+  mount that owns one engine per pane. **Paste**: xterm brackets a paste only once it has seen the app's
   DECSET 2004 — and a viewer that attaches later gets no replay, so it
   never sees Claude Code's "bracketed paste on" from startup and would
   paste a multi-line text raw (every newline an Enter: the prompt goes
-  off line by line). `Terminal.tsx` tracks whether 2004 ever passed and,
-  when nobody knows, wraps a text with line breaks in `ESC[200~ … ESC[201~`
-  itself (CRLF/LF → CR, as xterm does); a single line stays raw. herdr's
+  off line by line). `engine/modes.ts` notes whether 2004 ever passed
+  and `engine/paste.ts`, when nobody knows, wraps a text with line breaks
+  in `ESC[200~ … ESC[201~` itself (CRLF/LF → CR, as xterm does); a single line stays raw. herdr's
   attach forwards the markers only to a pane that enabled the mode, so a
   plain `cat` sees none.
 
