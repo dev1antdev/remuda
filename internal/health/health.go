@@ -83,7 +83,7 @@ func (c *Collector) Start(interval time.Duration) {
 					continue
 				}
 				c.mu.Lock()
-				r := c.reports[mc.Cfg.ID]
+				r := c.reports[mc.ID()]
 				c.mu.Unlock()
 				if r == nil || time.Since(r.At) >= interval {
 					c.Refresh(mc)
@@ -136,10 +136,10 @@ func (c *Collector) RefreshLatest(maxAge time.Duration) {
 // Refresh reads one machine now; a read already running is waited for.
 func (c *Collector) Refresh(mc *machines.Machine) {
 	c.mu.Lock()
-	l := c.locks[mc.Cfg.ID]
+	l := c.locks[mc.ID()]
 	if l == nil {
 		l = &sync.Mutex{}
-		c.locks[mc.Cfg.ID] = l
+		c.locks[mc.ID()] = l
 	}
 	c.mu.Unlock()
 	l.Lock()
@@ -157,7 +157,7 @@ func (c *Collector) Refresh(mc *machines.Machine) {
 		mc.SetPeer(peer) // a probe that failed outright says nothing about the peer
 	}
 	c.mu.Lock()
-	c.reports[mc.Cfg.ID] = &r
+	c.reports[mc.ID()] = &r
 	c.mu.Unlock()
 }
 

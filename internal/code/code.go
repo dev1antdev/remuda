@@ -47,14 +47,14 @@ func New(port int) *Service {
 // Status says whether the machine's code-server answers; a good verdict is cached 15s so a polling page does not probe every time.
 func (s *Service) Status(mc *machines.Machine) Status {
 	s.mu.Lock()
-	if c, ok := s.checks[mc.Cfg.ID]; ok && time.Since(c.at) < 15*time.Second && c.st.Available {
+	if c, ok := s.checks[mc.ID()]; ok && time.Since(c.at) < 15*time.Second && c.st.Available {
 		s.mu.Unlock()
 		return c.st
 	}
 	s.mu.Unlock()
 	st := s.probe(mc)
 	s.mu.Lock()
-	s.checks[mc.Cfg.ID] = check{at: time.Now(), st: st}
+	s.checks[mc.ID()] = check{at: time.Now(), st: st}
 	s.mu.Unlock()
 	return st
 }
@@ -130,7 +130,7 @@ func (s *Service) Proxy(w http.ResponseWriter, r *http.Request, mc *machines.Mac
 			return nil
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			s.Forget(mc.Cfg.ID)
+			s.Forget(mc.ID())
 			if r.Context().Err() == context.Canceled {
 				return
 			}

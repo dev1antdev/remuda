@@ -112,11 +112,11 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
-	s.Radar.Seen(mc.Cfg.ID, pane.PaneID)
+	s.Radar.Seen(mc.ID(), pane.PaneID)
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
 	open := func(pc *peerClient) {
-		s.peerOpen(w, r, pc, mc.Cfg.ID, pane.PaneID, cols, rows)
+		s.peerOpen(w, r, pc, mc.ID(), pane.PaneID, cols, rows)
 	}
 	if pc, err := s.peerFor(mc); err != nil {
 		httpErr(w, 502, err)

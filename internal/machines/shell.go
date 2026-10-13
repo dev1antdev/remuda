@@ -29,7 +29,7 @@ func (mc *Machine) Home() string {
 // shell is where scripts run: here, or the ssh master while it is up.
 func (mc *Machine) shell() (shell.Shell, error) {
 	if mc.local {
-		return shell.Local{Name: mc.Cfg.ID}, nil
+		return shell.Local{Name: mc.ID()}, nil
 	}
 	return mc.remoteConn()
 }

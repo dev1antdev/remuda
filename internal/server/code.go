@@ -20,7 +20,7 @@ func (s *Server) handleCodeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Query().Get("check") != "" {
-		s.Code.Forget(mc.Cfg.ID)
+		s.Code.Forget(mc.ID())
 	}
 	writeJSON(w, s.Code.Status(mc))
 }

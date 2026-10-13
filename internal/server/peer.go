@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
@@ -45,12 +46,12 @@ func (s *Server) peerAfterRefusal(mc *machines.Machine, err error) *peerClient {
 	if mc.Local() || !herdr.Refused(err) || s.Health == nil {
 		return nil
 	}
-	if r := s.Health.Report(mc.Cfg.ID); r == nil || time.Since(r.At) > 30*time.Second {
+	if r := s.Health.Report(mc.ID()); r == nil || time.Since(r.At) > 30*time.Second {
 		s.Health.Refresh(mc)
 	}
 	pc, perr := s.peerFor(mc)
 	if perr != nil {
-		log.Printf("peer %s: %v", mc.Cfg.ID, perr)
+		log.Printf("peer %s: %v", mc.ID(), perr)
 		return nil
 	}
 	return pc

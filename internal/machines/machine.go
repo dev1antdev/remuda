@@ -232,19 +232,19 @@ func (mc *Machine) Ready() (*herdr.Client, *herdr.AttachManager, error) {
 		return mc.client, mc.attach, nil
 	}
 	if mc.removed {
-		return nil, nil, fmt.Errorf("machine %s was removed", mc.Cfg.ID)
+		return nil, nil, fmt.Errorf("machine %s was removed", mc.ID())
 	}
 	switch mc.state {
 	case StateConnected:
 		return mc.client, mc.attach, nil
 	case StateConnecting:
-		return nil, nil, fmt.Errorf("machine %s is connecting", mc.Cfg.ID)
+		return nil, nil, fmt.Errorf("machine %s is connecting", mc.ID())
 	default:
 		if time.Since(mc.lastAttempt) > 15*time.Second {
 			mc.lastAttempt = time.Now()
 			go mc.connect()
 		}
-		return nil, nil, fmt.Errorf("machine %s: %s", mc.Cfg.ID, mc.errMsg)
+		return nil, nil, fmt.Errorf("machine %s: %s", mc.ID(), mc.errMsg)
 	}
 }
 

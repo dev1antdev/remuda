@@ -35,7 +35,7 @@ func (r *Restarter) Server(mc *machines.Machine, say func(string)) error {
 	if r.Lock != nil {
 		var locks []sync.Locker
 		for _, c := range chats {
-			l := r.Lock(mc.Cfg.ID, c.pane)
+			l := r.Lock(mc.ID(), c.pane)
 			l.Lock()
 			locks = append(locks, l)
 		}
