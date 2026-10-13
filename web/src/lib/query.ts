@@ -9,7 +9,9 @@ export type Query<T> = {
   data: T | null;
   error: string;
   loading: boolean; // nothing loaded yet and a fetch under way
+  fetching: boolean; // a fetch under way, the first or a later one
   reload: () => void;
+  mutate: (fn: (data: T | null) => T | null) => void; // the data as the screen already shows it, ahead of the server (a switch flipped, a card dropped)
 };
 
 export type QueryOptions = {
@@ -22,6 +24,7 @@ export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(false);
   const seq = useRef(0); // the inputs' generation: an answer to an older one is dropped
   const inflight = useRef(false);
   const again = useRef(false);
@@ -38,6 +41,7 @@ export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], {
     }
     const mine = seq.current;
     inflight.current = true;
+    setFetching(true);
     try {
       const result = await fnRef.current();
       if (mine !== seq.current) return;
@@ -51,6 +55,7 @@ export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], {
     } finally {
       if (mine === seq.current) {
         inflight.current = false;
+        setFetching(false);
         if (again.current) {
           again.current = false;
           void run();
@@ -59,6 +64,7 @@ export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], {
     }
   }, []);
   const reload = useCallback(() => void run(), [run]);
+  const mutate = useCallback((fn: (data: T | null) => T | null) => setData(fn), []);
 
   useEffect(() => {
     seq.current++;
@@ -85,5 +91,5 @@ export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], {
     };
   }, [every, enabled, run]);
 
-  return { data, error, loading, reload };
+  return { data, error, loading, fetching, reload, mutate };
 }
