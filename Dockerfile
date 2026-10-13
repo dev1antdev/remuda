@@ -3,7 +3,7 @@
 # Stages:
 #   web      builds the React SPA
 #   build    compiles the Go binary with the SPA embedded
-#   test     runs go vet + go test + the TypeScript typecheck (docker build --target test)
+#   test     runs go vet + go test + the TypeScript typecheck and the page's unit tests (docker build --target test)
 #   runtime  the image to run: the binary, herdr (for `terminal attach`), ssh, git
 #
 # The container is only the bridge: herdr itself keeps running on the host.
@@ -35,7 +35,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}"
 FROM build AS test
 RUN apk add --no-cache nodejs npm
 COPY --from=web /src/web/node_modules ./web/node_modules
-RUN go vet ./... && go test ./... && cd web && npm run typecheck
+RUN go vet ./... && go test ./... && cd web && npm run typecheck && npm test
 
 # ---- runtime ----
 FROM debian:bookworm-slim AS runtime

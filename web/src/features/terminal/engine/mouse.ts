@@ -27,7 +27,7 @@ export function wheelTicks(acc: WheelAcc, delta: number, sideways: boolean, unit
   acc[axis] += delta;
   const ticks = Math.trunc(acc[axis] / unit);
   acc[axis] -= ticks * unit;
-  return ticks;
+  return ticks || 0;
 }
 
 export type Reporter = {

@@ -1,4 +1,4 @@
-.PHONY: all build web server dev run test typecheck docker docker-test release publish deploy service code clean
+.PHONY: all build web server dev run test webtest typecheck docker docker-test release publish deploy service code clean
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 PUBLISH_BRANCH ?= main
@@ -24,9 +24,13 @@ server:
 dev: web/node_modules
 	cd web && npm run dev
 
-test:
+test: webtest
 	go vet ./...
 	go test ./...
+
+# The page's unit tests: Vitest on the pure modules, a *.test.ts beside each.
+webtest: web/node_modules
+	cd web && npm test
 
 typecheck: web/node_modules
 	cd web && npm run typecheck

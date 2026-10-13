@@ -1,5 +1,5 @@
 import { fileURLToPath, URL } from "node:url";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
@@ -14,4 +14,6 @@ export default defineConfig({
     },
   },
   build: { outDir: "dist" },
+  // the pure modules have tests beside them; nothing needs a DOM
+  test: { include: ["src/**/*.test.ts"], environment: "node" },
 });

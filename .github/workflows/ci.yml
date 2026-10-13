@@ -1,5 +1,5 @@
 # Every push to main or release and every pull request: the SPA built (every Go compile embeds it),
-# the TypeScript check, gofmt, go vet, the tests, and the vulnerability
+# the TypeScript check and the page's unit tests, gofmt, go vet, the tests, and the vulnerability
 # scans — the same list as /verify in .claude/skills, run where the
 # author's machine is not.
 name: CI
@@ -33,6 +33,7 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
           npm run typecheck
+          npm test
       - name: gofmt
         run: |
           out="$(gofmt -l ./cmd ./internal)"
