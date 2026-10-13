@@ -1,6 +1,8 @@
 // A task's comments: the agent's answers, the person's notes, remuda's own; and a box for a new one.
 
 import { useState } from "react";
+import { actions } from "@/app/store";
+import type { FileTarget } from "@/features/files/target";
 import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
 import { Icon, Logo } from "@/ui";
@@ -17,6 +19,8 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
   const [comment, setComment] = useState("");
   const [posting, setPosting] = useState(false);
   const comments = t.comments ?? [];
+  // a path in a comment opens where the run worked: its machine, its pane while it lives, its worktree
+  const openFile = (target: FileTarget) => actions.openFile(run?.machine ?? "local", run?.pane ?? "", target, run?.dir ?? "");
   const post = async () => {
     const body = comment.trim();
     if (!body || posting) return;
@@ -71,7 +75,7 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
             </button>
           </div>
           <div className="tasks-comment-body">
-            <Markdown text={c.body} onOpenFile={() => {}} />
+            <Markdown text={c.body} onOpenFile={openFile} />
           </div>
         </div>
       ))}

@@ -123,7 +123,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   folder picker behind the New workspace dialog's browse button
   (`web/src/features/roster/FolderPicker.tsx`: crumbs, subfolders, the machine's known
   workspaces as quick picks, hidden on request). Routes: `/api/fs/dirs`,
-  `/api/fs/stat` (resolve + kind),
+  `/api/fs/stat` (resolve + kind; `dir=` stands in for the pane's folder
+  when there is no pane — a transcript on its own, a task's comments),
   `/api/fs/file` (bytes; text is always `text/plain`, CSP-sandboxed, 512KB
   text / 24MB raw caps), `/api/fs/diff`, `POST /api/fs/upload` (multipart
   `file` ×≤4, 25MB each → `<pane dir>/.remuda/uploads/<time>-<tag>-<name>`,
@@ -446,6 +447,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `web/src/lib/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
   provider (`terminal/engine/links.ts`) and the chat linkifier; keeps a
   `:line` suffix, drops trailing punctuation, never a path inside a URL.
+  A link needs a name a file would have — a dotfile (`.env`, `.gitignore`;
+  the dot kept on `.mcp.json`) or a name with an extension, in any
+  alphabet — so a folder (`internal/server`) or a slashed phrase
+  (`Approve/Reject`) is none.
   **File links only in an agent's pane** (`agent` prop); URLs everywhere,
   but Cmd/Ctrl+click in a shell pane — its clicks belong to the app. URLs
   open through `openUrl` in `host.ts` (host bridge, else a new tab).
@@ -671,7 +676,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a push, and `Store.OnFinish` moves the task to the `on_finish` column
   when it still sits in `on_start` (a card the person moved meanwhile
   stays; the push title says `→ Testing`); a pane gone two minutes →
-  `gone`. `comments` are markdown; the UI re-reads an open task every
+  `gone`. `comments` are markdown, a path in one opening on the run's
+  machine relative to its worktree; the UI re-reads an open task every
   10 s while a run is live.
 - `internal/auth/` — single bearer token; HttpOnly cookie; no accounts.
 - `internal/server/` — the HTTP adapter: one file per context (`roster.go`,
