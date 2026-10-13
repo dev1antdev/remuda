@@ -1,4 +1,4 @@
-// Turns marks/*.svg into src/marks.ts: one viewBox and the path data per
+// Turns marks/*.svg into src/ui/marks.ts: one viewBox and the path data per
 // vendor, so the sidebar draws each logo as an inline <svg> in currentColor
 // — no HTML strings, no font to install.
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -18,5 +18,5 @@ export type Mark = { viewBox: string; paths: string[] };
 
 export const MARKS: Record<string, Mark> = ${JSON.stringify(out, null, 2)};
 `;
-writeFileSync(new URL("../src/marks.ts", import.meta.url).pathname, ts);
-console.log(`${Object.keys(out).length} marks → src/marks.ts`);
+writeFileSync(new URL("../src/ui/marks.ts", import.meta.url).pathname, ts);
+console.log(`${Object.keys(out).length} marks → src/ui/marks.ts`);
