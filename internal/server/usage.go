@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/usage"
 )
 
@@ -57,7 +58,7 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 		go func(mc *machines.Machine) {
 			defer wg.Done()
 			pm := perMachine{ID: mc.Cfg.ID, Label: mc.Label()}
-			if mc.Local {
+			if mc.Local() {
 				rep, err := usage.Scan(mc.Home()+"/.claude/projects", since, loc)
 				if err != nil {
 					pm.Error = err.Error()
@@ -65,7 +66,7 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 					pm.Report = &rep
 				}
 			} else {
-				raw, err := mc.Shell(usage.Script(mc.Home(), since, tz), 90*time.Second)
+				raw, err := shell.Text(mc, usage.Script(mc.Home(), since, tz), 90*time.Second)
 				var rep usage.Report
 				switch {
 				case err != nil:

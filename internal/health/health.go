@@ -17,6 +17,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 // Report is one machine's vitals, as last read.
@@ -145,7 +146,7 @@ func (c *Collector) Refresh(mc *machines.Machine) {
 	c.mu.Unlock()
 	l.Lock()
 	defer l.Unlock()
-	out, err := mc.Shell(Script(), 30*time.Second)
+	out, err := shell.Text(mc, Script(), 30*time.Second)
 	r, peer := Parse(out)
 	r.At = time.Now()
 	if err != nil && r.Claude == "" && r.Herdr == "" {

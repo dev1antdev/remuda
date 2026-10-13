@@ -9,6 +9,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/search"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 // handleSearch is GET /api/search?q=&machine=<id|all>&dir=&days=: full text over every connected machine's transcripts, newest first.
@@ -23,7 +24,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		since = time.Now().AddDate(0, 0, -d)
 	}
 	want := r.URL.Query().Get("machine")
-	var mcs []*machines.Machine
+	var hosts []shell.Host
 	for _, mc := range s.Machines.List() {
 		if want != "" && want != "all" && mc.Cfg.ID != want {
 			continue
@@ -31,7 +32,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		if st, _ := mc.State(); st != machines.StateConnected {
 			continue
 		}
-		mcs = append(mcs, mc)
+		hosts = append(hosts, mc)
 	}
-	writeJSON(w, search.Search(mcs, q, r.URL.Query().Get("dir"), since))
+	writeJSON(w, search.Search(hosts, q, r.URL.Query().Get("dir"), since))
 }

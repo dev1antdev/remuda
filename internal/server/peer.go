@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
@@ -43,7 +42,7 @@ func (s *Server) peerFor(mc *machines.Machine) (*peerClient, error) {
 
 // peerAfterRefusal probes the machine again after a refused attach: a remuda may have started there since the last look.
 func (s *Server) peerAfterRefusal(mc *machines.Machine, err error) *peerClient {
-	if mc.Local || !herdr.Refused(err) || s.Health == nil {
+	if mc.Local() || !herdr.Refused(err) || s.Health == nil {
 		return nil
 	}
 	if r := s.Health.Report(mc.Cfg.ID); r == nil || time.Since(r.At) > 30*time.Second {

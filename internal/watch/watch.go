@@ -12,6 +12,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/radar"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 const (
@@ -44,7 +45,7 @@ type Watcher struct {
 	push     *push.Service
 	radar    *radar.Tracker
 	// Badges, when set, refreshes a machine's review counts: a minute apart, one shell per machine
-	Badges func(mc *machines.Machine, dirs []string)
+	Badges func(host shell.Host, dirs []string)
 	Dirs   func(snap *herdr.Snapshot) []string
 	// Usage, when set, is handed every snapshot for the cost meter; it rate-limits its own reads
 	Usage func(mc *machines.Machine, snap *herdr.Snapshot)
@@ -97,7 +98,7 @@ func (w *Watcher) stateFor(id string) *machineState {
 
 func (w *Watcher) loop(mc *machines.Machine) {
 	every := remoteEvery
-	if mc.Local {
+	if mc.Local() {
 		every = localEvery
 	}
 	var badgesAt time.Time
@@ -156,7 +157,7 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 	fails := st.fails
 	w.mu.Unlock()
 	// herdr's own restart or update handoff unbinds the socket for a moment: a few misses first
-	if mc.Local && w.LocalDown != nil && fails >= localDownAfter {
+	if mc.Local() && w.LocalDown != nil && fails >= localDownAfter {
 		go w.LocalDown(err)
 	}
 	return nil, err

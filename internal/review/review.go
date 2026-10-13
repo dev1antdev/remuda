@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -135,14 +135,14 @@ func blobsScript() string {
 }
 
 // Summary reviews one folder against its baseline.
-func (store *Store) Summary(machine *machines.Machine, dir string) Summary {
+func (store *Store) Summary(host shell.Host, dir string) Summary {
 	summary := Summary{At: time.Now(), Commits: []Commit{}, Files: []File{}}
-	baseline, hasBaseline := store.baseline(machine.Cfg.ID, dir)
+	baseline, hasBaseline := store.baseline(host.ID(), dir)
 	if hasBaseline {
 		copied := baseline
 		summary.Baseline = &copied
 	}
-	output, err := machine.Shell(summaryScript(dir, baseline.Head), 60*time.Second)
+	output, err := shell.Text(host, summaryScript(dir, baseline.Head), 60*time.Second)
 	if err != nil {
 		summary.Error = err.Error()
 		return summary
@@ -244,7 +244,7 @@ func (store *Store) Summary(machine *machines.Machine, dir string) Summary {
 			summary.Fresh++
 		}
 	}
-	store.setBadge(key(machine.Cfg.ID, dir), baseline, Badge{Changed: len(summary.Files), Fresh: summary.Fresh})
+	store.setBadge(key(host.ID(), dir), baseline, Badge{Changed: len(summary.Files), Fresh: summary.Fresh})
 	return summary
 }
 
@@ -261,15 +261,15 @@ func (store *Store) setBadge(storeKey string, against Baseline, badge Badge) {
 
 // Diff is one file's unified diff since the viewer looked: from the blob
 // the baseline recorded for it, else against HEAD; an untracked file whole.
-func (store *Store) Diff(machine *machines.Machine, dir, path string) (string, error) {
-	baseline, _ := store.baseline(machine.Cfg.ID, dir)
+func (store *Store) Diff(host shell.Host, dir, path string) (string, error) {
+	baseline, _ := store.baseline(host.ID(), dir)
 	quotedPath := script.Quote(path)
 	reviewedBlob := baseline.Blobs[path]
 	if reviewedBlob != "" && reviewedBlob != "gone" && hexRe.MatchString(reviewedBlob) {
 		// the script prints the temp file's name first; the diff headers carry it
 		fromBlob := script.InDir(dir) + `t=$(mktemp "${TMPDIR:-/tmp}/remuda-seen.XXXXXX") || exit 0; printf '%s\n' "$t"; ` +
 			`if git cat-file -p ` + reviewedBlob + ` > "$t" 2>/dev/null; then git -c color.ui=never -c core.quotepath=off diff --no-index -- "$t" ` + quotedPath + ` | head -c 600000; fi; rm -f "$t"; exit 0`
-		output, err := machine.Shell(fromBlob, 60*time.Second)
+		output, err := shell.Text(host, fromBlob, 60*time.Second)
 		if err != nil {
 			return output, err
 		}
@@ -283,19 +283,19 @@ func (store *Store) Diff(machine *machines.Machine, dir, path string) (string, e
 		`if git ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || git cat-file -e "HEAD:./"` + quotedPath + ` 2>/dev/null; then ` +
 		`git -c color.ui=never -c core.quotepath=off diff --relative HEAD -- ` + quotedPath + ` | head -c 600000; ` +
 		`else git -c color.ui=never diff --no-index -- /dev/null ` + quotedPath + ` | head -c 600000; fi; exit 0`
-	return machine.Shell(fromHead, 60*time.Second)
+	return shell.Text(host, fromHead, 60*time.Second)
 }
 
 var hexRe = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 
 // MarkSeen moves the folder's baseline to now: HEAD, the blob of every
 // uncommitted file, and the verdict the agent was told.
-func (store *Store) MarkSeen(machine *machines.Machine, dir, verdict string) (Baseline, error) {
+func (store *Store) MarkSeen(host shell.Host, dir, verdict string) (Baseline, error) {
 	if !VerdictOK(verdict) {
 		return Baseline{}, fmt.Errorf("no such verdict: %q", verdict)
 	}
 	snapshot := script.InDir(dir) + `git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` + blobsScript()
-	output, err := machine.Shell(snapshot, 60*time.Second)
+	output, err := shell.Text(host, snapshot, 60*time.Second)
 	if err != nil {
 		return Baseline{}, err
 	}
@@ -307,8 +307,8 @@ func (store *Store) MarkSeen(machine *machines.Machine, dir, verdict string) (Ba
 		}
 	}
 	store.mu.Lock()
-	store.baselines[key(machine.Cfg.ID, dir)] = baseline
-	store.badges[key(machine.Cfg.ID, dir)] = Badge{}
+	store.baselines[key(host.ID(), dir)] = baseline
+	store.badges[key(host.ID(), dir)] = Badge{}
 	err = store.save()
 	store.mu.Unlock()
 	if err != nil {
@@ -319,19 +319,19 @@ func (store *Store) MarkSeen(machine *machines.Machine, dir, verdict string) (Ba
 
 // Badges refreshes the roster's counts for many folders of one machine in
 // a single round trip.
-func (store *Store) Badges(machine *machines.Machine, dirs []string) {
+func (store *Store) Badges(host shell.Host, dirs []string) {
 	if len(dirs) == 0 {
 		return
 	}
 	var sweep strings.Builder
 	baselines := map[string]Baseline{}
 	for _, dir := range dirs {
-		baseline, _ := store.baseline(machine.Cfg.ID, dir)
+		baseline, _ := store.baseline(host.ID(), dir)
 		baselines[dir] = baseline
 		sweep.WriteString(`( ` + script.InRepo(dir) +
 			`printf '%s\036' ` + script.Quote(dir) + `; ` + blobsScript() + `; printf '\035\n' ); `)
 	}
-	output, err := machine.Shell(sweep.String(), 90*time.Second)
+	output, err := shell.Text(host, sweep.String(), 90*time.Second)
 	if err != nil {
 		return
 	}
@@ -356,6 +356,6 @@ func (store *Store) Badges(machine *machines.Machine, dirs []string) {
 				badge.Fresh++
 			}
 		}
-		store.setBadge(key(machine.Cfg.ID, dir), baseline, badge)
+		store.setBadge(key(host.ID(), dir), baseline, badge)
 	}
 }

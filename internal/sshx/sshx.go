@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 type Conn struct {
@@ -26,19 +27,6 @@ type Conn struct {
 
 	ctl    string // control socket path
 	master *exec.Cmd
-}
-
-// ExitError is a remote command that ran and exited non-zero.
-type ExitError struct {
-	Code   int
-	Stderr string
-}
-
-func (e *ExitError) Error() string {
-	if e.Stderr != "" {
-		return e.Stderr
-	}
-	return fmt.Sprintf("exit status %d", e.Code)
 }
 
 // SocketDir is where the control and forward sockets go when main sets it: the state dir, the person's own.
@@ -132,7 +120,7 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 		if err != nil {
 			var ee *exec.ExitError
 			if errors.As(err, &ee) {
-				return out.Bytes(), &ExitError{Code: ee.ExitCode(), Stderr: strings.TrimSpace(errb.String())}
+				return out.Bytes(), &shell.ExitError{Code: ee.ExitCode(), Stderr: strings.TrimSpace(errb.String())}
 			}
 			return out.Bytes(), fmt.Errorf("ssh %s: %w", c.Host, err)
 		}
@@ -179,7 +167,7 @@ func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) 
 		if err != nil {
 			var ee *exec.ExitError
 			if errors.As(err, &ee) {
-				return &ExitError{Code: ee.ExitCode()}
+				return &shell.ExitError{Code: ee.ExitCode()}
 			}
 			return fmt.Errorf("ssh %s: %w", c.Host, err)
 		}
@@ -192,14 +180,8 @@ func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) 
 	}
 }
 
-// Exec runs a command on the remote host and returns its stdout.
-func (c *Conn) Exec(command string, timeout time.Duration) (string, error) {
-	out, err := c.run(command, timeout, nil)
-	return string(out), err
-}
-
-// ExecBytes is Exec for binary-safe stdout.
-func (c *Conn) ExecBytes(command string, timeout time.Duration) ([]byte, error) {
+// Run runs a script on the host and returns its stdout.
+func (c *Conn) Run(command string, timeout time.Duration) ([]byte, error) {
 	return c.run(command, timeout, nil)
 }
 

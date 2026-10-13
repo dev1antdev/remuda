@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/version"
@@ -25,6 +24,13 @@ type Display struct {
 	Updated int64   `json:"updated,omitempty"` // unix ms of the last response
 	Unknown bool    `json:"unknown,omitempty"` // a model with no price here
 	Partial bool    `json:"partial,omitempty"` // only a tail was read: the cost is a floor
+}
+
+// Files is where a machine's transcript bytes come from: a stat, a folder's stats, a read from an offset.
+type Files interface {
+	Version(path string) (transcript.Version, error)
+	DirVersions(dir string) (map[string]transcript.Version, error)
+	ReadFrom(path string, offset int64) ([]byte, error)
 }
 
 // Tracker keeps a running sum per transcript file, reading only what was appended since the last look.
@@ -57,27 +63,27 @@ func NewTracker() *Tracker {
 func key(machineID, s string) string { return machineID + "|" + s }
 
 // Observe keeps a pane's files current: the chain is oldest first, the last one live, each earlier one read once.
-func (t *Tracker) Observe(mc *machines.Machine, paneID string, chain []string) {
+func (t *Tracker) Observe(machineID string, files Files, paneID string, chain []string) {
 	if len(chain) == 0 {
 		return
 	}
 	live := chain[len(chain)-1]
 	t.mu.Lock()
-	t.panes[key(mc.Cfg.ID, paneID)] = live
+	t.panes[key(machineID, paneID)] = live
 	for i := 1; i < len(chain); i++ {
-		t.pred[key(mc.Cfg.ID, chain[i])] = chain[i-1]
+		t.pred[key(machineID, chain[i])] = chain[i-1]
 	}
 	t.mu.Unlock()
-	t.refresh(mc, live, false)
+	t.refresh(machineID, files, live, false)
 	for _, p := range chain[:len(chain)-1] {
-		t.refresh(mc, p, true)
+		t.refresh(machineID, files, p, true)
 	}
 	// Claude Code's own counter includes <session>/subagents/*.jsonl
-	t.observeSubagents(mc, live)
+	t.observeSubagents(machineID, files, live)
 }
 
-func (t *Tracker) observeSubagents(mc *machines.Machine, live string) {
-	k := key(mc.Cfg.ID, live)
+func (t *Tracker) observeSubagents(machineID string, files Files, live string) {
+	k := key(machineID, live)
 	t.mu.Lock()
 	last := t.subsChecked[k]
 	t.mu.Unlock()
@@ -88,23 +94,23 @@ func (t *Tracker) observeSubagents(mc *machines.Machine, live string) {
 	t.subsChecked[k] = time.Now()
 	t.mu.Unlock()
 	dir := strings.TrimSuffix(live, ".jsonl") + "/subagents"
-	vers, err := mc.DirVersions(dir)
+	vers, err := files.DirVersions(dir)
 	if err != nil {
 		return
 	}
-	files := make([]string, 0, len(vers))
+	paths := make([]string, 0, len(vers))
 	for p, v := range vers {
-		files = append(files, p)
-		t.read(mc, p, v)
+		paths = append(paths, p)
+		t.read(machineID, files, p, v)
 	}
-	sort.Strings(files)
+	sort.Strings(paths)
 	t.mu.Lock()
-	t.subs[k] = files
+	t.subs[k] = paths
 	t.mu.Unlock()
 }
 
-func (t *Tracker) refresh(mc *machines.Machine, path string, once bool) {
-	k := key(mc.Cfg.ID, path)
+func (t *Tracker) refresh(machineID string, files Files, path string, once bool) {
+	k := key(machineID, path)
 	t.mu.Lock()
 	st := t.files[k]
 	if st == nil {
@@ -118,16 +124,16 @@ func (t *Tracker) refresh(mc *machines.Machine, path string, once bool) {
 	st.checked = time.Now()
 	t.mu.Unlock()
 
-	v, err := mc.TranscriptVersion(path)
+	v, err := files.Version(path)
 	if err != nil {
 		return
 	}
-	t.read(mc, path, v)
+	t.read(machineID, files, path, v)
 }
 
 // read brings a file's sum up to version v, reading only what was added since the last look.
-func (t *Tracker) read(mc *machines.Machine, path string, v transcript.Version) {
-	k := key(mc.Cfg.ID, path)
+func (t *Tracker) read(machineID string, files Files, path string, v transcript.Version) {
+	k := key(machineID, path)
 	t.mu.Lock()
 	st := t.files[k]
 	if st == nil {
@@ -148,7 +154,7 @@ func (t *Tracker) read(mc *machines.Machine, path string, v transcript.Version) 
 	if v.Size-offset > readCap { // too much at once: the tail, from a line boundary
 		offset, reset, partial = v.Size-readCap, true, true
 	}
-	data, err := mc.ReadFrom(path, offset)
+	data, err := files.ReadFrom(path, offset)
 	if err != nil {
 		return
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/jobs"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/restart"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 // Updates from the page: herdr, the agents and remuda itself, each a job the person first sees as a command, then watches run; nothing asks for sudo.
@@ -383,7 +384,7 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 
 // deployPlan offers this very binary to a remote machine of the same OS and CPU whose remuda is behind or missing.
 func (s *Server) deployPlan(mc *machines.Machine, rep *health.Report) (health.Update, bool) {
-	if mc.Local || rep == nil || rep.Arch == "" || rep.Arch != runtime.GOARCH {
+	if mc.Local() || rep == nil || rep.Arch == "" || rep.Arch != runtime.GOARCH {
 		return health.Update{}, false
 	}
 	if (runtime.GOOS == "darwin") != strings.HasPrefix(rep.OS, "macOS") {
@@ -410,7 +411,7 @@ func (s *Server) releasePlan(mc *machines.Machine, rep *health.Report) (health.U
 		return health.Update{}, false
 	}
 	rel := s.Health.Release()
-	if mc.Local {
+	if mc.Local() {
 		return health.ReleaseUpdate(s.version(), runtime.GOOS, runtime.GOARCH, rel, true)
 	}
 	if rep == nil {
@@ -438,7 +439,7 @@ func (s *Server) deploySelf(mc *machines.Machine, say func(string)) error {
 		return fmt.Errorf("copy: %w", err)
 	}
 	say("installing and restarting the service…")
-	out, err := mc.Shell(deployScript, 2*time.Minute)
+	out, err := shell.Text(mc, deployScript, 2*time.Minute)
 	if out != "" {
 		say(strings.TrimSpace(out))
 	}
@@ -449,7 +450,7 @@ func (s *Server) deploySelf(mc *machines.Machine, say func(string)) error {
 	say("waiting for remuda there…")
 	for i := 0; i < 30; i++ {
 		time.Sleep(time.Second)
-		if out, err := mc.Shell(`curl -s -m 2 http://127.0.0.1:7317/api/health 2>/dev/null`, 10*time.Second); err == nil && strings.Contains(out, `"ok":true`) {
+		if out, err := shell.Text(mc, `curl -s -m 2 http://127.0.0.1:7317/api/health 2>/dev/null`, 10*time.Second); err == nil && strings.Contains(out, `"ok":true`) {
 			say("remuda there answers: " + strings.TrimSpace(out))
 			return nil
 		}

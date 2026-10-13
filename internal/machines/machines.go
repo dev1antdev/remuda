@@ -20,9 +20,9 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/sshx"
 	"github.com/dev1antdev/remuda/internal/state"
-	"github.com/dev1antdev/remuda/internal/text"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
@@ -47,7 +47,7 @@ type Config struct {
 
 type Machine struct {
 	Cfg   Config // as registered: herdr's list, machines.json, or this host's name
-	Local bool
+	local bool
 	label atomic.Value
 
 	mu          sync.Mutex
@@ -65,20 +65,11 @@ type Machine struct {
 	attach *herdr.AttachManager
 	home   string
 
-	files    map[string]*remoteFile // remote transcript cache by path
-	sessPath map[string]string      // session uuid -> resolved path
-	sessMiss map[string]time.Time   // session uuid -> when it was last not found
-
 	fwds map[int]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda)
 	peer *Peer
 
-	contPath map[string]contCheck // session file -> its continuation (if any), as last looked
-	predPath map[string]string    // session file -> the file it continues ("" when none)
-}
-
-type contCheck struct {
-	next string
-	at   time.Time
+	// Transcripts reads the session files on this machine.
+	Transcripts *transcript.Reader
 }
 
 // tcpForward is a port forwarded over one master; a new master needs a new forward.
@@ -96,13 +87,6 @@ type Peer struct {
 	Version string
 	At      time.Time
 }
-
-type remoteFile struct {
-	version transcript.Version
-	data    []byte
-}
-
-const remoteTailCap = 8 * 1024 * 1024
 
 // hostRe accepts ssh destinations (host, user@host, [v6]:port) and nothing ssh would read as an option.
 var hostRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@:%\[\]-]*$`)
@@ -163,13 +147,14 @@ func NewManager(dir, localSocket, localHerdrBin string) *Manager {
 	host, _ := os.Hostname()
 	local := &Machine{
 		Cfg:      Config{ID: LocalID, Label: "This Mac · " + strings.TrimSuffix(host, ".local")},
-		Local:    true,
+		local:    true,
 		state:    StateConnected,
 		herdrBin: localHerdrBin,
 		socket:   localSocket,
 		client:   herdr.NewClient(localSocket),
 		attach:   herdr.NewAttachManager(herdr.LocalAttachCommand(localHerdrBin, localSocket)),
 	}
+	local.Transcripts = transcript.NewReader(local)
 	m := &Manager{
 		machines: map[string]*Machine{LocalID: local},
 		order:    []string{LocalID},
@@ -229,7 +214,9 @@ func (m *Manager) add(cfg Config) *Machine {
 }
 
 func newRemote(cfg Config) *Machine {
-	return &Machine{Cfg: cfg, state: StateConnecting, files: map[string]*remoteFile{}, sessPath: map[string]string{}}
+	mc := &Machine{Cfg: cfg, state: StateConnecting}
+	mc.Transcripts = transcript.NewReader(mc)
+	return mc
 }
 
 // herdrMachine is one row of `herdr machine list --json`.
@@ -432,7 +419,7 @@ func (mc *Machine) HerdrBin() string {
 // ServerVersions reads the installed herdr's version and the running server's ("" when none runs), freshly.
 func (mc *Machine) ServerVersions() (installed, running string, err error) {
 	bin, sock := mc.herdrPaths()
-	out, err := mc.Shell(`LC_ALL=C; `+script.Quote(bin)+` --version 2>/dev/null | head -1; HERDR_SOCKET_PATH=`+script.Quote(sock)+` `+script.Quote(bin)+` status server 2>/dev/null | sed -n 's/^version: //p' | head -1`, 20*time.Second)
+	out, err := mc.text(`LC_ALL=C; `+script.Quote(bin)+` --version 2>/dev/null | head -1; HERDR_SOCKET_PATH=`+script.Quote(sock)+` `+script.Quote(bin)+` status server 2>/dev/null | sed -n 's/^version: //p' | head -1`, 20*time.Second)
 	if err != nil && strings.TrimSpace(out) == "" {
 		return "", "", err
 	}
@@ -449,13 +436,13 @@ var herdrSemver = regexp.MustCompile(`\d+\.\d+\.\d+`)
 // StopServer stops herdr's server on the machine, and every pane process with it.
 func (mc *Machine) StopServer() (string, error) {
 	bin, sock := mc.herdrPaths()
-	return mc.Shell(`HERDR_SOCKET_PATH=`+script.Quote(sock)+` `+script.Quote(bin)+` server stop 2>&1`, 30*time.Second)
+	return mc.text(`HERDR_SOCKET_PATH=`+script.Quote(sock)+` `+script.Quote(bin)+` server stop 2>&1`, 30*time.Second)
 }
 
 // StartServer starts herdr's server on the machine now, without the spacing of the automatic starts.
 func (mc *Machine) StartServer() error {
 	bin, sock := mc.herdrPaths()
-	if mc.Local {
+	if mc.local {
 		return herdr.StartServerNow(bin, sock)
 	}
 	conn, err := mc.remoteConn()
@@ -465,7 +452,7 @@ func (mc *Machine) StartServer() error {
 	mc.mu.Lock()
 	mc.serverStart = time.Now()
 	mc.mu.Unlock()
-	_, err = conn.Exec(herdr.StartServerScript(bin, sock), 25*time.Second)
+	_, err = conn.Run(herdr.StartServerScript(bin, sock), 25*time.Second)
 	return err
 }
 
@@ -515,7 +502,7 @@ func (mc *Machine) connect() {
 		probe += `; command -v herdr 2>/dev/null || ` +
 			`for p in "$HOME/.local/bin/herdr" /opt/homebrew/bin/herdr /usr/local/bin/herdr /usr/bin/herdr; do [ -x "$p" ] && printf '%s\n' "$p" && break; done; true`
 	}
-	out, err := conn.Exec(probe, 10*time.Second)
+	out, err := shell.Text(conn, probe, 10*time.Second)
 	if err != nil {
 		bail(fmt.Errorf("cannot read remote $HOME: %v", err))
 		return
@@ -541,7 +528,7 @@ func (mc *Machine) connect() {
 	}
 	client, err := rpcClient(conn, sock)
 	if err != nil && mc.mayStartServer() {
-		if _, serr := conn.Exec(herdr.StartServerScript(bin, sock), 25*time.Second); serr == nil {
+		if _, serr := conn.Run(herdr.StartServerScript(bin, sock), 25*time.Second); serr == nil {
 			client, err = rpcClient(conn, sock)
 		} else {
 			log.Printf("%s: start herdr server: %v", mc.Cfg.Host, serr)
@@ -618,7 +605,7 @@ func (mc *Machine) transportError(err error) {
 func (mc *Machine) Ready() (*herdr.Client, *herdr.AttachManager, error) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	if mc.Local {
+	if mc.local {
 		return mc.client, mc.attach, nil
 	}
 	if mc.removed {
@@ -638,80 +625,12 @@ func (mc *Machine) Ready() (*herdr.Client, *herdr.AttachManager, error) {
 	}
 }
 
-// FollowContinuation returns the live end of a session's chain of files.
-// A compaction moves the conversation to a new file (transcript.Continuation) while herdr goes on naming the first.
-func (mc *Machine) FollowContinuation(path string) string {
-	chain := mc.ContinuationChain(path)
-	return chain[len(chain)-1]
-}
-
-// ContinuationChain is the file and every file it went on in, oldest first, up to 8 hops.
-func (mc *Machine) ContinuationChain(path string) []string {
-	chain := []string{path}
-	for hops := 0; hops < 8; hops++ {
-		next := mc.nextContinuation(path)
-		if next == "" {
-			break
-		}
-		chain = append(chain, next)
-		path = next
-	}
-	return chain
-}
-
-// Predecessor is the file a session file continues after a compaction ("" when none), cached for good.
-func (mc *Machine) Predecessor(path string) string {
-	mc.mu.Lock()
-	p, ok := mc.predPath[path]
-	mc.mu.Unlock()
-	if ok {
-		return p
-	}
-	if mc.Local {
-		p = transcript.Predecessor(path)
-	} else if out, err := mc.exec(transcript.PredecessorScript(script.Quote(path)), 30*time.Second); err == nil {
-		p = strings.TrimSpace(out)
-	} else {
-		return "" // not cached: asked again next time
-	}
-	mc.mu.Lock()
-	if mc.predPath == nil {
-		mc.predPath = map[string]string{}
-	}
-	mc.predPath[path] = p
-	mc.mu.Unlock()
-	return p
-}
-
-// nextContinuation is one hop, cached for a minute.
-func (mc *Machine) nextContinuation(path string) string {
-	mc.mu.Lock()
-	c, ok := mc.contPath[path]
-	mc.mu.Unlock()
-	if ok && time.Since(c.at) <= time.Minute {
-		return c.next
-	}
-	var next string
-	if mc.Local {
-		next = transcript.Continuation(path)
-	} else if out, err := mc.exec(transcript.ContinuationScript(script.Quote(path)), 20*time.Second); err == nil {
-		next = strings.TrimSpace(out)
-	}
-	mc.mu.Lock()
-	if mc.contPath == nil {
-		mc.contPath = map[string]contCheck{}
-	}
-	mc.contPath[path] = contCheck{next: next, at: time.Now()}
-	mc.mu.Unlock()
-	return next
-}
-
 // CodeAddr is where this machine's code-server (127.0.0.1:port on the machine itself) is reachable from here.
 func (mc *Machine) CodeAddr(port int) (string, error) { return mc.ForwardAddr(port) }
 
 // ForwardAddr is a loopback address that reaches 127.0.0.1:port on the machine, a forward remembered per master.
 func (mc *Machine) ForwardAddr(port int) (string, error) {
-	if mc.Local {
+	if mc.local {
 		return fmt.Sprintf("127.0.0.1:%d", port), nil
 	}
 	conn, err := mc.remoteConn()
@@ -746,7 +665,7 @@ func (mc *Machine) SetPeer(p *Peer) {
 
 // Peer is the machine's own remuda: nil when none runs there, for the local machine, or past an hour.
 func (mc *Machine) Peer() *Peer {
-	if mc.Local {
+	if mc.local {
 		return nil
 	}
 	mc.mu.Lock()
@@ -770,212 +689,4 @@ func (mc *Machine) remoteConn() (*sshx.Conn, error) {
 		return nil, fmt.Errorf("not connected")
 	}
 	return mc.conn, nil
-}
-
-func (mc *Machine) exec(command string, timeout time.Duration) (string, error) {
-	conn, err := mc.remoteConn()
-	if err != nil {
-		return "", err
-	}
-	return conn.Exec(command, timeout)
-}
-
-func (mc *Machine) execBytes(command string, timeout time.Duration) ([]byte, error) {
-	conn, err := mc.remoteConn()
-	if err != nil {
-		return nil, err
-	}
-	return conn.ExecBytes(command, timeout)
-}
-
-// Home is the user's home directory on this machine.
-func (mc *Machine) Home() string {
-	if mc.Local {
-		h, _ := os.UserHomeDir()
-		return h
-	}
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	return mc.home
-}
-
-// ---- transcripts ----
-
-// TranscriptVersion stats the session file; the version doubles as the ETag.
-func (mc *Machine) TranscriptVersion(path string) (transcript.Version, error) {
-	if mc.Local {
-		return transcript.Stat(path)
-	}
-	out, err := mc.exec(script.Stat(script.Quote(path), "%s %Y", "%z %m"), 10*time.Second)
-	if err != nil {
-		return transcript.Version{}, err
-	}
-	var v transcript.Version
-	if _, err := fmt.Sscanf(out, "%d %d", &v.Size, &v.MTime); err != nil {
-		return transcript.Version{}, fmt.Errorf("stat %s: %q", path, out)
-	}
-	return v, nil
-}
-
-// DirVersions is the size and mtime of every .jsonl directly in dir, in one round trip; a missing dir is an empty map.
-func (mc *Machine) DirVersions(dir string) (map[string]transcript.Version, error) {
-	out := map[string]transcript.Version{}
-	if mc.Local {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return out, nil
-			}
-			return nil, err
-		}
-		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
-				continue
-			}
-			if info, err := e.Info(); err == nil {
-				out[filepath.Join(dir, e.Name())] = transcript.Version{Size: info.Size(), MTime: info.ModTime().UnixNano()}
-			}
-		}
-		return out, nil
-	}
-	q := script.Quote(dir)
-	listing := `[ -d ` + q + ` ] || exit 0; for f in ` + q + `/*.jsonl; do [ -f "$f" ] || continue; ` + script.Stat(`"$f"`, "%s %Y %n", "%z %m %N") + `; done`
-	raw, err := mc.exec(listing, 20*time.Second)
-	if err != nil {
-		return nil, err
-	}
-	for _, line := range strings.Split(strings.TrimRight(raw, "\n"), "\n") {
-		var v transcript.Version
-		rest := ""
-		if n, _ := fmt.Sscanf(line, "%d %d %s", &v.Size, &v.MTime, &rest); n == 3 {
-			// the path may hold spaces: everything after the two numbers
-			parts := strings.SplitN(line, " ", 3)
-			out[parts[2]] = v
-		}
-	}
-	return out, nil
-}
-
-// Transcript parses the session file at the given version, remotely from a cached tail grown by delta.
-func (mc *Machine) Transcript(path string, v transcript.Version) ([]transcript.Turn, error) {
-	if mc.Local {
-		return transcript.Parse(path)
-	}
-	data, err := mc.remoteTail(path, v)
-	if err != nil {
-		return nil, err
-	}
-	return transcript.ParseBytes(data)
-}
-
-// remoteTail returns the file tail, fetching only the delta since the cached copy when the file merely grew.
-func (mc *Machine) remoteTail(path string, v transcript.Version) ([]byte, error) {
-	mc.mu.Lock()
-	cached := mc.files[path]
-	mc.mu.Unlock()
-	if cached != nil && cached.version == v {
-		return cached.data, nil
-	}
-
-	// every read is cut at the size the stat saw: what the agent wrote since belongs to the next version
-	q := script.Quote(path)
-	var data []byte
-	if cached != nil && v.Size > cached.version.Size {
-		// grew: fetch the delta only (tail -c +N is 1-indexed)
-		delta, err := mc.execBytes(fmt.Sprintf("tail -c +%d %s | head -c %d", cached.version.Size+1, q, v.Size-cached.version.Size), 30*time.Second)
-		if err == nil {
-			data = append(cached.data[:len(cached.data):len(cached.data)], delta...) // the cached slice is shared: copy
-		}
-	}
-	if data == nil {
-		fetch := min(v.Size, remoteTailCap)
-		var err error
-		if data, err = mc.execBytes(fmt.Sprintf("head -c %d %s | tail -c %d", v.Size, q, fetch), 60*time.Second); err != nil {
-			return nil, err
-		}
-	}
-	if len(data) > remoteTailCap {
-		data = append([]byte(nil), data[len(data)-remoteTailCap:]...)
-	}
-
-	mc.mu.Lock()
-	mc.files[path] = &remoteFile{version: v, data: data}
-	if len(mc.files) > 8 {
-		for k := range mc.files {
-			if k != path {
-				delete(mc.files, k)
-				break
-			}
-		}
-	}
-	mc.mu.Unlock()
-	return data, nil
-}
-
-// ResolveSession finds the session file of herdr's agent_session: the exact id first, else a glob across project dirs.
-func (mc *Machine) ResolveSession(cwd, kind, value string) (string, error) {
-	// the agent's own hooks chose these: a path only under ~/.claude/projects, an id only what looks like one
-	if kind == "path" {
-		clean := filepath.Clean(value)
-		under := filepath.Join(mc.Home(), ".claude", "projects") + "/"
-		if !strings.HasSuffix(clean, ".jsonl") || !strings.HasPrefix(clean, under) {
-			return "", fmt.Errorf("session path %q is not a session file under ~/.claude/projects", value)
-		}
-		return clean, nil
-	}
-	if !text.SessionID(value) {
-		return "", fmt.Errorf("session id %q does not look like one", value)
-	}
-	mc.mu.Lock()
-	cached, ok := mc.sessPath[value]
-	missedAt, missed := mc.sessMiss[value]
-	mc.mu.Unlock()
-	if ok {
-		if !mc.Local {
-			return cached, nil
-		}
-		if _, err := os.Stat(cached); err == nil {
-			return cached, nil
-		}
-	}
-	if missed && time.Since(missedAt) < 30*time.Second {
-		return "", os.ErrNotExist
-	}
-
-	var p string
-	miss := func(err error) (string, error) {
-		mc.mu.Lock()
-		if mc.sessMiss == nil {
-			mc.sessMiss = map[string]time.Time{}
-		}
-		mc.sessMiss[value] = time.Now()
-		mc.mu.Unlock()
-		return "", err
-	}
-	if mc.Local {
-		var err error
-		if p, err = transcript.FindSessionByID(cwd, value); err != nil {
-			return miss(err)
-		}
-	} else {
-		projects := mc.Home() + "/.claude/projects"
-		primary := projects + "/" + transcript.EncodePath(cwd) + "/" + value + ".jsonl"
-		find := `if [ -f ` + script.Quote(primary) + ` ]; then printf %s ` + script.Quote(primary) + `; else ls ` +
-			script.Quote(projects) + `/*/` + script.Quote(value+".jsonl") + ` 2>/dev/null | head -1; fi`
-		out, err := mc.exec(find, 15*time.Second)
-		if err != nil {
-			return miss(err)
-		}
-		if p = strings.TrimSpace(out); p == "" {
-			return miss(os.ErrNotExist)
-		}
-	}
-	mc.mu.Lock()
-	if mc.sessPath == nil {
-		mc.sessPath = map[string]string{}
-	}
-	mc.sessPath[value] = p
-	delete(mc.sessMiss, value)
-	mc.mu.Unlock()
-	return p, nil
 }

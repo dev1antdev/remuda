@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/health"
@@ -748,7 +747,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			httpErr(w, 400, fmt.Errorf("pane, or dir and session, required"))
 			return
 		}
-		p, err := mc.ResolveSession(cwd, "id", want)
+		p, err := mc.Transcripts.ResolveSession(cwd, "id", want)
 		if err != nil {
 			httpErr(w, 404, fmt.Errorf("session %s: %w", want, err))
 			return
@@ -764,21 +763,21 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		cwd = pane.Dir()
 
 		if want != "" { // only a session of this folder: another folder's is the viewer's business
-			if mc.Local {
+			if mc.Local() {
 				sessions, _ = transcript.Sessions(cwd)
 				for _, c := range sessions {
 					if c.ID == want {
 						path = c.Path
 					}
 				}
-			} else if p, err := mc.ResolveSession(cwd, "id", want); err == nil && strings.Contains(p, "/"+transcript.EncodePath(cwd)+"/") {
+			} else if p, err := mc.Transcripts.ResolveSession(cwd, "id", want); err == nil && strings.Contains(p, "/"+transcript.EncodePath(cwd)+"/") {
 				path = p
 			}
 		}
 		if path == "" && pane.AgentSession != nil && pane.AgentSession.Agent == "claude" {
-			path, _ = mc.ResolveSession(cwd, pane.AgentSession.Kind, pane.AgentSession.Value)
+			path, _ = mc.Transcripts.ResolveSession(cwd, pane.AgentSession.Kind, pane.AgentSession.Value)
 		}
-		if path == "" && mc.Local {
+		if path == "" && mc.Local() {
 			if sessions == nil {
 				sessions, _ = transcript.Sessions(cwd)
 			}
@@ -794,9 +793,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// a compacted conversation went on in a newer file, unless this very file was asked for
 	if want == "" {
-		path = mc.FollowContinuation(path)
+		path = mc.Transcripts.Live(path)
 	}
-	version, err := mc.TranscriptVersion(path)
+	version, err := mc.Transcripts.Version(path)
 	if err != nil {
 		httpErr(w, http.StatusBadGateway, err)
 		return
@@ -807,12 +806,12 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	turns, err := mc.Transcript(path, version)
+	turns, err := mc.Transcripts.Turns(path, version)
 	if err != nil {
 		httpErr(w, http.StatusBadGateway, err)
 		return
 	}
-	if sessions == nil && mc.Local && paneID != "" {
+	if sessions == nil && mc.Local() && paneID != "" {
 		sessions, _ = transcript.Sessions(cwd)
 	}
 	if sessions == nil {
@@ -889,7 +888,7 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 		h.Set("Content-Security-Policy", "sandbox; default-src 'none'; img-src data:; media-src 'self'; style-src 'unsafe-inline'")
 	}
 	max := info.MaxBytes()
-	if mc.Local {
+	if mc.Local() {
 		f, err := mc.Open(info.Path)
 		if err != nil {
 			httpErr(w, 500, err)

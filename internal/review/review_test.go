@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 func TestStaleBadgeDoesNotOverwriteAMovedBaseline(t *testing.T) {
@@ -63,7 +63,7 @@ func TestSeenCoversEveryKindOfChange(t *testing.T) {
 	git("mv", "r.txt", "renamed.txt")
 	write("new.txt", "n")
 
-	machine := &machines.Machine{Cfg: machines.Config{ID: "local"}, Local: true}
+	machine := shell.Local{Name: "local"}
 	store := New(t.TempDir())
 	summary := store.Summary(machine, dir)
 	if summary.Error != "" || len(summary.Files) != 6 || summary.Fresh != 6 {
@@ -95,7 +95,7 @@ func TestAMergeBringsNoFilesOfItsOwn(t *testing.T) {
 	write("a.txt", "a\n")
 	git("add", "-A")
 	git("commit", "-qm", "init")
-	machine := &machines.Machine{Cfg: machines.Config{ID: "local"}, Local: true}
+	machine := shell.Local{Name: "local"}
 	store := New(t.TempDir())
 	if _, err := store.MarkSeen(machine, dir, VerdictApproved); err != nil {
 		t.Fatal(err)

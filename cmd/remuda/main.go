@@ -131,18 +131,18 @@ func main() {
 		if err != nil {
 			return nil, "", false
 		}
-		path, err := mc.ResolveSession(p.Dir(), p.AgentSession.Kind, p.AgentSession.Value)
+		path, err := mc.Transcripts.ResolveSession(p.Dir(), p.AgentSession.Kind, p.AgentSession.Value)
 		if err != nil {
 			return nil, "", false
 		}
-		return mc, mc.FollowContinuation(path), true
+		return mc, mc.Transcripts.Live(path), true
 	}
 	lastWrite := func(machineID string, p *herdr.PaneInfo) (time.Time, bool) {
 		mc, path, ok := sessionFile(machineID, p)
 		if !ok {
 			return time.Time{}, false
 		}
-		v, err := mc.TranscriptVersion(path)
+		v, err := mc.Transcripts.Version(path)
 		if err != nil {
 			return time.Time{}, false
 		}
@@ -170,19 +170,11 @@ func main() {
 				if p.Agent == "" || p.AgentSession == nil {
 					continue
 				}
-				orig, err := mc.ResolveSession(p.Dir(), p.AgentSession.Kind, p.AgentSession.Value)
+				orig, err := mc.Transcripts.ResolveSession(p.Dir(), p.AgentSession.Kind, p.AgentSession.Value)
 				if err != nil {
 					continue
 				}
-				chain := mc.ContinuationChain(orig)
-				for n := 0; n < 8; n++ {
-					pred := mc.Predecessor(chain[0])
-					if pred == "" {
-						break
-					}
-					chain = append([]string{pred}, chain...)
-				}
-				meter.Observe(mc, p.PaneID, chain)
+				meter.Observe(mc.ID(), mc.Transcripts, p.PaneID, mc.Transcripts.Lineage(orig))
 			}
 		}()
 	}
@@ -213,11 +205,11 @@ func main() {
 		if !ok {
 			return transcript.Turn{}, false
 		}
-		v, err := mc.TranscriptVersion(path)
+		v, err := mc.Transcripts.Version(path)
 		if err != nil {
 			return transcript.Turn{}, false
 		}
-		turns, err := mc.Transcript(path, v)
+		turns, err := mc.Transcripts.Turns(path, v)
 		if err != nil || len(turns) == 0 {
 			return transcript.Turn{}, false
 		}
