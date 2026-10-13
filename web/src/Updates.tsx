@@ -1,8 +1,6 @@
-// Updates on a machine, from the page: what can be updated (herdr, the
-// agents, remuda itself on a remote), each shown as the command it
-// would run; a chosen one runs as a job whose output streams in. The
-// server runs the command shown and nothing else: Run sends it back and
-// is refused when the plan has changed since.
+// Updates on a machine, from the page: what can be updated (herdr, the agents,
+// remuda itself), each shown as the command it would run; a chosen one runs as
+// a job whose output streams in. Run sends the command shown back: the server runs that or refuses.
 
 import { useEffect, useRef, useState } from "react";
 import { fetchJob, listJobs, listUpdates, startUpdate, type Job, type Machine, type Update } from "./api";
@@ -10,8 +8,7 @@ import Icon from "./icons";
 import { errMsg } from "./prefs";
 import { Dialog, Notice, useAsync } from "./ui";
 
-// the job last started per machine: closing the dialog does not stop a
-// job, and opening it again shows the one still running
+// lastJob is the job last started per machine, so the dialog opened again shows the one still running
 const lastJob = new Map<string, string>();
 
 export default function UpdatesDialog({ machine, what, onClose, onDone }: {
@@ -21,13 +18,12 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
   onDone?: () => void;
 }) {
   const { data, error, loading } = useAsync(() => listUpdates(machine.id), [machine.id]);
-  // what ran here lately — a chat restarted after it settled shows up here
   const [listTick, setListTick] = useState(0);
   const recent = useAsync(() => listJobs(machine.id), [machine.id, listTick]);
   const [picked, setPicked] = useState<Update | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [err, setErr] = useState("");
-  const [missing, setMissing] = useState(""); // `what` asked for, not offered
+  const [missing, setMissing] = useState("");
   // the one asked for is picked once, on arrival; Back then shows the list
   const autoPicked = useRef(false);
   useEffect(() => {
@@ -44,13 +40,11 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
             : `Nothing to update called “${what}” there any more.`,
       );
   }, [what, data]);
-  // a job still running from last time
   useEffect(() => {
     const id = lastJob.get(machine.id);
     if (!id) return;
     fetchJob(id).then((j) => { if (!j.done) setJob(j); }, () => lastJob.delete(machine.id));
   }, [machine.id]);
-  // the running job, polled while it runs; an error ends the polling
   useEffect(() => {
     if (!job || job.done) return;
     const id = job.id;
@@ -94,7 +88,6 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
       setJob(j);
     }, (e) => setErr(errMsg(e)));
   };
-  // the list view follows what runs: a chat restarted after it settled shows up
   const listShown = !job && !picked;
   useEffect(() => {
     if (!listShown) return;

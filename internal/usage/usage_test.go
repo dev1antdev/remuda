@@ -98,7 +98,6 @@ func TestUsageOfAndAccumulatorDedupes(t *testing.T) {
 	if a.Unknown != 1 || a.Turns != 3 {
 		t.Fatalf("unknown %+v", a.Totals)
 	}
-	// Sum counts the pending response without committing it
 	a.Add(transcript.UsageRecord{MessageID: "y", Model: "claude-fable-5-1", Output: 100, At: r.At.Add(time.Hour)})
 	sum, last := a.Sum()
 	if sum.Turns != 4 || sum.Output != 155 || last.MessageID != "y" || a.Turns != 3 || a.ByModel["claude-fable-5-1"].Turns != 2 {

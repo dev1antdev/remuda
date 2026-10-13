@@ -79,12 +79,12 @@ func TestTickFiresOncePerMatchingMinute(t *testing.T) {
 	st.Tick()
 	st.Wait()
 	now = now.Add(20 * time.Second)
-	st.Tick() // the same minute: not again
+	st.Tick()
 	if n := count(); n != 1 {
 		t.Fatalf("sent %d", n)
 	}
 	now = now.Add(time.Minute)
-	st.Tick() // 09:01: no match
+	st.Tick()
 	if n := count(); n != 1 {
 		t.Fatalf("sent %d after the minute passed", n)
 	}

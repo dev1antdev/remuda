@@ -10,8 +10,7 @@ func TestYesIsOnlyYes(t *testing.T) {
 	}
 }
 
-// The address goes into AppleScript as one string literal: whatever it
-// holds, nothing of it becomes script.
+// TestOpenScriptKeepsTheAddressAString checks that nothing the address holds becomes script.
 func TestOpenScriptKeepsTheAddressAString(t *testing.T) {
 	for page, want := range map[string]string{
 		"http://127.0.0.1:7317/?token=abc":   `open location "http://127.0.0.1:7317/?token=abc"` + "\n",

@@ -1,8 +1,6 @@
-// The Code mode: a machine's code-server (VS Code in the browser) framed
-// under remuda's own origin and token. Pick the machine and the folder —
-// the workspaces herdr knows are offered — and the editor fills the screen.
-// Once opened it stays mounted behind the other modes, so switching back
-// does not reload the editor.
+// The Code mode: a machine's code-server (VS Code in the browser) framed under
+// remuda's own origin and token; pick the machine and a folder herdr knows.
+// Once opened it stays mounted behind the other modes, so the editor never reloads.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { codeStatus, type CodeStatus, type Machine } from "./api";
@@ -14,17 +12,16 @@ import { openUrl } from "./host";
 
 export default function Code({ machines, currentMachine, currentFolder, visible }: {
   machines: Machine[];
-  currentMachine: string | null; // the pane in view, as a default
+  currentMachine: string | null;
   currentFolder: string | null;
   visible: boolean;
 }) {
   const live = connected(machines);
   const [machineId, setMachineId] = usePref("code.machine", "");
   const machine = live.find((m) => m.id === (machineId || currentMachine)) ?? live[0] ?? null;
-  const [folders, setFolders] = usePref<Record<string, string>>("code.folders", {}); // last folder per machine
+  const [folders, setFolders] = usePref<Record<string, string>>("code.folders", {});
   const folderIcon = <Icon name="folder" size={14} />;
 
-  // the folders on offer: every workspace's checkout (or its first pane's cwd)
   const options = useMemo(() => {
     if (!machine) return [];
     const seen = new Map<string, string>();
@@ -39,8 +36,6 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
   const folder = machine ? (folders[machine.id] || (currentMachine === machine.id && currentFolder) || options[0]?.value || "") : "";
   const [status, setStatus] = useState<CodeStatus | null>(null);
   const [checking, setChecking] = useState(false);
-  // a probe answers for the machine it was sent to: an answer that comes
-  // back after the pick moved on (or the mode unmounted) is dropped
   const probeSeq = useRef(0);
   const probe = (force = false) => {
     if (!machine) return;
@@ -62,7 +57,6 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [machine?.id]);
-  // while it is down, look again now and then (an install in progress)
   useEffect(() => {
     if (!visible || status?.available !== false) return;
     const id = setInterval(() => probe(true), 20_000);
@@ -71,7 +65,6 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
   }, [visible, status?.available, machine?.id]);
 
   const src = machine && folder ? `/code/${encodeURIComponent(machine.id)}/?folder=${encodeURIComponent(folder)}` : machine ? `/code/${encodeURIComponent(machine.id)}/` : "";
-  // the frame is keyed by machine + folder: a new pick is a fresh editor
   const frameKey = `${machine?.id ?? ""}|${folder}`;
 
   return (

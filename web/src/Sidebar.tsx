@@ -1,8 +1,6 @@
-// The machines sidebar, radar-style: one row per agent — a mark that says
-// what it is doing, its vendor's logo, its title in the state's colour —
-// under workspace headers, worktrees as a tree, the busiest first. A
-// finished agent keeps its tick until the pane is looked at; one that asks
-// keeps its question until it works again; a parked one cools with time.
+// The machines sidebar, radar-style: one row per agent — a mark for what it
+// is doing, its vendor's logo, its title in the state's colour — under
+// workspace headers, worktrees as a tree, the busiest first.
 
 import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import { refreshHealth, type Health, type Latest, type Machine, type Session } from "./api";
@@ -34,8 +32,8 @@ export type Current = { machineId: string; sessionId: string; paneId: string } |
 
 export default function Sidebar({ machines, latest, serverVersion, current, prefs, collapsed, onToggle, onSelect, onMenu, onNewWorkspace, onRemoveMachine, onRenameMachine, onAddMachine, onPrefs, onSchedules, onUsage }: {
   machines: Machine[];
-  latest?: Latest; // the newest Claude Code and herdr out there
-  serverVersion?: string; // this remuda, to compare with the ones deployed remotely
+  latest?: Latest;
+  serverVersion?: string;
   current: Current;
   prefs: RadarPrefs;
   collapsed: Record<string, boolean>;
@@ -50,7 +48,6 @@ export default function Sidebar({ machines, latest, serverVersion, current, pref
   onSchedules: () => void;
   onUsage: () => void;
 }) {
-  // one clock for every spinner and pulse; it only runs while something moves
   const moving = machines.some((m) => m.sessions.some((s) => s.tabs.some((t) => t.panes.some((p) => p.radar?.state === "working" || p.radar?.state === "blocked"))));
   const [step, setStep] = useState(0);
   useEffect(() => {
@@ -58,7 +55,6 @@ export default function Sidebar({ machines, latest, serverVersion, current, pref
     const id = setInterval(() => setStep((s) => (s + 1) % 1_000_000), SPIN_MS);
     return () => clearInterval(id);
   }, [moving]);
-  // idle rows cool with the clock, not with events: re-read them now and then
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
@@ -66,14 +62,10 @@ export default function Sidebar({ machines, latest, serverVersion, current, pref
   }, []);
   useEffect(() => setNow(Date.now()), [machines]);
 
-  // workspaces folded shut, like the machines above them
   const [wsFolded, setWsFolded] = usePref<Record<string, boolean>>("wsFolded", {});
   const onFold = (key: string) => setWsFolded((f) => ({ ...f, [key]: !f[key] }));
 
-  // the settings popover is fixed at its button: inside the sidebar it would
-  // be clipped by the sidebar's own scrolling. A pointer outside closes it —
-  // not one on its own button (that toggles) or inside its dropdowns (a
-  // portal) — and so does a dialog opening over the page.
+  // the popover is fixed at its button (the sidebar's scroll would clip it); a dialog opening over the page sets #root inert, which closes it too
   const [settings, setSettings] = useState<{ x: number; y: number } | null>(null);
   const closeSettings = useCallback(() => setSettings(null), []);
   useDismiss(!!settings, closeSettings, [".radar-settings", ".radar-settings-btn", ".sel-pop"]);
@@ -197,8 +189,7 @@ type RowProps = {
 
 const foldKey = (m: Machine, s: Session) => `${m.id}|${s.id}`;
 
-// a row is a button made of a div: Enter or Space on the row itself picks
-// it; the same keys on a button inside it are that button's
+// rowKey makes a div row a button: Enter or Space on the row itself picks it, on a button inside it they are that button's
 function rowKey(e: KeyboardEvent<HTMLDivElement>, pick: () => void) {
   if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
   e.preventDefault();
@@ -263,8 +254,7 @@ function Flat({ machine: m, ...rest }: RowProps) {
   );
 }
 
-// A workspace's line: its name, dim, with herdr's own status for one that
-// runs no agent (a shell is still a place to go), and the ⋯ menu.
+// WorkspaceHead is a workspace's line: its name, herdr's own status when it runs no agent, and the ⋯ menu
 function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable, current, step, onSelect, onMenu, folded, onFold }: RowProps & {
   session: Session;
   nested: boolean;
@@ -442,9 +432,7 @@ function RadarSettings({ at, prefs, onPrefs }: { at: { x: number; y: number }; p
   );
 }
 
-// a number field that lets you clear it and retype: the text is local, a
-// whole positive number is saved as it is typed, anything else is dropped
-// on the way out
+// MinutesInput keeps its text local so the field can be cleared and retyped; a whole positive number saves as typed
 function MinutesInput({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   const [text, setText] = useState(String(value));
   useEffect(() => setText(String(value)), [value]);
@@ -490,12 +478,8 @@ function stateWords(d: Display, last: number | undefined, now: number): string {
   }
 }
 
-// the colour of a context fill: calm below 70%, amber, then red near the edge
-
 // ---- a machine's vitals ----
-// Claude Code, herdr and remuda versions against the newest known, disk
-// and load. Quiet when all is well; an amber chip when something wants a
-// look — an update, a full disk — and a popover with the details either way.
+// Claude Code, herdr and remuda versions against the newest known, disk and load: an amber chip when something wants a look
 
 type Concern = { key: string; text: string; bad?: boolean; update?: string };
 
@@ -509,7 +493,6 @@ function concerns(h: Health | undefined, latest: Latest | undefined, serverVersi
   if (h.herdr && h.herdr_server && h.herdr_server !== h.herdr) out.push({ key: "herdr-server", text: `herdr's server still runs ${h.herdr_server}; ${h.herdr} is installed`, update: "restart-herdr" });
   if (remote && serverVersion && h.remuda && h.remuda !== serverVersion) out.push({ key: "ui", text: `remuda there is ${h.remuda}; this one is ${serverVersion}`, update: "remuda" });
   if (remote && serverVersion && !h.remuda) out.push({ key: "ui", text: "no remuda deployed there — search and usage fall back to slower paths", update: "remuda" });
-  // a newer release of remuda on GitHub than the one this machine runs
   const have = remote ? h.remuda : serverVersion;
   if (have && latest?.remuda && newer(have, latest.remuda)) out.push({ key: "release", text: `remuda ${latest.remuda} is out (${have} here)`, update: "remuda-release" });
   if (h.disk_used_pct >= 90 || (h.disk_free_gb > 0 && h.disk_free_gb < 10)) out.push({ key: "disk", text: `Disk ${h.disk_used_pct}% full, ${h.disk_free_gb.toFixed(0)} GB free`, bad: h.disk_used_pct >= 95 });
@@ -517,8 +500,7 @@ function concerns(h: Health | undefined, latest: Latest | undefined, serverVersi
   return out;
 }
 
-// b is a newer x.y.z than a (whatever either says after the numbers: a
-// build past a tag, "v0.4.0-24-g5dac31e", is 0.4.0)
+// newer: b is a newer x.y.z than a, whatever follows the numbers (a build past a tag, "v0.4.0-24-g5dac31e", is 0.4.0)
 export function newer(a: string, b: string): boolean {
   const pa = a.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
   const pb = b.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
@@ -531,7 +513,7 @@ function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine;
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [fresh, setFresh] = useState<{ health: Health | null; latest: Latest } | null>(null);
-  const [updateWhat, setUpdateWhat] = useState<string | null>(null); // the updates dialog, on one thing or all
+  const [updateWhat, setUpdateWhat] = useState<string | null>(null);
   const close = useCallback(() => setOpen(null), []);
   useDismiss(!!open, close, [".health-pop", `[data-health-btn="${CSS.escape(m.id)}"]`]);
   // a manual read stands until the collector's next one

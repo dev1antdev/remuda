@@ -1,7 +1,6 @@
-// Package review answers "what changed here since I last looked": a
-// folder's uncommitted work against HEAD, the commits since the viewer's
-// baseline, and the verdict the agent was told. Nothing is written into
-// the repository.
+// Package review answers "what changed here since I last looked": a folder's
+// uncommitted work against HEAD, the commits since the viewer's baseline, and
+// the verdict the agent was told. Nothing is written into the repository.
 package review
 
 import (
@@ -115,12 +114,8 @@ func (store *Store) Badge(machineID, dir string) (Badge, bool) {
 	return badge, ok
 }
 
-// summaryScript gathers everything Summary needs in one shell. Sections are
-// separated by a line of \x1e, fields by \x1f: repo/branch/HEAD, the commits
-// since the baseline along the first parent (a merge is one line), the
-// numstat against HEAD, the untracked files, every uncommitted file's blob,
-// and per commit the blobs it left (diff-tree, which prints nothing for a
-// merge), from which Summary tells a commit of reviewed work.
+// summaryScript gathers everything Summary needs in one shell, sections separated by a line of \x1e and fields by \x1f:
+// repo/branch/HEAD, the first-parent commits since the baseline, the numstat against HEAD, the untracked files, every uncommitted file's blob, and per commit the blobs it left (none for a merge).
 func summaryScript(dir, baselineHead string) string {
 	return `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
@@ -132,9 +127,8 @@ func summaryScript(dir, baselineHead string) string {
 		`if [ "$base" != HEAD ]; then for c in $(git rev-list --first-parent "$base"..HEAD 2>/dev/null); do printf '%s\n' "$c"; git -c core.quotepath=off diff-tree --no-commit-id -r --relative --no-renames "$c" 2>/dev/null | while IFS= read -r l; do printf '\037%s\n' "$l"; done; done; fi`
 }
 
-// blobsScript prints "<path>\x1f<blob hash>" per uncommitted file, one per
-// line, "gone" for a deleted one; paths are relative to the folder and
-// renames are a deletion plus an addition.
+// blobsScript prints "<path>\x1f<blob hash>" per uncommitted file, one per line, "gone" for a deleted one.
+// Paths are relative to the folder; a rename is a deletion plus an addition.
 func blobsScript() string {
 	return `{ git -c core.quotepath=off diff --no-renames --relative --name-only HEAD 2>/dev/null; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; } | ` +
 		`while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\037%s\n' "$f" "$(git hash-object -- "$f" 2>/dev/null)"; else printf '%s\037gone\n' "$f"; fi; done`

@@ -14,13 +14,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
-// Scan is the scanner itself: every session file under projects (one
-// project directory when dir names a folder), newest first, each line first sieved with the four spellings (a byte search,
-// fast) and then parsed by transcript.MatchLine. Matching records are
-// written as grep -r would print them — "./<rel path>:<raw line>" — so one
-// parser reads a scan and a grep alike. It stops after limit hits, so the
-// newest ones are the ones kept. `remuda search` runs it on a remote
-// machine; locally it runs in-process.
+// Scan writes the records under projects that match q, newest file first and up to limit, as grep -r prints them: "./<rel path>:<raw line>".
+// A line is sieved by the four spellings (a byte search) before transcript.MatchLine parses it.
 func Scan(projects, q, dir string, since time.Time, limit int, w io.Writer) error {
 	type file struct {
 		rel string
@@ -111,9 +106,8 @@ func anyOf(line []byte, pats [][]byte) bool {
 	return false
 }
 
-// spellings are the forms a case-folded match can take in the raw JSON:
-// as typed, lower, UPPER and Capitalized — grep -i folds ASCII only, and
-// a byte sieve folds nothing, so the forms are spelled out.
+// spellings are the forms a case-folded match can take in the raw JSON: as typed, lower, UPPER and Capitalized.
+// grep -i folds ASCII only and a byte sieve folds nothing, so the forms are spelled out.
 func spellings(q string) []string {
 	out := make([]string, 0, 4)
 	for _, v := range []string{q, strings.ToLower(q), strings.ToUpper(q), capitalized(q)} {

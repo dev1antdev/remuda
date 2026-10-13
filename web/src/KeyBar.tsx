@@ -4,9 +4,8 @@ import type { Modifier, TermApi } from "./Terminal";
 
 type Key = { id: string; label: ReactNode; title?: string; wide?: boolean } & ({ seq: string } | { arrow: "A" | "B" | "C" | "D" } | { mod: Exclude<Modifier, null> });
 
-// Row 1: what a phone keyboard lacks and an agent TUI needs constantly.
-// Row 2: the rest of a keyboard. Sequences are what a terminal would send;
-// arrows follow DECCKM, so they match whatever the TUI asked for.
+// ROW1 is what a phone keyboard lacks and an agent TUI needs constantly, ROW2 the rest of a
+// keyboard; the sequences are what a terminal sends, arrows following DECCKM.
 const ROW1: Key[] = [
   { id: "Esc", label: "Esc", seq: "\x1b" },
   { id: "Tab", label: "Tab", seq: "\t" },
@@ -38,11 +37,8 @@ const ROW2: Key[] = [
   { id: "^E", label: "^E", seq: "\x05" },
 ];
 
-// Key bar for the terminal lens. Every key goes through the live terminal's
-// own input path, exactly like a keystroke — no second send path, no server
-// key grammar; the terminal applies the one-shot modifier itself. Pointer
-// events are prevented so the terminal keeps focus and the soft keyboard
-// stays up.
+// KeyBar is the terminal lens's key bar: every key goes through the live terminal's own input path, like
+// a keystroke; pointer events are prevented so the terminal keeps focus and the soft keyboard stays up.
 export default function KeyBar({
   term,
   modifier,

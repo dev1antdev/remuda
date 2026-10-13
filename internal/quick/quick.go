@@ -1,7 +1,6 @@
-// Package quick keeps the saved prompts: a label and a text, for every
-// folder or one in particular, offered in the chat composer so a phone
-// never has to type "run the tests and sum up" again. One JSON list in
-// the state dir, replaced whole.
+// Package quick keeps the saved prompts offered in the chat composer: a label
+// and a text, for every folder or one in particular, as one JSON list in the
+// state dir replaced whole.
 package quick
 
 import (
@@ -46,13 +45,12 @@ func (st *Store) List() []Prompt {
 	return copyOf(st.all)
 }
 
-// never nil: the client gets [] rather than null
+// copyOf is a copy that is never nil, so the client gets [] rather than null.
 func copyOf(list []Prompt) []Prompt {
 	return append(make([]Prompt, 0, len(list)), list...)
 }
 
-// Replace keeps the whole list as given, checked and trimmed. IDs the
-// client did not send, or sent twice, are made up here.
+// Replace keeps the whole list as given, checked and trimmed; ids the client did not send, or sent twice, are made up here.
 func (st *Store) Replace(list []Prompt) ([]Prompt, error) {
 	out := make([]Prompt, 0, len(list))
 	seen := map[string]bool{}

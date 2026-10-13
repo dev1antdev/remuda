@@ -69,7 +69,6 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 		p, err := s.Tasks.Project(id)
 		s.taskReply(w, p, err)
 	})
-	// the project's own fields, replaced whole
 	api.HandleFunc("PUT /api/tasks/projects/{id}/fields", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := pathID(w, r, "id")
 		if !ok {
@@ -199,7 +198,7 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 	})
 }
 
-// GET /api/tasks?view=today|upcoming|open|project&project=&done=1&q=&page=&tz=
+// handleTaskList is GET /api/tasks?view=today|upcoming|open|project&project=&done=1&q=&page=&tz=.
 func (s *Server) handleTaskList(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	project, _ := strconv.ParseInt(q.Get("project"), 10, 64)
@@ -244,10 +243,8 @@ func pathID(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
 	return id, true
 }
 
-// POST /api/tasks/{id}/start {machine, workspace, branch, base, agent, groom, prompt}
-// — a worktree off the workspace, the agent in it, the task's prompt once
-// the agent is up (in the background: a fresh agent takes seconds, and may
-// stop at a question of its own first). The run is on the task from now on.
+// handleTaskStart is POST /api/tasks/{id}/start {machine, workspace, branch, base, agent, groom, prompt}:
+// a worktree off the workspace, the agent in it, the task's prompt handed over in the background.
 func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {
@@ -260,7 +257,7 @@ func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 		Base      string `json:"base"`
 		Agent     string `json:"agent"`
 		Groom     bool   `json:"groom"`
-		Prompt    string `json:"prompt"` // the text as edited; empty = composed here
+		Prompt    string `json:"prompt"`
 	}
 	if !decode(w, r, &req) {
 		return
@@ -309,7 +306,7 @@ func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 	}
 	prompt := strings.TrimSpace(req.Prompt)
 	if prompt == "" {
-		project, _ := s.Tasks.Project(task.ProjectID) // its title and fields; a missing one leaves them out
+		project, _ := s.Tasks.Project(task.ProjectID)
 		prompt = tasks.Prompt(task, project, req.Groom)
 	} else if req.Groom && !strings.HasPrefix(prompt, "/grill-me") {
 		prompt = "/grill-me " + prompt
@@ -319,12 +316,8 @@ func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 	s.taskReply(w, t, err)
 }
 
-// deliverTaskPrompt waits for the fresh agent and hands it the task. Claude
-// Code asks whether to trust a folder it has not seen — this worktree was
-// made a moment ago from the person's own repository, so that one question
-// is answered yes here (and noted on the task). Any other question of the
-// agent's is pushed to the person once and waited for; after five minutes
-// the run is failed.
+// deliverTaskPrompt waits for the fresh agent and hands it the task; Claude Code's "trust this folder"
+// question for the new worktree is answered yes, any other question is pushed to the person and waited for.
 func (s *Server) deliverTaskPrompt(mc *machines.Machine, client *herdr.Client, run tasks.Run, task tasks.Task, prompt string) {
 	lock := s.paneLock(push.PaneRef{Machine: mc.Cfg.ID, Pane: run.Pane})
 	deadline := time.Now().Add(5 * time.Minute)
@@ -340,7 +333,7 @@ func (s *Server) deliverTaskPrompt(mc *machines.Machine, client *herdr.Client, r
 			_ = s.Tasks.SetRun(run.ID, tasks.RunRunning, "")
 			return
 		case herdr.IsCode(err, "agent_not_ready") || herdr.IsCode(err, "agent_not_found"):
-			last = err // still coming up
+			last = err
 		case herdr.IsCode(err, "agent_blocked"):
 			last = err
 			if !trusted {
@@ -379,8 +372,7 @@ func (s *Server) deliverTaskPrompt(mc *machines.Machine, client *herdr.Client, r
 	s.failTaskRun(run, "The task could not be handed to the agent: "+msg+". The worktree is there; send it by hand.")
 }
 
-// failTaskRun closes a starting run as failed — unless the sweep closed it
-// meanwhile (a pane gone while starting is one comment, not two).
+// failTaskRun closes a starting run as failed, unless the sweep closed it meanwhile.
 func (s *Server) failTaskRun(run tasks.Run, note string) {
 	if cur, err := s.Tasks.Run(run.ID); err != nil || cur.State != tasks.RunStarting {
 		return
@@ -389,12 +381,8 @@ func (s *Server) failTaskRun(run tasks.Run, note string) {
 	_, _ = s.Tasks.AddComment(run.TaskID, "remuda", note)
 }
 
-// isTrustPrompt recognises Claude Code's "do you trust this folder" screen
-// for the given folder — nothing else gets an answer on the person's
-// behalf. The dialog is drawn in a box and wrapped at the pane's width, so
-// the path may be split over lines between border runes: whitespace and
-// box drawing are dropped before matching, and the path may be shown with
-// the home folder as "~".
+// isTrustPrompt recognises Claude Code's "do you trust this folder" screen for the given folder, nothing else.
+// The dialog is boxed and wrapped at the pane's width, so whitespace and box runes are dropped; the path may start with ~.
 func isTrustPrompt(screen, dir, home string) bool {
 	flat := squash(screen)
 	if !strings.Contains(flat, "trustthisfolder") || !strings.Contains(flat, "Accessingworkspace") {

@@ -1,16 +1,6 @@
-// Package health reads each machine's vital signs — which Claude Code,
-// herdr and remuda it runs, how much disk is left, how loaded it is —
-// and what the newest Claude Code and herdr are, so the sidebar can say
-// when a machine wants an update or is running out of room.
-//
-// One POSIX script per machine, a few minutes apart, through the same
-// shell the rest of remuda uses (local exec or the SSH master). The
-// latest versions come from the npm registry (Claude Code, Codex, Gemini
-// CLI) and GitHub's releases API (herdr, and remuda itself), once every
-// few hours, and only when version checks are on: those five requests
-// are the only thing remuda ever sends anywhere by itself. Plan and
-// Updates turn a report into the update commands the page offers;
-// release.go is the offer of a newer remuda.
+// Package health reads each machine's vitals and the newest agent, herdr
+// and remuda versions (the only requests remuda makes by itself), and
+// plans the update commands the page offers.
 package health
 
 import (
@@ -33,18 +23,18 @@ type Report struct {
 	At time.Time `json:"at"`
 	OS string    `json:"os,omitempty"` // "macOS 26.6.2", "Linux 6.8.0"
 
-	Claude      string  `json:"claude,omitempty"`     // installed Claude Code version
+	Claude      string  `json:"claude,omitempty"`
 	ClaudeVia   string  `json:"claude_via,omitempty"` // brew | npm | native | "" — how to update it
 	Codex       string  `json:"codex,omitempty"`
 	CodexVia    string  `json:"codex_via,omitempty"`
 	Gemini      string  `json:"gemini,omitempty"`
 	GeminiVia   string  `json:"gemini_via,omitempty"`
-	HerdrVia    string  `json:"herdr_via,omitempty"`    // brew | installer | "" — how herdr is updated
-	Arch        string  `json:"arch,omitempty"`         // arm64 | amd64
-	Herdr       string  `json:"herdr,omitempty"`        // installed herdr version
-	HerdrServer string  `json:"herdr_server,omitempty"` // the version the running server is on, when one runs
-	Remuda      string  `json:"remuda,omitempty"`       // the remuda binary deployed there (remote machines)
-	Running     bool    `json:"remuda_running"`         // a remuda answers on the machine\'s own port: terminals go through it
+	HerdrVia    string  `json:"herdr_via,omitempty"` // brew | installer | "" — how herdr is updated
+	Arch        string  `json:"arch,omitempty"`      // arm64 | amd64
+	Herdr       string  `json:"herdr,omitempty"`
+	HerdrServer string  `json:"herdr_server,omitempty"`
+	Remuda      string  `json:"remuda,omitempty"`
+	Running     bool    `json:"remuda_running"` // a remuda answers on the machine's own port: terminals go through it
 	DiskFreeGB  float64 `json:"disk_free_gb"`
 	DiskUsedPct int     `json:"disk_used_pct"`
 	Load1       float64 `json:"load1"`
@@ -59,7 +49,7 @@ type Latest struct {
 	Codex  string    `json:"codex,omitempty"`
 	Gemini string    `json:"gemini,omitempty"`
 	Herdr  string    `json:"herdr,omitempty"`
-	Remuda string    `json:"remuda,omitempty"` // the newest release of remuda itself (release.go)
+	Remuda string    `json:"remuda,omitempty"`
 }
 
 // Collector keeps the reports and the latest versions fresh.
@@ -73,7 +63,7 @@ type Collector struct {
 	mu      sync.Mutex
 	reports map[string]*Report
 	latest  Latest
-	release Release                // the newest release of remuda, with its assets
+	release Release
 	locks   map[string]*sync.Mutex // one read of a machine at a time; a second waits for it
 }
 
@@ -81,9 +71,7 @@ func New(m *machines.Manager, version string, check bool) *Collector {
 	return &Collector{machines: m, Version: version, Check: check, reports: map[string]*Report{}, locks: map[string]*sync.Mutex{}}
 }
 
-// Start keeps every connected machine's report no older than interval —
-// a machine that connects later is read within a minute of it — and the
-// latest versions a few hours fresh.
+// Start keeps every connected machine's report no older than interval and the versions fresh.
 func (c *Collector) Start(interval time.Duration) {
 	go func() {
 		for {
@@ -125,17 +113,14 @@ func (c *Collector) Latest() Latest {
 	return c.latest
 }
 
-// Release is the newest release of remuda as last read, with its assets;
-// empty before the first lookup or with checks off.
+// Release is the newest release of remuda as last read, with its assets.
 func (c *Collector) Release() Release {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.release
 }
 
-// RefreshLatest looks the versions up again when the last look is older
-// than maxAge — for the person who just published a release and presses
-// "read again", rather than waiting out the six hours.
+// RefreshLatest looks the versions up again when the last look is older than maxAge.
 func (c *Collector) RefreshLatest(maxAge time.Duration) {
 	if !c.Check {
 		return
@@ -148,8 +133,7 @@ func (c *Collector) RefreshLatest(maxAge time.Duration) {
 	}
 }
 
-// Refresh reads one machine now; a read already running is waited for,
-// so a caller always returns with a fresh report.
+// Refresh reads one machine now; a read already running is waited for.
 func (c *Collector) Refresh(mc *machines.Machine) {
 	c.mu.Lock()
 	l := c.locks[mc.Cfg.ID]
@@ -177,10 +161,8 @@ func (c *Collector) Refresh(mc *machines.Machine) {
 	c.mu.Unlock()
 }
 
-// Script prints the vitals, one "key=value" per line. Every probe is
-// optional and silent when a tool is missing; PATH takes in the places
-// package managers put binaries, since a non-interactive shell over SSH
-// starts without them.
+// Script prints the vitals, one "key=value" per line, every probe silent when its tool is missing.
+// PATH is set first: a non-interactive shell over ssh starts without the package managers' bin dirs.
 func Script() string {
 	return `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH
 LC_ALL=C; export LC_ALL
@@ -203,8 +185,7 @@ var (
 	fieldsRe = regexp.MustCompile(`\s+`)
 )
 
-// Parse reads the script's output: the report, and the remuda running
-// there when the script found one (its health answer and its token).
+// Parse reads the script's output: the report and, when one answered, the peer remuda.
 func Parse(out string) (Report, *machines.Peer) {
 	var r Report
 	var peer *machines.Peer
@@ -288,15 +269,13 @@ func Parse(out string) (Report, *machines.Peer) {
 		}
 	}
 	if peer != nil && (peer.Token == "" || !r.Running) {
-		peer = nil // half a peer is none: no token to speak with, or no answer
+		peer = nil
 	}
 	return r, peer
 }
 
-// installedVia guesses the package manager from where the binary really
-// lives (the symlink read), so the hint names the right update command:
-// an npm global under Homebrew's node is a symlink in /opt/homebrew/bin
-// into node_modules — npm, not brew.
+// installedVia guesses the package manager from where the binary really lives (the symlink read).
+// An npm global under Homebrew's node is a symlink in /opt/homebrew/bin into node_modules: npm, not brew.
 func installedVia(path string) string {
 	switch {
 	case strings.Contains(path, "node_modules") || strings.Contains(path, "/.npm") || strings.Contains(path, "/.nvm/") || strings.Contains(path, "/.volta/") || strings.Contains(path, "/.bun/"):
@@ -318,8 +297,7 @@ func (c *Collector) refreshLatest() {
 	}
 }
 
-// fetchLatest asks npm and GitHub now; a lookup that fails keeps the last
-// known value.
+// fetchLatest asks npm and GitHub now; a lookup that fails keeps the last known value.
 func (c *Collector) fetchLatest() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -352,7 +330,6 @@ func (c *Collector) fetchLatest() {
 		log.Printf("health: remuda latest: %v", err)
 	}
 	c.mu.Lock()
-	// a lookup that failed keeps the last known value
 	if l.Claude == "" {
 		l.Claude = c.latest.Claude
 	}
@@ -430,8 +407,7 @@ func parts(v string) []int {
 	return out
 }
 
-// Update is what the UI may run on a machine: the command, as the person
-// sees it before saying yes, and a title.
+// Update is a command the UI may run on a machine, shown to the person before they say yes.
 type Update struct {
 	What    string `json:"what"`
 	Title   string `json:"title"`
@@ -439,23 +415,16 @@ type Update struct {
 	Note    string `json:"note,omitempty"`
 }
 
-// Plan is the update for one thing on a machine with this report, or an
-// error when it is not installed there or remuda has no way to do it.
-// Everything runs as the user, through the package manager that put it
-// there; nothing asks for sudo.
-// brewUpdate goes before every `brew upgrade`: Homebrew's own auto-update
-// runs only once a day (and not at all with HOMEBREW_NO_AUTO_UPDATE), so
-// without it the upgrade can look at stale formulae and say "already
-// installed" while a newer version is out.
+// brewUpdate goes before every `brew upgrade`: Homebrew's own auto-update runs
+// once a day at most, so without it an upgrade can miss a version that is out.
 const brewUpdate = "brew update && "
 
-// serverStep is the line after an install of herdr, a comment for the
-// shell and a promise for the person: the running server ends up on the
-// new version too (server.go in internal/restart does it).
+// serverStep follows an install of herdr: a comment for the shell, and the promise restart/server.go keeps.
 const serverStep = "\n# then the running server onto it: kept when herdr's handoff already did that, else restarted with every chat started again on its session"
 
 const serverNote = "When the running server is still on the old version afterwards (Homebrew, or a handoff that did not happen) it is restarted: herdr restores the workspaces, tabs and panes, and remuda starts every chat again with its session resumed; shells and other pane processes come back as fresh shells."
 
+// Plan is the update for one thing on a machine with this report, run as the user and never with sudo.
 func Plan(what string, r *Report) (Update, error) {
 	path := `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH; `
 	via := func(cmdVia, brew, npm, native string) (string, error) {
@@ -532,8 +501,7 @@ func Plan(what string, r *Report) (Update, error) {
 	return Update{}, fmt.Errorf("nothing to update called %q", what)
 }
 
-// Updates lists what the machine can update right now — herdr, then the
-// agents installed — each noting whether a newer version is out.
+// Updates lists what the machine can update right now, each noting whether a newer version is out.
 func Updates(r *Report, l Latest) []Update {
 	var out []Update
 	type cand struct {

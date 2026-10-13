@@ -7,9 +7,8 @@ import (
 	"testing"
 )
 
-// OpenSSH binds a master at the control path plus a 17-byte suffix, and a
-// unix sockaddr holds 104 bytes: a Mac's state dir with a ten-letter user
-// name went two bytes over, and every remote machine stayed "error".
+// TestSocketPathLeavesOpenSSHItsSuffix keeps OpenSSH's 17-byte suffix within a 104-byte sockaddr:
+// a Mac's state dir with a ten-letter user name went two bytes over, and every remote stayed "error".
 func TestSocketPathLeavesOpenSSHItsSuffix(t *testing.T) {
 	defer func(d string) { SocketDir = d }(SocketDir)
 

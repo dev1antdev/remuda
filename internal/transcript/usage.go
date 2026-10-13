@@ -6,10 +6,8 @@ import (
 	"time"
 )
 
-// UsageRecord is what one assistant record says it cost: the API's usage
-// block, the model, when. One API response is written as several records
-// (a thinking block, a text, a tool call…) that share the message id and
-// repeat the same usage — the reader counts a message id once.
+// UsageRecord is what one assistant record says it cost: the API's usage block, the model, when.
+// One API response is written as several records sharing message.id with the same usage: a reader counts an id once.
 type UsageRecord struct {
 	MessageID                                                       string
 	Model                                                           string
@@ -47,9 +45,8 @@ type usageRecord struct {
 	} `json:"message"`
 }
 
-// UsageOf reads one raw record; false for anything but an assistant
-// record with usage behind a real API call (an API error is written as an
-// assistant record too, with a "<synthetic>" model and zero usage).
+// UsageOf reads one raw record; false for anything but an assistant record with usage behind a real API call.
+// An API error is written as an assistant record too (isApiErrorMessage, a "<synthetic>" model): no call behind it.
 func UsageOf(line []byte) (UsageRecord, bool) {
 	var r usageRecord
 	if json.Unmarshal(line, &r) != nil || r.Type != "assistant" || r.Message.Usage == nil || r.IsAPIError {

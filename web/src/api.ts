@@ -9,11 +9,8 @@ export type Pane = {
   status: Status;
   cols: number;
   rows: number;
-  // an agent's lifecycle as the server reads it: held done, held question,
-  // the last moment it worked (unix ms) — absent for a shell
+  // the agent's lifecycle as the server reads it (last_active in unix ms); absent for a shell
   radar?: { state: "working" | "blocked" | "done" | "idle" | "unknown"; last_active?: number; since?: number; alert?: string };
-  // the model, how full its context is, what the session cost — once the
-  // server has read the transcript
   usage?: PaneUsage;
 };
 
@@ -44,7 +41,7 @@ export type Session = {
   status: Status;
   active_tab_id: string;
   worktree?: { repo_key: string; repo_name: string; linked: boolean; checkout_path: string };
-  dir?: string; // the workspace's folder
+  dir?: string;
   review?: { changed: number; fresh: number }; // uncommitted files; fresh = moved since the reviewer looked
   tabs: Tab[];
 };
@@ -53,7 +50,7 @@ export type Session = {
 export type Health = {
   at: string;
   os?: string;
-  claude?: string; // installed Claude Code
+  claude?: string;
   claude_via?: "brew" | "npm" | "native" | "";
   codex?: string;
   codex_via?: "brew" | "npm" | "native" | "";
@@ -61,9 +58,9 @@ export type Health = {
   gemini_via?: "brew" | "npm" | "native" | "";
   herdr?: string;
   herdr_via?: "brew" | "installer" | "";
-  herdr_server?: string; // what the running server is on, when it differs from the binary
+  herdr_server?: string; // the version the running server is on, when one runs
   arch?: string;
-  remuda?: string; // the binary deployed there
+  remuda?: string;
   remuda_running?: boolean; // and it answers on the machine's own port: terminals there go through it
   disk_free_gb: number;
   disk_used_pct: number;
@@ -132,8 +129,7 @@ export type SessionInfo = { id: string; mod_time: string; title?: string };
 
 export type ChatResponse = { session_id?: string; sessions: SessionInfo[]; turns: Turn[] };
 
-// check turns a failed response into an Error with the server's message; a
-// 401 means the cookie is gone, and the server serves the sign-in page.
+// check turns a failed response into an Error with the server's message; a 401 means the cookie is gone, so the page reloads into sign-in
 export async function check(res: Response): Promise<Response> {
   if (res.status === 401) {
     location.reload();
@@ -222,8 +218,7 @@ export const markReviewed = (machineId: string, dir: string, verdict?: "approved
 
 // ---- search: full text over every transcript ----
 export type SearchHit = { machine: string; project: string; dir: string; session: string; uuid: string; ts: string; role: "user" | "assistant"; snippet: string };
-// encodePath is the name Claude Code gives a folder's project directory —
-// the same rule as transcript.EncodePath on the server
+// encodePath is the name Claude Code gives a folder's project directory, the same rule as transcript.EncodePath on the server
 export const encodePath = (dir: string) => dir.replace(/[^A-Za-z0-9]/g, "-");
 export type SearchResult = { hits: SearchHit[]; errors?: Record<string, string>; more: boolean };
 export const searchTranscripts = (q: string, f: { machine?: string; dir?: string; days?: number }, signal?: AbortSignal): Promise<SearchResult> => {
@@ -313,10 +308,7 @@ export function sendKeys(machine: string, pane: string, keys: string[]): Promise
   return sendJSON("POST", "/api/keys", { machine, pane, keys });
 }
 
-// Created is what the create calls return: the container exists either way;
-// a warning says the agent in it failed to start (so the caller lands on the
-// pane and shows the warning instead of leaving a dialog that would create a
-// second one).
+// Created is what the create calls return: the container exists either way, a warning says the agent in it failed to start
 export type Created = { pane: string; warning?: string };
 
 async function create(url: string, req: unknown): Promise<Created> {
@@ -407,8 +399,7 @@ export async function fsText(
 
 export type Upload = { name: string; path: string; rel: string; size: number; kind: string };
 
-// uploadFiles stores files in the pane's folder (.remuda/uploads) and
-// returns their paths; up to 4 per call, 25 MB each.
+// uploadFiles stores files in the pane's folder (.remuda/uploads) and returns their paths; up to 4 a call, 25 MB each
 export async function uploadFiles(machineId: string, paneId: string, files: File[]): Promise<Upload[]> {
   const form = new FormData();
   for (const f of files) form.append("file", f, f.name);

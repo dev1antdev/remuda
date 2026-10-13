@@ -18,8 +18,7 @@ export const MAX_ATTACHMENTS = 4;
 
 const IMAGE = /^image\/(png|jpeg|gif|webp|svg\+xml)$/;
 
-// filesFrom pulls files out of a drop or paste; a pasted screenshot arrives
-// as an "image.png" item with no name worth keeping.
+// filesFrom pulls files out of a drop or paste; a pasted screenshot arrives as "image.png" and gets a name.
 export function filesFrom(dt: DataTransfer | null): File[] {
   if (!dt) return [];
   const out: File[] = [];
@@ -48,15 +47,13 @@ export function useAttachments(machineId: string, paneId: string) {
   const itemsRef = useRef(items);
   itemsRef.current = items;
 
-  // object URLs are revoked when their item goes away, and all on unmount
   const revoke = (list: Attachment[]) => list.forEach((a) => a.thumb && URL.revokeObjectURL(a.thumb));
   useEffect(() => () => revoke(itemsRef.current), []);
 
   const add = useCallback(
     async (files: File[]): Promise<Upload[]> => {
       if (files.length === 0) return [];
-      // itemsRef, not a setItems updater: updaters run at render time, so
-      // reading state through one here would see a stale count
+      // itemsRef, not a setItems updater: updaters run at render time and would see a stale count
       const batch = files.slice(0, Math.max(0, MAX_ATTACHMENTS - itemsRef.current.length));
       if (batch.length === 0) return [];
       const fresh: Attachment[] = batch.map((file) => ({
@@ -76,8 +73,7 @@ export function useAttachments(machineId: string, paneId: string) {
             return i >= 0 ? { ...a, upload: ups[i] ?? null } : a;
           }),
         );
-        // only the ones still wanted: a chip removed mid-upload must not
-        // come back as a mention in the draft
+        // only the ones still wanted: a chip removed mid-upload must not come back as a mention in the draft
         const kept = new Set(itemsRef.current.map((a) => a.id));
         return ups.filter((_, i) => kept.has(fresh[i]!.id));
       } catch (e) {
@@ -89,8 +85,7 @@ export function useAttachments(machineId: string, paneId: string) {
     [machineId, paneId],
   );
 
-  // remove/clear update the ref at once: an upload finishing a moment later
-  // checks it to decide whether its mention is still wanted
+  // remove and clear update the ref at once: an upload finishing a moment later checks it
   const remove = useCallback((id: string) => {
     revoke(itemsRef.current.filter((a) => a.id === id));
     itemsRef.current = itemsRef.current.filter((a) => a.id !== id);

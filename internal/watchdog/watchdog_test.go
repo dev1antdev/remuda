@@ -92,7 +92,6 @@ func TestLongWaitIsReminded(t *testing.T) {
 	if len(h.pushed) != 1 || h.pushed[0].Kind != "waiting" {
 		t.Fatalf("pushed %+v", h.pushed)
 	}
-	// answered: the episode is gone, the memory with it
 	h.episodes = []radar.Episode{{Machine: "m", Pane: "p1", State: herdr.StatusWorking, Since: h.now}}
 	w.Sweep()
 	if h.notes["p1"] != "" || len(w.fired) != 0 {

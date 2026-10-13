@@ -9,31 +9,27 @@ import (
 	"strings"
 )
 
-// A project's own fields: what its tasks carry besides the title,
-// description, due date, priority and labels every task has. Each field
-// has a kind; a task's value for it is kept as JSON — a string, a number,
-// true, or a list of strings — and only values that mean something are
-// kept: an empty text, an unticked box, nothing chosen is no row at all.
-
+// Field is one of a project's own fields, beyond the title, description, due date, priority and labels every task has.
+// A task's value for it is kept as JSON, and only when it means something: an empty text, an unticked box, nothing chosen is no row at all.
 type Field struct {
 	ID        int64    `json:"id"`
 	ProjectID int64    `json:"project_id"`
 	Title     string   `json:"title"`
-	Kind      string   `json:"kind"`    // text | number | select | multi | date | check | link
-	Options   []string `json:"options"` // what select and multi choose from
+	Kind      string   `json:"kind"`
+	Options   []string `json:"options"`
 	Position  float64  `json:"position"`
-	OnCard    bool     `json:"on_card"`   // shown on the board card and the list row
-	InPrompt  bool     `json:"in_prompt"` // goes to the agent with the task
+	OnCard    bool     `json:"on_card"`
+	InPrompt  bool     `json:"in_prompt"`
 }
 
 const (
 	FieldText   = "text"
 	FieldNumber = "number"
-	FieldSelect = "select" // one of the options
-	FieldMulti  = "multi"  // any of the options
-	FieldDate   = "date"   // RFC 3339, kept in UTC
-	FieldCheck  = "check"  // ticked or not
-	FieldLink   = "link"   // an http(s) URL
+	FieldSelect = "select"
+	FieldMulti  = "multi"
+	FieldDate   = "date"
+	FieldCheck  = "check"
+	FieldLink   = "link"
 )
 
 var fieldKinds = map[string]bool{FieldText: true, FieldNumber: true, FieldSelect: true, FieldMulti: true, FieldDate: true, FieldCheck: true, FieldLink: true}
@@ -53,8 +49,7 @@ func scanField(sc interface{ Scan(...any) error }) (Field, error) {
 	return f, nil
 }
 
-// fieldsOf lists a project's fields in order; project 0 lists every
-// project's.
+// fieldsOf lists a project's fields in order; project 0 lists every project's.
 func (st *Store) fieldsOf(projectID int64) ([]Field, error) {
 	q := `SELECT ` + fieldCols + ` FROM fields`
 	var args []any
@@ -87,11 +82,8 @@ func fieldByID(fs []Field, id int64) *Field {
 	return nil
 }
 
-// SetFields replaces a project's fields with want, in that order: an id of
-// 0 is a new field, a known id keeps its values, a field left out goes
-// with its values. A field whose kind changed loses its values (they
-// would not fit); one whose options shrank loses the values that are no
-// longer among them.
+// SetFields replaces a project's fields with want, in that order: id 0 is a new field, a known id keeps its values, one left out goes with its values.
+// A field whose kind changed loses its values; one whose options shrank loses the values no longer among them.
 func (st *Store) SetFields(projectID int64, want []Field) ([]Field, error) {
 	var n int
 	if err := st.db.QueryRow(`SELECT count(*) FROM projects WHERE id = ?`, projectID).Scan(&n); err != nil {
@@ -185,8 +177,7 @@ func (st *Store) SetFields(projectID int64, want []Field) ([]Field, error) {
 	return st.fieldsOf(projectID)
 }
 
-// pruneOptions drops the values of a select or multi field that its
-// options no longer hold.
+// pruneOptions drops the values of a select or multi field that its options no longer hold.
 func pruneOptions(tx *sql.Tx, f Field) error {
 	rows, err := tx.Query(`SELECT task_id, value FROM task_fields WHERE field_id = ?`, f.ID)
 	if err != nil {
@@ -194,7 +185,7 @@ func pruneOptions(tx *sql.Tx, f Field) error {
 	}
 	type fix struct {
 		task  int64
-		value string // "" to delete
+		value string
 	}
 	var fixes []fix
 	for rows.Next() {
@@ -225,9 +216,7 @@ func pruneOptions(tx *sql.Tx, f Field) error {
 	return nil
 }
 
-// fit is a stored value read again against its field as it is now: the
-// same, cut down to the options the field still has, or nothing when
-// none of it fits.
+// fit is a stored value read again against its field as it is now: the same, cut down to the options left, or nothing.
 func fit(f Field, raw string) (string, bool) {
 	switch f.Kind {
 	case FieldSelect:
@@ -258,9 +247,7 @@ func fit(f Field, raw string) (string, bool) {
 	return stored, true
 }
 
-// normFieldValue checks a value against its field's kind and returns it
-// as stored (JSON), or empty when there is nothing to keep: null, an
-// empty text, nothing chosen, a box not ticked.
+// normFieldValue checks a value against its field's kind and returns it as stored (JSON), or empty when there is nothing to keep.
 func normFieldValue(f Field, raw json.RawMessage) (stored string, empty bool, err error) {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
@@ -357,9 +344,7 @@ func has(list []string, s string) bool {
 	return false
 }
 
-// applyFields writes a task's values from a patch: each key a field id of
-// the task's project, each value checked against the field — null, or
-// nothing worth keeping, removes the value.
+// applyFields writes a task's values from a patch, each key a field id of the task's project; null or nothing worth keeping removes the value.
 func applyFields(tx *sql.Tx, taskID int64, fields []Field, patch map[string]json.RawMessage) error {
 	for key, raw := range patch {
 		id, err := strconv.ParseInt(key, 10, 64)
@@ -386,9 +371,7 @@ func applyFields(tx *sql.Tx, taskID int64, fields []Field, patch map[string]json
 	return nil
 }
 
-// carryFields moves a task's values to another project's fields: a value
-// goes to the field of the same name and kind there, if it fits its
-// options; the rest are dropped.
+// carryFields moves a task's values to another project's fields of the same name and kind, when they fit the options there; the rest are dropped.
 func carryFields(tx *sql.Tx, taskID int64, from, to []Field) error {
 	rows, err := tx.Query(`SELECT field_id, value FROM task_fields WHERE task_id = ?`, taskID)
 	if err != nil {

@@ -1,13 +1,6 @@
-// Package tsnetx puts remuda on the tailnet by itself: with -tailscale
-// the binary joins as its own node (tsnet, userspace networking, no
-// tailscaled needed), gets a MagicDNS name and a real certificate, and
-// serves HTTPS there — a phone opens https://remuda.<tailnet>.ts.net
-// with no `tailscale serve` or SSH tunnel beside it. The loopback
-// listener stays for the desk.
-//
-// The first run needs a login: the status carries the URL to visit (it
-// is logged, and the UI shows it as a toast on the loopback side) unless
-// TS_AUTHKEY is set. State lives under the remuda state dir.
+// Package tsnetx puts remuda on the tailnet by itself: with -tailscale the binary joins
+// as its own tsnet node (userspace, no tailscaled), gets a MagicDNS name and a certificate,
+// and serves HTTPS there. The first run needs a login unless TS_AUTHKEY is set.
 package tsnetx
 
 import (
@@ -33,8 +26,7 @@ type Status struct {
 	Error    string `json:"error,omitempty"`
 }
 
-// quietLogf keeps the lines a person needs — a certificate that could not
-// be fetched, an error — and drops the rest of tsnet's chatter.
+// quietLogf keeps the lines a person needs (a certificate that could not be fetched, an error) and drops the rest of tsnet's chatter.
 func quietLogf(format string, args ...any) {
 	line := fmt.Sprintf(format, args...)
 	l := strings.ToLower(line)
@@ -50,16 +42,14 @@ type Node struct {
 	st  Status
 }
 
-// Start joins the tailnet in the background and serves h over HTTPS on
-// :443 (and redirects :80) once the node is up. It returns at once; the
-// status tells how far the node got.
+// Start joins the tailnet in the background and serves h over HTTPS on :443 (:80 redirects) once the node is up; it returns at once.
 func Start(stateDir, hostname, authKey string, h http.Handler) *Node {
 	n := &Node{
 		srv: &tsnet.Server{
 			Dir:      filepath.Join(stateDir, "tailscale"),
 			Hostname: hostname,
 			AuthKey:  authKey,
-			Logf:     quietLogf, // tsnet is chatty; certificate and error lines still get through
+			Logf:     quietLogf,
 			UserLogf: func(string, ...any) {},
 		},
 		st: Status{State: "starting", Hostname: hostname},
@@ -95,7 +85,6 @@ func (n *Node) run(h http.Handler) {
 		n.set(Status{State: "error", Error: err.Error(), Hostname: n.srv.Hostname})
 		return
 	}
-	// until the node is up: the login URL, when the control plane gives one
 	logged := ""
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -126,8 +115,7 @@ func (n *Node) run(h http.Handler) {
 	n.set(Status{State: "running", URL: url, Hostname: n.srv.Hostname})
 	log.Printf("tailscale: serving %s", url)
 
-	// :80 → https; :443 with the tailnet's certificate (needs HTTPS and
-	// MagicDNS enabled in the tailnet's DNS settings)
+	// :443 needs HTTPS certificates and MagicDNS enabled in the tailnet's DNS settings
 	go func() {
 		ln, err := n.srv.Listen("tcp", ":80")
 		if err != nil {

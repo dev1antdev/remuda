@@ -1,7 +1,6 @@
-// Usage: what the agents cost over a period, on every machine — by day,
-// by project, by model, the sessions that cost the most. API-equivalent
-// prices from Claude Code's own catalog; on a subscription a measure, not
-// a bill.
+// Usage: what the agents cost over a period, on every machine — by day, by
+// project, by model, the sessions that cost the most. API-equivalent prices
+// from Claude Code's own catalog; on a subscription a measure, not a bill.
 
 import { useMemo, useState } from "react";
 import { fetchUsage, type Machine, type UsageTotals } from "./api";
@@ -37,7 +36,6 @@ export default function Usage({ machines, onClose, onOpenSession }: {
   const { data, error, loading } = useAsync(() => fetchUsage(Number(days), machine === "all" ? "" : machine, tz), [days, machine, tz]);
   const several = connected(machines).length > 1;
 
-  // everything summed over the machines that answered
   const sum = useMemo(() => {
     const zero = (): UsageTotals => ({ input: 0, output: 0, cache_read: 0, cache_write: 0, cache_write_1h: 0, cost: 0, turns: 0, unknown: 0 });
     const add = (a: UsageTotals, b: UsageTotals) => {
@@ -82,7 +80,6 @@ export default function Usage({ machines, onClose, onOpenSession }: {
       }
       for (const s of r.sessions) sessions.push({ machine: m.id, project: s.project, session: s.session, dir: s.dir, model: s.model, cost: s.cost, turns: s.turns, last: s.last });
     }
-    // every day of the period, empty ones too
     const n = Number(days);
     const all: { date: string; cost: number; turns: number }[] = [];
     for (let i = n - 1; i >= 0; i--) {

@@ -13,11 +13,10 @@ import (
 	"github.com/dev1antdev/remuda/internal/version"
 )
 
-// Display is a pane's meter for the roster: the model, how full its
-// context is, what the session has cost so far.
+// Display is a pane's meter for the roster: the model, how full its context is, what the session has cost.
 type Display struct {
 	Model   string  `json:"model"`
-	Name    string  `json:"name"`              // the model's display name
+	Name    string  `json:"name"`
 	Context int64   `json:"context"`           // tokens the last response read
 	Window  int     `json:"window"`            // the model's context window
 	Cost    float64 `json:"cost"`              // USD, this file and the ones it continues
@@ -28,9 +27,7 @@ type Display struct {
 	Partial bool    `json:"partial,omitempty"` // only a tail was read: the cost is a floor
 }
 
-// Tracker keeps a running sum per transcript file, reading only what was
-// appended since the last look — locally from the file, remotely as a
-// `tail -c +N` over ssh — and at most every refreshEvery per file.
+// Tracker keeps a running sum per transcript file, reading only what was appended since the last look.
 type Tracker struct {
 	mu          sync.Mutex
 	files       map[string]*fileState // machine|path
@@ -59,9 +56,7 @@ func NewTracker() *Tracker {
 
 func key(machineID, s string) string { return machineID + "|" + s }
 
-// Observe keeps a pane's files current: the chain is oldest first, the
-// last one live; each earlier one — compacted away — is read once and its
-// sum counts toward the pane too.
+// Observe keeps a pane's files current: the chain is oldest first, the last one live, each earlier one read once.
 func (t *Tracker) Observe(mc *machines.Machine, paneID string, chain []string) {
 	if len(chain) == 0 {
 		return
@@ -77,8 +72,7 @@ func (t *Tracker) Observe(mc *machines.Machine, paneID string, chain []string) {
 	for _, p := range chain[:len(chain)-1] {
 		t.refresh(mc, p, true)
 	}
-	// the session's subagents (<session>/subagents/*.jsonl) spend too: what
-	// Claude Code's own counter shows includes them
+	// Claude Code's own counter includes <session>/subagents/*.jsonl
 	t.observeSubagents(mc, live)
 }
 
@@ -131,8 +125,7 @@ func (t *Tracker) refresh(mc *machines.Machine, path string, once bool) {
 	t.read(mc, path, v)
 }
 
-// read brings a file's sum up to version v, reading only what was added
-// since the last look.
+// read brings a file's sum up to version v, reading only what was added since the last look.
 func (t *Tracker) read(mc *machines.Machine, path string, v transcript.Version) {
 	k := key(mc.Cfg.ID, path)
 	t.mu.Lock()
@@ -207,7 +200,6 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 	if st == nil {
 		return Display{}, false
 	}
-	// the sum is read with the pending response counted
 	sum, last := st.acc.Sum()
 	if sum.Turns == 0 {
 		return Display{}, false
@@ -219,7 +211,6 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 	} else {
 		d.Unknown = true
 	}
-	// the files this one continues, and the subagents of the live one
 	more := t.subs[key(machineID, path)]
 	for p, n := t.pred[key(machineID, path)], 0; p != "" && n < 8; p, n = t.pred[key(machineID, p)], n+1 {
 		more = append(more, p)

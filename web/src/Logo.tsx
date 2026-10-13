@@ -1,8 +1,8 @@
 import { MARKS } from "./marks";
 import { BRAND } from "./radar";
 
-// The vendor's mark in the vendor's hue; a brand that signs in black or
-// white is drawn in ink. Agents without a mark get a generic one.
+// Logo draws the vendor's mark in the vendor's hue (a brand that signs in black or white in ink); an
+// agent without a mark gets a generic one.
 export default function Logo({ agent }: { agent: string }) {
   const mark = MARKS[agent];
   const color = BRAND[agent];

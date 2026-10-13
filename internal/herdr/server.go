@@ -13,27 +13,12 @@ import (
 	"github.com/dev1antdev/remuda/internal/sshx"
 )
 
-// herdr keeps panes in a headless server (`herdr server`); the TUI is one
-// client of it, remuda another. When remuda runs and no server
-// answers, it starts one — detached, so it outlives remuda — and the
-// agents are there whether or not a terminal window is.
-//
-// The server is started through the user's login shell with a clean
-// environment: every pane inherits the server's environment, so it must
-// be the one the user's own terminal would have (PATH from the profile,
-// their exports) and never the service's (a TS_AUTHKEY, HERDR_ENV from a
-// pane remuda itself runs in). herdr reads HERDR_SOCKET_PATH for where
-// to listen; it ignores HOME for that.
-
 var (
 	startMu   sync.Mutex
 	lastStart time.Time
 )
 
-// EnsureServer makes sure a herdr server answers at socket: a ping, and
-// when it fails, `bin server` started in the background and waited for.
-// Starts are at least two minutes apart, so a server that cannot come up
-// is not restarted in a loop.
+// EnsureServer pings the herdr server at socket and starts one when none answers, at most every two minutes.
 func EnsureServer(bin, socket string) error {
 	if _, _, err := NewClient(socket).Ping(); err == nil {
 		return nil
@@ -49,9 +34,7 @@ func EnsureServer(bin, socket string) error {
 	return start(bin, socket)
 }
 
-// StartServerNow is EnsureServer without the two-minute spacing: a person
-// asked for the restart (an update brought a new binary), so a server
-// that was started a moment ago is no reason to wait.
+// StartServerNow is EnsureServer without the two-minute spacing: the person asked for the restart.
 func StartServerNow(bin, socket string) error {
 	startMu.Lock()
 	defer startMu.Unlock()
@@ -74,7 +57,7 @@ func start(bin, socket string) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start herdr server: %w", err)
 	}
-	go cmd.Wait() // reaped when it ends; nothing waits for it
+	go cmd.Wait()
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		time.Sleep(500 * time.Millisecond)
@@ -85,9 +68,8 @@ func start(bin, socket string) error {
 	return fmt.Errorf("herdr server started but does not answer at %s yet", socket)
 }
 
-// serverCommand is `bin server` the way the user's terminal would start
-// it: through their login shell, in their home, with only the environment
-// a login gets plus where to listen.
+// serverCommand is `bin server` as the user's terminal would start it: login shell, home, a login's environment.
+// Every pane inherits the server's environment, and herdr listens where HERDR_SOCKET_PATH says, ignoring HOME.
 func serverCommand(bin, socket, home string) *exec.Cmd {
 	var cmd *exec.Cmd
 	if sh := os.Getenv("SHELL"); loginShell(sh) {
@@ -111,8 +93,7 @@ func loginShell(sh string) bool {
 	return err == nil && !st.IsDir() && st.Mode()&0o111 != 0
 }
 
-// cleanEnv is what a fresh login has — the service's own variables stay
-// behind.
+// cleanEnv is what a fresh login has; the service's own variables stay behind.
 func cleanEnv() []string {
 	keep := map[string]bool{"HOME": true, "PATH": true, "USER": true, "LOGNAME": true, "SHELL": true, "TMPDIR": true, "LANG": true, "SSH_AUTH_SOCK": true, "TERM": true}
 	var out []string
@@ -125,10 +106,7 @@ func cleanEnv() []string {
 	return out
 }
 
-// StartServerScript is the same for a remote machine, as a POSIX script run
-// over ssh: unless `herdr status server` says one runs, the server in the
-// background through the login shell, then a short wait for it to answer.
-// Nothing is thrown away: a stale socket file is herdr's to replace.
+// StartServerScript is the same start as a POSIX script over ssh: unless a server runs, start one and wait for it.
 func StartServerScript(bin, socket string) string {
 	q := sshx.Quote(bin)
 	s := sshx.Quote(socket)

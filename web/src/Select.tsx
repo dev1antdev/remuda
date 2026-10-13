@@ -1,8 +1,6 @@
-// A select that can show an icon beside each option — a native <select>
-// cannot. A button shows the chosen option; the list opens in a portal at
-// the button (fixed, kept inside the viewport, flipping upward when the
-// screen runs out), so no scrolling parent clips it. Arrow keys move,
-// Enter picks, Escape closes, Tab closes and moves on.
+// A select that can show an icon beside each option, which a native <select> cannot: a button shows
+// the chosen option and the list opens in a portal at the button, fixed and kept inside the viewport
+// (flipping upward when the screen runs out), so no scrolling parent clips it.
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -102,7 +100,6 @@ export default function Select<T extends string | number>({ value, options, onCh
   };
   const move = (d: number) => setFocus((f) => (enabled.length ? (f + d + enabled.length) % enabled.length : -1));
 
-  // group headers in first-seen order
   const groups: { name: string | undefined; items: Option<T>[] }[] = [];
   for (const o of options) {
     const g = groups.find((x) => x.name === o.group);

@@ -19,9 +19,8 @@ func (t *Totals) add(o Totals) {
 	t.Unknown += o.Unknown
 }
 
-// Accumulator sums records, counting each message id once (the records of
-// one response sit next to each other; the last one wins). It can be fed
-// in pieces: the response still being written is held until the next id.
+// Accumulator sums records, counting each message id once: the records of one response sit together, the last wins.
+// The response still being written is held until the next id, so the file can be fed in pieces.
 type Accumulator struct {
 	Totals
 	ByModel map[string]*Totals `json:"by_model,omitempty"`
@@ -87,8 +86,7 @@ func (a *Accumulator) Flush() {
 	}
 }
 
-// Sum is the totals and the latest response with the pending one counted,
-// without committing anything.
+// Sum is the totals and the latest response with the pending one counted, without committing it.
 func (a *Accumulator) Sum() (Totals, transcript.UsageRecord) {
 	t, last := a.Totals, a.Last
 	if a.hasPend {

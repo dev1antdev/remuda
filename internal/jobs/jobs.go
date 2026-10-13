@@ -1,6 +1,5 @@
-// Package jobs runs the long commands a person watches from the UI — an
-// update of herdr or an agent on a machine — and keeps their output for
-// the page to poll. A job is one shell script on one machine, streamed.
+// Package jobs runs a shell script on a machine in the background, its
+// output kept for the page to poll.
 package jobs
 
 import (
@@ -14,7 +13,7 @@ import (
 )
 
 const (
-	maxOutput = 256 * 1024 // what a job keeps of its output: the tail
+	maxOutput = 256 * 1024
 	keepJobs  = 50
 	timeout   = 20 * time.Minute
 )
@@ -44,7 +43,7 @@ type Runner struct {
 	mu    sync.Mutex
 	jobs  map[string]*job
 	order []string
-	// OnDone, when set, is told of every finished job (the vitals re-read)
+	// OnDone, when set, is told of every finished job.
 	OnDone func(j Job)
 }
 
@@ -55,11 +54,8 @@ func (r *Runner) Start(mc *machines.Machine, title, command string) Job {
 	return r.StartThen(mc, title, command, nil, nil)
 }
 
-// StartThen is Start with Go work around the script, writing to the same
-// log: first before it (a look at the versions), then after it whatever
-// its exit status — an update of every agent that half failed still has
-// the other half to bring the chats onto. The script's failure is the
-// job's verdict.
+// StartThen is Start with Go work around the script in the same log: first
+// before it, then after it whatever its exit status, which stays the verdict.
 func (r *Runner) StartThen(mc *machines.Machine, title, command string, first func(say func(string)), then func(say func(string)) error) Job {
 	return r.launch(mc, title, command, func(j *job) error {
 		say := func(line string) { j.write([]byte(line + "\n")) }
@@ -96,8 +92,7 @@ func (r *Runner) List(machineID string, n int) []Job {
 	return out
 }
 
-// Run is Start for a job written in Go rather than a script: fn streams
-// its own lines and returns the verdict.
+// Run is Start for a job written in Go: fn streams its own lines and returns the verdict.
 func (r *Runner) Run(mc *machines.Machine, title, command string, fn func(say func(string)) error) Job {
 	return r.launch(mc, title, command, func(j *job) error {
 		return fn(func(line string) { j.write([]byte(line + "\n")) })
@@ -110,7 +105,7 @@ func (r *Runner) launch(mc *machines.Machine, title, command string, run func(j 
 	r.jobs[j.view.ID] = j
 	r.order = append(r.order, j.view.ID)
 	for i := 0; len(r.order) > keepJobs && i < len(r.order); {
-		if old := r.jobs[r.order[i]]; old != nil && !old.done() { // a running one stays
+		if old := r.jobs[r.order[i]]; old != nil && !old.done() {
 			i++
 			continue
 		}

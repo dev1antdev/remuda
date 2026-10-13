@@ -10,10 +10,7 @@ import Icon from "./icons";
 import { whenShort } from "./time";
 import { Dialog, Notice, useTimedNotice } from "./ui";
 
-// Chat lens: the transcript comes from Claude Code's own session file (read
-// server-side), sending types into the live pane. Polls with ETag — every
-// 2s while the agent works or waits, every 10s when the pane is idle, and
-// at once when the roster flips its status.
+// Chat is the chat lens: the transcript from Claude Code's own session file, read server-side; sending types into the live pane
 export default function Chat({
   machineId,
   paneId,
@@ -30,17 +27,16 @@ export default function Chat({
   paneId: string; // "" shows a transcript on its own (a search jump), read-only
   status: string;
   onOpenFile: OpenFile;
-  agents: AgentTarget[]; // where a turn can be forwarded
+  agents: AgentTarget[];
   origin: string; // "workspace on machine", named in a forwarded message
-  dir: string; // the pane's folder, for its own quick prompts
-  jump?: { session: string; turn: string; n: number } | null; // a search hit to scroll to
-  usage?: PaneUsage; // the context meter, for the compaction notice
+  dir: string;
+  jump?: { session: string; turn: string; n: number } | null;
+  usage?: PaneUsage;
   active?: boolean; // the lens on screen; a hidden one keeps its state and waits
 }) {
   const readOnly = !paneId;
   const activeRef = useRef(active);
   activeRef.current = active;
-  // forwarding a turn to another agent
   const [forward, setForward] = useState<string | null>(null);
   const onForward = useCallback((text: string) => setForward(`From ${origin}:\n\n${text}`), [origin]);
   const others = agents.some((a) => a.machineId !== machineId || a.paneId !== paneId);
@@ -55,32 +51,27 @@ export default function Chat({
   const busyRef = useRef(busy);
   busyRef.current = busy;
 
-  // a search hit: its session, then its turn once the transcript is there
   const pendingTurn = useRef<string | null>(jump?.turn ?? null);
   const [jumpMiss, setJumpMiss] = useState(false);
   const shownSession = useRef<string | undefined>(undefined);
   shownSession.current = chat?.session_id;
   useEffect(() => {
     if (!jump) return;
-    // no turn named: the transcript, landed at its end
     pendingTurn.current = jump.turn || null;
     stickRef.current = !jump.turn;
     setJumpMiss(false);
-    // the transcript on screen already? then only the scroll below; a
-    // refetch would blank the log first
+    // the session on screen is not refetched: the poll effect blanks the log first
     if (shownSession.current !== jump.session) setSessionId(jump.session);
   }, [jump]);
 
-  // The poll restarts (and the log clears) only when the transcript itself
-  // changes. The pane's status sets the pace through a ref, so a flip never
-  // blanks the log — it only asks for a poll at once.
+  // the status sets the pace through a ref: a flip must not restart the poll, which blanks the log
   const pollNow = useRef<() => void>(() => {});
   useEffect(() => {
     etagRef.current = null;
     setChat(null);
     let stop = false;
     let inflight = false;
-    let again = false; // a poll was asked for while one was running
+    let again = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const poll = async () => {
@@ -120,8 +111,7 @@ export default function Chat({
       if (timer) clearTimeout(timer);
     };
   }, [machineId, paneId, sessionId, dir]);
-  // a status flip, or the lens coming back on screen, asks for a poll now;
-  // the first run is the mount, where the poll above has just gone out
+  // not on mount: the poll above has just gone out
   const busySeen = useRef(false);
   useEffect(() => {
     if (!busySeen.current) {
@@ -131,10 +121,8 @@ export default function Chat({
     if (active) pollNow.current();
   }, [busy, active]);
 
-  // back on screen: a hidden element forgets its scroll, so the place is
-  // put back — the bottom when following, else where the reader was. This
-  // runs before the jump below, so a search hit that opens the lens wins.
-  const savedTop = useRef<number | null>(null); // the reader's place, kept while the lens is hidden
+  // a hidden element forgets its scroll, so the place is put back on screen; this runs before the jump effect below, so a search hit wins
+  const savedTop = useRef<number | null>(null);
   useEffect(() => {
     const log = logRef.current;
     if (!active || !log) return;
@@ -150,29 +138,23 @@ export default function Chat({
     const el = log.querySelector(`[data-ids~="${CSS.escape(id)}"]`);
     pendingTurn.current = null;
     if (!el) {
-      // older than the loaded tail of the transcript
       setJumpMiss(true);
       stickRef.current = true;
       return;
     }
     stickRef.current = false;
     el.scrollIntoView({ block: "start" });
-    // the highlight is a one-shot animation: restarted even when the class
-    // is still there from a previous jump to the same turn
+    // remove, reflow, add: the CSS animation restarts when the class is still there from a previous jump
     el.classList.remove("turn-hit");
     void (el as HTMLElement).offsetWidth;
     el.classList.add("turn-hit");
-    setTimeout(() => el.classList.remove("turn-hit"), 2600); // harmless on a detached node
+    setTimeout(() => el.classList.remove("turn-hit"), 2600);
   }, [chat, jump]);
 
-  // Follow the bottom only while the reader is there and not busy with the
-  // text: a wheel or a finger moving up lets go at once (not after 60px, so
-  // a poll landing mid-gesture cannot yank the view back), a drag or a
-  // selection in the log holds it, and our own scroll never counts as the
-  // reader's.
+  // the log follows the bottom only while the reader is there and not selecting or dragging; an upward wheel or finger lets go at once
   const ownScroll = useRef(false);
   const dragging = useRef(false);
-  const released = useRef(false); // an upward gesture: scrolling near the bottom does not re-stick
+  const released = useRef(false);
   useEffect(() => {
     const log = logRef.current;
     if (!log || !stickRef.current || dragging.current) return;
@@ -188,7 +170,7 @@ export default function Chat({
     if (!log || ownScroll.current) return;
     if (log.clientHeight > 0) savedTop.current = log.scrollTop; // a hidden log reads 0: not a place
     const d = log.scrollHeight - log.scrollTop - log.clientHeight;
-    if (d < 1) released.current = false; // back at the very bottom: following again
+    if (d < 1) released.current = false;
     stickRef.current = !released.current && d < 60;
   };
   useEffect(() => {
@@ -312,13 +294,9 @@ export default function Chat({
   );
 }
 
-// The composer owns the draft, so typing never re-renders the transcript.
-// Attachments (paperclip, a pasted screenshot, a drop) upload into the pane's
-// folder and put an @path mention at the caret; the agent reads the file
-// from there once the message is sent.
+// Composer owns the draft, so typing never re-renders the transcript
 function Composer({ machineId, paneId, working, dir }: { machineId: string; paneId: string; working: boolean; dir: string }) {
-  // the draft is read through a ref by the insertions, so they compose
-  // without side effects inside a state updater
+  // the insertions read the draft through a ref: a state updater must stay free of side effects
   const [draft, setDraftState] = useState("");
   const draftRef = useRef("");
   const setDraft = (next: string | ((d: string) => string)) => {
@@ -328,7 +306,7 @@ function Composer({ machineId, paneId, working, dir }: { machineId: string; pane
   };
   const [quick, setQuick] = useState<{ x: number; y: number } | null>(null);
   const [manage, setManage] = useState(false);
-  const [prompts, setPrompts] = useState<QuickPrompt[] | null>(null); // null: not loaded (yet)
+  const [prompts, setPrompts] = useState<QuickPrompt[] | null>(null);
   const [quickErr, setQuickErr] = useState("");
   useEffect(() => {
     if (!quick) return;
@@ -358,17 +336,14 @@ function Composer({ machineId, paneId, working, dir }: { machineId: string; pane
 
   const mention = (rel: string) => `@${rel}`;
 
-  // the caret where the files were added: the paperclip steals focus, so it
-  // is remembered on every blur
+  // the paperclip steals focus, so the caret is remembered on every blur
   const caret = useRef<number | null>(null);
   const dictation = useDictation((text) => {
-    caret.current = null; // the next insertion goes after the dictated text
+    caret.current = null;
     setDraft((d) => (d ? d.replace(/\s*$/, " ") : "") + text);
   });
 
-  // insertAt puts text at the remembered caret (or the end), padded with
-  // spaces, and moves the caret past it once the draft has rendered — one
-  // update for all mentions so several files keep their order.
+  // insertAt puts text at the remembered caret (or the end), padded with spaces, and moves the caret past it once the draft has rendered
   const moveCaret = useRef<number | null>(null);
   const insertAt = (text: string) => {
     const d = draftRef.current;
@@ -557,12 +532,11 @@ function Composer({ machineId, paneId, working, dir }: { machineId: string; pane
           onPaste={(e) => {
             const files = filesFrom(e.clipboardData);
             if (files.length === 0) return;
-            e.preventDefault(); // a pasted screenshot is a file, not text
+            e.preventDefault();
             void attach(files);
           }}
           onKeyDown={(e) => {
-            // Phone keyboards have no Shift+Enter: there Enter breaks the line
-            // and the Send button sends, like any messaging app.
+            // phone keyboards have no Shift+Enter: there Enter breaks the line and the button sends
             if (isTouch) return;
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
@@ -583,11 +557,9 @@ function Composer({ machineId, paneId, working, dir }: { machineId: string; pane
   );
 }
 
-// Saved prompts: edit the whole list in one place — a label, the text, and
-// whether it is for every folder or this one.
+// QuickPromptsDialog edits the saved prompts as one list: a label, the text, every folder or this one
 function QuickPromptsDialog({ dir, onClose }: { dir: string; onClose: () => void }) {
-  // the list is replaced whole on save, so nothing is saved until the
-  // current one has loaded
+  // the save replaces the list whole, so nothing is saved until the current one has loaded
   const [list, setList] = useState<QuickPrompt[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -655,9 +627,7 @@ function QuickPromptsDialog({ dir, onClose }: { dir: string; onClose: () => void
   );
 }
 
-// Dictation through the browser's own speech recognition (Safari and
-// Chrome ship one; it runs on the device or the platform's service, not
-// through remuda). Final results are handed over as they come.
+// dictation through the browser's own speech recognition: on the device or its platform's service, never through remuda
 type SpeechRecognitionLike = {
   lang: string;
   continuous: boolean;
@@ -707,7 +677,7 @@ function useDictation(onText: (text: string) => void) {
       rec.current = null;
     }
   };
-  // leaving the pane stops the microphone and nothing lands afterwards
+  // unmount: the handlers go before stop(), so nothing lands afterwards
   useEffect(
     () => () => {
       const r = rec.current;
@@ -721,6 +691,7 @@ function useDictation(onText: (text: string) => void) {
   return { supported: !!SPEECH, listening, toggle };
 }
 
+// TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 const TurnView = memo(
   function TurnView({ turn, onOpenFile, onForward }: { turn: Turn; onOpenFile: OpenFile; onForward?: (text: string) => void }) {
     const cls = turn.role === "user" ? "turn turn-user" : "turn turn-assistant";
@@ -741,8 +712,7 @@ const TurnView = memo(
   (a, b) => a.onOpenFile === b.onOpenFile && a.onForward === b.onForward && sameTurn(a.turn, b.turn),
 );
 
-// every poll brings new objects; only the content tells turns apart (a
-// tool's input never changes once written, so it is not compared)
+// sameTurn compares content, as every poll brings new objects; a tool's input never changes once written, so it is skipped
 function sameTurn(a: Turn, b: Turn): boolean {
   if (a.role !== b.role || a.ts !== b.ts || a.parts.length !== b.parts.length || a.ids?.length !== b.ids?.length) return false;
   for (let i = 0; i < a.parts.length; i++) {
@@ -755,8 +725,7 @@ function sameTurn(a: Turn, b: Turn): boolean {
 
 const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 
-// Folded renders its body only once opened: thinking and tool I/O can be
-// kilobytes per turn, and most are never looked at.
+// Folded renders its body only once opened: thinking and tool I/O can be kilobytes a turn
 function Folded({ className, summary, children }: { className: string; summary: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (

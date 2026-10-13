@@ -1,8 +1,4 @@
-/* remuda — one dark, warm-charcoal system.
-   Surfaces are four layers (ground → raised → input → overlay), hairlines are
-   white at low alpha so they sit on any layer, every colour has a soft tint
-   for fills, controls share one height scale, and motion is short and eased.
-   Class names are the UI's vocabulary; the values below are the design. */
+/* remuda — one dark, warm-charcoal design system: class names are the UI's vocabulary, the values below are the design. */
 
 :root {
   /* surfaces */
@@ -63,8 +59,7 @@
   --ctl-sm: 28px;
   --ctl-xs: 24px;
 
-  /* layers: the drawer and the task panel sit under dialogs, menus and
-     select lists over everything */
+  /* layers */
   --z-drawer: 30;
   --z-dialog: 35;
   --z-menu: 40;
@@ -77,7 +72,7 @@
 
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
-  --bg-elev: var(--bg-active); /* a raised chip on a raised surface */
+  --bg-elev: var(--bg-active);
 
   color-scheme: dark;
 }
@@ -118,8 +113,7 @@
   background: transparent;
 }
 
-/* herdr owns the real scrollback; the local buffer's bar would paint over
-   the last column */
+/* the viewport's overlay scrollbar would paint over the last column; herdr owns the real scrollback */
 .xterm .xterm-viewport {
   scrollbar-width: none;
 }
@@ -188,7 +182,6 @@ button {
 
 /* ---- shared controls ---- */
 
-/* a square, quiet button holding an icon */
 .icon-btn {
   display: inline-grid;
   place-items: center;
@@ -244,12 +237,10 @@ button {
 }
 
 a.btn {
-  text-decoration: none; /* a link dressed as a button */
+  text-decoration: none;
 }
 
-/* the button family: quiet by default, .primary filled, .danger red,
-   .ghost bare, .sm and .lg sizes. Every <button> carries one of these;
-   nothing is styled by where it sits. */
+/* the button family: quiet by default, .primary filled, .danger red, .ghost bare, .sm and .lg sizes */
 .btn,
 .sidebar-head-btn {
   display: inline-flex;
@@ -303,7 +294,6 @@ a.btn {
   color: var(--fg);
 }
 
-/* the filled button: one per surface, in the accent */
 .btn.primary,
 .primary,
 .composer-send,
@@ -368,8 +358,7 @@ a.btn {
   filter: none;
 }
 
-/* text fields: one rule for every input, textarea and select; .field
-   marks a bare element that no context selector would catch */
+/* text fields: one rule for every input, textarea and select; .field marks a bare element */
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
 textarea,
 .field,
@@ -432,7 +421,6 @@ textarea.bare:focus-visible {
   border-color: transparent;
 }
 
-/* a small label above a field */
 .modal label,
 .radar-settings label {
   display: flex;
@@ -539,7 +527,6 @@ input[type="checkbox"]:hover:not(:checked) {
   box-shadow: var(--inset-top), var(--shadow-sm);
 }
 
-/* the terminal's own toggles, inside the lens switch */
 .tabs-tools .kb-toggle {
   width: 28px;
   padding: 0;
@@ -630,7 +617,6 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--accent);
 }
 
-/* anchored at a button's left edge */
 .row-menu.width-menu,
 .row-menu.radar-settings,
 .row-menu.split-menu,
@@ -641,7 +627,6 @@ input[type="checkbox"]:hover:not(:checked) {
   transform: none;
 }
 
-/* a pill: status in the top bar */
 .pill {
   display: inline-flex;
   align-items: center;
@@ -669,7 +654,6 @@ input[type="checkbox"]:hover:not(:checked) {
   text-overflow: ellipsis;
 }
 
-/* one notice block: a tone, an optional icon, an optional action, the X */
 .notice {
   display: flex;
   align-items: flex-start;
@@ -728,7 +712,6 @@ input[type="checkbox"]:hover:not(:checked) {
   opacity: 0.7;
 }
 
-/* empty states, centred and faint */
 .empty,
 .placeholder,
 .chat-empty {
@@ -791,8 +774,7 @@ input[type="checkbox"]:hover:not(:checked) {
   font-weight: 400;
 }
 
-/* the lens group sits right, before the search and the bell: the switch
-   keeps its place whatever the pane shows, the pill grows leftwards */
+/* the lens group is anchored right: the switch keeps its place whatever the pane shows, the pill grows leftwards */
 .lenses {
   display: flex;
   align-items: center;
@@ -1120,7 +1102,6 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--fg);
 }
 
-/* a workspace that runs agents: its name is a header */
 .ws-row.radar-head:not(.quiet) {
   min-height: 26px;
   padding: 6px 6px 1px 8px;
@@ -1172,7 +1153,6 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--fg);
 }
 
-/* folded: the head is a row again, with the group's states on the right */
 .ws-row.radar-head.is-folded {
   min-height: var(--ctl);
   padding: 4px 6px 4px 8px;
@@ -1193,8 +1173,7 @@ input[type="checkbox"]:hover:not(:checked) {
   margin-right: 2px;
 }
 
-/* worktrees hang under their repository: a trunk down the left of each
-   child group, stopping at the last child's tick */
+/* worktrees hang under their repository: a trunk down the left of each child group, stopping at the last child's tick */
 .ws-children {
   margin-left: 18px;
 }
@@ -1260,9 +1239,7 @@ input[type="checkbox"]:hover:not(:checked) {
   box-shadow: inset 0 0 0 1px var(--line);
 }
 
-/* the mark's glyphs (braille, ✓, ◦, ?) come from whatever font has them,
-   each with its own line metrics — a fixed box keeps the row from jumping
-   when the state changes */
+/* the mark's glyphs come from whatever font has them, each with its own line metrics: a fixed box keeps the row from jumping */
 .radar-mark {
   display: inline-grid;
   place-items: center;
@@ -1340,7 +1317,6 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--accent);
 }
 
-/* the watchdog's note: the mark turns into an amber exclamation */
 .radar-row.is-alert .radar-mark,
 .radar-row.is-alert .radar-title {
   color: var(--amber);
@@ -2275,7 +2251,7 @@ input[type="checkbox"]:hover:not(:checked) {
 }
 
 .alerts-dialog .alerts-opt {
-  flex-direction: row; /* a label in a dialog stacks by default; this one is a row */
+  flex-direction: row;
   align-items: flex-start;
   gap: 12px;
   cursor: pointer;
@@ -2540,7 +2516,6 @@ input[type="checkbox"]:hover:not(:checked) {
   width: min(96vw, 820px);
 }
 
-/* the head: a title with an icon, header controls, the X */
 .modal-head {
   display: flex;
   align-items: center;
@@ -2882,7 +2857,6 @@ input[type="checkbox"]:hover:not(:checked) {
   font-variant-numeric: tabular-nums;
 }
 
-/* the open task */
 .tasks-detail {
   width: 380px;
   flex-shrink: 0;
@@ -2994,7 +2968,6 @@ input[type="checkbox"]:hover:not(:checked) {
   font-size: 13px;
 }
 
-/* send to an agent: a split button */
 .tasks-send {
   display: flex;
 }
@@ -3199,9 +3172,7 @@ input[type="checkbox"]:hover:not(:checked) {
   gap: 6px;
 }
 
-/* a scrolling column keeps its children's height: a flex item with its
-   own overflow has no minimum, so without this the files, turns and hits
-   would be squeezed to fit the screen instead of scrolling past it */
+/* a flex item with its own overflow has no minimum height: without this the files, turns and hits would be squeezed to fit the screen instead of scrolling */
 .review-body > *,
 .chat-log > *,
 .search-list > *,
@@ -3398,7 +3369,6 @@ input[type="checkbox"]:hover:not(:checked) {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-/* a tap on a row: a comment; the comments wait under their rows */
 .review-diff.can-comment .fv-line.commentable {
   cursor: pointer;
 }
@@ -3927,7 +3897,6 @@ button.usage-row:hover {
   text-decoration: line-through;
 }
 
-/* where a dragged card would land: a line above the card, or at the foot */
 .board-card.drop-before::before {
   content: "";
   position: absolute;
@@ -3990,7 +3959,6 @@ button.usage-row:hover {
   height: var(--ctl-sm);
 }
 
-/* a project's field on a card or a row, and its control in the detail */
 .tasks-fieldv {
   display: inline-flex;
   align-items: center;
@@ -4038,7 +4006,6 @@ button.usage-row:hover {
   height: var(--ctl-sm);
 }
 
-/* the column a task is in, on a list row */
 .tasks-status {
   display: inline-flex;
   align-items: center;
@@ -4122,7 +4089,6 @@ button.usage-row:hover {
     grid-template-columns: 1fr;
   }
 
-  /* the lens row has room for the number and the bar, not the cost */
   .usage-pill-cost {
     display: none;
   }
@@ -4684,8 +4650,7 @@ button.usage-row:hover {
 
 /* ---- mobile ---- */
 @media (max-width: 768px) {
-  /* a dialog head with controls wraps: the title and the X stay on the
-     first line, the controls take the next */
+  /* a dialog head wraps: the title and the X stay on the first line, the controls take the next */
   .modal-head {
     flex-wrap: wrap;
   }
@@ -4715,7 +4680,6 @@ button.usage-row:hover {
     min-width: 0;
   }
 
-  /* the composer row: icon-only buttons, the text field keeps the width */
   .composer-attach {
     width: 32px;
     height: 36px;
@@ -4735,8 +4699,7 @@ button.usage-row:hover {
     display: inline-grid;
   }
 
-  /* the header wraps: modes, title and the two round buttons on the first
-     row, the lens switch — Chat | Terminal | Changes — full width below it */
+  /* the header wraps: modes, title and the round buttons on the first row, the lens switch full width below */
   .topbar {
     flex-wrap: wrap;
     gap: 8px;
@@ -4804,7 +4767,6 @@ button.usage-row:hover {
     max-width: none;
   }
 
-  /* one column a screen, swiped through, the next one peeking */
   .board {
     padding: 0 12px 12px;
     gap: 10px;
@@ -4860,7 +4822,6 @@ button.usage-row:hover {
     opacity: 1;
   }
 
-  /* a finger needs more than a pointer: the small controls grow one step */
   .icon-btn {
     width: var(--ctl);
     height: var(--ctl);
@@ -4889,7 +4850,6 @@ button.usage-row:hover {
   }
 }
 
-/* the hover row everywhere: the same radius, hover and focus ring */
 .ws-row,
 .radar-row,
 .tasks-row,
@@ -4918,7 +4878,6 @@ button.usage-row:hover {
   outline-offset: 1px;
 }
 
-/* a narrow screen: the text-size buttons go, the tabs keep their room */
 @media (max-width: 920px) {
   .tabs-tools .kb-font {
     display: none;
@@ -5315,7 +5274,6 @@ button.usage-row:hover {
   min-width: 0;
 }
 
-/* the Update beside a concern is a small button, not a menu row */
 .health-list .btn {
   flex: none;
   width: auto;

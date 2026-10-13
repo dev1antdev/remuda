@@ -1,8 +1,6 @@
-// A project's settings: its name and colour, and its workflow — the
-// columns a task moves through, in order, each open or done, and the moves
-// the workflow makes by itself: where new tasks land, where a task goes
-// when an agent is started on it, where it goes when the agent finishes.
-// Saved whole; a removed column says where its tasks go.
+// A project's settings: its name and colour, and its workflow — the columns a task moves through,
+// each open or done, and the moves the workflow makes by itself — plus its own fields. Saved whole;
+// a removed column says where its tasks go.
 
 import { useCallback, useState } from "react";
 import { FIELD_KINDS, patchProject, putFields, putStatuses, type Field, type FieldKind, type Project, type Status } from "./tasksApi";
@@ -20,8 +18,7 @@ const FLAGS: { flag: Flag; icon: IconName; title: string }[] = [
   { flag: "on_finish", icon: "circle-check", title: "A task whose agent finished moves here" },
 ];
 
-// a column as edited: its key outlives a rename, a removed one keeps its
-// row so the choice of where its tasks go sits beside it
+// Row is a column as edited: its key outlives a rename, a removed one keeps its row so the choice of where its tasks go sits beside it
 type Row = Status & { key: number; removed?: boolean; to?: number };
 // a field as edited: the options as the text typed, split on save
 type FRow = Field & { key: number; optionsText: string };
@@ -57,7 +54,6 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
     setNextKey((k) => k + 1);
   };
 
-  // the fields
   const [frows, setFrows] = useState<FRow[]>(() => project.fields.map((f, i) => ({ ...f, key: i + 1, optionsText: f.options.join(", ") })));
   const [nextFKey, setNextFKey] = useState(project.fields.length + 1);
   const fupdate = (key: number, patch: Partial<FRow>) => setFrows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));

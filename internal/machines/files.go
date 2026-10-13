@@ -21,13 +21,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/sshx"
 )
 
-// File access for the viewer: what the agent wrote, read back from the
-// machine it lives on. Local reads use the filesystem; remote reads go over
-// the SSH master. The one write is SaveUpload, into the pane's own
-// .remuda/uploads folder.
-
 const (
-	MaxTextBytes = 512 * 1024       // a text file is served up to this much
+	MaxTextBytes = 512 * 1024
 	MaxRawBytes  = 24 * 1024 * 1024 // images / media / pdf
 	maxFind      = 8
 )
@@ -48,8 +43,7 @@ func (fi FileInfo) MaxBytes() int64 {
 	return MaxRawBytes
 }
 
-// fileKinds is the one table of extension → kind + MIME; anything else is
-// text or binary by content.
+// fileKinds maps an extension to kind and MIME; anything else is text or binary by content.
 var fileKinds = map[string]struct{ kind, mime string }{
 	".png": {"image", "image/png"}, ".jpg": {"image", "image/jpeg"}, ".jpeg": {"image", "image/jpeg"},
 	".gif": {"image", "image/gif"}, ".webp": {"image", "image/webp"}, ".svg": {"image", "image/svg+xml"},
@@ -68,10 +62,8 @@ func classify(p string, sniffBinary func() bool) (kind, mime string) {
 	return "text", "text/plain; charset=utf-8"
 }
 
-// ResolvePath turns what an agent printed — absolute, ~/…, or relative to the
-// pane's folder — into a real path. A relative miss is searched for under the
-// pane folder by suffix, because agents say "demo.mp4" when they mean
-// "docs/screenshots/demo.mp4".
+// ResolvePath turns what an agent printed (absolute, ~/…, or relative to the pane's folder) into a real path.
+// A relative miss is searched under the pane folder by suffix: agents say "demo.mp4" for "docs/demo.mp4".
 func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
 	p := strings.TrimSpace(raw)
 	if p == "" {
@@ -88,7 +80,6 @@ func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
 	if err == nil {
 		return info, nil
 	}
-	// relative miss: look under the pane folder
 	if !strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "~") && cwd != "" {
 		found := mc.findBySuffix(cwd, strings.TrimPrefix(strings.TrimPrefix(raw, "./"), "/"))
 		if len(found) == 1 {
@@ -145,7 +136,7 @@ func (mc *Machine) stat(p string) (FileInfo, error) {
 	return FileInfo{Path: p, Kind: kind, MIME: mime, Size: size}, nil
 }
 
-// sniffLocal: binary if the first 8KB hold a NUL.
+// sniffLocal reports a NUL in the file's first 8KB: a binary file.
 func sniffLocal(p string) bool {
 	f, err := os.Open(p)
 	if err != nil {
@@ -220,16 +211,14 @@ func (mc *Machine) ReadRemote(p string, max int64) ([]byte, bool, error) {
 	return data, false, nil
 }
 
-// Uploads land in the pane's folder under .remuda/uploads, so the agent can
-// read them by a relative path without leaving its project. The folder
-// carries its own .gitignore so screenshots never end up in a commit.
+// Uploads land under the pane folder's .remuda/uploads, beside a .gitignore so none reaches a commit.
 const (
 	uploadDir    = ".remuda"
 	uploadSubdir = "uploads"
 )
 
 type Upload struct {
-	Name string `json:"name"` // the stored file name
+	Name string `json:"name"`
 	Path string `json:"path"` // absolute, on this machine
 	Rel  string `json:"rel"`  // relative to the pane folder, for the prompt
 	Size int    `json:"size"`
@@ -238,9 +227,8 @@ type Upload struct {
 
 var unsafeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
-// storedName makes a safe, unique file name: time, a random tag, and the
-// original stem and extension sanitized separately — a non-ASCII stem must
-// not take the extension with it, and a silly extension must not panic.
+// storedName makes a safe, unique file name: time, a random tag, and the stem and extension sanitized separately
+// (a non-ASCII stem must not take the extension with it, and a silly extension must not panic).
 func storedName(name string) string {
 	base := filepath.Base(strings.ReplaceAll(name, "\\", "/"))
 	ext := filepath.Ext(base)
@@ -274,9 +262,7 @@ func (mc *Machine) SaveUpload(cwd, name string, data []byte) (Upload, error) {
 	abs := cleanPath(cwd + "/" + rel)
 	ignore := cleanPath(cwd + "/" + uploadDir + "/.gitignore")
 
-	// the pane's folder is the agent's: a .remuda or an uploads folder it
-	// made a symlink would send the file (or the .gitignore) wherever it
-	// pointed, so neither may be one, and nothing here follows a link
+	// the pane's folder is the agent's: a .remuda or uploads it made a symlink would send the file wherever it pointed
 	holder, folder := cleanPath(cwd+"/"+uploadDir), filepath.Dir(abs)
 	if mc.Local {
 		for _, p := range []string{holder, folder} {
@@ -325,8 +311,7 @@ type Diff struct {
 	Diff      string `json:"diff"`
 }
 
-// ReadFrom returns a file's bytes from an offset to its end — a transcript's
-// growth since the last look. Remotely it is a tail over ssh.
+// ReadFrom returns a file's bytes from offset to its end; remotely a tail over ssh.
 func (mc *Machine) ReadFrom(p string, offset int64) ([]byte, error) {
 	if mc.Local {
 		f, err := os.Open(p)
@@ -342,9 +327,7 @@ func (mc *Machine) ReadFrom(p string, offset int64) ([]byte, error) {
 	return mc.execBytes(fmt.Sprintf("tail -c +%d %s", offset+1, sshx.Quote(p)), 120*time.Second)
 }
 
-// Shell runs a POSIX shell script on the machine — `sh -c` here, `sh -c`
-// over the ssh master there (whatever the login shell) — and returns its
-// stdout.
+// Shell runs a POSIX script on the machine through `sh -c`, here or over the ssh master, and returns its stdout.
 func (mc *Machine) Shell(script string, timeout time.Duration) (string, error) {
 	if mc.Local {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -367,9 +350,7 @@ func (mc *Machine) Shell(script string, timeout time.Duration) (string, error) {
 	return mc.exec(script, timeout)
 }
 
-// Stream runs a POSIX script on the machine and hands its output (stdout
-// and stderr together, as it comes) to sink — for the long jobs a person
-// watches: an install, an update. The exit status is the error.
+// Stream runs a POSIX script on the machine, handing sink its output as it comes; the exit status is the error.
 func (mc *Machine) Stream(script string, timeout time.Duration, sink func([]byte)) error {
 	if !mc.Local {
 		conn, err := mc.remoteConn()
@@ -419,9 +400,7 @@ func (mc *Machine) Stream(script string, timeout time.Duration, sink func([]byte
 	return nil
 }
 
-// GitDiff shows the file's uncommitted change (staged + unstaged, against
-// HEAD) in its repository, or marks it untracked / outside any repo. The
-// same script runs locally and remotely; outside a repo it prints nothing.
+// GitDiff is the file's uncommitted change against HEAD in its repository, or marks it untracked / outside any repo.
 func (mc *Machine) GitDiff(p string) (Diff, error) {
 	q := sshx.Quote(p)
 	script := `cd ` + sshx.Quote(filepath.Dir(p)) + ` 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
@@ -452,8 +431,7 @@ type DirListing struct {
 	Dirs   []DirEntry `json:"dirs"`
 }
 
-// ListDirs lists the subfolders of path on the machine ("" or "~" is
-// home; "~/x" is under it). Hidden folders only when asked.
+// ListDirs lists the subfolders of path on the machine ("" or "~" is home), hidden ones only when asked.
 func (mc *Machine) ListDirs(path string, hidden bool) (DirListing, error) {
 	q := sshx.Quote(path)
 	glob := "*/"

@@ -1,7 +1,6 @@
-// One dialog for anything that goes to an agent as a prompt — a task, a
-// message forwarded from another agent: pick the agent (every running one,
-// by machine, the last one used for this key preselected), edit the text,
-// send through the chat's own path.
+// One dialog for anything that goes to an agent as a prompt — a task, a message
+// forwarded from another agent: pick the agent (every running one, by machine,
+// the last used for this key preselected), edit the text, send through the chat's own path.
 
 import { useState } from "react";
 import type { AgentTarget } from "./Tasks";
@@ -18,7 +17,7 @@ export default function SendToAgent({ title, text: initialText, agents, currentP
   agents: AgentTarget[];
   currentPane: { machineId: string; paneId: string } | null;
   rememberKey: string; // the last target for this key is offered first
-  exclude?: { machineId: string; paneId: string }; // not to itself
+  exclude?: { machineId: string; paneId: string };
   onClose: () => void;
   onSend: (target: AgentTarget, text: string) => Promise<void>;
 }) {

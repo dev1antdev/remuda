@@ -21,10 +21,7 @@ import (
 
 const CookieName = "remuda_token"
 
-// LoadOrCreateToken returns REMUDA_TOKEN if set (32 characters or more: a
-// short one is guessable), otherwise the token stored at <state dir>/token,
-// creating it on first run — created says so, the one time the sign-in
-// link is worth printing.
+// LoadOrCreateToken returns REMUDA_TOKEN when set (32 characters or more), else the token stored at <state dir>/token, creating it on first run.
 func LoadOrCreateToken(dir string) (token string, created bool, err error) {
 	if t := strings.TrimSpace(os.Getenv("REMUDA_TOKEN")); t != "" {
 		if len(t) < 32 {
@@ -51,7 +48,7 @@ func LoadOrCreateToken(dir string) (token string, created bool, err error) {
 
 type Guard struct {
 	token string
-	host  string // shown on the sign-in page: which machine's remuda this is
+	host  string
 }
 
 func NewGuard(token string) *Guard {
@@ -74,8 +71,7 @@ func (g *Guard) fromRequest(r *http.Request) string {
 	return ""
 }
 
-// Middleware rejects unauthenticated requests. A valid ?token= query (the QR /
-// pairing link) is exchanged for the cookie and stripped from the URL.
+// Middleware rejects unauthenticated requests; a valid ?token= (the pairing link) is exchanged for the cookie and stripped from the URL.
 func (g *Guard) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if qt := r.URL.Query().Get("token"); qt != "" {
@@ -119,8 +115,7 @@ func (g *Guard) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// refused notes a wrong token — the one thing on this surface worth a line
-// in the log — and makes the caller wait a little, so guessing is slow.
+// refused logs a wrong token with its address and makes the caller wait, so guessing is slow.
 func (g *Guard) refused(r *http.Request) {
 	log.Printf("auth: wrong token from %s", r.RemoteAddr)
 	time.Sleep(500 * time.Millisecond)
@@ -138,8 +133,7 @@ func (g *Guard) setCookie(w http.ResponseWriter, r *http.Request, token string) 
 	})
 }
 
-// serveLogin names the machine: with several remudas reachable on
-// 127.0.0.1 through port forwards, "wrong token" usually means "wrong host".
+// serveLogin is the sign-in page, naming the machine: through port forwards, "wrong token" usually means "wrong host".
 func (g *Guard) serveLogin(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusUnauthorized)

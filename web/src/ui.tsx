@@ -9,8 +9,7 @@ import { errMsg } from "./prefs";
 
 // ---- dialog ----
 
-// how many dialogs are open: the page behind them is inert until the last
-// one closes
+// openDialogs counts the open dialogs: the page behind them is inert until the last one closes.
 let openDialogs = 0;
 
 export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit, controls, children, className, labelledBy }: {
@@ -28,13 +27,11 @@ export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit
   const id = useId();
   const box = useRef<HTMLDivElement & HTMLFormElement>(null);
   useEffect(() => {
-    // focus moves in; the page behind is inert; both undone on close
     const opener = document.activeElement as HTMLElement | null;
     const root = document.getElementById("root");
     openDialogs++;
     root?.setAttribute("inert", "");
-    // React's autoFocus focuses without writing the attribute: a field it
-    // already focused keeps the focus
+    // React's autoFocus focuses without writing the attribute: a field it already focused keeps the focus
     if (!box.current?.contains(document.activeElement)) {
       const first = box.current?.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select, button:not(.icon-btn)");
       (first ?? box.current)?.focus();
@@ -82,9 +79,8 @@ export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit
   return createPortal(node, document.body);
 }
 
-// Escape closes the topmost thing: a dialog, unless a Select's list is open
-// (its own listener runs first and stops the event) or `when` says another
-// layer is above this one
+// useEscape closes the topmost thing on Escape: not while a Select's list is open (its own listener
+// runs first and stops the event), nor when `when` says another layer is above this one.
 export function useEscape(onClose: () => void, when?: () => boolean) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -97,7 +93,7 @@ export function useEscape(onClose: () => void, when?: () => boolean) {
   }, [onClose, when]);
 }
 
-// a popover or menu: a pointer outside it, or Escape, closes it
+// useDismiss closes a popover or menu on a pointer outside it, or Escape.
 export function useDismiss(open: boolean, close: () => void, ignore: string[] = []) {
   useEffect(() => {
     if (!open) return;
@@ -107,8 +103,7 @@ export function useDismiss(open: boolean, close: () => void, ignore: string[] = 
       close();
     };
     const key = (e: KeyboardEvent) => {
-      // a Select's open list takes the Escape; its listener is a sibling
-      // on the same node, so stopPropagation alone would not keep us out
+      // a Select's open list takes the Escape; its listener is a sibling on the same node, so stopPropagation alone would not keep us out
       if (e.key === "Escape" && !document.querySelector(".sel-pop")) {
         e.stopPropagation();
         close();
@@ -151,7 +146,7 @@ export function Notice({ tone = "info", icon, children, action, onDismiss, class
   );
 }
 
-// a confirmation that goes away on its own; a later one replaces the timer
+// useTimedNotice is a confirmation that goes away on its own; a later one replaces the timer.
 export function useTimedNotice(ms = 5000): [string, (text: string) => void, () => void] {
   const [text, setText] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -173,7 +168,7 @@ export function useTimedNotice(ms = 5000): [string, (text: string) => void, () =
 
 // ---- async ----
 
-// a form's submit: busy while it runs, the error as text
+// useSubmit runs a form's submit: busy while it runs, the error as text.
 export function useSubmit<A extends unknown[]>(fn: (...args: A) => Promise<void>) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -194,8 +189,7 @@ export function useSubmit<A extends unknown[]>(fn: (...args: A) => Promise<void>
   return { busy, err, run, setErr };
 }
 
-// a fetch that follows its inputs: a result that arrives after they
-// changed is dropped
+// useAsync is a fetch that follows its inputs: a result that arrives after they changed is dropped.
 export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): { data: T | null; error: string; loading: boolean; reload: () => void } {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState("");
@@ -225,9 +219,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): { data: T | 
 }
 
 // ---- toasts ----
-// Status that comes and goes lives in a corner, never in a bar: a pill in
-// the header would move everything beside it. Sticky ones (offline, a new
-// version) carry no timer; the rest the caller clears.
+// Transient status lives in a corner, never in a bar: a pill in the header would move everything beside it.
 
 export type ToastItem = { id: string; tone: Tone; text: ReactNode; action?: ReactNode; onDismiss?: () => void; busy?: boolean };
 

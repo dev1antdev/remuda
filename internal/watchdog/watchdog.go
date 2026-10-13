@@ -1,10 +1,6 @@
-// Package watchdog notices agents that need a person without asking for
-// one: working for a long time while the transcript stays silent (a hung
-// tool, a wedged process), waiting on an answer for a long time (a prompt
-// nobody saw), or looping — the same tool call again and again. It reads
-// the radar's episodes and the transcripts a minute apart, leaves a note on
-// the pane for the sidebar, and pushes once per episode, then as a
-// reminder now and then while the condition holds.
+// Package watchdog notices agents that need a person without asking for one: working
+// while the transcript stays silent, waiting on an answer for long, or looping on one tool
+// call. It leaves a note on the pane for the sidebar and pushes once per episode, then reminders.
 package watchdog
 
 import (
@@ -18,8 +14,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/radar"
 )
 
-// Inputs is everything the rules read and do, as functions, so the rules
-// can be tested without herdr.
+// Inputs is everything the rules read and do, as functions, so the rules can be tested without herdr.
 type Inputs struct {
 	Episodes  func() []radar.Episode
 	Pane      func(machineID, paneID string) (PaneInfo, bool)

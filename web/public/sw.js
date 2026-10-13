@@ -1,7 +1,6 @@
-// remuda service worker: network-first for navigations (a fresh build always
-// wins online), cache-first for the content-addressed bundle under /assets/
-// and the app icons, and Web Push. /api, /ws and the editor under /code/
-// are never intercepted. Nothing is precached.
+// remuda service worker: network-first for navigations, cache-first for the content-addressed bundle
+// under /assets/ and the app icons, and Web Push. /api, /ws and the editor under /code/ are never
+// intercepted; nothing is precached.
 const CACHE = "remuda-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
@@ -29,8 +28,7 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         try {
           const res = await fetch(event.request);
-          // only the app shell at "/" goes in, and only a real one — never
-          // the 401 sign-in page, never some other path's answer
+          // only the app shell at "/" goes in, and only a real one: never the 401 sign-in page, never another path's answer
           if (res.ok && url.pathname === "/") keep("/", res.clone());
           return res;
         } catch {
@@ -57,9 +55,8 @@ self.addEventListener("fetch", (event) => {
 
 // ---- push ----
 
-// Every push shows a notification: Safari revokes subscriptions whose pushes
-// stay silent. With a window visible it is shown quietly (the app already
-// shows the status) and replaces the pane's earlier one.
+// Every push shows a notification: Safari revokes subscriptions whose pushes stay silent. With a
+// window visible it is shown quietly and replaces the pane's earlier one.
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -119,9 +116,8 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
-// The browser rotated the subscription: re-subscribe with the same server
-// key and tell the server which endpoint this replaces, so the device keeps
-// its alert preferences. Without this, pushes die until the app is reopened.
+// The browser rotated the subscription: re-subscribe with the same server key and tell the server which
+// endpoint this replaces, so the device keeps its prefs; without this, pushes die until the app is reopened.
 self.addEventListener("pushsubscriptionchange", (event) => {
   event.waitUntil(
     (async () => {

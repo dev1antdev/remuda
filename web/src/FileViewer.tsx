@@ -8,9 +8,7 @@ export type FileTarget = { path: string; line?: number; prefer?: "file" | "chang
 
 type Tab = "file" | "changes";
 
-// Opens what the agent wrote: the file itself, and its uncommitted change in
-// git ("what Claude changed"). Reads from the machine the pane lives on.
-// Pushes a history entry so the phone's Back closes it.
+// FileViewer opens what the agent wrote: the file itself and its uncommitted change in git, read from the machine the pane lives on
 export default function FileViewer({
   machineId,
   paneId,
@@ -32,9 +30,7 @@ export default function FileViewer({
   const lineRef = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
 
-  // a history entry so Back (Android, iOS swipe) closes the viewer; when
-  // the viewer goes away some other way the entry goes with it, or the
-  // next Back would do nothing
+  // a history entry so Back (Android, an iOS swipe) closes the viewer; gone another way, the entry goes too, or the next Back would do nothing
   useEffect(() => {
     history.pushState({ remuda: "file" }, "");
     const onPop = () => onClose();
@@ -45,7 +41,6 @@ export default function FileViewer({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // keys go to the viewer, so Escape closes it and not whatever was behind
   useEffect(() => {
     box.current?.focus();
   }, []);
@@ -54,8 +49,7 @@ export default function FileViewer({
     if (history.state?.remuda === "file") history.back();
     else onClose();
   };
-  // keys inside the viewer reach its own handler below; when the focus
-  // has wandered out of it, Escape still closes it
+  // when the focus has wandered out of the viewer, Escape still closes it
   const closeRef = useRef(close);
   closeRef.current = close;
   useEffect(() => {
@@ -74,7 +68,7 @@ export default function FileViewer({
     setText(null);
     setDiff(null);
     setError(null);
-    setTab(target.prefer ?? "file"); // a new target starts on the tab it asked for
+    setTab(target.prefer ?? "file");
     (async () => {
       try {
         const i = await fsStat(machineId, paneId, target.path);

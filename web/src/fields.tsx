@@ -1,7 +1,5 @@
-// A project's own fields on a task: the value as words (a chip on a card
-// or a list row, a line of the prompt) and the control that edits it, by
-// the field's kind. A date field is a calendar day, kept as UTC midnight
-// so it reads the same in every zone.
+// A project's own fields on a task: the value as words and the control that edits it, by the field's
+// kind. A date field is a calendar day kept as UTC midnight, so it reads the same in every zone.
 
 import { useEffect, useState } from "react";
 import type { Field, FieldValue } from "./tasksApi";
@@ -85,8 +83,7 @@ export function FieldInput({ field, value, onCommit }: { field: Field; value: Fi
   }
 }
 
-// text, a link or a number: kept here while typed, sent when the person
-// is done (blur or Enter), only when it changed
+// TextField holds text, a link or a number while typed and sends it on blur or Enter, only when it changed
 function TextField({ field, value, onCommit }: { field: Field; value: FieldValue | undefined; onCommit: (v: FieldValue) => void }) {
   const shown = value === undefined || value === null ? "" : String(value);
   const [local, setLocal] = useState(shown);

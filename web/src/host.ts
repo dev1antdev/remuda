@@ -1,7 +1,6 @@
 // Links and the clipboard, the way a browser does them.
 
-// copyText puts text on the clipboard: the Clipboard API, else the old
-// execCommand path (http origins, older WebViews).
+// copyText puts text on the clipboard: the Clipboard API, else execCommand (http origins, older WebViews).
 export async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);

@@ -31,7 +31,6 @@ export default function Search({ machines, onClose, onOpen }: { machines: Machin
   const query = q.trim();
   const short = [...query].length < 2;
 
-  // search as the query settles; a request still in flight is dropped
   useEffect(() => {
     if (short) {
       setRes(null);
@@ -116,8 +115,7 @@ export default function Search({ machines, onClose, onOpen }: { machines: Machin
   );
 }
 
-// the query's occurrences marked; none when lower-casing moved the
-// offsets (a dotted İ grows), the snippet is then shown plain
+// highlight marks the query's occurrences; none when lower-casing moved the offsets (a dotted İ grows), the snippet then shows plain
 function highlight(text: string, q: string) {
   const lower = text.toLowerCase();
   const needle = q.toLowerCase();

@@ -1,7 +1,5 @@
-// Package server is remuda's HTTP + WebSocket bridge to herdr — the local
-// one and any remote machine's — roster and chat over REST, live terminal
-// bytes over WS. herdr owns every process, pane and agent status; Claude Code
-// owns its transcript files; this server only connects them to the browser.
+// Package server is remuda's HTTP and WebSocket bridge to herdr, local and
+// remote: the roster and chat over REST, live terminal bytes over WS.
 package server
 
 import (
@@ -56,29 +54,25 @@ type Server struct {
 	Schedules *schedule.Store
 	Quick     *quick.Store
 	Usage     *usage.Tracker
-	// Health and Tailscale are set after New, like Schedules: the machines'
-	// vitals, and the tailnet node's status when -tailscale is on
 	Health    *health.Collector
 	Tailscale func() tsnetx.Status
-	Jobs      *jobs.Runner       // the updates a person runs from the page
-	Restart   *restart.Restarter // chats onto a freshly updated agent
+	Jobs      *jobs.Runner
+	Restart   *restart.Restarter
 	Radar     *radar.Tracker
 	Guard     *auth.Guard
-	UI        fs.FS // built SPA
+	UI        fs.FS
 
 	mu      sync.Mutex
-	paneMu  map[push.PaneRef]*sync.Mutex // per-pane submit serialization
-	streams termStreams                  // HTTP-transport terminal sessions
+	paneMu  map[push.PaneRef]*sync.Mutex
+	streams termStreams
 }
 
-// New wires the server. Schedules is the one dependency set afterwards: it
-// delivers through the server's own SubmitToFolder.
+// New wires the server; Schedules, Health, Tailscale, Jobs and Restart are set afterwards.
 func New(m *machines.Manager, w *watch.Watcher, p *push.Service, t *tasks.Store, c *code.Service, rv *review.Store, r *radar.Tracker, q *quick.Store, u *usage.Tracker, g *auth.Guard, ui fs.FS) *Server {
 	return &Server{Machines: m, Watch: w, Push: p, Tasks: t, Code: c, Review: rv, Radar: r, Quick: q, Usage: u, Guard: g, UI: ui, paneMu: map[push.PaneRef]*sync.Mutex{}}
 }
 
-// agents remuda offers to start, by herdr manifest kind. The list is also
-// served to the UI so there is one copy.
+// agents is what remuda offers to start, by herdr manifest kind; the UI is served the same list.
 var agents = []agentKind{
 	{"claude", "Claude Code"}, {"codex", "Codex"}, {"gemini", "Gemini"}, {"pi", "pi"},
 	{"opencode", "OpenCode"}, {"cursor", "Cursor"}, {"amp", "Amp"}, {"grok", "Grok"}, {"qwen", "Qwen"},
@@ -177,19 +171,12 @@ func (s *Server) Handler() http.Handler {
 	return secureHeaders(csrfGuard(root))
 }
 
-// appCSP is what the page may load and do: its own scripts, its own and
-// inline styles (xterm and React set styles on elements), images and
-// media from here or from memory (thumbnails of uploads), its own
-// WebSockets (ws:/wss: spelled out for browsers that do not read 'self'
-// for them), its own frames (the Code mode, a PDF) — framed by itself
-// only, no plugins, no base, forms to itself.
+// appCSP is what the page may load and do; inline styles because xterm and React set them on
+// elements, ws:/wss: spelled out because some browsers do not read 'self' for WebSockets.
 const appCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; " +
 	"font-src 'self' data:; connect-src 'self' ws: wss:; worker-src 'self'; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'none'; form-action 'self'"
 
-// secureHeaders is the set every response carries: no sniffing of types,
-// no referrer to other sites, no framing by other origins, HSTS over TLS,
-// and the page's CSP — except on the code-server proxy, which has its own
-// headers, and the file viewer's bytes, which carry a stricter one.
+// secureHeaders puts nosniff, Referrer-Policy, X-Frame-Options, HSTS over TLS and the page's CSP on every response but the code-server proxy's and the file viewer's bytes.
 func secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -208,11 +195,8 @@ func secureHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// csrfGuard rejects cross-origin mutations and WebSocket upgrades. The token
-// cookie is SameSite=Lax, which is per site, not per origin: another port on
-// the same host would get it — so an Origin that is not ours is refused
-// outright, and for a browser that sends no Sec-Fetch-* at all the Origin
-// check is the one that holds.
+// csrfGuard refuses cross-origin mutations and WebSocket upgrades by Sec-Fetch-Site and Origin.
+// The cookie's SameSite=Lax is per site, not per origin: another port on the same host would get it.
 func csrfGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mutation := r.Method != http.MethodGet && r.Method != http.MethodHead || strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
@@ -245,8 +229,7 @@ func httpErr(w http.ResponseWriter, code int, err error) {
 	json.NewEncoder(w).Encode(map[string]any{"error": err.Error()})
 }
 
-// rpcErr reports a failed herdr call: herdr's own refusals are the caller's
-// problem (4xx), anything else is the bridge's (502).
+// rpcErr reports a failed herdr call: herdr's own refusals are the caller's problem (4xx), anything else the bridge's (502).
 func rpcErr(w http.ResponseWriter, err error) {
 	var he *herdr.Error
 	if errors.As(err, &he) {
@@ -257,7 +240,7 @@ func rpcErr(w http.ResponseWriter, err error) {
 }
 
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // a megabyte is more than any of these bodies
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		httpErr(w, 400, fmt.Errorf("bad request body: %v", err))
 		return false
@@ -265,8 +248,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
-// machineFor finds the request's machine: ?machine=, the X-Remuda-Machine
-// header, or the id a POST body carried. Empty means local.
+// machineFor finds the request's machine: ?machine=, the X-Remuda-Machine header, or the id a POST body carried; empty means local.
 func (s *Server) machineFor(r *http.Request, bodyID string) (*machines.Machine, error) {
 	id := r.URL.Query().Get("machine")
 	if id == "" {
@@ -293,18 +275,17 @@ func (s *Server) ready(w http.ResponseWriter, r *http.Request, bodyID string) (*
 	return mc, client, attach, true
 }
 
-// handleHealth answers from the watcher's cache: unauthenticated, so it
-// never asks herdr anything.
+// handleHealth answers from the watcher's cache, unauthenticated: it never asks herdr and says only what the peer probe needs.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	snap, err := s.Watch.Snapshot(machines.LocalID)
 	if snap == nil || err != nil {
 		writeJSON(w, map[string]any{"ok": true, "herdr": false})
 		return
 	}
-	writeJSON(w, map[string]any{"ok": true, "herdr": true, "version": buildversion.Build}) // the one unauthenticated answer: what the peer probe needs, no more
+	writeJSON(w, map[string]any{"ok": true, "herdr": true, "version": buildversion.Build})
 }
 
-// POST /api/machines/{id}/health — read the machine's vitals now.
+// handleMachineHealth is POST /api/machines/{id}/health: read the machine's vitals now.
 func (s *Server) handleMachineHealth(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.Machines.Get(r.PathValue("id"))
 	if err != nil {
@@ -315,7 +296,6 @@ func (s *Server) handleMachineHealth(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 503, fmt.Errorf("health checks are off"))
 		return
 	}
-	// a read on demand also asks what is new, unless it was asked a moment ago
 	s.Health.RefreshLatest(5 * time.Minute)
 	s.Health.Refresh(mc)
 	writeJSON(w, map[string]any{"health": s.Health.Report(mc.Cfg.ID), "latest": s.Health.Latest()})
@@ -326,16 +306,14 @@ func (s *Server) handleMachineHealth(w http.ResponseWriter, r *http.Request) {
 type rosterPane struct {
 	ID      string `json:"id"`
 	Title   string `json:"title"`
-	Agent   string `json:"agent"` // "" for a plain shell
+	Agent   string `json:"agent"`
 	CWD     string `json:"cwd"`
-	Focused bool   `json:"focused"` // the tab's focused pane
-	Status  string `json:"status"`  // run | input | idle | done | shell
-	Cols    int    `json:"cols"`    // the pane's own grid, so a phone can keep it
+	Focused bool   `json:"focused"`
+	Status  string `json:"status"` // run | input | idle | done | shell
+	Cols    int    `json:"cols"`
 	Rows    int    `json:"rows"`
-	// an agent's lifecycle as a person reads it (held done, held question,
-	// last activity) — nil for a shell
+	// an agent's lifecycle as a person reads it (held done, held question, last activity); nil for a shell
 	Radar *radar.Display `json:"radar,omitempty"`
-	// the model, how full its context is, what the session cost — once read
 	Usage *usage.Display `json:"usage,omitempty"`
 }
 
@@ -356,18 +334,18 @@ type rosterReview struct {
 type rosterWorktree struct {
 	RepoKey      string `json:"repo_key"`
 	RepoName     string `json:"repo_name"`
-	Linked       bool   `json:"linked"` // a `git worktree add` checkout, nested under its repo
+	Linked       bool   `json:"linked"`
 	CheckoutPath string `json:"checkout_path"`
 }
 
 type rosterSession struct {
-	ID          string          `json:"id"` // workspace id
+	ID          string          `json:"id"`
 	Name        string          `json:"name"`
 	Status      string          `json:"status"`
 	ActiveTabID string          `json:"active_tab_id"`
 	Worktree    *rosterWorktree `json:"worktree,omitempty"`
-	Dir         string          `json:"dir,omitempty"`    // the workspace's folder: its checkout, else its first pane's cwd
-	Review      *rosterReview   `json:"review,omitempty"` // what the reviewer has not looked at yet
+	Dir         string          `json:"dir,omitempty"`
+	Review      *rosterReview   `json:"review,omitempty"`
 	Tabs        []rosterTab     `json:"tabs"`
 }
 
@@ -375,15 +353,14 @@ type rosterMachine struct {
 	ID       string          `json:"id"`
 	Label    string          `json:"label"`
 	Host     string          `json:"host,omitempty"`
-	Source   string          `json:"source,omitempty"` // machines.SourceHerdr when mirrored
-	State    string          `json:"state"`            // connected | connecting | error
+	Source   string          `json:"source,omitempty"`
+	State    string          `json:"state"` // connected | connecting | error
 	Error    string          `json:"error,omitempty"`
 	Sessions []rosterSession `json:"sessions"`
-	Health   *health.Report  `json:"health,omitempty"` // versions, disk, load — see internal/health
+	Health   *health.Report  `json:"health,omitempty"`
 }
 
-// sessionsFromSnapshot keeps herdr's own hierarchy: workspace → tabs → panes,
-// in herdr's order, so the UI can draw the same tree herdr's sidebar does.
+// sessionsFromSnapshot keeps herdr's own hierarchy, workspace → tabs → panes, in herdr's order.
 func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []rosterSession {
 	panesByTab := map[string][]rosterPane{}
 	agentInTab := map[string]bool{}
@@ -458,8 +435,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 	return out
 }
 
-// workspaceDir is the folder a workspace lives in: its git checkout when
-// herdr knows one, else the cwd of its first pane.
+// workspaceDir is the folder a workspace lives in: its git checkout when herdr knows one, else the cwd of its first pane.
 func workspaceDir(snap *herdr.Snapshot, ws *herdr.WorkspaceInfo) string {
 	if ws.Worktree != nil && ws.Worktree.CheckoutPath != "" {
 		return ws.Worktree.CheckoutPath
@@ -474,8 +450,7 @@ func workspaceDir(snap *herdr.Snapshot, ws *herdr.WorkspaceInfo) string {
 	return ""
 }
 
-// WorkspaceDirs lists the folders of a snapshot's workspaces (for the
-// review badges).
+// WorkspaceDirs lists the folders of a snapshot's workspaces, for the review badges.
 func WorkspaceDirs(snap *herdr.Snapshot) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -488,8 +463,7 @@ func WorkspaceDirs(snap *herdr.Snapshot) []string {
 	return out
 }
 
-// handleRoster serves every machine from the watcher's cache — never a herdr
-// call on the request path — with an ETag so an unchanged roster is a 304.
+// handleRoster serves every machine from the watcher's cache, with an ETag so an unchanged roster is a 304.
 func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 	list := s.Machines.List()
 	out := make([]rosterMachine, 0, len(list))
@@ -573,8 +547,7 @@ func (s *Server) handleRemoveMachine(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true})
 }
 
-// PATCH /api/machines/{id} {label} — a name of the user's own for the
-// machine (the local one too); empty goes back to the registry's.
+// handleRenameMachine is PATCH /api/machines/{id} {label}: a name of the user's own for the machine; empty goes back to the registry's.
 func (s *Server) handleRenameMachine(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Label string `json:"label"`
@@ -604,13 +577,11 @@ type createReq struct {
 	Dir       string `json:"dir"`
 	Branch    string `json:"branch"`
 	Base      string `json:"base"`
-	Agent     string `json:"agent"` // herdr agent kind, or "shell"
+	Agent     string `json:"agent"`
 }
 
-// create is the one path for every "make a container, start an agent in it"
-// request: the agent kind is validated before any RPC (an unknown one must
-// not leave an orphaned container), the container is created, the agent is
-// started, the watcher is refreshed so the UI sees the new pane at once.
+// create is the one path for every "make a container, start an agent in it" request.
+// The agent kind is checked before any RPC: an unknown one must not leave an orphaned container.
 func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*herdr.Client, *createReq) (id string, pane *herdr.PaneInfo, extra map[string]any, err error)) {
 	var req createReq
 	if !decode(w, r, &req) {
@@ -633,8 +604,6 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*herd
 	for k, v := range extra {
 		resp[k] = v
 	}
-	// the container exists either way; an agent that failed to start is
-	// reported, not rolled back
 	if req.Agent != "" && req.Agent != "shell" {
 		if err := startAgent(client, pane.PaneID, req.Agent); err != nil {
 			resp["agent_error"] = err.Error()
@@ -644,9 +613,7 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*herd
 	writeJSON(w, resp)
 }
 
-// startAgent starts an agent in a pane whose shell may still be coming up
-// (a new worktree's pane is "not an available shell" for a moment): the
-// busy answer is retried for a few seconds.
+// startAgent starts an agent in a pane whose shell may still be coming up, retrying herdr's busy answer for a few seconds.
 func startAgent(client *herdr.Client, paneID, kind string) error {
 	deadline := time.Now().Add(12 * time.Second)
 	for {
@@ -681,8 +648,7 @@ func (s *Server) handleNewTab(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// refOK is a branch or base name git gets as an argument: never something
-// it would read as an option, nothing with spaces or control characters.
+// refOK is a branch or base name git gets as an argument: never something it would read as an option, no spaces or control characters.
 func refOK(s string) bool {
 	if s == "" || strings.HasPrefix(s, "-") || strings.Contains(s, "..") {
 		return false
@@ -729,8 +695,7 @@ func (s *Server) closeHandler(close func(*herdr.Client, string) error) http.Hand
 	}
 }
 
-// renameHandler serves the two renames: a tab's or a workspace's label,
-// from a JSON body {"label": …}.
+// renameHandler serves the two renames, a tab's or a workspace's label, from a JSON body {"label": …}.
 func (s *Server) renameHandler(rename func(*herdr.Client, string, string) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -775,8 +740,6 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Either a pane (its folder, its agent's session) or — a search jump,
-	// read-only — a folder and a session id.
 	var path, cwd string
 	var sessions []transcript.SessionInfo
 	if paneID == "" {
@@ -800,8 +763,6 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		s.Radar.Seen(mc.Cfg.ID, pane.PaneID)
 		cwd = pane.Dir()
 
-		// herdr names the exact session when it knows it; the folder's session
-		// list is the fallback and the picker (local machines only, for now).
 		if want != "" { // only a session of this folder: another folder's is the viewer's business
 			if mc.Local {
 				sessions, _ = transcript.Sessions(cwd)
@@ -831,8 +792,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// a compacted conversation went on in a newer file — unless this very
-	// file was asked for (the picker, a search hit in it)
+	// a compacted conversation went on in a newer file, unless this very file was asked for
 	if want == "" {
 		path = mc.FollowContinuation(path)
 	}
@@ -852,7 +812,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadGateway, err)
 		return
 	}
-	if sessions == nil && mc.Local && paneID != "" { // the picker, only on a full response; a transcript on its own has none
+	if sessions == nil && mc.Local && paneID != "" {
 		sessions, _ = transcript.Sessions(cwd)
 	}
 	if sessions == nil {
@@ -865,8 +825,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 // ---- files the agent wrote ----
 
-// handleFsStat resolves a path the agent printed (absolute, ~/, or relative
-// to the pane's folder) and says what kind of file it is.
+// handleFsStat resolves a path the agent printed (absolute, ~/, or relative to the pane's folder) and says what kind of file it is.
 func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.machineFor(r, "")
 	if err != nil {
@@ -887,8 +846,7 @@ func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, info)
 }
 
-// GET /api/fs/dirs?machine&path&hidden — a folder's subfolders on the
-// machine, for picking a project folder instead of typing it.
+// handleFsDirs is GET /api/fs/dirs?machine&path&hidden: a folder's subfolders on the machine, for the folder picker.
 func (s *Server) handleFsDirs(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.machineFor(r, "")
 	if err != nil {
@@ -903,9 +861,7 @@ func (s *Server) handleFsDirs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, l)
 }
 
-// handleFsFile serves the bytes. Text is always text/plain whatever the
-// extension claims, everything is sandboxed and never cached. Local files
-// stream with Range support (video seeks); remote ones are read whole.
+// handleFsFile serves the bytes: text always as text/plain whatever the extension claims, sandboxed and never cached.
 func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.machineFor(r, "")
 	if err != nil {
@@ -976,7 +932,7 @@ func (c *cappedFile) Read(b []byte) (int, error) {
 }
 
 func (c *cappedFile) Seek(off int64, whence int) (int64, error) {
-	if whence == 2 { // from the end of the *capped* file
+	if whence == 2 {
 		return c.f.Seek(c.size+off, 0)
 	}
 	return c.f.Seek(off, whence)
@@ -1006,10 +962,7 @@ const (
 	maxUploadBytes = 25 << 20
 )
 
-// handleFsUpload stores up to four files from the phone or PC in the pane's
-// folder (multipart field "file", repeated) and returns their paths for the
-// prompt. Nothing is auto-sent: the files are only mentioned once the user
-// sends the message.
+// handleFsUpload stores up to four files (multipart field "file", repeated) in the pane's folder and returns their paths for the prompt.
 func (s *Server) handleFsUpload(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.machineFor(r, "")
 	if err != nil {
@@ -1070,7 +1023,7 @@ func (s *Server) handlePushSubscribe(w http.ResponseWriter, r *http.Request) {
 		Subscription push.Subscription `json:"subscription"`
 		Prefs        *push.Prefs       `json:"prefs"`
 		Label        string            `json:"label"`
-		OldEndpoint  string            `json:"old_endpoint"` // the browser rotated the subscription
+		OldEndpoint  string            `json:"old_endpoint"`
 	}
 	if !decode(w, r, &req) {
 		return
@@ -1191,9 +1144,7 @@ func (errAgentBusy) Error() string {
 	return "the agent is waiting for an answer — answer its prompt first"
 }
 
-// submitTo delivers text to a pane the way the chat does: herdr's own
-// submit (bracketed paste, Enter 300ms later) for an agent, typing like a
-// keyboard for a shell. Serialized per pane.
+// submitTo delivers text to a pane the way the chat does: herdr's own submit for an agent, typing like a keyboard for a shell; serialized per pane.
 func (s *Server) submitTo(mc *machines.Machine, client *herdr.Client, paneID, text string) error {
 	lock := s.paneLock(push.PaneRef{Machine: mc.Cfg.ID, Pane: paneID})
 	lock.Lock()
@@ -1205,8 +1156,7 @@ func (s *Server) submitTo(mc *machines.Machine, client *herdr.Client, paneID, te
 	case herdr.IsCode(err, "agent_blocked"):
 		return errAgentBusy{}
 	case herdr.IsCode(err, "agent_not_found") || herdr.IsCode(err, "agent_not_ready"):
-		// No agent in front: type like a keyboard. The settle gap lives server-
-		// side so a TUI still redrawing doesn't take the Enter as a newline.
+		// the settle gap before Enter: a TUI still redrawing would take it as a newline
 		if err := client.PaneSendText(paneID, text); err != nil {
 			return err
 		}
@@ -1217,8 +1167,6 @@ func (s *Server) submitTo(mc *machines.Machine, client *herdr.Client, paneID, te
 	}
 }
 
-// SubmitToFolder finds the agent running in a machine's folder and gives it
-// the text — the scheduler's door. The pane's title names where it went.
 // agentPaneIn is the first agent pane of the first workspace in a folder.
 func agentPaneIn(snap *herdr.Snapshot, dir string) *herdr.PaneInfo {
 	for i := range snap.Workspaces {
@@ -1235,6 +1183,7 @@ func agentPaneIn(snap *herdr.Snapshot, dir string) *herdr.PaneInfo {
 	return nil
 }
 
+// SubmitToFolder gives the text to the agent running in a machine's folder, the scheduler's door; the pane's title names where it went.
 func (s *Server) SubmitToFolder(machineID, dir, text string) (string, error) {
 	mc, err := s.Machines.Get(machineID)
 	if err != nil {
@@ -1258,8 +1207,7 @@ func (s *Server) SubmitToFolder(machineID, dir, text string) (string, error) {
 	return pane.DisplayTitle(), nil
 }
 
-// herdr's pane.send_keys grammar: lowercase names, "+" for modifiers
-// (observed live: enter, esc, up, down, tab, shift+tab, backspace, ctrl+c).
+// allowedKeys is herdr's pane.send_keys grammar as observed live: lowercase names, "+" for modifiers.
 var allowedKeys = map[string]bool{
 	"enter": true, "esc": true, "tab": true, "shift+tab": true, "space": true,
 	"up": true, "down": true, "left": true, "right": true,
@@ -1324,17 +1272,15 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
-	// the client's probe of this URL (a plain GET: "would a socket be
-	// accepted?") must cost no attach, here or on a peer
+	// the client's proxy probe is a plain GET of this URL and must cost no attach, here or on a peer
 	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		http.Error(w, "upgrade required", http.StatusUpgradeRequired)
 		return
 	}
-	s.Radar.Seen(mc.Cfg.ID, pane.PaneID) // a terminal in view counts as looked at
+	s.Radar.Seen(mc.Cfg.ID, pane.PaneID)
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
 
-	// the machine's own remuda, when it runs, holds the one attach: relay
 	if pc, err := s.peerFor(mc); err != nil {
 		httpErr(w, 502, err)
 		return
@@ -1344,15 +1290,12 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	}
 	ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
 	if err != nil {
-		// refused because another client holds it — a remuda that started
-		// since the last probe? one more look, then the relay
 		if pc := s.peerAfterRefusal(mc, err); pc != nil {
 			s.relayPaneWS(w, r, pc, pane.PaneID, cols, rows)
 			return
 		}
 	}
 
-	// ANSI output compresses 3-10×; no context takeover keeps it cheap per connection
 	c, err2 := websocket.Accept(w, r, &websocket.AcceptOptions{CompressionMode: websocket.CompressionNoContextTakeover})
 	if err2 != nil {
 		if err == nil {
@@ -1364,15 +1307,13 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	c.SetReadLimit(1 << 20)
 	if err != nil {
-		c.Close(websocket.StatusInternalError, attachRefused(mc, err)) // the reason reaches the viewer
+		c.Close(websocket.StatusInternalError, attachRefused(mc, err))
 		return
 	}
 	defer cancel()
 
-	// The writer is stopped explicitly when the read loop ends: on a hijacked
-	// connection r.Context() stays alive until this handler returns, so
-	// without this the goroutine (and the attach subscription) would linger
-	// until the pane's next byte.
+	// the writer is stopped by hand when the read loop ends: on a hijacked connection
+	// r.Context() lives until the handler returns, so the attach would linger until the pane's next byte
 	wctx, wcancel := context.WithCancel(ctx)
 	defer wcancel()
 	done := make(chan struct{})
@@ -1385,15 +1326,13 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 					c.Close(websocket.StatusNormalClosure, "terminal detached")
 					return
 				}
-				// coalesce whatever else is already queued into one frame
 				for more := true; more; {
 					select {
 					case extra, ok := <-ch:
 						if !ok {
 							more = false
 						} else {
-							// the chunk is shared with every viewer: a full-slice
-							// expression makes this append copy before it writes
+							// the chunk is shared with every viewer: the full-slice expression makes append copy first
 							data = append(data[:len(data):len(data)], extra...)
 						}
 					default:
@@ -1448,7 +1387,6 @@ func (s *Server) staticHandler() http.Handler {
 			path = "index.html"
 		}
 		if _, err := fs.Stat(s.UI, path); err != nil {
-			// SPA fallback
 			r2 := r.Clone(r.Context())
 			r2.URL.Path = "/"
 			fileServer.ServeHTTP(w, r2)

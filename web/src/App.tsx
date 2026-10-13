@@ -78,8 +78,7 @@ function requestedFromURL(): Requested | null {
   return { machineId: q.get("machine") || "local", paneId };
 }
 
-// the agent a "make something" dialog offers first: claude when herdr knows
-// it, else the first one herdr lists
+// defaultAgent is the one a "make something" dialog offers first: claude when herdr knows it, else the first listed
 function defaultAgent(agents: AgentKind[], want: string): string {
   return agents.some((a) => a.id === want) ? want : (agents[0]?.id ?? "shell");
 }
@@ -94,54 +93,39 @@ export default function App() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [agents, setAgents] = useState<AgentKind[]>([]);
   const rosterEtag = useRef<string | null>(null);
-  // The selection is a request; what is shown is derived: the requested
-  // pane when the roster has it (a tapped notification may ask before the
-  // roster loads), else the first agent pane.
+  // the selection is a request; the pane shown is derived from it (current, below), never fixed up in an effect
   const [requested, setRequested] = useState<Requested | null>(requestedFromURL);
   const [lens, setLens] = useState<Lens>(isTouch ? "chat" : "terminal");
   const [drawer, setDrawer] = useState(false);
   const [offline, setOffline] = useState(false);
-  const [stale, setStale] = useState<string | null>(null); // the server's version when newer than this page
+  const [stale, setStale] = useState<string | null>(null);
   const [rosterInfo, setRosterInfo] = useState<{ latest?: Latest; tailscale?: Tailscale; version?: string }>({});
-  // a newer release of remuda than the one serving this page: one toast
-  // per version, gone once dismissed; its button opens the install
   const [releaseSeen, setReleaseSeen] = usePref("release.seen", "");
   const [releaseDialog, setReleaseDialog] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [menu, setMenu] = useState<RowMenu>(null);
   const [alerts, setAlerts] = useState(false);
   const [notice, setNotice] = useState<NoticeMsg | null>(null);
-  // an in-app confirmation: window.confirm() is unreliable inside embedded
-  // browsers, and a dialog of our own matches the rest
+  // a dialog of our own: window.confirm() is unreliable inside embedded browsers
   const [confirmReq, setConfirmReq] = useState<{ text: string; label: string; run: () => void } | null>(null);
   const ask = (text: string, label: string, run: () => void) => setConfirmReq({ text, label, run });
   const [termApi, setTermApi] = useState<TermApi | null>(null);
   const [modifier, setModifier] = useState<Modifier>(null);
-  // selection mode: a plain drag selects text instead of reaching the agent
   const [selectMode, setSelectMode] = useState(false);
   const copied = useCallback((n: number) => setNotice({ text: `Copied ${n} character${n === 1 ? "" : "s"}`, brief: true }), []);
-  // the lenses the selected pane has shown: each stays mounted once seen,
-  // so flipping back is instant — the terminal keeps its attach, the chat
-  // its scroll. Scoped to the pane: a lens never mounts hidden (a terminal
-  // opened unseen would attach at xterm's default 80×24 and resize the
-  // shared pane for everyone)
+  // a lens stays mounted once seen, scoped to the pane: it never mounts hidden, since a terminal opened unseen would attach at 80×24 and resize the shared pane
   const [seenLenses, setSeenLenses] = useState<{ pane: string; lenses: Partial<Record<Lens, true>> }>({ pane: "", lenses: {} });
   const [file, setFile] = useState<{ machineId: string; paneId: string; target: FileTarget } | null>(null);
   const [keybar, setKeybar] = usePref("keybar", isTouch);
-  // A phone keeps the pane's own grid by default: resizing the shared pane
-  // to a phone would squeeze the desktop's view of it too.
+  // a phone keeps the pane's own grid: resizing the shared pane to it would squeeze the desktop's view too
   const [sizeMode, setSizeMode] = usePref<SizeMode>("sizeMode", isTouch ? "keep" : "fit");
-  // what the window is for right now: herdr's sessions, or the task list
   const [mode, setMode] = usePref<"herdr" | "tasks" | "code">("mode", "herdr");
-  // the editor stays mounted once opened, so coming back does not reload it
   const [codeOpened, setCodeOpened] = useState(() => mode === "code");
   const [schedules, setSchedules] = useState(false);
   const [usagePanel, setUsagePanel] = useState(false);
   useEffect(() => {
     if (mode === "code") setCodeOpened(true);
   }, [mode]);
-  // search across every transcript; a hit opens in the pane living in that
-  // folder, or — none there — as a transcript on its own, read-only
   const [search, setSearch] = useState(false);
   const [viewer, setViewer] = useState<SearchHit | null>(null);
   // the jump names its pane ("" = the viewer): a Chat gets it only when it is that pane's
@@ -149,8 +133,7 @@ export default function App() {
   const jumps = useRef(0);
   const jumpFor = (machineId: string, paneId: string) => (jump && jump.machineId === machineId && jump.paneId === paneId ? jump : null);
   useEffect(() => {
-    // ⌘K on a Mac, Ctrl+K elsewhere — by key code, whatever the layout; a
-    // terminal keeps its own Ctrl+K
+    // ⌘K on a Mac, Ctrl+K elsewhere, by key code whatever the layout; a terminal keeps its own Ctrl+K
     const mac = /Mac|iPhone|iPad/.test(navigator.platform);
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "KeyK" || e.altKey || e.shiftKey || (mac ? !e.metaKey : !e.ctrlKey)) return;
@@ -161,15 +144,11 @@ export default function App() {
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
-  // a pane asked for from outside (a tapped notification, a deep link) is
-  // an Agents-mode thing, whatever the device was left in
   const requestPane = (r: Requested) => {
     setRequested(r);
     setViewer(null);
     setMode("herdr");
   };
-  // …including the one the page was opened with; the query goes, so a
-  // reload does not ask for it again
   useEffect(() => {
     if (!requested) return;
     setMode("herdr");
@@ -177,13 +156,9 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [termFont, setTermFont] = usePref("termFont", isTouch ? 12 : 13);
-  // fit mode: a grid at least this wide, scrolling sideways on a narrower
-  // screen — for diff viewers and tables that only truncate
   const [minCols, setMinCols] = usePref("minCols", 0);
   const [widthMenu, setWidthMenu] = useState<{ x: number; y: number } | null>(null);
-  // machines folded shut in the sidebar, like herdr's collapsed groups
   const [collapsed, setCollapsed] = usePref<Record<string, boolean>>("collapsed", {});
-  // how the sidebar reads and orders the agents (see radar.ts)
   const [radarPrefs, setRadarPrefs] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
 
   const refreshSeq = useRef(0);
@@ -191,14 +166,13 @@ export default function App() {
     const seq = ++refreshSeq.current;
     try {
       const res = await fetchRoster(rosterEtag.current);
-      if (seq !== refreshSeq.current) return; // a later poll already answered
+      if (seq !== refreshSeq.current) return;
       if (res.roster) {
         rosterEtag.current = res.etag;
         setMachines(res.roster.machines);
         setAgents(res.roster.agents);
         setRosterInfo({ latest: res.roster.latest, tailscale: res.roster.tailscale, version: res.roster.version });
       }
-      // the server was updated under this page: say so, once per version
       if (res.version && res.version !== __REMUDA_VERSION__ && __REMUDA_VERSION__ !== "dev") setStale(res.version);
       setOffline(false);
     } catch {
@@ -224,8 +198,7 @@ export default function App() {
     };
   }, [refresh]);
 
-  // push: re-register this device on load; a tapped notification in an
-  // already open tab arrives as a message from the service worker
+  // a tapped notification in an already open tab arrives as a "select-pane" message from the service worker
   useEffect(() => {
     void resyncPush(readAlertPrefs());
     if (!("serviceWorker" in navigator)) return;
@@ -239,7 +212,6 @@ export default function App() {
     };
   }, []);
 
-  // A menu closes on any click elsewhere or Escape.
   const menuOpen = !!menu || !!widthMenu;
   useEffect(() => {
     if (!menuOpen) return;
@@ -257,11 +229,10 @@ export default function App() {
   }, [menuOpen]);
 
   useEffect(() => {
-    if (!notice || notice.error) return; // an error stays until dismissed
+    if (!notice || notice.error) return;
     const t = setTimeout(() => setNotice(null), notice.brief ? 2000 : 6000);
     return () => clearTimeout(t);
   }, [notice]);
-  // what the corner shows: the connection, a newer server, the last note
   const toasts: ToastItem[] = [];
   if (offline) toasts.push({ id: "offline", tone: "warn", text: "Reconnecting to remuda…", busy: true });
   if (stale && !offline)
@@ -290,7 +261,6 @@ export default function App() {
       onDismiss: () => setReleaseSeen(release),
     });
   if (notice) toasts.push({ id: "notice", tone: notice.error ? "error" : "success", text: notice.text, onDismiss: () => setNotice(null) });
-  // the tailnet node needs a login (first run), or could not start
   const ts = rosterInfo.tailscale;
   if (ts?.state === "needs_login" && ts.login_url)
     toasts.push({
@@ -320,8 +290,7 @@ export default function App() {
 
   const openHit = (hit: SearchHit) => {
     setSearch(false);
-    // the pane whose folder is the hit's project (a cd inside the session
-    // does not move the transcript)
+    // the hit's project is the folder the agent started in: a cd inside the session does not move the transcript
     const there = allPanes.filter((x) => x.machine.id === hit.machine && (encodePath(x.session.dir ?? "") === hit.project || encodePath(x.pane.cwd) === hit.project));
     const pick = there.find((x) => x.pane.agent === "claude") ?? there.find((x) => x.pane.agent) ?? there[0];
     setJump({ machineId: hit.machine, paneId: pick ? pick.pane.id : "", session: hit.session, turn: hit.uuid, n: ++jumps.current });
@@ -335,7 +304,6 @@ export default function App() {
     }
   };
 
-  // what the Tasks mode can send a task to
   const agentTargets = useMemo<AgentTarget[]>(
     () =>
       allPanes
@@ -353,10 +321,7 @@ export default function App() {
     [allPanes],
   );
 
-  // Looking at a pane counts as having seen it finish: the server marks a
-  // terminal or chat open once, but a finish while the terminal stays open
-  // is only seen here. Not while the tab is hidden — a phone in a pocket
-  // has not looked.
+  // a finish while the pane is already open is only seen here (the server marks a terminal or chat open once); not while the tab is hidden
   const seenState = current?.pane.radar?.state;
   useEffect(() => {
     if (mode !== "herdr" || viewer || !current || seenState !== "done") return;
@@ -386,9 +351,7 @@ export default function App() {
   const retargetFile = useCallback((target: FileTarget) => setFile((f) => (f ? { ...f, target } : f)), []);
   const modifierUsed = useCallback(() => setModifier(null), []);
 
-  // After creating something, close the dialog, land on the new pane and
-  // surface a warning — the container exists even when its agent did not
-  // start, so the dialog must not stay open to be submitted twice.
+  // the dialog closes even on a warning: the container exists although its agent did not start, and a second submit would make another
   const landOn = async (machineId: string, made: Created) => {
     setDialog(null);
     await refresh();
@@ -396,9 +359,7 @@ export default function App() {
     if (made.warning) setNotice({ text: made.warning });
   };
 
-  // the terminal's own controls: size, width, selection, text size, key
-  // bar. They live in the tab strip's right slot, so showing and hiding
-  // them with the lens moves nothing in the header.
+  // the terminal's own controls live in the tab strip's right slot: showing them with the lens moves nothing in the header
   const terminalTools = current && (
     <>
       <button
@@ -458,7 +419,6 @@ export default function App() {
     </>
   );
 
-  // a lens counts as seen for this pane once it is the one on screen
   const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
   useEffect(() => {
     if (!paneKey) return;
@@ -867,8 +827,7 @@ export default function App() {
   );
 }
 
-// Tabs of the current workspace sit above the pane, as in herdr; a split tab
-// lists its panes under the tab row, connected like herdr's tree.
+// TabStrip is the workspace's tabs above the pane, as in herdr; a split tab lists its panes under the row
 function TabStrip({
   session,
   tab,
@@ -882,13 +841,12 @@ function TabStrip({
   session: Session;
   tab: Tab;
   pane: Pane;
-  tools?: ReactNode; // the lens's own controls, right of the tabs
+  tools?: ReactNode;
   onSelect: (paneId: string) => void;
   onNewTab: () => void;
   onCloseTab: (t: Tab) => void;
   onRename: (t: Tab, label: string) => void;
 }) {
-  // double-click a tab to name it in place; Enter keeps, Escape drops
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
   const commit = () => {
     if (!editing) return;
@@ -993,10 +951,9 @@ function AgentSelect({ agents, value, onChange }: { agents: AgentKind[]; value: 
   );
 }
 
-// A dialog that is a form: fields, an error if the action failed, Cancel
-// and the one filled button.
 type Submit = { err: string; busy: boolean; run: () => Promise<void> };
 
+// FormDialog is a dialog that is a form: fields, an error if the action failed, Cancel and the one filled button
 function FormDialog({ title, icon, hint, children, onClose, submit, submitLabel }: {
   title: string;
   icon?: IconName;
@@ -1079,13 +1036,12 @@ function NewWorkspaceDialog({
   const [dir, setDir] = useState("");
   const [name, setName] = useState("");
   const [agent, setAgent] = useState(() => defaultAgent(agents, "claude"));
-  const [picking, setPicking] = useState(false); // the folder picker, over this dialog
+  const [picking, setPicking] = useState(false);
   const submit = useSubmit(async () => {
     if (!dir.trim()) throw new Error("Project folder is required");
     await onCreate(machine, dir.trim(), name.trim(), agent);
   });
   const target = machines.find((m) => m.id === machine);
-  // every machine is listed; one that is not connected cannot be picked
   const options = machineOptions(machines, { onlyConnected: false }).map((o) => {
     const m = machines.find((x) => x.id === o.value);
     return m && m.state !== "connected" ? { ...o, hint: m.state, disabled: true } : { ...o, hint: m?.host };

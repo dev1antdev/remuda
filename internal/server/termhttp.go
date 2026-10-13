@@ -14,14 +14,11 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
-// The terminal over plain HTTP: for viewers whose path to the server passes
-// a proxy that forwards requests but not WebSockets. A stream is a
-// server-side subscription to the pane's attach; the client long-polls it
-// for output and POSTs input. Same bytes, same attach sharing, a little
-// more latency.
+// The terminal over plain HTTP, for viewers behind a proxy that forwards requests
+// but not WebSockets: a stream is a server-side subscription the client long-polls.
 
 const (
-	streamIdle     = 90 * time.Second // no read for this long → the stream is dropped
+	streamIdle     = 90 * time.Second
 	streamMaxWait  = 25 * time.Second
 	streamMaxChunk = 512 * 1024
 )
@@ -32,9 +29,9 @@ type termStream struct {
 	attach   *herdr.AttachManager
 	ch       chan []byte
 	cancel   func()
-	readMu   sync.Mutex   // one long-poll at a time; never held by anyone else
-	lastRead atomic.Int64 // unix nanos of the last poll
-	mu       sync.Mutex   // closed
+	readMu   sync.Mutex // one long-poll at a time; never held by anyone else
+	lastRead atomic.Int64
+	mu       sync.Mutex
 	closed   bool
 }
 
@@ -80,8 +77,7 @@ func (ts *termStreams) remove(id string) {
 	}
 }
 
-// sweep drops streams nobody has read for a while — a tab closed without
-// saying goodbye must not pin the attach open. It never waits on a poll.
+// sweep drops streams nobody has read for a while, so a tab closed without a goodbye does not pin the attach open.
 func (ts *termStreams) sweep() {
 	for {
 		time.Sleep(15 * time.Second)
@@ -105,7 +101,7 @@ func newStreamID() string {
 	return hex.EncodeToString(b)
 }
 
-// POST /api/term/open?machine&id&cols&rows → {"sid": …}
+// handleTermOpen is POST /api/term/open?machine&id&cols&rows → {"sid": …}.
 func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 	mc, _, attach, ok := s.ready(w, r, "")
 	if !ok {
@@ -119,9 +115,6 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 	s.Radar.Seen(mc.Cfg.ID, pane.PaneID)
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
-	// the machine's own remuda, when it runs, holds the one attach: the
-	// stream is opened there and its id carries the machine, so every later
-	// request of the transport finds its way back
 	open := func(pc *peerClient) {
 		s.peerOpen(w, r, pc, mc.Cfg.ID, pane.PaneID, cols, rows)
 	}
@@ -147,9 +140,8 @@ func (s *Server) handleTermOpen(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"sid": st.id})
 }
 
-// GET /api/term/read?sid&wait=<seconds> → raw bytes; waits for the first
-// chunk, then drains what else is queued. X-Remuda-End: 1 when the attach
-// is gone, 410 when the stream is unknown (the client reopens).
+// handleTermRead is GET /api/term/read?sid&wait=<seconds> → raw bytes: the first chunk, then what else is queued.
+// X-Remuda-End: 1 says the attach is gone; 410 says the stream is unknown and the client reopens.
 func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 	if s.peerStream(w, r, "/api/term/read") {
 		return
@@ -172,7 +164,6 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 
 	var out []byte
 	ended := false
-	// wait for the first chunk, then drain whatever else is already queued
 	select {
 	case data, ok := <-st.ch:
 		if !ok {
@@ -199,12 +190,12 @@ func (s *Server) handleTermRead(w http.ResponseWriter, r *http.Request) {
 	}
 	if ended {
 		w.Header().Set("X-Remuda-End", "1")
-		s.streams.remove(st.id) // the client stops polling; the map stays honest
+		s.streams.remove(st.id)
 	}
 	w.Write(out)
 }
 
-// POST /api/term/input?sid — body is what the keyboard typed.
+// handleTermInput is POST /api/term/input?sid: the body is what the keyboard typed.
 func (s *Server) handleTermInput(w http.ResponseWriter, r *http.Request) {
 	if s.peerStream(w, r, "/api/term/input") {
 		return
@@ -228,7 +219,7 @@ func (s *Server) handleTermInput(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// POST /api/term/resize?sid&cols&rows
+// handleTermResize is POST /api/term/resize?sid&cols&rows.
 func (s *Server) handleTermResize(w http.ResponseWriter, r *http.Request) {
 	if s.peerStream(w, r, "/api/term/resize") {
 		return
@@ -244,7 +235,7 @@ func (s *Server) handleTermResize(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DELETE /api/term/close?sid
+// handleTermClose is DELETE /api/term/close?sid.
 func (s *Server) handleTermClose(w http.ResponseWriter, r *http.Request) {
 	if s.peerStream(w, r, "/api/term/close") {
 		return

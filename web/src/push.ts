@@ -1,7 +1,6 @@
-// Web Push on the client: one subscription per browser, kept in step with the
-// server's VAPID key. Subscribing is single-flight (two concurrent
-// subscribe() calls make Chrome keep only the later one, so the first
-// confirmation would hit a dead endpoint).
+// Web Push on the client: one subscription per browser, kept in step with the server's VAPID key.
+// Subscribing is single-flight: two concurrent subscribe() calls make Chrome keep only the later
+// one, so the first confirmation would hit a dead endpoint.
 
 import { check, sendJSON } from "./api";
 
@@ -9,7 +8,7 @@ export type Prefs = { input: boolean; done: "off" | "long" | "always"; watchdog?
 
 export type PushState = {
   supported: boolean;
-  reason?: string; // why not, when unsupported
+  reason?: string;
   permission: NotificationPermission | "unsupported";
   subscribed: boolean;
   endpoint?: string;
@@ -68,8 +67,7 @@ export async function getPushState(): Promise<PushState> {
 
 let inflight: Promise<void> | null = null;
 
-// enablePush asks for permission (once), subscribes (or re-subscribes if the
-// server's key changed) and registers the subscription with its prefs.
+// enablePush asks for permission, subscribes (anew when the server's key changed) and registers the subscription.
 export function enablePush(prefs: Prefs): Promise<void> {
   if (inflight) return inflight;
   inflight = (async () => {
@@ -114,8 +112,7 @@ export function sendTestPush(endpoint: string): Promise<void> {
   return sendJSON("POST", "/api/push/test", { endpoint });
 }
 
-// On every load with permission granted, re-register silently so a server
-// that lost its state regains this device without a click.
+// resyncPush re-registers silently on every load with permission granted, so a server that lost its state regains this device.
 export async function resyncPush(prefs: Prefs): Promise<void> {
   if (!support().ok || Notification.permission !== "granted") return;
   try {
@@ -135,8 +132,8 @@ function sameKey(sub: PushSubscription, key: Uint8Array<ArrayBuffer>): boolean {
   return true;
 }
 
-// Typed over a plain ArrayBuffer: newer TS libs type `new Uint8Array(n)` as
-// Uint8Array<ArrayBufferLike>, which BufferSource no longer accepts.
+// urlBase64ToUint8Array decodes the server's key over a plain ArrayBuffer: newer TS libs type
+// `new Uint8Array(n)` as Uint8Array<ArrayBufferLike>, which BufferSource no longer accepts.
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
   const b64 = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");

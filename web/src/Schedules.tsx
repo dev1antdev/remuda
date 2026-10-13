@@ -1,7 +1,6 @@
-// Schedules: prompts sent to an agent on a timetable. A list with the next
-// and last run, a switch per row, "Run now", and a form to make one — a
-// machine, a workspace folder, when (presets that write cron, or cron by
-// hand), and the prompt itself.
+// Schedules: prompts sent to an agent on a timetable. A list with the next and
+// last run, a switch per row, "Run now", and a form to make one — a machine, a
+// workspace folder, when (presets that write cron, or cron by hand), the prompt.
 
 import { useEffect, useMemo, useState } from "react";
 import { deleteSchedule, fetchSchedules, putSchedule, runSchedule, type Machine, type Schedule } from "./api";
@@ -12,14 +11,10 @@ import { Dialog, Notice, useSubmit } from "./ui";
 import Select from "./Select";
 import Icon from "./icons";
 
-// the server fills in the coming run on List; the api type has not caught
-// up with it yet
-
 const NEVER = "0001-01-01T00:00:00Z"; // Go's zero time
 const DEFAULT_CRON = "0 9 * * 1-5";
 
-// a preset writes its cron from the hour and minute; "custom" leaves the
-// cron to the hand that typed it
+// PRESETS write their cron from the hour and minute; "custom" leaves the cron as typed
 const PRESETS: { id: string; label: string; cron?: (hh: number, mm: number) => string }[] = [
   { id: "daily", label: "Every day", cron: (h, m) => `${m} ${h} * * *` },
   { id: "weekdays", label: "Weekdays", cron: (h, m) => `${m} ${h} * * 1-5` },

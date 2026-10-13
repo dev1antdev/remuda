@@ -1,10 +1,6 @@
-// Package usage counts what the agents spend: tokens per transcript record,
-// priced the way Claude Code prices them (its baked model catalog, read
-// from the installed 2.1.285: nine tiers, the 1h cache tier, the US-geo
-// surcharge), and how full a session's context is against its model's
-// window. Nothing here talks to Anthropic: it is the API-equivalent cost of
-// what the transcripts say, which on a subscription is a measure, not a
-// bill.
+// Package usage counts what the agents spend: tokens per transcript record, priced
+// the way Claude Code prices them (its baked model catalog, read from the installed
+// 2.1.285), and how full a session's context is. On a subscription a measure, not a bill.
 package usage
 
 import (
@@ -69,9 +65,7 @@ var models = []struct {
 
 var dateSuffix = regexp.MustCompile(`-\d{8}$`)
 
-// Lookup finds a model by its id as the transcripts spell it — the
-// canonical id, a dated one ("claude-sonnet-4-5-20250929"), or a provider's
-// prefix ("us.anthropic.…"). The second value is false for an unknown one.
+// Lookup finds a model by its id as the transcripts spell it: canonical, dated, or behind a provider's prefix.
 func Lookup(model string) (Model, bool) {
 	m := strings.ToLower(strings.TrimSpace(model))
 	if m == "" || strings.HasPrefix(m, "<") {
@@ -89,8 +83,7 @@ func Lookup(model string) (Model, bool) {
 	return Model{}, false
 }
 
-// FastRates are what Claude Code charges in fast mode (its z9e): Opus 5.5
-// one table, Opus 4.8 and 5 another, everything else the dearest.
+// FastRates are what Claude Code charges in fast mode (its z9e table).
 func FastRates(m Model) Rates {
 	switch m.ID {
 	case "claude-opus-5-5":
@@ -123,9 +116,7 @@ func (t *Tokens) Add(o Tokens) {
 // Context is what the record's prompt held: everything the model read.
 func (t Tokens) Context() int64 { return t.Input + t.CacheRead + t.CacheWrite5m + t.CacheWrite1h }
 
-// Cost prices one record the way Claude Code does: the 1h cache tier where
-// the API said so, fast mode from its own table, a tenth more when
-// inference was pinned to the US (not on web search).
+// Cost prices one record the way Claude Code does; the US-geo tenth is on tokens, not on web search.
 func Cost(m Model, t Tokens, geo, speed string) float64 {
 	r := m.Rates
 	if speed == "fast" {

@@ -8,8 +8,7 @@ import (
 	"time"
 )
 
-// A throwaway herdr server: its own HOME and socket, so the person's real
-// one is never touched. Skipped where herdr is not installed.
+// TestEnsureServerStartsOne starts a throwaway herdr server on a socket of its own, never the person's.
 func TestEnsureServerStartsOne(t *testing.T) {
 	bin, err := exec.LookPath("herdr")
 	if err != nil {

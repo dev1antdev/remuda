@@ -15,11 +15,9 @@ const anchor = (url: string, children: ReactNode, key: string) => (
   </a>
 );
 
-// A small Markdown renderer for agent answers. Builds React nodes directly —
-// no HTML string, nothing to sanitize. Covers what agents actually write:
-// headings, paragraphs, nested lists (incl. task lists), fenced code,
-// blockquotes, tables, rules, and inline code/bold/italic/strike/links,
-// plus file paths as buttons that open the viewer.
+// A small Markdown renderer for agent answers: React nodes directly, no HTML
+// string, nothing to sanitize. Headings, paragraphs, nested lists (task lists
+// too), fenced code, blockquotes, tables, rules, inline marks, file paths as buttons.
 
 export type OpenFile = (t: FileTarget) => void;
 
@@ -106,8 +104,7 @@ export function parseBlocks(src: string): Block[] {
       while (i < lines.length) {
         const m = lines[i]!.match(LIST);
         if (!m || m[1]!.length !== indent || /\d/.test(m[2]!) !== ordered) break;
-        // the item's own text plus every following line indented deeper
-        // (or blank lines followed by deeper lines)
+        // the item's own text plus every following line indented deeper, blank lines before deeper lines included
         const body: string[] = [m[3]!];
         i++;
         while (i < lines.length) {
@@ -183,9 +180,7 @@ const INLINE = new RegExp(
   "g",
 );
 
-// Inside a link's text nothing else is clickable: no path buttons, no
-// nested anchors (a click would open the file AND the link, and an
-// interactive element inside another is invalid markup).
+// renderInline; inside a link's text nothing else is clickable (onOpenFile null): an interactive element inside another is invalid markup
 function renderInline(text: string, onOpenFile: OpenFile | null, key = "i"): ReactNode[] {
   const out: ReactNode[] = [];
   let at = 0;
