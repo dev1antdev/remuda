@@ -1,4 +1,4 @@
-# Every push and pull request: the SPA built (every Go compile embeds it),
+# Every push to main or release and every pull request: the SPA built (every Go compile embeds it),
 # the TypeScript check, gofmt, go vet, the tests, and the vulnerability
 # scans — the same list as /verify in .claude/skills, run where the
 # author's machine is not.
@@ -6,7 +6,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, release]
   pull_request:
 
 permissions:

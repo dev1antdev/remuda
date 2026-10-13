@@ -164,10 +164,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   restart) — the machine serving the page restarts detached two seconds
   after the job instead, so the job ends first and the stale-page pill
   does the rest. `make release` writes `bin/checksums.txt`; `make
-  publish` (a tag on HEAD, a clean tree, the checks green) pushes the
-  tag, and `.github/workflows/release.yml` builds the binaries and makes
-  the GitHub release from it; `.github/workflows/ci.yml` is /verify's
-  list plus govulncheck, npm audit and gitleaks on every push.
+  publish` (on `main` with `release` fast-forwarded in, a tag on HEAD, a
+  clean tree, the checks green) pushes the tag, and
+  `.github/workflows/release.yml` builds the binaries and makes the
+  GitHub release from it; `.github/workflows/ci.yml` is /verify's list
+  plus govulncheck, npm audit and gitleaks on every push to main or
+  release and every pull request. Pull requests target `release`; `main`
+  is what is out (AGENTS.md, "Build and check").
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
   (`HealthButton` in Sidebar.tsx) turns amber on an update, a lagging
   remote remuda, or a nearly full disk.
