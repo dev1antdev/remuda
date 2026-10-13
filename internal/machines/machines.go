@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/sshx"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/text"
@@ -431,7 +432,7 @@ func (mc *Machine) HerdrBin() string {
 // ServerVersions reads the installed herdr's version and the running server's ("" when none runs), freshly.
 func (mc *Machine) ServerVersions() (installed, running string, err error) {
 	bin, sock := mc.herdrPaths()
-	out, err := mc.Shell(`LC_ALL=C; `+sshx.Quote(bin)+` --version 2>/dev/null | head -1; HERDR_SOCKET_PATH=`+sshx.Quote(sock)+` `+sshx.Quote(bin)+` status server 2>/dev/null | sed -n 's/^version: //p' | head -1`, 20*time.Second)
+	out, err := mc.Shell(`LC_ALL=C; `+script.Quote(bin)+` --version 2>/dev/null | head -1; HERDR_SOCKET_PATH=`+script.Quote(sock)+` `+script.Quote(bin)+` status server 2>/dev/null | sed -n 's/^version: //p' | head -1`, 20*time.Second)
 	if err != nil && strings.TrimSpace(out) == "" {
 		return "", "", err
 	}
@@ -448,7 +449,7 @@ var herdrSemver = regexp.MustCompile(`\d+\.\d+\.\d+`)
 // StopServer stops herdr's server on the machine, and every pane process with it.
 func (mc *Machine) StopServer() (string, error) {
 	bin, sock := mc.herdrPaths()
-	return mc.Shell(`HERDR_SOCKET_PATH=`+sshx.Quote(sock)+` `+sshx.Quote(bin)+` server stop 2>&1`, 30*time.Second)
+	return mc.Shell(`HERDR_SOCKET_PATH=`+script.Quote(sock)+` `+script.Quote(bin)+` server stop 2>&1`, 30*time.Second)
 }
 
 // StartServer starts herdr's server on the machine now, without the spacing of the automatic starts.
@@ -585,10 +586,10 @@ func rpcClient(conn *sshx.Conn, sock string) (*herdr.Client, error) {
 		errs = append(errs, err.Error())
 	}
 
-	script := "nc -U " + sshx.Quote(sock)
+	bridge := "nc -U " + script.Quote(sock)
 	client := herdr.NewClient(sock)
 	client.Dial = func(timeout time.Duration) (net.Conn, error) {
-		return conn.DialExec(script, timeout)
+		return conn.DialExec(bridge, timeout)
 	}
 	if _, _, err := client.Ping(); err == nil {
 		return client, nil
@@ -668,7 +669,7 @@ func (mc *Machine) Predecessor(path string) string {
 	}
 	if mc.Local {
 		p = transcript.Predecessor(path)
-	} else if out, err := mc.exec(transcript.PredecessorScript(sshx.Quote(path)), 30*time.Second); err == nil {
+	} else if out, err := mc.exec(transcript.PredecessorScript(script.Quote(path)), 30*time.Second); err == nil {
 		p = strings.TrimSpace(out)
 	} else {
 		return "" // not cached: asked again next time
@@ -693,7 +694,7 @@ func (mc *Machine) nextContinuation(path string) string {
 	var next string
 	if mc.Local {
 		next = transcript.Continuation(path)
-	} else if out, err := mc.exec(transcript.ContinuationScript(sshx.Quote(path)), 20*time.Second); err == nil {
+	} else if out, err := mc.exec(transcript.ContinuationScript(script.Quote(path)), 20*time.Second); err == nil {
 		next = strings.TrimSpace(out)
 	}
 	mc.mu.Lock()
@@ -771,20 +772,20 @@ func (mc *Machine) remoteConn() (*sshx.Conn, error) {
 	return mc.conn, nil
 }
 
-func (mc *Machine) exec(script string, timeout time.Duration) (string, error) {
+func (mc *Machine) exec(command string, timeout time.Duration) (string, error) {
 	conn, err := mc.remoteConn()
 	if err != nil {
 		return "", err
 	}
-	return conn.Exec(script, timeout)
+	return conn.Exec(command, timeout)
 }
 
-func (mc *Machine) execBytes(script string, timeout time.Duration) ([]byte, error) {
+func (mc *Machine) execBytes(command string, timeout time.Duration) ([]byte, error) {
 	conn, err := mc.remoteConn()
 	if err != nil {
 		return nil, err
 	}
-	return conn.ExecBytes(script, timeout)
+	return conn.ExecBytes(command, timeout)
 }
 
 // Home is the user's home directory on this machine.
@@ -798,12 +799,6 @@ func (mc *Machine) Home() string {
 	return mc.home
 }
 
-// statScript prints the GNU form, falling back to BSD stat.
-func statScript(path, gnuFmt, bsdFmt string) string {
-	q := sshx.Quote(path)
-	return "stat -c " + sshx.Quote(gnuFmt) + " " + q + " 2>/dev/null || stat -f " + sshx.Quote(bsdFmt) + " " + q
-}
-
 // ---- transcripts ----
 
 // TranscriptVersion stats the session file; the version doubles as the ETag.
@@ -811,7 +806,7 @@ func (mc *Machine) TranscriptVersion(path string) (transcript.Version, error) {
 	if mc.Local {
 		return transcript.Stat(path)
 	}
-	out, err := mc.exec(statScript(path, "%s %Y", "%z %m"), 10*time.Second)
+	out, err := mc.exec(script.Stat(script.Quote(path), "%s %Y", "%z %m"), 10*time.Second)
 	if err != nil {
 		return transcript.Version{}, err
 	}
@@ -843,9 +838,9 @@ func (mc *Machine) DirVersions(dir string) (map[string]transcript.Version, error
 		}
 		return out, nil
 	}
-	q := sshx.Quote(dir)
-	script := `[ -d ` + q + ` ] || exit 0; for f in ` + q + `/*.jsonl; do [ -f "$f" ] || continue; stat -c '%s %Y %n' "$f" 2>/dev/null || stat -f '%z %m %N' "$f"; done`
-	raw, err := mc.exec(script, 20*time.Second)
+	q := script.Quote(dir)
+	listing := `[ -d ` + q + ` ] || exit 0; for f in ` + q + `/*.jsonl; do [ -f "$f" ] || continue; ` + script.Stat(`"$f"`, "%s %Y %n", "%z %m %N") + `; done`
+	raw, err := mc.exec(listing, 20*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -883,7 +878,7 @@ func (mc *Machine) remoteTail(path string, v transcript.Version) ([]byte, error)
 	}
 
 	// every read is cut at the size the stat saw: what the agent wrote since belongs to the next version
-	q := sshx.Quote(path)
+	q := script.Quote(path)
 	var data []byte
 	if cached != nil && v.Size > cached.version.Size {
 		// grew: fetch the delta only (tail -c +N is 1-indexed)
@@ -965,9 +960,9 @@ func (mc *Machine) ResolveSession(cwd, kind, value string) (string, error) {
 	} else {
 		projects := mc.Home() + "/.claude/projects"
 		primary := projects + "/" + transcript.EncodePath(cwd) + "/" + value + ".jsonl"
-		script := `if [ -f ` + sshx.Quote(primary) + ` ]; then printf %s ` + sshx.Quote(primary) + `; else ls ` +
-			sshx.Quote(projects) + `/*/` + sshx.Quote(value+".jsonl") + ` 2>/dev/null | head -1; fi`
-		out, err := mc.exec(script, 15*time.Second)
+		find := `if [ -f ` + script.Quote(primary) + ` ]; then printf %s ` + script.Quote(primary) + `; else ls ` +
+			script.Quote(projects) + `/*/` + script.Quote(value+".jsonl") + ` 2>/dev/null | head -1; fi`
+		out, err := mc.exec(find, 15*time.Second)
 		if err != nil {
 			return miss(err)
 		}

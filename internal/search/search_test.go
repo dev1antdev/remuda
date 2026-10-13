@@ -56,7 +56,7 @@ func TestScanNewestFirstWithFilters(t *testing.T) {
 }
 
 func TestScriptQuotesAndSpellings(t *testing.T) {
-	s := script("/Users/me", `say "hi"`, "", time.Time{})
+	s := remoteScript("/Users/me", `say "hi"`, "", time.Time{})
 	if !strings.Contains(s, `-e 'say \"hi\"'`) {
 		t.Fatalf("the JSON form is missing: %s", s)
 	}
@@ -67,16 +67,16 @@ func TestScriptQuotesAndSpellings(t *testing.T) {
 	if !strings.HasPrefix(s, want) {
 		t.Fatalf("prefix:\n%s\nwant\n%s", s, want)
 	}
-	if n := strings.Count(script("/h", "123", "", time.Time{}), "-e "); n != 1 {
+	if n := strings.Count(remoteScript("/h", "123", "", time.Time{}), "-e "); n != 1 {
 		t.Fatalf("%d patterns for digits", n)
 	}
-	if !strings.Contains(script("/h", "<b>&", "", time.Time{}), `-e '<b>&'`) {
-		t.Fatalf("html escaped: %s", script("/h", "<b>&", "", time.Time{}))
+	if !strings.Contains(remoteScript("/h", "<b>&", "", time.Time{}), `-e '<b>&'`) {
+		t.Fatalf("html escaped: %s", remoteScript("/h", "<b>&", "", time.Time{}))
 	}
-	if !strings.Contains(script("/h", "it's", "", time.Time{}), `'it'\''s'`) {
-		t.Fatalf("shell quote: %s", script("/h", "it's", "", time.Time{}))
+	if !strings.Contains(remoteScript("/h", "it's", "", time.Time{}), `'it'\''s'`) {
+		t.Fatalf("shell quote: %s", remoteScript("/h", "it's", "", time.Time{}))
 	}
-	if s := script("/h", "x", "/p/q", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)); !strings.Contains(s, " -dir '/p/q' -since '2026-10-01T00:00:00Z'") {
+	if s := remoteScript("/h", "x", "/p/q", time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)); !strings.Contains(s, " -dir '/p/q' -since '2026-10-01T00:00:00Z'") {
 		t.Fatalf("filters: %s", s)
 	}
 	if capitalized("вику") != "Вику" {

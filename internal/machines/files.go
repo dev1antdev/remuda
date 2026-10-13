@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/sshx"
 )
 
@@ -114,9 +115,9 @@ func (mc *Machine) stat(p string) (FileInfo, error) {
 		kind, mime := classify(p, func() bool { return sniffLocal(p) })
 		return FileInfo{Path: p, Kind: kind, MIME: mime, Size: fi.Size()}, nil
 	}
-	q := sshx.Quote(p)
+	q := script.Quote(p)
 	out, err := mc.exec(`if [ -d `+q+` ]; then echo dir; elif [ -f `+q+` ]; then `+
-		`printf 'file %s ' "$(`+statScript(p, "%s", "%z")+`)"; `+
+		`printf 'file %s ' "$(`+script.Stat(q, "%s", "%z")+`)"; `+
 		`head -c 8192 `+q+` | tr -d -c '\000' | wc -c; else echo missing; fi`, 15*time.Second)
 	if err != nil {
 		return FileInfo{}, err
@@ -179,10 +180,10 @@ func (mc *Machine) findBySuffix(root, rel string) []string {
 	}
 	var prune []string
 	for d := range skipDirs {
-		prune = append(prune, "-name "+sshx.Quote(d)+" -prune -o")
+		prune = append(prune, "-name "+script.Quote(d)+" -prune -o")
 	}
-	out, err := mc.exec(`find `+sshx.Quote(root)+` `+strings.Join(prune, " ")+
-		` -type f -path `+sshx.Quote("*/"+rel)+` -print 2>/dev/null | head -`+strconv.Itoa(maxFind), 20*time.Second)
+	out, err := mc.exec(`find `+script.Quote(root)+` `+strings.Join(prune, " ")+
+		` -type f -path `+script.Quote("*/"+rel)+` -print 2>/dev/null | head -`+strconv.Itoa(maxFind), 20*time.Second)
 	if err != nil {
 		return nil
 	}
@@ -201,7 +202,7 @@ func (mc *Machine) Open(p string) (*os.File, error) {
 
 // ReadRemote returns up to max bytes of a remote file and whether it was cut.
 func (mc *Machine) ReadRemote(p string, max int64) ([]byte, bool, error) {
-	data, err := mc.execBytes(fmt.Sprintf("head -c %d %s", max+1, sshx.Quote(p)), 60*time.Second)
+	data, err := mc.execBytes(fmt.Sprintf("head -c %d %s", max+1, script.Quote(p)), 60*time.Second)
 	if err != nil {
 		return nil, false, err
 	}
@@ -293,13 +294,13 @@ func (mc *Machine) SaveUpload(cwd, name string, data []byte) (Upload, error) {
 		if err != nil {
 			return Upload{}, err
 		}
-		if _, err := mc.exec("[ ! -L "+sshx.Quote(holder)+" ] && [ ! -L "+sshx.Quote(folder)+" ]", 10*time.Second); err != nil {
+		if _, err := mc.exec("[ ! -L "+script.Quote(holder)+" ] && [ ! -L "+script.Quote(folder)+" ]", 10*time.Second); err != nil {
 			return Upload{}, fmt.Errorf("%s or its uploads folder is a symlink; uploads go only into a real folder", holder)
 		}
 		if err := conn.Put(abs, data, 2*time.Minute); err != nil {
 			return Upload{}, err
 		}
-		mc.exec("[ -e "+sshx.Quote(ignore)+" ] || printf '*\\n' > "+sshx.Quote(ignore), 10*time.Second)
+		mc.exec("[ -e "+script.Quote(ignore)+" ] || printf '*\\n' > "+script.Quote(ignore), 10*time.Second)
 	}
 	kind, _ := classify(abs, func() bool { return bytes.IndexByte(data[:min(len(data), 8192)], 0) >= 0 })
 	return Upload{Name: stored, Path: abs, Rel: rel, Size: len(data), Kind: kind}, nil
@@ -324,15 +325,15 @@ func (mc *Machine) ReadFrom(p string, offset int64) ([]byte, error) {
 		}
 		return io.ReadAll(io.LimitReader(f, 256<<20))
 	}
-	return mc.execBytes(fmt.Sprintf("tail -c +%d %s", offset+1, sshx.Quote(p)), 120*time.Second)
+	return mc.execBytes(fmt.Sprintf("tail -c +%d %s", offset+1, script.Quote(p)), 120*time.Second)
 }
 
 // Shell runs a POSIX script on the machine through `sh -c`, here or over the ssh master, and returns its stdout.
-func (mc *Machine) Shell(script string, timeout time.Duration) (string, error) {
+func (mc *Machine) Shell(command string, timeout time.Duration) (string, error) {
 	if mc.Local {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "sh", "-c", script)
+		cmd := exec.CommandContext(ctx, "sh", "-c", command)
 		cmd.WaitDelay = 2 * time.Second // a killed sh may leave children on the pipes; do not wait for them
 		var out, errb bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &errb
@@ -347,21 +348,21 @@ func (mc *Machine) Shell(script string, timeout time.Duration) (string, error) {
 		}
 		return out.String(), nil
 	}
-	return mc.exec(script, timeout)
+	return mc.exec(command, timeout)
 }
 
 // Stream runs a POSIX script on the machine, handing sink its output as it comes; the exit status is the error.
-func (mc *Machine) Stream(script string, timeout time.Duration, sink func([]byte)) error {
+func (mc *Machine) Stream(command string, timeout time.Duration, sink func([]byte)) error {
 	if !mc.Local {
 		conn, err := mc.remoteConn()
 		if err != nil {
 			return err
 		}
-		return conn.Stream(script, timeout, sink)
+		return conn.Stream(command, timeout, sink)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "sh", "-c", script)
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // its own group: a timeout ends the children too
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
 	cmd.WaitDelay = 2 * time.Second
@@ -402,11 +403,11 @@ func (mc *Machine) Stream(script string, timeout time.Duration, sink func([]byte
 
 // GitDiff is the file's uncommitted change against HEAD in its repository, or marks it untracked / outside any repo.
 func (mc *Machine) GitDiff(p string) (Diff, error) {
-	q := sshx.Quote(p)
-	script := `cd ` + sshx.Quote(filepath.Dir(p)) + ` 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
+	q := script.Quote(p)
+	diff := script.InRepo(filepath.Dir(p)) +
 		`printf '%s\n' "$root"; if git ls-files --error-unmatch -- ` + q + ` >/dev/null 2>&1; then echo tracked; ` +
 		`git -c color.ui=never diff HEAD -- ` + q + ` | head -c 400000; else echo untracked; fi`
-	out, err := mc.Shell(script, 30*time.Second)
+	out, err := mc.Shell(diff, 30*time.Second)
 	if err != nil {
 		return Diff{}, err
 	}
@@ -433,15 +434,15 @@ type DirListing struct {
 
 // ListDirs lists the subfolders of path on the machine ("" or "~" is home), hidden ones only when asked.
 func (mc *Machine) ListDirs(path string, hidden bool) (DirListing, error) {
-	q := sshx.Quote(path)
+	q := script.Quote(path)
 	glob := "*/"
 	if hidden {
 		glob = "*/ .*/"
 	}
-	script := `p=` + q + `; [ -z "$p" ] && p="$HOME"; case "$p" in "~") p="$HOME";; "~/"*) p="$HOME/${p#"~/"}";; esac; ` +
+	listing := `p=` + q + `; [ -z "$p" ] && p="$HOME"; case "$p" in "~") p="$HOME";; "~/"*) p="$HOME/${p#"~/"}";; esac; ` +
 		`cd "$p" 2>/dev/null || { printf 'ERR\037not a folder: %s\n' "$p"; exit 0; }; printf '%s\n' "$(pwd -P)"; printf '%s\n' "$HOME"; printf '\036\n'; ` +
 		`for d in ` + glob + `; do case "$d" in ./|../) continue;; esac; [ -d "$d" ] || continue; n=${d%/}; g=0; [ -e "$d.git" ] && g=1; printf '%s\037%s\n' "$n" "$g"; done`
-	out, err := mc.Shell(script, 30*time.Second)
+	out, err := mc.Shell(listing, 30*time.Second)
 	if err != nil {
 		return DirListing{}, err
 	}

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/version"
 )
@@ -229,8 +229,8 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 
 // Script runs the report on a remote machine through its own remuda.
 func Script(home string, since time.Time, tz string) string {
-	q := sshx.Quote
-	bin, guard := sshx.VersionedBin(home, version.Build)
+	q := script.Quote
+	bin, guard := script.Remuda(home, version.Build)
 	tzFlag := ""
 	if tz != "" {
 		tzFlag = " -tz " + q(tz)

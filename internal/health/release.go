@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/dev1antdev/remuda/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/script"
 )
 
 // remuda's own releases on GitHub, offered to a machine whose remuda is older; nothing is fetched until Run.
@@ -124,8 +124,6 @@ func releaseURLOK(raw, tag string) bool {
 	return strings.HasPrefix(u.Path, "/"+releasesRepo+"/releases/download/"+tag+"/") && !strings.Contains(u.Path, "/../")
 }
 
-const pathLine = `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH`
-
 // InstallScript puts ~/.local/bin/remuda.new where the service runs remuda from, once it has shown it runs at all.
 const InstallScript = `chmod +x "$HOME/.local/bin/remuda.new" && "$HOME/.local/bin/remuda.new" -version && mv "$HOME/.local/bin/remuda.new" "$HOME/.local/bin/remuda"`
 
@@ -142,13 +140,13 @@ const restartLater = `if launchctl print "gui/$(id -u)/dev.mardeus.remuda" >/dev
 // ReleaseScript is what the machine runs: download, the checksum when the release has one, install, restart.
 func ReleaseScript(url, sums, asset string, local bool) string {
 	var b strings.Builder
-	b.WriteString("set -e; " + pathLine + "\n")
+	b.WriteString("set -e; " + script.PATH + "\n")
 	b.WriteString(`mkdir -p "$HOME/.local/bin"` + "\n")
-	b.WriteString(`echo downloading ` + sshx.Quote(url) + "\n")
-	b.WriteString(`curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.new" ` + sshx.Quote(url) + "\n")
+	b.WriteString(`echo downloading ` + script.Quote(url) + "\n")
+	b.WriteString(`curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.new" ` + script.Quote(url) + "\n")
 	if sums != "" {
-		b.WriteString(`if curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.sums" ` + sshx.Quote(sums) + `; then` + "\n")
-		b.WriteString(`  want=$(awk -v n=` + sshx.Quote(asset) + ` '{ f=$NF; sub(/^\*/, "", f); if (f == n) print $1 }' "$HOME/.local/bin/remuda.sums" | head -1)` + "\n")
+		b.WriteString(`if curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.sums" ` + script.Quote(sums) + `; then` + "\n")
+		b.WriteString(`  want=$(awk -v n=` + script.Quote(asset) + ` '{ f=$NF; sub(/^\*/, "", f); if (f == n) print $1 }' "$HOME/.local/bin/remuda.sums" | head -1)` + "\n")
 		b.WriteString(`  have=$( (shasum -a 256 "$HOME/.local/bin/remuda.new" 2>/dev/null || sha256sum "$HOME/.local/bin/remuda.new") | cut -d' ' -f1)` + "\n")
 		b.WriteString(`  rm -f "$HOME/.local/bin/remuda.sums"` + "\n")
 		b.WriteString(`  if [ -z "$want" ] || [ "$want" != "$have" ]; then echo "!! checksum mismatch: the download is not what the release says (want ${want:-?}, got $have)"; rm -f "$HOME/.local/bin/remuda.new"; exit 1; fi` + "\n")

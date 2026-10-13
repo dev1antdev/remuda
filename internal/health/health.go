@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/script"
 )
 
 // Report is one machine's vitals, as last read.
@@ -164,7 +165,7 @@ func (c *Collector) Refresh(mc *machines.Machine) {
 // Script prints the vitals, one "key=value" per line, every probe silent when its tool is missing.
 // PATH is set first: a non-interactive shell over ssh starts without the package managers' bin dirs.
 func Script() string {
-	return `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH
+	return script.PATH + `
 LC_ALL=C; export LC_ALL
 if command -v sw_vers >/dev/null 2>&1; then echo "os=macOS $(sw_vers -productVersion 2>/dev/null)"; else echo "os=$(uname -s) $(uname -r)"; fi
 for a in claude codex gemini; do c=$(command -v "$a" 2>/dev/null); if [ -n "$c" ]; then echo "$a=$("$a" --version 2>/dev/null | head -1)"; echo "${a}_path=$(readlink "$c" 2>/dev/null || printf %s "$c")"; fi; done
@@ -426,7 +427,7 @@ const serverNote = "When the running server is still on the old version afterwar
 
 // Plan is the update for one thing on a machine with this report, run as the user and never with sudo.
 func Plan(what string, r *Report) (Update, error) {
-	path := `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH; `
+	path := script.PATH + "; "
 	via := func(cmdVia, brew, npm, native string) (string, error) {
 		switch cmdVia {
 		case "brew":

@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dev1antdev/remuda/internal/script"
 )
 
 type Conn struct {
@@ -37,19 +39,6 @@ func (e *ExitError) Error() string {
 		return e.Stderr
 	}
 	return fmt.Sprintf("exit status %d", e.Code)
-}
-
-// VersionedBin is the quoted path of a machine's own remuda and the shell guard that it is this very version
-// (an older one would not know the subcommand, or would start a server instead).
-func VersionedBin(home, version string) (bin, guard string) {
-	bin = Quote(home + "/.local/bin/remuda")
-	guard = "[ -x " + bin + " ] && [ \"$(" + bin + " -version 2>/dev/null)\" = " + Quote("remuda "+version) + " ]"
-	return bin, guard
-}
-
-// Quote wraps s for a POSIX shell.
-func Quote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // SocketDir is where the control and forward sockets go when main sets it: the state dir, the person's own.
@@ -127,9 +116,9 @@ wait:
 func (c *Conn) Alive() bool { return c.cmd("-O", "check", c.Host).Run() == nil }
 
 // run executes a remote command over the master with a deadline, stdin streamed to it when given.
-func (c *Conn) run(script string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
+func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
 	// every script here is POSIX sh; the remote login shell may be anything
-	cmd := c.cmd(c.Host, "sh -c "+Quote(script))
+	cmd := c.cmd(c.Host, "sh -c "+script.Quote(command))
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -151,13 +140,13 @@ func (c *Conn) run(script string, timeout time.Duration, stdin io.Reader) ([]byt
 	case <-time.After(timeout):
 		cmd.Process.Kill()
 		<-done
-		return nil, fmt.Errorf("ssh %s: %q timed out", c.Host, script)
+		return nil, fmt.Errorf("ssh %s: %q timed out", c.Host, command)
 	}
 }
 
 // Stream runs a remote command, handing sink its output (stdout and stderr) as it comes; the exit status is the error.
-func (c *Conn) Stream(script string, timeout time.Duration, sink func([]byte)) error {
-	cmd := c.cmd(c.Host, "sh -c "+Quote("exec 2>&1; "+script))
+func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) error {
+	cmd := c.cmd(c.Host, "sh -c "+script.Quote("exec 2>&1; "+command))
 	pr, pw := io.Pipe()
 	cmd.Stdout, cmd.Stderr = pw, pw
 	if err := cmd.Start(); err != nil {
@@ -204,19 +193,19 @@ func (c *Conn) Stream(script string, timeout time.Duration, sink func([]byte)) e
 }
 
 // Exec runs a command on the remote host and returns its stdout.
-func (c *Conn) Exec(script string, timeout time.Duration) (string, error) {
-	out, err := c.run(script, timeout, nil)
+func (c *Conn) Exec(command string, timeout time.Duration) (string, error) {
+	out, err := c.run(command, timeout, nil)
 	return string(out), err
 }
 
 // ExecBytes is Exec for binary-safe stdout.
-func (c *Conn) ExecBytes(script string, timeout time.Duration) ([]byte, error) {
-	return c.run(script, timeout, nil)
+func (c *Conn) ExecBytes(command string, timeout time.Duration) ([]byte, error) {
+	return c.run(command, timeout, nil)
 }
 
 // Put writes data to a remote file, creating its directory, through cat over the master.
 func (c *Conn) Put(path string, data []byte, timeout time.Duration) error {
-	_, err := c.run("mkdir -p "+Quote(filepath.Dir(path))+" && cat > "+Quote(path), timeout, bytes.NewReader(data))
+	_, err := c.run("mkdir -p "+script.Quote(filepath.Dir(path))+" && cat > "+script.Quote(path), timeout, bytes.NewReader(data))
 	return err
 }
 
@@ -252,8 +241,8 @@ func (c *Conn) ForwardTCP(remotePort int) (string, error) {
 
 // DialExec runs a remote command over the master and exposes its stdin/stdout as a net.Conn:
 // the RPC transport for an sshd that refuses unix-socket forwarding (`nc -U <socket>` bridges to herdr).
-func (c *Conn) DialExec(script string, timeout time.Duration) (net.Conn, error) {
-	cmd := c.cmd(c.Host, script)
+func (c *Conn) DialExec(command string, timeout time.Duration) (net.Conn, error) {
+	cmd := c.cmd(c.Host, command)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	stdin, err := cmd.StdinPipe()
@@ -355,7 +344,7 @@ func (a sshAddr) String() string  { return string(a) }
 
 // AttachCmd builds the remote `herdr terminal attach` to run under a local PTY; ssh -tt carries window-size changes.
 func (c *Conn) AttachCmd(herdrBin, terminalID string) *exec.Cmd {
-	cmd := c.cmd("-tt", c.Host, Quote(herdrBin)+" terminal attach "+Quote(terminalID))
+	cmd := c.cmd("-tt", c.Host, script.Quote(herdrBin)+" terminal attach "+script.Quote(terminalID))
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 	return cmd
 }

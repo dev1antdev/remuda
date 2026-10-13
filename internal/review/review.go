@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -117,9 +117,9 @@ func (store *Store) Badge(machineID, dir string) (Badge, bool) {
 // summaryScript gathers everything Summary needs in one shell, sections separated by a line of \x1e and fields by \x1f:
 // repo/branch/HEAD, the first-parent commits since the baseline, the numstat against HEAD, the untracked files, every uncommitted file's blob, and per commit the blobs it left (none for a merge).
 func summaryScript(dir, baselineHead string) string {
-	return `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; ` +
+	return script.InRepo(dir) +
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
-		`base=` + sshx.Quote(baselineHead) + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
+		`base=` + script.Quote(baselineHead) + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
 		`if [ "$base" != HEAD ]; then git log --first-parent --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
 		`git -c core.quotepath=off diff --no-renames --relative --numstat HEAD 2>/dev/null; printf '\036\n'; ` +
 		`git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
@@ -263,13 +263,13 @@ func (store *Store) setBadge(storeKey string, against Baseline, badge Badge) {
 // the baseline recorded for it, else against HEAD; an untracked file whole.
 func (store *Store) Diff(machine *machines.Machine, dir, path string) (string, error) {
 	baseline, _ := store.baseline(machine.Cfg.ID, dir)
-	quotedPath := sshx.Quote(path)
+	quotedPath := script.Quote(path)
 	reviewedBlob := baseline.Blobs[path]
 	if reviewedBlob != "" && reviewedBlob != "gone" && hexRe.MatchString(reviewedBlob) {
 		// the script prints the temp file's name first; the diff headers carry it
-		script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; t=$(mktemp "${TMPDIR:-/tmp}/remuda-seen.XXXXXX") || exit 0; printf '%s\n' "$t"; ` +
+		fromBlob := script.InDir(dir) + `t=$(mktemp "${TMPDIR:-/tmp}/remuda-seen.XXXXXX") || exit 0; printf '%s\n' "$t"; ` +
 			`if git cat-file -p ` + reviewedBlob + ` > "$t" 2>/dev/null; then git -c color.ui=never -c core.quotepath=off diff --no-index -- "$t" ` + quotedPath + ` | head -c 600000; fi; rm -f "$t"; exit 0`
-		output, err := machine.Shell(script, 60*time.Second)
+		output, err := machine.Shell(fromBlob, 60*time.Second)
 		if err != nil {
 			return output, err
 		}
@@ -279,11 +279,11 @@ func (store *Store) Diff(machine *machines.Machine, dir, path string) (string, e
 		}
 		return strings.ReplaceAll(diff, "a"+tempFile, "a/"+path), nil
 	}
-	script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; ` +
+	fromHead := script.InDir(dir) +
 		`if git ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || git cat-file -e "HEAD:./"` + quotedPath + ` 2>/dev/null; then ` +
 		`git -c color.ui=never -c core.quotepath=off diff --relative HEAD -- ` + quotedPath + ` | head -c 600000; ` +
 		`else git -c color.ui=never diff --no-index -- /dev/null ` + quotedPath + ` | head -c 600000; fi; exit 0`
-	return machine.Shell(script, 60*time.Second)
+	return machine.Shell(fromHead, 60*time.Second)
 }
 
 var hexRe = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
@@ -294,8 +294,8 @@ func (store *Store) MarkSeen(machine *machines.Machine, dir, verdict string) (Ba
 	if !VerdictOK(verdict) {
 		return Baseline{}, fmt.Errorf("no such verdict: %q", verdict)
 	}
-	script := `cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` + blobsScript()
-	output, err := machine.Shell(script, 60*time.Second)
+	snapshot := script.InDir(dir) + `git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` + blobsScript()
+	output, err := machine.Shell(snapshot, 60*time.Second)
 	if err != nil {
 		return Baseline{}, err
 	}
@@ -323,15 +323,15 @@ func (store *Store) Badges(machine *machines.Machine, dirs []string) {
 	if len(dirs) == 0 {
 		return
 	}
-	var script strings.Builder
+	var sweep strings.Builder
 	baselines := map[string]Baseline{}
 	for _, dir := range dirs {
 		baseline, _ := store.baseline(machine.Cfg.ID, dir)
 		baselines[dir] = baseline
-		script.WriteString(`( cd ` + sshx.Quote(dir) + ` 2>/dev/null || exit 0; git rev-parse --show-toplevel >/dev/null 2>&1 || exit 0; ` +
-			`printf '%s\036' ` + sshx.Quote(dir) + `; ` + blobsScript() + `; printf '\035\n' ); `)
+		sweep.WriteString(`( ` + script.InRepo(dir) +
+			`printf '%s\036' ` + script.Quote(dir) + `; ` + blobsScript() + `; printf '\035\n' ); `)
 	}
-	output, err := machine.Shell(script.String(), 90*time.Second)
+	output, err := machine.Shell(sweep.String(), 90*time.Second)
 	if err != nil {
 		return
 	}

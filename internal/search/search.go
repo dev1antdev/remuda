@@ -16,7 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/sshx"
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/version"
 )
@@ -86,7 +86,7 @@ func one(mc *machines.Machine, q, dir string, since time.Time) ([]Hit, error) {
 		out = b.String()
 	} else {
 		var err error
-		if out, err = mc.Shell(script(mc.Home(), q, dir, since), timeout); err != nil {
+		if out, err = mc.Shell(remoteScript(mc.Home(), q, dir, since), timeout); err != nil {
 			return nil, err
 		}
 	}
@@ -124,27 +124,27 @@ func one(mc *machines.Machine, q, dir string, since time.Time) ([]Hit, error) {
 	return hits, sc.Err()
 }
 
-// script runs the scan on a remote machine: remuda's own scanner where `make deploy` put it, else grep.
+// remoteScript runs the scan on a remote machine: remuda's own scanner where `make deploy` put it, else grep.
 // The grep takes the four spellings as they sit in the JSON (grep -i folds ASCII only); BSD grep is seconds per hundred MB.
-func script(home, q, dir string, since time.Time) string {
+func remoteScript(home, q, dir string, since time.Time) string {
 	seen := map[string]bool{}
 	var pats []string
 	for _, v := range spellings(q) {
 		if !seen[v] {
 			seen[v] = true
-			pats = append(pats, "-e "+sshx.Quote(v))
+			pats = append(pats, "-e "+script.Quote(v))
 		}
 	}
-	bin, guard := sshx.VersionedBin(home, version.Build)
-	args := "search -q " + sshx.Quote(q) + " -limit " + strconv.Itoa(perMachine)
+	bin, guard := script.Remuda(home, version.Build)
+	args := "search -q " + script.Quote(q) + " -limit " + strconv.Itoa(perMachine)
 	if dir != "" {
-		args += " -dir " + sshx.Quote(dir)
+		args += " -dir " + script.Quote(dir)
 	}
 	if !since.IsZero() {
-		args += " -since " + sshx.Quote(since.UTC().Format(time.RFC3339))
+		args += " -since " + script.Quote(since.UTC().Format(time.RFC3339))
 	}
 	return "if " + guard + " && " + bin + " " + args + "; then exit 0; fi; " +
-		"cd " + sshx.Quote(home+"/.claude/projects") + " 2>/dev/null || exit 0; " +
+		"cd " + script.Quote(home+"/.claude/projects") + " 2>/dev/null || exit 0; " +
 		"grep -raF --include='*.jsonl' " + strings.Join(pats, " ") + " . 2>/dev/null | " +
 		"cut -b1-" + strconv.Itoa(lineCap) + " | head -c " + strconv.Itoa(outputCap) + "; exit 0"
 }
