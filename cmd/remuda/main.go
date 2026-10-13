@@ -155,7 +155,7 @@ func main() {
 	defer tracker.Flush()
 	reviews := review.New(dir)
 	watcher := watch.New(mgr, pushSvc, tracker)
-	watcher.Badges, watcher.Dirs = reviews.Badges, server.WorkspaceDirs
+	watcher.Badges, watcher.Dirs = reviews.Badges, (*herdr.Snapshot).WorkspaceDirs
 	meter := usage.NewTracker()
 	var meterBusy sync.Map
 	watcher.Usage = func(mc *machines.Machine, snap *herdr.Snapshot) {
@@ -185,12 +185,7 @@ func main() {
 		if snap == nil {
 			return nil, nil
 		}
-		for i := range snap.Panes {
-			if snap.Panes[i].PaneID == paneID {
-				return &snap.Panes[i], snap
-			}
-		}
-		return nil, snap
+		return snap.Pane(paneID), snap
 	}
 	paneOf := func(machineID, paneID string) *herdr.PaneInfo {
 		p, _ := paneAndSnap(machineID, paneID)
@@ -223,13 +218,7 @@ func main() {
 			if p == nil {
 				return watchdog.PaneInfo{}, false
 			}
-			label := ""
-			for _, ws := range snap.Workspaces {
-				if ws.WorkspaceID == p.WorkspaceID {
-					label = ws.Label
-				}
-			}
-			return watchdog.PaneInfo{Title: p.DisplayTitle(), Workspace: label, Agent: p.AgentName()}, true
+			return watchdog.PaneInfo{Title: p.DisplayTitle(), Workspace: snap.WorkspaceLabel(p.WorkspaceID), Agent: p.AgentName()}, true
 		},
 		LastWrite: func(machineID, paneID string) (time.Time, bool) {
 			p := paneOf(machineID, paneID)
@@ -243,12 +232,7 @@ func main() {
 			if !ok {
 				return nil
 			}
-			var out []string
-			for _, part := range last.Parts {
-				if part.Type == "tool" {
-					out = append(out, part.ToolName+"\x00"+string(part.Input))
-				}
-			}
+			out := last.ToolCalls()
 			if len(out) > n {
 				out = out[len(out)-n:]
 			}
@@ -277,24 +261,12 @@ func main() {
 			d := tracker.Display(machineID, p)
 			return d.State, time.UnixMilli(d.Since), true
 		},
-		// the text after the turn's last tool call: a turn ending in a tool call is a stop, not an answer
 		LastAnswer: func(machineID, paneID string) (string, string) {
 			last, ok := lastTurn(machineID, paneID)
-			if !ok || len(last.IDs) == 0 {
+			if !ok {
 				return "", ""
 			}
-			var texts []string
-			for _, part := range last.Parts {
-				switch part.Type {
-				case "tool":
-					texts = texts[:0]
-				case "text":
-					if t := strings.TrimSpace(part.Text); t != "" {
-						texts = append(texts, t)
-					}
-				}
-			}
-			return strings.Join(texts, "\n\n"), last.IDs[len(last.IDs)-1]
+			return last.Answer(), last.LastID()
 		},
 		Notify: pushSvc.Notify,
 	}

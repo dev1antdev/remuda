@@ -425,39 +425,11 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 				Linked: ws.Worktree.IsLinkedWorktree, CheckoutPath: ws.Worktree.CheckoutPath,
 			}
 		}
-		rs.Dir = workspaceDir(snap, &ws)
+		rs.Dir = snap.WorkspaceDir(&ws)
 		if b, ok := s.Review.Badge(machineID, rs.Dir); rs.Dir != "" && ok && b.Changed > 0 {
 			rs.Review = &rosterReview{Changed: b.Changed, Fresh: b.Fresh}
 		}
 		out = append(out, rs)
-	}
-	return out
-}
-
-// workspaceDir is the folder a workspace lives in: its git checkout when herdr knows one, else the cwd of its first pane.
-func workspaceDir(snap *herdr.Snapshot, ws *herdr.WorkspaceInfo) string {
-	if ws.Worktree != nil && ws.Worktree.CheckoutPath != "" {
-		return ws.Worktree.CheckoutPath
-	}
-	for i := range snap.Panes {
-		if snap.Panes[i].WorkspaceID == ws.WorkspaceID {
-			if d := snap.Panes[i].Dir(); d != "" {
-				return d
-			}
-		}
-	}
-	return ""
-}
-
-// WorkspaceDirs lists the folders of a snapshot's workspaces, for the review badges.
-func WorkspaceDirs(snap *herdr.Snapshot) []string {
-	var out []string
-	seen := map[string]bool{}
-	for i := range snap.Workspaces {
-		if d := workspaceDir(snap, &snap.Workspaces[i]); d != "" && !seen[d] {
-			seen[d] = true
-			out = append(out, d)
-		}
 	}
 	return out
 }
@@ -512,10 +484,8 @@ func (s *Server) findPane(mc *machines.Machine, paneID string) (*herdr.PaneInfo,
 	if snap == nil {
 		return nil, err
 	}
-	for i := range snap.Panes {
-		if snap.Panes[i].PaneID == paneID {
-			return &snap.Panes[i], nil
-		}
+	if pane := snap.Pane(paneID); pane != nil {
+		return pane, nil
 	}
 	return nil, fmt.Errorf("pane %s not found", paneID)
 }
@@ -1166,22 +1136,6 @@ func (s *Server) submitTo(mc *machines.Machine, client *herdr.Client, paneID, te
 	}
 }
 
-// agentPaneIn is the first agent pane of the first workspace in a folder.
-func agentPaneIn(snap *herdr.Snapshot, dir string) *herdr.PaneInfo {
-	for i := range snap.Workspaces {
-		ws := &snap.Workspaces[i]
-		if workspaceDir(snap, ws) != dir {
-			continue
-		}
-		for j := range snap.Panes {
-			if p := &snap.Panes[j]; p.WorkspaceID == ws.WorkspaceID && p.Agent != "" {
-				return p
-			}
-		}
-	}
-	return nil
-}
-
 // SubmitToFolder gives the text to the agent running in a machine's folder, the scheduler's door; the pane's title names where it went.
 func (s *Server) SubmitToFolder(machineID, dir, text string) (string, error) {
 	mc, err := s.Machines.Get(machineID)
@@ -1196,7 +1150,7 @@ func (s *Server) SubmitToFolder(machineID, dir, text string) (string, error) {
 	if snap == nil {
 		return "", fmt.Errorf("%s has no snapshot yet", mc.Label())
 	}
-	pane := agentPaneIn(snap, dir)
+	pane := snap.AgentPaneIn(dir)
 	if pane == nil {
 		return "", fmt.Errorf("no agent is running in %s on %s", dir, mc.Label())
 	}

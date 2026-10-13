@@ -92,3 +92,22 @@ func TestEncodePathCountsUTF16Units(t *testing.T) {
 		}
 	}
 }
+
+func TestTurnAnswerAndToolCalls(t *testing.T) {
+	turn := Turn{Role: "assistant", IDs: []string{"a", "b"}, Parts: []Part{
+		{Type: "text", Text: "thinking out loud"},
+		{Type: "tool", ToolName: "Read", Input: []byte(`{"f":1}`)},
+		{Type: "text", Text: " done "},
+		{Type: "text", Text: "really"},
+	}}
+	if turn.Answer() != "done\n\nreally" || turn.LastID() != "b" {
+		t.Fatalf("answer %q id %q", turn.Answer(), turn.LastID())
+	}
+	if calls := turn.ToolCalls(); len(calls) != 1 || calls[0] != "Read\x00{\"f\":1}" {
+		t.Fatalf("tool calls %q", calls)
+	}
+	stopped := Turn{Parts: []Part{{Type: "text", Text: "first"}, {Type: "tool", ToolName: "Bash"}}}
+	if stopped.Answer() != "" || (Turn{}).LastID() != "" {
+		t.Fatal("a turn ending in a tool call is no answer")
+	}
+}

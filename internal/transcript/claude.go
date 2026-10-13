@@ -716,3 +716,41 @@ func ContinuationScript(quotedPath string) string {
 		`p=$(head -c 65536 "$f" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$p" ] || continue; ` +
 		`if grep -q "\"uuid\":\"$p\"" "$old"; then printf %s "$f"; exit 0; fi; done`
 }
+
+// ---- what a turn ended with ----
+
+// LastID is the id of the last record merged into the turn, "" for none.
+func (t Turn) LastID() string {
+	if len(t.IDs) == 0 {
+		return ""
+	}
+	return t.IDs[len(t.IDs)-1]
+}
+
+// Answer is the text the turn ended with: what came after its last tool call.
+// A turn that ends in a tool call is a stop, not an answer, and answers "".
+func (t Turn) Answer() string {
+	var texts []string
+	for _, part := range t.Parts {
+		switch part.Type {
+		case "tool":
+			texts = texts[:0]
+		case "text":
+			if text := strings.TrimSpace(part.Text); text != "" {
+				texts = append(texts, text)
+			}
+		}
+	}
+	return strings.Join(texts, "\n\n")
+}
+
+// ToolCalls is a fingerprint, name and input, of each tool call in the turn, in order.
+func (t Turn) ToolCalls() []string {
+	var out []string
+	for _, part := range t.Parts {
+		if part.Type == "tool" {
+			out = append(out, part.ToolName+"\x00"+string(part.Input))
+		}
+	}
+	return out
+}
