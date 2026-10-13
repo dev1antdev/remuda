@@ -1,16 +1,19 @@
-# Dependency updates as pull requests, once a week: Go modules, the web
-# packages, and the actions the workflows run on.
+# Dependency updates as pull requests against release, once a week: Go
+# modules, the web packages, and the actions the workflows run on.
 version: 2
 updates:
   - package-ecosystem: gomod
     directory: /
+    target-branch: release
     schedule:
       interval: weekly
   - package-ecosystem: npm
     directory: /web
+    target-branch: release
     schedule:
       interval: weekly
   - package-ecosystem: github-actions
     directory: /
+    target-branch: release
     schedule:
       interval: weekly

@@ -21,16 +21,21 @@ once after cloning and after every change under `web/`.
 | Go checks | `gofmt -l ./cmd ./internal` (must print nothing), `go vet ./...`, `go test ./...` |
 | TypeScript check | `make typecheck` (`tsc --noEmit` + `go vet`) |
 | Everything, as CI does (`.github/workflows/ci.yml`) | `make test && make typecheck`, or `docker build --target test .` |
-| A release | on `release`: `git checkout release && git merge --ff-only main`, build and test it whole, then `git tag -a vX.Y.Z -m 'remuda X.Y.Z' && make publish` — the Release workflow builds and publishes it |
+| A pull request | against `release`: `gh pr create --base release` |
+| A release | `git checkout main && git merge --ff-only release && git tag -a vX.Y.Z -m 'remuda X.Y.Z' && make publish` — the Release workflow builds and publishes it |
 | Binaries for every host | `make release`; `make deploy HOST=<ssh host>` |
 
-`release` is the branch a release is cut from. It receives `main` by
-fast-forward only (a hotfix made on it goes to `main` the same day), CI
-runs on every push to it, the tag is made there and `make publish`
-refuses any other branch (`RELEASE_BRANCH=<branch>` overrides). Before a
-tag the branch is built and tried as a whole: the checks, `make build`,
-a real session in the browser, and the end-to-end tests when they come
-— a job gated on `github.ref == 'refs/heads/release'` is their place.
+Two long-lived branches. **`release`** is where the next release comes
+together: every pull request targets it (Dependabot's too), CI runs on
+every push to it, and before a tag it is built and tried as a whole —
+the checks, `make build`, a real session in the browser, and the
+end-to-end tests when they come (a job gated on `github.ref ==
+'refs/heads/release'` is their place). **`main`** is what is out: at a
+release it receives `release` by fast-forward and nothing else, so a
+clone of `main`, the README on GitHub and the binary on every machine
+agree. `make publish` refuses any branch but `main`
+(`PUBLISH_BRANCH=<branch>` overrides). A hotfix is made on `main` and
+merged into `release` the same day, or the next fast-forward fails.
 
 Tests are plain `testing` and need no herdr: the ones that start a
 throwaway herdr server skip when `herdr` is not on PATH. The web side has
