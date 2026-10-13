@@ -3464,6 +3464,7 @@ input[type="checkbox"]:hover:not(:checked) {
   position: sticky;
   bottom: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
@@ -3477,14 +3478,21 @@ input[type="checkbox"]:hover:not(:checked) {
   align-items: center;
   gap: 6px;
   flex: 1;
+  min-height: var(--ctl-sm);
   font-size: 13px;
   color: var(--fg-dim);
 }
 
-.review-draft-bar .primary {
+.review-draft-bar .btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.review-verdicts {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
 }
 
 /* ---- schedules ---- */
