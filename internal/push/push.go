@@ -16,7 +16,7 @@ import (
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
-
+	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/state"
 )
@@ -64,11 +64,6 @@ type Action struct {
 	Title  string `json:"title"`
 }
 
-// PaneRef identifies a pane across machines.
-type PaneRef struct{ Machine, Pane string }
-
-func (r PaneRef) String() string { return r.Machine + "|" + r.Pane }
-
 type Service struct {
 	dir     string
 	pub     string
@@ -78,7 +73,7 @@ type Service struct {
 	mu   sync.Mutex
 	subs map[string]*Subscription // by endpoint
 
-	timers map[PaneRef][]*time.Timer
+	timers map[events.PaneRef][]*time.Timer
 	send   func(sub *Subscription, p Payload) error
 }
 
@@ -92,7 +87,7 @@ var (
 
 // New loads or creates the VAPID keypair and the subscription store in dir.
 func New(dir string) (*Service, error) {
-	s := &Service{dir: dir, subs: map[string]*Subscription{}, timers: map[PaneRef][]*time.Timer{},
+	s := &Service{dir: dir, subs: map[string]*Subscription{}, timers: map[events.PaneRef][]*time.Timer{},
 		subject: "https://github.com/dev1antdev/remuda"}
 	s.send = s.Send
 	if err := s.loadKeys(); err != nil {
@@ -279,20 +274,9 @@ func (s *Service) SendTest(endpoint string) error {
 	return s.Send(sub, Payload{Title: "remuda", Body: "Alerts reach this device.", Tag: "test", Kind: "test"})
 }
 
-// Event is a pane's status transition as the watcher saw it.
-type Event struct {
-	Pane      PaneRef
-	Workspace string
-	PaneTitle string
-	Agent     string
-	Kind      string        // the agent kind herdr detected ("claude"), "" for a shell
-	From, To  string        // herdr statuses; To "gone" when the pane closed
-	Worked    time.Duration // how long the pane was working before this
-}
-
 // OnStatus schedules or calls off alerts: any status change on a pane cancels whatever was pending for it.
 // herdr says nothing about whether a person is at the desk; "changed that fast" is the proxy for presence.
-func (s *Service) OnStatus(ev Event) {
+func (s *Service) OnStatus(ev events.PaneStatus) {
 	key := ev.Pane
 	// cancel and schedule under one lock: two changes of the same pane arriving together must not leave a timer the later one meant to kill
 	s.mu.Lock()
@@ -394,7 +378,7 @@ func (s *Service) OnStatus(ev Event) {
 	}
 }
 
-func paneLine(ev Event) string {
+func paneLine(ev events.PaneStatus) string {
 	if ev.PaneTitle != "" && ev.PaneTitle != ev.Agent {
 		return " · " + ev.PaneTitle
 	}

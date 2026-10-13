@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
-	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
@@ -325,7 +325,7 @@ func (r *Restarter) book(machineID, paneID, kind, session string) {
 
 // OnStatus is the watcher's hook: a booked chat that settled is restarted a
 // little later, any change before then calling it off until the next settle.
-func (r *Restarter) OnStatus(ev push.Event) {
+func (r *Restarter) OnStatus(ev events.PaneStatus) {
 	key := ev.Pane.Machine + "|" + ev.Pane.Pane
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -337,7 +337,7 @@ func (r *Restarter) OnStatus(ev push.Event) {
 		b.timer.Stop()
 		b.timer = nil
 	}
-	if ev.To == "gone" || ev.Kind != b.kind || time.Since(b.at) > bookingTTL {
+	if ev.To == events.Gone || ev.Kind != b.kind || time.Since(b.at) > bookingTTL {
 		delete(r.pending, key)
 		return
 	}
@@ -348,7 +348,7 @@ func (r *Restarter) OnStatus(ev push.Event) {
 }
 
 // fire is the settle timer going off: the booking becomes a restart job.
-func (r *Restarter) fire(key string, ev push.Event) {
+func (r *Restarter) fire(key string, ev events.PaneStatus) {
 	r.mu.Lock()
 	b := r.pending[key]
 	if b == nil || b.timer == nil {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
@@ -319,7 +320,7 @@ func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 // deliverTaskPrompt waits for the fresh agent and hands it the task; Claude Code's "trust this folder"
 // question for the new worktree is answered yes, any other question is pushed to the person and waited for.
 func (s *Server) deliverTaskPrompt(mc *machines.Machine, client *herdr.Client, run tasks.Run, task tasks.Task, prompt string) {
-	lock := s.paneLock(push.PaneRef{Machine: mc.Cfg.ID, Pane: run.Pane})
+	lock := s.paneLock(events.PaneRef{Machine: mc.Cfg.ID, Pane: run.Pane})
 	deadline := time.Now().Add(5 * time.Minute)
 	nudged, trusted := false, false
 	var last error

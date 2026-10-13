@@ -25,6 +25,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/code"
+	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/jobs"
@@ -62,13 +63,13 @@ type Server struct {
 	UI        fs.FS
 
 	mu      sync.Mutex
-	paneMu  map[push.PaneRef]*sync.Mutex
+	paneMu  map[events.PaneRef]*sync.Mutex
 	streams termStreams
 }
 
 // New wires the server; Schedules, Health, Tailscale, Jobs and Restart are set afterwards.
 func New(m *machines.Manager, w *watch.Watcher, p *push.Service, t *tasks.Store, c *code.Service, rv *review.Store, r *radar.Tracker, q *quick.Store, u *usage.Tracker, g *auth.Guard, ui fs.FS) *Server {
-	return &Server{Machines: m, Watch: w, Push: p, Tasks: t, Code: c, Review: rv, Radar: r, Quick: q, Usage: u, Guard: g, UI: ui, paneMu: map[push.PaneRef]*sync.Mutex{}}
+	return &Server{Machines: m, Watch: w, Push: p, Tasks: t, Code: c, Review: rv, Radar: r, Quick: q, Usage: u, Guard: g, UI: ui, paneMu: map[events.PaneRef]*sync.Mutex{}}
 }
 
 // agents is what remuda offers to start, by herdr manifest kind; the UI is served the same list.
@@ -1045,10 +1046,10 @@ func (s *Server) handlePushTest(w http.ResponseWriter, r *http.Request) {
 
 // PaneLock is paneLock for the restarter, which types into a pane too.
 func (s *Server) PaneLock(machineID, paneID string) sync.Locker {
-	return s.paneLock(push.PaneRef{Machine: machineID, Pane: paneID})
+	return s.paneLock(events.PaneRef{Machine: machineID, Pane: paneID})
 }
 
-func (s *Server) paneLock(ref push.PaneRef) *sync.Mutex {
+func (s *Server) paneLock(ref events.PaneRef) *sync.Mutex {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.paneMu[ref] == nil {
@@ -1115,7 +1116,7 @@ func (errAgentBusy) Error() string {
 
 // submitTo delivers text to a pane the way the chat does: herdr's own submit for an agent, typing like a keyboard for a shell; serialized per pane.
 func (s *Server) submitTo(mc *machines.Machine, client *herdr.Client, paneID, text string) error {
-	lock := s.paneLock(push.PaneRef{Machine: mc.Cfg.ID, Pane: paneID})
+	lock := s.paneLock(events.PaneRef{Machine: mc.Cfg.ID, Pane: paneID})
 	lock.Lock()
 	defer lock.Unlock()
 	err := client.AgentPrompt(paneID, text)
@@ -1195,7 +1196,7 @@ func (s *Server) handleKeys(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	lock := s.paneLock(push.PaneRef{Machine: mc.Cfg.ID, Pane: req.Pane})
+	lock := s.paneLock(events.PaneRef{Machine: mc.Cfg.ID, Pane: req.Pane})
 	lock.Lock()
 	defer lock.Unlock()
 	if err := client.PaneSendKeys(req.Pane, req.Keys); err != nil {

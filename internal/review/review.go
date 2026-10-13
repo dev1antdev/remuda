@@ -82,13 +82,20 @@ type Store struct {
 	mu        sync.Mutex
 	baselines map[string]Baseline // by machine|folder
 	badges    map[string]Badge
+	sweeps    map[string]badgeSweep // by machine
+}
+
+// badgeSweep is a machine's last Badges run: when it began, and whether it is still going.
+type badgeSweep struct {
+	at   time.Time
+	busy bool
 }
 
 func key(machineID, dir string) string { return machineID + "|" + dir }
 
 // New loads the baselines kept in dir.
 func New(dir string) *Store {
-	store := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}}
+	store := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}, sweeps: map[string]badgeSweep{}}
 	if err := state.LoadJSON(dir, baselineFile, &store.baselines); err != nil {
 		log.Printf("%s is unreadable (%v): every folder counts as never reviewed", baselineFile, err)
 	}
@@ -315,6 +322,26 @@ func (store *Store) MarkSeen(host shell.Host, dir, verdict string) (Baseline, er
 		return baseline, fmt.Errorf("the baseline could not be kept: %w", err)
 	}
 	return baseline, nil
+}
+
+// RefreshBadges runs Badges in the background, a minute apart per machine and never two at once:
+// the sweep is seconds of git, over ssh for a remote, and the poll that asked must not wait for it.
+func (store *Store) RefreshBadges(host shell.Host, dirs []string) {
+	store.mu.Lock()
+	sweep := store.sweeps[host.ID()]
+	if sweep.busy || time.Since(sweep.at) < time.Minute {
+		store.mu.Unlock()
+		return
+	}
+	began := time.Now()
+	store.sweeps[host.ID()] = badgeSweep{at: began, busy: true}
+	store.mu.Unlock()
+	go func() {
+		store.Badges(host, dirs)
+		store.mu.Lock()
+		store.sweeps[host.ID()] = badgeSweep{at: began}
+		store.mu.Unlock()
+	}()
 }
 
 // Badges refreshes the roster's counts for many folders of one machine in

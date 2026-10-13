@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/version"
@@ -33,8 +34,16 @@ type Files interface {
 	ReadFrom(path string, offset int64) ([]byte, error)
 }
 
+// Source is a machine's transcripts as the meter reads them: the bytes, and which files a pane's conversation lives in.
+type Source interface {
+	Files
+	ResolveSession(cwd, kind, value string) (string, error)
+	Lineage(path string) []string
+}
+
 // Tracker keeps a running sum per transcript file, reading only what was appended since the last look.
 type Tracker struct {
+	busy        sync.Map // machine id → a read of its snapshot is under way
 	mu          sync.Mutex
 	files       map[string]*fileState // machine|path
 	panes       map[string]string     // machine|pane → path
@@ -61,6 +70,28 @@ func NewTracker() *Tracker {
 }
 
 func key(machineID, s string) string { return machineID + "|" + s }
+
+// ObserveSnapshot keeps every agent pane's meter current, one read per machine at a time and off the poll's path.
+func (t *Tracker) ObserveSnapshot(machineID string, source Source, snap *herdr.Snapshot) {
+	if _, running := t.busy.LoadOrStore(machineID, true); running {
+		return
+	}
+	panes := append([]herdr.PaneInfo(nil), snap.Panes...)
+	go func() {
+		defer t.busy.Delete(machineID)
+		for i := range panes {
+			pane := &panes[i]
+			if pane.Agent == "" || pane.AgentSession == nil {
+				continue
+			}
+			first, err := source.ResolveSession(pane.Dir(), pane.AgentSession.Kind, pane.AgentSession.Value)
+			if err != nil {
+				continue
+			}
+			t.Observe(machineID, source, pane.PaneID, source.Lineage(first))
+		}
+	}()
+}
 
 // Observe keeps a pane's files current: the chain is oldest first, the last one live, each earlier one read once.
 func (t *Tracker) Observe(machineID string, files Files, paneID string, chain []string) {

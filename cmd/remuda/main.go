@@ -14,13 +14,13 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 	_ "time/tzdata" // the usage report cuts days in the viewer's zone, wherever the binary runs
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/code"
+	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/jobs"
@@ -117,6 +117,7 @@ func main() {
 		log.Fatalf("ui assets: %v", err)
 	}
 
+	bus := events.NewBus()
 	mgr := machines.NewManager(dir, *socket, *herdrBin)
 	defer mgr.Close()
 	pushSvc, err := push.New(dir)
@@ -154,30 +155,17 @@ func main() {
 	})
 	defer tracker.Flush()
 	reviews := review.New(dir)
-	watcher := watch.New(mgr, pushSvc, tracker)
-	watcher.Badges, watcher.Dirs = reviews.Badges, (*herdr.Snapshot).WorkspaceDirs
+	watcher := watch.New(mgr, bus)
 	meter := usage.NewTracker()
-	var meterBusy sync.Map
-	watcher.Usage = func(mc *machines.Machine, snap *herdr.Snapshot) {
-		if _, running := meterBusy.LoadOrStore(mc.Cfg.ID, true); running {
-			return
+	events.Subscribe(bus, func(e events.Snapshot) { tracker.Observe(e.Machine, e.Snap, e.At) })
+	events.Subscribe(bus, func(e events.Snapshot) {
+		if mc, err := mgr.Get(e.Machine); err == nil {
+			reviews.RefreshBadges(mc, e.Snap.WorkspaceDirs())
+			meter.ObserveSnapshot(mc.ID(), mc.Transcripts, e.Snap)
 		}
-		panes := append([]herdr.PaneInfo(nil), snap.Panes...)
-		go func() {
-			defer meterBusy.Delete(mc.Cfg.ID)
-			for i := range panes {
-				p := &panes[i]
-				if p.Agent == "" || p.AgentSession == nil {
-					continue
-				}
-				orig, err := mc.Transcripts.ResolveSession(p.Dir(), p.AgentSession.Kind, p.AgentSession.Value)
-				if err != nil {
-					continue
-				}
-				meter.Observe(mc.ID(), mc.Transcripts, p.PaneID, mc.Transcripts.Lineage(orig))
-			}
-		}()
-	}
+	})
+	events.Subscribe(bus, func(e events.MachineRemoved) { tracker.Forget(e.Machine) })
+	events.Subscribe(bus, pushSvc.OnStatus)
 	watcher.Start()
 
 	paneAndSnap := func(machineID, paneID string) (*herdr.PaneInfo, *herdr.Snapshot) {
@@ -281,38 +269,21 @@ func main() {
 	vitals := health.New(mgr, version, !*noCheck)
 	vitals.Start(15 * time.Minute)
 	s.Health = vitals
-	var downMu sync.Mutex
-	var lastDown string
-	watcher.LocalDown = func(err error) {
-		e := herdr.EnsureServer(bin, *socket)
-		msg := ""
-		if e != nil {
-			msg = e.Error()
-		}
-		downMu.Lock()
-		defer downMu.Unlock()
-		if msg != lastDown {
-			lastDown = msg
-			if e != nil {
-				log.Printf("herdr server: %v", e)
-			} else {
-				log.Printf("herdr server: answering again")
-			}
-		}
-	}
-	runner := jobs.New()
-	runner.OnDone = func(j jobs.Job) {
-		if mc, err := mgr.Get(j.Machine); err == nil {
+	keeper := &herdr.Keeper{Bin: bin, Socket: *socket}
+	events.Subscribe(bus, func(e events.LocalHerdrDown) { keeper.Revive(e.Err) })
+	runner := jobs.New(bus)
+	events.Subscribe(bus, func(e events.JobDone) {
+		if mc, err := mgr.Get(e.Machine); err == nil {
 			vitals.Refresh(mc)
 		}
-	}
+	})
 	s.Jobs = runner
 	restarter := restart.New(mgr)
 	restarter.Later = func(mc *machines.Machine, title string, fn func(say func(string)) error) {
 		runner.Run(mc, title, "", fn)
 	}
 	restarter.Lock = s.PaneLock
-	watcher.OnEvent = restarter.OnStatus
+	events.Subscribe(bus, restarter.OnStatus)
 	s.Restart = restarter
 	if *tailscale {
 		var node *tsnetx.Node

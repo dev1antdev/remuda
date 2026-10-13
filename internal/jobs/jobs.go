@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
@@ -38,16 +39,15 @@ type job struct {
 	out  strings.Builder
 }
 
-// Runner keeps the jobs.
+// Runner keeps the jobs and says on the bus when one ends.
 type Runner struct {
+	bus   *events.Bus
 	mu    sync.Mutex
 	jobs  map[string]*job
 	order []string
-	// OnDone, when set, is told of every finished job.
-	OnDone func(j Job)
 }
 
-func New() *Runner { return &Runner{jobs: map[string]*job{}} }
+func New(bus *events.Bus) *Runner { return &Runner{bus: bus, jobs: map[string]*job{}} }
 
 // Start runs the script on the machine in the background.
 func (r *Runner) Start(host shell.Host, title, command string) Job {
@@ -123,9 +123,7 @@ func (r *Runner) launch(host shell.Host, title, command string, run func(j *job)
 			j.view.OK = true
 		}
 		j.mu.Unlock()
-		if r.OnDone != nil {
-			r.OnDone(j.snapshot())
-		}
+		events.Publish(r.bus, events.JobDone{Machine: host.ID(), Title: title, OK: err == nil})
 	}()
 	return j.snapshot()
 }
