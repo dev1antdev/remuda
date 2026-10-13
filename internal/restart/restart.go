@@ -1,12 +1,6 @@
-// Package restart brings chats onto a freshly updated agent. A pane
-// running Claude Code, Codex or Gemini CLI is asked to leave (the agent's
-// own /exit) and the agent is started again in the same pane with its
-// session resumed — right away when the chat is idle, and a little after
-// it settles otherwise. herdr does the typing (agent.prompt, agent.start):
-// nothing here writes raw bytes into a terminal, a pane without a session
-// id is left alone, and a restart holds the same per-pane lock the rest
-// of remuda holds while it types, so nothing else lands in the shell
-// in between.
+// Package restart brings chats onto a freshly updated agent: a pane is asked
+// to leave with the agent's own /exit and started again with its session
+// resumed, through herdr and under the pane's lock.
 package restart
 
 import (
@@ -24,11 +18,10 @@ import (
 )
 
 const (
-	// settleDelay is how long after a busy chat settles before it is asked
-	// to leave: the person is most likely reading or typing right then.
+	// settleDelay: a chat that just settled is left this long before it is asked
+	// to leave, since the person is most likely reading or typing right then
 	settleDelay = 25 * time.Second
-	// bookingTTL: a chat booked this long ago (blocked, or never settling)
-	// is forgotten
+	// bookingTTL: a booking this old (blocked, or never settling) is forgotten
 	bookingTTL = 12 * time.Hour
 	// again: a pane is not restarted twice within this
 	again = 2 * time.Minute
@@ -38,7 +31,7 @@ const (
 type agent struct {
 	Kind   string
 	Title  string
-	exit   string // the slash command that quits it
+	exit   string
 	resume func(session string) []string
 }
 
@@ -48,8 +41,7 @@ var agents = map[string]agent{
 	"gemini": {"gemini", "Gemini CLI", "/quit", func(id string) []string { return []string{"--resume", id} }},
 }
 
-// Kinds says which agents an update called `what` touches: claude, codex,
-// gemini, or all three for "agents"; none for herdr or remuda.
+// Kinds says which agents an update called what touches; none for herdr or remuda.
 func Kinds(what string) []string {
 	switch what {
 	case "claude", "codex", "gemini":
@@ -77,8 +69,7 @@ func Resume(kind, session string) string {
 	return a.Kind + " " + strings.Join(a.resume(session), " ")
 }
 
-// Chats are the panes of these kinds that can be restarted (they have a
-// session to resume): the ready ones and the busy ones.
+// Chats are the panes of these kinds with a session to resume: the ready ones and the busy ones.
 func Chats(snap *herdr.Snapshot, kinds []string) (ready, busy []herdr.PaneInfo) {
 	if snap == nil {
 		return nil, nil
@@ -117,9 +108,8 @@ func settled(status string) bool {
 	return status == herdr.StatusIdle || status == herdr.StatusDone
 }
 
-// sessionOf is the pane's session id, or "" — also for an id that does not
-// look like one: the value comes from the pane's own hooks, and it is about
-// to be typed after `--resume`.
+// sessionOf is the pane's session id, or "" for one that does not look like one:
+// the value comes from the pane's own hooks and is about to be typed after --resume.
 func sessionOf(p *herdr.PaneInfo) string {
 	if p.AgentSession == nil || p.AgentSession.Kind != "id" || !text.SessionID(p.AgentSession.Value) {
 		return ""
@@ -137,11 +127,9 @@ type booking struct {
 // Restarter restarts chats and remembers the busy ones.
 type Restarter struct {
 	machines *machines.Manager
-	// Later runs a deferred restart so the person can see it — a job, in
-	// main. Nil means it is logged only.
+	// Later runs a deferred restart as a job the person can see; nil means logged only.
 	Later func(mc *machines.Machine, title string, fn func(say func(string)) error)
-	// Lock is the per-pane lock the rest of remuda holds while it types
-	// into a pane; a restart holds it from the exit to the resumed agent.
+	// Lock is the per-pane typing lock; a restart holds it from the exit to the resumed agent.
 	Lock func(machineID, paneID string) sync.Locker
 
 	mu      sync.Mutex
@@ -153,8 +141,7 @@ func New(m *machines.Manager) *Restarter {
 	return &Restarter{machines: m, pending: map[string]*booking{}, last: map[string]time.Time{}}
 }
 
-// Now restarts every ready chat of these kinds on the machine, saying what
-// it does, and books the busy ones for when they settle.
+// Now restarts the machine's ready chats of these kinds and books the busy ones for when they settle.
 func (r *Restarter) Now(mc *machines.Machine, kinds []string, say func(string)) error {
 	client, _, err := mc.Ready()
 	if err != nil {
@@ -196,9 +183,7 @@ func (r *Restarter) Now(mc *machines.Machine, kinds []string, say func(string)) 
 	return nil
 }
 
-// one restarts a single chat under the pane's lock: a fresh look at the
-// pane (still that agent, that session, settled), leave, wait for the
-// shell, start with the session resumed.
+// one restarts a single chat under the pane's lock: a fresh look, leave, wait for the shell, resume.
 func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say func(string)) error {
 	a, ok := agents[kind]
 	if !ok {
@@ -219,7 +204,7 @@ func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say 
 	r.mu.Unlock()
 	client, _, err := mc.Ready()
 	if err != nil {
-		r.book(mc.Cfg.ID, paneID, kind, session) // the machine is away: when it is back and the chat settles
+		r.book(mc.Cfg.ID, paneID, kind, session)
 		return fmt.Errorf("%s: %v — booked for later", paneID, err)
 	}
 	p, found := pane(client, paneID)
@@ -285,8 +270,7 @@ const (
 	unseen // no snapshot came back at all: nothing is known
 )
 
-// waitShell polls until the pane has no agent (shell back), is gone, or
-// runs something else; stillThere after the timeout.
+// waitShell polls until the pane has no agent, is gone or runs something else; stillThere after the timeout.
 func (r *Restarter) waitShell(client *herdr.Client, paneID, kind string, timeout time.Duration) paneState {
 	deadline := time.Now().Add(timeout)
 	seen := false
@@ -339,10 +323,8 @@ func (r *Restarter) book(machineID, paneID, kind, session string) {
 	r.pending[machineID+"|"+paneID] = &booking{kind: kind, session: session, at: time.Now()}
 }
 
-// OnStatus is the watcher's hook. A booked chat that settled gets its
-// restart a little later — any change before then calls it off until the
-// next settle; a booked pane whose agent left, or that closed, is
-// forgotten.
+// OnStatus is the watcher's hook: a booked chat that settled is restarted a
+// little later, any change before then calling it off until the next settle.
 func (r *Restarter) OnStatus(ev push.Event) {
 	key := ev.Pane.Machine + "|" + ev.Pane.Pane
 	r.mu.Lock()
@@ -360,7 +342,7 @@ func (r *Restarter) OnStatus(ev push.Event) {
 		return
 	}
 	if !settled(ev.To) {
-		return // still busy; the next settle
+		return
 	}
 	b.timer = time.AfterFunc(settleDelay, func() { r.fire(key, ev) })
 }
@@ -415,8 +397,7 @@ func (r *Restarter) Pending(machineID string) int {
 
 var nameRe = regexp.MustCompile(`[^a-z0-9_-]+`)
 
-// agentName is a live-agent name herdr accepts ([a-z][a-z0-9_-]{0,31}),
-// unique per pane.
+// agentName is a live-agent name herdr accepts ([a-z][a-z0-9_-]{0,31}), unique per pane.
 func agentName(kind, paneID string) string {
 	n := kind + "-" + nameRe.ReplaceAllString(strings.ToLower(paneID), "-")
 	if len(n) > 32 {

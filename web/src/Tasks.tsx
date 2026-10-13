@@ -1,8 +1,6 @@
-// The Tasks mode: remuda's own task list (internal/tasks, SQLite on the
-// remuda host). Projects on the left (with three smart lists above them),
-// the list in the middle, the open task on the right. Nothing is cached
-// beyond the screen: every change goes to the server and the list is
-// re-read.
+// The Tasks mode: remuda's own task list (internal/tasks). Projects on the left with three smart lists
+// above them, the list or board in the middle, the open task on the right. Nothing is cached beyond the
+// screen: every change goes to the server and the list is re-read.
 
 import { createElement, useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
@@ -82,7 +80,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
   const [defaultProject, setDefaultProject] = useState(0);
   const [sel, setSel] = usePref<Sel>("tasks.sel", { kind: "smart", id: "today" });
   const [showDone, setShowDone] = usePref("tasks.showDone", false);
-  const [view, setView] = usePref<"list" | "board">("tasks.view", "board"); // a project as a list or a board
+  const [view, setView] = usePref<"list" | "board">("tasks.view", "board");
   const [settings, setSettings] = useState(false);
   const [search, setSearch] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -94,7 +92,6 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
   const [newProject, setNewProject] = useState(false);
   const [sendReq, setSendReq] = useState<{ task: Task; groom: boolean } | null>(null);
   const [startReq, setStartReq] = useState<Task | null>(null);
-  // "started…" / "sent…", with the pane it points at, gone after a while
   const [notice, showNotice, clearNotice] = useTimedNotice(12000);
   const [noticeAt, setNoticeAt] = useState<{ machineId: string; paneId: string } | null>(null);
   const announce = (text: string, at: { machineId: string; paneId: string }) => {
@@ -107,7 +104,6 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
   const [listTick, setListTick] = useState(0);
   const reloadList = useCallback(() => setListTick((t) => t + 1), []);
 
-  // the sidebar's data
   useEffect(() => {
     let gone = false;
     void Promise.all([listProjects(), listLabels()]).then(
@@ -124,8 +120,6 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
     };
   }, [tick]);
 
-  // the list: selection + done + search → one query; a project on its
-  // board is read whole, in column order
   const board = sel.kind === "project" && view === "board";
   const withDone = showDone && sel.kind === "project" && !board;
   const query = useMemo(
@@ -133,7 +127,6 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
     [sel, withDone, board],
   );
   const debounced = useDebounced(search, 250);
-  // a new list starts on its first page; the open task belongs to the old one
   const select = (next: Sel) => {
     setSel(next);
     setPage(1);
@@ -149,7 +142,7 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
         // the list knows no comments; an open task keeps the ones it loaded
         setTasks((prev) => r.tasks.map((t) => ({ ...t, comments: t.comments ?? prev.find((p) => p.id === t.id)?.comments })));
         setPages(r.pages);
-        if (page > r.pages) setPage(Math.max(1, r.pages)); // the page emptied out
+        if (page > r.pages) setPage(Math.max(1, r.pages));
         setError("");
         setLoading(false);
       },
@@ -163,8 +156,6 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
       gone = true;
     };
   }, [query, debounced, page, tick, listTick]);
-  // the board moves by itself when an agent starts or finishes: re-read
-  // it now and then while it is on screen
   useEffect(() => {
     if (!board) return;
     const timer = setInterval(() => {
@@ -178,10 +169,8 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
   const statusOf = (t: Task) => byId.get(t.project_id)?.statuses.find((s) => s.id === t.status_id);
   const open = openId === null ? null : (tasks.find((t) => t.id === openId) ?? null);
 
-  // one task changed on the server: show it without re-reading the list
   const replace = (t: Task) => setTasks((ts) => ts.map((x) => (x.id === t.id ? t : x)));
-  // …unless it left the list: another project, another due date — or
-  // another column, where the server knows the place
+  // replaceOrMove re-reads the list when the task left it — another project, another due date — or changed column, where the server knows the place
   const replaceOrMove = (t: Task) => {
     const was = tasks.find((x) => x.id === t.id);
     replace(t);
@@ -222,14 +211,12 @@ export default function Tasks({ drawer, closeDrawer, ask, machines, agents, curr
     await createTask(projectId, fields);
     refresh();
   };
-  // a task typed into a column of the board
   const addTo = async (title: string, statusId: number) => {
     if (sel.kind !== "project") return;
     await createTask(sel.id, { title, status_id: statusId });
     reloadList();
   };
-  // a card dropped: shown there at once, the server told, the list put
-  // back as it was if it refuses
+  // a dropped card is shown there at once; the server is told and the list put back as it was if it refuses
   const moveCard = (t: Task, statusId: number, after: number | undefined) => {
     const before = tasks;
     setTasks((ts) => {
@@ -637,10 +624,7 @@ function TaskRow({ task: t, project, status, fields, selected, onToggle, onOpen 
   );
 }
 
-// what a task shows beside its title — on a list row and on a board card
-// alike: the agent on it, priority, labels, the due date, the project's
-// fields that ask to be on the card, and when asked the column it is in
-// and its project
+// TaskChips is what a task shows beside its title, on a list row and a board card alike
 function TaskChips({ task: t, project, status, fields }: { task: Task; project?: Project; status?: Status; fields?: Field[] }) {
   const due = dueLabel(t);
   return (
@@ -680,8 +664,8 @@ function TaskChips({ task: t, project, status, fields }: { task: Task; project?:
 function TaskDetail({ task: t, projects, statuses, fields, labels, onChange, onLabels, onClose, onDelete, onError, canSend, onSend, canStart, onStart, machineLabel, liveStatus, onOpenPane }: {
   task: Task;
   projects: Project[];
-  statuses: Status[]; // its project's columns
-  fields: Field[]; // its project's own fields
+  statuses: Status[];
+  fields: Field[];
   labels: Label[];
   onChange: (t: Task) => void;
   onLabels: (ls: Label[]) => void;
@@ -690,7 +674,7 @@ function TaskDetail({ task: t, projects, statuses, fields, labels, onChange, onL
   onError: (msg: string) => void;
   canSend: boolean;
   onSend: (groom: boolean) => void;
-  canStart: boolean; // a connected machine with a workspace to branch off
+  canStart: boolean;
   onStart: () => void;
   machineLabel: (id: string) => string;
   liveStatus: (r: Run) => string | null; // the pane's status from the roster, null when it is not there
@@ -1063,10 +1047,7 @@ function TaskDetail({ task: t, projects, statuses, fields, labels, onChange, onL
 
 // ---- send to an agent ----
 
-// taskPrompt is what the agent gets: the title, the description as text,
-// the project's fields meant for the prompt that have a value, and which
-// task it is — with /grill-me in front for a grooming pass. The same words
-// the server composes (internal/tasks/prompt.go).
+// taskPrompt is what the agent gets — the same words the server composes (internal/tasks/prompt.go) — with /grill-me in front for a grooming pass
 export function taskPrompt(t: Task, project: Project | undefined, groom: boolean): string {
   const desc = t.description ? htmlToText(t.description) : "";
   const fields = (project?.fields ?? [])
@@ -1094,8 +1075,8 @@ function branchFor(t: Task): string {
 
 function StartAgentDialog({ task: t, project, moveTo, machines, currentPane, onClose, onStarted }: {
   task: Task;
-  project: Project | undefined; // its name and fields, for the prompt
-  moveTo?: string; // the column the start moves the task to, when the project has one
+  project: Project | undefined;
+  moveTo?: string;
   machines: Machine[];
   currentPane: { machineId: string; paneId: string } | null;
   onClose: () => void;
@@ -1205,15 +1186,14 @@ function StartAgentDialog({ task: t, project, moveTo, machines, currentPane, onC
   );
 }
 
-// A datetime-local field fires a change per segment typed (and reads as ""
-// while incomplete), so the value is kept here and sent when the user is
-// done: on blur or Enter, never while empty (the clear button unsets).
+// DueInput keeps the value while typed and sends it on blur or Enter, never while empty (the clear button unsets):
+// a datetime-local field fires a change per segment typed and reads as "" while incomplete
 function DueInput({ value, onCommit }: { value: string; onCommit: (iso: string) => void }) {
   const [local, setLocal] = useState(toLocalInput(value));
   useEffect(() => setLocal(toLocalInput(value)), [value]);
   const commit = () => {
-    if (!local) return setLocal(toLocalInput(value)); // emptied: the clear button unsets
-    if (local === toLocalInput(value)) return; // untouched: no patch for a blur
+    if (!local) return setLocal(toLocalInput(value));
+    if (local === toLocalInput(value)) return;
     onCommit(new Date(local).toISOString());
   };
   return (
@@ -1289,9 +1269,8 @@ function labelStyle(l: Label): CSSProperties {
   return { background: `#${hex}33`, borderColor: `#${hex}88` };
 }
 
-// Descriptions are HTML (paragraphs; older ones may carry more). Shown
-// through a tiny allow-list renderer (React nodes, never innerHTML); edited
-// as plain text, which goes back as paragraphs.
+// Descriptions are HTML (paragraphs; older ones may carry more): rendered through an allow-list into
+// React nodes, never innerHTML, and edited as plain text that goes back as paragraphs.
 const BLOCK = new Set(["p", "div", "li", "h1", "h2", "h3", "h4", "pre", "blockquote", "tr"]);
 
 export function htmlToText(html: string): string {

@@ -11,13 +11,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
-// Server restarts herdr's server on the machine onto the installed binary
-// and brings the chats back. A stop ends every pane process; herdr itself
-// restores the workspaces, tabs and panes (and, where an integration
-// reports sessions, the agents); every chat that came back as a bare
-// shell gets its agent started again with the session resumed. The panes
-// with chats stay locked from the stop to the last resume, so nothing
-// else types into a shell that used to be a chat.
+// Server restarts herdr's server onto the installed binary and starts every
+// chat that came back as a bare shell again, its panes locked throughout.
 func (r *Restarter) Server(mc *machines.Machine, say func(string)) error {
 	client, _, err := mc.Ready()
 	if err != nil {

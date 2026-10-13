@@ -232,7 +232,6 @@ func TestWorkflowDefaultsAndCopy(t *testing.T) {
 	if !ss[0].OnNew || !ss[1].OnStart || !ss[2].OnFinish || ss[3].Kind != KindDone || ss[0].Kind != KindOpen {
 		t.Fatalf("default flags %+v", ss)
 	}
-	// a parent's edited workflow is copied into its child, once
 	ss[2].Title = "Review"
 	ss = append(ss, Status{Title: "Blocked", HexColor: "#e74c3c"})
 	if _, err := st.SetStatuses(inbox[0].ID, ss, nil); err != nil {
@@ -272,7 +271,6 @@ func TestSetStatusesRules(t *testing.T) {
 	bad("a nameless column", []Status{{Title: " "}, {Title: "D", Kind: KindDone}}, nil)
 	bad("a strange kind", []Status{{Title: "A", Kind: "weird"}, {Title: "D", Kind: KindDone}}, nil)
 	bad("another project's column", []Status{{ID: 999, Title: "A"}, {Title: "D", Kind: KindDone}}, nil)
-	// a column with tasks cannot just go
 	tk, _ := st.Create(id, Patch{Title: str("x")})
 	if tk.StatusID != ss[0].ID {
 		t.Fatalf("a new task is not in New: %d", tk.StatusID)
@@ -286,11 +284,9 @@ func TestSetStatusesRules(t *testing.T) {
 	if len(got) != 3 || got[0].Title != "In progress" || got[0].Position != 1 {
 		t.Fatalf("after the drop %+v", got)
 	}
-	// its task went to Done, and done followed the column
 	if tk, _ = st.Get(tk.ID); tk.StatusID != ss[3].ID || !tk.Done || tk.DoneAt == "" {
 		t.Fatalf("the moved task %+v", tk)
 	}
-	// a column turned open takes its tasks back to open
 	got[2].Kind = KindOpen
 	got = append(got, Status{Title: "Shipped", Kind: KindDone})
 	if got, err = st.SetStatuses(id, got, nil); err != nil {
@@ -311,7 +307,6 @@ func TestColumnAndDoneFollowEachOther(t *testing.T) {
 	ss := inbox[0].Statuses
 	newCol, progress, done := ss[0], ss[1], ss[3]
 	tk, _ := st.Create(id, Patch{Title: str("a")})
-	// the checkbox: done is the done column, undone is where new tasks land
 	tk, _ = st.Update(tk.ID, Patch{Done: boolp(true)})
 	if tk.StatusID != done.ID || !tk.Done {
 		t.Fatalf("done %+v", tk)
@@ -320,7 +315,6 @@ func TestColumnAndDoneFollowEachOther(t *testing.T) {
 	if tk.StatusID != newCol.ID || tk.Done || tk.DoneAt != "" {
 		t.Fatalf("undone %+v", tk)
 	}
-	// a column: done follows its kind
 	tk, _ = st.Update(tk.ID, Patch{StatusID: &done.ID})
 	if !tk.Done || tk.DoneAt == "" {
 		t.Fatalf("into the done column %+v", tk)
@@ -332,7 +326,6 @@ func TestColumnAndDoneFollowEachOther(t *testing.T) {
 	if _, err := st.Update(tk.ID, Patch{StatusID: intp64(999)}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("a foreign column: %v", err)
 	}
-	// born done, or in a named column
 	born, _ := st.Create(id, Patch{Title: str("b"), Done: boolp(true)})
 	if born.StatusID != done.ID || !born.Done {
 		t.Fatalf("born done %+v", born)
@@ -341,12 +334,10 @@ func TestColumnAndDoneFollowEachOther(t *testing.T) {
 	if placed.StatusID != progress.ID {
 		t.Fatalf("placed %+v", placed)
 	}
-	// the smart lists still cut by done
 	open, _, _ := st.List(Query{View: "open"})
 	if len(open) != 2 {
 		t.Fatalf("open: %d", len(open))
 	}
-	// moving to another project: the column of the same name, else by state
 	other, _ := st.CreateProject("Other", 0)
 	os := other.Statuses
 	renamed := append([]Status{}, os...)
@@ -416,7 +407,6 @@ func TestPositionsInAColumn(t *testing.T) {
 	if !(ts[0].Position < ts[1].Position && ts[1].Position < ts[2].Position) {
 		t.Fatalf("not renumbered: %v %v %v", ts[0].Position, ts[1].Position, ts[2].Position)
 	}
-	// a change of column without a place goes to the bottom there
 	progress := inbox[0].Statuses[1]
 	x, _ := st.Create(id, Patch{Title: str("x"), StatusID: &progress.ID})
 	moved, _ := st.Update(b.ID, Patch{StatusID: &progress.ID})

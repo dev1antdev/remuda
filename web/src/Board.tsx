@@ -1,8 +1,5 @@
-// The board: a project's columns side by side, its tasks as cards. On a
-// desk a card is dragged between and within columns; on a phone the
-// columns are swiped through and a card's ⋯ menu moves it. The order
-// shown is the order given — the server's, or the one the last drop made
-// — nothing is sorted here.
+// The board: a project's columns side by side, its tasks as cards — dragged on a desk, moved from a
+// ⋯ menu on a phone, shown in the order given: the server's, or the one the last drop made.
 
 import { useCallback, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import type { Project, Status, Task } from "./tasksApi";
@@ -18,7 +15,7 @@ export default function Board({ project, tasks, openId, draggable, onOpen, onMov
   // after: the card to sit behind in the column, 0 for the top, undefined for the bottom
   onMove: (task: Task, statusId: number, after: number | undefined) => void;
   onAdd: (title: string, statusId: number) => Promise<void>;
-  chips: (t: Task) => ReactNode; // what a list row shows beside the title: the same on a card
+  chips: (t: Task) => ReactNode;
 }) {
   const byStatus = useMemo(() => {
     const m = new Map<number, Task[]>();
@@ -37,8 +34,7 @@ export default function Board({ project, tasks, openId, draggable, onOpen, onMov
     setOver(null);
   };
 
-  // where between the column's cards the pointer is: the index a dropped
-  // card would take, the card being dragged not counted
+  // indexAt is the index a dropped card would take at y, the card being dragged not counted
   const indexAt = (col: HTMLElement, y: number) => {
     let i = 0;
     for (const c of col.querySelectorAll<HTMLElement>(".board-card")) {

@@ -11,8 +11,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/search"
 )
 
-// GET /api/search?q=&machine=<id|all>&dir=&days= — full text over the
-// transcripts of every connected machine, newest first.
+// handleSearch is GET /api/search?q=&machine=<id|all>&dir=&days=: full text over every connected machine's transcripts, newest first.
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if len([]rune(q)) < 2 {

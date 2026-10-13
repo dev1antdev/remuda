@@ -1,10 +1,6 @@
-// Package tasks is remuda's own task list: projects, tasks, labels, in
-// one SQLite file in the state dir (tasks.db, WAL). No server but this one,
-// no account, nothing leaves the machine. The shapes are what the Tasks
-// mode shows: a project tree, each project with its own workflow — the
-// columns a task moves through — tasks with a due date, a priority, labels
-// and an HTML description, three smart lists over them and a board per
-// project.
+// Package tasks is remuda's own task list — a project tree, each project
+// with its workflow columns and fields, tasks with labels, comments and
+// agent runs — in one SQLite file (tasks.db, WAL) in the state dir.
 package tasks
 
 import (
@@ -27,13 +23,12 @@ const file = "tasks.db"
 // PageSize is how many tasks a page of the list holds.
 const PageSize = 50
 
-// BoardDone is how many done tasks a board column shows: the latest ones;
-// the rest are in the list with "done" ticked.
+// BoardDone is how many done tasks a board column shows, the latest ones.
 const BoardDone = 50
 
 var (
 	ErrNotFound = errors.New("not found")
-	ErrInvalid  = errors.New("invalid") // a request that cannot be honoured; the message says why
+	ErrInvalid  = errors.New("invalid")
 )
 
 func invalid(msg string) error { return fmt.Errorf("%w: %s", ErrInvalid, msg) }
@@ -49,20 +44,18 @@ type Project struct {
 	Position    float64  `json:"position"`
 	Created     string   `json:"created"`
 	Updated     string   `json:"updated"`
-	Statuses    []Status `json:"statuses"` // the workflow, in order
-	Fields      []Field  `json:"fields"`   // its own fields, in order
+	Statuses    []Status `json:"statuses"`
+	Fields      []Field  `json:"fields"`
 }
 
-// Status is one column of a project's board. A task is always in exactly
-// one; done follows the column's kind. The flags say where the workflow's
-// own moves land — new tasks, a task an agent was started on, a task whose
-// agent finished — at most one column per flag.
+// Status is one column of a project's board; a task is always in exactly one, and done follows the column's kind.
+// The flags say where the workflow's own moves land (new tasks, a started agent, a finish), at most one column per flag.
 type Status struct {
 	ID        int64   `json:"id"`
 	ProjectID int64   `json:"project_id"`
 	Title     string  `json:"title"`
 	HexColor  string  `json:"hex_color"`
-	Kind      string  `json:"kind"` // open | done
+	Kind      string  `json:"kind"`
 	Position  float64 `json:"position"`
 	OnNew     bool    `json:"on_new"`
 	OnStart   bool    `json:"on_start"`
@@ -86,51 +79,48 @@ type Task struct {
 	StatusID    int64          `json:"status_id"`
 	Title       string         `json:"title"`
 	Description string         `json:"description"` // HTML: paragraphs from the editor
-	Done        bool           `json:"done"`        // the column's kind, kept here for the smart lists
-	DoneAt      string         `json:"done_at"`     // RFC 3339 UTC, "" when open
-	DueDate     string         `json:"due_date"`    // RFC 3339 UTC, "" when none
-	Priority    int            `json:"priority"`    // 0 none … 5 do now
-	Position    float64        `json:"position"`    // the place in its column
+	Done        bool           `json:"done"`
+	DoneAt      string         `json:"done_at"`  // RFC 3339 UTC, "" when open
+	DueDate     string         `json:"due_date"` // RFC 3339 UTC, "" when none
+	Priority    int            `json:"priority"`
+	Position    float64        `json:"position"`
 	Labels      []Label        `json:"labels"`
 	Fields      map[string]any `json:"fields"`     // the project's fields' values, by field id
 	Identifier  string         `json:"identifier"` // "#12"
 	Created     string         `json:"created"`
 	Updated     string         `json:"updated"`
-	Run         *Run           `json:"run,omitempty"`      // the latest agent started on it
-	Comments    []Comment      `json:"comments,omitempty"` // on Get only
+	Run         *Run           `json:"run,omitempty"`
+	Comments    []Comment      `json:"comments,omitempty"`
 }
 
-// Run is an agent started on a task: a worktree made from the task, the
-// agent in it, the prompt sent once the agent is up, every finish of the
-// agent's reported back as a comment.
+// Run is an agent started on a task: a worktree made for it, the agent in it, the prompt sent once the agent is up.
 type Run struct {
 	ID         int64  `json:"id"`
 	TaskID     int64  `json:"task_id"`
 	Machine    string `json:"machine"`
-	Workspace  string `json:"workspace"` // herdr workspace id of the worktree
+	Workspace  string `json:"workspace"`
 	Pane       string `json:"pane"`
 	Dir        string `json:"dir"`
 	Branch     string `json:"branch"`
 	Agent      string `json:"agent"`
-	State      string `json:"state"` // starting | running | finished | gone | failed
+	State      string `json:"state"`
 	Started    string `json:"started"`
-	PromptSent string `json:"prompt_sent,omitempty"` // when the task reached the agent
-	Finished   string `json:"finished,omitempty"`    // the last finish reported
-	Reported   string `json:"-"`                     // the transcript record that finish ended with
+	PromptSent string `json:"prompt_sent,omitempty"`
+	Finished   string `json:"finished,omitempty"`
+	Reported   string `json:"-"` // the transcript record the reported finish ended with
 	Error      string `json:"error,omitempty"`
 }
 
 const (
-	RunStarting = "starting" // the agent is coming up; the prompt waits
-	RunRunning  = "running"  // the prompt is in; the agent works or waits
-	RunFinished = "finished" // the agent's last turn is in the comments
-	RunGone     = "gone"     // the pane is no more (workspace closed)
-	RunFailed   = "failed"   // the prompt never got through
+	RunStarting = "starting"
+	RunRunning  = "running"
+	RunFinished = "finished"
+	RunGone     = "gone"
+	RunFailed   = "failed"
 )
 
-// legacyInProgress is the label older versions put on a task while an
-// agent was on it; the workflow's on_start column took its place. It is
-// read once, to place such tasks, and never written again.
+// legacyInProgress is the label older versions put on a task while an agent was on it.
+// seedWorkflows reads it once to place such tasks in the on_start column; it is never written again.
 const legacyInProgress = "in progress"
 
 type Comment struct {
@@ -141,12 +131,8 @@ type Comment struct {
 	Created string `json:"created"`
 }
 
-// Patch is a partial update: a nil field stays as it is. A due date of ""
-// clears it. StatusID moves the task to a column (done follows); Done
-// alone moves it to the project's done column, or back to where new tasks
-// land. After places it in its column: right after that task, 0 for the
-// top; without it a task that changed column goes to the bottom. Fields
-// is partial too: a key is a field id, null clears its value.
+// Patch is a partial update: a nil field stays as it is, a due date of "" clears it, a Fields key is a field id with null clearing the value.
+// After places the task in its column (0 is the top); a changed column without it goes to the bottom.
 type Patch struct {
 	Title       *string                    `json:"title"`
 	Description *string                    `json:"description"`
@@ -169,13 +155,11 @@ type ProjectPatch struct {
 	Position    *float64 `json:"position"`
 }
 
-// Query is one page of the list: a smart view or a project, open tasks or
-// all, a search, in the viewer's time zone (the smart views cut by local
-// days). The board is a project whole, in column order, unpaged.
+// Query is one page of the list: a smart view or a project, a search, in the viewer's time zone.
 type Query struct {
 	View    string // today | upcoming | open | project | board
 	Project int64
-	Done    bool // include done tasks (project view)
+	Done    bool
 	Search  string
 	Page    int
 	Now     time.Time
@@ -196,7 +180,7 @@ func Open(dir string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(1) // one writer; reads queue behind it, which is fine for a personal list
+	db.SetMaxOpenConns(1) // one connection: SQLite has one writer at a time, and reads queue behind it
 	st := &Store{db: db, now: time.Now}
 	if err := st.migrate(); err != nil {
 		db.Close()
@@ -311,7 +295,6 @@ CREATE TABLE IF NOT EXISTS task_fields (
 	if _, err := st.db.Exec(`CREATE INDEX IF NOT EXISTS tasks_status ON tasks(project_id, status_id, position)`); err != nil {
 		return err
 	}
-	// a first list has somewhere to add to
 	var n int
 	if err := st.db.QueryRow(`SELECT count(*) FROM projects`).Scan(&n); err != nil {
 		return err
@@ -351,11 +334,8 @@ func (st *Store) addColumn(table, col, def string) error {
 	return err
 }
 
-// seedWorkflows gives every project without columns the default workflow,
-// and every task without a column its place by what it was: done tasks in
-// the done column, those an agent was on (the old "in progress" label)
-// where a start lands, the rest where new tasks land. Runs at every open;
-// a store that is up to date does nothing.
+// seedWorkflows gives every project without columns the default workflow and every task without a column its place.
+// It runs at every open: done tasks go to the done column, those with the old "in progress" label to on_start, the rest where new tasks land.
 func (st *Store) seedWorkflows() error {
 	ps, err := st.Projects()
 	if err != nil {
@@ -371,7 +351,6 @@ func (st *Store) seedWorkflows() error {
 		}
 		byProject[p.ID] = ss
 	}
-	// without a column, or with one that is not its project's
 	rows, err := st.db.Query(`SELECT t.id, t.project_id, t.done,
   EXISTS (SELECT 1 FROM task_labels tl JOIN labels l ON l.id = tl.label_id WHERE tl.task_id = t.id AND l.title = ? COLLATE NOCASE)
   FROM tasks t WHERE NOT EXISTS (SELECT 1 FROM statuses s WHERE s.id = t.status_id AND s.project_id = t.project_id)`, legacyInProgress)
@@ -490,8 +469,7 @@ func (st *Store) Project(id int64) (Project, error) {
 	return p, nil
 }
 
-// CreateProject makes a project with its parent's workflow and fields — a
-// copy, its own from then on — or the default workflow at the top level.
+// CreateProject makes a project with a copy of its parent's workflow and fields, or the default workflow at the top level.
 func (st *Store) CreateProject(title string, parent int64) (Project, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
@@ -557,7 +535,6 @@ func (st *Store) UpdateProject(id int64, p ProjectPatch) (Project, error) {
 		}
 	}
 	if p.ParentID != nil {
-		// not itself, and not one of its own descendants
 		for pid := *p.ParentID; pid != 0; {
 			if pid == id {
 				return cur, invalid("a project cannot be inside itself")
@@ -587,8 +564,7 @@ func (st *Store) UpdateProject(id int64, p ProjectPatch) (Project, error) {
 	return st.Project(id)
 }
 
-// DeleteProject removes a project with its tasks and columns; projects
-// inside it move to the top level.
+// DeleteProject removes a project with its tasks and columns; projects inside it move to the top level.
 func (st *Store) DeleteProject(id int64) error {
 	if _, err := st.Project(id); err != nil {
 		return err
@@ -609,9 +585,7 @@ func (st *Store) DeleteProject(id int64) error {
 
 // ---- the workflow: a project's columns ----
 
-// DefaultStatuses is the workflow a project starts with when it has no
-// parent to copy: new tasks land in New, a started agent moves a task to
-// In progress, its finish to Testing, and Done is the done column.
+// DefaultStatuses is the workflow a project starts with when it has no parent to copy.
 func DefaultStatuses() []Status {
 	return []Status{
 		{Title: "New", HexColor: "95a5a6", Kind: KindOpen, OnNew: true},
@@ -623,8 +597,7 @@ func DefaultStatuses() []Status {
 
 const statusCols = `id, project_id, title, hex_color, kind, position, on_new, on_start, on_finish`
 
-// statusesOf lists a project's columns in order; project 0 lists every
-// project's.
+// statusesOf lists a project's columns in order; project 0 lists every project's.
 func (st *Store) statusesOf(projectID int64) ([]Status, error) {
 	q := `SELECT ` + statusCols + ` FROM statuses`
 	var args []any
@@ -675,8 +648,7 @@ func flagged(ss []Status, flag func(Status) bool) *Status {
 	return nil
 }
 
-// landing is where a new task goes: the on_new column, else the first open
-// one, else the first.
+// landing is where a new task goes: the on_new column, else the first open one, else the first.
 func landing(ss []Status) *Status {
 	if s := flagged(ss, func(x Status) bool { return x.OnNew }); s != nil {
 		return s
@@ -695,12 +667,8 @@ func doneStatus(ss []Status) *Status {
 	return flagged(ss, func(x Status) bool { return x.Kind == KindDone })
 }
 
-// SetStatuses replaces a project's columns with want, in that order: an id
-// of 0 is a new column, a known id keeps its tasks, a column left out is
-// removed and its tasks go to moves[old id] — a surviving column, required
-// while it has tasks. There is always at least one open and one done
-// column, and each flag sits on at most one. Done follows the kind for
-// every task.
+// SetStatuses replaces a project's columns with want, in that order: id 0 is a new column, a known id keeps its tasks, one left out is removed.
+// A removed column's tasks go to moves[old id], required while it has any; at least one open and one done column, each flag on at most one.
 func (st *Store) SetStatuses(projectID int64, want []Status, moves map[int64]int64) ([]Status, error) {
 	var n int
 	if err := st.db.QueryRow(`SELECT count(*) FROM projects WHERE id = ?`, projectID).Scan(&n); err != nil {
@@ -765,7 +733,6 @@ func (st *Store) SetStatuses(projectID int64, want []Status, moves map[int64]int
 			return nil, invalid("only one column can " + what)
 		}
 	}
-	// the columns going, and whether their tasks have somewhere to go
 	counts := map[int64]int{}
 	rows, err := st.db.Query(`SELECT status_id, count(*) FROM tasks WHERE project_id = ? GROUP BY status_id`, projectID)
 	if err != nil {
@@ -842,9 +809,8 @@ func (st *Store) SetStatuses(projectID int64, want []Status, moves map[int64]int
 	return st.statusesOf(projectID)
 }
 
-// placeAfter is the position for a task that goes right after `after` in
-// its column (0: the top) — the midpoint between its new neighbours, the
-// column renumbered first when two of them have no room between them.
+// placeAfter is the position for a task that goes right after `after` in its column (0: the top).
+// It is the midpoint between the new neighbours; the column is renumbered first when two of them have no room between them.
 func placeAfter(tx *sql.Tx, projectID, statusID, self, after int64) (float64, error) {
 	rows, err := tx.Query(`SELECT id, position FROM tasks WHERE project_id = ? AND status_id = ? AND id <> ? ORDER BY position, id DESC`, projectID, statusID, self)
 	if err != nil {
@@ -1092,8 +1058,7 @@ func (st *Store) fillLabels(tasks []*Task) error {
 	return rows.Err()
 }
 
-// Create makes a task in a project: in the column asked for, else the done
-// column for a task born done, else where new tasks land; at the bottom.
+// Create makes a task in a project: in the column asked for, else the done column for a task born done, else where new tasks land.
 func (st *Store) Create(projectID int64, p Patch) (Task, error) {
 	project, err := st.Project(projectID)
 	if err != nil {
@@ -1182,7 +1147,6 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 	if p.Priority != nil {
 		cur.Priority = clampPriority(*p.Priority)
 	}
-	// where it sits: the project, then the column — done follows the column
 	ss, err := st.statusesOf(cur.ProjectID)
 	if err != nil {
 		return cur, err
@@ -1192,14 +1156,13 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 		return cur, err
 	}
 	moved := false
-	var carryTo []Field // another project's fields, when the task moves there
+	var carryTo []Field
 	if p.ProjectID != nil && *p.ProjectID != cur.ProjectID {
 		target, err := st.Project(*p.ProjectID)
 		if err != nil {
 			return cur, fmt.Errorf("project: %w", err)
 		}
 		carryTo = target.Fields
-		// the column of the same name over there, else the one its state calls for
 		var next *Status
 		if old := statusByID(ss, cur.StatusID); old != nil {
 			next = statusByTitle(target.Statuses, old.Title)
@@ -1292,13 +1255,8 @@ func (st *Store) Delete(id int64) error {
 	return nil
 }
 
-// List is one page of the query, with how many pages there are. Order:
-// open before done, the nearest due date first, undated last, newest
-// first among equals. Today ends at the viewer's midnight; upcoming is the
-// next seven days from now. The search is case-folded on the Go side
-// (SQLite's own folding is ASCII only), so it finds Cyrillic either way.
-// The board is a project in column order, every open task and the latest
-// done ones, on one page.
+// List is one page of the query, with how many pages there are: open before done, the nearest due date first, undated last, newest first among equals.
+// The search is case-folded in Go: SQLite's own lower() folds ASCII only, so Cyrillic would not match either way.
 func (st *Store) List(q Query) ([]Task, int, error) {
 	now := q.Now
 	if now.IsZero() {
@@ -1331,7 +1289,6 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 	case "board":
 		where = append(where, "tasks.project_id = ?")
 		args = append(args, q.Project)
-		// a done column shows the latest finishes first; the others keep their order
 		from = `tasks LEFT JOIN statuses s ON s.id = tasks.status_id`
 		order = ` ORDER BY s.position, CASE WHEN s.kind = 'done' THEN tasks.done_at ELSE '' END DESC, tasks.position, tasks.id DESC`
 	default:
@@ -1365,7 +1322,6 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 	var out []Task
 	pages := 1
 	if q.View == "board" {
-		// the latest BoardDone of each done column
 		seen := map[int64]int{}
 		for _, t := range all {
 			if t.Done {
@@ -1412,8 +1368,7 @@ func scanRun(sc interface{ Scan(...any) error }) (Run, error) {
 	return r, err
 }
 
-// StartRun records an agent started on a task and moves the task to the
-// column its project keeps for that, in one transaction.
+// StartRun records an agent started on a task and moves the task to its project's on_start column, in one transaction.
 func (st *Store) StartRun(r Run) (Run, error) {
 	t, err := st.Get(r.TaskID)
 	if err != nil {
@@ -1446,11 +1401,8 @@ func (st *Store) StartRun(r Run) (Run, error) {
 	return r, tx.Commit()
 }
 
-// OnFinish moves a task whose agent finished to the column its project
-// keeps for that: only a task that is not done and still sits where the
-// start put it (or anywhere, when no column takes starts) — a card the
-// person moved by hand stays. It returns the column the task went to, or
-// nil.
+// OnFinish moves a task whose agent finished to its project's on_finish column and returns it, or nil when nothing moved.
+// Only a task not done and still where the start put it moves: a card the person moved by hand stays.
 func (st *Store) OnFinish(taskID int64) (*Status, error) {
 	t, err := st.Get(taskID)
 	if err != nil {
@@ -1500,8 +1452,7 @@ func (st *Store) Run(id int64) (Run, error) {
 	return r, err
 }
 
-// OpenRuns are the runs still to watch: starting, running, or finished
-// with the pane still there (the agent may be asked for more).
+// OpenRuns are the runs still to watch: starting, running, or finished with the pane still there.
 func (st *Store) OpenRuns() ([]Run, error) {
 	rows, err := st.db.Query(`SELECT `+runCols+` FROM task_runs WHERE state IN (?, ?, ?) ORDER BY id`, RunStarting, RunRunning, RunFinished)
 	if err != nil {
@@ -1519,8 +1470,7 @@ func (st *Store) OpenRuns() ([]Run, error) {
 	return out, rows.Err()
 }
 
-// SetRun moves a run on: a state, and what goes with it — for finished the
-// record the reported answer ended with, otherwise an error message.
+// SetRun moves a run on to a state with its detail: the reported record for finished, else an error message.
 func (st *Store) SetRun(id int64, state string, detail string) error {
 	now := st.stamp()
 	var res sql.Result
@@ -1606,9 +1556,8 @@ func clampPriority(p int) int { return min(max(p, 0), 5) }
 
 var colorRe = regexp.MustCompile(`^(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
 
-// normColor is a colour as the UI keeps it — six (or three) hex digits
-// without the "#", or nothing. The value lands in a style attribute, so
-// nothing else is a colour.
+// normColor is a colour as the UI keeps it: six (or three) hex digits without the "#", or nothing.
+// The value lands in a style attribute, so nothing else passes.
 func normColor(s string) (string, error) {
 	s = strings.TrimPrefix(strings.TrimSpace(s), "#")
 	if s != "" && !colorRe.MatchString(s) {

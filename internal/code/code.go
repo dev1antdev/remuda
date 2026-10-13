@@ -1,9 +1,6 @@
 // Package code puts a machine's code-server (VS Code in the browser) behind
-// remuda: each machine runs its own on 127.0.0.1:<port>, auth off, and
-// remuda's bearer-token guard is the door — the browser reaches it at
-// /code/<machine>/, locally straight to the port, remotely through a port
-// forwarded over the same ssh master the roster uses. One origin, one token,
-// nothing else to expose.
+// remuda's token guard: each machine runs its own on 127.0.0.1:<port> with auth
+// off, reached at /code/<machine>/ straight to the port or over the ssh master.
 package code
 
 import (
@@ -35,7 +32,7 @@ type Service struct {
 	client *http.Client
 
 	mu     sync.Mutex
-	checks map[string]check // by machine id
+	checks map[string]check
 }
 
 type check struct {
@@ -47,8 +44,7 @@ func New(port int) *Service {
 	return &Service{Port: port, client: &http.Client{Timeout: 3 * time.Second}, checks: map[string]check{}}
 }
 
-// Status says whether the machine's code-server answers; a good verdict is
-// cached briefly so a page polling it does not probe every few seconds.
+// Status says whether the machine's code-server answers; a good verdict is cached 15s so a polling page does not probe every time.
 func (s *Service) Status(mc *machines.Machine) Status {
 	s.mu.Lock()
 	if c, ok := s.checks[mc.Cfg.ID]; ok && time.Since(c.at) < 15*time.Second && c.st.Available {
@@ -80,8 +76,7 @@ func (s *Service) probe(mc *machines.Machine) Status {
 		Status string `json:"status"`
 	}
 	_ = json.NewDecoder(io.LimitReader(res.Body, 4096)).Decode(&body)
-	// "alive" with a client connected, "expired" without one: both are a
-	// code-server answering
+	// code-server's healthz says "alive" with a client connected and "expired" without one: both are an answer
 	if res.StatusCode != http.StatusOK || body.Status == "" {
 		st.Error = fmt.Sprintf("%s:%d answers, but not like a code-server (%s)", mc.Label(), s.Port, res.Status)
 		return st
@@ -97,10 +92,8 @@ func (s *Service) Forget(machineID string) {
 	s.mu.Unlock()
 }
 
-// Proxy serves one request to the machine's code-server. `prefix` is the
-// mount (/code/<machine>) the browser used, stripped on the way in and put
-// back on any absolute redirect on the way out; WebSocket upgrades pass
-// through (the editor's own connection is one).
+// Proxy serves one request to the machine's code-server, with the mount prefix (/code/<machine>) stripped on the way in and put back on absolute redirects.
+// WebSocket upgrades pass through: the editor's own connection is one.
 func (s *Service) Proxy(w http.ResponseWriter, r *http.Request, mc *machines.Machine, prefix string) {
 	addr, err := mc.CodeAddr(s.Port)
 	if err != nil {
@@ -113,9 +106,7 @@ func (s *Service) Proxy(w http.ResponseWriter, r *http.Request, mc *machines.Mac
 			pr.SetURL(target)
 			pr.Out.Host = pr.In.Host // code-server reads the Host it was asked for
 			pr.SetXForwarded()
-			// remuda's own credential stays here: code-server runs with no
-			// auth of its own and needs neither, and on a remote machine
-			// whatever listens on that port would otherwise read the token
+			// remuda's token never reaches the machine: code-server needs no auth, and whatever listens on that port would read it
 			pr.Out.Header.Del("Authorization")
 			pr.Out.Header.Del("Cookie")
 			for _, c := range pr.In.Cookies() {

@@ -1,10 +1,9 @@
-// Finds file paths in a line of text the way an agent prints them: absolute,
-// ~/…, ./…, relative with a slash, or a bare name with a code-ish extension,
-// optionally followed by :line[:col] — and URLs, which are never paths.
-// Shared by the terminal link provider and the chat linkifier.
+// Finds file paths in a line of text the way an agent prints them (absolute, ~/…, ./…, relative with
+// a slash, or a bare name with a code-ish extension, optionally :line[:col]) and URLs, which are never
+// paths. Shared by the terminal link provider and the chat linkifier.
 
 export type PathMatch = {
-  start: number; // index in the line
+  start: number;
   end: number; // exclusive
   text: string;
   path: string;

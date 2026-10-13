@@ -20,7 +20,6 @@ func TestDoneIsHeldUntilSeen(t *testing.T) {
 	now := time.Now()
 	tr.Observe("m", snap(herdr.StatusWorking, false), now)
 	tr.Observe("m", snap(herdr.StatusWorking, false), now.Add(time.Second))
-	// herdr lets go of done within seconds; the tick must not
 	tr.Observe("m", snap(herdr.StatusDone, false), now.Add(5*time.Second))
 	for i := 0; i < 5; i++ {
 		s := snap(herdr.StatusIdle, false)
@@ -107,7 +106,6 @@ func TestRecoveryAndPersistence(t *testing.T) {
 		t.Fatalf("recovered %d, want %d", d.LastActive, stamp.UnixMilli())
 	}
 	tr.Flush()
-	// a restart keeps the stamp and does not ask again
 	tr2 := New(dir, func(string, *herdr.PaneInfo) time.Time { t.Fatal("recovery asked twice"); return time.Time{} })
 	tr2.Observe("m", s, time.Now())
 	if d := display(tr2, s); d.LastActive != stamp.UnixMilli() {
@@ -140,7 +138,6 @@ func TestSeenHoldsWhileHerdrStillSaysDone(t *testing.T) {
 			t.Fatalf("poll %d after seen: %s, want idle", i, d.State)
 		}
 	}
-	// the next finish is a new one
 	tr.Observe("m", snap(herdr.StatusWorking, false), now.Add(40*time.Second))
 	s := snap(herdr.StatusDone, false)
 	tr.Observe("m", s, now.Add(45*time.Second))
@@ -153,7 +150,6 @@ func TestRestartKeepsTicksAndRaisesNone(t *testing.T) {
 	dir := t.TempDir()
 	tr := New(dir, nil)
 	now := time.Now()
-	// p1 finished and was not looked at; p2 finished and was
 	two := &herdr.Snapshot{Panes: []herdr.PaneInfo{
 		{PaneID: "p1", Agent: "claude", AgentStatus: herdr.StatusWorking},
 		{PaneID: "p2", Agent: "claude", AgentStatus: herdr.StatusWorking},
@@ -164,8 +160,6 @@ func TestRestartKeepsTicksAndRaisesNone(t *testing.T) {
 	tr.Seen("m", "p2")
 	tr.Flush()
 
-	// remuda restarts; herdr still says done for both, and knows a third
-	// pane that finished before remuda ever ran
 	tr2 := New(dir, nil)
 	three := &herdr.Snapshot{Panes: []herdr.PaneInfo{
 		{PaneID: "p1", Agent: "claude", AgentStatus: herdr.StatusDone},
@@ -182,7 +176,6 @@ func TestRestartKeepsTicksAndRaisesNone(t *testing.T) {
 	if d := tr2.Display("m", &three.Panes[2]); d.State != herdr.StatusIdle {
 		t.Fatalf("p3 (finished before remuda ran): %s, want idle", d.State)
 	}
-	// a finish after the restart is news again
 	three.Panes[2].AgentStatus = herdr.StatusWorking
 	tr2.Observe("m", three, now.Add(2*time.Minute))
 	three.Panes[2].AgentStatus = herdr.StatusDone

@@ -16,7 +16,6 @@ import (
 	"time"
 )
 
-// Every embedded script parses: a typo in one is a machine half set up.
 func TestScriptsParse(t *testing.T) {
 	for name, script := range map[string]string{"setup": setupScript, "install-service": serviceScript, "install": installScript, "uninstall": uninstallScript, "install-code": codeScript} {
 		cmd := exec.Command("sh", "-n")
@@ -24,9 +23,8 @@ func TestScriptsParse(t *testing.T) {
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Errorf("%s.sh: %v\n%s", name, err, out)
 		}
-		// a backtick outside a comment is a command substitution — in an
-		// unquoted heredoc too, where it once sat in a config file's text
-		// and would have run `remuda code` from inside its own installer
+		// a backtick is a command substitution in an unquoted heredoc too: one in a
+		// config file's text would have run `remuda code` from inside its own installer
 		for i, line := range strings.Split(script, "\n") {
 			if strings.Contains(line, "`") && !strings.HasPrefix(strings.TrimSpace(line), "#") {
 				t.Errorf("%s.sh:%d: a backtick outside a comment: %s", name, i+1, line)
@@ -54,9 +52,7 @@ func TestInstallEnvNamesThisBuildsReleaseOnly(t *testing.T) {
 	}
 }
 
-// home is a machine with nothing on it: a temp HOME, and nothing of the
-// person's own named by the environment. Were a real herdr ever reached
-// from here, it would find no server at the socket it is pointed at.
+// home is a bare machine: a temp HOME, with nothing of the person's own named by the environment.
 func home(t *testing.T) string {
 	t.Helper()
 	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
@@ -91,8 +87,7 @@ func exists(path string) bool {
 
 const fakeBinary = "#!/bin/sh\necho remuda v9.9.9\n"
 
-// release serves what a GitHub release does: the binary under every
-// asset name, and checksums.txt saying sum for each.
+// release serves a GitHub release: the binary under every asset name, checksums.txt saying sum for each.
 func release(t *testing.T, sum string) string {
 	t.Helper()
 	if _, err := exec.LookPath("curl"); err != nil {
@@ -121,8 +116,7 @@ func sumOf(s string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// install runs the installer as `curl … | sh` does, for the binary alone:
-// setup would reach for the machine's real herdr and service.
+// install runs the installer as `curl … | sh` does, for the binary alone: setup would reach the real herdr.
 func install(t *testing.T, base string, env ...string) (string, error) {
 	t.Helper()
 	cmd := exec.Command("sh", "-s")
@@ -192,9 +186,7 @@ func TestInstallerLeavesARemudaThatIsThereWhenToldTo(t *testing.T) {
 
 // --- the way back ---
 
-// The programs the uninstall script calls that act on the machine rather
-// than on files under HOME. Each stand-in writes down how it was called
-// and answers as a machine with everything installed would.
+// standIns are the programs the uninstall script calls that act beyond HOME's files; each logs its call.
 var standIns = map[string]string{
 	// loaded exactly when the service's file is there
 	"launchctl": `case "$1" in print) [ -f "$HOME/Library/LaunchAgents/${2##*/}.plist" ]; exit $? ;; esac`,
@@ -209,8 +201,7 @@ esac`,
 	"pgrep": `exit 1`, // no remuda started by hand
 }
 
-// machine lays a home out as the installer, `remuda setup` and `remuda
-// code` leave it, and returns it with a reader of the stand-ins' calls.
+// machine lays a home out as the installer, setup and `remuda code` leave it, with a reader of the stand-ins' calls.
 func machine(t *testing.T) (string, func() string) {
 	t.Helper()
 	dir := home(t)
@@ -218,9 +209,8 @@ func machine(t *testing.T) (string, func() string) {
 	for name, body := range standIns {
 		write(t, filepath.Join(bin, name), "#!/bin/sh\necho \""+name+" $*\" >> \"$HOME/calls.log\"\n"+body+"\n", 0o755)
 	}
-	// The stand-ins must be what the script finds. A real launchctl or
-	// herdr reached from a test would act on the person's own machine, so
-	// nothing runs unless every one of them resolves into this home.
+	// a real launchctl or herdr reached from a test would act on the person's own
+	// machine: nothing runs unless every stand-in resolves into this home
 	const pathLine = `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"`
 	if !strings.Contains(uninstallScript, pathLine) {
 		t.Fatal("the uninstall script no longer puts ~/.local/bin first on PATH: the stand-ins would not be found")
@@ -277,7 +267,7 @@ func stopsTheService() string {
 	return "systemctl --user disable --now remuda.service"
 }
 
-// The calls that change a machine beyond its files.
+// acts are the calls that change a machine beyond its files.
 var acts = []string{"bootout", "unload", "disable", "integration uninstall", "server stop", "brew uninstall", "ssh -S"}
 
 func TestPlanSaysWhatWouldGoAndTouchesNothing(t *testing.T) {
@@ -319,7 +309,7 @@ func TestPlanSaysWhatWouldGoAndTouchesNothing(t *testing.T) {
 
 func TestRemovalTakesRemudaAndLeavesWhatIsNotItsOwn(t *testing.T) {
 	dir, calls := machine(t)
-	// an ssh master remuda left for a remote machine: a socket where it keeps them
+	// an ssh master's control socket, left where remuda keeps them
 	socks, err := os.MkdirTemp("/tmp", "rs")
 	if err != nil {
 		t.Fatal(err)
@@ -399,17 +389,14 @@ func TestRemovalOfEverythingLeavesNothing(t *testing.T) {
 		t.Errorf("the tailnet node that stays listed is not mentioned:\n%s", out.String())
 	}
 
-	// the stand-in for herdr went with the rest, so the look afterwards asks
-	// for remuda alone: with herdr's flag it would question whatever herdr
-	// the machine running this test really has
+	// the herdr stand-in went with the rest: a plan with -herdr now would ask
+	// whatever herdr the machine running this test really has
 	out.Reset()
 	if some, err := (Removal{}).Plan(&out); err != nil || some {
 		t.Errorf("after everything went there is still something to remove (some=%v err=%v):\n%s", some, err, out.String())
 	}
 }
 
-// REMUDA_STATE_DIR can name any folder; only one holding remuda's own
-// files is ever deleted.
 func TestRemovalNeverDeletesAFolderThatIsNotItsState(t *testing.T) {
 	dir, _ := machine(t)
 	other := filepath.Join(dir, "Documents")
@@ -445,9 +432,7 @@ func TestPlanFindsNothingOnAMachineWithoutRemuda(t *testing.T) {
 	}
 }
 
-// byHand starts a process and has the pgrep stand-in report it for as
-// long as it lives: a remuda the person started in a terminal. The
-// returned channel closes when it has ended.
+// byHand starts a process the pgrep stand-in reports while it lives; the channel closes when it has ended.
 func byHand(t *testing.T, home string) <-chan struct{} {
 	t.Helper()
 	cmd := exec.Command("sleep", "60")
@@ -496,8 +481,6 @@ func TestARemudaStartedByHandIsThePersonsToStop(t *testing.T) {
 	}
 }
 
-// With herdr going it cannot stay: remuda starts herdr's server whenever
-// none answers, and would bring back the one just stopped.
 func TestARemudaStartedByHandStopsWhenHerdrGoes(t *testing.T) {
 	dir, calls := machine(t)
 	ended := byHand(t, dir)

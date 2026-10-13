@@ -39,9 +39,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
-  // preference changes reach the server one after another: two quick
-  // toggles must not race, the last one sent is the one that holds
-  const queue = useRef(Promise.resolve());
+  const queue = useRef(Promise.resolve()); // serialized, so the last toggle sent is the one that holds
   const changePrefs = (next: Prefs) => {
     setPrefs(next);
     writePref("alerts", next);

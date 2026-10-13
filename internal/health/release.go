@@ -12,12 +12,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/sshx"
 )
 
-// remuda's own releases on GitHub. The newest is looked up with the other
-// versions; a machine whose remuda is older is offered the right binary —
-// fetched by the machine itself, checked against the release's checksums,
-// put where the service runs it from, the service restarted. Nothing is
-// downloaded until the person says Run, and the command they say it to is
-// the one shown.
+// remuda's own releases on GitHub, offered to a machine whose remuda is older; nothing is fetched until Run.
 
 const releasesRepo = "dev1antdev/remuda"
 
@@ -26,9 +21,9 @@ var releasesURL = "https://api.github.com/repos/" + releasesRepo + "/releases/la
 // Release is the newest release as GitHub lists it.
 type Release struct {
 	Tag       string            `json:"tag"`
-	Version   string            `json:"version"` // x.y.z out of the tag
-	Assets    map[string]string `json:"-"`       // asset name → download URL
-	Checksums string            `json:"-"`       // the checksums.txt asset; "" when the release has none
+	Version   string            `json:"version"`
+	Assets    map[string]string `json:"-"` // asset name → download URL
+	Checksums string            `json:"-"` // the checksums.txt asset; "" when the release has none
 }
 
 func fetchRelease(ctx context.Context, url string) (Release, error) {
@@ -75,10 +70,7 @@ func parseRelease(r io.Reader) (Release, error) {
 	return rel, nil
 }
 
-// AssetName is the release asset a machine needs, remuda-<os>-<arch>: the
-// OS as a Report says it ("macOS 26.6.2", "Linux 6.8.0") or as Go does
-// (darwin, linux), the arch as the report normalises it. "" for a
-// platform the releases do not cover.
+// AssetName is the release asset a machine needs, remuda-<os>-<arch>; "" for a platform the releases do not cover.
 func AssetName(os, arch string) string {
 	o := strings.ToLower(os)
 	switch {
@@ -95,10 +87,8 @@ func AssetName(os, arch string) string {
 	return "remuda-" + o + "-" + arch
 }
 
-// ReleaseUpdate is the offer to put the release on a machine running
-// `have`: only when the release is newer and has a binary for the
-// machine. local says the machine is the one whose remuda runs this very
-// server, which must restart itself after the job rather than during it.
+// ReleaseUpdate offers the release to a machine running have, when it is newer and has a binary for it.
+// local: the machine's remuda serves this very page, so it must restart after the job, not during it.
 func ReleaseUpdate(have, os, arch string, rel Release, local bool) (Update, bool) {
 	if rel.Version == "" || have == "" || !Newer(have, rel.Version) {
 		return Update{}, false
@@ -121,10 +111,8 @@ func ReleaseUpdate(have, os, arch string, rel Release, local bool) (Update, bool
 	return Update{What: "remuda-release", Title: "Download & install remuda " + rel.Tag, Command: ReleaseScript(url, rel.Checksums, asset, local), Note: note}, true
 }
 
-// releaseURLOK is a download URL as GitHub hands them out for this
-// repository's release, and nothing else: it goes into a shell script, so
-// an API answer that is not that (a hostile mirror, a quote, a subshell)
-// is no release at all.
+// releaseURLOK accepts only a download URL as GitHub hands them out for this repository's release:
+// it goes into a shell script, so anything else (a hostile mirror, a quote, a subshell) is no release.
 func releaseURLOK(raw, tag string) bool {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Host != "github.com" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.String() != raw {
@@ -138,25 +126,20 @@ func releaseURLOK(raw, tag string) bool {
 
 const pathLine = `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH`
 
-// InstallScript puts ~/.local/bin/remuda.new in the place the service runs
-// remuda from — after it has shown it runs at all.
+// InstallScript puts ~/.local/bin/remuda.new where the service runs remuda from, once it has shown it runs at all.
 const InstallScript = `chmod +x "$HOME/.local/bin/remuda.new" && "$HOME/.local/bin/remuda.new" -version && mv "$HOME/.local/bin/remuda.new" "$HOME/.local/bin/remuda"`
 
-// RestartScript restarts the service, launchd or systemd, and says so when
-// there is none to restart.
+// RestartScript restarts the service, launchd or systemd, and says so when there is none.
 const RestartScript = `if command -v launchctl >/dev/null 2>&1; then launchctl kickstart -k "gui/$(id -u)/dev.mardeus.remuda" 2>&1 || echo "(no launchd service; start remuda there yourself)"; ` +
 	`elif command -v systemctl >/dev/null 2>&1; then systemctl --user restart remuda.service 2>&1 || echo "(no systemd service; start remuda there yourself)"; fi`
 
-// restartLater is the restart for the machine whose remuda runs the job
-// itself: detached and two seconds on, so the job ends first and the page
-// hears it did. Without a service there is nothing that would start the
-// new binary, so the person is told instead.
+// restartLater is for the machine whose remuda runs the job itself: detached
+// and two seconds on, so the job ends first and the page hears it did.
 const restartLater = `if launchctl print "gui/$(id -u)/dev.mardeus.remuda" >/dev/null 2>&1 || systemctl --user is-active remuda.service >/dev/null 2>&1; then ` +
 	`echo "restarting remuda in 2 s…"; (sleep 2; ` + RestartScript + `) >/dev/null 2>&1 & ` +
 	`else echo "no service runs remuda here: start the new binary yourself"; fi`
 
-// ReleaseScript is what the machine runs: download, the checksum when the
-// release has one (a mismatch keeps the old binary), install, restart.
+// ReleaseScript is what the machine runs: download, the checksum when the release has one, install, restart.
 func ReleaseScript(url, sums, asset string, local bool) string {
 	var b strings.Builder
 	b.WriteString("set -e; " + pathLine + "\n")

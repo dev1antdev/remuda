@@ -7,10 +7,8 @@ import (
 	"strings"
 )
 
-// Prompt is what an agent gets for a task: the title, the description as
-// text, the project's fields that are meant for the prompt and have a
-// value, and which task it is — with /grill-me in front for a grooming
-// pass. The same words the UI's "Send to agent" composes.
+// Prompt is what an agent gets for a task: the title, the description as text, the in_prompt fields with a value, and which task it is.
+// The same words the UI's "Send to agent" composes.
 func Prompt(t Task, project Project, groom bool) string {
 	parts := []string{strings.TrimSpace(t.Title)}
 	if d := HTMLToText(t.Description); d != "" {
@@ -48,9 +46,7 @@ var (
 	manyNL    = regexp.MustCompile(`\n{3,}`)
 )
 
-// HTMLToText flattens the description's HTML the way the UI does: blocks
-// end a line, list items get a dash, the rest of the tags go, entities
-// unescape.
+// HTMLToText flattens the description's HTML the way the UI does: blocks end a line, list items get a dash, the rest of the tags go.
 func HTMLToText(s string) string {
 	if !strings.Contains(s, "<") {
 		return strings.TrimSpace(html.UnescapeString(s))

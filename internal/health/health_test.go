@@ -33,7 +33,6 @@ uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 	if r.Load1 != 6.52 || r.Uptime != "33 mins" {
 		t.Fatalf("load/uptime: %+v", r)
 	}
-	// Linux: "up 5 days, 3:02, 1 user, load average: 0.52, 0.58, 0.59"
 	l, _ := Parse("os=Linux 6.8.0\nuptime= 10:11:12 up 5 days,  3:02,  1 user,  load average: 0.52, 0.58, 0.59\ndf=/dev/sda1 100000000 50000000 50000000 50% /\n")
 	if l.Load1 != 0.52 || l.Uptime != "5 days,  3:02" || l.DiskUsedPct != 50 {
 		t.Fatalf("linux: %+v", l)
@@ -44,7 +43,6 @@ uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 	if peer != nil || r.Running {
 		t.Fatal("no peer lines, no peer")
 	}
-	// a running remuda with its token is a peer; a token alone is not
 	p, peer2 := Parse("peer={\"herdr\":true,\"ok\":true,\"version\":\"v0.4.0-9-gabc\"}\npeer_token=abc123\n")
 	if !p.Running || peer2 == nil || peer2.Token != "abc123" || peer2.Version != "v0.4.0-9-gabc" || peer2.Port != 7317 {
 		t.Fatalf("peer: %+v %+v", p, peer2)
@@ -188,12 +186,10 @@ func TestReleaseUpdate(t *testing.T) {
 	if !strings.Contains(u.Note, "v0.4.0-24-g5dac31e → v0.5.0") || !strings.Contains(u.Note, "checksums") || strings.Contains(u.Note, "serving this page") {
 		t.Errorf("remote note: %s", u.Note)
 	}
-	// the machine serving the page restarts after the job, not during it
 	l, ok := ReleaseUpdate("v0.4.0-24-g5dac31e", "darwin", "arm64", rel, true)
 	if !ok || !strings.Contains(l.Command, "sleep 2") || !strings.Contains(l.Command, "launchctl print") || !strings.Contains(l.Note, "serving this page") {
 		t.Fatalf("local: %+v", l)
 	}
-	// not newer, no binary for the platform, nothing installed: no offer
 	if _, ok := ReleaseUpdate("v0.5.0", "darwin", "arm64", rel, false); ok {
 		t.Error("the same version was offered")
 	}
@@ -209,7 +205,6 @@ func TestReleaseUpdate(t *testing.T) {
 	if _, ok := ReleaseUpdate("v0.4.0", "darwin", "arm64", Release{}, false); ok {
 		t.Error("no release known, yet offered")
 	}
-	// an asset URL that is not GitHub's for this release is no release: it goes into a shell
 	for _, bad := range []string{
 		`https://evil.example/remuda-darwin-arm64`,
 		`https://github.com/someone/else/releases/download/v0.5.0/remuda-darwin-arm64`,
@@ -224,7 +219,6 @@ func TestReleaseUpdate(t *testing.T) {
 			t.Errorf("a release with asset URL %q was offered", bad)
 		}
 	}
-	// a release without checksums installs, and says it is not verified
 	old, _ := parseRelease(strings.NewReader(`{"tag_name":"v0.6.0","assets":[{"name":"remuda-darwin-arm64","browser_download_url":"https://github.com/dev1antdev/remuda/releases/download/v0.6.0/remuda-darwin-arm64"}]}`))
 	n, ok := ReleaseUpdate("v0.4.0", "darwin", "arm64", old, false)
 	if !ok || !strings.Contains(n.Command, "not verified") || strings.Contains(n.Command, "awk") || !strings.Contains(n.Note, "no checksums.txt") {

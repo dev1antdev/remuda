@@ -1,8 +1,6 @@
 // Package sshx drives OpenSSH for remote machines: one ControlMaster per
-// machine, and everything else — RPC socket forwarding, remote execs, the
-// terminal attach — multiplexed over it. remuda never implements SSH
-// itself: the user's own ssh config, keys and agent do the authentication,
-// and BatchMode guarantees we fail instead of prompting.
+// machine, with socket forwarding, remote execs and the terminal attach over it.
+// remuda implements no SSH itself; BatchMode makes it fail instead of prompting.
 package sshx
 
 import (
@@ -41,10 +39,8 @@ func (e *ExitError) Error() string {
 	return fmt.Sprintf("exit status %d", e.Code)
 }
 
-// VersionedBin is the shell test that a machine's own remuda at
-// ~/.local/bin is this very version (an older one would not know the
-// subcommand — or would start a server instead), and the quoted path to
-// run it: `if <guard>; then <bin> …`.
+// VersionedBin is the quoted path of a machine's own remuda and the shell guard that it is this very version
+// (an older one would not know the subcommand, or would start a server instead).
 func VersionedBin(home, version string) (bin, guard string) {
 	bin = Quote(home + "/.local/bin/remuda")
 	guard = "[ -x " + bin + " ] && [ \"$(" + bin + " -version 2>/dev/null)\" = " + Quote("remuda "+version) + " ]"
@@ -56,22 +52,15 @@ func Quote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// SocketDir is where the control and forward sockets go when main sets
-// it: the state dir, 0700 and the person's own. Unset, the temp dir —
-// which on a shared Linux box is everyone's, where a socket of another
-// user's could sit at the name and be reused as the master.
+// SocketDir is where the control and forward sockets go when main sets it: the state dir, the person's own.
+// Unset, the temp dir, where on a shared box another user's socket could sit at the name and be reused.
 var SocketDir string
 
-// socketPathMax is the longest socket path handed to ssh. A unix
-// sockaddr holds 104 bytes, and OpenSSH binds a master at the path plus
-// a 17-byte random suffix before renaming it into place ("too long for
-// Unix domain socket" otherwise), which leaves 86 for the path itself.
+// socketPathMax is the longest socket path handed to ssh: a unix sockaddr holds 104 bytes,
+// and OpenSSH binds a master at the path plus a 17-byte random suffix ("too long for Unix domain socket").
 const socketPathMax = 86
 
-// tmpPath is a short, deterministic socket path, the extension counted.
-// A state dir that leaves no room — a Mac's "Library/Application
-// Support" with a user name past eight letters — falls back to the temp
-// dir, which on a Mac is the person's own private one.
+// tmpPath is a short, deterministic socket path under SocketDir, or the temp dir when that leaves no room.
 func tmpPath(prefix, seed, ext string) string {
 	sum := sha256.Sum256([]byte(seed))
 	name := prefix + hex.EncodeToString(sum[:8]) + ext
@@ -109,7 +98,7 @@ func Dial(host string) (*Conn, error) {
 	}
 	c.master = cmd
 	exited := make(chan struct{})
-	go func() { // reap whenever it exits
+	go func() {
 		cmd.Wait()
 		close(exited)
 	}()
@@ -137,8 +126,7 @@ wait:
 // Alive reports whether the master still answers.
 func (c *Conn) Alive() bool { return c.cmd("-O", "check", c.Host).Run() == nil }
 
-// run executes a remote command over the master with a deadline; stdin, when
-// given, is streamed to it.
+// run executes a remote command over the master with a deadline, stdin streamed to it when given.
 func (c *Conn) run(script string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
 	// every script here is POSIX sh; the remote login shell may be anything
 	cmd := c.cmd(c.Host, "sh -c "+Quote(script))
@@ -167,8 +155,7 @@ func (c *Conn) run(script string, timeout time.Duration, stdin io.Reader) ([]byt
 	}
 }
 
-// Stream runs a command on the remote host and hands its output (stdout and
-// stderr together, as it comes) to sink; the exit status is the error.
+// Stream runs a remote command, handing sink its output (stdout and stderr) as it comes; the exit status is the error.
 func (c *Conn) Stream(script string, timeout time.Duration, sink func([]byte)) error {
 	cmd := c.cmd(c.Host, "sh -c "+Quote("exec 2>&1; "+script))
 	pr, pw := io.Pipe()
@@ -222,20 +209,18 @@ func (c *Conn) Exec(script string, timeout time.Duration) (string, error) {
 	return string(out), err
 }
 
-// ExecBytes is Exec for binary-safe stdout (transcript tails, file reads).
+// ExecBytes is Exec for binary-safe stdout.
 func (c *Conn) ExecBytes(script string, timeout time.Duration) ([]byte, error) {
 	return c.run(script, timeout, nil)
 }
 
-// Put writes data to a remote file (creating its directory) by streaming it
-// into `cat` over the master.
+// Put writes data to a remote file, creating its directory, through cat over the master.
 func (c *Conn) Put(path string, data []byte, timeout time.Duration) error {
 	_, err := c.run("mkdir -p "+Quote(filepath.Dir(path))+" && cat > "+Quote(path), timeout, bytes.NewReader(data))
 	return err
 }
 
-// ForwardSocket forwards a local unix socket to a remote one over the master
-// and returns the local path.
+// ForwardSocket forwards a local unix socket to a remote one over the master and returns the local path.
 func (c *Conn) ForwardSocket(remoteSock string) (string, error) {
 	local := tmpPath("remuda-fw-", c.Host+"\x00"+remoteSock, ".sock")
 	os.Remove(local)
@@ -248,9 +233,7 @@ func (c *Conn) ForwardSocket(remoteSock string) (string, error) {
 	return local, nil
 }
 
-// ForwardTCP forwards a fresh local loopback port to 127.0.0.1:remotePort on
-// the host over the master and returns the local address. The forward lives
-// as long as the master does.
+// ForwardTCP forwards a fresh loopback port to 127.0.0.1:remotePort on the host for as long as the master lives.
 func (c *Conn) ForwardTCP(remotePort int) (string, error) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -267,9 +250,8 @@ func (c *Conn) ForwardTCP(remotePort int) (string, error) {
 	return local, nil
 }
 
-// DialExec runs a remote command over the master and exposes its stdin/stdout
-// as a net.Conn — the RPC transport for sshds that refuse unix-socket
-// forwarding (`nc -U <socket>` on the remote side bridges to herdr).
+// DialExec runs a remote command over the master and exposes its stdin/stdout as a net.Conn:
+// the RPC transport for an sshd that refuses unix-socket forwarding (`nc -U <socket>` bridges to herdr).
 func (c *Conn) DialExec(script string, timeout time.Duration) (net.Conn, error) {
 	cmd := c.cmd(c.Host, script)
 	var stderr bytes.Buffer
@@ -301,7 +283,7 @@ type cmdConn struct {
 	timedOut bool
 }
 
-// a read or write after the deadline fired says so, with what ssh said
+// wrap turns a failure after the deadline into os.ErrDeadlineExceeded, else adds what ssh said.
 func (c *cmdConn) wrap(n int, err error) (int, error) {
 	if err == nil {
 		return n, nil
@@ -341,7 +323,7 @@ func (c *cmdConn) Close() error {
 	return nil
 }
 
-// A deadline kills the remote command, which fails the pending Read.
+// SetDeadline kills the remote command when the deadline passes, which fails the pending Read.
 func (c *cmdConn) SetDeadline(t time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -371,8 +353,7 @@ type sshAddr string
 func (a sshAddr) Network() string { return "ssh" }
 func (a sshAddr) String() string  { return string(a) }
 
-// AttachCmd builds the remote `herdr terminal attach` command to run under a
-// local PTY. ssh propagates window-size changes to the remote tty.
+// AttachCmd builds the remote `herdr terminal attach` to run under a local PTY; ssh -tt carries window-size changes.
 func (c *Conn) AttachCmd(herdrBin, terminalID string) *exec.Cmd {
 	cmd := c.cmd("-tt", c.Host, Quote(herdrBin)+" terminal attach "+Quote(terminalID))
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")

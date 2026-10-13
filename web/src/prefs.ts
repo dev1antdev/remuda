@@ -4,8 +4,7 @@ import type { Prefs } from "./push";
 // Small shared things: per-device preferences in localStorage, the touch
 // test, and a couple of one-liners every component was re-typing.
 
-// The keys of the previous name (herdr-ui.*) carry over once, so a device
-// keeps its mode, widths and what it has seen.
+// The keys of the previous name (herdr-ui.*) carry over once.
 try {
   for (const k of Object.keys(localStorage)) {
     if (!k.startsWith("herdr-ui.")) continue;
@@ -20,9 +19,8 @@ try {
 
 export const isTouch = matchMedia("(pointer: coarse)").matches;
 
-// readPref keeps a stored value only when it has the fallback's shape: a
-// pref saved by an older build may lack fields (merged in from the
-// fallback) or be a different type altogether (dropped).
+// readPref keeps a stored value only in the fallback's shape: a pref saved by an older build may lack
+// fields (merged in from the fallback) or be a different type altogether (dropped).
 export function readPref<T>(key: string, fallback: T): T {
   try {
     const v = localStorage.getItem(`remuda.${key}`);
@@ -70,14 +68,14 @@ export function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-// the last path segment ("" for a bare "/"), a trailing slash ignored
+// basename is the last path segment, a trailing slash ignored.
 export const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 export const dirname = (p: string) => {
   const i = p.lastIndexOf("/");
   return i < 0 ? "" : p.slice(0, i + 1);
 };
 
-// a value that settles: the input as it was ms ago, for a search box
+// useDebounced is the value as it was ms ago, for a search box.
 export function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
   useEffect(() => {

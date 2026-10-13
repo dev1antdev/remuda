@@ -5,9 +5,8 @@ import { check, sendJSON } from "./api";
 
 export type Label = { id: number; title: string; hex_color: string };
 
-// one column of a project's board; a task is always in exactly one, and
-// done follows the column's kind. The flags say where the workflow's own
-// moves land — at most one column per flag.
+// Status is one column of a project's board: a task is always in exactly one, and done follows the column's kind.
+// The flags say where the workflow's own moves land — at most one column per flag.
 export type Status = {
   id: number;
   project_id: number;
@@ -15,9 +14,9 @@ export type Status = {
   hex_color: string;
   kind: "open" | "done";
   position: number;
-  on_new: boolean; // new tasks land here
-  on_start: boolean; // a task an agent was started on moves here
-  on_finish: boolean; // a task whose agent finished moves here
+  on_new: boolean;
+  on_start: boolean;
+  on_finish: boolean;
 };
 
 // a project's own field: what its tasks carry besides what every task has
@@ -27,10 +26,10 @@ export type Field = {
   project_id: number;
   title: string;
   kind: FieldKind;
-  options: string[]; // what select and multi choose from
+  options: string[];
   position: number;
-  on_card: boolean; // shown on the board card and the list row
-  in_prompt: boolean; // goes to the agent with the task
+  on_card: boolean;
+  in_prompt: boolean;
 };
 export const FIELD_KINDS: { value: FieldKind; label: string }[] = [
   { value: "text", label: "Text" },
@@ -69,7 +68,7 @@ export type Task = {
   done_at: string;
   due_date: string;
   priority: number; // 0 unset … 5 "do now"
-  position: number; // the place in its column
+  position: number;
   labels: Label[];
   fields: Record<string, FieldValue>; // by field id; no key, no value
   identifier: string; // "#12"
@@ -109,9 +108,8 @@ export const listProjects = () => get<Project[]>("/api/tasks/projects");
 export const createProject = (title: string, parent_project_id = 0) => sendJSON<Project>("POST", "/api/tasks/projects", { title, parent_project_id });
 export const patchProject = (id: number, fields: Partial<Pick<Project, "title" | "description" | "hex_color" | "parent_project_id" | "is_archived" | "is_favorite" | "position">>) =>
   sendJSON<Project>("PATCH", `/api/tasks/projects/${id}`, fields);
-// the workflow replaced whole: a column with id 0 is new, one left out is
-// removed — its tasks go to moves[old id], which the server insists on
-// while it has any
+// putStatuses replaces the workflow whole: a column with id 0 is new, one left out is removed and its
+// tasks go to moves[old id], which the server insists on while it has any
 export const putStatuses = (projectId: number, statuses: Status[], moves: Record<number, number>) =>
   sendJSON<Project>("PUT", `/api/tasks/projects/${projectId}/statuses`, { statuses, moves });
 // the fields replaced whole: a field with id 0 is new, one left out goes with its values
@@ -141,8 +139,7 @@ export async function listTasks(q: TaskQuery): Promise<{ tasks: Task[]; pages: n
 
 export const getTask = (id: number) => get<Task>(`/api/tasks/${id}`);
 export const createTask = (projectId: number, fields: Partial<Task> & { title: string }) => sendJSON<Task>("POST", "/api/tasks", { ...fields, project_id: projectId });
-// after: the task to sit behind in its column, 0 for the top; without it
-// a task that changed column goes to the bottom
+// patchTask: after is the task to sit behind in its column, 0 for the top; without it a task that changed column goes to the bottom
 export const patchTask = (id: number, fields: Partial<Task> & { after?: number }) => sendJSON<Task>("PATCH", `/api/tasks/${id}`, fields);
 export const deleteTask = (id: number) => sendJSON<unknown>("DELETE", `/api/tasks/${id}`);
 

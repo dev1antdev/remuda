@@ -1,8 +1,6 @@
-// Package machines gives remuda its multi-PC view: the local herdr plus any
-// number of remote ones, each a machine with its own herdr server, reached
-// over the user's own SSH. Per machine there is one ControlMaster, one RPC
-// transport, shared terminal attaches, and a transcript cache that fetches
-// remote session files by delta.
+// Package machines gives remuda its multi-PC view: the local herdr plus remote
+// ones reached over the user's own SSH, each with one ControlMaster, one RPC
+// transport, shared terminal attaches and a transcript cache fetched by delta.
 package machines
 
 import (
@@ -49,7 +47,7 @@ type Config struct {
 type Machine struct {
 	Cfg   Config // as registered: herdr's list, machines.json, or this host's name
 	Local bool
-	label atomic.Value // the label shown — the user's own when set, else Cfg.Label
+	label atomic.Value
 
 	mu          sync.Mutex
 	state       string
@@ -59,7 +57,7 @@ type Machine struct {
 	removed     bool      // taken out of the registry; never reconnect, pollers stop
 	serverStart time.Time // when remuda last started `herdr server` there
 	herdrBin    string    // herdr's binary on the machine, once known
-	socket      string    // its server socket
+	socket      string
 
 	conn   *sshx.Conn
 	client *herdr.Client
@@ -71,7 +69,7 @@ type Machine struct {
 	sessMiss map[string]time.Time   // session uuid -> when it was last not found
 
 	fwds map[int]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda)
-	peer *Peer               // the remuda running on the machine itself, when one does
+	peer *Peer
 
 	contPath map[string]contCheck // session file -> its continuation (if any), as last looked
 	predPath map[string]string    // session file -> the file it continues ("" when none)
@@ -82,19 +80,15 @@ type contCheck struct {
 	at   time.Time
 }
 
-// tcpForward remembers a port forwarded over one master; a reconnect makes
-// a new master, and the forward with it.
+// tcpForward is a port forwarded over one master; a new master needs a new forward.
 type tcpForward struct {
 	conn *sshx.Conn
 	port int
 	addr string
 }
 
-// Peer is a remuda running on a remote machine. herdr lets one client
-// attach to a terminal at a time, so when the machine's own remuda holds
-// that attach, this one reaches the terminal through it (the pane
-// WebSocket and the HTTP transport are relayed over the master, with the
-// peer's token), and both sides can look at the same pane.
+// Peer is the remuda running on the machine itself. herdr lets one client attach to a terminal at a time,
+// so when the peer holds that attach, this remuda reaches the pane through it (relayed over the master).
 type Peer struct {
 	Port    int
 	Token   string
@@ -109,8 +103,7 @@ type remoteFile struct {
 
 const remoteTailCap = 8 * 1024 * 1024
 
-// hostRe accepts ssh destinations — host, user@host, [v6]:port forms — and
-// nothing that ssh would read as an option.
+// hostRe accepts ssh destinations (host, user@host, [v6]:port) and nothing ssh would read as an option.
 var hostRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@:%\[\]-]*$`)
 
 // ---- manager ----
@@ -120,14 +113,13 @@ type Manager struct {
 	machines map[string]*Machine
 	order    []string
 	path     string // machines.json
-	dir      string // the state dir, where labels.json (the user's own names for machines) lives
+	dir      string // the state dir, where labels.json lives
 	names    map[string]string
 	herdrBin string
 	saveMu   sync.Mutex // writes of machines.json, one at a time
 }
 
-// Label is the machine's name as shown: the user's own when they gave
-// one, else what the registry says.
+// Label is the machine's name as shown: the user's own when they gave one, else the registry's.
 func (mc *Machine) Label() string {
 	if l, ok := mc.label.Load().(string); ok && l != "" {
 		return l
@@ -137,9 +129,7 @@ func (mc *Machine) Label() string {
 
 func (mc *Machine) setLabel(l string) { mc.label.Store(l) }
 
-// Rename gives the machine a name of the user's own; an empty name goes
-// back to the registry's. Kept in labels.json, so it survives a restart
-// and herdr's own list.
+// Rename gives the machine a name of the user's own, kept in labels.json; an empty name goes back to the registry's.
 func (m *Manager) Rename(id, label string) (*Machine, error) {
 	label = strings.TrimSpace(label)
 	if len(label) > 60 {
@@ -167,9 +157,7 @@ func (m *Manager) Rename(id, label string) (*Machine, error) {
 	return mc, nil
 }
 
-// NewManager builds the registry: the local machine plus whatever
-// machines.json lists. Machines saved in herdr itself are added by
-// SyncHerdr, which the watcher calls periodically.
+// NewManager builds the registry: the local machine plus what machines.json lists; herdr's own come through SyncHerdr.
 func NewManager(dir, localSocket, localHerdrBin string) *Manager {
 	host, _ := os.Hostname()
 	local := &Machine{
@@ -251,9 +239,7 @@ type herdrMachine struct {
 	Enabled bool   `json:"enabled"`
 }
 
-// SyncHerdr mirrors herdr's own saved SSH machines so a PC added in herdr
-// shows up here without being added twice. herdr's stable id is ours too,
-// so a rename in herdr keeps links and preferences intact.
+// SyncHerdr mirrors herdr's own saved SSH machines, under herdr's ids so a rename there keeps links and preferences.
 func (m *Manager) SyncHerdr() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -276,7 +262,6 @@ func (m *Manager) SyncHerdr() {
 		}
 		m.add(Config{ID: h.ID, Label: h.Label, Host: h.Target, Source: SourceHerdr})
 	}
-	// one herdr no longer lists (removed, or disabled) goes here too
 	m.mu.Lock()
 	var gone []string
 	for id, mc := range m.machines {
@@ -290,8 +275,7 @@ func (m *Manager) SyncHerdr() {
 	}
 }
 
-// drop takes a machine out of the registry and ends its connection; its
-// watcher loop and pollers stop on their own.
+// drop takes a machine out of the registry and ends its connection; its watcher loop and pollers stop on their own.
 func (m *Manager) drop(id string) *Machine {
 	m.mu.Lock()
 	mc := m.machines[id]
@@ -437,19 +421,14 @@ func (mc *Machine) fail(err error) {
 	}
 }
 
-// connect dials the master, learns the remote home and herdr binary, picks
-// the RPC transport and verifies herdr answers through it.
-
-// HerdrBin is herdr's binary on the machine, once known ("" before the
-// first connect of a remote).
+// HerdrBin is herdr's binary on the machine, "" before a remote's first connect.
 func (mc *Machine) HerdrBin() string {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	return mc.herdrBin
 }
 
-// ServerVersions reads the installed herdr's version and the running
-// server's ("" when none runs), freshly.
+// ServerVersions reads the installed herdr's version and the running server's ("" when none runs), freshly.
 func (mc *Machine) ServerVersions() (installed, running string, err error) {
 	bin, sock := mc.herdrPaths()
 	out, err := mc.Shell(`LC_ALL=C; `+sshx.Quote(bin)+` --version 2>/dev/null | head -1; HERDR_SOCKET_PATH=`+sshx.Quote(sock)+` `+sshx.Quote(bin)+` status server 2>/dev/null | sed -n 's/^version: //p' | head -1`, 20*time.Second)
@@ -466,15 +445,13 @@ func (mc *Machine) ServerVersions() (installed, running string, err error) {
 
 var herdrSemver = regexp.MustCompile(`\d+\.\d+\.\d+`)
 
-// StopServer stops herdr's server on the machine. Every pane process ends
-// with it; the session shape is herdr's to restore on the next start.
+// StopServer stops herdr's server on the machine, and every pane process with it.
 func (mc *Machine) StopServer() (string, error) {
 	bin, sock := mc.herdrPaths()
 	return mc.Shell(`HERDR_SOCKET_PATH=`+sshx.Quote(sock)+` `+sshx.Quote(bin)+` server stop 2>&1`, 30*time.Second)
 }
 
-// StartServer starts herdr's server on the machine now — the person asked
-// (an update), so the spacing of the automatic starts does not apply.
+// StartServer starts herdr's server on the machine now, without the spacing of the automatic starts.
 func (mc *Machine) StartServer() error {
 	bin, sock := mc.herdrPaths()
 	if mc.Local {
@@ -501,8 +478,7 @@ func (mc *Machine) herdrPaths() (bin, sock string) {
 	return bin, sock
 }
 
-// mayStartServer says whether remuda may start `herdr server` on the
-// machine now — once per two minutes — and notes that it did.
+// mayStartServer allows one `herdr server` start per two minutes, noting the one it allows.
 func (m *Machine) mayStartServer() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -513,6 +489,7 @@ func (m *Machine) mayStartServer() bool {
 	return true
 }
 
+// connect dials the master, finds the remote home and herdr binary, picks the RPC transport and pings herdr.
 func (mc *Machine) connect() {
 	mc.mu.Lock()
 	mc.state = StateConnecting
@@ -530,10 +507,8 @@ func (mc *Machine) connect() {
 		mc.fail(err)
 	}
 
-	// one round trip: home, then the herdr binary (non-interactive ssh often
-	// misses ~/.local/bin in PATH)
-	// the script ends true, so a missing binary is a blank line, not a
-	// failed exec; a configured herdr_bin skips the search
+	// one round trip for $HOME and the herdr binary: a non-interactive ssh PATH often misses ~/.local/bin;
+	// the script ends true, so a missing binary is a blank line, not a failed exec
 	probe := `printf '%s\n' "$HOME"`
 	if mc.Cfg.HerdrBin == "" {
 		probe += `; command -v herdr 2>/dev/null || ` +
@@ -565,9 +540,6 @@ func (mc *Machine) connect() {
 	}
 	client, err := rpcClient(conn, sock)
 	if err != nil && mc.mayStartServer() {
-		// no server there? remuda runs one: the headless `herdr server`,
-		// detached, then one more try (at most once per two minutes, so a
-		// herdr that cannot come up is not started on every reconnect)
 		if _, serr := conn.Exec(herdr.StartServerScript(bin, sock), 25*time.Second); serr == nil {
 			client, err = rpcClient(conn, sock)
 		} else {
@@ -598,11 +570,8 @@ func (mc *Machine) connect() {
 	mc.mu.Unlock()
 }
 
-// rpcClient picks the RPC transport: a forwarded unix socket when the remote
-// sshd allows it (one hop, fastest), else one `nc -U` exec per request over
-// the same master — some sshds answer "unknown channel type" to streamlocal
-// forwarding, and herdr's one-response-per-connection protocol makes the
-// exec form exactly equivalent.
+// rpcClient picks the RPC transport: a forwarded unix socket, else one `nc -U` exec per request over the master
+// (some sshds refuse streamlocal forwarding with "unknown channel type"; herdr answers once per connection anyway).
 func rpcClient(conn *sshx.Conn, sock string) (*herdr.Client, error) {
 	var errs []string
 	if local, err := conn.ForwardSocket(sock); err == nil {
@@ -629,9 +598,7 @@ func rpcClient(conn *sshx.Conn, sock string) (*herdr.Client, error) {
 	return nil, fmt.Errorf("%s", strings.Join(errs, "; "))
 }
 
-// transportError runs when an RPC failed to reach herdr: if the SSH master
-// is gone too, the machine is marked dead so Ready reconnects it. The alive
-// check spawns a process, so it is rate-limited.
+// transportError marks the machine dead, for Ready to reconnect, when an RPC failed and the ssh master is gone too.
 func (mc *Machine) transportError(err error) {
 	mc.mu.Lock()
 	conn := mc.conn
@@ -646,8 +613,7 @@ func (mc *Machine) transportError(err error) {
 	}
 }
 
-// Ready hands out the machine's client and attach manager, kicking off a
-// reconnect for a failed remote at most every 15s.
+// Ready hands out the machine's client and attach manager, reconnecting a failed remote at most every 15s.
 func (mc *Machine) Ready() (*herdr.Client, *herdr.AttachManager, error) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
@@ -671,18 +637,14 @@ func (mc *Machine) Ready() (*herdr.Client, *herdr.AttachManager, error) {
 	}
 }
 
-// FollowContinuation returns the live end of a session's chain of files: a
-// compacted conversation continues in a new file (see
-// transcript.Continuation), and herdr goes on naming the first. The search
-// costs a directory listing and a read, so it is redone at most every
-// minute per file.
+// FollowContinuation returns the live end of a session's chain of files.
+// A compaction moves the conversation to a new file (transcript.Continuation) while herdr goes on naming the first.
 func (mc *Machine) FollowContinuation(path string) string {
 	chain := mc.ContinuationChain(path)
 	return chain[len(chain)-1]
 }
 
-// ContinuationChain is the file and every file it went on in, oldest
-// first: path, its continuation, that one's continuation… up to 8 hops.
+// ContinuationChain is the file and every file it went on in, oldest first, up to 8 hops.
 func (mc *Machine) ContinuationChain(path string) []string {
 	chain := []string{path}
 	for hops := 0; hops < 8; hops++ {
@@ -696,9 +658,7 @@ func (mc *Machine) ContinuationChain(path string) []string {
 	return chain
 }
 
-// Predecessor is the file a session file continues (after a compaction
-// the conversation went on in a new file; this finds the old one), cached
-// for good — the past does not move. "" when there is none.
+// Predecessor is the file a session file continues after a compaction ("" when none), cached for good.
 func (mc *Machine) Predecessor(path string) string {
 	mc.mu.Lock()
 	p, ok := mc.predPath[path]
@@ -745,14 +705,10 @@ func (mc *Machine) nextContinuation(path string) string {
 	return next
 }
 
-// CodeAddr is where this machine's code-server (127.0.0.1:port on the
-// machine itself) is reachable from here: the port as is on the local
-// machine, a loopback port forwarded over the ssh master on a remote one.
+// CodeAddr is where this machine's code-server (127.0.0.1:port on the machine itself) is reachable from here.
 func (mc *Machine) CodeAddr(port int) (string, error) { return mc.ForwardAddr(port) }
 
-// ForwardAddr is a loopback address that reaches 127.0.0.1:port on the
-// machine: the port itself locally, a port forwarded over the master
-// remotely, remembered per master.
+// ForwardAddr is a loopback address that reaches 127.0.0.1:port on the machine, a forward remembered per master.
 func (mc *Machine) ForwardAddr(port int) (string, error) {
 	if mc.Local {
 		return fmt.Sprintf("127.0.0.1:%d", port), nil
@@ -787,8 +743,7 @@ func (mc *Machine) SetPeer(p *Peer) {
 	mc.mu.Unlock()
 }
 
-// Peer is the machine's own remuda, nil when none runs there, this is
-// the local machine, or the reading is over an hour old.
+// Peer is the machine's own remuda: nil when none runs there, for the local machine, or past an hour.
 func (mc *Machine) Peer() *Peer {
 	if mc.Local {
 		return nil
@@ -867,9 +822,7 @@ func (mc *Machine) TranscriptVersion(path string) (transcript.Version, error) {
 	return v, nil
 }
 
-// DirVersions is the size and mtime of every .jsonl file directly in dir —
-// a session's subagent transcripts — in one round trip; a missing dir is
-// an empty map.
+// DirVersions is the size and mtime of every .jsonl directly in dir, in one round trip; a missing dir is an empty map.
 func (mc *Machine) DirVersions(dir string) (map[string]transcript.Version, error) {
 	out := map[string]transcript.Version{}
 	if mc.Local {
@@ -908,8 +861,7 @@ func (mc *Machine) DirVersions(dir string) (map[string]transcript.Version, error
 	return out, nil
 }
 
-// Transcript parses the session file at the given version — locally straight
-// from disk, remotely from a cached tail that grows by delta.
+// Transcript parses the session file at the given version, remotely from a cached tail grown by delta.
 func (mc *Machine) Transcript(path string, v transcript.Version) ([]transcript.Turn, error) {
 	if mc.Local {
 		return transcript.Parse(path)
@@ -921,8 +873,7 @@ func (mc *Machine) Transcript(path string, v transcript.Version) ([]transcript.T
 	return transcript.ParseBytes(data)
 }
 
-// remoteTail returns the file tail, fetching only the delta since the cached
-// copy when the file merely grew.
+// remoteTail returns the file tail, fetching only the delta since the cached copy when the file merely grew.
 func (mc *Machine) remoteTail(path string, v transcript.Version) ([]byte, error) {
 	mc.mu.Lock()
 	cached := mc.files[path]
@@ -931,8 +882,7 @@ func (mc *Machine) remoteTail(path string, v transcript.Version) ([]byte, error)
 		return cached.data, nil
 	}
 
-	// every read is cut at the size the stat saw: the agent may have written
-	// more since, and that part belongs to the next version
+	// every read is cut at the size the stat saw: what the agent wrote since belongs to the next version
 	q := sshx.Quote(path)
 	var data []byte
 	if cached != nil && v.Size > cached.version.Size {
@@ -955,7 +905,6 @@ func (mc *Machine) remoteTail(path string, v transcript.Version) ([]byte, error)
 
 	mc.mu.Lock()
 	mc.files[path] = &remoteFile{version: v, data: data}
-	// the cache is per viewed session; keep it small
 	if len(mc.files) > 8 {
 		for k := range mc.files {
 			if k != path {
@@ -968,13 +917,9 @@ func (mc *Machine) remoteTail(path string, v transcript.Version) ([]byte, error)
 	return data, nil
 }
 
-// ResolveSession finds the Claude session file on this machine from herdr's
-// agent_session (exact id first, then a glob across project dirs). Hits are
-// cached; a local hit is re-checked with one stat.
+// ResolveSession finds the session file of herdr's agent_session: the exact id first, else a glob across project dirs.
 func (mc *Machine) ResolveSession(cwd, kind, value string) (string, error) {
-	// both come from the pane's own hooks — the agent in it chose them — so
-	// a path is only a session file under the agent's own projects tree,
-	// and an id only what looks like one
+	// the agent's own hooks chose these: a path only under ~/.claude/projects, an id only what looks like one
 	if kind == "path" {
 		clean := filepath.Clean(value)
 		under := filepath.Join(mc.Home(), ".claude", "projects") + "/"
@@ -999,7 +944,7 @@ func (mc *Machine) ResolveSession(cwd, kind, value string) (string, error) {
 		}
 	}
 	if missed && time.Since(missedAt) < 30*time.Second {
-		return "", os.ErrNotExist // a file not there yet is not looked for on every poll
+		return "", os.ErrNotExist
 	}
 
 	var p string

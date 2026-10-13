@@ -14,9 +14,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/sshx"
 )
 
-// socketsUnder keeps the ssh control and forward sockets in the state dir
-// (0700, the person's own) rather than the shared temp dir, where another
-// user of the machine could leave a socket at the name.
+// socketsUnder keeps the ssh control and forward sockets in the state dir (0700):
+// in the shared temp dir another user of the machine could leave a socket at the name.
 func socketsUnder(dir string) {
 	d := filepath.Join(dir, "ssh")
 	if err := os.MkdirAll(d, 0o700); err == nil {
@@ -30,10 +29,8 @@ func interactive() bool {
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
-// confirm asks a yes/no question at the terminal; anything but y is no.
-// Where nobody can answer — stdin is a pipe, a file, or ends without a
-// line (/dev/null is a character device too, so only the read tells) —
-// the answer is no, and it says how to mean yes.
+// confirm asks a yes/no question at the terminal; anything but y is no, and so is nobody to ask.
+// /dev/null is a character device too, so only the read tells whether anyone is there.
 func confirm(question string) bool {
 	const how = "nobody to ask here: say -yes to go ahead without being asked"
 	if fi, err := os.Stdin.Stat(); err != nil || fi.Mode()&os.ModeCharDevice == 0 {
@@ -70,11 +67,8 @@ func answers(addr string, wait time.Duration) bool {
 	}
 }
 
-// openPage shows the page in the person's browser: on a Mac, at the desk.
-// The address carries the token, so it reaches osascript on stdin — a
-// command line is what ps shows to every user of the machine. On Linux
-// the browser started for it would keep the address in its own arguments
-// for as long as it runs, so there the person follows the printed link.
+// openPage shows the page in the person's browser: on a Mac at the desk only.
+// The address carries the token, so it reaches osascript on stdin, never a command line ps would show.
 func openPage(page string) bool {
 	if runtime.GOOS != "darwin" || os.Getenv("SSH_CONNECTION") != "" {
 		return false
@@ -84,8 +78,7 @@ func openPage(page string) bool {
 	return cmd.Run() == nil
 }
 
-// openScript is the AppleScript that opens page: one string literal, its
-// quotes and backslashes escaped.
+// openScript is the AppleScript that opens page as one string literal, its quotes and backslashes escaped.
 func openScript(page string) string {
 	return `open location "` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(page) + `"` + "\n"
 }

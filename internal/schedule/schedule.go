@@ -1,12 +1,6 @@
-// Package schedule sends prompts to agents on a timetable: "every weekday
-// at 9:00, run the tests and sum up", "at 18:00, status and what is
-// blocked". A schedule names a machine and a workspace folder, not a pane
-// — panes come and go, the project stays — and at run time the prompt goes
-// to the agent running in that folder through the same path the chat
-// uses. Times are five-field cron in the server's local time. Schedules
-// live in <state>/schedules.json; a run is never queued or retried: a
-// minute with no agent, or an agent busy with a question, is noted and
-// pushed, and the next run is the next match.
+// Package schedule sends prompts to agents on a timetable: a schedule names a
+// machine and a workspace folder (panes come and go, the project stays), a
+// five-field cron in local time and the prompt; a run is never queued or retried.
 package schedule
 
 import (
@@ -30,20 +24,19 @@ const file = "schedules.json"
 type Schedule struct {
 	ID      string `json:"id"`
 	Machine string `json:"machine"`
-	Dir     string `json:"dir"`    // the workspace folder; the agent in it gets the prompt
-	Label   string `json:"label"`  // what the user calls it
-	Cron    string `json:"cron"`   // "0 9 * * 1-5"
-	Prompt  string `json:"prompt"` // what the agent gets
+	Dir     string `json:"dir"`
+	Label   string `json:"label"`
+	Cron    string `json:"cron"`
+	Prompt  string `json:"prompt"`
 	Enabled bool   `json:"enabled"`
 
 	Next       time.Time `json:"next,omitzero"` // the coming run, filled in by List
 	LastRun    time.Time `json:"last_run,omitzero"`
-	LastResult string    `json:"last_result,omitempty"` // "sent to <pane title>" or why not
+	LastResult string    `json:"last_result,omitempty"`
 	LastOK     bool      `json:"last_ok"`
 }
 
-// Submit delivers a prompt to the agent in a folder and names the pane it
-// went to.
+// Submit delivers a prompt to the agent in a folder and names the pane it went to.
 type Submit func(machineID, dir, text string) (pane string, err error)
 
 type Store struct {
@@ -161,8 +154,7 @@ func (st *Store) Run(id string) (Schedule, error) {
 func (st *Store) fire(s *Schedule) {
 	pane, err := st.submit(s.Machine, s.Dir, s.Prompt)
 	st.mu.Lock()
-	// the result goes on the schedule as it is now — an edit saved while
-	// the submit ran replaced the pointer; one deleted meanwhile is gone
+	// an edit saved while the submit ran replaced the pointer, and one deleted meanwhile is gone: the result goes on the schedule as it is now
 	cur, ok := st.items[s.ID]
 	if !ok {
 		st.mu.Unlock()
@@ -189,8 +181,7 @@ func (st *Store) fire(s *Schedule) {
 	}
 }
 
-// Tick runs every enabled schedule whose cron matches this minute and that
-// has not run this minute yet. Call it about every half minute.
+// Tick runs every enabled schedule whose cron matches this minute and has not run this minute yet; call it about every half minute.
 func (st *Store) Tick() {
 	now := st.now()
 	minute := now.Truncate(time.Minute)
@@ -217,7 +208,7 @@ func (st *Store) Tick() {
 // Wait blocks until the deliveries a Tick started are done (tests).
 func (st *Store) Wait() { st.inflight.Wait() }
 
-// Run loops Tick forever.
+// Loop runs Tick forever.
 func (st *Store) Loop() {
 	for {
 		st.Tick()
@@ -227,15 +218,12 @@ func (st *Store) Loop() {
 
 // ---- cron ----
 
-// Cron is a five-field expression: minute hour day-of-month month
-// day-of-week, each `*`, a number, a list `1,2`, a range `1-5`, or a step
-// `*/15`; day-of-week 0 and 7 are both Sunday. Local time. As in cron,
-// when both the day-of-month and the day-of-week are restricted, a day
-// matching either one fires.
+// Cron is a five-field expression (minute hour day-of-month month day-of-week) in local time: `*`, a number, a list, a range or a step; day-of-week 0 and 7 are both Sunday.
+// As in Vixie cron, when both day fields are restricted a day matching either one fires.
 type Cron struct {
-	fields  [5][]bool // allowed values per field, indexed by value
-	anyDay  bool      // day-of-month is `*`
-	anyWeek bool      // day-of-week is `*`
+	fields  [5][]bool
+	anyDay  bool
+	anyWeek bool
 }
 
 var ranges = [5][2]int{{0, 59}, {0, 23}, {1, 31}, {1, 12}, {0, 7}}

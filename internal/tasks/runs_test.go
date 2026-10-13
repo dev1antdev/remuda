@@ -18,7 +18,6 @@ func TestPromptFlattensHTML(t *testing.T) {
 	if Prompt(Task{Title: "x", Identifier: "#1"}, Project{}, false) != "x\n\n(remuda task #1)" {
 		t.Fatal("plain")
 	}
-	// the project's fields meant for the prompt, with a value, in order
 	project := Project{Title: "Work", Fields: []Field{
 		{ID: 1, Title: "Area", Kind: FieldSelect, InPrompt: true},
 		{ID: 2, Title: "Secret", Kind: FieldText, InPrompt: false},
@@ -57,7 +56,6 @@ func TestRunLifecycleAndSweep(t *testing.T) {
 		t.Fatal("the list carries no run")
 	}
 
-	// the sweep
 	state, answer, answerID := "working", "", ""
 	gone := false
 	var pushed []push.Payload
@@ -68,12 +66,12 @@ func TestRunLifecycleAndSweep(t *testing.T) {
 		Notify:     func(p push.Payload) { pushed = append(pushed, p) },
 		Now:        func() time.Time { return clock },
 	}
-	w.Sweep() // starting: nothing yet
+	w.Sweep()
 	clock = clock.Add(time.Minute)
 	if err := st.SetRun(run.ID, RunRunning, ""); err != nil {
 		t.Fatal(err)
 	}
-	w.Sweep() // working: nothing
+	w.Sweep()
 	if cs, _ := st.Comments(tk.ID); len(cs) != 0 {
 		t.Fatalf("comments while working: %+v", cs)
 	}
@@ -93,33 +91,28 @@ func TestRunLifecycleAndSweep(t *testing.T) {
 	if got, _ = st.Get(tk.ID); got.StatusID != finish.ID || got.Done {
 		t.Fatalf("the finish did not move the task: column %d want %d", got.StatusID, finish.ID)
 	}
-	w.Sweep() // the same finish again: silence
+	w.Sweep()
 	if cs, _ := st.Comments(tk.ID); len(cs) != 1 {
 		t.Fatalf("reported twice: %+v", cs)
 	}
-	// a restart forgets nothing: the reported record is on the run
 	w2 := &RunWatch{Store: st, PaneState: w.PaneState, LastAnswer: w.LastAnswer, Notify: w.Notify, Now: w.Now}
 	w2.Sweep()
 	if cs, _ := st.Comments(tk.ID); len(cs) != 1 {
 		t.Fatalf("reported again after a restart: %+v", cs)
 	}
-	// the user asks for more; a later turn is a new finish
 	answer, answerID = "Also fixed the typo.", "rec-b7"
 	clock = clock.Add(11 * time.Minute)
 	w.Sweep()
 	if cs, _ := st.Comments(tk.ID); len(cs) != 2 {
 		t.Fatalf("second finish: %+v", cs)
 	}
-	// the second finish found the task in Testing already: it stays
 	if got, _ = st.Get(tk.ID); got.StatusID != finish.ID {
 		t.Fatalf("a second finish moved the task: column %d", got.StatusID)
 	}
-	// done is the done column
 	got, _ = st.Update(tk.ID, Patch{Done: boolp(true)})
 	if !got.Done || got.StatusID != doneStatus(project.Statuses).ID {
 		t.Fatalf("done: %+v", got)
 	}
-	// the pane goes: one snapshot without it is nothing, two minutes of it is gone
 	gone = true
 	w.Sweep()
 	if r, _ := st.Run(run.ID); r.State != RunFinished {
@@ -157,7 +150,6 @@ func TestFreshPaneIsNotGoneYet(t *testing.T) {
 	if r, _ := st.Run(run.ID); r.State != RunGone {
 		t.Fatalf("not gone: %+v", r)
 	}
-	// a starting run nobody delivers (a restart lost the deliverer) fails in time
 	tk2, _ := st.Create(inbox[0].ID, Patch{Title: str("y")})
 	run2, _ := st.StartRun(Run{TaskID: tk2.ID, Machine: "m", Workspace: "w", Pane: "w:p2", Agent: "claude"})
 	w.PaneState = func(m, p string) (string, time.Time, bool) { return "unknown", time.Time{}, true }

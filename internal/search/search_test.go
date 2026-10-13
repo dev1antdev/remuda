@@ -67,7 +67,6 @@ func TestScriptQuotesAndSpellings(t *testing.T) {
 	if !strings.HasPrefix(s, want) {
 		t.Fatalf("prefix:\n%s\nwant\n%s", s, want)
 	}
-	// one spelling only when they coincide
 	if n := strings.Count(script("/h", "123", "", time.Time{}), "-e "); n != 1 {
 		t.Fatalf("%d patterns for digits", n)
 	}

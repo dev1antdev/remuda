@@ -1,7 +1,5 @@
 // Package herdr speaks herdr's newline-JSON RPC over its Unix socket and owns
-// the `herdr terminal attach` PTYs. remuda is a bridge: herdr keeps every
-// process, pane and agent status; nothing here mutates state beyond what the
-// user asked for (send text/keys, create/close workspaces).
+// the `herdr terminal attach` PTYs.
 package herdr
 
 import (
@@ -23,9 +21,8 @@ func DefaultSocket(home string) string {
 	return filepath.Join(home, ".config", "herdr", "herdr.sock")
 }
 
-// FindBinary resolves the herdr binary: the given name on PATH, else the
-// places installers put it — a process started by an IDE or a service has a
-// bare PATH without ~/.local/bin.
+// FindBinary resolves the herdr binary: the name on PATH, else where installers put it
+// (a service or an IDE starts remuda with a bare PATH that lacks ~/.local/bin).
 func FindBinary(name string) (string, error) {
 	if p, err := exec.LookPath(name); err == nil {
 		return p, nil
@@ -53,8 +50,7 @@ func SocketPath() string {
 	return DefaultSocket(home)
 }
 
-// Error is a structured herdr RPC error (code + message): herdr answered,
-// and said no.
+// Error is a structured herdr RPC error: herdr answered, and said no.
 type Error struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -71,11 +67,9 @@ func IsCode(err error, code string) bool {
 type Client struct {
 	Socket  string
 	Timeout time.Duration
-	// Dial, when set, replaces the unix-socket dial — e.g. an `ssh host nc -U`
-	// process for hosts whose sshd cannot forward unix sockets.
+	// Dial, when set, replaces the unix-socket dial (an ssh exec where the sshd refuses socket forwarding).
 	Dial func(timeout time.Duration) (net.Conn, error)
-	// OnTransportError fires when a call fails to reach herdr at all (as
-	// opposed to a structured *Error): the owner marks the machine dead.
+	// OnTransportError fires when a call fails to reach herdr at all, never for herdr's own *Error.
 	OnTransportError func(error)
 	reqSeq           atomic.Int64
 }
@@ -100,13 +94,13 @@ type rpcFrame struct {
 	Error  *Error          `json:"error,omitempty"`
 }
 
-// Call performs one request on one connection — herdr closes the socket after
-// a single response, so connections are never pooled or reused.
+// Call performs one request on one connection.
+// herdr closes the socket after each response, so connections are never pooled or reused.
 func (c *Client) Call(method string, params any, out any) error {
 	return c.CallTimeout(method, params, out, c.Timeout)
 }
 
-// CallTimeout is Call with a custom deadline (worktree git operations etc.).
+// CallTimeout is Call with a custom deadline.
 func (c *Client) CallTimeout(method string, params any, out any, timeout time.Duration) error {
 	err := c.call(method, params, out, timeout)
 	var he *Error
@@ -182,8 +176,7 @@ const (
 	UIShell = "shell"
 )
 
-// UIStatus maps a herdr status to the UI's: a pane, tab or workspace with no
-// agent at all is "shell".
+// UIStatus maps a herdr status to the UI's; no agent at all is "shell".
 func UIStatus(status string, hasAgent bool) string {
 	switch status {
 	case StatusWorking:
@@ -353,9 +346,8 @@ func (c *Client) PaneSendKeys(paneID string, keys []string) error {
 	return c.Call("pane.send_keys", map[string]any{"pane_id": paneID, "keys": keys}, nil)
 }
 
-// AgentPrompt is herdr's own submit: bracketed paste + Enter 300ms later.
-// Refuses with agent_blocked while the agent waits for a menu answer, and
-// agent_not_found / agent_not_ready without an agent in front.
+// AgentPrompt is herdr's own submit: bracketed paste, then Enter 300ms later.
+// It refuses with agent_blocked while the agent waits on a menu, agent_not_found / agent_not_ready without an agent.
 func (c *Client) AgentPrompt(target, text string) error {
 	return c.Call("agent.prompt", map[string]any{"target": target, "text": text}, nil)
 }
@@ -389,8 +381,7 @@ type TabCreateResult struct {
 	RootPane PaneInfo `json:"root_pane"`
 }
 
-// TabCreate opens another tab in the workspace's folder. herdr keeps the
-// label as given, so empty means unnamed.
+// TabCreate opens another tab in the workspace's folder; an empty label leaves it unnamed.
 func (c *Client) TabCreate(workspaceID, label string) (*TabCreateResult, error) {
 	params := map[string]any{"workspace_id": workspaceID, "focus": false}
 	if label != "" {
@@ -413,8 +404,7 @@ func (c *Client) WorkspaceRename(workspaceID, label string) error {
 	return c.Call("workspace.rename", map[string]any{"workspace_id": workspaceID, "label": label}, nil)
 }
 
-// TabClose closes the tab and every pane in it; a workspace's last tab takes
-// the workspace with it.
+// TabClose closes the tab and its panes; a workspace's last tab takes the workspace with it.
 func (c *Client) TabClose(tabID string) error {
 	return c.Call("tab.close", map[string]any{"tab_id": tabID}, nil)
 }
@@ -428,9 +418,7 @@ type WorktreeCreateResult struct {
 	} `json:"worktree"`
 }
 
-// WorktreeCreate runs `git worktree add` for the workspace's repository and
-// opens the checkout as a new workspace grouped under it. git on a large
-// checkout can take well over the default timeout.
+// WorktreeCreate adds a git worktree to the workspace's repository and opens it as a workspace under it.
 func (c *Client) WorktreeCreate(workspaceID, branch, base, label string) (*WorktreeCreateResult, error) {
 	params := map[string]any{"workspace_id": workspaceID, "branch": branch, "focus": false}
 	if base != "" {
@@ -453,9 +441,7 @@ func (c *Client) AgentStart(paneID, kind string) error {
 	}, nil, 30*time.Second)
 }
 
-// AgentStartWith is AgentStart with the agent's own arguments (what the
-// CLI takes after `--`), a name of the caller's choosing and a longer
-// wait — a session resumed can take a while to be ready.
+// AgentStartWith is AgentStart with the agent's own arguments, a name of the caller's choosing and a timeout.
 func (c *Client) AgentStartWith(paneID, kind, name string, args []string, timeout time.Duration) error {
 	return c.CallTimeout("agent.start", map[string]any{
 		"pane_id": paneID, "kind": kind, "name": name, "args": args, "timeout_ms": timeout.Milliseconds(),

@@ -4,7 +4,7 @@ import "net/http"
 
 // Code mode: a machine's code-server behind the guard.
 
-// GET /api/code/{machine} → whether it answers (cached), and the port
+// handleCodeStatus is GET /api/code/{machine}: whether it answers (cached), and the port.
 func (s *Server) handleCodeStatus(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.Machines.Get(r.PathValue("machine"))
 	if err != nil {
@@ -17,7 +17,7 @@ func (s *Server) handleCodeStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.Code.Status(mc))
 }
 
-// /code/{machine}/… → the editor
+// handleCodeProxy serves /code/{machine}/… from the machine's code-server.
 func (s *Server) handleCodeProxy(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("machine")
 	mc, err := s.Machines.Get(id)

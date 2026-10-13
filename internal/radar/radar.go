@@ -1,19 +1,6 @@
-// Package radar keeps the lifecycle of every agent pane the way a person
-// would read it, not the way herdr reports it from moment to moment:
-//
-//   - done stays done until someone has looked at the pane (herdr focused it,
-//     or a remuda client opened it), because `done` collapses into `idle`
-//     within seconds and the tick is the whole point;
-//   - a question (blocked) stays a question until the agent works again;
-//   - a flicker through idle right after working is still working (grace);
-//   - the time an agent last worked is remembered, so the UI can cool an
-//     idle row with age — and panes that were open before remuda started
-//     get that time recovered from their session file.
-//
-// The display states are working | blocked | done | idle | unknown; the idle
-// tiers (fresh / normal / stale) are the UI's to draw from LastActive, since
-// they are a matter of thresholds and of the clock, not of events. Stamps
-// live in <state>/activity.json so a restart keeps the order of the list.
+// Package radar keeps the lifecycle of every agent pane as a person reads it, not as
+// herdr reports it from moment to moment: done is held until seen, a question until the
+// agent works again, and the last working moment is kept in <state>/activity.json.
 package radar
 
 import (
@@ -39,7 +26,7 @@ type Display struct {
 	State      string `json:"state"`                 // working | blocked | done | idle | unknown
 	LastActive int64  `json:"last_active,omitempty"` // unix ms of the last moment the agent worked; 0 = never seen working
 	Since      int64  `json:"since,omitempty"`       // unix ms when the shown state began
-	Alert      string `json:"alert,omitempty"`       // the watchdog's note: quiet for 20 min, waiting 15 min, looping
+	Alert      string `json:"alert,omitempty"`       // the watchdog's note
 }
 
 // Episode is one pane's current state and when it began, for the watchdog.
@@ -49,8 +36,7 @@ type Episode struct {
 	Since         time.Time
 }
 
-// Recover finds a last-activity time for a pane the tracker has no stamp
-// for — from its session record. Zero when there is none.
+// Recover finds a last-activity time for a pane the tracker has no stamp for; zero when there is none.
 type Recover func(machineID string, p *herdr.PaneInfo) time.Time
 
 type pane struct {
@@ -60,10 +46,10 @@ type pane struct {
 	doneSeen  bool // this finish was looked at; herdr may go on saying done for hours
 	blocked   bool // the question mark is up until the agent works again
 	recovered bool
-	since     time.Time // when the shown state began
-	shown     string    // the state shown last, to notice a change
-	alert     string    // the watchdog's note, cleared when the state moves on
-	known     bool      // observed at least once (or loaded from the file)
+	since     time.Time
+	shown     string
+	alert     string
+	known     bool
 }
 
 type Tracker struct {
@@ -78,10 +64,7 @@ type Tracker struct {
 
 func key(machineID, paneID string) string { return machineID + "|" + paneID }
 
-// stamp is what activity.json keeps per pane: when the agent last worked,
-// and whether its finish is still waiting to be looked at — so a restart
-// neither forgets a tick that was up nor raises one for every finish herdr
-// is still reporting from before.
+// stamp is what activity.json keeps per pane: when the agent last worked and whether its finish still waits to be seen.
 type stamp struct {
 	LastActive int64 `json:"last_active,omitempty"`
 	Held       bool  `json:"held,omitempty"`
@@ -102,8 +85,7 @@ func New(dir string, recover Recover) *Tracker {
 		}
 		for k, st := range stamps {
 			if st.LastActive > 0 || st.Held {
-				// a pane known from before: its tick stands as it stood; a
-				// finish it had not raised is one that was looked at
+				// a finish the earlier run had not raised was looked at
 				t.panes[k] = &pane{lastWork: time.UnixMilli(st.LastActive), recovered: true, doneHeld: st.Held, doneSeen: !st.Held, known: true}
 			}
 		}
@@ -111,8 +93,7 @@ func New(dir string, recover Recover) *Tracker {
 	return t
 }
 
-// Observe folds one snapshot of a machine into the tracker. Panes of that
-// machine missing from the snapshot are forgotten.
+// Observe folds one snapshot of a machine into the tracker; its panes missing from the snapshot are forgotten.
 func (t *Tracker) Observe(machineID string, snap *herdr.Snapshot, now time.Time) {
 	var recover []herdr.PaneInfo
 	t.mu.Lock()
@@ -144,8 +125,7 @@ func (t *Tracker) Observe(machineID string, snap *herdr.Snapshot, now time.Time)
 	t.saveLocked(now, false)
 	t.mu.Unlock()
 
-	// a session record is a stat, over ssh for a remote machine: off the
-	// poller, one pane after another, and only where nothing arrived since
+	// a stat, over ssh for a remote: off the poller, and only where nothing arrived since
 	if t.recover != nil && len(recover) > 0 {
 		go func() {
 			for i := range recover {
@@ -170,18 +150,13 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 		st.lastWork = now
 		t.dirty = true
 	}
-	// a blink through idle right after an observed working tick is still
-	// working (a stamp loaded or recovered is not one)
+	// a blink through idle right after an observed working tick is still working (a loaded or recovered stamp is not one)
 	if (status == herdr.StatusIdle || status == herdr.StatusDone) && st.status == herdr.StatusWorking && now.Sub(st.lastWork) < idleGrace {
 		status = herdr.StatusWorking
 	}
-	// finished: herdr says so, or it was working a poll ago and is not now.
-	// herdr keeps saying done until the pane is focused in herdr itself —
-	// for hours — so a finish that was looked at here stays looked at until
-	// the agent works again
+	// herdr keeps reporting done until the pane is focused in herdr itself, for hours: a finish looked at here stays looked at until the agent works again
 	if !st.known {
-		// first sight of this pane — a restart, or one that was there before
-		// remuda: a finish herdr is still reporting from before is not news
+		// first sight (a restart, or a pane from before remuda): a finish herdr still reports from before is not news
 		st.known = true
 		if status != herdr.StatusWorking && !st.doneHeld {
 			st.doneSeen = true
@@ -205,9 +180,7 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 	case status == herdr.StatusBlocked:
 		st.blocked = true
 	case status == herdr.StatusWorking || st.lastWork.IsZero():
-		// it is working again — or it never had worked (as far as anyone
-		// knows, recovery included), so leaving blocked means the dialog is
-		// simply gone
+		// working again, or it never had worked (recovery included): the dialog simply closed
 		st.blocked = false
 	}
 	if p.Focused && st.doneHeld {
@@ -219,8 +192,7 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 	}
 }
 
-// Forget drops a machine's panes: it was removed, nothing of it is to be
-// watched or reminded about.
+// Forget drops a removed machine's panes.
 func (t *Tracker) Forget(machineID string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -242,8 +214,7 @@ func (t *Tracker) Seen(machineID, paneID string) {
 	}
 }
 
-// Display reads the pane as a person would. A pane the tracker has not
-// observed yet is read from herdr's status alone.
+// Display reads the pane as a person would; one not observed yet is read from herdr's status alone.
 func (t *Tracker) Display(machineID string, p *herdr.PaneInfo) Display {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -254,8 +225,7 @@ func (t *Tracker) Display(machineID string, p *herdr.PaneInfo) Display {
 	d := Display{}
 	if !st.lastWork.IsZero() {
 		d.LastActive = st.lastWork.UnixMilli()
-		// while it works the stamp moves every poll; the roster's ETag
-		// should not — the UI reads a working row as the liveliest anyway
+		// the stamp moves every poll while it works; the roster's ETag must not
 		if st.status == herdr.StatusWorking {
 			d.LastActive = st.lastWork.Truncate(time.Minute).UnixMilli()
 		}
@@ -302,8 +272,7 @@ func (t *Tracker) SetAlert(machineID, paneID, note string) {
 	}
 }
 
-// plain maps herdr's status to a display state without any holding: a
-// `done` herdr already let go of is just idle.
+// plain maps herdr's status to a display state without any holding: a done herdr let go of is idle.
 func plain(status string) string {
 	switch status {
 	case herdr.StatusWorking, herdr.StatusBlocked:

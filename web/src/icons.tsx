@@ -70,8 +70,7 @@ const PATHS = {
 
 export type IconName = keyof typeof PATHS;
 
-// Three sizes: 12 inside badges and small buttons, 14 beside text, 16 in
-// headers and large buttons.
+// IconSize: 12 inside badges and small buttons, 14 beside text, 16 in headers and large buttons.
 export type IconSize = 12 | 14 | 16 | 18 | 20;
 
 export default function Icon({ name, size = 16, strokeWidth = 1.75, className, ...rest }: { name: IconName; size?: IconSize; strokeWidth?: number } & SVGProps<SVGSVGElement>) {

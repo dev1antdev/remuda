@@ -1,7 +1,6 @@
-// Package push delivers Web Push alerts ("needs you" / "finished") to the
-// phone with the app closed. Standard RFC 8291/8292: self-generated VAPID
-// keys, payloads encrypted to each browser's subscription, sent straight to
-// the browser vendor's push endpoint. No third-party service in between.
+// Package push delivers Web Push alerts ("needs you" / "finished") to the phone with
+// the app closed: RFC 8291/8292, self-generated VAPID keys, payloads encrypted to each
+// browser's subscription and sent straight to the vendor's endpoint, no service between.
 package push
 
 import (
@@ -22,8 +21,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
-// Prefs are per-device: alert when an agent waits for an answer, and when it
-// finishes a turn — never, only long turns (≥60s), or always.
+// Prefs are per-device: alert on a question, and on a finish never, only after a long turn (≥60s), or always.
 type Prefs struct {
 	Watchdog *bool  `json:"watchdog,omitempty"` // a stuck or long-waiting agent; nil = on
 	Input    bool   `json:"input"`
@@ -46,7 +44,7 @@ type Subscription struct {
 		Auth   string `json:"auth"`
 	} `json:"keys"`
 	Prefs   Prefs     `json:"prefs"`
-	Label   string    `json:"label,omitempty"` // user agent, for a future devices list
+	Label   string    `json:"label,omitempty"`
 	Created time.Time `json:"created"`
 }
 
@@ -80,7 +78,7 @@ type Service struct {
 	mu   sync.Mutex
 	subs map[string]*Subscription // by endpoint
 
-	timers map[PaneRef][]*time.Timer // pending alerts
+	timers map[PaneRef][]*time.Timer
 	send   func(sub *Subscription, p Payload) error
 }
 
@@ -108,8 +106,7 @@ func (s *Service) loadKeys() error {
 	path := filepath.Join(s.dir, "vapid.json")
 	var k struct{ Public, Private string }
 	if b, err := os.ReadFile(path); err == nil {
-		// A malformed file is an error, never a silent rotation: rotating
-		// the key orphans every subscribed device.
+		// a damaged file is an error, never a silent rotation: a new key orphans every subscribed device
 		if err := json.Unmarshal(b, &k); err != nil || k.Public == "" || k.Private == "" {
 			return fmt.Errorf("%s is damaged; move it away to generate new keys (every device must then re-enable alerts)", path)
 		}
@@ -167,8 +164,7 @@ func (s *Service) saveSubs() {
 
 func (s *Service) PublicKey() string { return s.pub }
 
-// Subscribe registers or updates a device. oldEndpoint, when the browser
-// rotated the subscription, carries the previous device's prefs over.
+// Subscribe registers or updates a device; oldEndpoint, when the browser rotated the subscription, carries the old prefs over.
 func (s *Service) Subscribe(sub Subscription, oldEndpoint string) {
 	sub.Prefs.Normalize()
 	s.mu.Lock()
@@ -212,8 +208,7 @@ func (s *Service) Subscriptions() []Subscription {
 	return out
 }
 
-// Send pushes one payload to one subscription. A 404/410 from the push
-// service means the browser dropped the subscription: forget it.
+// Send pushes one payload to one subscription; a 404/410 from the push service means the browser dropped it.
 func (s *Service) Send(sub *Subscription, p Payload) error {
 	body, _ := json.Marshal(p)
 	urgency := webpush.UrgencyNormal
@@ -246,8 +241,7 @@ func (s *Service) Send(sub *Subscription, p Payload) error {
 	return nil
 }
 
-// topic collapses pending pushes for the same pane: the Topic header allows
-// 32 URL-safe chars.
+// topic collapses pending pushes for the same pane; the Topic header allows 32 URL-safe chars.
 func topic(tag string) string {
 	const ok = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
 	t := strings.Map(func(r rune) rune {
@@ -262,9 +256,7 @@ func topic(tag string) string {
 	return t
 }
 
-// Notify sends one payload now to every device that wants the watchdog's
-// word (the pref defaults to on). It is the watchdog's door; the status
-// scheduler above is untouched by it.
+// Notify sends one payload now to every device that wants the watchdog's word (the pref defaults to on).
 func (s *Service) Notify(p Payload) {
 	for _, sub := range s.list() {
 		if sub.Prefs.Watchdog != nil && !*sub.Prefs.Watchdog {
@@ -290,7 +282,7 @@ func (s *Service) SendTest(endpoint string) error {
 // Event is a pane's status transition as the watcher saw it.
 type Event struct {
 	Pane      PaneRef
-	Workspace string // label for the title
+	Workspace string
 	PaneTitle string
 	Agent     string
 	Kind      string        // the agent kind herdr detected ("claude"), "" for a shell
@@ -298,15 +290,11 @@ type Event struct {
 	Worked    time.Duration // how long the pane was working before this
 }
 
-// OnStatus schedules or calls off alerts. Any change on a pane cancels
-// whatever was pending for it: a prompt answered at the desk, or a finish
-// immediately followed by the next prompt, never reaches the phone. herdr
-// says nothing about whether a human is at the PC, so "changed that fast"
-// is the proxy for presence.
+// OnStatus schedules or calls off alerts: any status change on a pane cancels whatever was pending for it.
+// herdr says nothing about whether a person is at the desk; "changed that fast" is the proxy for presence.
 func (s *Service) OnStatus(ev Event) {
 	key := ev.Pane
-	// cancel and schedule under one lock: two changes of the same pane
-	// arriving together must not leave a timer the later one meant to kill
+	// cancel and schedule under one lock: two changes of the same pane arriving together must not leave a timer the later one meant to kill
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, t := range s.timers[key] {
@@ -338,8 +326,7 @@ func (s *Service) OnStatus(ev Event) {
 		}
 		var t *time.Timer
 		t = time.AfterFunc(delay, func() {
-			// drop only this timer: a sibling (the other device group's
-			// delay) must stay cancellable by a later status change
+			// drop only this timer: a sibling (the other device group's delay) must stay cancellable by a later status change
 			s.mu.Lock()
 			rest := s.timers[key][:0]
 			for _, o := range s.timers[key] {

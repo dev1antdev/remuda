@@ -12,9 +12,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/usage"
 )
 
-// GET /api/usage?days=7&machine=<id|all>&tz= — what the agents cost over
-// a period, per machine: locally a scan of ~/.claude/projects, remotely
-// the same scan by the remuda deployed there.
+// handleUsage is GET /api/usage?days=7&machine=<id|all>&tz=: what the agents cost over a period, per machine.
 func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 	if days <= 0 {
@@ -29,13 +27,12 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 		if l, err := time.LoadLocation(tz); err == nil {
 			loc = l
 		} else {
-			tz = "" // an unknown zone: every machine falls back the same way
+			tz = ""
 		}
 	}
 	if tz == "" && loc.String() != "Local" {
 		tz = loc.String() // "Local" means nothing to another machine; empty leaves it its own
 	}
-	// the period starts at a local midnight, so the first day is whole
 	now := time.Now().In(loc)
 	since := time.Date(now.Year(), now.Month(), now.Day()-(days-1), 0, 0, 0, 0, loc)
 	want := r.URL.Query().Get("machine")

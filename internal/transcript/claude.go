@@ -1,6 +1,5 @@
 // Package transcript reads Claude Code session files (JSONL under
-// ~/.claude/projects/<encoded-cwd>/<uuid>.jsonl) into chat turns. Read-only:
-// remuda never writes to Claude's files; prompts are typed into the pane.
+// ~/.claude/projects/<encoded-cwd>/<uuid>.jsonl) into chat turns, read-only.
 package transcript
 
 import (
@@ -36,7 +35,7 @@ type Part struct {
 type Turn struct {
 	Role  string   `json:"role"` // user | assistant
 	Ts    string   `json:"ts,omitempty"`
-	IDs   []string `json:"ids,omitempty"` // the records merged into it, for a search jump
+	IDs   []string `json:"ids,omitempty"` // the records merged into it
 	Parts []Part   `json:"parts"`
 }
 
@@ -57,8 +56,7 @@ func SessionID(path string) string {
 // EncodePath mirrors Claude Code's project-dir encoding: every character
 // outside [A-Za-z0-9] becomes '-'.
 func EncodePath(cwd string) string {
-	// Claude Code replaces per UTF-16 code unit (a JavaScript regexp), so a
-	// non-ASCII letter is one dash, an astral rune two
+	// Claude Code replaces per UTF-16 code unit (a JavaScript regexp): an astral rune is two dashes
 	var b strings.Builder
 	for _, r := range cwd {
 		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
@@ -107,16 +105,13 @@ func Sessions(cwd string) ([]SessionInfo, error) {
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ModTime.After(out[j].ModTime) })
-	for i := range min(5, len(out)) { // titles need a read; only for the sessions the picker shows first
+	for i := range min(5, len(out)) {
 		out[i].Title = sessionTitle(out[i].Path, out[i].Size)
 	}
 	return out, nil
 }
 
-// Titles are cached per path. Lines already scanned never change (the file
-// is append-only), so a title once found — or a scan that exhausted its
-// window — is final; only a short file that had no title yet is re-read
-// once it has grown.
+// Titles are cached per path; a session file is append-only, so a title once found is final.
 var (
 	titleMu    sync.Mutex
 	titleCache = map[string]titleEntry{}
@@ -125,13 +120,12 @@ var (
 type titleEntry struct {
 	title string
 	final bool
-	size  int64 // size when last scanned, for non-final entries
+	size  int64
 }
 
 const titleScanLines = 400 // the ai-title record, when there is one, comes early
 
-// sessionTitle returns the ai-title record if present, else the first words of
-// the first real user prompt.
+// sessionTitle is the ai-title record if present, else the first words of the first real user prompt.
 func sessionTitle(path string, size int64) string {
 	titleMu.Lock()
 	e, ok := titleCache[path]
@@ -151,8 +145,7 @@ func sessionTitle(path string, size int64) string {
 	return title
 }
 
-// scanTitle reads up to titleScanLines; final says whether more of the file
-// could still change the answer.
+// scanTitle reads up to titleScanLines; final says whether more of the file could still change the answer.
 func scanTitle(path string) (title string, final bool) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -186,10 +179,9 @@ func scanTitle(path string) (title string, final bool) {
 	return first, n >= titleScanLines
 }
 
-// FindSessionByID locates <uuid>.jsonl: first in the project dir encoded from
-// cwd, then by scanning every project dir (the UUID guarantees at most one hit).
+// FindSessionByID locates <uuid>.jsonl: the project dir encoded from cwd first, then every project dir.
 func FindSessionByID(cwd, id string) (string, error) {
-	if !text.SessionID(id) { // the id is the pane's word; a path in it names no file here
+	if !text.SessionID(id) { // the id is the agent's own word: a path in it must name no file here
 		return "", os.ErrNotExist
 	}
 	if cwd != "" {
@@ -223,8 +215,7 @@ type Version struct {
 // String is the HTTP ETag form.
 func (v Version) String() string { return fmt.Sprintf("%d-%d", v.Size, v.MTime) }
 
-// Time is the modification time: nanoseconds from a local stat, seconds
-// from a remote one.
+// Time is the modification time, from nanoseconds (a local stat) or seconds (a remote one).
 func (v Version) Time() time.Time {
 	if v.MTime > 1e12 {
 		return time.Unix(0, v.MTime)
@@ -232,9 +223,7 @@ func (v Version) Time() time.Time {
 	return time.Unix(v.MTime, 0)
 }
 
-// Lines calls fn for every line of r (without the newline). A line longer
-// than max is dropped whole — and the rest of the file still arrives,
-// where a bufio.Scanner would have stopped at it in silence.
+// Lines calls fn for every line of r (without the newline); a line longer than max is dropped whole.
 func Lines(r io.Reader, max int, fn func(line []byte)) error {
 	br := bufio.NewReaderSize(r, 64*1024)
 	var acc []byte
@@ -309,8 +298,7 @@ type contentBlock struct {
 
 const tailWindow = 16 * 1024 * 1024
 
-// Parse reads the tail of a session file into turns. Torn last lines (Claude
-// mid-append) are skipped, never fatal.
+// Parse reads the tail of a session file into turns; a torn last line (Claude mid-append) is skipped, never fatal.
 func Parse(path string) ([]Turn, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -326,8 +314,7 @@ func Parse(path string) ([]Turn, error) {
 	return parseStream(f)
 }
 
-// ParseBytes parses transcript content already in memory (remote machines
-// fetch the file tail over SSH).
+// ParseBytes parses transcript content already in memory.
 func ParseBytes(data []byte) ([]Turn, error) {
 	if len(data) > tailWindow {
 		data = data[len(data)-tailWindow:]
@@ -337,15 +324,12 @@ func ParseBytes(data []byte) ([]Turn, error) {
 
 func parseStream(r io.Reader) ([]Turn, error) {
 	var turns []Turn
-	// tool_use id -> where its part sits; indexes, not pointers, because a
-	// later append to the same turn reallocates Parts
+	// indexes, not pointers: a later append to the same turn reallocates Parts
 	type partRef struct{ turn, part int }
 	pending := map[string]partRef{}
 
 	appendPart := func(role, ts, uuid string, p Part) {
 		n := len(turns)
-		// Merge consecutive same-role records into one turn; a user turn that
-		// only carried tool_results never opens a bubble.
 		if n > 0 && turns[n-1].Role == role {
 			t := &turns[n-1]
 			t.Parts = append(t.Parts, p)
@@ -396,7 +380,6 @@ func parseStream(r io.Reader) ([]Turn, error) {
 					appendPart("user", rec.Timestamp, rec.UUID, Part{Type: "text", Text: "[image]"})
 				}
 			}
-			// string-content user messages
 			if s := stringContent(msg.Content); s != "" && !skipUserText(s) {
 				appendPart("user", rec.Timestamp, rec.UUID, Part{Type: "text", Text: userText(s)})
 			}
@@ -439,12 +422,10 @@ type Match struct {
 	Ts      time.Time
 	Role    string // user | assistant
 	Cwd     string
-	Snippet string // the text around the first occurrence, one line
+	Snippet string
 }
 
-// MatchLine parses one raw record and says whether a user or assistant
-// text in it contains q, case-folded — the same texts the chat shows: no
-// sidechains, no meta, no injected prompts, no tool output.
+// MatchLine says whether a user or assistant text in one raw record contains q, case-folded.
 func MatchLine(line []byte, q string) (Match, bool) {
 	var rec record
 	if json.Unmarshal(line, &rec) != nil || rec.IsSidechain || rec.IsMeta || rec.IsAPIError {
@@ -479,7 +460,7 @@ func MatchLine(line []byte, q string) (Match, bool) {
 		if i < 0 {
 			continue
 		}
-		if len(folded) != len(t) { // folding changed byte lengths; show the folded text then
+		if len(folded) != len(t) { // i indexes the folded text: when folding moved bytes, the snippet is cut from it
 			t = folded
 		}
 		ts, _ := time.Parse(time.RFC3339Nano, rec.Timestamp)
@@ -488,8 +469,7 @@ func MatchLine(line []byte, q string) (Match, bool) {
 	return Match{}, false
 }
 
-// snippet is the text around [at, at+n): up to 90 runes before and 160
-// after, whitespace collapsed, with an ellipsis where it was cut.
+// snippet is the text around [at, at+n), whitespace collapsed, an ellipsis where it was cut.
 func snippet(t string, at, n int) string {
 	start, end := at, at+n
 	for i := 0; i < 90 && start > 0; i++ {
@@ -542,8 +522,7 @@ var (
 	commandTagRe  = regexp.MustCompile(`(?s)<command-message>.*?</command-message>\s*`)
 )
 
-// userText is what a user record reads as: a slash command, which Claude
-// Code logs wrapped in tags, becomes "/name args"; the rest is as typed.
+// userText reads a user record as typed: a slash command, which Claude Code logs wrapped in tags, becomes "/name args".
 func userText(t string) string {
 	if !strings.Contains(t, "<command-message>") {
 		return t
@@ -613,12 +592,6 @@ func truncateJSON(raw json.RawMessage, n int) json.RawMessage {
 }
 
 // ---- continuations ----
-//
-// When Claude Code compacts a conversation it goes on in a NEW session file
-// whose first message points, through parentUuid, at a record of the old
-// one — while herdr keeps reporting the session id it saw at start. So a
-// resolved file may be stale: Continuation finds the newer file in the same
-// project folder that carries on from it, if any.
 
 var parentRe = regexp.MustCompile(`"parentUuid":"([0-9a-f-]{36})"`)
 
@@ -638,8 +611,8 @@ func firstParent(path string) string {
 	return string(m[1])
 }
 
-// hasRecord says whether the file holds a record with this uuid. The parent
-// of a continuation is near the old file's end, so the tail is read first.
+// hasRecord says whether the file holds a record with this uuid.
+// The parent of a continuation sits near the old file's end, so the tail is read first.
 func hasRecord(path, uuid string) bool {
 	needle := []byte(`"uuid":"` + uuid + `"`)
 	f, err := os.Open(path)
@@ -670,8 +643,8 @@ func hasRecord(path, uuid string) bool {
 	return found
 }
 
-// Continuation returns the newer session file in path's folder that
-// continues it, or "" when there is none. One step; callers loop.
+// Continuation is the newer session file in path's folder that continues it, or ""; one step, callers loop.
+// A compaction moves the conversation to a new file whose first parentUuid names a record of the old one, while herdr keeps naming the old id.
 func Continuation(path string) string {
 	st, err := os.Stat(path)
 	if err != nil {
@@ -706,8 +679,7 @@ func Continuation(path string) string {
 	return ""
 }
 
-// Predecessor is the older file in path's folder that path continues —
-// the one holding the record path's first parentUuid names — or "".
+// Predecessor is the older file in path's folder that path continues, or "".
 func Predecessor(path string) string {
 	parent := firstParent(path)
 	if parent == "" {
@@ -730,16 +702,14 @@ func Predecessor(path string) string {
 	return ""
 }
 
-// PredecessorScript is Predecessor as a POSIX shell one-liner, for a
-// remote machine: prints the older file, or nothing.
+// PredecessorScript is Predecessor as a POSIX shell one-liner for a remote machine: prints the older file, or nothing.
 func PredecessorScript(quotedPath string) string {
 	return `new=` + quotedPath + `; dir=$(dirname "$new"); ` +
 		`p=$(head -c 65536 "$new" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$p" ] || exit 0; ` +
 		`for f in "$dir"/*.jsonl; do [ "$f" = "$new" ] && continue; if grep -q "\"uuid\":\"$p\"" "$f" 2>/dev/null; then printf %s "$f"; exit 0; fi; done`
 }
 
-// ContinuationScript is the same search as a POSIX shell one-liner, for a
-// remote machine: prints the continuing file, or nothing.
+// ContinuationScript is Continuation as a POSIX shell one-liner for a remote machine: prints the continuing file, or nothing.
 func ContinuationScript(quotedPath string) string {
 	return `old=` + quotedPath + `; dir=$(dirname "$old"); for f in $(ls -t "$dir"/*.jsonl 2>/dev/null); do ` +
 		`[ "$f" = "$old" ] && break; [ "$f" -nt "$old" ] || continue; ` +

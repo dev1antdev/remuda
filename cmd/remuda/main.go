@@ -1,7 +1,6 @@
-// remuda — self-hosted browser/phone client for herdr. One Go binary, no
-// external services: herdr owns the agents and panes, Claude Code owns its
-// transcripts, remuda bridges them to your browser over localhost (or your
-// own tailnet / SSH tunnel).
+// remuda is a self-hosted browser and phone cockpit for the coding agents
+// herdr runs: one Go binary that bridges herdr and the agents' transcripts
+// to the browser over localhost, a tailnet or an SSH tunnel.
 package main
 
 import (
@@ -50,8 +49,6 @@ import (
 var version = "dev"
 
 func main() {
-	// `remuda search`: the transcript scanner, run over ssh on a remote
-	// machine by the remuda that serves the search (see internal/search)
 	buildversion.Build = version
 	if len(os.Args) > 1 && os.Args[1] == "search" {
 		searchCmd(os.Args[2:])
@@ -109,8 +106,6 @@ func main() {
 		log.Fatalf("herdr: %v", err)
 	}
 	*herdrBin = bin
-	// no herdr server? remuda runs one (headless, detached) — the agents
-	// are there whether or not a terminal window is
 	if err := herdr.EnsureServer(bin, *socket); err != nil {
 		log.Printf("WARNING: herdr is not answering at %s (%v); remuda will keep trying", *socket, err)
 	} else if v, protocol, err := herdr.NewClient(*socket).Ping(); err == nil {
@@ -128,9 +123,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("push: %v", err)
 	}
-	// a pane's session file (following a compaction's continuation) and
-	// when it was last written — the radar recovers an old pane's last turn
-	// from it, the watchdog reads an agent's silence off it
 	sessionFile := func(machineID string, p *herdr.PaneInfo) (*machines.Machine, string, bool) {
 		if p.AgentSession == nil {
 			return nil, "", false
@@ -164,10 +156,8 @@ func main() {
 	reviews := review.New(dir)
 	watcher := watch.New(mgr, pushSvc, tracker)
 	watcher.Badges, watcher.Dirs = reviews.Badges, server.WorkspaceDirs
-	// the cost and context meter: each agent pane's transcript, read by
-	// its growth; a compacted session's earlier file rides along
 	meter := usage.NewTracker()
-	var meterBusy sync.Map // machine id → in flight: a slow read never holds the poll
+	var meterBusy sync.Map
 	watcher.Usage = func(mc *machines.Machine, snap *herdr.Snapshot) {
 		if _, running := meterBusy.LoadOrStore(mc.Cfg.ID, true); running {
 			return
@@ -184,8 +174,6 @@ func main() {
 				if err != nil {
 					continue
 				}
-				// the whole conversation: what came before this file (a
-				// compaction's old file) and what came after
 				chain := mc.ContinuationChain(orig)
 				for n := 0; n < 8; n++ {
 					pred := mc.Predecessor(chain[0])
@@ -200,7 +188,6 @@ func main() {
 	}
 	watcher.Start()
 
-	// the watchdog: a minute apart, over the radar's episodes
 	paneAndSnap := func(machineID, paneID string) (*herdr.PaneInfo, *herdr.Snapshot) {
 		snap, _ := watcher.Snapshot(machineID)
 		if snap == nil {
@@ -217,8 +204,6 @@ func main() {
 		p, _ := paneAndSnap(machineID, paneID)
 		return p
 	}
-	// the agent's latest turn in a pane's transcript, for the watchdog's
-	// loop check and the task runs' answers
 	lastTurn := func(machineID, paneID string) (transcript.Turn, bool) {
 		p := paneOf(machineID, paneID)
 		if p == nil {
@@ -287,7 +272,6 @@ func main() {
 		log.Fatalf("tasks: %v", err)
 	}
 	defer taskStore.Close()
-	// agents started on tasks: their finishes come back as comments
 	runs := &tasks.RunWatch{
 		Store: taskStore,
 		PaneState: func(machineID, paneID string) (string, time.Time, bool) {
@@ -301,9 +285,7 @@ func main() {
 			d := tracker.Display(machineID, p)
 			return d.State, time.UnixMilli(d.Since), true
 		},
-		// what the agent's latest turn ended with: the text after its last
-		// tool call (a turn ending in a tool call is a stop, not an answer),
-		// and the record it ended with
+		// the text after the turn's last tool call: a turn ending in a tool call is a stop, not an answer
 		LastAnswer: func(machineID, paneID string) (string, string) {
 			last, ok := lastTurn(machineID, paneID)
 			if !ok || len(last.IDs) == 0 {
@@ -326,20 +308,15 @@ func main() {
 	}
 	go runs.Loop(15 * time.Second)
 	s := server.New(mgr, watcher, pushSvc, taskStore, code.New(*codePort), reviews, tracker, quick.New(dir), meter, auth.NewGuard(token), ui)
-	// schedules: prompts on a timetable, delivered through the server's own
-	// submit path to the agent in a folder
 	s.Schedules = schedule.New(dir, s.SubmitToFolder, pushSvc.Notify)
 	go s.Schedules.Loop()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// the machines' vitals for the sidebar, and the newest versions out there
 	vitals := health.New(mgr, version, !*noCheck)
 	vitals.Start(15 * time.Minute)
 	s.Health = vitals
-	// the local herdr gone quiet: its server is started again (every
-	// failed poll calls this; the same complaint is logged once)
 	var downMu sync.Mutex
 	var lastDown string
 	watcher.LocalDown = func(err error) {
@@ -359,7 +336,6 @@ func main() {
 			}
 		}
 	}
-	// updates run from the page; a finished one re-reads the machine
 	runner := jobs.New()
 	runner.OnDone = func(j jobs.Job) {
 		if mc, err := mgr.Get(j.Machine); err == nil {
@@ -367,7 +343,6 @@ func main() {
 		}
 	}
 	s.Jobs = runner
-	// chats onto a freshly updated agent: now when idle, else when they settle
 	restarter := restart.New(mgr)
 	restarter.Later = func(mc *machines.Machine, title string, fn func(say func(string)) error) {
 		runner.Run(mc, title, "", fn)
@@ -382,8 +357,7 @@ func main() {
 		defer node.Close()
 	}
 	log.Printf("remuda %s listening on http://%s", version, *addr)
-	// the sign-in link once, on the first run, or to a person at a terminal
-	// — never into the service's log at every restart
+	// the sign-in link goes to a person at a terminal or into the first run's log, never the service's log at every restart
 	if created || interactive() {
 		log.Printf("sign in with the token from `remuda -print-token`, or open:")
 		log.Printf("  http://%s/?token=%s", *addr, token)
@@ -451,8 +425,7 @@ func usageCmd(args []string) {
 	_ = json.NewEncoder(os.Stdout).Encode(rep)
 }
 
-// help is `remuda -h`: the server's flags, and the commands a person
-// with nothing but the binary needs to know are there.
+// help is `remuda -h`: the server's flags, and the commands a person with nothing but the binary needs to know are there.
 func help() {
 	w := flag.CommandLine.Output()
 	fmt.Fprint(w, `remuda — a browser and phone cockpit for the coding agents herdr runs
@@ -468,11 +441,7 @@ Each command lists its own flags with -h. The server's:
 	flag.PrintDefaults()
 }
 
-// setupCmd is `remuda setup [-host H] [-tailscale] …`: herdr installed
-// and its server running, the agent integrations, the remuda service —
-// here or on a remote machine over ssh (a remote with no remuda fetches
-// the release for its own OS and CPU). Afterwards the token's URL, for a
-// local setup; -open, which the installer passes, shows it in the browser.
+// setupCmd is `remuda setup [-host H] [-tailscale] …`: herdr and its server, the agent integrations and the remuda service, here or over ssh.
 func setupCmd(args []string) {
 	fs := flag.NewFlagSet("setup", flag.ExitOnError)
 	host := fs.String("host", "", "set up a remote machine over ssh instead of this one")
@@ -500,11 +469,7 @@ func setupCmd(args []string) {
 	}
 }
 
-// uninstallCmd is `remuda uninstall [-host H] [-data] [-code] [-herdr]
-// [-all] [-yes] [-n]`: what would go is shown first, then asked about —
-// the same promise as an update's "the command shown is the one that
-// runs". remuda itself always; the person's data, code-server and herdr
-// only by their flags, because each of those is more than remuda's own.
+// uninstallCmd is `remuda uninstall [-host H] [-data] [-code] [-herdr] [-all] [-yes] [-n]`: what would go is shown first, then asked about.
 func uninstallCmd(args []string) {
 	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
 	host := fs.String("host", "", "a remote machine over ssh instead of this one")
@@ -534,8 +499,7 @@ func uninstallCmd(args []string) {
 	}
 }
 
-// codeCmd is `remuda code [-host H] [-port N] [install|uninstall|status]`:
-// code-server for the Code mode, by the script the binary carries.
+// codeCmd is `remuda code [-host H] [-port N] [install|uninstall|status]`: code-server for the Code mode, by the script the binary carries.
 func codeCmd(args []string) {
 	fs := flag.NewFlagSet("code", flag.ExitOnError)
 	host := fs.String("host", "", "a remote machine over ssh instead of this one")

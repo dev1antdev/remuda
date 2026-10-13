@@ -1,10 +1,6 @@
-// Package search finds what was said across every Claude transcript on
-// every machine. There is no index: each machine scans its own
-// ~/.claude/projects on demand — in-process here, and on a remote through
-// the remuda deployed there (`remuda search`), with a plain grep as
-// the fallback when that binary is missing or older. The matching records
-// come back raw to be parsed by the transcript package: only the user and
-// assistant texts the chat shows count, not tool output.
+// Package search finds what was said across every Claude transcript on every machine.
+// There is no index: each machine scans its own ~/.claude/projects on demand, in-process
+// here and through the remuda deployed on a remote (`remuda search`), else a plain grep.
 package search
 
 import (
@@ -27,10 +23,10 @@ import (
 
 type Hit struct {
 	Machine string    `json:"machine"`
-	Project string    `json:"project"` // the project directory's name, EncodePath of the folder Claude was started in
-	Dir     string    `json:"dir"`     // the folder at that moment (a Bash cd moves it), for the label
-	Session string    `json:"session"` // the transcript file's id
-	UUID    string    `json:"uuid"`    // the record, for the jump
+	Project string    `json:"project"` // the project directory's name: EncodePath of the folder Claude was started in
+	Dir     string    `json:"dir"`     // the folder at that moment (a cd moves it)
+	Session string    `json:"session"`
+	UUID    string    `json:"uuid"`
 	Ts      time.Time `json:"ts"`
 	Role    string    `json:"role"` // user | assistant
 	Snippet string    `json:"snippet"`
@@ -39,7 +35,7 @@ type Hit struct {
 type Result struct {
 	Hits   []Hit             `json:"hits"`
 	Errors map[string]string `json:"errors,omitempty"` // per machine that could not be searched
-	More   bool              `json:"more"`             // cut at the limit; narrow it down
+	More   bool              `json:"more"`             // cut at the limit
 }
 
 const (
@@ -50,9 +46,7 @@ const (
 	timeout    = 45 * time.Second
 )
 
-// Search runs on the given machines at once. dir narrows to one project
-// folder (the one an agent was started in; records made after a cd are in
-// the same file and count), since to records after a time.
+// Search runs on the given machines at once; dir narrows to one project folder, since to records after a time.
 func Search(mcs []*machines.Machine, q, dir string, since time.Time) Result {
 	res := Result{Hits: []Hit{}, Errors: map[string]string{}}
 	var mu sync.Mutex
@@ -130,14 +124,8 @@ func one(mc *machines.Machine, q, dir string, since time.Time) ([]Hit, error) {
 	return hits, sc.Err()
 }
 
-// script runs the scan on a remote machine: remuda's own scanner where
-// `make deploy` put the binary (fast — a 400 MB history in well under a
-// second), else grep over the project transcripts for the query as it
-// sits in the JSON (quotes and newlines escaped), in the four spellings
-// that fold case where grep's own -i would not (non-ASCII letters). The
-// BSD grep is slow with several patterns, seconds per hundred megabytes,
-// which is what the scanner is for. Either way the parser here folds
-// properly afterwards.
+// script runs the scan on a remote machine: remuda's own scanner where `make deploy` put it, else grep.
+// The grep takes the four spellings as they sit in the JSON (grep -i folds ASCII only); BSD grep is seconds per hundred MB.
 func script(home, q, dir string, since time.Time) string {
 	seen := map[string]bool{}
 	var pats []string
@@ -161,8 +149,7 @@ func script(home, q, dir string, since time.Time) string {
 		"cut -b1-" + strconv.Itoa(lineCap) + " | head -c " + strconv.Itoa(outputCap) + "; exit 0"
 }
 
-// jsonText is s as it appears inside a JSON string, without the quotes
-// and without HTML escaping (transcripts keep < and & as they are).
+// jsonText is s as it appears inside a JSON string, without the quotes and without HTML escaping.
 func jsonText(s string) string {
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)

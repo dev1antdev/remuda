@@ -57,12 +57,10 @@ func TestFieldsRoundTrip(t *testing.T) {
 	if _, there := tk.Fields[ids["Notes"]]; there {
 		t.Fatalf("an empty text was kept: %+v", tk.Fields)
 	}
-	// the list carries the values too
 	list, _, _ := st.List(Query{View: "open"})
 	if list[0].Fields[ids["Area"]] != "web" {
 		t.Fatalf("list values %+v", list[0].Fields)
 	}
-	// refusals
 	for what, patch := range map[string]map[string]json.RawMessage{
 		"not an option":       {ids["Area"]: raw(`"mobile"`)},
 		"a tag not an option": {ids["Tags"]: raw(`["a", "z"]`)},
@@ -77,7 +75,6 @@ func TestFieldsRoundTrip(t *testing.T) {
 			t.Fatalf("%s: accepted (%v)", what, err)
 		}
 	}
-	// a patch is partial; null and false clear
 	tk, err = st.Update(tk.ID, Patch{Fields: map[string]json.RawMessage{ids["Area"]: raw(`null`), ids["Blocking"]: raw(`false`), ids["Notes"]: raw(`"hello"`)}})
 	if err != nil {
 		t.Fatal(err)
@@ -112,10 +109,8 @@ func TestSetFieldsRules(t *testing.T) {
 	fs, _ := st.SetFields(id, []Field{{Title: "Area", Kind: FieldSelect, Options: []string{"web", "api"}}, {Title: "Tags", Kind: FieldMulti, Options: []string{"a", "b"}}, {Title: "Size", Kind: FieldNumber}})
 	area, tags, size := itoa(fs[0].ID), itoa(fs[1].ID), itoa(fs[2].ID)
 	tk, _ := st.Create(id, Patch{Title: str("x"), Fields: map[string]json.RawMessage{area: raw(`"api"`), tags: raw(`["a","b"]`), size: raw(`3`)}})
-	// options shrink: a chosen one that went is dropped, the rest stay
 	fs[0].Options = []string{"web"}
 	fs[1].Options = []string{"b"}
-	// a kind change empties the field
 	fs[2].Kind = FieldText
 	if _, err := st.SetFields(id, fs); err != nil {
 		t.Fatal(err)
@@ -130,7 +125,6 @@ func TestSetFieldsRules(t *testing.T) {
 	if _, there := tk.Fields[size]; there {
 		t.Fatalf("a value survived its kind: %+v", tk.Fields)
 	}
-	// a field left out goes with its values
 	if _, err := st.SetFields(id, fs[1:]); err != nil {
 		t.Fatal(err)
 	}
@@ -151,12 +145,10 @@ func TestFieldsFollowATaskBetweenProjects(t *testing.T) {
 	id := inbox[0].ID
 	fs, _ := st.SetFields(id, []Field{{Title: "Area", Kind: FieldSelect, Options: []string{"web", "api"}}, {Title: "Size", Kind: FieldNumber}, {Title: "Only here", Kind: FieldText}})
 	tk, _ := st.Create(id, Patch{Title: str("x"), Fields: map[string]json.RawMessage{itoa(fs[0].ID): raw(`"api"`), itoa(fs[1].ID): raw(`5`), itoa(fs[2].ID): raw(`"gone"`)}})
-	// a child copies the fields — its own ids
 	child, _ := st.CreateProject("Child", id)
 	if len(child.Fields) != 3 || child.Fields[0].ID == fs[0].ID || len(child.Fields[0].Options) != 2 {
 		t.Fatalf("child fields %+v", child.Fields)
 	}
-	// another project with some of the same fields, one with narrower options
 	other, _ := st.CreateProject("Other", 0)
 	ofs, _ := st.SetFields(other.ID, []Field{{Title: "size", Kind: FieldNumber}, {Title: "Area", Kind: FieldSelect, Options: []string{"web"}}, {Title: "Only here", Kind: FieldNumber}})
 	tk, err := st.Update(tk.ID, Patch{ProjectID: &other.ID})

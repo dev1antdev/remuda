@@ -59,7 +59,7 @@ func TestAnsweredAtTheDeskCancels(t *testing.T) {
 	s, sent := newTestService(t)
 	s.OnStatus(Event{Pane: PaneRef{"local", "p1"}, From: "working", To: "blocked"})
 	time.Sleep(10 * time.Millisecond)
-	s.OnStatus(Event{Pane: PaneRef{"local", "p1"}, From: "blocked", To: "working"}) // answered
+	s.OnStatus(Event{Pane: PaneRef{"local", "p1"}, From: "blocked", To: "working"})
 	time.Sleep(80 * time.Millisecond)
 	if len(sent.get()) != 0 {
 		t.Fatalf("alert should have been called off, got %+v", sent.get())
@@ -130,21 +130,20 @@ func TestSubscriptionsPersist(t *testing.T) {
 	}
 }
 
-// Two device groups schedule two timers for one finish; the fast one firing
-// must leave the slow one cancellable by the next status change.
+// TestSiblingTimerStaysCancellable: the fast device group's timer firing must leave the slow one cancellable by the next status change.
 func TestSiblingTimerStaysCancellable(t *testing.T) {
 	shrinkDelays(t)
-	s, sent := newTestService(t) // dev 1: done:"long"
+	s, sent := newTestService(t)
 	sub := Subscription{Endpoint: "https://push.example/dev2", Prefs: Prefs{Done: "always"}}
 	sub.Keys.P256dh, sub.Keys.Auth = "p", "a"
 	s.Subscribe(sub, "")
 
 	s.OnStatus(Event{Pane: PaneRef{"local", "p1"}, From: "working", To: "done", Worked: time.Second})
-	time.Sleep(35 * time.Millisecond) // the 20ms "always" push went out
+	time.Sleep(35 * time.Millisecond)
 	if got := sent.get(); len(got) != 1 {
 		t.Fatalf("want the fast alert only, got %+v", got)
 	}
-	s.OnStatus(Event{Pane: PaneRef{"local", "p1"}, From: "done", To: "working"}) // next prompt typed
+	s.OnStatus(Event{Pane: PaneRef{"local", "p1"}, From: "done", To: "working"})
 	time.Sleep(80 * time.Millisecond)
 	if got := sent.get(); len(got) != 1 {
 		t.Fatalf("the 'long' alert must have been called off, got %+v", got)

@@ -18,8 +18,8 @@ export function machineOptions(machines: Machine[], opts: { all?: string; onlyCo
   return out;
 }
 
-// the workspace folders known to the roster, on one machine or all of
-// them; a folder's hint is its path, or on "all" the machines it is on
+// folderOptions lists the workspace folders the roster knows on one machine or all; the hint is the
+// folder's path, or on "all" the machines it is on.
 export function folderOptions(machines: Machine[], machineId: string | "all"): Option<string>[] {
   const seen = new Map<string, { name: string; machines: string[] }>();
   for (const m of machines) {

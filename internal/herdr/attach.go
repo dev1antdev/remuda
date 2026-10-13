@@ -15,15 +15,12 @@ import (
 )
 
 const (
-	lingerAfter   = 45 * time.Second // keep an attach alive briefly after the last viewer leaves
+	lingerAfter   = 45 * time.Second
 	subscriberBuf = 256
 )
 
-// AttachManager shares one `herdr terminal attach <terminal_id>` PTY per
-// terminal across every browser viewer. Never pass --takeover: stealing
-// herdr's own attach slot is the user's call, not the bridge's.
-// NewCommand builds the attach process — a local herdr exec, or ssh for a
-// remote machine.
+// AttachManager shares one `herdr terminal attach` PTY per terminal across every viewer.
+// Never pass --takeover: stealing herdr's attach slot is the user's call alone.
 type AttachManager struct {
 	NewCommand func(terminalID string) *exec.Cmd
 
@@ -35,9 +32,9 @@ type attach struct {
 	termID string
 	cmd    *exec.Cmd
 	pty    *os.File
-	early  chan []byte   // the attach's first chunks, while watched (herdr's refusal shows up here)
-	watch  atomic.Bool   // the readLoop still copies chunks into early
-	exited chan struct{} // closed when the attach process has gone
+	early  chan []byte // the attach's first chunks, while watched: herdr prints its refusal into the PTY
+	watch  atomic.Bool
+	exited chan struct{}
 
 	mu     sync.Mutex
 	subs   map[chan []byte]bool
@@ -45,15 +42,12 @@ type attach struct {
 	linger *time.Timer
 }
 
-// RefusedError is herdr declining the attach — "already has an attached
-// client; retry with --takeover" — reported where it can be acted on
-// instead of painted into the viewer as text.
+// RefusedError is herdr declining the attach ("already has an attached client; retry with --takeover").
 type RefusedError struct{ Msg string }
 
 func (e *RefusedError) Error() string { return e.Msg }
 
-// Refused reports whether err is herdr declining an attach because another
-// client holds the terminal.
+// Refused reports whether err is herdr declining an attach because another client holds the terminal.
 func Refused(err error) bool {
 	var r *RefusedError
 	return errors.As(err, &r) && strings.Contains(r.Msg, "already has an attached client")
@@ -61,9 +55,8 @@ func Refused(err error) bool {
 
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b[()][A-Z0-9]`)
 
-// refusal finds herdr's own verdict in the attach's first output: a line
-// "herdr: server shut down: terminal attach failed: …", or any "attach
-// failed". The text comes back without escape sequences.
+// refusal finds herdr's verdict in the attach's first output, returned without escape sequences:
+// a line "herdr: server shut down: terminal attach failed: …", or any "attach failed".
 func refusal(first []byte) (string, bool) {
 	text := ansiRe.ReplaceAllString(string(first), "")
 	for _, line := range strings.Split(text, "\n") {
@@ -78,15 +71,11 @@ func refusal(first []byte) (string, bool) {
 	return "", false
 }
 
-// firstWait is how long a fresh attach that prints nothing is watched
-// for herdr's refusal; once it prints, a few hundred milliseconds or half
-// a kilobyte without a refusal mean it is a real attach.
+// firstWait is how long a fresh attach that prints nothing is watched for herdr's refusal.
 const firstWait = 1500 * time.Millisecond
 
-// watchStart reads the attach's first output for herdr's verdict. The
-// refusal comes in a chunk or two and the process exits right after; a
-// real attach paints the screen and stays. The subscriber is already
-// registered, so nothing painted meanwhile is lost to it.
+// watchStart reads the attach's first output for herdr's verdict: a refusal comes in a chunk
+// or two and the process exits right after; a real attach paints the screen and stays.
 func (a *attach) watchStart() error {
 	defer a.watch.Store(false)
 	var acc []byte
@@ -143,17 +132,8 @@ func validSize(cols, rows int) bool {
 	return cols >= 20 && rows >= 5 && cols <= 500 && rows <= 300
 }
 
-// Subscribe attaches (or joins the existing attach of) a terminal. The caller
-// receives a live channel and must call cancel when done.
-//
-// A fresh attach paints the screen itself (herdr draws the pane on attach).
-// A joined one cannot be caught up from a byte tail: TUIs like Claude Code
-// draw with cursor moves relative to where the cursor was, so a tail taken
-// from an arbitrary byte lands everything in the wrong place and every
-// later partial update on top of it — the footer and the prompt box gone,
-// typed text showing. Instead the pane is asked to repaint: a resize by a
-// row and back makes herdr and the app redraw the whole screen, which the
-// new viewer receives live.
+// Subscribe attaches (or joins the existing attach of) a terminal; the caller must call cancel when done.
+// A joiner is caught up by a repaint, never a byte tail: TUIs draw with cursor moves relative to where it was.
 func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte, cancel func(), err error) {
 	m.mu.Lock()
 	a := m.attaches[termID]
@@ -189,8 +169,6 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 	a.subs[ch] = true
 	a.mu.Unlock()
 
-	// a fresh attach: herdr answers at once when it will not have us —
-	// the verdict is an error here, never a screenful of text for the viewer
 	if !joined {
 		if err := a.watchStart(); err != nil {
 			m.kill(a)
@@ -213,11 +191,8 @@ func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte
 	return ch, cancel, nil
 }
 
-// repaint asks the pane to redraw itself for a joining viewer: one row
-// smaller, then the size asked for. The two resizes are spaced — back to
-// back, ssh and the app only ever see the final size (unchanged) and draw
-// nothing; a quarter second apart each one is a real resize, and the
-// second brings the whole screen.
+// repaint has the pane redraw for a joining viewer: a row smaller, then the size asked for.
+// Back to back, ssh and the app see only the final (unchanged) size and draw nothing.
 func (a *attach) repaint(cols, rows int) {
 	_ = pty.Setsize(a.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows - 1)})
 	time.Sleep(250 * time.Millisecond)
@@ -275,8 +250,7 @@ func (a *attach) readLoop(m *AttachManager) {
 	m.kill(a)
 }
 
-// killIfIdle ends an attach nobody watches — the test and the decision in
-// one critical section, so a viewer joining meanwhile is not cut off.
+// killIfIdle ends an attach nobody watches, the test and the kill under one lock so a joiner is not cut off.
 func (m *AttachManager) killIfIdle(a *attach) {
 	a.mu.Lock()
 	if len(a.subs) > 0 || a.dead {
@@ -338,8 +312,7 @@ func (m *AttachManager) Write(termID string, data []byte) error {
 	return err
 }
 
-// Resize changes the attach PTY size; herdr reflows the pane for the smallest
-// attached client, exactly like a terminal window resize.
+// Resize changes the attach PTY size; herdr reflows the pane for the smallest attached client.
 func (m *AttachManager) Resize(termID string, cols, rows int) error {
 	if !validSize(cols, rows) {
 		return nil

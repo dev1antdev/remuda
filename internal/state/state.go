@@ -1,7 +1,5 @@
-// Package state is where remuda keeps its own files: the access token,
-// manually added machines, push keys and subscriptions, the radar's
-// stamps, review baselines, schedules, quick prompts, the task database.
-// One directory, 0700, every file written atomically with 0600.
+// Package state is the one directory remuda keeps its own files in (0700)
+// and the one atomic 0600 writer for them.
 package state
 
 import (
@@ -14,9 +12,7 @@ import (
 	"path/filepath"
 )
 
-// Dir is <user config dir>/remuda, created on first use — or
-// REMUDA_STATE_DIR, for a second instance beside the real one (a test,
-// a trial of -tailscale) that must not share its token, tasks and pushes.
+// Dir is <user config dir>/remuda, created on first use, or REMUDA_STATE_DIR for a second instance beside the real one.
 func Dir() (string, error) {
 	dir := os.Getenv("REMUDA_STATE_DIR")
 	if dir == "" {
@@ -25,8 +21,7 @@ func Dir() (string, error) {
 			return "", err
 		}
 		dir = filepath.Join(base, "remuda")
-		// the state kept under the previous name (herdr-ui) is carried
-		// over once: token, machines, tasks, radar — the same files
+		// herdr-ui was remuda's previous name: its state dir is carried over once
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			if old := filepath.Join(base, "herdr-ui"); isDir(old) {
 				if err := os.Rename(old, dir); err == nil {
@@ -46,9 +41,7 @@ func isDir(path string) bool {
 	return err == nil && st.IsDir()
 }
 
-// WriteFile writes data to path via a private temp file + rename, mode
-// 0600 — two writers at once each get their own temp file, so the rename
-// always installs a whole document.
+// WriteFile writes data to path through a private temp file and a rename, mode 0600.
 func WriteFile(path string, data []byte) error {
 	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*")
 	if err != nil {
@@ -71,8 +64,7 @@ func WriteFile(path string, data []byte) error {
 	return nil
 }
 
-// LoadJSON reads <dir>/<name> into v; a missing file is no error (v stays
-// as it was), a damaged one is.
+// LoadJSON reads <dir>/<name> into v; a missing file is no error, a damaged one is.
 func LoadJSON(dir, name string, v any) error {
 	b, err := os.ReadFile(filepath.Join(dir, name))
 	if errors.Is(err, os.ErrNotExist) {

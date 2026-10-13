@@ -1,16 +1,13 @@
-// The sidebar's reading of every agent — after hhdebb/herdr-radar's design,
-// written for this UI: the server holds the lifecycle (held done, held
-// question, last activity, in internal/radar); this file decides what that
-// looks like and in what order. Pure functions over the roster.
+// The sidebar's reading of every agent, after hhdebb/herdr-radar's design:
+// the server holds the lifecycle (internal/radar), this file decides what
+// it looks like and in what order. Pure functions over the roster.
 
 import type { Machine, Pane, Session, Tab } from "./api";
 import { basename } from "./prefs";
 
 // ---- vendors ----
 
-// Each vendor's own published hue, chosen to read on a dark panel; green and
-// red stay out because they mean done and blocked. A vendor absent here has
-// no hue of its own and its mark is drawn in ink.
+// BRAND is each vendor's own published hue; green and red stay out, they mean done and blocked
 export const BRAND: Record<string, string> = {
   claude: "#d97757",
   gemini: "#4285f4",
@@ -56,13 +53,13 @@ export const VENDOR_NAME: Record<string, string> = {
   crush: "Crush",
 };
 
-// the hue a working row and its mark take: the vendor's, else a recognised
-// harness with no hue of its own
+// brandColor is the hue a working row and its mark take: the vendor's, else OTHER_HUE for a harness without one
 export const OTHER_HUE = "#c78a1f";
 export const brandColor = (agent: string): string => BRAND[agent] ?? OTHER_HUE;
 
 // ---- state ----
 
+// the server holds done until the pane is seen and a question until the agent works again; the idle tiers below are the UI's, from last_active and the clock
 export type RadarState = "working" | "blocked" | "done" | "idle" | "unknown";
 export type Tier = "fresh" | "normal" | "stale";
 export type Display = RadarState | "idle_fresh" | "idle_stale";
@@ -70,9 +67,9 @@ export type Display = RadarState | "idle_fresh" | "idle_stale";
 export type RadarPrefs = {
   order: "active" | "recent" | "herdr";
   rowLabel: "title" | "tab" | "both";
-  freshMinutes: number; // after the last turn, a pane still reads as fresh
-  staleMinutes: number; // without a turn, the row dims
-  shells: boolean; // list shell panes too
+  freshMinutes: number;
+  staleMinutes: number;
+  shells: boolean;
 };
 
 export const DEFAULT_RADAR: RadarPrefs = { order: "active", rowLabel: "title", freshMinutes: 15, staleMinutes: 120, shells: false };
@@ -99,9 +96,7 @@ export const FRAMES = ["⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"];
 export const SPIN_MS = 150;
 export const PULSE_STEPS = 5; // spinner steps per half of the blocked pulse
 
-// The mark in front of a title. Shape carries the state so the row still
-// reads without colour: motion for working, a pulsing question when it
-// waits on you, a tick for done (held until seen), a ring for idle.
+// markOf is the mark in front of a title; its shape carries the state, so a row reads without colour: motion working, a pulsing ? blocked, a tick done (held until seen), a ring idle
 export function markOf(d: Display, step: number): string {
   switch (d) {
     case "working":
@@ -119,10 +114,7 @@ export function markOf(d: Display, step: number): string {
 
 // ---- labels ----
 
-// What names a row: the session's own title, the tab's name, or both. A
-// title that only names the folder (a shell-filled terminal title) gives
-// way to the vendor's name; one that repeats the workspace's name under a
-// header that already shows it loses that prefix.
+// rowLabel names a row: the session's title, the tab's name or both; a title that only names the folder gives way to the vendor's name, one repeating the workspace's name loses that prefix
 export function rowLabel(p: Pane, tab: Tab, workspace: string, prefs: RadarPrefs): string {
   let title = p.title.trim();
   const folder = p.cwd ? basename(p.cwd) : "";
@@ -139,9 +131,7 @@ export function rowLabel(p: Pane, tab: Tab, workspace: string, prefs: RadarPrefs
 
 // ---- order ----
 
-// `last` is the row's activity for ordering: a working row is the liveliest
-// of all (its stamp is quantized by the server), the rest their last turn,
-// no stamp at all = 0. `index` is herdr's own order, the tie-breaker.
+// AgentRow: `last` orders the rows — a working row is the liveliest of all (the server quantizes its stamp), the rest their last turn, no stamp = 0; `index` is herdr's own order, the tie-breaker
 export type AgentRow = { session: Session; tab: Tab; pane: Pane; last: number; head: boolean; index: number };
 
 export function agentRows(s: Session, prefs: RadarPrefs): AgentRow[] {
@@ -158,8 +148,7 @@ export function agentRows(s: Session, prefs: RadarPrefs): AgentRow[] {
   return out;
 }
 
-// Within a workspace: the tabs by their liveliest pane, a split's first pane
-// before the rest, then each pane by its own activity; ties keep herdr's order.
+// orderRows, within a workspace: the tabs by their liveliest pane, a split's first pane before the rest, then each pane by its own activity; ties keep herdr's order
 export function orderRows(rows: AgentRow[]): AgentRow[] {
   const tabBest = new Map<string, number>();
   const tabFirst = new Map<string, number>();
@@ -179,10 +168,7 @@ export function orderRows(rows: AgentRow[]): AgentRow[] {
 
 export type Group = { session: Session; rows: AgentRow[]; children: Group[]; best: number };
 
-// A machine's workspaces as families — a repository with its worktrees under
-// it — ordered by the liveliest agent in the family, the parent first and
-// its children by their own; families with no agent keep herdr's order at
-// the end.
+// groups is a machine's workspaces as families (a repository with its worktrees under it), by the liveliest agent in each, the parent first; families with no agent keep herdr's order at the end
 export function groups(m: Machine, prefs: RadarPrefs): Group[] {
   const parentByRepo = new Map<string, Session>();
   for (const s of m.sessions) {

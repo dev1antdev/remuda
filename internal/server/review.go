@@ -53,8 +53,7 @@ func (s *Server) handleReviewDiff(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"diff": diff})
 }
 
-// handleReviewSeen answers POST /api/review/seen {machine, dir, verdict?}: the
-// baseline moves to now, with the verdict the page told the agent, if any.
+// handleReviewSeen answers POST /api/review/seen {machine, dir, verdict?}: the baseline moves to now.
 func (s *Server) handleReviewSeen(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Machine string `json:"machine"`

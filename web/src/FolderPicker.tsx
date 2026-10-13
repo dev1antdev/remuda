@@ -20,7 +20,6 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
   const [typed, setTyped] = useState(start);
   const [hidden, setHidden] = useState(false);
   const { data, error, loading } = useAsync(() => listDirs(machine.id, path, hidden), [machine.id, path, hidden]);
-  // the field follows the folder shown; a path typed and entered is tried
   useEffect(() => {
     if (data?.path) setTyped(data.path);
   }, [data?.path]);

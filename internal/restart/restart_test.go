@@ -36,8 +36,7 @@ func TestKindsCountNames(t *testing.T) {
 }
 
 func TestSessionOfRefusesWhatIsNotAnID(t *testing.T) {
-	// the id is the pane's own word and goes after --resume: a flag, a
-	// path or a shell word in it is no session at all
+	// the id goes after --resume: a flag, a path or a shell word in it is no session at all
 	for _, v := range []string{"--help", "-x", "a b", "../x", "", "x;rm", "x$(y)", ".hidden"} {
 		if got := sessionOf(&herdr.PaneInfo{AgentSession: &herdr.AgentSession{Kind: "id", Value: v}}); got != "" {
 			t.Errorf("sessionOf(%q) = %q, want none", v, got)

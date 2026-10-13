@@ -17,12 +17,9 @@ import (
 	"github.com/dev1antdev/remuda/internal/restart"
 )
 
-// Updates from the page: herdr, the agents, and remuda itself on a
-// remote machine — each a job the person first sees as a command, then
-// watches run. Everything runs as the user through the package manager
-// that installed the thing; nothing asks for sudo.
+// Updates from the page: herdr, the agents and remuda itself, each a job the person first sees as a command, then watches run; nothing asks for sudo.
 
-// GET /api/machines/{id}/updates — what this machine can update now.
+// handleMachineUpdates is GET /api/machines/{id}/updates: what this machine can update now.
 func (s *Server) handleMachineUpdates(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.Machines.Get(r.PathValue("id"))
 	if err != nil {
@@ -57,8 +54,7 @@ func (s *Server) handleMachineUpdates(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"updates": ups})
 }
 
-// serverRestartPlan offers a restart of herdr's server when it still runs
-// an older version than the one installed.
+// serverRestartPlan offers a restart of herdr's server when it still runs an older version than the one installed.
 func (s *Server) serverRestartPlan(mc *machines.Machine, rep *health.Report, snap *herdr.Snapshot) (health.Update, bool) {
 	if s.Restart == nil || rep == nil || rep.HerdrServer == "" || rep.Herdr == "" || rep.HerdrServer == rep.Herdr {
 		return health.Update{}, false
@@ -76,8 +72,7 @@ func serverRestartUpdate(mc *machines.Machine, running, installed string, snap *
 	return health.Update{What: "restart-herdr", Title: "Restart herdr's server", Command: "# on " + mc.Label() + ", through remuda:\nherdr server stop; herdr server   # " + running + " → " + installed + "; then every chat started again on its session", Note: note}
 }
 
-// herdrThen is the step after an install of herdr: the running server
-// onto the new version, unless the installer's handoff already did that.
+// herdrThen is the step after an install of herdr: the running server onto the new version, unless the installer's handoff already did that.
 func (s *Server) herdrThen(mc *machines.Machine) func(say func(string)) error {
 	if s.Restart == nil {
 		return nil
@@ -119,8 +114,7 @@ func (s *Server) restartNote(snap *herdr.Snapshot, kinds []string) string {
 	return msg + "; a message half-typed in a chat's box is lost."
 }
 
-// restartPlans offers a restart on its own for each agent with chats on
-// the machine — for an agent that updated itself.
+// restartPlans offers a restart on its own for each agent with chats on the machine, for an agent that updated itself.
 func (s *Server) restartPlans(mc *machines.Machine, snap *herdr.Snapshot) []health.Update {
 	if s.Restart == nil || snap == nil {
 		return nil
@@ -134,8 +128,7 @@ func (s *Server) restartPlans(mc *machines.Machine, snap *herdr.Snapshot) []heal
 	return out
 }
 
-// restartPlan is the offer to restart one agent's chats: the panes it
-// means are in the command text, so a Run on a stale offer is refused.
+// restartPlan is the offer to restart one agent's chats; the panes it means are in the command text, so a Run on a stale offer is refused.
 func restartPlan(kind string, snap *herdr.Snapshot) (health.Update, int) {
 	if restart.Kinds(kind) == nil {
 		return health.Update{}, 0
@@ -163,9 +156,7 @@ func exitOf(kind string) string {
 	return "/quit"
 }
 
-// restartHooks is the work around an agent update: the versions read
-// right before the script, read again after it, and the chats of every
-// agent whose version changed restarted onto it.
+// restartHooks reads the agents' versions before and after an update's script and restarts the chats of every agent whose version changed.
 func (s *Server) restartHooks(mc *machines.Machine, what string) (first func(say func(string)), then func(say func(string)) error) {
 	kinds := restart.Kinds(what)
 	if s.Restart == nil || len(kinds) == 0 {
@@ -243,7 +234,7 @@ func firstNonEmpty(ss ...string) string {
 	return ""
 }
 
-// GET /api/machines/{id}/jobs — recent jobs there, newest first.
+// handleMachineJobs is GET /api/machines/{id}/jobs: recent jobs there, newest first.
 func (s *Server) handleMachineJobs(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.Machines.Get(r.PathValue("id"))
 	if err != nil {
@@ -268,7 +259,7 @@ func (s *Server) pendingRestarts(machineID string) int {
 	return s.Restart.Pending(machineID)
 }
 
-// POST /api/machines/{id}/update {what} — start it; the answer is the job.
+// handleMachineUpdate is POST /api/machines/{id}/update {what, command}: starts it; the answer is the job.
 func (s *Server) handleMachineUpdate(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.Machines.Get(r.PathValue("id"))
 	if err != nil {
@@ -277,7 +268,7 @@ func (s *Server) handleMachineUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		What    string `json:"what"`
-		Command string `json:"command"` // the one the page showed; refused when the plan changed since
+		Command string `json:"command"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req); err != nil {
 		httpErr(w, 400, err)
@@ -376,7 +367,7 @@ func (s *Server) handleMachineUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"job": j.ID})
 }
 
-// GET /api/jobs/{id}
+// handleJob is GET /api/jobs/{id}.
 func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 	if s.Jobs == nil {
 		httpErr(w, 404, fmt.Errorf("no such job"))
@@ -390,8 +381,7 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, j)
 }
 
-// deployPlan: this very binary can go to a remote machine of the same OS
-// and CPU when its remuda is behind (or missing).
+// deployPlan offers this very binary to a remote machine of the same OS and CPU whose remuda is behind or missing.
 func (s *Server) deployPlan(mc *machines.Machine, rep *health.Report) (health.Update, bool) {
 	if mc.Local || rep == nil || rep.Arch == "" || rep.Arch != runtime.GOARCH {
 		return health.Update{}, false
@@ -411,14 +401,10 @@ func (s *Server) deployPlan(mc *machines.Machine, rep *health.Report) (health.Up
 		Note: have + " → " + me + ". The binary this page is served by is copied over your SSH and its service restarted; the peer relay reconnects by itself."}, true
 }
 
-// deployScript installs the copied binary and restarts the service — the
-// part of a deploy that runs as a shell script on the machine; the same
-// two steps a release download ends with.
+// deployScript installs the copied binary and restarts the service: the two steps a release download ends with too.
 const deployScript = health.InstallScript + " && " + health.RestartScript
 
-// releasePlan: a newer release of remuda on GitHub than the one this
-// machine runs — the one serving this page included, which restarts
-// itself a moment after the install.
+// releasePlan offers a newer GitHub release of remuda than the machine runs, the one serving this page included.
 func (s *Server) releasePlan(mc *machines.Machine, rep *health.Report) (health.Update, bool) {
 	if s.Health == nil {
 		return health.Update{}, false
@@ -459,8 +445,7 @@ func (s *Server) deploySelf(mc *machines.Machine, say func(string)) error {
 	if err != nil {
 		return err
 	}
-	// the job ends when the new remuda answers there, so the vitals read
-	// that follows finds the peer again
+	// the job ends only once the new remuda answers, so the vitals read that follows finds the peer again
 	say("waiting for remuda there…")
 	for i := 0; i < 30; i++ {
 		time.Sleep(time.Second)

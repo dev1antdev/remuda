@@ -11,17 +11,12 @@ import type { FileTarget } from "./FileViewer";
 
 export type Modifier = "ctrl" | "alt" | null;
 
-// How this viewer relates to the shared pane's size:
-//  fit  — the pane is resized to this screen (herdr follows the smallest
-//         attached client; the desktop's own view shrinks with a phone)
-//  keep — attach at the pane's own grid and shrink the font to show it
-//         whole; too wide for the screen, it scrolls instead
+// SizeMode: fit resizes the shared pane to this screen, keep attaches at the pane's own grid.
+// herdr follows the smallest attached client, so fit on a phone squeezes the desktop's view.
 export type SizeMode = "fit" | "keep";
 
-// What the key bar needs from a live terminal: a way to type a sequence as
-// if from the keyboard (through the same onData → socket path), and the
-// cursor-key mode (DECCKM decides ESC O A vs ESC [ A). A one-shot Ctrl/Alt
-// lives in React state above both; input() applies and consumes it.
+// TermApi is what the key bar needs from a live terminal: type a sequence as if from the
+// keyboard, and whether DECCKM (application cursor keys) is on.
 export type TermApi = {
   input: (seq: string) => void;
   appCursor: () => boolean;
@@ -30,16 +25,13 @@ export type TermApi = {
 const MIN_FONT = 8;
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 
-// Transport decision for this page: once WebSockets prove unusable, every
-// terminal uses HTTP without trying again.
+// Once WebSockets prove unusable, every terminal on this page uses HTTP without trying again.
 let preferHTTP = false;
 let wsFailures = 0;
 let wsRetry = 0;
 
-// applyModifier encodes a single printable character under a one-shot
-// Ctrl (control code) or Alt (ESC prefix), and an arrow as the modified CSI
-// form (ESC [ 1 ; 5 A for Ctrl, ; 3 for Alt); anything else passes through
-// unchanged, and the caller keeps the modifier armed.
+// applyModifier encodes a printable character or an arrow under a one-shot Ctrl or Alt (an arrow
+// as the modified CSI form, ESC [ 1 ; 5 A for Ctrl, ; 3 for Alt); anything else passes through.
 export function applyModifier(mod: Modifier, seq: string): string {
   if (!mod) return seq;
   const arrow = /^\x1b[[O]([ABCD])$/.exec(seq);
@@ -48,12 +40,10 @@ export function applyModifier(mod: Modifier, seq: string): string {
   return mod === "ctrl" ? String.fromCharCode(seq.toUpperCase().charCodeAt(0) & 0x1f) : "\x1b" + seq;
 }
 
-// A DECSET that mixes a mouse-tracking mode with other modes is split in
-// two before xterm sees it — the others first — so the handler below only
-// ever meets pure sequences and never has to re-inject (a re-injected
-// sequence would land behind the rest of the chunk, out of order).
 const TRACKING = new Set([9, 1000, 1002, 1003]);
 const DECSET = /\x1b\[\?([\d;]+)([hl])/g;
+// splitTracking splits a DECSET that mixes a mouse-tracking mode with other modes in two, the others
+// first: a sequence re-injected from xterm's CSI handler would land behind the rest of the chunk.
 export function splitTracking(s: string): string {
   if (!s.includes("\x1b[?")) return s;
   return s.replace(DECSET, (all, params: string, final: string) => {
@@ -66,10 +56,8 @@ export function splitTracking(s: string): string {
   });
 }
 
-// Live terminal for one herdr pane: raw pane bytes arrive as binary WS frames,
-// keystrokes go back as JSON. herdr keeps the real scrollback and mouse
-// reporting; the local buffer is small and its scrollbar is hidden (an overlay
-// scrollbar would paint over the last column).
+// TerminalView is the live terminal for one herdr pane: pane bytes arrive as binary WS frames,
+// keystrokes go back as JSON text frames; herdr keeps the real scrollback.
 export default function TerminalView({
   machineId,
   paneId,
@@ -91,17 +79,13 @@ export default function TerminalView({
   paneId: string;
   cols: number; // the pane's own grid, 0 when unknown
   rows: number;
-  // an agent's pane: file paths and links are clickable. A shell's pane
-  // belongs to whatever runs in it — clicks go to the app, only URLs with
-  // Cmd/Ctrl held are links.
+  // an agent's pane: file paths and URLs are links; in a shell's pane only a Cmd/Ctrl-click opens a URL
   agent: boolean;
   mode: SizeMode;
   minCols: number; // fit mode: never narrower than this many columns (0 = off)
   fontSize: number; // preferred size in fit mode
   modifier: Modifier;
-  // selection mode: a transparent text layer over the grid whose selection
-  // is the browser's own — for a phone's long-press and the places where
-  // xterm's own selection does not work
+  // a transparent text layer over the grid whose selection is the browser's own (a phone's long-press)
   selectMode: boolean;
   onModifierUsed: () => void;
   onReady: (api: TermApi | null) => void;
@@ -110,7 +94,6 @@ export default function TerminalView({
   active?: boolean; // the lens on screen; hidden, the attach stays and output keeps arriving
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
-  // props the running terminal reads without being recreated
   const live = useRef({ agent, cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied });
   live.current = { agent, cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied };
   const applyRef = useRef<() => void>(() => {});
@@ -136,17 +119,12 @@ export default function TerminalView({
     let lastSize = "";
 
     // ---- transport: WebSocket, falling back to HTTP long-polling ----
-    // Some proxies forward requests but not WebSockets: after two sockets
-    // that close before they open while the same request works as plain
-    // HTTP, the page switches to the HTTP transport for good.
     type Transport = { input(data: string): void; resize(cols: number, rows: number): void; close(): void };
     let transport: Transport | null = null;
     const paneQuery = `machine=${encodeURIComponent(machineId)}&id=${encodeURIComponent(paneId)}`;
     const note = (text: string) => term.write(`\r\n\x1b[2m[remuda] ${text}\x1b[0m\r\n`);
 
-    // the PTY is shared by every viewer: never re-send an unchanged size.
-    // The connect request already carries the size, so lastSize is set
-    // there and a fresh connection sends nothing until the grid changes.
+    // sendResize sends the grid to the shared PTY only when it changed since the connect request carried it.
     const sendResize = () => {
       const size = `${term.cols}x${term.rows}`;
       if (size === lastSize) return;
@@ -158,10 +136,10 @@ export default function TerminalView({
       const m = live.current.modifier;
       const out = applyModifier(m, seq);
       sendInput(out);
-      if (m && out !== seq) live.current.onModifierUsed(); // armed until a key it can apply to
+      if (m && out !== seq) live.current.onModifierUsed();
     };
 
-    // Cell size in px, measured from the renderer once it has drawn.
+    // cellSize reads the cell box in px from xterm's private _renderService; before the first draw, an estimate.
     const cellSize = () => {
       const core = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } } })._core;
       const c = core?._renderService?.dimensions?.css?.cell;
@@ -169,15 +147,11 @@ export default function TerminalView({
       return { w: c?.width || size * 0.6, h: c?.height || size * 1.2 };
     };
 
-    // applyGeometry sizes the grid: fit → to the mount; keep → the pane's own
-    // grid, with the font shrunk until the width fits (down to MIN_FONT, then
-    // the mount scrolls). A minimum width in fit mode makes the grid wider
-    // than the screen when the screen is narrower — the mount then scrolls
-    // sideways, which is how a TUI without horizontal scrolling (a diff
-    // viewer, a table) still shows its right-hand side.
+    // applyGeometry sizes the grid: fit → to the mount (at least minCols wide, the mount scrolling
+    // sideways), keep → the pane's own grid with the font shrunk to fit the width, down to MIN_FONT.
     const PAD = 8; // the mount's padding, both sides
     const applyGeometry = () => {
-      if (mount.clientWidth === 0) return; // hidden: nothing to measure, sized again when shown
+      if (mount.clientWidth === 0) return; // hidden: nothing to measure
       const g = live.current;
       mount.classList.remove("keep", "wide");
       if (g.mode === "keep" && g.cols > 0 && g.rows > 0) {
@@ -190,8 +164,7 @@ export default function TerminalView({
         if (term.options.fontSize !== g.fontSize) term.options.fontSize = g.fontSize;
         const fits = fit.proposeDimensions();
         if (g.minCols > 0 && fits && fits.cols < g.minCols) {
-          // the class brings the scrollbar first, so clientHeight already
-          // excludes it when the rows are measured — one resize, not two
+          // the class brings the scrollbar first, so clientHeight already excludes it when the rows are measured
           mount.classList.add("wide");
           const rows = Math.max(5, Math.floor((mount.clientHeight - PAD) / cellSize().h));
           if (term.cols !== g.minCols || term.rows !== rows) term.resize(g.minCols, rows);
@@ -205,9 +178,7 @@ export default function TerminalView({
     focusRef.current = () => term.focus();
     applyGeometry();
 
-    // In keep mode the grid may be taller than the screen: follow the bottom
-    // (the agent's input line) unless the reader scrolled up — one layout
-    // read per animation frame, not per chunk.
+    // followBottom keeps a keep-mode grid taller than the screen at its bottom unless the reader scrolled up.
     let followQueued = false;
     const followBottom = () => {
       if (followQueued || !mount.classList.contains("keep")) return;
@@ -219,9 +190,7 @@ export default function TerminalView({
       });
     };
 
-    // Output from either transport: the mixed DECSETs split (see
-    // splitTracking), then the follow-up work once it is on screen. One
-    // decoder for the stream, so a character cut by a chunk boundary joins.
+    // paint writes a chunk from either transport; one streaming decoder, so a character cut by a chunk boundary joins.
     const decoder = new TextDecoder();
     let onPainted = () => {}; // the content-anchored selection, below
     const paint = (buf: Uint8Array) => {
@@ -233,10 +202,8 @@ export default function TerminalView({
       });
     };
 
-    // A fresh stream starts from a blank screen (there is no replay; the
-    // server nudges the app into a repaint). The reset forgets the modes
-    // the app set, and nobody will set them again: what was known is
-    // re-applied, and the paste rule falls back to "bracket when unsure".
+    // onOpen resets the screen for a fresh stream: there is no replay, the server nudges the app into a
+    // repaint, so the modes xterm knew are re-applied by hand since nobody will set them again.
     const onOpen = (sentSize: string) => {
       const appCursor = term.modes.applicationCursorKeysMode;
       const bracketed = term.modes.bracketedPasteMode;
@@ -246,15 +213,12 @@ export default function TerminalView({
       pasteModeSeen = false;
       if (appCursor) term.write("\x1b[?1h");
       if (bracketed) term.write("\x1b[?2004h");
-      lastSize = sentSize; // what the connect request carried
-      sendResize(); // only when the grid changed since then
+      lastSize = sentSize;
+      sendResize();
     };
 
-    // wsWouldAccept tells a proxy that drops WebSockets from everything
-    // else that ends a socket before it opens — a server restarting, a pane
-    // gone (404), a dead remote (503). The same URL as a plain request
-    // passes the handler's checks and fails only at the upgrade itself (426
-    // Upgrade Required): then, and only then, the proxy is the problem.
+    // wsWouldAccept tells a proxy that drops WebSockets from a server that ends the socket itself: a plain
+    // GET of the same URL passes every check and fails only at the upgrade (426), so 426 means the proxy.
     const wsWouldAccept = () => fetch(`/ws/pane?${paneQuery}`).then((r) => r.status === 426, () => false);
 
     const connectWS = (): Transport => {
@@ -279,20 +243,15 @@ export default function TerminalView({
       };
       ws.onmessage = (ev) => {
         if (!(ev.data instanceof ArrayBuffer)) return;
-        wsRetry = 0; // output flowing: the back-off starts over
+        wsRetry = 0;
         paint(new Uint8Array(ev.data));
       };
       ws.onerror = () => ws?.close();
       ws.onclose = (ev) => {
         if (closed || ws === null) return;
         if (opened) {
-          // a normal close means the attach ended — herdr restarted, the
-          // SSH session blinked, the pane went away. The next connect
-          // starts a fresh attach; a pane that is gone fails that connect
-          // and the roster drops the terminal soon after. A reason (an
-          // attach refused: another client holds the terminal) is written
-          // on the screen — every retry starts from a blank one, so it is
-          // written each time and the screen always shows it
+          // a close reason (an attach refused: another client holds the terminal) is written on every
+          // retry, since each one starts from a blank screen
           if (ev.code === 1000) note("terminal detached — reconnecting");
           else if (ev.reason) note(ev.reason);
           retry();
@@ -321,8 +280,7 @@ export default function TerminalView({
       };
     };
 
-    // HTTP: open a server-side stream, long-poll it for output, POST input
-    // in small batches. A 410 means the stream expired: reopen and repaint.
+    // connectHTTP opens a server-side stream, long-polls it for output and POSTs input in batches; 410 means it expired.
     const connectHTTP = (): Transport => {
       let sid: string | null = null;
       let stopped = false;
@@ -346,8 +304,7 @@ export default function TerminalView({
         }
         onOpen(sentSize);
       };
-      // input goes in small batches; a batch that failed is queued again
-      // and retried, so nothing waits for the next keystroke
+      // flush POSTs the pending input; a batch that failed is queued again and retried.
       const flush = async () => {
         flushTimer = null;
         if (stopped || !sid || !pending) return;
@@ -381,7 +338,7 @@ export default function TerminalView({
             if (stopped) return;
             if (res.status === 410) {
               sid = null;
-              later(500); // expired: reopen
+              later(500);
               return;
             }
             if (!res.ok) throw new Error(`read failed (${res.status})`);
@@ -418,23 +375,16 @@ export default function TerminalView({
     };
 
     const onData = term.onData((data) => {
-      forgetSelection(); // typing ends a selection, as in any terminal
+      forgetSelection();
       input(data);
     });
 
     // ---- the mouse stays ours ----
-    // herdr enables mouse tracking in the attach stream (for its own
-    // scrollback). If xterm honoured that, every drag would become mouse
-    // reports and nothing could ever be selected. So the DECSET for the
-    // tracking modes is intercepted here — xterm never enters tracking, a
-    // plain drag selects — and the wheel is translated into the reports the
-    // app asked for, so herdr still scrolls.
+    // herdr enables mouse tracking in every attach stream; honoured by xterm, every drag would be mouse
+    // reports. The tracking DECSETs are intercepted so xterm never tracks, and the wheel is reported by hand.
     let appMouse = 0; // the tracking mode the app wants; 0 = none
     let sgrMouse = false; // it asked for SGR (1006) reports
-    // Whether the app ever said how it wants pastes (DECSET 2004). A viewer
-    // that attaches later gets no replay, so it never sees Claude Code's
-    // "bracketed paste on" from startup — and xterm would then paste a
-    // multi-line text raw, every newline an Enter that sends the prompt.
+    // whether a DECSET 2004 ever passed: a late attach gets no replay, so Claude Code's "bracketed paste on" is never seen
     let pasteModeSeen = false;
     const mouseModeHandler = (enable: boolean) => (params: (number | number[])[]) => {
       const rest: number[] = [];
@@ -451,18 +401,16 @@ export default function TerminalView({
         }
       }
       if (!touched) return false; // nothing of ours: xterm handles it
-      // a mixed sequence only gets here when a chunk boundary cut it before
-      // splitTracking could; the other modes are re-applied, late
+      // a mixed sequence only gets here when a chunk boundary cut it before splitTracking could: the rest is re-applied, late
       if (rest.length) term.write(`\x1b[?${rest.join(";")}${enable ? "h" : "l"}`);
-      // xterm only swaps its text cursor for an arrow when it tracks the
-      // mouse itself; the app owns the clicks, so the arrow is ours to show
+      // xterm shows an arrow cursor only when it tracks the mouse itself; the app owns the clicks, so the arrow is ours
       mount.classList.toggle("app-mouse", appMouse !== 0);
       return true;
     };
     const decset = term.parser.registerCsiHandler({ prefix: "?", final: "h" }, mouseModeHandler(true));
     const decrst = term.parser.registerCsiHandler({ prefix: "?", final: "l" }, mouseModeHandler(false));
 
-    // the grid cell under a pointer event, 1-based
+    // cellAt is the grid cell under a pointer event, 1-based.
     const cellAt = (e: MouseEvent): { col: number; row: number } | null => {
       const screen = term.element?.querySelector(".xterm-screen") as HTMLElement | null;
       if (!screen) return null;
@@ -473,18 +421,15 @@ export default function TerminalView({
         row: Math.max(1, Math.min(term.rows, Math.floor((e.clientY - r.top) / h) + 1)),
       };
     };
-    // one mouse report the way the app asked for it: SGR, else X10 (whose
-    // release is button 3 and whose coordinates stop at 223)
+    // report encodes one mouse report as the app asked: SGR (1006), else X10, whose release is button 3
+    // and whose coordinates stop at 223.
     const report = (code: number, c: { col: number; row: number }, release: boolean) =>
       sgrMouse
         ? `\x1b[<${code};${c.col};${c.row}${release ? "m" : "M"}`
         : "\x1b[M" + String.fromCharCode(32 + (release ? (code & ~3) | 3 : code), 32 + Math.min(c.col, 223), 32 + Math.min(c.row, 223));
     const modifierBits = (e: MouseEvent) => (e.shiftKey ? 4 : 0) + (e.altKey ? 8 : 0) + (e.ctrlKey ? 16 : 0);
 
-    // A wheel report per row of movement, the way a native terminal does
-    // it: the pixels add up and every cell height sends one tick. A
-    // trackpad's stream of small events (and its momentum) then scrolls
-    // the app as far as the finger moved, not once per event.
+    // wheelTicks turns wheel movement into ticks as a native terminal does: the pixels add up, one tick per cell height.
     let wheelAcc = { x: 0, y: 0 };
     const wheelTicks = (e: WheelEvent, sideways: boolean): number => {
       const { w, h } = cellSize();
@@ -492,7 +437,7 @@ export default function TerminalView({
       if (e.deltaMode === 1) delta *= h; // lines
       else if (e.deltaMode === 2) delta *= h * term.rows; // pages
       const axis = sideways ? "x" : "y";
-      if (Math.sign(delta) !== Math.sign(wheelAcc[axis])) wheelAcc[axis] = 0; // a turn forgets the remainder
+      if (Math.sign(delta) !== Math.sign(wheelAcc[axis])) wheelAcc[axis] = 0;
       wheelAcc[axis] += delta;
       const unit = sideways ? w * 2 : h;
       const ticks = Math.trunc(wheelAcc[axis] / unit);
@@ -506,14 +451,12 @@ export default function TerminalView({
     };
     const onWheel = (e: WheelEvent) => {
       const sideways = Math.abs(e.deltaX) > Math.abs(e.deltaY);
-      // a grid larger than the screen (keep mode, a minimum width) scrolls
-      // here, in that direction; otherwise the gesture is the app's —
-      // wheel left/right (buttons 6/7) is how a TUI scrolls its columns
+      // a grid larger than the screen scrolls here in that direction; otherwise the gesture is the app's (wheel left/right = buttons 6/7)
       if (sideways ? mount.scrollWidth > mount.clientWidth : mount.classList.contains("keep") && mount.scrollHeight > mount.clientHeight) {
         e.stopPropagation();
         return;
       }
-      if (!appMouse) return; // no tracking wanted: xterm scrolls its own buffer
+      if (!appMouse) return;
       const cell = cellAt(e);
       if (!cell) return;
       e.preventDefault();
@@ -523,11 +466,8 @@ export default function TerminalView({
     };
     mount.addEventListener("wheel", onWheel, { capture: true, passive: false });
 
-    // A finger does the same: a drag over the screen is the app's scroll,
-    // one tick per row moved, so a phone can read back through an agent's
-    // output. Without this xterm would scroll its own (empty) buffer and
-    // the app would never know. A tap stays a tap: the browser's click
-    // follows and is reported below. Selection mode keeps the finger.
+    // A finger drag is the app's scroll too, one tick per row moved: otherwise xterm would scroll its
+    // own (empty) buffer and the app would never know. A tap stays a tap, reported as a click below.
     let touch: { y: number; x: number; acc: number } | null = null;
     const onTouchStart = (e: TouchEvent) => {
       touch = null;
@@ -557,10 +497,8 @@ export default function TerminalView({
     mount.addEventListener("touchend", onTouchEnd, { capture: true, passive: true });
     mount.addEventListener("touchcancel", onTouchEnd, { capture: true, passive: true });
 
-    // Clicks still reach the app: a press and release on the same spot is
-    // reported at its cell (a TUI's buttons and lists work), while anything
-    // that moved is a selection and stays here. Reported after xterm's own
-    // mouseup, so a click that opened a link is not also a click for the app.
+    // A press and release within 4px is reported to the app as a click at its cell; anything that moved
+    // is a selection. Reported after xterm's own mouseup, so a click that opened a link is not also the app's.
     let pressed: { x: number; y: number; button: number } | null = null;
     let linkUsed = false;
     const onMouseDown = (e: MouseEvent) => {
@@ -585,21 +523,13 @@ export default function TerminalView({
     mount.addEventListener("mouseup", onMouseUp, true);
 
     // ---- a selection that stays with the text ----
-    // The app owns the scrollback: a wheel is a report to it and it repaints
-    // the screen, so a selection on screen rows would sit still while the
-    // text moved under it. Here the selection is kept in content rows, and
-    // every row seen while it exists is remembered by its text. When the
-    // screen settles after a repaint, the rows on it are looked up in that
-    // memory: the offset most unique rows agree on is where the screen is
-    // now, the selection is drawn there (or not at all, when the screen
-    // shows nothing remembered — a jump far away), and a drag held past the
-    // top or bottom edge scrolls the app and grows the selection. Copy
-    // reads the remembered rows, so it is right wherever the screen went.
+    // The app repaints the screen on every scroll, so the selection is kept in content rows and every row
+    // seen is remembered by its text; a settled screen is located in that memory and the selection drawn there.
     type Pos = { row: number; col: number }; // content row, 0-based col
     let offset = 0; // content row = screen row + offset
     let attached = true; // the screen's place in the content is known
-    let anchor: Pos | null = null; // where the selection began
-    let head: Pos | null = null; // where it is being dragged to
+    let anchor: Pos | null = null;
+    let head: Pos | null = null;
     const rowText = new Map<number, string>(); // content row → its text when last seen
     let applying = false; // our own term.select, not the user's
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -620,9 +550,8 @@ export default function TerminalView({
       attached = true;
       rowText.clear();
     };
-    // where the screen is in the content: the offset that the most rows
-    // agree on, among rows whose text is unique both on screen and in the
-    // memory (a repeated line fits anywhere). null when nothing is known.
+    // relocate finds where the screen is in the content: the offset most rows agree on, among rows whose
+    // text is unique both on screen and in the memory; null when nothing is known.
     const relocate = (rows: string[]): number | null => {
       const onScreen = new Map<string, number>();
       const twice = new Set<string>();
@@ -650,16 +579,13 @@ export default function TerminalView({
       for (const [o, v] of votes) {
         if (v > bestVotes || (v === bestVotes && o === offset)) [best, bestVotes] = [o, v];
       }
-      // a few rows agreeing is not enough: the app's own frame — a header
-      // row, the status lines — sits on the same screen rows whatever the
-      // content, and after a jump into unseen text those would be the only
-      // matches, all voting for the old place. A good share of the screen
-      // has to be recognised.
+      // the app's own header and status rows sit on the same screen rows whatever the content and always
+      // vote for the old place, so a good share of the screen has to be recognised
       let unique = 0;
       for (const r of onScreen.keys()) if (!twice.has(r)) unique++;
       return best !== null && bestVotes >= 2 && bestVotes * 2 > total && bestVotes >= unique * 0.3 ? best : null;
     };
-    // draw the part of the selection that is on screen
+    // renderSelection draws the part of the selection that is on screen.
     const renderSelection = () => {
       const o = ordered();
       if (!o) return;
@@ -681,8 +607,7 @@ export default function TerminalView({
         applying = false;
       }
     };
-    // a settled screen: found in the memory (then remembered and the
-    // selection drawn), or not (the selection waits, unseen)
+    // settled locates a settled screen: found in the memory, it is remembered and the selection drawn; else the selection waits unseen.
     const settled = () => {
       settleTimer = null;
       if (!anchor) return;
@@ -698,9 +623,7 @@ export default function TerminalView({
         if (edge === "down" && head) head = { row: offset + term.rows - 1, col: term.cols };
         else if (edge === "up" && head) head = { row: offset, col: 0 };
         else if (moved && dragAnchor && pointer) {
-          // the button is held and the text scrolled under the pointer (a
-          // wheel): the selection runs from where it began to what is now
-          // under the pointer, as in a native terminal
+          // a wheel under a held button: the head follows what is now under the pointer, as in a native terminal
           head = pointerPos() ?? head;
         }
       }
@@ -711,12 +634,11 @@ export default function TerminalView({
       if (settleTimer) clearTimeout(settleTimer);
       settleTimer = setTimeout(settled, 40);
     };
-    // the user's own selection changes: a drag, a double-click, a shift-click
+    // onSelection takes the user's own selection changes: a drag, a double-click, a shift-click.
     const onSelection = term.onSelectionChange(() => {
       if (applying) return;
       const pos = term.getSelectionPosition();
-      // xterm drops its own selection on any user input and on a buffer
-      // switch; ours stays until a new drag (mousedown) or typing says so
+      // xterm drops its own selection on any input and on a buffer switch; ours stays until a new mousedown or typing
       if (!pos) return;
       const baseY = term.buffer.active.baseY;
       const start: Pos = { row: pos.start.y - baseY + offset, col: pos.start.x };
@@ -736,13 +658,8 @@ export default function TerminalView({
         head = e;
       }
     });
-    // the drag: its anchor, and the scroll when it leaves the screen
-    // A drag is ours from its first move: xterm reports a selection only on
-    // mouseup, so a scroll under a held button would go unseen until then
-    // and land on the wrong rows. The anchor is set on mousedown, the head
-    // follows the pointer, and the first select() ends xterm's own drag.
-    // A click that never moves is left to xterm (a double-click's word, a
-    // triple-click's line arrive through onSelectionChange).
+    // A drag is ours from its first move: xterm reports a selection only on mouseup, so a wheel under a held
+    // button would go unseen. A click that never moves is left to xterm (a double-click's word, a triple-click's line).
     let dragAnchor: Pos | null = null;
     let dragMoved = false;
     let pointer: { x: number; y: number } | null = null; // where the held button is
@@ -778,7 +695,7 @@ export default function TerminalView({
       edgeTimer = edge ? setInterval(edgeTick, 90) : null;
     };
     const dragStart = (e: MouseEvent) => {
-      forgetSelection(); // a new selection starts over, with a fresh memory
+      forgetSelection();
       const cell = cellAt(e);
       dragAnchor = cell ? { row: cell.row - 1, col: cell.col - 1 } : null;
       dragMoved = false;
@@ -798,7 +715,7 @@ export default function TerminalView({
       edgeTimer = null;
       document.removeEventListener("mousemove", onDragMove);
     };
-    // the selected text, on screen or remembered
+    // contentSelection is the selected text, on screen or remembered.
     const contentSelection = (): string => {
       const o = ordered();
       if (!o) return "";
@@ -814,19 +731,14 @@ export default function TerminalView({
     };
 
     // ---- selection and copy ----
-    // Two ways to select: a plain drag (xterm's own — the app's mouse
-    // tracking is intercepted above, so a drag is never a mouse report), and
-    // selection mode — a transparent text layer over the grid whose
-    // selection is the browser's own, for a phone's long-press and the
-    // places where xterm's does not work. Copy is Cmd+C / Ctrl+Shift+C, or
-    // the native menu.
+    // the selection-mode layer: a transparent text copy of the screen whose selection is the browser's own
     const layer = document.createElement("div");
     layer.className = "term-select";
     layer.hidden = true;
     term.element!.appendChild(layer);
     let layerTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // the layer mirrors the visible rows as text, one row per line
+    // paintLayer mirrors the visible rows into the layer as text, one row per line.
     const paintLayer = () => {
       layerTimer = null;
       if (layer.hidden) return;
@@ -860,10 +772,8 @@ export default function TerminalView({
       }
     };
 
-    // what is selected right now: the layer's DOM selection, else xterm's.
-    // A full-screen app paints its rows out to the last column with real
-    // spaces, so a selection would carry every line padded to the width
-    // of the screen; the trailing run goes, as a native terminal drops it
+    // selectedText is the layer's DOM selection, else the content selection, else xterm's; a full-screen app
+    // pads its rows to the last column with real spaces, so the trailing run goes as a native terminal drops it.
     const selectedText = (): string => {
       const sel = window.getSelection();
       const raw = sel && !sel.isCollapsed && layer.contains(sel.anchorNode) ? sel.toString() : anchor ? contentSelection() : term.hasSelection() ? term.getSelection() : "";
@@ -878,8 +788,7 @@ export default function TerminalView({
       void copyText(text).then((ok) => ok && live.current.onCopied(text.length));
       return true;
     };
-    // the native copy (the context menu, a phone's Copy): the selection may
-    // live in the layer, so the text is set on the event ourselves
+    // onCopy serves the native copy (the context menu, a phone's Copy): the selection may live in the layer, so the text is set by hand.
     const onCopy = (e: ClipboardEvent) => {
       const text = selectedText();
       if (!text) return;
@@ -889,12 +798,8 @@ export default function TerminalView({
     };
     mount.addEventListener("copy", onCopy);
 
-    // Keys xterm gets wrong for agent TUIs: Shift+Enter is a newline in
-    // Claude Code only as the Alt+Enter chord (ESC CR); where Ctrl+V is the
-    // paste chord it must reach the browser's paste event instead of
-    // becoming 0x16 (on a Mac it is a keystroke for the app). The handler
-    // sees keydown, keypress AND keyup — Enter's keypress would still emit
-    // "\r" and send the prompt, so every phase of the chord is swallowed.
+    // Shift+Enter is sent as Claude Code's newline chord Alt+Enter (ESC CR), every phase swallowed since Enter's
+    // keypress would still emit "\r" and send the prompt; off a Mac, Ctrl+V must reach the browser's paste event.
     term.attachCustomKeyEventHandler((ev) => {
       if (ev.key === "Enter" && ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
         if (ev.type === "keydown") {
@@ -916,8 +821,7 @@ export default function TerminalView({
       return true;
     });
 
-    // File paths the agent prints become links: a click opens the file where
-    // it lives (this machine or the remote one), at the :line if given.
+    // File paths the agent prints become links: a click opens the file where it lives, at the :line if given.
     const linkProvider = term.registerLinkProvider({
       provideLinks(y, callback) {
         const row = term.buffer.active.getLine(y - 1);
@@ -929,7 +833,7 @@ export default function TerminalView({
           text: m.text,
           decorations,
           activate: (e: MouseEvent) => {
-            if (!live.current.agent && !e.metaKey && !e.ctrlKey) return; // the app's click
+            if (!live.current.agent && !e.metaKey && !e.ctrlKey) return;
             linkUsed = true;
             openUrl(m.url);
           },
@@ -951,9 +855,8 @@ export default function TerminalView({
       },
     });
 
-    // Files dropped or pasted onto the terminal upload into the pane's folder
-    // and their paths are typed, shell-quoted, as if pasted — never sent.
-    // Uploads are serialized so two drops don't interleave their paths.
+    // typeFiles uploads dropped or pasted files into the pane's folder and types their paths shell-quoted,
+    // never sent; uploads are serialized so two drops don't interleave their paths.
     let uploads: Promise<void> = Promise.resolve();
     const typeFiles = (files: File[]) => {
       uploads = uploads.then(async () => {
@@ -987,10 +890,8 @@ export default function TerminalView({
         typeFiles(files);
         return;
       }
-      // Plain text: xterm's own paste, which brackets it when the app asked.
-      // When nobody knows what the app asked (a late attach), a text with
-      // line breaks is bracketed anyway — every shell and agent TUI reads
-      // that as one paste; the alternative sends line one and loses the rest.
+      // a late attach never saw DECSET 2004 and xterm would paste a multi-line text raw, every newline an
+      // Enter that sends the prompt: it is bracketed by hand instead (CRLF/LF → CR, as xterm does)
       const text = e.clipboardData?.getData("text/plain") ?? "";
       if (!text.includes("\n") || term.modes.bracketedPasteMode || pasteModeSeen) return;
       e.preventDefault();
@@ -1002,8 +903,7 @@ export default function TerminalView({
     mount.addEventListener("drop", onDrop);
     mount.addEventListener("paste", onPaste, true);
 
-    // Debounced refit: a window-edge drag otherwise floods the agent with
-    // resizes and Claude Code repaints its whole conversation per resize.
+    // debounced: a window-edge drag would flood the agent with resizes, and Claude Code repaints its whole conversation per resize
     let settle: ReturnType<typeof setTimeout> | null = null;
     const ro = new ResizeObserver(() => {
       if (settle) clearTimeout(settle);
@@ -1046,8 +946,7 @@ export default function TerminalView({
     };
   }, [machineId, paneId]);
 
-  // geometry props changed: re-apply without reconnecting. The pane's own
-  // grid only matters in keep mode.
+  // geometry props re-apply without reconnecting; the pane's own grid only matters in keep mode
   const keepCols = mode === "keep" ? cols : 0;
   const keepRows = mode === "keep" ? rows : 0;
   useEffect(() => {
@@ -1057,8 +956,7 @@ export default function TerminalView({
   useEffect(() => {
     selectRef.current(selectMode);
   }, [selectMode]);
-  // back on screen (not the first show): the grid is measured again and,
-  // with a keyboard, the keys go here — a touch screen's keyboard must not pop
+  // back on screen (not the first show): measured again and, with a keyboard, focused — a touch screen's keyboard must not pop
   const wasActive = useRef(active);
   useEffect(() => {
     const was = wasActive.current;

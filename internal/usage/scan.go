@@ -12,8 +12,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
-// Report is what a period cost on one machine: by day, by project, by
-// model, and the sessions that cost the most.
+// Report is what a period cost on one machine: by day, by project, by model, and the dearest sessions.
 type Report struct {
 	Since    string          `json:"since"`
 	Total    Totals          `json:"total"`
@@ -54,10 +53,8 @@ type SessionTotals struct {
 
 const topSessions = 40
 
-// Scan sums the transcripts under projects from since on: a file not
-// written since then holds nothing newer. Subagent transcripts
-// (<session>/subagents/*.jsonl) count toward their session. Days are cut
-// in loc.
+// Scan sums the transcripts under projects written since (an older file holds nothing newer), days cut in loc.
+// <session>/subagents/*.jsonl count toward their session.
 func Scan(projects string, since time.Time, loc *time.Location) (Report, error) {
 	projects = filepath.Clean(projects)
 	if real, err := filepath.EvalSymlinks(projects); err == nil {
@@ -100,8 +97,6 @@ func Scan(projects string, since time.Time, loc *time.Location) (Report, error) 
 		}
 		defer f.Close()
 		rep.Files++
-		// every response once (the accumulator's rule), attributed as it
-		// commits: to its day, its model, its session
 		dir := ""
 		var first, last time.Time
 		acc := Accumulator{OnCommit: func(r transcript.UsageRecord, t Totals) {

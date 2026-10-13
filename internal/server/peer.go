@@ -18,22 +18,14 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
-// A terminal through the machine's own remuda.
-//
-// herdr lets one client attach to a terminal at a time: when a remote Mac's own
-// remuda holds the attach (someone looks at the pane there), an attach
-// from here over SSH is refused — "already has an attached client". So
-// when a remote machine runs its own remuda (the health probe finds it
-// on 127.0.0.1:7317 and reads its token), the pane WebSocket and the HTTP
-// transport are relayed to it over the master's port forward, and the one
-// attach there serves every viewer on both sides. Without a peer the
-// direct attach stays as it was.
+// A terminal through the machine's own remuda: herdr lets one client attach to a
+// terminal at a time, so a remote that runs a remuda has every viewer relayed to it.
 
 const peerSep = "~" // a relayed HTTP stream's id: "<machine>~<the peer's sid>"
 
 // peerClient is how to reach the peer: its forwarded address and token.
 type peerClient struct {
-	base  string // http://127.0.0.1:<forwarded port>
+	base  string
 	token string
 }
 
@@ -49,15 +41,11 @@ func (s *Server) peerFor(mc *machines.Machine) (*peerClient, error) {
 	return &peerClient{base: "http://" + addr, token: p.Token}, nil
 }
 
-// peerAfterRefusal is the second look: a direct attach was refused because
-// another client holds the terminal — maybe a remuda that started since
-// the last probe. The machine is read again, now.
+// peerAfterRefusal probes the machine again after a refused attach: a remuda may have started there since the last look.
 func (s *Server) peerAfterRefusal(mc *machines.Machine, err error) *peerClient {
 	if mc.Local || !herdr.Refused(err) || s.Health == nil {
 		return nil
 	}
-	// one look, not one per retry: a viewer's reconnects come every few
-	// seconds and a probe is a shell on the machine
 	if r := s.Health.Report(mc.Cfg.ID); r == nil || time.Since(r.At) > 30*time.Second {
 		s.Health.Refresh(mc)
 	}
@@ -69,8 +57,8 @@ func (s *Server) peerAfterRefusal(mc *machines.Machine, err error) *peerClient {
 	return pc
 }
 
-// attachRefused is the message for a viewer when nothing can be done. It
-// travels as a WebSocket close reason, which holds 123 bytes at most.
+// attachRefused is the message for a viewer when nothing can be done.
+// It travels as a WebSocket close reason, which holds 123 bytes at most.
 func attachRefused(mc *machines.Machine, err error) string {
 	msg := "attach failed: " + err.Error()
 	if herdr.Refused(err) {
@@ -82,9 +70,7 @@ func attachRefused(mc *machines.Machine, err error) string {
 	return msg
 }
 
-// relayPaneWS pipes the viewer's socket to the peer's /ws/pane for the
-// same pane: text frames (input, resize) go there, every frame from there
-// comes back as it is.
+// relayPaneWS pipes the viewer's socket to the peer's /ws/pane for the same pane, both ways.
 func (s *Server) relayPaneWS(w http.ResponseWriter, r *http.Request, pc *peerClient, paneID string, cols, rows int) {
 	ctx := r.Context()
 	wsURL := strings.Replace(pc.base, "http://", "ws://", 1) + "/ws/pane?" + url.Values{"machine": {"local"}, "id": {paneID}, "cols": {fmt.Sprint(cols)}, "rows": {fmt.Sprint(rows)}}.Encode()
@@ -121,7 +107,6 @@ func (s *Server) relayPaneWS(w http.ResponseWriter, r *http.Request, pc *peerCli
 		for {
 			typ, data, err := up.Read(rctx)
 			if err != nil {
-				// the peer's close reason reaches the viewer as it is
 				var ce websocket.CloseError
 				if errors.As(err, &ce) {
 					c.Close(ce.Code, ce.Reason)
@@ -148,9 +133,7 @@ func (s *Server) relayPaneWS(w http.ResponseWriter, r *http.Request, pc *peerCli
 	<-done
 }
 
-// peerHTTP forwards one request of the HTTP transport to the peer: the
-// same path, the query as given, the body as given, the answer as it came
-// (status, Content-Type, the end marker).
+// peerHTTP forwards one request of the HTTP transport to the peer and passes its answer back as it came.
 func (s *Server) peerHTTP(w http.ResponseWriter, r *http.Request, pc *peerClient, path string, q url.Values) {
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
@@ -182,8 +165,7 @@ func (s *Server) peerHTTP(w http.ResponseWriter, r *http.Request, pc *peerClient
 	io.Copy(w, res.Body)
 }
 
-// peerOpen opens the HTTP transport's stream on the peer and hands the
-// viewer an id that names the machine.
+// peerOpen opens the HTTP transport's stream on the peer and hands the viewer an id that names the machine.
 func (s *Server) peerOpen(w http.ResponseWriter, r *http.Request, pc *peerClient, machineID, paneID string, cols, rows int) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
@@ -208,8 +190,7 @@ func (s *Server) peerOpen(w http.ResponseWriter, r *http.Request, pc *peerClient
 	writeJSON(w, map[string]any{"sid": machineID + peerSep + out.SID})
 }
 
-// peerStream forwards a transport request whose stream lives on a peer;
-// false when the id is a local one.
+// peerStream forwards a transport request whose stream lives on a peer; false when the id is a local one.
 func (s *Server) peerStream(w http.ResponseWriter, r *http.Request, path string) bool {
 	machineID, remote, ok := splitPeerSID(r.URL.Query().Get("sid"))
 	if !ok {
@@ -231,8 +212,7 @@ func (s *Server) peerStream(w http.ResponseWriter, r *http.Request, path string)
 	return true
 }
 
-// splitPeerSID takes a relayed stream id apart: the machine and the peer's
-// own id. ok is false for a local stream.
+// splitPeerSID takes a relayed stream id apart; ok is false for a local stream.
 func splitPeerSID(sid string) (machineID, remote string, ok bool) {
 	i := strings.Index(sid, peerSep)
 	if i < 0 {
