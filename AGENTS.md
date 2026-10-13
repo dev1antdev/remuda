@@ -38,7 +38,9 @@ agree. `make publish` refuses any branch but `main`
 merged into `release` the same day, or the next fast-forward fails.
 
 Tests are plain `testing` and need no herdr: the ones that start a
-throwaway herdr server skip when `herdr` is not on PATH. The web side has
+throwaway herdr server skip when `herdr` is not on PATH, and a package
+that runs scripts is tested on a `shell.Fake` with a recorded answer
+(`internal/review/wire_test.go`, `internal/jobs/jobs_test.go`). The web side has
 no test runner; `tsc` is the check, and `web/src/markdown.tsx` is written
 so it can be run through esbuild + node by hand.
 
@@ -58,7 +60,7 @@ not style.
 - **`~/.claude` is read-only.** Transcripts are parsed, never written.
   Input reaches an agent only through herdr — `agent.prompt`, else
   `pane.send_text` + `pane.send_keys` — serialized per pane by
-  `paneLock`. Never queue, retry or auto-send what a person typed. The one
+  `sessions.Input`. Never queue, retry or auto-send what a person typed. The one
   exception is the restart after an update the person ran (CLAUDE.md,
   `internal/restart`).
 - **Never `--takeover`.** herdr allows one attached client per terminal;
@@ -113,6 +115,16 @@ not style.
   protocol, an ordering the code cannot show. Nothing above a line that
   restates it, no prose narrating why; if a block needs a paragraph,
   split it into named pieces instead.
+- **Contexts, one port, one adapter.** `internal/server` is the HTTP
+  adapter and holds no logic: a handler reads the request, asks one
+  service and writes the answer; the use case lives in its context
+  package (`sessions`, `chat`, `review`, `updates`, `tasks`, …). A package
+  that only runs scripts on a machine takes a `shell.Host`, never a
+  `*machines.Machine`, and builds its scripts with `internal/script`.
+  Packages hear each other through `internal/events`; the subscriptions
+  are listed once, in `internal/app`. `docs/architecture.md` draws the
+  map; a new feature is a package with its use cases, a file in
+  `internal/server` with its routes, and a line in `app.go`.
 - **Commit messages are one plain sentence** about what changed for the
   person, not a list of files: *"Chats follow an agent update: restarted
   with their sessions resumed"*, *"Machines can be renamed, the local one
@@ -125,16 +137,20 @@ not style.
 
 | To change… | Start in |
 |---|---|
-| An HTTP route, the roster, the pane WebSocket | `internal/server/` (`server.go` holds the mux) |
+| How it all fits, where a new feature goes | `docs/architecture.md`, `internal/app/app.go` |
+| An HTTP route, the roster, the pane WebSocket | `internal/server/` (one file per context; `server.go` holds the mux and the helpers) |
+| What people type into panes, the agents remuda starts | `internal/sessions/` |
+| A script a machine runs, local or over ssh | `internal/script/` (building it), `internal/shell/` (the port, the fake for tests) |
+| Who hears what | `internal/events/`, the subscriptions in `internal/app/app.go` |
 | herdr RPC, the attach PTY, starting herdr | `internal/herdr/` |
 | Remote machines, SSH, remote files | `internal/machines/`, `internal/sshx/` |
 | What the sidebar says about an agent | `internal/radar/`, `web/src/radar.ts`, `Sidebar.tsx` |
 | Pushes and their timing | `internal/push/`, `web/public/sw.js`, `web/src/push.ts` |
-| Transcript parsing, chat turns | `internal/transcript/`, `web/src/Chat.tsx` |
+| Transcript parsing, the conversation behind a pane | `internal/transcript/`, `internal/chat/`, `web/src/Chat.tsx` |
 | The terminal lens: keys, selection, mouse | `web/src/Terminal.tsx`, `KeyBar.tsx` |
 | The Changes lens (review) | `internal/review/`, `web/src/Review.tsx` |
-| Tasks mode | `internal/tasks/`, `web/src/Tasks.tsx`, `tasksApi.ts` |
-| Updates and the restarts after them | `internal/health/`, `internal/jobs/`, `internal/restart/`, `web/src/Updates.tsx` |
+| Tasks mode | `internal/tasks/` (`start.go` starts an agent on a task), `web/src/Tasks.tsx`, `tasksApi.ts` |
+| Updates and the restarts after them | `internal/updates/`, `internal/health/`, `internal/jobs/`, `internal/restart/`, `web/src/Updates.tsx` |
 | Installing and uninstalling: the installer, setup, the service, code-server | `internal/setup/` (the scripts in `scripts/`, embedded), `cmd/remuda/main.go` for the commands |
 | The look | `web/src/styles.css`, `ui.tsx`, `icons.tsx`, `Select.tsx` |
 
