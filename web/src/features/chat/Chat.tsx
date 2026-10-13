@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { actions, app } from "@/app/store";
+import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import { fetchChat, fetchQuick, saveQuick, type ChatResponse, type Part, type QuickPrompt, type Turn } from "@/features/chat/api";
 import { sendKeys, submitPrompt, type PaneUsage } from "@/features/roster/api";
-import type { AgentTarget } from "@/features/agents/targets";
 import SendToAgent from "@/features/agents/SendToAgent";
 import { filesFrom } from "@/lib/transfer";
 import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "@/features/chat/attachments";
@@ -15,30 +16,21 @@ import { whenShort } from "@/lib/time";
 import { Dialog, Notice, useTimedNotice } from "@/ui";
 
 // Chat is the chat lens: the transcript from Claude Code's own session file, read server-side; sending types into the live pane
-export default function Chat({
-  machineId,
-  paneId,
-  status,
-  onOpenFile,
-  agents,
-  origin,
-  dir,
-  jump,
-  usage,
-  active = true,
-}: {
+export default function Chat({ machineId, paneId, status, origin, dir, usage, active = true }: {
   machineId: string;
   paneId: string; // "" shows a transcript on its own (a search jump), read-only
   status: string;
-  onOpenFile: OpenFile;
-  agents: AgentTarget[];
   origin: string; // "workspace on machine", named in a forwarded message
   dir: string;
-  jump?: { session: string; turn: string; n: number } | null;
   usage?: PaneUsage;
   active?: boolean; // the lens on screen; a hidden one keeps its state and waits
 }) {
   const readOnly = !paneId;
+  const agents = useAgentTargets();
+  // the jump names its pane ("" = the viewer): this chat takes it only when it is that pane's
+  const anyJump = app.use((s) => s.jump);
+  const jump = anyJump && anyJump.machineId === machineId && anyJump.paneId === paneId ? anyJump : null;
+  const onOpenFile = useCallback<OpenFile>((target) => actions.openFile(machineId, paneId, target), [machineId, paneId]);
   const activeRef = useRef(active);
   activeRef.current = active;
   const [forward, setForward] = useState<string | null>(null);

@@ -19,9 +19,9 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
   onClose: () => void;
   onDone?: () => void;
 }) {
-  const { data, error, loading } = useQuery(() => listUpdates(machine.id), [machine.id]);
+  const { data, error, loading } = useQuery(() => listUpdates(machine.id), [machine.id], { keep: true });
   const [listTick, setListTick] = useState(0);
-  const recent = useQuery(() => listJobs(machine.id), [machine.id, listTick]);
+  const recent = useQuery(() => listJobs(machine.id), [machine.id, listTick], { keep: true });
   const [picked, setPicked] = useState<Update | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [err, setErr] = useState("");

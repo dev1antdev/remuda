@@ -3,6 +3,11 @@
 // screen: every change goes to the server and the list is re-read.
 
 import { createElement, useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCurrent } from "@/app/current";
+import { actions, app } from "@/app/store";
+import { useAgentTargets } from "@/features/agents/useAgentTargets";
+import { submitPrompt } from "@/features/roster/api";
+import { useRoster } from "@/features/roster/useRoster";
 import { addComment, addTaskLabel, createLabel, createProject, createTask, deleteComment, deleteTask, getTask, listLabels, listProjects, listTasks, patchTask, PRIORITIES, removeTaskLabel, startTask, type Field, type Label, type Project, type Run, type Status, type Task } from "@/features/tasks/api";
 import { FieldChip, FieldInput, valueText } from "@/features/tasks/fields";
 import type { Machine } from "@/features/roster/api";
@@ -34,16 +39,16 @@ const SMART: { id: Smart; label: string; icon: IconName }[] = [
 
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-export default function Tasks({ drawer, closeDrawer, ask, machines, agents, currentPane, onOpenPane, onSend }: {
-  drawer: boolean;
-  closeDrawer: () => void;
-  ask: (text: string, label: string, run: () => void) => void;
-  machines: Machine[];
-  agents: AgentTarget[];
-  currentPane: { machineId: string; paneId: string } | null;
-  onOpenPane: (machineId: string, paneId: string) => void;
-  onSend: (machineId: string, paneId: string, text: string) => Promise<void>;
-}) {
+export default function Tasks() {
+  const drawer = app.use((s) => s.drawer);
+  const closeDrawer = actions.closeDrawer;
+  const ask = actions.ask;
+  const { machines } = useRoster();
+  const agents = useAgentTargets();
+  const located = useCurrent();
+  const currentPane = located ? { machineId: located.machine.id, paneId: located.pane.id } : null;
+  const onOpenPane = actions.selectPane;
+  const onSend = submitPrompt;
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [labels, setLabels] = useState<Label[]>([]);
   const [defaultProject, setDefaultProject] = useState(0);

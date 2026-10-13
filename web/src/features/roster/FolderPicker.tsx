@@ -21,7 +21,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
   const [path, setPath] = useState(start);
   const [typed, setTyped] = useState(start);
   const [hidden, setHidden] = useState(false);
-  const { data, error, loading } = useQuery(() => listDirs(machine.id, path, hidden), [machine.id, path, hidden]);
+  const { data, error, loading } = useQuery(() => listDirs(machine.id, path, hidden), [machine.id, path, hidden], { keep: true });
   useEffect(() => {
     if (data?.path) setTyped(data.path);
   }, [data?.path]);

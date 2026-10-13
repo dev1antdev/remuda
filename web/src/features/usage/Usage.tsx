@@ -30,7 +30,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
   const [days, setDays] = useState("7");
   const [machine, setMachine] = useState("all");
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const { data, error, loading } = useQuery(() => fetchUsage(Number(days), machine === "all" ? "" : machine, tz), [days, machine, tz]);
+  const { data, error, loading } = useQuery(() => fetchUsage(Number(days), machine === "all" ? "" : machine, tz), [days, machine, tz], { keep: true });
   const several = connected(machines).length > 1;
 
   const sum = useMemo(() => {

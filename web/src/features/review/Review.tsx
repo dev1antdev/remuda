@@ -3,6 +3,8 @@
 // that goes to the pane's agent, on its own or under a verdict.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { actions } from "@/app/store";
+import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import { fetchReview, fetchReviewDiff, markReviewed, type Review as ReviewData, type ReviewFile, type Verdict } from "@/features/review/api";
 import { submitPrompt } from "@/features/roster/api";
 import type { AgentTarget } from "@/features/agents/targets";
@@ -27,16 +29,16 @@ export type DraftComment = {
 };
 
 
-export default function Review({ machineId, paneId, dir, agent, agents, currentPane, onOpenFile, onSeen }: {
+export default function Review({ machineId, paneId, dir, agent, onSeen }: {
   machineId: string;
   paneId: string;
   dir: string;
   agent: string; // "" for a shell pane
-  agents: AgentTarget[];
-  currentPane: { machineId: string; paneId: string } | null;
-  onOpenFile: (path: string, line?: number) => void;
   onSeen?: () => void;
 }) {
+  const agents = useAgentTargets();
+  const currentPane = { machineId, paneId };
+  const onOpenFile = (path: string, line?: number) => actions.openFile(machineId, paneId, { path, line });
   const [draft, setDraft] = usePref<DraftComment[]>(`review.draft:${machineId}|${dir}`, []);
   const [pickingAgent, setPickingAgent] = useState(false);
   const [openVerdict, setOpenVerdict] = useState<Verdict | null>(null);

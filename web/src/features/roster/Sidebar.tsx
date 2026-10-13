@@ -3,7 +3,12 @@
 // workspace headers, worktrees as a tree, the busiest first.
 
 import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
-import { refreshHealth, type Health, type Latest, type Machine, type Session } from "@/features/roster/api";
+import { act } from "@/app/act";
+import { useCurrent } from "@/app/current";
+import { actions } from "@/app/store";
+import { DEFAULT_RADAR } from "./radar";
+import { useRoster } from "./useRoster";
+import { refreshHealth, removeMachine, type Health, type Latest, type Machine, type Session } from "@/features/roster/api";
 import { fillClass } from "@/features/usage/format";
 import Logo from "@/ui/Logo";
 import Select from "@/ui/Select";
@@ -19,24 +24,22 @@ import { newer } from "@/lib/version";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
 
-export default function Sidebar({ machines, latest, serverVersion, current, prefs, collapsed, onToggle, onSelect, onMenu, onNewWorkspace, onRemoveMachine, onRenameMachine, onAddMachine, onPrefs, onSchedules, onUsage }: {
-  machines: Machine[];
-  latest?: Latest;
-  serverVersion?: string;
-  current: Current;
-  prefs: RadarPrefs;
-  collapsed: Record<string, boolean>;
-  onToggle: (machineId: string) => void;
-  onSelect: (machineId: string, paneId: string) => void;
-  onMenu: (m: Machine, s: Session, x: number, y: number) => void;
-  onNewWorkspace: (m: Machine) => void;
-  onRemoveMachine: (m: Machine) => void;
-  onRenameMachine: (m: Machine) => void;
-  onAddMachine: () => void;
-  onPrefs: (next: RadarPrefs) => void;
-  onSchedules: () => void;
-  onUsage: () => void;
-}) {
+export default function Sidebar() {
+  const { machines, latest } = useRoster();
+  const serverVersion = __REMUDA_VERSION__ === "dev" ? undefined : __REMUDA_VERSION__;
+  const located = useCurrent();
+  const current: Current = located ? { machineId: located.machine.id, sessionId: located.session.id, paneId: located.pane.id } : null;
+  const [prefs, onPrefs] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
+  const [collapsed, setCollapsed] = usePref<Record<string, boolean>>("collapsed", {});
+  const onToggle = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
+  const onSelect = actions.selectPane;
+  const onMenu = (m: Machine, s: Session, x: number, y: number) => actions.openMenu({ machine: m, session: s, x, y });
+  const onNewWorkspace = (m: Machine) => actions.openDialog({ kind: "workspace", machineId: m.id });
+  const onRemoveMachine = (m: Machine) => actions.ask(`Remove machine “${m.label}”? Nothing on the PC is touched.`, "Remove", () => void act(removeMachine(m.id)));
+  const onRenameMachine = (m: Machine) => actions.openDialog({ kind: "renameMachine", machine: m });
+  const onAddMachine = () => actions.openDialog({ kind: "machine" });
+  const onSchedules = () => actions.openPanel("schedules");
+  const onUsage = () => actions.openPanel("usage");
   const moving = machines.some((m) => m.sessions.some((s) => s.tabs.some((t) => t.panes.some((p) => p.radar?.state === "working" || p.radar?.state === "blocked"))));
   const [step, setStep] = useState(0);
   useEffect(() => {

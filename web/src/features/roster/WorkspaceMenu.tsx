@@ -1,0 +1,48 @@
+// The workspace's ⋯ menu: a tab, a worktree, a rename, close.
+
+import { useEffect } from "react";
+import { act } from "@/app/act";
+import { actions, type RowMenu } from "@/app/store";
+import { killSession, type Machine, type Session } from "./api";
+
+export function closeWorkspace(m: Machine, s: Session) {
+  const n = s.tabs.reduce((a, t) => a + t.panes.length, 0);
+  actions.ask(`Close “${s.name}”? ${n} pane${n === 1 ? "" : "s"} close and the agents in them stop.`, "Close workspace", () => void act(killSession(m.id, s.id)));
+}
+
+export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) {
+  useEffect(() => {
+    const close = () => actions.closeMenu();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, []);
+  const { machine, session } = menu;
+  const tab = session.tabs.find((x) => x.id === session.active_tab_id) ?? session.tabs[0];
+  const item = (label: string, run: () => void, className?: string) => (
+    <button
+      type="button"
+      role="menuitem"
+      className={className}
+      onClick={() => {
+        actions.closeMenu();
+        run();
+      }}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div className="row-menu" role="menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
+      {item("New tab…", () => actions.openDialog({ kind: "tab", machineId: machine.id, session }))}
+      {item("New worktree…", () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }))}
+      {item("Rename workspace…", () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }))}
+      {tab && item(`Rename tab ${tab.named ? `“${tab.label}”` : tab.number}…`, () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }))}
+      {item("Close workspace", () => closeWorkspace(machine, session), "danger")}
+    </div>
+  );
+}
