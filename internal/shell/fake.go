@@ -18,6 +18,8 @@ type Fake struct {
 
 func (f *Fake) ID() string { return f.Name }
 
+func (f *Fake) Label() string { return f.Name }
+
 func (f *Fake) Home() string { return f.Dir }
 
 func (f *Fake) Local() bool { return !f.Remote }

@@ -9,6 +9,14 @@ import (
 	"github.com/dev1antdev/remuda/internal/review"
 )
 
+// The Changes lens: a folder's uncommitted work, the diff of one file, the baseline moved by a look.
+
+func (s *Server) reviewRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/review", s.handleReview)
+	api.HandleFunc("GET /api/review/diff", s.handleReviewDiff)
+	api.HandleFunc("POST /api/review/seen", s.handleReviewSeen)
+}
+
 // reviewTarget resolves the request's machine and insists on an absolute folder.
 func (s *Server) reviewTarget(w http.ResponseWriter, r *http.Request, bodyMachine, dir string) (*machines.Machine, bool) {
 	m, err := s.machineFor(r, bodyMachine)

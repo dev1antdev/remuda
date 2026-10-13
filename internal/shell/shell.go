@@ -29,6 +29,7 @@ type Shell interface {
 type Host interface {
 	Shell
 	ID() string
+	Label() string
 	Home() string
 	Local() bool
 }
@@ -58,6 +59,8 @@ type Local struct {
 }
 
 func (l Local) ID() string { return l.Name }
+
+func (l Local) Label() string { return l.Name }
 
 func (Local) Local() bool { return true }
 

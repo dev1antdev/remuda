@@ -4,6 +4,14 @@ import "net/http"
 
 // Code mode: a machine's code-server behind the guard.
 
+func (s *Server) codeRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/code/{machine}", s.handleCodeStatus)
+	for _, method := range []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"} {
+		api.HandleFunc(method+" /code/{machine}", s.handleCodeProxy)
+		api.HandleFunc(method+" /code/{machine}/", s.handleCodeProxy)
+	}
+}
+
 // handleCodeStatus is GET /api/code/{machine}: whether it answers (cached), and the port.
 func (s *Server) handleCodeStatus(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.Machines.Get(r.PathValue("machine"))
