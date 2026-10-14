@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/health"
+	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/script"
 )
 
@@ -81,10 +82,19 @@ func Plan(what string, r *health.Report) (Update, error) {
 			return Update{}, err
 		}
 		return Update{What: what, Title: "Update Gemini CLI", Command: c + " && gemini --version", Note: "Running agents keep the old version until they are restarted."}, nil
+	case "kimi":
+		if r == nil || r.Kimi == "" {
+			return Update{}, fmt.Errorf("Kimi Code is not installed there")
+		}
+		c, err := via(r.KimiVia, "brew upgrade kimi-code", "npm install -g @moonshot-ai/kimi-code@latest", "kimi upgrade -y")
+		if err != nil {
+			return Update{}, err
+		}
+		return Update{What: what, Title: "Update Kimi Code", Command: c + " && kimi --version", Note: "Running agents keep the old version until they are restarted."}, nil
 	case "agents":
 		var parts []string
 		brew := false // one refresh of the formulae for all of them
-		for _, w := range []string{"claude", "codex", "gemini"} {
+		for _, w := range restart.Kinds("agents") {
 			if u, err := Plan(w, r); err == nil {
 				c := strings.TrimPrefix(u.Command, path)
 				if strings.HasPrefix(c, brewUpdate) {
@@ -112,7 +122,7 @@ func Offered(r *health.Report, l health.Latest) []Update {
 	type cand struct {
 		what, have, latest string
 	}
-	for _, c := range []cand{{"herdr", r.Herdr, l.Herdr}, {"claude", r.Claude, l.Claude}, {"codex", r.Codex, l.Codex}, {"gemini", r.Gemini, l.Gemini}} {
+	for _, c := range []cand{{"herdr", r.Herdr, l.Herdr}, {"claude", r.Claude, l.Claude}, {"codex", r.Codex, l.Codex}, {"gemini", r.Gemini, l.Gemini}, {"kimi", r.Kimi, l.Kimi}} {
 		if c.have == "" {
 			continue
 		}

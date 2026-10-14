@@ -15,6 +15,8 @@ herdr_server=0.9.1
 arch=arm64
 codex=codex-cli 0.153.0
 codex_path=/opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js
+kimi=2.1.1
+kimi_path=/Users/x/.kimi-code/bin/kimi
 remuda=remuda v0.4.0-8-g3262e05
 df=/dev/disk3s5   482797652 188483048 271706504    41% 1511806 2717065040    0%   /System/Volumes/Data
 uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
@@ -23,7 +25,7 @@ uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 	if r.OS != "macOS 26.6.2" || r.Claude != "2.1.285" || r.ClaudeVia != "brew" || r.Herdr != "0.9.3" || r.Remuda != "v0.4.0-8-g3262e05" {
 		t.Fatalf("versions: %+v", r)
 	}
-	if r.HerdrVia != "brew" || r.Arch != "arm64" || r.Codex != "0.153.0" || r.CodexVia != "npm" || r.HerdrServer != "0.9.1" {
+	if r.HerdrVia != "brew" || r.Arch != "arm64" || r.Codex != "0.153.0" || r.CodexVia != "npm" || r.HerdrServer != "0.9.1" || r.Kimi != "2.1.1" || r.KimiVia != "native" {
 		t.Fatalf("via/arch: %+v", r)
 	}
 	if r.DiskUsedPct != 41 || r.DiskFreeGB < 259 || r.DiskFreeGB > 260 {
@@ -71,7 +73,7 @@ func TestNewer(t *testing.T) {
 }
 
 func TestInstalledVia(t *testing.T) {
-	if installedVia("../Cellar/claude-code/2.1.285/bin/claude") != "brew" || installedVia("/opt/homebrew/bin/claude") != "brew" || installedVia("../lib/node_modules/@anthropic-ai/claude-code/cli.js") != "npm" || installedVia("/Users/x/.local/bin/claude") != "native" || installedVia("/Users/x/.nvm/versions/node/v22/bin/claude") != "npm" || installedVia("/usr/bin/claude") != "" {
+	if installedVia("../Cellar/claude-code/2.1.285/bin/claude") != "brew" || installedVia("/opt/homebrew/bin/claude") != "brew" || installedVia("../lib/node_modules/@anthropic-ai/claude-code/cli.js") != "npm" || installedVia("/Users/x/.local/bin/claude") != "native" || installedVia("/Users/x/.nvm/versions/node/v22/bin/claude") != "npm" || installedVia("/Users/x/.kimi-code/bin/kimi") != "native" || installedVia("/usr/bin/claude") != "" {
 		t.Fatal("via")
 	}
 }

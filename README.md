@@ -105,7 +105,7 @@ finds, and remuda as a background service on `127.0.0.1:7317`. On a Mac
 the page then opens in your browser, signed in; elsewhere the sign-in link
 is printed. Nothing asks for sudo, and the same line run again is the
 upgrade. What it cannot do for you is install a coding agent — Claude Code,
-Codex or Gemini CLI — and sign you in to it: do that, then `remuda setup`
+Codex, Gemini CLI or Kimi Code — and sign you in to it: do that, then `remuda setup`
 once more for that agent's hooks. (git, which worktrees and the Changes
 lens use, comes with Apple's Command Line Tools: macOS offers them the
 first time git is called.)
@@ -163,14 +163,14 @@ server whenever none answers — at its own start, and on a remote machine
 when it connects — so agents are there whether or not a terminal window
 is. The server is started through your login shell with a clean
 environment, so its panes see the PATH and exports your terminal has.
-Updates — herdr, Claude Code, Codex, Gemini CLI, and remuda itself
+Updates — herdr, Claude Code, Codex, Gemini CLI, Kimi Code, and remuda itself
 on a remote machine — run from the page: the ⓘ beside a machine shows
 what is out of date with an Update button, the ⋯ menu has "Updates…";
 each shows the exact command first and streams its output. After an
 agent update, the chats running that agent are restarted onto the new
 version: each is asked to leave (its own `/exit`) and started again in the
 same pane with its session resumed (`claude --resume`, `codex resume`,
-`gemini --resume`); a busy chat is restarted a little after it finishes,
+`gemini --resume`, `kimi --session`); a busy chat is restarted a little after it finishes,
 and a message half-typed in a chat's box is lost. The same restart is
 offered on its own ("Restart Claude Code chats") for an agent that
 updated itself. An update of herdr ends with its server on the new

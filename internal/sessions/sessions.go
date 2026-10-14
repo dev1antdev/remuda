@@ -22,7 +22,7 @@ type Agent struct {
 }
 
 var Agents = []Agent{
-	{"claude", "Claude Code"}, {"codex", "Codex"}, {"gemini", "Gemini"}, {"pi", "pi"},
+	{"claude", "Claude Code"}, {"codex", "Codex"}, {"gemini", "Gemini"}, {"kimi", "Kimi Code"}, {"pi", "pi"},
 	{"opencode", "OpenCode"}, {"cursor", "Cursor"}, {"amp", "Amp"}, {"grok", "Grok"}, {"qwen", "Qwen"},
 }
 

@@ -91,6 +91,15 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
                   </dd>
                 </>
               )}
+              {h.kimi && (
+                <>
+                  <dt>Kimi Code</dt>
+                  <dd>
+                    {h.kimi}
+                    {l?.kimi && newer(h.kimi, l.kimi) ? <span className="health-new"> → {l.kimi}</span> : null}
+                  </dd>
+                </>
+              )}
               <dt>herdr</dt>
               <dd>
                 {h.herdr ?? "—"}
