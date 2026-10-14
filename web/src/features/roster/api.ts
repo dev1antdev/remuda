@@ -60,6 +60,8 @@ export type Health = {
   codex_via?: "brew" | "npm" | "native" | "";
   gemini?: string;
   gemini_via?: "brew" | "npm" | "native" | "";
+  kimi?: string;
+  kimi_via?: "brew" | "npm" | "native" | "";
   herdr?: string;
   herdr_via?: "brew" | "installer" | "";
   herdr_server?: string; // the version the running server is on, when one runs
@@ -74,7 +76,7 @@ export type Health = {
 };
 
 // the newest versions out there; remuda is its own newest release on GitHub
-export type Latest = { at: string; claude?: string; codex?: string; gemini?: string; herdr?: string; remuda?: string };
+export type Latest = { at: string; claude?: string; codex?: string; gemini?: string; kimi?: string; herdr?: string; remuda?: string };
 
 export type Tailscale = { state: "starting" | "needs_login" | "running" | "error"; login_url?: string; url?: string; hostname?: string; error?: string };
 

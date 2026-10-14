@@ -7,7 +7,7 @@
 # The remuda service itself is installed by install-service.sh after this.
 # Env: HERDR_INSTALL=brew|installer (default: brew if present, else installer)
 set -e
-PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH
+PATH="$HOME/.local/bin:$HOME/.kimi-code/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH
 
 say() { printf '%s\n' "$*"; }
 
@@ -55,7 +55,7 @@ fi
 
 # 3. integrations for the agents present
 agents=0
-for a in claude codex gemini; do
+for a in claude codex gemini kimi; do
     command -v "$a" >/dev/null 2>&1 || continue
     agents=$((agents + 1))
     st=$(herdr integration status 2>/dev/null | grep "^$a:" || true)
@@ -69,7 +69,7 @@ for a in claude codex gemini; do
     esac
 done
 if [ "$agents" = 0 ]; then
-    say "no coding agent on this machine yet: install Claude Code, Codex or Gemini CLI and sign in to it,"
+    say "no coding agent on this machine yet: install Claude Code, Codex, Gemini CLI or Kimi Code and sign in to it,"
     say "  then run remuda setup once more, for the hooks that tell remuda what the agent is doing"
 fi
 say "setup: done"

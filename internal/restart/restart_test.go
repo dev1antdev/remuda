@@ -7,7 +7,7 @@ import (
 )
 
 func TestKindsCountNames(t *testing.T) {
-	if k := Kinds("agents"); len(k) != 3 {
+	if k := Kinds("agents"); len(k) != 4 {
 		t.Fatalf("agents: %v", k)
 	}
 	if k := Kinds("herdr"); k != nil {
@@ -30,8 +30,11 @@ func TestKindsCountNames(t *testing.T) {
 	if n := agentName("claude", "wD:p5"); n != "claude-wd-p5" {
 		t.Fatalf("name: %s", n)
 	}
-	if Resume("codex", "abc") != "codex resume abc" || Resume("claude", "abc") != "claude --resume abc" || Resume("gemini", "abc") != "gemini --resume abc" {
+	if Resume("codex", "abc") != "codex resume abc" || Resume("claude", "abc") != "claude --resume abc" || Resume("gemini", "abc") != "gemini --resume abc" || Resume("kimi", "abc") != "kimi --session abc" {
 		t.Fatal("resume commands")
+	}
+	if Exit("claude") != "/exit" || Exit("codex") != "/quit" || Exit("kimi") != "/exit" || Exit("herdr") != "" {
+		t.Fatal("exit commands")
 	}
 }
 
