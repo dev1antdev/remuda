@@ -1,4 +1,4 @@
-// The shell: the header, the sidebar and the pane area or the other modes, and the overlays. It also
+// The shell: the header, the sidebar and the pane area or the other modes (the wall, tasks, code), and the overlays. It also
 // keeps the address in step with the selection, hears the service worker and the ⌘K key, and tells the
 // server when a finished pane is being looked at.
 
@@ -14,6 +14,7 @@ import { Toasts } from "@/ui";
 import Header from "./Header";
 import Overlays from "./Overlays";
 import PaneArea from "./PaneArea";
+import Wall from "./Wall";
 import { folderOf, useCurrent } from "./current";
 import { actions, app } from "./store";
 import { useToasts } from "./toasts";
@@ -79,6 +80,7 @@ export default function Shell() {
             <Code machines={machines} currentMachine={current?.machine.id ?? null} currentFolder={current ? folderOf(current) || null : null} visible={mode === "code"} />
           </div>
         )}
+        {mode === "wall" && <Wall />}
         {mode === "tasks" && <Tasks />}
         {mode === "herdr" && (
           <>

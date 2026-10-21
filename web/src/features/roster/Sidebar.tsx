@@ -10,9 +10,10 @@ import { Icon, Notice, useDismiss } from "@/ui";
 import { removeMachine, type Machine, type Session } from "./api";
 import { HealthButton } from "./HealthButton";
 import { MachineMenu } from "./MachineMenu";
-import { DEFAULT_RADAR, SPIN_MS, summary, type RadarPrefs } from "./radar";
+import { DEFAULT_RADAR, summary, type RadarPrefs } from "./radar";
 import { RadarSettings } from "./RadarSettings";
 import { Rows, StateMarks, type Current } from "./rows";
+import { moving, useClock, useSpinner } from "./useClocks";
 import { useRoster } from "./useRoster";
 
 export type { Current } from "./rows";
@@ -33,7 +34,7 @@ export default function Sidebar() {
   const onFold = (key: string) => setWsFolded((f) => ({ ...f, [key]: !f[key] }));
   const onMenu = (m: Machine, s: Session, x: number, y: number) => actions.openMenu({ machine: m, session: s, x, y });
   const onRemoveMachine = (m: Machine) => actions.ask(`Remove machine “${m.label}”? Nothing on the PC is touched.`, "Remove", () => void act(removeMachine(m.id)));
-  const step = useSpinner(machines.some((m) => m.sessions.some((s) => s.tabs.some((t) => t.panes.some((p) => p.radar?.state === "working" || p.radar?.state === "blocked")))));
+  const step = useSpinner(moving(machines));
   const now = useClock(machines);
 
   // the popover is fixed at its button (the sidebar's scroll would clip it); a dialog opening over the page sets #root inert, which closes it too
@@ -128,26 +129,4 @@ export default function Sidebar() {
       })}
     </>
   );
-}
-
-// useSpinner is the one clock behind every braille frame and pulsing question mark, ticking only while something moves
-function useSpinner(moving: boolean): number {
-  const [step, setStep] = useState(0);
-  useEffect(() => {
-    if (!moving) return;
-    const id = setInterval(() => setStep((s) => (s + 1) % 1_000_000), SPIN_MS);
-    return () => clearInterval(id);
-  }, [moving]);
-  return step;
-}
-
-// useClock is "now" for the idle tiers: every half minute, and at every roster change
-function useClock(machines: Machine[]): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-  useEffect(() => setNow(Date.now()), [machines]);
-  return now;
 }

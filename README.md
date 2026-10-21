@@ -65,7 +65,14 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   `pane.send_keys`.
 - **New workspace / close** — `workspace.create` + `agent.start` (any agent
   herdr has a manifest for), `workspace.close`.
-- **Tasks** — the **Agents | Tasks** switch in the top bar opens remuda's
+- **Wall** — the **Wall** mode in the top bar puts every agent on one
+  screen: a tile per agent pane on every connected machine, with its
+  state, the last turns of its conversation and a line to answer it,
+  in a grid that fits the window (S / M / L). Hide the idle ones, hide
+  any tile, bring them back; a click on a tile's head opens that agent
+  in Agents. The tiles ask only for the last few turns, so a wall of a
+  dozen agents stays light.
+- **Tasks** — the **Agents | Wall | Tasks | Code** switch in the top bar opens remuda's
   own task list: projects on the left, Today / Upcoming / All open, quick
   add, done, due dates, priorities, labels, descriptions, search — and a
   **board** per project: the columns a task moves through (New → In
@@ -440,6 +447,13 @@ machine, folder and period. A hit jumps to the turn in the running pane, or
 opens the old transcript read-only. No index, no database: each machine
 scans its own `~/.claude/projects` on demand (remuda's scanner where the
 binary is deployed, grep otherwise).
+
+**Wall:** a mode for the big screen — every agent on every connected
+machine as a tile: its state and workspace, its context and cost, the
+last dozen turns of its conversation, the keys for a question it asks,
+and a line to answer. Tiles keep the roster's order, so nothing jumps
+when an agent changes state; hide the idle ones or any single tile, pick
+the tile size, click a head to open the agent in full.
 
 Planned: a remote-machine session picker, incremental transcript parsing for
 very long sessions.

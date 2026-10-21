@@ -5311,3 +5311,168 @@ button.usage-row:hover {
 .updates-recent .icon.bad {
   color: var(--red);
 }
+
+/* ---- the Wall: every agent on one screen, a tile each ---- */
+.wall {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.wall-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-raised);
+  flex-shrink: 0;
+}
+
+.wall-count {
+  font-size: 12px;
+  color: var(--fg-dim);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.wall-spacer {
+  flex: 1;
+}
+
+.wall-sizes {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.wall-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--tile-min, 460px), 100%), 1fr));
+  grid-auto-rows: minmax(320px, 1fr);
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.tile.is-blocked {
+  border-color: var(--red-ring);
+}
+
+.tile.is-alert {
+  border-color: var(--amber-ring);
+}
+
+.tile-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 8px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.tile-open {
+  flex: 1;
+  min-width: 0;
+  gap: 6px;
+  padding: 4px 4px;
+  font-size: 13px;
+  color: var(--fg);
+  text-align: left;
+}
+
+.tile-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.tile-where {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-faint);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.tile.is-blocked .radar-mark,
+.tile.is-blocked .tile-label {
+  color: var(--red);
+}
+
+.tile.is-done .radar-mark,
+.tile.is-done .tile-label {
+  color: var(--green);
+}
+
+.tile.is-idle_fresh .radar-mark {
+  color: #9fc4ab;
+}
+
+.tile.is-unknown .radar-mark {
+  color: var(--violet);
+}
+
+.tile.is-idle_stale .tile-head {
+  opacity: 0.6;
+}
+
+.tile.is-alert .radar-mark {
+  color: var(--amber);
+  font-weight: 700;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.tile-usage {
+  margin-left: 0;
+}
+
+.tile .chat-log {
+  padding: 10px 12px;
+  gap: 10px;
+}
+
+.tile .turn {
+  max-width: none;
+}
+
+.tile .turn-user {
+  max-width: 85%;
+}
+
+.tile .chat-notice {
+  margin: 0 8px 6px;
+}
+
+.composer.compact {
+  padding: 6px 8px;
+  gap: 6px;
+}
+
+.composer.compact textarea {
+  min-height: 30px;
+}
+
+.composer.compact .composer-send,
+.composer.compact .composer-stop {
+  height: var(--ctl);
+  border-radius: var(--r-md);
+  padding: 0 10px;
+}

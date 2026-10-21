@@ -7,13 +7,13 @@ import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import SendToAgent from "@/features/agents/SendToAgent";
 import type { OpenFile } from "@/features/files/target";
 import { sendKeys, submitPrompt, type PaneUsage } from "@/features/roster/api";
-import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
-import { Icon, Notice, Select, useTimedNotice } from "@/ui";
-import { fetchChat, type ChatResponse } from "./api";
+import { Notice, Select, useTimedNotice } from "@/ui";
 import Composer from "./Composer";
+import { PromptKeys } from "./PromptKeys";
 import { TurnView } from "./TurnView";
+import { useChat } from "./useChat";
 import { useFollowBottom } from "./useFollowBottom";
 
 export default function Chat({ machineId, paneId, status, origin, dir, usage, active = true }: {
@@ -41,29 +41,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, ac
   const busy = status === "run" || status === "input";
 
   // the transcript, at the pane's pace: two seconds while the agent works or asks, ten otherwise
-  const etag = useRef<string | null>(null);
-  useEffect(() => {
-    etag.current = null;
-  }, [machineId, paneId, sessionId, dir]);
-  const { data: chat, error: fetchError, reload } = useQuery<ChatResponse>(
-    async () => {
-      const res = await fetchChat(machineId, paneId, sessionId, etag.current, dir);
-      if (!res) return undefined;
-      etag.current = res.etag;
-      return res.body;
-    },
-    [machineId, paneId, sessionId, dir],
-    { every: busy ? 2000 : 10000, enabled: active },
-  );
-  // a flip of the status or the lens coming on screen is a look at once; not on mount, the query has just gone out
-  const mounted = useRef(false);
-  useEffect(() => {
-    if (!mounted.current) {
-      mounted.current = true;
-      return;
-    }
-    if (active) reload();
-  }, [busy, active, reload]);
+  const { data: chat, error: fetchError } = useChat({ machineId, paneId, sessionId, dir, every: busy ? 2000 : 10000, active });
 
   const follow = useFollowBottom(logRef, { active, chat, startAtBottom: !jump?.turn });
 
@@ -125,20 +103,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, ac
       {!readOnly && status === "input" && (
         <Notice tone="warn" icon="alert-triangle" className="chat-notice">
           The agent is waiting for an answer — check the terminal, or:
-          <span className="prompt-card-keys">
-            <button type="button" className="btn sm" title="Up" aria-label="Up" onClick={() => keys(["up"])}>
-              <Icon name="chevron-up" size={14} />
-            </button>
-            <button type="button" className="btn sm" title="Down" aria-label="Down" onClick={() => keys(["down"])}>
-              <Icon name="chevron-down" size={14} />
-            </button>
-            <button type="button" className="btn sm" onClick={() => keys(["enter"])}>
-              Enter
-            </button>
-            <button type="button" className="btn sm" onClick={() => keys(["esc"])}>
-              Esc
-            </button>
-          </span>
+          <PromptKeys onKeys={keys} />
         </Notice>
       )}
       {error && (
