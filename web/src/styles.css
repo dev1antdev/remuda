@@ -5629,3 +5629,65 @@ body.popout {
     display: none;
   }
 }
+
+/* ---- the review's two columns, the changed words, the keys ---- */
+.review-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 6px 0 12px;
+  font-size: 11px;
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+.review-keys kbd {
+  display: inline-block;
+  min-width: 16px;
+  margin-right: 2px;
+  padding: 0 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  font: 11px/16px var(--mono);
+  color: var(--fg-dim);
+  text-align: center;
+}
+.fv-mark {
+  border-radius: var(--r-xs);
+  color: inherit;
+}
+.fv-diff .add .fv-mark {
+  background: var(--green-ring);
+}
+.fv-diff .del .fv-mark {
+  background: var(--red-ring);
+}
+.review-diff.columns {
+  min-width: 0;
+  overflow-x: hidden;
+}
+.fv-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.fv-pair > .fv-line {
+  min-width: 0;
+  padding-right: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fv-pair > .fv-line + .fv-line {
+  border-left: 1px solid var(--line);
+}
+.fv-pair > .fv-line.empty {
+  background: var(--bg-input);
+}
+@media (max-width: 1180px) {
+  .review-keys {
+    display: none;
+  }
+}
+@media (pointer: coarse) {
+  .review-keys {
+    display: none;
+  }
+}

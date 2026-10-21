@@ -77,7 +77,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
       <div className="pane-body">
         {seen("changes") && (
           <div className="lens-pane" hidden={lens !== "changes"}>
-            <Review key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} paneId={pane.id} dir={folder} agent={pane.agent} onSeen={refresh} />
+            <Review key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} paneId={pane.id} dir={folder} agent={pane.agent} onSeen={refresh} active={lens === "changes"} />
           </div>
         )}
         {seen("chat") && (

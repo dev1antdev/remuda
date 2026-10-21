@@ -1,34 +1,40 @@
-// The Changes lens: a workspace folder's uncommitted work and the commits since the last look, with
-// comments on diff lines gathered into a draft that goes to the pane's agent, on its own or under a verdict.
+// The Changes lens: a workspace folder's uncommitted work and the commits since the last look, the diffs in one
+// column or two with the changed words marked, walked by keys, with comments on diff lines gathered into a draft
+// that goes to the pane's agent, on its own or under a verdict.
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { actions } from "@/app/store";
 import SendToAgent from "@/features/agents/SendToAgent";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import { submitPrompt } from "@/features/roster/api";
-import { usePref } from "@/lib/prefs";
+import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { basename, errMsg, plural } from "@/lib/text";
 import { ago } from "@/lib/time";
 import { Icon, Notice, useTimedNotice } from "@/ui";
 import { fetchReview, fetchReviewDiff, markReviewed, type Review as ReviewData, type ReviewFile, type Verdict } from "./api";
-import { FileRow, Note } from "./Diff";
+import { FileRow } from "./Diff";
+import { Note } from "./Hunk";
+import { KEYS, useReviewKeys } from "./keys";
 import { commentsMessage, place, verdictMessage, type DraftComment } from "./draft";
 import { VerdictDialog } from "./VerdictDialog";
 
 export type { DraftComment } from "./draft";
 
-export default function Review({ machineId, paneId, dir, agent, onSeen }: {
+export default function Review({ machineId, paneId, dir, agent, onSeen, active = true }: {
   machineId: string;
   paneId: string;
   dir: string;
   agent: string; // "" for a shell pane
   onSeen?: () => void;
+  active?: boolean; // the lens on screen: its keys listen
 }) {
   const agents = useAgentTargets();
   const currentPane = { machineId, paneId };
   const onOpenFile = (path: string, line?: number) => actions.openFile(machineId, paneId, { path, line });
   const [draft, setDraft] = usePref<DraftComment[]>(`review.draft:${machineId}|${dir}`, []);
+  const [split, setSplit] = usePref("review.split", !isTouch);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [pickingAgent, setPickingAgent] = useState(false);
   const [openVerdict, setOpenVerdict] = useState<Verdict | null>(null);
   const [actionError, setActionError] = useState("");
@@ -86,26 +92,38 @@ export default function Review({ machineId, paneId, dir, agent, onSeen }: {
     showNotice(`${verdict === "approved" ? "Approved" : "Rejected"} — ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""} has been told.`);
   };
 
-  if (review === null && !error) return <div className="empty">Looking at the folder…</div>;
-  if (review && !review.repo) return <div className="empty">{basename(dir)} is not a git checkout — nothing to review.</div>;
   const files = review?.files ?? [];
   const commits = review?.commits ?? [];
   const lastLook = review?.baseline ? new Date(review.baseline.at) : null;
+  const freshFiles = lastLook ? files.filter((file) => file.fresh) : files;
+  const unchangedFiles = lastLook ? files.filter((file) => !file.fresh) : [];
+  const keys = useReviewKeys({
+    active,
+    root: rootRef,
+    files: [...freshFiles, ...(showUnchanged ? unchangedFiles : [])].map((file) => file.path),
+    openFile,
+    setOpenFile,
+    onOpen: (path, line) => onOpenFile(`${dir}/${path}`, line),
+    toggleSplit: () => setSplit((on) => !on),
+  });
+
+  if (review === null && !error) return <div className="empty">Looking at the folder…</div>;
+  if (review && !review.repo) return <div className="empty">{basename(dir)} is not a git checkout — nothing to review.</div>;
   const lastVerdict = review?.baseline?.verdict;
   const lastLookText = !lastLook ? "not reviewed yet" : lastVerdict === "approved" ? `approved ${ago(lastLook)}` : lastVerdict === "changes" ? `rejected ${ago(lastLook)}` : `since you looked ${ago(lastLook)}`;
   const added = files.reduce((sum, file) => sum + file.added, 0);
   const removed = files.reduce((sum, file) => sum + file.removed, 0);
   const orphanComments = draft.filter((comment) => !files.some((file) => file.path === comment.file));
   const hasAgentToTell = !!agent || agents.length > 0;
-  const freshFiles = lastLook ? files.filter((file) => file.fresh) : files;
-  const unchangedFiles = lastLook ? files.filter((file) => !file.fresh) : [];
   const fileRow = (file: ReviewFile) => (
     <FileRow
       key={`${file.path}|${look}`}
       file={file}
       open={openFile === file.path}
+      split={split}
       onToggle={() => setOpenFile(openFile === file.path ? null : file.path)}
       load={loadDiff}
+      onLoaded={keys.loaded}
       canComment={hasAgentToTell}
       draft={draft.filter((comment) => comment.file === file.path)}
       onComment={(comment) => addComment({ ...comment, file: file.path })}
@@ -115,7 +133,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen }: {
   );
 
   return (
-    <div className="review">
+    <div className="review" ref={rootRef}>
       <div className="review-head">
         <div className="review-title">
           <span className="review-branch">
@@ -127,6 +145,17 @@ export default function Review({ machineId, paneId, dir, agent, onSeen }: {
             {files.length > 0 && ` · ${plural(files.length, "file")} uncommitted +${added} −${removed}`}
           </span>
         </div>
+        <span className="review-keys" aria-hidden="true">
+          {KEYS.map(([first, second, what]) => (
+            <span key={what}>
+              <kbd>{first}</kbd>
+              {second && <kbd>{second}</kbd>} {what}
+            </span>
+          ))}
+        </span>
+        <button type="button" className={`icon-btn${split ? " on" : ""}`} aria-pressed={split} title={split ? "Two columns, the old file on the left (s)" : "One column (s)"} onClick={() => setSplit((on) => !on)}>
+          <Icon name="columns" size={14} />
+        </button>
         <button type="button" className="icon-btn" title="Look again" onClick={lookAgain}>
           <Icon name="refresh-cw" size={14} />
         </button>

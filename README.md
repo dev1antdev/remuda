@@ -410,6 +410,11 @@ uncommitted work — what `git diff` shows, plus new files — with what moved
 since you last looked marked, and the commits made since. A merge or a
 pull brings nothing into the list; only the work in the folder does. Tap a
 line of a diff and write what should change; a few of those make a review.
+A diff shows in one column or two (the old file on the left, the new on
+the right) with the words that changed in a line marked, and the lens
+walks by keys: `j` `k` through the files, `↑` `↓` the lines, `n` `p` the
+hunks, `c` comments on the line, `o` opens the file there, `s` flips the
+columns.
 **Approve** tells the agent the work is reviewed and it can carry on (a
 task it works on can move along), **Reject** tells it what to fix and to
 come back for another look; both take a note and carry your comments, and

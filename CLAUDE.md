@@ -443,9 +443,21 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   minute apart and never two at once per machine, one shell over
   `Snapshot.WorkspaceDirs()`, and the roster carries `session.dir` and
   `session.review {changed, fresh}` for the sidebar badge.
-  `features/review/Review.tsx` draws it (`Diff.tsx` the file rows and
-  hunks, `hunks.ts` the parsing, `VerdictDialog.tsx`, `draft.ts` the
-  comments and the messages they become): commits, files (fresh first), hunks with a comment box whose
+  `features/review/Review.tsx` draws it (`Diff.tsx` the file rows,
+  `Hunk.tsx` a hunk's rows in one column or two with a comment box under
+  the tapped row, `hunks.ts` the parsing — `splitHunks`, `rowsOf`,
+  `pairRows` lays a removed run beside the added run that follows it,
+  `partners`, `changedSpan` the words that differ between a removed line
+  and its replacement, out to word boundaries, drawn as `.fv-mark`;
+  `keys.ts` the keys — `useReviewKeys`, by key position so a Cyrillic
+  layout works: j k walk the files, ↑ ↓ the lines of the open one, n p
+  its hunks, c comments on the focused line, o opens the file there, s
+  flips the two columns (pref `review.split`, on by default with a mouse,
+  the toggle in the lens head); the legend in the head, hidden under
+  1180 px and on touch; the hook listens only while the lens is on screen
+  (`active`) and never over a field, a dialog or the file viewer;
+  `VerdictDialog.tsx`, `draft.ts` the comments and the messages they
+  become): commits, files (fresh first), hunks with a comment box whose
   text goes to the pane's agent through `/api/submit` as
   "Review feedback on path:line". Nothing is written into a repository.
   **Review comments**: in the lens a tap on a diff row opens a comment box

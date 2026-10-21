@@ -36,3 +36,54 @@ export function rowsOf(hunk: DiffHunk): DiffRow[] {
     return row;
   });
 }
+
+export type SplitRow = { old: DiffRow | null; new: DiffRow | null };
+
+// pairRows lays the rows side by side: a context row on both sides, each removed row beside the added row that follows the run it is in, the rest alone
+export function pairRows(rows: DiffRow[]): SplitRow[] {
+  const pairs: SplitRow[] = [];
+  let index = 0;
+  while (index < rows.length) {
+    const row = rows[index]!;
+    if (row.kind !== "del" && row.kind !== "add") {
+      pairs.push({ old: row, new: row });
+      index++;
+      continue;
+    }
+    const removed: DiffRow[] = [];
+    const added: DiffRow[] = [];
+    while (index < rows.length && rows[index]!.kind === "del") removed.push(rows[index++]!);
+    while (index < rows.length && rows[index]!.kind === "add") added.push(rows[index++]!);
+    for (let at = 0; at < Math.max(removed.length, added.length); at++) pairs.push({ old: removed[at] ?? null, new: added[at] ?? null });
+  }
+  return pairs;
+}
+
+// partners maps each removed row to the added row that replaced it and back, for the highlight of what changed between them
+export function partners(pairs: SplitRow[]): Map<DiffRow, DiffRow> {
+  const map = new Map<DiffRow, DiffRow>();
+  for (const pair of pairs) {
+    if (pair.old && pair.new && pair.old !== pair.new) {
+      map.set(pair.old, pair.new);
+      map.set(pair.new, pair.old);
+    }
+  }
+  return map;
+}
+
+// changedSpan is where a removed line and its replacement differ: the lengths of the head and tail they share, moved out
+// to word boundaries so a word changed in the middle is marked whole; null when they share nothing, or everything
+export function changedSpan(oldText: string, newText: string): { head: number; tail: number } | null {
+  const max = Math.min(oldText.length, newText.length);
+  let head = 0;
+  while (head < max && oldText[head] === newText[head]) head++;
+  let tail = 0;
+  while (tail < max - head && oldText[oldText.length - 1 - tail] === newText[newText.length - 1 - tail]) tail++;
+  if (head === oldText.length && oldText.length === newText.length) return null;
+  while (head > 0 && wordChar(oldText[head - 1]) && (wordChar(oldText[head]) || wordChar(newText[head]))) head--;
+  while (tail > 0 && wordChar(oldText[oldText.length - tail]) && (wordChar(oldText[oldText.length - tail - 1]) || wordChar(newText[newText.length - tail - 1]))) tail--;
+  if (head + tail === 0) return null;
+  return { head, tail };
+}
+
+const wordChar = (char: string | undefined) => char !== undefined && /[\p{L}\p{N}_]/u.test(char);
