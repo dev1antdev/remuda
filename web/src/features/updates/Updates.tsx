@@ -10,6 +10,21 @@ import { errMsg } from "@/lib/text";
 import { Dialog, Notice } from "@/ui";
 import { useQuery } from "@/lib/query";
 
+// missingText says why the update asked for is not on the machine's list
+function missingText(what: string): string {
+  switch (what) {
+    case "remuda":
+      return "This remuda cannot be deployed there: that needs a remote machine of the same OS and CPU, and a released build here.";
+    case "remuda-release":
+      return "No newer release of remuda is known for this machine.";
+    case "hooks":
+      return "herdr's hooks there are current.";
+    case "plugins":
+      return "No herdr plugin from GitHub is installed there, or herdr there is older than 0.9.4.";
+  }
+  return `Nothing to update called “${what}” there any more.`;
+}
+
 // lastJob is the job last started per machine, so the dialog opened again shows the one still running
 const lastJob = new Map<string, string>();
 
@@ -33,14 +48,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
     autoPicked.current = true;
     const u = data.find((u) => u.what === what);
     if (u) setPicked(u);
-    else
-      setMissing(
-        what === "remuda"
-          ? "This remuda cannot be deployed there: that needs a remote machine of the same OS and CPU, and a released build here."
-          : what === "remuda-release"
-            ? "No newer release of remuda is known for this machine."
-            : `Nothing to update called “${what}” there any more.`,
-      );
+    else setMissing(missingText(what));
   }, [what, data]);
   useEffect(() => {
     const id = lastJob.get(machine.id);
@@ -165,7 +173,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           <div className="updates-list">
             {data?.map((u) => (
               <button key={u.what} type="button" className="updates-row" onClick={() => setPicked(u)}>
-                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "herdr" || u.what.startsWith("remuda") ? "refresh-cw" : "sparkles"} size={14} />
+                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "herdr" || u.what === "hooks" || u.what === "plugins" || u.what.startsWith("remuda") ? "refresh-cw" : "sparkles"} size={14} />
                 <span className="updates-row-text">
                   <span>{u.title}</span>
                   <span className="dim">{u.note?.split(". ")[0]}</span>

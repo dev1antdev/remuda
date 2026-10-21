@@ -101,7 +101,8 @@ OS and CPU (macOS and Linux, arm64 and amd64), checks it against the
 release's `checksums.txt` and refuses a download that does not match, puts
 it at `~/.local/bin/remuda` and runs `remuda setup`: herdr installed if
 missing, its headless server started, the status hooks for the agents it
-finds, and remuda as a background service on `127.0.0.1:7317`. On a Mac
+finds (and brought up to date when a newer herdr writes newer ones), and
+remuda as a background service on `127.0.0.1:7317`. On a Mac
 the page then opens in your browser, signed in; elsewhere the sign-in link
 is printed. Nothing asks for sudo, and the same line run again is the
 upgrade. What it cannot do for you is install a coding agent — Claude Code,
@@ -163,10 +164,15 @@ server whenever none answers — at its own start, and on a remote machine
 when it connects — so agents are there whether or not a terminal window
 is. The server is started through your login shell with a clean
 environment, so its panes see the PATH and exports your terminal has.
-Updates — herdr, Claude Code, Codex, Gemini CLI, and remuda itself
-on a remote machine — run from the page: the ⓘ beside a machine shows
-what is out of date with an Update button, the ⋯ menu has "Updates…";
-each shows the exact command first and streams its output. After an
+Updates — herdr, Claude Code, Codex, Gemini CLI, herdr's own agent hooks
+and its plugins from GitHub, and remuda itself on a remote machine — run
+from the page: the ⓘ beside a machine shows what is out of date with an
+Update button, the ⋯ menu has "Updates…"; each shows the exact command
+first and streams its output. A newer herdr writes newer hooks into your
+agents' settings: the ⓘ says whose are outdated, an update of herdr
+installs them again by itself, and "Update herdr plugins" is `herdr
+plugin update` for the plugins installed from GitHub (herdr 0.9.4 and
+up). After an
 agent update, the chats running that agent are restarted onto the new
 version: each is asked to leave (its own `/exit`) and started again in the
 same pane with its session resumed (`claude --resume`, `codex resume`,
