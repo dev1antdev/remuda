@@ -5,6 +5,7 @@ import type { OpenFile } from "@/features/files/target";
 import { Icon } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import type { Part, Turn } from "./api";
+import { EDIT_TOOLS, toolPath } from "./footprint";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 export const TurnView = memo(
@@ -41,8 +42,6 @@ export function sameTurn(a: Turn, b: Turn): boolean {
   }
   return true;
 }
-
-const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 
 // Folded renders its body only once opened: thinking and tool I/O can be kilobytes a turn
 function Folded({ className, summary, children }: { className: string; summary: ReactNode; children: ReactNode }) {
@@ -111,13 +110,11 @@ function PartView({ part, onOpenFile }: { part: Part; onOpenFile: OpenFile }) {
 // toolLabel is what a tool call says in one line: its name, and the file or command it was about
 export function toolLabel(part: Part): { name: string; hint: string; file: string | null } {
   const name = part.tool_name ?? "tool";
+  const file = toolPath(part);
+  if (file) return { name, hint: file.length > 70 ? "…" + file.slice(-69) : file, file };
   const input = part.input as Record<string, unknown> | undefined | string;
   if (input && typeof input === "object") {
     const obj = input as Record<string, unknown>;
-    const file = obj["file_path"] ?? obj["notebook_path"] ?? obj["path"];
-    if (typeof file === "string" && file) {
-      return { name, hint: file.length > 70 ? "…" + file.slice(-69) : file, file };
-    }
     const hint = obj["command"] ?? obj["pattern"] ?? obj["url"] ?? obj["description"] ?? obj["query"];
     if (typeof hint === "string") {
       return { name, hint: hint.length > 60 ? hint.slice(0, 60) + "…" : hint, file: null };

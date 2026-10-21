@@ -1,4 +1,4 @@
-// The pane area: the tab strip and the three lenses of the pane on screen, or a transcript on its own.
+// The pane area: the tab strip, the three lenses of the pane on screen with the files rail beside them, or a transcript on its own.
 // A lens stays mounted once seen, scoped to the pane: it never mounts hidden, since a terminal opened
 // unseen would attach at 80×24 and resize the shared pane.
 
@@ -8,6 +8,7 @@ import { closeTab, renameTab } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
 import TabStrip from "@/features/roster/TabStrip";
 import Chat from "@/features/chat/Chat";
+import FilesRail, { FilesRailToggle } from "@/features/chat/FilesRail";
 import Review from "@/features/review/Review";
 import { TerminalLens, TerminalTools } from "@/features/terminal/TerminalLens";
 import { Notice } from "@/ui";
@@ -18,6 +19,7 @@ import { actions, app, type Lens } from "./store";
 export default function PaneArea({ current }: { current: Located | null }) {
   const lens = app.use((s) => s.lens);
   const viewer = app.use((s) => s.viewer);
+  const footprint = app.use((s) => s.footprint);
   const { refresh } = useRoster();
   const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
   const [seenLenses, setSeenLenses] = useState<{ pane: string; lenses: Partial<Record<Lens, true>> }>({ pane: "", lenses: {} });
@@ -57,7 +59,12 @@ export default function PaneArea({ current }: { current: Located | null }) {
         session={session}
         tab={tab}
         pane={pane}
-        tools={lens === "terminal" ? <TerminalTools pane={pane} /> : null}
+        tools={
+          <>
+            {lens === "terminal" && <TerminalTools pane={pane} />}
+            <FilesRailToggle disabled={!pane.agent} />
+          </>
+        }
         onSelect={(paneId) => actions.selectPane(machine.id, paneId)}
         onNewTab={() => actions.openDialog({ kind: "tab", machineId: machine.id, session })}
         onRename={(t, label) => void act(renameTab(machine.id, t.id, label))}
@@ -67,30 +74,44 @@ export default function PaneArea({ current }: { current: Located | null }) {
           actions.ask(msg, "Close tab", () => void act(closeTab(machine.id, t.id)));
         }}
       />
-      {seen("changes") && (
-        <div className="lens-pane" hidden={lens !== "changes"}>
-          <Review key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} paneId={pane.id} dir={folder} agent={pane.agent} onSeen={refresh} />
-        </div>
-      )}
-      {seen("chat") && (
-        <div className="lens-pane" hidden={lens !== "chat"}>
-          <Chat
+      <div className="pane-body">
+        {seen("changes") && (
+          <div className="lens-pane" hidden={lens !== "changes"}>
+            <Review key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} paneId={pane.id} dir={folder} agent={pane.agent} onSeen={refresh} />
+          </div>
+        )}
+        {seen("chat") && (
+          <div className="lens-pane" hidden={lens !== "chat"}>
+            <Chat
+              key={`${machine.id}|${pane.id}`}
+              machineId={machine.id}
+              paneId={pane.id}
+              status={pane.status}
+              origin={`${session.name}${machine.id !== "local" ? ` on ${machine.label}` : ""}`}
+              dir={folder}
+              usage={pane.usage}
+              active={lens === "chat"}
+            />
+          </div>
+        )}
+        {seen("terminal") && (
+          <div className="lens-pane" hidden={lens !== "terminal"}>
+            <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={lens === "terminal"} />
+          </div>
+        )}
+        {footprint && pane.agent && (
+          <FilesRail
             key={`${machine.id}|${pane.id}`}
             machineId={machine.id}
             paneId={pane.id}
             status={pane.status}
-            origin={`${session.name}${machine.id !== "local" ? ` on ${machine.label}` : ""}`}
             dir={folder}
-            usage={pane.usage}
-            active={lens === "chat"}
+            active
+            onOpenFile={(target) => actions.openFile(machine.id, pane.id, target, folder)}
+            onOpenInCode={(path) => actions.openInCode(machine.id, folder, path)}
           />
-        </div>
-      )}
-      {seen("terminal") && (
-        <div className="lens-pane" hidden={lens !== "terminal"}>
-          <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={lens === "terminal"} />
-        </div>
-      )}
+        )}
+      </div>
     </main>
   );
 }

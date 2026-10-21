@@ -286,7 +286,8 @@ for the workspace's folder, with its own terminal, git and extensions (from
 Open VSX). Each machine runs its own copy, bound to `127.0.0.1:7320` with
 no auth of its own; remuda is the door: `/code/<machine>/` goes through
 the same bearer token, locally to the port, remotely through a port
-forwarded over the ssh master the roster already uses. Install it on a
+forwarded over the ssh master the roster already uses. A file from the
+files rail opens here on its own tab. Install it on a
 machine with
 
 ```sh
@@ -381,6 +382,15 @@ strip above the pane, machines mirrored from `herdr machine list`, and a
 open the file where it lives (local or remote), with a **Changes** tab
 showing its uncommitted `git diff`. A path is a link when it names a file
 (`main.go`, `docs/plan.md`, `.env`), not a folder.
+
+**Files the agent touched:** a rail beside the chat and the terminal (the
+folder button in the tab strip) lists every file the agent edited or read
+in this conversation, from its own tool calls — newest first, with how
+many edits, when it last touched the file and a mark when that last edit
+failed. A click opens the file with its uncommitted diff; the code button
+opens it in the Code mode, VS Code on that machine. Edits an agent made
+through shell commands are not its tool calls: the Changes lens shows
+those. Hidden on a phone.
 
 **Attachments:** the paperclip, a pasted screenshot (Ctrl/Cmd+V) or a drop
 uploads into the pane's folder (`.remuda/uploads/`) and mentions the file

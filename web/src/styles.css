@@ -5497,3 +5497,135 @@ body.popout {
 .popout-body .placeholder {
   margin: auto;
 }
+
+/* ---- the files rail: what the agent touched this session, beside the lenses ---- */
+.pane-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+.pane-body > .lens-pane {
+  min-width: 0;
+}
+.footprint {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.footprint-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: var(--ctl-lg);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 600;
+}
+.footprint-sub {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+.footprint-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.fp-row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-sm);
+  transition: background var(--fast) var(--ease);
+}
+.fp-row:hover,
+.fp-row:focus-within {
+  background: var(--bg-hover);
+}
+.fp-open {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 5px 8px;
+  color: var(--fg);
+  text-align: left;
+}
+.fp-open:hover {
+  background: none;
+  color: var(--fg);
+}
+.fp-path {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.fp-name {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.fp-dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-faint);
+}
+.fp-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+.fp-row.recent .fp-name {
+  color: var(--accent);
+}
+.fp-failed {
+  color: var(--amber);
+}
+.fp-code {
+  margin-right: 4px;
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease), background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.fp-row:hover .fp-code,
+.fp-row:focus-within .fp-code {
+  opacity: 1;
+}
+.fp-fold {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 4px;
+}
+.fp-fold > .linkish {
+  align-self: flex-start;
+}
+@media (pointer: coarse) {
+  .fp-code {
+    opacity: 1;
+  }
+}
+@media (max-width: 920px) {
+  .footprint,
+  .fp-toggle {
+    display: none;
+  }
+}

@@ -110,7 +110,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `ReadFrom`, `Turns`, `ResolveSession`, `Live` / `Chain` / `Lineage`
   (every file a conversation lived in) and `Predecessor`, in process here
   and by script over a `shell.Host` on a remote. `Turn.Answer`,
-  `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with. The chat lens (`features/chat/Chat.tsx`: the transcript through `useChat.ts`, the one fetch hook — every 2 s while the agent works or asks, 10 s otherwise, a 304 = unchanged, `last=N` for a wall tile; `Composer.tsx` (`compact` in a tile), `TurnView.tsx`, `PromptKeys.tsx` (↑ ↓ Enter Esc for a question), `Tail.tsx` (a tile's chat: the last 12 turns, 3 s / 15 s), `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
+  `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with. The chat lens (`features/chat/Chat.tsx`: the transcript through `useChat.ts`, the one fetch hook — every 2 s while the agent works or asks, 10 s otherwise, a 304 = unchanged, `last=N` for a wall tile; `Composer.tsx` (`compact` in a tile), `TurnView.tsx`, `PromptKeys.tsx` (↑ ↓ Enter Esc for a question), `Tail.tsx` (a tile's chat: the last 12 turns, 3 s / 15 s), `FilesRail.tsx` (the **files rail** beside the lenses: every file the agent edited or read in this conversation since its last compaction, from its own tool calls — `footprint.ts` is the pure part, tested: `toolPath` reads `file_path` / `notebook_path` from an object input or from one the server cut to a string at 8 KB, so `TurnView` links a big Write too; edited files first by their last touch, the ones only read folded; its own `useChat` poll at a tile's pace, only while on screen; a row opens the file viewer on its changes, the code button `actions.openInCode`; a change made through a shell command is the Changes lens's to show, not the rail's), `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
   only when the reader is there and not selecting or dragging; an upward
   wheel or finger lets go at once, and `TurnView` (`sameTurn`) re-renders only when a
   turn's content changed, so a selection survives the polls.
@@ -385,7 +385,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   lens. `act.ts` (`act(promise)`: refresh the roster, else toast the
   error), `toasts.tsx`, `Shell.tsx` (URL sync, ⌘K, the service worker's
   select-pane, mark-seen, the four modes), `Header.tsx`, `PaneArea.tsx`
-  (the lenses, mounted once seen), `Wall.tsx` (the **Wall mode**: every
+  (the lenses, mounted once seen, and the files rail beside them in
+  `.pane-body` — store field `footprint` from the pref of that name,
+  default on with a mouse, its toggle in the tab strip's tools slot
+  whatever the lens so nothing in the strip moves, disabled for a shell
+  pane, hidden with the rail under 920 px), `Wall.tsx` (the **Wall mode**: every
   agent pane on a connected machine as a tile — the sidebar row's head
   (mark, logo, label, workspace · machine, context % · cost), the last 12
   turns through `features/chat/Tail`, a compact composer; a click on the
@@ -474,7 +478,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   per master. `GET /api/code/{machine}` probes `/healthz` (a good answer is
   cached 15s; `?check=1` re-probes). `web/src/features/code/Code.tsx` is the picker
   (machine, then a folder from the roster's workspaces) and the iframe,
-  kept mounted behind the other modes once opened. The flag `-code-port`
+  kept mounted behind the other modes once opened. `actions.openInCode(machine,
+  folder, path)` (the files rail's code button; store field `codeFile`)
+  switches the mode, moves the picker to that machine and folder and
+  remounts the frame with `payload=[["openFile","vscode-remote://<page
+  host>/path"]]`, which the workbench opens on load — the authority is
+  the page's own host because the proxy keeps `Host`. The flag `-code-port`
   changes the port on every machine at once.
 - `web/src/lib/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
   provider (`terminal/engine/links.ts`) and the chat linkifier; keeps a
