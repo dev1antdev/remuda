@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/transcript"
@@ -18,7 +19,9 @@ func (s *Server) chatRoutes(api *http.ServeMux) {
 
 var sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9-]{1,80}$`)
 
-// handleChat is GET /api/chat?machine&pane[&session] or ?machine&dir&session, with an ETag per file version.
+const maxLastTurns = 200
+
+// handleChat is GET /api/chat?machine&pane[&session] or ?machine&dir&session, with an ETag per file version; last=N answers the last N turns only (a wall tile).
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.machineFor(r, "")
 	if err != nil {
@@ -33,6 +36,15 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if paneID == "" && (dir == "" || sessionID == "") {
 		httpErr(w, 400, fmt.Errorf("pane, or dir and session, required"))
 		return
+	}
+	last := 0
+	if v := r.URL.Query().Get("last"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > maxLastTurns {
+			httpErr(w, 400, fmt.Errorf("last must be 1..%d", maxLastTurns))
+			return
+		}
+		last = n
 	}
 	conv, err := s.Chat.Open(mc, paneID, sessionID, dir)
 	var notFound *chat.NotFoundError
@@ -57,6 +69,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	turns, err := conv.Turns()
+	if last > 0 {
+		turns, err = conv.LastTurns(last)
+	}
 	if err != nil {
 		httpErr(w, http.StatusBadGateway, err)
 		return

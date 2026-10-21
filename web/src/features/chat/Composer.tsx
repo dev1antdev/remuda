@@ -1,5 +1,6 @@
 // The composer owns the draft, so typing never re-renders the transcript: attachments uploaded at once,
-// quick prompts, dictation, Enter to send (Shift+Enter a new line; on a phone the button sends).
+// quick prompts, dictation, Enter to send (Shift+Enter a new line; on a phone the button sends). The compact
+// one, in a wall tile, is the line and its buttons alone.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { sendKeys, submitPrompt } from "@/features/roster/api";
@@ -11,7 +12,7 @@ import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments"
 import { useDictation } from "./dictation";
 import { QuickPromptsDialog, QuickPromptsMenu } from "./QuickPrompts";
 
-export default function Composer({ machineId, paneId, working, dir }: { machineId: string; paneId: string; working: boolean; dir: string }) {
+export default function Composer({ machineId, paneId, working, dir, compact = false }: { machineId: string; paneId: string; working: boolean; dir: string; compact?: boolean }) {
   // the insertions read the draft through a ref: a state updater must stay free of side effects
   const [draft, setDraftState] = useState("");
   const draftRef = useRef("");
@@ -124,7 +125,7 @@ export default function Composer({ machineId, paneId, working, dir }: { machineI
         </div>
       )}
       <div
-        className={`composer${dragOver ? " drag" : ""}`}
+        className={`composer${compact ? " compact" : ""}${dragOver ? " drag" : ""}`}
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes("Files")) {
             e.preventDefault();
@@ -151,41 +152,45 @@ export default function Composer({ machineId, paneId, working, dir }: { machineI
             void attach(files);
           }}
         />
-        <button
-          type="button"
-          className="icon-btn lg composer-attach"
-          title={`Attach files (up to ${MAX_ATTACHMENTS}) — they are uploaded into the pane's folder`}
-          aria-label="Attach files"
-          disabled={att.items.length >= MAX_ATTACHMENTS}
-          onClick={() => picker.current?.click()}
-        >
-          <Icon name="paperclip" size={16} />
-        </button>
-        <button
-          type="button"
-          className={`icon-btn lg composer-attach${quick ? " on" : ""}`}
-          title="Quick prompts"
-          aria-label="Quick prompts"
-          aria-expanded={!!quick}
-          onClick={(e) => {
-            e.stopPropagation();
-            const r = e.currentTarget.getBoundingClientRect();
-            setQuick(quick ? null : { x: r.left, y: r.top - 6 });
-          }}
-        >
-          <Icon name="zap" size={16} />
-        </button>
-        {dictation.supported && (
-          <button
-            type="button"
-            className={`icon-btn lg composer-attach composer-mic${dictation.listening ? " listening" : ""}`}
-            title={dictation.listening ? "Stop dictating" : "Dictate (on this device's speech recognition)"}
-            aria-label={dictation.listening ? "Stop dictating" : "Dictate"}
-            aria-pressed={dictation.listening}
-            onClick={dictation.toggle}
-          >
-            <Icon name="mic" size={16} />
-          </button>
+        {!compact && (
+          <>
+            <button
+              type="button"
+              className="icon-btn lg composer-attach"
+              title={`Attach files (up to ${MAX_ATTACHMENTS}) — they are uploaded into the pane's folder`}
+              aria-label="Attach files"
+              disabled={att.items.length >= MAX_ATTACHMENTS}
+              onClick={() => picker.current?.click()}
+            >
+              <Icon name="paperclip" size={16} />
+            </button>
+            <button
+              type="button"
+              className={`icon-btn lg composer-attach${quick ? " on" : ""}`}
+              title="Quick prompts"
+              aria-label="Quick prompts"
+              aria-expanded={!!quick}
+              onClick={(e) => {
+                e.stopPropagation();
+                const r = e.currentTarget.getBoundingClientRect();
+                setQuick(quick ? null : { x: r.left, y: r.top - 6 });
+              }}
+            >
+              <Icon name="zap" size={16} />
+            </button>
+            {dictation.supported && (
+              <button
+                type="button"
+                className={`icon-btn lg composer-attach composer-mic${dictation.listening ? " listening" : ""}`}
+                title={dictation.listening ? "Stop dictating" : "Dictate (on this device's speech recognition)"}
+                aria-label={dictation.listening ? "Stop dictating" : "Dictate"}
+                aria-pressed={dictation.listening}
+                onClick={dictation.toggle}
+              >
+                <Icon name="mic" size={16} />
+              </button>
+            )}
+          </>
         )}
         {quick && (
           <QuickPromptsMenu
@@ -206,8 +211,8 @@ export default function Composer({ machineId, paneId, working, dir }: { machineI
         <textarea
           ref={area}
           value={draft}
-          placeholder={isTouch ? "Message the agent… (Enter = new line)" : "Message the agent… (Shift+Enter = new line)"}
-          rows={Math.min(6, Math.max(1, draft.split("\n").length))}
+          placeholder={compact ? "Message…" : isTouch ? "Message the agent… (Enter = new line)" : "Message the agent… (Shift+Enter = new line)"}
+          rows={Math.min(compact ? 3 : 6, Math.max(1, draft.split("\n").length))}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={(e) => (caret.current = e.target.selectionStart)}
           onSelect={(e) => (caret.current = e.currentTarget.selectionStart)}

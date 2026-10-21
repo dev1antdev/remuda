@@ -4,7 +4,7 @@
 import type { Lens, Mode, Selection } from "./store";
 
 const LENSES: Lens[] = ["chat", "terminal", "changes"];
-const MODES: Mode[] = ["herdr", "tasks", "code"];
+const MODES: Mode[] = ["herdr", "wall", "tasks", "code"];
 
 export function readURL(): { requested: Selection | null; mode?: Mode; lens?: Lens } {
   const q = new URLSearchParams(location.search);

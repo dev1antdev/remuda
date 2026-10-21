@@ -6,6 +6,7 @@ package chat
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
@@ -25,6 +26,8 @@ func (e *NotFoundError) Unwrap() error { return e.Err }
 type Service struct {
 	Machines *machines.Manager
 	Watch    *watch.Watcher
+
+	tails tailCache
 }
 
 // Pane is a pane from the watcher's cache with its snapshot; the pane is nil when unknown, both when the machine has no snapshot.
@@ -133,6 +136,7 @@ type Conversation struct {
 	Sessions []transcript.SessionInfo
 
 	reader *transcript.Reader
+	tails  *tailCache
 }
 
 // ETag changes whenever the file does.
@@ -145,10 +149,75 @@ func (conv Conversation) Turns() ([]transcript.Turn, error) {
 	return conv.reader.Turns(conv.Path, conv.Version)
 }
 
+// LastTurns is the conversation's last n turns at the version Open saw, parsed once per version however many tiles ask for them.
+func (conv Conversation) LastTurns(n int) ([]transcript.Turn, error) {
+	key := tailKey{path: conv.Path, version: conv.Version, n: n}
+	if conv.tails != nil {
+		if turns, ok := conv.tails.lookup(key); ok {
+			return turns, nil
+		}
+	}
+	turns, err := conv.Turns()
+	if err != nil {
+		return nil, err
+	}
+	turns = lastTurns(turns, n)
+	if conv.tails != nil {
+		conv.tails.remember(key, turns)
+	}
+	return turns, nil
+}
+
+// lastTurns is the last n of the turns, all of them when there are no more than n.
+func lastTurns(turns []transcript.Turn, n int) []transcript.Turn {
+	if n <= 0 || len(turns) <= n {
+		return turns
+	}
+	return turns[len(turns)-n:]
+}
+
+// tailCache keeps the last turns of a session file at a version: the wall's tiles and the chat lens ask for the same slice within seconds of each other.
+type tailCache struct {
+	mu      sync.Mutex
+	entries map[tailKey][]transcript.Turn
+	order   []tailKey // oldest first
+}
+
+type tailKey struct {
+	path    string
+	version transcript.Version
+	n       int
+}
+
+const tailCacheSize = 64
+
+func (c *tailCache) lookup(key tailKey) ([]transcript.Turn, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	turns, ok := c.entries[key]
+	return turns, ok
+}
+
+func (c *tailCache) remember(key tailKey, turns []transcript.Turn) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.entries == nil {
+		c.entries = map[tailKey][]transcript.Turn{}
+	}
+	if _, known := c.entries[key]; !known {
+		c.order = append(c.order, key)
+	}
+	c.entries[key] = turns
+	for len(c.order) > tailCacheSize {
+		delete(c.entries, c.order[0])
+		c.order = c.order[1:]
+	}
+}
+
 // Open finds the conversation to show: a pane's live one (followed through compactions, unless a session of its folder is asked for by id),
 // or, without a pane, a session by folder and id, read-only. An unknown pane or session is a NotFoundError; a Path of "" is an empty chat.
 func (c *Service) Open(mc *machines.Machine, paneID, sessionID, dir string) (Conversation, error) {
-	conv := Conversation{reader: mc.Transcripts}
+	conv := Conversation{reader: mc.Transcripts, tails: &c.tails}
 	if paneID == "" {
 		path, err := mc.Transcripts.ResolveSession(dir, "id", sessionID)
 		if err != nil {

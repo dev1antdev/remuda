@@ -110,7 +110,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `ReadFrom`, `Turns`, `ResolveSession`, `Live` / `Chain` / `Lineage`
   (every file a conversation lived in) and `Predecessor`, in process here
   and by script over a `shell.Host` on a remote. `Turn.Answer`,
-  `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with. The chat lens (`features/chat/Chat.tsx`: the transcript on `useQuery`, every 2 s while the agent works or asks, 10 s otherwise, a 304 = unchanged; `Composer.tsx`, `TurnView.tsx`, `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
+  `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with. The chat lens (`features/chat/Chat.tsx`: the transcript through `useChat.ts`, the one fetch hook — every 2 s while the agent works or asks, 10 s otherwise, a 304 = unchanged, `last=N` for a wall tile; `Composer.tsx` (`compact` in a tile), `TurnView.tsx`, `PromptKeys.tsx` (↑ ↓ Enter Esc for a question), `Tail.tsx` (a tile's chat: the last 12 turns, 3 s / 15 s), `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
   only when the reader is there and not selecting or dragging; an upward
   wheel or finger lets go at once, and `TurnView` (`sameTurn`) re-renders only when a
   turn's content changed, so a selection survives the polls.
@@ -384,9 +384,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   once at load, so a link or a reload lands on the same pane in the same
   lens. `act.ts` (`act(promise)`: refresh the roster, else toast the
   error), `toasts.tsx`, `Shell.tsx` (URL sync, ⌘K, the service worker's
-  select-pane, mark-seen, the three modes), `Header.tsx`, `PaneArea.tsx`
-  (the lenses, mounted once seen), `Overlays.tsx` (panels, dialogs, the
-  menu, the confirm, the file viewer). The roster is read once for the
+  select-pane, mark-seen, the four modes), `Header.tsx`, `PaneArea.tsx`
+  (the lenses, mounted once seen), `Wall.tsx` (the **Wall mode**: every
+  agent pane on a connected machine as a tile — the sidebar row's head
+  (mark, logo, label, workspace · machine, context % · cost), the last 12
+  turns through `features/chat/Tail`, a compact composer; a click on the
+  head opens the pane in Agents on the chat lens. `features/roster/wall.ts`
+  says which panes make a tile and in what order — the roster's, stable, so
+  no tile jumps on a status change — and leaves out the ones hidden by hand
+  (pref `wall.hidden`, the eye on a tile, "Show N hidden" resets) and, with
+  "Hide idle", the idle ones past the radar's fresh tier; pref `wall` holds
+  the size S/M/L (`TILE_MIN` 360/460/600 px, an auto-fill grid) and the idle
+  switch; no sidebar in the mode, "+ Agent" opens the New workspace
+  dialog), `Overlays.tsx` (panels, dialogs, the menu, the confirm, the
+  file viewer). The roster is read once for the
   page: `features/roster/useRoster.tsx` (`RosterProvider`: `useQuery`
   every 3 s with the ETag, `stale` when the server is newer; `useRoster()`
   hands out machines, agents, latest, tailscale, version, offline).
@@ -626,7 +637,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `StartAgentDialog.tsx`, `prompt.ts`, `html.tsx`, `pieces.tsx`, `api.ts`);
   descriptions are rendered through an allow-list into React nodes (never
   innerHTML) and edited as plain text that goes back as paragraphs. The
-  top-bar `mode-switch` (Agents | Tasks | Code) is a per-device pref.
+  top-bar `mode-switch` (Agents | Wall | Tasks | Code) is a per-device pref.
   **Workflow**: every project has its columns (`statuses`: title, colour,
   `kind` open|done, position, the flags `on_new` / `on_start` /
   `on_finish` on at most one column each) — New / In progress / Testing /
@@ -719,7 +730,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   by folder and id — a `NotFoundError` for an unknown one), `SessionFile`,
   `LastWrite` / `LastWriteOfPane`, `LastTurn`, `LastToolCalls`,
   `LastAnswer`: the radar's recovery, the watchdog and the task watch read
-  through it. In the UI a tab is renamed in
+  through it. `GET /api/chat?last=N` (1..200) answers the last N turns only
+  — `Conversation.LastTurns`, the slice kept per file version in
+  `tailCache`, so the wall's tiles and the lens on the same pane parse a
+  file once per change; the ETag is the same either way, and every GET with
+  a pane still marks it seen. In the UI a tab is renamed in
   place by double-click, or from the workspace's ⋯ menu (touch). The roster carries an ETag (304 when unchanged) and
   the agent list. Local files stream through `http.ServeContent` (Range for
   video); the WS uses per-message compression and coalesces queued chunks.

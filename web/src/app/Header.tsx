@@ -25,6 +25,9 @@ export default function Header({ current }: { current: Located | null }) {
         <button className={mode === "herdr" ? "on" : ""} onClick={() => actions.setMode("herdr")} title="Your agents and terminals, from herdr">
           Agents
         </button>
+        <button className={mode === "wall" ? "on" : ""} onClick={() => actions.setMode("wall")} title="Every agent on one screen, a tile each">
+          Wall
+        </button>
         <button className={mode === "tasks" ? "on" : ""} onClick={() => actions.setMode("tasks")} title="Your tasks, kept on this remuda">
           Tasks
         </button>

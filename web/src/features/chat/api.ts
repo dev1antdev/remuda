@@ -24,11 +24,13 @@ export async function fetchChat(
   sessionId: string | null,
   etag: string | null,
   dir?: string,
+  last?: number, // only the last N turns: a wall tile
 ): Promise<{ body: ChatResponse; etag: string | null } | null> {
   const q = new URLSearchParams({ machine: machineId });
   if (paneId) q.set("pane", paneId);
   else if (dir) q.set("dir", dir);
   if (sessionId) q.set("session", sessionId);
+  if (last) q.set("last", String(last));
   const res = await fetch(`/api/chat?${q}`, { headers: etag ? { "If-None-Match": etag } : {} });
   if (res.status === 304) return null;
   await check(res);
