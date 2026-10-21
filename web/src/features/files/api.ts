@@ -11,7 +11,9 @@ export type FileInfo = {
 
 export type FileDiff = { repo?: string; untracked?: boolean; diff: string };
 
-export const fsStat = (machineId: string, paneId: string, path: string): Promise<FileInfo> => getJSON(`/api/fs/stat?${new URLSearchParams({ machine: machineId, pane: paneId, path })}`);
+// fsStat resolves a path on a machine: relative to the pane's folder, or to dir when there is no pane (a transcript on its own, a task's comments)
+export const fsStat = (machineId: string, paneId: string, path: string, dir = ""): Promise<FileInfo> =>
+  getJSON(`/api/fs/stat?${new URLSearchParams({ machine: machineId, pane: paneId, path, ...(dir ? { dir } : {}) })}`);
 
 export type DirListing = { path: string; parent?: string; home?: string; dirs: { name: string; git: boolean }[] };
 

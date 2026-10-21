@@ -23,7 +23,7 @@ func (s *Server) fileRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/fs/upload", s.handleFsUpload)
 }
 
-// handleFsStat resolves a path the agent printed (absolute, ~/, or relative to the pane's folder) and says what kind of file it is.
+// handleFsStat resolves a path the agent printed (absolute, ~/, or relative to the pane's folder — to dir when there is no pane) and says what kind of file it is.
 func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.machineFor(r, "")
 	if err != nil {
@@ -35,6 +35,9 @@ func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 		if pane, err := s.findPane(mc, paneID); err == nil {
 			cwd = pane.Dir()
 		}
+	}
+	if cwd == "" {
+		cwd = r.URL.Query().Get("dir")
 	}
 	info, err := mc.ResolvePath(cwd, r.URL.Query().Get("path"))
 	if err != nil {

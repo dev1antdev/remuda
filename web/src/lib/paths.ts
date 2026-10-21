@@ -1,6 +1,8 @@
 // Finds file paths in a line of text the way an agent prints them (absolute, ~/…, ./…, relative with
-// a slash, or a bare name with a code-ish extension, optionally :line[:col]) and URLs, which are never
-// paths. Shared by the terminal link provider and the chat linkifier.
+// a slash, a bare name with a code-ish extension, a dotfile such as .env, optionally :line[:col]) and
+// URLs, which are never paths. A link needs a name a file would have — a dotfile or a name with an
+// extension — so a folder (internal/server) or a slashed phrase (Approve/Reject) is none. Shared by the
+// terminal link provider and the chat linkifier.
 
 export type PathMatch = {
   start: number;
@@ -12,14 +14,21 @@ export type PathMatch = {
 
 const EXT =
   "(?:go|ts|tsx|js|jsx|mjs|cjs|py|rb|rs|java|kt|swift|c|h|cpp|hpp|cs|php|sh|zsh|bash|sql|md|txt|json|ya?ml|toml|ini|cfg|conf|env|css|scss|html?|xml|svg|png|jpe?g|gif|webp|pdf|mp4|webm|mov|lock|log|csv|proto|graphql|tf|vue|svelte|dart|ex|exs|hs|lua|pl|r|scala|zig|mod|sum)";
+// the dotfiles agents name on their own; a bare ".md" in prose is an extension, not a file
+const DOTFILE = String.raw`(?:env(?:\.[\w-]+)?|envrc|gitignore|gitattributes|gitmodules|dockerignore|npmrc|nvmrc|npmignore|editorconfig|prettierrc|eslintrc|babelrc|htaccess|tool-versions|python-version|ruby-version|node-version|gitconfig|zshrc|zprofile|bashrc|bash_profile|profile|vimrc)`;
 
-const SEG = String.raw`[\w.@%+=-]+`;
+const WORD = String.raw`\p{L}\p{N}_`;
+const SEG = String.raw`[${WORD}.@%+=-]+`;
+const NAME = String.raw`[${WORD}@%+-][${WORD}.@%+-]*`;
 const PATH_RE = new RegExp(
   String.raw`(?:~|\.{1,2})?/(?:${SEG}/)*${SEG}` + // absolute, ~/, ./, ../
     String.raw`|(?:${SEG}/)+${SEG}` + // relative with a slash
-    String.raw`|[\w@%+-][\w.@%+-]*\.${EXT}\b`, // bare filename with a known extension
-  "g",
+    String.raw`|\.?${NAME}\.${EXT}\b` + // bare filename with a known extension, its leading dot kept (.mcp.json)
+    String.raw`|(?<![${WORD}.@%+/-])\.${DOTFILE}\b`, // a dotfile
+  "gu",
 );
+// a name a file would have: a dotfile, or an extension with a letter in it (v1.2.3 has none)
+const FILE_NAME = /^\.[^/]+$|\.[A-Za-z0-9]*[A-Za-z][A-Za-z0-9]*$/;
 const LINE_SUFFIX = /:(\d+)(?::\d+)?$/;
 const TRAILING = /[.,;:)\]}'"`>]+$/;
 
@@ -74,6 +83,7 @@ export function findPaths(text: string): PathMatch[] {
     if (path === "/" || path === "./" || path === "../") continue;
     // a bare "x.y" that is really a version or a domain is not a file
     if (!path.includes("/") && /^\d+(\.\d+)+$/.test(path)) continue;
+    if (!FILE_NAME.test(path.slice(path.lastIndexOf("/") + 1))) continue;
     out.push({ start: at, end: at + raw.length, text: raw, path, line });
   }
   return out;

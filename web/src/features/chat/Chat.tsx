@@ -30,7 +30,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, ac
   // the jump names its pane ("" = the viewer): this chat takes it only when it is that pane's
   const anyJump = app.use((s) => s.jump);
   const jump = anyJump && anyJump.machineId === machineId && anyJump.paneId === paneId ? anyJump : null;
-  const onOpenFile = useCallback<OpenFile>((target) => actions.openFile(machineId, paneId, target), [machineId, paneId]);
+  const onOpenFile = useCallback<OpenFile>((target) => actions.openFile(machineId, paneId, target, dir), [machineId, paneId, dir]);
   const [forward, setForward] = useState<string | null>(null);
   const onForward = useCallback((text: string) => setForward(`From ${origin}:\n\n${text}`), [origin]);
   const others = agents.some((a) => a.machineId !== machineId || a.paneId !== paneId);

@@ -57,7 +57,7 @@ export default function Overlays() {
       {panel === "usage" && (
         <Usage machines={machines} onClose={actions.closePanel} onOpenSession={(machine, project, session, dir) => openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" })} />
       )}
-      {file && <FileViewer machineId={file.machineId} paneId={file.paneId} target={file.target} onClose={actions.closeFile} onRetarget={actions.retargetFile} />}
+      {file && <FileViewer machineId={file.machineId} paneId={file.paneId} dir={file.dir} target={file.target} onClose={actions.closeFile} onRetarget={actions.retargetFile} />}
       {menu && <WorkspaceMenu menu={menu} />}
       {confirm && (
         <ConfirmDialog
