@@ -44,6 +44,7 @@ export type AppState = {
   viewer: SearchHit | null; // a transcript on its own, from a search hit
   jump: Jump | null;
   codeOpened: boolean; // the Code mode stays mounted once opened, so the editor never reloads
+  popout: Selection | null; // the pane in the small window above every other app (app/pip.ts owns the window)
 };
 
 const fromURL = readURL();
@@ -63,6 +64,7 @@ export const app = createStore<AppState>({
   viewer: null,
   jump: null,
   codeOpened: mode === "code",
+  popout: null,
 });
 
 let jumps = 0;
@@ -139,5 +141,8 @@ export const actions = {
   },
   jumpTo(machineId: string, paneId: string, session: string, turn: string) {
     app.set({ jump: { machineId, paneId, session, turn, n: ++jumps }, lens: "chat" });
+  },
+  setPopOut(popout: Selection | null) {
+    app.set({ popout });
   },
 };

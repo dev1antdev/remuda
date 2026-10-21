@@ -14,6 +14,7 @@ import { Toasts } from "@/ui";
 import Header from "./Header";
 import Overlays from "./Overlays";
 import PaneArea from "./PaneArea";
+import PopOut from "./PopOut";
 import Wall from "./Wall";
 import { folderOf, useCurrent } from "./current";
 import { actions, app } from "./store";
@@ -94,6 +95,7 @@ export default function Shell() {
       </div>
       <Toasts items={toasts} />
       <Overlays />
+      <PopOut />
     </div>
   );
 }

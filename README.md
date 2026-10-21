@@ -71,7 +71,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   in a grid that fits the window (S / M / L). Hide the idle ones, hide
   any tile, bring them back; a click on a tile's head opens that agent
   in Agents. The tiles ask only for the last few turns, so a wall of a
-  dozen agents stays light.
+  dozen agents stays light. In Chrome a tile — or the agent on screen,
+  from the header — **pops out** into a small window that stays above
+  every other app (Document Picture-in-Picture): the agent keeps you
+  company over your editor, and the line to answer it is right there.
 - **Tasks** — the **Agents | Wall | Tasks | Code** switch in the top bar opens remuda's
   own task list: projects on the left, Today / Upcoming / All open, quick
   add, done, due dates, priorities, labels, descriptions, search — and a
@@ -453,7 +456,9 @@ machine as a tile: its state and workspace, its context and cost, the
 last dozen turns of its conversation, the keys for a question it asks,
 and a line to answer. Tiles keep the roster's order, so nothing jumps
 when an agent changes state; hide the idle ones or any single tile, pick
-the tile size, click a head to open the agent in full.
+the tile size, click a head to open the agent in full. In Chrome, a tile
+or the current agent **pops out** into a small always-on-top window
+(Document Picture-in-Picture), one at a time, closed from its own frame.
 
 Planned: a remote-machine session picker, incremental transcript parsing for
 very long sessions.
