@@ -23,24 +23,47 @@ type Report struct {
 	At time.Time `json:"at"`
 	OS string    `json:"os,omitempty"` // "macOS 26.6.2", "Linux 6.8.0"
 
-	Claude      string  `json:"claude,omitempty"`
-	ClaudeVia   string  `json:"claude_via,omitempty"` // brew | npm | native | "" — how to update it
-	Codex       string  `json:"codex,omitempty"`
-	CodexVia    string  `json:"codex_via,omitempty"`
-	Gemini      string  `json:"gemini,omitempty"`
-	GeminiVia   string  `json:"gemini_via,omitempty"`
-	HerdrVia    string  `json:"herdr_via,omitempty"` // brew | installer | "" — how herdr is updated
-	Arch        string  `json:"arch,omitempty"`      // arm64 | amd64
-	Herdr       string  `json:"herdr,omitempty"`
-	HerdrServer string  `json:"herdr_server,omitempty"`
-	Remuda      string  `json:"remuda,omitempty"`
-	Running     bool    `json:"remuda_running"` // a remuda answers on the machine's own port: terminals go through it
-	DiskFreeGB  float64 `json:"disk_free_gb"`
-	DiskUsedPct int     `json:"disk_used_pct"`
-	Load1       float64 `json:"load1"`
-	Uptime      string  `json:"uptime,omitempty"`
-	Error       string  `json:"error,omitempty"`
+	Claude        string   `json:"claude,omitempty"`
+	ClaudeVia     string   `json:"claude_via,omitempty"` // brew | npm | native | "" — how to update it
+	Codex         string   `json:"codex,omitempty"`
+	CodexVia      string   `json:"codex_via,omitempty"`
+	Gemini        string   `json:"gemini,omitempty"`
+	GeminiVia     string   `json:"gemini_via,omitempty"`
+	Kimi          string   `json:"kimi,omitempty"`
+	KimiVia       string   `json:"kimi_via,omitempty"`
+	HerdrVia      string   `json:"herdr_via,omitempty"` // brew | installer | "" — how herdr is updated
+	Arch          string   `json:"arch,omitempty"`      // arm64 | amd64
+	Herdr         string   `json:"herdr,omitempty"`
+	HerdrServer   string   `json:"herdr_server,omitempty"`
+	Remuda        string   `json:"remuda,omitempty"`
+	Running       bool     `json:"remuda_running"` // a remuda answers on the machine's own port: terminals go through it
+	DiskFreeGB    float64  `json:"disk_free_gb"`
+	DiskUsedPct   int      `json:"disk_used_pct"`
+	Load1         float64  `json:"load1"`
+	Uptime        string   `json:"uptime,omitempty"`
+	OutdatedHooks []Hook   `json:"outdated_hooks,omitempty"` // herdr's agent integrations behind what the installed herdr writes
+	Plugins       []Plugin `json:"plugins,omitempty"`        // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
+	Error         string   `json:"error,omitempty"`
 }
+
+// Hook is one of herdr's agent integrations as `herdr integration status` reports it outdated: the version on the machine and the one the installed herdr writes.
+type Hook struct {
+	Agent string `json:"agent"`
+	Have  string `json:"have,omitempty"`
+	Want  string `json:"want,omitempty"`
+}
+
+// Plugin is a herdr plugin installed from GitHub, which `herdr plugin update` refreshes.
+type Plugin struct {
+	ID     string `json:"id"`
+	Source string `json:"source"` // owner/repo[/subdir]
+}
+
+// OutdatedHooks lists herdr's agent integrations behind the installed herdr, one "agent have < want" per line; nothing when all are current.
+const OutdatedHooks = `herdr integration status 2>/dev/null | sed -n 's/^\([a-z0-9-]*\)[^:]*: outdated (\([^)]*\)).*/\1 \2/p'`
+
+// GitHubPlugins lists herdr's plugins installed from GitHub, one "id owner/repo" per line.
+const GitHubPlugins = `herdr plugin list 2>/dev/null | sed -n 's/^- \([^ ]*\) .*\[github:\([^@]*\)@.*/\1 \2/p'`
 
 // Latest is what the world offers right now.
 type Latest struct {
@@ -48,6 +71,7 @@ type Latest struct {
 	Claude string    `json:"claude,omitempty"`
 	Codex  string    `json:"codex,omitempty"`
 	Gemini string    `json:"gemini,omitempty"`
+	Kimi   string    `json:"kimi,omitempty"`
 	Herdr  string    `json:"herdr,omitempty"`
 	Remuda string    `json:"remuda,omitempty"`
 }
@@ -167,8 +191,9 @@ func Script() string {
 	return script.PATH + `
 LC_ALL=C; export LC_ALL
 if command -v sw_vers >/dev/null 2>&1; then echo "os=macOS $(sw_vers -productVersion 2>/dev/null)"; else echo "os=$(uname -s) $(uname -r)"; fi
-for a in claude codex gemini; do c=$(command -v "$a" 2>/dev/null); if [ -n "$c" ]; then echo "$a=$("$a" --version 2>/dev/null | head -1)"; echo "${a}_path=$(readlink "$c" 2>/dev/null || printf %s "$c")"; fi; done
+for a in claude codex gemini kimi; do c=$(command -v "$a" 2>/dev/null); if [ -n "$c" ]; then echo "$a=$("$a" --version 2>/dev/null | head -1)"; echo "${a}_path=$(readlink "$c" 2>/dev/null || printf %s "$c")"; fi; done
 h=$(command -v herdr 2>/dev/null); if [ -n "$h" ]; then echo "herdr=$(herdr --version 2>/dev/null | head -1)"; echo "herdr_path=$(readlink "$h" 2>/dev/null || printf %s "$h")"; echo "herdr_server=$(herdr status server 2>/dev/null | sed -n 's/^version: //p' | head -1)"; fi
+if [ -n "$h" ]; then ` + OutdatedHooks + ` | sed 's/^/hook=/'; ` + GitHubPlugins + ` | sed 's/^/plugin=/'; fi
 echo "arch=$(uname -m)"
 if [ -x "$HOME/.local/bin/remuda" ]; then echo "remuda=$("$HOME/.local/bin/remuda" -version 2>/dev/null)"; fi
 echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
@@ -183,6 +208,7 @@ var (
 	loadRe   = regexp.MustCompile(`load averages?: *([\d.]+)`)
 	upRe     = regexp.MustCompile(`up (.*?),\s+\d+ users?`)
 	fieldsRe = regexp.MustCompile(`\s+`)
+	agentRe  = regexp.MustCompile(`^[a-z0-9-]+$`)
 )
 
 // Parse reads the script's output: the report and, when one answered, the peer remuda.
@@ -210,6 +236,10 @@ func Parse(out string) (Report, *machines.Peer) {
 			r.Gemini = semver.FindString(v)
 		case "gemini_path":
 			r.GeminiVia = installedVia(v)
+		case "kimi":
+			r.Kimi = semver.FindString(v)
+		case "kimi_path":
+			r.KimiVia = installedVia(v)
 		case "herdr":
 			r.Herdr = semver.FindString(v)
 		case "herdr_server":
@@ -219,6 +249,14 @@ func Parse(out string) (Report, *machines.Peer) {
 				r.HerdrVia = "brew"
 			} else {
 				r.HerdrVia = "installer"
+			}
+		case "hook":
+			if hook, ok := parseHook(v); ok {
+				r.OutdatedHooks = append(r.OutdatedHooks, hook)
+			}
+		case "plugin":
+			if id, source, ok := strings.Cut(v, " "); ok && id != "" && source != "" {
+				r.Plugins = append(r.Plugins, Plugin{ID: id, Source: source})
 			}
 		case "arch":
 			switch v {
@@ -274,6 +312,16 @@ func Parse(out string) (Report, *machines.Peer) {
 	return r, peer
 }
 
+// parseHook reads a probe line "claude v10 < v11": the integration's name, and the versions when herdr said them.
+func parseHook(v string) (Hook, bool) {
+	agent, rest, _ := strings.Cut(v, " ")
+	if !agentRe.MatchString(agent) {
+		return Hook{}, false
+	}
+	have, want, _ := strings.Cut(rest, " < ")
+	return Hook{Agent: agent, Have: strings.TrimSpace(have), Want: strings.TrimSpace(want)}, true
+}
+
 // installedVia guesses the package manager from where the binary really lives (the symlink read).
 // An npm global under Homebrew's node is a symlink in /opt/homebrew/bin into node_modules: npm, not brew.
 func installedVia(path string) string {
@@ -282,7 +330,7 @@ func installedVia(path string) string {
 		return "npm"
 	case strings.Contains(path, "/homebrew/") || strings.Contains(path, "/Cellar/"):
 		return "brew"
-	case strings.Contains(path, "/.local/bin/") || strings.Contains(path, "/.local/share/claude/"):
+	case strings.Contains(path, "/.local/bin/") || strings.Contains(path, "/.local/share/claude/") || strings.Contains(path, "/.kimi-code/"):
 		return "native"
 	}
 	return ""
@@ -311,7 +359,7 @@ func (c *Collector) fetchLatest() {
 	for _, a := range []struct {
 		pkg string
 		dst *string
-	}{{"@openai/codex", &l.Codex}, {"@google/gemini-cli", &l.Gemini}} {
+	}{{"@openai/codex", &l.Codex}, {"@google/gemini-cli", &l.Gemini}, {"@moonshot-ai/kimi-code", &l.Kimi}} {
 		if v, err := fetchJSON(ctx, "https://registry.npmjs.org/"+a.pkg+"/latest", "version"); err == nil {
 			*a.dst = semver.FindString(v)
 		} else {
@@ -341,6 +389,9 @@ func (c *Collector) fetchLatest() {
 	}
 	if l.Gemini == "" {
 		l.Gemini = c.latest.Gemini
+	}
+	if l.Kimi == "" {
+		l.Kimi = c.latest.Kimi
 	}
 	if l.Remuda == "" {
 		l.Remuda = c.latest.Remuda

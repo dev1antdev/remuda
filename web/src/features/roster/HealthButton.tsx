@@ -91,12 +91,41 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
                   </dd>
                 </>
               )}
+              {h.kimi && (
+                <>
+                  <dt>Kimi Code</dt>
+                  <dd>
+                    {h.kimi}
+                    {l?.kimi && newer(h.kimi, l.kimi) ? <span className="health-new"> → {l.kimi}</span> : null}
+                  </dd>
+                </>
+              )}
               <dt>herdr</dt>
               <dd>
                 {h.herdr ?? "—"}
                 {h.herdr_server && h.herdr !== h.herdr_server ? <span className="health-new"> · server {h.herdr_server}</span> : null}
                 {h.herdr && l?.herdr && newer(h.herdr, l.herdr) ? <span className="health-new"> → {l.herdr}</span> : null}
               </dd>
+              {h.outdated_hooks?.length ? (
+                <>
+                  <dt>herdr hooks</dt>
+                  <dd>
+                    {h.outdated_hooks.map((k, i) => (
+                      <span key={k.agent}>
+                        {i > 0 ? ", " : ""}
+                        {k.agent} {k.have}
+                        {k.want ? <span className="health-new"> → {k.want}</span> : null}
+                      </span>
+                    ))}
+                  </dd>
+                </>
+              ) : null}
+              {h.plugins?.length ? (
+                <>
+                  <dt>herdr plugins</dt>
+                  <dd>{h.plugins.map((p) => p.id).join(", ")}</dd>
+                </>
+              ) : null}
               <dt>remuda</dt>
               <dd>
                 {h.remuda ?? (m.id === "local" ? serverVersion : "not deployed")}
