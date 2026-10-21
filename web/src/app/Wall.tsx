@@ -1,20 +1,17 @@
 // The Wall mode: every agent on one screen, a tile each — its state, its last turns, a line to answer — in a
-// grid that fits the window. app composes: the tile's chat is features/chat/Tail, which panes make a tile and
-// in what order is features/roster/wall.
+// grid that fits the window. app composes: the tile is ./Tile over features/chat/Tail, which panes make a tile
+// and in what order is features/roster/wall.
 
 import { useMemo, type CSSProperties } from "react";
-import Tail from "@/features/chat/Tail";
-import { DEFAULT_RADAR, displayOf, markOf, rowLabel, type RadarPrefs } from "@/features/roster/radar";
-import { stateWords } from "@/features/roster/rows";
+import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
-import { DEFAULT_WALL, TILE_MIN, tiles, type Tile, type WallPrefs } from "@/features/roster/wall";
-import { fillClass, usd } from "@/features/usage/format";
+import { DEFAULT_WALL, TILE_MIN, tiles, type WallPrefs } from "@/features/roster/wall";
 import { usePref } from "@/lib/prefs";
-import { Icon, Logo } from "@/ui";
-import { brandColor } from "@/ui/brand";
-import { folderOf } from "./current";
+import { Icon } from "@/ui";
+import { popOut, popOutSupported } from "./pip";
 import { actions } from "./store";
+import { TileView } from "./Tile";
 
 const SIZES: { size: WallPrefs["size"]; title: string }[] = [
   { size: "s", title: "Small tiles: the most on screen" },
@@ -73,48 +70,18 @@ export default function Wall() {
       ) : (
         <div className="wall-grid" style={{ "--tile-min": `${TILE_MIN[prefs.size]}px` } as CSSProperties}>
           {list.shown.map((t) => (
-            <TileView key={t.key} tile={t} radar={radar} step={step} now={now} onHide={() => setHidden((h) => [...h.filter((k) => k !== t.key), t.key])} />
+            <TileView
+              key={t.key}
+              tile={t}
+              radar={radar}
+              step={step}
+              now={now}
+              onHide={() => setHidden((h) => [...h.filter((k) => k !== t.key), t.key])}
+              onPopOut={popOutSupported ? () => void popOut({ machineId: t.machine.id, paneId: t.pane.id }) : undefined}
+            />
           ))}
         </div>
       )}
     </main>
-  );
-}
-
-// TileView is one agent: its head as the sidebar row reads it, then its tail of a chat
-function TileView({ tile, radar, step, now, onHide }: { tile: Tile; radar: RadarPrefs; step: number; now: number; onHide: () => void }) {
-  const { machine, session, tab, pane } = tile;
-  const d = displayOf(pane, radar, now);
-  const alert = pane.radar?.alert;
-  const markStyle = d === "working" && !alert ? { color: brandColor(pane.agent) } : undefined;
-  const usage = pane.usage;
-  const fill = usage && usage.window > 0 ? usage.context / usage.window : 0;
-  const where = `${session.name}${machine.id !== "local" ? ` · ${machine.label}` : ""}`;
-  const open = () => {
-    actions.selectPane(machine.id, pane.id);
-    actions.setLens("chat");
-  };
-  return (
-    <section className={`tile is-${d}${alert ? " is-alert" : ""}`} aria-label={`${pane.agent} in ${where}`}>
-      <header className="tile-head">
-        <button type="button" className="linkish tile-open" title={`${alert ?? stateWords(d, pane.radar?.last_active, now)}\n${pane.cwd}\nOpen in Agents`} onClick={open}>
-          <span className="radar-mark" style={markStyle}>
-            {alert ? "!" : markOf(d, step)}
-          </span>
-          <Logo agent={pane.agent} />
-          <span className="tile-label">{rowLabel(pane, tab, session.name, radar)}</span>
-          <span className="tile-where">{where}</span>
-        </button>
-        {usage && usage.window > 0 && (
-          <span className={`radar-ctx tile-usage${fillClass(fill)}`} title={`Context ${Math.round(100 * fill)}% full · ${usage.name} · ${usd(usage.cost)} API-equivalent so far`}>
-            {Math.round(100 * fill)}% · {usd(usage.cost)}
-          </span>
-        )}
-        <button type="button" className="icon-btn sm tile-hide" title="Hide this tile (Show hidden brings it back)" aria-label="Hide this tile" onClick={onHide}>
-          <Icon name="eye-off" size={14} />
-        </button>
-      </header>
-      <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={folderOf(tile)} active />
-    </section>
   );
 }

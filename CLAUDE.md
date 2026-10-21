@@ -396,8 +396,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   "Hide idle", the idle ones past the radar's fresh tier; pref `wall` holds
   the size S/M/L (`TILE_MIN` 360/460/600 px, an auto-fill grid) and the idle
   switch; no sidebar in the mode, "+ Agent" opens the New workspace
-  dialog), `Overlays.tsx` (panels, dialogs, the menu, the confirm, the
-  file viewer). The roster is read once for the
+  dialog; the tile itself is `Tile.tsx`, `TileView`), **the pop-out**
+  (`pip.ts` owns the one small window Chrome's Document
+  Picture-in-Picture gives — `popOut(selection)` from the click itself,
+  the page's stylesheets copied in, `pagehide` clears the store; one
+  window at a time, the browser's rule; `popOutSupported` decides whether
+  the buttons exist at all, so nothing in a bar appears or vanishes.
+  `PopOut.tsx` draws the popped pane through a `createPortal` into that
+  window's body — the same `TileView` as the wall, the roster, the store
+  and every handler shared, "That pane is gone" once the roster lost it.
+  Store field `popout`, buttons on every wall tile and in the header,
+  disabled there without a pane), `Overlays.tsx` (panels, dialogs, the
+  menu, the confirm, the file viewer). The roster is read once for the
   page: `features/roster/useRoster.tsx` (`RosterProvider`: `useQuery`
   every 3 s with the ETag, `stale` when the server is newer; `useRoster()`
   hands out machines, agents, latest, tailscale, version, offline).

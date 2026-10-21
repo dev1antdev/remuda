@@ -1,5 +1,6 @@
-// The header: [burger][modes][title — takes the slack][usage pill][lens switch][search][bell]. Nothing in
-// it moves when state changes: the lens group is anchored right and the pill grows into the title's slack.
+// The header: [burger][modes][title — takes the slack][usage pill][lens switch][pop-out][search][bell]. Nothing
+// in it moves when state changes: the lens group is anchored right and the pill grows into the title's slack;
+// the pop-out button is there whenever the browser can do it, disabled without a pane.
 
 import { basename } from "@/lib/text";
 import { machineLabel } from "@/features/roster/options";
@@ -7,6 +8,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { fillClass, tok, usd } from "@/features/usage/format";
 import { Icon } from "@/ui";
 import type { Located } from "./current";
+import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens } from "./store";
 
 export default function Header({ current }: { current: Located | null }) {
@@ -57,6 +59,17 @@ export default function Header({ current }: { current: Located | null }) {
           {current.pane.usage && current.pane.usage.window > 0 && <UsagePill usage={current.pane.usage} />}
           <LensSwitch lens={lens} current={current} />
         </div>
+      )}
+      {popOutSupported && (
+        <button
+          type="button"
+          className="icon-btn bell"
+          title="Pop out this agent: a small window above every other app"
+          disabled={!current || !!viewer}
+          onClick={() => current && void popOut({ machineId: current.machine.id, paneId: current.pane.id })}
+        >
+          <Icon name="pip" size={18} />
+        </button>
       )}
       <button type="button" className="icon-btn bell" title="Search every conversation (⌘K / Ctrl+K)" onClick={() => actions.openPanel("search")}>
         <Icon name="search" size={18} />

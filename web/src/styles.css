@@ -5476,3 +5476,24 @@ button.usage-row:hover {
   border-radius: var(--r-md);
   padding: 0 10px;
 }
+
+/* ---- the pop-out: a tile alone in the small window above every other app ---- */
+body.popout {
+  overflow: hidden;
+}
+
+.popout-body {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.popout-body .tile {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+}
+
+.popout-body .placeholder {
+  margin: auto;
+}
