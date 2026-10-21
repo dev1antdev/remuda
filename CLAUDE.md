@@ -183,7 +183,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   attach, the chat its scroll and no refetch, Changes its draft; a lens
   gets `active` and polls or refits only when on screen.
 - `internal/health` — each machine's vitals (Claude Code / herdr /
-  remuda versions, how Claude Code was installed, disk, load, uptime)
+  remuda versions, how Claude Code was installed, herdr's agent hooks
+  that lag the installed herdr (`OutdatedHooks`, the shell behind
+  `Report.OutdatedHooks`) and its plugins from GitHub (`GitHubPlugins` →
+  `Report.Plugins`), disk, load, uptime)
   from one POSIX script per machine through `shell.Text`, every 15
   minutes and on demand (`POST /api/machines/{id}/health`); the newest
   Claude Code, Codex, Gemini CLI and Kimi Code (npm registry), herdr and **remuda
@@ -284,7 +287,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a remote machine's `connect()` does the same over ssh
   (`herdr.StartServerScript`) before giving up. `remuda setup [-host H] [-tailscale]` (`internal/setup`:
   `setup.sh` installs herdr with brew or its installer, starts the
-  server, installs `herdr integration` hooks for the agents present;
+  server, installs `herdr integration` hooks for the agents present and
+  installs again every integration herdr reports outdated;
   `install-service.sh` is the launchd / systemd service) is the
   one-command install, locally or over ssh. `internal/jobs` runs a shell script on a `shell.Host` in the background
   with its output streamed (`Host.Stream`: `sh -c` here, the master for a
@@ -294,7 +298,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   every brew path runs `brew update` first, once per job),
   claude / codex / gemini / kimi (brew, npm or the agent's own updater, by
   where the binary lives), or every agent (`restart.Kinds("agents")` is the
-  one list of them); `GET /api/machines/{id}/updates` lists
+  one list of them); `what=hooks` is `herdr integration
+  install` for every agent whose hooks herdr reports outdated (the herdr
+  update runs that step itself, `hooksStep`, before the server restart —
+  0.9.5 changed what Codex's hooks are), `what=plugins` is `herdr plugin
+  update --yes` for the plugins installed from GitHub, on herdr 0.9.4 and
+  up; `GET /api/machines/{id}/updates` lists
   them (`updates.Service.Available`), `POST …/update {what}` starts one
   (`Service.Start`); `what=remuda` copies this very binary to a remote of
   the same OS/CPU and restarts its service; `what=remuda-release` has the

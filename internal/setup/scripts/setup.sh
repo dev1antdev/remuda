@@ -64,9 +64,14 @@ for a in claude codex gemini kimi; do
         say "herdr integration for $a: installing…"
         herdr integration install "$a" || say "  (could not install the $a integration; agent status will be guessed)"
         ;;
+    *" outdated "*) ;;  # updated below, with every other agent's
     "") ;;
     *) say "herdr integration for $a: $(printf '%s' "$st" | sed "s/^$a: //")" ;;
     esac
+done
+for a in $(herdr integration status 2>/dev/null | sed -n 's/^\([a-z0-9-]*\)[^:]*: outdated.*/\1/p'); do
+    say "herdr integration for $a: outdated, updating…"
+    herdr integration install "$a" || say "  (could not update the $a integration; herdr integration install $a)"
 done
 if [ "$agents" = 0 ]; then
     say "no coding agent on this machine yet: install Claude Code, Codex, Gemini CLI or Kimi Code and sign in to it,"

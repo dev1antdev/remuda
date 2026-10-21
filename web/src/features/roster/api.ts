@@ -72,6 +72,8 @@ export type Health = {
   disk_used_pct: number;
   load1: number;
   uptime?: string;
+  outdated_hooks?: { agent: string; have?: string; want?: string }[]; // herdr's agent integrations behind the installed herdr
+  plugins?: { id: string; source: string }[]; // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
   error?: string;
 };
 

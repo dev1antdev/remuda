@@ -16,6 +16,12 @@ describe("concerns", () => {
     expect(keys(list)).toEqual(["claude", "codex", "kimi", "herdr-server"]);
     expect(list.map((c) => c.update)).toEqual(["claude", "codex", "kimi", "restart-herdr"]);
   });
+  it("asks for herdr's hooks to be installed again when the installed herdr writes newer ones", () => {
+    const h = health({ herdr: "0.9.5", outdated_hooks: [{ agent: "claude", have: "v10", want: "v11" }, { agent: "codex", have: "v8", want: "v10" }, { agent: "copilot" }] });
+    expect(concerns(h, { at: "", herdr: "0.9.5" }, "v0.6.0", false)).toEqual([{ key: "hooks", text: "herdr's hooks for Claude Code, Codex and Copilot are outdated", update: "hooks" }]);
+    expect(concerns(health({ herdr: "0.9.5", outdated_hooks: [{ agent: "qodercli" }] }), undefined, "v0.6.0", false)[0]?.text).toBe("herdr's hooks for Qoder are outdated");
+    expect(concerns(health({ herdr: "0.9.5", outdated_hooks: [], plugins: [{ id: "herdr.push", source: "x/y" }] }), undefined, "v0.6.0", false)).toEqual([]);
+  });
   it("compares a remote's remuda with this one, and both with the newest release", () => {
     const remote = concerns(health({ remuda: "v0.4.0" }), { at: "", remuda: "v0.5.0" }, "v0.5.0", true);
     expect(keys(remote)).toEqual(["ui", "release"]);

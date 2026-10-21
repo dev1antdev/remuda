@@ -1,6 +1,9 @@
 package health
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -18,6 +21,9 @@ codex_path=/opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js
 kimi=2.1.1
 kimi_path=/Users/x/.kimi-code/bin/kimi
 remuda=remuda v0.4.0-8-g3262e05
+hook=claude v10 < v11
+hook=codex v8 < v10
+plugin=herdr.push dcolinmorgan/herdr-push
 df=/dev/disk3s5   482797652 188483048 271706504    41% 1511806 2717065040    0%   /System/Volumes/Data
 uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 `
@@ -33,6 +39,15 @@ uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 	}
 	if r.Load1 != 6.52 || r.Uptime != "33 mins" {
 		t.Fatalf("load/uptime: %+v", r)
+	}
+	if len(r.OutdatedHooks) != 2 || r.OutdatedHooks[0] != (Hook{"claude", "v10", "v11"}) || r.OutdatedHooks[1] != (Hook{"codex", "v8", "v10"}) {
+		t.Fatalf("hooks: %+v", r.OutdatedHooks)
+	}
+	if len(r.Plugins) != 1 || r.Plugins[0] != (Plugin{"herdr.push", "dcolinmorgan/herdr-push"}) {
+		t.Fatalf("plugins: %+v", r.Plugins)
+	}
+	if bad, _ := Parse("hook=$(id) v1 < v2\nhook=claude\nplugin=only-an-id\n"); len(bad.OutdatedHooks) != 1 || bad.OutdatedHooks[0] != (Hook{Agent: "claude"}) || len(bad.Plugins) != 0 {
+		t.Fatalf("a hook line is an agent name and maybe its versions, a plugin line an id and a source: %+v", bad)
 	}
 	l, _ := Parse("os=Linux 6.8.0\nuptime= 10:11:12 up 5 days,  3:02,  1 user,  load average: 0.52, 0.58, 0.59\ndf=/dev/sda1 100000000 50000000 50000000 50% /\n")
 	if l.Load1 != 0.52 || l.Uptime != "5 days,  3:02" || l.DiskUsedPct != 50 {
@@ -50,6 +65,36 @@ uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 	}
 	if _, none := Parse("peer_token=abc123\n"); none != nil {
 		t.Fatal("a token without an answer is no peer")
+	}
+}
+
+// TestProbeReadsHerdrsHooksAndPlugins runs the two pipelines of the probe against a herdr stand-in, so the sed in them is tried on this machine's sed.
+func TestProbeReadsHerdrsHooksAndPlugins(t *testing.T) {
+	bin := t.TempDir()
+	stub := "#!/bin/sh\ncase \"$1 $2\" in\n" +
+		"\"integration status\") printf 'pi: not installed (/x)\\nclaude: outdated (v10 < v11) (/Users/x/.claude/hooks/herdr-agent-state.sh)\\ncodex: current (v10) (/y)\\nantigravity-cli: outdated (v2 < v3) (/z)\\nletta (experimental): outdated (v1 < v2) (/w)\\n' ;;\n" +
+		"\"plugin list\") printf '2 plugins installed:\\n- herdr.push (Herdr Push) enabled [github:dcolinmorgan/herdr-push@f4fdb06d5413]\\n  config: /c\\n- local.one (Local) enabled [linked:/p]\\n' ;;\n" +
+		"esac\n"
+	if err := os.WriteFile(filepath.Join(bin, "herdr"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run := func(pipeline string) string {
+		cmd := exec.Command("sh", "-c", pipeline)
+		cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(out)
+	}
+	if got := run(OutdatedHooks); got != "claude v10 < v11\nantigravity-cli v2 < v3\nletta v1 < v2\n" {
+		t.Fatalf("outdated hooks: %q", got)
+	}
+	if got := run(GitHubPlugins); got != "herdr.push dcolinmorgan/herdr-push\n" {
+		t.Fatalf("github plugins: %q", got)
+	}
+	if probe := Script(); !strings.Contains(probe, OutdatedHooks+" | sed 's/^/hook=/'") || !strings.Contains(probe, GitHubPlugins+" | sed 's/^/plugin=/'") {
+		t.Fatal("the probe does not print them as hook= and plugin= lines")
 	}
 }
 
