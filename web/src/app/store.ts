@@ -45,6 +45,8 @@ export type AppState = {
   jump: Jump | null;
   codeOpened: boolean; // the Code mode stays mounted once opened, so the editor never reloads
   popout: Selection | null; // the pane in the small window above every other app (app/pip.ts owns the window)
+  footprint: boolean; // the files rail beside the lenses, a per-device pref
+  codeFile: { machineId: string; folder: string; path: string; n: number } | null; // a file the Code mode is asked to open, once
 };
 
 const fromURL = readURL();
@@ -65,9 +67,12 @@ export const app = createStore<AppState>({
   jump: null,
   codeOpened: mode === "code",
   popout: null,
+  footprint: readPref("footprint", !isTouch),
+  codeFile: null,
 });
 
 let jumps = 0;
+let codeOpens = 0;
 
 export const actions = {
   // a pane asked for by a click in the sidebar, a notification, a search hit, a task
@@ -144,5 +149,15 @@ export const actions = {
   },
   setPopOut(popout: Selection | null) {
     app.set({ popout });
+  },
+  toggleFootprint() {
+    const footprint = !app.get().footprint;
+    app.set({ footprint });
+    writePref("footprint", footprint);
+  },
+  // the Code mode on that machine and folder, with the file open
+  openInCode(machineId: string, folder: string, path: string) {
+    app.set({ mode: "code", codeOpened: true, codeFile: { machineId, folder, path, n: ++codeOpens } });
+    writePref("mode", "code");
   },
 };

@@ -3,6 +3,7 @@
 // Once opened it stays mounted behind the other modes, so the editor never reloads.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { app } from "@/app/store";
 import { codeStatus, type CodeStatus } from "@/features/code/api";
 import type { Machine } from "@/features/roster/api";
 import { basename, errMsg } from "@/lib/text";
@@ -36,6 +37,14 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
   }, [machine]);
 
   const folder = machine ? (folders[machine.id] || (currentMachine === machine.id && currentFolder) || options[0]?.value || "") : "";
+  // a file asked for from a pane: the editor goes to its machine and folder first, then opens it
+  const codeFile = app.use((s) => s.codeFile);
+  useEffect(() => {
+    if (!codeFile) return;
+    if (codeFile.machineId !== machineId) setMachineId(codeFile.machineId);
+    setFolders((prev) => (prev[codeFile.machineId] === codeFile.folder ? prev : { ...prev, [codeFile.machineId]: codeFile.folder }));
+  }, [codeFile]); // eslint-disable-line react-hooks/exhaustive-deps
+  const opening = codeFile && machine && codeFile.machineId === machine.id && codeFile.folder === folder ? codeFile : null;
   const [status, setStatus] = useState<CodeStatus | null>(null);
   const [checking, setChecking] = useState(false);
   const probeSeq = useRef(0);
@@ -66,8 +75,10 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, status?.available, machine?.id]);
 
-  const src = machine && folder ? `/code/${encodeURIComponent(machine.id)}/?folder=${encodeURIComponent(folder)}` : machine ? `/code/${encodeURIComponent(machine.id)}/` : "";
-  const frameKey = `${machine?.id ?? ""}|${folder}`;
+  // the workbench opens a file named in its payload; the authority is this page's host, which the proxy keeps as Host
+  const payload = opening ? `&payload=${encodeURIComponent(JSON.stringify([["openFile", `vscode-remote://${location.host}${opening.path}`]]))}` : "";
+  const src = machine && folder ? `/code/${encodeURIComponent(machine.id)}/?folder=${encodeURIComponent(folder)}${payload}` : machine ? `/code/${encodeURIComponent(machine.id)}/` : "";
+  const frameKey = `${machine?.id ?? ""}|${folder}|${opening?.n ?? 0}`;
 
   return (
     <div className="code-mode">
