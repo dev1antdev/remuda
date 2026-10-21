@@ -29,6 +29,8 @@ type Report struct {
 	CodexVia      string   `json:"codex_via,omitempty"`
 	Gemini        string   `json:"gemini,omitempty"`
 	GeminiVia     string   `json:"gemini_via,omitempty"`
+	Kimi          string   `json:"kimi,omitempty"`
+	KimiVia       string   `json:"kimi_via,omitempty"`
 	HerdrVia      string   `json:"herdr_via,omitempty"` // brew | installer | "" — how herdr is updated
 	Arch          string   `json:"arch,omitempty"`      // arm64 | amd64
 	Herdr         string   `json:"herdr,omitempty"`
@@ -69,6 +71,7 @@ type Latest struct {
 	Claude string    `json:"claude,omitempty"`
 	Codex  string    `json:"codex,omitempty"`
 	Gemini string    `json:"gemini,omitempty"`
+	Kimi   string    `json:"kimi,omitempty"`
 	Herdr  string    `json:"herdr,omitempty"`
 	Remuda string    `json:"remuda,omitempty"`
 }
@@ -188,7 +191,7 @@ func Script() string {
 	return script.PATH + `
 LC_ALL=C; export LC_ALL
 if command -v sw_vers >/dev/null 2>&1; then echo "os=macOS $(sw_vers -productVersion 2>/dev/null)"; else echo "os=$(uname -s) $(uname -r)"; fi
-for a in claude codex gemini; do c=$(command -v "$a" 2>/dev/null); if [ -n "$c" ]; then echo "$a=$("$a" --version 2>/dev/null | head -1)"; echo "${a}_path=$(readlink "$c" 2>/dev/null || printf %s "$c")"; fi; done
+for a in claude codex gemini kimi; do c=$(command -v "$a" 2>/dev/null); if [ -n "$c" ]; then echo "$a=$("$a" --version 2>/dev/null | head -1)"; echo "${a}_path=$(readlink "$c" 2>/dev/null || printf %s "$c")"; fi; done
 h=$(command -v herdr 2>/dev/null); if [ -n "$h" ]; then echo "herdr=$(herdr --version 2>/dev/null | head -1)"; echo "herdr_path=$(readlink "$h" 2>/dev/null || printf %s "$h")"; echo "herdr_server=$(herdr status server 2>/dev/null | sed -n 's/^version: //p' | head -1)"; fi
 if [ -n "$h" ]; then ` + OutdatedHooks + ` | sed 's/^/hook=/'; ` + GitHubPlugins + ` | sed 's/^/plugin=/'; fi
 echo "arch=$(uname -m)"
@@ -233,6 +236,10 @@ func Parse(out string) (Report, *machines.Peer) {
 			r.Gemini = semver.FindString(v)
 		case "gemini_path":
 			r.GeminiVia = installedVia(v)
+		case "kimi":
+			r.Kimi = semver.FindString(v)
+		case "kimi_path":
+			r.KimiVia = installedVia(v)
 		case "herdr":
 			r.Herdr = semver.FindString(v)
 		case "herdr_server":
@@ -323,7 +330,7 @@ func installedVia(path string) string {
 		return "npm"
 	case strings.Contains(path, "/homebrew/") || strings.Contains(path, "/Cellar/"):
 		return "brew"
-	case strings.Contains(path, "/.local/bin/") || strings.Contains(path, "/.local/share/claude/"):
+	case strings.Contains(path, "/.local/bin/") || strings.Contains(path, "/.local/share/claude/") || strings.Contains(path, "/.kimi-code/"):
 		return "native"
 	}
 	return ""
@@ -352,7 +359,7 @@ func (c *Collector) fetchLatest() {
 	for _, a := range []struct {
 		pkg string
 		dst *string
-	}{{"@openai/codex", &l.Codex}, {"@google/gemini-cli", &l.Gemini}} {
+	}{{"@openai/codex", &l.Codex}, {"@google/gemini-cli", &l.Gemini}, {"@moonshot-ai/kimi-code", &l.Kimi}} {
 		if v, err := fetchJSON(ctx, "https://registry.npmjs.org/"+a.pkg+"/latest", "version"); err == nil {
 			*a.dst = semver.FindString(v)
 		} else {
@@ -382,6 +389,9 @@ func (c *Collector) fetchLatest() {
 	}
 	if l.Gemini == "" {
 		l.Gemini = c.latest.Gemini
+	}
+	if l.Kimi == "" {
+		l.Kimi = c.latest.Kimi
 	}
 	if l.Remuda == "" {
 		l.Remuda = c.latest.Remuda

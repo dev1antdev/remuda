@@ -39,17 +39,29 @@ var agents = map[string]agent{
 	"claude": {"claude", "Claude Code", "/exit", func(id string) []string { return []string{"--resume", id} }},
 	"codex":  {"codex", "Codex", "/quit", func(id string) []string { return []string{"resume", id} }},
 	"gemini": {"gemini", "Gemini CLI", "/quit", func(id string) []string { return []string{"--resume", id} }},
+	"kimi":   {"kimi", "Kimi Code", "/exit", func(id string) []string { return []string{"--session", id} }},
 }
+
+// kinds is every agent a restart knows, in the order the page offers them.
+var kinds = []string{"claude", "codex", "gemini", "kimi"}
 
 // Kinds says which agents an update called what touches; none for herdr or remuda.
 func Kinds(what string) []string {
-	switch what {
-	case "claude", "codex", "gemini":
+	if what == "agents" {
+		return kinds
+	}
+	if _, ok := agents[what]; ok {
 		return []string{what}
-	case "agents":
-		return []string{"claude", "codex", "gemini"}
 	}
 	return nil
+}
+
+// Exit is the agent's own command to leave.
+func Exit(kind string) string {
+	if a, ok := agents[kind]; ok {
+		return a.exit
+	}
+	return ""
 }
 
 // Title is the agent's name for people.

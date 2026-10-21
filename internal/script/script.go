@@ -10,8 +10,8 @@ func Quote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// PATH comes first in every script that calls a tool: a non-interactive shell over ssh starts without the package managers' bin dirs.
-const PATH = `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH`
+// PATH comes first in every script that calls a tool: a non-interactive shell over ssh starts without the package managers' bin dirs, or Kimi Code's own.
+const PATH = `PATH="$HOME/.local/bin:$HOME/.kimi-code/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH`
 
 // InDir enters the folder, or ends the script quietly: a folder that is gone answers nothing, not an error.
 func InDir(dir string) string {

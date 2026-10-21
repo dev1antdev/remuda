@@ -21,6 +21,15 @@ func TestPlan(t *testing.T) {
 	if _, err := Plan("gemini", r); err == nil {
 		t.Fatal("gemini is not installed")
 	}
+	if _, err := Plan("kimi", r); err == nil {
+		t.Fatal("kimi is not installed")
+	}
+	if u, err := Plan("kimi", &health.Report{Kimi: "2.1.1", KimiVia: "native"}); err != nil || !strings.HasSuffix(u.Command, "kimi upgrade -y && kimi --version") {
+		t.Fatalf("kimi: %+v %v", u, err)
+	}
+	if u, _ := Plan("kimi", &health.Report{Kimi: "2.1.1", KimiVia: "npm"}); !strings.Contains(u.Command, "npm install -g @moonshot-ai/kimi-code@latest") {
+		t.Fatalf("kimi npm: %s", u.Command)
+	}
 	if u, err := Plan("agents", r); err != nil || !strings.Contains(u.Command, "Update Claude Code") || strings.Contains(u.Command, "Gemini") {
 		t.Fatalf("agents: %+v %v", u, err)
 	}

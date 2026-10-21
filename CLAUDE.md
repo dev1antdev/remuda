@@ -28,7 +28,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   service, lists who hears which event (the one place the subscriptions
   live), starts the loops and serves. Nothing here does work of its own.
 - `internal/script/` — every POSIX script remuda runs is built with it:
-  `Quote`, the `PATH` line, `InDir` / `InRepo` (cd, or answer nothing),
+  `Quote`, the `PATH` line (`~/.local/bin`, Homebrew, Kimi Code's own
+  `~/.kimi-code/bin`), `InDir` / `InRepo` (cd, or answer nothing),
   the portable `Stat`, `Remuda(home, version)` (a machine's own remuda
   and the guard that it is this version), and the separators `GS` / `RS`
   / `US` with `Sections` / `Lines` / `Fields` for reading an answer.
@@ -188,7 +189,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Report.Plugins`), disk, load, uptime)
   from one POSIX script per machine through `shell.Text`, every 15
   minutes and on demand (`POST /api/machines/{id}/health`); the newest
-  Claude Code, Codex and Gemini CLI (npm registry), herdr and **remuda
+  Claude Code, Codex, Gemini CLI and Kimi Code (npm registry), herdr and **remuda
   itself** (GitHub releases) every 6 hours unless `-no-version-check` —
   the only outbound requests remuda makes by itself (a read on demand
   asks again when the last look is over 5 minutes old, `RefreshLatest`).
@@ -295,8 +296,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `events.JobDone`, on which the vitals are re-read; `updates.Plan(what,
   report)` is the update command for herdr (brew or `herdr update --handoff`;
   every brew path runs `brew update` first, once per job),
-  claude / codex / gemini (brew, npm or the native updater, by where the
-  binary lives), or every agent; `what=hooks` is `herdr integration
+  claude / codex / gemini / kimi (brew, npm or the agent's own updater, by
+  where the binary lives), or every agent (`restart.Kinds("agents")` is the
+  one list of them); `what=hooks` is `herdr integration
   install` for every agent whose hooks herdr reports outdated (the herdr
   update runs that step itself, `hooksStep`, before the server restart —
   0.9.5 changed what Codex's hooks are), `what=plugins` is `herdr plugin
@@ -318,7 +320,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   pane running that agent is restarted onto it: `agent.prompt` with the
   agent's own `/exit` (Ctrl-C twice if it lingers), a wait for the shell
   prompt, then `agent.start` with `--resume <session id>` (`codex resume`,
-  `gemini --resume`) from the snapshot's `agent_session`. Idle/done chats
+  `gemini --resume`, `kimi --session`) from the snapshot's `agent_session`. Idle/done chats
   go at once; working/blocked/unknown ones are booked and restarted after
   the watcher sees them settle (`events.PaneStatus` → `Restarter.OnStatus`,
   a 25 s timer, then its own job via `Restarter.Later`). A pane without a session id

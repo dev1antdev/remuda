@@ -141,7 +141,7 @@ func serverRestartPlan(mc *machines.Machine, rep *health.Report, snap *herdr.Sna
 }
 
 func serverRestartUpdate(mc *machines.Machine, running, installed string, snap *herdr.Snapshot) Update {
-	ready, busy := restart.Count(snap, []string{"claude", "codex", "gemini"})
+	ready, busy := restart.Count(snap, restart.Kinds("agents"))
 	n := ready + busy
 	note := fmt.Sprintf("The server runs %s while %s is installed. A restart ends every pane process; herdr restores the workspaces, tabs and panes, and remuda starts each of the %d chat(s) again with its session resumed. Shells and other processes in panes come back as fresh shells.", running, installed, n)
 	if busy > 0 {
@@ -195,7 +195,7 @@ func restartPlans(snap *herdr.Snapshot) []Update {
 		return nil
 	}
 	var out []Update
-	for _, kind := range []string{"claude", "codex", "gemini"} {
+	for _, kind := range restart.Kinds("agents") {
 		if u, n := restartPlan(kind, snap); n > 0 {
 			out = append(out, u)
 		}
@@ -220,15 +220,8 @@ func restartPlan(kind string, snap *herdr.Snapshot) (Update, int) {
 		note += fmt.Sprintf(", %d of them busy (those restart once they have settled for a while)", len(busy))
 	}
 	note += fmt.Sprintf(". Each is asked to leave and %s is started again in the same pane with the conversation resumed — for a %s that updated itself, or after `%s update` run by hand. A message half-typed in a chat's box is lost.", title, title, kind)
-	cmd := "# in every " + title + " pane here (" + strings.Join(ids, ", ") + "), through herdr:\n" + restart.Resume(kind, "<session>") + "   (after its own " + exitOf(kind) + ")"
+	cmd := "# in every " + title + " pane here (" + strings.Join(ids, ", ") + "), through herdr:\n" + restart.Resume(kind, "<session>") + "   (after its own " + restart.Exit(kind) + ")"
 	return Update{What: "restart-" + kind, Title: "Restart " + title + " chats", Command: cmd, Note: note}, n
-}
-
-func exitOf(kind string) string {
-	if kind == "claude" {
-		return "/exit"
-	}
-	return "/quit"
 }
 
 // restartHooks reads the agents' versions before and after an update's script and restarts the chats of every agent whose version changed.
@@ -296,6 +289,8 @@ func agentVersion(r *health.Report, kind string) string {
 		return r.Codex
 	case "gemini":
 		return r.Gemini
+	case "kimi":
+		return r.Kimi
 	}
 	return ""
 }
