@@ -459,7 +459,15 @@ project, by model, by machine, the sessions that cost the most — every
 machine reads its own transcripts, nothing is sent anywhere. On a
 subscription it is a measure of where the work went, not a bill.
 
-**Search** (🔍 or ⌘K): full text over every conversation on every
+**Command palette** (⌘K, Ctrl+K elsewhere): type a few letters and
+jump to any agent on any machine — by its name, workspace, folder,
+machine or tab — or run what the page has a button for: a mode, a lens,
+a new workspace, tab or worktree, a rename, the pop-out, the files
+rail, the panels. The liveliest agents come first, the current one is
+marked; ↑ ↓ move, ↵ runs, Esc closes. The last row searches every
+conversation for what you typed.
+
+**Search** (🔍, or the palette's last row): full text over every conversation on every
 machine — what you or an agent said, never tool output — filtered by
 machine, folder and period. A hit jumps to the turn in the running pane, or
 opens the old transcript read-only. No index, no database: each machine

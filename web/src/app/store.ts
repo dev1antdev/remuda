@@ -28,7 +28,7 @@ export type NoticeMsg = { text: string; error?: boolean; brief?: boolean };
 export type Confirm = { text: string; label: string; run: () => void };
 // a jump names its pane ("" = the transcript viewer): a Chat gets it only when it is that pane's
 export type Jump = { machineId: string; paneId: string; session: string; turn: string; n: number };
-export type Panel = "search" | "alerts" | "schedules" | "usage" | "release" | null;
+export type Panel = "palette" | "search" | "alerts" | "schedules" | "usage" | "release" | null;
 
 export type AppState = {
   requested: Selection | null; // the selection is a request; the pane shown is derived from it, never fixed up in an effect
@@ -38,6 +38,7 @@ export type AppState = {
   dialog: AppDialog;
   menu: RowMenu;
   panel: Panel; // the one overlay panel open, if any
+  search: string; // what the search panel opens with: the palette hands over what was typed in it
   notice: NoticeMsg | null;
   confirm: Confirm | null; // a dialog of our own: window.confirm() is unreliable inside embedded browsers
   file: { machineId: string; paneId: string; dir: string; target: FileTarget } | null; // dir stands in for the pane's folder when there is no pane
@@ -60,6 +61,7 @@ export const app = createStore<AppState>({
   dialog: null,
   menu: null,
   panel: null,
+  search: "",
   notice: null,
   confirm: null,
   file: null,
@@ -113,6 +115,10 @@ export const actions = {
   },
   closePanel() {
     app.set({ panel: null });
+  },
+  // the search panel, with a query already typed
+  openSearch(query = "") {
+    app.set({ panel: "search", search: query });
   },
   notify(text: string, opts: { error?: boolean; brief?: boolean } = {}) {
     app.set({ notice: { text, ...opts } });

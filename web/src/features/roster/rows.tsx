@@ -4,11 +4,10 @@
 import type { KeyboardEvent } from "react";
 import { fillClass } from "@/features/usage/format";
 import { basename } from "@/lib/text";
-import { ago } from "@/lib/time";
 import { Icon, Logo, StatusDot } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import type { Machine, Session } from "./api";
-import { agentRows, displayOf, groups, markOf, recentRows, rowLabel, type AgentRow, type Display, type Group, type RadarPrefs } from "./radar";
+import { agentRows, displayOf, groups, markOf, recentRows, rowLabel, stateWords, type AgentRow, type Display, type Group, type RadarPrefs } from "./radar";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
 
@@ -259,24 +258,4 @@ function representative(s: Session) {
   const tab = s.tabs.find((t) => t.id === s.active_tab_id) ?? s.tabs[0];
   if (!tab) return null;
   return tab.panes.find((p) => p.focused) ?? tab.panes.find((p) => p.agent) ?? tab.panes[0] ?? null;
-}
-
-export function stateWords(d: Display, last: number | undefined, now: number): string {
-  const when = last ? ` · last turn ${ago(last, now)}` : "";
-  switch (d) {
-    case "working":
-      return "working";
-    case "blocked":
-      return "waiting on you";
-    case "done":
-      return `done${when}`;
-    case "idle_fresh":
-      return `idle, just stopped${when}`;
-    case "idle_stale":
-      return `idle for a long time${when}`;
-    case "unknown":
-      return "state unknown";
-    default:
-      return `idle${when}`;
-  }
 }

@@ -1,0 +1,95 @@
+// What the palette offers: every pane to jump to, and every command the page has a button or a menu item
+// for — the modes, the lenses, the dialogs, the panels, the rail, the pop-out, the search. The one place
+// that lists them; the palette itself only shows and ranks.
+
+import { useCallback } from "react";
+import Palette from "@/features/palette/Palette";
+import { paneEntries, type Entry } from "@/features/palette/rank";
+import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
+import { closeWorkspace } from "@/features/roster/WorkspaceMenu";
+import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
+import { useRoster } from "@/features/roster/useRoster";
+import { usePref } from "@/lib/prefs";
+import type { IconName } from "@/ui/icons";
+import { folderOf, useCurrent } from "./current";
+import { popOut, popOutSupported } from "./pip";
+import { actions, app, type Lens, type Mode } from "./store";
+
+const MODES: { mode: Mode; title: string; hint: string; icon: IconName }[] = [
+  { mode: "herdr", title: "Go to Agents", hint: "your agents and terminals, from herdr", icon: "terminal" },
+  { mode: "wall", title: "Go to the Wall", hint: "every agent on one screen, a tile each", icon: "layers" },
+  { mode: "tasks", title: "Go to Tasks", hint: "your tasks, kept on this remuda", icon: "list" },
+  { mode: "code", title: "Go to Code", hint: "VS Code on a machine, through remuda", icon: "code" },
+];
+
+const LENSES: { lens: Lens; title: string; icon: IconName }[] = [
+  { lens: "chat", title: "Show the chat", icon: "message" },
+  { lens: "terminal", title: "Show the terminal", icon: "terminal" },
+  { lens: "changes", title: "Show the changes", icon: "file" },
+];
+
+export default function CommandPalette() {
+  const entries = useCommands();
+  return <Palette entries={entries} onClose={actions.closePanel} />;
+}
+
+// useCommands is the list for what was typed: the panes first, then the commands that apply right now.
+function useCommands(): (query: string) => Entry[] {
+  const { machines } = useRoster();
+  const mode = app.use((s) => s.mode);
+  const lens = app.use((s) => s.lens);
+  const viewer = app.use((s) => s.viewer);
+  const footprint = app.use((s) => s.footprint);
+  const current = useCurrent();
+  const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
+  const step = useSpinner(moving(machines));
+  const now = useClock(machines);
+  return useCallback(
+    (query: string) => {
+      const selection = current ? { machineId: current.machine.id, paneId: current.pane.id } : null;
+      const panes = paneEntries(machines, radar, now, step, selection, actions.selectPane);
+      const commands: Entry[] = [];
+      const command = (id: string, title: string, run: () => void, more: Partial<Entry> = {}) => commands.push({ id, kind: "command", title, keywords: [], run, ...more });
+
+      for (const m of MODES) if (m.mode !== mode) command(`mode:${m.mode}`, m.title, () => actions.setMode(m.mode), { hint: m.hint, icon: m.icon, keywords: ["mode", m.mode] });
+      if (current && !viewer) {
+        const folder = folderOf(current);
+        for (const l of LENSES) {
+          if ((mode === "herdr" && l.lens === lens) || (l.lens === "changes" && !folder)) continue;
+          const show = () => {
+            actions.setMode("herdr");
+            actions.setLens(l.lens);
+          };
+          command(`lens:${l.lens}`, l.title, show, { hint: `of ${current.session.name}`, icon: l.icon, keywords: ["lens", l.lens, current.pane.agent] });
+        }
+      }
+
+      const here = current?.machine.id ?? "local";
+      for (const m of machines) {
+        if (m.state !== "connected" && m.id !== here) continue;
+        const where = m.id === here ? "here" : `on ${m.label}`;
+        command(`workspace:${m.id}`, `New workspace ${where}…`, () => actions.openDialog({ kind: "workspace", machineId: m.id }), { hint: "an agent in a folder", icon: "plus", keywords: ["start", "agent", "create", m.label] });
+      }
+      if (current && !viewer) {
+        const { machine, session, tab } = current;
+        const named = `“${session.name}”`;
+        command("tab", `New tab in ${named}…`, () => actions.openDialog({ kind: "tab", machineId: machine.id, session }), { hint: "another agent in the same folder", icon: "plus", keywords: ["agent", "create"] });
+        command("worktree", `New worktree of ${named}…`, () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }), { hint: "a branch checked out beside it, an agent in it", icon: "plus", keywords: ["branch", "create"] });
+        command("rename-workspace", `Rename workspace ${named}…`, () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }), { icon: "tag" });
+        command("rename-tab", `Rename tab ${tab.named ? `“${tab.label}”` : tab.number}…`, () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }), { icon: "tag" });
+        command("close-workspace", `Close workspace ${named}`, () => closeWorkspace(machine, session), { hint: "its panes close and the agents in them stop", icon: "x", danger: true, keywords: ["kill", "stop", "quit"] });
+        if (popOutSupported) command("popout", "Pop out this agent", () => void popOut(selection!), { hint: "a small window above every other app", icon: "pip", keywords: ["picture", "window", "float"] });
+      }
+
+      command("rail", footprint ? "Hide the files rail" : "Show the files rail", actions.toggleFootprint, { hint: "the files the agent touched, beside the lenses", icon: "folder", keywords: ["footprint", "files"] });
+      command("alerts", "Alerts on this device", () => actions.openPanel("alerts"), { hint: "which pushes to get here", icon: "bell", keywords: ["push", "notifications"] });
+      command("schedules", "Schedules", () => actions.openPanel("schedules"), { hint: "prompts sent to agents on a timetable", icon: "calendar", keywords: ["cron", "timer", "prompt"] });
+      command("usage", "Usage report", () => actions.openPanel("usage"), { hint: "what the agents cost, by day, project and session", icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
+      command("machine", "Add a PC…", () => actions.openDialog({ kind: "machine" }), { hint: "a remote machine over SSH", icon: "monitor", keywords: ["machine", "remote", "ssh", "host"] });
+      const typed = query.trim();
+      command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
+      return [...panes, ...commands];
+    },
+    [machines, mode, lens, viewer, footprint, current, radar, step, now],
+  );
+}

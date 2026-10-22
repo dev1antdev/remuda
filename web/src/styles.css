@@ -5640,7 +5640,8 @@ body.popout {
   color: var(--fg-faint);
   white-space: nowrap;
 }
-.review-keys kbd {
+.review-keys kbd,
+.palette-foot kbd {
   display: inline-block;
   min-width: 16px;
   margin-right: 2px;
@@ -5689,5 +5690,142 @@ body.popout {
 @media (pointer: coarse) {
   .review-keys {
     display: none;
+  }
+}
+
+/* ---- the command palette: ⌘K ---- */
+.modal.palette {
+  width: min(96vw, 620px);
+  max-height: min(72dvh, 600px);
+  margin-top: 12dvh;
+  padding: 10px;
+  gap: 8px;
+}
+
+.palette-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.palette-head-icon {
+  flex-shrink: 0;
+  margin-left: 4px;
+  color: var(--fg-faint);
+}
+
+.palette-head input {
+  flex: 1;
+  min-width: 0;
+  height: var(--ctl-lg);
+  border-radius: var(--r-lg);
+  font-size: 15px;
+}
+
+.palette-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.palette-group {
+  padding: 8px 10px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.palette-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 4px 10px;
+  border-radius: var(--r-md);
+  color: var(--fg);
+  font-size: 13.5px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.palette-row[aria-selected="true"] {
+  background: var(--bg-hover);
+}
+
+.palette-row.danger .palette-title {
+  color: var(--red);
+}
+
+.palette-row .radar-logo {
+  width: 15px;
+  height: 15px;
+}
+
+.palette-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  background: var(--bg-elev);
+  color: var(--fg-dim);
+  flex-shrink: 0;
+}
+
+.palette-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palette-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--fg-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palette-detail {
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 11px;
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+
+.palette-foot {
+  display: flex;
+  gap: 14px;
+  padding: 6px 10px 0;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--fg-faint);
+}
+
+/* the mark on its own, outside a sidebar row: the palette's rows */
+.radar-mark.idle_fresh {
+  color: #9fc4ab;
+}
+
+.radar-mark.unknown {
+  color: var(--violet);
+}
+
+.radar-mark.alert {
+  color: var(--amber);
+  font-weight: 700;
+}
+
+@media (pointer: coarse) {
+  .palette-row {
+    min-height: 40px;
   }
 }

@@ -1,5 +1,5 @@
 // The shell: the header, the sidebar and the pane area or the other modes (the wall, tasks, code), and the overlays. It also
-// keeps the address in step with the selection, hears the service worker and the ⌘K key, and tells the
+// keeps the address in step with the selection, hears the service worker and ⌘K (the palette), and tells the
 // server when a finished pane is being looked at.
 
 import { useEffect } from "react";
@@ -36,13 +36,13 @@ export default function Shell() {
   }, [current?.machine.id, current?.pane.id, mode, lens]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // ⌘K on a Mac, Ctrl+K elsewhere, by key code whatever the layout; a terminal keeps its own Ctrl+K
+    // ⌘K on a Mac, Ctrl+K elsewhere, by key code whatever the layout, opens the palette; a terminal keeps its own Ctrl+K
     const mac = /Mac|iPhone|iPad/.test(navigator.platform);
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "KeyK" || e.altKey || e.shiftKey || (mac ? !e.metaKey : !e.ctrlKey)) return;
       if (!mac && (e.target as Element | null)?.closest?.(".xterm")) return;
       e.preventDefault();
-      actions.togglePanel("search");
+      actions.togglePanel("palette");
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

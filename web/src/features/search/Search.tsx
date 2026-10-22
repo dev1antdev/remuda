@@ -20,8 +20,8 @@ const PERIODS = [
   { value: "30", label: "Last 30 days" },
 ];
 
-export default function Search({ machines, onClose, onOpen }: { machines: Machine[]; onClose: () => void; onOpen: (hit: SearchHit) => void }) {
-  const [q, setQ] = useState("");
+export default function Search({ machines, initial = "", onClose, onOpen }: { machines: Machine[]; initial?: string; onClose: () => void; onOpen: (hit: SearchHit) => void }) {
+  const [q, setQ] = useState(initial);
   const [machine, setMachine] = useState("all");
   const [dir, setDir] = useState("");
   const [days, setDays] = useState("0");

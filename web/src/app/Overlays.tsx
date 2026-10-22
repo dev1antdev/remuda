@@ -1,5 +1,5 @@
 // Everything that opens over the page: the "make something" dialogs, the workspace menu, the confirm, the
-// panels (search, alerts, schedules, usage, the release install) and the file viewer. Each reads what it
+// panels (the palette, search, alerts, schedules, usage, the release install) and the file viewer. Each reads what it
 // needs from the store and closes itself through the actions.
 
 import { addMachine, createSession, createTab, createWorktree, renameMachine, renameSession, renameTab, type Created } from "@/features/roster/api";
@@ -14,6 +14,7 @@ import UpdatesDialog from "@/features/updates/Updates";
 import Usage from "@/features/usage/Usage";
 import { encodePath, type SearchHit } from "@/features/search/api";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import CommandPalette from "./commands";
 import { useAllPanes } from "./current";
 import { actions, app } from "./store";
 
@@ -21,6 +22,7 @@ export default function Overlays() {
   const dialog = app.use((s) => s.dialog);
   const menu = app.use((s) => s.menu);
   const panel = app.use((s) => s.panel);
+  const search = app.use((s) => s.search);
   const confirm = app.use((s) => s.confirm);
   const file = app.use((s) => s.file);
   const { machines, agents, refresh } = useRoster();
@@ -50,10 +52,11 @@ export default function Overlays() {
 
   return (
     <>
+      {panel === "palette" && <CommandPalette />}
       {panel === "release" && local && <UpdatesDialog machine={local} what="remuda-release" onClose={actions.closePanel} />}
       {panel === "alerts" && <AlertsPanel onClose={actions.closePanel} />}
       {panel === "schedules" && <Schedules machines={machines} onClose={actions.closePanel} ask={actions.ask} />}
-      {panel === "search" && <Search machines={machines} onClose={actions.closePanel} onOpen={openHit} />}
+      {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} />}
       {panel === "usage" && (
         <Usage machines={machines} onClose={actions.closePanel} onOpenSession={(machine, project, session, dir) => openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" })} />
       )}
