@@ -366,7 +366,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `mutate` for what the screen already shows ahead of the server — a
   switch flipped, a card dropped), `store.ts` (`createStore` over
   `useSyncExternalStore`: `get` / `set` / `subscribe` / `use(select)`),
-  `prefs.ts` (`usePref`, localStorage-backed; `readPref` keeps a stored
+  `prefs.ts` (`usePref`, localStorage-backed and shared: every hook of a
+  key follows a write through any other or through `writePref`, over
+  `useSyncExternalStore` — the terminal's tools in the tab strip and the
+  lens beside them hold the same keys; `readPref` keeps a stored
   value only in the fallback's shape; `isTouch`), `text.ts` (`errMsg`,
   `basename` / `dirname`, `plural`, `shellQuote`), `time.ts`, `paths.ts`,
   `host.ts` (`copyText`: Clipboard API, else execCommand; `openUrl`: a
