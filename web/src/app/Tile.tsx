@@ -2,8 +2,7 @@
 // label, workspace · machine, context % · cost — then the tail of its chat with a line to answer.
 
 import Tail from "@/features/chat/Tail";
-import { displayOf, markOf, rowLabel, type RadarPrefs } from "@/features/roster/radar";
-import { stateWords } from "@/features/roster/rows";
+import { displayOf, markOf, rowLabel, stateWords, type RadarPrefs } from "@/features/roster/radar";
 import type { Tile } from "@/features/roster/wall";
 import { fillClass, usd } from "@/features/usage/format";
 import { Icon, Logo } from "@/ui";

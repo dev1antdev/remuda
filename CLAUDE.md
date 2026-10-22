@@ -386,7 +386,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`?machine=&pane=&mode=&lens=`, `history.replaceState`) and is read
   once at load, so a link or a reload lands on the same pane in the same
   lens. `act.ts` (`act(promise)`: refresh the roster, else toast the
-  error), `toasts.tsx`, `Shell.tsx` (URL sync, ⌘K, the service worker's
+  error), `toasts.tsx`, `Shell.tsx` (URL sync, ⌘K → the palette, the service worker's
   select-pane, mark-seen, the four modes), `Header.tsx`, `PaneArea.tsx`
   (the lenses, mounted once seen, and the files rail beside them in
   `.pane-body` — store field `footprint` from the pref of that name,
@@ -414,7 +414,23 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and every handler shared, "That pane is gone" once the roster lost it.
   Store field `popout`, buttons on every wall tile and in the header,
   disabled there without a pane), `Overlays.tsx` (panels, dialogs, the
-  menu, the confirm, the file viewer). The roster is read once for the
+  menu, the confirm, the file viewer), `commands.tsx` (the **command
+  palette** on ⌘K / Ctrl+K, by key code so any layout works: every pane
+  as a row to jump to — each machine's liveliest first, shells at its
+  end, the current one marked — and every command the page has a button
+  or a menu item for: the other modes, the other lenses of the pane, new
+  workspace / tab / worktree, the renames, close workspace, pop out, the
+  files rail, alerts, schedules, usage, add a PC, and last, whatever was
+  typed, "Search every conversation…", which opens the search panel with
+  the query (`actions.openSearch`, store field `search`). `commands.tsx`
+  is the one list; `features/palette/Palette.tsx` shows it — ↑ ↓ ↵ Esc,
+  the mouse — and `features/palette/rank.ts` is the pure part, tested:
+  `paneEntries` builds the rows from the roster through `radar.ts`
+  (`rowLabel`, `stateWords`, `markOf`), `rank` keeps the entries every
+  typed word hits and orders them — the whole title, its start, a word's
+  start, anywhere, a title's initials ("gw" → Go to the Wall); a title
+  counts double, a shell half — panes before commands, ties in the given
+  order). The roster is read once for the
   page: `features/roster/useRoster.tsx` (`RosterProvider`: `useQuery`
   every 3 s with the ETag, `stale` when the server is newer; `useRoster()`
   hands out machines, agents, latest, tailscale, version, offline).
@@ -593,8 +609,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the panel behind the calendar button in the sidebar head (`cron.ts` the
   presets and their parsing, `ScheduleEditor.tsx` the form).
 - `internal/search/` — **full-text search** over every transcript on every
-  machine (`GET /api/search?q=&machine=&dir=&days=`; ⌘K / Ctrl+K, the 🔍
-  in the header). No index: `Scan` walks `~/.claude/projects` newest-first,
+  machine (`GET /api/search?q=&machine=&dir=&days=`; the 🔍 in the
+  header, or the last row of the ⌘K palette with what was typed there). No index: `Scan` walks `~/.claude/projects` newest-first,
   sieves lines by four spellings of the query (as typed, lower, UPPER,
   Capitalized — a byte search folds nothing), then `transcript.MatchLine`
   parses the candidates: only user/assistant texts count, never tool
