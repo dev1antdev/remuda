@@ -20,10 +20,13 @@ const DOTFILE = String.raw`(?:env(?:\.[\w-]+)?|envrc|gitignore|gitattributes|git
 const WORD = String.raw`\p{L}\p{N}_`;
 const SEG = String.raw`[${WORD}.@%+=-]+`;
 const NAME = String.raw`[${WORD}@%+-][${WORD}.@%+-]*`;
+// Every alternative starts only where a token starts (the lookbehinds; the absolute one needs its slash), so a
+// line costs its length: tried from every position inside a long token, the greedy segments cost its square,
+// and a pasted CSV row with base64 blobs froze the page for a minute at every render of that turn.
 const PATH_RE = new RegExp(
   String.raw`(?:~|\.{1,2})?/(?:${SEG}/)*${SEG}` + // absolute, ~/, ./, ../
-    String.raw`|(?:${SEG}/)+${SEG}` + // relative with a slash
-    String.raw`|\.?${NAME}\.${EXT}\b` + // bare filename with a known extension, its leading dot kept (.mcp.json)
+    String.raw`|(?<![${WORD}.@%+=/-])(?:${SEG}/)+${SEG}` + // relative with a slash
+    String.raw`|(?<![${WORD}.@%+-])\.?${NAME}\.${EXT}\b` + // bare filename with a known extension, its leading dot kept (.mcp.json)
     String.raw`|(?<![${WORD}.@%+/-])\.${DOTFILE}\b`, // a dotfile
   "gu",
 );

@@ -42,4 +42,11 @@ describe("findPaths", () => {
     expect(findPaths("see https://x.com/a/b.go")).toEqual([]);
     expect(findPaths("version 1.2.3 is out")).toEqual([]);
   });
+  it("starts a name only where a token starts, and so costs a long token its length, not its square", () => {
+    expect(paths("x=file.go, (bar.py) [baz.ts] and ..nothing.go")).toEqual(["file.go", "bar.py", "baz.ts"]);
+    const blob = Array.from({ length: 64000 }, (_, i) => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"[(i * 7) % 64]).join("");
+    const started = performance.now();
+    expect(findPaths(`8334948,405480,Roofr\\Task\\Models\\Task,2026-10-20 20:28:16,${blob},${"ы".repeat(20000)}`)).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(500); // the square took seconds
+  });
 });

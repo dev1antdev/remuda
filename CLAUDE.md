@@ -522,7 +522,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   A link needs a name a file would have — a dotfile (`.env`, `.gitignore`;
   the dot kept on `.mcp.json`) or a name with an extension, in any
   alphabet — so a folder (`internal/server`) or a slashed phrase
-  (`Approve/Reject`) is none.
+  (`Approve/Reject`) is none. Every alternative of `PATH_RE` starts only
+  where a token starts (a lookbehind), so a line costs its length: tried
+  from every position inside a long token, the greedy segments cost its
+  square, and a CSV row with base64 blobs pasted into one agent's chat
+  froze the whole page for a minute at every render of that turn — the
+  Wall first, since it renders every agent's last turns (`paths.test.ts`
+  keeps the bound).
   **File links only in an agent's pane** (`agent` prop); URLs everywhere,
   but Cmd/Ctrl+click in a shell pane — its clicks belong to the app. URLs
   open through `openUrl` in `host.ts` (host bridge, else a new tab).
