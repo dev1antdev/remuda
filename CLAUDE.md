@@ -553,7 +553,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the Changes lens of the picked one beside it, its pane the workspace's
   first agent pane (a shell when none runs there, comments then go to any
   agent), `onSeen` the roster's refresh; under 920 px the list and the
-  lens take turns, a Queue button leads back.
+  lens take turns, a Queue button leads back. `actions.openReview(machine,
+  dir)` (a task's run has a **Review** link beside Open) switches to the
+  mode with store field `reviewAsked`, which the queue picks once the
+  roster lists that folder and clears; a folder without changes is a toast.
   **Review comments**: in the lens a tap on a diff row opens a comment box
   under it; comments gather in a draft (`usePref("review.draft:<machine>|
   <dir>")`, this device, per folder), sit under their rows (`.review-note`,
@@ -564,7 +567,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   agent: Approve and Reject (`VerdictDialog`) each take a note and send
   `verdictMessage` — the verdict, the note, the draft's comments, and
   what it means (approved: reviewed, carry on, a task can move on;
-  rejected: work on it and say when it is ready for another look) —
+  rejected: work on it and say when it is ready for another look; an
+  approval with "and ask the agent to commit" ticked adds `COMMIT_ASK`,
+  the button reads **Approve & commit** — the agent commits, remuda never
+  writes into a repository) —
   through `/api/submit` first, then `markReviewed(verdict)`, so an
   agent's refusal leaves the baseline alone; a rejection needs a comment
   or a note. "Mark reviewed" is the silent one: the baseline moves, the

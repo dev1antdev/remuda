@@ -1,9 +1,10 @@
 // The Review mode: every workspace with uncommitted work in one list, the ones with changes since you looked first,
 // and the Changes lens of the picked one beside it — approve, reject, comment from here instead of visiting each pane.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { actions, app } from "@/app/store";
 import { useRoster } from "@/features/roster/useRoster";
-import { plural } from "@/lib/text";
+import { basename, plural } from "@/lib/text";
 import { Icon, Logo } from "@/ui";
 import { reviewQueue, type QueueItem } from "./queue";
 import Review from "./Review";
@@ -12,6 +13,15 @@ export default function ReviewQueue() {
   const { machines, refresh } = useRoster();
   const queue = useMemo(() => reviewQueue(machines), [machines]);
   const [picked, setPicked] = useState<string | null>(null);
+  const asked = app.use((s) => s.reviewAsked);
+  // a folder asked for from elsewhere (a task's run) is picked once the roster lists it; one without changes is said so
+  useEffect(() => {
+    if (!asked) return;
+    const wanted = queue.find((candidate) => candidate.machine.id === asked.machineId && candidate.dir === asked.dir);
+    if (wanted) setPicked(wanted.key);
+    else actions.notify(`Nothing to review in ${basename(asked.dir) || asked.dir} yet`, { brief: true });
+    actions.reviewPicked();
+  }, [asked, queue]);
   const item = queue.find((candidate) => candidate.key === picked) ?? null;
   const fresh = queue.filter((candidate) => candidate.fresh > 0).length;
   const manyMachines = new Set(queue.map((candidate) => candidate.machine.id)).size > 1;

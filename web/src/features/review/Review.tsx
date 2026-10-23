@@ -92,15 +92,15 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
     }
   };
   // the agent first, the baseline second: a refusal leaves everything as it was
-  const sendVerdict = async (verdict: Verdict, target: { machineId: string; paneId: string; agent: string; sessionName?: string }, note: string) => {
-    await submitPrompt(target.machineId, target.paneId, verdictMessage(verdict, note, draft, where()));
+  const sendVerdict = async (verdict: Verdict, target: { machineId: string; paneId: string; agent: string; sessionName?: string }, note: string, commit: boolean) => {
+    await submitPrompt(target.machineId, target.paneId, verdictMessage(verdict, note, draft, where(), commit));
     await markReviewed(machineId, dir, verdict);
     setDraft([]);
     setOpenVerdict(null);
     setOpenFile(null);
     lookAgain();
     onSeen?.();
-    showNotice(`${verdict === "approved" ? "Approved" : "Rejected"} — ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""} has been told.`);
+    showNotice(`${verdict === "approved" ? "Approved" : "Rejected"} — ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""} has been told${commit ? " and asked to commit" : ""}.`);
   };
 
   const files = review?.files ?? [];
@@ -279,7 +279,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           currentPane={currentPane}
           comments={draft.length}
           onClose={() => setOpenVerdict(null)}
-          onSend={(target, note) => sendVerdict(openVerdict, target, note)}
+          onSend={(target, note, commit) => sendVerdict(openVerdict, target, note, commit)}
         />
       )}
     </div>
