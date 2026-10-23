@@ -74,3 +74,20 @@ export function shownPath(path: string, dir: string): string {
   const base = dir.replace(/\/+$/, "");
   return base && path.startsWith(base + "/") ? path.slice(base.length + 1) : path;
 }
+
+// toolLabel is what a tool call says in one line: its name, and the file or command it was about
+export function toolLabel(part: Part): { name: string; hint: string; file: string | null } {
+  const name = part.tool_name ?? "tool";
+  const file = toolPath(part);
+  // a file is a link when the tool read or wrote it; Grep's or Glob's path is a folder, named only
+  if (file) return { name, hint: file.length > 70 ? "…" + file.slice(-69) : file, file: EDIT_TOOLS.has(name) || READ_TOOLS.has(name) ? file : null };
+  const input = part.input as Record<string, unknown> | undefined | string;
+  if (input && typeof input === "object") {
+    const obj = input as Record<string, unknown>;
+    const hint = obj["command"] ?? obj["pattern"] ?? obj["url"] ?? obj["description"] ?? obj["query"];
+    if (typeof hint === "string") {
+      return { name, hint: hint.length > 60 ? hint.slice(0, 60) + "…" : hint, file: null };
+    }
+  }
+  return { name, hint: "", file: null };
+}

@@ -1,8 +1,8 @@
 // TileView is one agent as the wall and the pop-out show it: its head as the sidebar row reads it — mark, logo,
-// label, workspace · machine, context % · cost — then the tail of its chat, or its terminal as it is, with a line
-// to answer.
+// label, workspace · machine, context % · cost — its state line (how long, and what it runs this second), then the
+// tail of its chat, or its terminal as it is, with a line to answer.
 
-import Tail, { TailAnswer } from "@/features/chat/Tail";
+import Tail, { TailAnswer, TileState } from "@/features/chat/Tail";
 import { displayOf, markOf, rowLabel, stateWords, type RadarPrefs } from "@/features/roster/radar";
 import type { Tile, WallView } from "@/features/roster/wall";
 import { Screen } from "@/features/terminal/Screen";
@@ -35,10 +35,11 @@ export function TileView({ tile, view = "chat", radar, step, now, onHide, onPopO
     window.focus();
   };
   const dir = folderOf(tile);
+  const words = alert ?? stateWords(d, pane.radar?.last_active, now, pane.radar?.since);
   return (
     <section className={`tile is-${d}${alert ? " is-alert" : ""}`} aria-label={`${pane.agent} in ${where}`}>
       <header className="tile-head">
-        <button type="button" className="linkish tile-open" title={`${alert ?? stateWords(d, pane.radar?.last_active, now)}\n${pane.cwd}\nOpen the ${screen ? "terminal" : "chat"} in Agents`} onClick={open}>
+        <button type="button" className="linkish tile-open" title={`${words}\n${pane.cwd}\nOpen the ${screen ? "terminal" : "chat"} in Agents`} onClick={open}>
           <span className="radar-mark" style={markStyle}>
             {alert ? "!" : markOf(d, step)}
           </span>
@@ -64,11 +65,12 @@ export function TileView({ tile, view = "chat", radar, step, now, onHide, onPopO
       </header>
       {screen ? (
         <>
+          <TileState words={words} />
           <Screen machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active onOpen={open} />
           <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} />
         </>
       ) : (
-        <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} active />
+        <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} words={words} active />
       )}
     </section>
   );

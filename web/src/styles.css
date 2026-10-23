@@ -5445,6 +5445,45 @@ button.usage-row:hover {
   margin-left: 0;
 }
 
+/* the state line under the head: the state and how long, and what the agent runs this second; always there, so nothing moves */
+.tile-state {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 12px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.tile-words {
+  flex-shrink: 0;
+}
+
+.tile-doing {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg);
+}
+
+.tile-doing-name {
+  color: var(--fg-faint);
+}
+
+.tile.is-blocked .tile-words {
+  color: var(--red);
+}
+
+.tile.is-alert .tile-words {
+  color: var(--amber);
+}
+
 .tile .chat-log {
   padding: 10px 12px;
   gap: 10px;
