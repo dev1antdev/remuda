@@ -23,6 +23,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/review"
+	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/server"
 	"github.com/dev1antdev/remuda/internal/sessions"
@@ -88,6 +89,7 @@ func Run(ctx context.Context, o Options) error {
 	chats := &chat.Service{Machines: fleet, Watch: watcher}
 	tracker := radar.New(o.Dir, chats.LastWriteOf)
 	defer tracker.Flush()
+	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer})
 	reviews := review.New(o.Dir)
 	meter := usage.NewTracker()
 	input := sessions.NewInput(fleet, watcher)
@@ -109,8 +111,13 @@ func Run(ctx context.Context, o Options) error {
 			meter.ObserveSnapshot(mc.ID(), mc.Transcripts, e.Snap)
 		}
 	})
-	events.Subscribe(bus, func(e events.MachineRemoved) { tracker.Forget(e.Machine) })
+	events.Subscribe(bus, func(e events.Snapshot) { sayings.Observe(e.Machine, e.Snap) })
+	events.Subscribe(bus, func(e events.MachineRemoved) {
+		tracker.Forget(e.Machine)
+		sayings.Forget(e.Machine)
+	})
 	events.Subscribe(bus, pushSvc.OnStatus)
+	events.Subscribe(bus, sayings.OnStatus)
 	events.Subscribe(bus, restarter.OnStatus)
 	events.Subscribe(bus, func(e events.JobDone) {
 		if mc, err := fleet.Get(e.Machine); err == nil {
@@ -164,6 +171,7 @@ func Run(ctx context.Context, o Options) error {
 		Launcher:  &tasks.Launcher{Store: taskStore, Input: input, Watch: watcher, Notify: pushSvc.Notify},
 		Push:      pushSvc,
 		Feed:      activity,
+		Said:      sayings,
 		Radar:     tracker,
 		Usage:     meter,
 		Health:    vitals,

@@ -11,13 +11,23 @@ import { Notice } from "@/ui";
 import Composer from "./Composer";
 import { doing, type Doing } from "./doing";
 import { PromptKeys } from "./PromptKeys";
+import { said } from "./said";
 import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFollowBottom } from "./useFollowBottom";
 
 export const TAIL_TURNS = 12;
 
-const Tail = memo(function Tail({ machineId, paneId, status, dir, words, active }: { machineId: string; paneId: string; status: string; dir: string; words: string; active: boolean }) {
+const Tail = memo(function Tail({ machineId, paneId, status, dir, words, settled = false, said: fallback, active }: {
+  machineId: string;
+  paneId: string;
+  status: string;
+  dir: string;
+  words: string;
+  settled?: boolean; // the agent finished or sits idle: the state line says what it answered
+  said?: string; // the roster's line, until the tail has the turns
+  active: boolean;
+}) {
   const busy = status === "run" || status === "input";
   const { data: chat, error: fetchError } = useChat({ machineId, paneId, sessionId: null, dir, every: busy ? 3000 : 15000, active, last: TAIL_TURNS });
   const logRef = useRef<HTMLDivElement>(null);
@@ -25,9 +35,10 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, words, active 
   const onOpenFile = useCallback<OpenFile>((target) => actions.openFile(machineId, paneId, target, dir), [machineId, paneId, dir]);
   const turns = chat?.turns ?? [];
   const now = useMemo(() => (status === "run" && turns.length > 0 ? doing(turns) : null), [status, turns]);
+  const answered = useMemo(() => (settled ? (turns.length > 0 ? said(turns) : fallback) : undefined), [settled, turns, fallback]);
   return (
     <div className="chat tail">
-      <TileState words={words} doing={now} />
+      <TileState words={words} doing={now} said={answered} />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : "No transcript yet."}</div>}
         {turns.map((t, i) => (
@@ -41,11 +52,17 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, words, active 
 
 export default Tail;
 
-// TileState is the line under a tile's head: the state and how long, and while the agent works, what it does this second
-export function TileState({ words, doing }: { words: string; doing?: Doing | null }) {
+// TileState is the line under a tile's head: the state and how long, and while the agent works, what it does this second;
+// once it has finished, what it answered.
+export function TileState({ words, doing, said }: { words: string; doing?: Doing | null; said?: string }) {
   return (
     <div className="tile-state">
       <span className="tile-words">{words}</span>
+      {said && !doing && (
+        <span className="tile-said" title={said}>
+          · {said}
+        </span>
+      )}
       {doing && (
         <span className="tile-doing" title={doing.what === "tool" ? `${doing.name} ${doing.hint}` : undefined}>
           {doing.what === "tool" ? (

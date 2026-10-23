@@ -27,6 +27,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/quick"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/review"
+	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/tasks"
@@ -49,6 +50,7 @@ type Server struct {
 	Push      *push.Service
 	Feed      *feed.Service
 	Radar     *radar.Tracker
+	Said      *said.Tracker
 	Usage     *usage.Tracker
 	Health    *health.Collector
 	Review    *review.Store

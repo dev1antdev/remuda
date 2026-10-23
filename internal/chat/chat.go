@@ -74,6 +74,23 @@ func (c *Service) LastWriteOf(machineID string, pane *herdr.PaneInfo) time.Time 
 	return at
 }
 
+// SessionVersion is the version of the pane's session file, for a reader that skips an unchanged file.
+func (c *Service) SessionVersion(machineID, paneID string) (string, bool) {
+	pane, _ := c.Pane(machineID, paneID)
+	if pane == nil {
+		return "", false
+	}
+	mc, path, ok := c.SessionFile(machineID, pane)
+	if !ok {
+		return "", false
+	}
+	version, err := mc.Transcripts.Version(path)
+	if err != nil {
+		return "", false
+	}
+	return version.String(), true
+}
+
 // LastWriteOfPane is LastWrite by pane id, for the watchdog.
 func (c *Service) LastWriteOfPane(machineID, paneID string) (time.Time, bool) {
 	pane, _ := c.Pane(machineID, paneID)

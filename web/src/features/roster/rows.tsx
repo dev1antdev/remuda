@@ -210,6 +210,7 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
   const hue = p.agent ? brandColor(p.agent) : undefined;
   const alert = p.radar?.alert;
   const style = d === "working" && hue && !alert ? { color: hue } : undefined;
+  const said = !alert && (d === "done" || d.startsWith("idle")) ? p.said : undefined;
   return (
     <div
       className={`radar-row is-${d}${selected ? " sel" : ""}${p.agent ? "" : " shell"}${alert ? " is-alert" : ""}`}
@@ -217,14 +218,15 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
       tabIndex={0}
       onClick={() => onSelect(m.id, p.id)}
       onKeyDown={(e) => rowKey(e, () => onSelect(m.id, p.id))}
-      title={`${p.agent || "shell"} · ${alert ? alert : stateWords(d, p.radar?.last_active, now, p.radar?.since)}\n${p.cwd}`}
+      title={`${p.agent || "shell"} · ${alert ? alert : stateWords(d, p.radar?.last_active, now, p.radar?.since)}${said ? ` · ${said}` : ""}\n${p.cwd}`}
     >
       <span className="radar-mark" style={style}>
         {alert ? "!" : p.agent ? markOf(d, step) : "$"}
       </span>
       {p.agent && <Logo agent={p.agent} />}
-      <span className="radar-title" style={style}>
-        {label}
+      <span className={`radar-title${said ? " has-said" : ""}`} style={style}>
+        {said ? <span className="radar-label">{label}</span> : label}
+        {said && <span className="radar-said">· {said}</span>}
       </span>
       {p.usage && p.usage.window > 0 && p.usage.context / p.usage.window >= 0.5 && (
         <span className={`radar-ctx${fillClass(p.usage.context / p.usage.window)}`} title={`Context ${Math.round((100 * p.usage.context) / p.usage.window)}% full · ${p.usage.name} · $${p.usage.cost.toFixed(2)}`}>

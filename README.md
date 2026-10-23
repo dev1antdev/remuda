@@ -45,7 +45,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   here): a braille spinner while it works, a pulsing `?` while it waits on
   you, a green `✓` that **stays until you have looked at the pane**, a ring
   that cools with the time since the last turn — fresh, plain, then the
-  whole row dims after two hours. Each agent wears its vendor's logo and
+  whole row dims after two hours. A finished agent's row says, in grey
+  after its name, the first line of what it answered, so the sidebar
+  reads like a list of results. Each agent wears its vendor's logo and
   hue (27 vendors), workspaces are headers with worktrees as a tree, the
   busiest project sorts first; `⇅` flips to a flat list by activity or
   herdr's own order, `⚙` holds the thresholds and the row label.
@@ -68,7 +70,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
 - **Wall** — the **Wall** mode in the top bar puts every agent on one
   screen: a tile per agent pane on every connected machine, with its
   state and how long it has lasted, what it runs this second (the tool
-  call under way, else thinking or writing), the last turns of its
+  call under way, else thinking or writing) or, once it has finished,
+  the first line of what it answered, the last turns of its
   conversation and a line to answer it,
   in a grid that fits the window (S / M / L). Hide the idle ones, or
   keep only the agents that need you — a question, a watchdog note, a
@@ -513,7 +516,8 @@ binary is deployed, grep otherwise).
 
 **Wall:** a mode for the big screen — every agent on every connected
 machine as a tile: its state and workspace, its context and cost, how
-long it has been at it and what it runs this second, the last dozen
+long it has been at it and what it runs this second — or, once it is
+done, the first line of its answer — the last dozen
 turns of its conversation, the keys for a question it asks,
 and a line to answer. Tiles keep the roster's order, so nothing jumps
 when an agent changes state; hide the idle ones, keep only the ones that

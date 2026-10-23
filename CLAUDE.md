@@ -423,7 +423,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   "Hide idle", the idle ones past the radar's fresh tier, and with **Needs me** (pref `needsMe`, `needsMe` in wall.ts) everyone but the agents waiting for the person — a question open, a watchdog note, a finish not looked at — "Nobody needs you right now" when that leaves none; a tile that needs one wears a pulsing ring (red for a question, amber for a note), a finished one a green edge; the two filters and the view are palette commands too; pref `wall` holds
   the size S/M/L (`TILE_MIN` 360/460/600 px, an auto-fill grid) and the idle
   switch; no sidebar in the mode, "+ Agent" opens the New workspace
-  dialog; the tile itself is `Tile.tsx`, `TileView`; a tile shows the chat or, in the **Screen** view (`view` in pref `wall`: the Chat | Screen pair in the wall's bar, "Wall of screens" in the palette, the pop-out follows it), the pane's terminal as it is — `features/terminal/Screen.tsx` reads `GET /api/screen?machine&pane` (`internal/server/screen.go` → `herdr.Client.PaneScreen`, `pane.read` with `format: ansi`, read from herdr on demand at the tiles' pace, 3 s / 15 s, an ETag over the text so an unchanged screen is a 304; no attach, so no slot is taken and the shared pane is never resized) and draws the rows through `features/terminal/ansi.ts` (`parseAnsi`, tested: SGR colours in xterm's palette, 256 and true colour, bold / dim / italic / underline / inverse, every other escape dropped) at the font that fits the pane's columns in the tile's width (`thumbFont`, `engine/geometry.ts`), the bottom rows kept when the height runs out; a click opens the terminal lens, the head the lens of the view; `TailAnswer` (chat/Tail.tsx) is the foot under either view — the keys for a question and the compact composer; under the head a **state line** that is always there, `TileState` in `chat/Tail.tsx` — `stateWords` with how long the state has lasted (`radar.since`, `elapsed` in `lib/time.ts`) and, while the agent works in the chat view, what it does this second from the end of its tail (`features/chat/doing.ts`, tested: the tool call still without a result through `toolLabel`, now in `footprint.ts`, else thinking or writing)), **the pop-out**
+  dialog; the tile itself is `Tile.tsx`, `TileView`; a tile shows the chat or, in the **Screen** view (`view` in pref `wall`: the Chat | Screen pair in the wall's bar, "Wall of screens" in the palette, the pop-out follows it), the pane's terminal as it is — `features/terminal/Screen.tsx` reads `GET /api/screen?machine&pane` (`internal/server/screen.go` → `herdr.Client.PaneScreen`, `pane.read` with `format: ansi`, read from herdr on demand at the tiles' pace, 3 s / 15 s, an ETag over the text so an unchanged screen is a 304; no attach, so no slot is taken and the shared pane is never resized) and draws the rows through `features/terminal/ansi.ts` (`parseAnsi`, tested: SGR colours in xterm's palette, 256 and true colour, bold / dim / italic / underline / inverse, every other escape dropped) at the font that fits the pane's columns in the tile's width (`thumbFont`, `engine/geometry.ts`), the bottom rows kept when the height runs out; a click opens the terminal lens, the head the lens of the view; `TailAnswer` (chat/Tail.tsx) is the foot under either view — the keys for a question and the compact composer; under the head a **state line** that is always there, `TileState` in `chat/Tail.tsx` — `stateWords` with how long the state has lasted (`radar.since`, `elapsed` in `lib/time.ts`) and, while the agent works in the chat view, what it does this second from the end of its tail (`features/chat/doing.ts`, tested: the tool call still without a result through `toolLabel`, now in `footprint.ts`, else thinking or writing), and once it has finished or sits idle, **what it answered**: the first line of the text its last turn ended with, in the quiet colour — the chat view reads it from the tail (`features/chat/said.ts`, tested: marks stripped, cut at a word by 120 characters), the screen view and the strip from the roster's `pane.said` (`internal/said`, the same cut)), **the pop-out**
   (`pip.ts` owns the one small window Chrome's Document
   Picture-in-Picture gives — `popOut(selection)` from the click itself,
   the page's stylesheets copied in, `pagehide` clears the store; one
@@ -639,11 +639,29 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   last; a flat `recent` order; herdr's own; `radar.test.ts`),
   `features/roster/Sidebar.tsx` draws it (`rows.tsx` the rows,
   `HealthButton.tsx`, `MachineMenu.tsx`, `RadarSettings.tsx`; one spinner
-  clock for the braille frames and the pulsing question).
+  clock for the braille frames and the pulsing question). A finished or
+  idle row says what the agent answered after its title, in the quiet
+  colour and in its tooltip (`pane.said` from the roster, `.radar-said`:
+  the title keeps up to 62% of its line, the answer the rest, each
+  clipped with an ellipsis); the row's height and its other parts stay
+  where they are.
   Machines and workspace groups fold (prefs `collapsed` / `wsFolded`); a
   folded group's head carries its agents' states (working / ? / ✓ counts).
   `web/marks/*.svg` are the vendor logos (MIT packaging, see NOTICE.md),
   `npm run marks` regenerates `src/ui/marks.ts`; drawn inline in currentColor.
+- `internal/said/` — the first line of every finished agent's last answer,
+  for the roster (`pane.said`) and so for the sidebar row and the wall
+  tile. `Tracker` hears `events.PaneStatus` (a finish — done or idle —
+  queues a read, a start of work clears the line, a closed pane is
+  forgotten) and `Observe` seeds from every snapshot the agent panes
+  already finished when first seen, once; the reads go through
+  `chat.Service` (`SessionVersion`, then `LastAnswer`) in one goroutine
+  per machine, off the request path — a remote read is a script over
+  ssh — and a file whose version is the one read last is not parsed
+  again. `FirstLine` strips the Markdown marks (headings, list and quote
+  marks, emphasis, code, links, tags; fences and rules skipped) and cuts
+  at a word by `Max` 120 characters; `features/chat/said.ts` is the same
+  cut on the page, both tested.
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥
@@ -846,9 +864,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   file the chat lens shows: the pane's live one followed through
   compactions, a session of its folder by id, or a transcript on its own
   by folder and id — a `NotFoundError` for an unknown one), `SessionFile`,
-  `LastWrite` / `LastWriteOfPane`, `LastTurn`, `LastToolCalls`,
-  `LastAnswer`: the radar's recovery, the watchdog and the task watch read
-  through it. `GET /api/chat?last=N` (1..200) answers the last N turns only
+  `LastWrite` / `LastWriteOfPane`, `SessionVersion`, `LastTurn`,
+  `LastToolCalls`, `LastAnswer`: the radar's recovery, the watchdog, the
+  task watch and the said tracker read through it. `GET /api/chat?last=N` (1..200) answers the last N turns only
   — `Conversation.LastTurns`, the slice kept per file version in
   `tailCache`, so the wall's tiles and the lens on the same pane parse a
   file once per change (the cached slice is a copy, so the cache never pins
