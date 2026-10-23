@@ -91,3 +91,14 @@ export function toolLabel(part: Part): { name: string; hint: string; file: strin
   }
   return { name, hint: "", file: null };
 }
+
+const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i;
+
+// imagePath is the picture a finished Read or Write was about, to draw beside the call; a failed call or any other file is none
+export function imagePath(part: Part): string | null {
+  if (part.type !== "tool" || part.is_error || part.output === undefined) return null;
+  const name = part.tool_name ?? "";
+  if (!READ_TOOLS.has(name) && !EDIT_TOOLS.has(name)) return null;
+  const file = toolPath(part);
+  return file && IMAGE_RE.test(file) ? file : null;
+}

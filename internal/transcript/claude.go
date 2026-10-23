@@ -569,16 +569,24 @@ func plainUserText(raw json.RawMessage) string {
 	return ""
 }
 
-// resultText flattens a tool_result content (string or blocks) to text.
+// resultText flattens a tool_result content (string or blocks) to text; a picture alone reads "[image]", so the call
+// still counts as answered.
 func resultText(raw json.RawMessage) string {
 	if s := stringContent(raw); s != "" {
 		return s
 	}
 	var parts []string
+	pictures := 0
 	for _, b := range blocks(raw) {
-		if b.Type == "text" && b.Text != "" {
+		switch {
+		case b.Type == "text" && b.Text != "":
 			parts = append(parts, b.Text)
+		case b.Type == "image":
+			pictures++
 		}
+	}
+	if len(parts) == 0 && pictures > 0 {
+		return "[image]"
 	}
 	return strings.Join(parts, "\n")
 }

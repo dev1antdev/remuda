@@ -1,17 +1,20 @@
-// One turn of the transcript: its text as Markdown, its thinking and tool calls folded, a forward button.
+// One turn of the transcript: its text as Markdown, its thinking and tool calls folded, a picture the agent read or wrote
+// as a thumbnail, a forward button.
 
 import { memo, useState, type ReactNode } from "react";
+import { fileUrl } from "@/features/files/api";
 import type { OpenFile } from "@/features/files/target";
 import { tok, usd } from "@/features/usage/format";
+import { basename } from "@/lib/text";
 import { spent } from "@/lib/time";
 import { ErrorBoundary, Icon, Notice } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import type { Part, Turn } from "./api";
-import { EDIT_TOOLS, toolLabel } from "./footprint";
+import { EDIT_TOOLS, imagePath, toolLabel } from "./footprint";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 export const TurnView = memo(
-  function TurnView({ turn, onOpenFile, onForward }: { turn: Turn; onOpenFile: OpenFile; onForward?: (text: string) => void }) {
+  function TurnView({ turn, machineId, onOpenFile, onForward }: { turn: Turn; machineId?: string; onOpenFile: OpenFile; onForward?: (text: string) => void }) {
     const cls = turn.role === "user" ? "turn turn-user" : "turn turn-assistant";
     const text = turn.parts
       .filter((p) => p.type === "text")
@@ -22,7 +25,7 @@ export const TurnView = memo(
       <div className={cls} data-ids={turn.ids?.join(" ")}>
         <ErrorBoundary fallback={(message) => <Notice tone="error">This turn could not be drawn: {message}</Notice>}>
           {turn.parts.map((p, i) => (
-            <PartView key={i} part={p} onOpenFile={onOpenFile} />
+            <PartView key={i} part={p} machineId={machineId} onOpenFile={onOpenFile} />
           ))}
         </ErrorBoundary>
         {turn.role === "assistant" && (turn.took || turn.tokens) ? <Spent turn={turn} /> : null}
@@ -34,7 +37,7 @@ export const TurnView = memo(
       </div>
     );
   },
-  (a, b) => a.onOpenFile === b.onOpenFile && a.onForward === b.onForward && sameTurn(a.turn, b.turn),
+  (a, b) => a.machineId === b.machineId && a.onOpenFile === b.onOpenFile && a.onForward === b.onForward && sameTurn(a.turn, b.turn),
 );
 
 // sameTurn compares content, as every poll brings new objects; a tool's input never changes once written, so it is skipped
@@ -71,7 +74,7 @@ function Folded({ className, summary, children }: { className: string; summary: 
   );
 }
 
-function PartView({ part, onOpenFile }: { part: Part; onOpenFile: OpenFile }) {
+function PartView({ part, machineId, onOpenFile }: { part: Part; machineId?: string; onOpenFile: OpenFile }) {
   if (part.type === "text") {
     return <Markdown text={part.text ?? ""} onOpenFile={onOpenFile} />;
   }
@@ -91,37 +94,52 @@ function PartView({ part, onOpenFile }: { part: Part; onOpenFile: OpenFile }) {
   }
   if (part.type === "tool") {
     const { name, hint, file } = toolLabel(part);
+    const picture = machineId ? imagePath(part) : null;
     return (
-      <Folded
-        className={part.is_error ? "part-tool part-tool-error" : "part-tool"}
-        summary={
-          <>
-            <Icon name={part.is_error ? "alert-triangle" : "chevron-right"} size={12} className="part-tool-icon" /> {name}
-            {hint && " · "}
-            {file ? (
-              <button
-                type="button"
-                className="path-link"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onOpenFile({ path: file, prefer: EDIT_TOOLS.has(name) ? "changes" : "file" });
-                }}
-                title={EDIT_TOOLS.has(name) ? "Open the file with its changes" : "Open the file"}
-              >
-                {hint}
-              </button>
-            ) : (
-              hint
-            )}
-          </>
-        }
-      >
-        {part.input !== undefined && <pre className="tool-io">{pretty(part.input)}</pre>}
-        {part.output && <pre className="tool-io">{part.output}</pre>}
-      </Folded>
+      <>
+        <Folded
+          className={part.is_error ? "part-tool part-tool-error" : "part-tool"}
+          summary={
+            <>
+              <Icon name={part.is_error ? "alert-triangle" : "chevron-right"} size={12} className="part-tool-icon" /> {name}
+              {hint && " · "}
+              {file ? (
+                <button
+                  type="button"
+                  className="path-link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onOpenFile({ path: file, prefer: EDIT_TOOLS.has(name) ? "changes" : "file" });
+                  }}
+                  title={EDIT_TOOLS.has(name) ? "Open the file with its changes" : "Open the file"}
+                >
+                  {hint}
+                </button>
+              ) : (
+                hint
+              )}
+            </>
+          }
+        >
+          {part.input !== undefined && <pre className="tool-io">{pretty(part.input)}</pre>}
+          {part.output && <pre className="tool-io">{part.output}</pre>}
+        </Folded>
+        {picture && <Thumb machineId={machineId!} path={picture} onOpenFile={onOpenFile} />}
+      </>
     );
   }
   return null;
+}
+
+// Thumb is the picture a Read or Write was about, drawn under the call from the machine's own file; a file gone since is nothing
+function Thumb({ machineId, path, onOpenFile }: { machineId: string; path: string; onOpenFile: OpenFile }) {
+  const [gone, setGone] = useState(false);
+  if (gone) return null;
+  return (
+    <button type="button" className="linkish part-image" title={`${path}\nOpen the file`} onClick={() => onOpenFile({ path, prefer: "file" })}>
+      <img src={fileUrl(machineId, path)} alt={basename(path)} loading="lazy" onError={() => setGone(true)} />
+    </button>
+  );
 }
 
 function pretty(v: unknown): string {
