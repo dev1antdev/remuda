@@ -505,6 +505,13 @@ tool calls folded — to share with someone who is not in remuda.
 every place a word occurs in the conversation shown and says "3 of 12";
 Enter and Shift+Enter walk them, the current one brought into view, Esc
 closes. It works on a transcript opened from the search too.
+**The timeline** (🕒 in the tab strip, on by default with a mouse) is a
+thin bar over the conversation: every prompt and its answer laid out in
+time — a break over ten minutes drawn as ten, so a lunch does not
+flatten the day — with the moments worth a look marked and named under
+it: the first failed call, the longest call, a loop of identical calls,
+the questions the agent asked, a compaction. A click on any of them
+jumps to that turn. It works on a transcript opened from the search too.
 **Plan** — when the agent keeps a task list (Claude Code's own
 TaskCreate / TaskUpdate, or TodoWrite), a quiet line over the chat says
 how far it is and what it is on, in the agent's own words — "Plan 3/7 ·

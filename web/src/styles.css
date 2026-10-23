@@ -4501,6 +4501,90 @@ button.usage-row:hover {
   animation: turn-hit 2.6s var(--ease);
 }
 
+/* the session's timeline over the chat: prompts and answers in time, the moments worth a look marked */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 20px 0;
+}
+
+.timeline-bar {
+  position: relative;
+  height: 14px;
+  border-radius: var(--r-xs);
+  background: var(--bg-raised);
+}
+
+.timeline-seg,
+.timeline-mark {
+  position: absolute;
+  display: block;
+  padding: 0;
+}
+
+.timeline-seg {
+  top: 4px;
+  height: 6px;
+  min-width: 2px;
+  background: var(--bg-active);
+  box-shadow: inset 2px 0 0 var(--fg-faint);
+  border-radius: var(--r-xs);
+}
+
+.timeline-seg:hover {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.timeline-mark {
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 99px;
+  background: var(--fg-dim);
+  z-index: 1;
+}
+
+.timeline-mark:hover {
+  background: var(--fg);
+}
+
+.timeline-mark.is-error {
+  z-index: 2;
+  background: var(--red);
+  box-shadow: 0 0 0 2px var(--red-soft);
+}
+
+.timeline-mark.is-loop {
+  background: var(--amber);
+  box-shadow: 0 0 0 2px var(--amber-soft);
+}
+
+.timeline-mark.is-question {
+  background: var(--blue);
+}
+
+.timeline-mark.is-compaction {
+  background: var(--violet);
+}
+
+.timeline-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  margin-left: -6px;
+}
+
+.timeline-chip.is-error {
+  color: var(--red);
+}
+
+.timeline-chip.is-loop {
+  color: var(--amber);
+}
+
 /* the find bar's matches, painted over the text without touching a node */
 ::highlight(remuda-find) {
   background-color: var(--amber-soft);
