@@ -41,6 +41,9 @@ export default function Header({ current }: { current: Located | null }) {
         <button className={mode === "code" ? "on" : ""} onClick={() => actions.setMode("code")} title="VS Code on a machine, through remuda">
           Code
         </button>
+        <button className={mode === "review" ? "on" : ""} onClick={() => actions.setMode("review")} title="Every workspace with changes to review, in one list">
+          Review
+        </button>
       </nav>
       <span className="title">
         {mode !== "herdr" ? null : viewer ? (

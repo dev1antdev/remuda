@@ -10,6 +10,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/sessions"
+	"github.com/dev1antdev/remuda/internal/text"
 )
 
 // Sessions: workspaces, tabs and worktrees made and closed through herdr, and what people type into panes.
@@ -35,6 +36,7 @@ type createReq struct {
 	Branch    string `json:"branch"`
 	Base      string `json:"base"`
 	Agent     string `json:"agent"`
+	Resume    string `json:"resume"` // a session id of the folder's: the agent comes back to that conversation
 }
 
 // create is the one path for every "make a container, start an agent in it" request.
@@ -46,6 +48,10 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*herd
 	}
 	if !sessions.KnownAgent(req.Agent) {
 		httpErr(w, 400, fmt.Errorf("unknown agent %q", req.Agent))
+		return
+	}
+	if req.Resume != "" && (!text.SessionID(req.Resume) || req.Agent == "" || req.Agent == "shell") {
+		httpErr(w, 400, fmt.Errorf("resume needs an agent and a session id"))
 		return
 	}
 	mc, client, _, ok := s.ready(w, r, req.Machine)
@@ -62,7 +68,11 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*herd
 		resp[k] = v
 	}
 	if req.Agent != "" && req.Agent != "shell" {
-		if err := sessions.StartAgent(client, pane.PaneID, req.Agent); err != nil {
+		start := func() error { return sessions.StartAgent(client, pane.PaneID, req.Agent) }
+		if req.Resume != "" {
+			start = func() error { return sessions.StartAgentResumed(client, pane.PaneID, req.Agent, req.Resume) }
+		}
+		if err := start(); err != nil {
 			resp["agent_error"] = err.Error()
 		}
 	}

@@ -36,7 +36,7 @@ export function paneEntries(machines: Machine[], prefs: RadarPrefs, now: number,
         kind: "pane",
         title: rowLabel(pane, tab, session.name, prefs),
         hint: `${session.name}${machine.id !== "local" ? ` · ${machine.label}` : ""}`,
-        detail: pane.agent ? (alert ?? stateWords(display, pane.radar?.last_active, now)) : "shell",
+        detail: pane.agent ? (alert ?? stateWords(display, pane.radar?.last_active, now, pane.radar?.since)) : "shell",
         keywords: [session.name, machine.label, pane.agent || "shell", basename(pane.cwd), tab.named ? tab.label : ""].filter(Boolean),
         pane: {
           machineId: machine.id,

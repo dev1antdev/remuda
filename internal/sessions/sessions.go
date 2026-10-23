@@ -55,18 +55,49 @@ func RefOK(name string) bool {
 // Starter is what starting an agent needs of herdr's client.
 type Starter interface {
 	AgentStart(paneID, kind string) error
+	AgentStartWith(paneID, kind, name string, args []string, timeout time.Duration) error
 }
 
 // StartAgent starts an agent in a pane whose shell may still be coming up, retrying herdr's busy answer for a few seconds.
 func StartAgent(client Starter, paneID, kind string) error {
+	return startAgent(func() error { return client.AgentStart(paneID, kind) })
+}
+
+// StartAgentResumed starts an agent on one of its earlier conversations: the kind's own resume arguments after the session id.
+func StartAgentResumed(client Starter, paneID, kind, session string) error {
+	args, ok := ResumeArgs(kind, session)
+	if !ok {
+		return fmt.Errorf("%s cannot resume a session", kind)
+	}
+	return startAgent(func() error { return client.AgentStartWith(paneID, kind, kind, args, 30*time.Second) })
+}
+
+func startAgent(start func() error) error {
 	deadline := time.Now().Add(12 * time.Second)
 	for {
-		err := client.AgentStart(paneID, kind)
+		err := start()
 		if err == nil || !(herdr.IsCode(err, "agent_pane_busy") || herdr.IsCode(err, "agent_not_ready")) || time.Now().After(deadline) {
 			return err
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
+}
+
+// resumeFlags is how each agent is told which conversation to come back to; the id goes last, as the agent's own CLI wants it.
+var resumeFlags = map[string][]string{
+	"claude": {"--resume"},
+	"codex":  {"resume"},
+	"gemini": {"--resume"},
+	"kimi":   {"--session"},
+}
+
+// ResumeArgs is the agent's command-line arguments that resume a session, false for a kind that has none.
+func ResumeArgs(kind, session string) ([]string, bool) {
+	flags, ok := resumeFlags[kind]
+	if !ok {
+		return nil, false
+	}
+	return append(append([]string(nil), flags...), session), true
 }
 
 // Prompter is what delivering text and keys needs of herdr's client.

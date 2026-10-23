@@ -4,7 +4,7 @@
 
 import type { Machine, Pane, Session, Tab } from "@/features/roster/api";
 import { basename } from "@/lib/text";
-import { ago } from "@/lib/time";
+import { ago, elapsed } from "@/lib/time";
 import { VENDOR_NAME } from "@/ui/brand";
 
 // ---- state ----
@@ -80,13 +80,14 @@ export function rowLabel(p: Pane, tab: Tab, workspace: string, prefs: RadarPrefs
 }
 
 // stateWords says what an agent is doing, for a title or a row's right edge: the state, and for a resting one when its last turn was.
-export function stateWords(d: Display, last: number | undefined, now: number): string {
+export function stateWords(d: Display, last: number | undefined, now: number, since?: number): string {
   const when = last ? ` · last turn ${ago(last, now)}` : "";
+  const how = since ? ` for ${elapsed(since, now)}` : "";
   switch (d) {
     case "working":
-      return "working";
+      return `working${how}`;
     case "blocked":
-      return "waiting on you";
+      return `waiting on you${how}`;
     case "done":
       return `done${when}`;
     case "idle_fresh":

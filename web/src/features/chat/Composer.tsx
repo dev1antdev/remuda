@@ -1,6 +1,6 @@
 // The composer owns the draft, so typing never re-renders the transcript: attachments uploaded at once,
-// quick prompts, dictation, Enter to send (Shift+Enter a new line; on a phone the button sends). The compact
-// one, in a wall tile, is the line and its buttons alone.
+// quick prompts, dictation, Enter to send (Shift+Enter a new line; on a phone the button sends), ↑ in an empty
+// line to bring back what was sent before. The compact one, in a wall tile, is the line and its buttons alone.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { sendKeys, submitPrompt } from "@/features/roster/api";
@@ -11,6 +11,7 @@ import { Icon, Notice } from "@/ui";
 import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
 import { useDictation } from "./dictation";
 import { QuickPromptsDialog, QuickPromptsMenu } from "./QuickPrompts";
+import { useHistory } from "./useHistory";
 
 export default function Composer({ machineId, paneId, working, dir, compact = false }: { machineId: string; paneId: string; working: boolean; dir: string; compact?: boolean }) {
   // the insertions read the draft through a ref: a state updater must stay free of side effects
@@ -29,6 +30,7 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const att = useAttachments(machineId, paneId);
+  const history = useHistory(machineId, dir);
 
   const mention = (rel: string) => `@${rel}`;
 
@@ -80,6 +82,7 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
     setSending(true);
     try {
       await submitPrompt(machineId, paneId, text);
+      history.add(text);
       setDraft("");
       att.clear();
       setError(null);
@@ -213,7 +216,10 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
           value={draft}
           placeholder={compact ? "Message…" : isTouch ? "Message the agent… (Enter = new line)" : "Message the agent… (Shift+Enter = new line)"}
           rows={Math.min(compact ? 3 : 6, Math.max(1, draft.split("\n").length))}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            history.reset();
+            setDraft(e.target.value);
+          }}
           onBlur={(e) => (caret.current = e.target.selectionStart)}
           onSelect={(e) => (caret.current = e.currentTarget.selectionStart)}
           onPaste={(e) => {
@@ -228,6 +234,16 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               void send();
+              return;
+            }
+            // ↑ on an empty line, or while walking, brings back what was sent before; ↓ walks forward and back to the line being written
+            if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey && (draft === "" || history.browsing())) {
+              const text = history.walk(e.key === "ArrowUp" ? "up" : "down", draft);
+              if (text === null) return;
+              e.preventDefault();
+              caret.current = text.length;
+              moveCaret.current = text.length;
+              setDraft(text);
             }
           }}
         />

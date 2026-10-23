@@ -342,6 +342,27 @@ func (c *Client) PaneRead(paneID string) (string, error) {
 	return out.Read.Text, nil
 }
 
+// Screen is a pane's visible screen as herdr renders it: the rows as text with their SGR colours.
+type Screen struct {
+	Text      string
+	Truncated bool
+}
+
+// PaneScreen is the pane's visible screen with its colours kept (pane.read, format ansi): the wall's screen view.
+func (c *Client) PaneScreen(paneID string) (Screen, error) {
+	var out struct {
+		Read struct {
+			Text      string `json:"text"`
+			Truncated bool   `json:"truncated"`
+		} `json:"read"`
+	}
+	params := map[string]any{"pane_id": paneID, "source": "visible", "format": "ansi", "strip_ansi": false}
+	if err := c.Call("pane.read", params, &out); err != nil {
+		return Screen{}, err
+	}
+	return Screen{Text: out.Read.Text, Truncated: out.Read.Truncated}, nil
+}
+
 func (c *Client) PaneSendKeys(paneID string, keys []string) error {
 	return c.Call("pane.send_keys", map[string]any{"pane_id": paneID, "keys": keys}, nil)
 }
