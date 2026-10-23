@@ -444,7 +444,11 @@ agent hears nothing.
 
 **Between agents:** every assistant turn has a *forward* link that sends its
 text, headed "From *workspace*:", to any other agent on any machine — the
-same dialog Tasks uses to send a task. **Quick prompts** (⚡ in the composer)
+same dialog Tasks uses to send a task. **Message several agents** (✉ in
+the sidebar head, or the palette) sends one text to the agents you tick —
+everyone, the working ones, the resting ones, or by hand — each through
+the chat's own path in turn, and says how each went; an agent busy with a
+question refuses and is shown so, never queued. **Quick prompts** (⚡ in the composer)
 are saved texts, for every folder or one, shared by all your devices. **↑**
 on an empty line brings back what you sent before from this device to
 that folder, newest first; ↓ walks forward and back to the line you were

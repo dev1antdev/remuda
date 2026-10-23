@@ -716,7 +716,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   passes through remuda) and every assistant turn has **forward** — the
   turn's text, headed "From <workspace on machine>:", to another agent
   through `features/agents/SendToAgent.tsx`, the one dialog Tasks, Chat and the review share
-  (`send.targets` pref remembers the last target per key).
+  (`send.targets` pref remembers the last target per key). **Message several agents** (`features/agents/BroadcastDialog.tsx`, the
+  palette and the ✉ in the sidebar head, dialog kind `broadcast`): tick the
+  agents — All / Working / Resting pick by status, an agent asking a question
+  is never picked — one text goes to each in turn through `/api/submit`, and
+  the dialog says how each went; a refusal is shown, never retried or queued
+  (`broadcast.ts` the pure part, tested).
 - `internal/tasks/` — the **Tasks mode**: remuda's own list in
   `tasks.db` (SQLite, WAL, `modernc.org/sqlite` — pure Go, so the four
   static builds keep `CGO_ENABLED=0`) in the state dir of **the remuda

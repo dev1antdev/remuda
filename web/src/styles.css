@@ -2272,6 +2272,77 @@ input[type="checkbox"]:hover:not(:checked) {
   height: var(--ctl-sm);
 }
 
+/* the broadcast dialog: agents to tick, by machine, then how each send went */
+.pick-quick {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.pick-quick .modal-hint {
+  flex: 1;
+  margin: 0;
+}
+
+.pick-list,
+.pick-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pick-list {
+  max-height: 40vh;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.pick-machine {
+  display: block;
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.pick-row:hover {
+  background: var(--bg-active);
+}
+
+.pick-row.asking .pick-hint {
+  color: var(--red);
+}
+
+.pick-row.failed .pick-hint {
+  color: var(--red);
+}
+
+.pick-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pick-hint {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
 .alerts-dialog small {
   display: block;
   margin-top: 2px;
