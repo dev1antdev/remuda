@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Part, Turn } from "./api";
-import { footprint, shownPath, toolPath } from "./footprint";
+import { footprint, shownPath, toolLabel, toolPath } from "./footprint";
 
 const tool = (tool_name: string, input: unknown, is_error = false): Part => ({ type: "tool", tool_name, input, is_error });
 const assistant = (ts: string, ...parts: Part[]): Turn => ({ role: "assistant", ts, parts });
@@ -56,5 +56,15 @@ describe("shownPath", () => {
     expect(shownPath("/home/x/.claude/plans/p.md", "/r")).toBe("/home/x/.claude/plans/p.md");
     expect(shownPath("/r2/a.ts", "/r")).toBe("/r2/a.ts");
     expect(shownPath("/r/a.ts", "")).toBe("/r/a.ts");
+  });
+});
+
+describe("toolLabel", () => {
+  it("names the tool and what it was about, a file linked only when read or written", () => {
+    expect(toolLabel({ type: "tool", tool_name: "Edit", input: { file_path: "/w/a.go" } })).toEqual({ name: "Edit", hint: "/w/a.go", file: "/w/a.go" });
+    expect(toolLabel({ type: "tool", tool_name: "Grep", input: { pattern: "x", path: "/w" } })).toEqual({ name: "Grep", hint: "/w", file: null });
+    expect(toolLabel({ type: "tool", tool_name: "Bash", input: { command: "go test ./..." } })).toEqual({ name: "Bash", hint: "go test ./...", file: null });
+    expect(toolLabel({ type: "tool", tool_name: "Bash", input: { command: "x".repeat(70) } }).hint).toBe("x".repeat(60) + "…");
+    expect(toolLabel({ type: "tool", input: "cut" })).toEqual({ name: "tool", hint: "", file: null });
   });
 });

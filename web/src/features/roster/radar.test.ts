@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Pane, Tab } from "./api";
-import { DEFAULT_RADAR, displayOf, FRAMES, markOf, PULSE_STEPS, rowLabel, tier } from "./radar";
+import { DEFAULT_RADAR, displayOf, FRAMES, markOf, PULSE_STEPS, rowLabel, stateWords, tier } from "./radar";
 
 const now = 1_000_000_000;
 const minutes = (n: number) => now - n * 60_000;
@@ -47,5 +47,15 @@ describe("rowLabel", () => {
     expect(rowLabel(pane({ title: "a long title" }), named, "", { ...DEFAULT_RADAR, rowLabel: "tab" })).toBe("api");
     expect(rowLabel(pane({ title: "a long title" }), named, "", { ...DEFAULT_RADAR, rowLabel: "both" })).toBe("api · a long title");
     expect(rowLabel(pane({ title: "a long title" }), tab({}), "", { ...DEFAULT_RADAR, rowLabel: "tab" })).toBe("a long title");
+  });
+});
+
+describe("stateWords", () => {
+  it("says the state, how long it has lasted and when the last turn was", () => {
+    const now = 1_700_000_000_000;
+    expect(stateWords("working", undefined, now)).toBe("working");
+    expect(stateWords("working", undefined, now, now - 6 * 60_000)).toBe("working for 6 min");
+    expect(stateWords("blocked", undefined, now, now - 90_000)).toBe("waiting on you for 2 min");
+    expect(stateWords("done", now - 4 * 60_000, now, now - 60_000)).toBe("done · last turn 4 min ago");
   });
 });

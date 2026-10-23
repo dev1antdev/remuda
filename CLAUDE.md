@@ -63,7 +63,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   **Never pass `--takeover`** — stealing herdr's attach slot is the user's
   call only. `Client.OnTransportError` fires for failures to *reach* herdr
   (not for herdr's own `*Error` refusals); a remote machine hooks it to
-  mark itself dead, so handlers never call MarkDead. `PaneInfo` has
+  mark itself dead, so handlers never call MarkDead. `Client.PaneScreen` is `pane.read` with the
+  colours kept (the wall's screen view). `PaneInfo` has
   `Dir()`, `AgentName()`, `DisplayTitle()`; status vocabularies are the
   `Status*`/`UI*` constants with `UIStatus(status, hasAgent)` as the one
   mapping.
@@ -110,7 +111,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `ReadFrom`, `Turns`, `ResolveSession`, `Live` / `Chain` / `Lineage`
   (every file a conversation lived in) and `Predecessor`, in process here
   and by script over a `shell.Host` on a remote. `Turn.Answer`,
-  `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with. The chat lens (`features/chat/Chat.tsx`: the transcript through `useChat.ts`, the one fetch hook — every 2 s while the agent works or asks, 10 s otherwise, a 304 = unchanged, `last=N` for a wall tile; `Composer.tsx` (`compact` in a tile), `TurnView.tsx`, `PromptKeys.tsx` (↑ ↓ Enter Esc for a question), `Tail.tsx` (a tile's chat: the last 12 turns, 3 s / 15 s), `FilesRail.tsx` (the **files rail** beside the lenses: every file the agent edited or read in this conversation since its last compaction, from its own tool calls — `footprint.ts` is the pure part, tested: `toolPath` reads `file_path` / `notebook_path` from an object input or from one the server cut to a string at 8 KB, so `TurnView` links a big Write too (a link only for a tool that read or wrote the file: Grep's or Glob's path is a folder, named only); edited files first by their last touch, the ones only read folded; its own `useChat` poll at a tile's pace, only while on screen; a row opens the file viewer on its changes, the code button `actions.openInCode`; a change made through a shell command is the Changes lens's to show, not the rail's), `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
+  `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with. The chat lens (`features/chat/Chat.tsx`: the transcript through `useChat.ts`, the one fetch hook — every 2 s while the agent works or asks, 10 s otherwise, a 304 = unchanged, `last=N` for a wall tile; `Composer.tsx` (`compact` in a tile; ↑ on an empty line brings back what was sent from this device to that folder, newest first, ↓ walks forward and back to the line being written — pref `prompt.history:<machine>|<dir>`, the 50 newest, a repeat moved up; `history.ts` the pure part, tested, `useHistory.ts` the hook), `export.ts` (**Export as Markdown**: the conversation shown — the pane's live session or the older one picked in the lens, store field `chatSession` set by Chat — fetched whole and saved as `<workspace>-<day>-<session>.md` through `saveText` in `lib/host.ts`; text as it is, thinking and tool calls folded in `<details>`, outputs fenced past any backticks; `conversationMarkdown` / `exportFileName` tested; the ↓ button is `ChatTools.tsx` in the tab strip's tools slot while the chat lens is on screen, and the palette has it for the pane and for a transcript open from the search), `TurnView.tsx`, `PromptKeys.tsx` (↑ ↓ Enter Esc for a question), `Tail.tsx` (a tile's chat: the last 12 turns, 3 s / 15 s), `FilesRail.tsx` (the **files rail** beside the lenses: every file the agent edited or read in this conversation since its last compaction, from its own tool calls — `footprint.ts` is the pure part, tested: `toolPath` reads `file_path` / `notebook_path` from an object input or from one the server cut to a string at 8 KB, so `TurnView` links a big Write too (a link only for a tool that read or wrote the file: Grep's or Glob's path is a folder, named only); edited files first by their last touch, the ones only read folded; its own `useChat` poll at a tile's pace, only while on screen; a row opens the file viewer on its changes, the code button `actions.openInCode`; a change made through a shell command is the Changes lens's to show, not the rail's), `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
   only when the reader is there and not selecting or dragging; an upward
   wheel or finger lets go at once, and `TurnView` (`sameTurn`) re-renders only when a
   turn's content changed, so a selection survives the polls.
@@ -384,10 +385,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a media query as a hook, for a piece the stylesheet hides that would
   otherwise poll unseen), `text.ts` (`errMsg`,
   `basename` / `dirname`, `plural`, `shellQuote`), `time.ts`, `paths.ts`,
-  `host.ts` (`copyText`: Clipboard API, else execCommand; `openUrl`: a
+  `host.ts` (`copyText`: Clipboard API, else execCommand; `saveText`: a
+  file for the browser to keep; `openUrl`: a
   new tab — nothing embeds remuda any more, the JetBrains plugin and its
   `window.herdrHost` bridge are gone), `transfer.ts` (`filesFrom`),
-  `version.ts` (`newer`).
+  `version.ts` (`newer`), `perf.ts` (`watchStalls`: the browser's long
+  tasks from 250 ms up, each reported with where the page was;
+  `stallWords`, `toastDue` tested).
 - `web/src/app/` — the shell. `store.ts` is the one page store: the
   *requested* pane (a deep link, a notification, a click), the lens, the
   mode, the drawer, the open dialog / menu / panel, the notice, the
@@ -398,7 +402,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`?machine=&pane=&mode=&lens=`, `history.replaceState`) and is read
   once at load, so a link or a reload lands on the same pane in the same
   lens. `act.ts` (`act(promise)`: refresh the roster, else toast the
-  error), `toasts.tsx`, `Shell.tsx` (URL sync, ⌘K → the palette, the service worker's
+  error), `toasts.tsx`, `diag.ts` (`startDiagnostics`, from App: every
+  stall of the main thread goes to the console as `[remuda] The page
+  stalled 4.2 s on the Wall (13 tiles)` with the mode, the lens and the
+  pane — what the Wall freeze hunt lacked — and one from 2 s up becomes
+  a toast, a minute apart at most), `Shell.tsx` (URL sync, ⌘K → the palette, the service worker's
   select-pane, mark-seen, the four modes), `Header.tsx`, `PaneArea.tsx`
   (the lenses, mounted once seen, and the files rail beside them in
   `.pane-body` — store field `footprint` from the pref of that name,
@@ -412,10 +420,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   says which panes make a tile and in what order — the roster's, stable, so
   no tile jumps on a status change — and leaves out the ones hidden by hand
   (pref `wall.hidden`, the eye on a tile, "Show N hidden" resets) and, with
-  "Hide idle", the idle ones past the radar's fresh tier; pref `wall` holds
+  "Hide idle", the idle ones past the radar's fresh tier, and with **Needs me** (pref `needsMe`, `needsMe` in wall.ts) everyone but the agents waiting for the person — a question open, a watchdog note, a finish not looked at — "Nobody needs you right now" when that leaves none; a tile that needs one wears a pulsing ring (red for a question, amber for a note), a finished one a green edge; the two filters and the view are palette commands too; pref `wall` holds
   the size S/M/L (`TILE_MIN` 360/460/600 px, an auto-fill grid) and the idle
   switch; no sidebar in the mode, "+ Agent" opens the New workspace
-  dialog; the tile itself is `Tile.tsx`, `TileView`), **the pop-out**
+  dialog; the tile itself is `Tile.tsx`, `TileView`; a tile shows the chat or, in the **Screen** view (`view` in pref `wall`: the Chat | Screen pair in the wall's bar, "Wall of screens" in the palette, the pop-out follows it), the pane's terminal as it is — `features/terminal/Screen.tsx` reads `GET /api/screen?machine&pane` (`internal/server/screen.go` → `herdr.Client.PaneScreen`, `pane.read` with `format: ansi`, read from herdr on demand at the tiles' pace, 3 s / 15 s, an ETag over the text so an unchanged screen is a 304; no attach, so no slot is taken and the shared pane is never resized) and draws the rows through `features/terminal/ansi.ts` (`parseAnsi`, tested: SGR colours in xterm's palette, 256 and true colour, bold / dim / italic / underline / inverse, every other escape dropped) at the font that fits the pane's columns in the tile's width (`thumbFont`, `engine/geometry.ts`), the bottom rows kept when the height runs out; a click opens the terminal lens, the head the lens of the view; `TailAnswer` (chat/Tail.tsx) is the foot under either view — the keys for a question and the compact composer; under the head a **state line** that is always there, `TileState` in `chat/Tail.tsx` — `stateWords` with how long the state has lasted (`radar.since`, `elapsed` in `lib/time.ts`) and, while the agent works in the chat view, what it does this second from the end of its tail (`features/chat/doing.ts`, tested: the tool call still without a result through `toolLabel`, now in `footprint.ts`, else thinking or writing)), **the pop-out**
   (`pip.ts` owns the one small window Chrome's Document
   Picture-in-Picture gives — `popOut(selection)` from the click itself,
   the page's stylesheets copied in, `pagehide` clears the store; one
@@ -503,6 +511,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   become): commits, files (fresh first), hunks with a comment box whose
   text goes to the pane's agent through `/api/submit` as
   "Review feedback on path:line". Nothing is written into a repository.
+  **The Review mode** (`features/review/ReviewQueue.tsx`, the fifth mode,
+  `?mode=review`): every workspace with uncommitted work in one list —
+  `queue.ts` (`reviewQueue`, tested) reads the roster's `session.dir` and
+  `session.review`, the ones with changes since the last look first — and
+  the Changes lens of the picked one beside it, its pane the workspace's
+  first agent pane (a shell when none runs there, comments then go to any
+  agent), `onSeen` the roster's refresh; under 920 px the list and the
+  lens take turns, a Queue button leads back.
   **Review comments**: in the lens a tap on a diff row opens a comment box
   under it; comments gather in a draft (`usePref("review.draft:<machine>|
   <dir>")`, this device, per folder), sit under their rows (`.review-note`,
@@ -726,7 +742,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `StartAgentDialog.tsx`, `prompt.ts`, `html.tsx`, `pieces.tsx`, `api.ts`);
   descriptions are rendered through an allow-list into React nodes (never
   innerHTML) and edited as plain text that goes back as paragraphs. The
-  top-bar `mode-switch` (Agents | Wall | Tasks | Code) is a per-device pref.
+  top-bar `mode-switch` (Agents | Wall | Tasks | Code | Review) is a per-device pref.
   **Workflow**: every project has its columns (`statuses`: title, colour,
   `kind` open|done, position, the flags `on_new` / `on_start` /
   `on_finish` on at most one column each) — New / In progress / Testing /
@@ -794,7 +810,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `internal/server/` — the HTTP adapter: one file per context (`roster.go`,
   `machines.go`, `sessions.go`, `chat.go`, `files.go`, `push.go`,
   `search.go`, `usage.go`, `quick.go`, `schedule.go`, `review.go`,
-  `code.go`, `update.go`, `tasks.go`, `terminal.go` with `termhttp.go` and
+  `code.go`, `update.go`, `tasks.go`, `screen.go`, `terminal.go` with `termhttp.go` and
   `peer.go`), each registering its routes in a `…Routes(mux)` that
   `Handler()` calls; a handler reads the request, asks one service and
   writes the answer, and the logic lives in the context packages.

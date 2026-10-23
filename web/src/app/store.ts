@@ -10,7 +10,7 @@ import type { SearchHit } from "@/features/search/api";
 import { readURL } from "./url";
 
 export type Lens = "chat" | "terminal" | "changes";
-export type Mode = "herdr" | "wall" | "tasks" | "code";
+export type Mode = "herdr" | "wall" | "tasks" | "code" | "review";
 export type Selection = { machineId: string; paneId: string };
 
 // Every "make something" dialog, keyed so only one is open at a time.
@@ -49,6 +49,7 @@ export type AppState = {
   popout: Selection | null; // the pane in the small window above every other app (app/pip.ts owns the window)
   footprint: boolean; // the files rail beside the lenses, a per-device pref
   codeFile: { machineId: string; folder: string; path: string; n: number } | null; // a file the Code mode is asked to open, once
+  chatSession: string | null; // an older session of its folder the chat lens shows instead of the pane's live one; the export follows it
 };
 
 const fromURL = readURL();
@@ -72,6 +73,7 @@ export const app = createStore<AppState>({
   popout: null,
   footprint: readPref("footprint", !isTouch),
   codeFile: null,
+  chatSession: null,
 });
 
 let jumps = 0;
@@ -167,6 +169,9 @@ export const actions = {
     writePref("footprint", footprint);
   },
   // the Code mode on that machine and folder, with the file open
+  showChatSession(chatSession: string | null) {
+    app.set({ chatSession });
+  },
   openInCode(machineId: string, folder: string, path: string) {
     app.set({ mode: "code", codeOpened: true, codeFile: { machineId, folder, path, n: ++codeOpens } });
     writePref("mode", "code");
