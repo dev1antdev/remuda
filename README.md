@@ -84,7 +84,12 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   from the header — **pops out** into a small window that stays above
   every other app (Document Picture-in-Picture): the agent keeps you
   company over your editor, and the line to answer it is right there.
-- **Tasks** — the **Agents | Wall | Tasks | Code** switch in the top bar opens remuda's
+- **Review** — the **Review** mode lists every workspace on every machine
+  with uncommitted work, the ones with changes since you last looked
+  first, and opens the Changes lens of the one you pick beside the list:
+  approve, reject or comment from one place instead of visiting each
+  pane.
+- **Tasks** — the **Agents | Wall | Tasks | Code | Review** switch in the top bar opens remuda's
   own task list: projects on the left, Today / Upcoming / All open, quick
   add, done, due dates, priorities, labels, descriptions, search — and a
   **board** per project: the columns a task moves through (New → In

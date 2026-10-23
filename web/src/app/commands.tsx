@@ -21,6 +21,7 @@ const MODES: { mode: Mode; title: string; hint: string; icon: IconName }[] = [
   { mode: "wall", title: "Go to the Wall", hint: "every agent on one screen, a tile each", icon: "layers" },
   { mode: "tasks", title: "Go to Tasks", hint: "your tasks, kept on this remuda", icon: "list" },
   { mode: "code", title: "Go to Code", hint: "VS Code on a machine, through remuda", icon: "code" },
+  { mode: "review", title: "Go to Review", hint: "every workspace with changes to review, in one list", icon: "circle-check" },
 ];
 
 const LENSES: { lens: Lens; title: string; icon: IconName }[] = [

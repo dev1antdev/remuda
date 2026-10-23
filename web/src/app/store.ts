@@ -10,7 +10,7 @@ import type { SearchHit } from "@/features/search/api";
 import { readURL } from "./url";
 
 export type Lens = "chat" | "terminal" | "changes";
-export type Mode = "herdr" | "wall" | "tasks" | "code";
+export type Mode = "herdr" | "wall" | "tasks" | "code" | "review";
 export type Selection = { machineId: string; paneId: string };
 
 // Every "make something" dialog, keyed so only one is open at a time.
