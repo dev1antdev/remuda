@@ -1558,6 +1558,34 @@ input[type="checkbox"]:hover:not(:checked) {
   padding: 0 8px 0 4px;
 }
 
+/* the find bar opens to the left of its toggle: the toggle and the tools after it keep their place */
+.find-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 2px;
+}
+
+.find-bar input {
+  width: 150px;
+  height: var(--ctl-sm);
+}
+
+.find-count {
+  min-width: 6ch;
+  text-align: center;
+  font-size: 11px;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .find-bar input {
+    width: 96px;
+  }
+}
+
 .tabs {
   flex: 1;
   min-width: 0;
@@ -4339,6 +4367,17 @@ button.usage-row:hover {
 
 .turn.turn-hit {
   animation: turn-hit 2.6s var(--ease);
+}
+
+/* the find bar's matches, painted over the text without touching a node */
+::highlight(remuda-find) {
+  background-color: var(--amber-soft);
+  color: var(--fg);
+}
+
+::highlight(remuda-find-current) {
+  background-color: var(--amber);
+  color: #1a1611;
 }
 
 @keyframes turn-hit {

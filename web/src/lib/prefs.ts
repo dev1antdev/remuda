@@ -17,6 +17,8 @@ try {
 }
 
 export const isTouch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+// isMac says which modifier a shortcut shows and listens for: ⌘ there, Ctrl everywhere else
+export const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
 // readPref keeps a stored value only in the fallback's shape: a pref saved by an older build may lack
 // fields (merged in from the fallback) or be a different type altogether (dropped).
