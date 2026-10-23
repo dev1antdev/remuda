@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { errMsg } from "@/lib/text";
-import { readAlertPrefs } from "@/features/alerts/prefs";
+import { deviceZone, readAlertPrefs, readQuietWindow } from "@/features/alerts/prefs";
 import { writePref } from "@/lib/prefs";
-import { disablePush, enablePush, getPushState, sendTestPush, updatePrefs, type Prefs, type PushState } from "@/features/alerts/push";
+import { disablePush, enablePush, getPushState, sendTestPush, updatePrefs, type Prefs, type PushState, type Quiet } from "@/features/alerts/push";
 import Select from "@/ui/Select";
 import { Dialog, Notice, useTimedNotice } from "@/ui";
 
@@ -39,6 +39,16 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
     writePref("alerts", next);
     if (!state?.subscribed) return;
     queue.current = queue.current.then(() => updatePrefs(next)).catch((e) => setErr(errMsg(e)));
+  };
+
+  const zone = deviceZone();
+  const [quietWindow, setQuietWindow] = useState(readQuietWindow);
+  const changeQuiet = (on: boolean) => changePrefs({ ...prefs, quiet: on ? { ...quietWindow, tz: zone } : undefined });
+  const changeWindow = (next: Omit<Quiet, "tz">) => {
+    if (!/^\d\d:\d\d$/.test(next.from) || !/^\d\d:\d\d$/.test(next.to)) return; // a field being cleared: keep the last window
+    setQuietWindow(next);
+    writePref("alerts.quiet", next);
+    if (prefs.quiet) changePrefs({ ...prefs, quiet: { ...next, tz: zone } });
   };
 
   return (
@@ -100,6 +110,18 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
           ]}
         />
       </label>
+      <label className="alerts-opt">
+        <input type="checkbox" checked={!!prefs.quiet} onChange={(e) => changeQuiet(e.target.checked)} />
+        <span>
+          <b>Quiet hours</b>
+          <small>Nothing is sent to this device between the two times, by its own clock ({zone}). Activity keeps what happened meanwhile.</small>
+        </span>
+      </label>
+      <div className="alerts-quiet">
+        <input type="time" className="sm" value={quietWindow.from} disabled={!prefs.quiet} aria-label="Quiet from" onChange={(e) => changeWindow({ ...quietWindow, from: e.target.value })} />
+        <span>to</span>
+        <input type="time" className="sm" value={quietWindow.to} disabled={!prefs.quiet} aria-label="Quiet until" onChange={(e) => changeWindow({ ...quietWindow, to: e.target.value })} />
+      </div>
 
       {state?.subscribed && state.endpoint && (
         <button
