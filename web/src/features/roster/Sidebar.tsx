@@ -80,6 +80,9 @@ export default function Sidebar() {
           <button type="button" className="icon-btn" onClick={() => actions.openPanel("usage")} title="Usage: what the agents cost, by day, project and session">
             <Icon name="chart" size={14} />
           </button>
+          <button type="button" className="icon-btn" onClick={() => actions.openPanel("standup")} title="Standup: what every agent did today, in one report">
+            <Icon name="sun" size={14} />
+          </button>
           <button type="button" className="sidebar-head-btn" onClick={() => actions.openDialog({ kind: "machine" })} title="Add a remote PC over SSH">
             <Icon name="plus" size={12} /> PC
           </button>

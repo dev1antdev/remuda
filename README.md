@@ -98,6 +98,18 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   first, and opens the Changes lens of the one you pick beside the list:
   approve, reject or comment from one place instead of visiting each
   pane.
+- **Standup** — the sun button in the sidebar head (or "Standup" in the
+  palette) is one report over every agent on every machine: what each
+  did since midnight — prompts and answers, how long and what it cost,
+  the tools it called and which failed, the longest call, the commands
+  it ran, the files it edited and read, subagents started, questions
+  asked — and the first line of its last answer, the agents that need
+  you first. Switch to the last 24 hours or 7 days; **Copy as Markdown**
+  gives the report ready to paste into a channel. The same recap of one
+  conversation — the session on screen, or a transcript opened from the
+  search — is the sun button beside the chat's export, and in the
+  palette. All of it is read from the transcripts remuda already has;
+  nothing is sent anywhere.
 - **Tasks** — the **Agents | Wall | Tasks | Code | Review** switch in the top bar opens remuda's
   own task list: projects on the left, Today / Upcoming / All open, quick
   add, done, due dates, priorities, labels, descriptions, search — and a

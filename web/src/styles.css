@@ -6498,3 +6498,122 @@ body.popout {
     min-height: 40px;
   }
 }
+
+/* ---- standup: what every agent did today, and one conversation's recap ---- */
+
+.standup-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.standup-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.standup-open .radar-logo {
+  flex-shrink: 0;
+}
+
+.standup-where {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standup-machine {
+  color: var(--fg-dim);
+  font-weight: 400;
+}
+
+.standup-state {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-dim);
+}
+
+.standup-state.is-blocked,
+.standup-line.is-blocked {
+  color: var(--red);
+}
+
+.standup-state.is-done {
+  color: var(--green);
+}
+
+.standup-state.is-working {
+  color: var(--fg);
+}
+
+.standup-cost {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.standup-line {
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.standup-line.quiet,
+.standup-files {
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.standup-files {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standup-label {
+  margin-right: 5px;
+  color: var(--fg-faint);
+}
+
+.standup-said {
+  font-size: 13px;
+  color: var(--fg-dim);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standup-quiet {
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.standup-quiet summary {
+  cursor: pointer;
+}
+
+.standup-quiet ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.standup-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
