@@ -77,8 +77,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   screen: a tile per agent pane on every connected machine, with its
   state and how long it has lasted, what it runs this second (the tool
   call under way, else thinking or writing) or, once it has finished,
-  the first line of what it answered, the last turns of its
-  conversation and a line to answer it,
+  the first line of what it answered, its pull request as a link when
+  it named one (GitHub or GitLab; the workspace's ⋯ menu has it too),
+  the last turns of its conversation and a line to answer it,
   in a grid that fits the window (S / M / L). Hide the idle ones, or
   keep only the agents that need you — a question, a watchdog note, a
   finish you have not looked at, each ringed on the wall — hide any
