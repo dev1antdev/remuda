@@ -366,6 +366,12 @@ make typecheck # tsc + go vet
 make webtest   # vitest on the page's pure modules
 ```
 
+When the page stalls — nothing clickable for a moment — the browser
+console gets a line like `[remuda] The page stalled 4.2 s on the Wall (13
+tiles)` with the mode, the lens and the pane it was on, and a stall of
+two seconds or more shows a toast saying so; paste the line into an
+issue and the cause is half found.
+
 ## Status / roadmap
 
 Working today (verified against herdr 0.9.1, protocol 22, local + a real
