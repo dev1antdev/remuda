@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Review } from "./api";
-import { commentsMessage, place, verdictMessage, type DraftComment } from "./draft";
+import { COMMIT_ASK, commentsMessage, place, verdictMessage, type DraftComment } from "./draft";
 
 const comment: DraftComment = { id: 1, file: "internal/server/chat.go", line: 42, removed: false, code: "+\tif err != nil {", text: "handle the error\nproperly" };
 const removed: DraftComment = { id: 2, file: "web/src/app.ts", line: 7, removed: true, code: "-const x = 1;", text: "why gone?" };
@@ -31,5 +31,13 @@ describe("verdictMessage", () => {
   it("rejects: changes requested, and the work is not finished until approved", () => {
     const msg = verdictMessage("changes", "", [], "/x");
     expect(msg).toBe("Review of /x: changes requested.\n\nWork on what is asked above, then say when the changes are ready for another look. The work is not finished until it is approved.");
+  });
+});
+
+describe("verdictMessage with a commit asked", () => {
+  it("asks the agent to commit only on an approval that wants it", () => {
+    expect(verdictMessage("approved", "", [], "/x", true).endsWith(COMMIT_ASK)).toBe(true);
+    expect(verdictMessage("approved", "", [], "/x")).not.toContain(COMMIT_ASK);
+    expect(verdictMessage("changes", "fix it", [], "/x", true)).not.toContain(COMMIT_ASK);
   });
 });

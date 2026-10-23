@@ -45,7 +45,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   here): a braille spinner while it works, a pulsing `?` while it waits on
   you, a green `✓` that **stays until you have looked at the pane**, a ring
   that cools with the time since the last turn — fresh, plain, then the
-  whole row dims after two hours. Each agent wears its vendor's logo and
+  whole row dims after two hours. A finished agent's row says, in grey
+  after its name, the first line of what it answered, so the sidebar
+  reads like a list of results. Each agent wears its vendor's logo and
   hue (27 vendors), workspaces are headers with worktrees as a tree, the
   busiest project sorts first; `⇅` flips to a flat list by activity or
   herdr's own order, `⚙` holds the thresholds and the row label.
@@ -63,12 +65,19 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   while the agent waits on a menu; falls back to `pane.send_text` for plain
   shells. Named keys (`Enter`, `Escape`, arrows, `Ctrl+C`) via
   `pane.send_keys`.
+- **Answer** — while the agent waits on a dialog, the chat shows the
+  question as it stands on the screen (Claude Code's permission prompts,
+  its "trust this folder", an AskUserQuestion) with a button per choice;
+  a tap walks the cursor there and presses Enter, Esc closes. From the
+  phone, the wall and the pop-out too. A dialog remuda cannot read leaves
+  the blind ↑ ↓ Enter Esc.
 - **New workspace / close** — `workspace.create` + `agent.start` (any agent
   herdr has a manifest for), `workspace.close`.
 - **Wall** — the **Wall** mode in the top bar puts every agent on one
   screen: a tile per agent pane on every connected machine, with its
   state and how long it has lasted, what it runs this second (the tool
-  call under way, else thinking or writing), the last turns of its
+  call under way, else thinking or writing) or, once it has finished,
+  the first line of what it answered, the last turns of its
   conversation and a line to answer it,
   in a grid that fits the window (S / M / L). Hide the idle ones, or
   keep only the agents that need you — a question, a watchdog note, a
@@ -108,6 +117,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   worktree is answered for you), the task moves to *In progress*, and
   every answer the agent finishes comes back to the task as a comment
   with a push — and moves it on to *Testing*, unless you moved it first.
+  A *Review* link beside the run opens its worktree in the Review mode.
   Which columns do what is the project's own setting. Mark it done from
   there.
 
@@ -203,7 +213,10 @@ same pane with its session resumed (`claude --resume`, `codex resume`,
 `gemini --resume`, `kimi --session`); a busy chat is restarted a little after it finishes,
 and a message half-typed in a chat's box is lost. The same restart is
 offered on its own ("Restart Claude Code chats") for an agent that
-updated itself. An update of herdr ends with its server on the new
+updated itself, and for one chat at a time from the workspace's ⋯ menu
+or the palette ("Restart Claude Code on its session…"): for an agent
+that got stuck, the same exit and resume in its pane, refused while it
+has a question open or is still working. An update of herdr ends with its server on the new
 version: herdr's own live handoff when the installer did one, otherwise
 the server is restarted — herdr restores the workspaces and panes, and
 remuda starts every chat again with its session resumed ("Restart
@@ -224,7 +237,11 @@ fast-forwards it into `main` — so `main` is always what is out — and
 `checksums.txt` and publishes them under it. CI
 (`.github/workflows/ci.yml`) runs the build, the tests, the TypeScript
 check, `govulncheck`, `npm audit` and a secret scan of the whole history
-on every push to `main` or `release` and every pull request.
+on every push to `main` or `release` and every pull request, and on
+`release` the end-to-end smoke as well: a throwaway herdr, a remuda of
+its own and headless Chrome, a scratch workspace typed into and read
+back (`make e2e` runs the same thing on your machine, touching nothing
+of yours).
 
 The long way, piece by piece:
 
@@ -378,6 +395,7 @@ make server    # go run, API on :7317
 make dev       # vite dev server on :5173, proxies /api and /ws
 make typecheck # tsc + go vet
 make webtest   # vitest on the page's pure modules
+make e2e       # the end-to-end smoke: throwaway herdr + remuda + headless Chrome
 ```
 
 When the page stalls — nothing clickable for a moment — the browser
@@ -401,7 +419,9 @@ strip above the pane, machines mirrored from `herdr machine list`, and a
 **file viewer** — click any path the agent prints in the terminal or chat to
 open the file where it lives (local or remote), with a **Changes** tab
 showing its uncommitted `git diff`. A path is a link when it names a file
-(`main.go`, `docs/plan.md`, `.env`), not a folder.
+(`main.go`, `docs/plan.md`, `.env`), not a folder. A picture the agent
+read or wrote — a screenshot it looked at, an icon it drew — shows as a
+thumbnail under the call in the chat; a click opens it.
 
 **Files the agent touched:** a rail beside the chat and the terminal (the
 folder button in the tab strip) lists every file the agent edited or read
@@ -411,6 +431,12 @@ failed. A click opens the file with its uncommitted diff; the code button
 opens it in the Code mode, VS Code on that machine. Edits an agent made
 through shell commands are not its tool calls: the Changes lens shows
 those. Hidden on a phone.
+
+**Full screen** (the ⤢ in the tab strip, or the palette): the header,
+the sidebar and the rail go and the lens takes the whole screen — a
+terminal on the whole monitor, a chat on the whole phone. The tab strip
+stays with its tools; Esc outside the terminal, or the same button,
+brings the page back.
 
 **Attachments:** the paperclip, a pasted screenshot (Ctrl/Cmd+V) or a drop
 uploads into the pane's folder (`.remuda/uploads/`) and mentions the file
@@ -423,7 +449,10 @@ VAPID keys — the only third party is your browser vendor's push service.
 remuda watches every machine's agents itself, so alerts arrive with the
 app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 a minute after a long turn. Answer at the desk first and nothing is sent.
-Needs HTTPS (tailscale serve) or localhost; on iPhone, the home-screen app.
+**Quiet hours** keep a device silent between two times of its own clock
+(22:00 to 07:00, say); the Activity panel still keeps what happened, so the
+morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
+on iPhone, the home-screen app.
 
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
@@ -436,9 +465,11 @@ walks by keys: `j` `k` through the files, `↑` `↓` the lines, `n` `p` the
 hunks, `c` comments on the line, `o` opens the file there, `s` flips the
 columns.
 **Approve** tells the agent the work is reviewed and it can carry on (a
-task it works on can move along), **Reject** tells it what to fix and to
-come back for another look; both take a note and carry your comments, and
-both start the next look from now. The comments can also go on their own,
+task it works on can move along) — tick *and ask the agent to commit* and
+it is **Approve & commit**: the agent commits the reviewed work and says
+so (remuda itself never writes into a repository); **Reject** tells it
+what to fix and to come back for another look; both take a note and carry
+your comments, and both start the next look from now. The comments can also go on their own,
 to this agent or any other. "Mark reviewed" just clears the counts — the
 agent hears nothing.
 
@@ -455,14 +486,17 @@ same dialog Tasks uses to send a task. **Message several agents** (✉ in
 the sidebar head, or the palette) sends one text to the agents you tick —
 everyone, the working ones, the resting ones, or by hand — each through
 the chat's own path in turn, and says how each went; an agent busy with a
-question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Quick prompts** (⚡ in the composer)
-are saved texts, for every folder or one, shared by all your devices. **↑**
+question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Quick prompts** (⚡ in the composer) are saved texts, for every folder or one, shared by all your devices; `{dir}`, `{branch}` and `{file}` in one become the pane's folder, its branch and the file you last opened. **↑**
 on an empty line brings back what you sent before from this device to
 that folder, newest first; ↓ walks forward and back to the line you were
 writing.
 **Export** (↓ in the tab strip on the chat lens, or the palette) saves
 the conversation as a Markdown file — the text as it is, thinking and
 tool calls folded — to share with someone who is not in remuda.
+**Find** (⌘F / Ctrl+F on the chat lens, or 🔍 in the tab strip) marks
+every place a word occurs in the conversation shown and says "3 of 12";
+Enter and Shift+Enter walk them, the current one brought into view, Esc
+closes. It works on a transcript opened from the search too.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through remuda.
 
@@ -494,7 +528,9 @@ remuda is behind this one, or the disk is nearly full.
 **Cost and context:** every agent pane shows how full its context is (a
 pill in the header and on the sidebar row from 50% up, red near the edge,
 with "Compact now" in the chat from 80%) and what the session has cost so
-far at Claude Code's own API prices. 📊 opens the report: by day, by
+far at Claude Code's own API prices. Under every answer in the chat, a
+quiet line says how long it took, the tokens it used and what it cost
+("4 min 12 s · 38k tokens · $0.42"). 📊 opens the report: by day, by
 project, by model, by machine, the sessions that cost the most — every
 machine reads its own transcripts, nothing is sent anywhere. On a
 subscription it is a measure of where the work went, not a bill.
@@ -505,7 +541,11 @@ machine or tab — or run what the page has a button for: a mode, a lens,
 a new workspace, tab or worktree, a rename, the pop-out, the files
 rail, the panels. The liveliest agents come first, the current one is
 marked; ↑ ↓ move, ↵ runs, Esc closes. The last row searches every
-conversation for what you typed.
+conversation for what you typed. **?** opens the keyboard sheet: every
+key the page answers, in groups. **Alt+N** goes to the next agent that
+needs you — a question open, a watchdog note, a finish you have not
+looked at — round and round in the sidebar's order; on the Wall that
+tile takes the wall, elsewhere the agent opens on its chat.
 
 **Search** (🔍, or the palette's last row): full text over every conversation on every
 machine — what you or an agent said, never tool output — filtered by
@@ -516,8 +556,9 @@ binary is deployed, grep otherwise).
 
 **Wall:** a mode for the big screen — every agent on every connected
 machine as a tile: its state and workspace, its context and cost, how
-long it has been at it and what it runs this second, the last dozen
-turns of its conversation, the keys for a question it asks,
+long it has been at it and what it runs this second — or, once it is
+done, the first line of its answer — the last dozen turns of its
+conversation, the question it asks with its choices as buttons,
 and a line to answer. Tiles keep the roster's order, so nothing jumps
 when an agent changes state; hide the idle ones, keep only the ones that
 need you, or hide any single tile, focus one agent with the rest in a

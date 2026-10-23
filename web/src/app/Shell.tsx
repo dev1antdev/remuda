@@ -1,8 +1,9 @@
 // The shell: the header, the sidebar and the pane area or the other modes (the wall, tasks, code), and the overlays. It also
-// keeps the address in step with the selection, hears the service worker and ⌘K (the palette), and tells the
-// server when a finished pane is being looked at.
+// keeps the address in step with the selection, hears the service worker, ⌘K (the palette), ⌘F (the find bar), ? (the keyboard
+// sheet) and Alt+N (the next agent that needs you), and tells the server when a finished pane is being looked at.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { isMac } from "@/lib/prefs";
 import { markSeen } from "@/features/roster/api";
 import Sidebar from "@/features/roster/Sidebar";
 import { useRoster } from "@/features/roster/useRoster";
@@ -18,6 +19,8 @@ import PaneArea from "./PaneArea";
 import PopOut from "./PopOut";
 import Wall from "./Wall";
 import { folderOf, useCurrent } from "./current";
+import { useFullKeys } from "./full";
+import { useNextKey, useNextNeedingMe } from "./next";
 import { actions, app } from "./store";
 import { useToasts } from "./toasts";
 import { writeURL } from "./url";
@@ -28,22 +31,55 @@ export default function Shell() {
   const drawer = app.use((s) => s.drawer);
   const viewer = app.use((s) => s.viewer);
   const codeOpened = app.use((s) => s.codeOpened);
+  const full = app.use((s) => s.full);
   const current = useCurrent();
   const { machines } = useRoster();
   const toasts = useToasts();
+  useFullKeys();
+  useNextKey(useNextNeedingMe());
 
   useEffect(() => {
     writeURL({ selection: current ? { machineId: current.machine.id, paneId: current.pane.id } : null, mode, lens });
   }, [current?.machine.id, current?.pane.id, mode, lens]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // ⌘K on a Mac, Ctrl+K elsewhere, by key code whatever the layout, opens the palette; a terminal keeps its own Ctrl+K
-    const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+    // ⌘K on a Mac, Ctrl+K elsewhere, by key code whatever the layout, opens the palette; a terminal keeps its own Ctrl+K.
+    // ? (Shift and the slash key, by position) opens the keyboard sheet, never over a field or another dialog.
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "KeyK" || e.altKey || e.shiftKey || (mac ? !e.metaKey : !e.ctrlKey)) return;
-      if (!mac && (e.target as Element | null)?.closest?.(".xterm")) return;
+      const target = e.target as Element | null;
+      if (e.code === "Slash" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (target?.closest?.("input, textarea, select, [contenteditable], .xterm")) return;
+        const { dialog, panel } = app.get();
+        if (dialog?.kind === "keys") {
+          e.preventDefault();
+          actions.closeDialog();
+        } else if (!dialog && !panel) {
+          e.preventDefault();
+          actions.openDialog({ kind: "keys" });
+        }
+        return;
+      }
+      if (e.code !== "KeyK" || e.altKey || e.shiftKey || (isMac ? !e.metaKey : !e.ctrlKey)) return;
+      if (!isMac && target?.closest?.(".xterm")) return;
       e.preventDefault();
       actions.togglePanel("palette");
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  // ⌘F / Ctrl+F, by key code, opens the find bar over the chat lens or the transcript viewer — from the composer too,
+  // since no field there has a find of its own — unless an overlay is open
+  const shown = useRef(current);
+  shown.current = current;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyF" || e.altKey || e.shiftKey || (isMac ? !e.metaKey : !e.ctrlKey)) return;
+      const s = app.get();
+      if (s.mode !== "herdr" || s.dialog || s.panel || s.file || s.confirm) return;
+      if (!s.viewer && (s.lens !== "chat" || !shown.current)) return;
+      e.preventDefault();
+      actions.openFind();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -74,7 +110,7 @@ export default function Shell() {
   }, [mode, !!viewer, current?.machine.id, current?.pane.id, seenState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="app">
+    <div className={full && mode === "herdr" ? "app is-full" : "app"}>
       <Header current={current} />
       <div className="body">
         {codeOpened && (
