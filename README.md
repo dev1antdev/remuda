@@ -206,7 +206,10 @@ same pane with its session resumed (`claude --resume`, `codex resume`,
 `gemini --resume`, `kimi --session`); a busy chat is restarted a little after it finishes,
 and a message half-typed in a chat's box is lost. The same restart is
 offered on its own ("Restart Claude Code chats") for an agent that
-updated itself. An update of herdr ends with its server on the new
+updated itself, and for one chat at a time from the workspace's ⋯ menu
+or the palette ("Restart Claude Code on its session…"): for an agent
+that got stuck, the same exit and resume in its pane, refused while it
+has a question open or is still working. An update of herdr ends with its server on the new
 version: herdr's own live handoff when the installer did one, otherwise
 the server is restarted — herdr restores the workspaces and panes, and
 remuda starts every chat again with its session resumed ("Restart
@@ -227,7 +230,11 @@ fast-forwards it into `main` — so `main` is always what is out — and
 `checksums.txt` and publishes them under it. CI
 (`.github/workflows/ci.yml`) runs the build, the tests, the TypeScript
 check, `govulncheck`, `npm audit` and a secret scan of the whole history
-on every push to `main` or `release` and every pull request.
+on every push to `main` or `release` and every pull request, and on
+`release` the end-to-end smoke as well: a throwaway herdr, a remuda of
+its own and headless Chrome, a scratch workspace typed into and read
+back (`make e2e` runs the same thing on your machine, touching nothing
+of yours).
 
 The long way, piece by piece:
 
@@ -381,6 +388,7 @@ make server    # go run, API on :7317
 make dev       # vite dev server on :5173, proxies /api and /ws
 make typecheck # tsc + go vet
 make webtest   # vitest on the page's pure modules
+make e2e       # the end-to-end smoke: throwaway herdr + remuda + headless Chrome
 ```
 
 When the page stalls — nothing clickable for a moment — the browser
@@ -404,7 +412,9 @@ strip above the pane, machines mirrored from `herdr machine list`, and a
 **file viewer** — click any path the agent prints in the terminal or chat to
 open the file where it lives (local or remote), with a **Changes** tab
 showing its uncommitted `git diff`. A path is a link when it names a file
-(`main.go`, `docs/plan.md`, `.env`), not a folder.
+(`main.go`, `docs/plan.md`, `.env`), not a folder. A picture the agent
+read or wrote — a screenshot it looked at, an icon it drew — shows as a
+thumbnail under the call in the chat; a click opens it.
 
 **Files the agent touched:** a rail beside the chat and the terminal (the
 folder button in the tab strip) lists every file the agent edited or read
@@ -426,7 +436,10 @@ VAPID keys — the only third party is your browser vendor's push service.
 remuda watches every machine's agents itself, so alerts arrive with the
 app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 a minute after a long turn. Answer at the desk first and nothing is sent.
-Needs HTTPS (tailscale serve) or localhost; on iPhone, the home-screen app.
+**Quiet hours** keep a device silent between two times of its own clock
+(22:00 to 07:00, say); the Activity panel still keeps what happened, so the
+morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
+on iPhone, the home-screen app.
 
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
@@ -466,6 +479,10 @@ writing.
 **Export** (↓ in the tab strip on the chat lens, or the palette) saves
 the conversation as a Markdown file — the text as it is, thinking and
 tool calls folded — to share with someone who is not in remuda.
+**Find** (⌘F / Ctrl+F on the chat lens, or 🔍 in the tab strip) marks
+every place a word occurs in the conversation shown and says "3 of 12";
+Enter and Shift+Enter walk them, the current one brought into view, Esc
+closes. It works on a transcript opened from the search too.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through remuda.
 
@@ -494,7 +511,9 @@ remuda is behind this one, or the disk is nearly full.
 **Cost and context:** every agent pane shows how full its context is (a
 pill in the header and on the sidebar row from 50% up, red near the edge,
 with "Compact now" in the chat from 80%) and what the session has cost so
-far at Claude Code's own API prices. 📊 opens the report: by day, by
+far at Claude Code's own API prices. Under every answer in the chat, a
+quiet line says how long it took, the tokens it used and what it cost
+("4 min 12 s · 38k tokens · $0.42"). 📊 opens the report: by day, by
 project, by model, by machine, the sessions that cost the most — every
 machine reads its own transcripts, nothing is sent anywhere. On a
 subscription it is a measure of where the work went, not a bill.
@@ -505,7 +524,11 @@ machine or tab — or run what the page has a button for: a mode, a lens,
 a new workspace, tab or worktree, a rename, the pop-out, the files
 rail, the panels. The liveliest agents come first, the current one is
 marked; ↑ ↓ move, ↵ runs, Esc closes. The last row searches every
-conversation for what you typed.
+conversation for what you typed. **?** opens the keyboard sheet: every
+key the page answers, in groups. **Alt+N** goes to the next agent that
+needs you — a question open, a watchdog note, a finish you have not
+looked at — round and round in the sidebar's order; on the Wall that
+tile takes the wall, elsewhere the agent opens on its chat.
 
 **Search** (🔍, or the palette's last row): full text over every conversation on every
 machine — what you or an agent said, never tool output — filtered by
