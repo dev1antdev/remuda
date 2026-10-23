@@ -4,7 +4,9 @@
 import { memo, useState, type ReactNode } from "react";
 import { fileUrl } from "@/features/files/api";
 import type { OpenFile } from "@/features/files/target";
+import { tok, usd } from "@/features/usage/format";
 import { basename } from "@/lib/text";
+import { spent } from "@/lib/time";
 import { ErrorBoundary, Icon, Notice } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import type { Part, Turn } from "./api";
@@ -26,6 +28,7 @@ export const TurnView = memo(
             <PartView key={i} part={p} machineId={machineId} onOpenFile={onOpenFile} />
           ))}
         </ErrorBoundary>
+        {turn.role === "assistant" && (turn.took || turn.tokens) ? <Spent turn={turn} /> : null}
         {onForward && text && turn.role === "assistant" && (
           <button type="button" className="linkish turn-forward" title="Forward this to another agent" onClick={() => onForward(text)}>
             <Icon name="send" size={12} /> forward
@@ -40,12 +43,24 @@ export const TurnView = memo(
 // sameTurn compares content, as every poll brings new objects; a tool's input never changes once written, so it is skipped
 export function sameTurn(a: Turn, b: Turn): boolean {
   if (a.role !== b.role || a.ts !== b.ts || a.parts.length !== b.parts.length || a.ids?.length !== b.ids?.length) return false;
+  if (a.took !== b.took || a.tokens !== b.tokens || a.cost !== b.cost) return false;
   for (let i = 0; i < a.parts.length; i++) {
     const p = a.parts[i]!;
     const q = b.parts[i]!;
     if (p.type !== q.type || p.text !== q.text || p.output !== q.output || p.is_error !== q.is_error || p.tool_name !== q.tool_name) return false;
   }
   return true;
+}
+
+// Spent is the quiet foot of an answer: how long it took, the tokens it used, what it cost at API prices.
+function Spent({ turn }: { turn: Turn }) {
+  const words = [turn.took ? spent(turn.took) : "", turn.tokens ? `${tok(turn.tokens)} tokens` : "", turn.cost ? usd(turn.cost) : ""].filter(Boolean);
+  const title = `${turn.model ? `${turn.model} · ` : ""}from your prompt to the end of this answer; the tokens of its API responses, cache included, at API prices — on a subscription a measure, not a bill`;
+  return (
+    <span className="turn-spent" title={title}>
+      {words.join(" · ")}
+    </span>
+  );
 }
 
 // Folded renders its body only once opened: thinking and tool I/O can be kilobytes a turn
