@@ -50,6 +50,7 @@ export type AppState = {
   footprint: boolean; // the files rail beside the lenses, a per-device pref
   codeFile: { machineId: string; folder: string; path: string; n: number } | null; // a file the Code mode is asked to open, once
   chatSession: string | null; // an older session of its folder the chat lens shows instead of the pane's live one; the export follows it
+  lastFile: { machineId: string; path: string } | null; // the file last opened in the viewer: what {file} means in a quick prompt
 };
 
 const fromURL = readURL();
@@ -74,6 +75,7 @@ export const app = createStore<AppState>({
   footprint: readPref("footprint", !isTouch),
   codeFile: null,
   chatSession: null,
+  lastFile: null,
 });
 
 let jumps = 0;
@@ -137,7 +139,7 @@ export const actions = {
     app.set({ confirm: null });
   },
   openFile(machineId: string, paneId: string, target: FileTarget, dir = "") {
-    app.set({ file: { machineId, paneId, dir, target } });
+    app.set({ file: { machineId, paneId, dir, target }, lastFile: { machineId, path: target.path } });
   },
   retargetFile(target: FileTarget) {
     app.set((s) => ({ file: s.file ? { ...s.file, target } : s.file }));

@@ -722,7 +722,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   subscription a measure, not a bill.
 - `internal/quick/` — saved prompts (`quick.json`, `GET/PUT /api/quick`,
   the list replaced whole), each for every folder or one `dir`; the chat
-  composer offers them under ⚡ and edits them in a dialog. The composer
+  composer offers them under ⚡ and edits them in a dialog; a text may
+  carry `{dir}`, `{branch}` and `{file}` (`chat/quickvars.ts`, tested:
+  `needs` / `expand`), filled on the pick by `expandPrompt` in
+  QuickPrompts.tsx — the pane's folder, its branch through one
+  `GET /api/review` only when the text wants it, and the file last opened
+  in the viewer (store field `lastFile`, set by `openFile`); one the page
+  cannot fill stays as written. The composer
   also dictates through the browser's own `SpeechRecognition` (nothing
   passes through remuda) and every assistant turn has **forward** — the
   turn's text, headed "From <workspace on machine>:", to another agent
