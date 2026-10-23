@@ -41,6 +41,15 @@ export default function Wall() {
         </span>
         <button
           type="button"
+          className={`btn sm${prefs.needsMe ? " on" : ""}`}
+          aria-pressed={prefs.needsMe}
+          title="Only the agents waiting for you: a question open, a watchdog note, a finish you have not looked at"
+          onClick={() => setPrefs({ ...prefs, needsMe: !prefs.needsMe })}
+        >
+          Needs me{prefs.needsMe && list.calm ? ` (${list.calm})` : ""}
+        </button>
+        <button
+          type="button"
           className={`btn sm${prefs.hideIdle ? " on" : ""}`}
           aria-pressed={prefs.hideIdle}
           title={`Hide the agents idle for over ${radar.freshMinutes} min (the sidebar's fresh tier)`}
@@ -74,7 +83,7 @@ export default function Wall() {
       </div>
       {n === 0 ? (
         <div className="placeholder">
-          <p>{machines.some((m) => m.state === "connected") ? (list.hidden || list.idle ? "Every agent is hidden or idle." : "No agent runs anywhere.") : "No machine connected."}</p>
+          <p>{machines.some((m) => m.state === "connected") ? (list.calm ? "Nobody needs you right now." : list.hidden || list.idle ? "Every agent is hidden or idle." : "No agent runs anywhere.") : "No machine connected."}</p>
           <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
             Start an agent
           </button>

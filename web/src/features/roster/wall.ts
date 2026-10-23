@@ -4,22 +4,22 @@ import type { Machine, Pane, Session, Tab } from "./api";
 import { displayOf, type RadarPrefs } from "./radar";
 
 export type WallView = "chat" | "screen"; // what a tile shows: the last turns of the conversation, or the terminal as it is
-export type WallPrefs = { size: "s" | "m" | "l"; hideIdle: boolean; view: WallView };
-export const DEFAULT_WALL: WallPrefs = { size: "m", hideIdle: false, view: "chat" };
+export type WallPrefs = { size: "s" | "m" | "l"; hideIdle: boolean; needsMe: boolean; view: WallView };
+export const DEFAULT_WALL: WallPrefs = { size: "m", hideIdle: false, needsMe: false, view: "chat" };
 
 // the narrowest a tile gets, per size; the grid fits as many columns as the window allows
 export const TILE_MIN: Record<WallPrefs["size"], number> = { s: 360, m: 460, l: 600 };
 
 export type Tile = { key: string; machine: Machine; session: Session; tab: Tab; pane: Pane };
-export type Tiles = { shown: Tile[]; hidden: number; idle: number };
+export type Tiles = { shown: Tile[]; hidden: number; idle: number; calm: number };
 
 export const tileKey = (machineId: string, paneId: string) => `${machineId}|${paneId}`;
 
 // tiles lists every agent pane on a connected machine in a stable order — the machines as the roster has them, the panes as
 // herdr has them — so no tile jumps when a status changes; the ones hidden by hand and, when asked, the idle ones past the
-// fresh tier are left out and counted
+// fresh tier or the ones that need nobody are left out and counted
 export function tiles(machines: Machine[], hidden: string[], prefs: WallPrefs, radar: RadarPrefs, now: number): Tiles {
-  const out: Tiles = { shown: [], hidden: 0, idle: 0 };
+  const out: Tiles = { shown: [], hidden: 0, idle: 0, calm: 0 };
   const gone = new Set(hidden);
   for (const machine of machines) {
     if (machine.state !== "connected") continue;
@@ -30,6 +30,10 @@ export function tiles(machines: Machine[], hidden: string[], prefs: WallPrefs, r
           const key = tileKey(machine.id, pane.id);
           if (gone.has(key)) {
             out.hidden++;
+            continue;
+          }
+          if (prefs.needsMe && !needsMe(pane, radar, now)) {
+            out.calm++;
             continue;
           }
           if (prefs.hideIdle && isIdle(pane, radar, now)) {
@@ -46,4 +50,11 @@ export function tiles(machines: Machine[], hidden: string[], prefs: WallPrefs, r
 export function isIdle(pane: Pane, radar: RadarPrefs, now: number): boolean {
   const d = displayOf(pane, radar, now);
   return d === "idle" || d === "idle_stale";
+}
+
+// needsMe is an agent waiting for the person: a question open, a watchdog note, or a finish nobody has looked at yet
+export function needsMe(pane: Pane, radar: RadarPrefs, now: number): boolean {
+  if (pane.radar?.alert) return true;
+  const d = displayOf(pane, radar, now);
+  return d === "blocked" || d === "done";
 }

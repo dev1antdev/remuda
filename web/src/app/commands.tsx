@@ -84,11 +84,13 @@ function useCommands(): (query: string) => Entry[] {
       }
 
       const screens = wall.view === "screen";
-      const showWall = () => {
-        setWall({ ...wall, view: screens ? "chat" : "screen" });
+      const onTheWall = (change: Partial<WallPrefs>) => () => {
+        setWall({ ...wall, ...change });
         actions.setMode("wall");
       };
-      command("wall-view", screens ? "Wall of chats" : "Wall of screens", showWall, { hint: screens ? "each tile the last turns of its conversation" : "each tile its terminal as it is, scaled to fit", icon: "layers", keywords: ["wall", "terminal", "screen", "chat", "view", "tiles"] });
+      command("wall-needs", wall.needsMe ? "Wall: every agent" : "Wall: only the agents that need me", onTheWall({ needsMe: !wall.needsMe }), { hint: wall.needsMe ? "the filter off" : "a question open, a watchdog note, a finish not looked at", icon: "layers", keywords: ["wall", "needs", "attention", "waiting", "blocked", "filter"] });
+      command("wall-idle", wall.hideIdle ? "Wall: show the idle agents" : "Wall: hide the idle agents", onTheWall({ hideIdle: !wall.hideIdle }), { hint: `idle for over ${radar.freshMinutes} min`, icon: "layers", keywords: ["wall", "idle", "hide", "filter"] });
+      command("wall-view", screens ? "Wall of chats" : "Wall of screens", onTheWall({ view: screens ? "chat" : "screen" }), { hint: screens ? "each tile the last turns of its conversation" : "each tile its terminal as it is, scaled to fit", icon: "layers", keywords: ["wall", "terminal", "screen", "chat", "view", "tiles"] });
       command("rail", footprint ? "Hide the files rail" : "Show the files rail", actions.toggleFootprint, { hint: "the files the agent touched, beside the lenses", icon: "folder", keywords: ["footprint", "files"] });
       command("alerts", "Alerts on this device", () => actions.openPanel("alerts"), { hint: "which pushes to get here", icon: "bell", keywords: ["push", "notifications"] });
       command("schedules", "Schedules", () => actions.openPanel("schedules"), { hint: "prompts sent to agents on a timetable", icon: "calendar", keywords: ["cron", "timer", "prompt"] });
