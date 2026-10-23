@@ -58,3 +58,10 @@ export function needsMe(pane: Pane, radar: RadarPrefs, now: number): boolean {
   const d = displayOf(pane, radar, now);
   return d === "blocked" || d === "done";
 }
+
+// withFocus splits the shown tiles into the one given the whole wall and the rest for the strip under it; an unknown
+// or vanished key focuses nothing and the grid stands
+export function withFocus(shown: Tile[], key: string): { big: Tile | null; rest: Tile[] } {
+  const big = shown.find((tile) => tile.key === key) ?? null;
+  return { big, rest: big ? shown.filter((tile) => tile !== big) : shown };
+}

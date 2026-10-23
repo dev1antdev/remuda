@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session } from "./api";
 import { DEFAULT_RADAR } from "./radar";
-import { DEFAULT_WALL, isIdle, needsMe, tileKey, tiles } from "./wall";
+import { DEFAULT_WALL, isIdle, needsMe, tileKey, tiles, withFocus } from "./wall";
 
 const NOW = 1_700_000_000_000;
 const MIN = 60_000;
@@ -86,5 +86,17 @@ describe("isIdle", () => {
     expect(isIdle(noStamp, DEFAULT_RADAR, NOW)).toBe(true);
     expect(isIdle(done, DEFAULT_RADAR, NOW)).toBe(false);
     expect(isIdle(fresh, { ...DEFAULT_RADAR, freshMinutes: 2 }, NOW)).toBe(true);
+  });
+});
+
+describe("withFocus", () => {
+  it("lifts the focused tile out and keeps the rest in order; a gone key focuses nothing", () => {
+    const shown = tiles([machine("local", [session("a", [working, blocked, done])])], [], DEFAULT_WALL, DEFAULT_RADAR, NOW).shown;
+    const focused = withFocus(shown, tileKey("local", "b"));
+    expect(focused.big?.pane.id).toBe("b");
+    expect(focused.rest.map((t) => t.pane.id)).toEqual(["w", "d"]);
+    const none = withFocus(shown, tileKey("local", "gone"));
+    expect(none.big).toBeNull();
+    expect(none.rest).toBe(shown);
   });
 });

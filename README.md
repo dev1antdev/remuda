@@ -73,7 +73,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   in a grid that fits the window (S / M / L). Hide the idle ones, or
   keep only the agents that need you — a question, a watchdog note, a
   finish you have not looked at, each ringed on the wall — hide any
-  tile, bring them back; a click on a tile's head opens that agent
+  tile, bring them back; **focus** one agent and it takes the whole wall
+  while the others wait in a strip under it; a click on a tile's head opens that agent
   in Agents. The tiles ask only for the last few turns, so a wall of a
   dozen agents stays light. **Screen** turns every tile into the pane's
   terminal as it is — the rows with their colours, scaled to the tile,
@@ -488,7 +489,8 @@ long it has been at it and what it runs this second, the last dozen
 turns of its conversation, the keys for a question it asks,
 and a line to answer. Tiles keep the roster's order, so nothing jumps
 when an agent changes state; hide the idle ones, keep only the ones that
-need you, or hide any single tile, pick the tile size, click a head to open the agent in full, or switch the
+need you, or hide any single tile, focus one agent with the rest in a
+strip under it, pick the tile size, click a head to open the agent in full, or switch the
 wall to **Screen** to see every terminal as it is instead of its chat. In Chrome, a tile
 or the current agent **pops out** into a small always-on-top window
 (Document Picture-in-Picture), one at a time, closed from its own frame.

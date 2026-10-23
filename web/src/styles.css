@@ -5359,6 +5359,36 @@ button.usage-row:hover {
   padding: 10px 12px;
 }
 
+/* one tile given the whole wall, the rest in a strip under it: their heads and state lines only */
+.wall-focus {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px 0;
+}
+
+.wall-focus .tile {
+  flex: 1;
+}
+
+.wall-strip {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.wall-strip .tile {
+  width: 300px;
+  flex-shrink: 0;
+}
+
+.tile.brief .tile-state {
+  border-bottom: 0;
+}
+
 .tile {
   display: flex;
   flex-direction: column;

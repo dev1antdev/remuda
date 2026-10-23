@@ -1,12 +1,12 @@
 // The Wall mode: every agent on one screen, a tile each — its state, its last turns or its terminal as it is, a
-// line to answer — in a grid that fits the window. app composes: the tile is ./Tile over features/chat/Tail, which panes make a tile
+// line to answer — in a grid that fits the window, or one of them given the whole wall with the rest in a strip under it. app composes: the tile is ./Tile over features/chat/Tail, which panes make a tile
 // and in what order is features/roster/wall.
 
-import { useMemo, type CSSProperties } from "react";
+import { useEffect, useMemo, type CSSProperties } from "react";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
-import { DEFAULT_WALL, TILE_MIN, tiles, type WallPrefs, type WallView } from "@/features/roster/wall";
+import { DEFAULT_WALL, TILE_MIN, tiles, withFocus, type Tile, type WallPrefs, type WallView } from "@/features/roster/wall";
 import { usePref } from "@/lib/prefs";
 import { Icon } from "@/ui";
 import { popOut, popOutSupported } from "./pip";
@@ -32,7 +32,33 @@ export default function Wall() {
   const now = useClock(machines);
   const step = useSpinner(moving(machines));
   const list = useMemo(() => tiles(machines, hidden, prefs, radar, now), [machines, hidden, prefs, radar, now]);
+  const [focus, setFocus] = usePref<string>("wall.focus", "");
+  const { big, rest } = useMemo(() => withFocus(list.shown, focus), [list.shown, focus]);
+  useEffect(() => {
+    if (!big) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || (event.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]") || document.querySelector(".modal-scrim, .sel-pop")) return;
+      setFocus("");
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [big, setFocus]);
   const n = list.shown.length;
+  const tile = (t: Tile, brief = false) => (
+    <TileView
+      key={t.key}
+      tile={t}
+      view={prefs.view}
+      radar={radar}
+      step={step}
+      now={now}
+      brief={brief}
+      focused={t === big}
+      onFocus={() => setFocus(t === big ? "" : t.key)}
+      onHide={() => setHidden((h) => [...h.filter((k) => k !== t.key), t.key])}
+      onPopOut={popOutSupported ? () => void popOut({ machineId: t.machine.id, paneId: t.pane.id }) : undefined}
+    />
+  );
   return (
     <main className="wall">
       <div className="wall-bar">
@@ -88,20 +114,14 @@ export default function Wall() {
             Start an agent
           </button>
         </div>
+      ) : big ? (
+        <>
+          <div className="wall-focus">{tile(big)}</div>
+          {rest.length > 0 && <div className="wall-strip">{rest.map((t) => tile(t, true))}</div>}
+        </>
       ) : (
         <div className="wall-grid" style={{ "--tile-min": `${TILE_MIN[prefs.size]}px` } as CSSProperties}>
-          {list.shown.map((t) => (
-            <TileView
-              key={t.key}
-              tile={t}
-              view={prefs.view}
-              radar={radar}
-              step={step}
-              now={now}
-              onHide={() => setHidden((h) => [...h.filter((k) => k !== t.key), t.key])}
-              onPopOut={popOutSupported ? () => void popOut({ machineId: t.machine.id, paneId: t.pane.id }) : undefined}
-            />
-          ))}
+          {list.shown.map((t) => tile(t))}
         </div>
       )}
     </main>
