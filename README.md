@@ -67,7 +67,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   herdr has a manifest for), `workspace.close`.
 - **Wall** — the **Wall** mode in the top bar puts every agent on one
   screen: a tile per agent pane on every connected machine, with its
-  state, the last turns of its conversation and a line to answer it,
+  state and how long it has lasted, what it runs this second (the tool
+  call under way, else thinking or writing), the last turns of its
+  conversation and a line to answer it,
   in a grid that fits the window (S / M / L). Hide the idle ones, hide
   any tile, bring them back; a click on a tile's head opens that agent
   in Agents. The tiles ask only for the last few turns, so a wall of a
@@ -479,8 +481,9 @@ scans its own `~/.claude/projects` on demand (remuda's scanner where the
 binary is deployed, grep otherwise).
 
 **Wall:** a mode for the big screen — every agent on every connected
-machine as a tile: its state and workspace, its context and cost, the
-last dozen turns of its conversation, the keys for a question it asks,
+machine as a tile: its state and workspace, its context and cost, how
+long it has been at it and what it runs this second, the last dozen
+turns of its conversation, the keys for a question it asks,
 and a line to answer. Tiles keep the roster's order, so nothing jumps
 when an agent changes state; hide the idle ones or any single tile, pick
 the tile size, click a head to open the agent in full, or switch the
