@@ -5,11 +5,11 @@
 import { useCallback } from "react";
 import Palette from "@/features/palette/Palette";
 import { paneEntries, type Entry } from "@/features/palette/rank";
-import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
+import { DEFAULT_RADAR, rowLabel, type RadarPrefs } from "@/features/roster/radar";
 import { closeWorkspace } from "@/features/roster/WorkspaceMenu";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
-import { DEFAULT_WALL, type WallPrefs } from "@/features/roster/wall";
+import { DEFAULT_WALL, tileKey, type WallPrefs } from "@/features/roster/wall";
 import { usePref } from "@/lib/prefs";
 import type { IconName } from "@/ui/icons";
 import { folderOf, useCurrent } from "./current";
@@ -44,6 +44,7 @@ function useCommands(): (query: string) => Entry[] {
   const current = useCurrent();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
+  const [focus, setFocus] = usePref<string>("wall.focus", "");
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
   return useCallback(
@@ -90,6 +91,15 @@ function useCommands(): (query: string) => Entry[] {
       };
       command("wall-needs", wall.needsMe ? "Wall: every agent" : "Wall: only the agents that need me", onTheWall({ needsMe: !wall.needsMe }), { hint: wall.needsMe ? "the filter off" : "a question open, a watchdog note, a finish not looked at", icon: "layers", keywords: ["wall", "needs", "attention", "waiting", "blocked", "filter"] });
       command("wall-idle", wall.hideIdle ? "Wall: show the idle agents" : "Wall: hide the idle agents", onTheWall({ hideIdle: !wall.hideIdle }), { hint: `idle for over ${radar.freshMinutes} min`, icon: "layers", keywords: ["wall", "idle", "hide", "filter"] });
+      if (focus) command("wall-unfocus", "Wall: back to the grid", () => {
+        setFocus("");
+        actions.setMode("wall");
+      }, { hint: "every tile its own size again", icon: "minimize", keywords: ["wall", "focus", "grid", "leave"] });
+      if (current && current.pane.agent && tileKey(current.machine.id, current.pane.id) !== focus)
+        command("wall-focus", `Focus ${rowLabel(current.pane, current.tab, current.session.name, radar)} on the Wall`, () => {
+          setFocus(tileKey(current.machine.id, current.pane.id));
+          actions.setMode("wall");
+        }, { hint: "this agent takes the wall, the others wait in a strip", icon: "maximize", keywords: ["wall", "focus", "big", "zoom"] });
       command("wall-view", screens ? "Wall of chats" : "Wall of screens", onTheWall({ view: screens ? "chat" : "screen" }), { hint: screens ? "each tile the last turns of its conversation" : "each tile its terminal as it is, scaled to fit", icon: "layers", keywords: ["wall", "terminal", "screen", "chat", "view", "tiles"] });
       command("rail", footprint ? "Hide the files rail" : "Show the files rail", actions.toggleFootprint, { hint: "the files the agent touched, beside the lenses", icon: "folder", keywords: ["footprint", "files"] });
       command("alerts", "Alerts on this device", () => actions.openPanel("alerts"), { hint: "which pushes to get here", icon: "bell", keywords: ["push", "notifications"] });
@@ -100,6 +110,6 @@ function useCommands(): (query: string) => Entry[] {
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, footprint, current, radar, wall, setWall, step, now],
+    [machines, mode, lens, viewer, footprint, current, radar, wall, setWall, focus, setFocus, step, now],
   );
 }

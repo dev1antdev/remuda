@@ -12,12 +12,15 @@ import { brandColor } from "@/ui/brand";
 import { folderOf } from "./current";
 import { actions } from "./store";
 
-export function TileView({ tile, view = "chat", radar, step, now, onHide, onPopOut }: {
+export function TileView({ tile, view = "chat", radar, step, now, brief = false, focused = false, onFocus, onHide, onPopOut }: {
   tile: Tile;
   view?: WallView;
   radar: RadarPrefs;
   step: number;
   now: number;
+  brief?: boolean; // the strip under a focused tile: the head and the state line only
+  focused?: boolean; // this tile has the whole wall
+  onFocus?: () => void; // the wall's focus button: give this tile the wall, or the wall back
   onHide?: () => void; // the wall's eye
   onPopOut?: () => void; // the wall's pop-out, when the browser can
 }) {
@@ -37,7 +40,7 @@ export function TileView({ tile, view = "chat", radar, step, now, onHide, onPopO
   const dir = folderOf(tile);
   const words = alert ?? stateWords(d, pane.radar?.last_active, now, pane.radar?.since);
   return (
-    <section className={`tile is-${d}${alert ? " is-alert" : ""}`} aria-label={`${pane.agent} in ${where}`}>
+    <section className={`tile is-${d}${alert ? " is-alert" : ""}${brief ? " brief" : ""}`} aria-label={`${pane.agent} in ${where}`}>
       <header className="tile-head">
         <button type="button" className="linkish tile-open" title={`${words}\n${pane.cwd}\nOpen the ${screen ? "terminal" : "chat"} in Agents`} onClick={open}>
           <span className="radar-mark" style={markStyle}>
@@ -52,6 +55,11 @@ export function TileView({ tile, view = "chat", radar, step, now, onHide, onPopO
             {Math.round(100 * fill)}% · {usd(usage.cost)}
           </span>
         )}
+        {onFocus && (
+          <button type="button" className={`icon-btn sm tile-focus${focused ? " on" : ""}`} title={focused ? "Back to the grid (Esc)" : "Focus: this agent takes the wall, the others wait in a strip"} aria-label={focused ? "Back to the grid" : "Focus this agent"} aria-pressed={focused} onClick={onFocus}>
+            <Icon name={focused ? "minimize" : "maximize"} size={14} />
+          </button>
+        )}
         {onPopOut && (
           <button type="button" className="icon-btn sm tile-pop" title="Pop out: a small window above every other app" aria-label="Pop out" onClick={onPopOut}>
             <Icon name="pip" size={14} />
@@ -63,7 +71,9 @@ export function TileView({ tile, view = "chat", radar, step, now, onHide, onPopO
           </button>
         )}
       </header>
-      {screen ? (
+      {brief ? (
+        <TileState words={words} />
+      ) : screen ? (
         <>
           <TileState words={words} />
           <Screen machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active onOpen={open} />
