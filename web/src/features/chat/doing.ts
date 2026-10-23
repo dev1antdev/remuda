@@ -1,10 +1,11 @@
 // What the agent is doing this second, read from the end of its conversation: the tool call still without a
-// result, else thinking before the next step, else writing its answer. A wall tile shows it while the agent works.
+// result (and since when, so the tile can count how long it has run), else thinking before the next step, else
+// writing its answer. A wall tile shows it while the agent works.
 
 import type { Turn } from "./api";
 import { toolLabel } from "./footprint";
 
-export type Doing = { what: "tool"; name: string; hint: string } | { what: "thinking" | "writing" };
+export type Doing = { what: "tool"; name: string; hint: string; at?: string } | { what: "thinking" | "writing" };
 
 export function doing(turns: Turn[]): Doing {
   const last = turns[turns.length - 1];
@@ -14,7 +15,7 @@ export function doing(turns: Turn[]): Doing {
   if (part.type === "tool") {
     if (part.output !== undefined) return { what: "thinking" };
     const { name, hint } = toolLabel(part);
-    return { what: "tool", name, hint };
+    return part.at ? { what: "tool", name, hint, at: part.at } : { what: "tool", name, hint };
   }
   return { what: part.type === "thinking" ? "thinking" : "writing" };
 }

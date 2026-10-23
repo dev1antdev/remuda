@@ -34,6 +34,12 @@ export function spent(seconds: number): string {
   return m % 60 ? `${h} h ${m % 60} min` : `${h} h`;
 }
 
+// took says how long one call took: a tenth under ten seconds ("0.8 s", "1.2 s"), else as spent ("12 s", "4 min 12 s").
+export function took(seconds: number): string {
+  if (seconds < 10) return `${(Math.round(Math.max(0, seconds) * 10) / 10).toFixed(1)} s`;
+  return spent(seconds);
+}
+
 // whenShort is the time if today, the weekday and time within a week, else the date.
 export function whenShort(d: When): string {
   const t = toDate(d);

@@ -2183,6 +2183,21 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--red);
 }
 
+.part-tool summary .part-hint,
+.part-tool summary .path-link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.part-took {
+  margin-left: auto;
+  padding-left: 8px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--fg-faint);
+}
+
 .part-image {
   display: block;
   margin: 6px 0 0;
@@ -4682,6 +4697,10 @@ button.usage-row:hover {
   cursor: default;
 }
 
+.turn-wrong {
+  color: var(--red);
+}
+
 .turn-forward {
   align-self: flex-start;
   display: inline-flex;
@@ -5800,6 +5819,14 @@ button.usage-row:hover {
 
 .tile-doing-name {
   color: var(--fg-faint);
+}
+
+.tile-running {
+  color: var(--fg-faint);
+}
+
+.tile-running.is-long {
+  color: var(--amber);
 }
 
 .tile.is-blocked .tile-words {

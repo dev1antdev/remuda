@@ -6,7 +6,9 @@ import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { actions } from "@/app/store";
 import type { OpenFile } from "@/features/files/target";
 import { sendKeys } from "@/features/roster/api";
+import { useNow } from "@/lib/clock";
 import { errMsg } from "@/lib/text";
+import { took } from "@/lib/time";
 import { Notice } from "@/ui";
 import Composer from "./Composer";
 import { doing, type Doing } from "./doing";
@@ -68,6 +70,7 @@ export function TileState({ words, doing, said }: { words: string; doing?: Doing
           {doing.what === "tool" ? (
             <>
               <span className="tile-doing-name">{doing.name}</span> {doing.hint}
+              {doing.at && <Running since={doing.at} />}
             </>
           ) : (
             `${doing.what}…`
@@ -75,6 +78,22 @@ export function TileState({ words, doing, said }: { words: string; doing?: Doing
         </span>
       )}
     </div>
+  );
+}
+
+// LONG_CALL is when a running call turns amber: a command going on past a minute deserves a look
+export const LONG_CALL = 60;
+
+// Running counts how long the call without a result has run, a second at a time, amber past LONG_CALL
+function Running({ since }: { since: string }) {
+  const now = useNow(1000);
+  const seconds = Math.max(0, (now - new Date(since).getTime()) / 1000);
+  if (!Number.isFinite(seconds)) return null;
+  return (
+    <span className={seconds >= LONG_CALL ? "tile-running is-long" : "tile-running"} title={seconds >= LONG_CALL ? "This call has run for over a minute" : undefined}>
+      {" · "}
+      {took(seconds)}
+    </span>
   );
 }
 
