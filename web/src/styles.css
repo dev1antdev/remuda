@@ -5783,6 +5783,20 @@ button.usage-row:hover {
   margin-left: 0;
 }
 
+.tile-pr {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.tile-pr:hover {
+  color: var(--accent);
+}
+
 /* the state line under the head: the state and how long, and what the agent runs this second; always there, so nothing moves */
 .tile-state {
   display: flex;

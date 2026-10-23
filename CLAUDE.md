@@ -452,7 +452,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   whatever the lens so nothing in the strip moves, disabled for a shell
   pane, hidden with the rail under 920 px and not polling there; beside it the **full screen** toggle, `app/full.tsx` — store field `full`: the header, the sidebar and the rail go, the tab strip stays with its tools, the browser's own full screen is asked for where it exists; Esc outside a field or the terminal leaves, so does the browser's exit, and a mode change clears it; the palette has it), `Wall.tsx` (the **Wall mode**: every
   agent pane on a connected machine as a tile — the sidebar row's head
-  (mark, logo, label, workspace · machine, context % · cost), the last 12
+  (mark, logo, label, workspace · machine, the pull request the agent named as a link, context % · cost), the last 12
   turns through `features/chat/Tail`, a compact composer; a click on the
   head opens the pane in Agents on the chat lens. `features/roster/wall.ts`
   says which panes make a tile and in what order — the roster's, stable, so
@@ -721,7 +721,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   again. `FirstLine` strips the Markdown marks (headings, list and quote
   marks, emphasis, code, links, tags; fences and rules skipped) and cuts
   at a word by `Max` 120 characters; `features/chat/said.ts` is the same
-  cut on the page, both tested.
+  cut on the page, both tested. The same read notes **the pull request
+  the agent named** (`transcript.PullRequest`, tested: the last GitHub
+  `/pull/N` or GitLab `/merge_requests/N` in the assistant's own text;
+  `pane.pr {url, label}` on the roster, kept while the agent works
+  again, gone with the pane): a "PR #15" / "MR !9" link in a wall
+  tile's head, in the sidebar row's tooltip, and "Open PR #15" in the
+  workspace's ⋯ menu.
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥
