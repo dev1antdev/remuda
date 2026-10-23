@@ -483,8 +483,7 @@ same dialog Tasks uses to send a task. **Message several agents** (✉ in
 the sidebar head, or the palette) sends one text to the agents you tick —
 everyone, the working ones, the resting ones, or by hand — each through
 the chat's own path in turn, and says how each went; an agent busy with a
-question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Quick prompts** (⚡ in the composer)
-are saved texts, for every folder or one, shared by all your devices. **↑**
+question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Quick prompts** (⚡ in the composer) are saved texts, for every folder or one, shared by all your devices; `{dir}`, `{branch}` and `{file}` in one become the pane's folder, its branch and the file you last opened. **↑**
 on an empty line brings back what you sent before from this device to
 that folder, newest first; ↓ walks forward and back to the line you were
 writing.

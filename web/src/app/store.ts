@@ -55,6 +55,7 @@ export type AppState = {
   footprint: boolean; // the files rail beside the lenses, a per-device pref
   codeFile: { machineId: string; folder: string; path: string; n: number } | null; // a file the Code mode is asked to open, once
   chatSession: string | null; // an older session of its folder the chat lens shows instead of the pane's live one; the export follows it
+  lastFile: { machineId: string; path: string } | null; // the file last opened in the viewer: what {file} means in a quick prompt
   full: boolean; // the lens takes the whole screen: no header, no sidebar, no rail (app/full.tsx)
   find: Find | null; // the find bar over the chat lens or the transcript viewer, null while closed
 };
@@ -81,6 +82,7 @@ export const app = createStore<AppState>({
   footprint: readPref("footprint", !isTouch),
   codeFile: null,
   chatSession: null,
+  lastFile: null,
   full: false,
   find: null,
 });
@@ -149,7 +151,7 @@ export const actions = {
     app.set({ confirm: null });
   },
   openFile(machineId: string, paneId: string, target: FileTarget, dir = "") {
-    app.set({ file: { machineId, paneId, dir, target } });
+    app.set({ file: { machineId, paneId, dir, target }, lastFile: { machineId, path: target.path } });
   },
   retargetFile(target: FileTarget) {
     app.set((s) => ({ file: s.file ? { ...s.file, target } : s.file }));

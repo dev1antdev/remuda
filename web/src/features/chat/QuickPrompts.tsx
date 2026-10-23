@@ -1,10 +1,25 @@
-// Quick prompts: the saved texts offered under ⚡ in the composer, and the dialog that edits them as one list.
+// Quick prompts: the saved texts offered under ⚡ in the composer, and the dialog that edits them as one list. A text may
+// carry {dir}, {branch} and {file}: the pane's folder, its branch (asked of the machine on the pick) and the file last
+// opened in the viewer.
 
 import { useState } from "react";
 import { useQuery } from "@/lib/query";
 import { basename, errMsg } from "@/lib/text";
 import { Dialog, Icon, Notice } from "@/ui";
+import { fetchReview } from "@/features/review/api";
+import { app } from "@/app/store";
 import { fetchQuick, saveQuick, type QuickPrompt } from "./api";
+import { expand, needs } from "./quickvars";
+
+// expandPrompt fills a picked text's placeholders; the branch is one shell on the machine, run only when the text wants it
+export async function expandPrompt(text: string, machineId: string, dir: string): Promise<string> {
+  const wanted = needs(text);
+  if (wanted.size === 0) return text;
+  const last = app.get().lastFile;
+  const file = last && last.machineId === machineId ? last.path : "";
+  const branch = wanted.has("branch") && dir ? await fetchReview(machineId, dir).then((r) => r.branch, () => "") : "";
+  return expand(text, { dir, branch, file });
+}
 
 export function QuickPromptsMenu({ at, dir, onPick, onManage }: { at: { x: number; y: number }; dir: string; onPick: (text: string) => void; onManage: () => void }) {
   const { data: prompts, error } = useQuery(fetchQuick, []);
@@ -55,7 +70,7 @@ export function QuickPromptsDialog({ dir, onClose }: { dir: string; onClose: () 
       }}
     >
       <p className="modal-hint">
-        Offered under <Icon name="zap" size={12} /> in the composer; one tap puts the text in. Shared by every device that uses this remuda.
+        Offered under <Icon name="zap" size={12} /> in the composer; one tap puts the text in. Shared by every device that uses this remuda. <code>{"{dir}"}</code>, <code>{"{branch}"}</code> and <code>{"{file}"}</code> become the pane's folder, its branch and the file you last opened.
       </p>
       {!list && !loaded.error && <Notice tone="hint">Loading…</Notice>}
       <div className="quick-list">

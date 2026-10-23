@@ -10,7 +10,7 @@ import { filesFrom } from "@/lib/transfer";
 import { Icon, Notice } from "@/ui";
 import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
 import { useDictation } from "./dictation";
-import { QuickPromptsDialog, QuickPromptsMenu } from "./QuickPrompts";
+import { expandPrompt, QuickPromptsDialog, QuickPromptsMenu } from "./QuickPrompts";
 import { useHistory } from "./useHistory";
 
 export default function Composer({ machineId, paneId, working, dir, compact = false }: { machineId: string; paneId: string; working: boolean; dir: string; compact?: boolean }) {
@@ -200,9 +200,11 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
             at={quick}
             dir={dir}
             onPick={(text) => {
-              insertAt(text);
               setQuick(null);
-              area.current?.focus();
+              void expandPrompt(text, machineId, dir).then((filled) => {
+                insertAt(filled);
+                area.current?.focus();
+              });
             }}
             onManage={() => {
               setQuick(null);
