@@ -6634,37 +6634,6 @@ body.popout {
   }
 }
 
-/* ---- subagents: a row per agent a turn spawned, under the call; the tile's count of them ---- */
-.subagent-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  margin: 4px 0 0 10px;
-  padding: 3px 8px;
-  border-left: 2px solid var(--line);
-  font-size: 12px;
-  color: var(--fg-dim);
-}
-
-.subagent-row.is-working {
-  border-left-color: var(--accent);
-}
-
-.subagent-row.is-done {
-  border-left-color: var(--green);
-}
-
-.subagent-desc {
-  flex-shrink: 0;
-  max-width: 45%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--fg);
-}
-
-.subagent-line {
 /* ---- standup: what every agent did today, and one conversation's recap ---- */
 
 .standup-item {
@@ -6698,24 +6667,6 @@ body.popout {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--mono);
-  font-size: 11px;
-}
-
-.subagent-row.is-done .subagent-line {
-  font-family: inherit;
-  font-size: 12px;
-}
-
-.subagent-count,
-.subagent-open {
-  flex-shrink: 0;
-}
-
-.tile-subs {
-  flex-shrink: 0;
-  color: var(--fg-faint);
-}
 }
 
 .standup-machine {
@@ -6911,5 +6862,61 @@ body.popout {
   flex-shrink: 0;
   font-family: var(--mono);
   font-size: 11px;
+  color: var(--fg-faint);
+}
+
+/* ---- subagents: a row per agent a turn spawned, under the call; the tile's count of them ---- */
+.subagent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 4px 0 0 10px;
+  padding: 3px 8px;
+  border-left: 2px solid var(--line);
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.subagent-row.is-working {
+  border-left-color: var(--accent);
+}
+
+.subagent-row.is-done {
+  border-left-color: var(--green);
+}
+
+.subagent-desc {
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+.subagent-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.subagent-row.is-done .subagent-line {
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.subagent-count,
+.subagent-open {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.tile-subs {
+  flex-shrink: 0;
   color: var(--fg-faint);
 }
