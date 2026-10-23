@@ -10,6 +10,7 @@ import { errMsg } from "@/lib/text";
 import { Notice } from "@/ui";
 import Composer from "./Composer";
 import { doing, type Doing } from "./doing";
+import { counts, progressWords } from "./plan";
 import { QuestionCard } from "./QuestionCard";
 import { said } from "./said";
 import { TurnView } from "./TurnView";
@@ -36,9 +37,11 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, words, settled
   const turns = chat?.turns ?? [];
   const now = useMemo(() => (status === "run" && turns.length > 0 ? doing(turns) : null), [status, turns]);
   const answered = useMemo(() => (settled ? (turns.length > 0 ? said(turns) : fallback) : undefined), [settled, turns, fallback]);
+  const plan = chat?.plan;
+  const progress = useMemo(() => (plan && counts(plan).open > 0 ? progressWords(plan) : undefined), [plan]);
   return (
     <div className="chat tail">
-      <TileState words={words} doing={now} said={answered} />
+      <TileState words={words} doing={now} said={answered} plan={progress} />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : "No transcript yet."}</div>}
         {turns.map((t, i) => (
@@ -53,11 +56,16 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, words, settled
 export default Tail;
 
 // TileState is the line under a tile's head: the state and how long, and while the agent works, what it does this second;
-// once it has finished, what it answered.
-export function TileState({ words, doing, said }: { words: string; doing?: Doing | null; said?: string }) {
+// once it has finished, what it answered; and while its plan has open items, how far it is.
+export function TileState({ words, doing, said, plan }: { words: string; doing?: Doing | null; said?: string; plan?: string }) {
   return (
     <div className="tile-state">
       <span className="tile-words">{words}</span>
+      {plan && (
+        <span className="tile-plan" title="The agent's plan: items done of all">
+          {plan}
+        </span>
+      )}
       {said && !doing && (
         <span className="tile-said" title={said}>
           · {said}

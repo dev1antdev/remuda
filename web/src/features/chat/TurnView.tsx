@@ -11,6 +11,8 @@ import { ErrorBoundary, Icon, Notice } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import type { Part, Turn } from "./api";
 import { EDIT_TOOLS, imagePath, toolLabel } from "./footprint";
+import { PLAN_TOOLS, planCallWords } from "./plan";
+import { PLAN_MARK } from "./PlanBar";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 export const TurnView = memo(
@@ -90,6 +92,15 @@ function PartView({ part, machineId, onOpenFile }: { part: Part; machineId?: str
       >
         <div className="part-text">{part.text}</div>
       </Folded>
+    );
+  }
+  if (part.type === "tool" && PLAN_TOOLS.has(part.tool_name ?? "")) {
+    // a plan tool's call is one line: the item it added or moved, not its JSON
+    const { words, mark } = planCallWords(part);
+    return (
+      <div className={part.is_error ? "part-plan part-tool-error" : "part-plan"} title={part.is_error ? part.output : words}>
+        <Icon name={mark === "list" ? "list" : PLAN_MARK[mark]} size={12} className="part-tool-icon" /> {words}
+      </div>
     );
   }
   if (part.type === "tool") {

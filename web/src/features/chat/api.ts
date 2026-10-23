@@ -27,7 +27,15 @@ export type Turn = {
 
 export type SessionInfo = { id: string; mod_time: string; title?: string };
 
-export type ChatResponse = { session_id?: string; sessions: SessionInfo[]; turns: Turn[] };
+// PlanItem is one thing the agent set out to do, from its own TodoWrite / TaskCreate / TaskUpdate calls
+export type PlanItem = {
+  id: string;
+  text: string;
+  active?: string; // what the agent says while on it
+  status: "pending" | "in_progress" | "completed";
+};
+
+export type ChatResponse = { session_id?: string; sessions: SessionInfo[]; turns: Turn[]; plan?: PlanItem[] };
 
 // fetchChat returns null when unchanged (304 via ETag).
 export async function fetchChat(

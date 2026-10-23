@@ -171,23 +171,30 @@ func (conv Conversation) Turns() ([]transcript.Turn, error) {
 	return usage.PriceTurns(turns), nil
 }
 
-// LastTurns is the conversation's last n turns at the version Open saw, parsed once per version however many tiles ask for them.
-func (conv Conversation) LastTurns(n int) ([]transcript.Turn, error) {
+// Tail is what a tile asks for at a file version: the last turns, and the agent's plan over the whole conversation, which
+// a plan set thirty turns ago would otherwise leave out.
+type Tail struct {
+	Turns []transcript.Turn
+	Plan  []transcript.PlanItem
+}
+
+// LastTurns is the conversation's last n turns and its plan at the version Open saw, parsed once per version however many tiles ask for them.
+func (conv Conversation) LastTurns(n int) (Tail, error) {
 	key := tailKey{path: conv.Path, version: conv.Version, n: n}
 	if conv.tails != nil {
-		if turns, ok := conv.tails.lookup(key); ok {
-			return turns, nil
+		if tail, ok := conv.tails.lookup(key); ok {
+			return tail, nil
 		}
 	}
 	turns, err := conv.Turns()
 	if err != nil {
-		return nil, err
+		return Tail{}, err
 	}
-	turns = lastTurns(turns, n)
+	tail := Tail{Turns: lastTurns(turns, n), Plan: transcript.Plan(turns)}
 	if conv.tails != nil {
-		conv.tails.remember(key, turns)
+		conv.tails.remember(key, tail)
 	}
-	return turns, nil
+	return tail, nil
 }
 
 // lastTurns is the last n of the turns, all of them when there are no more than n: a copy, so the cache that
@@ -199,10 +206,10 @@ func lastTurns(turns []transcript.Turn, n int) []transcript.Turn {
 	return append([]transcript.Turn(nil), turns[len(turns)-n:]...)
 }
 
-// tailCache keeps the last turns of a session file at a version: the wall's tiles and the chat lens ask for the same slice within seconds of each other.
+// tailCache keeps the tail of a session file at a version: the wall's tiles and the chat lens ask for the same slice within seconds of each other.
 type tailCache struct {
 	mu      sync.Mutex
-	entries map[tailKey][]transcript.Turn
+	entries map[tailKey]Tail
 	order   []tailKey // oldest first
 }
 
@@ -214,23 +221,23 @@ type tailKey struct {
 
 const tailCacheSize = 64
 
-func (c *tailCache) lookup(key tailKey) ([]transcript.Turn, bool) {
+func (c *tailCache) lookup(key tailKey) (Tail, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	turns, ok := c.entries[key]
-	return turns, ok
+	tail, ok := c.entries[key]
+	return tail, ok
 }
 
-func (c *tailCache) remember(key tailKey, turns []transcript.Turn) {
+func (c *tailCache) remember(key tailKey, tail Tail) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.entries == nil {
-		c.entries = map[tailKey][]transcript.Turn{}
+		c.entries = map[tailKey]Tail{}
 	}
 	if _, known := c.entries[key]; !known {
 		c.order = append(c.order, key)
 	}
-	c.entries[key] = turns
+	c.entries[key] = tail
 	for len(c.order) > tailCacheSize {
 		delete(c.entries, c.order[0])
 		c.order = c.order[1:]

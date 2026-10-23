@@ -68,11 +68,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	var turns []transcript.Turn
+	var tail chat.Tail
 	if last > 0 {
-		turns, err = conv.LastTurns(last)
-	} else {
-		turns, err = conv.Turns()
+		tail, err = conv.LastTurns(last)
+	} else if tail.Turns, err = conv.Turns(); err == nil {
+		tail.Plan = transcript.Plan(tail.Turns)
 	}
 	if err != nil {
 		httpErr(w, http.StatusBadGateway, err)
@@ -82,7 +82,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if sessions == nil {
 		sessions = []transcript.SessionInfo{}
 	}
+	answer := map[string]any{"session_id": conv.ID, "sessions": sessions, "turns": tail.Turns}
+	if len(tail.Plan) > 0 {
+		answer["plan"] = tail.Plan
+	}
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, map[string]any{"session_id": conv.ID, "sessions": sessions, "turns": turns})
+	writeJSON(w, answer)
 }

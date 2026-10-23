@@ -12,6 +12,7 @@ import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
 import { Icon, Notice, Select, useTimedNotice } from "@/ui";
 import Composer from "./Composer";
+import { PlanBar } from "./PlanBar";
 import { QuestionCard } from "./QuestionCard";
 import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
@@ -120,6 +121,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           )}
         </div>
       )}
+      <PlanBar plan={chat?.plan} />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : readOnly ? "This transcript is empty." : "No transcript for this pane's folder yet."}</div>}
         {turns.map((t, i) => (
