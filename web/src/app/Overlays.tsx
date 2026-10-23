@@ -14,6 +14,8 @@ import AlertsPanel from "@/features/alerts/AlertsPanel";
 import FileViewer from "@/features/files/FileViewer";
 import Schedules from "@/features/schedules/Schedules";
 import Search from "@/features/search/Search";
+import RecapDialog from "@/features/standup/RecapDialog";
+import Standup from "@/features/standup/StandupPanel";
 import UpdatesDialog from "@/features/updates/Updates";
 import Usage from "@/features/usage/Usage";
 import { encodePath, type SearchHit } from "@/features/search/api";
@@ -63,6 +65,7 @@ export default function Overlays() {
       {panel === "activity" && <Activity onClose={actions.closePanel} />}
       {panel === "schedules" && <Schedules machines={machines} onClose={actions.closePanel} ask={actions.ask} />}
       {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} />}
+      {panel === "standup" && <Standup onClose={actions.closePanel} />}
       {panel === "usage" && (
         <Usage machines={machines} onClose={actions.closePanel} onOpenSession={(machine, project, session, dir) => openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" })} />
       )}
@@ -129,6 +132,7 @@ export default function Overlays() {
       )}
       {dialog?.kind === "broadcast" && <BroadcastDialog agents={targets} onClose={actions.closeDialog} />}
       {dialog?.kind === "keys" && <KeysDialog onClose={actions.closeDialog} />}
+      {dialog?.kind === "recap" && <RecapDialog machineId={dialog.machineId} paneId={dialog.paneId} session={dialog.session} dir={dialog.dir} title={dialog.title} onClose={actions.closeDialog} />}
       {dialog?.kind === "machine" && (
         <AddMachineDialog
           onClose={actions.closeDialog}

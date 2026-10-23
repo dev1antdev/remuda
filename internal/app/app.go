@@ -21,6 +21,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/quick"
 	"github.com/dev1antdev/remuda/internal/radar"
+	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
@@ -172,6 +173,7 @@ func Run(ctx context.Context, o Options) error {
 		Push:      pushSvc,
 		Feed:      activity,
 		Said:      sayings,
+		Recap:     &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker},
 		Radar:     tracker,
 		Usage:     meter,
 		Health:    vitals,
