@@ -531,7 +531,10 @@ pill in the header and on the sidebar row from 50% up, red near the edge,
 with "Compact now" in the chat from 80%) and what the session has cost so
 far at Claude Code's own API prices. Under every answer in the chat, a
 quiet line says how long it took, the tokens it used and what it cost
-("4 min 12 s · 38k tokens · $0.42"). 📊 opens the report: by day, by
+("4 min 12 s · 38k tokens · $0.42"); every tool call in the log ends
+with how long it took, a failed one is red, and that line counts the
+failed and the repeated calls. On the Wall a tile says how long the
+running command has gone on, amber past a minute. 📊 opens the report: by day, by
 project, by model, by machine, the sessions that cost the most — every
 machine reads its own transcripts, nothing is sent anywhere. On a
 subscription it is a measure of where the work went, not a bill.

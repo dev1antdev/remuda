@@ -6,6 +6,9 @@ export type Part = {
   type: "text" | "thinking" | "tool";
   text?: string;
   tool_name?: string;
+  tool_id?: string; // the tool_use id
+  at?: string; // when the tool was called
+  took?: number; // seconds from the call to its result, absent while it runs
   input?: unknown;
   output?: string;
   is_error?: boolean;

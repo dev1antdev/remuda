@@ -26,6 +26,9 @@ type Part struct {
 	Type     string          `json:"type"` // text | thinking | tool
 	Text     string          `json:"text,omitempty"`
 	ToolName string          `json:"tool_name,omitempty"`
+	ToolID   string          `json:"tool_id,omitempty"` // the tool_use id: what its result and a subagent's meta name
+	At       string          `json:"at,omitempty"`      // when the tool was called, the record's timestamp
+	Took     float64         `json:"took,omitempty"`    // seconds from the call to its result, 0 while it runs
 	Input    json.RawMessage `json:"input,omitempty"`
 	Output   string          `json:"output,omitempty"`
 	IsError  bool            `json:"is_error,omitempty"`
@@ -382,6 +385,7 @@ func parseStream(r io.Reader) ([]Turn, error) {
 						p := &turns[ref.turn].Parts[ref.part]
 						p.Output = truncate(resultText(b.Content), 16*1024)
 						p.IsError = b.IsError
+						p.Took = secondsBetween(p.At, rec.Timestamp)
 						delete(pending, b.ToolUseID)
 					}
 				case "image":
@@ -410,7 +414,7 @@ func parseStream(r io.Reader) ([]Turn, error) {
 					appendPart("assistant", rec.Timestamp, rec.UUID, Part{Type: "thinking", Text: b.Thinking})
 				case "tool_use":
 					appendPart("assistant", rec.Timestamp, rec.UUID, Part{
-						Type: "tool", ToolName: b.Name,
+						Type: "tool", ToolName: b.Name, ToolID: b.ID, At: rec.Timestamp,
 						Input: truncateJSON(b.Input, 8*1024),
 					})
 					last := len(turns) - 1
@@ -424,6 +428,19 @@ func parseStream(r io.Reader) ([]Turn, error) {
 	})
 	settleSpending(turns)
 	return turns, err
+}
+
+// secondsBetween is the seconds from one record's timestamp to another's: 0 when either is missing or they run backwards.
+func secondsBetween(from, to string) float64 {
+	a, err := time.Parse(time.RFC3339Nano, from)
+	if err != nil {
+		return 0
+	}
+	b, err := time.Parse(time.RFC3339Nano, to)
+	if err != nil || !b.After(a) {
+		return 0
+	}
+	return b.Sub(a).Seconds()
 }
 
 // ---- search ----
