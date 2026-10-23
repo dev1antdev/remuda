@@ -2,7 +2,9 @@ package sessions
 
 import (
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
@@ -10,6 +12,7 @@ import (
 
 // fakeClient answers like herdr: prompts refused by code, and a record of what was typed.
 type fakeClient struct {
+	withArgs  []string // the last AgentStartWith's arguments
 	promptErr *herdr.Error
 	typed     []string
 	keys      [][]string
@@ -33,6 +36,11 @@ func (f *fakeClient) PaneSendText(paneID, text string) error {
 func (f *fakeClient) PaneSendKeys(paneID string, keys []string) error {
 	f.keys = append(f.keys, keys)
 	return nil
+}
+
+func (f *fakeClient) AgentStartWith(paneID, kind, name string, args []string, timeout time.Duration) error {
+	f.withArgs = append([]string{kind, name}, args...)
+	return f.AgentStart(paneID, kind)
 }
 
 func (f *fakeClient) AgentStart(paneID, kind string) error {
@@ -96,5 +104,31 @@ func TestKeysAndAgents(t *testing.T) {
 	refused := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_name_taken"}}}
 	if err := StartAgent(refused, "w1:p1", "claude"); !herdr.IsCode(err, "agent_name_taken") || refused.starts != 1 {
 		t.Fatalf("another refusal is final: %v", err)
+	}
+}
+
+func TestResumeArgs(t *testing.T) {
+	cases := map[string]string{"claude": "--resume s1", "codex": "resume s1", "gemini": "--resume s1", "kimi": "--session s1"}
+	for kind, want := range cases {
+		args, ok := ResumeArgs(kind, "s1")
+		if !ok || strings.Join(args, " ") != want {
+			t.Errorf("%s: got %v %v, want %q", kind, args, ok, want)
+		}
+	}
+	if _, ok := ResumeArgs("shell", "s1"); ok {
+		t.Errorf("a shell resumes nothing")
+	}
+}
+
+func TestStartAgentResumed(t *testing.T) {
+	f := &fakeClient{}
+	if err := StartAgentResumed(f, "w1:p1", "claude", "0123-abcd"); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(f.withArgs, " "); got != "claude claude --resume 0123-abcd" {
+		t.Errorf("args: %q", got)
+	}
+	if err := StartAgentResumed(f, "w1:p1", "shell", "0123-abcd"); err == nil {
+		t.Errorf("a shell cannot resume")
 	}
 }

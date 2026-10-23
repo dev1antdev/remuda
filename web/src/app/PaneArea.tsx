@@ -94,6 +94,8 @@ export default function PaneArea({ current }: { current: Located | null }) {
               origin={`${session.name}${machine.id !== "local" ? ` on ${machine.label}` : ""}`}
               dir={folder}
               usage={pane.usage}
+              workspaceId={session.id}
+              agent={pane.agent}
               active={lens === "chat"}
             />
           </div>
