@@ -5,3 +5,6 @@ web/dist/
 .DS_Store
 web/tsconfig.tsbuildinfo
 /remuda
+
+# the worktrees Claude Code agents work in beside the checkout
+.claude/worktrees/
