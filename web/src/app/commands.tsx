@@ -11,6 +11,7 @@ import { closeWorkspace } from "@/features/roster/WorkspaceMenu";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
 import { DEFAULT_WALL, tileKey, type WallPrefs } from "@/features/roster/wall";
+import { agentTitle, askRestart } from "@/features/updates/restartPane";
 import { usePref } from "@/lib/prefs";
 import { basename, errMsg } from "@/lib/text";
 import type { IconName } from "@/ui/icons";
@@ -89,6 +90,7 @@ function useCommands(): (query: string) => Entry[] {
         command("worktree", `New worktree of ${named}…`, () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }), { hint: "a branch checked out beside it, an agent in it", icon: "plus", keywords: ["branch", "create"] });
         command("rename-workspace", `Rename workspace ${named}…`, () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }), { icon: "tag" });
         command("rename-tab", `Rename tab ${tab.named ? `“${tab.label}”` : tab.number}…`, () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }), { icon: "tag" });
+        if (current.pane.agent) command("restart-pane", `Restart ${agentTitle(current.pane.agent)} on its session…`, () => askRestart(machine.id, current.pane.id, current.pane.agent), { hint: "its own exit, then started again on the same conversation", icon: "refresh-cw", keywords: ["restart", "resume", "stuck", "hung", "reload", "again"] });
         command("close-workspace", `Close workspace ${named}`, () => closeWorkspace(machine, session), { hint: "its panes close and the agents in them stop", icon: "x", danger: true, keywords: ["kill", "stop", "quit"] });
         if (popOutSupported) command("popout", "Pop out this agent", () => void popOut(selection!), { hint: "a small window above every other app", icon: "pip", keywords: ["picture", "window", "float"] });
         if (current.pane.agent) command("export", "Export this conversation as Markdown", () => void exportConversation(machine.id, current.pane.id, chatSession, folderOf(current), { agent: current.pane.agent, workspace: session.name, machine: machine.label }).catch(toastError), { hint: "the session shown, as a file", icon: "download", keywords: ["save", "download", "markdown", "transcript", "share", "file"] });
