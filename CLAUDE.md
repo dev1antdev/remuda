@@ -228,8 +228,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `.github/workflows/release.yml` builds the binaries and makes the
   GitHub release from it; `.github/workflows/ci.yml` is /verify's list
   plus govulncheck, npm audit and gitleaks on every push to main or
-  release and every pull request. Pull requests target `release`; `main`
-  is what is out (AGENTS.md, "Build and check").
+  release and every pull request, and on `release` (and by hand,
+  `workflow_dispatch`) the end-to-end smoke too: `make e2e` is
+  `scripts/e2e.sh` — a throwaway herdr server on a socket and HOME of its
+  own (`HERDR_SOCKET_PATH`, stopped the same way), a remuda on it with its
+  own state dir, headless Chrome — driving `e2e/smoke.mjs` over the
+  DevTools protocol with no dependency: sign in, a scratch shell
+  workspace through the API, a command typed into the terminal lens and
+  read back through `/api/screen`, the chat, the Wall, Review, Activity,
+  the palette, the workspace closed, no console errors; the temp folder
+  stays on a failure, with the screenshots (an artifact in CI). Pull
+  requests target `release`; `main` is what is out (AGENTS.md, "Build and
+  check").
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
   (`features/roster/HealthButton.tsx`; the rules in `concerns.ts`) turns amber on an update, a lagging
   remote remuda, or a nearly full disk.
