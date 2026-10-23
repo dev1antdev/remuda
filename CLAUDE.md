@@ -113,8 +113,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and by script over a `shell.Host` on a remote. `Turn.Answer`,
   `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with; a tool
   result that is a picture alone reads `[image]` (`resultText`), so the
-  call counts as answered and the chat draws the picture under it. **An
-  answer says what it spent** (`spent.go`, tested): `Took`, the seconds
+  call counts as answered and the chat draws the picture under it; a
+  tool part carries `tool_id` (the tool_use id), `at` (when it was
+  called) and `took`, the seconds to its result (`secondsBetween`), 0
+  while it runs. **An answer says what it spent** (`spent.go`, tested): `Took`, the seconds
   from the person's prompt to the turn's last record, and `Tokens`, the
   input, output and cache tokens of its API responses — one per
   `message.id`, the last record of each, as `usage.Accumulator` counts —
