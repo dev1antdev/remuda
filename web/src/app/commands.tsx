@@ -15,6 +15,7 @@ import { usePref } from "@/lib/prefs";
 import { basename, errMsg } from "@/lib/text";
 import type { IconName } from "@/ui/icons";
 import { folderOf, useCurrent } from "./current";
+import { NEXT_KEY, useNextNeedingMe } from "./next";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
 
@@ -53,6 +54,7 @@ function useCommands(): (query: string) => Entry[] {
   const [focus, setFocus] = usePref<string>("wall.focus", "");
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
+  const goNext = useNextNeedingMe();
   return useCallback(
     (query: string) => {
       const selection = current ? { machineId: current.machine.id, paneId: current.pane.id } : null;
@@ -60,6 +62,7 @@ function useCommands(): (query: string) => Entry[] {
       const commands: Entry[] = [];
       const command = (id: string, title: string, run: () => void, more: Partial<Entry> = {}) => commands.push({ id, kind: "command", title, keywords: [], run, ...more });
 
+      command("next-needs", "Go to the next agent that needs you", goNext, { hint: `${NEXT_KEY} · a question open, a watchdog note, a finish not looked at`, icon: "arrow-right", keywords: ["next", "needs", "attention", "waiting", "blocked", "question", "done", "jump"] });
       for (const m of MODES) if (m.mode !== mode) command(`mode:${m.mode}`, m.title, () => actions.setMode(m.mode), { hint: m.hint, icon: m.icon, keywords: ["mode", m.mode] });
       if (current && !viewer) {
         const folder = folderOf(current);
@@ -123,6 +126,6 @@ function useCommands(): (query: string) => Entry[] {
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, chatSession, footprint, current, radar, wall, setWall, focus, setFocus, step, now],
+    [machines, mode, lens, viewer, chatSession, footprint, current, radar, wall, setWall, focus, setFocus, step, now, goNext],
   );
 }
