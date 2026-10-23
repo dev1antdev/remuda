@@ -598,6 +598,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `working`) after 60s for turns ≥ 60s or 10s with `done:"always"`; **any
   status change on the pane cancels its pending alerts** — answered at the
   desk means no push. Delays are vars so `push_test.go` can shrink them.
+  **Quiet hours** (`quiet.go`): a device's prefs may carry `quiet {from,
+  to, tz}` — "HH:MM" by its own IANA zone, the zone database embedded so
+  it loads on any host; `Normalize` drops a window that does not parse;
+  every send goes through `deliver`, which skips a device whose window
+  covers the moment of sending (`Quiet.Covers`: a window past midnight
+  wraps, equal times are no window, an unknown zone reads as UTC) — the
+  timers, the watchdog's `Notify`, the schedules' and the tasks' pushes
+  alike, while `OnAlert` still records every one for the feed; a test
+  push is sent regardless, since the person just pressed the button.
+  The page re-reads the device's zone on every load (`readAlertPrefs`),
+  so a window set at home fits the clock on a trip; the window last set
+  is kept on the device (pref `alerts.quiet`) while the hours are off.
   Routes: `GET /api/push` (public key), `POST/DELETE /api/push/subscribe`,
   `POST /api/push/test`.
 - `web/public/sw.js` shows every push (Safari revokes silent subscriptions),

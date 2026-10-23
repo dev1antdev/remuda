@@ -423,7 +423,10 @@ VAPID keys — the only third party is your browser vendor's push service.
 remuda watches every machine's agents itself, so alerts arrive with the
 app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 a minute after a long turn. Answer at the desk first and nothing is sent.
-Needs HTTPS (tailscale serve) or localhost; on iPhone, the home-screen app.
+**Quiet hours** keep a device silent between two times of its own clock
+(22:00 to 07:00, say); the Activity panel still keeps what happened, so the
+morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
+on iPhone, the home-screen app.
 
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
