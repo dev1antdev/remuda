@@ -1,13 +1,15 @@
 # Every push to main or release and every pull request: the SPA built (every Go compile embeds it),
 # the TypeScript check and the page's unit tests, gofmt, go vet, the tests, and the vulnerability
 # scans — the same list as /verify in .claude/skills, run where the
-# author's machine is not.
+# author's machine is not. On release (and by hand), the end-to-end smoke
+# too: a throwaway herdr, a remuda of its own and headless Chrome (make e2e).
 name: CI
 
 on:
   push:
     branches: [main, release]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -47,6 +49,43 @@ jobs:
       - name: npm audit
         working-directory: web
         run: npm audit --audit-level=high
+
+  e2e:
+    name: end-to-end smoke
+    needs: check
+    runs-on: ubuntu-latest
+    # the tried-as-a-whole step before a tag (AGENTS.md, "Build and check"); on release and when run by hand
+    if: github.ref == 'refs/heads/release' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: herdr
+        # the way remuda setup installs it on a machine without Homebrew (internal/setup/scripts/setup.sh)
+        run: |
+          curl -fsSL https://herdr.dev/install.sh | HERDR_INSTALL_DIR="$HOME/.local/bin" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/herdr" --version
+      - name: SPA
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: make e2e
+        run: E2E_OUT="$RUNNER_TEMP/e2e-shots" make e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-screenshots
+          path: ${{ runner.temp }}/e2e-shots
+          if-no-files-found: ignore
 
   secrets:
     name: secret scan (whole history)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ago, elapsed } from "./time";
+import { ago, elapsed, spent } from "./time";
 
 describe("ago", () => {
   const now = Date.UTC(2026, 9, 13, 12, 0, 0);
@@ -26,5 +26,16 @@ describe("elapsed", () => {
     expect(elapsed(now - 180 * 60_000, now)).toBe("3 h");
     expect(elapsed(now - 49 * 3_600_000, now)).toBe("2 days");
     expect(elapsed(now + 5_000, now)).toBe("0 s");
+  });
+});
+
+describe("spent", () => {
+  it("says how long a piece of work took", () => {
+    expect(spent(12.4)).toBe("12 s");
+    expect(spent(252)).toBe("4 min 12 s");
+    expect(spent(300)).toBe("5 min");
+    expect(spent(4320)).toBe("1 h 12 min");
+    expect(spent(7200)).toBe("2 h");
+    expect(spent(-3)).toBe("0 s");
   });
 });

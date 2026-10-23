@@ -21,19 +21,24 @@ import (
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
-// Prefs are per-device: alert on a question, and on a finish never, only after a long turn (≥60s), or always.
+// Prefs are per-device: alert on a question, on a finish never, only after a long turn (≥60s), or always,
+// and quiet hours during which nothing is sent at all.
 type Prefs struct {
 	Watchdog *bool  `json:"watchdog,omitempty"` // a stuck or long-waiting agent; nil = on
 	Input    bool   `json:"input"`
 	Done     string `json:"done"` // off | long | always
+	Quiet    *Quiet `json:"quiet,omitempty"`
 }
 
-// Normalize fills the default and rejects unknown values.
+// Normalize fills the default, rejects unknown values and drops a quiet window that does not parse.
 func (p *Prefs) Normalize() {
 	switch p.Done {
 	case "off", "long", "always":
 	default:
 		p.Done = "long"
+	}
+	if p.Quiet != nil && !p.Quiet.Valid() {
+		p.Quiet = nil
 	}
 }
 
@@ -257,8 +262,21 @@ func topic(tag string) string {
 // Notify sends one payload now to every device that wants the watchdog's word (the pref defaults to on).
 func (s *Service) Notify(p Payload) {
 	s.record(p)
+	var targets []*Subscription
 	for _, sub := range s.list() {
 		if sub.Prefs.Watchdog != nil && !*sub.Prefs.Watchdog {
+			continue
+		}
+		targets = append(targets, sub)
+	}
+	s.deliver(targets, p)
+}
+
+// deliver sends one payload to each device, skipping the ones inside their quiet hours right now.
+func (s *Service) deliver(targets []*Subscription, p Payload) {
+	now := time.Now()
+	for _, sub := range targets {
+		if muted(sub, now) {
 			continue
 		}
 		if err := s.send(sub, p); err != nil {
@@ -339,11 +357,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 			if note {
 				s.record(p)
 			}
-			for _, sub := range targets {
-				if err := s.send(sub, p); err != nil {
-					log.Printf("push to %.40s…: %v", sub.Endpoint, err)
-				}
-			}
+			s.deliver(targets, p)
 		})
 		pending = append(pending, t)
 	}

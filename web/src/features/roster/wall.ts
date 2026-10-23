@@ -65,3 +65,12 @@ export function withFocus(shown: Tile[], key: string): { big: Tile | null; rest:
   const big = shown.find((tile) => tile.key === key) ?? null;
   return { big, rest: big ? shown.filter((tile) => tile !== big) : shown };
 }
+
+// nextNeedingMe is the agent to go to after the one at fromKey: the tiles that need the person, in the roster's order,
+// round and round; nobody when none needs one, the same tile when it is the only one
+export function nextNeedingMe(machines: Machine[], radar: RadarPrefs, now: number, fromKey: string): Tile | null {
+  const waiting = tiles(machines, [], { ...DEFAULT_WALL, needsMe: true }, radar, now).shown;
+  if (!waiting.length) return null;
+  const at = waiting.findIndex((tile) => tile.key === fromKey);
+  return waiting[(at + 1) % waiting.length] ?? null;
+}

@@ -16,6 +16,7 @@ export type Pane = {
   // the agent's lifecycle as the server reads it (last_active in unix ms); absent for a shell
   radar?: { state: "working" | "blocked" | "done" | "idle" | "unknown"; last_active?: number; since?: number; alert?: string };
   usage?: PaneUsage;
+  said?: string; // the first line of the agent's last answer, once it finished
 };
 
 export type PaneUsage = {

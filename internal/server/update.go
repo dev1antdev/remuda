@@ -17,6 +17,32 @@ func (s *Server) updateRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/machines/{id}/update", s.handleMachineUpdate)
 	api.HandleFunc("GET /api/machines/{id}/jobs", s.handleMachineJobs)
 	api.HandleFunc("GET /api/jobs/{id}", s.handleJob)
+	api.HandleFunc("POST /api/panes/restart", s.handlePaneRestart)
+}
+
+// handlePaneRestart is POST /api/panes/restart {machine, pane}: one chat started again on its session; the answer is the job.
+func (s *Server) handlePaneRestart(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Machine string `json:"machine"`
+		Pane    string `json:"pane"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.Pane == "" {
+		httpErr(w, 400, fmt.Errorf("pane required"))
+		return
+	}
+	mc, _, _, ok := s.ready(w, r, req.Machine)
+	if !ok {
+		return
+	}
+	job, err := s.Updates.RestartPane(mc, req.Pane)
+	if err != nil {
+		httpErr(w, 400, err)
+		return
+	}
+	writeJSON(w, map[string]any{"job": job.ID})
 }
 
 // handleMachineUpdates is GET /api/machines/{id}/updates: what this machine can update now.

@@ -22,6 +22,7 @@ once after cloning and after every change under `web/`.
 | TypeScript check | `make typecheck` (`tsc --noEmit` + `go vet`) |
 | The page's unit tests (Vitest on the pure modules) | `make webtest` (`npm test` in `web/`; `make test` runs it too) |
 | Everything, as CI does (`.github/workflows/ci.yml`) | `make test && make typecheck`, or `docker build --target test .` |
+| The end-to-end smoke: a throwaway herdr, a remuda of its own, headless Chrome (`scripts/e2e.sh`, `e2e/smoke.mjs`) | `make e2e` (needs herdr, node and Chrome; nothing of yours is touched) |
 | A pull request | against `release`: `gh pr create --base release` |
 | A release | `git checkout main && git merge --ff-only release && git tag -a vX.Y.Z -m 'remuda X.Y.Z' && make publish` — the Release workflow builds and publishes it |
 | Binaries for every host | `make release`; `make deploy HOST=<ssh host>` |
@@ -30,8 +31,10 @@ Two long-lived branches. **`release`** is where the next release comes
 together: every pull request targets it (Dependabot's too), CI runs on
 every push to it, and before a tag it is built and tried as a whole —
 the checks, `make build`, a real session in the browser, and the
-end-to-end tests when they come (a job gated on `github.ref ==
-'refs/heads/release'` is their place). **`main`** is what is out: at a
+end-to-end smoke — `make e2e`, the `e2e` job in ci.yml, gated on
+`github.ref == 'refs/heads/release'` and `workflow_dispatch`, so it
+runs on every push to `release` and by hand (`gh workflow run ci.yml
+--ref release`) before a tag. **`main`** is what is out: at a
 release it receives `release` by fast-forward and nothing else, so a
 clone of `main`, the README on GitHub and the binary on every machine
 agree. `make publish` refuses any branch but `main`
