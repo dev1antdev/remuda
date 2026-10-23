@@ -11,7 +11,16 @@ export type Part = {
   is_error?: boolean;
 };
 
-export type Turn = { role: "user" | "assistant"; ts?: string; ids?: string[]; parts: Part[] };
+export type Turn = {
+  role: "user" | "assistant";
+  ts?: string;
+  ids?: string[];
+  parts: Part[];
+  took?: number; // seconds from the prompt to the answer's last record
+  tokens?: number; // input, output and cache tokens of the answer's API responses
+  cost?: number; // USD at API prices
+  model?: string;
+};
 
 export type SessionInfo = { id: string; mod_time: string; title?: string };
 

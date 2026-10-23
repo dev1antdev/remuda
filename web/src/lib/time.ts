@@ -24,6 +24,16 @@ export function elapsed(since: When, now = Date.now()): string {
   return `${Math.round(h / 24)} days`;
 }
 
+// spent says how long a piece of work took: "12 s", "4 min 12 s", "1 h 12 min".
+export function spent(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return s % 60 ? `${m} min ${s % 60} s` : `${m} min`;
+  const h = Math.floor(m / 60);
+  return m % 60 ? `${h} h ${m % 60} min` : `${h} h`;
+}
+
 // whenShort is the time if today, the weekday and time within a week, else the date.
 export function whenShort(d: When): string {
   const t = toDate(d);

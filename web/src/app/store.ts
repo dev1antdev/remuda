@@ -4,6 +4,7 @@
 
 import { createStore } from "@/lib/store";
 import { isTouch, readPref, writePref } from "@/lib/prefs";
+import { clamp, step } from "@/features/chat/find";
 import type { Machine, Session } from "@/features/roster/api";
 import type { FileTarget } from "@/features/files/target";
 import type { SearchHit } from "@/features/search/api";
@@ -21,6 +22,7 @@ export type AppDialog =
   | { kind: "worktree"; machineId: string; session: Session }
   | { kind: "machine" }
   | { kind: "broadcast" } // one message to several agents
+  | { kind: "keys" } // the keyboard sheet
   | { kind: "renameMachine"; machine: Machine }
   | null;
 
@@ -30,6 +32,9 @@ export type Confirm = { text: string; label: string; run: () => void };
 // a jump names its pane ("" = the transcript viewer): a Chat gets it only when it is that pane's
 export type Jump = { machineId: string; paneId: string; session: string; turn: string; n: number };
 export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "release" | null;
+// the find bar over the conversation shown: the bar writes the query and the step, the chat writes the count;
+// opened counts the ⌘F presses, so each one puts the focus back in the field
+export type Find = { query: string; at: number; total: number; opened: number };
 
 export type AppState = {
   requested: Selection | null; // the selection is a request; the pane shown is derived from it, never fixed up in an effect
@@ -50,6 +55,7 @@ export type AppState = {
   footprint: boolean; // the files rail beside the lenses, a per-device pref
   codeFile: { machineId: string; folder: string; path: string; n: number } | null; // a file the Code mode is asked to open, once
   chatSession: string | null; // an older session of its folder the chat lens shows instead of the pane's live one; the export follows it
+  find: Find | null; // the find bar over the chat lens or the transcript viewer, null while closed
 };
 
 const fromURL = readURL();
@@ -74,6 +80,7 @@ export const app = createStore<AppState>({
   footprint: readPref("footprint", !isTouch),
   codeFile: null,
   chatSession: null,
+  find: null,
 });
 
 let jumps = 0;
@@ -171,6 +178,23 @@ export const actions = {
   // the Code mode on that machine and folder, with the file open
   showChatSession(chatSession: string | null) {
     app.set({ chatSession });
+  },
+  // the find bar: opened again, it keeps its query and takes the focus back
+  openFind() {
+    app.set((s) => ({ find: { query: s.find?.query ?? "", at: s.find?.at ?? 0, total: s.find?.total ?? 0, opened: (s.find?.opened ?? 0) + 1 } }));
+  },
+  closeFind() {
+    app.set({ find: null });
+  },
+  setFindQuery(query: string) {
+    app.set((s) => (s.find ? { find: { ...s.find, query, at: 0 } } : {}));
+  },
+  stepFind(by: 1 | -1) {
+    app.set((s) => (s.find ? { find: { ...s.find, at: step(s.find.at, s.find.total, by) } } : {}));
+  },
+  // the chat counted the matches of the query shown
+  foundMatches(total: number) {
+    app.set((s) => (s.find && s.find.total !== total ? { find: { ...s.find, total, at: clamp(s.find.at, total) } } : {}));
   },
   openInCode(machineId: string, folder: string, path: string) {
     app.set({ mode: "code", codeOpened: true, codeFile: { machineId, folder, path, n: ++codeOpens } });

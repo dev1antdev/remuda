@@ -39,6 +39,8 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
   };
   const dir = folderOf(tile);
   const words = alert ?? stateWords(d, pane.radar?.last_active, now, pane.radar?.since);
+  const settled = !alert && (d === "done" || d.startsWith("idle"));
+  const said = settled ? pane.said : undefined;
   return (
     <section className={`tile is-${d}${alert ? " is-alert" : ""}${brief ? " brief" : ""}`} aria-label={`${pane.agent} in ${where}`}>
       <header className="tile-head">
@@ -72,15 +74,15 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
         )}
       </header>
       {brief ? (
-        <TileState words={words} />
+        <TileState words={words} said={said} />
       ) : screen ? (
         <>
-          <TileState words={words} />
+          <TileState words={words} said={said} />
           <Screen machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active onOpen={open} />
           <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} active />
         </>
       ) : (
-        <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} words={words} active />
+        <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} words={words} settled={settled} said={said} active />
       )}
     </section>
   );
