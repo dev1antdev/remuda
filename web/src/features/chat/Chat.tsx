@@ -36,6 +36,12 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, ac
   const others = agents.some((a) => a.machineId !== machineId || a.paneId !== paneId);
   const [forwarded, showForwarded, clearForwarded] = useTimedNotice(4000);
   const [sessionId, setSessionId] = useState<string | null>(jump?.session ?? null);
+  // the session picked here is the one the export (in the tab strip, the palette) saves; the pane's live one is null
+  useEffect(() => {
+    if (readOnly) return;
+    actions.showChatSession(sessionId);
+    return () => actions.showChatSession(null);
+  }, [sessionId, readOnly]);
   const [actionError, setActionError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const busy = status === "run" || status === "input";

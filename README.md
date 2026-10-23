@@ -426,6 +426,9 @@ agent hears nothing.
 text, headed "From *workspace*:", to any other agent on any machine — the
 same dialog Tasks uses to send a task. **Quick prompts** (⚡ in the composer)
 are saved texts, for every folder or one, shared by all your devices.
+**Export** (↓ in the tab strip on the chat lens, or the palette) saves
+the conversation as a Markdown file — the text as it is, thinking and
+tool calls folded — to share with someone who is not in remuda.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through remuda.
 
