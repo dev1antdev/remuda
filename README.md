@@ -76,7 +76,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
 - **Wall** — the **Wall** mode in the top bar puts every agent on one
   screen: a tile per agent pane on every connected machine, with its
   state and how long it has lasted, what it runs this second (the tool
-  call under way, else thinking or writing) or, once it has finished,
+  call under way, else thinking or writing) and how far its plan is
+  (3/7) or, once it has finished,
   the first line of what it answered, its pull request as a link when
   it named one (GitHub or GitLab; the workspace's ⋯ menu has it too),
   the last turns of its conversation and a line to answer it,
@@ -504,6 +505,13 @@ tool calls folded — to share with someone who is not in remuda.
 every place a word occurs in the conversation shown and says "3 of 12";
 Enter and Shift+Enter walk them, the current one brought into view, Esc
 closes. It works on a transcript opened from the search too.
+**Plan** — when the agent keeps a task list (Claude Code's own
+TaskCreate / TaskUpdate, or TodoWrite), a quiet line over the chat says
+how far it is and what it is on, in the agent's own words — "Plan 3/7 ·
+Building the page" — and unfolds to the list; a wall tile says 3/7 in
+its state line, and in the conversation each change to the list is one
+line, not a block of JSON. Read from the transcript, so a remote
+machine's agent has it too.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through remuda.
 
@@ -566,8 +574,8 @@ binary is deployed, grep otherwise).
 
 **Wall:** a mode for the big screen — every agent on every connected
 machine as a tile: its state and workspace, its context and cost, how
-long it has been at it and what it runs this second — or, once it is
-done, the first line of its answer — the last dozen turns of its
+long it has been at it, what it runs this second and how far its plan
+is — or, once it is done, the first line of its answer — the last dozen turns of its
 conversation, the question it asks with its choices as buttons,
 and a line to answer. Tiles keep the roster's order, so nothing jumps
 when an agent changes state; hide the idle ones, keep only the ones that
