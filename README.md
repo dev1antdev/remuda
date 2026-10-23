@@ -502,7 +502,10 @@ machine or tab — or run what the page has a button for: a mode, a lens,
 a new workspace, tab or worktree, a rename, the pop-out, the files
 rail, the panels. The liveliest agents come first, the current one is
 marked; ↑ ↓ move, ↵ runs, Esc closes. The last row searches every
-conversation for what you typed.
+conversation for what you typed. **Alt+N** goes to the next agent that
+needs you — a question open, a watchdog note, a finish you have not
+looked at — round and round in the sidebar's order; on the Wall that
+tile takes the wall, elsewhere the agent opens on its chat.
 
 **Search** (🔍, or the palette's last row): full text over every conversation on every
 machine — what you or an agent said, never tool output — filtered by
