@@ -423,7 +423,10 @@ VAPID keys — the only third party is your browser vendor's push service.
 remuda watches every machine's agents itself, so alerts arrive with the
 app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 a minute after a long turn. Answer at the desk first and nothing is sent.
-Needs HTTPS (tailscale serve) or localhost; on iPhone, the home-screen app.
+**Quiet hours** keep a device silent between two times of its own clock
+(22:00 to 07:00, say); the Activity panel still keeps what happened, so the
+morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
+on iPhone, the home-screen app.
 
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
@@ -504,7 +507,10 @@ machine or tab — or run what the page has a button for: a mode, a lens,
 a new workspace, tab or worktree, a rename, the pop-out, the files
 rail, the panels. The liveliest agents come first, the current one is
 marked; ↑ ↓ move, ↵ runs, Esc closes. The last row searches every
-conversation for what you typed.
+conversation for what you typed. **Alt+N** goes to the next agent that
+needs you — a question open, a watchdog note, a finish you have not
+looked at — round and round in the sidebar's order; on the Wall that
+tile takes the wall, elsewhere the agent opens on its chat.
 
 **Search** (🔍, or the palette's last row): full text over every conversation on every
 machine — what you or an agent said, never tool output — filtered by
