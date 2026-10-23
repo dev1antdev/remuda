@@ -11,7 +11,16 @@ export type Part = {
   is_error?: boolean;
 };
 
-export type Turn = { role: "user" | "assistant"; ts?: string; ids?: string[]; parts: Part[] };
+export type Turn = {
+  role: "user" | "assistant";
+  ts?: string;
+  ids?: string[];
+  parts: Part[];
+  took?: number; // seconds from the prompt to the answer's last record
+  tokens?: number; // input, output and cache tokens of the answer's API responses
+  cost?: number; // USD at API prices
+  model?: string;
+};
 
 export type SessionInfo = { id: string; mod_time: string; title?: string };
 
@@ -38,6 +47,12 @@ export async function fetchChat(
 }
 
 // ---- quick prompts: saved texts for the composer ----
+export type QuestionOption = { n: number; label: string; picked: boolean };
+// Question is the dialog on the pane's screen: its words, and its choices with the cursor on one.
+export type Question = { text: string; options: QuestionOption[] };
+export const fetchQuestion = (machineId: string, paneId: string): Promise<Question | null> =>
+  getJSON<{ question: Question | null }>(`/api/question?${new URLSearchParams({ machine: machineId, pane: paneId })}`).then((r) => r.question);
+
 export type QuickPrompt = { id?: string; label: string; text: string; dir?: string };
 export const fetchQuick = (): Promise<QuickPrompt[]> => getJSON("/api/quick");
 export const saveQuick = (list: QuickPrompt[]): Promise<QuickPrompt[]> => sendJSON("PUT", "/api/quick", list);

@@ -39,6 +39,9 @@ func TestStartRefusesWhatItCannotRun(t *testing.T) {
 			t.Errorf("Start(%q, %q): a refusal is not a stale command", c.what, c.command)
 		}
 	}
+	if _, err := service.RestartPane(local, "w1:p1"); err == nil || !strings.Contains(err.Error(), "no pane w1:p1") {
+		t.Errorf("RestartPane with no snapshot = %v, want no pane", err)
+	}
 	if offered := service.Available(local); len(offered) != 0 {
 		t.Fatalf("nothing is known, nothing offered: %+v", offered)
 	}

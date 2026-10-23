@@ -1,4 +1,4 @@
-.PHONY: all build web server dev run test webtest typecheck docker docker-test release publish deploy service code clean
+.PHONY: all build web server dev run test webtest typecheck e2e docker docker-test release publish deploy service code clean
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 PUBLISH_BRANCH ?= main
@@ -35,6 +35,11 @@ webtest: web/node_modules
 typecheck: web/node_modules
 	cd web && npm run typecheck
 	go vet ./...
+
+# The end-to-end smoke (scripts/e2e.sh): a throwaway herdr server, a remuda of its own and
+# headless Chrome driven by e2e/smoke.mjs; nothing of the person's is touched.
+e2e: build
+	E2E_BIN=$(CURDIR)/bin/remuda sh scripts/e2e.sh
 
 docker:
 	docker build --target runtime --build-arg VERSION=$(VERSION) -t remuda:local .

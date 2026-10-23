@@ -12,6 +12,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/usage"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
@@ -72,6 +73,23 @@ func (c *Service) LastWrite(machineID string, pane *herdr.PaneInfo) (time.Time, 
 func (c *Service) LastWriteOf(machineID string, pane *herdr.PaneInfo) time.Time {
 	at, _ := c.LastWrite(machineID, pane)
 	return at
+}
+
+// SessionVersion is the version of the pane's session file, for a reader that skips an unchanged file.
+func (c *Service) SessionVersion(machineID, paneID string) (string, bool) {
+	pane, _ := c.Pane(machineID, paneID)
+	if pane == nil {
+		return "", false
+	}
+	mc, path, ok := c.SessionFile(machineID, pane)
+	if !ok {
+		return "", false
+	}
+	version, err := mc.Transcripts.Version(path)
+	if err != nil {
+		return "", false
+	}
+	return version.String(), true
 }
 
 // LastWriteOfPane is LastWrite by pane id, for the watchdog.
@@ -144,9 +162,13 @@ func (conv Conversation) ETag() string {
 	return fmt.Sprintf(`"%s-%s"`, conv.ID, conv.Version)
 }
 
-// Turns parses the conversation at the version Open saw.
+// Turns parses the conversation at the version Open saw, every answer priced.
 func (conv Conversation) Turns() ([]transcript.Turn, error) {
-	return conv.reader.Turns(conv.Path, conv.Version)
+	turns, err := conv.reader.Turns(conv.Path, conv.Version)
+	if err != nil {
+		return nil, err
+	}
+	return usage.PriceTurns(turns), nil
 }
 
 // LastTurns is the conversation's last n turns at the version Open saw, parsed once per version however many tiles ask for them.
