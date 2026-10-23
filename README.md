@@ -401,7 +401,9 @@ strip above the pane, machines mirrored from `herdr machine list`, and a
 **file viewer** — click any path the agent prints in the terminal or chat to
 open the file where it lives (local or remote), with a **Changes** tab
 showing its uncommitted `git diff`. A path is a link when it names a file
-(`main.go`, `docs/plan.md`, `.env`), not a folder.
+(`main.go`, `docs/plan.md`, `.env`), not a folder. A picture the agent
+read or wrote — a screenshot it looked at, an icon it drew — shows as a
+thumbnail under the call in the chat; a click opens it.
 
 **Files the agent touched:** a rail beside the chat and the terminal (the
 folder button in the tab strip) lists every file the agent edited or read

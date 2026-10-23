@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Part, Turn } from "./api";
-import { footprint, shownPath, toolLabel, toolPath } from "./footprint";
+import { footprint, imagePath, shownPath, toolLabel, toolPath } from "./footprint";
 
 const tool = (tool_name: string, input: unknown, is_error = false): Part => ({ type: "tool", tool_name, input, is_error });
 const assistant = (ts: string, ...parts: Part[]): Turn => ({ role: "assistant", ts, parts });
@@ -66,5 +66,20 @@ describe("toolLabel", () => {
     expect(toolLabel({ type: "tool", tool_name: "Bash", input: { command: "go test ./..." } })).toEqual({ name: "Bash", hint: "go test ./...", file: null });
     expect(toolLabel({ type: "tool", tool_name: "Bash", input: { command: "x".repeat(70) } }).hint).toBe("x".repeat(60) + "…");
     expect(toolLabel({ type: "tool", input: "cut" })).toEqual({ name: "tool", hint: "", file: null });
+  });
+});
+
+describe("imagePath", () => {
+  const done = (tool_name: string, input: unknown, is_error = false): Part => ({ ...tool(tool_name, input, is_error), output: "ok" });
+  it("is the picture a finished Read or Write was about", () => {
+    expect(imagePath(done("Read", { file_path: "/r/docs/shot.PNG" }))).toBe("/r/docs/shot.PNG");
+    expect(imagePath(done("Write", { file_path: "/r/web/marks/claude.svg", content: "<svg/>" }))).toBe("/r/web/marks/claude.svg");
+    expect(imagePath(done("Read", { file_path: "/r/a.go" }))).toBeNull();
+  });
+  it("is none for a call still running, a failed one, or a tool that only named a folder", () => {
+    expect(imagePath(tool("Read", { file_path: "/r/shot.png" }))).toBeNull();
+    expect(imagePath(done("Read", { file_path: "/r/shot.png" }, true))).toBeNull();
+    expect(imagePath(done("Glob", { pattern: "*.png", path: "/r/shots.png" }))).toBeNull();
+    expect(imagePath({ type: "text", text: "/r/shot.png" })).toBeNull();
   });
 });

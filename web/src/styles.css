@@ -2129,6 +2129,23 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--red);
 }
 
+.part-image {
+  display: block;
+  margin: 6px 0 0;
+  padding: 0;
+  max-width: 100%;
+  line-height: 0;
+}
+.part-image img {
+  max-height: 160px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+.part-image:hover img {
+  border-color: var(--line-hover);
+}
 .tool-io {
   background: var(--bg-raised);
   border: 1px solid var(--line);
