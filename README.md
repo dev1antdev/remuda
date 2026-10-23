@@ -108,6 +108,7 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   worktree is answered for you), the task moves to *In progress*, and
   every answer the agent finishes comes back to the task as a comment
   with a push — and moves it on to *Testing*, unless you moved it first.
+  A *Review* link beside the run opens its worktree in the Review mode.
   Which columns do what is the project's own setting. Mark it done from
   there.
 
@@ -436,9 +437,11 @@ walks by keys: `j` `k` through the files, `↑` `↓` the lines, `n` `p` the
 hunks, `c` comments on the line, `o` opens the file there, `s` flips the
 columns.
 **Approve** tells the agent the work is reviewed and it can carry on (a
-task it works on can move along), **Reject** tells it what to fix and to
-come back for another look; both take a note and carry your comments, and
-both start the next look from now. The comments can also go on their own,
+task it works on can move along) — tick *and ask the agent to commit* and
+it is **Approve & commit**: the agent commits the reviewed work and says
+so (remuda itself never writes into a repository); **Reject** tells it
+what to fix and to come back for another look; both take a note and carry
+your comments, and both start the next look from now. The comments can also go on their own,
 to this agent or any other. "Mark reviewed" just clears the counts — the
 agent hears nothing.
 

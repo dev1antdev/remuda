@@ -50,6 +50,7 @@ export type AppState = {
   footprint: boolean; // the files rail beside the lenses, a per-device pref
   codeFile: { machineId: string; folder: string; path: string; n: number } | null; // a file the Code mode is asked to open, once
   chatSession: string | null; // an older session of its folder the chat lens shows instead of the pane's live one; the export follows it
+  reviewAsked: { machineId: string; dir: string } | null; // a folder the Review mode is asked to pick, once (a task's run)
 };
 
 const fromURL = readURL();
@@ -74,6 +75,7 @@ export const app = createStore<AppState>({
   footprint: readPref("footprint", !isTouch),
   codeFile: null,
   chatSession: null,
+  reviewAsked: null,
 });
 
 let jumps = 0;
@@ -91,6 +93,14 @@ export const actions = {
   setMode(mode: Mode) {
     app.set((s) => ({ mode, codeOpened: s.codeOpened || mode === "code" }));
     writePref("mode", mode);
+  },
+  // openReview takes the person to the Review mode on a folder's changes: a task's worktree, from the task
+  openReview(machineId: string, dir: string) {
+    app.set({ mode: "review", reviewAsked: { machineId, dir } });
+    writePref("mode", "review");
+  },
+  reviewPicked() {
+    app.set({ reviewAsked: null });
   },
   toggleDrawer() {
     app.set((s) => ({ drawer: !s.drawer }));

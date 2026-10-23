@@ -1,6 +1,7 @@
 // The open task on the right: every field in place, the ways to hand it to an agent, the run on it, the description, the comments.
 
 import { useCallback, useState } from "react";
+import { actions } from "@/app/store";
 import { errMsg } from "@/lib/text";
 import { fmtDate } from "@/lib/time";
 import { Icon, Logo, Select, useDismiss } from "@/ui";
@@ -171,6 +172,11 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
           {paneStatus !== null && (
             <button type="button" className="linkish" onClick={() => onOpenPane(run.machine, run.pane)}>
               Open <Icon name="chevron-right" size={12} />
+            </button>
+          )}
+          {run.dir && (
+            <button type="button" className="linkish" title="The worktree's changes in the Review mode" onClick={() => actions.openReview(run.machine, run.dir)}>
+              <Icon name="circle-check" size={12} /> Review
             </button>
           )}
         </div>
