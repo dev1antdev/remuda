@@ -76,9 +76,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
 - **Wall** — the **Wall** mode in the top bar puts every agent on one
   screen: a tile per agent pane on every connected machine, with its
   state and how long it has lasted, what it runs this second (the tool
-  call under way, else thinking or writing) or, once it has finished,
-  the first line of what it answered, the last turns of its
-  conversation and a line to answer it,
+  call under way, else thinking or writing) and how far its plan is
+  (3/7) or, once it has finished,
+  the first line of what it answered, its pull request as a link when
+  it named one (GitHub or GitLab; the workspace's ⋯ menu has it too),
+  the last turns of its conversation and a line to answer it,
   in a grid that fits the window (S / M / L). Hide the idle ones, or
   keep only the agents that need you — a question, a watchdog note, a
   finish you have not looked at, each ringed on the wall — hide any
@@ -454,6 +456,12 @@ a minute after a long turn. Answer at the desk first and nothing is sent.
 morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
 on iPhone, the home-screen app.
 
+**Read aloud** is the same panel's last switch: the browser's own voice
+says what an agent answered when it finishes ("api: Tests pass."), that
+one is waiting for you, or a watchdog note — while the page is open and
+in front, in the voice you pick, a Russian one for a Russian answer.
+Nothing passes through remuda; a reload says nothing.
+
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
 since you last looked marked, and the commits made since. A merge or a
@@ -504,6 +512,13 @@ flatten the day — with the moments worth a look marked and named under
 it: the first failed call, the longest call, a loop of identical calls,
 the questions the agent asked, a compaction. A click on any of them
 jumps to that turn. It works on a transcript opened from the search too.
+**Plan** — when the agent keeps a task list (Claude Code's own
+TaskCreate / TaskUpdate, or TodoWrite), a quiet line over the chat says
+how far it is and what it is on, in the agent's own words — "Plan 3/7 ·
+Building the page" — and unfolds to the list; a wall tile says 3/7 in
+its state line, and in the conversation each change to the list is one
+line, not a block of JSON. Read from the transcript, so a remote
+machine's agent has it too.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through remuda.
 
@@ -537,7 +552,10 @@ pill in the header and on the sidebar row from 50% up, red near the edge,
 with "Compact now" in the chat from 80%) and what the session has cost so
 far at Claude Code's own API prices. Under every answer in the chat, a
 quiet line says how long it took, the tokens it used and what it cost
-("4 min 12 s · 38k tokens · $0.42"). 📊 opens the report: by day, by
+("4 min 12 s · 38k tokens · $0.42"); every tool call in the log ends
+with how long it took, a failed one is red, and that line counts the
+failed and the repeated calls. On the Wall a tile says how long the
+running command has gone on, amber past a minute. 📊 opens the report: by day, by
 project, by model, by machine, the sessions that cost the most — every
 machine reads its own transcripts, nothing is sent anywhere. On a
 subscription it is a measure of where the work went, not a bill.
@@ -563,8 +581,8 @@ binary is deployed, grep otherwise).
 
 **Wall:** a mode for the big screen — every agent on every connected
 machine as a tile: its state and workspace, its context and cost, how
-long it has been at it and what it runs this second — or, once it is
-done, the first line of its answer — the last dozen turns of its
+long it has been at it, what it runs this second and how far its plan
+is — or, once it is done, the first line of its answer — the last dozen turns of its
 conversation, the question it asks with its choices as buttons,
 and a line to answer. Tiles keep the roster's order, so nothing jumps
 when an agent changes state; hide the idle ones, keep only the ones that

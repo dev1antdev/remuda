@@ -8,6 +8,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 func TestFirstLineStripsTheMarks(t *testing.T) {
@@ -45,7 +46,15 @@ type fake struct {
 	mu       sync.Mutex
 	versions map[string]string
 	answers  map[string]string
+	links    map[string]string
 	reads    int
+}
+
+func (f *fake) link(m, p string) (transcript.Link, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	url, ok := f.links[m+"|"+p]
+	return transcript.Link{URL: url, Label: "PR #1"}, ok
 }
 
 func (f *fake) version(m, p string) (string, bool) {
@@ -108,6 +117,38 @@ func TestTrackerReadsOnAFinishAndClearsOnWork(t *testing.T) {
 	tr.OnStatus(status(events.Gone))
 	if tr.Line("local", "w1:p1") != "" {
 		t.Fatal("a closed pane keeps its line")
+	}
+}
+
+func TestTrackerKeepsTheLinkWhileTheAgentWorks(t *testing.T) {
+	f := &fake{versions: map[string]string{"local|w1:p1": "10-1"}, answers: map[string]string{"local|w1:p1": "Opened the PR."}, links: map[string]string{"local|w1:p1": "https://github.com/o/r/pull/1"}}
+	tr := New(Inputs{Version: f.version, Answer: f.answer, Link: f.link})
+	tr.OnStatus(status(herdr.StatusDone))
+	waitFor(t, "the link", func() bool { _, ok := tr.Link("local", "w1:p1"); return ok })
+	if link, _ := tr.Link("local", "w1:p1"); link.URL != "https://github.com/o/r/pull/1" || link.Label != "PR #1" {
+		t.Fatalf("link = %+v", link)
+	}
+
+	tr.OnStatus(status(herdr.StatusWorking))
+	if _, ok := tr.Link("local", "w1:p1"); !ok || tr.Line("local", "w1:p1") != "" {
+		t.Fatal("working clears the line and keeps the link")
+	}
+
+	f.mu.Lock()
+	f.versions["local|w1:p1"] = "20-2"
+	delete(f.links, "local|w1:p1")
+	f.mu.Unlock()
+	tr.OnStatus(status(herdr.StatusDone))
+	waitFor(t, "the line again", func() bool { return tr.Line("local", "w1:p1") == "Opened the PR." })
+	if _, ok := tr.Link("local", "w1:p1"); ok {
+		t.Fatal("a read that finds no request drops the old one")
+	}
+
+	plain := New(Inputs{Version: f.version, Answer: f.answer})
+	plain.OnStatus(status(herdr.StatusDone))
+	waitFor(t, "the plain line", func() bool { return plain.Line("local", "w1:p1") != "" })
+	if _, ok := plain.Link("local", "w1:p1"); ok {
+		t.Fatal("no Link input, no link")
 	}
 }
 

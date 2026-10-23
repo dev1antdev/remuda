@@ -2183,6 +2183,21 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--red);
 }
 
+.part-tool summary .part-hint,
+.part-tool summary .path-link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.part-took {
+  margin-left: auto;
+  padding-left: 8px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--fg-faint);
+}
+
 .part-image {
   display: block;
   margin: 6px 0 0;
@@ -2500,6 +2515,16 @@ input[type="checkbox"]:hover:not(:checked) {
   font-size: 12px;
   color: var(--fg-dim);
 }
+
+.alerts-voice {
+  gap: 8px;
+}
+
+.alerts-voice .sel {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 
 .alerts-quiet input[type="time"] {
   width: 7.5em;
@@ -4766,6 +4791,10 @@ button.usage-row:hover {
   cursor: default;
 }
 
+.turn-wrong {
+  color: var(--red);
+}
+
 .turn-forward {
   align-self: flex-start;
   display: inline-flex;
@@ -5848,6 +5877,20 @@ button.usage-row:hover {
   margin-left: 0;
 }
 
+.tile-pr {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.tile-pr:hover {
+  color: var(--accent);
+}
+
 /* the state line under the head: the state and how long, and what the agent runs this second; always there, so nothing moves */
 .tile-state {
   display: flex;
@@ -5884,6 +5927,14 @@ button.usage-row:hover {
 
 .tile-doing-name {
   color: var(--fg-faint);
+}
+
+.tile-running {
+  color: var(--fg-faint);
+}
+
+.tile-running.is-long {
+  color: var(--amber);
 }
 
 .tile.is-blocked .tile-words {
@@ -6581,4 +6632,116 @@ body.popout {
   .palette-row {
     min-height: 40px;
   }
+}
+
+/* ---- the agent's plan: the bar over the chat, a plan tool's call in a turn, the count on a tile ---- */
+.plan-bar {
+  flex-shrink: 0;
+  margin: 0 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.plan-bar > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--ctl-sm);
+  padding: 0 4px;
+  margin: 2px -4px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  list-style: none;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.plan-bar > summary::-webkit-details-marker {
+  display: none;
+}
+
+.plan-bar > summary:hover {
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+
+.plan-icon {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+.plan-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg);
+}
+
+.plan-now {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-faint);
+}
+
+.plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.plan-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--fg-dim);
+}
+
+.plan-item .plan-mark {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--fg-faint);
+}
+
+.plan-item.is-in_progress {
+  color: var(--fg);
+}
+
+.plan-item.is-in_progress .plan-mark {
+  color: var(--accent);
+}
+
+.plan-item.is-completed {
+  color: var(--fg-faint);
+}
+
+.plan-item.is-completed .plan-mark {
+  color: var(--green);
+}
+
+.part-plan {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  font-size: 13px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tile-plan {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-faint);
 }

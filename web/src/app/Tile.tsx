@@ -1,5 +1,5 @@
 // TileView is one agent as the wall and the pop-out show it: its head as the sidebar row reads it — mark, logo,
-// label, workspace · machine, context % · cost — its state line (how long, and what it runs this second), then the
+// label, workspace · machine, the pull request it named, context % · cost — its state line (how long, and what it runs this second), then the
 // tail of its chat, or its terminal as it is, with a line to answer.
 
 import Tail, { TailAnswer, TileState } from "@/features/chat/Tail";
@@ -8,6 +8,7 @@ import { hueStyle } from "@/features/roster/hue";
 import type { Tile, WallView } from "@/features/roster/wall";
 import { Screen } from "@/features/terminal/Screen";
 import { fillClass, usd } from "@/features/usage/format";
+import { openUrl } from "@/lib/host";
 import { Icon, Logo } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import { folderOf } from "./current";
@@ -42,6 +43,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
   const words = alert ?? stateWords(d, pane.radar?.last_active, now, pane.radar?.since);
   const settled = !alert && (d === "done" || d.startsWith("idle"));
   const said = settled ? pane.said : undefined;
+  const pr = pane.pr;
   return (
     <section className={`tile is-${d}${alert ? " is-alert" : ""}${brief ? " brief" : ""}${machine.id !== "local" ? " has-hue" : ""}`} style={hueStyle(machine.id)} aria-label={`${pane.agent} in ${where}`}>
       <header className="tile-head">
@@ -53,6 +55,11 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           <span className="tile-label">{rowLabel(pane, tab, session.name, radar)}</span>
           <span className="tile-where">{where}</span>
         </button>
+        {pr && (
+          <button type="button" className="linkish tile-pr" title={`${pr.url}\nOpen in a new tab`} onClick={() => openUrl(pr.url)}>
+            <Icon name="external-link" size={12} /> {pr.label}
+          </button>
+        )}
         {usage && usage.window > 0 && (
           <span className={`radar-ctx tile-usage${fillClass(fill)}`} title={`Context ${Math.round(100 * fill)}% full · ${usage.name} · ${usd(usage.cost)} API-equivalent so far`}>
             {Math.round(100 * fill)}% · {usd(usage.cost)}

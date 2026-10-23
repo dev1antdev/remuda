@@ -12,6 +12,10 @@ describe("doing", () => {
     expect(doing([assistant({ type: "tool", tool_name: "Read", input: '{"file_path":"/w/a.go"' })])).toEqual({ what: "tool", name: "Read", hint: "/w/a.go" });
   });
 
+  it("says since when the call has run, when the record is stamped", () => {
+    expect(doing([assistant({ type: "tool", tool_name: "Bash", input: { command: "make e2e" }, at: "2026-10-24T10:00:00Z" })])).toEqual({ what: "tool", name: "Bash", hint: "make e2e", at: "2026-10-24T10:00:00Z" });
+  });
+
   it("is thinking once the result is in, after the prompt, or in a thinking block", () => {
     expect(doing([assistant({ type: "tool", tool_name: "Bash", input: { command: "ls" }, output: "" })])).toEqual({ what: "thinking" });
     expect(doing([assistant({ type: "tool", tool_name: "Bash", input: { command: "ls" }, output: "a\nb" })])).toEqual({ what: "thinking" });

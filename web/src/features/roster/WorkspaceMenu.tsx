@@ -1,9 +1,11 @@
-// The workspace's ⋯ menu: a tab, a worktree, a rename, the active tab's agent restarted on its session, close.
+// The workspace's ⋯ menu: a tab, a worktree, a rename, the pull request the agent named, the active tab's agent restarted on
+// its session, close.
 
 import { useEffect } from "react";
 import { act } from "@/app/act";
 import { actions, type RowMenu } from "@/app/store";
 import { agentTitle, askRestart } from "@/features/updates/restartPane";
+import { openUrl } from "@/lib/host";
 import { killSession, type Machine, type Session } from "./api";
 
 export function closeWorkspace(m: Machine, s: Session) {
@@ -25,6 +27,7 @@ export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) 
   const { machine, session } = menu;
   const tab = session.tabs.find((x) => x.id === session.active_tab_id) ?? session.tabs[0];
   const chat = tab?.panes.find((p) => p.agent);
+  const pr = chat?.pr;
   const item = (label: string, run: () => void, className?: string) => (
     <button
       type="button"
@@ -44,6 +47,7 @@ export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) 
       {item("New worktree…", () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }))}
       {item("Rename workspace…", () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }))}
       {tab && item(`Rename tab ${tab.named ? `“${tab.label}”` : tab.number}…`, () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }))}
+      {pr && item(`Open ${pr.label}`, () => openUrl(pr.url))}
       {chat && item(`Restart ${agentTitle(chat.agent)} on its session…`, () => askRestart(machine.id, chat.id, chat.agent))}
       {item("Close workspace", () => closeWorkspace(machine, session), "danger")}
     </div>
