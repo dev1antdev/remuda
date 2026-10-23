@@ -10,12 +10,8 @@ import { errMsg } from "@/lib/text";
 import { Notice } from "@/ui";
 import Composer from "./Composer";
 import { doing, type Doing } from "./doing";
-<<<<<<< HEAD
 import { QuestionCard } from "./QuestionCard";
-=======
-import { PromptKeys } from "./PromptKeys";
 import { said } from "./said";
->>>>>>> release
 import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFollowBottom } from "./useFollowBottom";

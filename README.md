@@ -431,6 +431,12 @@ opens it in the Code mode, VS Code on that machine. Edits an agent made
 through shell commands are not its tool calls: the Changes lens shows
 those. Hidden on a phone.
 
+**Full screen** (the ⤢ in the tab strip, or the palette): the header,
+the sidebar and the rail go and the lens takes the whole screen — a
+terminal on the whole monitor, a chat on the whole phone. The tab strip
+stays with its tools; Esc outside the terminal, or the same button,
+brings the page back.
+
 **Attachments:** the paperclip, a pasted screenshot (Ctrl/Cmd+V) or a drop
 uploads into the pane's folder (`.remuda/uploads/`) and mentions the file
 as `@path` in the message — Claude reads the image from there. In the
@@ -545,14 +551,9 @@ binary is deployed, grep otherwise).
 
 **Wall:** a mode for the big screen — every agent on every connected
 machine as a tile: its state and workspace, its context and cost, how
-<<<<<<< HEAD
-long it has been at it and what it runs this second, the last dozen
-turns of its conversation, the question it asks with its choices as buttons,
-=======
 long it has been at it and what it runs this second — or, once it is
-done, the first line of its answer — the last dozen
-turns of its conversation, the keys for a question it asks,
->>>>>>> release
+done, the first line of its answer — the last dozen turns of its
+conversation, the question it asks with its choices as buttons,
 and a line to answer. Tiles keep the roster's order, so nothing jumps
 when an agent changes state; hide the idle ones, keep only the ones that
 need you, or hide any single tile, focus one agent with the rest in a

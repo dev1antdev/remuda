@@ -819,6 +819,12 @@ input[type="checkbox"]:hover:not(:checked) {
   flex: 1;
   min-height: 0;
 }
+.app.is-full .topbar,
+.app.is-full .sidebar,
+.app.is-full .scrim,
+.app.is-full .footprint {
+  display: none;
+}
 
 .sidebar {
   width: 268px;
