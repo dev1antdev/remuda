@@ -6,6 +6,7 @@ import { addMachine, createSession, createTab, createWorktree, renameMachine, re
 import { useRoster } from "@/features/roster/useRoster";
 import { AddMachineDialog, NewTabDialog, NewWorkspaceDialog, NewWorktreeDialog, RenameDialog, RenameMachineDialog } from "@/features/roster/dialogs";
 import WorkspaceMenu from "@/features/roster/WorkspaceMenu";
+import Activity from "@/features/activity/Activity";
 import BroadcastDialog from "@/features/agents/BroadcastDialog";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import AlertsPanel from "@/features/alerts/AlertsPanel";
@@ -58,6 +59,7 @@ export default function Overlays() {
       {panel === "palette" && <CommandPalette />}
       {panel === "release" && local && <UpdatesDialog machine={local} what="remuda-release" onClose={actions.closePanel} />}
       {panel === "alerts" && <AlertsPanel onClose={actions.closePanel} />}
+      {panel === "activity" && <Activity onClose={actions.closePanel} />}
       {panel === "schedules" && <Schedules machines={machines} onClose={actions.closePanel} ask={actions.ask} />}
       {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} />}
       {panel === "usage" && (

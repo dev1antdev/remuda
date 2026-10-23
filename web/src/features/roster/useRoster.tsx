@@ -12,6 +12,7 @@ export type RosterState = {
   latest?: Latest;
   tailscale?: Tailscale;
   version?: string; // the server's
+  feed?: number; // the newest activity entry: past the one seen here, the bell has news
   offline: boolean;
   stale: string | null; // the server's version when this page is older
   refresh: () => void;
@@ -42,6 +43,7 @@ export function RosterProvider({ children }: { children: ReactNode }) {
       latest: data?.latest,
       tailscale: data?.tailscale,
       version: data?.version,
+      feed: data?.feed,
       offline: !!error,
       stale,
       refresh: reload,

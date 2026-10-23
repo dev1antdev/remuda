@@ -442,6 +442,13 @@ both start the next look from now. The comments can also go on their own,
 to this agent or any other. "Mark reviewed" just clears the counts — the
 agent hears nothing.
 
+**Activity** (the bell in the header) is what happened while you were
+away: every finish, question, watchdog note, failed schedule and task
+move, by day, newest first, from every machine — the same things the
+pushes carry, kept whether or not a device is subscribed. A row opens
+its pane; the bell wears a dot until you look. The alert settings sit at
+the panel's foot.
+
 **Between agents:** every assistant turn has a *forward* link that sends its
 text, headed "From *workspace*:", to any other agent on any machine — the
 same dialog Tasks uses to send a task. **Message several agents** (✉ in

@@ -13,6 +13,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/events"
+	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/jobs"
@@ -72,6 +73,10 @@ func Run(ctx context.Context, o Options) error {
 	pushSvc, err := push.New(o.Dir)
 	if err != nil {
 		return fmt.Errorf("push: %w", err)
+	}
+	activity := feed.New(o.Dir)
+	pushSvc.OnAlert = func(p push.Payload) {
+		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body})
 	}
 	taskStore, err := tasks.Open(o.Dir)
 	if err != nil {
@@ -158,6 +163,7 @@ func Run(ctx context.Context, o Options) error {
 		Tasks:     taskStore,
 		Launcher:  &tasks.Launcher{Store: taskStore, Input: input, Watch: watcher, Notify: pushSvc.Notify},
 		Push:      pushSvc,
+		Feed:      activity,
 		Radar:     tracker,
 		Usage:     meter,
 		Health:    vitals,

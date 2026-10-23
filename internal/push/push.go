@@ -75,6 +75,9 @@ type Service struct {
 
 	timers map[events.PaneRef][]*time.Timer
 	send   func(sub *Subscription, p Payload) error
+
+	// OnAlert hears every alert as it goes out, or would have — the activity feed, whether or not a device is subscribed.
+	OnAlert func(p Payload)
 }
 
 // Delays are variables so tests can shrink them.
@@ -253,6 +256,7 @@ func topic(tag string) string {
 
 // Notify sends one payload now to every device that wants the watchdog's word (the pref defaults to on).
 func (s *Service) Notify(p Payload) {
+	s.record(p)
 	for _, sub := range s.list() {
 		if sub.Prefs.Watchdog != nil && !*sub.Prefs.Watchdog {
 			continue
@@ -260,6 +264,13 @@ func (s *Service) Notify(p Payload) {
 		if err := s.send(sub, p); err != nil {
 			log.Printf("push to %.40s…: %v", sub.Endpoint, err)
 		}
+	}
+}
+
+// record hands an alert to the feed, when there is one.
+func (s *Service) record(p Payload) {
+	if s.OnAlert != nil {
+		s.OnAlert(p)
 	}
 }
 
@@ -290,7 +301,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 	for _, sub := range s.subs {
 		subs = append(subs, sub)
 	}
-	if len(subs) == 0 {
+	if len(subs) == 0 && s.OnAlert == nil {
 		return
 	}
 
@@ -304,8 +315,9 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 	}
 
 	var pending []*time.Timer
-	schedule := func(delay time.Duration, targets []*Subscription, p Payload) {
-		if len(targets) == 0 {
+	// note: the feed hears this alert when it fires, so a finish or a question answered at the desk is no news either
+	schedule := func(delay time.Duration, targets []*Subscription, p Payload, note bool) {
+		if len(targets) == 0 && !(note && s.OnAlert != nil) {
 			return
 		}
 		var t *time.Timer
@@ -324,6 +336,9 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 				s.timers[key] = rest
 			}
 			s.mu.Unlock()
+			if note {
+				s.record(p)
+			}
 			for _, sub := range targets {
 				if err := s.send(sub, p); err != nil {
 					log.Printf("push to %.40s…: %v", sub.Endpoint, err)
@@ -346,7 +361,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 			Title: label + " needs you",
 			Body:  agent + " is waiting for an answer" + paneLine(ev),
 			Tag:   key.String(),
-		})
+		}, true)
 	case herdr.StatusDone:
 		if ev.From != herdr.StatusWorking {
 			return
@@ -368,8 +383,8 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 			Body:  agent + " is done after " + ev.Worked.Round(time.Second).String() + paneLine(ev),
 			Tag:   key.String(),
 		}
-		schedule(doneDelay, long, p)
-		schedule(doneDelayFast, always, p)
+		schedule(doneDelay, long, p, false)
+		schedule(doneDelayFast, always, p, true)
 	default:
 		return
 	}

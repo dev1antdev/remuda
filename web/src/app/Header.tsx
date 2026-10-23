@@ -4,7 +4,9 @@
 
 import { basename } from "@/lib/text";
 import { machineLabel } from "@/features/roster/options";
+import { unread } from "@/features/activity/group";
 import { useRoster } from "@/features/roster/useRoster";
+import { usePref } from "@/lib/prefs";
 import { fillClass, tok, usd } from "@/features/usage/format";
 import { Icon } from "@/ui";
 import type { Located } from "./current";
@@ -18,6 +20,9 @@ export default function Header({ current }: { current: Located | null }) {
   const drawer = app.use((s) => s.drawer);
   const viewer = app.use((s) => s.viewer);
   const panel = app.use((s) => s.panel);
+  const { feed } = useRoster();
+  const [seen] = usePref<number>("feed.seen", 0);
+  const news = unread(feed, seen);
   return (
     <header className="topbar">
       <button type="button" className="burger icon-btn" onClick={actions.toggleDrawer} title="Menu" aria-expanded={drawer}>
@@ -77,7 +82,7 @@ export default function Header({ current }: { current: Located | null }) {
       <button type="button" className="icon-btn bell" title="Search every conversation (also from ⌘K / Ctrl+K)" onClick={() => actions.openSearch()}>
         <Icon name="search" size={18} />
       </button>
-      <button type="button" className={`icon-btn bell${panel === "alerts" ? " on" : ""}`} title="Alerts on this device" aria-expanded={panel === "alerts"} onClick={() => actions.togglePanel("alerts")}>
+      <button type="button" className={`icon-btn bell${panel === "activity" ? " on" : ""}${news ? " has-news" : ""}`} title="Activity: what happened across the agents (the alert settings are inside)" aria-expanded={panel === "activity"} onClick={() => actions.togglePanel("activity")}>
         <Icon name="bell" size={18} />
       </button>
     </header>

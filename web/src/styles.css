@@ -794,6 +794,7 @@ input[type="checkbox"]:hover:not(:checked) {
 }
 
 .bell {
+  position: relative; /* the activity dot sits in its corner */
   display: inline-grid;
   place-items: center;
   width: var(--ctl-sm);
@@ -5834,6 +5835,106 @@ button.usage-row:hover {
   .queue-back {
     display: inline-flex;
   }
+}
+
+/* ---- the activity panel: what happened, by day; the bell carries a dot while there is news ---- */
+.bell.has-news::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg-raised);
+}
+
+.activity-day {
+  margin-bottom: 10px;
+}
+
+.activity-day-head {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.activity-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.activity-row:hover:not(:disabled) {
+  background: var(--bg-active);
+}
+
+.activity-row:disabled {
+  cursor: default;
+}
+
+.activity-row.gone {
+  color: var(--fg-dim);
+}
+
+.activity-row > svg,
+.activity-row > .logo {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.activity-when {
+  flex-shrink: 0;
+  width: 52px;
+  font-size: 12px;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+
+.activity-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.activity-title {
+  font-size: 13px;
+}
+
+.activity-machine {
+  color: var(--fg-faint);
+}
+
+.activity-body {
+  font-size: 12px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-foot {
+  justify-content: flex-start;
 }
 
 /* ---- the pop-out: a tile alone in the small window above every other app ---- */

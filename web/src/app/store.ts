@@ -29,7 +29,7 @@ export type NoticeMsg = { text: string; error?: boolean; brief?: boolean };
 export type Confirm = { text: string; label: string; run: () => void };
 // a jump names its pane ("" = the transcript viewer): a Chat gets it only when it is that pane's
 export type Jump = { machineId: string; paneId: string; session: string; turn: string; n: number };
-export type Panel = "palette" | "search" | "alerts" | "schedules" | "usage" | "release" | null;
+export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "release" | null;
 
 export type AppState = {
   requested: Selection | null; // the selection is a request; the pane shown is derived from it, never fixed up in an effect

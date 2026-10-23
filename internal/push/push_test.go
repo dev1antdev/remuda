@@ -1,6 +1,8 @@
 package push
 
 import (
+	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -149,5 +151,33 @@ func TestSiblingTimerStaysCancellable(t *testing.T) {
 	time.Sleep(80 * time.Millisecond)
 	if got := sent.get(); len(got) != 1 {
 		t.Fatalf("the 'long' alert must have been called off, got %+v", got)
+	}
+}
+
+func TestFeedHearsAlertsWithoutSubscriptions(t *testing.T) {
+	inputDelay, doneDelayFast = 10*time.Millisecond, 10*time.Millisecond
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var heard []string
+	var mu sync.Mutex
+	s.OnAlert = func(p Payload) {
+		mu.Lock()
+		heard = append(heard, p.Kind+":"+p.Title)
+		mu.Unlock()
+	}
+	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "p1"}, Workspace: "api", Agent: "claude", From: "working", To: "blocked"})
+	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "p2"}, Workspace: "web", From: "working", To: "done", Worked: time.Millisecond})
+	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "p3"}, Workspace: "quick", From: "working", To: "blocked"})
+	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "p3"}, From: "blocked", To: "working"}) // answered at the desk
+	s.Notify(Payload{Kind: "stuck", Title: "api is stuck"})
+	time.Sleep(60 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	sort.Strings(heard)
+	want := []string{"done:web finished", "input:api needs you", "stuck:api is stuck"}
+	if strings.Join(heard, "|") != strings.Join(want, "|") {
+		t.Errorf("heard %v, want %v", heard, want)
 	}
 }
