@@ -7,6 +7,7 @@ import { useMedia } from "@/lib/media";
 import { basename } from "@/lib/text";
 import { closeTab, renameTab } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
+import { ChatTools } from "@/features/chat/ChatTools";
 import TabStrip from "@/features/roster/TabStrip";
 import Chat from "@/features/chat/Chat";
 import FilesRail, { FilesRailToggle } from "@/features/chat/FilesRail";
@@ -64,6 +65,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
         tools={
           <>
             {lens === "terminal" && <TerminalTools pane={pane} />}
+            {lens === "chat" && <ChatTools machineId={machine.id} paneId={pane.id} agent={pane.agent} workspace={session.name} machine={machine.label} dir={folder} />}
             <FilesRailToggle disabled={!pane.agent} />
           </>
         }

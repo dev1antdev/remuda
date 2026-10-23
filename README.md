@@ -449,6 +449,9 @@ are saved texts, for every folder or one, shared by all your devices. **↑**
 on an empty line brings back what you sent before from this device to
 that folder, newest first; ↓ walks forward and back to the line you were
 writing.
+**Export** (↓ in the tab strip on the chat lens, or the palette) saves
+the conversation as a Markdown file — the text as it is, thinking and
+tool calls folded — to share with someone who is not in remuda.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through remuda.
 

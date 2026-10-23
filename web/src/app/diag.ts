@@ -5,7 +5,7 @@ import { stallWords, toastDue, watchStalls } from "@/lib/perf";
 import { plural } from "@/lib/text";
 import { actions, app } from "./store";
 
-const MODE_NAMES = { herdr: "Agents", wall: "the Wall", tasks: "Tasks", code: "Code" } as const;
+const MODE_NAMES = { herdr: "Agents", wall: "the Wall", tasks: "Tasks", code: "Code", review: "Review" } as const;
 
 // wherePage says where the page is right now, in the words a person would use; the pane shown is the address bar's (url.ts keeps it)
 export function wherePage(): string {
