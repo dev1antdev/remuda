@@ -70,6 +70,9 @@ export default function Sidebar() {
             <Icon name="sliders" size={14} />
           </button>
           {settings && <RadarSettings at={settings} prefs={prefs} onPrefs={onPrefs} />}
+          <button type="button" className="icon-btn" onClick={() => actions.openDialog({ kind: "broadcast" })} title="Message several agents: one text to the ones you tick, each in turn">
+            <Icon name="send" size={14} />
+          </button>
           <button type="button" className="icon-btn" onClick={() => actions.openPanel("schedules")} title="Schedules: prompts sent to agents on a timetable">
             <Icon name="calendar" size={14} />
           </button>

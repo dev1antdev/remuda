@@ -20,6 +20,7 @@ export type AppDialog =
   | { kind: "tab"; machineId: string; session: Session }
   | { kind: "worktree"; machineId: string; session: Session }
   | { kind: "machine" }
+  | { kind: "broadcast" } // one message to several agents
   | { kind: "renameMachine"; machine: Machine }
   | null;
 
