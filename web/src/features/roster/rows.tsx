@@ -218,7 +218,7 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
       tabIndex={0}
       onClick={() => onSelect(m.id, p.id)}
       onKeyDown={(e) => rowKey(e, () => onSelect(m.id, p.id))}
-      title={`${p.agent || "shell"} · ${alert ? alert : stateWords(d, p.radar?.last_active, now, p.radar?.since)}${said ? ` · ${said}` : ""}\n${p.cwd}`}
+      title={`${p.agent || "shell"} · ${alert ? alert : stateWords(d, p.radar?.last_active, now, p.radar?.since)}${said ? ` · ${said}` : ""}${p.pr ? `\n${p.pr.label} · ${p.pr.url}` : ""}\n${p.cwd}`}
     >
       <span className="radar-mark" style={style}>
         {alert ? "!" : p.agent ? markOf(d, step) : "$"}

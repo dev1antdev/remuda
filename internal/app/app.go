@@ -90,7 +90,7 @@ func Run(ctx context.Context, o Options) error {
 	chats := &chat.Service{Machines: fleet, Watch: watcher}
 	tracker := radar.New(o.Dir, chats.LastWriteOf)
 	defer tracker.Flush()
-	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer})
+	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer, Link: chats.PullRequest})
 	reviews := review.New(o.Dir)
 	meter := usage.NewTracker()
 	input := sessions.NewInput(fleet, watcher)

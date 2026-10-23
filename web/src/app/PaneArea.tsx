@@ -9,6 +9,7 @@ import { closeTab, renameTab } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
 import { ChatTools } from "@/features/chat/ChatTools";
 import { FindTool } from "@/features/chat/FindBar";
+import { TimelineTool } from "@/features/chat/TimelineBar";
 import TabStrip from "@/features/roster/TabStrip";
 import Chat from "@/features/chat/Chat";
 import FilesRail, { FilesRailToggle } from "@/features/chat/FilesRail";
@@ -37,7 +38,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
   if (viewer) {
     return (
       <main className="pane-area">
-        <Notice tone="info" icon="search" className="viewer-bar" action={<FindTool />} onDismiss={actions.closeViewer}>
+        <Notice tone="info" icon="search" className="viewer-bar" action={<><FindTool /><TimelineTool /></>} onDismiss={actions.closeViewer}>
           A transcript from <b>{basename(viewer.dir)}</b> — no agent runs there now, so it reads only.
         </Notice>
         <Chat key={`viewer|${viewer.machine}|${viewer.session}`} machineId={viewer.machine} paneId="" status="" origin={`${basename(viewer.dir)} (an old transcript)`} dir={viewer.dir} />

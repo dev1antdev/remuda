@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { errMsg } from "@/lib/text";
 import { deviceZone, readAlertPrefs, readQuietWindow } from "@/features/alerts/prefs";
-import { writePref } from "@/lib/prefs";
+import { usePref, writePref } from "@/lib/prefs";
 import { disablePush, enablePush, getPushState, sendTestPush, updatePrefs, type Prefs, type PushState, type Quiet } from "@/features/alerts/push";
+import { speak, useVoices, voiceSupported } from "@/features/alerts/useVoice";
+import { DEFAULT_VOICE, type VoicePrefs } from "@/features/alerts/voice";
 import Select from "@/ui/Select";
 import { Dialog, Notice, useTimedNotice } from "@/ui";
 
-// Push alerts for this device: enable, what to be told about, a test push.
+// Push alerts for this device: enable, what to be told about, quiet hours, a test push; and the browser's voice reading the agents aloud.
 export default function AlertsPanel({ onClose }: { onClose: () => void }) {
   const [state, setState] = useState<PushState | null>(null);
   const [prefs, setPrefs] = useState<Prefs>(readAlertPrefs);
@@ -50,6 +52,11 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
     writePref("alerts.quiet", next);
     if (prefs.quiet) changePrefs({ ...prefs, quiet: { ...next, tz: zone } });
   };
+
+  const [voice, setVoice] = usePref<VoicePrefs>("alerts.voice", DEFAULT_VOICE);
+  const voices = useVoices();
+  const voiceOptions = [{ value: "", label: "The browser's default voice" }, ...voices.map((v) => ({ value: v.name, label: v.name, hint: v.lang, group: v.lang }))];
+  const sayOne = () => speak(/[\u0400-\u04ff]/.test(voice.voice ?? "") ? "api: Все тесты прошли, ветка запушена." : "api: The tests pass and the branch is pushed.", "", voice.voice);
 
   return (
     <Dialog title="Alerts on this device" icon="bell" onClose={onClose} className="alerts-dialog">
@@ -121,6 +128,24 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
         <input type="time" className="sm" value={quietWindow.from} disabled={!prefs.quiet} aria-label="Quiet from" onChange={(e) => changeWindow({ ...quietWindow, from: e.target.value })} />
         <span>to</span>
         <input type="time" className="sm" value={quietWindow.to} disabled={!prefs.quiet} aria-label="Quiet until" onChange={(e) => changeWindow({ ...quietWindow, to: e.target.value })} />
+      </div>
+
+      <label className="alerts-opt">
+        <input type="checkbox" checked={voice.on} disabled={!voiceSupported} onChange={(e) => setVoice({ ...voice, on: e.target.checked })} />
+        <span>
+          <b>Read aloud</b> on this device
+          <small>
+            {voiceSupported
+              ? "The browser's own voice says what an agent answered when it finishes, that one waits for you, a watchdog note — while this page is open and in front. Nothing passes through remuda."
+              : "This browser has no speech synthesis."}
+          </small>
+        </span>
+      </label>
+      <div className="alerts-quiet alerts-voice">
+        <Select value={voice.voice ?? ""} options={voiceOptions} onChange={(name) => setVoice({ ...voice, voice: name || undefined })} />
+        <button type="button" className="btn sm" disabled={!voice.on} onClick={sayOne}>
+          Say a line
+        </button>
       </div>
 
       {state?.subscribed && state.endpoint && (
