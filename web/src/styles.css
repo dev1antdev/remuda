@@ -2374,6 +2374,24 @@ input[type="checkbox"]:hover:not(:checked) {
   align-self: flex-start;
 }
 
+/* the quiet window's two times, under their checkbox; off, they fade but keep their place */
+.alerts-quiet {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -6px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.alerts-quiet input[type="time"] {
+  width: 7.5em;
+}
+
+.alerts-quiet input:disabled {
+  opacity: 0.45;
+}
+
 /* ---- file links ---- */
 .path-link {
   border: 0;
@@ -4528,7 +4546,14 @@ button.usage-row:hover {
   align-self: flex-start;
 }
 
-/* ---- forward, quick prompts, dictation ---- */
+/* ---- what an answer spent, forward, quick prompts, dictation ---- */
+.turn-spent {
+  align-self: flex-start;
+  font-size: 11px;
+  color: var(--fg-faint);
+  cursor: default;
+}
+
 .turn-forward {
   align-self: flex-start;
   display: inline-flex;
