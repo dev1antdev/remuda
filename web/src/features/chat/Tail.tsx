@@ -31,7 +31,7 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, words, active 
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : "No transcript yet."}</div>}
         {turns.map((t, i) => (
-          <TurnView key={t.ids?.[0] || i} turn={t} onOpenFile={onOpenFile} />
+          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} />
         ))}
       </div>
       <TailAnswer machineId={machineId} paneId={paneId} status={status} dir={dir} error={fetchError || null} />
