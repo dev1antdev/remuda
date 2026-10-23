@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session } from "./api";
 import { DEFAULT_RADAR } from "./radar";
-import { DEFAULT_WALL, isIdle, tileKey, tiles } from "./wall";
+import { DEFAULT_WALL, isIdle, needsMe, tileKey, tiles, withFocus } from "./wall";
 
 const NOW = 1_700_000_000_000;
 const MIN = 60_000;
@@ -25,6 +25,7 @@ const fresh = pane("f", "gemini", { state: "idle", last_active: NOW - 5 * MIN })
 const old = pane("o", "claude", { state: "idle", last_active: NOW - 3 * 60 * MIN });
 const noStamp = pane("n", "claude", { state: "idle" });
 const shell = pane("s", "");
+const noted = pane("a", "claude", { state: "working", last_active: NOW, alert: "stuck for 20 min" });
 
 describe("tiles", () => {
   it("keeps the roster's order whatever the agents are doing, and skips the shells", () => {
@@ -56,6 +57,28 @@ describe("tiles", () => {
   });
 });
 
+describe("needs me", () => {
+  it("keeps only the agents waiting for the person — a question, a watchdog note, a finish not looked at — and counts the rest", () => {
+    const all = [working, blocked, done, fresh, old, noStamp, noted];
+    const list = tiles([machine("local", [session("a", all)])], [], { ...DEFAULT_WALL, needsMe: true }, DEFAULT_RADAR, NOW);
+    expect(list.shown.map((t) => t.pane.id)).toEqual(["b", "d", "a"]);
+    expect(list.calm).toBe(4);
+    expect(list.idle).toBe(0);
+    const both = tiles([machine("local", [session("a", all)])], [], { ...DEFAULT_WALL, needsMe: true, hideIdle: true }, DEFAULT_RADAR, NOW);
+    expect(both.shown.map((t) => t.pane.id)).toEqual(["b", "d", "a"]);
+    expect(both.calm).toBe(4);
+  });
+
+  it("is a question, a note or an unseen finish, never work or rest", () => {
+    expect(needsMe(blocked, DEFAULT_RADAR, NOW)).toBe(true);
+    expect(needsMe(done, DEFAULT_RADAR, NOW)).toBe(true);
+    expect(needsMe(noted, DEFAULT_RADAR, NOW)).toBe(true);
+    expect(needsMe(working, DEFAULT_RADAR, NOW)).toBe(false);
+    expect(needsMe(fresh, DEFAULT_RADAR, NOW)).toBe(false);
+    expect(needsMe(shell, DEFAULT_RADAR, NOW)).toBe(false);
+  });
+});
+
 describe("isIdle", () => {
   it("follows the radar's tiers", () => {
     expect(isIdle(fresh, DEFAULT_RADAR, NOW)).toBe(false);
@@ -63,5 +86,17 @@ describe("isIdle", () => {
     expect(isIdle(noStamp, DEFAULT_RADAR, NOW)).toBe(true);
     expect(isIdle(done, DEFAULT_RADAR, NOW)).toBe(false);
     expect(isIdle(fresh, { ...DEFAULT_RADAR, freshMinutes: 2 }, NOW)).toBe(true);
+  });
+});
+
+describe("withFocus", () => {
+  it("lifts the focused tile out and keeps the rest in order; a gone key focuses nothing", () => {
+    const shown = tiles([machine("local", [session("a", [working, blocked, done])])], [], DEFAULT_WALL, DEFAULT_RADAR, NOW).shown;
+    const focused = withFocus(shown, tileKey("local", "b"));
+    expect(focused.big?.pane.id).toBe("b");
+    expect(focused.rest.map((t) => t.pane.id)).toEqual(["w", "d"]);
+    const none = withFocus(shown, tileKey("local", "gone"));
+    expect(none.big).toBeNull();
+    expect(none.rest).toBe(shown);
   });
 });

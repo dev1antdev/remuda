@@ -13,6 +13,17 @@ export function ago(d: When, now = Date.now()): string {
   return `${Math.round(h / 24)} days ago`;
 }
 
+// elapsed says how long something has been going on: "40 s", "6 min", "1 h 12 min", "2 days".
+export function elapsed(since: When, now = Date.now()): string {
+  const s = Math.max(0, Math.round((now - toDate(since).getTime()) / 1000));
+  if (s < 60) return `${s} s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return m % 60 ? `${h} h ${m % 60} min` : `${h} h`;
+  return `${Math.round(h / 24)} days`;
+}
+
 // whenShort is the time if today, the weekday and time within a week, else the date.
 export function whenShort(d: When): string {
   const t = toDate(d);

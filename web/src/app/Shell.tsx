@@ -8,6 +8,7 @@ import Sidebar from "@/features/roster/Sidebar";
 import { useRoster } from "@/features/roster/useRoster";
 import { resyncPush } from "@/features/alerts/push";
 import { readAlertPrefs } from "@/features/alerts/prefs";
+import ReviewQueue from "@/features/review/ReviewQueue";
 import Tasks from "@/features/tasks/Tasks";
 import Code from "@/features/code/Code";
 import { Toasts } from "@/ui";
@@ -83,6 +84,7 @@ export default function Shell() {
         )}
         {mode === "wall" && <Wall />}
         {mode === "tasks" && <Tasks />}
+        {mode === "review" && <ReviewQueue />}
         {mode === "herdr" && (
           <>
             <aside className={drawer ? "sidebar open" : "sidebar"}>
