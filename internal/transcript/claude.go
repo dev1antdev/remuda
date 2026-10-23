@@ -32,11 +32,18 @@ type Part struct {
 }
 
 // Turn is one chat turn. Adjacent assistant records merge into one turn.
+// An assistant turn also says what it spent (spent.go): Took and Tokens from the file, Cost and Model once priced.
 type Turn struct {
-	Role  string   `json:"role"` // user | assistant
-	Ts    string   `json:"ts,omitempty"`
-	IDs   []string `json:"ids,omitempty"` // the records merged into it
-	Parts []Part   `json:"parts"`
+	Role      string        `json:"role"` // user | assistant
+	Ts        string        `json:"ts,omitempty"`
+	IDs       []string      `json:"ids,omitempty"` // the records merged into it
+	Parts     []Part        `json:"parts"`
+	Took      float64       `json:"took,omitempty"`   // seconds from the person's prompt to the turn's last record
+	Tokens    int64         `json:"tokens,omitempty"` // input, output and cache tokens of its API responses, each once
+	Cost      float64       `json:"cost,omitempty"`   // USD at API prices, set by usage.PriceTurns
+	Model     string        `json:"model,omitempty"`  // the model of its last response, set by usage.PriceTurns
+	Responses []UsageRecord `json:"-"`                // its API responses, one per message id, the last record of each
+	ended     string        // the timestamp of the last record merged into it
 }
 
 // SessionInfo describes one session file for the picker.
@@ -333,12 +340,13 @@ func parseStream(r io.Reader) ([]Turn, error) {
 		if n > 0 && turns[n-1].Role == role {
 			t := &turns[n-1]
 			t.Parts = append(t.Parts, p)
+			t.ended = ts
 			if uuid != "" && t.IDs[len(t.IDs)-1] != uuid {
 				t.IDs = append(t.IDs, uuid)
 			}
 			return
 		}
-		turns = append(turns, Turn{Role: role, Ts: ts, IDs: []string{uuid}, Parts: []Part{p}})
+		turns = append(turns, Turn{Role: role, Ts: ts, IDs: []string{uuid}, Parts: []Part{p}, ended: ts})
 	}
 
 	err := Lines(r, 16*1024*1024, func(line []byte) {
@@ -409,8 +417,12 @@ func parseStream(r io.Reader) ([]Turn, error) {
 					pending[b.ID] = partRef{turn: last, part: len(turns[last].Parts) - 1}
 				}
 			}
+			if n := len(turns); n > 0 && turns[n-1].Role == "assistant" {
+				turns[n-1].spend(line, rec.Timestamp)
+			}
 		}
 	})
+	settleSpending(turns)
 	return turns, err
 }
 

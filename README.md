@@ -491,7 +491,9 @@ remuda is behind this one, or the disk is nearly full.
 **Cost and context:** every agent pane shows how full its context is (a
 pill in the header and on the sidebar row from 50% up, red near the edge,
 with "Compact now" in the chat from 80%) and what the session has cost so
-far at Claude Code's own API prices. 📊 opens the report: by day, by
+far at Claude Code's own API prices. Under every answer in the chat, a
+quiet line says how long it took, the tokens it used and what it cost
+("4 min 12 s · 38k tokens · $0.42"). 📊 opens the report: by day, by
 project, by model, by machine, the sessions that cost the most — every
 machine reads its own transcripts, nothing is sent anywhere. On a
 subscription it is a measure of where the work went, not a bill.
