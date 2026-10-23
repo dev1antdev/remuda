@@ -1,17 +1,22 @@
-// The Wall mode: every agent on one screen, a tile each — its state, its last turns, a line to answer — in a
-// grid that fits the window. app composes: the tile is ./Tile over features/chat/Tail, which panes make a tile
+// The Wall mode: every agent on one screen, a tile each — its state, its last turns or its terminal as it is, a
+// line to answer — in a grid that fits the window. app composes: the tile is ./Tile over features/chat/Tail, which panes make a tile
 // and in what order is features/roster/wall.
 
 import { useMemo, type CSSProperties } from "react";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
-import { DEFAULT_WALL, TILE_MIN, tiles, type WallPrefs } from "@/features/roster/wall";
+import { DEFAULT_WALL, TILE_MIN, tiles, type WallPrefs, type WallView } from "@/features/roster/wall";
 import { usePref } from "@/lib/prefs";
 import { Icon } from "@/ui";
 import { popOut, popOutSupported } from "./pip";
 import { actions } from "./store";
 import { TileView } from "./Tile";
+
+const VIEWS: { view: WallView; label: string; title: string }[] = [
+  { view: "chat", label: "Chat", title: "Each tile the last turns of its conversation" },
+  { view: "screen", label: "Screen", title: "Each tile its terminal as it is, scaled to fit" },
+];
 
 const SIZES: { size: WallPrefs["size"]; title: string }[] = [
   { size: "s", title: "Small tiles: the most on screen" },
@@ -49,6 +54,13 @@ export default function Wall() {
           </button>
         )}
         <span className="wall-spacer" />
+        <span className="wall-views">
+          {VIEWS.map((v) => (
+            <button key={v.view} type="button" className={`btn sm${prefs.view === v.view ? " on" : ""}`} aria-pressed={prefs.view === v.view} title={v.title} onClick={() => setPrefs({ ...prefs, view: v.view })}>
+              {v.label}
+            </button>
+          ))}
+        </span>
         <span className="wall-sizes">
           {SIZES.map((s) => (
             <button key={s.size} type="button" className={`btn sm${prefs.size === s.size ? " on" : ""}`} aria-pressed={prefs.size === s.size} title={s.title} onClick={() => setPrefs({ ...prefs, size: s.size })}>
@@ -73,6 +85,7 @@ export default function Wall() {
             <TileView
               key={t.key}
               tile={t}
+              view={prefs.view}
               radar={radar}
               step={step}
               now={now}
