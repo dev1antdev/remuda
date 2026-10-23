@@ -103,24 +103,42 @@ func (c *Service) LastWriteOfPane(machineID, paneID string) (time.Time, bool) {
 
 // LastTurn is the assistant's latest turn in a pane's conversation; false when the turn is the person's or there is none.
 func (c *Service) LastTurn(machineID, paneID string) (transcript.Turn, bool) {
-	pane, _ := c.Pane(machineID, paneID)
-	if pane == nil {
-		return transcript.Turn{}, false
-	}
-	mc, path, ok := c.SessionFile(machineID, pane)
-	if !ok {
-		return transcript.Turn{}, false
-	}
-	version, err := mc.Transcripts.Version(path)
-	if err != nil {
-		return transcript.Turn{}, false
-	}
-	turns, err := mc.Transcripts.Turns(path, version)
-	if err != nil || len(turns) == 0 {
+	turns, ok := c.paneTurns(machineID, paneID)
+	if !ok || len(turns) == 0 {
 		return transcript.Turn{}, false
 	}
 	last := turns[len(turns)-1]
 	return last, last.Role == "assistant"
+}
+
+// paneTurns parses a pane's live conversation whole; false when the pane or its file is unknown.
+func (c *Service) paneTurns(machineID, paneID string) ([]transcript.Turn, bool) {
+	pane, _ := c.Pane(machineID, paneID)
+	if pane == nil {
+		return nil, false
+	}
+	mc, path, ok := c.SessionFile(machineID, pane)
+	if !ok {
+		return nil, false
+	}
+	version, err := mc.Transcripts.Version(path)
+	if err != nil {
+		return nil, false
+	}
+	turns, err := mc.Transcripts.Turns(path, version)
+	if err != nil {
+		return nil, false
+	}
+	return turns, true
+}
+
+// PullRequest is the last pull or merge request the pane's agent named in an answer.
+func (c *Service) PullRequest(machineID, paneID string) (transcript.Link, bool) {
+	turns, ok := c.paneTurns(machineID, paneID)
+	if !ok {
+		return transcript.Link{}, false
+	}
+	return transcript.PullRequest(turns)
 }
 
 // LastToolCalls is the last n tool calls of the assistant's latest turn, for the loop check.
