@@ -12,9 +12,10 @@ import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
 import { Icon, Notice, Select, useTimedNotice } from "@/ui";
 import Composer from "./Composer";
-import { PromptKeys } from "./PromptKeys";
+import { QuestionCard } from "./QuestionCard";
 import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
+import { useFind } from "./useFind";
 import { useFollowBottom } from "./useFollowBottom";
 
 export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true }: {
@@ -54,6 +55,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   const { data: chat, error: fetchError } = useChat({ machineId, paneId, sessionId, dir, every: busy ? 2000 : 10000, active });
 
   const follow = useFollowBottom(logRef, { active, chat, startAtBottom: !jump?.turn });
+  useFind(logRef, { active, chat });
 
   // a search hit: scroll to its turn once that session is on screen, or say it is older than the loaded tail
   const pendingTurn = useRef<string | null>(jump?.turn ?? null);
@@ -97,7 +99,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
     if (!older || !workspaceId || !agent) return;
     void act(createTab({ machine: machineId, workspace: workspaceId, name: "", agent, resume: older }).then((created) => actions.selectPane(machineId, created.pane)));
   };
-  const keys = (ks: string[]) => void sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
+  const keys = (ks: string[]) => sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
   const context = usage && usage.window > 0 ? usage.context / usage.window : 0;
   const error = actionError ?? (fetchError || null);
 
@@ -121,13 +123,14 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : readOnly ? "This transcript is empty." : "No transcript for this pane's folder yet."}</div>}
         {turns.map((t, i) => (
-          <TurnView key={t.ids?.[0] || i} turn={t} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} />
+          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} />
         ))}
       </div>
       {!readOnly && status === "input" && (
         <Notice tone="warn" icon="alert-triangle" className="chat-notice">
-          The agent is waiting for an answer — check the terminal, or:
-          <PromptKeys onKeys={keys} />
+          <QuestionCard machineId={machineId} paneId={paneId} active={active} onKeys={keys}>
+            The agent is waiting for an answer — check the terminal, or:
+          </QuestionCard>
         </Notice>
       )}
       {error && (

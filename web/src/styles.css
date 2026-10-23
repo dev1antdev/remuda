@@ -1280,6 +1280,26 @@ input[type="checkbox"]:hover:not(:checked) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.radar-title.has-said {
+  display: flex;
+  align-items: baseline;
+}
+.radar-title.has-said .radar-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 62%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.radar-said {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-faint);
+  font-weight: normal;
+}
 
 .radar-ws {
   color: var(--fg-faint);
@@ -1562,6 +1582,34 @@ input[type="checkbox"]:hover:not(:checked) {
   gap: 2px;
   flex-shrink: 0;
   padding: 0 8px 0 4px;
+}
+
+/* the find bar opens to the left of its toggle: the toggle and the tools after it keep their place */
+.find-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 2px;
+}
+
+.find-bar input {
+  width: 150px;
+  height: var(--ctl-sm);
+}
+
+.find-count {
+  min-width: 6ch;
+  text-align: center;
+  font-size: 11px;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .find-bar input {
+    width: 96px;
+  }
 }
 
 .tabs {
@@ -2135,6 +2183,23 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--red);
 }
 
+.part-image {
+  display: block;
+  margin: 6px 0 0;
+  padding: 0;
+  max-width: 100%;
+  line-height: 0;
+}
+.part-image img {
+  max-height: 160px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+.part-image:hover img {
+  border-color: var(--line-hover);
+}
 .tool-io {
   background: var(--bg-raised);
   border: 1px solid var(--line);
@@ -2159,6 +2224,52 @@ input[type="checkbox"]:hover:not(:checked) {
   gap: 6px;
   flex-wrap: wrap;
   margin-top: 8px;
+}
+
+/* the question card: the dialog's words as read off the agent's screen, a button per choice */
+.question {
+  min-width: 0;
+}
+
+.question-head {
+  font-weight: 600;
+}
+
+.question-detail {
+  margin: 4px 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.question-ask {
+  margin-top: 2px;
+}
+
+.question-options {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.question-options .btn {
+  height: auto;
+  min-height: var(--ctl-sm);
+  padding-block: 4px;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+
+.tile .question-detail {
+  display: none;
 }
 
 .composer {
@@ -2378,6 +2489,24 @@ input[type="checkbox"]:hover:not(:checked) {
 
 .alerts-test {
   align-self: flex-start;
+}
+
+/* the quiet window's two times, under their checkbox; off, they fade but keep their place */
+.alerts-quiet {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -6px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.alerts-quiet input[type="time"] {
+  width: 7.5em;
+}
+
+.alerts-quiet input:disabled {
+  opacity: 0.45;
 }
 
 /* ---- file links ---- */
@@ -4347,6 +4476,17 @@ button.usage-row:hover {
   animation: turn-hit 2.6s var(--ease);
 }
 
+/* the find bar's matches, painted over the text without touching a node */
+::highlight(remuda-find) {
+  background-color: var(--amber-soft);
+  color: var(--fg);
+}
+
+::highlight(remuda-find-current) {
+  background-color: var(--amber);
+  color: #1a1611;
+}
+
 @keyframes turn-hit {
   0%,
   60% {
@@ -4534,7 +4674,14 @@ button.usage-row:hover {
   align-self: flex-start;
 }
 
-/* ---- forward, quick prompts, dictation ---- */
+/* ---- what an answer spent, forward, quick prompts, dictation ---- */
+.turn-spent {
+  align-self: flex-start;
+  font-size: 11px;
+  color: var(--fg-faint);
+  cursor: default;
+}
+
 .turn-forward {
   align-self: flex-start;
   display: inline-flex;
@@ -5611,6 +5758,13 @@ button.usage-row:hover {
   flex-shrink: 0;
 }
 
+.tile-said {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-faint);
+}
+
 .tile-doing {
   min-width: 0;
   overflow: hidden;
@@ -6107,7 +6261,8 @@ body.popout {
   white-space: nowrap;
 }
 .review-keys kbd,
-.palette-foot kbd {
+.palette-foot kbd,
+.keys-dialog kbd {
   display: inline-block;
   min-width: 16px;
   margin-right: 2px;
@@ -6117,6 +6272,30 @@ body.popout {
   font: 11px/16px var(--mono);
   color: var(--fg-dim);
   text-align: center;
+}
+.keys-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px 24px;
+}
+.keys-group h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.keys-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 3px 0;
+  font-size: 13px;
+}
+.keys-caps {
+  flex: 0 0 96px;
+  white-space: nowrap;
 }
 .fv-mark {
   border-radius: var(--r-xs);
