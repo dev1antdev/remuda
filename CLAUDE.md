@@ -354,8 +354,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a "new version — reload" pill. After a deploy, a stale tab is told.
 - `web/src/ui/Markdown.tsx` — dependency-free Markdown → React nodes (no
   HTML strings, nothing to sanitize). `parseBlocks` is pure (task-list
-  state is decided there, not in render) and memoized per text;
-  `markdown.test.ts` covers it.
+  state is decided there, not in render) and memoized per text; quotes
+  and lists nest at most `MAX_NESTING` (16) deep and then read as text (a
+  line of three thousand `>` recursed past the stack), and a line over
+  `LONG_LINE` (10 000 characters) is drawn plain, with no marks or links
+  (the inline regex costs its square on a run of one character);
+  `markdown.test.ts` covers it. `ui/ErrorBoundary.tsx` is the one class
+  component: React unmounts the whole tree on a render error, so every
+  turn (`TurnView`) draws inside one — a turn the parser cannot draw is a
+  note, the rest of the chat stands — and `App.tsx` wraps the page in one
+  with a Reload button, never a blank page.
 - `web/src/lib/` — what every screen uses and no screen owns, React-free
   but for the hooks: `http.ts` (`check` / `getJSON` / `sendJSON`, every
   request), `query.ts` (`useQuery(fn, deps, {every, enabled, keep})` —

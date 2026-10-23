@@ -1,5 +1,7 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { parseBlocks } from "./Markdown";
+import { Markdown, parseBlocks } from "./Markdown";
 
 describe("parseBlocks", () => {
   it("reads headings, paragraphs, task lists and fenced code", () => {
@@ -17,5 +19,34 @@ describe("parseBlocks", () => {
   });
   it("keeps CRLF text whole", () => {
     expect(parseBlocks("one\r\ntwo\r\n")).toMatchObject([{ t: "p", lines: ["one", "two"] }]);
+  });
+  it("stops nesting quotes and lists at a depth, so a line of thousands of marks is text, not a stack overflow", () => {
+    const quotes = parseBlocks(">".repeat(5000) + "x");
+    let block = quotes[0]!;
+    let depth = 0;
+    while (block.t === "quote") {
+      depth++;
+      block = block.blocks[0]!;
+    }
+    expect(depth).toBe(16);
+    expect(block).toMatchObject({ t: "p", lines: [">".repeat(5000 - 16) + "x"] });
+    expect(() => parseBlocks("- ".repeat(5000) + "x")).not.toThrow();
+    expect(() => parseBlocks("1. ".repeat(5000) + "x")).not.toThrow();
+  });
+});
+
+describe("Markdown", () => {
+  const draw = (text: string) => renderToStaticMarkup(createElement(Markdown, { text, onOpenFile: () => {} }));
+  it("marks and links a line of prose", () => {
+    const html = draw("see **main.go** and `x`");
+    expect(html).toContain("<strong>");
+    expect(html).toContain('class="path-link"');
+  });
+  it("draws a line over ten thousand characters as plain text, in milliseconds", () => {
+    const started = performance.now();
+    const html = draw("[".repeat(40_000) + " **not bold** main.go");
+    expect(html).not.toContain("<strong>");
+    expect(html).not.toContain("path-link");
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });

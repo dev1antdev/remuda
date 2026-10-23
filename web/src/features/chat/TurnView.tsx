@@ -2,7 +2,7 @@
 
 import { memo, useState, type ReactNode } from "react";
 import type { OpenFile } from "@/features/files/target";
-import { Icon } from "@/ui";
+import { ErrorBoundary, Icon, Notice } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import type { Part, Turn } from "./api";
 import { EDIT_TOOLS, toolPath } from "./footprint";
@@ -18,9 +18,11 @@ export const TurnView = memo(
       .trim();
     return (
       <div className={cls} data-ids={turn.ids?.join(" ")}>
-        {turn.parts.map((p, i) => (
-          <PartView key={i} part={p} onOpenFile={onOpenFile} />
-        ))}
+        <ErrorBoundary fallback={(message) => <Notice tone="error">This turn could not be drawn: {message}</Notice>}>
+          {turn.parts.map((p, i) => (
+            <PartView key={i} part={p} onOpenFile={onOpenFile} />
+          ))}
+        </ErrorBoundary>
         {onForward && text && turn.role === "assistant" && (
           <button type="button" className="linkish turn-forward" title="Forward this to another agent" onClick={() => onForward(text)}>
             <Icon name="send" size={12} /> forward

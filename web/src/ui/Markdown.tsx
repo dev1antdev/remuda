@@ -38,7 +38,12 @@ const TABLE_SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 // A list item: its blocks, and for a task item ("[ ] …" / "[x] …") its state.
 type ListItem = { blocks: Block[]; checked: boolean | null };
 
-export function parseBlocks(src: string): Block[] {
+// Deeper than this, quotes and lists read as text: a line of three thousand ">" or "- " marks would otherwise recurse past the stack.
+const MAX_NESTING = 16;
+// A line this long is a paste, not prose: no marks, no links — the inline regex costs its square on a run of one character.
+const LONG_LINE = 10_000;
+
+export function parseBlocks(src: string, depth = 0): Block[] {
   const lines = src.replace(/\r\n?/g, "\n").split("\n");
   const out: Block[] = [];
   let i = 0;
@@ -84,15 +89,15 @@ export function parseBlocks(src: string): Block[] {
       continue;
     }
 
-    if (QUOTE.test(line)) {
+    if (depth < MAX_NESTING && QUOTE.test(line)) {
       flushPara();
       const inner: string[] = [];
       while (i < lines.length && QUOTE.test(lines[i]!)) inner.push(lines[i++]!.match(QUOTE)![1]!);
-      out.push({ t: "quote", blocks: parseBlocks(inner.join("\n")) });
+      out.push({ t: "quote", blocks: parseBlocks(inner.join("\n"), depth + 1) });
       continue;
     }
 
-    if (LIST.test(line)) {
+    if (depth < MAX_NESTING && LIST.test(line)) {
       flushPara();
       const first = line.match(LIST)!;
       const indent = first[1]!.length;
@@ -128,7 +133,7 @@ export function parseBlocks(src: string): Block[] {
           checked = task[1] !== " ";
           body[0] = body[0]!.slice(task[0].length);
         }
-        items.push({ blocks: parseBlocks(body.join("\n")), checked });
+        items.push({ blocks: parseBlocks(body.join("\n"), depth + 1), checked });
       }
       out.push({ t: "list", ordered, start, items });
       continue;
@@ -180,6 +185,7 @@ const INLINE = new RegExp(
 
 // renderInline; inside a link's text nothing else is clickable (onOpenFile null): an interactive element inside another is invalid markup
 function renderInline(text: string, onOpenFile: OpenFile | null, key = "i"): ReactNode[] {
+  if (text.length > LONG_LINE) return [<Fragment key={key}>{text}</Fragment>];
   const out: ReactNode[] = [];
   let at = 0;
   let n = 0;
