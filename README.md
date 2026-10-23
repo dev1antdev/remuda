@@ -434,7 +434,10 @@ agent hears nothing.
 **Between agents:** every assistant turn has a *forward* link that sends its
 text, headed "From *workspace*:", to any other agent on any machine — the
 same dialog Tasks uses to send a task. **Quick prompts** (⚡ in the composer)
-are saved texts, for every folder or one, shared by all your devices.
+are saved texts, for every folder or one, shared by all your devices. **↑**
+on an empty line brings back what you sent before from this device to
+that folder, newest first; ↓ walks forward and back to the line you were
+writing.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through remuda.
 
