@@ -388,7 +388,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `host.ts` (`copyText`: Clipboard API, else execCommand; `openUrl`: a
   new tab — nothing embeds remuda any more, the JetBrains plugin and its
   `window.herdrHost` bridge are gone), `transfer.ts` (`filesFrom`),
-  `version.ts` (`newer`).
+  `version.ts` (`newer`), `perf.ts` (`watchStalls`: the browser's long
+  tasks from 250 ms up, each reported with where the page was;
+  `stallWords`, `toastDue` tested).
 - `web/src/app/` — the shell. `store.ts` is the one page store: the
   *requested* pane (a deep link, a notification, a click), the lens, the
   mode, the drawer, the open dialog / menu / panel, the notice, the
@@ -399,7 +401,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`?machine=&pane=&mode=&lens=`, `history.replaceState`) and is read
   once at load, so a link or a reload lands on the same pane in the same
   lens. `act.ts` (`act(promise)`: refresh the roster, else toast the
-  error), `toasts.tsx`, `Shell.tsx` (URL sync, ⌘K → the palette, the service worker's
+  error), `toasts.tsx`, `diag.ts` (`startDiagnostics`, from App: every
+  stall of the main thread goes to the console as `[remuda] The page
+  stalled 4.2 s on the Wall (13 tiles)` with the mode, the lens and the
+  pane — what the Wall freeze hunt lacked — and one from 2 s up becomes
+  a toast, a minute apart at most), `Shell.tsx` (URL sync, ⌘K → the palette, the service worker's
   select-pane, mark-seen, the four modes), `Header.tsx`, `PaneArea.tsx`
   (the lenses, mounted once seen, and the files rail beside them in
   `.pane-body` — store field `footprint` from the pref of that name,
