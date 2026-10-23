@@ -1,15 +1,17 @@
-// One turn of the transcript: its text as Markdown, its thinking and tool calls folded, a picture the agent read or wrote
-// as a thumbnail, a forward button.
+// One turn of the transcript: its text as Markdown, its thinking and tool calls folded (each call with how long it took, a
+// failed one in red), a picture the agent read or wrote as a thumbnail, a foot with what the answer spent and what went
+// wrong, a forward button.
 
 import { memo, useState, type ReactNode } from "react";
 import { fileUrl } from "@/features/files/api";
 import type { OpenFile } from "@/features/files/target";
 import { tok, usd } from "@/features/usage/format";
 import { basename } from "@/lib/text";
-import { spent } from "@/lib/time";
+import { spent, took } from "@/lib/time";
 import { ErrorBoundary, Icon, Notice } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import type { Part, Turn } from "./api";
+import { callStats, callWords } from "./calls";
 import { EDIT_TOOLS, imagePath, toolLabel } from "./footprint";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
@@ -28,7 +30,7 @@ export const TurnView = memo(
             <PartView key={i} part={p} machineId={machineId} onOpenFile={onOpenFile} />
           ))}
         </ErrorBoundary>
-        {turn.role === "assistant" && (turn.took || turn.tokens) ? <Spent turn={turn} /> : null}
+        {turn.role === "assistant" && <Spent turn={turn} />}
         {onForward && text && turn.role === "assistant" && (
           <button type="button" className="linkish turn-forward" title="Forward this to another agent" onClick={() => onForward(text)}>
             <Icon name="send" size={12} /> forward
@@ -47,18 +49,22 @@ export function sameTurn(a: Turn, b: Turn): boolean {
   for (let i = 0; i < a.parts.length; i++) {
     const p = a.parts[i]!;
     const q = b.parts[i]!;
-    if (p.type !== q.type || p.text !== q.text || p.output !== q.output || p.is_error !== q.is_error || p.tool_name !== q.tool_name) return false;
+    if (p.type !== q.type || p.text !== q.text || p.output !== q.output || p.is_error !== q.is_error || p.tool_name !== q.tool_name || p.took !== q.took) return false;
   }
   return true;
 }
 
-// Spent is the quiet foot of an answer: how long it took, the tokens it used, what it cost at API prices.
+// Spent is the quiet foot of an answer: how long it took, the tokens it used, what it cost at API prices, and what
+// went wrong among its calls — the failed ones, the ones repeating an earlier call exactly. Nothing when there is nothing to say.
 function Spent({ turn }: { turn: Turn }) {
   const words = [turn.took ? spent(turn.took) : "", turn.tokens ? `${tok(turn.tokens)} tokens` : "", turn.cost ? usd(turn.cost) : ""].filter(Boolean);
-  const title = `${turn.model ? `${turn.model} · ` : ""}from your prompt to the end of this answer; the tokens of its API responses, cache included, at API prices — on a subscription a measure, not a bill`;
+  const wrong = callWords(callStats(turn));
+  if (!words.length && !wrong) return null;
+  const title = `${turn.model ? `${turn.model} · ` : ""}from your prompt to the end of this answer; the tokens of its API responses, cache included, at API prices — on a subscription a measure, not a bill${wrong ? "; a repeated call is one whose tool and input match an earlier call of this answer exactly" : ""}`;
   return (
     <span className="turn-spent" title={title}>
       {words.join(" · ")}
+      {wrong && <span className="turn-wrong">{words.length ? ` · ${wrong}` : wrong}</span>}
     </span>
   );
 }
@@ -116,8 +122,13 @@ function PartView({ part, machineId, onOpenFile }: { part: Part; machineId?: str
                   {hint}
                 </button>
               ) : (
-                hint
+                <span className="part-hint">{hint}</span>
               )}
+              {part.took ? (
+                <span className="part-took" title={part.is_error ? "The call failed, and how long it took" : "How long the call took"}>
+                  {took(part.took)}
+                </span>
+              ) : null}
             </>
           }
         >
