@@ -500,7 +500,10 @@ closes. It works on a transcript opened from the search too.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through remuda.
 
-**Machines** carry the names herdr gave them; the ⋯ beside a machine
+**Machines** carry the names herdr gave them, and every remote one a
+hue of its own — the edge of its block in the sidebar, of its tiles on
+the Wall, a dot in the palette — so three machines are told apart at a
+glance; the ⋯ beside a machine
 renames it for remuda (the Mac you sit at too), copies its SSH host, or
 removes one you added here.
 

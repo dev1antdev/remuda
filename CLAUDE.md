@@ -698,6 +698,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the title keeps up to 62% of its line, the answer the rest, each
   clipped with an ellipsis); the row's height and its other parts stay
   where they are.
+  Every remote machine has a hue of its own (`features/roster/hue.ts`,
+  tested: from the id, never red or green, which mean blocked and done):
+  the sidebar block's left edge, a wall tile's left edge, a dot before
+  the machine in a palette row; the local machine has none.
   Machines and workspace groups fold (prefs `collapsed` / `wsFolded`); a
   folded group's head carries its agents' states (working / ? / ✓ counts).
   `web/marks/*.svg` are the vendor logos (MIT packaging, see NOTICE.md),
