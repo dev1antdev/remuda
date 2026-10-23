@@ -503,6 +503,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   become): commits, files (fresh first), hunks with a comment box whose
   text goes to the pane's agent through `/api/submit` as
   "Review feedback on path:line". Nothing is written into a repository.
+  **The Review mode** (`features/review/ReviewQueue.tsx`, the fifth mode,
+  `?mode=review`): every workspace with uncommitted work in one list —
+  `queue.ts` (`reviewQueue`, tested) reads the roster's `session.dir` and
+  `session.review`, the ones with changes since the last look first — and
+  the Changes lens of the picked one beside it, its pane the workspace's
+  first agent pane (a shell when none runs there, comments then go to any
+  agent), `onSeen` the roster's refresh; under 920 px the list and the
+  lens take turns, a Queue button leads back.
   **Review comments**: in the lens a tap on a diff row opens a comment box
   under it; comments gather in a draft (`usePref("review.draft:<machine>|
   <dir>")`, this device, per folder), sit under their rows (`.review-note`,
@@ -721,7 +729,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `StartAgentDialog.tsx`, `prompt.ts`, `html.tsx`, `pieces.tsx`, `api.ts`);
   descriptions are rendered through an allow-list into React nodes (never
   innerHTML) and edited as plain text that goes back as paragraphs. The
-  top-bar `mode-switch` (Agents | Wall | Tasks | Code) is a per-device pref.
+  top-bar `mode-switch` (Agents | Wall | Tasks | Code | Review) is a per-device pref.
   **Workflow**: every project has its columns (`statuses`: title, colour,
   `kind` open|done, position, the flags `on_new` / `on_start` /
   `on_finish` on at most one column each) — New / In progress / Testing /
