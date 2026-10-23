@@ -6,23 +6,26 @@ import { actions, app } from "@/app/store";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import SendToAgent from "@/features/agents/SendToAgent";
 import type { OpenFile } from "@/features/files/target";
-import { sendKeys, submitPrompt, type PaneUsage } from "@/features/roster/api";
+import { act } from "@/app/act";
+import { createTab, sendKeys, submitPrompt, type PaneUsage } from "@/features/roster/api";
 import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
-import { Notice, Select, useTimedNotice } from "@/ui";
+import { Icon, Notice, Select, useTimedNotice } from "@/ui";
 import Composer from "./Composer";
 import { PromptKeys } from "./PromptKeys";
 import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFollowBottom } from "./useFollowBottom";
 
-export default function Chat({ machineId, paneId, status, origin, dir, usage, active = true }: {
+export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true }: {
   machineId: string;
   paneId: string; // "" shows a transcript on its own (a search jump), read-only
   status: string;
   origin: string; // "workspace on machine", named in a forwarded message
   dir: string;
   usage?: PaneUsage;
+  workspaceId?: string; // with agent: an older session picked here can be resumed in a new tab of this workspace
+  agent?: string;
   active?: boolean; // the lens on screen; a hidden one keeps its state and waits
 }) {
   const readOnly = !paneId;
@@ -36,6 +39,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, ac
   const others = agents.some((a) => a.machineId !== machineId || a.paneId !== paneId);
   const [forwarded, showForwarded, clearForwarded] = useTimedNotice(4000);
   const [sessionId, setSessionId] = useState<string | null>(jump?.session ?? null);
+  const live = useRef<string | undefined>(undefined); // the pane's own session, noted while it is the one shown
   const [actionError, setActionError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const busy = status === "run" || status === "input";
@@ -81,6 +85,12 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, ac
 
   const turns = chat?.turns ?? [];
   const sessions = chat?.sessions ?? [];
+  if (sessionId === null && chat?.session_id) live.current = chat.session_id;
+  const older = sessionId !== null && sessionId !== live.current ? sessionId : null;
+  const resume = () => {
+    if (!older || !workspaceId || !agent) return;
+    void act(createTab({ machine: machineId, workspace: workspaceId, name: "", agent, resume: older }).then((created) => actions.selectPane(machineId, created.pane)));
+  };
   const keys = (ks: string[]) => void sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
   const context = usage && usage.window > 0 ? usage.context / usage.window : 0;
   const error = actionError ?? (fetchError || null);
@@ -88,12 +98,19 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, ac
   return (
     <div className="chat">
       {sessions.length > 1 && (
-        <Select
-          className="chat-session-pick"
-          value={sessionId ?? chat?.session_id ?? ""}
-          onChange={setSessionId}
-          options={sessions.map((s) => ({ value: s.id, label: s.title || s.id.slice(0, 8), hint: whenShort(s.mod_time) }))}
-        />
+        <div className="chat-session-row">
+          <Select
+            className="chat-session-pick"
+            value={sessionId ?? chat?.session_id ?? ""}
+            onChange={setSessionId}
+            options={sessions.map((s) => ({ value: s.id, label: s.title || s.id.slice(0, 8), hint: whenShort(s.mod_time) }))}
+          />
+          {older && workspaceId && agent && (
+            <button type="button" className="btn sm" title="A new tab in this workspace, the agent started on this conversation" onClick={resume}>
+              <Icon name="corner-down-left" size={12} /> Resume in a new tab
+            </button>
+          )}
+        </div>
       )}
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : readOnly ? "This transcript is empty." : "No transcript for this pane's folder yet."}</div>}

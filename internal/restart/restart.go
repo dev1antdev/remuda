@@ -5,6 +5,7 @@ package restart
 
 import (
 	"fmt"
+	"github.com/dev1antdev/remuda/internal/sessions"
 	"log"
 	"regexp"
 	"strings"
@@ -27,19 +28,24 @@ const (
 	again = 2 * time.Minute
 )
 
-// agent is how to leave and come back for one kind.
+// agent is how to leave for one kind; how to come back is sessions.ResumeArgs, the one table of resume flags.
 type agent struct {
-	Kind   string
-	Title  string
-	exit   string
-	resume func(session string) []string
+	Kind  string
+	Title string
+	exit  string
 }
 
 var agents = map[string]agent{
-	"claude": {"claude", "Claude Code", "/exit", func(id string) []string { return []string{"--resume", id} }},
-	"codex":  {"codex", "Codex", "/quit", func(id string) []string { return []string{"resume", id} }},
-	"gemini": {"gemini", "Gemini CLI", "/quit", func(id string) []string { return []string{"--resume", id} }},
-	"kimi":   {"kimi", "Kimi Code", "/exit", func(id string) []string { return []string{"--session", id} }},
+	"claude": {"claude", "Claude Code", "/exit"},
+	"codex":  {"codex", "Codex", "/quit"},
+	"gemini": {"gemini", "Gemini CLI", "/quit"},
+	"kimi":   {"kimi", "Kimi Code", "/exit"},
+}
+
+// resume is the kind's arguments for coming back to a session.
+func (a agent) resume(session string) []string {
+	args, _ := sessions.ResumeArgs(a.Kind, session)
+	return args
 }
 
 // kinds is every agent a restart knows, in the order the page offers them.

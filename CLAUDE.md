@@ -110,7 +110,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `ReadFrom`, `Turns`, `ResolveSession`, `Live` / `Chain` / `Lineage`
   (every file a conversation lived in) and `Predecessor`, in process here
   and by script over a `shell.Host` on a remote. `Turn.Answer`,
-  `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with. The chat lens (`features/chat/Chat.tsx`: the transcript through `useChat.ts`, the one fetch hook — every 2 s while the agent works or asks, 10 s otherwise, a 304 = unchanged, `last=N` for a wall tile; `Composer.tsx` (`compact` in a tile), `TurnView.tsx`, `PromptKeys.tsx` (↑ ↓ Enter Esc for a question), `Tail.tsx` (a tile's chat: the last 12 turns, 3 s / 15 s), `FilesRail.tsx` (the **files rail** beside the lenses: every file the agent edited or read in this conversation since its last compaction, from its own tool calls — `footprint.ts` is the pure part, tested: `toolPath` reads `file_path` / `notebook_path` from an object input or from one the server cut to a string at 8 KB, so `TurnView` links a big Write too (a link only for a tool that read or wrote the file: Grep's or Glob's path is a folder, named only); edited files first by their last touch, the ones only read folded; its own `useChat` poll at a tile's pace, only while on screen; a row opens the file viewer on its changes, the code button `actions.openInCode`; a change made through a shell command is the Changes lens's to show, not the rail's), `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
+  `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with. The chat lens (`features/chat/Chat.tsx`: the transcript through `useChat.ts`, the one fetch hook — every 2 s while the agent works or asks, 10 s otherwise, a 304 = unchanged, `last=N` for a wall tile; `Composer.tsx` (`compact` in a tile); an older session picked in the lens's session picker gets **Resume in a new tab** beside it — `POST /api/tabs` with `resume`, the agent of the pane started on that conversation in the same workspace, the new pane selected, `TurnView.tsx`, `PromptKeys.tsx` (↑ ↓ Enter Esc for a question), `Tail.tsx` (a tile's chat: the last 12 turns, 3 s / 15 s), `FilesRail.tsx` (the **files rail** beside the lenses: every file the agent edited or read in this conversation since its last compaction, from its own tool calls — `footprint.ts` is the pure part, tested: `toolPath` reads `file_path` / `notebook_path` from an object input or from one the server cut to a string at 8 KB, so `TurnView` links a big Write too (a link only for a tool that read or wrote the file: Grep's or Glob's path is a folder, named only); edited files first by their last touch, the ones only read folded; its own `useChat` poll at a tile's pace, only while on screen; a row opens the file viewer on its changes, the code button `actions.openInCode`; a change made through a shell command is the Changes lens's to show, not the rail's), `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
   only when the reader is there and not selecting or dragging; an upward
   wheel or finger lets go at once, and `TurnView` (`sameTurn`) re-renders only when a
   turn's content changed, so a selection survives the polls.
@@ -797,13 +797,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   everything else behind it. Every route resolves its machine through
   `machineFor` (query → `X-Remuda-Machine` header → POST body `machine`)
   and `ready()`. The three create routes share `create()` (agent kind
-  validated by `sessions.KnownAgent` *before* any RPC, container made,
-  agent started by `sessions.StartAgent`, watcher refreshed); the two
+  validated by `sessions.KnownAgent` *before* any RPC, and a `resume`
+  session id by `text.SessionID` with an agent to go with it; container
+  made, agent started by `sessions.StartAgent`, or `StartAgentResumed`
+  with `resume`, watcher refreshed); the two
   close routes share `closeHandler`, the two renames (`PATCH
   /api/tabs/{id}`, `PATCH /api/sessions/{id}`, body `{label}`) share
   `renameHandler` — herdr's `tab.rename` / `workspace.rename`.
 - `internal/sessions/` — the input side of herdr: `Agents` / `KnownAgent`,
-  `StartAgent` (retries `agent_pane_busy` for a few seconds), `Keys`
+  `StartAgent` (retries `agent_pane_busy` for a few seconds), `StartAgentResumed` (the same, with the kind's resume arguments after a session id — `ResumeArgs`, the one table of them: `claude --resume`, `codex resume`, `gemini --resume`, `kimi --session`; the restarts use it too), `Keys`
   (herdr's `send_keys` grammar), `RefOK` (a branch name git gets as an
   argument), and `Input`: one lock per pane, `Submit` (`agent.prompt`, else
   `send_text` + Enter; `ErrAgentBusy` while a menu is open), `SendKeys`,

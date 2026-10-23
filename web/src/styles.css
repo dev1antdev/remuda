@@ -1453,6 +1453,24 @@ input[type="checkbox"]:hover:not(:checked) {
   font-size: 12px;
 }
 
+/* the session picker with, beside an older session, the way back into it */
+.chat-session-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 0;
+}
+
+.chat-session-row .chat-session-pick {
+  margin: 0;
+  max-width: none;
+  min-width: 0;
+}
+
+.chat-session-row .btn {
+  flex-shrink: 0;
+}
+
 .chat-session-pick {
   margin: 10px 14px 0;
   align-self: flex-start;

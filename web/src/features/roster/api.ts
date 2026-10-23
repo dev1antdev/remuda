@@ -129,7 +129,8 @@ async function create(url: string, req: unknown): Promise<Created> {
 
 export const createSession = (req: { machine: string; name: string; dir: string; agent: string }) => create("/api/sessions", req);
 
-export const createTab = (req: { machine: string; workspace: string; name: string; agent: string }) => create("/api/tabs", req);
+// resume: a session id of the folder, the agent coming back to that conversation
+export const createTab = (req: { machine: string; workspace: string; name: string; agent: string; resume?: string }) => create("/api/tabs", req);
 
 export const createWorktree = (req: { machine: string; workspace: string; branch: string; base: string; name: string; agent: string }) => create("/api/worktrees", req);
 
