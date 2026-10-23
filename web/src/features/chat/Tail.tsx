@@ -21,10 +21,7 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, active }: { ma
   const logRef = useRef<HTMLDivElement>(null);
   const follow = useFollowBottom(logRef, { active, chat, startAtBottom: true });
   const onOpenFile = useCallback<OpenFile>((target) => actions.openFile(machineId, paneId, target, dir), [machineId, paneId, dir]);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const keys = (ks: string[]) => void sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
   const turns = chat?.turns ?? [];
-  const error = actionError ?? (fetchError || null);
   return (
     <div className="chat tail">
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
@@ -33,6 +30,20 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, active }: { ma
           <TurnView key={t.ids?.[0] || i} turn={t} onOpenFile={onOpenFile} />
         ))}
       </div>
+      <TailAnswer machineId={machineId} paneId={paneId} status={status} dir={dir} error={fetchError || null} />
+    </div>
+  );
+});
+
+export default Tail;
+
+// TailAnswer is the foot of a tile whatever it shows above: the keys for a question the agent asks, an error, the one-line composer.
+export function TailAnswer({ machineId, paneId, status, dir, error: shown = null }: { machineId: string; paneId: string; status: string; dir: string; error?: string | null }) {
+  const [actionError, setActionError] = useState<string | null>(null);
+  const keys = (ks: string[]) => void sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
+  const error = actionError ?? shown;
+  return (
+    <>
       {status === "input" && (
         <Notice tone="warn" icon="alert-triangle" className="chat-notice">
           Waiting for an answer: <PromptKeys onKeys={keys} />
@@ -44,8 +55,6 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, active }: { ma
         </Notice>
       )}
       <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} compact />
-    </div>
+    </>
   );
-});
-
-export default Tail;
+}

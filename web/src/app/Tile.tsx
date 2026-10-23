@@ -1,17 +1,20 @@
 // TileView is one agent as the wall and the pop-out show it: its head as the sidebar row reads it — mark, logo,
-// label, workspace · machine, context % · cost — then the tail of its chat with a line to answer.
+// label, workspace · machine, context % · cost — then the tail of its chat, or its terminal as it is, with a line
+// to answer.
 
-import Tail from "@/features/chat/Tail";
+import Tail, { TailAnswer } from "@/features/chat/Tail";
 import { displayOf, markOf, rowLabel, stateWords, type RadarPrefs } from "@/features/roster/radar";
-import type { Tile } from "@/features/roster/wall";
+import type { Tile, WallView } from "@/features/roster/wall";
+import { Screen } from "@/features/terminal/Screen";
 import { fillClass, usd } from "@/features/usage/format";
 import { Icon, Logo } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import { folderOf } from "./current";
 import { actions } from "./store";
 
-export function TileView({ tile, radar, step, now, onHide, onPopOut }: {
+export function TileView({ tile, view = "chat", radar, step, now, onHide, onPopOut }: {
   tile: Tile;
+  view?: WallView;
   radar: RadarPrefs;
   step: number;
   now: number;
@@ -25,15 +28,17 @@ export function TileView({ tile, radar, step, now, onHide, onPopOut }: {
   const usage = pane.usage;
   const fill = usage && usage.window > 0 ? usage.context / usage.window : 0;
   const where = `${session.name}${machine.id !== "local" ? ` · ${machine.label}` : ""}`;
+  const screen = view === "screen";
   const open = () => {
     actions.selectPane(machine.id, pane.id);
-    actions.setLens("chat");
+    actions.setLens(screen ? "terminal" : "chat");
     window.focus();
   };
+  const dir = folderOf(tile);
   return (
     <section className={`tile is-${d}${alert ? " is-alert" : ""}`} aria-label={`${pane.agent} in ${where}`}>
       <header className="tile-head">
-        <button type="button" className="linkish tile-open" title={`${alert ?? stateWords(d, pane.radar?.last_active, now)}\n${pane.cwd}\nOpen in Agents`} onClick={open}>
+        <button type="button" className="linkish tile-open" title={`${alert ?? stateWords(d, pane.radar?.last_active, now)}\n${pane.cwd}\nOpen the ${screen ? "terminal" : "chat"} in Agents`} onClick={open}>
           <span className="radar-mark" style={markStyle}>
             {alert ? "!" : markOf(d, step)}
           </span>
@@ -57,7 +62,14 @@ export function TileView({ tile, radar, step, now, onHide, onPopOut }: {
           </button>
         )}
       </header>
-      <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={folderOf(tile)} active />
+      {screen ? (
+        <>
+          <Screen machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active onOpen={open} />
+          <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} />
+        </>
+      ) : (
+        <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} active />
+      )}
     </section>
   );
 }

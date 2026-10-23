@@ -5342,7 +5342,8 @@ button.usage-row:hover {
   flex: 1;
 }
 
-.wall-sizes {
+.wall-sizes,
+.wall-views {
   display: inline-flex;
   gap: 2px;
 }
@@ -5459,6 +5460,60 @@ button.usage-row:hover {
 
 .tile .chat-notice {
   margin: 0 8px 6px;
+}
+
+/* the screen view: the pane's rows with their colours at the size that fits the tile's width, the bottom rows kept
+   when the height runs out (the prompt and the status live there); the background is the terminal lens's */
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  padding: 6px 8px;
+  background: #14120f;
+  color: #ffffff;
+  font-family: var(--mono);
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.screen-line {
+  flex-shrink: 0;
+  min-height: 1.25em;
+  white-space: pre;
+}
+
+.screen .b {
+  font-weight: 700;
+}
+
+.screen .d {
+  opacity: 0.6;
+}
+
+.screen .i {
+  font-style: italic;
+}
+
+.screen .u {
+  text-decoration: underline;
+}
+
+.screen .s {
+  text-decoration: line-through;
+}
+
+.screen .u.s {
+  text-decoration: underline line-through;
+}
+
+.screen .chat-empty,
+.screen .chat-notice {
+  font-size: 13px;
+  font-family: var(--sans);
+  margin: auto 0;
 }
 
 .composer.compact {

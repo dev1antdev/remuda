@@ -3,8 +3,9 @@
 import type { Machine, Pane, Session, Tab } from "./api";
 import { displayOf, type RadarPrefs } from "./radar";
 
-export type WallPrefs = { size: "s" | "m" | "l"; hideIdle: boolean };
-export const DEFAULT_WALL: WallPrefs = { size: "m", hideIdle: false };
+export type WallView = "chat" | "screen"; // what a tile shows: the last turns of the conversation, or the terminal as it is
+export type WallPrefs = { size: "s" | "m" | "l"; hideIdle: boolean; view: WallView };
+export const DEFAULT_WALL: WallPrefs = { size: "m", hideIdle: false, view: "chat" };
 
 // the narrowest a tile gets, per size; the grid fits as many columns as the window allows
 export const TILE_MIN: Record<WallPrefs["size"], number> = { s: 360, m: 460, l: 600 };

@@ -9,6 +9,7 @@ import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { closeWorkspace } from "@/features/roster/WorkspaceMenu";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
+import { DEFAULT_WALL, type WallPrefs } from "@/features/roster/wall";
 import { usePref } from "@/lib/prefs";
 import type { IconName } from "@/ui/icons";
 import { folderOf, useCurrent } from "./current";
@@ -42,6 +43,7 @@ function useCommands(): (query: string) => Entry[] {
   const footprint = app.use((s) => s.footprint);
   const current = useCurrent();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
+  const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
   return useCallback(
@@ -81,6 +83,12 @@ function useCommands(): (query: string) => Entry[] {
         if (popOutSupported) command("popout", "Pop out this agent", () => void popOut(selection!), { hint: "a small window above every other app", icon: "pip", keywords: ["picture", "window", "float"] });
       }
 
+      const screens = wall.view === "screen";
+      const showWall = () => {
+        setWall({ ...wall, view: screens ? "chat" : "screen" });
+        actions.setMode("wall");
+      };
+      command("wall-view", screens ? "Wall of chats" : "Wall of screens", showWall, { hint: screens ? "each tile the last turns of its conversation" : "each tile its terminal as it is, scaled to fit", icon: "layers", keywords: ["wall", "terminal", "screen", "chat", "view", "tiles"] });
       command("rail", footprint ? "Hide the files rail" : "Show the files rail", actions.toggleFootprint, { hint: "the files the agent touched, beside the lenses", icon: "folder", keywords: ["footprint", "files"] });
       command("alerts", "Alerts on this device", () => actions.openPanel("alerts"), { hint: "which pushes to get here", icon: "bell", keywords: ["push", "notifications"] });
       command("schedules", "Schedules", () => actions.openPanel("schedules"), { hint: "prompts sent to agents on a timetable", icon: "calendar", keywords: ["cron", "timer", "prompt"] });
@@ -90,6 +98,6 @@ function useCommands(): (query: string) => Entry[] {
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, footprint, current, radar, step, now],
+    [machines, mode, lens, viewer, footprint, current, radar, wall, setWall, step, now],
   );
 }
