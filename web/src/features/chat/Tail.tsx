@@ -8,10 +8,12 @@ import type { OpenFile } from "@/features/files/target";
 import { sendKeys } from "@/features/roster/api";
 import { errMsg } from "@/lib/text";
 import { Notice } from "@/ui";
+import type { Subagent } from "./api";
 import Composer from "./Composer";
 import { doing, type Doing } from "./doing";
 import { QuestionCard } from "./QuestionCard";
 import { said } from "./said";
+import { subagentWords } from "./subagents";
 import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFollowBottom } from "./useFollowBottom";
@@ -36,13 +38,17 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, words, settled
   const turns = chat?.turns ?? [];
   const now = useMemo(() => (status === "run" && turns.length > 0 ? doing(turns) : null), [status, turns]);
   const answered = useMemo(() => (settled ? (turns.length > 0 ? said(turns) : fallback) : undefined), [settled, turns, fallback]);
+  const subagents = chat?.subagents;
+  const subs = useMemo(() => subagentWords(subagents, now?.what === "subagents"), [subagents, now]);
+  const session = chat?.session_id ?? "";
+  const onOpenSubagent = useCallback((s: Subagent) => actions.openViewer({ machine: machineId, dir, session, subagent: { id: s.id, description: s.description || s.kind || s.id } }), [machineId, dir, session]);
   return (
     <div className="chat tail">
-      <TileState words={words} doing={now} said={answered} />
+      <TileState words={words} doing={now} said={answered} subagents={subs} />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : "No transcript yet."}</div>}
         {turns.map((t, i) => (
-          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} />
+          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} />
         ))}
       </div>
       <TailAnswer machineId={machineId} paneId={paneId} status={status} dir={dir} active={active} error={fetchError || null} />
@@ -54,7 +60,7 @@ export default Tail;
 
 // TileState is the line under a tile's head: the state and how long, and while the agent works, what it does this second;
 // once it has finished, what it answered.
-export function TileState({ words, doing, said }: { words: string; doing?: Doing | null; said?: string }) {
+export function TileState({ words, doing, said, subagents }: { words: string; doing?: Doing | null; said?: string; subagents?: string }) {
   return (
     <div className="tile-state">
       <span className="tile-words">{words}</span>
@@ -69,11 +75,14 @@ export function TileState({ words, doing, said }: { words: string; doing?: Doing
             <>
               <span className="tile-doing-name">{doing.name}</span> {doing.hint}
             </>
+          ) : doing.what === "subagents" ? (
+            `${subagents || "waiting on a subagent"}…`
           ) : (
             `${doing.what}…`
           )}
         </span>
       )}
+      {subagents && doing?.what !== "subagents" && <span className="tile-subs">· {subagents}</span>}
     </div>
   );
 }

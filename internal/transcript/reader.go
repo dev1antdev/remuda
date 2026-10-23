@@ -27,6 +27,9 @@ type Reader struct {
 	sessionMiss  map[string]time.Time    // session id -> when it was last not found
 	continuation map[string]continuation // session file -> its continuation, as last looked
 	predecessor  map[string]string       // session file -> the file it continues ("" when none)
+	subTails     map[string]*cachedTail  // remote subagent files by path
+	subagents    map[string]*subagentEntry
+	subDirs      map[string]dirListing // a remote session's subagent folder, as listed a moment ago
 }
 
 type cachedTail struct {
@@ -44,7 +47,8 @@ const remoteTailCap = 8 * 1024 * 1024
 // NewReader reads the transcripts on host.
 func NewReader(host shell.Host) *Reader {
 	return &Reader{host: host, tails: map[string]*cachedTail{}, sessionPath: map[string]string{}, sessionMiss: map[string]time.Time{},
-		continuation: map[string]continuation{}, predecessor: map[string]string{}}
+		continuation: map[string]continuation{}, predecessor: map[string]string{},
+		subTails: map[string]*cachedTail{}, subagents: map[string]*subagentEntry{}, subDirs: map[string]dirListing{}}
 }
 
 // Version stats the session file; the version doubles as the ETag.
@@ -65,7 +69,20 @@ func (r *Reader) Version(path string) (Version, error) {
 
 // DirVersions is the size and mtime of every .jsonl directly in dir, in one round trip; a missing dir is an empty map.
 func (r *Reader) DirVersions(dir string) (map[string]Version, error) {
+	return r.dirVersions(dir, ".jsonl")
+}
+
+// dirVersions is DirVersions for the files of the given suffixes.
+func (r *Reader) dirVersions(dir string, suffixes ...string) (map[string]Version, error) {
 	out := map[string]Version{}
+	named := func(name string) bool {
+		for _, suffix := range suffixes {
+			if strings.HasSuffix(name, suffix) {
+				return true
+			}
+		}
+		return false
+	}
 	if r.host.Local() {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -75,7 +92,7 @@ func (r *Reader) DirVersions(dir string) (map[string]Version, error) {
 			return nil, err
 		}
 		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+			if entry.IsDir() || !named(entry.Name()) {
 				continue
 			}
 			if info, err := entry.Info(); err == nil {
@@ -85,7 +102,11 @@ func (r *Reader) DirVersions(dir string) (map[string]Version, error) {
 		return out, nil
 	}
 	quoted := script.Quote(dir)
-	listing := `[ -d ` + quoted + ` ] || exit 0; for f in ` + quoted + `/*.jsonl; do [ -f "$f" ] || continue; ` + script.Stat(`"$f"`, "%s %Y %n", "%z %m %N") + `; done`
+	globs := make([]string, len(suffixes))
+	for i, suffix := range suffixes {
+		globs[i] = quoted + "/*" + suffix
+	}
+	listing := `[ -d ` + quoted + ` ] || exit 0; for f in ` + strings.Join(globs, " ") + `; do [ -f "$f" ] || continue; ` + script.Stat(`"$f"`, "%s %Y %n", "%z %m %N") + `; done`
 	raw, err := shell.Text(r.host, listing, 20*time.Second)
 	if err != nil {
 		return nil, err
@@ -132,8 +153,13 @@ func (r *Reader) Turns(path string, v Version) ([]Turn, error) {
 
 // remoteTail returns the file tail, fetching only the delta since the cached copy when the file merely grew.
 func (r *Reader) remoteTail(path string, v Version) ([]byte, error) {
+	return r.remoteTailIn(r.tails, path, v, 8)
+}
+
+// remoteTailIn is remoteTail over one of the caches, which keeps at most keep files.
+func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Version, keep int) ([]byte, error) {
 	r.mu.Lock()
-	cached := r.tails[path]
+	cached := tails[path]
 	r.mu.Unlock()
 	if cached != nil && cached.version == v {
 		return cached.data, nil
@@ -161,11 +187,11 @@ func (r *Reader) remoteTail(path string, v Version) ([]byte, error) {
 	}
 
 	r.mu.Lock()
-	r.tails[path] = &cachedTail{version: v, data: data}
-	if len(r.tails) > 8 {
-		for k := range r.tails {
+	tails[path] = &cachedTail{version: v, data: data}
+	if len(tails) > keep {
+		for k := range tails {
 			if k != path {
-				delete(r.tails, k)
+				delete(tails, k)
 				break
 			}
 		}

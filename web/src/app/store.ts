@@ -32,6 +32,8 @@ export type Confirm = { text: string; label: string; run: () => void };
 // a jump names its pane ("" = the transcript viewer): a Chat gets it only when it is that pane's
 export type Jump = { machineId: string; paneId: string; session: string; turn: string; n: number };
 export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "release" | null;
+// what the transcript viewer shows, read-only: a session by folder and id, or one of its subagents
+export type Viewer = Pick<SearchHit, "machine" | "dir" | "session"> & { subagent?: { id: string; description: string } };
 // the find bar over the conversation shown: the bar writes the query and the step, the chat writes the count;
 // opened counts the ⌘F presses, so each one puts the focus back in the field
 export type Find = { query: string; at: number; total: number; opened: number };
@@ -48,7 +50,7 @@ export type AppState = {
   notice: NoticeMsg | null;
   confirm: Confirm | null; // a dialog of our own: window.confirm() is unreliable inside embedded browsers
   file: { machineId: string; paneId: string; dir: string; target: FileTarget } | null; // dir stands in for the pane's folder when there is no pane
-  viewer: SearchHit | null; // a transcript on its own, from a search hit
+  viewer: Viewer | null; // a transcript on its own: a search hit's session, or one subagent of a conversation
   jump: Jump | null;
   codeOpened: boolean; // the Code mode stays mounted once opened, so the editor never reloads
   popout: Selection | null; // the pane in the small window above every other app (app/pip.ts owns the window)
@@ -170,7 +172,7 @@ export const actions = {
     app.set({ file: null });
   },
   // a transcript with no agent behind it, read only
-  openViewer(hit: SearchHit) {
+  openViewer(hit: Viewer) {
     app.set({ viewer: hit, mode: "herdr", panel: null });
     writePref("mode", "herdr");
   },

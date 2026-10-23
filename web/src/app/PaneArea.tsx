@@ -35,12 +35,30 @@ export default function PaneArea({ current }: { current: Located | null }) {
   const seen = (l: Lens) => lens === l || (seenLenses.pane === paneKey && !!seenLenses.lenses[l]);
 
   if (viewer) {
+    const sub = viewer.subagent;
     return (
       <main className="pane-area">
-        <Notice tone="info" icon="search" className="viewer-bar" action={<FindTool />} onDismiss={actions.closeViewer}>
-          A transcript from <b>{basename(viewer.dir)}</b> — no agent runs there now, so it reads only.
+        <Notice tone="info" icon={sub ? "sparkles" : "search"} className="viewer-bar" action={<FindTool />} onDismiss={actions.closeViewer}>
+          {sub ? (
+            <>
+              A subagent of <b>{basename(viewer.dir)}</b>: {sub.description} — its own conversation, read-only.
+            </>
+          ) : (
+            <>
+              A transcript from <b>{basename(viewer.dir)}</b> — no agent runs there now, so it reads only.
+            </>
+          )}
         </Notice>
-        <Chat key={`viewer|${viewer.machine}|${viewer.session}`} machineId={viewer.machine} paneId="" status="" origin={`${basename(viewer.dir)} (an old transcript)`} dir={viewer.dir} />
+        <Chat
+          key={`viewer|${viewer.machine}|${viewer.session}|${sub?.id ?? ""}`}
+          machineId={viewer.machine}
+          paneId=""
+          status=""
+          origin={sub ? `${sub.description} (a subagent of ${basename(viewer.dir)})` : `${basename(viewer.dir)} (an old transcript)`}
+          dir={viewer.dir}
+          session={viewer.session}
+          subagent={sub?.id}
+        />
       </main>
     );
   }

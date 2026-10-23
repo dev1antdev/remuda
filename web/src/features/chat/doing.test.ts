@@ -21,6 +21,12 @@ describe("doing", () => {
     expect(doing([assistant()])).toEqual({ what: "thinking" });
   });
 
+  it("is waiting on subagents while an Agent call has no result", () => {
+    expect(doing([user, assistant({ type: "tool", tool_name: "Agent", tool_id: "toolu_1", input: { description: "PR: quiet hours", prompt: "build it" } })])).toEqual({ what: "subagents" });
+    expect(doing([user, assistant({ type: "tool", tool_name: "Task", input: { description: "look" } })])).toEqual({ what: "subagents" });
+    expect(doing([user, assistant({ type: "tool", tool_name: "Agent", input: { description: "x" }, output: "Async agent launched" })])).toEqual({ what: "thinking" });
+  });
+
   it("is writing when the last part is text", () => {
     expect(doing([user, assistant({ type: "tool", tool_name: "Bash", input: { command: "ls" }, output: "a" }, { type: "text", text: "Done: " })])).toEqual({ what: "writing" });
   });

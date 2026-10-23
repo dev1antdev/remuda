@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { useQuery, type Query } from "@/lib/query";
 import { fetchChat, type ChatResponse } from "./api";
 
-export function useChat({ machineId, paneId, sessionId, dir, every, active, last }: {
+export function useChat({ machineId, paneId, sessionId, dir, every, active, last, subagent }: {
   machineId: string;
   paneId: string; // "" with a dir: a transcript on its own
   sessionId: string | null;
@@ -13,19 +13,20 @@ export function useChat({ machineId, paneId, sessionId, dir, every, active, last
   every: number; // the poll interval, by the pane's status
   active: boolean; // on screen: a hidden chat keeps its turns and waits
   last?: number; // only the last N turns
+  subagent?: string; // one subagent's own conversation
 }): Query<ChatResponse> {
   const etag = useRef<string | null>(null);
   useEffect(() => {
     etag.current = null;
-  }, [machineId, paneId, sessionId, dir, last]);
+  }, [machineId, paneId, sessionId, dir, last, subagent]);
   const query = useQuery<ChatResponse>(
     async () => {
-      const res = await fetchChat(machineId, paneId, sessionId, etag.current, dir, last);
+      const res = await fetchChat(machineId, paneId, sessionId, etag.current, dir, last, subagent);
       if (!res) return undefined;
       etag.current = res.etag;
       return res.body;
     },
-    [machineId, paneId, sessionId, dir, last],
+    [machineId, paneId, sessionId, dir, last, subagent],
     { every, enabled: active },
   );
   // a change of pace (the status flipped) or coming on screen is a look at once; not on mount, the query has just gone out

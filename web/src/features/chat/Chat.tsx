@@ -11,6 +11,7 @@ import { createTab, sendKeys, submitPrompt, type PaneUsage } from "@/features/ro
 import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
 import { Icon, Notice, Select, useTimedNotice } from "@/ui";
+import type { Subagent } from "./api";
 import Composer from "./Composer";
 import { QuestionCard } from "./QuestionCard";
 import { TurnView } from "./TurnView";
@@ -18,7 +19,7 @@ import { useChat } from "./useChat";
 import { useFind } from "./useFind";
 import { useFollowBottom } from "./useFollowBottom";
 
-export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true }: {
+export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session }: {
   machineId: string;
   paneId: string; // "" shows a transcript on its own (a search jump), read-only
   status: string;
@@ -28,6 +29,8 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   workspaceId?: string; // with agent: an older session picked here can be resumed in a new tab of this workspace
   agent?: string;
   active?: boolean; // the lens on screen; a hidden one keeps its state and waits
+  subagent?: string; // with no pane: one subagent's own conversation, read-only
+  session?: string; // with no pane: the session to show when no jump names it (the viewer)
 }) {
   const readOnly = !paneId;
   const agents = useAgentTargets();
@@ -39,7 +42,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   const onForward = useCallback((text: string) => setForward(`From ${origin}:\n\n${text}`), [origin]);
   const others = agents.some((a) => a.machineId !== machineId || a.paneId !== paneId);
   const [forwarded, showForwarded, clearForwarded] = useTimedNotice(4000);
-  const [sessionId, setSessionId] = useState<string | null>(jump?.session ?? null);
+  const [sessionId, setSessionId] = useState<string | null>(jump?.session ?? session ?? null);
   const live = useRef<string | undefined>(undefined); // the pane's own session, noted while it is the one shown
   // the session picked here is the one the export (in the tab strip, the palette) saves; the pane's live one is null
   useEffect(() => {
@@ -52,7 +55,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   const busy = status === "run" || status === "input";
 
   // the transcript, at the pane's pace: two seconds while the agent works or asks, ten otherwise
-  const { data: chat, error: fetchError } = useChat({ machineId, paneId, sessionId, dir, every: busy ? 2000 : 10000, active });
+  const { data: chat, error: fetchError } = useChat({ machineId, paneId, sessionId, dir, every: busy ? 2000 : 10000, active, subagent });
 
   const follow = useFollowBottom(logRef, { active, chat, startAtBottom: !jump?.turn });
   useFind(logRef, { active, chat });
@@ -62,6 +65,11 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   const [jumpMiss, setJumpMiss] = useState(false);
   const shownSession = useRef<string | undefined>(undefined);
   shownSession.current = chat?.session_id;
+  // a subagent's own conversation opens in the transcript viewer, read-only, under this conversation's session
+  const onOpenSubagent = useCallback(
+    (s: Subagent) => actions.openViewer({ machine: machineId, dir, session: shownSession.current ?? "", subagent: { id: s.id, description: s.description || s.kind || s.id } }),
+    [machineId, dir],
+  );
   useEffect(() => {
     if (!jump) return;
     pendingTurn.current = jump.turn || null;
@@ -123,7 +131,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : readOnly ? "This transcript is empty." : "No transcript for this pane's folder yet."}</div>}
         {turns.map((t, i) => (
-          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} />
+          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} subagents={chat?.subagents} onOpenSubagent={onOpenSubagent} />
         ))}
       </div>
       {!readOnly && status === "input" && (

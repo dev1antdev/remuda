@@ -309,30 +309,24 @@ type contentBlock struct {
 const tailWindow = 16 * 1024 * 1024
 
 // Parse reads the tail of a session file into turns; a torn last line (Claude mid-append) is skipped, never fatal.
+// A subagent's records (sidechain ones) are left out: they are its own conversation (Reader.SubagentTurns).
 func Parse(path string) ([]Turn, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	if fi, err := f.Stat(); err == nil && fi.Size() > tailWindow {
-		if _, err := f.Seek(fi.Size()-tailWindow, 0); err != nil {
-			return nil, err
-		}
-	}
-	return parseStream(f)
+	return parseFile(path, false)
 }
 
 // ParseBytes parses transcript content already in memory.
 func ParseBytes(data []byte) ([]Turn, error) {
+	return parseBytes(data, false)
+}
+
+func parseBytes(data []byte, keepSidechain bool) ([]Turn, error) {
 	if len(data) > tailWindow {
 		data = data[len(data)-tailWindow:]
 	}
-	return parseStream(bytes.NewReader(data))
+	return parseRecords(bytes.NewReader(data), keepSidechain)
 }
 
-func parseStream(r io.Reader) ([]Turn, error) {
+func parseRecords(r io.Reader, keepSidechain bool) ([]Turn, error) {
 	var turns []Turn
 	// indexes, not pointers: a later append to the same turn reallocates Parts
 	type partRef struct{ turn, part int }
@@ -360,7 +354,7 @@ func parseStream(r io.Reader) ([]Turn, error) {
 		if json.Unmarshal(line, &rec) != nil {
 			return
 		}
-		if rec.IsSidechain || rec.IsMeta || rec.IsAPIError {
+		if (rec.IsSidechain && !keepSidechain) || rec.IsMeta || rec.IsAPIError {
 			return
 		}
 		switch rec.Type {
