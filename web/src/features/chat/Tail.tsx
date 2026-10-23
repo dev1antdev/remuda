@@ -10,8 +10,12 @@ import { errMsg } from "@/lib/text";
 import { Notice } from "@/ui";
 import Composer from "./Composer";
 import { doing, type Doing } from "./doing";
+<<<<<<< HEAD
+import { QuestionCard } from "./QuestionCard";
+=======
 import { PromptKeys } from "./PromptKeys";
 import { said } from "./said";
+>>>>>>> release
 import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFollowBottom } from "./useFollowBottom";
@@ -45,7 +49,7 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, words, settled
           <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} />
         ))}
       </div>
-      <TailAnswer machineId={machineId} paneId={paneId} status={status} dir={dir} error={fetchError || null} />
+      <TailAnswer machineId={machineId} paneId={paneId} status={status} dir={dir} active={active} error={fetchError || null} />
     </div>
   );
 });
@@ -79,15 +83,17 @@ export function TileState({ words, doing, said }: { words: string; doing?: Doing
 }
 
 // TailAnswer is the foot of a tile whatever it shows above: the keys for a question the agent asks, an error, the one-line composer.
-export function TailAnswer({ machineId, paneId, status, dir, error: shown = null }: { machineId: string; paneId: string; status: string; dir: string; error?: string | null }) {
+export function TailAnswer({ machineId, paneId, status, dir, active = true, error: shown = null }: { machineId: string; paneId: string; status: string; dir: string; active?: boolean; error?: string | null }) {
   const [actionError, setActionError] = useState<string | null>(null);
-  const keys = (ks: string[]) => void sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
+  const keys = (ks: string[]) => sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
   const error = actionError ?? shown;
   return (
     <>
       {status === "input" && (
         <Notice tone="warn" icon="alert-triangle" className="chat-notice">
-          Waiting for an answer: <PromptKeys onKeys={keys} />
+          <QuestionCard machineId={machineId} paneId={paneId} active={active} compact onKeys={keys}>
+            Waiting for an answer:
+          </QuestionCard>
         </Notice>
       )}
       {error && (

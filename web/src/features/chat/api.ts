@@ -47,6 +47,12 @@ export async function fetchChat(
 }
 
 // ---- quick prompts: saved texts for the composer ----
+export type QuestionOption = { n: number; label: string; picked: boolean };
+// Question is the dialog on the pane's screen: its words, and its choices with the cursor on one.
+export type Question = { text: string; options: QuestionOption[] };
+export const fetchQuestion = (machineId: string, paneId: string): Promise<Question | null> =>
+  getJSON<{ question: Question | null }>(`/api/question?${new URLSearchParams({ machine: machineId, pane: paneId })}`).then((r) => r.question);
+
 export type QuickPrompt = { id?: string; label: string; text: string; dir?: string };
 export const fetchQuick = (): Promise<QuickPrompt[]> => getJSON("/api/quick");
 export const saveQuick = (list: QuickPrompt[]): Promise<QuickPrompt[]> => sendJSON("PUT", "/api/quick", list);

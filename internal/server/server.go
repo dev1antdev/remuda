@@ -83,6 +83,7 @@ func (s *Server) Handler() http.Handler {
 	s.tasksRoutes(api)
 	s.terminalRoutes(api)
 	s.screenRoutes(api)
+	s.questionRoutes(api)
 	s.feedRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 

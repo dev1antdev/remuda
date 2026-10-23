@@ -65,6 +65,12 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   while the agent waits on a menu; falls back to `pane.send_text` for plain
   shells. Named keys (`Enter`, `Escape`, arrows, `Ctrl+C`) via
   `pane.send_keys`.
+- **Answer** — while the agent waits on a dialog, the chat shows the
+  question as it stands on the screen (Claude Code's permission prompts,
+  its "trust this folder", an AskUserQuestion) with a button per choice;
+  a tap walks the cursor there and presses Enter, Esc closes. From the
+  phone, the wall and the pop-out too. A dialog remuda cannot read leaves
+  the blind ↑ ↓ Enter Esc.
 - **New workspace / close** — `workspace.create` + `agent.start` (any agent
   herdr has a manifest for), `workspace.close`.
 - **Wall** — the **Wall** mode in the top bar puts every agent on one
@@ -539,9 +545,14 @@ binary is deployed, grep otherwise).
 
 **Wall:** a mode for the big screen — every agent on every connected
 machine as a tile: its state and workspace, its context and cost, how
+<<<<<<< HEAD
+long it has been at it and what it runs this second, the last dozen
+turns of its conversation, the question it asks with its choices as buttons,
+=======
 long it has been at it and what it runs this second — or, once it is
 done, the first line of its answer — the last dozen
 turns of its conversation, the keys for a question it asks,
+>>>>>>> release
 and a line to answer. Tiles keep the roster's order, so nothing jumps
 when an agent changes state; hide the idle ones, keep only the ones that
 need you, or hide any single tile, focus one agent with the rest in a
