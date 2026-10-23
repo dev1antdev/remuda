@@ -34,6 +34,7 @@ type rosterPane struct {
 	// an agent's lifecycle as a person reads it (held done, held question, last activity); nil for a shell
 	Radar *radar.Display `json:"radar,omitempty"`
 	Usage *usage.Display `json:"usage,omitempty"`
+	Said  string         `json:"said,omitempty"` // the first line of the last answer, once the agent finished
 }
 
 type rosterTab struct {
@@ -99,6 +100,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 		if pane.Agent != "" {
 			display := s.Radar.Display(machineID, pane)
 			entry.Radar = &display
+			entry.Said = s.Said.Line(machineID, pane.PaneID)
 			if meter, ok := s.Usage.Display(machineID, pane.PaneID); ok {
 				entry.Usage = &meter
 			}
