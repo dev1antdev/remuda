@@ -6101,7 +6101,8 @@ body.popout {
   white-space: nowrap;
 }
 .review-keys kbd,
-.palette-foot kbd {
+.palette-foot kbd,
+.keys-dialog kbd {
   display: inline-block;
   min-width: 16px;
   margin-right: 2px;
@@ -6111,6 +6112,30 @@ body.popout {
   font: 11px/16px var(--mono);
   color: var(--fg-dim);
   text-align: center;
+}
+.keys-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px 24px;
+}
+.keys-group h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.keys-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 3px 0;
+  font-size: 13px;
+}
+.keys-caps {
+  flex: 0 0 96px;
+  white-space: nowrap;
 }
 .fv-mark {
   border-radius: var(--r-xs);

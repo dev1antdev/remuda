@@ -118,6 +118,7 @@ function useCommands(): (query: string) => Entry[] {
       command("alerts", "Alerts on this device", () => actions.openPanel("alerts"), { hint: "which pushes to get here", icon: "bell", keywords: ["push", "notifications"] });
       command("schedules", "Schedules", () => actions.openPanel("schedules"), { hint: "prompts sent to agents on a timetable", icon: "calendar", keywords: ["cron", "timer", "prompt"] });
       command("usage", "Usage report", () => actions.openPanel("usage"), { hint: "what the agents cost, by day, project and session", icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
+      command("keys", "Keyboard shortcuts", () => actions.openDialog({ kind: "keys" }), { hint: "? · every key the page answers", icon: "keyboard", keywords: ["keys", "shortcuts", "help", "hotkeys", "bindings", "keyboard"] });
       command("machine", "Add a PC…", () => actions.openDialog({ kind: "machine" }), { hint: "a remote machine over SSH", icon: "monitor", keywords: ["machine", "remote", "ssh", "host"] });
       const typed = query.trim();
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });

@@ -1,4 +1,6 @@
-// Links, the clipboard and a file to keep, the way a browser does them.
+// Links, the clipboard and a file to keep, the way a browser does them; and which keys the platform uses.
+
+export const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
 // copyText puts text on the clipboard: the Clipboard API, else execCommand (http origins, older WebViews).
 export async function copyText(text: string): Promise<boolean> {

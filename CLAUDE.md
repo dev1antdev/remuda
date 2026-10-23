@@ -438,7 +438,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and every handler shared, "That pane is gone" once the roster lost it.
   Store field `popout`, buttons on every wall tile and in the header,
   disabled there without a pane), `Overlays.tsx` (panels, dialogs, the
-  menu, the confirm, the file viewer), `commands.tsx` (the **command
+  menu, the confirm, the file viewer; the keyboard sheet behind **?** — Shift and the slash key by position, never over a field or another dialog, the same key closes it — is `features/help/KeysDialog.tsx` over `help/keys.ts`, the one list of every key the page answers, tested; the palette has it as "Keyboard shortcuts"), `commands.tsx` (the **command
   palette** on ⌘K / Ctrl+K, by key code so any layout works: every pane
   as a row to jump to — each machine's liveliest first, shells at its
   end, the current one marked — and every command the page has a button

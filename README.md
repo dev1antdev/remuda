@@ -502,7 +502,8 @@ machine or tab — or run what the page has a button for: a mode, a lens,
 a new workspace, tab or worktree, a rename, the pop-out, the files
 rail, the panels. The liveliest agents come first, the current one is
 marked; ↑ ↓ move, ↵ runs, Esc closes. The last row searches every
-conversation for what you typed.
+conversation for what you typed. **?** opens the keyboard sheet: every
+key the page answers, in groups.
 
 **Search** (🔍, or the palette's last row): full text over every conversation on every
 machine — what you or an agent said, never tool output — filtered by

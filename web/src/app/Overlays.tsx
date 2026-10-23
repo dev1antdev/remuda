@@ -8,6 +8,7 @@ import { AddMachineDialog, NewTabDialog, NewWorkspaceDialog, NewWorktreeDialog, 
 import WorkspaceMenu from "@/features/roster/WorkspaceMenu";
 import Activity from "@/features/activity/Activity";
 import BroadcastDialog from "@/features/agents/BroadcastDialog";
+import KeysDialog from "@/features/help/KeysDialog";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import AlertsPanel from "@/features/alerts/AlertsPanel";
 import FileViewer from "@/features/files/FileViewer";
@@ -127,6 +128,7 @@ export default function Overlays() {
         />
       )}
       {dialog?.kind === "broadcast" && <BroadcastDialog agents={targets} onClose={actions.closeDialog} />}
+      {dialog?.kind === "keys" && <KeysDialog onClose={actions.closeDialog} />}
       {dialog?.kind === "machine" && (
         <AddMachineDialog
           onClose={actions.closeDialog}
