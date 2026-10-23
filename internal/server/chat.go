@@ -46,7 +46,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		}
 		last = n
 	}
-	conv, err := s.Chat.Open(mc, paneID, sessionID, dir)
+	conv, err := s.Chat.Open(mc, paneID, sessionID, dir, last > 0)
 	var notFound *chat.NotFoundError
 	switch {
 	case errors.As(err, &notFound):
@@ -56,7 +56,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadGateway, err)
 		return
 	}
-	if paneID != "" {
+	if paneID != "" && last == 0 { // a tile's tail is not the person's look at the pane: the lens is
 		s.Radar.Seen(mc.ID(), paneID)
 	}
 	if conv.Path == "" {
@@ -68,9 +68,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	turns, err := conv.Turns()
+	var turns []transcript.Turn
 	if last > 0 {
 		turns, err = conv.LastTurns(last)
+	} else {
+		turns, err = conv.Turns()
 	}
 	if err != nil {
 		httpErr(w, http.StatusBadGateway, err)

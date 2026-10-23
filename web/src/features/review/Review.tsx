@@ -2,7 +2,7 @@
 // column or two with the changed words marked, walked by keys, with comments on diff lines gathered into a draft
 // that goes to the pane's agent, on its own or under a verdict.
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { actions } from "@/app/store";
 import SendToAgent from "@/features/agents/SendToAgent";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
@@ -13,13 +13,15 @@ import { basename, errMsg, plural } from "@/lib/text";
 import { ago } from "@/lib/time";
 import { Icon, Notice, useTimedNotice } from "@/ui";
 import { fetchReview, fetchReviewDiff, markReviewed, type Review as ReviewData, type ReviewFile, type Verdict } from "./api";
-import { FileRow } from "./Diff";
+import { FileRow, type NewComment } from "./Diff";
 import { Note } from "./Hunk";
 import { KEYS, useReviewKeys } from "./keys";
 import { commentsMessage, place, verdictMessage, type DraftComment } from "./draft";
 import { VerdictDialog } from "./VerdictDialog";
 
 export type { DraftComment } from "./draft";
+
+const NO_COMMENTS: DraftComment[] = []; // one empty list for every file without comments: a new array would redraw its hunks
 
 export default function Review({ machineId, paneId, dir, agent, onSeen, active = true }: {
   machineId: string;
@@ -50,8 +52,17 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
   const lookAgain = () => setLook((count) => count + 1);
   const loadDiff = useCallback((path: string) => fetchReviewDiff(machineId, dir, path), [machineId, dir]); // stable: every row's query keys on it
 
-  const addComment = (comment: Omit<DraftComment, "id">) => setDraft((comments) => [...comments, { ...comment, id: comments.reduce((max, other) => Math.max(max, other.id), 0) + 1 }]);
-  const removeComment = (id: number) => setDraft((comments) => comments.filter((comment) => comment.id !== id));
+  // stable, so a memoised hunk is left alone by a roster poll or a keystroke elsewhere
+  const addComment = useCallback(
+    (file: string, comment: NewComment) => setDraft((comments) => [...comments, { ...comment, file, id: comments.reduce((max, other) => Math.max(max, other.id), 0) + 1 }]),
+    [setDraft],
+  );
+  const removeComment = useCallback((id: number) => setDraft((comments) => comments.filter((comment) => comment.id !== id)), [setDraft]);
+  const draftByFile = useMemo(() => {
+    const byFile = new Map<string, DraftComment[]>();
+    for (const comment of draft) byFile.set(comment.file, [...(byFile.get(comment.file) ?? []), comment]);
+    return byFile;
+  }, [draft]);
   const where = () => place(dir, review);
 
   const markReviewedSilently = async () => {
@@ -125,8 +136,8 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       load={loadDiff}
       onLoaded={keys.loaded}
       canComment={hasAgentToTell}
-      draft={draft.filter((comment) => comment.file === file.path)}
-      onComment={(comment) => addComment({ ...comment, file: file.path })}
+      draft={draftByFile.get(file.path) ?? NO_COMMENTS}
+      onComment={addComment}
       onRemove={removeComment}
       onOpen={(line) => onOpenFile(`${dir}/${file.path}`, line)}
     />

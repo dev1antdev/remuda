@@ -64,6 +64,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, ac
     if (!id || !log || !chat || !jump || chat.session_id !== jump.session) return;
     const el = log.querySelector(`[data-ids~="${CSS.escape(id)}"]`);
     pendingTurn.current = null;
+    actions.clearJump();
     if (!el) {
       setJumpMiss(true);
       follow.stick.current = true;

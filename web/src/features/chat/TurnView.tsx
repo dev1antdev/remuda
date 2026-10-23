@@ -5,7 +5,7 @@ import type { OpenFile } from "@/features/files/target";
 import { ErrorBoundary, Icon, Notice } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import type { Part, Turn } from "./api";
-import { EDIT_TOOLS, toolPath } from "./footprint";
+import { EDIT_TOOLS, READ_TOOLS, toolPath } from "./footprint";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 export const TurnView = memo(
@@ -113,7 +113,8 @@ function PartView({ part, onOpenFile }: { part: Part; onOpenFile: OpenFile }) {
 export function toolLabel(part: Part): { name: string; hint: string; file: string | null } {
   const name = part.tool_name ?? "tool";
   const file = toolPath(part);
-  if (file) return { name, hint: file.length > 70 ? "…" + file.slice(-69) : file, file };
+  // a file is a link when the tool read or wrote it; Grep's or Glob's path is a folder, named only
+  if (file) return { name, hint: file.length > 70 ? "…" + file.slice(-69) : file, file: EDIT_TOOLS.has(name) || READ_TOOLS.has(name) ? file : null };
   const input = part.input as Record<string, unknown> | undefined | string;
   if (input && typeof input === "object") {
     const obj = input as Record<string, unknown>;

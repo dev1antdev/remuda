@@ -25,6 +25,7 @@ export default function Palette({ entries, onClose }: { entries: (query: string)
     entry.run();
   };
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return; // an IME commit is not a pick
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (list.length) setIndex((at + (e.key === "ArrowDown" ? 1 : list.length - 1)) % list.length);

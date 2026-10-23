@@ -71,7 +71,7 @@ export default function Header({ current }: { current: Located | null }) {
           <Icon name="pip" size={18} />
         </button>
       )}
-      <button type="button" className="icon-btn bell" title="Search every conversation (also from ⌘K / Ctrl+K)" onClick={() => actions.openPanel("search")}>
+      <button type="button" className="icon-btn bell" title="Search every conversation (also from ⌘K / Ctrl+K)" onClick={() => actions.openSearch()}>
         <Icon name="search" size={18} />
       </button>
       <button type="button" className={`icon-btn bell${panel === "alerts" ? " on" : ""}`} title="Alerts on this device" aria-expanded={panel === "alerts"} onClick={() => actions.togglePanel("alerts")}>

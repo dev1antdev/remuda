@@ -110,7 +110,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `ReadFrom`, `Turns`, `ResolveSession`, `Live` / `Chain` / `Lineage`
   (every file a conversation lived in) and `Predecessor`, in process here
   and by script over a `shell.Host` on a remote. `Turn.Answer`,
-  `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with. The chat lens (`features/chat/Chat.tsx`: the transcript through `useChat.ts`, the one fetch hook — every 2 s while the agent works or asks, 10 s otherwise, a 304 = unchanged, `last=N` for a wall tile; `Composer.tsx` (`compact` in a tile), `TurnView.tsx`, `PromptKeys.tsx` (↑ ↓ Enter Esc for a question), `Tail.tsx` (a tile's chat: the last 12 turns, 3 s / 15 s), `FilesRail.tsx` (the **files rail** beside the lenses: every file the agent edited or read in this conversation since its last compaction, from its own tool calls — `footprint.ts` is the pure part, tested: `toolPath` reads `file_path` / `notebook_path` from an object input or from one the server cut to a string at 8 KB, so `TurnView` links a big Write too; edited files first by their last touch, the ones only read folded; its own `useChat` poll at a tile's pace, only while on screen; a row opens the file viewer on its changes, the code button `actions.openInCode`; a change made through a shell command is the Changes lens's to show, not the rail's), `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
+  `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with. The chat lens (`features/chat/Chat.tsx`: the transcript through `useChat.ts`, the one fetch hook — every 2 s while the agent works or asks, 10 s otherwise, a 304 = unchanged, `last=N` for a wall tile; `Composer.tsx` (`compact` in a tile), `TurnView.tsx`, `PromptKeys.tsx` (↑ ↓ Enter Esc for a question), `Tail.tsx` (a tile's chat: the last 12 turns, 3 s / 15 s), `FilesRail.tsx` (the **files rail** beside the lenses: every file the agent edited or read in this conversation since its last compaction, from its own tool calls — `footprint.ts` is the pure part, tested: `toolPath` reads `file_path` / `notebook_path` from an object input or from one the server cut to a string at 8 KB, so `TurnView` links a big Write too (a link only for a tool that read or wrote the file: Grep's or Glob's path is a folder, named only); edited files first by their last touch, the ones only read folded; its own `useChat` poll at a tile's pace, only while on screen; a row opens the file viewer on its changes, the code button `actions.openInCode`; a change made through a shell command is the Changes lens's to show, not the rail's), `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
   only when the reader is there and not selecting or dragging; an upward
   wheel or finger lets go at once, and `TurnView` (`sameTurn`) re-renders only when a
   turn's content changed, so a selection survives the polls.
@@ -368,7 +368,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   but for the hooks: `http.ts` (`check` / `getJSON` / `sendJSON`, every
   request), `query.ts` (`useQuery(fn, deps, {every, enabled, keep})` —
   the one way a screen reads the server: a fetch that follows its inputs,
-  polls while enabled and the tab is visible, drops an answer that
+  polls while enabled and the page is visible — `visibility.ts`:
+  this document or the pop-out's — drops an answer that
   arrives after the inputs changed; `undefined` from the fetcher means
   unchanged (an ETag 304) and the data stays; `reload`, `fetching`, and
   `mutate` for what the screen already shows ahead of the server — a
@@ -377,8 +378,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `prefs.ts` (`usePref`, localStorage-backed and shared: every hook of a
   key follows a write through any other or through `writePref`, over
   `useSyncExternalStore` — the terminal's tools in the tab strip and the
-  lens beside them hold the same keys; `readPref` keeps a stored
-  value only in the fallback's shape; `isTouch`), `text.ts` (`errMsg`,
+  lens beside them hold the same keys; a `storage` event from another
+  tab drops the cached value and wakes the hooks; `readPref` keeps a stored
+  value only in the fallback's shape; `isTouch`), `media.ts` (`useMedia`:
+  a media query as a hook, for a piece the stylesheet hides that would
+  otherwise poll unseen), `text.ts` (`errMsg`,
   `basename` / `dirname`, `plural`, `shellQuote`), `time.ts`, `paths.ts`,
   `host.ts` (`copyText`: Clipboard API, else execCommand; `openUrl`: a
   new tab — nothing embeds remuda any more, the JetBrains plugin and its
@@ -400,7 +404,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `.pane-body` — store field `footprint` from the pref of that name,
   default on with a mouse, its toggle in the tab strip's tools slot
   whatever the lens so nothing in the strip moves, disabled for a shell
-  pane, hidden with the rail under 920 px), `Wall.tsx` (the **Wall mode**: every
+  pane, hidden with the rail under 920 px and not polling there), `Wall.tsx` (the **Wall mode**: every
   agent pane on a connected machine as a tile — the sidebar row's head
   (mark, logo, label, workspace · machine, context % · cost), the last 12
   turns through `features/chat/Tail`, a compact composer; a click on the
@@ -416,7 +420,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Picture-in-Picture gives — `popOut(selection)` from the click itself,
   the page's stylesheets copied in, `pagehide` clears the store; one
   window at a time, the browser's rule; `popOutSupported` decides whether
-  the buttons exist at all, so nothing in a bar appears or vanishes.
+  the buttons exist at all, so nothing in a bar appears or vanishes; the
+  window's document is registered with `lib/visibility.ts`, so the polls
+  behind it go on while the tab behind it is hidden, and the follow-bottom
+  hook uses the log's own window and document for its frames, selection
+  and mouse-up.
   `PopOut.tsx` draws the popped pane through a `createPortal` into that
   window's body — the same `TileView` as the wall, the roster, the store
   and every handler shared, "That pane is gone" once the roster lost it.
@@ -463,7 +471,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   so that a commit of that very content brings nothing new and a file
   committed as reviewed leaves the list. `GET /api/review/diff?dir=&path=`
   is one file's diff from the blob the baseline recorded for it (only the
-  edits since the look), else against HEAD (an untracked file whole).
+  edits since the look; a file deleted since diffs as its removal), else
+  against HEAD (an untracked file whole) — always `--no-ext-diff`, so a
+  difftastic set as the external driver stays out of it.
   The lens shows fresh files first and folds the rest behind "N files
   unchanged since you looked"; seen commits are dimmed. Every
   `events.Snapshot` goes to `review.RefreshBadges`, which runs `Badges` a
@@ -473,14 +483,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `features/review/Review.tsx` draws it (`Diff.tsx` the file rows,
   `Hunk.tsx` a hunk's rows in one column or two with a comment box under
   the tapped row, `hunks.ts` the parsing — `splitHunks`, `rowsOf`,
-  `pairRows` lays a removed run beside the added run that follows it,
+  `pairRows` lays a removed run beside the added run that follows it, a
+  "\ No newline at end of file" note staying with its side,
   `partners`, `changedSpan` the words that differ between a removed line
-  and its replacement, out to word boundaries, drawn as `.fv-mark`;
+  and its replacement, out to word boundaries and never between the
+  halves of a surrogate pair, drawn as `.fv-mark`; `Hunk` is memoised and
+  the comment box holds its own text, so a keystroke or a roster poll
+  redraws no cells, and the focus returns to the row when the box closes;
   `keys.ts` the keys — `useReviewKeys`, by key position so a Cyrillic
   layout works: j k walk the files, ↑ ↓ the lines of the open one, n p
   its hunks, c comments on the focused line, o opens the file there, s
   flips the two columns (pref `review.split`, on by default with a mouse,
-  the toggle in the lens head); the legend in the head, hidden under
+  the toggle in the lens head) and keeps the line focused; the rows walk
+  with or without an agent to comment to, and are collected only for a
+  key that needs them; the legend in the head, hidden under
   1180 px and on touch; the hook listens only while the lens is on screen
   (`active`) and never over a field, a dialog or the file viewer;
   `VerdictDialog.tsx`, `draft.ts` the comments and the messages they
@@ -520,9 +536,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   kept mounted behind the other modes once opened. `actions.openInCode(machine,
   folder, path)` (the files rail's code button; store field `codeFile`)
   switches the mode, moves the picker to that machine and folder and
-  remounts the frame with `payload=[["openFile","vscode-remote://<page
-  host>/path"]]`, which the workbench opens on load — the authority is
-  the page's own host because the proxy keeps `Host`. The flag `-code-port`
+  mounts the frame with `payload=[["openFile","vscode-remote://<page
+  host>/path"]]` (the path escaped per segment), which the workbench
+  opens on load — the authority is the page's own host because the proxy
+  keeps `Host`; the frame's address is settled once per request, so
+  coming back to the folder later does not open the file again. The flag `-code-port`
   changes the port on every machine at once.
 - `web/src/lib/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
   provider (`terminal/engine/links.ts`) and the chat linkifier; keeps a
@@ -577,7 +595,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   carries `pane.radar = {state, last_active}` for agent panes. Rules: a
   blink through idle within 2.5s of working is still working; **done is held
   until seen** (herdr focused the pane, or a client opened its terminal /
-  chat, or `POST /api/seen`) — and a seen finish stays seen until the agent works again, because herdr itself keeps reporting `done` for hours, until the pane is focused in herdr; **a question is held until the agent works
+  chat, or `POST /api/seen` — a tile's tail, `GET /api/chat?last=N` on the
+  Wall or in the pop-out, is not a look) — and a seen finish stays seen until the agent works again, because herdr itself keeps reporting `done` for hours, until the pane is focused in herdr; **a question is held until the agent works
   again** (unless it never had worked — then the dialog simply closed);
   `last_active` is the last moment herdr said working, recovered for panes
   older than remuda from the session file's mtime (`chat.Service.LastWriteOf`:
@@ -638,7 +657,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   folder the agent started in; a `cd` in the session moves the record's
   `cwd` but not the file) — the UI matches it to a pane by
   `encodePath(session.dir|pane.cwd)` and jumps (`jump` prop on Chat →
-  `data-ids~=uuid` → scroll + `.turn-hit`), else opens the transcript on
+  `data-ids~=uuid` → scroll + `.turn-hit`, then `actions.clearJump`, so a
+  later mount of the pane starts at the bottom in its live session), else opens the transcript on
   its own: `GET /api/chat?dir=&session=` without a pane is read-only
   (`Turn.IDs` carry the record uuids; `sessionIDRe` guards the id).
 - `internal/usage/` — the **cost and context meter**. `prices.go` is Claude
@@ -797,8 +817,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   through it. `GET /api/chat?last=N` (1..200) answers the last N turns only
   — `Conversation.LastTurns`, the slice kept per file version in
   `tailCache`, so the wall's tiles and the lens on the same pane parse a
-  file once per change; the ETag is the same either way, and every GET with
-  a pane still marks it seen. In the UI a tab is renamed in
+  file once per change (the cached slice is a copy, so the cache never pins
+  a whole parsed file); the ETag is the same either way, a tail lists no
+  sessions, and every GET with a pane but a tail marks it seen. In the UI a tab is renamed in
   place by double-click, or from the workspace's ⋯ menu (touch). The roster carries an ETag (304 when unchanged) and
   the agent list. Local files stream through `http.ServeContent` (Range for
   video); the WS uses per-message compression and coalesces queued chunks.
@@ -826,7 +847,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   these before writing new rules.
 - `web/src/ui/` — the shared pieces, `index.ts` the barrel: `Dialog` (one
   scrim over the drawer, a head with icon/title/controls/X, Escape, focus
-  in and back out, `#root` inert while open, `as="form"` + `onSubmit`,
+  in and back out — the opener is read before the first render, since an
+  autoFocus field has the focus by the time an effect runs — `#root` inert while open, `as="form"` + `onSubmit`,
   sizes sm/md/lg), `FormDialog`, `ConfirmDialog`, `Notice` (tones
   error/success/warn/info/hint, optional icon, action and dismiss),
   `Toasts`, `useTimedNotice`, `useDismiss` (popovers), `useSubmit`,

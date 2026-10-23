@@ -13,6 +13,9 @@ import Select from "@/ui/Select";
 import Icon from "@/ui/icons";
 import { openUrl } from "@/lib/host";
 
+// escapePath keeps a #, ? or % in a file name as part of the path when the workbench parses its URI
+const escapePath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
+
 export default function Code({ machines, currentMachine, currentFolder, visible }: {
   machines: Machine[];
   currentMachine: string | null;
@@ -44,7 +47,6 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
     if (codeFile.machineId !== machineId) setMachineId(codeFile.machineId);
     setFolders((prev) => (prev[codeFile.machineId] === codeFile.folder ? prev : { ...prev, [codeFile.machineId]: codeFile.folder }));
   }, [codeFile]); // eslint-disable-line react-hooks/exhaustive-deps
-  const opening = codeFile && machine && codeFile.machineId === machine.id && codeFile.folder === folder ? codeFile : null;
   const [status, setStatus] = useState<CodeStatus | null>(null);
   const [checking, setChecking] = useState(false);
   const probeSeq = useRef(0);
@@ -75,10 +77,23 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, status?.available, machine?.id]);
 
-  // the workbench opens a file named in its payload; the authority is this page's host, which the proxy keeps as Host
-  const payload = opening ? `&payload=${encodeURIComponent(JSON.stringify([["openFile", `vscode-remote://${location.host}${opening.path}`]]))}` : "";
-  const src = machine && folder ? `/code/${encodeURIComponent(machine.id)}/?folder=${encodeURIComponent(folder)}${payload}` : machine ? `/code/${encodeURIComponent(machine.id)}/` : "";
-  const frameKey = `${machine?.id ?? ""}|${folder}|${opening?.n ?? 0}`;
+  // the frame's address is settled once per machine, folder and request: a file asked for rides along as the workbench's
+  // payload on that one mount (the authority is this page's host, which the proxy keeps as Host), and coming back to
+  // the folder later does not open it again
+  const [frame, setFrame] = useState<{ key: string; src: string } | null>(null);
+  const carried = useRef(0); // the request a frame has carried
+  useEffect(() => {
+    if (!machine) {
+      setFrame(null);
+      return;
+    }
+    const asked = codeFile && codeFile.n !== carried.current ? codeFile : null;
+    if (asked && (asked.machineId !== machine.id || asked.folder !== folder)) return; // the picker is on its way there
+    if (asked) carried.current = asked.n;
+    const payload = asked ? `&payload=${encodeURIComponent(JSON.stringify([["openFile", `vscode-remote://${location.host}${escapePath(asked.path)}`]]))}` : "";
+    const src = folder ? `/code/${encodeURIComponent(machine.id)}/?folder=${encodeURIComponent(folder)}${payload}` : `/code/${encodeURIComponent(machine.id)}/`;
+    setFrame({ key: `${machine.id}|${folder}|${asked?.n ?? 0}`, src });
+  }, [machine?.id, folder, codeFile?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="code-mode">
@@ -97,7 +112,7 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
         )}
         <span className="code-bar-spacer" />
         {status?.available && (
-          <button type="button" className="icon-btn" title="Open the editor in its own tab" onClick={() => openUrl(src)}>
+          <button type="button" className="icon-btn" title="Open the editor in its own tab" onClick={() => frame && openUrl(frame.src)}>
             <Icon name="external-link" size={14} />
           </button>
         )}
@@ -107,7 +122,7 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
       ) : status === null ? (
         <div className="empty">Looking for code-server on {machine.label}…</div>
       ) : status.available ? (
-        <iframe key={frameKey} className="code-frame" src={src} title={`VS Code on ${machine.label}`} allow="clipboard-read; clipboard-write" />
+        frame && <iframe key={frame.key} className="code-frame" src={frame.src} title={`VS Code on ${machine.label}`} allow="clipboard-read; clipboard-write" />
       ) : (
         <div className="code-install">
           <h2>

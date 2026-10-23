@@ -4,7 +4,7 @@
 import type { Part, Turn } from "./api";
 
 export const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
-const READ_TOOLS = new Set(["Read"]);
+export const READ_TOOLS = new Set(["Read"]);
 
 export type Touch = {
   path: string;
@@ -71,5 +71,6 @@ export function footprint(turns: Turn[]): Footprint {
 
 // shownPath is the path as the rail shows it: relative to the pane's folder when under it
 export function shownPath(path: string, dir: string): string {
-  return dir && path.startsWith(dir + "/") ? path.slice(dir.length + 1) : path;
+  const base = dir.replace(/\/+$/, "");
+  return base && path.startsWith(base + "/") ? path.slice(base.length + 1) : path;
 }

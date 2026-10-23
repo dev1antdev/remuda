@@ -59,7 +59,22 @@ describe("pairRows", () => {
   });
 });
 
+describe("pairRows with a missing final newline", () => {
+  it("keeps the removed line beside its replacement and lays the two notes side by side", () => {
+    const text = ["@@ -1 +1 @@", "-old", "\\ No newline at end of file", "+new", "\\ No newline at end of file"].join("\n");
+    const pairs = pairRows(rowsOf(splitHunks(text)[0]!));
+    expect(pairs.map((pair) => [pair.old?.text ?? null, pair.new?.text ?? null])).toEqual([
+      ["-old", "+new"],
+      ["\\ No newline at end of file", "\\ No newline at end of file"],
+    ]);
+    expect(partners(pairs).size).toBe(2);
+  });
+});
+
 describe("changedSpan", () => {
+  it("marks an emoji whole, never half a surrogate pair", () => {
+    expect(changedSpan("a😀b", "a😁b")).toEqual({ head: 1, tail: 1 });
+  });
   it("is the head and tail two lines share, out to the word boundaries", () => {
     expect(changedSpan("    foo(a, b)", "    bar(a, b)")).toEqual({ head: 4, tail: 6 });
     expect(changedSpan("abc", "abc def")).toEqual({ head: 3, tail: 0 });

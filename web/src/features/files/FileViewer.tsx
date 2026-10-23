@@ -56,7 +56,7 @@ export default function FileViewer({
   closeRef.current = close;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || box.current?.contains(document.activeElement) || document.querySelector(".sel-pop")) return;
+      if (e.key !== "Escape" || box.current?.contains(document.activeElement) || document.querySelector(".sel-pop, .modal-scrim")) return;
       e.stopPropagation();
       closeRef.current();
     };
