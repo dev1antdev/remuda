@@ -13,6 +13,7 @@ import { MachineMenu } from "./MachineMenu";
 import { DEFAULT_RADAR, summary, type RadarPrefs } from "./radar";
 import { RadarSettings } from "./RadarSettings";
 import { Rows, StateMarks, type Current } from "./rows";
+import { hueStyle } from "./hue";
 import { moving, useClock, useSpinner } from "./useClocks";
 import { useRoster } from "./useRoster";
 
@@ -88,7 +89,7 @@ export default function Sidebar() {
         const folded = !!collapsed[m.id];
         const n = summary(m);
         return (
-          <div key={m.id} className={`machine${folded ? " folded" : ""}`}>
+          <div key={m.id} className={`machine${folded ? " folded" : ""}${m.id !== "local" ? " has-hue" : ""}`} style={hueStyle(m.id)}>
             <div className="machine-head">
               <button type="button" className="machine-toggle" title={folded ? "Show workspaces" : "Hide workspaces"} aria-expanded={!folded} onClick={() => onToggle(m.id)}>
                 <span className={`machine-state is-${m.state}`} title={m.error || m.state} />

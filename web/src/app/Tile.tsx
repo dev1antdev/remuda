@@ -4,6 +4,7 @@
 
 import Tail, { TailAnswer, TileState } from "@/features/chat/Tail";
 import { displayOf, markOf, rowLabel, stateWords, type RadarPrefs } from "@/features/roster/radar";
+import { hueStyle } from "@/features/roster/hue";
 import type { Tile, WallView } from "@/features/roster/wall";
 import { Screen } from "@/features/terminal/Screen";
 import { fillClass, usd } from "@/features/usage/format";
@@ -40,7 +41,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
   const dir = folderOf(tile);
   const words = alert ?? stateWords(d, pane.radar?.last_active, now, pane.radar?.since);
   return (
-    <section className={`tile is-${d}${alert ? " is-alert" : ""}${brief ? " brief" : ""}`} aria-label={`${pane.agent} in ${where}`}>
+    <section className={`tile is-${d}${alert ? " is-alert" : ""}${brief ? " brief" : ""}${machine.id !== "local" ? " has-hue" : ""}`} style={hueStyle(machine.id)} aria-label={`${pane.agent} in ${where}`}>
       <header className="tile-head">
         <button type="button" className="linkish tile-open" title={`${words}\n${pane.cwd}\nOpen the ${screen ? "terminal" : "chat"} in Agents`} onClick={open}>
           <span className="radar-mark" style={markStyle}>

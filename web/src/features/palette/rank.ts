@@ -2,6 +2,7 @@
 // what was typed. Pure: the rows are built from the roster, the ranking from words.
 
 import type { Machine } from "@/features/roster/api";
+import { machineHue } from "@/features/roster/hue";
 import { displayOf, markOf, recentRows, rowLabel, stateWords, type Display, type RadarPrefs } from "@/features/roster/radar";
 import { basename } from "@/lib/text";
 import type { IconName } from "@/ui/icons";
@@ -18,6 +19,7 @@ export type Entry = {
   detail?: string; // at the right edge: the agent's state
   keywords: string[]; // what else the typed words may hit
   pane?: PaneRow;
+  hue?: number; // the pane's machine, as a dot before the hint; none for the local one
   icon?: IconName;
   danger?: boolean;
   always?: boolean; // listed whatever was typed, after the rest
@@ -36,6 +38,7 @@ export function paneEntries(machines: Machine[], prefs: RadarPrefs, now: number,
         kind: "pane",
         title: rowLabel(pane, tab, session.name, prefs),
         hint: `${session.name}${machine.id !== "local" ? ` · ${machine.label}` : ""}`,
+        hue: machineHue(machine.id) ?? undefined,
         detail: pane.agent ? (alert ?? stateWords(display, pane.radar?.last_active, now, pane.radar?.since)) : "shell",
         keywords: [session.name, machine.label, pane.agent || "shell", basename(pane.cwd), tab.named ? tab.label : ""].filter(Boolean),
         pane: {

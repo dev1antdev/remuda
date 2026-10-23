@@ -640,6 +640,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `features/roster/Sidebar.tsx` draws it (`rows.tsx` the rows,
   `HealthButton.tsx`, `MachineMenu.tsx`, `RadarSettings.tsx`; one spinner
   clock for the braille frames and the pulsing question).
+  Every remote machine has a hue of its own (`features/roster/hue.ts`,
+  tested: from the id, never red or green, which mean blocked and done):
+  the sidebar block's left edge, a wall tile's left edge, a dot before
+  the machine in a palette row; the local machine has none.
   Machines and workspace groups fold (prefs `collapsed` / `wsFolded`); a
   folded group's head carries its agents' states (working / ? / ✓ counts).
   `web/marks/*.svg` are the vendor logos (MIT packaging, see NOTICE.md),

@@ -5484,6 +5484,7 @@ button.usage-row:hover {
 }
 
 .tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -5492,6 +5493,29 @@ button.usage-row:hover {
   border-radius: var(--r-lg);
   background: var(--bg-raised);
   overflow: hidden;
+}
+
+/* every remote machine has a hue of its own (features/roster/hue.ts): a tile's left edge, a sidebar block's, a dot in the palette */
+.tile.has-hue::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: hsl(var(--machine-hue) 55% 58%);
+  pointer-events: none;
+}
+.machine.has-hue {
+  box-shadow: inset 2px 0 0 hsl(var(--machine-hue) 55% 58% / 0.75);
+}
+.hue-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  vertical-align: 0;
 }
 
 /* a tile that needs the person wears a pulsing ring: red for a question, amber for a watchdog note; a finish not looked at, a green edge */

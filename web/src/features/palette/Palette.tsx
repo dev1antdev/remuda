@@ -2,6 +2,7 @@
 // offers, ranked as you type; ↑ ↓ move, ↵ runs, Esc closes. What it lists comes from app/commands.
 
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { hueColor } from "@/features/roster/hue";
 import { Dialog, Icon, Logo } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import { rank, type Entry } from "./rank";
@@ -110,7 +111,12 @@ function Row({ entry, id, selected, head, onHover, onPick }: { entry: Entry; id:
           </span>
         )}
         <span className="palette-title">{entry.title}</span>
-        {entry.hint && <span className="palette-hint">{entry.hint}</span>}
+        {entry.hint && (
+          <span className="palette-hint">
+            {entry.hue !== undefined && <i className="hue-dot" style={{ background: hueColor(entry.hue) }} />}
+            {entry.hint}
+          </span>
+        )}
         {pane?.current ? <span className="palette-detail">here now</span> : entry.detail ? <span className="palette-detail">{entry.detail}</span> : null}
       </div>
     </>
