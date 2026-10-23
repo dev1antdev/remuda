@@ -6,6 +6,7 @@ import { useCallback } from "react";
 import Palette from "@/features/palette/Palette";
 import { paneEntries, type Entry } from "@/features/palette/rank";
 import { exportConversation } from "@/features/chat/export";
+import { useTimelineShown } from "@/features/chat/TimelineBar";
 import { DEFAULT_RADAR, rowLabel, type RadarPrefs } from "@/features/roster/radar";
 import { closeWorkspace } from "@/features/roster/WorkspaceMenu";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
@@ -57,6 +58,7 @@ function useCommands(): (query: string) => Entry[] {
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
   const [focus, setFocus] = usePref<string>("wall.focus", "");
+  const [timelineShown, setTimelineShown] = useTimelineShown();
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
   const goNext = useNextNeedingMe();
@@ -103,11 +105,17 @@ function useCommands(): (query: string) => Entry[] {
           actions.setLens("chat");
           actions.openFind();
         }, { hint: `${FIND_KEY} on the chat lens: every match marked, Enter walks them`, icon: "search", keywords: ["search", "text", "match", "highlight", "where"] });
+        if (current.pane.agent) command("timeline", timelineShown ? "Hide the session timeline" : "Show the session timeline", () => {
+          actions.setMode("herdr");
+          actions.setLens("chat");
+          setTimelineShown(!timelineShown);
+        }, { hint: "prompts and answers in time over the chat; the first error, the longest call, loops and questions marked", icon: "clock", keywords: ["timeline", "history", "highlights", "errors", "loop", "overview", "map", "time"] });
       }
       if (viewer) {
         const machine = machines.find((m) => m.id === viewer.machine);
         command("export-viewer", "Export this transcript as Markdown", () => void exportConversation(viewer.machine, "", viewer.session, viewer.dir, { agent: "", workspace: basename(viewer.dir) || viewer.dir, machine: machine?.label ?? viewer.machine }).catch(toastError), { hint: "the one open from the search, as a file", icon: "download", keywords: ["save", "download", "markdown", "share", "file"] });
         command("find-viewer", "Find in this transcript", () => actions.openFind(), { hint: `${FIND_KEY}: every match marked, Enter walks them`, icon: "search", keywords: ["search", "text", "match", "highlight", "where"] });
+        command("timeline-viewer", timelineShown ? "Hide the session timeline" : "Show the session timeline", () => setTimelineShown(!timelineShown), { hint: "prompts and answers in time over the transcript; the first error, the longest call, loops and questions marked", icon: "clock", keywords: ["timeline", "history", "highlights", "errors", "loop", "overview", "map", "time"] });
       }
 
       const screens = wall.view === "screen";
@@ -140,6 +148,6 @@ function useCommands(): (query: string) => Entry[] {
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, chatSession, footprint, full, current, radar, wall, setWall, focus, setFocus, step, now, goNext],
+    [machines, mode, lens, viewer, chatSession, footprint, full, current, radar, wall, setWall, focus, setFocus, timelineShown, setTimelineShown, step, now, goNext],
   );
 }
