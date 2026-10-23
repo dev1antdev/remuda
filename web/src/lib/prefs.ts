@@ -47,6 +47,16 @@ export function writePref(key: string, value: unknown): void {
 const values = new Map<string, unknown>();
 const listeners = new Map<string, Set<() => void>>();
 
+// another tab's write: the cached value goes and every hook of the key reads storage again
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (!event.key?.startsWith("remuda.")) return;
+    const key = event.key.slice("remuda.".length);
+    values.delete(key);
+    for (const notify of listeners.get(key) ?? []) notify();
+  });
+}
+
 function current<T>(key: string, fallback: T): T {
   if (!values.has(key)) values.set(key, readPref(key, fallback));
   return values.get(key) as T;

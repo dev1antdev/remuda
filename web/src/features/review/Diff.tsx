@@ -20,7 +20,7 @@ export function FileRow({ file, open, split, onToggle, load, onLoaded, canCommen
   onLoaded?: (path: string) => void; // the diff is on screen
   canComment: boolean;
   draft: DraftComment[];
-  onComment: (comment: NewComment) => void;
+  onComment: (file: string, comment: NewComment) => void;
   onRemove: (id: number) => void;
   onOpen: (line?: number) => void;
 }) {
@@ -73,13 +73,21 @@ export function FileRow({ file, open, split, onToggle, load, onLoaded, canCommen
         ) : diff === null ? (
           <div className="empty">Loading…</div>
         ) : (
-          <Diff text={diff} split={split} canComment={canComment} draft={draft} onComment={onComment} onRemove={onRemove} />
+          <Diff text={diff} split={split} canComment={canComment} draft={draft} file={file.path} onComment={onComment} onRemove={onRemove} />
         ))}
     </div>
   );
 }
 
-function Diff({ text, split, canComment, draft, onComment, onRemove }: { text: string; split: boolean; canComment: boolean; draft: DraftComment[]; onComment: (comment: NewComment) => void; onRemove: (id: number) => void }) {
+function Diff({ text, split, canComment, draft, file, onComment, onRemove }: {
+  text: string;
+  split: boolean;
+  canComment: boolean;
+  draft: DraftComment[];
+  file: string;
+  onComment: (file: string, comment: NewComment) => void;
+  onRemove: (id: number) => void;
+}) {
   const hunks = useMemo(() => splitHunks(text), [text]);
   const rowKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -91,7 +99,7 @@ function Diff({ text, split, canComment, draft, onComment, onRemove }: { text: s
   return (
     <div className={`fv-code fv-diff review-diff${split ? " columns" : ""}${canComment ? " can-comment" : ""}`}>
       {hunks.map((hunk, index) => (
-        <Hunk key={index} hunk={hunk} split={split} canComment={canComment} draft={draft} onComment={onComment} onRemove={onRemove} />
+        <Hunk key={index} hunk={hunk} split={split} canComment={canComment} draft={draft} file={file} onComment={onComment} onRemove={onRemove} />
       ))}
       {strayComments.length > 0 && (
         <div className="review-orphans">

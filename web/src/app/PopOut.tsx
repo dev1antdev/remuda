@@ -9,20 +9,25 @@ import { useRoster } from "@/features/roster/useRoster";
 import { tileKey } from "@/features/roster/wall";
 import { useAllPanes } from "./current";
 import { popOutWindow } from "./pip";
-import { app } from "./store";
+import { app, type Selection } from "./store";
 import { TileView } from "./Tile";
 
 export default function PopOut() {
   const popout = app.use((s) => s.popout);
+  const win = popOutWindow();
+  if (!popout || !win) return null;
+  return createPortal(<Popped popout={popout} />, win.document.body);
+}
+
+// Popped is the window's content; its clocks tick only while a window is open
+function Popped({ popout }: { popout: Selection }) {
   const { machines } = useRoster();
   const panes = useAllPanes();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const now = useClock(machines);
   const step = useSpinner(moving(machines));
-  const win = popOutWindow();
-  if (!popout || !win) return null;
   const located = panes.find((x) => x.machine.id === popout.machineId && x.pane.id === popout.paneId);
-  return createPortal(
+  return (
     <div className="popout-body">
       {located ? (
         <TileView tile={{ ...located, key: tileKey(located.machine.id, located.pane.id) }} radar={radar} step={step} now={now} />
@@ -31,7 +36,6 @@ export default function PopOut() {
           <p>That pane is gone.</p>
         </div>
       )}
-    </div>,
-    win.document.body,
+    </div>
   );
 }

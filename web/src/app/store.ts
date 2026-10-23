@@ -153,6 +153,10 @@ export const actions = {
   jumpTo(machineId: string, paneId: string, session: string, turn: string) {
     app.set({ jump: { machineId, paneId, session, turn, n: ++jumps }, lens: "chat" });
   },
+  // the chat took the jump: a later mount of the same pane starts at the bottom, in its live session
+  clearJump() {
+    app.set({ jump: null });
+  },
   setPopOut(popout: Selection | null) {
     app.set({ popout });
   },

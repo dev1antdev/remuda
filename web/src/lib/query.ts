@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { errMsg } from "./text";
+import { pageVisible } from "./visibility";
 
 export type Query<T> = {
   data: T | null;
@@ -81,7 +82,7 @@ export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], {
   useEffect(() => {
     if (!every || !enabled) return;
     const tick = () => {
-      if (document.visibilityState === "visible") void run();
+      if (pageVisible()) void run();
     };
     const timer = setInterval(tick, every);
     document.addEventListener("visibilitychange", tick);

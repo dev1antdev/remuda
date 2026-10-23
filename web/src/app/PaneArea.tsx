@@ -3,6 +3,7 @@
 // unseen would attach at 80×24 and resize the shared pane.
 
 import { useEffect, useState } from "react";
+import { useMedia } from "@/lib/media";
 import { basename } from "@/lib/text";
 import { closeTab, renameTab } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
@@ -20,6 +21,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
   const lens = app.use((s) => s.lens);
   const viewer = app.use((s) => s.viewer);
   const footprint = app.use((s) => s.footprint);
+  const narrow = useMedia("(max-width: 920px)"); // the stylesheet hides the rail there: it must not poll unseen
   const { refresh } = useRoster();
   const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
   const [seenLenses, setSeenLenses] = useState<{ pane: string; lenses: Partial<Record<Lens, true>> }>({ pane: "", lenses: {} });
@@ -106,7 +108,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
             paneId={pane.id}
             status={pane.status}
             dir={folder}
-            active
+            active={!narrow}
             onOpenFile={(target) => actions.openFile(machine.id, pane.id, target, folder)}
             onOpenInCode={(path) => actions.openInCode(machine.id, folder, path)}
           />

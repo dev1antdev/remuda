@@ -1,6 +1,7 @@
 // The pop-out: one small window that stays above every other app (Chrome's Document Picture-in-Picture), with a
 // piece of this page drawn into it through a portal. The window is this module's; the store says what is in it.
 
+import { alsoVisible } from "@/lib/visibility";
 import { actions, type Selection } from "./store";
 
 type PipOpener = { requestWindow(options?: { width?: number; height?: number }): Promise<Window>; window: Window | null };
@@ -26,11 +27,14 @@ export async function popOut(selection: Selection): Promise<void> {
   try {
     win = await pip.requestWindow({ width: WIDTH, height: HEIGHT });
   } catch (e) {
+    actions.setPopOut(null);
     actions.notify(`Could not open the window: ${e instanceof Error ? e.message : String(e)}`, { error: true });
     return;
   }
   dress(win.document);
+  const forget = alsoVisible(win.document); // its polls go on while the tab behind it is hidden
   win.addEventListener("pagehide", () => {
+    forget();
     if (current === win) {
       current = null;
       actions.setPopOut(null);

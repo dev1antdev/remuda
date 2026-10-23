@@ -53,8 +53,11 @@ export function pairRows(rows: DiffRow[]): SplitRow[] {
     const removed: DiffRow[] = [];
     const added: DiffRow[] = [];
     while (index < rows.length && rows[index]!.kind === "del") removed.push(rows[index++]!);
+    const oldNote = removed.length > 0 && rows[index]?.kind === "meta" ? rows[index++]! : null; // "\ No newline at end of file", the old side's
     while (index < rows.length && rows[index]!.kind === "add") added.push(rows[index++]!);
+    const newNote = added.length > 0 && rows[index]?.kind === "meta" ? rows[index++]! : null;
     for (let at = 0; at < Math.max(removed.length, added.length); at++) pairs.push({ old: removed[at] ?? null, new: added[at] ?? null });
+    if (oldNote || newNote) pairs.push({ old: oldNote, new: newNote });
   }
   return pairs;
 }
@@ -63,7 +66,7 @@ export function pairRows(rows: DiffRow[]): SplitRow[] {
 export function partners(pairs: SplitRow[]): Map<DiffRow, DiffRow> {
   const map = new Map<DiffRow, DiffRow>();
   for (const pair of pairs) {
-    if (pair.old && pair.new && pair.old !== pair.new) {
+    if (pair.old && pair.new && pair.old !== pair.new && pair.old.kind !== "meta") {
       map.set(pair.old, pair.new);
       map.set(pair.new, pair.old);
     }
@@ -80,6 +83,9 @@ export function changedSpan(oldText: string, newText: string): { head: number; t
   let tail = 0;
   while (tail < max - head && oldText[oldText.length - 1 - tail] === newText[newText.length - 1 - tail]) tail++;
   if (head === oldText.length && oldText.length === newText.length) return null;
+  // never between the halves of a surrogate pair: an emoji that changed is marked whole, not shown broken
+  if (head > 0 && lowSurrogate(oldText.charCodeAt(head))) head--;
+  if (tail > 0 && lowSurrogate(oldText.charCodeAt(oldText.length - tail))) tail--;
   while (head > 0 && wordChar(oldText[head - 1]) && (wordChar(oldText[head]) || wordChar(newText[head]))) head--;
   while (tail > 0 && wordChar(oldText[oldText.length - tail]) && (wordChar(oldText[oldText.length - tail - 1]) || wordChar(newText[newText.length - tail - 1]))) tail--;
   if (head + tail === 0) return null;
@@ -87,3 +93,4 @@ export function changedSpan(oldText: string, newText: string): { head: number; t
 }
 
 const wordChar = (char: string | undefined) => char !== undefined && /[\p{L}\p{N}_]/u.test(char);
+const lowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;

@@ -11,22 +11,25 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
   const savedTop = useRef<number | null>(null); // a hidden element forgets its scroll
 
   // back on screen, the place is put back; this runs before a jump's own scroll, so a search hit wins
+  // the log's own window: in the pop-out that is the small window, whose frames and selection are its own
+  const windowOf = (log: HTMLElement) => log.ownerDocument.defaultView ?? window;
+
   useEffect(() => {
     const log = logRef.current;
     if (!active || !log) return;
     ownScroll.current = true;
     log.scrollTop = stick.current ? log.scrollHeight : (savedTop.current ?? log.scrollTop);
-    requestAnimationFrame(() => (ownScroll.current = false));
+    windowOf(log).requestAnimationFrame(() => (ownScroll.current = false));
   }, [active, logRef]);
 
   useEffect(() => {
     const log = logRef.current;
     if (!log || !stick.current || dragging.current) return;
-    const sel = window.getSelection();
+    const sel = windowOf(log).getSelection();
     if (sel && !sel.isCollapsed && sel.anchorNode && log.contains(sel.anchorNode)) return;
     ownScroll.current = true;
     log.scrollTop = log.scrollHeight;
-    requestAnimationFrame(() => (ownScroll.current = false));
+    windowOf(log).requestAnimationFrame(() => (ownScroll.current = false));
   }, [chat, logRef]);
 
   const onScroll = () => {
@@ -41,7 +44,9 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
   useEffect(() => {
     const log = logRef.current;
     if (!log) return;
+    // a gesture over a log that cannot scroll moves whatever is around it (the wall's grid), not this log
     const letGo = (up: boolean) => {
+      if (log.scrollHeight <= log.clientHeight + 1) return;
       released.current = up;
       if (up) stick.current = false;
     };
@@ -54,14 +59,15 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
     log.addEventListener("wheel", onWheel, { passive: true });
     log.addEventListener("touchstart", onTouchStart, { passive: true });
     log.addEventListener("touchmove", onTouchMove, { passive: true });
+    const doc = log.ownerDocument;
     log.addEventListener("mousedown", onDown);
-    document.addEventListener("mouseup", onUp);
+    doc.addEventListener("mouseup", onUp);
     return () => {
       log.removeEventListener("wheel", onWheel);
       log.removeEventListener("touchstart", onTouchStart);
       log.removeEventListener("touchmove", onTouchMove);
       log.removeEventListener("mousedown", onDown);
-      document.removeEventListener("mouseup", onUp);
+      doc.removeEventListener("mouseup", onUp);
     };
   }, [logRef]);
 

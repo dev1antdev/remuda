@@ -17,8 +17,11 @@ func TestLastTurnsKeepsTheTail(t *testing.T) {
 		turns[i].Role = []string{"user", "assistant"}[i%2]
 	}
 	got := lastTurns(turns, 2)
-	if len(got) != 2 || &got[0] != &turns[3] {
-		t.Fatalf("last 2 of 5 = %d turns starting at %d", len(got), cap(turns)-cap(got))
+	if len(got) != 2 || got[0].Role != turns[3].Role || got[1].Role != turns[4].Role {
+		t.Fatalf("last 2 of 5 = %d turns, the first %q", len(got), got[0].Role)
+	}
+	if &got[0] == &turns[3] {
+		t.Fatal("the tail must be a copy: a shared array would keep the whole conversation in the cache")
 	}
 	if got := lastTurns(turns, 9); len(got) != 5 {
 		t.Fatalf("asking for more than there are = %d turns", len(got))

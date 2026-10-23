@@ -275,7 +275,8 @@ func (store *Store) Diff(host shell.Host, dir, path string) (string, error) {
 	if reviewedBlob != "" && reviewedBlob != "gone" && hexRe.MatchString(reviewedBlob) {
 		// the script prints the temp file's name first; the diff headers carry it
 		fromBlob := script.InDir(dir) + `t=$(mktemp "${TMPDIR:-/tmp}/remuda-seen.XXXXXX") || exit 0; printf '%s\n' "$t"; ` +
-			`if git cat-file -p ` + reviewedBlob + ` > "$t" 2>/dev/null; then git -c color.ui=never -c core.quotepath=off diff --no-index -- "$t" ` + quotedPath + ` | head -c 600000; fi; rm -f "$t"; exit 0`
+			`p=` + quotedPath + `; [ -e "$p" ] || p=/dev/null; ` + // a reviewed file the agent deleted since: the diff is its removal
+			`if git cat-file -p ` + reviewedBlob + ` > "$t" 2>/dev/null; then git -c color.ui=never -c core.quotepath=off diff --no-ext-diff --no-index -- "$t" "$p" | head -c 600000; fi; rm -f "$t"; exit 0`
 		output, err := shell.Text(host, fromBlob, 60*time.Second)
 		if err != nil {
 			return output, err
@@ -288,8 +289,8 @@ func (store *Store) Diff(host shell.Host, dir, path string) (string, error) {
 	}
 	fromHead := script.InDir(dir) +
 		`if git ls-files --error-unmatch -- ` + quotedPath + ` >/dev/null 2>&1 || git cat-file -e "HEAD:./"` + quotedPath + ` 2>/dev/null; then ` +
-		`git -c color.ui=never -c core.quotepath=off diff --relative HEAD -- ` + quotedPath + ` | head -c 600000; ` +
-		`else git -c color.ui=never diff --no-index -- /dev/null ` + quotedPath + ` | head -c 600000; fi; exit 0`
+		`git -c color.ui=never -c core.quotepath=off diff --no-ext-diff --relative HEAD -- ` + quotedPath + ` | head -c 600000; ` +
+		`else git -c color.ui=never diff --no-ext-diff --no-index -- /dev/null ` + quotedPath + ` | head -c 600000; fi; exit 0`
 	return shell.Text(host, fromHead, 60*time.Second)
 }
 

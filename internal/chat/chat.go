@@ -168,12 +168,13 @@ func (conv Conversation) LastTurns(n int) ([]transcript.Turn, error) {
 	return turns, nil
 }
 
-// lastTurns is the last n of the turns, all of them when there are no more than n.
+// lastTurns is the last n of the turns, all of them when there are no more than n: a copy, so the cache that
+// keeps the tail does not pin the whole parsed conversation behind it.
 func lastTurns(turns []transcript.Turn, n int) []transcript.Turn {
 	if n <= 0 || len(turns) <= n {
 		return turns
 	}
-	return turns[len(turns)-n:]
+	return append([]transcript.Turn(nil), turns[len(turns)-n:]...)
 }
 
 // tailCache keeps the last turns of a session file at a version: the wall's tiles and the chat lens ask for the same slice within seconds of each other.
@@ -216,7 +217,8 @@ func (c *tailCache) remember(key tailKey, turns []transcript.Turn) {
 
 // Open finds the conversation to show: a pane's live one (followed through compactions, unless a session of its folder is asked for by id),
 // or, without a pane, a session by folder and id, read-only. An unknown pane or session is a NotFoundError; a Path of "" is an empty chat.
-func (c *Service) Open(mc *machines.Machine, paneID, sessionID, dir string) (Conversation, error) {
+// For a tail only (a tile's last turns) the folder's sessions are not listed: a tile never shows them, and the listing reads every file's title.
+func (c *Service) Open(mc *machines.Machine, paneID, sessionID, dir string, tail bool) (Conversation, error) {
 	conv := Conversation{reader: mc.Transcripts, tails: &c.tails}
 	if paneID == "" {
 		path, err := mc.Transcripts.ResolveSession(dir, "id", sessionID)
@@ -267,7 +269,7 @@ func (c *Service) Open(mc *machines.Machine, paneID, sessionID, dir string) (Con
 	}
 	conv.Version = version
 	conv.ID = transcript.SessionID(conv.Path)
-	if conv.Sessions == nil && mc.Local() && paneID != "" {
+	if conv.Sessions == nil && mc.Local() && paneID != "" && !tail {
 		conv.Sessions, _ = transcript.Sessions(conv.Dir)
 	}
 	return conv, nil

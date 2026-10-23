@@ -1,6 +1,6 @@
 // The dialog: one scrim, one header, Escape, focus in and back out, the page behind it inert.
 
-import { useCallback, useEffect, useId, useRef, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Icon, { type IconName } from "@/ui/icons";
 
@@ -21,8 +21,9 @@ export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit
 }) {
   const id = useId();
   const box = useRef<HTMLDivElement & HTMLFormElement>(null);
+  // the element to give the focus back to, read before the first render: an autoFocus field has it by the time an effect runs
+  const [opener] = useState(() => document.activeElement as HTMLElement | null);
   useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
     const root = document.getElementById("root");
     openDialogs++;
     root?.setAttribute("inert", "");
@@ -35,7 +36,7 @@ export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit
       if (--openDialogs === 0) root?.removeAttribute("inert");
       opener?.focus?.();
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Escape closes this dialog only when it is the topmost one
   const topmost = useCallback(() => {
     const scrims = document.querySelectorAll(".modal-scrim");
