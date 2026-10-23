@@ -4,7 +4,10 @@
 
 import { check, sendJSON } from "@/lib/http";
 
-export type Prefs = { input: boolean; done: "off" | "long" | "always"; watchdog?: boolean };
+// Quiet is a daily window in this device's zone during which the server sends it nothing.
+export type Quiet = { from: string; to: string; tz: string };
+
+export type Prefs = { input: boolean; done: "off" | "long" | "always"; watchdog?: boolean; quiet?: Quiet };
 
 export type PushState = {
   supported: boolean;

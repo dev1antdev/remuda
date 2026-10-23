@@ -68,6 +68,22 @@ func (s *Service) Recent(mc *machines.Machine) (list []jobs.Job, pendingRestarts
 // Job is the job as it stands.
 func (s *Service) Job(id string) (jobs.Job, bool) { return s.Jobs.Get(id) }
 
+// RestartPane starts a job restarting one chat on its session; what the watcher's snapshot already rules out is refused before any job.
+func (s *Service) RestartPane(mc *machines.Machine, paneID string) (jobs.Job, error) {
+	snap, _ := s.Watch.Snapshot(mc.ID())
+	p, found := restart.Lookup(snap, paneID)
+	if !found {
+		return jobs.Job{}, fmt.Errorf("no pane %s on %s", paneID, mc.Label())
+	}
+	kind, session, err := restart.Resumable(p)
+	if err != nil {
+		return jobs.Job{}, err
+	}
+	title := "Restart " + restart.Title(kind) + " in " + p.DisplayTitle()
+	command := "# in " + paneID + " on " + mc.Label() + ", through herdr:\n" + restart.Resume(kind, session) + "   (after its own " + restart.Exit(kind) + ")"
+	return s.Jobs.Run(mc, title, command, func(say func(string)) error { return s.Restart.Pane(mc, paneID, say) }), nil
+}
+
 // Start runs the update called what on the machine; the command must be the one shown, or the run is a StaleError.
 func (s *Service) Start(mc *machines.Machine, what, command string) (jobs.Job, error) {
 	if command == "" { // the promise is "what was shown is what runs": a run without the shown text is refused

@@ -1,5 +1,6 @@
 // The shell: the header, the sidebar and the pane area or the other modes (the wall, tasks, code), and the overlays. It also
-// keeps the address in step with the selection, hears the service worker, ⌘K (the palette) and ? (the keyboard sheet), and tells the
+// keeps the address in step with the selection, hears the service worker, ⌘K (the palette), ? (the keyboard sheet) and Alt+N (the next
+// agent that needs you), and tells the
 // server when a finished pane is being looked at.
 
 import { useEffect } from "react";
@@ -19,6 +20,7 @@ import PaneArea from "./PaneArea";
 import PopOut from "./PopOut";
 import Wall from "./Wall";
 import { folderOf, useCurrent } from "./current";
+import { useNextKey, useNextNeedingMe } from "./next";
 import { actions, app } from "./store";
 import { useToasts } from "./toasts";
 import { writeURL } from "./url";
@@ -32,6 +34,7 @@ export default function Shell() {
   const current = useCurrent();
   const { machines } = useRoster();
   const toasts = useToasts();
+  useNextKey(useNextNeedingMe());
 
   useEffect(() => {
     writeURL({ selection: current ? { machineId: current.machine.id, paneId: current.pane.id } : null, mode, lens });

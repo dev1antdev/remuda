@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session } from "./api";
 import { DEFAULT_RADAR } from "./radar";
-import { DEFAULT_WALL, isIdle, needsMe, tileKey, tiles, withFocus } from "./wall";
+import { DEFAULT_WALL, isIdle, needsMe, nextNeedingMe, tileKey, tiles, withFocus } from "./wall";
 
 const NOW = 1_700_000_000_000;
 const MIN = 60_000;
@@ -98,5 +98,26 @@ describe("withFocus", () => {
     const none = withFocus(shown, tileKey("local", "gone"));
     expect(none.big).toBeNull();
     expect(none.rest).toBe(shown);
+  });
+});
+
+describe("nextNeedingMe", () => {
+  const roster = [machine("local", [session("a", [working, blocked, fresh])]), machine("gog", [session("b", [done, noted])])];
+
+  it("walks the agents that need the person in the roster's order, round and round", () => {
+    expect(nextNeedingMe(roster, DEFAULT_RADAR, NOW, "")?.key).toBe("local|b");
+    expect(nextNeedingMe(roster, DEFAULT_RADAR, NOW, "local|b")?.key).toBe("gog|d");
+    expect(nextNeedingMe(roster, DEFAULT_RADAR, NOW, "gog|d")?.key).toBe("gog|a");
+    expect(nextNeedingMe(roster, DEFAULT_RADAR, NOW, "gog|a")?.key).toBe("local|b");
+  });
+
+  it("starts from the first when the given one needs nobody or is unknown", () => {
+    expect(nextNeedingMe(roster, DEFAULT_RADAR, NOW, "local|w")?.key).toBe("local|b");
+    expect(nextNeedingMe(roster, DEFAULT_RADAR, NOW, "nowhere|x")?.key).toBe("local|b");
+  });
+
+  it("answers nobody when every agent is fine, and the same one when it is alone", () => {
+    expect(nextNeedingMe([machine("local", [session("a", [working, fresh])])], DEFAULT_RADAR, NOW, "")).toBeNull();
+    expect(nextNeedingMe([machine("local", [session("a", [working, blocked])])], DEFAULT_RADAR, NOW, "local|b")?.key).toBe("local|b");
   });
 });
