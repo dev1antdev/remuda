@@ -4546,7 +4546,14 @@ button.usage-row:hover {
   align-self: flex-start;
 }
 
-/* ---- forward, quick prompts, dictation ---- */
+/* ---- what an answer spent, forward, quick prompts, dictation ---- */
+.turn-spent {
+  align-self: flex-start;
+  font-size: 11px;
+  color: var(--fg-faint);
+  cursor: default;
+}
+
 .turn-forward {
   align-self: flex-start;
   display: inline-flex;
