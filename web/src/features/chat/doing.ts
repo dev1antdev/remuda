@@ -1,12 +1,13 @@
 // What the agent is doing this second, read from the end of its conversation: the tool call still without a
-// result, else thinking before the next step, else writing its answer. A wall tile shows it while the agent works.
+// result (and since when, so the tile can count how long it has run), else thinking before the next step, else
+// writing its answer. A wall tile shows it while the agent works.
 
 import type { Turn } from "./api";
 import { toolLabel } from "./footprint";
 import { SPAWN_TOOLS } from "./subagents";
 
 // an Agent call without its result is the lead waiting on the subagents it spawned
-export type Doing = { what: "tool"; name: string; hint: string } | { what: "thinking" | "writing" | "subagents" };
+export type Doing = { what: "tool"; name: string; hint: string; at?: string } | { what: "thinking" | "writing" | "subagents" };
 
 export function doing(turns: Turn[]): Doing {
   const last = turns[turns.length - 1];
@@ -17,7 +18,7 @@ export function doing(turns: Turn[]): Doing {
     if (part.output !== undefined) return { what: "thinking" };
     if (SPAWN_TOOLS.has(part.tool_name ?? "")) return { what: "subagents" };
     const { name, hint } = toolLabel(part);
-    return { what: "tool", name, hint };
+    return part.at ? { what: "tool", name, hint, at: part.at } : { what: "tool", name, hint };
   }
   return { what: part.type === "thinking" ? "thinking" : "writing" };
 }

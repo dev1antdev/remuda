@@ -6,6 +6,7 @@ import { useCallback } from "react";
 import Palette from "@/features/palette/Palette";
 import { paneEntries, type Entry } from "@/features/palette/rank";
 import { exportConversation } from "@/features/chat/export";
+import { useTimelineShown } from "@/features/chat/TimelineBar";
 import { DEFAULT_RADAR, rowLabel, type RadarPrefs } from "@/features/roster/radar";
 import { closeWorkspace } from "@/features/roster/WorkspaceMenu";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
@@ -57,6 +58,7 @@ function useCommands(): (query: string) => Entry[] {
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
   const [focus, setFocus] = usePref<string>("wall.focus", "");
+  const [timelineShown, setTimelineShown] = useTimelineShown();
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
   const goNext = useNextNeedingMe();
@@ -98,16 +100,24 @@ function useCommands(): (query: string) => Entry[] {
         command("close-workspace", `Close workspace ${named}`, () => closeWorkspace(machine, session), { hint: "its panes close and the agents in them stop", icon: "x", danger: true, keywords: ["kill", "stop", "quit"] });
         if (popOutSupported) command("popout", "Pop out this agent", () => void popOut(selection!), { hint: "a small window above every other app", icon: "pip", keywords: ["picture", "window", "float"] });
         if (current.pane.agent) command("export", "Export this conversation as Markdown", () => void exportConversation(machine.id, current.pane.id, chatSession, folderOf(current), { agent: current.pane.agent, workspace: session.name, machine: machine.label }).catch(toastError), { hint: "the session shown, as a file", icon: "download", keywords: ["save", "download", "markdown", "transcript", "share", "file"] });
+        if (current.pane.agent) command("recap", "Recap this conversation", () => actions.openDialog({ kind: "recap", machineId: machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), title: machine.id !== "local" ? `${session.name} on ${machine.label}` : session.name }), { hint: "prompts, answers, tools, files, cost — Copy as Markdown", icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest", "what happened"] });
         if (current.pane.agent) command("find", "Find in this conversation", () => {
           actions.setMode("herdr");
           actions.setLens("chat");
           actions.openFind();
         }, { hint: `${FIND_KEY} on the chat lens: every match marked, Enter walks them`, icon: "search", keywords: ["search", "text", "match", "highlight", "where"] });
+        if (current.pane.agent) command("timeline", timelineShown ? "Hide the session timeline" : "Show the session timeline", () => {
+          actions.setMode("herdr");
+          actions.setLens("chat");
+          setTimelineShown(!timelineShown);
+        }, { hint: "prompts and answers in time over the chat; the first error, the longest call, loops and questions marked", icon: "clock", keywords: ["timeline", "history", "highlights", "errors", "loop", "overview", "map", "time"] });
       }
       if (viewer) {
         const machine = machines.find((m) => m.id === viewer.machine);
         if (!viewer.subagent) command("export-viewer", "Export this transcript as Markdown", () => void exportConversation(viewer.machine, "", viewer.session, viewer.dir, { agent: "", workspace: basename(viewer.dir) || viewer.dir, machine: machine?.label ?? viewer.machine }).catch(toastError), { hint: "the one open from the search, as a file", icon: "download", keywords: ["save", "download", "markdown", "share", "file"] });
         command("find-viewer", "Find in this transcript", () => actions.openFind(), { hint: `${FIND_KEY}: every match marked, Enter walks them`, icon: "search", keywords: ["search", "text", "match", "highlight", "where"] });
+        command("recap-viewer", "Recap this transcript", () => actions.openDialog({ kind: "recap", machineId: viewer.machine, paneId: "", session: viewer.session, dir: viewer.dir, title: basename(viewer.dir) || viewer.dir }), { hint: "prompts, answers, tools, files, cost — Copy as Markdown", icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest"] });
+        command("timeline-viewer", timelineShown ? "Hide the session timeline" : "Show the session timeline", () => setTimelineShown(!timelineShown), { hint: "prompts and answers in time over the transcript; the first error, the longest call, loops and questions marked", icon: "clock", keywords: ["timeline", "history", "highlights", "errors", "loop", "overview", "map", "time"] });
       }
 
       const screens = wall.view === "screen";
@@ -134,12 +144,13 @@ function useCommands(): (query: string) => Entry[] {
       command("alerts", "Alerts on this device", () => actions.openPanel("alerts"), { hint: "which pushes to get here", icon: "bell", keywords: ["push", "notifications"] });
       command("schedules", "Schedules", () => actions.openPanel("schedules"), { hint: "prompts sent to agents on a timetable", icon: "calendar", keywords: ["cron", "timer", "prompt"] });
       command("usage", "Usage report", () => actions.openPanel("usage"), { hint: "what the agents cost, by day, project and session", icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
+      command("standup", "Standup: what every agent did today", () => actions.openPanel("standup"), { hint: "one report over every machine, ready to paste as Markdown", icon: "sun", keywords: ["standup", "report", "today", "summary", "recap", "daily", "digest", "morning"] });
       command("keys", "Keyboard shortcuts", () => actions.openDialog({ kind: "keys" }), { hint: "? · every key the page answers", icon: "keyboard", keywords: ["keys", "shortcuts", "help", "hotkeys", "bindings", "keyboard"] });
       command("machine", "Add a PC…", () => actions.openDialog({ kind: "machine" }), { hint: "a remote machine over SSH", icon: "monitor", keywords: ["machine", "remote", "ssh", "host"] });
       const typed = query.trim();
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, chatSession, footprint, full, current, radar, wall, setWall, focus, setFocus, step, now, goNext],
+    [machines, mode, lens, viewer, chatSession, footprint, full, current, radar, wall, setWall, focus, setFocus, timelineShown, setTimelineShown, step, now, goNext],
   );
 }

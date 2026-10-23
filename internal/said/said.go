@@ -1,5 +1,5 @@
-// Package said keeps the first line of every finished agent's last answer, for the roster: read once per finish,
-// off the request path, so a wall tile and a sidebar row can say what the agent answered.
+// Package said keeps the first line of every finished agent's last answer, and the pull request it named, for the
+// roster: read once per finish, off the request path, so a wall tile and a sidebar row can say what the agent answered.
 package said
 
 import (
@@ -10,6 +10,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 // Max is the longest line kept, in characters; a longer answer is cut at a word with an ellipsis.
@@ -19,11 +20,14 @@ const Max = 120
 type Inputs struct {
 	Version func(machineID, paneID string) (string, bool) // the session file's version; false when the pane has none
 	Answer  func(machineID, paneID string) (text, id string)
+	Link    func(machineID, paneID string) (transcript.Link, bool) // the last pull request the agent named; nil reads none
 }
 
 type entry struct {
 	version string // the file version the line was read at; "" when the read found no file
 	line    string
+	link    transcript.Link
+	hasLink bool
 }
 
 // Tracker holds one line per pane and reads one pane at a time per machine.
@@ -51,17 +55,36 @@ func (t *Tracker) Line(machineID, paneID string) string {
 	return t.lines[key(machineID, paneID)].line
 }
 
-// OnStatus hears every transition: a finish is read, a start of work clears the line, a closed pane is forgotten.
+// Link is the last pull or merge request the pane's agent named, kept while it works on; false when none was read.
+func (t *Tracker) Link(machineID, paneID string) (transcript.Link, bool) {
+	if t == nil {
+		return transcript.Link{}, false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	e := t.lines[key(machineID, paneID)]
+	return e.link, e.hasLink
+}
+
+// OnStatus hears every transition: a finish is read, a start of work clears the line (the link stays: the request is
+// still there), a closed pane is forgotten.
 func (t *Tracker) OnStatus(ev events.PaneStatus) {
 	if ev.Kind == "" {
 		return
 	}
+	k := key(ev.Pane.Machine, ev.Pane.Pane)
 	switch ev.To {
 	case herdr.StatusDone, herdr.StatusIdle:
 		t.ask(ev.Pane.Machine, ev.Pane.Pane)
-	case herdr.StatusWorking, events.Gone:
+	case herdr.StatusWorking:
 		t.mu.Lock()
-		delete(t.lines, key(ev.Pane.Machine, ev.Pane.Pane))
+		if e, ok := t.lines[k]; ok {
+			t.lines[k] = entry{link: e.link, hasLink: e.hasLink}
+		}
+		t.mu.Unlock()
+	case events.Gone:
+		t.mu.Lock()
+		delete(t.lines, k)
 		t.mu.Unlock()
 	}
 }
@@ -148,8 +171,12 @@ func (t *Tracker) read(machineID, paneID string) {
 		return
 	}
 	text, _ := t.in.Answer(machineID, paneID)
+	e := entry{version: version, line: FirstLine(text)}
+	if t.in.Link != nil {
+		e.link, e.hasLink = t.in.Link(machineID, paneID)
+	}
 	t.mu.Lock()
-	t.lines[k] = entry{version: version, line: FirstLine(text)}
+	t.lines[k] = e
 	t.mu.Unlock()
 }
 

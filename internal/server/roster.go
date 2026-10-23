@@ -12,6 +12,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/sessions"
+	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/usage"
 	buildversion "github.com/dev1antdev/remuda/internal/version"
 )
@@ -32,9 +33,10 @@ type rosterPane struct {
 	Cols    int    `json:"cols"`
 	Rows    int    `json:"rows"`
 	// an agent's lifecycle as a person reads it (held done, held question, last activity); nil for a shell
-	Radar *radar.Display `json:"radar,omitempty"`
-	Usage *usage.Display `json:"usage,omitempty"`
-	Said  string         `json:"said,omitempty"` // the first line of the last answer, once the agent finished
+	Radar *radar.Display   `json:"radar,omitempty"`
+	Usage *usage.Display   `json:"usage,omitempty"`
+	Said  string           `json:"said,omitempty"` // the first line of the last answer, once the agent finished
+	PR    *transcript.Link `json:"pr,omitempty"`   // the last pull or merge request the agent named
 }
 
 type rosterTab struct {
@@ -101,6 +103,9 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			display := s.Radar.Display(machineID, pane)
 			entry.Radar = &display
 			entry.Said = s.Said.Line(machineID, pane.PaneID)
+			if link, ok := s.Said.Link(machineID, pane.PaneID); ok {
+				entry.PR = &link
+			}
 			if meter, ok := s.Usage.Display(machineID, pane.PaneID); ok {
 				entry.Usage = &meter
 			}

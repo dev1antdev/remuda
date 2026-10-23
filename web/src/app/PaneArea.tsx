@@ -9,6 +9,7 @@ import { closeTab, renameTab } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
 import { ChatTools } from "@/features/chat/ChatTools";
 import { FindTool } from "@/features/chat/FindBar";
+import { TimelineTool } from "@/features/chat/TimelineBar";
 import TabStrip from "@/features/roster/TabStrip";
 import Chat from "@/features/chat/Chat";
 import FilesRail, { FilesRailToggle } from "@/features/chat/FilesRail";
@@ -38,7 +39,18 @@ export default function PaneArea({ current }: { current: Located | null }) {
     const sub = viewer.subagent;
     return (
       <main className="pane-area">
-        <Notice tone="info" icon={sub ? "sparkles" : "search"} className="viewer-bar" action={<FindTool />} onDismiss={actions.closeViewer}>
+        <Notice
+          tone="info"
+          icon={sub ? "sparkles" : "search"}
+          className="viewer-bar"
+          action={
+            <>
+              <FindTool />
+              <TimelineTool />
+            </>
+          }
+          onDismiss={actions.closeViewer}
+        >
           {sub ? (
             <>
               A subagent of <b>{basename(viewer.dir)}</b>: {sub.description} — its own conversation, read-only.

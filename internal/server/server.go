@@ -26,6 +26,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/quick"
 	"github.com/dev1antdev/remuda/internal/radar"
+	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
@@ -51,6 +52,7 @@ type Server struct {
 	Feed      *feed.Service
 	Radar     *radar.Tracker
 	Said      *said.Tracker
+	Recap     *recap.Service
 	Usage     *usage.Tracker
 	Health    *health.Collector
 	Review    *review.Store
@@ -85,6 +87,7 @@ func (s *Server) Handler() http.Handler {
 	s.screenRoutes(api)
 	s.questionRoutes(api)
 	s.feedRoutes(api)
+	s.recapRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

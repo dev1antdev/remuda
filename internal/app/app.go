@@ -21,6 +21,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/quick"
 	"github.com/dev1antdev/remuda/internal/radar"
+	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
@@ -89,7 +90,7 @@ func Run(ctx context.Context, o Options) error {
 	chats := &chat.Service{Machines: fleet, Watch: watcher}
 	tracker := radar.New(o.Dir, chats.LastWriteOf)
 	defer tracker.Flush()
-	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer})
+	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer, Link: chats.PullRequest})
 	reviews := review.New(o.Dir)
 	meter := usage.NewTracker()
 	input := sessions.NewInput(fleet, watcher)
@@ -172,6 +173,7 @@ func Run(ctx context.Context, o Options) error {
 		Push:      pushSvc,
 		Feed:      activity,
 		Said:      sayings,
+		Recap:     &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker},
 		Radar:     tracker,
 		Usage:     meter,
 		Health:    vitals,
