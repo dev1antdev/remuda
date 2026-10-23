@@ -455,6 +455,12 @@ a minute after a long turn. Answer at the desk first and nothing is sent.
 morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
 on iPhone, the home-screen app.
 
+**Read aloud** is the same panel's last switch: the browser's own voice
+says what an agent answered when it finishes ("api: Tests pass."), that
+one is waiting for you, or a watchdog note — while the page is open and
+in front, in the voice you pick, a Russian one for a Russian answer.
+Nothing passes through remuda; a reload says nothing.
+
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
 since you last looked marked, and the commits made since. A merge or a

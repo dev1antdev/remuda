@@ -655,7 +655,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   so a window set at home fits the clock on a trip; the window last set
   is kept on the device (pref `alerts.quiet`) while the hours are off.
   Routes: `GET /api/push` (public key), `POST/DELETE /api/push/subscribe`,
-  `POST /api/push/test`.
+  `POST /api/push/test`. **Read aloud** (`features/alerts/voice.ts`,
+  tested; `useVoice.ts`, called from Shell): with the switch in the
+  alerts panel on (pref `alerts.voice` {on, voice}), this device speaks
+  through the browser's own `speechSynthesis` — nothing passes through
+  remuda — what an agent answered when it finishes (the roster's
+  `said`), that one waits for the person, a watchdog note: only the
+  changes seen while the page is open and in front, each once by a key
+  per episode (`linesToSay`; the first roster only seeds), in the voice
+  picked in the panel, else a Russian voice for Cyrillic text when the
+  browser has one.
 - `web/public/sw.js` shows every push (Safari revokes silent subscriptions),
   silent while a window is visible; click → `select-pane` message to an open
   window or `openWindow(/?machine=&pane=)`; `pushsubscriptionchange`
