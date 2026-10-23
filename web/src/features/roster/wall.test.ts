@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session } from "./api";
 import { DEFAULT_RADAR } from "./radar";
-import { DEFAULT_WALL, isIdle, tileKey, tiles } from "./wall";
+import { DEFAULT_WALL, isIdle, needsMe, tileKey, tiles } from "./wall";
 
 const NOW = 1_700_000_000_000;
 const MIN = 60_000;
@@ -25,6 +25,7 @@ const fresh = pane("f", "gemini", { state: "idle", last_active: NOW - 5 * MIN })
 const old = pane("o", "claude", { state: "idle", last_active: NOW - 3 * 60 * MIN });
 const noStamp = pane("n", "claude", { state: "idle" });
 const shell = pane("s", "");
+const noted = pane("a", "claude", { state: "working", last_active: NOW, alert: "stuck for 20 min" });
 
 describe("tiles", () => {
   it("keeps the roster's order whatever the agents are doing, and skips the shells", () => {
@@ -53,6 +54,28 @@ describe("tiles", () => {
     expect(list.shown.map((t) => t.pane.id)).toEqual(["w", "b", "d", "f"]);
     expect(list.idle).toBe(2);
     expect(tiles([machine("local", [session("a", all)])], [], DEFAULT_WALL, DEFAULT_RADAR, NOW).shown).toHaveLength(6);
+  });
+});
+
+describe("needs me", () => {
+  it("keeps only the agents waiting for the person — a question, a watchdog note, a finish not looked at — and counts the rest", () => {
+    const all = [working, blocked, done, fresh, old, noStamp, noted];
+    const list = tiles([machine("local", [session("a", all)])], [], { ...DEFAULT_WALL, needsMe: true }, DEFAULT_RADAR, NOW);
+    expect(list.shown.map((t) => t.pane.id)).toEqual(["b", "d", "a"]);
+    expect(list.calm).toBe(4);
+    expect(list.idle).toBe(0);
+    const both = tiles([machine("local", [session("a", all)])], [], { ...DEFAULT_WALL, needsMe: true, hideIdle: true }, DEFAULT_RADAR, NOW);
+    expect(both.shown.map((t) => t.pane.id)).toEqual(["b", "d", "a"]);
+    expect(both.calm).toBe(4);
+  });
+
+  it("is a question, a note or an unseen finish, never work or rest", () => {
+    expect(needsMe(blocked, DEFAULT_RADAR, NOW)).toBe(true);
+    expect(needsMe(done, DEFAULT_RADAR, NOW)).toBe(true);
+    expect(needsMe(noted, DEFAULT_RADAR, NOW)).toBe(true);
+    expect(needsMe(working, DEFAULT_RADAR, NOW)).toBe(false);
+    expect(needsMe(fresh, DEFAULT_RADAR, NOW)).toBe(false);
+    expect(needsMe(shell, DEFAULT_RADAR, NOW)).toBe(false);
   });
 });
 

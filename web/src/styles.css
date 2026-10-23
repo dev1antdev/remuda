@@ -5370,12 +5370,30 @@ button.usage-row:hover {
   overflow: hidden;
 }
 
+/* a tile that needs the person wears a pulsing ring: red for a question, amber for a watchdog note; a finish not looked at, a green edge */
+.tile.is-blocked,
+.tile.is-alert {
+  animation: ring 1.6s ease-in-out infinite;
+}
+
 .tile.is-blocked {
   border-color: var(--red-ring);
+  box-shadow: 0 0 0 2px var(--red-ring);
 }
 
 .tile.is-alert {
   border-color: var(--amber-ring);
+  box-shadow: 0 0 0 2px var(--amber-ring);
+}
+
+.tile.is-done {
+  border-color: var(--green-ring);
+}
+
+@keyframes ring {
+  50% {
+    box-shadow: 0 0 0 2px transparent;
+  }
 }
 
 .tile-head {
