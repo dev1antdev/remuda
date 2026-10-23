@@ -1,6 +1,6 @@
 // The keyboard sheet behind ? and the palette: every key the page answers, in groups.
 
-import { isMac } from "@/lib/host";
+import { isMac } from "@/lib/prefs";
 import { Dialog } from "@/ui";
 import { keyGroups } from "./keys";
 

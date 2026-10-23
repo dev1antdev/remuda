@@ -476,6 +476,10 @@ writing.
 **Export** (↓ in the tab strip on the chat lens, or the palette) saves
 the conversation as a Markdown file — the text as it is, thinking and
 tool calls folded — to share with someone who is not in remuda.
+**Find** (⌘F / Ctrl+F on the chat lens, or 🔍 in the tab strip) marks
+every place a word occurs in the conversation shown and says "3 of 12";
+Enter and Shift+Enter walk them, the current one brought into view, Esc
+closes. It works on a transcript opened from the search too.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through remuda.
 

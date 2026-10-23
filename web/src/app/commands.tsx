@@ -12,13 +12,15 @@ import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
 import { DEFAULT_WALL, tileKey, type WallPrefs } from "@/features/roster/wall";
 import { agentTitle, askRestart } from "@/features/updates/restartPane";
-import { usePref } from "@/lib/prefs";
+import { isMac, usePref } from "@/lib/prefs";
 import { basename, errMsg } from "@/lib/text";
 import type { IconName } from "@/ui/icons";
 import { folderOf, useCurrent } from "./current";
 import { NEXT_KEY, useNextNeedingMe } from "./next";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
+
+const FIND_KEY = isMac ? "⌘F" : "Ctrl+F";
 
 const MODES: { mode: Mode; title: string; hint: string; icon: IconName }[] = [
   { mode: "herdr", title: "Go to Agents", hint: "your agents and terminals, from herdr", icon: "terminal" },
@@ -94,10 +96,16 @@ function useCommands(): (query: string) => Entry[] {
         command("close-workspace", `Close workspace ${named}`, () => closeWorkspace(machine, session), { hint: "its panes close and the agents in them stop", icon: "x", danger: true, keywords: ["kill", "stop", "quit"] });
         if (popOutSupported) command("popout", "Pop out this agent", () => void popOut(selection!), { hint: "a small window above every other app", icon: "pip", keywords: ["picture", "window", "float"] });
         if (current.pane.agent) command("export", "Export this conversation as Markdown", () => void exportConversation(machine.id, current.pane.id, chatSession, folderOf(current), { agent: current.pane.agent, workspace: session.name, machine: machine.label }).catch(toastError), { hint: "the session shown, as a file", icon: "download", keywords: ["save", "download", "markdown", "transcript", "share", "file"] });
+        if (current.pane.agent) command("find", "Find in this conversation", () => {
+          actions.setMode("herdr");
+          actions.setLens("chat");
+          actions.openFind();
+        }, { hint: `${FIND_KEY} on the chat lens: every match marked, Enter walks them`, icon: "search", keywords: ["search", "text", "match", "highlight", "where"] });
       }
       if (viewer) {
         const machine = machines.find((m) => m.id === viewer.machine);
         command("export-viewer", "Export this transcript as Markdown", () => void exportConversation(viewer.machine, "", viewer.session, viewer.dir, { agent: "", workspace: basename(viewer.dir) || viewer.dir, machine: machine?.label ?? viewer.machine }).catch(toastError), { hint: "the one open from the search, as a file", icon: "download", keywords: ["save", "download", "markdown", "share", "file"] });
+        command("find-viewer", "Find in this transcript", () => actions.openFind(), { hint: `${FIND_KEY}: every match marked, Enter walks them`, icon: "search", keywords: ["search", "text", "match", "highlight", "where"] });
       }
 
       const screens = wall.view === "screen";

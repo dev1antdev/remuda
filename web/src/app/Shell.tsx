@@ -1,9 +1,9 @@
 // The shell: the header, the sidebar and the pane area or the other modes (the wall, tasks, code), and the overlays. It also
-// keeps the address in step with the selection, hears the service worker, ⌘K (the palette), ? (the keyboard sheet) and Alt+N (the next
-// agent that needs you), and tells the
-// server when a finished pane is being looked at.
+// keeps the address in step with the selection, hears the service worker, ⌘K (the palette), ⌘F (the find bar), ? (the keyboard
+// sheet) and Alt+N (the next agent that needs you), and tells the server when a finished pane is being looked at.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { isMac } from "@/lib/prefs";
 import { markSeen } from "@/features/roster/api";
 import Sidebar from "@/features/roster/Sidebar";
 import { useRoster } from "@/features/roster/useRoster";
@@ -12,7 +12,6 @@ import { readAlertPrefs } from "@/features/alerts/prefs";
 import ReviewQueue from "@/features/review/ReviewQueue";
 import Tasks from "@/features/tasks/Tasks";
 import Code from "@/features/code/Code";
-import { isMac } from "@/lib/host";
 import { Toasts } from "@/ui";
 import Header from "./Header";
 import Overlays from "./Overlays";
@@ -61,6 +60,23 @@ export default function Shell() {
       if (!isMac && target?.closest?.(".xterm")) return;
       e.preventDefault();
       actions.togglePanel("palette");
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  // ⌘F / Ctrl+F, by key code, opens the find bar over the chat lens or the transcript viewer — from the composer too,
+  // since no field there has a find of its own — unless an overlay is open
+  const shown = useRef(current);
+  shown.current = current;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyF" || e.altKey || e.shiftKey || (isMac ? !e.metaKey : !e.ctrlKey)) return;
+      const s = app.get();
+      if (s.mode !== "herdr" || s.dialog || s.panel || s.file || s.confirm) return;
+      if (!s.viewer && (s.lens !== "chat" || !shown.current)) return;
+      e.preventDefault();
+      actions.openFind();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
