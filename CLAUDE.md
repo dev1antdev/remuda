@@ -412,7 +412,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `.pane-body` — store field `footprint` from the pref of that name,
   default on with a mouse, its toggle in the tab strip's tools slot
   whatever the lens so nothing in the strip moves, disabled for a shell
-  pane, hidden with the rail under 920 px and not polling there), `Wall.tsx` (the **Wall mode**: every
+  pane, hidden with the rail under 920 px and not polling there; beside it the **full screen** toggle, `app/full.tsx` — store field `full`: the header, the sidebar and the rail go, the tab strip stays with its tools, the browser's own full screen is asked for where it exists; Esc outside a field or the terminal leaves, so does the browser's exit, and a mode change clears it; the palette has it), `Wall.tsx` (the **Wall mode**: every
   agent pane on a connected machine as a tile — the sidebar row's head
   (mark, logo, label, workspace · machine, context % · cost), the last 12
   turns through `features/chat/Tail`, a compact composer; a click on the

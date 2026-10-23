@@ -18,6 +18,7 @@ import PaneArea from "./PaneArea";
 import PopOut from "./PopOut";
 import Wall from "./Wall";
 import { folderOf, useCurrent } from "./current";
+import { useFullKeys } from "./full";
 import { actions, app } from "./store";
 import { useToasts } from "./toasts";
 import { writeURL } from "./url";
@@ -28,9 +29,11 @@ export default function Shell() {
   const drawer = app.use((s) => s.drawer);
   const viewer = app.use((s) => s.viewer);
   const codeOpened = app.use((s) => s.codeOpened);
+  const full = app.use((s) => s.full);
   const current = useCurrent();
   const { machines } = useRoster();
   const toasts = useToasts();
+  useFullKeys();
 
   useEffect(() => {
     writeURL({ selection: current ? { machineId: current.machine.id, paneId: current.pane.id } : null, mode, lens });
@@ -74,7 +77,7 @@ export default function Shell() {
   }, [mode, !!viewer, current?.machine.id, current?.pane.id, seenState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="app">
+    <div className={full && mode === "herdr" ? "app is-full" : "app"}>
       <Header current={current} />
       <div className="body">
         {codeOpened && (

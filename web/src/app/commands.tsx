@@ -15,6 +15,7 @@ import { usePref } from "@/lib/prefs";
 import { basename, errMsg } from "@/lib/text";
 import type { IconName } from "@/ui/icons";
 import { folderOf, useCurrent } from "./current";
+import { enterFull, leaveFull } from "./full";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
 
@@ -47,6 +48,7 @@ function useCommands(): (query: string) => Entry[] {
   const viewer = app.use((s) => s.viewer);
   const chatSession = app.use((s) => s.chatSession);
   const footprint = app.use((s) => s.footprint);
+  const full = app.use((s) => s.full);
   const current = useCurrent();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
@@ -112,6 +114,7 @@ function useCommands(): (query: string) => Entry[] {
           actions.setMode("wall");
         }, { hint: "this agent takes the wall, the others wait in a strip", icon: "maximize", keywords: ["wall", "focus", "big", "zoom"] });
       command("wall-view", screens ? "Wall of chats" : "Wall of screens", onTheWall({ view: screens ? "chat" : "screen" }), { hint: screens ? "each tile the last turns of its conversation" : "each tile its terminal as it is, scaled to fit", icon: "layers", keywords: ["wall", "terminal", "screen", "chat", "view", "tiles"] });
+      if (current && !viewer && mode === "herdr") command("full", full ? "Leave full screen" : "Full screen", full ? leaveFull : enterFull, { hint: full ? "the header and the sidebar back" : "the lens takes the whole screen; Esc leaves", icon: full ? "minimize" : "maximize", keywords: ["fullscreen", "zen", "focus", "maximize", "screen"] });
       command("rail", footprint ? "Hide the files rail" : "Show the files rail", actions.toggleFootprint, { hint: "the files the agent touched, beside the lenses", icon: "folder", keywords: ["footprint", "files"] });
       command("activity", "Activity", () => actions.openPanel("activity"), { hint: "what happened across the agents while you were away", icon: "bell", keywords: ["feed", "history", "log", "news", "notifications", "away"] });
       command("broadcast", "Message several agents…", () => actions.openDialog({ kind: "broadcast" }), { hint: "one text to the agents you tick, each in turn", icon: "send", keywords: ["broadcast", "all", "every", "everyone", "prompt", "compact", "send"] });
@@ -123,6 +126,6 @@ function useCommands(): (query: string) => Entry[] {
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, chatSession, footprint, current, radar, wall, setWall, focus, setFocus, step, now],
+    [machines, mode, lens, viewer, chatSession, footprint, full, current, radar, wall, setWall, focus, setFocus, step, now],
   );
 }

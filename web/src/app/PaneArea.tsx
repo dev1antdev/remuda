@@ -16,6 +16,7 @@ import { TerminalLens, TerminalTools } from "@/features/terminal/TerminalLens";
 import { Notice } from "@/ui";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
+import { FullToggle } from "./full";
 import { actions, app, type Lens } from "./store";
 
 export default function PaneArea({ current }: { current: Located | null }) {
@@ -67,6 +68,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
             {lens === "terminal" && <TerminalTools pane={pane} />}
             {lens === "chat" && <ChatTools machineId={machine.id} paneId={pane.id} agent={pane.agent} workspace={session.name} machine={machine.label} dir={folder} />}
             <FilesRailToggle disabled={!pane.agent} />
+            <FullToggle />
           </>
         }
         onSelect={(paneId) => actions.selectPane(machine.id, paneId)}

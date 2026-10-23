@@ -50,6 +50,7 @@ export type AppState = {
   footprint: boolean; // the files rail beside the lenses, a per-device pref
   codeFile: { machineId: string; folder: string; path: string; n: number } | null; // a file the Code mode is asked to open, once
   chatSession: string | null; // an older session of its folder the chat lens shows instead of the pane's live one; the export follows it
+  full: boolean; // the lens takes the whole screen: no header, no sidebar, no rail (app/full.tsx)
 };
 
 const fromURL = readURL();
@@ -74,6 +75,7 @@ export const app = createStore<AppState>({
   footprint: readPref("footprint", !isTouch),
   codeFile: null,
   chatSession: null,
+  full: false,
 });
 
 let jumps = 0;
@@ -89,8 +91,11 @@ export const actions = {
     app.set({ lens });
   },
   setMode(mode: Mode) {
-    app.set((s) => ({ mode, codeOpened: s.codeOpened || mode === "code" }));
+    app.set((s) => ({ mode, codeOpened: s.codeOpened || mode === "code", full: false }));
     writePref("mode", mode);
+  },
+  setFull(full: boolean) {
+    app.set({ full });
   },
   toggleDrawer() {
     app.set((s) => ({ drawer: !s.drawer }));

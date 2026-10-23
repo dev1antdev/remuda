@@ -412,6 +412,12 @@ opens it in the Code mode, VS Code on that machine. Edits an agent made
 through shell commands are not its tool calls: the Changes lens shows
 those. Hidden on a phone.
 
+**Full screen** (the ⤢ in the tab strip, or the palette): the header,
+the sidebar and the rail go and the lens takes the whole screen — a
+terminal on the whole monitor, a chat on the whole phone. The tab strip
+stays with its tools; Esc outside the terminal, or the same button,
+brings the page back.
+
 **Attachments:** the paperclip, a pasted screenshot (Ctrl/Cmd+V) or a drop
 uploads into the pane's folder (`.remuda/uploads/`) and mentions the file
 as `@path` in the message — Claude reads the image from there. In the
