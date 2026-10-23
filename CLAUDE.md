@@ -573,7 +573,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   status transition (push, the restarts and the radar hear them); the
   first snapshot of a machine only seeds state — a reconnect must not
   replay a day of alerts.
-- `internal/push/` — Web Push (RFC 8291/8292 via webpush-go). VAPID keys at
+- `internal/push/` — Web Push (RFC 8291/8292 via webpush-go); `OnAlert` hands
+  every alert to the activity feed as it fires. VAPID keys at
   `<config>/remuda/vapid.json` (a damaged file is an error, never a silent
   rotation — rotating orphans every device); subscriptions in
   `push-subscriptions.json`, 404/410 from the push service drops one. The
@@ -589,6 +590,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   re-subscribes. `web/src/features/alerts/push.ts` is single-flight and re-registers on every
   load with permission granted. Push needs a secure context: localhost or
   `tailscale serve` HTTPS; iPhone needs the home-screen app.
+- `internal/feed/` — the **activity**: what happened across the agents while
+  nobody was looking. `push.Service.OnAlert` hears every alert the pushes
+  carry, or would have carried without a subscribed device — a question
+  after 10 s, a finish after 10 s (any turn), a watchdog note, a schedule
+  that failed, a task that moved — and `feed.Service.Add` keeps it in
+  `feed.json` (300 newest, numbered); `GET /api/feed?limit=` lists them, the
+  roster carries `feed` (the newest id) so the bell shows a dot when it is
+  past pref `feed.seen`. `features/activity/Activity.tsx` is the panel behind
+  the bell (store panel `activity`): by day (`group.ts`, tested), a row
+  opens its pane, the alert settings at its foot; the palette has it too.
 - `internal/radar/` — the sidebar's reading of every agent, after
   hhdebb/herdr-radar's design and written here (`radar_test.go` covers the
   rules). The watcher feeds every snapshot into the `Tracker`; the roster

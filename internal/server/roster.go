@@ -175,6 +175,9 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 		out = append(out, entry)
 	}
 	roster := map[string]any{"machines": out, "agents": sessions.Agents, "version": buildversion.Build, "latest": s.Health.Latest()}
+	if s.Feed != nil {
+		roster["feed"] = s.Feed.LastID() // the newest activity entry: the bell knows there is news without asking
+	}
 	if s.Tailscale != nil {
 		roster["tailscale"] = s.Tailscale()
 	}

@@ -95,7 +95,7 @@ export type Machine = {
 
 export type AgentKind = { id: string; label: string };
 
-export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale };
+export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number }; // feed: the newest activity entry's id
 
 // fetchRoster returns null when the roster is unchanged (304 via ETag).
 export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null }> {
