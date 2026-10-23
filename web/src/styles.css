@@ -2501,6 +2501,16 @@ input[type="checkbox"]:hover:not(:checked) {
   color: var(--fg-dim);
 }
 
+.alerts-voice {
+  gap: 8px;
+}
+
+.alerts-voice .sel {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+
 .alerts-quiet input[type="time"] {
   width: 7.5em;
 }
