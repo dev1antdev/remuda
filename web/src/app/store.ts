@@ -21,6 +21,7 @@ export type AppDialog =
   | { kind: "worktree"; machineId: string; session: Session }
   | { kind: "machine" }
   | { kind: "broadcast" } // one message to several agents
+  | { kind: "keys" } // the keyboard sheet
   | { kind: "renameMachine"; machine: Machine }
   | null;
 

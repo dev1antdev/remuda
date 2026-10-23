@@ -1,5 +1,6 @@
 // The shell: the header, the sidebar and the pane area or the other modes (the wall, tasks, code), and the overlays. It also
-// keeps the address in step with the selection, hears the service worker, ⌘K (the palette) and Alt+N (the next agent that needs you), and tells the
+// keeps the address in step with the selection, hears the service worker, ⌘K (the palette), ? (the keyboard sheet) and Alt+N (the next
+// agent that needs you), and tells the
 // server when a finished pane is being looked at.
 
 import { useEffect } from "react";
@@ -11,6 +12,7 @@ import { readAlertPrefs } from "@/features/alerts/prefs";
 import ReviewQueue from "@/features/review/ReviewQueue";
 import Tasks from "@/features/tasks/Tasks";
 import Code from "@/features/code/Code";
+import { isMac } from "@/lib/host";
 import { Toasts } from "@/ui";
 import Header from "./Header";
 import Overlays from "./Overlays";
@@ -39,11 +41,24 @@ export default function Shell() {
   }, [current?.machine.id, current?.pane.id, mode, lens]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // ⌘K on a Mac, Ctrl+K elsewhere, by key code whatever the layout, opens the palette; a terminal keeps its own Ctrl+K
-    const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+    // ⌘K on a Mac, Ctrl+K elsewhere, by key code whatever the layout, opens the palette; a terminal keeps its own Ctrl+K.
+    // ? (Shift and the slash key, by position) opens the keyboard sheet, never over a field or another dialog.
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "KeyK" || e.altKey || e.shiftKey || (mac ? !e.metaKey : !e.ctrlKey)) return;
-      if (!mac && (e.target as Element | null)?.closest?.(".xterm")) return;
+      const target = e.target as Element | null;
+      if (e.code === "Slash" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (target?.closest?.("input, textarea, select, [contenteditable], .xterm")) return;
+        const { dialog, panel } = app.get();
+        if (dialog?.kind === "keys") {
+          e.preventDefault();
+          actions.closeDialog();
+        } else if (!dialog && !panel) {
+          e.preventDefault();
+          actions.openDialog({ kind: "keys" });
+        }
+        return;
+      }
+      if (e.code !== "KeyK" || e.altKey || e.shiftKey || (isMac ? !e.metaKey : !e.ctrlKey)) return;
+      if (!isMac && target?.closest?.(".xterm")) return;
       e.preventDefault();
       actions.togglePanel("palette");
     };
