@@ -22,6 +22,7 @@ const PATHS = {
   keyboard: "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10",
   "text-smaller": "M4 7V4h12v3M10 4v14M7 18h6M17 14h5",
   "text-larger": "M4 7V4h12v3M10 4v14M7 18h6M17 14h5M19.5 11.5v5",
+  download: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
   maximize: "M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7",
   minimize: "M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7",
   "move-horizontal": "m18 8 4 4-4 4M6 8l-4 4 4 4M2 12h20",

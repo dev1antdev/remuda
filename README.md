@@ -67,15 +67,29 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   herdr has a manifest for), `workspace.close`.
 - **Wall** — the **Wall** mode in the top bar puts every agent on one
   screen: a tile per agent pane on every connected machine, with its
-  state, the last turns of its conversation and a line to answer it,
-  in a grid that fits the window (S / M / L). Hide the idle ones, hide
-  any tile, bring them back; a click on a tile's head opens that agent
+  state and how long it has lasted, what it runs this second (the tool
+  call under way, else thinking or writing), the last turns of its
+  conversation and a line to answer it,
+  in a grid that fits the window (S / M / L). Hide the idle ones, or
+  keep only the agents that need you — a question, a watchdog note, a
+  finish you have not looked at, each ringed on the wall — hide any
+  tile, bring them back; **focus** one agent and it takes the whole wall
+  while the others wait in a strip under it; a click on a tile's head opens that agent
   in Agents. The tiles ask only for the last few turns, so a wall of a
-  dozen agents stays light. In Chrome a tile — or the agent on screen,
+  dozen agents stays light. **Screen** turns every tile into the pane's
+  terminal as it is — the rows with their colours, scaled to the tile,
+  the prompt and the status at the bottom — a wall of monitors, read
+  from herdr without attaching, so nothing is resized and no attach slot
+  is taken; a click opens that terminal. In Chrome a tile — or the agent on screen,
   from the header — **pops out** into a small window that stays above
   every other app (Document Picture-in-Picture): the agent keeps you
   company over your editor, and the line to answer it is right there.
-- **Tasks** — the **Agents | Wall | Tasks | Code** switch in the top bar opens remuda's
+- **Review** — the **Review** mode lists every workspace on every machine
+  with uncommitted work, the ones with changes since you last looked
+  first, and opens the Changes lens of the one you pick beside the list:
+  approve, reject or comment from one place instead of visiting each
+  pane.
+- **Tasks** — the **Agents | Wall | Tasks | Code | Review** switch in the top bar opens remuda's
   own task list: projects on the left, Today / Upcoming / All open, quick
   add, done, due dates, priorities, labels, descriptions, search — and a
   **board** per project: the columns a task moves through (New → In
@@ -366,6 +380,12 @@ make typecheck # tsc + go vet
 make webtest   # vitest on the page's pure modules
 ```
 
+When the page stalls — nothing clickable for a moment — the browser
+console gets a line like `[remuda] The page stalled 4.2 s on the Wall (13
+tiles)` with the mode, the lens and the pane it was on, and a stall of
+two seconds or more shows a toast saying so; paste the line into an
+issue and the cause is half found.
+
 ## Status / roadmap
 
 Working today (verified against herdr 0.9.1, protocol 22, local + a real
@@ -424,8 +444,18 @@ agent hears nothing.
 
 **Between agents:** every assistant turn has a *forward* link that sends its
 text, headed "From *workspace*:", to any other agent on any machine — the
-same dialog Tasks uses to send a task. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Quick prompts** (⚡ in the composer)
-are saved texts, for every folder or one, shared by all your devices.
+same dialog Tasks uses to send a task. **Message several agents** (✉ in
+the sidebar head, or the palette) sends one text to the agents you tick —
+everyone, the working ones, the resting ones, or by hand — each through
+the chat's own path in turn, and says how each went; an agent busy with a
+question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Quick prompts** (⚡ in the composer)
+are saved texts, for every folder or one, shared by all your devices. **↑**
+on an empty line brings back what you sent before from this device to
+that folder, newest first; ↓ walks forward and back to the line you were
+writing.
+**Export** (↓ in the tab strip on the chat lens, or the palette) saves
+the conversation as a Markdown file — the text as it is, thinking and
+tool calls folded — to share with someone who is not in remuda.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through remuda.
 
@@ -475,11 +505,14 @@ scans its own `~/.claude/projects` on demand (remuda's scanner where the
 binary is deployed, grep otherwise).
 
 **Wall:** a mode for the big screen — every agent on every connected
-machine as a tile: its state and workspace, its context and cost, the
-last dozen turns of its conversation, the keys for a question it asks,
+machine as a tile: its state and workspace, its context and cost, how
+long it has been at it and what it runs this second, the last dozen
+turns of its conversation, the keys for a question it asks,
 and a line to answer. Tiles keep the roster's order, so nothing jumps
-when an agent changes state; hide the idle ones or any single tile, pick
-the tile size, click a head to open the agent in full. In Chrome, a tile
+when an agent changes state; hide the idle ones, keep only the ones that
+need you, or hide any single tile, focus one agent with the rest in a
+strip under it, pick the tile size, click a head to open the agent in full, or switch the
+wall to **Screen** to see every terminal as it is instead of its chat. In Chrome, a tile
 or the current agent **pops out** into a small always-on-top window
 (Document Picture-in-Picture), one at a time, closed from its own frame.
 

@@ -5,11 +5,14 @@
 import { useCallback } from "react";
 import Palette from "@/features/palette/Palette";
 import { paneEntries, type Entry } from "@/features/palette/rank";
-import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
+import { exportConversation } from "@/features/chat/export";
+import { DEFAULT_RADAR, rowLabel, type RadarPrefs } from "@/features/roster/radar";
 import { closeWorkspace } from "@/features/roster/WorkspaceMenu";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
+import { DEFAULT_WALL, tileKey, type WallPrefs } from "@/features/roster/wall";
 import { usePref } from "@/lib/prefs";
+import { basename, errMsg } from "@/lib/text";
 import type { IconName } from "@/ui/icons";
 import { folderOf, useCurrent } from "./current";
 import { popOut, popOutSupported } from "./pip";
@@ -20,6 +23,7 @@ const MODES: { mode: Mode; title: string; hint: string; icon: IconName }[] = [
   { mode: "wall", title: "Go to the Wall", hint: "every agent on one screen, a tile each", icon: "layers" },
   { mode: "tasks", title: "Go to Tasks", hint: "your tasks, kept on this remuda", icon: "list" },
   { mode: "code", title: "Go to Code", hint: "VS Code on a machine, through remuda", icon: "code" },
+  { mode: "review", title: "Go to Review", hint: "every workspace with changes to review, in one list", icon: "circle-check" },
 ];
 
 const LENSES: { lens: Lens; title: string; icon: IconName }[] = [
@@ -33,15 +37,20 @@ export default function CommandPalette() {
   return <Palette entries={entries} onClose={actions.closePanel} />;
 }
 
+const toastError = (e: unknown) => actions.notify(errMsg(e), { error: true });
+
 // useCommands is the list for what was typed: the panes first, then the commands that apply right now.
 function useCommands(): (query: string) => Entry[] {
   const { machines } = useRoster();
   const mode = app.use((s) => s.mode);
   const lens = app.use((s) => s.lens);
   const viewer = app.use((s) => s.viewer);
+  const chatSession = app.use((s) => s.chatSession);
   const footprint = app.use((s) => s.footprint);
   const current = useCurrent();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
+  const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
+  const [focus, setFocus] = usePref<string>("wall.focus", "");
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
   return useCallback(
@@ -79,9 +88,32 @@ function useCommands(): (query: string) => Entry[] {
         command("rename-tab", `Rename tab ${tab.named ? `“${tab.label}”` : tab.number}…`, () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }), { icon: "tag" });
         command("close-workspace", `Close workspace ${named}`, () => closeWorkspace(machine, session), { hint: "its panes close and the agents in them stop", icon: "x", danger: true, keywords: ["kill", "stop", "quit"] });
         if (popOutSupported) command("popout", "Pop out this agent", () => void popOut(selection!), { hint: "a small window above every other app", icon: "pip", keywords: ["picture", "window", "float"] });
+        if (current.pane.agent) command("export", "Export this conversation as Markdown", () => void exportConversation(machine.id, current.pane.id, chatSession, folderOf(current), { agent: current.pane.agent, workspace: session.name, machine: machine.label }).catch(toastError), { hint: "the session shown, as a file", icon: "download", keywords: ["save", "download", "markdown", "transcript", "share", "file"] });
+      }
+      if (viewer) {
+        const machine = machines.find((m) => m.id === viewer.machine);
+        command("export-viewer", "Export this transcript as Markdown", () => void exportConversation(viewer.machine, "", viewer.session, viewer.dir, { agent: "", workspace: basename(viewer.dir) || viewer.dir, machine: machine?.label ?? viewer.machine }).catch(toastError), { hint: "the one open from the search, as a file", icon: "download", keywords: ["save", "download", "markdown", "share", "file"] });
       }
 
+      const screens = wall.view === "screen";
+      const onTheWall = (change: Partial<WallPrefs>) => () => {
+        setWall({ ...wall, ...change });
+        actions.setMode("wall");
+      };
+      command("wall-needs", wall.needsMe ? "Wall: every agent" : "Wall: only the agents that need me", onTheWall({ needsMe: !wall.needsMe }), { hint: wall.needsMe ? "the filter off" : "a question open, a watchdog note, a finish not looked at", icon: "layers", keywords: ["wall", "needs", "attention", "waiting", "blocked", "filter"] });
+      command("wall-idle", wall.hideIdle ? "Wall: show the idle agents" : "Wall: hide the idle agents", onTheWall({ hideIdle: !wall.hideIdle }), { hint: `idle for over ${radar.freshMinutes} min`, icon: "layers", keywords: ["wall", "idle", "hide", "filter"] });
+      if (focus) command("wall-unfocus", "Wall: back to the grid", () => {
+        setFocus("");
+        actions.setMode("wall");
+      }, { hint: "every tile its own size again", icon: "minimize", keywords: ["wall", "focus", "grid", "leave"] });
+      if (current && current.pane.agent && tileKey(current.machine.id, current.pane.id) !== focus)
+        command("wall-focus", `Focus ${rowLabel(current.pane, current.tab, current.session.name, radar)} on the Wall`, () => {
+          setFocus(tileKey(current.machine.id, current.pane.id));
+          actions.setMode("wall");
+        }, { hint: "this agent takes the wall, the others wait in a strip", icon: "maximize", keywords: ["wall", "focus", "big", "zoom"] });
+      command("wall-view", screens ? "Wall of chats" : "Wall of screens", onTheWall({ view: screens ? "chat" : "screen" }), { hint: screens ? "each tile the last turns of its conversation" : "each tile its terminal as it is, scaled to fit", icon: "layers", keywords: ["wall", "terminal", "screen", "chat", "view", "tiles"] });
       command("rail", footprint ? "Hide the files rail" : "Show the files rail", actions.toggleFootprint, { hint: "the files the agent touched, beside the lenses", icon: "folder", keywords: ["footprint", "files"] });
+      command("broadcast", "Message several agents…", () => actions.openDialog({ kind: "broadcast" }), { hint: "one text to the agents you tick, each in turn", icon: "send", keywords: ["broadcast", "all", "every", "everyone", "prompt", "compact", "send"] });
       command("alerts", "Alerts on this device", () => actions.openPanel("alerts"), { hint: "which pushes to get here", icon: "bell", keywords: ["push", "notifications"] });
       command("schedules", "Schedules", () => actions.openPanel("schedules"), { hint: "prompts sent to agents on a timetable", icon: "calendar", keywords: ["cron", "timer", "prompt"] });
       command("usage", "Usage report", () => actions.openPanel("usage"), { hint: "what the agents cost, by day, project and session", icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
@@ -90,6 +122,6 @@ function useCommands(): (query: string) => Entry[] {
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, footprint, current, radar, step, now],
+    [machines, mode, lens, viewer, chatSession, footprint, current, radar, wall, setWall, focus, setFocus, step, now],
   );
 }

@@ -78,6 +78,7 @@ func (s *Server) Handler() http.Handler {
 	s.updateRoutes(api)
 	s.tasksRoutes(api)
 	s.terminalRoutes(api)
+	s.screenRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

@@ -29,6 +29,13 @@ export function keepFont(avail: number, preferred: number, cols: number, cellWid
   return Math.max(MIN_FONT, Math.min(preferred, Math.floor((avail * fontSize) / (cols * cellWidth))));
 }
 
+// thumbFont is the size at which cols columns fill avail pixels, given a cell's width at fontSize: a screen drawn
+// small, never larger than fontSize, in half-pixel steps so a resize by a pixel redraws nothing
+export function thumbFont(avail: number, cols: number, cellWidth: number, fontSize: number): number {
+  const fit = (avail * fontSize) / (Math.max(1, cols) * cellWidth);
+  return Math.max(2, Math.min(fontSize, Math.floor(fit * 2) / 2));
+}
+
 // applyGeometry sizes the grid: fit → to the mount (at least minCols wide, the mount scrolling sideways),
 // keep → the pane's own grid with the font shrunk to fit the width. False when the mount is hidden.
 export function applyGeometry(term: Terminal, fit: FitAddon, mount: HTMLElement, g: Geometry): boolean {

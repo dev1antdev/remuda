@@ -2290,6 +2290,77 @@ input[type="checkbox"]:hover:not(:checked) {
   height: var(--ctl-sm);
 }
 
+/* the broadcast dialog: agents to tick, by machine, then how each send went */
+.pick-quick {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.pick-quick .modal-hint {
+  flex: 1;
+  margin: 0;
+}
+
+.pick-list,
+.pick-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pick-list {
+  max-height: 40vh;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.pick-machine {
+  display: block;
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.pick-row:hover {
+  background: var(--bg-active);
+}
+
+.pick-row.asking .pick-hint {
+  color: var(--red);
+}
+
+.pick-row.failed .pick-hint {
+  color: var(--red);
+}
+
+.pick-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pick-hint {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
 .alerts-dialog small {
   display: block;
   margin-top: 2px;
@@ -5360,7 +5431,8 @@ button.usage-row:hover {
   flex: 1;
 }
 
-.wall-sizes {
+.wall-sizes,
+.wall-views {
   display: inline-flex;
   gap: 2px;
 }
@@ -5376,6 +5448,40 @@ button.usage-row:hover {
   padding: 10px 12px;
 }
 
+/* one tile given the whole wall, the rest in a strip under it: their heads and state lines only */
+.wall-focus {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px 0;
+}
+
+.wall-focus .tile {
+  flex: 1;
+}
+
+.wall-strip {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.wall-strip .tile {
+  width: 300px;
+  flex-shrink: 0;
+}
+
+.tile.brief .tile-state {
+  border-bottom: 0;
+}
+
+.tile.brief .tile-where {
+  display: none; /* the strip is narrow: the label and the state line say enough, the tooltip the rest */
+}
+
 .tile {
   display: flex;
   flex-direction: column;
@@ -5387,12 +5493,30 @@ button.usage-row:hover {
   overflow: hidden;
 }
 
+/* a tile that needs the person wears a pulsing ring: red for a question, amber for a watchdog note; a finish not looked at, a green edge */
+.tile.is-blocked,
+.tile.is-alert {
+  animation: ring 1.6s ease-in-out infinite;
+}
+
 .tile.is-blocked {
   border-color: var(--red-ring);
+  box-shadow: 0 0 0 2px var(--red-ring);
 }
 
 .tile.is-alert {
   border-color: var(--amber-ring);
+  box-shadow: 0 0 0 2px var(--amber-ring);
+}
+
+.tile.is-done {
+  border-color: var(--green-ring);
+}
+
+@keyframes ring {
+  50% {
+    box-shadow: 0 0 0 2px transparent;
+  }
 }
 
 .tile-head {
@@ -5462,6 +5586,45 @@ button.usage-row:hover {
   margin-left: 0;
 }
 
+/* the state line under the head: the state and how long, and what the agent runs this second; always there, so nothing moves */
+.tile-state {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 12px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.tile-words {
+  flex-shrink: 0;
+}
+
+.tile-doing {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg);
+}
+
+.tile-doing-name {
+  color: var(--fg-faint);
+}
+
+.tile.is-blocked .tile-words {
+  color: var(--red);
+}
+
+.tile.is-alert .tile-words {
+  color: var(--amber);
+}
+
 .tile .chat-log {
   padding: 10px 12px;
   gap: 10px;
@@ -5479,6 +5642,60 @@ button.usage-row:hover {
   margin: 0 8px 6px;
 }
 
+/* the screen view: the pane's rows with their colours at the size that fits the tile's width, the bottom rows kept
+   when the height runs out (the prompt and the status live there); the background is the terminal lens's */
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  padding: 6px 8px;
+  background: #14120f;
+  color: #ffffff;
+  font-family: var(--mono);
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.screen-line {
+  flex-shrink: 0;
+  min-height: 1.25em;
+  white-space: pre;
+}
+
+.screen .b {
+  font-weight: 700;
+}
+
+.screen .d {
+  opacity: 0.6;
+}
+
+.screen .i {
+  font-style: italic;
+}
+
+.screen .u {
+  text-decoration: underline;
+}
+
+.screen .s {
+  text-decoration: line-through;
+}
+
+.screen .u.s {
+  text-decoration: underline line-through;
+}
+
+.screen .chat-empty,
+.screen .chat-notice {
+  font-size: 13px;
+  font-family: var(--sans);
+  margin: auto 0;
+}
+
 .composer.compact {
   padding: 6px 8px;
   gap: 6px;
@@ -5493,6 +5710,130 @@ button.usage-row:hover {
   height: var(--ctl);
   border-radius: var(--r-md);
   padding: 0 10px;
+}
+
+/* ---- the Review mode: the queue of workspaces with changes, and the Changes lens of the picked one ---- */
+.queue {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.queue-list {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+  background: var(--bg-raised);
+  overflow-y: auto;
+  padding: 8px;
+  gap: 2px;
+}
+
+.queue-head {
+  padding: 6px 8px 8px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.queue-empty {
+  margin: 0;
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--fg-faint);
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--fg-dim);
+  text-align: left;
+  cursor: pointer;
+}
+
+.queue-item:hover {
+  background: var(--bg-active);
+}
+
+.queue-item.on {
+  background: var(--accent-soft);
+  color: var(--fg);
+}
+
+.queue-item.fresh {
+  color: var(--fg);
+}
+
+.queue-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-where {
+  color: var(--fg-faint);
+  font-size: 12px;
+}
+
+.queue-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.queue-main-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.queue-back {
+  display: none;
+}
+
+.queue-title {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-main .placeholder {
+  margin: auto;
+}
+
+@media (max-width: 920px) {
+  .queue.has-pick .queue-list {
+    display: none;
+  }
+
+  .queue:not(.has-pick) .queue-list {
+    width: 100%;
+    border-right: 0;
+  }
+
+  .queue:not(.has-pick) .queue-main {
+    display: none;
+  }
+
+  .queue-back {
+    display: inline-flex;
+  }
 }
 
 /* ---- the pop-out: a tile alone in the small window above every other app ---- */
