@@ -341,7 +341,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `agent.start --resume`. The herdr update job ends with `herdrThen`
   (`Machine.ServerVersions`: binary vs running server; equal → nothing,
   else the restart); `what = restart-herdr` runs it alone and the vitals
-  probe's `herdr_server` line is what offers it.
+  probe's `herdr_server` line is what offers it. **One chat by hand**:
+  `Restarter.Pane(mc, paneID, say)` is the same leave-and-resume for a
+  single pane, behind `POST /api/panes/restart {machine, pane}` →
+  `updates.Service.RestartPane` → a job (`GET /api/jobs/{id}`); the
+  workspace's ⋯ menu ("Restart Claude Code on its session…", the active
+  tab's agent pane) and the palette offer it behind a confirm, and
+  `features/updates/restartPane.ts` follows the job with toasts.
+  `restart.Resumable(pane)` is the one check — refused for a shell, an
+  agent the table does not know, no session id, a question open
+  (`/exit` typed into a menu is wrong) or an agent still working (a
+  restart by hand is never booked for later: the person asks again once
+  it has settled, or sends Esc) — run on the watcher's snapshot before
+  the job starts (a 400 with the reason) and on a fresh look inside it;
+  a pane restarted within the last two minutes is refused too.
 - `internal/tsnetx` — `-tailscale` joins the tailnet as a tsnet node
   (userspace, no tailscaled) named `-tailscale-hostname`, serves the same
   handler over HTTPS on :443 with the tailnet's certificate (:80

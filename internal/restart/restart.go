@@ -201,6 +201,83 @@ func (r *Restarter) Now(mc *machines.Machine, kinds []string, say func(string)) 
 	return nil
 }
 
+// Resumable says which agent and session a pane's chat can be restarted on right now, or why not:
+// a shell, an agent remuda cannot restart, no session id, a question open, still working.
+func Resumable(p herdr.PaneInfo) (kind, session string, err error) {
+	title := firstNonEmpty(p.DisplayTitle(), p.PaneID)
+	if p.Agent == "" {
+		return "", "", fmt.Errorf("%s is a shell: nothing to restart", title)
+	}
+	a, ok := agents[p.Agent]
+	if !ok {
+		return "", "", fmt.Errorf("%s runs %s, which remuda cannot restart", title, p.Agent)
+	}
+	session = sessionOf(&p)
+	if session == "" {
+		return "", "", fmt.Errorf("%s has no session id to resume", title)
+	}
+	switch p.AgentStatus {
+	case herdr.StatusBlocked:
+		return "", "", fmt.Errorf("%s has a question open: answer it first", title)
+	case herdr.StatusWorking:
+		return "", "", fmt.Errorf("%s is still working: wait until it settles, or send it Esc", title)
+	}
+	if !settled(p.AgentStatus) {
+		return "", "", fmt.Errorf("%s: its state is unknown right now; try again in a moment", title)
+	}
+	return a.Kind, session, nil
+}
+
+// Lookup is the pane in the snapshot, if it is there.
+func Lookup(snap *herdr.Snapshot, paneID string) (herdr.PaneInfo, bool) {
+	if snap == nil {
+		return herdr.PaneInfo{}, false
+	}
+	for i := range snap.Panes {
+		if snap.Panes[i].PaneID == paneID {
+			return snap.Panes[i], true
+		}
+	}
+	return herdr.PaneInfo{}, false
+}
+
+// Pane restarts one chat by hand, under the pane's lock: a fresh look, Resumable's refusals, then the leave and the resume.
+func (r *Restarter) Pane(mc *machines.Machine, paneID string, say func(string)) error {
+	key := mc.ID() + "|" + paneID
+	if r.Lock != nil {
+		l := r.Lock(mc.ID(), paneID)
+		l.Lock()
+		defer l.Unlock()
+	}
+	if since, ok := r.sinceLast(key); ok && since < again {
+		return fmt.Errorf("%s was restarted %s ago: not again so soon", paneID, since.Round(time.Second))
+	}
+	client, _, err := mc.Ready()
+	if err != nil {
+		return err
+	}
+	p, found, err := look(client, paneID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("no pane %s there", paneID)
+	}
+	kind, session, err := Resumable(p)
+	if err != nil {
+		return err
+	}
+	return r.swap(key, client, p, agents[kind], session, say)
+}
+
+// sinceLast is how long ago the pane was last restarted, if it was.
+func (r *Restarter) sinceLast(key string) (time.Duration, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	t, ok := r.last[key]
+	return time.Since(t), ok
+}
+
 // one restarts a single chat under the pane's lock: a fresh look, leave, wait for the shell, resume.
 func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say func(string)) error {
 	a, ok := agents[kind]
@@ -213,13 +290,10 @@ func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say 
 		l.Lock()
 		defer l.Unlock()
 	}
-	r.mu.Lock()
-	if t, ok := r.last[key]; ok && time.Since(t) < again {
-		r.mu.Unlock()
-		say(fmt.Sprintf("· %s: restarted %s ago — not again", paneID, time.Since(t).Round(time.Second)))
+	if since, ok := r.sinceLast(key); ok && since < again {
+		say(fmt.Sprintf("· %s: restarted %s ago — not again", paneID, since.Round(time.Second)))
 		return nil
 	}
-	r.mu.Unlock()
 	client, _, err := mc.Ready()
 	if err != nil {
 		r.book(mc.ID(), paneID, kind, session)
@@ -243,6 +317,12 @@ func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say 
 		say(fmt.Sprintf("· %s (%s): %s again — once it has settled", title, paneID, p.AgentStatus))
 		return nil
 	}
+	return r.swap(key, client, p, a, session, say)
+}
+
+// swap is the restart itself: the agent's own exit, a wait for the shell under it, the start with the session resumed.
+func (r *Restarter) swap(key string, client *herdr.Client, p herdr.PaneInfo, a agent, session string, say func(string)) error {
+	paneID, title := p.PaneID, p.DisplayTitle()
 	r.mu.Lock()
 	r.last[key] = time.Now()
 	r.mu.Unlock()
@@ -250,13 +330,13 @@ func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say 
 	if err := client.AgentPrompt(paneID, a.exit); err != nil {
 		return fmt.Errorf("%s: %s: %v", title, a.exit, err)
 	}
-	state := r.waitShell(client, paneID, kind, 12*time.Second)
+	state := r.waitShell(client, paneID, a.Kind, 12*time.Second)
 	if state == stillThere {
 		say("  still there — Ctrl-C twice")
 		if err := client.PaneSendKeys(paneID, []string{"ctrl+c", "ctrl+c"}); err != nil {
 			return fmt.Errorf("%s: Ctrl-C: %v", title, err)
 		}
-		state = r.waitShell(client, paneID, kind, 8*time.Second)
+		state = r.waitShell(client, paneID, a.Kind, 8*time.Second)
 	}
 	switch state {
 	case paneGone:
@@ -324,12 +404,8 @@ func look(client *herdr.Client, paneID string) (herdr.PaneInfo, bool, error) {
 	if err != nil {
 		return herdr.PaneInfo{}, false, err
 	}
-	for i := range snap.Panes {
-		if snap.Panes[i].PaneID == paneID {
-			return snap.Panes[i], true, nil
-		}
-	}
-	return herdr.PaneInfo{}, false, nil
+	p, found := Lookup(snap, paneID)
+	return p, found, nil
 }
 
 func (r *Restarter) book(machineID, paneID, kind, session string) {
