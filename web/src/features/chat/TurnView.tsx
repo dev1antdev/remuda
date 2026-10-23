@@ -10,15 +10,24 @@ import { basename } from "@/lib/text";
 import { spent, took } from "@/lib/time";
 import { ErrorBoundary, Icon, Notice } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
-import type { Part, Turn } from "./api";
+import type { Part, Subagent, Turn } from "./api";
 import { callStats, callWords } from "./calls";
 import { EDIT_TOOLS, imagePath, toolLabel } from "./footprint";
 import { PLAN_TOOLS, planCallWords } from "./plan";
 import { PLAN_MARK } from "./PlanBar";
+import { SubagentRow } from "./SubagentRow";
+import { sameSubagents, subagentsOf } from "./subagents";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 export const TurnView = memo(
-  function TurnView({ turn, machineId, onOpenFile, onForward }: { turn: Turn; machineId?: string; onOpenFile: OpenFile; onForward?: (text: string) => void }) {
+  function TurnView({ turn, machineId, onOpenFile, onForward, subagents, onOpenSubagent }: {
+    turn: Turn;
+    machineId?: string;
+    onOpenFile: OpenFile;
+    onForward?: (text: string) => void;
+    subagents?: Subagent[]; // the conversation's, drawn under the Agent calls that spawned them
+    onOpenSubagent?: (s: Subagent) => void;
+  }) {
     const cls = turn.role === "user" ? "turn turn-user" : "turn turn-assistant";
     const text = turn.parts
       .filter((p) => p.type === "text")
@@ -29,7 +38,7 @@ export const TurnView = memo(
       <div className={cls} data-ids={turn.ids?.join(" ")}>
         <ErrorBoundary fallback={(message) => <Notice tone="error">This turn could not be drawn: {message}</Notice>}>
           {turn.parts.map((p, i) => (
-            <PartView key={i} part={p} machineId={machineId} onOpenFile={onOpenFile} />
+            <PartView key={i} part={p} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} />
           ))}
         </ErrorBoundary>
         {turn.role === "assistant" && <Spent turn={turn} />}
@@ -41,7 +50,13 @@ export const TurnView = memo(
       </div>
     );
   },
-  (a, b) => a.machineId === b.machineId && a.onOpenFile === b.onOpenFile && a.onForward === b.onForward && sameTurn(a.turn, b.turn),
+  (a, b) =>
+    a.machineId === b.machineId &&
+    a.onOpenFile === b.onOpenFile &&
+    a.onForward === b.onForward &&
+    a.onOpenSubagent === b.onOpenSubagent &&
+    sameTurn(a.turn, b.turn) &&
+    sameSubagents(subagentsOf(a.turn, a.subagents), subagentsOf(b.turn, b.subagents)),
 );
 
 // sameTurn compares content, as every poll brings new objects; a tool's input never changes once written, so it is skipped
@@ -82,7 +97,7 @@ function Folded({ className, summary, children }: { className: string; summary: 
   );
 }
 
-function PartView({ part, machineId, onOpenFile }: { part: Part; machineId?: string; onOpenFile: OpenFile }) {
+function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent }: { part: Part; machineId?: string; onOpenFile: OpenFile; subagents?: Subagent[]; onOpenSubagent?: (s: Subagent) => void }) {
   if (part.type === "text") {
     return <Markdown text={part.text ?? ""} onOpenFile={onOpenFile} />;
   }
@@ -112,6 +127,7 @@ function PartView({ part, machineId, onOpenFile }: { part: Part; machineId?: str
   if (part.type === "tool") {
     const { name, hint, file } = toolLabel(part);
     const picture = machineId ? imagePath(part) : null;
+    const spawned = part.tool_id && subagents ? subagents.filter((s) => s.tool_id === part.tool_id) : [];
     return (
       <>
         <Folded
@@ -146,6 +162,9 @@ function PartView({ part, machineId, onOpenFile }: { part: Part; machineId?: str
           {part.input !== undefined && <pre className="tool-io">{pretty(part.input)}</pre>}
           {part.output && <pre className="tool-io">{part.output}</pre>}
         </Folded>
+        {spawned.map((s) => (
+          <SubagentRow key={s.id} subagent={s} onOpen={onOpenSubagent} />
+        ))}
         {picture && <Thumb machineId={machineId!} path={picture} onOpenFile={onOpenFile} />}
       </>
     );

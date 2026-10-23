@@ -4,8 +4,10 @@
 
 import type { Turn } from "./api";
 import { toolLabel } from "./footprint";
+import { SPAWN_TOOLS } from "./subagents";
 
-export type Doing = { what: "tool"; name: string; hint: string; at?: string } | { what: "thinking" | "writing" };
+// an Agent call without its result is the lead waiting on the subagents it spawned
+export type Doing = { what: "tool"; name: string; hint: string; at?: string } | { what: "thinking" | "writing" | "subagents" };
 
 export function doing(turns: Turn[]): Doing {
   const last = turns[turns.length - 1];
@@ -14,6 +16,7 @@ export function doing(turns: Turn[]): Doing {
   if (!part) return { what: "thinking" };
   if (part.type === "tool") {
     if (part.output !== undefined) return { what: "thinking" };
+    if (SPAWN_TOOLS.has(part.tool_name ?? "")) return { what: "subagents" };
     const { name, hint } = toolLabel(part);
     return part.at ? { what: "tool", name, hint, at: part.at } : { what: "tool", name, hint };
   }

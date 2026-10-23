@@ -10,11 +10,13 @@ import { useNow } from "@/lib/clock";
 import { errMsg } from "@/lib/text";
 import { took } from "@/lib/time";
 import { Notice } from "@/ui";
+import type { Subagent } from "./api";
 import Composer from "./Composer";
 import { doing, type Doing } from "./doing";
 import { counts, progressWords } from "./plan";
 import { QuestionCard } from "./QuestionCard";
 import { said } from "./said";
+import { subagentWords } from "./subagents";
 import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFollowBottom } from "./useFollowBottom";
@@ -39,15 +41,19 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, words, settled
   const turns = chat?.turns ?? [];
   const now = useMemo(() => (status === "run" && turns.length > 0 ? doing(turns) : null), [status, turns]);
   const answered = useMemo(() => (settled ? (turns.length > 0 ? said(turns) : fallback) : undefined), [settled, turns, fallback]);
+  const subagents = chat?.subagents;
+  const subs = useMemo(() => subagentWords(subagents, now?.what === "subagents"), [subagents, now]);
+  const session = chat?.session_id ?? "";
+  const onOpenSubagent = useCallback((s: Subagent) => actions.openViewer({ machine: machineId, dir, session, subagent: { id: s.id, description: s.description || s.kind || s.id } }), [machineId, dir, session]);
   const plan = chat?.plan;
   const progress = useMemo(() => (plan && counts(plan).open > 0 ? progressWords(plan) : undefined), [plan]);
   return (
     <div className="chat tail">
-      <TileState words={words} doing={now} said={answered} plan={progress} />
+      <TileState words={words} doing={now} said={answered} plan={progress} subagents={subs} />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : "No transcript yet."}</div>}
         {turns.map((t, i) => (
-          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} />
+          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} />
         ))}
       </div>
       <TailAnswer machineId={machineId} paneId={paneId} status={status} dir={dir} active={active} error={fetchError || null} />
@@ -58,8 +64,8 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, words, settled
 export default Tail;
 
 // TileState is the line under a tile's head: the state and how long, and while the agent works, what it does this second;
-// once it has finished, what it answered; and while its plan has open items, how far it is.
-export function TileState({ words, doing, said, plan }: { words: string; doing?: Doing | null; said?: string; plan?: string }) {
+// once it has finished, what it answered; while its plan has open items, how far it is; and how many subagents still work.
+export function TileState({ words, doing, said, plan, subagents }: { words: string; doing?: Doing | null; said?: string; plan?: string; subagents?: string }) {
   return (
     <div className="tile-state">
       <span className="tile-words">{words}</span>
@@ -80,11 +86,14 @@ export function TileState({ words, doing, said, plan }: { words: string; doing?:
               <span className="tile-doing-name">{doing.name}</span> {doing.hint}
               {doing.at && <Running since={doing.at} />}
             </>
+          ) : doing.what === "subagents" ? (
+            `${subagents || "waiting on a subagent"}…`
           ) : (
             `${doing.what}…`
           )}
         </span>
       )}
+      {subagents && doing?.what !== "subagents" && <span className="tile-subs">· {subagents}</span>}
     </div>
   );
 }

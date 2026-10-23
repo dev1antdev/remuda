@@ -435,7 +435,12 @@ open the file where it lives (local or remote), with a **Changes** tab
 showing its uncommitted `git diff`. A path is a link when it names a file
 (`main.go`, `docs/plan.md`, `.env`), not a folder. A picture the agent
 read or wrote — a screenshot it looked at, an icon it drew — shows as a
-thumbnail under the call in the chat; a click opens it.
+thumbnail under the call in the chat; a click opens it. **Subagents**: an
+agent Claude Code spawns for a task (a fork, an Explore, a custom one)
+shows under the call that started it — working, quiet or done, what it
+is on this second or the first line of its report, how many tool calls —
+and *Open* reads its own conversation; a tile's state line says "waiting
+on 2 subagents" or "2 subagents working" while they run.
 
 **Files the agent touched:** a rail beside the chat and the terminal (the
 folder button in the tab strip) lists every file the agent edited or read

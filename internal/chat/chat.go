@@ -165,19 +165,40 @@ func (c *Service) LastAnswer(machineID, paneID string) (string, string) {
 
 // Conversation is what the chat lens shows: one session file and its neighbours in the folder.
 type Conversation struct {
-	ID       string
-	Path     string // "" when the pane has no conversation yet
-	Dir      string
-	Version  transcript.Version
-	Sessions []transcript.SessionInfo
+	ID        string
+	Path      string // "" when the pane has no conversation yet
+	Dir       string
+	Version   transcript.Version
+	Sessions  []transcript.SessionInfo
+	Subagents []transcript.Subagent // the agents it spawned, as they stand
 
 	reader *transcript.Reader
 	tails  *tailCache
+	stamp  string // of the subagents' files, so the ETag moves with them
 }
 
-// ETag changes whenever the file does.
+// ETag changes whenever the file does, or one of its subagents' files.
 func (conv Conversation) ETag() string {
+	if conv.stamp != "" {
+		return fmt.Sprintf(`"%s-%s-%s"`, conv.ID, conv.Version, conv.stamp)
+	}
 	return fmt.Sprintf(`"%s-%s"`, conv.ID, conv.Version)
+}
+
+// Subagent is one of the conversation's subagents on its own, for the viewer: its turns priced, with its file's version.
+func (conv Conversation) Subagent(id string) ([]transcript.Turn, transcript.Version, error) {
+	known := false
+	for _, s := range conv.Subagents {
+		known = known || s.ID == id
+	}
+	if !known {
+		return nil, transcript.Version{}, &NotFoundError{fmt.Errorf("subagent %s not found", id)}
+	}
+	turns, version, err := conv.reader.SubagentTurns(conv.Path, id)
+	if err != nil {
+		return nil, version, err
+	}
+	return usage.PriceTurns(turns), version, nil
 }
 
 // Turns parses the conversation at the version Open saw, every answer priced.
@@ -316,6 +337,7 @@ func (c *Service) Open(mc *machines.Machine, paneID, sessionID, dir string, tail
 	}
 	conv.Version = version
 	conv.ID = transcript.SessionID(conv.Path)
+	conv.Subagents, conv.stamp, _ = mc.Transcripts.Subagents(conv.Path, time.Now())
 	if conv.Sessions == nil && mc.Local() && paneID != "" && !tail {
 		conv.Sessions, _ = transcript.Sessions(conv.Dir)
 	}

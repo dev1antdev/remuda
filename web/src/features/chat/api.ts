@@ -27,6 +27,24 @@ export type Turn = {
 
 export type SessionInfo = { id: string; mod_time: string; title?: string };
 
+// Subagent is an agent the conversation spawned through its Agent tool, as it stands: under the call in the chat
+export type Subagent = {
+  id: string; // agent-<hex>, the stem of its own transcript
+  tool_id: string; // the Agent call that spawned it
+  description: string;
+  kind?: string; // fork, Explore, general-purpose, a custom agent
+  model?: string;
+  branch?: string; // of a worktree of its own
+  status: "working" | "quiet" | "done";
+  tools: number;
+  failed?: number;
+  doing?: Part; // the tool call still without a result
+  report?: string; // the start of the text its last turn ended with
+  started?: string;
+  ended?: string;
+  took?: number;
+};
+
 // PlanItem is one thing the agent set out to do, from its own TodoWrite / TaskCreate / TaskUpdate calls
 export type PlanItem = {
   id: string;
@@ -35,7 +53,7 @@ export type PlanItem = {
   status: "pending" | "in_progress" | "completed";
 };
 
-export type ChatResponse = { session_id?: string; sessions: SessionInfo[]; turns: Turn[]; plan?: PlanItem[] };
+export type ChatResponse = { session_id?: string; subagent?: string; sessions: SessionInfo[]; turns: Turn[]; plan?: PlanItem[]; subagents?: Subagent[] };
 
 // fetchChat returns null when unchanged (304 via ETag).
 export async function fetchChat(
@@ -45,12 +63,14 @@ export async function fetchChat(
   etag: string | null,
   dir?: string,
   last?: number, // only the last N turns: a wall tile
+  subagent?: string, // one subagent's own conversation, read-only
 ): Promise<{ body: ChatResponse; etag: string | null } | null> {
   const q = new URLSearchParams({ machine: machineId });
   if (paneId) q.set("pane", paneId);
   else if (dir) q.set("dir", dir);
   if (sessionId) q.set("session", sessionId);
   if (last) q.set("last", String(last));
+  if (subagent) q.set("subagent", subagent);
   const res = await fetch(`/api/chat?${q}`, { headers: etag ? { "If-None-Match": etag } : {} });
   if (res.status === 304) return null;
   await check(res);
