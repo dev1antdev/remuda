@@ -15,7 +15,7 @@ import Chat from "@/features/chat/Chat";
 import FilesRail, { FilesRailToggle } from "@/features/chat/FilesRail";
 import Review from "@/features/review/Review";
 import { TerminalLens, TerminalTools } from "@/features/terminal/TerminalLens";
-import { Notice } from "@/ui";
+import { Notice, PANELS, Resizer } from "@/ui";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
 import { FullToggle } from "./full";
@@ -138,6 +138,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
             <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={lens === "terminal"} />
           </div>
         )}
+        {footprint && pane.agent && <Resizer spec={PANELS.rail} edge="left" label="Files rail width" />}
         {footprint && pane.agent && (
           <FilesRail
             key={`${machine.id}|${pane.id}`}

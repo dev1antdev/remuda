@@ -822,18 +822,72 @@ input[type="checkbox"]:hover:not(:checked) {
 .app.is-full .topbar,
 .app.is-full .sidebar,
 .app.is-full .scrim,
-.app.is-full .footprint {
+.app.is-full .footprint,
+.app.is-full .resizer {
   display: none;
 }
 
+/* ---- a panel's draggable edge: overlaps the hairline between the panel and its neighbour and takes no room ---- */
+.resizer {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 7px;
+  margin: 0 -4px 0 -3px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.resizer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background var(--fast) var(--ease);
+}
+
+.resizer:hover::before,
+.resizer:focus-visible::before,
+body.is-resizing .resizer::before {
+  left: 2px;
+  width: 3px;
+  background: var(--accent);
+}
+
+.resizer:focus-visible {
+  outline: none;
+}
+
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.is-resizing iframe {
+  pointer-events: none;
+}
+
+@media (max-width: 920px), (pointer: coarse) {
+  .resizer {
+    display: none;
+  }
+}
+
 .sidebar {
-  width: 268px;
+  width: var(--sidebar-w, 268px);
   flex-shrink: 0;
   border-right: 1px solid var(--line);
   background: var(--bg-raised);
   overflow-y: auto;
   scrollbar-gutter: stable;
   padding-bottom: 12px;
+}
+
+.tasks-sidebar {
+  width: var(--tasks-sidebar-w, 268px);
 }
 
 .sidebar-head {
@@ -3108,7 +3162,7 @@ input[type="checkbox"]:hover:not(:checked) {
 }
 
 .tasks-detail {
-  width: 380px;
+  width: var(--task-detail-w, 380px);
   flex-shrink: 0;
   border-left: 1px solid var(--line);
   background: var(--bg-raised);
@@ -6041,7 +6095,7 @@ button.usage-row:hover {
 }
 
 .queue-list {
-  width: 300px;
+  width: var(--queue-w, 300px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -6288,7 +6342,7 @@ body.popout {
   min-width: 0;
 }
 .footprint {
-  width: 300px;
+  width: var(--rail-w, 300px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

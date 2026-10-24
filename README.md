@@ -73,6 +73,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the blind ↑ ↓ Enter Esc.
 - **New workspace / close** — `workspace.create` + `agent.start` (any agent
   herdr has a manifest for), `workspace.close`.
+- **Panels** — the sidebar, the files rail, the Review queue and a
+  task's detail each have a draggable edge: pull it to the width you
+  like and it stays that way on this device; Tab to the edge and use
+  ← → (⇧ for bigger steps), ↵ or a double-click for the usual width;
+  "Reset the panels' widths" in the palette puts them all back.
 - **Wall** — the **Wall** mode in the top bar puts every agent on one
   screen: a tile per agent pane on every connected machine, with its
   state and how long it has lasted, what it runs this second (the tool

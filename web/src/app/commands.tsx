@@ -15,6 +15,7 @@ import { DEFAULT_WALL, tileKey, type WallPrefs } from "@/features/roster/wall";
 import { agentTitle, askRestart } from "@/features/updates/restartPane";
 import { isMac, usePref } from "@/lib/prefs";
 import { basename, errMsg } from "@/lib/text";
+import { resetPanels } from "@/ui";
 import type { IconName } from "@/ui/icons";
 import { folderOf, useCurrent } from "./current";
 import { enterFull, leaveFull } from "./full";
@@ -139,6 +140,7 @@ function useCommands(): (query: string) => Entry[] {
       command("wall-view", screens ? "Wall of chats" : "Wall of screens", onTheWall({ view: screens ? "chat" : "screen" }), { hint: screens ? "each tile the last turns of its conversation" : "each tile its terminal as it is, scaled to fit", icon: "layers", keywords: ["wall", "terminal", "screen", "chat", "view", "tiles"] });
       if (current && !viewer && mode === "herdr") command("full", full ? "Leave full screen" : "Full screen", full ? leaveFull : enterFull, { hint: full ? "the header and the sidebar back" : "the lens takes the whole screen; Esc leaves", icon: full ? "minimize" : "maximize", keywords: ["fullscreen", "zen", "focus", "maximize", "screen"] });
       command("rail", footprint ? "Hide the files rail" : "Show the files rail", actions.toggleFootprint, { hint: "the files the agent touched, beside the lenses", icon: "folder", keywords: ["footprint", "files"] });
+      command("panels", "Reset the panels' widths", resetPanels, { hint: "the sidebar, the files rail, the review queue and a task's detail back to their usual widths", icon: "layers", keywords: ["resize", "width", "sidebar", "panel", "rail", "columns"] });
       command("activity", "Activity", () => actions.openPanel("activity"), { hint: "what happened across the agents while you were away", icon: "bell", keywords: ["feed", "history", "log", "news", "notifications", "away"] });
       command("broadcast", "Message several agents…", () => actions.openDialog({ kind: "broadcast" }), { hint: "one text to the agents you tick, each in turn", icon: "send", keywords: ["broadcast", "all", "every", "everyone", "prompt", "compact", "send"] });
       command("alerts", "Alerts on this device", () => actions.openPanel("alerts"), { hint: "which pushes to get here", icon: "bell", keywords: ["push", "notifications"] });

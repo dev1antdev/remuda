@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { actions, app } from "@/app/store";
 import { useRoster } from "@/features/roster/useRoster";
 import { basename, plural } from "@/lib/text";
-import { Icon, Logo } from "@/ui";
+import { Icon, Logo, PANELS, Resizer } from "@/ui";
 import { reviewQueue, type QueueItem } from "./queue";
 import Review from "./Review";
 
@@ -36,6 +36,7 @@ export default function ReviewQueue() {
           <QueueRow key={candidate.key} item={candidate} on={candidate.key === picked} machine={manyMachines} onPick={() => setPicked(candidate.key)} />
         ))}
       </aside>
+      <Resizer spec={PANELS.queue} edge="right" label="Review queue width" />
       <section className="queue-main">
         {item ? (
           <>

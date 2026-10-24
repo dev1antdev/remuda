@@ -14,6 +14,7 @@ export function keyGroups(mac: boolean): KeyGroup[] {
         { keys: ["?"], what: "this sheet" },
         { keys: ["Alt N"], what: "the next agent that needs you" },
         { keys: ["Esc"], what: "close a dialog, a menu, the file viewer" },
+        { keys: ["←", "→"], what: "a panel's edge once Tab lands on it; ⇧ by more, ↵ its usual width" },
       ],
     },
     {
