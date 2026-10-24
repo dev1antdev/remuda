@@ -14,7 +14,7 @@ import { useVoice } from "@/features/alerts/useVoice";
 import ReviewQueue from "@/features/review/ReviewQueue";
 import Tasks from "@/features/tasks/Tasks";
 import Code from "@/features/code/Code";
-import { Toasts } from "@/ui";
+import { PANELS, Resizer, Toasts } from "@/ui";
 import Header from "./Header";
 import Overlays from "./Overlays";
 import PaneArea from "./PaneArea";
@@ -129,6 +129,7 @@ export default function Shell() {
             <aside className={drawer ? "sidebar open" : "sidebar"}>
               <Sidebar />
             </aside>
+            <Resizer spec={PANELS.sidebar} edge="right" label="Sidebar width" />
             {drawer && <div className="scrim" onClick={actions.closeDrawer} />}
             <PaneArea current={current} />
           </>

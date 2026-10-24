@@ -13,7 +13,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
-import { Icon, Notice, useDebounced, useTimedNotice, type IconName } from "@/ui";
+import { Icon, Notice, PANELS, Resizer, type IconName, useDebounced, useTimedNotice } from "@/ui";
 import { createTask, deleteTask, getTask, listLabels, listProjects, listTasks, patchTask, type Task } from "./api";
 import Board from "./Board";
 import { Loading, TaskChips } from "./pieces";
@@ -198,7 +198,7 @@ export default function Tasks() {
 
   return (
     <>
-      <aside className={drawer ? "sidebar open" : "sidebar"}>
+      <aside className={drawer ? "sidebar tasks-sidebar open" : "sidebar tasks-sidebar"}>
         <div className="sidebar-head">
           <span>Lists</span>
           <button type="button" className="btn sm" onClick={() => setNewProject(true)} title="New project">
@@ -218,6 +218,7 @@ export default function Tasks() {
         </div>
         <ProjectTree projects={projects} selected={sel.kind === "project" ? sel.id : 0} onSelect={(id) => select({ kind: "project", id })} />
       </aside>
+      <Resizer spec={PANELS.tasksSidebar} edge="right" label="Lists width" />
       {drawer && <div className="scrim" onClick={actions.closeDrawer} />}
 
       <main className="pane-area tasks-main">
@@ -330,6 +331,7 @@ export default function Tasks() {
         )}
       </main>
 
+      {open && <Resizer spec={PANELS.taskDetail} edge="left" label="Task width" />}
       {open && (
         <TaskDetail
           key={open.id}

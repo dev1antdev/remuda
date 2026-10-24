@@ -502,7 +502,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   end, the current one marked — and every command the page has a button
   or a menu item for: the other modes, the other lenses of the pane, new
   workspace / tab / worktree, the renames, close workspace, pop out, the
-  files rail, alerts, schedules, usage, add a PC, and last, whatever was
+  files rail, the panels' widths back to usual, alerts, schedules,
+  usage, add a PC, and last, whatever was
   typed, "Search every conversation…", which opens the search panel with
   the query (`actions.openSearch`, store field `search`). `commands.tsx`
   is the one list; `features/palette/Palette.tsx` shows it — ↑ ↓ ↵ Esc,
@@ -1050,7 +1051,19 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Icons are `ui/icons.tsx` (inline 24px stroke paths, `<Icon name
   size={12|14|16}>`): never an emoji or a font glyph as an icon.
   `Select.tsx` replaces every native `<select>` (an icon per option, a
-  portal so nothing clips it).
+  portal so nothing clips it). `Resizer.tsx` (over `panels.ts`, tested:
+  `PANELS`, `clampWidth`, `dragWidth`, `keyWidth`) is **a panel's
+  draggable edge** — the sidebar of Agents and of Tasks, the files rail,
+  the Review queue, a task's detail — a handle beside the panel in the
+  same row that takes no room: the width is a pref per device
+  (`panel.*`, clamped to the panel's range) and reaches the stylesheet
+  as a CSS variable on the row's element (`--sidebar-w`, `--rail-w`,
+  …), painted straight on the DOM while the pointer drags and written
+  when it lets go, so a drag redraws nothing but the layout; ← → on the
+  focused handle step it, ⇧ by more, ↵ and a double-click bring the
+  usual width back; none under 920 px or on a coarse pointer, where the
+  panels are drawers; "Reset the panels' widths" in the palette
+  (`resetPanels`).
 - `web/` — React + Vite + xterm.js SPA, embedded via `web/embed.go`
   (`go:embed all:dist`). Build with `make web` before `go build`; `npm
   test` runs Vitest on the pure modules (`*.test.ts` beside each; node,
