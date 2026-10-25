@@ -7477,6 +7477,43 @@ body.popout {
   }
 }
 
+/* ---- the lines around a hunk (features/review/context.ts): a ↑ in the gutter of the @@ row and "all N lines" at its
+   end, the same downward on the last hunk's foot; the row keeps its height whether the controls are there or not ---- */
+.review-hunk .fv-line.hunk {
+  min-height: 30px;
+}
+
+.review-hunk .fv-line.hunk .hunk-unfold {
+  flex: 0 0 22px;
+  display: flex;
+  justify-content: center;
+  margin-left: 6px;
+}
+
+.review-hunk .fv-line.hunk .hunk-unfold .icon-btn {
+  color: var(--fg-dim);
+}
+
+.review-hunk .fv-line.hunk .hunk-unfold-all {
+  font: 11px/1 var(--sans);
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.review-hunk .fv-line.hunk .hunk-unfold-all:hover {
+  color: var(--fg);
+}
+
+.review-hunk .fv-line.hunk.hunk-foot {
+  color: var(--fg-faint);
+  margin-top: 0;
+}
+
+.review-hunk .fv-line.hunk [aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ---- the look: flavour and accent swatches in Settings (features/settings/SettingsDialog.tsx) ---- */
 .swatch {
   display: inline-block;

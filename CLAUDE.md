@@ -575,6 +575,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   halves of a surrogate pair, drawn as `.fv-mark`; `Hunk` is memoised and
   the comment box holds its own text, so a keystroke or a roster poll
   redraws no cells, and the focus returns to the row when the box closes;
+  **the lines around a hunk unfold** from the working-tree file — its
+  `@@` row carries a ↑ for ten more lines above and "all N lines" for
+  the whole gap to the previous hunk or the file's start, the last hunk's
+  foot the same downward to the file's end; `context.ts` the pure part,
+  tested: `gapAbove` / `gapBelow` (new-side lines, the old side at a
+  fixed offset: added less removed above), `unfolded` the rows nearest
+  the hunk, `surround` what a hunk shows beyond its own rows,
+  `fileLines`, `whyNotUnfold`; the file's text comes through
+  `/api/fs/file` once per diff at the first unfold (`Diff` holds it, keyed
+  on the diff text, so a re-read diff starts folded against the file as
+  it is), a file past the 512 KB cap or gone from the tree leaves the
+  controls in place but disabled with the reason as their tip; unfolded
+  rows are context rows like any other — walked by ↑ ↓, commentable,
+  numbered on both sides — and an unfold redraws that hunk alone;
   `keys.ts` the keys — `useReviewKeys`, by key position so a Cyrillic
   layout works: j k walk the files, ↑ ↓ the lines of the open one, n p
   its hunks, c comments on the focused line, o opens the file there, s
