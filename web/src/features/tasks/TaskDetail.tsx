@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { actions } from "@/app/store";
+import { openUrl } from "@/lib/host";
 import { errMsg } from "@/lib/text";
 import { fmtDate } from "@/lib/time";
 import { Icon, Logo, Select, useDismiss } from "@/ui";
@@ -9,6 +10,7 @@ import { patchTask, PRIORITIES, type Field, type Label, type Project, type Run, 
 import { CommentsField } from "./Comments";
 import { FieldInput } from "./fields";
 import { Html, htmlToText, textToHtml } from "./html";
+import { issueLabel, issueLink } from "./issue";
 import { LabelsField } from "./Labels";
 import { DueInput, PrioMark, projectOption, statusOption } from "./pieces";
 
@@ -32,6 +34,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
   onOpenPane: (machineId: string, paneId: string) => void;
 }) {
   const run = t.run ?? null;
+  const issue = issueLink(t.description);
   const paneStatus = run ? liveStatus(run) : null;
   const runLabel = !run ? "" : run.state === "starting" ? "starting…" : run.state === "failed" ? "failed" : run.state === "gone" ? "closed" : paneStatus === "run" ? "working" : paneStatus === "input" ? "waiting for you" : paneStatus === null ? "closed" : run.state === "finished" ? "finished" : "running";
   const [title, setTitle] = useState(t.title);
@@ -70,6 +73,11 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
           aria-label={t.done ? "Mark undone" : "Mark done"}
         />
         <span className="tasks-ident">{t.identifier}</span>
+        {issue && (
+          <button type="button" className="linkish tasks-issue" title={issue} onClick={() => openUrl(issue)}>
+            {issueLabel(issue)} <Icon name="external-link" size={12} />
+          </button>
+        )}
         <button type="button" className="icon-btn tasks-close" onClick={onClose} title="Close" aria-label="Close">
           <Icon name="x" size={16} />
         </button>

@@ -152,7 +152,13 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   with a push — and moves it on to *Testing*, unless you moved it first.
   A *Review* link beside the run opens its worktree in the Review mode.
   Which columns do what is the project's own setting. Mark it done from
-  there.
+  there. A task can also start as a **GitHub issue**: paste its address
+  (the link button in the Tasks head, or "New task from a GitHub
+  issue…" in the palette), and `gh` on the machine you pick reads it as
+  you — title, text and labels become a task whose first line names the
+  issue, so an agent started on it knows where it came from; **Create &
+  start an agent…** opens the agent dialog on it at once. Nothing is
+  written to GitHub.
 
 ## Install & run
 

@@ -965,6 +965,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `ProjectSettings.tsx` (name, colour, columns with their marks, fields;
   saved whole, a removed column asked where its tasks go), `fields.tsx`
   holds `FieldChip` / `FieldInput` / `valueText`.
+  **A task from a GitHub issue** (`issue.go`, tested on a `shell.Fake`):
+  `IssueURL` takes only `https://github.com/<owner>/<repo>/issues/<n>`
+  (a trailing slash, query or fragment allowed; never a pull request),
+  `FetchIssue(host, url)` runs `gh issue view --json` on the machine as
+  the person (`IssueScript`; a missing or logged-out gh becomes a
+  sentence naming the machine, `ErrIssueFetch` → 502) and `ImportIssue`
+  makes the task: `#<n> <title>`, the description from `IssueHTML` (a
+  first paragraph `Issue: <a href=url>url</a> · by author`, so the
+  prompt's text carries the address once; the body's paragraphs
+  escaped, a fenced block as `<pre>`), GitHub's labels matched to the
+  store's by name and made with GitHub's colour when missing; the same
+  issue twice in one project is refused. `POST /api/tasks/import
+  {machine, project_id, url}`; the page: `ImportIssueDialog.tsx` (dialog
+  kind `import-issue`, the link button in the Tasks head and the
+  palette's "New task from a GitHub issue…"; Create, or Create & start an
+  agent…), `issue.ts` tested (`isIssueURL`, `issueLink`, `issueLabel` —
+  the detail's "owner/repo#n" link), and `actions.openTask(project,
+  task, start)` → store field `taskAsked`, which Tasks.tsx consumes once.
   **Send to agent** (a split button in the task; "for grooming" prefixes
   `/grill-me`) composes `taskPrompt` (title, description as text, the
   `in_prompt` fields with a value, the task id and project) and submits it

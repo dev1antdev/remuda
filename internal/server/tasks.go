@@ -192,6 +192,7 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 		t, err := s.Tasks.Get(id)
 		s.taskReply(w, t, err)
 	})
+	api.HandleFunc("POST /api/tasks/import", s.handleTaskImport)
 }
 
 // handleTaskList is GET /api/tasks?view=today|upcoming|open|project&project=&done=1&q=&page=&tz=.
@@ -276,4 +277,35 @@ func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.taskReply(w, task, err)
 	}
+}
+
+// handleTaskImport is POST /api/tasks/import {machine, project_id, url}: a GitHub issue read with gh on the machine, made a task of the project.
+func (s *Server) handleTaskImport(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Machine   string `json:"machine"`
+		ProjectID int64  `json:"project_id"`
+		URL       string `json:"url"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if _, _, _, ok := tasks.IssueURL(req.URL); !ok {
+		httpErr(w, http.StatusBadRequest, errors.New("a GitHub issue address looks like https://github.com/owner/repo/issues/123"))
+		return
+	}
+	mc, _, _, ok := s.ready(w, r, req.Machine)
+	if !ok {
+		return
+	}
+	issue, err := tasks.FetchIssue(mc, req.URL)
+	if errors.Is(err, tasks.ErrIssueFetch) {
+		httpErr(w, http.StatusBadGateway, err)
+		return
+	}
+	if err != nil {
+		s.taskReply(w, nil, err)
+		return
+	}
+	task, err := tasks.ImportIssue(s.Tasks, req.ProjectID, issue)
+	s.taskReply(w, task, err)
 }

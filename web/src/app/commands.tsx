@@ -156,6 +156,7 @@ function useCommands(): (query: string) => Entry[] {
       command("keys", "Keyboard shortcuts", () => actions.openDialog({ kind: "keys" }), { hint: "? · every key the page answers", icon: "keyboard", keywords: ["keys", "shortcuts", "help", "hotkeys", "bindings", "keyboard"] });
       command("machine", "Add a PC…", () => actions.openDialog({ kind: "machine" }), { hint: "a remote machine over SSH", icon: "monitor", keywords: ["machine", "remote", "ssh", "host"] });
       const typed = query.trim();
+      command("import-issue", "New task from a GitHub issue…", () => actions.openDialog({ kind: "import-issue" }), { hint: "read with gh on the machine, as you; an agent can start on it at once", icon: "link", keywords: ["github", "issue", "import", "task", "new", "gh"] });
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
