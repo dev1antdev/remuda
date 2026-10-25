@@ -1,6 +1,6 @@
 // One turn of the transcript: its text as Markdown, its thinking and tool calls folded (each call with how long it took, a
 // failed one in red), an Edit's change under its call in the lens, a picture the agent read or wrote as a thumbnail, a foot
-// with what the answer spent and what went wrong, a forward button.
+// with what the answer spent and what went wrong, a forward button and a link to the turn.
 
 import { memo, useState, type ReactNode } from "react";
 import { fileUrl } from "@/features/files/api";
@@ -8,7 +8,7 @@ import type { OpenFile } from "@/features/files/target";
 import { tok, usd } from "@/features/usage/format";
 import { basename } from "@/lib/text";
 import { spent, took } from "@/lib/time";
-import { ErrorBoundary, Icon, Notice } from "@/ui";
+import { ErrorBoundary, Icon, Notice, Tip } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import type { Part, Subagent, Turn } from "./api";
 import { callStats, callWords } from "./calls";
@@ -22,11 +22,12 @@ import { sameSubagents, subagentsOf } from "./subagents";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 export const TurnView = memo(
-  function TurnView({ turn, machineId, onOpenFile, onForward, subagents, onOpenSubagent, diffs }: {
+  function TurnView({ turn, machineId, onOpenFile, onForward, onLink, subagents, onOpenSubagent, diffs }: {
     turn: Turn;
     machineId?: string;
     onOpenFile: OpenFile;
     onForward?: (text: string) => void;
+    onLink?: (turn: Turn) => void; // copies a link to this turn; only a pane's conversation has one
     subagents?: Subagent[]; // the conversation's, drawn under the Agent calls that spawned them
     onOpenSubagent?: (s: Subagent) => void;
     diffs?: boolean; // an Edit's change drawn under its call: the lens, not a tile
@@ -45,10 +46,21 @@ export const TurnView = memo(
           ))}
         </ErrorBoundary>
         {turn.role === "assistant" && <Spent turn={turn} />}
-        {onForward && text && turn.role === "assistant" && (
-          <button type="button" className="linkish turn-forward" title="Forward this to another agent" onClick={() => onForward(text)}>
-            <Icon name="send" size={12} /> forward
-          </button>
+        {(!!(onForward && text && turn.role === "assistant") || !!(onLink && turn.ids?.length)) && (
+          <div className="turn-actions">
+            {onForward && text && turn.role === "assistant" && (
+              <button type="button" className="linkish turn-forward" title="Forward this to another agent" onClick={() => onForward(text)}>
+                <Icon name="send" size={12} /> forward
+              </button>
+            )}
+            {onLink && !!turn.ids?.length && (
+              <Tip text="Copy a link that opens this conversation at this turn">
+                <button type="button" className="icon-btn sm turn-link" aria-label="Copy link to this turn" onClick={() => onLink(turn)}>
+                  <Icon name="link" size={12} />
+                </button>
+              </Tip>
+            )}
+          </div>
         )}
       </div>
     );
@@ -57,6 +69,7 @@ export const TurnView = memo(
     a.machineId === b.machineId &&
     a.onOpenFile === b.onOpenFile &&
     a.onForward === b.onForward &&
+    a.onLink === b.onLink &&
     a.onOpenSubagent === b.onOpenSubagent &&
     a.diffs === b.diffs &&
     sameTurn(a.turn, b.turn) &&

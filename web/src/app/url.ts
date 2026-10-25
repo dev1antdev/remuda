@@ -1,7 +1,9 @@
 // The address says where the page is: ?machine=&pane=&mode=&lens=. A reload or a shared link lands there;
 // a tapped notification carries machine and pane the same way, or ?panel= for a panel of the page (a digest
-// opens the standup), read once at load and never written back.
+// opens the standup), read once at load and never written back. A link to a turn adds &session=&turn=, read once
+// at load into a jump and dropped by the first write, so a reload lands at the bottom as usual.
 
+import { readTurnLink, type TurnLinkTarget } from "@/features/chat/turnLink";
 import type { Lens, Mode, Panel, Selection } from "./store";
 
 const LENSES: Lens[] = ["chat", "terminal", "changes"];
@@ -13,7 +15,7 @@ export function panelOf(value: unknown): Panel {
   return PANELS.includes(value as Panel) ? (value as Panel) : null;
 }
 
-export function readURL(): { requested: Selection | null; mode?: Mode; lens?: Lens; panel: Panel } {
+export function readURL(): { requested: Selection | null; mode?: Mode; lens?: Lens; turn: TurnLinkTarget | null; panel: Panel } {
   const q = new URLSearchParams(location.search);
   const paneId = q.get("pane");
   const mode = q.get("mode") as Mode | null;
@@ -22,6 +24,7 @@ export function readURL(): { requested: Selection | null; mode?: Mode; lens?: Le
     requested: paneId ? { machineId: q.get("machine") || "local", paneId } : null,
     mode: mode && MODES.includes(mode) ? mode : undefined,
     lens: lens && LENSES.includes(lens) ? lens : undefined,
+    turn: readTurnLink(location.search),
     panel: panelOf(q.get("panel")),
   };
 }

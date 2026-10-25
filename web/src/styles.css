@@ -7746,3 +7746,32 @@ body.popout {
   padding: 3px 10px 5px;
   font: 12px var(--sans);
 }
+
+/* ---- a link to a turn: the copy button beside forward, revealed with the turn like it (turn-link PR) ---- */
+.turn-actions {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.turn-actions .turn-forward {
+  margin-top: 0;
+}
+
+.turn-link {
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.turn:hover .turn-link,
+.turn-link:focus-visible {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  .turn-link {
+    opacity: 1;
+  }
+}

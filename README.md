@@ -666,7 +666,10 @@ machine — what you or an agent said, never tool output — filtered by
 machine, folder and period. A hit jumps to the turn in the running pane, or
 opens the old transcript read-only. No index, no database: each machine
 scans its own `~/.claude/projects` on demand (remuda's scanner where the
-binary is deployed, grep otherwise).
+binary is deployed, grep otherwise). Every turn of a pane's conversation
+has a **Copy link** button of its own: the address opens remuda on that
+pane, in its chat, scrolled to that turn — for a note, a ticket or a
+teammate on the same tailnet.
 
 **Wall:** a mode for the big screen — every agent on every connected
 machine as a tile: its state and workspace, its context and cost, how
