@@ -7322,3 +7322,61 @@ body.popout {
     bottom: calc(128px + env(safe-area-inset-bottom));
   }
 }
+
+/* ---- the Edit's change under its call in the chat lens (features/chat/EditChange.tsx): the review's row colours and marks,
+   a sign column instead of line numbers, long lines scrolled rather than wrapped ---- */
+.edit-diff {
+  margin: 6px 0 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+  font: 12px/1.45 var(--mono);
+  overflow-x: auto;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.edit-diff .fv-line {
+  width: max-content;
+  min-width: 100%;
+  padding-left: 6px;
+}
+
+.edit-diff .fv-line:not(.add):not(.del):not(.hunk):not(.meta) {
+  color: var(--fg-dim);
+}
+
+.edit-diff .fv-line:first-child {
+  padding-top: 4px;
+}
+
+.edit-diff .fv-line:last-child {
+  padding-bottom: 4px;
+}
+
+.edit-diff .edit-sign {
+  flex: 0 0 16px;
+  color: var(--fg-faint);
+  user-select: none;
+}
+
+.edit-diff .del .edit-sign,
+.edit-diff .add .edit-sign {
+  color: inherit;
+}
+
+.edit-diff .hunk {
+  margin-top: 4px;
+  padding-left: 22px;
+}
+
+.edit-diff .meta {
+  padding-left: 22px;
+}
+
+.edit-diff .edit-more {
+  position: sticky;
+  left: 0;
+  padding: 3px 10px 5px;
+  font: 12px var(--sans);
+}
