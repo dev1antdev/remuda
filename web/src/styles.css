@@ -7598,3 +7598,71 @@ body.popout {
   vertical-align: -1px;
   color: var(--amber);
 }
+
+/* ---- the pull request's state beside its link in a tile's head: a chip with the checks, one with the review (prStatus.ts) ---- */
+.tile-pr-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.pr-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--fg-dim);
+  background: var(--bg-active);
+}
+
+.pr-state .pr-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.pr-state.is-green {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.pr-state.is-red {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.pr-state.is-amber {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.pr-state.is-dim {
+  color: var(--fg-faint);
+}
+
+/* a narrow tile keeps the checks and lets the review chip go, so the title keeps its room */
+.tile {
+  container-type: inline-size;
+}
+
+@container (max-width: 560px) {
+  .pr-state.pr-review {
+    display: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .pr-state.pr-review {
+    display: none;
+  }
+}

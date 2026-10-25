@@ -97,7 +97,12 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   call under way, else thinking or writing) and how far its plan is
   (3/7) or, once it has finished,
   the first line of what it answered, its pull request as a link when
-  it named one (GitHub or GitLab; the workspace's ⋯ menu has it too),
+  it named one (GitHub or GitLab; the workspace's ⋯ menu has it too)
+  and, for a GitHub one, how it stands beside the link — "2/2 checks ·
+  approved", red when a check failed, the branch conflicts or the
+  review asks for changes, amber while checks run — read with `gh` on
+  that machine as you, every two minutes while the page is open, so
+  remuda itself asks GitHub nothing;
   the last turns of its conversation and a line to answer it,
   in a grid that fits the window (S / M / L). Hide the idle ones, or
   keep only the agents that need you — a question, a watchdog note, a

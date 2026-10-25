@@ -94,7 +94,7 @@ func status(to string) events.PaneStatus {
 
 func TestTrackerReadsOnAFinishAndClearsOnWork(t *testing.T) {
 	f := &fake{versions: map[string]string{"local|w1:p1": "10-1"}, answers: map[string]string{"local|w1:p1": "**Merged** everything.\nDetails follow."}}
-	tr := New(Inputs{Version: f.version, Answer: f.answer})
+	tr := New(Inputs{Version: f.version, Answer: f.answer}, nil)
 	tr.OnStatus(status(herdr.StatusDone))
 	waitFor(t, "the line", func() bool { return tr.Line("local", "w1:p1") == "Merged everything." })
 
@@ -122,18 +122,42 @@ func TestTrackerReadsOnAFinishAndClearsOnWork(t *testing.T) {
 
 func TestTrackerKeepsTheLinkWhileTheAgentWorks(t *testing.T) {
 	f := &fake{versions: map[string]string{"local|w1:p1": "10-1"}, answers: map[string]string{"local|w1:p1": "Opened the PR."}, links: map[string]string{"local|w1:p1": "https://github.com/o/r/pull/1"}}
-	tr := New(Inputs{Version: f.version, Answer: f.answer, Link: f.link})
+	bus := events.NewBus()
+	var named []events.PullRequestNamed
+	var namedMu sync.Mutex
+	events.Subscribe(bus, func(e events.PullRequestNamed) {
+		namedMu.Lock()
+		named = append(named, e)
+		namedMu.Unlock()
+	})
+	tr := New(Inputs{Version: f.version, Answer: f.answer, Link: f.link}, bus)
 	tr.OnStatus(status(herdr.StatusDone))
 	waitFor(t, "the link", func() bool { _, ok := tr.Link("local", "w1:p1"); return ok })
 	if link, _ := tr.Link("local", "w1:p1"); link.URL != "https://github.com/o/r/pull/1" || link.Label != "PR #1" {
 		t.Fatalf("link = %+v", link)
 	}
+	namedMu.Lock()
+	if len(named) != 1 || named[0].URL != "https://github.com/o/r/pull/1" || named[0].Label != "PR #1" || named[0].Pane != (events.PaneRef{Machine: "local", Pane: "w1:p1"}) {
+		t.Fatalf("named = %+v", named)
+	}
+	namedMu.Unlock()
 
 	tr.OnStatus(status(herdr.StatusWorking))
 	if _, ok := tr.Link("local", "w1:p1"); !ok || tr.Line("local", "w1:p1") != "" {
 		t.Fatal("working clears the line and keeps the link")
 	}
+	f.mu.Lock()
+	f.versions["local|w1:p1"] = "11-1"
+	f.mu.Unlock()
+	tr.OnStatus(status(herdr.StatusDone))
+	waitFor(t, "the second read", func() bool { return f.count() == 2 })
+	namedMu.Lock()
+	if len(named) != 1 {
+		t.Fatalf("the same request was announced again: %+v", named)
+	}
+	namedMu.Unlock()
 
+	tr.OnStatus(status(herdr.StatusWorking))
 	f.mu.Lock()
 	f.versions["local|w1:p1"] = "20-2"
 	delete(f.links, "local|w1:p1")
@@ -144,7 +168,7 @@ func TestTrackerKeepsTheLinkWhileTheAgentWorks(t *testing.T) {
 		t.Fatal("a read that finds no request drops the old one")
 	}
 
-	plain := New(Inputs{Version: f.version, Answer: f.answer})
+	plain := New(Inputs{Version: f.version, Answer: f.answer}, nil)
 	plain.OnStatus(status(herdr.StatusDone))
 	waitFor(t, "the plain line", func() bool { return plain.Line("local", "w1:p1") != "" })
 	if _, ok := plain.Link("local", "w1:p1"); ok {
@@ -154,7 +178,7 @@ func TestTrackerKeepsTheLinkWhileTheAgentWorks(t *testing.T) {
 
 func TestTrackerSeedsFromASnapshotOnce(t *testing.T) {
 	f := &fake{versions: map[string]string{"local|w1:p1": "1-1"}, answers: map[string]string{"local|w1:p1": "Seeded."}}
-	tr := New(Inputs{Version: f.version, Answer: f.answer})
+	tr := New(Inputs{Version: f.version, Answer: f.answer}, nil)
 	snap := &herdr.Snapshot{Panes: []herdr.PaneInfo{
 		{PaneID: "w1:p1", Agent: "claude", AgentStatus: herdr.StatusDone},
 		{PaneID: "w1:p2", Agent: "claude", AgentStatus: herdr.StatusWorking},
