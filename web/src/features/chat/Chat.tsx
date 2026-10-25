@@ -1,21 +1,25 @@
 // Chat is the chat lens: the transcript from Claude Code's own session file, read server-side and polled
 // at the pane's pace; sending types into the live pane.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { actions, app } from "@/app/store";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import SendToAgent from "@/features/agents/SendToAgent";
 import type { OpenFile } from "@/features/files/target";
 import { act } from "@/app/act";
 import { createTab, sendKeys, submitPrompt, type PaneUsage } from "@/features/roster/api";
+import { copyText } from "@/lib/host";
 import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
 import { Icon, Notice, Select, useTimedNotice } from "@/ui";
-import type { Subagent } from "./api";
+import type { Subagent, Turn } from "./api";
 import Composer from "./Composer";
+import { anchorsItself, hiddenCount, idle, nextReveal } from "./mount";
 import { PlanBar } from "./PlanBar";
 import { QuestionCard } from "./QuestionCard";
+import { revealTurn } from "./reveal";
 import { TimelineBar } from "./TimelineBar";
+import { turnLink } from "./turnLink";
 import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFind } from "./useFind";
@@ -59,8 +63,36 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   // the transcript, at the pane's pace: two seconds while the agent works or asks, ten otherwise
   const { data: chat, error: fetchError } = useChat({ machineId, paneId, sessionId, dir, every: busy ? 2000 : 10000, active, subagent });
 
-  const follow = useFollowBottom(logRef, { active, chat, startAtBottom: !jump?.turn });
-  useFind(logRef, { active, chat });
+  // a long conversation mounts from its end: the last turns at once, the earlier ones in idle slices; the find bar and a
+  // jump to an earlier turn want them all at once. `revealed` belongs to one session, so a switch starts over.
+  const turns = chat?.turns ?? [];
+  const loaded = chat?.session_id; // the file on screen, which the revealed count belongs to
+  const [reveal, setReveal] = useState<{ session?: string; n: number }>({ n: 0 });
+  const revealed = reveal.session === loaded ? reveal.n : 0;
+  const hidden = hiddenCount(turns.length, revealed);
+  const revealAll = useCallback(() => setReveal({ session: loaded, n: turns.length }), [loaded, turns.length]);
+  const anchor = useRef<{ height: number; top: number } | null>(null); // the log's measure before a slice, for a browser without scroll anchoring
+  useEffect(() => {
+    const log = logRef.current;
+    if (hidden === 0 || !active || !log) return;
+    return idle(log.ownerDocument.defaultView ?? window, () => {
+      anchor.current = { height: log.scrollHeight, top: log.scrollTop };
+      setReveal((r) => ({ session: loaded, n: nextReveal(turns.length, r.session === loaded ? r.n : 0) }));
+    });
+  }, [hidden, active, loaded, turns.length]);
+  useLayoutEffect(() => {
+    const log = logRef.current;
+    const was = anchor.current;
+    anchor.current = null;
+    if (!log || !was || anchorsItself()) return;
+    log.scrollTop = was.top + (log.scrollHeight - was.height);
+  }, [hidden]);
+  const finding = app.use((s) => s.find !== null);
+  useEffect(() => {
+    if (finding && hidden > 0) revealAll();
+  }, [finding, hidden, revealAll]);
+  useFind(logRef, { active, chat, mounted: hidden === 0 });
+  const follow = useFollowBottom(logRef, { active, chat, startAtBottom: !jump?.turn, mounted: hidden });
 
   // a search hit: scroll to its turn once that session is on screen, or say it is older than the loaded tail
   const pendingTurn = useRef<string | null>(jump?.turn ?? null);
@@ -72,19 +104,34 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
     (s: Subagent) => actions.openViewer({ machine: machineId, dir, session: shownSession.current ?? "", subagent: { id: s.id, description: s.description || s.kind || s.id } }),
     [machineId, dir],
   );
+  // a link to a turn of a pane's conversation: the address with the pane, the session shown and the turn's first record
+  const onLink = useCallback(
+    (turn: Turn) => {
+      const id = turn.ids?.[0];
+      if (!id) return;
+      void copyText(turnLink(location.origin, { machineId, paneId, session: shownSession.current ?? "", turn: id })).then((ok) =>
+        actions.notify(ok ? "Link copied" : "The link could not be copied", { brief: true, error: !ok }),
+      );
+    },
+    [machineId, paneId],
+  );
   useEffect(() => {
     if (!jump) return;
     pendingTurn.current = jump.turn || null;
     follow.stick.current = !jump.turn;
     setJumpMiss(false);
-    // the session on screen is not refetched: the query blanks the log first
-    if (shownSession.current !== jump.session) setSessionId(jump.session);
+    // the session on screen is not refetched: the query blanks the log first; a jump naming no session takes the one shown
+    if (jump.session && shownSession.current !== jump.session) setSessionId(jump.session);
   }, [jump]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const id = pendingTurn.current;
     const log = logRef.current;
-    if (!id || !log || !chat || !jump || chat.session_id !== jump.session) return;
+    if (!id || !log || !chat || !jump || (jump.session && chat.session_id !== jump.session)) return;
     const el = log.querySelector(`[data-ids~="${CSS.escape(id)}"]`);
+    if (!el && hidden > 0 && turns.some((t) => t.ids?.includes(id))) {
+      revealAll(); // the turn is loaded but not mounted yet: this effect runs again once it is
+      return;
+    }
     pendingTurn.current = null;
     actions.clearJump();
     if (!el) {
@@ -93,15 +140,14 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       return;
     }
     follow.stick.current = false;
-    el.scrollIntoView({ block: "start" });
+    revealTurn(log, el);
     // remove, reflow, add: the CSS animation restarts when the class is still there from a previous jump
     el.classList.remove("turn-hit");
     void (el as HTMLElement).offsetWidth;
     el.classList.add("turn-hit");
     setTimeout(() => el.classList.remove("turn-hit"), 2600);
-  }, [chat, jump]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chat, jump, hidden]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const turns = chat?.turns ?? [];
   const sessions = chat?.sessions ?? [];
   if (sessionId === null && chat?.session_id) live.current = chat.session_id;
   const older = sessionId !== null && sessionId !== live.current ? sessionId : null;
@@ -134,8 +180,8 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       <PlanBar plan={chat?.plan} />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : readOnly ? "This transcript is empty." : "No transcript for this pane's folder yet."}</div>}
-        {turns.map((t, i) => (
-          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} subagents={chat?.subagents} onOpenSubagent={onOpenSubagent} />
+        {turns.slice(hidden).map((t, i) => (
+          <TurnView key={t.ids?.[0] || hidden + i} turn={t} machineId={machineId} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} onLink={readOnly ? undefined : onLink} subagents={chat?.subagents} onOpenSubagent={onOpenSubagent} diffs />
         ))}
       </div>
       {!readOnly && status === "input" && (

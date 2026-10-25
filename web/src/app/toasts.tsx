@@ -1,4 +1,5 @@
-// The toasts in the corner: offline, a newer server, a release out, Tailscale's state, the last notice.
+// The toasts in the corner: offline, a newer server, a release out, what happened while the page was away, Tailscale's
+// state, the last notice.
 
 import { useEffect } from "react";
 import { usePref } from "@/lib/prefs";
@@ -10,6 +11,7 @@ import { actions, app } from "./store";
 export function useToasts(): ToastItem[] {
   const { machines, latest, tailscale, version, offline, stale } = useRoster();
   const notice = app.use((s) => s.notice);
+  const away = app.use((s) => s.away);
   const [releaseSeen, setReleaseSeen] = usePref("release.seen", "");
   useEffect(() => {
     if (!notice || notice.error) return;
@@ -43,6 +45,25 @@ export function useToasts(): ToastItem[] {
         </button>
       ),
       onDismiss: () => setReleaseSeen(release),
+    });
+  if (away)
+    toasts.push({
+      id: "away",
+      tone: "info",
+      text: away,
+      action: (
+        <button
+          type="button"
+          className="btn sm primary"
+          onClick={() => {
+            actions.setAway(null);
+            actions.openPanel("standup");
+          }}
+        >
+          Standup
+        </button>
+      ),
+      onDismiss: () => actions.setAway(null),
     });
   if (notice) toasts.push({ id: "notice", tone: notice.error ? "error" : "success", text: notice.text, onDismiss: actions.clearNotice });
   if (tailscale?.state === "needs_login" && tailscale.login_url)

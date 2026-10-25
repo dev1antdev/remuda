@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/events"
@@ -19,6 +20,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/jobs"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/prefs"
+	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/quick"
 	"github.com/dev1antdev/remuda/internal/radar"
@@ -30,6 +33,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/server"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/setup"
+	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
@@ -78,6 +82,10 @@ func Run(ctx context.Context, o Options) error {
 	if err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
+	devices, err := auth.OpenDevices(o.Dir)
+	if err != nil {
+		return err
+	}
 	activity := feed.New(o.Dir)
 	taskStore, err := tasks.Open(o.Dir)
 	if err != nil {
@@ -100,9 +108,25 @@ func Run(ctx context.Context, o Options) error {
 	}
 	tracker := radar.New(o.Dir, chats.LastWriteOf)
 	defer tracker.Flush()
-	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer, Link: chats.PullRequest})
+	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer, Link: chats.PullRequest}, bus)
+	requests := prstatus.New(func(machineID string) (shell.Shell, bool) {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return nil, false
+		}
+		return mc, true
+	})
 	reviews := review.New(o.Dir)
 	meter := usage.NewTracker()
+	budgets := budget.New(o.Dir, func() []shell.Host {
+		var hosts []shell.Host
+		for _, mc := range fleet.List() {
+			if state, _ := mc.State(); state == machines.StateConnected {
+				hosts = append(hosts, mc)
+			}
+		}
+		return hosts
+	}, pushSvc.Notify)
 	input := sessions.NewInput(fleet, watcher)
 	health.PinnedCode = setup.CodeVersion
 	vitals := health.New(fleet, o.Version, o.VersionCheck)
@@ -113,7 +137,10 @@ func Run(ctx context.Context, o Options) error {
 	}
 	restarter.Lock = input.Lock
 	keeper := &herdr.Keeper{Bin: bin, Socket: o.Socket}
-	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Notify)
+	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker}
+	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
+		return recap.Digest(recaps.Standup(since), since, time.Now())
+	})
 
 	// who hears what
 	events.Subscribe(bus, func(e events.Snapshot) { tracker.Observe(e.Machine, e.Snap, e.At) })
@@ -129,9 +156,12 @@ func Run(ctx context.Context, o Options) error {
 		tracker.Forget(e.Machine)
 		sayings.Forget(e.Machine)
 		hub.RosterChanged()
+		requests.Forget(e.Machine)
 	})
 	events.Subscribe(bus, pushSvc.OnStatus)
 	events.Subscribe(bus, sayings.OnStatus)
+	events.Subscribe(bus, requests.OnNamed)
+	events.Subscribe(bus, requests.OnStatus)
 	events.Subscribe(bus, restarter.OnStatus)
 	events.Subscribe(bus, func(e events.PaneStatus) { hub.PaneChanged(e.Pane.Machine, e.Pane.Pane) })
 	events.Subscribe(bus, func(e events.JobDone) {
@@ -177,6 +207,7 @@ func Run(ctx context.Context, o Options) error {
 	}).Loop(15 * time.Second)
 	go schedules.Loop()
 	go hub.Run(ctx)
+	go budgets.Loop(5 * time.Minute)
 
 	srv = &server.Server{
 		Machines:  fleet,
@@ -189,15 +220,18 @@ func Run(ctx context.Context, o Options) error {
 		Push:      pushSvc,
 		Feed:      activity,
 		Said:      sayings,
-		Recap:     &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker},
+		PRs:       requests,
+		Recap:     recaps,
 		Radar:     tracker,
 		Usage:     meter,
+		Budgets:   budgets,
 		Health:    vitals,
 		Review:    reviews,
 		Schedules: schedules,
 		Quick:     quick.New(o.Dir),
+		Prefs:     prefs.New(o.Dir),
 		Code:      code.New(o.CodePort),
-		Guard:     auth.NewGuard(o.Token),
+		Guard:     auth.NewGuard(o.Token, devices),
 		UI:        ui,
 		Live:      hub,
 	}

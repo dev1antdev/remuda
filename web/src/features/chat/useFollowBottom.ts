@@ -1,9 +1,12 @@
 // The log follows the bottom only while the reader is there and not selecting or dragging; an upward wheel
-// or finger lets go at once, and a hidden log keeps its place for when it comes back.
+// or finger lets go at once, and a hidden log keeps its place for when it comes back. `mounted` counts the slices of a
+// progressive mount (Chat), each of which pins the end again.
 
 import { useEffect, useRef, type RefObject } from "react";
 
-export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { active, chat, startAtBottom }: { active: boolean; chat: unknown; startAtBottom: boolean }) {
+const SETTLE_FRAMES = 12;
+
+export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { active, chat, startAtBottom, mounted = 0 }: { active: boolean; chat: unknown; startAtBottom: boolean; mounted?: number }) {
   const stick = useRef(startAtBottom);
   const ownScroll = useRef(false); // a scroll we made, not the reader
   const dragging = useRef(false);
@@ -14,23 +17,42 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
   // the log's own window: in the pop-out that is the small window, whose frames and selection are its own
   const windowOf = (log: HTMLElement) => log.ownerDocument.defaultView ?? window;
 
+  // toBottom scrolls to the end and keeps doing so, a frame at a time, until the end holds still: the turns near it are
+  // skipped until they are on screen (content-visibility), so each scroll lays out a few more at their real heights and
+  // moves the end; a dozen frames bound it, and an upward wheel meanwhile lets go through letGo as always
+  const toBottom = (log: HTMLElement) => {
+    const win = windowOf(log);
+    ownScroll.current = true;
+    const pin = (left: number) => {
+      log.scrollTop = log.scrollHeight;
+      win.requestAnimationFrame(() => {
+        const away = log.scrollHeight - log.scrollTop - log.clientHeight;
+        if (stick.current && away > 1 && left > 0) pin(left - 1);
+        else ownScroll.current = false;
+      });
+    };
+    pin(SETTLE_FRAMES);
+  };
+
   useEffect(() => {
     const log = logRef.current;
     if (!active || !log) return;
+    if (stick.current) {
+      toBottom(log);
+      return;
+    }
     ownScroll.current = true;
-    log.scrollTop = stick.current ? log.scrollHeight : (savedTop.current ?? log.scrollTop);
+    log.scrollTop = savedTop.current ?? log.scrollTop;
     windowOf(log).requestAnimationFrame(() => (ownScroll.current = false));
-  }, [active, logRef]);
+  }, [active, logRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const log = logRef.current;
     if (!log || !stick.current || dragging.current) return;
     const sel = windowOf(log).getSelection();
     if (sel && !sel.isCollapsed && sel.anchorNode && log.contains(sel.anchorNode)) return;
-    ownScroll.current = true;
-    log.scrollTop = log.scrollHeight;
-    windowOf(log).requestAnimationFrame(() => (ownScroll.current = false));
-  }, [chat, logRef]);
+    toBottom(log);
+  }, [chat, mounted, logRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onScroll = () => {
     const log = logRef.current;

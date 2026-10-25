@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { changedSpan, pairRows, partners, rowsOf, splitHunks } from "./hunks";
+import { changedSpan, pairRows, partners, rowsOf, rowTokens, splitHunks } from "./hunks";
 
 const diff = ["diff --git a/f.go b/f.go", "--- a/f.go", "+++ b/f.go", "@@ -10,3 +10,4 @@ func main() {", " context", "-old line", "+new line", "+another", "\\ No newline at end of file", "@@ -40 +41 @@", " tail", ""].join("\n");
 
@@ -84,5 +84,22 @@ describe("changedSpan", () => {
     expect(changedSpan("alpha", "beta")).toBeNull();
     expect(changedSpan("abc", "abcdef")).toBeNull();
     expect(changedSpan("same", "same")).toBeNull();
+  });
+});
+
+describe("rowTokens", () => {
+  const rows = rowsOf(splitHunks("@@ -1,3 +1,3 @@\n const a = 1; /* one\n-two */ let b = 'x';\n+two */ let b = \"y\";\n return;")[0]!);
+  it("colours each side as one text, a comment spanning rows keeping its kind, context rows coloured once from the new side", () => {
+    const tokens = rowTokens(rows, "js");
+    expect(tokens.get(rows[0]!)!.map((t) => t.kind)).toContain("comment");
+    expect(tokens.get(rows[1]!)![0]!.kind).toBe("comment");
+    expect(tokens.get(rows[1]!)!.some((t) => t.kind === "string" && t.text === "'x'")).toBe(true);
+    expect(tokens.get(rows[2]!)![0]!.kind).toBe("comment");
+    expect(tokens.get(rows[2]!)!.some((t) => t.kind === "string" && t.text === '"y"')).toBe(true);
+    expect(tokens.get(rows[3]!)!.map((t) => t.text).join("")).toBe("return;");
+    expect(tokens.get(rows[3]!)!.some((t) => t.kind === "keyword")).toBe(true);
+  });
+  it("colours nothing without a language", () => {
+    expect(rowTokens(rows, "").size).toBe(0);
   });
 });
