@@ -121,7 +121,13 @@ export default function Shell() {
         <div className="body">
         {codeOpened && (
           <div className="code-host" hidden={mode !== "code"}>
-            <Code machines={machines} currentMachine={current?.machine.id ?? null} currentFolder={current ? folderOf(current) || null : null} visible={mode === "code"} />
+            <Code
+              machines={machines}
+              currentMachine={current?.machine.id ?? null}
+              currentFolder={current ? folderOf(current) || null : null}
+              currentPane={current ? { machineId: current.machine.id, paneId: current.pane.id, dir: folderOf(current), agent: current.pane.agent } : null}
+              visible={mode === "code"}
+            />
           </div>
         )}
         {mode === "wall" && <Wall />}

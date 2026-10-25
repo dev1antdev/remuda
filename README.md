@@ -346,12 +346,24 @@ docker build --target runtime -t remuda .   # just the image
 
 The **Code** mode frames [code-server](https://github.com/coder/code-server)
 (VS Code served over HTTP, MIT) running on the machine you pick — the editor
-for the workspace's folder, with its own terminal, git and extensions (from
-Open VSX). Each machine runs its own copy, bound to `127.0.0.1:7320` with
+for the workspace's folder, or for **every workspace on the machine at
+once** (the picker's first row, and the default past one folder: remuda
+writes them into one `.code-workspace` on the machine and keeps it in
+step as workspaces come and go) — with its own terminal, git and
+extensions (from Open VSX). Each machine runs its own copy, bound to `127.0.0.1:7320` with
 no auth of its own; remuda is the door: `/code/<machine>/` goes through
 the same bearer token, locally to the port, remotely through a port
 forwarded over the ssh master the roster already uses. A file from the
-files rail opens here on its own tab. Install it on a
+files rail, from a row of the Changes lens or from the file viewer (at
+its line) opens here — in the editor already on screen when there is
+one, through code-server's own command line, so nothing reloads. The
+Code bar's **Follow** opens every file the agent on screen finishes
+editing, as it happens; **Reload the editor** gives the folder a fresh
+frame when the connection was lost. The editor wears the page's own
+theme — Catppuccin Frappé or Latte, following the switch — through the
+Catppuccin extension remuda installs; and when a machine's code-server
+is older than the release remuda carries, the ⓘ says so and Updates
+offers the upgrade. Install it on a
 machine with
 
 ```sh

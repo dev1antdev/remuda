@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fileUrl, fsDiff, fsStat, fsText, type FileDiff, type FileInfo } from "@/features/files/api";
 import { basename, errMsg } from "@/lib/text";
-import { Notice } from "@/ui";
+import { Notice, Tip } from "@/ui";
 import Icon from "@/ui/icons";
 
 import type { FileTarget } from "./target";
+import { actions } from "@/app/store";
 
 type Tab = "file" | "changes";
 
@@ -145,6 +146,19 @@ export default function FileViewer({
               </button>
             </nav>
           )}
+          <Tip text="Open in Code (VS Code on this machine), at this line">
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Open in Code"
+              onClick={() => {
+                close();
+                actions.openInCode(machineId, dir, info?.path ?? target.path, target.line);
+              }}
+            >
+              <Icon name="code" size={16} />
+            </button>
+          </Tip>
           <button type="button" className="icon-btn" onClick={close} title="Close (Esc)" aria-label="Close">
             <Icon name="x" size={16} />
           </button>

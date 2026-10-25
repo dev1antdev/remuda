@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@/lib/query";
 import { basename, dirname, plural } from "@/lib/text";
-import { Icon, Notice } from "@/ui";
+import { Icon, Notice, Tip } from "@/ui";
 import type { ReviewFile } from "./api";
 import type { DraftComment } from "./draft";
 import { commentKey, Hunk, Note, rowKey, type NewComment } from "./Hunk";
@@ -11,7 +11,7 @@ import { rowsOf, splitHunks } from "./hunks";
 
 export type { NewComment } from "./Hunk";
 
-export function FileRow({ file, open, split, onToggle, load, onLoaded, canComment, draft, onComment, onRemove, onOpen }: {
+export function FileRow({ file, open, split, onToggle, load, onLoaded, canComment, draft, onComment, onRemove, onOpen, onCode }: {
   file: ReviewFile;
   open: boolean;
   split: boolean;
@@ -23,6 +23,7 @@ export function FileRow({ file, open, split, onToggle, load, onLoaded, canCommen
   onComment: (file: string, comment: NewComment) => void;
   onRemove: (id: number) => void;
   onOpen: (line?: number) => void;
+  onCode?: () => void; // the file in the editor, when Code mode is there to take it
 }) {
   const [attempt, setAttempt] = useState(0);
   const { data: diff, error } = useQuery(() => (open ? load(file.path) : Promise.resolve(undefined)), [open, load, file.path, attempt], { enabled: open, keep: true });
@@ -54,9 +55,18 @@ export function FileRow({ file, open, split, onToggle, load, onLoaded, canCommen
             </span>
           )}
         </button>
-        <button type="button" className="icon-btn sm" title="Open the file" onClick={() => onOpen()}>
-          <Icon name="external-link" size={12} />
-        </button>
+        <Tip text="Open the file in the viewer">
+          <button type="button" className="icon-btn sm" aria-label="Open the file" onClick={() => onOpen()}>
+            <Icon name="external-link" size={12} />
+          </button>
+        </Tip>
+        {onCode && (
+          <Tip text="Open the file in Code (VS Code on this machine)">
+            <button type="button" className="icon-btn sm" aria-label="Open in Code" onClick={onCode}>
+              <Icon name="code" size={12} />
+            </button>
+          </Tip>
+        )}
       </div>
       {open &&
         (error ? (

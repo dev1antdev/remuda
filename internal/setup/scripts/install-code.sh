@@ -53,14 +53,18 @@ install_release() {
         echo "unpacked to $DEST"
     fi
     ln -sfn "$DEST" "$LINK"
-    # first-run editor settings, only when the user has none yet: a dark
-    # theme like remuda's, no telemetry, no Copilot chat in the way
+    # the page's own colours in the editor: Catppuccin's theme, from Open VSX (skipped offline; the theme route installs it later)
+    if ! "$LINK/bin/code-server" --list-extensions 2>/dev/null | grep -qi '^catppuccin.catppuccin-vsc$'; then
+        "$LINK/bin/code-server" --install-extension catppuccin.catppuccin-vsc >/dev/null 2>&1 && echo "installed the Catppuccin theme" || echo "could not install the Catppuccin theme now (offline?); remuda will try again from the page"
+    fi
+    # first-run editor settings, only when the user has none yet: remuda's
+    # theme, no telemetry, no Copilot chat in the way
     USER_DIR="$HOME/.local/share/code-server/User"
     if [ ! -f "$USER_DIR/settings.json" ]; then
         mkdir -p "$USER_DIR"
         cat > "$USER_DIR/settings.json" <<JSON
 {
-  "workbench.colorTheme": "Default Dark Modern",
+  "workbench.colorTheme": "Catppuccin Frappé",
   "workbench.startupEditor": "none",
   "telemetry.telemetryLevel": "off",
   "chat.commandCenter.enabled": false,

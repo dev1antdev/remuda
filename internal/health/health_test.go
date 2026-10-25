@@ -154,3 +154,14 @@ func TestParseRelease(t *testing.T) {
 		t.Fatal("a tag without a version was accepted")
 	}
 }
+
+func TestParseReadsCodeServer(t *testing.T) {
+	r, _ := Parse("os=macOS 26\ncode_server=4.140.0\n")
+	if r.CodeServer != "4.140.0" {
+		t.Fatalf("code_server = %q", r.CodeServer)
+	}
+	r, _ = Parse("os=macOS 26\n")
+	if r.CodeServer != "" {
+		t.Fatalf("code_server without the link = %q", r.CodeServer)
+	}
+}

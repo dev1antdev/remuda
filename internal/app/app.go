@@ -28,6 +28,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/server"
 	"github.com/dev1antdev/remuda/internal/sessions"
+	"github.com/dev1antdev/remuda/internal/setup"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
@@ -94,6 +95,7 @@ func Run(ctx context.Context, o Options) error {
 	reviews := review.New(o.Dir)
 	meter := usage.NewTracker()
 	input := sessions.NewInput(fleet, watcher)
+	health.PinnedCode = setup.CodeVersion
 	vitals := health.New(fleet, o.Version, o.VersionCheck)
 	runner := jobs.New(bus)
 	restarter := restart.New(fleet)

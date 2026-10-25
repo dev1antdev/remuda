@@ -35,6 +35,9 @@ var uninstallScript string
 //go:embed scripts/install-code.sh
 var codeScript string
 
+// CodeVersion is the code-server release install-code.sh installs and the Updates row offers; the script's default must match.
+const CodeVersion = "4.140.0"
+
 // Options is what the scripts are told.
 type Options struct {
 	Host      string // "" is this machine; else an ssh destination

@@ -140,6 +140,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       onComment={addComment}
       onRemove={removeComment}
       onOpen={(line) => onOpenFile(`${dir}/${file.path}`, line)}
+      onCode={() => actions.openInCode(machineId, dir, `${dir.replace(/\/+$/, "")}/${file.path}`)}
     />
   );
 
