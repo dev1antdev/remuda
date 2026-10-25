@@ -1,9 +1,10 @@
 // The terminal lens: the live terminal with its key bar under it, and the tools that sit in the tab
 // strip's right slot — the size mode, the minimum width, the selection mode, the text size, the key bar.
 
-import { useTheme } from "@/app/theme";
+import { useFlavor, useMono } from "@/app/theme";
 import { useCallback } from "react";
 import { actions } from "@/app/store";
+import { monoStack } from "@/lib/look";
 import { isTouch, usePref } from "@/lib/prefs";
 import type { Pane } from "@/features/roster/api";
 import { Icon, type MenuItem, Tip } from "@/ui";
@@ -24,7 +25,8 @@ export function TerminalLens({ machineId, paneId, cols, rows, agent, active }: {
   const modifier = terminal.use((s) => s.modifier);
   const selectMode = terminal.use((s) => s.selectMode);
   const api = terminal.use((s) => s.api);
-  const theme = useTheme();
+  const flavor = useFlavor();
+  const mono = useMono();
   const onOpenFile = useCallback((target: { path: string; line?: number; prefer?: "file" | "changes" }) => actions.openFile(machineId, paneId, target), [machineId, paneId]);
   const onCopied = useCallback((n: number) => actions.notify(`Copied ${n} character${n === 1 ? "" : "s"}`, { brief: true }), []);
   return (
@@ -37,7 +39,8 @@ export function TerminalLens({ machineId, paneId, cols, rows, agent, active }: {
         agent={agent}
         mode={sizeMode}
         minCols={minCols}
-        theme={theme}
+        flavor={flavor}
+        fontFamily={monoStack(mono)}
         fontSize={fontSize}
         modifier={modifier}
         selectMode={selectMode}

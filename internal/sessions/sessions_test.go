@@ -120,6 +120,103 @@ func TestResumeArgs(t *testing.T) {
 	}
 }
 
+func TestStartArgsOrderAndModelFlags(t *testing.T) {
+	args, err := StartArgs("claude", Start{Resume: "0123-abcd", Model: "opus", Args: []string{"--permission-mode", "plan"}})
+	if err != nil || strings.Join(args, " ") != "--resume 0123-abcd --model opus --permission-mode plan" {
+		t.Fatalf("args: %v %v", args, err)
+	}
+	for kind, want := range map[string]string{"claude": "--model m", "codex": "--model m", "gemini": "--model m", "kimi": "--model m"} {
+		if got, ok := ModelArgs(kind, "m"); !ok || strings.Join(got, " ") != want {
+			t.Errorf("%s: %v %v", kind, got, ok)
+		}
+	}
+	if _, ok := ModelArgs("pi", "m"); ok {
+		t.Error("pi has no model flag remuda knows")
+	}
+	if _, err := StartArgs("pi", Start{Model: "m"}); err == nil {
+		t.Error("a model for a kind without the flag must be refused")
+	}
+	if args, err := StartArgs("pi", Start{Args: []string{"--yolo"}}); err != nil || strings.Join(args, " ") != "--yolo" {
+		t.Errorf("extra arguments work for every kind: %v %v", args, err)
+	}
+	if args, err := StartArgs("claude", Start{}); err != nil || args != nil {
+		t.Errorf("nothing asked, nothing passed: %v %v", args, err)
+	}
+	f := &fakeClient{}
+	if err := StartAgentWith(f, "w1:p1", "claude", Start{Model: "sonnet", Args: []string{"-p", "hi there"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(f.withArgs, "|"); got != "claude|claude|--model|sonnet|-p|hi there" {
+		t.Errorf("args: %q", got)
+	}
+	plain := &fakeClient{}
+	if err := StartAgentWith(plain, "w1:p1", "claude", Start{}); err != nil || plain.withArgs != nil || plain.starts != 1 {
+		t.Errorf("a plain start goes through agent.start without arguments: %v %v", plain.withArgs, err)
+	}
+}
+
+func TestSplitArgs(t *testing.T) {
+	cases := map[string][]string{
+		"":                                  nil,
+		"   ":                               nil,
+		"--permission-mode plan":            {"--permission-mode", "plan"},
+		`--append-system-prompt "be terse"`: {"--append-system-prompt", "be terse"},
+		`-p 'it''s'`:                        {"-p", "its"},
+		`a\ b c`:                            {"a b", "c"},
+		`"a \"q\" b"`:                       {`a "q" b`},
+		"x\ty\nz":                           {"x", "y", "z"},
+		`--dangerously-skip-permissions`:    {"--dangerously-skip-permissions"},
+	}
+	for in, want := range cases {
+		got, err := SplitArgs(in)
+		if err != nil || strings.Join(got, "|") != strings.Join(want, "|") {
+			t.Errorf("SplitArgs(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{`"open`, `'open`, `tail\`, "a\x1bb", "a\x7fb"} {
+		if _, err := SplitArgs(bad); err == nil {
+			t.Errorf("SplitArgs(%q) accepted", bad)
+		}
+	}
+}
+
+// readyAfter answers agent_not_ready for the first n prompts, then takes one.
+type readyAfter struct {
+	fakeClient
+	notReady int
+}
+
+func (f *readyAfter) AgentPrompt(target, text string) error {
+	if f.notReady > 0 {
+		f.notReady--
+		return &herdr.Error{Code: "agent_not_ready"}
+	}
+	return f.fakeClient.AgentPrompt(target, text)
+}
+
+func TestFirstPromptWaitsForTheAgent(t *testing.T) {
+	FirstPromptRetry = time.Millisecond
+	defer func() { FirstPromptRetry = 2 * time.Second }()
+	in := NewInput(nil, nil)
+	ref := events.PaneRef{Machine: "local", Pane: "w1:p1"}
+	client := &readyAfter{notReady: 3}
+	if err := in.FirstPrompt(client, ref, "build it", time.Second); err != nil || strings.Join(client.typed, ",") != "prompt:build it" {
+		t.Fatalf("delivered once the agent is up: %v %v", err, client.typed)
+	}
+	never := &fakeClient{promptErr: &herdr.Error{Code: "agent_not_ready"}}
+	if err := in.FirstPrompt(never, ref, "x", 20*time.Millisecond); err == nil || !strings.Contains(err.Error(), "did not come up") || len(never.typed) != 0 {
+		t.Fatalf("timeout: %v %v", err, never.typed)
+	}
+	blocked := &fakeClient{promptErr: &herdr.Error{Code: "agent_blocked"}}
+	if err := in.FirstPrompt(blocked, ref, "x", 20*time.Millisecond); err == nil || !strings.Contains(err.Error(), "asks something first") || len(blocked.keys) != 0 {
+		t.Fatalf("a dialog is waited through, never answered: %v %v", err, blocked.keys)
+	}
+	broken := &fakeClient{promptErr: &herdr.Error{Code: "pane_not_found"}}
+	if err := in.FirstPrompt(broken, ref, "x", time.Second); !herdr.IsCode(err, "pane_not_found") {
+		t.Fatalf("another refusal ends the wait at once: %v", err)
+	}
+}
+
 func TestStartAgentResumed(t *testing.T) {
 	f := &fakeClient{}
 	if err := StartAgentResumed(f, "w1:p1", "claude", "0123-abcd"); err != nil {

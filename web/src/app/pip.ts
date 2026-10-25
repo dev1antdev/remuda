@@ -3,6 +3,7 @@
 
 import { alsoVisible } from "@/lib/visibility";
 import { actions, type Selection } from "./store";
+import { currentLook, dressLook } from "./theme";
 
 type PipOpener = { requestWindow(options?: { width?: number; height?: number }): Promise<Window>; window: Window | null };
 
@@ -55,6 +56,9 @@ export function closePopOut(): void {
 function dress(doc: Document) {
   doc.documentElement.lang = document.documentElement.lang;
   doc.documentElement.dataset.theme = document.documentElement.dataset.theme;
+  doc.documentElement.dataset.flavor = document.documentElement.dataset.flavor;
+  doc.documentElement.dataset.accent = document.documentElement.dataset.accent;
+  dressLook(doc, currentLook());
   for (const sheet of Array.from(document.styleSheets)) {
     if (sheet.href) {
       const link = doc.createElement("link");

@@ -2,7 +2,7 @@
 // the chosen option and the list opens in a portal at the button, fixed and kept inside the viewport
 // (flipping upward when the screen runs out), so no scrolling parent clips it.
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Icon from "@/ui/icons";
 
@@ -13,6 +13,7 @@ export type Option<T extends string | number> = {
   hint?: string; // second-rank text after the label
   group?: string; // options with the same group sit under one header
   disabled?: boolean;
+  style?: CSSProperties; // on the label: a font option wears its own face
 };
 
 const MIN_WIDTH = 180;
@@ -125,7 +126,7 @@ export default function Select<T extends string | number>({ value, options, onCh
         }}
       >
         {chosen?.icon && <span className="sel-icon">{chosen.icon}</span>}
-        <span className="sel-label">{chosen ? chosen.label : (placeholder ?? "—")}</span>
+        <span className="sel-label" style={chosen?.style}>{chosen ? chosen.label : (placeholder ?? "—")}</span>
         <span className="sel-chev" aria-hidden="true">
           <Icon name="chevron-down" size={12} />
         </span>
@@ -169,7 +170,7 @@ export default function Select<T extends string | number>({ value, options, onCh
                     onClick={() => pick(o)}
                   >
                     {o.icon !== undefined && <span className="sel-icon">{o.icon}</span>}
-                    <span className="sel-label">{o.label}</span>
+                    <span className="sel-label" style={o.style}>{o.label}</span>
                     {o.hint && <span className="sel-hint">{o.hint}</span>}
                     {o.value === value && (
                       <span className="sel-check">

@@ -1,5 +1,6 @@
 // The roster: every machine with herdr's hierarchy, and what changes it — workspaces, tabs and worktrees made and closed, machines added and named.
 
+import type { BudgetStatus } from "@/features/usage/api";
 import { check, getJSON, sendJSON, withMachine } from "@/lib/http";
 
 export type Status = "run" | "input" | "idle" | "done" | "shell";
@@ -17,7 +18,19 @@ export type Pane = {
   radar?: { state: "working" | "blocked" | "done" | "idle" | "unknown"; last_active?: number; since?: number; alert?: string };
   usage?: PaneUsage;
   said?: string; // the first line of the agent's last answer, once it finished
-  pr?: { url: string; label: string }; // the last pull or merge request the agent named, "PR #15" / "MR !9"
+  pr?: PullRequest; // the last pull or merge request the agent named, "PR #15" / "MR !9"
+};
+
+// PullRequest is the request the agent named and, for a GitHub one gh on the machine could read, how it stands
+export type PullRequest = { url: string; label: string; status?: PRStatus };
+
+export type PRStatus = {
+  state: string; // OPEN | MERGED | CLOSED
+  draft: boolean;
+  mergeable: string; // MERGEABLE | CONFLICTING | UNKNOWN
+  review: string; // APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | ""
+  checks: { total: number; pass: number; fail: number; pending: number; skipped: number };
+  at: string;
 };
 
 export type PaneUsage = {
@@ -98,7 +111,7 @@ export type Machine = {
 
 export type AgentKind = { id: string; label: string };
 
-export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number }; // feed: the newest activity entry's id
+export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[] }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far
 
 // fetchRoster returns null when the roster is unchanged (304 via ETag).
 export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null }> {
@@ -130,12 +143,15 @@ async function create(url: string, req: unknown): Promise<Created> {
   };
 }
 
-export const createSession = (req: { machine: string; name: string; dir: string; agent: string }) => create("/api/sessions", req);
+// StartExtras are the person's choices for the agent: a model, extra arguments as typed, a first prompt sent once it is up
+export type StartExtras = { model?: string; args?: string; prompt?: string };
+
+export const createSession = (req: { machine: string; name: string; dir: string; agent: string } & StartExtras) => create("/api/sessions", req);
 
 // resume: a session id of the folder, the agent coming back to that conversation
-export const createTab = (req: { machine: string; workspace: string; name: string; agent: string; resume?: string }) => create("/api/tabs", req);
+export const createTab = (req: { machine: string; workspace: string; name: string; agent: string; resume?: string } & StartExtras) => create("/api/tabs", req);
 
-export const createWorktree = (req: { machine: string; workspace: string; branch: string; base: string; name: string; agent: string }) => create("/api/worktrees", req);
+export const createWorktree = (req: { machine: string; workspace: string; branch: string; base: string; name: string; agent: string } & StartExtras) => create("/api/worktrees", req);
 
 export const killSession = (machineId: string, id: string): Promise<void> => sendJSON("DELETE", withMachine(`/api/sessions/${encodeURIComponent(id)}`, machineId));
 

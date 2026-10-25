@@ -1,5 +1,7 @@
 // A unified diff cut into hunks and rows, each row with its line number in the new file or the old one.
 
+import { highlightLines, type Token } from "@/lib/highlight";
+
 export type DiffHunk = { header: string; oldStart: number; newStart: number; lines: string[] };
 
 export function splitHunks(text: string): DiffHunk[] {
@@ -94,3 +96,18 @@ export function changedSpan(oldText: string, newText: string): { head: number; t
 
 const wordChar = (char: string | undefined) => char !== undefined && /[\p{L}\p{N}_]/u.test(char);
 const lowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;
+
+// rowTokens colours a hunk's rows in the file's language, each side tokenized once as the text it is — a removed
+// run with the context around it, an added run the same — so a string or a comment that spans rows keeps its kind
+export function rowTokens(rows: DiffRow[], lang: string): Map<DiffRow, Token[]> {
+  const tokens = new Map<DiffRow, Token[]>();
+  if (!lang) return tokens;
+  const side = (keep: (row: DiffRow) => boolean) => {
+    const kept = rows.filter(keep);
+    const lines = highlightLines(kept.map((row) => row.text.slice(1)).join("\n"), lang);
+    kept.forEach((row, i) => tokens.set(row, lines[i] ?? []));
+  };
+  side((row) => row.kind === "del" || row.kind === "");
+  side((row) => row.kind === "add" || row.kind === "");
+  return tokens;
+}
