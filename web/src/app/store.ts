@@ -26,6 +26,7 @@ export type AppDialog =
   | { kind: "settings" } // the theme, the sidebar, the panels, the way to the alerts and the keys
   | { kind: "renameMachine"; machine: Machine }
   | { kind: "recap"; machineId: string; paneId: string; session: string | null; dir: string; title: string } // one conversation's recap; paneId "" = a transcript on its own
+  | { kind: "import-issue"; projectId?: number } // a task from a GitHub issue, into the project named or the one picked in the dialog
   | null;
 
 export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
@@ -63,25 +64,29 @@ export type AppState = {
   lastFile: { machineId: string; path: string } | null; // the file last opened in the viewer: what {file} means in a quick prompt
   full: boolean; // the lens takes the whole screen: no header, no sidebar, no rail (app/full.tsx)
   find: Find | null; // the find bar over the chat lens or the transcript viewer, null while closed
+  away: string | null; // what the agents did while the page was away, one toast line until it is dismissed or followed
+  taskAsked: { projectId: number; taskId: number; start: boolean; n: number } | null; // a task the Tasks mode is asked to open, once (one just made from an issue); start = the agent dialog on it too
 };
 
 const fromURL = readURL();
 const mode = fromURL.mode ?? (fromURL.requested ? "herdr" : readPref<Mode>("mode", "herdr"));
+// a link to a turn is a jump waiting for that pane's chat, which opens on it
+const linked = fromURL.turn ? { machineId: fromURL.turn.machineId, paneId: fromURL.turn.paneId, session: fromURL.turn.session, turn: fromURL.turn.turn, n: 1 } : null;
 
 export const app = createStore<AppState>({
   requested: fromURL.requested,
-  lens: fromURL.lens ?? (isTouch ? "chat" : "terminal"),
+  lens: linked ? "chat" : (fromURL.lens ?? (isTouch ? "chat" : "terminal")),
   mode,
   drawer: false,
   dialog: null,
   menu: null,
-  panel: null,
+  panel: fromURL.panel,
   search: "",
   notice: null,
   confirm: null,
   file: null,
   viewer: null,
-  jump: null,
+  jump: linked,
   codeOpened: mode === "code",
   popout: null,
   footprint: readPref("footprint", !isTouch),
@@ -91,10 +96,13 @@ export const app = createStore<AppState>({
   lastFile: null,
   full: false,
   find: null,
+  away: null,
+  taskAsked: null,
 });
 
-let jumps = 0;
+let jumps = linked ? 1 : 0;
 let codeOpens = 0;
+let taskOpens = 0;
 
 export const actions = {
   // a pane asked for by a click in the sidebar, a notification, a search hit, a task
@@ -220,5 +228,17 @@ export const actions = {
   openInCode(machineId: string, folder: string, path: string, line?: number) {
     app.set({ mode: "code", codeOpened: true, codeFile: { machineId, folder, path, line, n: ++codeOpens } });
     writePref("mode", "code");
+  },
+  // what happened while the page was away, as one toast line; null takes the toast down
+  setAway(away: string | null) {
+    app.set({ away });
+  },
+  // openTask takes the person to a task in the Tasks mode, with the start-an-agent dialog on it when asked
+  openTask(projectId: number, taskId: number, start = false) {
+    app.set({ mode: "tasks", full: false, taskAsked: { projectId, taskId, start, n: ++taskOpens } });
+    writePref("mode", "tasks");
+  },
+  taskOpened() {
+    app.set({ taskAsked: null });
   },
 };

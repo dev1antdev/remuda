@@ -1,11 +1,13 @@
 // The "make something" dialogs: a workspace, a tab, a worktree, a rename, a machine added or renamed.
 
 import { useState } from "react";
+import { readPref, writePref } from "@/lib/prefs";
 import { dirname } from "@/lib/text";
 import { FormDialog, Icon, Logo, Select, useSubmit } from "@/ui";
-import type { AgentKind, Machine, Session } from "./api";
+import type { AgentKind, Machine, Session, StartExtras } from "./api";
 import FolderPicker from "./FolderPicker";
 import { machineOptions } from "./options";
+import { choiceFor, CUSTOM, EMPTY_DRAFT, hasModelFlag, hasOptions, lastModelKey, modelChoices, modelPlaceholder, optionsFor, type Draft } from "./startOptions";
 
 const ADJ = ["clear", "quiet", "amber", "brisk", "calm", "early", "fresh", "keen", "mild", "swift"];
 const NOUN = ["forest", "river", "harbor", "meadow", "summit", "valley", "ridge", "grove", "lake", "field"];
@@ -35,6 +37,65 @@ function AgentSelect({ agents, value, onChange }: { agents: AgentKind[]; value: 
   );
 }
 
+// useStart is the agent a dialog starts and the person's choices for it: the model last used for the kind comes back
+// from this device's prefs, a pick of another kind brings that kind's; what the create route takes comes out of options()
+function useStart(initial: string) {
+  const [agent, setAgent] = useState(initial);
+  const [draft, setDraft] = useState<Draft>(() => ({ ...EMPTY_DRAFT, ...choiceFor(initial, readPref(lastModelKey(initial), "")) }));
+  const pickAgent = (kind: string) => {
+    setAgent(kind);
+    setDraft((d) => ({ ...d, ...choiceFor(kind, readPref(lastModelKey(kind), "")) }));
+  };
+  // options is the request's extras, remembering the model for the kind on the way out
+  const options = (): StartExtras => {
+    const extras = optionsFor(agent, draft);
+    if (hasModelFlag(agent)) writePref(lastModelKey(agent), extras.model ?? "");
+    return extras;
+  };
+  return { agent, pickAgent, draft, setDraft, options };
+}
+
+// StartOptionsFields is the folded "Options" under the agent: the model, extra arguments, a first prompt; nothing for a shell
+function StartOptionsFields({ kind, draft, onChange }: { kind: string; draft: Draft; onChange: (d: Draft) => void }) {
+  const [open, setOpen] = useState(false);
+  if (kind === "" || kind === "shell") return null;
+  const choices = modelChoices(kind);
+  const set = (patch: Partial<Draft>) => onChange({ ...draft, ...patch });
+  const typedModel = hasModelFlag(kind) && (choices.length === 0 || draft.choice === CUSTOM);
+  return (
+    <div className="start-options">
+      <button type="button" className="linkish start-options-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon name={open ? "chevron-down" : "chevron-right"} size={12} />
+        Options{!open && hasOptions(kind, draft) ? " · set" : ""}
+      </button>
+      {open && (
+        <>
+          {hasModelFlag(kind) && choices.length > 0 && (
+            <label>
+              Model
+              <Select value={draft.choice} onChange={(choice) => set({ choice })} options={choices} />
+            </label>
+          )}
+          {typedModel && (
+            <label>
+              {choices.length > 0 ? "Model id" : "Model"}
+              <input value={draft.custom} placeholder={modelPlaceholder(kind)} spellCheck={false} onChange={(e) => set({ custom: e.target.value })} />
+            </label>
+          )}
+          <label>
+            Extra arguments
+            <input value={draft.args} placeholder="--permission-mode plan" spellCheck={false} onChange={(e) => set({ args: e.target.value })} />
+          </label>
+          <label>
+            First prompt <small>sent once the agent is up</small>
+            <textarea value={draft.prompt} rows={3} placeholder="What the agent should start on" onChange={(e) => set({ prompt: e.target.value })} />
+          </label>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function RenameDialog({ what, label, onClose, onRename }: { what: "tab" | "workspace"; label: string; onClose: () => void; onRename: (label: string) => Promise<void> }) {
   const [value, setValue] = useState(label);
   const submit = useSubmit(() => onRename(value.trim()));
@@ -52,17 +113,17 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate,
   machines: Machine[];
   agents: AgentKind[];
   defaultMachine: string;
-  onCreate: (machine: string, dir: string, name: string, agent: string) => Promise<void>;
+  onCreate: (machine: string, dir: string, name: string, agent: string, extras: StartExtras) => Promise<void>;
   onClose: () => void;
 }) {
   const [machine, setMachine] = useState(defaultMachine);
   const [dir, setDir] = useState("");
   const [name, setName] = useState("");
-  const [agent, setAgent] = useState(() => defaultAgent(agents, "claude"));
+  const { agent, pickAgent, draft, setDraft, options: extras } = useStart(defaultAgent(agents, "claude"));
   const [picking, setPicking] = useState(false);
   const submit = useSubmit(async () => {
     if (!dir.trim()) throw new Error("Project folder is required");
-    await onCreate(machine, dir.trim(), name.trim(), agent);
+    await onCreate(machine, dir.trim(), name.trim(), agent, extras());
   });
   const target = machines.find((m) => m.id === machine);
   const options = machineOptions(machines, { onlyConnected: false }).map((o) => {
@@ -102,7 +163,8 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate,
         Name (optional)
         <input value={name} placeholder="checkout-api" onChange={(e) => setName(e.target.value)} />
       </label>
-      <AgentSelect agents={agents} value={agent} onChange={setAgent} />
+      <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
+      <StartOptionsFields kind={agent} draft={draft} onChange={setDraft} />
     </FormDialog>
   );
 }
@@ -110,19 +172,20 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate,
 export function NewTabDialog({ session, agents, onCreate, onClose }: {
   session: Session;
   agents: AgentKind[];
-  onCreate: (name: string, agent: string) => Promise<void>;
+  onCreate: (name: string, agent: string, extras: StartExtras) => Promise<void>;
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
-  const [agent, setAgent] = useState("shell");
-  const submit = useSubmit(() => onCreate(name.trim(), agent));
+  const { agent, pickAgent, draft, setDraft, options } = useStart("shell");
+  const submit = useSubmit(() => onCreate(name.trim(), agent, options()));
   return (
     <FormDialog title={`New tab in ${session.name}`} icon="plus" hint="Opens in the workspace's folder, like herdr's prefix+c." onClose={onClose} submit={submit} submitLabel="Create tab">
       <label>
         Name (optional)
         <input autoFocus value={name} placeholder="tests" onChange={(e) => setName(e.target.value)} />
       </label>
-      <AgentSelect agents={agents} value={agent} onChange={setAgent} />
+      <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
+      <StartOptionsFields kind={agent} draft={draft} onChange={setDraft} />
     </FormDialog>
   );
 }
@@ -130,16 +193,16 @@ export function NewTabDialog({ session, agents, onCreate, onClose }: {
 export function NewWorktreeDialog({ session, agents, onCreate, onClose }: {
   session: Session;
   agents: AgentKind[];
-  onCreate: (branch: string, base: string, name: string, agent: string) => Promise<void>;
+  onCreate: (branch: string, base: string, name: string, agent: string, extras: StartExtras) => Promise<void>;
   onClose: () => void;
 }) {
   const [branch, setBranch] = useState(suggestBranch);
   const [base, setBase] = useState("");
   const [name, setName] = useState("");
-  const [agent, setAgent] = useState(() => defaultAgent(agents, "claude"));
+  const { agent, pickAgent, draft, setDraft, options } = useStart(defaultAgent(agents, "claude"));
   const submit = useSubmit(async () => {
     if (!branch.trim()) throw new Error("Branch name is required");
-    await onCreate(branch.trim(), base.trim(), name.trim(), agent);
+    await onCreate(branch.trim(), base.trim(), name.trim(), agent, options());
   });
   const repo = session.worktree?.repo_name ?? session.name;
   return (
@@ -167,7 +230,8 @@ export function NewWorktreeDialog({ session, agents, onCreate, onClose }: {
         Workspace name (optional)
         <input value={name} placeholder="defaults to the branch" onChange={(e) => setName(e.target.value)} />
       </label>
-      <AgentSelect agents={agents} value={agent} onChange={setAgent} />
+      <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
+      <StartOptionsFields kind={agent} draft={draft} onChange={setDraft} />
     </FormDialog>
   );
 }
