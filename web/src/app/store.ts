@@ -64,6 +64,7 @@ export type AppState = {
   lastFile: { machineId: string; path: string } | null; // the file last opened in the viewer: what {file} means in a quick prompt
   full: boolean; // the lens takes the whole screen: no header, no sidebar, no rail (app/full.tsx)
   find: Find | null; // the find bar over the chat lens or the transcript viewer, null while closed
+  away: string | null; // what the agents did while the page was away, one toast line until it is dismissed or followed
   taskAsked: { projectId: number; taskId: number; start: boolean; n: number } | null; // a task the Tasks mode is asked to open, once (one just made from an issue); start = the agent dialog on it too
 };
 
@@ -93,6 +94,7 @@ export const app = createStore<AppState>({
   lastFile: null,
   full: false,
   find: null,
+  away: null,
   taskAsked: null,
 });
 
@@ -224,6 +226,10 @@ export const actions = {
   openInCode(machineId: string, folder: string, path: string, line?: number) {
     app.set({ mode: "code", codeOpened: true, codeFile: { machineId, folder, path, line, n: ++codeOpens } });
     writePref("mode", "code");
+  },
+  // what happened while the page was away, as one toast line; null takes the toast down
+  setAway(away: string | null) {
+    app.set({ away });
   },
   // openTask takes the person to a task in the Tasks mode, with the start-an-agent dialog on it when asked
   openTask(projectId: number, taskId: number, start = false) {

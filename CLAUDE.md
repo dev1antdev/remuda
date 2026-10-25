@@ -871,7 +871,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   conversation's (dialog kind `recap`: the Recap button in
   `chat/ChatTools.tsx` for the session shown, the palette for the pane
   and for a transcript open from the search), `RecapBody.tsx` the lines
-  both draw.
+  both draw. **While you were away** (`useWelcomeBack.ts`, called from
+  `app/Shell.tsx`): pref `page.lastSeen` is stamped when the page hides
+  or is left and every minute while it is visible; a return after an
+  hour or more fetches the standup since that stamp and puts one toast
+  up — "Away 3 h: 2 agents answered, 1 waits for you, $4.20 spent", a
+  Standup button opens the panel — store field `away`, nothing when
+  nothing happened, once per return; `away.ts` the pure part, tested:
+  `awayGap`, `awayWords`, `awayCounts`, `awayLine`.
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥

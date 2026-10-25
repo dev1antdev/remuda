@@ -131,7 +131,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   it ran, the files it edited and read, subagents started, questions
   asked — and the first line of its last answer, the agents that need
   you first. Switch to the last 24 hours or 7 days; **Copy as Markdown**
-  gives the report ready to paste into a channel. The same recap of one
+  gives the report ready to paste into a channel. Come back to the page
+  after an hour or more and a toast says what happened meanwhile —
+  "Away 3 h: 2 agents answered, 1 waits for you, $4.20 spent" — with the
+  standup one click away; nothing when nothing happened. The same recap of one
   conversation — the session on screen, or a transcript opened from the
   search — is the sun button beside the chat's export, and in the
   palette. All of it is read from the transcripts remuda already has;
