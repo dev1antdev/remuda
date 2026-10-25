@@ -1,6 +1,6 @@
 // Settings: the few things the page keeps per device, in one place — the theme, its flavour and accent, the text size,
-// the density and the monospace font, how the sidebar reads, the panels' widths, the way to the alerts and the keys,
-// which remuda this is, and the devices signed in to it.
+// the density and the monospace font, how the sidebar reads, the panels' widths, whether those follow the person to
+// their other devices, the way to the alerts and the keys, which remuda this is, and the devices signed in to it.
 
 import { setAccentPref, setDarkFlavorPref, setDensityPref, setMonoPref, setTextSizePref, setThemePref, useAccent, useDarkFlavorPref, useDensity, useFlavor, useMono, useTextSize, useThemePref } from "@/app/theme";
 import { actions } from "@/app/store";
@@ -11,6 +11,7 @@ import { DENSITY_NAMES, MONO_FONTS, monoName, monoStack, TEXT_SIZE_NAMES, TEXT_S
 import { usePref } from "@/lib/prefs";
 import { ACCENTS, accentName, DARK_FLAVORS, FLAVOR_NAMES, FLAVORS, swatches } from "@/lib/theme";
 import { Dialog, Icon, resetPanels, Select, Tip } from "@/ui";
+import { SYNC_PREF } from "./useSyncPrefs";
 
 const DENSITIES: Density[] = ["comfortable", "compact"];
 const MONO_CHOICES: MonoFont[] = ["", ...MONO_FONTS];
@@ -25,6 +26,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const mono = useMono();
   const palette = swatches(flavor);
   const [radar, setRadar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
+  const [sync, setSync] = usePref<boolean>(SYNC_PREF, false);
   const after = (run: () => void) => () => {
     onClose();
     run();
@@ -119,6 +121,13 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             Reset widths
           </button>
         </div>
+        <label className="settings-row">
+          <span>
+            Sync these settings between devices
+            <small>The theme, the density, the code font, the sidebar, the wall, the review and the panels travel through this remuda; alerts, the text sizes and the prompt history stay on the device</small>
+          </span>
+          <input type="checkbox" checked={sync} onChange={(e) => setSync(e.target.checked)} />
+        </label>
       </section>
       <section className="settings-section">
         <h3>Sidebar</h3>

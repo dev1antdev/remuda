@@ -1,7 +1,10 @@
 import { useCallback, useRef, useSyncExternalStore } from "react";
+import { isShared, type Stamped } from "./syncKeys";
 
 // Per-device preferences in localStorage, and the touch test. Every reader of a key sees a write made
 // through any other: the terminal's tools in the tab strip and the lens beside them hold the same keys.
+// A shared key (syncKeys.ts) also keeps the moment it was set, so the sync (features/settings/useSyncPrefs.ts)
+// can tell which device's copy is newer.
 
 // The keys of the previous name (herdr-ui.*) carry over once.
 try {
@@ -36,6 +39,21 @@ export function readPref<T>(key: string, fallback: T): T {
 }
 
 export function writePref(key: string, value: unknown): void {
+  store(key, value);
+  if (isShared(key)) {
+    setStamp(key, new Date().toISOString());
+    for (const notify of writeListeners) notify(key);
+  }
+}
+
+// applyPref is a write that came from another device through the server: stored with the stamp it was set at, every hook of
+// the key woken, the sync layer not told (it is the one calling)
+export function applyPref(key: string, value: unknown, at: string): void {
+  store(key, value);
+  setStamp(key, at);
+}
+
+function store(key: string, value: unknown): void {
   try {
     localStorage.setItem(`remuda.${key}`, JSON.stringify(value));
   } catch {
@@ -43,6 +61,59 @@ export function writePref(key: string, value: unknown): void {
   }
   values.set(key, value);
   for (const notify of listeners.get(key) ?? []) notify();
+}
+
+// the moment each shared key was last set, kept beside the prefs so a sync can tell which copy is newer
+const STAMPS = "remuda.__stamps";
+
+function stamps(): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(STAMPS) ?? "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function setStamp(key: string, at: string): void {
+  try {
+    localStorage.setItem(STAMPS, JSON.stringify({ ...stamps(), [key]: at }));
+  } catch {
+    /* no storage here */
+  }
+}
+
+// sharedPrefs is every shared key this device holds, with its value and stamp ("" for one set before stamps existed)
+export function sharedPrefs(): Record<string, Stamped> {
+  const out: Record<string, Stamped> = {};
+  const at = stamps();
+  try {
+    for (const stored of Object.keys(localStorage)) {
+      if (!stored.startsWith("remuda.")) continue;
+      const key = stored.slice("remuda.".length);
+      if (!isShared(key)) continue;
+      const raw = localStorage.getItem(stored);
+      if (raw === null) continue;
+      try {
+        out[key] = { value: JSON.parse(raw), at: at[key] ?? "" };
+      } catch {
+        /* not JSON: not a pref of ours */
+      }
+    }
+  } catch {
+    /* no storage here */
+  }
+  return out;
+}
+
+const writeListeners = new Set<(key: string) => void>();
+
+// watchWrites calls back with the key on every write of a shared pref made on this device (not on one applied from the server)
+export function watchWrites(notify: (key: string) => void): () => void {
+  writeListeners.add(notify);
+  return () => {
+    writeListeners.delete(notify);
+  };
 }
 
 // the value every hook of a key shares, read from storage once, and who is listening for it

@@ -23,6 +23,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/quick"
@@ -60,6 +61,7 @@ type Server struct {
 	Review    *review.Store
 	Schedules *schedule.Store
 	Quick     *quick.Store
+	Prefs     *prefs.Store
 	Code      *code.Service
 	Tailscale func() tsnetx.Status
 	Guard     *auth.Guard
@@ -80,6 +82,7 @@ func (s *Server) Handler() http.Handler {
 	s.searchRoutes(api)
 	s.usageRoutes(api)
 	s.quickRoutes(api)
+	s.prefsRoutes(api)
 	s.scheduleRoutes(api)
 	s.reviewRoutes(api)
 	s.codeRoutes(api)

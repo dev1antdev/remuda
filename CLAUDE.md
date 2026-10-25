@@ -448,7 +448,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `useSyncExternalStore` — the terminal's tools in the tab strip and the
   lens beside them hold the same keys; a `storage` event from another
   tab drops the cached value and wakes the hooks; `readPref` keeps a stored
-  value only in the fallback's shape; `isTouch`), `media.ts` (`useMedia`:
+  value only in the fallback's shape; a shared key — `syncKeys.ts`,
+  `isShared` — also keeps the moment it was set in `remuda.__stamps`, and
+  `sharedPrefs` / `applyPref` / `watchWrites` are what the settings sync
+  works with; `isTouch`), `media.ts` (`useMedia`:
   a media query as a hook, for a piece the stylesheet hides that would
   otherwise poll unseen), `clock.ts` (`useNow`: the time, refreshed every
   so many ms, for a counter on screen), `text.ts` (`errMsg`,
@@ -779,8 +782,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   shells switch, shown by **Settings** (`features/settings/
   SettingsDialog.tsx`, dialog kind `settings`, the rail's last button
   and a palette row: the theme, the text size, the density, the
-  monospace font, the panels' widths, the sidebar, the
-  way to the alerts and the keys, the version, the signed-in devices);
+  monospace font, the panels' widths, the switch that syncs
+  those between devices (`internal/prefs`), the sidebar, the way to the
+  alerts and the keys, the version, the signed-in devices);
   one spinner clock for
   the braille frames and the pulsing question). A finished or
   idle row says what the agent answered after its title, in the quiet
@@ -994,6 +998,28 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   is never picked — one text goes to each in turn through `/api/submit`, and
   the dialog says how each went; a refusal is shown, never retried or queued
   (`broadcast.ts` the pure part, tested).
+- `internal/prefs/` — **settings that follow the person between devices**:
+  `prefs.json` in the state dir, `{"<key>": {"value", "at"}}`; `Store.All`,
+  `Store.Put` merges a part by key, the newer stamp winning (an equal one
+  takes the incoming, a `null` value deletes, a missing stamp reads as
+  now), keys `^[a-zA-Z0-9_.:-]{1,80}$`, a value at most 16 KB, the file
+  1 MB; tested. Routes `GET /api/prefs` (an ETag, 304 when unchanged) and
+  `PUT /api/prefs` (the part, the merged whole back). The page decides
+  what travels: `lib/syncKeys.ts` (tested) is the allow-list — `theme`,
+  `theme.dark`, `theme.accent`, `density`, `font.mono` (not `text.size`:
+  a size suits a screen, like `termFont`), `radar`, `wall`, `review.split`,
+  `chat.timeline`, `footprint`, `tasks.view`, `standup.period`,
+  `code.follow` and every `panel.*` — with `merge` / `plan` (apply the
+  remote copies that are newer, push the local ones that are, a key one
+  side lacks goes to the other, a stampless local one stamped on its way
+  up); `features/settings/useSyncPrefs.ts` (called from Shell) does it
+  while the per-device switch `prefs.sync` is on: on start, on every
+  return into view, every minute while visible, and a write of a shared
+  key goes up half a second later (`watchWrites` in prefs.ts; a copy
+  applied from the server goes through `applyPref`, which keeps its stamp
+  and tells no one). Alerts, the terminal's text size, the prompt history
+  and everything `.seen` stay on the device. The row is the last of
+  Settings › Look.
 - `internal/tasks/` — the **Tasks mode**: remuda's own list in
   `tasks.db` (SQLite, WAL, `modernc.org/sqlite` — pure Go, so the four
   static builds keep `CGO_ENABLED=0`) in the state dir of **the remuda

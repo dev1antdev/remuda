@@ -18,6 +18,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/jobs"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/quick"
@@ -202,6 +203,7 @@ func Run(ctx context.Context, o Options) error {
 		Review:    reviews,
 		Schedules: schedules,
 		Quick:     quick.New(o.Dir),
+		Prefs:     prefs.New(o.Dir),
 		Code:      code.New(o.CodePort),
 		Guard:     auth.NewGuard(o.Token, devices),
 		UI:        ui,
