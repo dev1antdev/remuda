@@ -140,8 +140,7 @@ func TestStatusAndAlerts(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	s.refresh() // the one Replace started may still run; this one is synchronous and idempotent
-	waitIdle(s)
+	s.Wait() // the reading Replace started in the background
 	st := byID(s.Status())
 	if st["all"].Spent != 19.40 || st["all"].Collected == "" {
 		t.Errorf("every machine: spent %.2f collected %q", st["all"].Spent, st["all"].Collected)
@@ -216,14 +215,14 @@ func TestEditResetsAlerts(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.refresh()
-	waitIdle(s)
+	s.Wait()
 	if len(n.all()) != 1 {
 		t.Fatalf("fired %d, want the 80 %% one", len(n.all()))
 	}
 	if _, err := s.Replace([]Budget{{ID: "a", Limit: 10, Period: "day", Note: "renamed"}}); err != nil {
 		t.Fatal(err)
 	}
-	waitIdle(s)
+	s.Wait()
 	s.refresh()
 	if len(n.all()) != 1 {
 		t.Errorf("a note change fired again: %d", len(n.all()))
@@ -231,7 +230,7 @@ func TestEditResetsAlerts(t *testing.T) {
 	if _, err := s.Replace([]Budget{{ID: "a", Limit: 11, Period: "day"}}); err != nil {
 		t.Fatal(err)
 	}
-	waitIdle(s)
+	s.Wait()
 	s.refresh()
 	if len(n.all()) != 2 {
 		t.Errorf("a raised limit did not start afresh: %d", len(n.all()))
@@ -248,7 +247,7 @@ func TestStatusWithoutReading(t *testing.T) {
 	if len(st) != 1 || st[0].Collected != "" || st[0].Spent != 0 {
 		t.Errorf("an unread period must answer without a figure: %+v", st)
 	}
-	waitIdle(s)
+	s.Wait()
 }
 
 func TestWords(t *testing.T) {
@@ -267,17 +266,4 @@ func byID(list []Status) map[string]Status {
 		out[st.ID] = st
 	}
 	return out
-}
-
-// waitIdle lets the reading a Replace or Status started in the background finish.
-func waitIdle(s *Service) {
-	for i := 0; i < 200; i++ {
-		s.mu.Lock()
-		busy := s.inflight
-		s.mu.Unlock()
-		if !busy {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
 }
