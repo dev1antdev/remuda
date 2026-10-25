@@ -57,7 +57,7 @@ export type AppState = {
   codeOpened: boolean; // the Code mode stays mounted once opened, so the editor never reloads
   popout: Selection | null; // the pane in the small window above every other app (app/pip.ts owns the window)
   footprint: boolean; // the files rail beside the lenses, a per-device pref
-  codeFile: { machineId: string; folder: string; path: string; n: number } | null; // a file the Code mode is asked to open, once
+  codeFile: { machineId: string; folder: string; path: string; line?: number; n: number } | null; // a file the Code mode is asked to open, once; folder "" keeps the one picked
   chatSession: string | null; // an older session of its folder the chat lens shows instead of the pane's live one; the export follows it
   reviewAsked: { machineId: string; dir: string } | null; // a folder the Review mode is asked to pick, once (a task's run)
   lastFile: { machineId: string; path: string } | null; // the file last opened in the viewer: what {file} means in a quick prompt
@@ -217,8 +217,8 @@ export const actions = {
   foundMatches(total: number) {
     app.set((s) => (s.find && s.find.total !== total ? { find: { ...s.find, total, at: clamp(s.find.at, total) } } : {}));
   },
-  openInCode(machineId: string, folder: string, path: string) {
-    app.set({ mode: "code", codeOpened: true, codeFile: { machineId, folder, path, n: ++codeOpens } });
+  openInCode(machineId: string, folder: string, path: string, line?: number) {
+    app.set({ mode: "code", codeOpened: true, codeFile: { machineId, folder, path, line, n: ++codeOpens } });
     writePref("mode", "code");
   },
 };

@@ -351,7 +351,12 @@ Open VSX). Each machine runs its own copy, bound to `127.0.0.1:7320` with
 no auth of its own; remuda is the door: `/code/<machine>/` goes through
 the same bearer token, locally to the port, remotely through a port
 forwarded over the ssh master the roster already uses. A file from the
-files rail opens here on its own tab. Install it on a
+files rail, from a row of the Changes lens or from the file viewer (at
+its line) opens here — in the editor already on screen when there is
+one, through code-server's own command line, so nothing reloads. The
+Code bar's **Follow** opens every file the agent on screen finishes
+editing, as it happens; **Reload the editor** gives the folder a fresh
+frame when the connection was lost. Install it on a
 machine with
 
 ```sh

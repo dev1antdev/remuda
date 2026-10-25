@@ -632,18 +632,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   same folder when the editor lost its connection or shows a stale
   state). `web/src/features/code/Code.tsx` is the picker
   (machine, then a folder from the roster's workspaces) and the iframe,
-  kept mounted behind the other modes once opened. `actions.openInCode(machine,
-  folder, path)` (the files rail's code button; store field `codeFile`)
-  switches the mode, moves the picker to that machine and folder and
-  mounts the frame with `payload=[["openFile","vscode-remote://<authority>/path"]]`
+  kept mounted behind the other modes once opened. `actions.openInCode(machine, folder, path, line?)` (the files rail's code button, the Changes lens's per-file button, the file viewer's header button — the last two at a line; store field `codeFile`, a folder of "" keeps the one picked) switches the mode and moves the picker to that machine and folder; **when that editor is already on screen** the file goes to it in place — `POST /api/code/{machine}/open {path, line}` → `code.Service.Open`, code-server's own CLI with `--reuse-window` over its IPC socket (`OpenScript`, tested; `file:line` carries the line; the CLI exits 0 without a listener, so its last line is read for "error") — and nothing reloads; only a first frame mounts with `payload=[["openFile","vscode-remote://<authority>/path"]]`
   (the path escaped per segment), which the workbench opens on load —
   the authority is what code-server's own page states (`Status.Authority`,
   read off `data-settings` by the probe: "remote" since 4.9x, the host
   before; the page's host when the probe found none), or the editor
   answers "Unable to resolve resource"; the frame's address is settled once per request, so
-  coming back to the folder later does not open the file again; a path
-  that is the folder itself opens no file (the rail can name it after a
-  Read of the directory). The flag `-code-port`
+  coming back to the folder later does not open the file again; a path that is the folder itself opens no file (the rail can name it after a Read of the directory). **Follow** (the Code bar's button, pref `code.follow`): while the pane on screen in Agents runs an agent on this machine, its tail is polled at a tile's pace (`useChat`, `last=4`) and every edit it finishes — `newestEdit` in `code/follow.ts`, tested: the last Edit / Write / MultiEdit / NotebookEdit with a result and no error, by `tool_id` — opens in the editor the same way; what was already there when Follow began is not news. The flag `-code-port`
   changes the port on every machine at once.
 - `web/src/lib/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
   provider (`terminal/engine/links.ts`) and the chat linkifier; keeps a

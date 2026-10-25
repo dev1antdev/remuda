@@ -1,6 +1,9 @@
 package code
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestSettingOfReadsTheWorkbenchPage(t *testing.T) {
 	page := []byte(`<meta id="vscode-workbench-web-configuration" data-settings="{&quot;remoteAuthority&quot;:&quot;remote&quot;,&quot;serverBasePath&quot;:&quot;.&quot;,&quot;productConfiguration&quot;:{&quot;codeServerVersion&quot;:&quot;4.140.0&quot;}}">`)
@@ -19,5 +22,18 @@ func TestSettingOfReadsTheWorkbenchPage(t *testing.T) {
 	}
 	if got := settingOf([]byte(`<html>nothing here</html>`), "remoteAuthority"); got != "" {
 		t.Fatalf("authority = %q, want none", got)
+	}
+}
+
+func TestOpenScriptQuotesThePathAndCarriesTheLine(t *testing.T) {
+	got := OpenScript("/Users/me/Projects/a b/it's.go", 0)
+	if !strings.Contains(got, `--reuse-window '/Users/me/Projects/a b/it'\''s.go'`) || !strings.Contains(got, "code-server") {
+		t.Fatalf("script = %s", got)
+	}
+	if got := OpenScript("/w/main.go", 42); !strings.Contains(got, `'/w/main.go:42'`) {
+		t.Fatalf("line: %s", got)
+	}
+	if lastLine("a\n[12:00] error got error from Code {\"errno\":-2}\n") != `[12:00] error got error from Code {"errno":-2}` {
+		t.Fatal("lastLine")
 	}
 }

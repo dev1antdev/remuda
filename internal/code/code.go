@@ -19,6 +19,8 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/script"
+	"github.com/dev1antdev/remuda/internal/shell"
 )
 
 const DefaultPort = 7320
@@ -113,6 +115,35 @@ func settingOf(page []byte, name string) string {
 		return ""
 	}
 	return html.UnescapeString(string(m[1]))
+}
+
+// Open asks the machine's code-server to open a file in the editor already on screen — its own CLI over its IPC socket,
+// so the frame never reloads and the editor keeps its state. The CLI exits 0 even when no editor listens, so its words
+// are read for an error.
+func (s *Service) Open(mc *machines.Machine, path string, line int) error {
+	out, err := shell.Text(mc, OpenScript(path, line), 15*time.Second)
+	if err != nil {
+		return fmt.Errorf("code-server on %s: %w", mc.Label(), err)
+	}
+	if said := lastLine(out); strings.Contains(strings.ToLower(said), "error") {
+		return fmt.Errorf("code-server on %s: %s", mc.Label(), said)
+	}
+	return nil
+}
+
+// OpenScript is the command behind Open: code-server's CLI with --reuse-window, from PATH or where the installer puts it;
+// a line rides on the path as file:line, which the CLI reads the way VS Code's does.
+func OpenScript(path string, line int) string {
+	target := path
+	if line > 0 {
+		target = fmt.Sprintf("%s:%d", path, line)
+	}
+	return script.PATH + `; B=$(command -v code-server 2>/dev/null || echo "$HOME/.local/opt/code-server/bin/code-server"); "$B" --reuse-window ` + script.Quote(target) + ` 2>&1`
+}
+
+func lastLine(out string) string {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	return strings.TrimSpace(lines[len(lines)-1])
 }
 
 // Forget drops a cached verdict (after an install, say).

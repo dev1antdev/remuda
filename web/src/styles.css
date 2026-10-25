@@ -5040,6 +5040,10 @@ button.usage-row:hover {
   background: var(--bg-raised);
 }
 
+.code-follow {
+  gap: 6px;
+}
+
 .code-version {
   margin-left: auto;
   font-size: 11px;
