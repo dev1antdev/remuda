@@ -5,16 +5,18 @@
 import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
 import Icon, { type IconName } from "./icons";
+import Tip from "./Tip";
 
 export type MenuItem =
   | { label: string; icon?: IconName; hint?: string; shortcut?: string; checked?: boolean; danger?: boolean; disabled?: boolean; keepOpen?: boolean; onSelect: () => void }
   | { sep: true }
   | { heading: string };
 
-export default function Menu({ trigger, items, align = "end", side = "bottom", label }: { trigger: ReactNode; items: MenuItem[]; align?: "start" | "center" | "end"; side?: "top" | "bottom" | "left" | "right"; label?: string }) {
+export default function Menu({ trigger, tip, items, align = "end", side = "bottom", label }: { trigger: ReactNode; tip?: ReactNode; items: MenuItem[]; align?: "start" | "center" | "end"; side?: "top" | "bottom" | "left" | "right"; label?: string }) {
+  const opener = <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>;
   return (
     <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
+      {tip ? <Tip text={tip}>{opener}</Tip> : opener}
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="menu" align={align} side={side} sideOffset={6} collisionPadding={8} aria-label={label}>
           {items.map((item, i) =>

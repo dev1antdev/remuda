@@ -6,7 +6,7 @@ import { basename } from "@/lib/text";
 import { machineLabel } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
 import { fillClass, tok, usd } from "@/features/usage/format";
-import { Icon } from "@/ui";
+import { Icon, Tip } from "@/ui";
 import type { Located } from "./current";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens } from "./store";
@@ -19,9 +19,11 @@ export default function Header({ current }: { current: Located | null }) {
   const viewer = app.use((s) => s.viewer);
   return (
     <header className="topbar">
-      <button type="button" className="burger icon-btn" onClick={actions.toggleDrawer} title="Menu" aria-expanded={drawer}>
-        <Icon name="menu" size={18} />
-      </button>
+      <Tip text="The machines and their agents">
+        <button type="button" className="burger icon-btn" onClick={actions.toggleDrawer} aria-label="Machines" aria-expanded={drawer}>
+          <Icon name="menu" size={18} />
+        </button>
+      </Tip>
       <span className="title">
         {mode !== "herdr" ? null : viewer ? (
           <>
@@ -46,19 +48,17 @@ export default function Header({ current }: { current: Located | null }) {
         </div>
       )}
       {popOutSupported && (
-        <button
-          type="button"
-          className="icon-btn bell"
-          title="Pop out this agent: a small window above every other app"
-          disabled={!current || !!viewer}
-          onClick={() => current && void popOut({ machineId: current.machine.id, paneId: current.pane.id })}
-        >
-          <Icon name="pip" size={18} />
-        </button>
+        <Tip text="Pop out this agent: a small window above every other app">
+          <button type="button" className="icon-btn bell" aria-label="Pop out" disabled={!current || !!viewer} onClick={() => current && void popOut({ machineId: current.machine.id, paneId: current.pane.id })}>
+            <Icon name="pip" size={18} />
+          </button>
+        </Tip>
       )}
-      <button type="button" className="icon-btn bell" title="Search every conversation (also from ⌘K / Ctrl+K)" onClick={() => actions.openSearch()}>
-        <Icon name="search" size={18} />
-      </button>
+      <Tip text="Search every conversation on every machine (⌘K / Ctrl+K has it too)">
+        <button type="button" className="icon-btn bell" aria-label="Search" onClick={() => actions.openSearch()}>
+          <Icon name="search" size={18} />
+        </button>
+      </Tip>
     </header>
   );
 }

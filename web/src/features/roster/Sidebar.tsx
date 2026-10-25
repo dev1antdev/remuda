@@ -5,7 +5,7 @@ import { act } from "@/app/act";
 import { useCurrent } from "@/app/current";
 import { actions } from "@/app/store";
 import { usePref } from "@/lib/prefs";
-import { Icon, Menu, Notice } from "@/ui";
+import { Icon, Menu, Notice, Tip } from "@/ui";
 import { removeMachine, type Machine, type Session } from "./api";
 import { HealthButton } from "./HealthButton";
 import { MachineMenu } from "./MachineMenu";
@@ -41,8 +41,9 @@ export default function Sidebar() {
           <Menu
             label="New"
             align="end"
+            tip="New: a workspace on a machine, or a PC"
             trigger={
-              <button type="button" className="icon-btn" aria-label="New" title="New workspace, or a PC">
+              <button type="button" className="icon-btn" aria-label="New">
                 <Icon name="plus" size={14} />
               </button>
             }
@@ -55,8 +56,9 @@ export default function Sidebar() {
           <Menu
             label="Sidebar"
             align="end"
+            tip="Message several agents, the order, the sidebar settings"
             trigger={
-              <button type="button" className="icon-btn" aria-label="More" title="Message several agents, the order, the settings">
+              <button type="button" className="icon-btn" aria-label="More">
                 <Icon name="more" size={14} />
               </button>
             }
@@ -100,9 +102,11 @@ export default function Sidebar() {
                 </span>
               )}
               <HealthButton machine={m} latest={latest} serverVersion={serverVersion} />
-              <button type="button" className="icon-btn" title={`New workspace on ${m.label}`} disabled={m.state !== "connected"} onClick={() => actions.openDialog({ kind: "workspace", machineId: m.id })}>
-                <Icon name="plus" size={14} />
-              </button>
+              <Tip text={`New workspace on ${m.label}`}>
+                <button type="button" className="icon-btn" aria-label={`New workspace on ${m.label}`} disabled={m.state !== "connected"} onClick={() => actions.openDialog({ kind: "workspace", machineId: m.id })}>
+                  <Icon name="plus" size={14} />
+                </button>
+              </Tip>
               <MachineMenu machine={m} onRename={() => actions.openDialog({ kind: "renameMachine", machine: m })} onRemove={m.id !== "local" && m.source !== "herdr" ? () => onRemoveMachine(m) : undefined} />
             </div>
             {m.state === "error" && (

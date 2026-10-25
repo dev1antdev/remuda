@@ -1087,8 +1087,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and `Tip.tsx` a tooltip (`TipProvider` once over the page): Radix's
   DropdownMenu and Tooltip in the design system's clothes (`.menu`,
   `.menu-item` with an icon slot, a hint and a shortcut, `.tip`) — the
-  keyboard walks a menu, Esc closes, both open where there is room, a
-  tooltip never opens on a touch; `radix-ui` is the one dependency
+  keyboard walks a menu, Esc closes, both open where there is room, a tooltip never opens on a touch — every icon-only button of the
+  header, the sidebar, the tab strip, the composer and a wall tile
+  carries one, with an `aria-label` for the reader, and a `Menu` takes a
+  `tip` for its trigger; `radix-ui` is the one dependency
   beside react and xterm, for the primitives whose keyboard and focus
   behaviour is not worth writing twice. `Resizer.tsx` (over `panels.ts`, tested:
   `PANELS`, `clampWidth`, `dragWidth`, `keyWidth`) is **a panel's
