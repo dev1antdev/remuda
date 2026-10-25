@@ -26,6 +26,7 @@ export type AppDialog =
   | { kind: "settings" } // the theme, the sidebar, the panels, the way to the alerts and the keys
   | { kind: "renameMachine"; machine: Machine }
   | { kind: "recap"; machineId: string; paneId: string; session: string | null; dir: string; title: string } // one conversation's recap; paneId "" = a transcript on its own
+  | { kind: "import-issue"; projectId?: number } // a task from a GitHub issue, into the project named or the one picked in the dialog
   | null;
 
 export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
@@ -63,6 +64,7 @@ export type AppState = {
   lastFile: { machineId: string; path: string } | null; // the file last opened in the viewer: what {file} means in a quick prompt
   full: boolean; // the lens takes the whole screen: no header, no sidebar, no rail (app/full.tsx)
   find: Find | null; // the find bar over the chat lens or the transcript viewer, null while closed
+  taskAsked: { projectId: number; taskId: number; start: boolean; n: number } | null; // a task the Tasks mode is asked to open, once (one just made from an issue); start = the agent dialog on it too
 };
 
 const fromURL = readURL();
@@ -91,10 +93,12 @@ export const app = createStore<AppState>({
   lastFile: null,
   full: false,
   find: null,
+  taskAsked: null,
 });
 
 let jumps = 0;
 let codeOpens = 0;
+let taskOpens = 0;
 
 export const actions = {
   // a pane asked for by a click in the sidebar, a notification, a search hit, a task
@@ -220,5 +224,13 @@ export const actions = {
   openInCode(machineId: string, folder: string, path: string, line?: number) {
     app.set({ mode: "code", codeOpened: true, codeFile: { machineId, folder, path, line, n: ++codeOpens } });
     writePref("mode", "code");
+  },
+  // openTask takes the person to a task in the Tasks mode, with the start-an-agent dialog on it when asked
+  openTask(projectId: number, taskId: number, start = false) {
+    app.set({ mode: "tasks", full: false, taskAsked: { projectId, taskId, start, n: ++taskOpens } });
+    writePref("mode", "tasks");
+  },
+  taskOpened() {
+    app.set({ taskAsked: null });
   },
 };
