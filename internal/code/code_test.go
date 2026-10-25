@@ -60,7 +60,7 @@ func TestWithThemeSetsTheColourTheme(t *testing.T) {
 	if !strings.HasPrefix(got, "{\n  \"workbench.colorTheme\": \"Catppuccin Frappé\",\n") {
 		t.Fatalf("added: %s", got)
 	}
-	if ThemeName("light") != "Catppuccin Latte" || ThemeName("dark") != "Catppuccin Frappé" || ThemeName("") != "Catppuccin Frappé" {
+	if ThemeName("latte") != "Catppuccin Latte" || ThemeName("light") != "Catppuccin Latte" || ThemeName("frappe") != "Catppuccin Frappé" || ThemeName("macchiato") != "Catppuccin Macchiato" || ThemeName("mocha") != "Catppuccin Mocha" || ThemeName("dark") != "Catppuccin Frappé" || ThemeName("") != "Catppuccin Frappé" {
 		t.Fatal("names")
 	}
 }

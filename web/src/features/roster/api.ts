@@ -17,7 +17,19 @@ export type Pane = {
   radar?: { state: "working" | "blocked" | "done" | "idle" | "unknown"; last_active?: number; since?: number; alert?: string };
   usage?: PaneUsage;
   said?: string; // the first line of the agent's last answer, once it finished
-  pr?: { url: string; label: string }; // the last pull or merge request the agent named, "PR #15" / "MR !9"
+  pr?: PullRequest; // the last pull or merge request the agent named, "PR #15" / "MR !9"
+};
+
+// PullRequest is the request the agent named and, for a GitHub one gh on the machine could read, how it stands
+export type PullRequest = { url: string; label: string; status?: PRStatus };
+
+export type PRStatus = {
+  state: string; // OPEN | MERGED | CLOSED
+  draft: boolean;
+  mergeable: string; // MERGEABLE | CONFLICTING | UNKNOWN
+  review: string; // APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | ""
+  checks: { total: number; pass: number; fail: number; pending: number; skipped: number };
+  at: string;
 };
 
 export type PaneUsage = {

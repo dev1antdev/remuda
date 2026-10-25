@@ -52,6 +52,13 @@ type JobDone struct {
 // LocalHerdrDown says the local herdr has not answered for a few polls in a row.
 type LocalHerdrDown struct{ Err error }
 
+// PullRequestNamed says a pane's agent named a pull or merge request in its answers, first seen or changed.
+type PullRequestNamed struct {
+	Pane  PaneRef
+	URL   string
+	Label string
+}
+
 // Bus delivers each event to every subscriber of its type, in subscription order, on the publisher's goroutine.
 type Bus struct {
 	mu   sync.RWMutex

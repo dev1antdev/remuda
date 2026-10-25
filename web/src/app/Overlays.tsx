@@ -16,6 +16,7 @@ import FileViewer from "@/features/files/FileViewer";
 import Schedules from "@/features/schedules/Schedules";
 import Search from "@/features/search/Search";
 import RecapDialog from "@/features/standup/RecapDialog";
+import ImportIssueDialog from "@/features/tasks/ImportIssueDialog";
 import Standup from "@/features/standup/StandupPanel";
 import UpdatesDialog from "@/features/updates/Updates";
 import Usage from "@/features/usage/Usage";
@@ -134,6 +135,16 @@ export default function Overlays() {
       {dialog?.kind === "broadcast" && <BroadcastDialog agents={targets} onClose={actions.closeDialog} />}
       {dialog?.kind === "keys" && <KeysDialog onClose={actions.closeDialog} />}
       {dialog?.kind === "settings" && <SettingsDialog onClose={actions.closeDialog} />}
+      {dialog?.kind === "import-issue" && (
+        <ImportIssueDialog
+          projectId={dialog.projectId}
+          onClose={actions.closeDialog}
+          onCreated={(task, start) => {
+            actions.closeDialog();
+            actions.openTask(task.project_id, task.id, start);
+          }}
+        />
+      )}
       {dialog?.kind === "recap" && <RecapDialog machineId={dialog.machineId} paneId={dialog.paneId} session={dialog.session} dir={dialog.dir} title={dialog.title} onClose={actions.closeDialog} />}
       {dialog?.kind === "machine" && (
         <AddMachineDialog

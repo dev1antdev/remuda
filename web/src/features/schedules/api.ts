@@ -1,14 +1,19 @@
-// Schedules: prompts to an agent on a timetable.
+// Schedules: prompts to an agent on a timetable, or the standup pushed as a digest.
 
 import { getJSON, sendJSON } from "@/lib/http";
 
+export type ScheduleKind = "prompt" | "digest";
+export type DigestSince = "midnight" | "24h" | "7d" | "last";
+
 export type Schedule = {
   id?: string;
+  kind?: ScheduleKind; // prompt when absent (a record from before the kinds)
   machine: string;
   dir: string;
   label: string;
   cron: string;
   prompt: string;
+  since?: DigestSince; // a digest's period
   enabled: boolean;
   next?: string; // the coming run, filled in by the list
   last_run?: string;
