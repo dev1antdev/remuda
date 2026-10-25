@@ -23,6 +23,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/quick"
 	"github.com/dev1antdev/remuda/internal/radar"
@@ -52,6 +53,7 @@ type Server struct {
 	Feed      *feed.Service
 	Radar     *radar.Tracker
 	Said      *said.Tracker
+	PRs       *prstatus.Tracker
 	Recap     *recap.Service
 	Usage     *usage.Tracker
 	Health    *health.Collector

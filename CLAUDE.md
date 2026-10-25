@@ -486,7 +486,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   default on with a mouse, a row of the View menu whatever the lens,
   disabled for a shell pane, hidden with the rail under 920 px and not polling there; **full screen** is the View menu's last row, `app/full.tsx` — store field `full`: the header, the sidebar and the rail go, the tab strip stays with its tools, the browser's own full screen is asked for where it exists; Esc outside a field or the terminal leaves, so does the browser's exit, and a mode change clears it; the palette has it), `Wall.tsx` (the **Wall mode**: every
   agent pane on a connected machine as a tile — the sidebar row's head
-  (mark, logo, label, workspace · machine, the pull request the agent named as a link, context % · cost), the last 12
+  (mark, logo, label, workspace · machine, the pull request the agent named as a link with its checks and review beside it (`internal/prstatus`), context % · cost), the last 12
   turns through `features/chat/Tail`, a compact composer; a click on the
   head opens the pane in Agents on the chat lens. `features/roster/wall.ts`
   says which panes make a tile and in what order — the roster's, stable, so
@@ -777,7 +777,35 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `pane.pr {url, label}` on the roster, kept while the agent works
   again, gone with the pane): a "PR #15" / "MR !9" link in a wall
   tile's head, in the sidebar row's tooltip, and "Open PR #15" in the
-  workspace's ⋯ menu.
+  workspace's ⋯ menu; a link first seen or changed goes on the bus as
+  `events.PullRequestNamed`.
+- `internal/prstatus/` — **the state of the pull request** an agent
+  named: `Tracker` hears `events.PullRequestNamed` and, for a GitHub one
+  (`/pull/`), runs `gh pr view <url> --json state,isDraft,mergeable,
+  reviewDecision,statusCheckRollup` on the pane's machine (`shell.Text`
+  over a `shell.Shell` the app finds through `fleet.Get`; the script from
+  `internal/script`; `Parse` counts the rollup's check runs and status
+  contexts as pass / fail / pending / skipped, tested on `shell.Fake`) —
+  read when the link appears, then at most every `Every` (2 min) on
+  `Touch`, which the roster handler calls, so a page nobody reads asks
+  GitHub nothing; one read in flight per machine; a pane gone
+  (`events.PaneStatus` to `Gone`) or a machine removed is forgotten; a
+  GitLab merge request is left alone. No gh, not signed in or a machine
+  away leaves the status absent with its reason, logged once an hour per
+  machine. The roster's `pane.pr.status {state, draft, mergeable,
+  review, checks {total, pass, fail, pending, skipped}, at}`
+  (`rosterPR`, so the ETag moves with it); `features/roster/prStatus.ts`
+  (tested: `checksWords` "2/2 checks" / "1 failed" / "3 running",
+  `reviewWords` merged / closed / draft / conflicts / approved / changes
+  requested / review pending, `checksTone` and `reviewTone` — red /
+  amber / green / dim / none, each chip its own — and `statusTone`, the
+  graver of the two, `prWords`) draws it as two `.pr-state` chips in the
+  `.tile-pr-group` beside the link in a wall tile's head (the review
+  chip goes in a tile under 560 px — `.tile` is a size container — and
+  under 920 px), in the sidebar row's tooltip and in the workspace
+  menu's "Open PR #15" row. gh runs as the person on their own machine, like
+  git does for the Changes lens: remuda itself still makes no request
+  but the version checks.
 - `internal/recap/` — what a conversation came to, and the **standup**
   over every agent. `Of(turns, since)` (pure, tested) counts the turns
   from `since` on: prompts, answers (turns that ended in text), the
