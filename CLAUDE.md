@@ -626,16 +626,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   is `Machine.CodeAddr(port)`: the port itself locally, a loopback port
   forwarded over the ssh master (`sshx.Conn.ForwardTCP`) remotely, remembered
   per master. `GET /api/code/{machine}` probes `/healthz` (a good answer is
-  cached 15s; `?check=1` re-probes). `web/src/features/code/Code.tsx` is the picker
+  cached 15s; `?check=1` re-probes) and reads the workbench page for
+  the remote authority and code-server's version (`settingOf`, tested),
+  which the Code bar shows beside a reload button (a fresh frame for the
+  same folder when the editor lost its connection or shows a stale
+  state). `web/src/features/code/Code.tsx` is the picker
   (machine, then a folder from the roster's workspaces) and the iframe,
   kept mounted behind the other modes once opened. `actions.openInCode(machine,
   folder, path)` (the files rail's code button; store field `codeFile`)
   switches the mode, moves the picker to that machine and folder and
-  mounts the frame with `payload=[["openFile","vscode-remote://<page
-  host>/path"]]` (the path escaped per segment), which the workbench
-  opens on load — the authority is the page's own host because the proxy
-  keeps `Host`; the frame's address is settled once per request, so
-  coming back to the folder later does not open the file again. The flag `-code-port`
+  mounts the frame with `payload=[["openFile","vscode-remote://<authority>/path"]]`
+  (the path escaped per segment), which the workbench opens on load —
+  the authority is what code-server's own page states (`Status.Authority`,
+  read off `data-settings` by the probe: "remote" since 4.9x, the host
+  before; the page's host when the probe found none), or the editor
+  answers "Unable to resolve resource"; the frame's address is settled once per request, so
+  coming back to the folder later does not open the file again; a path
+  that is the folder itself opens no file (the rail can name it after a
+  Read of the directory). The flag `-code-port`
   changes the port on every machine at once.
 - `web/src/lib/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
   provider (`terminal/engine/links.ts`) and the chat linkifier; keeps a

@@ -5040,6 +5040,14 @@ button.usage-row:hover {
   background: var(--bg-raised);
 }
 
+.code-version {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+
+
 .code-bar .sel {
   height: var(--ctl-sm);
 }
