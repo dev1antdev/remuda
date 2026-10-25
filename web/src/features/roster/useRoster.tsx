@@ -1,8 +1,10 @@
-// The roster, read once for the whole page: polled every three seconds while the tab is visible, with an
-// ETag so an unchanged roster costs nothing and re-renders nothing. Every screen reads it through useRoster.
+// The roster, read once for the whole page: reloaded when the event socket says it moved and polled as the safety
+// net — every fifteen seconds with the socket up, every three without — with an ETag so an unchanged roster costs
+// nothing and re-renders nothing. Every screen reads it through useRoster.
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { setRosterRefresh } from "@/app/act";
+import { startLive, useLive, useLiveConnected } from "@/lib/live";
 import { useQuery } from "@/lib/query";
 import { fetchRoster, type AgentKind, type Latest, type Machine, type Roster, type Tailscale } from "./api";
 
@@ -24,6 +26,7 @@ const RosterContext = createContext<RosterState>(empty);
 export function RosterProvider({ children }: { children: ReactNode }) {
   const etag = useRef<string | null>(null);
   const [stale, setStale] = useState<string | null>(null);
+  const connected = useLiveConnected();
   const { data, error, reload } = useQuery<Roster>(
     async () => {
       const res = await fetchRoster(etag.current);
@@ -33,9 +36,13 @@ export function RosterProvider({ children }: { children: ReactNode }) {
       return res.roster;
     },
     [],
-    { every: 3000 },
+    { every: connected ? 15000 : 3000 },
   );
   useEffect(() => setRosterRefresh(reload), [reload]);
+  useEffect(() => {
+    startLive();
+  }, []);
+  useLive("roster", reload);
   const value = useMemo<RosterState>(
     () => ({
       machines: data?.machines ?? [],

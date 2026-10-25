@@ -58,6 +58,12 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   per pane (all viewers share one attach; replay buffer for late joiners).
 - **Chat lens** — the transcript herdr names via `agent_session`, parsed
   into turns (text, thinking, tool calls with outputs), polled with ETags.
+- **One socket for the news** — the page keeps one WebSocket to its
+  remuda, which says when the roster moved or a transcript grew, so the
+  sidebar, the wall and the chat redraw within about a second instead of
+  on the next poll, and the polls themselves slow down to a safety net:
+  fewer requests, less battery on a phone. Without the socket (an old
+  proxy, a hiccup) everything polls as before.
 - **The address follows you** — `?machine=&pane=&mode=&lens=` is what you
   are looking at, so a link, a reload or a notification lands on the same
   pane in the same lens.

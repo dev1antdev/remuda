@@ -92,6 +92,26 @@ func (c *Service) SessionVersion(machineID, paneID string) (string, bool) {
 	return version.String(), true
 }
 
+// ConversationVersion is what the chat's ETag follows — the live file's version and its subagents' stamp — false without a session file.
+func (c *Service) ConversationVersion(machineID, paneID string) (string, bool) {
+	pane, _ := c.Pane(machineID, paneID)
+	if pane == nil {
+		return "", false
+	}
+	mc, path, ok := c.SessionFile(machineID, pane)
+	if !ok {
+		return "", false
+	}
+	version, err := mc.Transcripts.Version(path)
+	if err != nil {
+		return "", false
+	}
+	if stamp := mc.Transcripts.SubagentsStamp(path, time.Now()); stamp != "" {
+		return version.String() + "-" + stamp, true
+	}
+	return version.String(), true
+}
+
 // LastWriteOfPane is LastWrite by pane id, for the watchdog.
 func (c *Service) LastWriteOfPane(machineID, paneID string) (time.Time, bool) {
 	pane, _ := c.Pane(machineID, paneID)

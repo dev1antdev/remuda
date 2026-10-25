@@ -22,6 +22,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/quick"
@@ -62,6 +63,7 @@ type Server struct {
 	Tailscale func() tsnetx.Status
 	Guard     *auth.Guard
 	UI        fs.FS
+	Live      *live.Hub // the page's event stream, nil without one
 
 	streams termStreams
 }
@@ -88,6 +90,7 @@ func (s *Server) Handler() http.Handler {
 	s.questionRoutes(api)
 	s.feedRoutes(api)
 	s.recapRoutes(api)
+	s.liveRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard
