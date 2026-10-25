@@ -101,7 +101,7 @@ export default function Overlays() {
           agents={agents}
           defaultMachine={dialog.machineId}
           onClose={actions.closeDialog}
-          onCreate={async (machine, dir, name, agent) => landOn(machine, await createSession({ machine, name, dir, agent }))}
+          onCreate={async (machine, dir, name, agent, extras) => landOn(machine, await createSession({ machine, name, dir, agent, ...extras }))}
         />
       )}
       {dialog?.kind === "tab" && (
@@ -109,7 +109,7 @@ export default function Overlays() {
           session={dialog.session}
           agents={agents}
           onClose={actions.closeDialog}
-          onCreate={async (name, agent) => landOn(dialog.machineId, await createTab({ machine: dialog.machineId, workspace: dialog.session.id, name, agent }))}
+          onCreate={async (name, agent, extras) => landOn(dialog.machineId, await createTab({ machine: dialog.machineId, workspace: dialog.session.id, name, agent, ...extras }))}
         />
       )}
       {dialog?.kind === "worktree" && (
@@ -117,8 +117,8 @@ export default function Overlays() {
           session={dialog.session}
           agents={agents}
           onClose={actions.closeDialog}
-          onCreate={async (branch, base, name, agent) =>
-            landOn(dialog.machineId, await createWorktree({ machine: dialog.machineId, workspace: dialog.session.id, branch, base, name, agent }))
+          onCreate={async (branch, base, name, agent, extras) =>
+            landOn(dialog.machineId, await createWorktree({ machine: dialog.machineId, workspace: dialog.session.id, branch, base, name, agent, ...extras }))
           }
         />
       )}

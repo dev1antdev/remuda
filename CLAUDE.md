@@ -1090,18 +1090,42 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `machineFor` (query → `X-Remuda-Machine` header → POST body `machine`)
   and `ready()`. The three create routes share `create()` (agent kind
   validated by `sessions.KnownAgent` *before* any RPC, and a `resume`
-  session id by `text.SessionID` with an agent to go with it; container
-  made, agent started by `sessions.StartAgent`, or `StartAgentResumed`
-  with `resume`, watcher refreshed); the two
+  session id by `text.SessionID` with an agent to go with it, as are the
+  person's `model`, `args` and `prompt` — `createReq.start()` refuses
+  them for a shell, splits the arguments and asks `sessions.StartArgs`
+  whether the kind takes the model; container made, agent started by
+  `sessions.StartAgentWith`, watcher refreshed, and a `prompt` handed to
+  `Input.FirstPrompt` in a goroutine, a failure a note in the activity
+  with the pane to open, `firstPrompt`); the two
   close routes share `closeHandler`, the two renames (`PATCH
   /api/tabs/{id}`, `PATCH /api/sessions/{id}`, body `{label}`) share
   `renameHandler` — herdr's `tab.rename` / `workspace.rename`.
 - `internal/sessions/` — the input side of herdr: `Agents` / `KnownAgent`,
-  `StartAgent` (retries `agent_pane_busy` for a few seconds), `StartAgentResumed` (the same, with the kind's resume arguments after a session id — `ResumeArgs`, the one table of them: `claude --resume`, `codex resume`, `gemini --resume`, `kimi --session`; the restarts use it too), `Keys`
+  `StartAgent` (retries `agent_pane_busy` for a few seconds), `StartAgentResumed` (the same, with the kind's resume arguments after a session id — `ResumeArgs`, the one table of them: `claude --resume`, `codex resume`, `gemini --resume`, `kimi --session`; the restarts use it too), both thin over
+  `StartAgentWith(client, pane, kind, Start{Resume, Model, Args})` —
+  `StartArgs` lays the command line out as resume, then the model
+  (`ModelArgs`, the one table of model flags: `--model` for claude, codex,
+  gemini and kimi; a kind without one refuses a model), then the person's
+  own arguments, which `SplitArgs` reads from what they typed the way a
+  shell would (quotes, backslashes; a control character or an unclosed
+  quote is an error; nothing else is filtered — the flags are their
+  choice) — `Keys`
   (herdr's `send_keys` grammar), `RefOK` (a branch name git gets as an
   argument), and `Input`: one lock per pane, `Submit` (`agent.prompt`, else
   `send_text` + Enter; `ErrAgentBusy` while a menu is open), `SendKeys`,
-  `SubmitToFolder` (the scheduler's door).
+  `SubmitToFolder` (the scheduler's door), and `FirstPrompt` (the text a
+  person wrote in the New workspace / tab / worktree dialog for the agent
+  they started: `agent.prompt` under the pane's lock every
+  `FirstPromptRetry` while the agent is still coming up, until it takes
+  the text or `FirstPromptTimeout` passes; a dialog on the agent's screen
+  — Claude Code's trust question for the folder — is waited through and
+  never answered, the folder being theirs to trust; the error says why).
+  The page's side is `features/roster/startOptions.ts` (pure, tested:
+  `modelChoices`, `optionsFor`, `choiceFor`, pref `start.model:<kind>`
+  for the model last used) under the dialogs' folded **Options**
+  (`StartOptionsFields` in `dialogs.tsx`: the model — Opus / Sonnet /
+  Haiku or a typed id for Claude Code, an id for the others — extra
+  arguments, a first prompt).
 - `internal/chat/` — the conversation behind a pane: `Service.Open` (which
   file the chat lens shows: the pane's live one followed through
   compactions, a session of its folder by id, or a transcript on its own

@@ -72,7 +72,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   phone, the wall and the pop-out too. A dialog remuda cannot read leaves
   the blind ↑ ↓ Enter Esc.
 - **New workspace / close** — `workspace.create` + `agent.start` (any agent
-  herdr has a manifest for), `workspace.close`.
+  herdr has a manifest for, with the model, extra arguments and first
+  prompt you chose under Options), `workspace.close`.
 - **The rail** — the places of the page down the left edge, each an
   icon with its name: Agents, Wall, Tasks, Code, Review, then Standup,
   Usage, Schedules, Activity and Settings. On a phone it lies along the
@@ -600,7 +601,16 @@ removes one you added here.
 
 **A new workspace** names a machine and a folder; the folder is picked
 from the machine's own folders (repositories marked, the workspaces
-already there as quick picks) or typed.
+already there as quick picks) or typed. Under the agent, **Options**
+unfolds what else to tell it: the model (Opus, Sonnet or Haiku for
+Claude Code, or any model id; an id for Codex, Gemini and Kimi Code),
+extra arguments as you would type them after the command
+(`--permission-mode plan`), and a first prompt, which remuda hands over
+once the agent is up — a trust question Claude Code asks for the folder
+is yours to answer first, and the prompt waits two minutes for it before
+giving up with a note in Activity. The model last used for each agent is
+remembered on the device. A new tab and a new worktree take the same
+options.
 
 **Several remuda at once:** each machine may run its own (the phone on
 the studio Mac's, the desk on its own). herdr lets one client attach to a terminal
