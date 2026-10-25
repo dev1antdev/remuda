@@ -10,7 +10,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/auth"
 )
 
-const deviceTestToken = "0123456789abcdef0123456789abcdef01234567"
+// deviceTestToken is long enough for the guard and plain enough that a secret scan reads it as what it is
+var deviceTestToken = strings.Repeat("test-token-", 4)
 
 // deviceServer is the device routes behind the guard over a fresh store, with two devices signed in.
 func deviceServer(t *testing.T) (http.Handler, *auth.Devices, *http.Cookie, *http.Cookie) {
