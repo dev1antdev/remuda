@@ -188,10 +188,15 @@ func WorkspaceJSON(folders []string) []byte {
 	return append(out, '\n')
 }
 
-// ThemeName is the Catppuccin theme of the page's theme, as the extension names it.
-func ThemeName(theme string) string {
-	if theme == "light" {
+// ThemeName is the Catppuccin theme of the page's flavour, as the extension names it; an unknown word is Frappé.
+func ThemeName(flavor string) string {
+	switch flavor {
+	case "latte", "light":
 		return "Catppuccin Latte"
+	case "macchiato":
+		return "Catppuccin Macchiato"
+	case "mocha":
+		return "Catppuccin Mocha"
 	}
 	return "Catppuccin Frappé"
 }
