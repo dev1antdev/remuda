@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { findPaths } from "@/lib/paths";
+import { highlightLines, langOf } from "@/lib/highlight";
 import type { OpenFile } from "@/features/files/target";
 import Icon from "@/ui/icons";
+import { tokenNodes } from "@/ui/Tokens";
 import { copyText, openUrl } from "@/lib/host";
 
 // links open in a new tab — never by navigating this page
@@ -304,6 +306,8 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string): React
   });
 }
 
+// CodeBlock is a fence: its language in the bar, a copy button, the first 40 lines until unfolded, the code coloured
+// by lib/highlight when the language is known (a fence without one, or a dump past the cap, stays one plain string)
 function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const lines = code.split("\n");
   const long = lines.length > 40;
@@ -311,7 +315,10 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(copiedTimer.current), []);
+  const language = langOf(lang);
+  const coloured = useMemo(() => (language ? highlightLines(code, language) : null), [code, language]);
   const shown = open ? code : lines.slice(0, 40).join("\n");
+  const shownLines = coloured && (open ? coloured : coloured.slice(0, 40));
   return (
     <div className="md-pre">
       <div className="md-pre-bar">
@@ -332,7 +339,16 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
         </button>
       </div>
       <pre>
-        <code>{shown}</code>
+        <code>
+          {shownLines
+            ? shownLines.map((tokens, i) => (
+                <Fragment key={i}>
+                  {i > 0 && "\n"}
+                  {tokenNodes(tokens)}
+                </Fragment>
+              ))
+            : shown}
+        </code>
       </pre>
       {long && (
         <button type="button" className="linkish md-more" onClick={() => setOpen((o) => !o)}>
