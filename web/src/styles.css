@@ -7322,3 +7322,25 @@ body.popout {
     bottom: calc(128px + env(safe-area-inset-bottom));
   }
 }
+
+/* ---- the Options fold under the agent of the New workspace / tab / worktree dialogs (features/roster/dialogs.tsx) ---- */
+.start-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.start-options-toggle {
+  align-self: flex-start;
+  margin: -4px 0 0 -6px;
+}
+
+.start-options label small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--fg-faint);
+}
+
+.start-options textarea {
+  min-height: 72px;
+}
