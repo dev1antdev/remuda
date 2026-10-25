@@ -77,10 +77,11 @@ export type Health = {
   outdated_hooks?: { agent: string; have?: string; want?: string }[]; // herdr's agent integrations behind the installed herdr
   plugins?: { id: string; source: string }[]; // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
   error?: string;
+  code_server?: string; // the release linked under ~/.local/opt/code-server
 };
 
 // the newest versions out there; remuda is its own newest release on GitHub
-export type Latest = { at: string; claude?: string; codex?: string; gemini?: string; kimi?: string; herdr?: string; remuda?: string };
+export type Latest = { at: string; claude?: string; codex?: string; gemini?: string; kimi?: string; herdr?: string; remuda?: string; code?: string }; // code: the code-server this remuda installs
 
 export type Tailscale = { state: "starting" | "needs_login" | "running" | "error"; login_url?: string; url?: string; hostname?: string; error?: string };
 

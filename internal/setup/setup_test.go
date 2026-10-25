@@ -506,3 +506,9 @@ func TestARemudaStartedByHandStopsWhenHerdrGoes(t *testing.T) {
 		t.Errorf("herdr's server was not stopped:\n%s", calls())
 	}
 }
+
+func TestCodeVersionMatchesTheScript(t *testing.T) {
+	if !strings.Contains(codeScript, `CODE_VERSION:-`+CodeVersion+`}`) {
+		t.Fatalf("install-code.sh does not default to code-server %s", CodeVersion)
+	}
+}

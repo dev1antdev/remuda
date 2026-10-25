@@ -162,3 +162,25 @@ func TestReleaseUpdate(t *testing.T) {
 		t.Fatalf("no checksums: %+v", n)
 	}
 }
+
+func TestOfferedIncludesCodeServerWhenInstalled(t *testing.T) {
+	r := &health.Report{CodeServer: "4.139.0", Remuda: "v0.8.0"}
+	var code *Update
+	for _, u := range Offered(r, health.Latest{Code: "4.140.0"}) {
+		if u.What == "code" {
+			u := u
+			code = &u
+		}
+	}
+	if code == nil || !strings.Contains(code.Note, "4.139.0 → 4.140.0") || !strings.Contains(code.Command, `remuda" code install`) {
+		t.Fatalf("code update = %+v", code)
+	}
+	if _, err := Plan("code", &health.Report{CodeServer: "4.140.0"}); err == nil {
+		t.Fatal("no remuda on the machine, no installer to run")
+	}
+	for _, u := range Offered(&health.Report{Remuda: "v0.8.0"}, health.Latest{Code: "4.140.0"}) {
+		if u.What == "code" {
+			t.Fatal("offered without code-server installed")
+		}
+	}
+}

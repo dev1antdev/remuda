@@ -13,6 +13,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,7 @@ type Service struct {
 
 	mu     sync.Mutex
 	checks map[string]check
+	themed map[string]string // the theme name each machine's editor was last dressed in
 }
 
 type check struct {
@@ -47,7 +49,7 @@ type check struct {
 }
 
 func New(port int) *Service {
-	return &Service{Port: port, client: &http.Client{Timeout: 3 * time.Second}, checks: map[string]check{}}
+	return &Service{Port: port, client: &http.Client{Timeout: 3 * time.Second}, checks: map[string]check{}, themed: map[string]string{}}
 }
 
 // Status says whether the machine's code-server answers; a good verdict is cached 15s so a polling page does not probe every time.
@@ -144,6 +146,110 @@ func OpenScript(path string, line int) string {
 func lastLine(out string) string {
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	return strings.TrimSpace(lines[len(lines)-1])
+}
+
+// WorkspaceFile is where a machine's one workspace file for the editor lives, under its home.
+const WorkspaceFile = ".config/code-server/remuda.code-workspace"
+
+// Workspace writes every folder herdr has a workspace in on the machine into one .code-workspace file and names its path:
+// the editor opened on it shows them all, and since it watches the file, a later write changes its folders in place.
+func (s *Service) Workspace(mc *machines.Machine, folders []string) (string, error) {
+	home := mc.Home()
+	if home == "" {
+		return "", fmt.Errorf("the home folder of %s is not known yet", mc.Label())
+	}
+	path := home + "/" + WorkspaceFile
+	data := WorkspaceJSON(folders)
+	cmd := "mkdir -p " + script.Quote(path[:strings.LastIndex(path, "/")]) + " && printf %s " + script.Quote(string(data)) + " > " + script.Quote(path)
+	if _, err := mc.Run(cmd, 10*time.Second); err != nil {
+		return "", fmt.Errorf("writing the workspace file on %s: %w", mc.Label(), err)
+	}
+	return path, nil
+}
+
+// WorkspaceJSON is the file's content: the folders by their last name, each named so the explorer reads well.
+func WorkspaceJSON(folders []string) []byte {
+	type folder struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+	}
+	list := make([]folder, 0, len(folders))
+	for _, dir := range folders {
+		dir = strings.TrimRight(dir, "/")
+		if dir == "" {
+			continue
+		}
+		list = append(list, folder{Name: dir[strings.LastIndex(dir, "/")+1:], Path: dir})
+	}
+	sort.Slice(list, func(i, j int) bool {
+		return strings.ToLower(list[i].Name) < strings.ToLower(list[j].Name) || (list[i].Name == list[j].Name && list[i].Path < list[j].Path)
+	})
+	out, _ := json.MarshalIndent(map[string]any{"folders": list, "settings": map[string]any{}}, "", "  ")
+	return append(out, '\n')
+}
+
+// ThemeName is the Catppuccin theme of the page's theme, as the extension names it.
+func ThemeName(theme string) string {
+	if theme == "light" {
+		return "Catppuccin Latte"
+	}
+	return "Catppuccin Frappé"
+}
+
+// Theme dresses the machine's editor in the page's theme: Catppuccin's extension installed once from Open VSX, then
+// workbench.colorTheme in code-server's settings.json, which the editor applies as the file changes — but an editor
+// already open knows nothing of an extension installed under it, so installed says the frame must load again. A
+// machine is dressed again only when the theme differs from the one last written while remuda runs.
+func (s *Service) Theme(mc *machines.Machine, theme string) (installed bool, err error) {
+	name := ThemeName(theme)
+	s.mu.Lock()
+	worn := s.themed[mc.ID()]
+	s.mu.Unlock()
+	if worn == name {
+		return false, nil
+	}
+	read := script.PATH + `; B=$(command -v code-server 2>/dev/null || echo "$HOME/.local/opt/code-server/bin/code-server"); if ! "$B" --list-extensions 2>/dev/null | grep -qi '^catppuccin.catppuccin-vsc$'; then "$B" --install-extension catppuccin.catppuccin-vsc >/dev/null 2>&1 && echo ` + installedMark + `; fi; f="$HOME/.local/share/code-server/User/settings.json"; mkdir -p "$(dirname "$f")"; if [ -f "$f" ]; then cat "$f"; else echo '{}'; fi`
+	current, err := shell.Text(mc, read, 120*time.Second)
+	if err != nil {
+		return false, fmt.Errorf("code-server's settings on %s: %w", mc.Label(), err)
+	}
+	if strings.HasPrefix(current, installedMark+"\n") {
+		installed = true
+		current = strings.TrimPrefix(current, installedMark+"\n")
+	}
+	next := WithTheme([]byte(current), name)
+	write := `f="$HOME/.local/share/code-server/User/settings.json"; printf %s ` + script.Quote(string(next)) + ` > "$f"`
+	if _, err := mc.Run(write, 10*time.Second); err != nil {
+		return installed, fmt.Errorf("writing code-server's settings on %s: %w", mc.Label(), err)
+	}
+	s.mu.Lock()
+	s.themed[mc.ID()] = name
+	s.mu.Unlock()
+	return installed, nil
+}
+
+// installedMark is the first line of the theme script's answer when it had to install the extension.
+const installedMark = "REMUDA-INSTALLED-THEME"
+
+var themeLineRe = regexp.MustCompile(`"workbench\.colorTheme"\s*:\s*"[^"]*"`)
+
+// WithTheme is settings.json with workbench.colorTheme set to name: merged as JSON when the file parses, else the one
+// line replaced or added — VS Code allows comments and trailing commas there, which a person may have written.
+func WithTheme(settings []byte, name string) []byte {
+	var m map[string]any
+	if err := json.Unmarshal(settings, &m); err == nil && m != nil {
+		m["workbench.colorTheme"] = name
+		out, _ := json.MarshalIndent(m, "", "  ")
+		return append(out, '\n')
+	}
+	text := string(settings)
+	if themeLineRe.MatchString(text) {
+		return []byte(themeLineRe.ReplaceAllString(text, `"workbench.colorTheme": "`+name+`"`))
+	}
+	if i := strings.Index(text, "{"); i >= 0 {
+		return []byte(text[:i+1] + "\n  \"workbench.colorTheme\": \"" + name + "\",\n" + text[i+1:])
+	}
+	return []byte("{\n  \"workbench.colorTheme\": \"" + name + "\"\n}\n")
 }
 
 // Forget drops a cached verdict (after an install, say).

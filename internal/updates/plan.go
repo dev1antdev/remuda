@@ -95,6 +95,14 @@ func Plan(what string, r *health.Report) (Update, error) {
 		}
 		return Update{What: what, Title: "Update herdr plugins", Command: path + "herdr plugin update --yes",
 			Note: strings.Join(names, ", ") + ". Fetched again from GitHub at the ref recorded when it was installed; an unchanged commit is skipped. Panes already running a plugin keep its old files, new runs use the update."}, nil
+	case "code":
+		if r == nil || r.CodeServer == "" {
+			return Update{}, fmt.Errorf("code-server is not installed there")
+		}
+		if r.Remuda == "" {
+			return Update{}, fmt.Errorf("remuda is not installed there to run its installer")
+		}
+		return Update{What: what, Title: "Update code-server", Command: path + `"$HOME/.local/bin/remuda" code install && readlink "$HOME/.local/opt/code-server"`, Note: "remuda's own installer: the pinned release, its checksum verified, the service restarted; an editor open on it reconnects (Reload the editor if it does not)."}, nil
 	case "claude":
 		if r == nil || r.Claude == "" {
 			return Update{}, fmt.Errorf("Claude Code is not installed there")
@@ -184,6 +192,14 @@ func Offered(r *health.Report, l health.Latest) []Update {
 		if u, err := Plan(what, r); err == nil {
 			out = append(out, u)
 		}
+	}
+	if u, err := Plan("code", r); err == nil {
+		if l.Code != "" && health.Newer(r.CodeServer, l.Code) {
+			u.Note = r.CodeServer + " → " + l.Code + ". " + u.Note
+		} else {
+			u.Note = r.CodeServer + " is what this remuda installs. " + u.Note
+		}
+		out = append(out, u)
 	}
 	return out
 }

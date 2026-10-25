@@ -9,3 +9,9 @@ export const codeStatus = (machineId: string, force = false): Promise<CodeStatus
 
 // openInEditor opens a file in the editor already on screen on that machine, at a line when given; no frame reloads
 export const openInEditor = (machineId: string, path: string, line?: number): Promise<{ ok: boolean }> => sendJSON("POST", `/api/code/${encodeURIComponent(machineId)}/open`, { path, line: line ?? 0 });
+
+// codeWorkspace writes the machine's workspaces into its one .code-workspace file for the editor and names it
+export const codeWorkspace = (machineId: string): Promise<{ path: string; folders: string[] }> => sendJSON("POST", `/api/code/${encodeURIComponent(machineId)}/workspace`, {});
+
+// codeTheme dresses the machine's editor in the page's theme (Catppuccin Frappé or Latte); the extension is installed on the way when missing
+export const codeTheme = (machineId: string, theme: "dark" | "light"): Promise<{ theme: string; installed: boolean }> => sendJSON("POST", `/api/code/${encodeURIComponent(machineId)}/theme`, { theme });

@@ -4,7 +4,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { app } from "@/app/store";
-import { codeStatus, openInEditor, type CodeStatus } from "@/features/code/api";
+import { codeStatus, codeTheme, codeWorkspace, openInEditor, type CodeStatus } from "@/features/code/api";
+import { useTheme } from "@/app/theme";
 import { newestEdit } from "@/features/code/follow";
 import { useChat } from "@/features/chat/useChat";
 import { actions } from "@/app/store";
@@ -19,6 +20,9 @@ import { Tip } from "@/ui";
 
 // escapePath keeps a #, ? or % in a file name as part of the path when the workbench parses its URI
 const escapePath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
+
+// ALL is the picker's first row: every workspace of the machine in one editor, through its .code-workspace file
+export const ALL = "*";
 
 export type CurrentPane = { machineId: string; paneId: string; dir: string; agent: string } | null;
 
@@ -42,17 +46,40 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
       const folder = s.worktree?.checkout_path || s.tabs.flatMap((t) => t.panes).find((p) => p.cwd)?.cwd || "";
       if (folder && !seen.has(folder)) seen.set(folder, s.name);
     }
-    return [...seen.entries()].map(([folder, name]) => ({ value: folder, label: name, hint: folder, icon: folderIcon }));
+    const each = [...seen.entries()].map(([folder, name]) => ({ value: folder, label: name, hint: folder, icon: folderIcon }));
+    return each.length > 1 ? [{ value: ALL, label: `All workspaces on ${machine.label}`, hint: `${each.length} folders in one editor`, icon: <Icon name="layers" size={14} /> }, ...each] : each;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [machine]);
+  const roots = useMemo(() => options.filter((o) => o.value !== ALL).map((o) => o.value), [options]);
 
-  const folder = machine ? (folders[machine.id] || (currentMachine === machine.id && currentFolder) || options[0]?.value || "") : "";
+  // what is picked: a folder, or ALL — the default once a machine has more than one workspace
+  const picked = machine ? folders[machine.id] || "" : "";
+  const wanted = picked === ALL && roots.length <= 1 ? roots[0] || "" : picked; // ALL with one workspace is that workspace
+  const folder = machine ? wanted || (roots.length > 1 ? ALL : (currentMachine === machine.id && currentFolder) || roots[0] || "") : "";
+  const all = folder === ALL;
+  // the workspace file: written when ALL is picked and again whenever the machine's folders change; the editor follows the file
+  const [workspace, setWorkspace] = useState<{ machineId: string; roots: string; path: string } | null>(null);
+  const rootsKey = roots.join("|");
+  useEffect(() => {
+    if (!machine || !all || !roots.length) return;
+    let gone = false;
+    codeWorkspace(machine.id).then(
+      (w) => !gone && setWorkspace({ machineId: machine.id, roots: rootsKey, path: w.path }),
+      (e) => !gone && actions.notify(errMsg(e), { error: true }),
+    );
+    return () => {
+      gone = true;
+    };
+  }, [machine?.id, all, rootsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const workspacePath = workspace && machine && workspace.machineId === machine.id ? workspace.path : null;
   // a file asked for from a pane: the editor goes to its machine and folder first, then opens it
   const codeFile = app.use((s) => s.codeFile);
   useEffect(() => {
     if (!codeFile) return;
     if (codeFile.machineId !== machineId) setMachineId(codeFile.machineId);
-    if (codeFile.folder) setFolders((prev) => (prev[codeFile.machineId] === codeFile.folder ? prev : { ...prev, [codeFile.machineId]: codeFile.folder }));
+    // ALL already holds every workspace folder: the file simply opens there; a single folder is switched to
+    const keepAll = folders[codeFile.machineId] === ALL || (!folders[codeFile.machineId] && roots.length > 1 && roots.includes(codeFile.folder));
+    if (codeFile.folder && !keepAll) setFolders((prev) => (prev[codeFile.machineId] === codeFile.folder ? prev : { ...prev, [codeFile.machineId]: codeFile.folder }));
   }, [codeFile]); // eslint-disable-line react-hooks/exhaustive-deps
   const [status, setStatus] = useState<CodeStatus | null>(null);
   const [checking, setChecking] = useState(false);
@@ -98,20 +125,38 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
       return;
     }
     const asked = codeFile && codeFile.n !== carried.current ? codeFile : null;
-    if (asked && (asked.machineId !== machine.id || (asked.folder && asked.folder !== folder))) return; // the picker is on its way there
+    if (asked && (asked.machineId !== machine.id || (asked.folder && asked.folder !== folder && !(all && roots.includes(asked.folder))))) return; // the picker is on its way there
     if (asked && !status?.available) return; // the authority comes with the status; the effect runs again once it is in
+    if (all && !workspacePath) return; // the workspace file is on its way
     if (asked) carried.current = asked.n;
     const place = `${machine.id}|${folder}`;
-    const file = asked && asked.path.replace(/\/+$/, "") !== folder.replace(/\/+$/, "") ? asked.path : null; // the folder itself is no file to open
+    const file = asked && !roots.includes(asked.path.replace(/\/+$/, "")) ? asked.path : null; // a folder itself is no file to open
     if (asked && file && frame && frame.place === place && ready === frame.key) {
       openLive(file, asked.line); // the editor is on screen: the file goes to it, nothing reloads
       return;
     }
     const authority = status?.authority || location.host;
     const payload = file ? `&payload=${encodeURIComponent(JSON.stringify([["openFile", `vscode-remote://${authority}${escapePath(file)}`]]))}` : "";
-    const src = folder ? `/code/${encodeURIComponent(machine.id)}/?folder=${encodeURIComponent(folder)}${payload}` : `/code/${encodeURIComponent(machine.id)}/`;
+    const where = all ? `?workspace=${encodeURIComponent(workspacePath!)}` : folder ? `?folder=${encodeURIComponent(folder)}` : "";
+    const src = `/code/${encodeURIComponent(machine.id)}/${where}${where ? payload : ""}`;
     setFrame({ key: `${place}|${asked?.n ?? 0}|${reloads}`, src, place });
-  }, [machine?.id, folder, codeFile?.n, status?.available, reloads]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [machine?.id, folder, codeFile?.n, status?.available, reloads, workspacePath]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the editor wears the page's theme: asked once per machine and theme; an editor already open takes a new theme, or
+  // an extension installed under it, only on a fresh load, so the frame reloads then
+  const theme = useTheme();
+  const themed = useRef<string>("");
+  useEffect(() => {
+    if (!machine || !status?.available) return;
+    const key = `${machine.id}|${theme}`;
+    if (themed.current === key) return;
+    const first = !themed.current.startsWith(`${machine.id}|`);
+    themed.current = key;
+    codeTheme(machine.id, theme).then(
+      (r) => (r.installed || !first) && setReloads((n) => n + 1),
+      (e) => actions.notify(`The editor keeps its own theme: ${errMsg(e)}`, { error: true }),
+    );
+  }, [machine?.id, status?.available, theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Follow: the pane on screen in Agents is watched at a tile's pace, and every edit its agent finishes opens here as it lands
   const [follow, setFollow] = usePref("code.follow", false);
@@ -119,21 +164,22 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
   const following = follow && !!watched && visible && ready !== "" && ready === frame?.key;
   const tail = useChat({ machineId: watched?.machineId ?? "", paneId: watched?.paneId ?? "", sessionId: null, dir: watched?.dir ?? "", every: 3000, active: following, last: 4 });
   const latest = useMemo(() => (tail.data ? newestEdit(tail.data.turns) : null), [tail.data]);
-  const seenEdit = useRef<string | null>(null);
+  // armed once the first answer after Follow began is in: whatever edit it holds is not news, every later one is
+  const seenEdit = useRef<{ id: string } | null>(null);
   useEffect(() => {
     if (!following) {
       seenEdit.current = null;
       return;
     }
-    if (!latest) return;
+    if (!tail.data) return;
     if (seenEdit.current === null) {
-      seenEdit.current = latest.id; // what was already there when Follow began is not news
+      seenEdit.current = { id: latest?.id ?? "" };
       return;
     }
-    if (latest.id === seenEdit.current) return;
-    seenEdit.current = latest.id;
+    if (!latest || latest.id === seenEdit.current.id) return;
+    seenEdit.current = { id: latest.id };
     openLive(latest.path);
-  }, [following, latest?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [following, tail.data, latest?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="code-mode">
@@ -147,7 +193,7 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
             value={folder}
             placeholder="Pick a folder"
             onChange={(f) => setFolders({ ...folders, [machine.id]: f })}
-            options={options.some((o) => o.value === folder) || !folder ? options : [{ value: folder, label: basename(folder), hint: folder, icon: folderIcon }, ...options]}
+            options={options.some((o) => o.value === folder) || !folder || folder === ALL ? options : [{ value: folder, label: basename(folder), hint: folder, icon: folderIcon }, ...options]}
           />
         )}
         {watched && status?.available && (

@@ -36,7 +36,8 @@ type Report struct {
 	Herdr         string   `json:"herdr,omitempty"`
 	HerdrServer   string   `json:"herdr_server,omitempty"`
 	Remuda        string   `json:"remuda,omitempty"`
-	Running       bool     `json:"remuda_running"` // a remuda answers on the machine's own port: terminals go through it
+	CodeServer    string   `json:"code_server,omitempty"` // the release under ~/.local/opt/code-server, as the installer links it
+	Running       bool     `json:"remuda_running"`        // a remuda answers on the machine's own port: terminals go through it
 	DiskFreeGB    float64  `json:"disk_free_gb"`
 	DiskUsedPct   int      `json:"disk_used_pct"`
 	Load1         float64  `json:"load1"`
@@ -74,7 +75,11 @@ type Latest struct {
 	Kimi   string    `json:"kimi,omitempty"`
 	Herdr  string    `json:"herdr,omitempty"`
 	Remuda string    `json:"remuda,omitempty"`
+	Code   string    `json:"code,omitempty"` // the code-server this remuda installs (PinnedCode), not a check
 }
+
+// PinnedCode is the code-server release this remuda's installer carries; the app sets it from internal/setup.
+var PinnedCode string
 
 // Collector keeps the reports and the latest versions fresh.
 type Collector struct {
@@ -134,7 +139,9 @@ func (c *Collector) Report(id string) *Report {
 func (c *Collector) Latest() Latest {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.latest
+	l := c.latest
+	l.Code = PinnedCode
+	return l
 }
 
 // Release is the newest release of remuda as last read, with its assets.
@@ -196,6 +203,7 @@ h=$(command -v herdr 2>/dev/null); if [ -n "$h" ]; then echo "herdr=$(herdr --ve
 if [ -n "$h" ]; then ` + OutdatedHooks + ` | sed 's/^/hook=/'; ` + GitHubPlugins + ` | sed 's/^/plugin=/'; fi
 echo "arch=$(uname -m)"
 if [ -x "$HOME/.local/bin/remuda" ]; then echo "remuda=$("$HOME/.local/bin/remuda" -version 2>/dev/null)"; fi
+cs=$(readlink "$HOME/.local/opt/code-server" 2>/dev/null); case "$cs" in *code-server-*) echo "code_server=${cs##*code-server-}";; esac
 echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
 echo "uptime=$(uptime 2>/dev/null)"
 tf=""; for f in "$HOME/Library/Application Support/remuda/token" "$HOME/.config/remuda/token"; do [ -r "$f" ] && { tf="$f"; break; }; done
@@ -269,6 +277,8 @@ func Parse(out string) (Report, *machines.Peer) {
 			}
 		case "remuda":
 			r.Remuda = strings.TrimPrefix(v, "remuda ")
+		case "code_server":
+			r.CodeServer = semver.FindString(v)
 		case "df":
 			// Filesystem 1K-blocks Used Available Use% ... (macOS adds iused columns)
 			f := fieldsRe.Split(v, -1)
