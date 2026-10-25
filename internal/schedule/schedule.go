@@ -1,6 +1,7 @@
-// Package schedule sends prompts to agents on a timetable: a schedule names a
-// machine and a workspace folder (panes come and go, the project stays), a
-// five-field cron in local time and the prompt; a run is never queued or retried.
+// Package schedule runs things on a timetable: a prompt to the agent in a
+// workspace folder (panes come and go, the project stays), or the standup as a
+// digest pushed to the person's devices; a five-field cron in local time; a run
+// is never queued or retried.
 package schedule
 
 import (
@@ -21,13 +22,29 @@ import (
 
 const file = "schedules.json"
 
+// The kinds of schedule: a prompt to an agent, or the standup pushed as a digest.
+const (
+	KindPrompt = "prompt"
+	KindDigest = "digest"
+)
+
+// What a digest covers: since local midnight, the last 24 hours, the last 7 days, or since its previous run.
+const (
+	SinceMidnight = "midnight"
+	SinceDay      = "24h"
+	SinceWeek     = "7d"
+	SinceLast     = "last"
+)
+
 type Schedule struct {
 	ID      string `json:"id"`
+	Kind    string `json:"kind"` // prompt (the default) | digest
 	Machine string `json:"machine"`
 	Dir     string `json:"dir"`
 	Label   string `json:"label"`
 	Cron    string `json:"cron"`
 	Prompt  string `json:"prompt"`
+	Since   string `json:"since,omitempty"` // a digest's period: midnight | 24h | 7d | last
 	Enabled bool   `json:"enabled"`
 
 	Next       time.Time `json:"next,omitzero"` // the coming run, filled in by List
@@ -39,10 +56,14 @@ type Schedule struct {
 // Submit delivers a prompt to the agent in a folder and names the pane it went to.
 type Submit func(machineID, dir, text string) (pane string, err error)
 
+// Digest is the standup since a moment as a notification's title and body; empty when nobody did anything.
+type Digest func(since time.Time) (title, body string, empty bool)
+
 type Store struct {
 	dir    string
 	submit Submit
 	notify func(push.Payload)
+	digest Digest
 	now    func() time.Time
 
 	mu       sync.Mutex
@@ -50,13 +71,19 @@ type Store struct {
 	inflight sync.WaitGroup
 }
 
-func New(dir string, submit Submit, notify func(push.Payload)) *Store {
-	st := &Store{dir: dir, submit: submit, notify: notify, now: time.Now, items: map[string]*Schedule{}}
+func New(dir string, submit Submit, notify func(push.Payload), digest Digest) *Store {
+	st := &Store{dir: dir, submit: submit, notify: notify, digest: digest, now: time.Now, items: map[string]*Schedule{}}
 	var list []*Schedule
 	if err := state.LoadJSON(dir, file, &list); err != nil {
 		log.Printf("%s is unreadable (%v): no schedules until it is fixed", file, err)
 	}
 	for _, s := range list {
+		if s.Kind == "" {
+			s.Kind = KindPrompt // the records from before the kinds
+		}
+		if s.Kind == KindDigest && s.Since == "" {
+			s.Since = SinceMidnight
+		}
 		st.items[s.ID] = s
 	}
 	return st
@@ -95,22 +122,44 @@ func (st *Store) List() []Schedule {
 	return out
 }
 
-// Put creates or replaces a schedule after checking it.
+// Put creates or replaces a schedule after checking it by its kind.
 func (st *Store) Put(s Schedule) (Schedule, error) {
 	s.Label = strings.TrimSpace(s.Label)
 	s.Prompt = strings.TrimSpace(s.Prompt)
 	s.Cron = strings.Join(strings.Fields(s.Cron), " ")
-	if s.Machine == "" || !strings.HasPrefix(s.Dir, "/") {
-		return s, errors.New("a machine and an absolute folder are required")
+	if s.Kind == "" {
+		s.Kind = KindPrompt
 	}
-	if s.Prompt == "" {
-		return s, errors.New("the prompt is empty")
+	switch s.Kind {
+	case KindPrompt:
+		if s.Machine == "" || !strings.HasPrefix(s.Dir, "/") {
+			return s, errors.New("a machine and an absolute folder are required")
+		}
+		if s.Prompt == "" {
+			return s, errors.New("the prompt is empty")
+		}
+		s.Since = ""
+		if s.Label == "" {
+			s.Label = text.FirstLine(s.Prompt, 60)
+		}
+	case KindDigest:
+		if s.Machine != "" || s.Dir != "" || s.Prompt != "" {
+			return s, errors.New("a digest goes to your devices: no machine, folder or prompt")
+		}
+		if s.Since == "" {
+			s.Since = SinceMidnight
+		}
+		if !sinceKnown(s.Since) {
+			return s, errors.New("a digest covers midnight, 24h, 7d or last")
+		}
+		if s.Label == "" {
+			s.Label = "Standup digest"
+		}
+	default:
+		return s, errors.New("a schedule is a prompt or a digest")
 	}
 	if _, err := Parse(s.Cron); err != nil {
 		return s, err
-	}
-	if s.Label == "" {
-		s.Label = text.FirstLine(s.Prompt, 60)
 	}
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -152,6 +201,10 @@ func (st *Store) Run(id string) (Schedule, error) {
 }
 
 func (st *Store) fire(s *Schedule) {
+	if s.Kind == KindDigest {
+		st.fireDigest(s)
+		return
+	}
 	pane, err := st.submit(s.Machine, s.Dir, s.Prompt)
 	st.mu.Lock()
 	// an edit saved while the submit ran replaced the pointer, and one deleted meanwhile is gone: the result goes on the schedule as it is now
@@ -179,6 +232,67 @@ func (st *Store) fire(s *Schedule) {
 			Tag:   "schedule|" + s.ID,
 		})
 	}
+}
+
+// fireDigest pushes the standup since the period the schedule names; a quiet period sends nothing and says so.
+func (st *Store) fireDigest(s *Schedule) {
+	now := st.now()
+	st.mu.Lock()
+	since := digestSince(s.Since, s.LastRun, now)
+	st.mu.Unlock()
+	var title, body string
+	empty := true
+	err := errors.New("no standup to digest")
+	if st.digest != nil {
+		title, body, empty = st.digest(since)
+		err = nil
+	}
+	st.mu.Lock()
+	cur, ok := st.items[s.ID]
+	if !ok {
+		st.mu.Unlock()
+		return
+	}
+	cur.LastRun = now
+	switch {
+	case err != nil:
+		cur.LastOK, cur.LastResult = false, err.Error()
+	case empty:
+		cur.LastOK, cur.LastResult = true, "nothing to report"
+	default:
+		cur.LastOK, cur.LastResult = true, "sent"
+	}
+	if serr := st.saveLocked(); serr != nil {
+		log.Printf("schedules: %v", serr)
+	}
+	id := cur.ID
+	st.mu.Unlock()
+	if err == nil && !empty && st.notify != nil {
+		st.notify(push.Payload{Kind: KindDigest, Title: title, Body: body, Tag: "digest|" + id, Panel: "standup"})
+	}
+}
+
+// digestSince is the start of a digest's period at now: local midnight, 24 hours or 7 days back, or the previous run (midnight when there was none).
+func digestSince(mode string, lastRun, now time.Time) time.Time {
+	switch mode {
+	case SinceDay:
+		return now.Add(-24 * time.Hour)
+	case SinceWeek:
+		return now.Add(-7 * 24 * time.Hour)
+	case SinceLast:
+		if !lastRun.IsZero() {
+			return lastRun
+		}
+	}
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+}
+
+func sinceKnown(mode string) bool {
+	switch mode {
+	case SinceMidnight, SinceDay, SinceWeek, SinceLast:
+		return true
+	}
+	return false
 }
 
 // Tick runs every enabled schedule whose cron matches this minute and has not run this minute yet; call it about every half minute.

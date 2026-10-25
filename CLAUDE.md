@@ -473,7 +473,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   in effects. `url.ts`: the address bar follows the store
   (`?machine=&pane=&mode=&lens=`, `history.replaceState`) and is read
   once at load, so a link or a reload lands on the same pane in the same
-  lens. `act.ts` (`act(promise)`: refresh the roster, else toast the
+  lens; `?panel=` (one of `panelOf`'s, a digest's tap) opens that panel
+  once and is never written back. `act.ts` (`act(promise)`: refresh the roster, else toast the
   error), `toasts.tsx`, `diag.ts` (`startDiagnostics`, from App: every
   stall of the main thread goes to the console as `[remuda] The page
   stalled 4.2 s on the Wall (13 tiles)` with the mode, the lens and the
@@ -688,6 +689,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   The page re-reads the device's zone on every load (`readAlertPrefs`),
   so a window set at home fits the clock on a trip; the window last set
   is kept on the device (pref `alerts.quiet`) while the hours are off.
+  `Notify` goes to the devices that want the watchdog's word, `Broadcast`
+  to every device (the schedules' digest and failures); a `Payload` may
+  name a `Panel` of the page (`standup`) for its tap to open instead of a
+  pane.
   Routes: `GET /api/push` (public key), `POST/DELETE /api/push/subscribe`,
   `POST /api/push/test`. **Read aloud** (`features/alerts/voice.ts`,
   tested; `useVoice.ts`, called from Shell): with the switch in the
@@ -701,7 +706,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   browser has one.
 - `web/public/sw.js` shows every push (Safari revokes silent subscriptions),
   silent while a window is visible; click → `select-pane` message to an open
-  window or `openWindow(/?machine=&pane=)`; `pushsubscriptionchange`
+  window or `openWindow(/?machine=&pane=)` — a push naming a `panel` (a
+  digest) → `open-panel` or `openWindow(/?panel=standup)` instead, which
+  `Shell.tsx` and `url.ts` answer; `pushsubscriptionchange`
   re-subscribes. `web/src/features/alerts/push.ts` is single-flight and re-registers on every
   load with permission granted. Push needs a secure context: localhost or
   `tailscale serve` HTTPS; iPhone needs the home-screen app.
@@ -790,7 +797,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   times, the first line of the last answer (`said.FirstLine`).
   `Markdown(items, since, now)` is the report to paste: a heading per
   agent that did something (`Numbers`, `Calls`, the files, the last
-  answer), the quiet ones named at the end. `Service` reads through
+  answer), the quiet ones named at the end. `Digest(items, since, now)`
+  (tested) is the same as one notification for a digest schedule: the
+  title counts ("Standup: 3 finished, 1 waiting, 2 working, $4.20"), the body is a
+  line per agent in the standup's order — its workspace and the first
+  line of its last answer, else its figures — `DigestLines` of them then
+  "+N more", `empty` when nobody did anything. `Service` reads through
   `chat.Service.Open` + `Turns()` (priced turns; a remote pane's through
   the Reader as the chat does, nothing new runs on a remote): `GET
   /api/recap?machine&pane[&session]` or `?machine&dir&session`
@@ -822,18 +834,29 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`push.Notify`, pref `watchdog`, default on) with a reminder every 30
   min; the notification carries `actions` — Open, and **Send Esc**, which
   the service worker posts to `/api/keys` itself.
-- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — prompts to agents on a timetable. A schedule names
-  a machine and a **folder** (panes come and go; the project stays), a
-  five-field cron in the server's local time (`Parse`/`Matches`/`Next`,
-  tested), the prompt, and a switch. `Tick` every 30s fires what matches
-  the minute and has not run this minute; delivery is
-  `sessions.Input.SubmitToFolder` → the agent pane in that folder →
-  `Input.Submit`, the chat's own path (an agent busy with a question refuses: noted, never
-  queued). A failed run is pushed (`Kind: "schedule"`). `schedules.json`
-  in the state dir; routes `GET/PUT /api/schedules`, `DELETE
-  /api/schedules/{id}`, `POST /api/schedules/{id}/run`. `features/schedules/Schedules.tsx` is
-  the panel behind the calendar button in the sidebar head (`cron.ts` the
-  presets and their parsing, `ScheduleEditor.tsx` the form).
+- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — things on a timetable, two **kinds**
+  (`Kind`, `prompt` for a record from before the field). A **prompt**
+  schedule names a machine and a **folder** (panes come and go; the
+  project stays), a five-field cron in the server's local time
+  (`Parse`/`Matches`/`Next`, tested), the prompt, and a switch; delivery
+  is `sessions.Input.SubmitToFolder` → the agent pane in that folder →
+  `Input.Submit`, the chat's own path (an agent busy with a question
+  refuses: noted, never queued). A **digest** schedule has no machine,
+  folder or prompt (`Put` refuses them): at its cron it pushes the
+  standup since its period — `Since` is `midnight` (default), `24h`,
+  `7d` or `last` (its previous run; `digestSince`, tested) — through the
+  `Digest` func `New` takes (`recap.Digest` over `Service.Standup` in
+  app.go) as `push.Payload{Kind: "digest", Panel: "standup"}`, "nothing
+  to report" when the period was quiet. `Tick` every 30s fires what
+  matches the minute and has not run this minute. The schedules' pushes
+  — a digest, a failed prompt run (`Kind: "schedule"`) — go through
+  `push.Service.Broadcast`, every device whatever its watchdog pref: a
+  schedule is the person's own word. `schedules.json` in the state dir;
+  routes `GET/PUT /api/schedules`, `DELETE /api/schedules/{id}`, `POST
+  /api/schedules/{id}/run`. `features/schedules/Schedules.tsx` is the
+  panel behind the calendar button in the sidebar head (`cron.ts` the
+  presets and their parsing, `digest.ts` the periods and words, tested,
+  `ScheduleEditor.tsx` the form with the kind switch at its top).
 - `internal/search/` — **full-text search** over every transcript on every
   machine (`GET /api/search?q=&machine=&dir=&days=`; the 🔍 in the
   header, or the last row of the ⌘K palette with what was typed there). No index: `Scan` walks `~/.claude/projects` newest-first,
