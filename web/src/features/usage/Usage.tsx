@@ -3,14 +3,17 @@
 // from Claude Code's own catalog; on a subscription a measure, not a bill.
 
 import { useMemo, useState } from "react";
-import { fetchUsage, type UsageTotals } from "@/features/usage/api";
+import { actions } from "@/app/store";
+import { fetchUsage, type BudgetStatus, type UsageTotals } from "@/features/usage/api";
 import type { Machine } from "@/features/roster/api";
+import { useRoster } from "@/features/roster/useRoster";
 import { basename } from "@/lib/text";
 import { connected, machineLabel, machineOptions } from "@/features/roster/options";
 import { ago, fmtDay } from "@/lib/time";
-import { Dialog, Notice } from "@/ui";
+import { Dialog, Icon, Notice, Tip } from "@/ui";
 import { useQuery } from "@/lib/query";
 import Select from "@/ui/Select";
+import { budgetTone, budgetWords, missingWords, ratio, scopeWords } from "./budgets";
 
 const PERIODS = [
   { value: "1", label: "Today" },
@@ -29,6 +32,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
 }) {
   const [days, setDays] = useState("7");
   const [machine, setMachine] = useState("all");
+  const { budgets } = useRoster();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { data, error, loading } = useQuery(() => fetchUsage(Number(days), machine === "all" ? "" : machine, tz), [days, machine, tz], { keep: true });
   const several = connected(machines).length > 1;
@@ -119,6 +123,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
         machine reads its own history.
       </Notice>
       {error && <Notice tone="error">{error}</Notice>}
+      <Budgets budgets={budgets ?? []} machines={machines} />
       {sum.perMachine
         .filter((m) => m.error)
         .map((m) => (
@@ -213,5 +218,44 @@ export default function Usage({ machines, onClose, onOpenSession }: {
         </section>
       </div>
     </Dialog>
+  );
+}
+
+// Budgets is the panel's first section: every limit with a thin bar of its period's spend, and the way to add one.
+function Budgets({ budgets, machines }: { budgets: BudgetStatus[]; machines: Machine[] }) {
+  const label = (id: string) => machineLabel(machines, id);
+  return (
+    <section className="budgets">
+      <h3>
+        Budgets
+        <button type="button" className="btn sm" onClick={() => actions.openDialog({ kind: "budget", budget: null })}>
+          <Icon name="plus" size={12} /> Add a budget
+        </button>
+      </h3>
+      {budgets.length === 0 && <div className="empty">No budgets yet: a limit per day, week or month, on everything or one machine or folder. The usage pill turns amber at 80 %, a push comes at 80 % and at the limit.</div>}
+      {budgets.map((b) => {
+        const r = ratio(b);
+        const tone = budgetTone(r);
+        const missing = missingWords(b, label);
+        return (
+          <div key={b.id} className={`budget-row${tone ? ` is-${tone}` : ""}`} title={missing || undefined}>
+            <span className="budget-scope">
+              {scopeWords(b, label)}
+              {b.note && <span className="usage-row-sub"> · {b.note}</span>}
+              {missing && <span className="usage-row-sub"> · {b.missing?.length === 1 ? "1 machine" : `${b.missing?.length} machines`} not counted</span>}
+            </span>
+            <span className="budget-bar" aria-hidden="true">
+              <span style={{ width: `${Math.min(100, 100 * r)}%` }} />
+            </span>
+            <span className="budget-words">{budgetWords(b)}</span>
+            <Tip text="Edit this budget">
+              <button type="button" className="icon-btn sm" aria-label="Edit this budget" onClick={() => actions.openDialog({ kind: "budget", budget: b })}>
+                <Icon name="edit" size={14} />
+              </button>
+            </Tip>
+          </div>
+        );
+      })}
+    </section>
   );
 }

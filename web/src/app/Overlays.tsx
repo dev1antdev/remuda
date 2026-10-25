@@ -19,6 +19,7 @@ import RecapDialog from "@/features/standup/RecapDialog";
 import ImportIssueDialog from "@/features/tasks/ImportIssueDialog";
 import Standup from "@/features/standup/StandupPanel";
 import UpdatesDialog from "@/features/updates/Updates";
+import BudgetDialog from "@/features/usage/BudgetDialog";
 import Usage from "@/features/usage/Usage";
 import { encodePath, type SearchHit } from "@/features/search/api";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
@@ -146,6 +147,7 @@ export default function Overlays() {
         />
       )}
       {dialog?.kind === "recap" && <RecapDialog machineId={dialog.machineId} paneId={dialog.paneId} session={dialog.session} dir={dialog.dir} title={dialog.title} onClose={actions.closeDialog} />}
+      {dialog?.kind === "budget" && <BudgetDialog machines={machines} budget={dialog.budget} onClose={actions.closeDialog} onSaved={done} ask={actions.ask} />}
       {dialog?.kind === "machine" && (
         <AddMachineDialog
           onClose={actions.closeDialog}

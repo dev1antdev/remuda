@@ -5,6 +5,7 @@
 import { basename } from "@/lib/text";
 import { machineLabel } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
+import { budgetTone, budgetWords, budgetsFor, graver, ratio, tightest, toneClass, type BudgetTone } from "@/features/usage/budgets";
 import { fillClass, tok, usd } from "@/features/usage/format";
 import { Icon, Tip } from "@/ui";
 import type { Located } from "./current";
@@ -12,7 +13,7 @@ import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens } from "./store";
 
 export default function Header({ current }: { current: Located | null }) {
-  const { machines } = useRoster();
+  const { machines, budgets } = useRoster();
   const mode = app.use((s) => s.mode);
   const lens = app.use((s) => s.lens);
   const drawer = app.use((s) => s.drawer);
@@ -43,7 +44,7 @@ export default function Header({ current }: { current: Located | null }) {
       </span>
       {mode === "herdr" && current && !viewer && (
         <div className="lenses">
-          {current.pane.usage && current.pane.usage.window > 0 && <UsagePill usage={current.pane.usage} />}
+          {current.pane.usage && current.pane.usage.window > 0 && <UsagePill usage={current.pane.usage} budget={tightest(budgetsFor(budgets, current.machine.id, current.session.dir || current.pane.cwd))} />}
           <LensSwitch lens={lens} current={current} />
         </div>
       )}
@@ -63,14 +64,19 @@ export default function Header({ current }: { current: Located | null }) {
   );
 }
 
-function UsagePill({ usage }: { usage: NonNullable<Located["pane"]["usage"]> }) {
+// UsagePill: the context's fill and the session's cost; the budget furthest along lends its tone when that is graver,
+// and its line joins the tooltip — the pill's width never changes with it.
+function UsagePill({ usage, budget }: { usage: NonNullable<Located["pane"]["usage"]>; budget: ReturnType<typeof tightest> }) {
   const fill = usage.context / usage.window;
   const percent = Math.round(100 * fill);
+  const contextTone: BudgetTone = fill >= 0.9 ? "red" : fill >= 0.7 ? "amber" : "";
+  const tone = budget ? graver(contextTone, budgetTone(ratio(budget))) : contextTone;
+  const cls = budget ? toneClass(tone) : fillClass(fill);
   return (
     <button
       type="button"
-      className={`usage-pill${fillClass(fill)}`}
-      title={`${usage.name}: context ${tok(usage.context)} of ${tok(usage.window)} (${percent}%) · ${usage.turns} responses · ${usd(usage.cost)} API-equivalent so far. Click for the usage report.`}
+      className={`usage-pill${cls}`}
+      title={`${usage.name}: context ${tok(usage.context)} of ${tok(usage.window)} (${percent}%) · ${usage.turns} responses · ${usd(usage.cost)} API-equivalent so far.${budget ? ` Budget: ${budgetWords(budget)}.` : ""} Click for the usage report.`}
       onClick={() => actions.openPanel("usage")}
     >
       <span className="usage-pill-bar">
