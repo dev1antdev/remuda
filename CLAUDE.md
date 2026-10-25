@@ -201,12 +201,17 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   only on mouseup, so a wheel under a held button would go unseen): the
   anchor is set on mousedown, the head follows the pointer, our select()
   ends xterm's own drag; a click that never moves is left to xterm. The ⬚ selection layer (phone long-press) is screen-only.
-- **Nothing in a bar moves when state changes.** The header is
-  `[burger][modes][title — takes the slack][usage pill][lens switch][search][bell]`:
-  the lens group is anchored right, the pill grows leftwards into the
-  title's slack, the three lens buttons have equal widths so a badge
-  widens nothing, and the Changes button is disabled (not removed) when
-  there is no folder. A lens's own controls (the terminal's size, width,
+- **Nothing in a bar moves when state changes.** The page's places are
+  **the rail** (`app/Rail.tsx`) down the left edge: the five modes, then
+  Standup, Usage, Schedules, Activity (a dot for news) and Settings,
+  each an icon with its name under it and a tooltip; under 920 px it
+  lies along the bottom with Agents, Wall, Tasks, Review and More (a
+  menu with Code, the panels and Settings), and yields while the
+  composer has the keyboard. The header is `[burger][title — takes the
+  slack][usage pill][lens switch][pop-out][search]`: the lens group is
+  anchored right, the pill grows leftwards into the title's slack, the
+  three lens buttons have equal widths so a badge widens nothing, and
+  the Changes button is disabled (not removed) when there is no folder. A lens's own controls (the terminal's size, width,
   selection, text size, key bar) live in the tab strip's right slot
   (`TabStrip tools=`), never in the header. Transient status — offline,
   a newer server, errors, "Copied N" — is a toast in the bottom corner
@@ -467,7 +472,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   stalled 4.2 s on the Wall (13 tiles)` with the mode, the lens and the
   pane — what the Wall freeze hunt lacked — and one from 2 s up becomes
   a toast, a minute apart at most), `Shell.tsx` (URL sync, ⌘K → the palette, ⌘F → the find bar, the service worker's
-  select-pane, mark-seen, the four modes), `Header.tsx`, `PaneArea.tsx`
+  select-pane, mark-seen, the four modes), `Rail.tsx` (the places),
+  `Header.tsx`, `PaneArea.tsx`
   (the lenses, mounted once seen, and the files rail beside them in
   `.pane-body` — store field `footprint` from the pref of that name,
   default on with a mouse, its toggle in the tab strip's tools slot
@@ -726,8 +732,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   agent, parent before worktrees, tabs by their liveliest pane, no-stamp
   last; a flat `recent` order; herdr's own; `radar.test.ts`),
   `features/roster/Sidebar.tsx` draws it (`rows.tsx` the rows,
-  `HealthButton.tsx`, `MachineMenu.tsx`, `RadarSettings.tsx`; one spinner
-  clock for the braille frames and the pulsing question). A finished or
+  `HealthButton.tsx`, `MachineMenu.tsx`; its head is a + menu — a
+  workspace on a connected machine, a PC — and a ⋯ menu — message
+  several agents, the order, Sidebar settings; `RadarSettings.tsx` is
+  `RadarFields`, the order, the row label, the idle tiers and the
+  shells switch, shown by **Settings** (`features/settings/
+  SettingsDialog.tsx`, dialog kind `settings`, the rail's last button
+  and a palette row: the theme, the panels' widths, the sidebar, the
+  way to the alerts and the keys, the version); one spinner clock for
+  the braille frames and the pulsing question). A finished or
   idle row says what the agent answered after its title, in the quiet
   colour and in its tooltip (`pane.said` from the roster, `.radar-said`:
   the title keeps up to 62% of its line, the answer the rest, each
@@ -1064,7 +1077,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Icons are `ui/icons.tsx` (inline 24px stroke paths, `<Icon name
   size={12|14|16}>`): never an emoji or a font glyph as an icon.
   `Select.tsx` replaces every native `<select>` (an icon per option, a
-  portal so nothing clips it). `Resizer.tsx` (over `panels.ts`, tested:
+  portal so nothing clips it). `Menu.tsx` is a menu behind any button
+  and `Tip.tsx` a tooltip (`TipProvider` once over the page): Radix's
+  DropdownMenu and Tooltip in the design system's clothes (`.menu`,
+  `.menu-item` with an icon slot, a hint and a shortcut, `.tip`) — the
+  keyboard walks a menu, Esc closes, both open where there is room, a
+  tooltip never opens on a touch; `radix-ui` is the one dependency
+  beside react and xterm, for the primitives whose keyboard and focus
+  behaviour is not worth writing twice. `Resizer.tsx` (over `panels.ts`, tested:
   `PANELS`, `clampWidth`, `dragWidth`, `keyWidth`) is **a panel's
   draggable edge** — the sidebar of Agents and of Tasks, the files rail,
   the Review queue, a task's detail — a handle beside the panel in the

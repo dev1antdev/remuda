@@ -1,12 +1,10 @@
-// The header: [burger][modes][title — takes the slack][usage pill][lens switch][pop-out][search][bell]. Nothing
-// in it moves when state changes: the lens group is anchored right and the pill grows into the title's slack;
+// The header: [burger][title — takes the slack][usage pill][lens switch][pop-out][search]. The places live on the rail.
+// Nothing in it moves when state changes: the lens group is anchored right and the pill grows into the title's slack;
 // the pop-out button is there whenever the browser can do it, disabled without a pane.
 
 import { basename } from "@/lib/text";
 import { machineLabel } from "@/features/roster/options";
-import { unread } from "@/features/activity/group";
 import { useRoster } from "@/features/roster/useRoster";
-import { usePref } from "@/lib/prefs";
 import { fillClass, tok, usd } from "@/features/usage/format";
 import { Icon } from "@/ui";
 import type { Located } from "./current";
@@ -19,32 +17,11 @@ export default function Header({ current }: { current: Located | null }) {
   const lens = app.use((s) => s.lens);
   const drawer = app.use((s) => s.drawer);
   const viewer = app.use((s) => s.viewer);
-  const panel = app.use((s) => s.panel);
-  const { feed } = useRoster();
-  const [seen] = usePref<number>("feed.seen", 0);
-  const news = unread(feed, seen);
   return (
     <header className="topbar">
       <button type="button" className="burger icon-btn" onClick={actions.toggleDrawer} title="Menu" aria-expanded={drawer}>
         <Icon name="menu" size={18} />
       </button>
-      <nav className="mode-switch">
-        <button className={mode === "herdr" ? "on" : ""} onClick={() => actions.setMode("herdr")} title="Your agents and terminals, from herdr">
-          Agents
-        </button>
-        <button className={mode === "wall" ? "on" : ""} onClick={() => actions.setMode("wall")} title="Every agent on one screen, a tile each">
-          Wall
-        </button>
-        <button className={mode === "tasks" ? "on" : ""} onClick={() => actions.setMode("tasks")} title="Your tasks, kept on this remuda">
-          Tasks
-        </button>
-        <button className={mode === "code" ? "on" : ""} onClick={() => actions.setMode("code")} title="VS Code on a machine, through remuda">
-          Code
-        </button>
-        <button className={mode === "review" ? "on" : ""} onClick={() => actions.setMode("review")} title="Every workspace with changes to review, in one list">
-          Review
-        </button>
-      </nav>
       <span className="title">
         {mode !== "herdr" ? null : viewer ? (
           <>
@@ -81,9 +58,6 @@ export default function Header({ current }: { current: Located | null }) {
       )}
       <button type="button" className="icon-btn bell" title="Search every conversation (also from ⌘K / Ctrl+K)" onClick={() => actions.openSearch()}>
         <Icon name="search" size={18} />
-      </button>
-      <button type="button" className={`icon-btn bell${panel === "activity" ? " on" : ""}${news ? " has-news" : ""}`} title="Activity: what happened across the agents (the alert settings are inside)" aria-expanded={panel === "activity"} onClick={() => actions.togglePanel("activity")}>
-        <Icon name="bell" size={18} />
       </button>
     </header>
   );

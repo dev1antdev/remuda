@@ -1,14 +1,15 @@
-// The sidebar's settings popover: the order, what a row is labelled with, the idle tiers, whether shells are listed.
+// The sidebar's settings: the order, what a row is labelled with, the idle tiers, whether shells are listed — the fields
+// the Settings dialog shows.
 
 import { useEffect, useState } from "react";
 import { Icon, Select } from "@/ui";
 import type { RadarPrefs } from "./radar";
 
-export function RadarSettings({ at, prefs, onPrefs }: { at: { x: number; y: number }; prefs: RadarPrefs; onPrefs: (p: RadarPrefs) => void }) {
+export function RadarFields({ prefs, onPrefs }: { prefs: RadarPrefs; onPrefs: (p: RadarPrefs) => void }) {
   return (
-    <div className="row-menu radar-settings" role="dialog" aria-label="Sidebar settings" style={{ left: at.x, top: at.y }}>
-      <label>
-        Order
+    <>
+      <label className="settings-row">
+        <span>Order</span>
         <Select
           value={prefs.order}
           onChange={(order) => onPrefs({ ...prefs, order })}
@@ -19,8 +20,8 @@ export function RadarSettings({ at, prefs, onPrefs }: { at: { x: number; y: numb
           ]}
         />
       </label>
-      <label>
-        Row label
+      <label className="settings-row">
+        <span>Row label</span>
         <Select
           value={prefs.rowLabel}
           onChange={(rowLabel) => onPrefs({ ...prefs, rowLabel })}
@@ -31,18 +32,25 @@ export function RadarSettings({ at, prefs, onPrefs }: { at: { x: number; y: numb
           ]}
         />
       </label>
-      <label>
-        Fresh for (min)
+      <label className="settings-row">
+        <span>
+          Fresh for
+          <small>minutes an idle agent still counts as fresh</small>
+        </span>
         <MinutesInput value={prefs.freshMinutes} onChange={(freshMinutes) => onPrefs({ ...prefs, freshMinutes })} />
       </label>
-      <label>
-        Stale after (min)
+      <label className="settings-row">
+        <span>
+          Stale after
+          <small>minutes idle before a row dims</small>
+        </span>
         <MinutesInput value={prefs.staleMinutes} onChange={(staleMinutes) => onPrefs({ ...prefs, staleMinutes })} />
       </label>
-      <label className="row">
-        <input type="checkbox" checked={prefs.shells} onChange={(e) => onPrefs({ ...prefs, shells: e.target.checked })} /> list shell panes too
+      <label className="settings-row">
+        <span>List shell panes too</span>
+        <input type="checkbox" checked={prefs.shells} onChange={(e) => onPrefs({ ...prefs, shells: e.target.checked })} />
       </label>
-    </div>
+    </>
   );
 }
 
@@ -53,6 +61,7 @@ function MinutesInput({ value, onChange }: { value: number; onChange: (n: number
   return (
     <input
       type="number"
+      className="sm settings-minutes"
       min={1}
       inputMode="numeric"
       value={text}
