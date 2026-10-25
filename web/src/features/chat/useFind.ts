@@ -1,23 +1,25 @@
 // useFind marks every place the find bar's query occurs in the chat's log, through the CSS Custom Highlight
 // API — no node changes, so a selection and the memoised turns stay as they are — keeps the current match on
-// screen and tells the store how many there are. Where the API is missing, the current match's turn gets the
+// screen (revealRange: the log's own scroll handler then notes that the reader left the bottom, so the follow
+// lets go) and tells the store how many there are. Where the API is missing, the current match's turn gets the
 // outline a search jump gives it.
 
 import { useEffect, useRef, type RefObject } from "react";
 import { actions, app } from "@/app/store";
 import { findRanges, MAX_MATCHES } from "./find";
+import { revealRange } from "./reveal";
 
 const ALL = "remuda-find";
 const CURRENT = "remuda-find-current";
 
-export function useFind(logRef: RefObject<HTMLDivElement | null>, { active, chat }: { active: boolean; chat: unknown }) {
+export function useFind(logRef: RefObject<HTMLDivElement | null>, { active, chat, mounted }: { active: boolean; chat: unknown; mounted: boolean }) {
   const open = app.use((s) => s.find !== null);
   const query = app.use((s) => s.find?.query ?? "");
   const at = app.use((s) => s.find?.at ?? 0);
   const ranges = useRef<Range[]>([]);
   const marked = useRef<Element | null>(null); // the turn outlined where no highlight registry exists
 
-  // the matches, painted again whenever the query or the turns change
+  // the matches, painted again whenever the query or the turns change, or the last of a long conversation's turns mount
   useEffect(() => {
     const log = logRef.current;
     if (!active || !open || !log) return;
@@ -35,7 +37,7 @@ export function useFind(logRef: RefObject<HTMLDivElement | null>, { active, chat
       registry?.delete(ALL);
       registry?.delete(CURRENT);
     };
-  }, [active, open, query, at, chat, logRef]);
+  }, [active, open, query, at, chat, mounted, logRef]);
 
   // the current match comes on screen when it is chosen, not on every poll
   useEffect(() => {
@@ -48,7 +50,7 @@ export function useFind(logRef: RefObject<HTMLDivElement | null>, { active, chat
       was?.classList.remove("turn-hit");
       return;
     }
-    reveal(log, current);
+    revealRange(log, current);
     if (highlights()) return;
     const turn = current.startContainer.parentElement?.closest(".turn") ?? null;
     if (was !== turn) was?.classList.remove("turn-hit");
@@ -86,13 +88,4 @@ function rangesIn(root: HTMLElement, query: string): Range[] {
     }
   }
   return out;
-}
-
-// reveal scrolls the log so the match sits in the middle, unless it is in view already; the log's own scroll
-// handler then notes that the reader is no longer at the bottom, so the follow lets go.
-function reveal(log: HTMLElement, range: Range) {
-  const hit = range.getBoundingClientRect();
-  const box = log.getBoundingClientRect();
-  if (hit.top >= box.top && hit.bottom <= box.bottom) return;
-  log.scrollTop += hit.top - box.top - box.height / 2 + hit.height / 2;
 }
