@@ -195,8 +195,16 @@ button {
 
 .app {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100dvh;
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* ---- shared controls ---- */
@@ -842,7 +850,8 @@ input[type="checkbox"]:hover:not(:checked) {
 .app.is-full .sidebar,
 .app.is-full .scrim,
 .app.is-full .footprint,
-.app.is-full .resizer {
+.app.is-full .resizer,
+.app.is-full .rail {
   display: none;
 }
 
@@ -6992,4 +7001,303 @@ body.popout {
 .tile-subs {
   flex-shrink: 0;
   color: var(--fg-faint);
+}
+
+/* ---- the rail (app/Rail.tsx): the page's places, an icon with its name each; along the bottom on a phone ---- */
+.rail {
+  display: flex;
+  flex-direction: column;
+  width: 64px;
+  flex-shrink: 0;
+  padding: calc(8px + env(safe-area-inset-top)) 6px 8px;
+  gap: 2px;
+  border-right: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+.rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rail-foot {
+  margin-top: auto;
+}
+
+.rail-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 52px;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--fg-dim);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.rail-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.rail-btn.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.rail-btn:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -2px;
+}
+
+.rail-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-btn.has-news::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 14px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg-raised);
+}
+
+.rail-btn.rail-more {
+  display: none;
+}
+
+/* ---- menus (ui/Menu.tsx): rows with an icon slot, a hint, a shortcut; a checked row carries a tick in the slot ---- */
+.menu {
+  min-width: 220px;
+  max-width: 320px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-md);
+  z-index: var(--z-menu);
+  animation: rise var(--fast) var(--ease);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--ctl);
+  padding: 6px 10px 6px 8px;
+  border-radius: var(--r-sm);
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+
+.menu-item[data-highlighted] {
+  background: var(--bg-hover);
+}
+
+.menu-item[data-disabled] {
+  color: var(--fg-faint);
+  cursor: default;
+}
+
+.menu-item.danger {
+  color: var(--red);
+}
+
+.menu-item.danger[data-highlighted] {
+  background: var(--red-soft);
+}
+
+.menu-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  flex-shrink: 0;
+  color: var(--fg-dim);
+}
+
+.menu-item.checked .menu-icon {
+  color: var(--accent);
+}
+
+.menu-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.menu-text small {
+  font-size: 11px;
+  color: var(--fg-faint);
+  white-space: normal;
+}
+
+.menu-kbd {
+  font: 11px var(--mono);
+  color: var(--fg-faint);
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--line);
+}
+
+.menu-heading {
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+/* ---- tooltips (ui/Tip.tsx) ---- */
+.tip {
+  max-width: 280px;
+  padding: 6px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-md);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 1.35;
+  z-index: var(--z-select);
+  animation: rise var(--fast) var(--ease);
+}
+
+/* ---- Settings (features/settings/SettingsDialog.tsx) ---- */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-section + .settings-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.settings-section h3 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.settings-dialog .settings-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: var(--ctl);
+  font-size: 13px;
+  text-align: left;
+}
+
+.settings-dialog .settings-row input[type="checkbox"] {
+  flex-shrink: 0;
+}
+
+.settings-dialog .settings-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-dialog .settings-row small {
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.settings-dialog .settings-row .sel {
+  max-width: 220px;
+  flex-shrink: 0;
+}
+
+.settings-minutes {
+  width: 5.5em;
+  flex-shrink: 0;
+}
+
+/* on a phone the rail lies along the bottom: the modes a thumb reaches, the rest behind More */
+@media (max-width: 920px) {
+  .app {
+    flex-direction: column;
+  }
+
+  .app-main {
+    order: 1;
+  }
+
+  .rail {
+    order: 2;
+    width: auto;
+    flex-direction: row;
+    align-items: stretch;
+    padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .rail-group {
+    flex-direction: row;
+    flex: 1;
+    justify-content: space-around;
+    gap: 0;
+  }
+
+  .rail-foot,
+  .rail-btn.rail-desk {
+    display: none;
+  }
+
+  .rail-btn.rail-more {
+    display: flex;
+  }
+
+  .rail-btn {
+    flex: 1 1 0;
+    min-height: 48px;
+    padding: 4px 0;
+  }
+
+  /* the keyboard is up: the bar yields its room */
+  body:has(.composer textarea:focus) .rail {
+    display: none;
+  }
+
+  .toasts {
+    bottom: calc(128px + env(safe-area-inset-bottom));
+  }
 }

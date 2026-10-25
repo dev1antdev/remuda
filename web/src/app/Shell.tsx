@@ -1,4 +1,4 @@
-// The shell: the header, the sidebar and the pane area or the other modes (the wall, tasks, code), and the overlays. It also
+// The shell: the rail, the header, the sidebar and the pane area or the other modes (the wall, tasks, code), and the overlays. It also
 // keeps the address in step with the selection, hears the service worker, ⌘K (the palette), ⌘F (the find bar), ? (the keyboard
 // sheet) and Alt+N (the next agent that needs you), reads the roster aloud when asked, and tells the server when a finished
 // pane is being looked at.
@@ -19,6 +19,7 @@ import Header from "./Header";
 import Overlays from "./Overlays";
 import PaneArea from "./PaneArea";
 import PopOut from "./PopOut";
+import Rail from "./Rail";
 import Wall from "./Wall";
 import { folderOf, useCurrent } from "./current";
 import { useFullKeys } from "./full";
@@ -114,8 +115,10 @@ export default function Shell() {
 
   return (
     <div className={full && mode === "herdr" ? "app is-full" : "app"}>
-      <Header current={current} />
-      <div className="body">
+      <Rail />
+      <div className="app-main">
+        <Header current={current} />
+        <div className="body">
         {codeOpened && (
           <div className="code-host" hidden={mode !== "code"}>
             <Code machines={machines} currentMachine={current?.machine.id ?? null} currentFolder={current ? folderOf(current) || null : null} visible={mode === "code"} />
@@ -134,6 +137,7 @@ export default function Shell() {
             <PaneArea current={current} />
           </>
         )}
+        </div>
       </div>
       <Toasts items={toasts} />
       <Overlays />

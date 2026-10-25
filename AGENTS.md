@@ -110,8 +110,11 @@ not style.
   `rpcErr`, JSON through `decode` / `writeJSON`. `go vet` is the linter,
   gofmt the formatter (a hook runs it in Claude Code). Tabs.
 - **TypeScript, React 19 function components**, 2-space indent, double
-  quotes, semicolons. Dependencies are react, react-dom and xterm; add
-  nothing without a reason that survives review. Never `innerHTML`:
+  quotes, semicolons. Dependencies are react, react-dom, xterm and
+  radix-ui (menus, tooltips, popovers: the primitives whose keyboard and
+  focus behaviour is not worth writing twice; `ui/Menu.tsx` and
+  `ui/Tip.tsx` are the only places that import it); add nothing without
+  a reason that survives review. Never `innerHTML`:
   Markdown and task descriptions render to React nodes. Per-device state
   is `usePref` (`lib/prefs.ts`); every request goes through `lib/http.ts`
   (`check` / `getJSON` / `sendJSON`) from a feature's own `api.ts`; a

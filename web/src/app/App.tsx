@@ -3,7 +3,7 @@
 
 import { useEffect } from "react";
 import { RosterProvider } from "@/features/roster/useRoster";
-import { ErrorBoundary, Notice } from "@/ui";
+import { ErrorBoundary, Notice, TipProvider } from "@/ui";
 import { startDiagnostics } from "./diag";
 import Shell from "./Shell";
 
@@ -20,9 +20,11 @@ export default function App() {
         </div>
       )}
     >
-      <RosterProvider>
-        <Shell />
-      </RosterProvider>
+      <TipProvider>
+        <RosterProvider>
+          <Shell />
+        </RosterProvider>
+      </TipProvider>
     </ErrorBoundary>
   );
 }

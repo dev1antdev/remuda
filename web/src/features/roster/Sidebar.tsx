@@ -1,27 +1,21 @@
-// The machines sidebar, radar-style: its head with the order, the settings, the schedules, the usage and
-// "+ PC"; then every machine with its vitals, its menu and its rows, the busiest first.
+// The machines sidebar, radar-style: its head with a + menu (a workspace, a PC) and a ⋯ menu (message several agents,
+// the order, the settings); then every machine with its vitals, its menu and its rows, the busiest first.
 
-import { useCallback, useEffect, useState } from "react";
 import { act } from "@/app/act";
 import { useCurrent } from "@/app/current";
 import { actions } from "@/app/store";
 import { usePref } from "@/lib/prefs";
-import { Icon, Notice, useDismiss } from "@/ui";
+import { Icon, Menu, Notice } from "@/ui";
 import { removeMachine, type Machine, type Session } from "./api";
 import { HealthButton } from "./HealthButton";
 import { MachineMenu } from "./MachineMenu";
 import { DEFAULT_RADAR, summary, type RadarPrefs } from "./radar";
-import { RadarSettings } from "./RadarSettings";
 import { Rows, StateMarks, type Current } from "./rows";
 import { hueStyle } from "./hue";
 import { moving, useClock, useSpinner } from "./useClocks";
 import { useRoster } from "./useRoster";
 
 export type { Current } from "./rows";
-
-const nextOrder = { active: "recent", recent: "herdr", herdr: "active" } as const;
-const orderTitle = { active: "Grouped by activity — click for a flat list by activity", recent: "Flat, by activity — click for herdr's own order", herdr: "herdr's own order — click to group by activity" };
-const orderIcon = { active: "arrow-up-down", recent: "list", herdr: "layers" } as const;
 
 export default function Sidebar() {
   const { machines, latest } = useRoster();
@@ -38,54 +32,45 @@ export default function Sidebar() {
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
 
-  // the popover is fixed at its button (the sidebar's scroll would clip it); a dialog opening over the page sets #root inert, which closes it too
-  const [settings, setSettings] = useState<{ x: number; y: number } | null>(null);
-  const closeSettings = useCallback(() => setSettings(null), []);
-  useDismiss(!!settings, closeSettings, [".radar-settings", ".radar-settings-btn", ".sel-pop"]);
-  useEffect(() => {
-    const root = document.getElementById("root");
-    if (!settings || !root) return;
-    const mo = new MutationObserver(() => root.hasAttribute("inert") && setSettings(null));
-    mo.observe(root, { attributes: true, attributeFilter: ["inert"] });
-    return () => mo.disconnect();
-  }, [settings]);
 
   return (
     <>
       <div className="sidebar-head">
         <span>Machines</span>
         <span className="sidebar-head-actions">
-          <button type="button" className={`icon-btn${prefs.order !== "active" ? " on" : ""}`} title={orderTitle[prefs.order]} onClick={() => onPrefs({ ...prefs, order: nextOrder[prefs.order] })}>
-            <Icon name={orderIcon[prefs.order]} size={14} />
-          </button>
-          <button
-            type="button"
-            className={`icon-btn radar-settings-btn${settings ? " on" : ""}`}
-            title="Sidebar settings"
-            aria-expanded={!!settings}
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              setSettings(settings ? null : { x: Math.min(r.left, window.innerWidth - 246), y: r.bottom });
-            }}
-          >
-            <Icon name="sliders" size={14} />
-          </button>
-          {settings && <RadarSettings at={settings} prefs={prefs} onPrefs={onPrefs} />}
-          <button type="button" className="icon-btn" onClick={() => actions.openDialog({ kind: "broadcast" })} title="Message several agents: one text to the ones you tick, each in turn">
-            <Icon name="send" size={14} />
-          </button>
-          <button type="button" className="icon-btn" onClick={() => actions.openPanel("schedules")} title="Schedules: prompts sent to agents on a timetable">
-            <Icon name="calendar" size={14} />
-          </button>
-          <button type="button" className="icon-btn" onClick={() => actions.openPanel("usage")} title="Usage: what the agents cost, by day, project and session">
-            <Icon name="chart" size={14} />
-          </button>
-          <button type="button" className="icon-btn" onClick={() => actions.openPanel("standup")} title="Standup: what every agent did today, in one report">
-            <Icon name="sun" size={14} />
-          </button>
-          <button type="button" className="sidebar-head-btn" onClick={() => actions.openDialog({ kind: "machine" })} title="Add a remote PC over SSH">
-            <Icon name="plus" size={12} /> PC
-          </button>
+          <Menu
+            label="New"
+            align="end"
+            trigger={
+              <button type="button" className="icon-btn" aria-label="New" title="New workspace, or a PC">
+                <Icon name="plus" size={14} />
+              </button>
+            }
+            items={[
+              ...machines.filter((m) => m.state === "connected").map((m) => ({ label: `New workspace on ${m.label}…`, icon: "terminal" as const, onSelect: () => actions.openDialog({ kind: "workspace", machineId: m.id }) })),
+              { sep: true },
+              { label: "Add a PC…", icon: "monitor", hint: "a remote machine over SSH", onSelect: () => actions.openDialog({ kind: "machine" }) },
+            ]}
+          />
+          <Menu
+            label="Sidebar"
+            align="end"
+            trigger={
+              <button type="button" className="icon-btn" aria-label="More" title="Message several agents, the order, the settings">
+                <Icon name="more" size={14} />
+              </button>
+            }
+            items={[
+              { label: "Message several agents…", icon: "send", hint: "one text to the ones you tick, each in turn", onSelect: () => actions.openDialog({ kind: "broadcast" }) },
+              { sep: true },
+              { heading: "Order" },
+              { label: "Grouped by activity", checked: prefs.order === "active", onSelect: () => onPrefs({ ...prefs, order: "active" }) },
+              { label: "Flat, by activity", checked: prefs.order === "recent", onSelect: () => onPrefs({ ...prefs, order: "recent" }) },
+              { label: "herdr's own order", checked: prefs.order === "herdr", onSelect: () => onPrefs({ ...prefs, order: "herdr" }) },
+              { sep: true },
+              { label: "Sidebar settings…", icon: "sliders", hint: "labels, idle tiers, shells", onSelect: () => actions.openDialog({ kind: "settings" }) },
+            ]}
+          />
         </span>
       </div>
       {machines.map((m) => {
