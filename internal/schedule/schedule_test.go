@@ -2,11 +2,13 @@ package schedule
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/state"
 )
 
 func at(s string) time.Time {
@@ -64,7 +66,7 @@ func TestTickFiresOncePerMatchingMinute(t *testing.T) {
 		defer mu.Unlock()
 		sent = append(sent, text)
 		return "pane", nil
-	}, nil)
+	}, nil, nil)
 	count := func() int {
 		st.Wait()
 		mu.Lock()
@@ -99,7 +101,7 @@ func TestTickFiresOncePerMatchingMinute(t *testing.T) {
 
 func TestFailureIsNotedAndPushed(t *testing.T) {
 	var pushed []push.Payload
-	st := New(t.TempDir(), func(string, string, string) (string, error) { return "", errors.New("no agent in the folder") }, func(p push.Payload) { pushed = append(pushed, p) })
+	st := New(t.TempDir(), func(string, string, string) (string, error) { return "", errors.New("no agent in the folder") }, func(p push.Payload) { pushed = append(pushed, p) }, nil)
 	s, _ := st.Put(Schedule{Machine: "local", Dir: "/tmp/x", Cron: "* * * * *", Prompt: "hi", Enabled: true})
 	if _, err := st.Run(s.ID); err != nil {
 		t.Fatal(err)
@@ -112,7 +114,7 @@ func TestFailureIsNotedAndPushed(t *testing.T) {
 
 func TestDisabledNeverFires(t *testing.T) {
 	fired := 0
-	st := New(t.TempDir(), func(string, string, string) (string, error) { fired++; return "p", nil }, nil)
+	st := New(t.TempDir(), func(string, string, string) (string, error) { fired++; return "p", nil }, nil, nil)
 	st.now = func() time.Time { return at("2026-10-07 09:00") }
 	_, _ = st.Put(Schedule{Machine: "local", Dir: "/tmp/x", Cron: "* * * * *", Prompt: "hi", Enabled: false})
 	st.Tick()
@@ -136,5 +138,110 @@ func TestCronDayFieldsOrLikeVixie(t *testing.T) {
 	only, _ := Parse("0 9 1 * *")
 	if only.Matches(at("2026-10-05 09:00")) {
 		t.Fatal("a restricted day-of-month alone matched a Monday")
+	}
+}
+
+func TestKindDefaultsToPromptOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	if err := state.SaveJSON(dir, file, []map[string]any{{"id": "a", "machine": "local", "dir": "/tmp/x", "label": "old", "cron": "0 9 * * *", "prompt": "hi", "enabled": true}, {"id": "b", "kind": "digest", "label": "d", "cron": "0 9 * * *", "enabled": true}}); err != nil {
+		t.Fatal(err)
+	}
+	st := New(dir, nil, nil, nil)
+	list := st.List()
+	if len(list) != 2 || list[1].Kind != KindPrompt || list[0].Kind != KindDigest || list[0].Since != SinceMidnight {
+		t.Fatalf("loaded %+v", list)
+	}
+}
+
+func TestPutChecksTheKind(t *testing.T) {
+	st := New(t.TempDir(), nil, nil, nil)
+	if _, err := st.Put(Schedule{Kind: KindDigest, Dir: "/tmp/x", Cron: "0 9 * * *"}); err == nil {
+		t.Fatal("a digest with a folder was kept")
+	}
+	if _, err := st.Put(Schedule{Kind: KindDigest, Cron: "0 9 * * *", Since: "yesterday"}); err == nil {
+		t.Fatal("a digest with an unknown period was kept")
+	}
+	if _, err := st.Put(Schedule{Cron: "0 9 * * *", Prompt: "hi"}); err == nil {
+		t.Fatal("a prompt without a machine was kept")
+	}
+	if _, err := st.Put(Schedule{Kind: "coffee", Cron: "0 9 * * *"}); err == nil {
+		t.Fatal("an unknown kind was kept")
+	}
+	saved, err := st.Put(Schedule{Kind: KindDigest, Cron: "0 9 * * 1-5", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Label != "Standup digest" || saved.Since != SinceMidnight || saved.Machine != "" {
+		t.Fatalf("saved %+v", saved)
+	}
+	prompt, err := st.Put(Schedule{Machine: "local", Dir: "/tmp/x", Cron: "0 9 * * *", Prompt: "hi", Since: SinceWeek})
+	if err != nil || prompt.Kind != KindPrompt || prompt.Since != "" {
+		t.Fatalf("prompt %+v %v", prompt, err)
+	}
+}
+
+func TestDigestFiresSinceItsPeriodAndPushes(t *testing.T) {
+	var asked []time.Time
+	var pushed []push.Payload
+	empty := false
+	st := New(t.TempDir(), nil, func(p push.Payload) { pushed = append(pushed, p) }, func(since time.Time) (string, string, bool) {
+		asked = append(asked, since)
+		return "Standup: 1 finished", "web: done", empty
+	})
+	now := at("2026-10-07 09:00")
+	st.now = func() time.Time { return now }
+	cases := []struct {
+		since string
+		want  time.Time
+	}{
+		{SinceMidnight, at("2026-10-07 00:00")},
+		{SinceDay, at("2026-10-06 09:00")},
+		{SinceWeek, at("2026-09-30 09:00")},
+		{SinceLast, at("2026-10-07 00:00")}, // never run: midnight
+	}
+	for _, c := range cases {
+		s, err := st.Put(Schedule{Kind: KindDigest, Cron: "0 9 * * *", Since: c.since, Enabled: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		asked = nil
+		got, err := st.Run(s.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(asked) != 1 || !asked[0].Equal(c.want) {
+			t.Errorf("%s: asked since %v, want %v", c.since, asked, c.want)
+		}
+		if !got.LastOK || got.LastResult != "sent" || !got.LastRun.Equal(now) {
+			t.Errorf("%s: result %+v", c.since, got)
+		}
+		if c.since == SinceLast {
+			now = now.Add(time.Hour)
+			asked = nil
+			if _, err := st.Run(s.ID); err != nil {
+				t.Fatal(err)
+			}
+			if len(asked) != 1 || !asked[0].Equal(at("2026-10-07 09:00")) {
+				t.Errorf("a second run since the previous one: asked %v", asked)
+			}
+		}
+	}
+	if len(pushed) != 5 {
+		t.Fatalf("pushed %d", len(pushed))
+	}
+	if p := pushed[0]; p.Kind != KindDigest || p.Panel != "standup" || p.Title != "Standup: 1 finished" || p.Body != "web: done" || !strings.HasPrefix(p.Tag, "digest|") || p.Pane != "" {
+		t.Fatalf("payload %+v", p)
+	}
+	empty = true
+	s, _ := st.Put(Schedule{Kind: KindDigest, Cron: "0 9 * * *", Enabled: true})
+	got, _ := st.Run(s.ID)
+	if len(pushed) != 5 || !got.LastOK || got.LastResult != "nothing to report" {
+		t.Fatalf("a quiet digest: pushed %d, result %+v", len(pushed), got)
+	}
+	plain := New(t.TempDir(), nil, func(p push.Payload) { pushed = append(pushed, p) }, nil)
+	s, _ = plain.Put(Schedule{Kind: KindDigest, Cron: "0 9 * * *", Enabled: true})
+	got, _ = plain.Run(s.ID)
+	if got.LastOK || len(pushed) != 5 {
+		t.Fatalf("without a digest source: %+v", got)
 	}
 }

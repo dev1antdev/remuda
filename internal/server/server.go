@@ -17,12 +17,15 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/prefs"
+	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/quick"
 	"github.com/dev1antdev/remuda/internal/radar"
@@ -52,12 +55,15 @@ type Server struct {
 	Feed      *feed.Service
 	Radar     *radar.Tracker
 	Said      *said.Tracker
+	PRs       *prstatus.Tracker
 	Recap     *recap.Service
 	Usage     *usage.Tracker
+	Budgets   *budget.Service
 	Health    *health.Collector
 	Review    *review.Store
 	Schedules *schedule.Store
 	Quick     *quick.Store
+	Prefs     *prefs.Store
 	Code      *code.Service
 	Tailscale func() tsnetx.Status
 	Guard     *auth.Guard
@@ -77,7 +83,9 @@ func (s *Server) Handler() http.Handler {
 	s.pushRoutes(api)
 	s.searchRoutes(api)
 	s.usageRoutes(api)
+	s.budgetRoutes(api)
 	s.quickRoutes(api)
+	s.prefsRoutes(api)
 	s.scheduleRoutes(api)
 	s.reviewRoutes(api)
 	s.codeRoutes(api)
@@ -88,6 +96,7 @@ func (s *Server) Handler() http.Handler {
 	s.questionRoutes(api)
 	s.feedRoutes(api)
 	s.recapRoutes(api)
+	s.deviceRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

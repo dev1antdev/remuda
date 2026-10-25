@@ -7,6 +7,7 @@ import { basename } from "@/lib/text";
 import { Icon, Logo, StatusDot } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import type { Machine, Session } from "./api";
+import { prWords } from "./prStatus";
 import { agentRows, displayOf, groups, markOf, recentRows, rowLabel, stateWords, type AgentRow, type Display, type Group, type RadarPrefs } from "./radar";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
@@ -218,7 +219,7 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
       tabIndex={0}
       onClick={() => onSelect(m.id, p.id)}
       onKeyDown={(e) => rowKey(e, () => onSelect(m.id, p.id))}
-      title={`${p.agent || "shell"} · ${alert ? alert : stateWords(d, p.radar?.last_active, now, p.radar?.since)}${said ? ` · ${said}` : ""}${p.pr ? `\n${p.pr.label} · ${p.pr.url}` : ""}\n${p.cwd}`}
+      title={`${p.agent || "shell"} · ${alert ? alert : stateWords(d, p.radar?.last_active, now, p.radar?.since)}${said ? ` · ${said}` : ""}${p.pr ? `\n${p.pr.label}${p.pr.status ? ` · ${prWords(p.pr.status)}` : ""} · ${p.pr.url}` : ""}\n${p.cwd}`}
     >
       <span className="radar-mark" style={style}>
         {alert ? "!" : p.agent ? markOf(d, step) : "$"}

@@ -8,14 +8,16 @@ import SendToAgent from "@/features/agents/SendToAgent";
 import type { OpenFile } from "@/features/files/target";
 import { act } from "@/app/act";
 import { createTab, sendKeys, submitPrompt, type PaneUsage } from "@/features/roster/api";
+import { copyText } from "@/lib/host";
 import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
 import { Icon, Notice, Select, useTimedNotice } from "@/ui";
-import type { Subagent } from "./api";
+import type { Subagent, Turn } from "./api";
 import Composer from "./Composer";
 import { PlanBar } from "./PlanBar";
 import { QuestionCard } from "./QuestionCard";
 import { TimelineBar } from "./TimelineBar";
+import { turnLink } from "./turnLink";
 import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFind } from "./useFind";
@@ -72,18 +74,29 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
     (s: Subagent) => actions.openViewer({ machine: machineId, dir, session: shownSession.current ?? "", subagent: { id: s.id, description: s.description || s.kind || s.id } }),
     [machineId, dir],
   );
+  // a link to a turn of a pane's conversation: the address with the pane, the session shown and the turn's first record
+  const onLink = useCallback(
+    (turn: Turn) => {
+      const id = turn.ids?.[0];
+      if (!id) return;
+      void copyText(turnLink(location.origin, { machineId, paneId, session: shownSession.current ?? "", turn: id })).then((ok) =>
+        actions.notify(ok ? "Link copied" : "The link could not be copied", { brief: true, error: !ok }),
+      );
+    },
+    [machineId, paneId],
+  );
   useEffect(() => {
     if (!jump) return;
     pendingTurn.current = jump.turn || null;
     follow.stick.current = !jump.turn;
     setJumpMiss(false);
-    // the session on screen is not refetched: the query blanks the log first
-    if (shownSession.current !== jump.session) setSessionId(jump.session);
+    // the session on screen is not refetched: the query blanks the log first; a jump naming no session takes the one shown
+    if (jump.session && shownSession.current !== jump.session) setSessionId(jump.session);
   }, [jump]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const id = pendingTurn.current;
     const log = logRef.current;
-    if (!id || !log || !chat || !jump || chat.session_id !== jump.session) return;
+    if (!id || !log || !chat || !jump || (jump.session && chat.session_id !== jump.session)) return;
     const el = log.querySelector(`[data-ids~="${CSS.escape(id)}"]`);
     pendingTurn.current = null;
     actions.clearJump();
@@ -135,7 +148,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : readOnly ? "This transcript is empty." : "No transcript for this pane's folder yet."}</div>}
         {turns.map((t, i) => (
-          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} subagents={chat?.subagents} onOpenSubagent={onOpenSubagent} />
+          <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} onLink={readOnly ? undefined : onLink} subagents={chat?.subagents} onOpenSubagent={onOpenSubagent} diffs />
         ))}
       </div>
       {!readOnly && status === "input" && (
