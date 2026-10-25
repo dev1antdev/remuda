@@ -1,6 +1,6 @@
 // One turn of the transcript: its text as Markdown, its thinking and tool calls folded (each call with how long it took, a
-// failed one in red), a picture the agent read or wrote as a thumbnail, a foot with what the answer spent and what went
-// wrong, a forward button.
+// failed one in red), an Edit's change under its call in the lens, a picture the agent read or wrote as a thumbnail, a foot
+// with what the answer spent and what went wrong, a forward button.
 
 import { memo, useState, type ReactNode } from "react";
 import { fileUrl } from "@/features/files/api";
@@ -12,6 +12,8 @@ import { ErrorBoundary, Icon, Notice } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import type { Part, Subagent, Turn } from "./api";
 import { callStats, callWords } from "./calls";
+import { EDIT_CHANGE_TOOLS, EditChange } from "./EditChange";
+import { editsOf } from "./editDiff";
 import { EDIT_TOOLS, imagePath, toolLabel } from "./footprint";
 import { PLAN_TOOLS, planCallWords } from "./plan";
 import { PLAN_MARK } from "./PlanBar";
@@ -20,13 +22,14 @@ import { sameSubagents, subagentsOf } from "./subagents";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 export const TurnView = memo(
-  function TurnView({ turn, machineId, onOpenFile, onForward, subagents, onOpenSubagent }: {
+  function TurnView({ turn, machineId, onOpenFile, onForward, subagents, onOpenSubagent, diffs }: {
     turn: Turn;
     machineId?: string;
     onOpenFile: OpenFile;
     onForward?: (text: string) => void;
     subagents?: Subagent[]; // the conversation's, drawn under the Agent calls that spawned them
     onOpenSubagent?: (s: Subagent) => void;
+    diffs?: boolean; // an Edit's change drawn under its call: the lens, not a tile
   }) {
     const cls = turn.role === "user" ? "turn turn-user" : "turn turn-assistant";
     const text = turn.parts
@@ -38,7 +41,7 @@ export const TurnView = memo(
       <div className={cls} data-ids={turn.ids?.join(" ")}>
         <ErrorBoundary fallback={(message) => <Notice tone="error">This turn could not be drawn: {message}</Notice>}>
           {turn.parts.map((p, i) => (
-            <PartView key={i} part={p} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} />
+            <PartView key={i} part={p} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} diffs={diffs} />
           ))}
         </ErrorBoundary>
         {turn.role === "assistant" && <Spent turn={turn} />}
@@ -55,6 +58,7 @@ export const TurnView = memo(
     a.onOpenFile === b.onOpenFile &&
     a.onForward === b.onForward &&
     a.onOpenSubagent === b.onOpenSubagent &&
+    a.diffs === b.diffs &&
     sameTurn(a.turn, b.turn) &&
     sameSubagents(subagentsOf(a.turn, a.subagents), subagentsOf(b.turn, b.subagents)),
 );
@@ -97,7 +101,7 @@ function Folded({ className, summary, children }: { className: string; summary: 
   );
 }
 
-function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent }: { part: Part; machineId?: string; onOpenFile: OpenFile; subagents?: Subagent[]; onOpenSubagent?: (s: Subagent) => void }) {
+function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent, diffs }: { part: Part; machineId?: string; onOpenFile: OpenFile; subagents?: Subagent[]; onOpenSubagent?: (s: Subagent) => void; diffs?: boolean }) {
   if (part.type === "text") {
     return <Markdown text={part.text ?? ""} onOpenFile={onOpenFile} />;
   }
@@ -128,6 +132,8 @@ function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent }: { 
     const { name, hint, file } = toolLabel(part);
     const picture = machineId ? imagePath(part) : null;
     const spawned = part.tool_id && subagents ? subagents.filter((s) => s.tool_id === part.tool_id) : [];
+    const diffed = !!diffs && EDIT_CHANGE_TOOLS.has(name);
+    const everywhere = diffed && editsOf(name, part.input).some((edit) => edit.replaceAll);
     return (
       <>
         <Folded
@@ -151,6 +157,7 @@ function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent }: { 
               ) : (
                 <span className="part-hint">{hint}</span>
               )}
+              {everywhere && <span className="part-hint"> · every occurrence</span>}
               {part.took ? (
                 <span className="part-took" title={part.is_error ? "The call failed, and how long it took" : "How long the call took"}>
                   {took(part.took)}
@@ -162,6 +169,7 @@ function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent }: { 
           {part.input !== undefined && <pre className="tool-io">{pretty(part.input)}</pre>}
           {part.output && <pre className="tool-io">{part.output}</pre>}
         </Folded>
+        {diffed && <EditChange part={part} />}
         {spawned.map((s) => (
           <SubagentRow key={s.id} subagent={s} onOpen={onOpenSubagent} />
         ))}

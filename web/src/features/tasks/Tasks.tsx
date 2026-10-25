@@ -13,7 +13,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
-import { Icon, Notice, PANELS, Resizer, type IconName, useDebounced, useTimedNotice } from "@/ui";
+import { Icon, Notice, PANELS, Resizer, Tip, type IconName, useDebounced, useTimedNotice } from "@/ui";
 import { createTask, deleteTask, getTask, listLabels, listProjects, listTasks, patchTask, type Task } from "./api";
 import Board from "./Board";
 import { Loading, TaskChips } from "./pieces";
@@ -104,6 +104,18 @@ export default function Tasks() {
     list.reload();
     detail.reload();
   };
+  // a task the page was asked to open (one just made from an issue): its project on screen, the task open, the agent dialog when asked
+  const asked = app.use((s) => s.taskAsked);
+  useEffect(() => {
+    if (!asked) return;
+    actions.taskOpened();
+    setSel({ kind: "project", id: asked.projectId });
+    setPage(1);
+    setOpenId(asked.taskId);
+    actions.closeDrawer();
+    refresh();
+    if (asked.start) void getTask(asked.taskId).then(setStartReq, (e) => setActionError(errMsg(e)));
+  }, [asked]); // eslint-disable-line react-hooks/exhaustive-deps
   const error = actionError || catalog.error || list.error;
   const select = (next: Sel) => {
     setSel(next);
@@ -257,6 +269,11 @@ export default function Tasks() {
               setPage(1);
             }}
           />
+          <Tip text="New task from a GitHub issue">
+            <button type="button" className="icon-btn" aria-label="New task from a GitHub issue" onClick={() => actions.openDialog({ kind: "import-issue", projectId: sel.kind === "project" ? sel.id : undefined })}>
+              <Icon name="link" size={16} />
+            </button>
+          </Tip>
           {project && (
             <button type="button" className="icon-btn" title="Project settings: name, colour, columns" aria-label="Project settings" onClick={() => setSettings(true)}>
               <Icon name="settings" size={16} />

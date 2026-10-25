@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/text"
 )
@@ -37,6 +39,32 @@ type createReq struct {
 	Base      string `json:"base"`
 	Agent     string `json:"agent"`
 	Resume    string `json:"resume"` // a session id of the folder's: the agent comes back to that conversation
+	Model     string `json:"model"`  // the model as the agent's CLI names it, "" for its default
+	Args      string `json:"args"`   // extra arguments as the person typed them, split like a shell would
+	Prompt    string `json:"prompt"` // a first prompt, handed over once the agent is up
+}
+
+// start is what the request asks of the agent beyond its kind, or the reason it cannot be asked.
+func (req *createReq) start() (sessions.Start, error) {
+	start := sessions.Start{Resume: req.Resume, Model: strings.TrimSpace(req.Model)}
+	if req.Agent == "" || req.Agent == "shell" {
+		if start.Resume != "" || start.Model != "" || strings.TrimSpace(req.Args) != "" || strings.TrimSpace(req.Prompt) != "" {
+			return start, errors.New("a session to resume, a model, arguments or a first prompt need an agent")
+		}
+		return start, nil
+	}
+	if start.Resume != "" && !text.SessionID(start.Resume) {
+		return start, errors.New("resume needs a session id")
+	}
+	args, err := sessions.SplitArgs(req.Args)
+	if err != nil {
+		return start, err
+	}
+	start.Args = args
+	if _, err := sessions.StartArgs(req.Agent, start); err != nil {
+		return start, err
+	}
+	return start, nil
 }
 
 // create is the one path for every "make a container, start an agent in it" request.
@@ -50,8 +78,9 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*herd
 		httpErr(w, 400, fmt.Errorf("unknown agent %q", req.Agent))
 		return
 	}
-	if req.Resume != "" && (!text.SessionID(req.Resume) || req.Agent == "" || req.Agent == "shell") {
-		httpErr(w, 400, fmt.Errorf("resume needs an agent and a session id"))
+	start, err := req.start()
+	if err != nil {
+		httpErr(w, 400, err)
 		return
 	}
 	mc, client, _, ok := s.ready(w, r, req.Machine)
@@ -67,17 +96,48 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*herd
 	for k, v := range extra {
 		resp[k] = v
 	}
+	prompt := strings.TrimSpace(req.Prompt)
 	if req.Agent != "" && req.Agent != "shell" {
-		start := func() error { return sessions.StartAgent(client, pane.PaneID, req.Agent) }
-		if req.Resume != "" {
-			start = func() error { return sessions.StartAgentResumed(client, pane.PaneID, req.Agent, req.Resume) }
-		}
-		if err := start(); err != nil {
+		if err := sessions.StartAgentWith(client, pane.PaneID, req.Agent, start); err != nil {
 			resp["agent_error"] = err.Error()
+			if prompt != "" {
+				resp["agent_error"] = err.Error() + " (the first prompt was not sent)"
+			}
+		} else if prompt != "" {
+			go s.firstPrompt(client, events.PaneRef{Machine: mc.ID(), Pane: pane.PaneID}, prompt, firstPromptPlace(&req, extra))
 		}
 	}
 	s.Watch.Refresh(mc)
 	writeJSON(w, resp)
+}
+
+// firstPrompt delivers the prompt a person wrote for the agent they just started; a failure is a note in the activity, with the pane to open.
+func (s *Server) firstPrompt(client *herdr.Client, ref events.PaneRef, prompt, place string) {
+	err := s.Input.FirstPrompt(client, ref, prompt, sessions.FirstPromptTimeout)
+	if err == nil || s.Push == nil {
+		return
+	}
+	s.Push.Notify(push.Payload{
+		Machine: ref.Machine, Pane: ref.Pane, Kind: "input",
+		Title:   "The first prompt for " + place + " was not delivered",
+		Body:    err.Error(),
+		Tag:     "first|" + ref.Pane,
+		Actions: []push.Action{{Action: "open", Title: "Open"}},
+	})
+}
+
+// firstPromptPlace names where the agent was started for the note: the worktree's branch, the workspace's name, else its folder.
+func firstPromptPlace(req *createReq, extra map[string]any) string {
+	if branch, ok := extra["branch"].(string); ok && branch != "" {
+		return branch
+	}
+	if req.Name != "" {
+		return req.Name
+	}
+	if req.Dir != "" {
+		return filepath.Base(req.Dir)
+	}
+	return "the new tab"
 }
 
 func (s *Server) handleNewWorkspace(w http.ResponseWriter, r *http.Request) {
