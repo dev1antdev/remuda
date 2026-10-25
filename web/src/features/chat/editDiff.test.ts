@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { editRows, editsOf, foldRows, NO_NEWLINE, type EditRow } from "./editDiff";
+import { editRows, editsOf, foldRows, NO_NEWLINE, rowTokens, type EditRow } from "./editDiff";
 
 const kinds = (rows: EditRow[]) => rows.map((r) => r.kind).join(" ");
 const texts = (rows: EditRow[]) => rows.map((r) => `${r.kind === "del" ? "-" : r.kind === "add" ? "+" : " "}${r.text}`);
@@ -71,5 +71,22 @@ describe("foldRows", () => {
     const rows = editRows("a\nb\nc", "a\nx\nc");
     expect(foldRows(rows, 24)).toEqual({ shown: rows, more: 0 });
     expect(foldRows(rows, 2)).toEqual({ shown: rows.slice(0, 2), more: 2 });
+  });
+});
+
+describe("rowTokens", () => {
+  it("colours each side as one text in the file's language, the context on both", () => {
+    const rows = editRows('a := "x"\nif a {\n', 'a := "y"\nif a {\n');
+    const tokens = rowTokens(rows, "go");
+    const del = rows.find((row) => row.kind === "del")!;
+    const add = rows.find((row) => row.kind === "add")!;
+    const ctx = rows.find((row) => row.kind === "ctx")!;
+    expect(tokens.get(del)?.some((token) => token.kind === "string" && token.text === '"x"')).toBe(true);
+    expect(tokens.get(add)?.some((token) => token.kind === "string" && token.text === '"y"')).toBe(true);
+    expect(tokens.get(ctx)?.some((token) => token.kind === "keyword" && token.text === "if")).toBe(true);
+  });
+
+  it("colours nothing without a language", () => {
+    expect(rowTokens(editRows("a", "b"), "").size).toBe(0);
   });
 });

@@ -2,6 +2,7 @@
 // paired with the added run that follows it and the words that differ marked, the way the Changes lens marks them.
 
 import { changedSpan } from "@/features/review/hunks";
+import { highlightLines, type Token } from "@/lib/highlight";
 
 export type Edit = { old: string; new: string; replaceAll: boolean };
 
@@ -131,4 +132,19 @@ function diffLines(a: string[], b: string[]): string[] {
     j++;
   }
   return ops;
+}
+
+// rowTokens colours each side of the change as one text in the file's language, so a string or comment spanning lines keeps
+// its kind; a removed line and its replacement sit on different sides, the context on both
+export function rowTokens(rows: EditRow[], lang: string): Map<EditRow, Token[]> {
+  const tokens = new Map<EditRow, Token[]>();
+  if (!lang) return tokens;
+  const side = (keep: (row: EditRow) => boolean) => {
+    const kept = rows.filter(keep);
+    const lines = highlightLines(kept.map((row) => row.text).join("\n"), lang);
+    kept.forEach((row, i) => tokens.set(row, lines[i] ?? []));
+  };
+  side((row) => row.kind === "del" || row.kind === "ctx");
+  side((row) => row.kind === "add" || row.kind === "ctx");
+  return tokens;
 }
