@@ -4,11 +4,13 @@
 // hunk must not redraw thousands of cells.
 
 import { memo, useMemo, useRef, useState } from "react";
+import { langOf, splitTokens, type Token } from "@/lib/highlight";
 import { plural } from "@/lib/text";
 import { Icon, Tip } from "@/ui";
+import { tokenNodes } from "@/ui/Tokens";
 import { gapAbove, gapBelow, gapLength, surround, UNFOLD_STEP, type Unfold } from "./context";
 import type { DraftComment } from "./draft";
-import { changedSpan, pairRows, partners, rowsOf, type DiffHunk, type DiffRow } from "./hunks";
+import { changedSpan, pairRows, partners, rowsOf, rowTokens, type DiffHunk, type DiffRow } from "./hunks";
 
 export type NewComment = Omit<DraftComment, "id" | "file">;
 
@@ -39,6 +41,7 @@ export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComm
   const rows = useMemo(() => [...around.above, ...rowsOf(hunk), ...around.below], [hunk, around]);
   const pairs = useMemo(() => pairRows(rows), [rows]);
   const partnerOf = useMemo(() => partners(pairs), [pairs]);
+  const tokensOf = useMemo(() => rowTokens(rows, langOf(file)), [rows, file]);
   const leftAbove = gapLength(gapAbove(hunk, prev)) - around.above.length;
   const below = next ? null : gapBelow(hunk, null, lines?.length ?? null);
   const leftBelow = next ? 0 : below ? gapLength(below) - around.below.length : null; // null: the file's length is not known yet
@@ -88,7 +91,7 @@ export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComm
         title={commentable ? "Comment on this line" : undefined}
       >
         <span className="fv-ln">{line ?? ""}</span>
-        <Source row={row} partner={partnerOf.get(row) ?? null} marker={side === "both"} />
+        <Source row={row} partner={partnerOf.get(row) ?? null} marker={side === "both"} tokens={tokensOf.get(row)} />
       </div>
     );
   };
@@ -196,27 +199,30 @@ function CommentBox({ row, onAdd, onClose }: { row: DiffRow; onAdd: (text: strin
   );
 }
 
-// Source is a row's text, the +/-/space marker kept in the one-column view, the words that changed against its partner marked
-function Source({ row, partner, marker }: { row: DiffRow; partner: DiffRow | null; marker: boolean }) {
+// Source is a row's text, the +/-/space marker kept in the one-column view, the words that changed against its partner
+// marked, the code coloured in the file's language when there are tokens for it (the mark cuts the tokens, so both hold)
+function Source({ row, partner, marker, tokens }: { row: DiffRow; partner: DiffRow | null; marker: boolean; tokens: Token[] | undefined }) {
   const text = row.text.slice(1);
   const lead = marker ? row.text.slice(0, 1) : "";
   const other = partner?.text.slice(1);
   const span = other === undefined ? null : row.kind === "del" ? changedSpan(text, other) : changedSpan(other, text);
+  const coloured = tokens ?? [{ kind: "plain" as const, text }];
   if (!span) {
     return (
       <span className="fv-src">
         {lead}
-        {text}
+        {tokenNodes(coloured)}
       </span>
     );
   }
   const end = text.length - span.tail;
+  const { before, inside, after } = splitTokens(coloured, span.head, end);
   return (
     <span className="fv-src">
       {lead}
-      {text.slice(0, span.head)}
-      {end > span.head && <mark className="fv-mark">{text.slice(span.head, end)}</mark>}
-      {text.slice(end)}
+      {tokenNodes(before, "b")}
+      {end > span.head && <mark className="fv-mark">{tokenNodes(inside, "m")}</mark>}
+      {tokenNodes(after, "a")}
     </span>
   );
 }

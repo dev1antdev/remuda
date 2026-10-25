@@ -427,7 +427,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   line of three thousand `>` recursed past the stack), and a line over
   `LONG_LINE` (10 000 characters) is drawn plain, with no marks or links
   (the inline regex costs its square on a run of one character);
-  `markdown.test.ts` covers it. `ui/ErrorBoundary.tsx` is the one class
+  `markdown.test.ts` covers it. A fence with a known language
+  (`langOf` of its info string) is coloured through `lib/highlight.ts`,
+  tokenized once per fence (`useMemo`) and drawn by `ui/Tokens.tsx`
+  (`tokenNodes`: a `.hl-<kind>` span per token, plain text as it is); a
+  fence without a language stays one plain string. `ui/ErrorBoundary.tsx` is the one class
   component: React unmounts the whole tree on a render error, so every
   turn (`TurnView`) draws inside one — a turn the parser cannot draw is a
   note, the rest of the chat stands — and `App.tsx` wraps the page in one
@@ -468,7 +472,25 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   blocks never drift from the swatches),
   `perf.ts` (`watchStalls`: the browser's long
   tasks from 250 ms up, each reported with where the page was;
-  `stallWords`, `toastDue` tested).
+  `stallWords`, `toastDue` tested), `highlight.ts` (**the syntax
+  highlighter**, dependency-free and tested: `tokenize(text, lang)` is one
+  hand-written scanner driven by a table per language — comments,
+  strings with their escapes and prefixes, numbers, keywords, builtins,
+  constants, types, a function before `(`, operators, punctuation — with
+  scanners of their own for yaml, markup (html/xml/svg, a `<script>` or
+  `<style>` body in its language), diff and markdown (a fence in its own
+  language); go, ts/js, python, shell, json, yaml, toml, ini, css, rust,
+  sql, make, dockerfile; `langOf` maps a fence's info string or a file
+  name to one of them, `""` otherwise — `go.mod`, `.gitignore`, LICENSE
+  stay plain; `highlightLines` cuts the tokens at newlines so a block
+  comment keeps its kind on every line; `splitTokens` cuts a line's
+  tokens at two offsets for a mark laid over them; linear in the text's
+  length — no regex runs from inside a token — and a text past
+  `MAX_HIGHLIGHT` (200 KB) comes back plain; the colours are
+  `.hl-<kind>` at the end of styles.css over the flavour's `--ctp-*`,
+  Catppuccin's own mapping: keywords mauve, strings green, numbers and
+  constants peach, comments overlay, functions and tags blue, types and
+  attributes yellow, builtins red, operators sky, keys lavender).
 - `web/src/app/` — the shell. `store.ts` is the one page store: the
   *requested* pane (a deep link, a notification, a click), the lens, the
   mode, the drawer, the open dialog / menu / panel (the panels: the
@@ -582,7 +604,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   "\ No newline at end of file" note staying with its side,
   `partners`, `changedSpan` the words that differ between a removed line
   and its replacement, out to word boundaries and never between the
-  halves of a surrogate pair, drawn as `.fv-mark`; `Hunk` is memoised and
+  halves of a surrogate pair, drawn as `.fv-mark`, `rowTokens` the rows
+  coloured in the file's language (`lib/highlight.ts` `langOf(path)`),
+  each side tokenized once as one text so a comment or a string spanning
+  rows keeps its kind, the mark cutting the tokens through `splitTokens`
+  so both hold; `Hunk` is memoised and
   the comment box holds its own text, so a keystroke or a roster poll
   redraws no cells, and the focus returns to the row when the box closes;
   **the lines around a hunk unfold** from the working-tree file — its

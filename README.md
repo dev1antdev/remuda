@@ -553,7 +553,8 @@ since you last looked marked, and the commits made since. A merge or a
 pull brings nothing into the list; only the work in the folder does. Tap a
 line of a diff and write what should change; a few of those make a review.
 A diff shows in one column or two (the old file on the left, the new on
-the right) with the words that changed in a line marked, and the lens
+the right) with the words that changed in a line marked, the code
+coloured in the file's language, and the lens
 walks by keys: `j` `k` through the files, `↑` `↓` the lines, `n` `p` the
 hunks, `c` comments on the line, `o` opens the file there, `s` flips the
 columns. A hunk shows three lines around a change; the `↑` on its `@@`
@@ -576,6 +577,11 @@ move, by day, newest first, from every machine — the same things the
 pushes carry, kept whether or not a device is subscribed. A row opens
 its pane; the bell wears a dot until you look. The alert settings sit at
 the panel's foot.
+
+**Code is coloured** in the chat's fenced blocks and in the Changes lens's
+diffs — Go, TypeScript, Python, shell, JSON, YAML, TOML, CSS, HTML, Rust,
+SQL, Makefiles, Dockerfiles — in Catppuccin's own hues for the flavour you
+wear, by a small highlighter of remuda's own, no library behind it.
 
 **Between agents:** every assistant turn has a *forward* link that sends its
 text, headed "From *workspace*:", to any other agent on any machine — the

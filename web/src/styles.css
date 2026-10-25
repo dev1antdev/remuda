@@ -7939,3 +7939,62 @@ body.popout {
     order: 3;
   }
 }
+
+/* ---- syntax colours (lib/highlight.ts, drawn by ui/Tokens.tsx): Catppuccin's own mapping through the flavour's palette, so
+   a code fence in the chat and a diff row in the Changes lens wear the same hues in every flavour ---- */
+.hl-comment {
+  color: var(--ctp-overlay1);
+  font-style: italic;
+}
+
+.hl-string {
+  color: var(--ctp-green);
+}
+
+.hl-number,
+.hl-constant {
+  color: var(--ctp-peach);
+}
+
+.hl-keyword {
+  color: var(--ctp-mauve);
+}
+
+.hl-builtin {
+  color: var(--ctp-red);
+}
+
+.hl-type {
+  color: var(--ctp-yellow);
+}
+
+.hl-function {
+  color: var(--ctp-blue);
+}
+
+.hl-operator {
+  color: var(--ctp-sky);
+}
+
+.hl-punct {
+  color: var(--ctp-overlay2);
+}
+
+.hl-tag {
+  color: var(--ctp-blue);
+}
+
+.hl-attr {
+  color: var(--ctp-yellow);
+}
+
+.hl-key {
+  color: var(--ctp-lavender);
+}
+
+/* a diff row's own colour stays on its plain text; the tokens keep their hues over the soft fill */
+.fv-diff .add .hl-punct,
+.fv-diff .del .hl-punct {
+  color: inherit;
+  opacity: 0.75;
+}
