@@ -54,6 +54,7 @@ export function closePopOut(): void {
 // style tags) and the body class the pop-out rules hang on.
 function dress(doc: Document) {
   doc.documentElement.lang = document.documentElement.lang;
+  doc.documentElement.dataset.theme = document.documentElement.dataset.theme;
   for (const sheet of Array.from(document.styleSheets)) {
     if (sheet.href) {
       const link = doc.createElement("link");

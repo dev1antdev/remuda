@@ -3,7 +3,9 @@
 // the status live there). The wall's screen view; a click opens the pane's terminal in Agents.
 
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useTheme } from "@/app/theme";
 import { useQuery } from "@/lib/query";
+import { ansiPalette } from "@/lib/theme";
 import { Notice } from "@/ui";
 import { parseAnsi, type Span } from "./ansi";
 import { fetchScreen } from "./api";
@@ -33,7 +35,9 @@ export const Screen = memo(function Screen({ machineId, paneId, cols, busy, acti
     [machineId, paneId],
     { every: busy ? 3000 : 15000, enabled: active },
   );
-  const lines = useMemo(() => (text === null ? [] : parseAnsi(text)), [text]);
+  const theme = useTheme();
+  const palette = useMemo(() => ansiPalette(theme), [theme]);
+  const lines = useMemo(() => (text === null ? [] : parseAnsi(text, palette)), [text, palette]);
   // the pane's grid, or the longest row when the roster has none or a row runs past it (a remote's grid can lag)
   const width = Math.max(cols, 1, ...lines.map((line) => line.reduce((n, span) => n + span.text.length, 0)));
   const box = useRef<HTMLDivElement>(null);

@@ -20,8 +20,10 @@ import { installPointer, type Flags } from "./pointer";
 import { trackSelection } from "./selection";
 import { connect, type Transport } from "./transport";
 import type { Modifier, TermApi } from "./types";
+import { terminalTheme, type Theme } from "@/lib/theme";
 
 export type EngineProps = Geometry & {
+  theme: Theme; // the page's theme: the terminal's colours follow it
   agent: boolean; // an agent's pane: file paths and URLs are links; in a shell's pane only a Cmd/Ctrl-click opens a URL
   modifier: Modifier;
   onModifierUsed: () => void;
@@ -43,8 +45,9 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     fontSize: props().fontSize,
     scrollback: 2000,
     allowProposedApi: true,
-    theme: { background: "#14120f", selectionBackground: "#4a4138" },
+    theme: terminalTheme(props().theme),
   });
+  let themeNow = props().theme;
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(mount);
@@ -67,6 +70,10 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     if (m && out !== seq) props().onModifierUsed();
   };
   const apply = () => {
+    if (props().theme !== themeNow) {
+      themeNow = props().theme;
+      term.options.theme = terminalTheme(themeNow);
+    }
     if (applyGeometry(term, fit, mount, props())) sendResize();
   };
   apply();

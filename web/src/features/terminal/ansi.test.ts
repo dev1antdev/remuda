@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ansiPalette } from "@/lib/theme";
 import { DEFAULT_BG, DEFAULT_FG, parseAnsi } from "./ansi";
 
 describe("parseAnsi", () => {
@@ -56,5 +57,14 @@ describe("parseAnsi", () => {
       [{ text: "  - " }, { text: "Лента", bold: true }, { text: " текст" }],
       [],
     ]);
+  });
+});
+
+describe("parseAnsi with a theme's palette", () => {
+  it("draws the basic colours and the inverse defaults from the palette given", () => {
+    const latte = ansiPalette("light");
+    expect(parseAnsi("\x1b[31mred", latte)).toEqual([[{ text: "red", fg: "#d20f39" }]]);
+    expect(parseAnsi("\x1b[7mx", latte)).toEqual([[{ text: "x", fg: latte.bg, bg: latte.fg }]]);
+    expect(parseAnsi("\x1b[36mcyan", ansiPalette("dark"))).toEqual([[{ text: "cyan", fg: "#81c8be" }]]);
   });
 });

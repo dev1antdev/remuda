@@ -5,9 +5,10 @@ import { useEffect, useRef } from "react";
 import type { OpenFile } from "@/features/files/target";
 import { isTouch } from "@/lib/prefs";
 import { createEngine, type Engine } from "./engine/engine";
+import type { Theme } from "@/lib/theme";
 import type { Modifier, SizeMode, TermApi } from "./engine/types";
 
-export default function TerminalView({ machineId, paneId, agent, cols, rows, mode, minCols, fontSize, modifier, selectMode, onModifierUsed, onReady, onOpenFile, onCopied, active = true }: {
+export default function TerminalView({ machineId, paneId, agent, cols, rows, mode, minCols, theme, fontSize, modifier, selectMode, onModifierUsed, onReady, onOpenFile, onCopied, active = true }: {
   machineId: string;
   paneId: string;
   cols: number; // the pane's own grid, 0 when unknown
@@ -15,6 +16,7 @@ export default function TerminalView({ machineId, paneId, agent, cols, rows, mod
   agent: boolean; // an agent's pane: file paths and URLs are links; in a shell's pane only a Cmd/Ctrl-click opens a URL
   mode: SizeMode;
   minCols: number; // fit mode: never narrower than this many columns (0 = off)
+  theme: Theme;
   fontSize: number; // preferred size in fit mode
   modifier: Modifier;
   selectMode: boolean; // a transparent text layer over the grid whose selection is the browser's own (a phone's long-press)
@@ -25,8 +27,8 @@ export default function TerminalView({ machineId, paneId, agent, cols, rows, mod
   active?: boolean; // the lens on screen; hidden, the attach stays and output keeps arriving
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const live = useRef({ agent, cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied });
-  live.current = { agent, cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied };
+  const live = useRef({ theme, agent, cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied });
+  live.current = { theme, agent, cols, rows, mode, minCols, fontSize, modifier, onModifierUsed, onReady, onOpenFile, onCopied };
   const engine = useRef<Engine | null>(null);
 
   useEffect(() => {
@@ -45,7 +47,7 @@ export default function TerminalView({ machineId, paneId, agent, cols, rows, mod
   const keepRows = mode === "keep" ? rows : 0;
   useEffect(() => {
     engine.current?.apply();
-  }, [keepCols, keepRows, mode, minCols, fontSize]);
+  }, [keepCols, keepRows, mode, minCols, fontSize, theme]);
 
   useEffect(() => {
     engine.current?.select(selectMode);

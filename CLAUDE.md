@@ -445,7 +445,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   file for the browser to keep; `openUrl`: a
   new tab — nothing embeds remuda any more, the JetBrains plugin and its
   `window.herdrHost` bridge are gone), `transfer.ts` (`filesFrom`),
-  `version.ts` (`newer`), `perf.ts` (`watchStalls`: the browser's long
+  `version.ts` (`newer`), `theme.ts` (the two Catppuccin flavours,
+  `resolveTheme`, `ansiPalette` / `terminalTheme` / `pageColor`),
+  `perf.ts` (`watchStalls`: the browser's long
   tasks from 250 ms up, each reported with where the page was;
   `stallWords`, `toastDue` tested).
 - `web/src/app/` — the shell. `store.ts` is the one page store: the
@@ -1015,11 +1017,22 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   place by double-click, or from the workspace's ⋯ menu (touch). The roster carries an ETag (304 when unchanged) and
   the agent list. Local files stream through `http.ServeContent` (Range for
   video); the WS uses per-message compression and coalesces queued chunks.
-- `web/src/styles.css` — one design system, dark and warm: four surface
-  layers (`--bg` → `--bg-raised` → `--bg-input` → `--bg-overlay`, `--bg-active`
-  / `--bg-elev` for a raised chip), hairlines as white at low alpha (`--line`,
-  `--line-strong`, `--line-hover`), every colour with a `-soft` fill and a
-  `-ring`, a radius scale (`--r-xs` 4 … `--r-xl` 16 — never a px radius),
+- `web/src/styles.css` — one design system in **Catppuccin's colours,
+  Frappé by night and Latte by day** (`lib/theme.ts` holds the swatches,
+  tested): every token a `light-dark()` pair picked by the root's
+  `color-scheme`, which `app/theme.ts` sets through `data-theme` from the
+  pref `theme` (system / dark / light; `startTheme` in main.tsx before
+  the first render, `useTheme` / `useThemePref` / `setThemePref`, the
+  three "Theme: …" rows of the palette; the pop-out's document and
+  `<meta name="theme-color">` follow); the terminal lens takes
+  `terminalTheme` and the wall's screens `ansiPalette`, Catppuccin's own
+  terminal mapping, so a tile shows the lens's colours. Four surface
+  layers (`--bg` base → `--bg-raised` mantle → `--bg-input` → `--bg-overlay`,
+  `--bg-active` / `--bg-elev` for a raised chip), hairlines from the
+  surfaces (`--line`, `--line-strong`, `--line-hover`), peach as the
+  accent with `--on-accent` ink, every colour with a `-soft` fill and a
+  `-ring` mixed from it (`color-mix`), shadows and sheen as inks the
+  theme picks, a radius scale (`--r-xs` 4 … `--r-xl` 16 — never a px radius),
   a type scale (11 / 12 / 13 / 13.5 body / 15 / 18 / 20 — never another
   size), control heights `--ctl-lg`/`--ctl`/`--ctl-sm`/`--ctl-xs`, a layer
   ladder (`--z-drawer` < `--z-dialog` < `--z-menu` < `--z-select`), three
@@ -1071,7 +1084,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   folder per lens or panel, its server calls in its own `api.ts`) →
   `app/`; a dependency points down that list, and a feature never imports
   another feature's screens (its `api.ts` and pure modules, and the few
-  shared pieces `agents/SendToAgent`, `files/target`, are fine).
+  shared pieces `agents/SendToAgent`, `files/target`, are fine; from
+  `app/` a feature takes only `store`, `current`, `act`, `pip`, `theme`).
   `features/terminal/engine/` is the terminal outside React (`engine.ts`
   wires `transport`, `modes`, `mouse`, `pointer`, `selection`, `layer`,
   `copy`, `links`, `paste`, `geometry`, `keys`); `Terminal.tsx` is the

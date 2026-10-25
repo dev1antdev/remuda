@@ -2,6 +2,8 @@
 // with its colours and weight resolved, every other escape (cursor moves, erases, OSC titles) dropped. The wall's
 // screen view draws the spans; nothing here touches the DOM.
 
+import type { AnsiPalette } from "@/lib/theme";
+
 export type Span = {
   text: string;
   fg?: string; // a CSS colour; absent for the default
@@ -14,26 +16,30 @@ export type Span = {
 };
 export type Line = Span[];
 
-// xterm.js's own palette, which the terminal lens draws with, so a screen tile shows the same colours
-const PALETTE = [
-  "#2e3436", "#cc0000", "#4e9a06", "#c4a000", "#3465a4", "#75507b", "#06989a", "#d3d7cf",
-  "#555753", "#ef2929", "#8ae234", "#fce94f", "#729fcf", "#ad7fa8", "#34e2e2", "#eeeeec",
-];
-export const DEFAULT_FG = "#ffffff";
-export const DEFAULT_BG = "#14120f"; // the terminal lens's background (engine.ts)
+// xterm.js's own palette, the fallback; a screen tile draws with the theme's (lib/theme.ts ansiPalette), as the lens does
+export const XTERM_PALETTE: AnsiPalette = {
+  colors: [
+    "#2e3436", "#cc0000", "#4e9a06", "#c4a000", "#3465a4", "#75507b", "#06989a", "#d3d7cf",
+    "#555753", "#ef2929", "#8ae234", "#fce94f", "#729fcf", "#ad7fa8", "#34e2e2", "#eeeeec",
+  ],
+  fg: "#ffffff",
+  bg: "#14120f",
+};
+export const DEFAULT_FG = XTERM_PALETTE.fg;
+export const DEFAULT_BG = XTERM_PALETTE.bg;
 
 type Colour = { index: number } | { css: string } | null;
 type Style = { fg: Colour; bg: Colour; bold: boolean; dim: boolean; italic: boolean; underline: boolean; inverse: boolean; strike: boolean };
 
 const plain = (): Style => ({ fg: null, bg: null, bold: false, dim: false, italic: false, underline: false, inverse: false, strike: false });
 
-export function parseAnsi(text: string): Line[] {
+export function parseAnsi(text: string, palette: AnsiPalette = XTERM_PALETTE): Line[] {
   const lines: Line[] = [];
   let line: Line = [];
   let style = plain();
   let buffer = "";
   const flush = () => {
-    if (buffer) line.push(span(buffer, style));
+    if (buffer) line.push(span(buffer, style, palette));
     buffer = "";
   };
   for (let i = 0; i < text.length; i++) {
@@ -173,17 +179,17 @@ function colour256(n: number): Colour {
 
 const hex = (rgb: number[]) => "#" + rgb.map((v) => v.toString(16).padStart(2, "0")).join("");
 
-const css = (colour: Exclude<Colour, null>) => ("css" in colour ? colour.css : PALETTE[colour.index]!);
+const css = (colour: Exclude<Colour, null>, palette: AnsiPalette) => ("css" in colour ? colour.css : palette.colors[colour.index]!);
 
 // span resolves a style onto a run of text: bold brightens a basic colour as xterm draws it, inverse swaps the two
-function span(text: string, style: Style): Span {
+function span(text: string, style: Style, palette: AnsiPalette): Span {
   const out: Span = { text };
   let fg = style.fg;
   let bg = style.bg;
   if (style.bold && fg && "index" in fg && fg.index < 8) fg = { index: fg.index + 8 };
-  if (style.inverse) [fg, bg] = [bg ?? { css: DEFAULT_BG }, fg ?? { css: DEFAULT_FG }];
-  if (fg) out.fg = css(fg);
-  if (bg) out.bg = css(bg);
+  if (style.inverse) [fg, bg] = [bg ?? { css: palette.bg }, fg ?? { css: palette.fg }];
+  if (fg) out.fg = css(fg, palette);
+  if (bg) out.bg = css(bg, palette);
   if (style.bold) out.bold = true;
   if (style.dim) out.dim = true;
   if (style.italic) out.italic = true;

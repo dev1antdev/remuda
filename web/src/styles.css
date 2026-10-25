@@ -1,44 +1,47 @@
-/* remuda — one dark, warm-charcoal design system: class names are the UI's vocabulary, the values below are the design. */
+/* remuda — one design system in Catppuccin's colours: Frappé by night, Latte by day. Class names are the UI's vocabulary; the
+   tokens below are the design, each colour a light-dark(frappé, latte) pair picked by the root's color-scheme (the switch sits after this block). */
 
 :root {
   /* surfaces */
-  --bg: #121110;
-  --bg-raised: #191715;
-  --bg-input: #211e1a;
-  --bg-hover: #27231e;
-  --bg-overlay: #201d19;
-  --bg-active: #2c2823;
+  --bg: light-dark(#eff1f5, #303446);
+  --bg-raised: light-dark(#e6e9ef, #292c3c);
+  --bg-input: light-dark(#ffffff, #414559);
+  --bg-hover: light-dark(rgba(76, 79, 105, 0.08), rgba(198, 208, 245, 0.08));
+  --bg-overlay: light-dark(#ffffff, #292c3c);
+  --bg-active: light-dark(#ccd0da, #51576d);
 
   /* ink */
-  --fg: #ebe6de;
-  --fg-dim: #a49c91;
-  --fg-faint: #6e675f;
+  --fg: light-dark(#4c4f69, #c6d0f5);
+  --fg-dim: light-dark(#6c6f85, #a5adce);
+  --fg-faint: light-dark(#8c8fa1, #838ba7);
 
   /* hairlines */
-  --line: rgba(255, 255, 255, 0.07);
-  --line-strong: rgba(255, 255, 255, 0.13);
+  --line: light-dark(#ccd0da, #414559);
+  --line-strong: light-dark(#bcc0cc, #51576d);
+  --line-hover: light-dark(#acb0be, #626880);
 
-  /* colour, each with a soft fill */
-  --accent: #e07c4c;
-  --accent-soft: rgba(224, 124, 76, 0.16);
-  --accent-ring: rgba(224, 124, 76, 0.45);
-  --green: #6cb57a;
-  --green-soft: rgba(108, 181, 122, 0.16);
-  --amber: #dcae4a;
-  --amber-soft: rgba(220, 174, 74, 0.16);
-  --blue: #6a9be0;
-  --blue-soft: rgba(106, 155, 224, 0.16);
-  --red: #d2655c;
-  --red-soft: rgba(210, 101, 92, 0.16);
-  --violet: #9f8ab8;
-  --amber-ring: rgba(220, 174, 74, 0.45);
-  --red-ring: rgba(210, 101, 92, 0.45);
-  --green-ring: rgba(108, 181, 122, 0.45);
-  --on-accent: #fff;
-  --line-hover: rgba(255, 255, 255, 0.2);
-  --scrim: rgba(0, 0, 0, 0.5);
-  --thumb: #3b3630;
-  --thumb-hover: #554e46;
+  /* colour — peach is the accent; red means blocked, green done, amber a note — each with a soft fill and a ring */
+  --accent: light-dark(#fe640b, #ef9f76);
+  --green: light-dark(#40a02b, #a6d189);
+  --amber: light-dark(#df8e1d, #e5c890);
+  --blue: light-dark(#1e66f5, #8caaee);
+  --red: light-dark(#d20f39, #e78284);
+  --violet: light-dark(#8839ef, #ca9ee6);
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+  --green-soft: color-mix(in srgb, var(--green) 18%, transparent);
+  --amber-soft: color-mix(in srgb, var(--amber) 18%, transparent);
+  --blue-soft: color-mix(in srgb, var(--blue) 18%, transparent);
+  --red-soft: color-mix(in srgb, var(--red) 18%, transparent);
+  --accent-ring: color-mix(in srgb, var(--accent) 50%, transparent);
+  --amber-ring: color-mix(in srgb, var(--amber) 50%, transparent);
+  --red-ring: color-mix(in srgb, var(--red) 50%, transparent);
+  --green-ring: color-mix(in srgb, var(--green) 50%, transparent);
+  --green-dim: color-mix(in srgb, var(--green) 65%, var(--fg-dim));
+  --on-accent: light-dark(#eff1f5, #232634);
+  --on-amber: light-dark(#4c4f69, #232634);
+  --scrim: light-dark(rgba(76, 79, 105, 0.4), rgba(35, 38, 52, 0.6));
+  --thumb: light-dark(#bcc0cc, #51576d);
+  --thumb-hover: light-dark(#acb0be, #626880);
 
   /* shape */
   --r-xs: 4px;
@@ -48,10 +51,15 @@
   --r-xl: 16px;
 
   /* depth */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
-  --inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --shadow-ink: light-dark(rgba(76, 79, 105, 0.14), rgba(0, 0, 0, 0.4));
+  --shadow-ink-soft: light-dark(rgba(76, 79, 105, 0.1), rgba(0, 0, 0, 0.35));
+  --shadow-ink-deep: light-dark(rgba(76, 79, 105, 0.18), rgba(0, 0, 0, 0.5));
+  --sheen: light-dark(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.06));
+  --shadow-sm: 0 1px 2px var(--shadow-ink);
+  --shadow-md: 0 6px 18px var(--shadow-ink-soft), 0 1px 2px var(--shadow-ink);
+  --shadow-lg: 0 20px 50px var(--shadow-ink-deep), 0 2px 8px var(--shadow-ink);
+  --inset-top: inset 0 1px 0 var(--sheen);
+  --inset-well: inset 0 1px 2px var(--shadow-ink-soft);
 
   /* controls */
   --ctl-lg: 36px;
@@ -75,6 +83,17 @@
   --bg-elev: var(--bg-active);
 
   color-scheme: dark;
+}
+
+/* the theme switch: data-theme on the root (app/theme.ts, from the pref) or, without one, the system's choice */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+  }
 }
 
 /* ---- reset & base ---- */
@@ -353,7 +372,7 @@ a.btn {
 }
 
 .btn.danger.soft:hover:not(:disabled) {
-  background: rgba(210, 101, 92, 0.26);
+  background: color-mix(in srgb, var(--red) 26%, transparent);
   border-color: var(--red-ring);
   filter: none;
 }
@@ -465,7 +484,7 @@ input[type="checkbox"]:checked::after {
 }
 
 input[type="checkbox"]:hover:not(:checked) {
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: var(--line-hover);
 }
 
 /* the segmented control: a well with one raised segment */
@@ -479,7 +498,7 @@ input[type="checkbox"]:hover:not(:checked) {
   padding: 3px;
   border-radius: var(--r-md);
   background: var(--bg-input);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--inset-well);
   flex-shrink: 0;
 }
 
@@ -523,7 +542,7 @@ input[type="checkbox"]:hover:not(:checked) {
 
 .mode-switch button.on {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: var(--inset-top), var(--shadow-sm);
 }
 
@@ -1378,7 +1397,7 @@ body.is-resizing iframe {
 
 .radar-row.is-idle_fresh .radar-mark,
 .radar-row.is-idle_fresh .radar-title {
-  color: #9fc4ab;
+  color: var(--green-dim);
 }
 
 .radar-row.is-unknown .radar-mark,
@@ -1441,7 +1460,7 @@ body.is-resizing iframe {
 }
 
 .sel:hover {
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: var(--line-hover);
 }
 
 .sel .sel-label {
@@ -1869,8 +1888,8 @@ body.is-resizing iframe {
 }
 
 .term-select::selection {
-  background: rgba(224, 124, 76, 0.45);
-  color: #fff;
+  background: var(--accent-ring);
+  color: var(--fg);
 }
 
 .term-mount.keep {
@@ -1925,7 +1944,7 @@ body.is-resizing iframe {
   font-family: var(--mono);
   font-size: 13px;
   flex-shrink: 0;
-  box-shadow: var(--inset-top), 0 1px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: var(--inset-top), 0 1px 0 var(--shadow-ink);
   transition: background var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
 
@@ -1992,7 +2011,7 @@ body.is-resizing iframe {
 .turn-user {
   align-self: flex-end;
   background: var(--accent-soft);
-  border: 1px solid rgba(224, 124, 76, 0.22);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-radius: var(--r-xl) var(--r-xl) var(--r-xs) var(--r-xl);
   padding: 9px 13px;
   max-width: min(680px, 80%);
@@ -2620,7 +2639,7 @@ body.is-resizing iframe {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--scrim);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
@@ -2760,12 +2779,12 @@ body.is-resizing iframe {
 
 .fv-diff .add {
   background: var(--green-soft);
-  color: #c4e8cc;
+  color: var(--green);
 }
 
 .fv-diff .del {
   background: var(--red-soft);
-  color: #f0bdb8;
+  color: var(--red);
 }
 
 .fv-diff .hunk {
@@ -2971,7 +2990,7 @@ body.is-resizing iframe {
   height: 9px;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 
 .tasks-star {
@@ -3290,7 +3309,7 @@ body.is-resizing iframe {
 .split-arrow {
   border-radius: 0 var(--r-md) var(--r-md) 0;
   padding: 0 8px;
-  border-left: 1px solid rgba(0, 0, 0, 0.28);
+  border-left: 1px solid color-mix(in srgb, var(--on-accent) 25%, transparent);
 }
 
 .split.off .split-main,
@@ -3407,7 +3426,7 @@ body.is-resizing iframe {
 
 .lens-switch button.on .lens-badge {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .ws-badge {
@@ -4647,7 +4666,7 @@ button.usage-row:hover {
 
 ::highlight(remuda-find-current) {
   background-color: var(--amber);
-  color: #1a1611;
+  color: var(--on-amber);
 }
 
 @keyframes turn-hit {
@@ -4692,7 +4711,7 @@ button.usage-row:hover {
 }
 
 .tasks-run.is-finished {
-  border-color: rgba(103, 178, 118, 0.4);
+  border-color: var(--green-ring);
 }
 
 .tasks-run.is-failed,
@@ -4888,7 +4907,7 @@ button.usage-row:hover {
 .composer-mic.listening {
   background: var(--red-soft);
   color: var(--red);
-  border-color: rgba(210, 101, 92, 0.5);
+  border-color: var(--red-ring);
   animation: pulse 1.4s ease-in-out infinite;
 }
 
@@ -5910,7 +5929,7 @@ button.usage-row:hover {
 }
 
 .tile.is-idle_fresh .radar-mark {
-  color: #9fc4ab;
+  color: var(--green-dim);
 }
 
 .tile.is-unknown .radar-mark {
@@ -6026,8 +6045,8 @@ button.usage-row:hover {
   justify-content: flex-end;
   overflow: hidden;
   padding: 6px 8px;
-  background: #14120f;
-  color: #ffffff;
+  background: var(--bg);
+  color: var(--fg);
   font-family: var(--mono);
   line-height: 1.25;
   cursor: pointer;
@@ -6670,7 +6689,7 @@ body.popout {
 
 /* the mark on its own, outside a sidebar row: the palette's rows */
 .radar-mark.idle_fresh {
-  color: #9fc4ab;
+  color: var(--green-dim);
 }
 
 .radar-mark.unknown {

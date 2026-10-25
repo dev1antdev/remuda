@@ -22,6 +22,7 @@ import { enterFull, leaveFull } from "./full";
 import { NEXT_KEY, useNextNeedingMe } from "./next";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
+import { setThemePref, useThemePref } from "./theme";
 
 const FIND_KEY = isMac ? "⌘F" : "Ctrl+F";
 
@@ -55,6 +56,7 @@ function useCommands(): (query: string) => Entry[] {
   const chatSession = app.use((s) => s.chatSession);
   const footprint = app.use((s) => s.footprint);
   const full = app.use((s) => s.full);
+  const themePref = useThemePref();
   const current = useCurrent();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
@@ -147,12 +149,15 @@ function useCommands(): (query: string) => Entry[] {
       command("schedules", "Schedules", () => actions.openPanel("schedules"), { hint: "prompts sent to agents on a timetable", icon: "calendar", keywords: ["cron", "timer", "prompt"] });
       command("usage", "Usage report", () => actions.openPanel("usage"), { hint: "what the agents cost, by day, project and session", icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
       command("standup", "Standup: what every agent did today", () => actions.openPanel("standup"), { hint: "one report over every machine, ready to paste as Markdown", icon: "sun", keywords: ["standup", "report", "today", "summary", "recap", "daily", "digest", "morning"] });
+      command("theme-system", "Theme: follow the system", () => setThemePref("system"), { hint: `${themePref === "system" ? "now · " : ""}Frappé when the system is dark, Latte when it is light`, icon: "monitor", keywords: ["theme", "dark", "light", "catppuccin", "system", "auto"] });
+      command("theme-dark", "Theme: Frappé (dark)", () => setThemePref("dark"), { hint: `${themePref === "dark" ? "now · " : ""}Catppuccin Frappé, whatever the system says`, icon: "moon", keywords: ["theme", "dark", "catppuccin", "frappe"] });
+      command("theme-light", "Theme: Latte (light)", () => setThemePref("light"), { hint: `${themePref === "light" ? "now · " : ""}Catppuccin Latte, whatever the system says`, icon: "sun", keywords: ["theme", "light", "catppuccin", "latte"] });
       command("keys", "Keyboard shortcuts", () => actions.openDialog({ kind: "keys" }), { hint: "? · every key the page answers", icon: "keyboard", keywords: ["keys", "shortcuts", "help", "hotkeys", "bindings", "keyboard"] });
       command("machine", "Add a PC…", () => actions.openDialog({ kind: "machine" }), { hint: "a remote machine over SSH", icon: "monitor", keywords: ["machine", "remote", "ssh", "host"] });
       const typed = query.trim();
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, chatSession, footprint, full, current, radar, wall, setWall, focus, setFocus, timelineShown, setTimelineShown, step, now, goNext],
+    [machines, mode, lens, viewer, chatSession, footprint, full, themePref, current, radar, wall, setWall, focus, setFocus, timelineShown, setTimelineShown, step, now, goNext],
   );
 }
