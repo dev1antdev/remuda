@@ -11,6 +11,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { resyncPush } from "@/features/alerts/push";
 import { readAlertPrefs } from "@/features/alerts/prefs";
 import { useVoice } from "@/features/alerts/useVoice";
+import { useSyncPrefs } from "@/features/settings/useSyncPrefs";
 import ReviewQueue from "@/features/review/ReviewQueue";
 import Tasks from "@/features/tasks/Tasks";
 import Code from "@/features/code/Code";
@@ -41,6 +42,7 @@ export default function Shell() {
   useFullKeys();
   useNextKey(useNextNeedingMe());
   useVoice();
+  useSyncPrefs();
 
   useEffect(() => {
     writeURL({ selection: current ? { machineId: current.machine.id, paneId: current.pane.id } : null, mode, lens });
