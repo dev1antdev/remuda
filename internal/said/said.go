@@ -30,17 +30,18 @@ type entry struct {
 	hasLink bool
 }
 
-// Tracker holds one line per pane and reads one pane at a time per machine.
+// Tracker holds one line per pane and reads one pane at a time per machine; a pull request first named goes on the bus.
 type Tracker struct {
 	in      Inputs
+	bus     *events.Bus
 	mu      sync.Mutex
 	lines   map[string]entry
 	queue   map[string][]string
 	running map[string]bool
 }
 
-func New(in Inputs) *Tracker {
-	return &Tracker{in: in, lines: map[string]entry{}, queue: map[string][]string{}, running: map[string]bool{}}
+func New(in Inputs, bus *events.Bus) *Tracker {
+	return &Tracker{in: in, bus: bus, lines: map[string]entry{}, queue: map[string][]string{}, running: map[string]bool{}}
 }
 
 func key(machineID, paneID string) string { return machineID + "|" + paneID }
@@ -178,6 +179,9 @@ func (t *Tracker) read(machineID, paneID string) {
 	t.mu.Lock()
 	t.lines[k] = e
 	t.mu.Unlock()
+	if e.hasLink && (!have.hasLink || have.link.URL != e.link.URL) {
+		events.Publish(t.bus, events.PullRequestNamed{Pane: events.PaneRef{Machine: machineID, Pane: paneID}, URL: e.link.URL, Label: e.link.Label})
+	}
 }
 
 var (

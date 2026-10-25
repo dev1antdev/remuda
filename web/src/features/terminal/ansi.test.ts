@@ -62,9 +62,10 @@ describe("parseAnsi", () => {
 
 describe("parseAnsi with a theme's palette", () => {
   it("draws the basic colours and the inverse defaults from the palette given", () => {
-    const latte = ansiPalette("light");
+    const latte = ansiPalette("latte");
     expect(parseAnsi("\x1b[31mred", latte)).toEqual([[{ text: "red", fg: "#d20f39" }]]);
     expect(parseAnsi("\x1b[7mx", latte)).toEqual([[{ text: "x", fg: latte.bg, bg: latte.fg }]]);
-    expect(parseAnsi("\x1b[36mcyan", ansiPalette("dark"))).toEqual([[{ text: "cyan", fg: "#81c8be" }]]);
+    expect(parseAnsi("\x1b[36mcyan", ansiPalette("frappe"))).toEqual([[{ text: "cyan", fg: "#81c8be" }]]);
+    expect(parseAnsi("\x1b[36mcyan", ansiPalette("mocha"))).toEqual([[{ text: "cyan", fg: "#94e2d5" }]]);
   });
 });

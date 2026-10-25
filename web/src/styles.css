@@ -1,32 +1,35 @@
-/* remuda — one design system in Catppuccin's colours: Frappé by night, Latte by day. Class names are the UI's vocabulary; the
-   tokens below are the design, each colour a light-dark(frappé, latte) pair picked by the root's color-scheme (the switch sits after this block). */
+/* remuda — one design system in Catppuccin's colours: Latte by day, Frappé, Macchiato or Mocha by night, one of the fourteen
+   named colours as the accent. Class names are the UI's vocabulary; the tokens below are the design, each colour read from the
+   flavour's own --ctp-* palette — the four palettes and the accents follow this block, app/theme.ts puts data-flavor and
+   data-accent on the root, lib/theme.ts types the same values out for the terminal and the screens. */
 
 :root {
   /* surfaces */
-  --bg: light-dark(#eff1f5, #303446);
-  --bg-raised: light-dark(#e6e9ef, #292c3c);
-  --bg-input: light-dark(#ffffff, #414559);
-  --bg-hover: light-dark(rgba(76, 79, 105, 0.08), rgba(198, 208, 245, 0.08));
-  --bg-overlay: light-dark(#ffffff, #292c3c);
-  --bg-active: light-dark(#ccd0da, #51576d);
+  --bg: var(--ctp-base);
+  --bg-raised: var(--ctp-mantle);
+  --bg-input: var(--ctp-input);
+  --bg-hover: color-mix(in srgb, var(--ctp-text) 8%, transparent);
+  --bg-overlay: var(--ctp-overlay);
+  --bg-active: var(--ctp-active);
 
   /* ink */
-  --fg: light-dark(#4c4f69, #c6d0f5);
-  --fg-dim: light-dark(#6c6f85, #a5adce);
-  --fg-faint: light-dark(#8c8fa1, #838ba7);
+  --fg: var(--ctp-text);
+  --fg-dim: var(--ctp-subtext0);
+  --fg-faint: var(--ctp-overlay1);
 
   /* hairlines */
-  --line: light-dark(#ccd0da, #414559);
-  --line-strong: light-dark(#bcc0cc, #51576d);
-  --line-hover: light-dark(#acb0be, #626880);
+  --line: var(--ctp-surface0);
+  --line-strong: var(--ctp-surface1);
+  --line-hover: var(--ctp-surface2);
 
-  /* colour — peach is the accent; red means blocked, green done, amber a note — each with a soft fill and a ring */
-  --accent: light-dark(#fe640b, #ef9f76);
-  --green: light-dark(#40a02b, #a6d189);
-  --amber: light-dark(#df8e1d, #e5c890);
-  --blue: light-dark(#1e66f5, #8caaee);
-  --red: light-dark(#d20f39, #e78284);
-  --violet: light-dark(#8839ef, #ca9ee6);
+  /* colour — the accent is the chosen one of the flavour's fourteen, peach unless the pref says; red means blocked, green done,
+     amber a note — each with a soft fill and a ring */
+  --accent: var(--ctp-accent);
+  --green: var(--ctp-green);
+  --amber: var(--ctp-yellow);
+  --blue: var(--ctp-blue);
+  --red: var(--ctp-red);
+  --violet: var(--ctp-mauve);
   --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
   --green-soft: color-mix(in srgb, var(--green) 18%, transparent);
   --amber-soft: color-mix(in srgb, var(--amber) 18%, transparent);
@@ -37,11 +40,11 @@
   --red-ring: color-mix(in srgb, var(--red) 50%, transparent);
   --green-ring: color-mix(in srgb, var(--green) 50%, transparent);
   --green-dim: color-mix(in srgb, var(--green) 65%, var(--fg-dim));
-  --on-accent: light-dark(#eff1f5, #232634);
-  --on-amber: light-dark(#4c4f69, #232634);
-  --scrim: light-dark(rgba(76, 79, 105, 0.4), rgba(35, 38, 52, 0.6));
-  --thumb: light-dark(#bcc0cc, #51576d);
-  --thumb-hover: light-dark(#acb0be, #626880);
+  --on-accent: var(--ctp-on-accent);
+  --on-amber: var(--ctp-on-amber);
+  --scrim: var(--ctp-scrim);
+  --thumb: var(--ctp-surface1);
+  --thumb-hover: var(--ctp-surface2);
 
   /* shape */
   --r-xs: 4px;
@@ -51,10 +54,10 @@
   --r-xl: 16px;
 
   /* depth */
-  --shadow-ink: light-dark(rgba(76, 79, 105, 0.14), rgba(0, 0, 0, 0.4));
-  --shadow-ink-soft: light-dark(rgba(76, 79, 105, 0.1), rgba(0, 0, 0, 0.35));
-  --shadow-ink-deep: light-dark(rgba(76, 79, 105, 0.18), rgba(0, 0, 0, 0.5));
-  --sheen: light-dark(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.06));
+  --shadow-ink: var(--ctp-shadow-ink);
+  --shadow-ink-soft: var(--ctp-shadow-ink-soft);
+  --shadow-ink-deep: var(--ctp-shadow-ink-deep);
+  --sheen: var(--ctp-sheen);
   --shadow-sm: 0 1px 2px var(--shadow-ink);
   --shadow-md: 0 6px 18px var(--shadow-ink-soft), 0 1px 2px var(--shadow-ink);
   --shadow-lg: 0 20px 50px var(--shadow-ink-deep), 0 2px 8px var(--shadow-ink);
@@ -85,16 +88,167 @@
   color-scheme: dark;
 }
 
-/* the theme switch: data-theme on the root (app/theme.ts, from the pref) or, without one, the system's choice */
-:root[data-theme="light"] {
+/* ---- the palettes: Catppuccin's named colours of each flavour (lib/theme.ts holds the same values, lib/theme.test.ts keeps
+   the two equal), picked by data-flavor on the root; a root without one wears Frappé ---- */
+:root,
+:root[data-flavor="frappe"] {
+  --ctp-rosewater: #f2d5cf;
+  --ctp-flamingo: #eebebe;
+  --ctp-pink: #f4b8e4;
+  --ctp-mauve: #ca9ee6;
+  --ctp-red: #e78284;
+  --ctp-maroon: #ea999c;
+  --ctp-peach: #ef9f76;
+  --ctp-yellow: #e5c890;
+  --ctp-green: #a6d189;
+  --ctp-teal: #81c8be;
+  --ctp-sky: #99d1db;
+  --ctp-sapphire: #85c1dc;
+  --ctp-blue: #8caaee;
+  --ctp-lavender: #babbf1;
+  --ctp-text: #c6d0f5;
+  --ctp-subtext1: #b5bfe2;
+  --ctp-subtext0: #a5adce;
+  --ctp-overlay2: #949cbb;
+  --ctp-overlay1: #838ba7;
+  --ctp-overlay0: #737994;
+  --ctp-surface2: #626880;
+  --ctp-surface1: #51576d;
+  --ctp-surface0: #414559;
+  --ctp-base: #303446;
+  --ctp-mantle: #292c3c;
+  --ctp-crust: #232634;
+}
+
+:root[data-flavor="macchiato"] {
+  --ctp-rosewater: #f4dbd6;
+  --ctp-flamingo: #f0c6c6;
+  --ctp-pink: #f5bde6;
+  --ctp-mauve: #c6a0f6;
+  --ctp-red: #ed8796;
+  --ctp-maroon: #ee99a0;
+  --ctp-peach: #f5a97f;
+  --ctp-yellow: #eed49f;
+  --ctp-green: #a6da95;
+  --ctp-teal: #8bd5ca;
+  --ctp-sky: #91d7e3;
+  --ctp-sapphire: #7dc4e4;
+  --ctp-blue: #8aadf4;
+  --ctp-lavender: #b7bdf8;
+  --ctp-text: #cad3f5;
+  --ctp-subtext1: #b8c0e0;
+  --ctp-subtext0: #a5adcb;
+  --ctp-overlay2: #939ab7;
+  --ctp-overlay1: #8087a2;
+  --ctp-overlay0: #6e738d;
+  --ctp-surface2: #5b6078;
+  --ctp-surface1: #494d64;
+  --ctp-surface0: #363a4f;
+  --ctp-base: #24273a;
+  --ctp-mantle: #1e2030;
+  --ctp-crust: #181926;
+}
+
+:root[data-flavor="mocha"] {
+  --ctp-rosewater: #f5e0dc;
+  --ctp-flamingo: #f2cdcd;
+  --ctp-pink: #f5c2e7;
+  --ctp-mauve: #cba6f7;
+  --ctp-red: #f38ba8;
+  --ctp-maroon: #eba0ac;
+  --ctp-peach: #fab387;
+  --ctp-yellow: #f9e2af;
+  --ctp-green: #a6e3a1;
+  --ctp-teal: #94e2d5;
+  --ctp-sky: #89dceb;
+  --ctp-sapphire: #74c7ec;
+  --ctp-blue: #89b4fa;
+  --ctp-lavender: #b4befe;
+  --ctp-text: #cdd6f4;
+  --ctp-subtext1: #bac2de;
+  --ctp-subtext0: #a6adc8;
+  --ctp-overlay2: #9399b2;
+  --ctp-overlay1: #7f849c;
+  --ctp-overlay0: #6c7086;
+  --ctp-surface2: #585b70;
+  --ctp-surface1: #45475a;
+  --ctp-surface0: #313244;
+  --ctp-base: #1e1e2e;
+  --ctp-mantle: #181825;
+  --ctp-crust: #11111b;
+}
+
+/* what every dark flavour derives from its palette: fields and overlays on its surfaces, crust ink on a coloured fill, black shadows */
+:root {
+  --ctp-input: var(--ctp-surface0);
+  --ctp-overlay: var(--ctp-mantle);
+  --ctp-active: var(--ctp-surface1);
+  --ctp-on-accent: var(--ctp-crust);
+  --ctp-on-amber: var(--ctp-crust);
+  --ctp-scrim: color-mix(in srgb, var(--ctp-crust) 60%, transparent);
+  --ctp-shadow-ink: rgba(0, 0, 0, 0.4);
+  --ctp-shadow-ink-soft: rgba(0, 0, 0, 0.35);
+  --ctp-shadow-ink-deep: rgba(0, 0, 0, 0.5);
+  --ctp-sheen: rgba(255, 255, 255, 0.06);
+  --ctp-accent: var(--ctp-peach);
+}
+
+/* Latte, the light flavour: white fields and overlays, its text as the ink of shadows and the scrim, base ink on a coloured fill */
+:root[data-flavor="latte"] {
+  --ctp-rosewater: #dc8a78;
+  --ctp-flamingo: #dd7878;
+  --ctp-pink: #ea76cb;
+  --ctp-mauve: #8839ef;
+  --ctp-red: #d20f39;
+  --ctp-maroon: #e64553;
+  --ctp-peach: #fe640b;
+  --ctp-yellow: #df8e1d;
+  --ctp-green: #40a02b;
+  --ctp-teal: #179299;
+  --ctp-sky: #04a5e5;
+  --ctp-sapphire: #209fb5;
+  --ctp-blue: #1e66f5;
+  --ctp-lavender: #7287fd;
+  --ctp-text: #4c4f69;
+  --ctp-subtext1: #5c5f77;
+  --ctp-subtext0: #6c6f85;
+  --ctp-overlay2: #7c7f93;
+  --ctp-overlay1: #8c8fa1;
+  --ctp-overlay0: #9ca0b0;
+  --ctp-surface2: #acb0be;
+  --ctp-surface1: #bcc0cc;
+  --ctp-surface0: #ccd0da;
+  --ctp-base: #eff1f5;
+  --ctp-mantle: #e6e9ef;
+  --ctp-crust: #dce0e8;
+  --ctp-input: #ffffff;
+  --ctp-overlay: #ffffff;
+  --ctp-active: var(--ctp-surface0);
+  --ctp-on-accent: var(--ctp-base);
+  --ctp-on-amber: var(--ctp-text);
+  --ctp-scrim: color-mix(in srgb, var(--ctp-text) 40%, transparent);
+  --ctp-shadow-ink: color-mix(in srgb, var(--ctp-text) 14%, transparent);
+  --ctp-shadow-ink-soft: color-mix(in srgb, var(--ctp-text) 10%, transparent);
+  --ctp-shadow-ink-deep: color-mix(in srgb, var(--ctp-text) 18%, transparent);
+  --ctp-sheen: rgba(255, 255, 255, 0.6);
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    color-scheme: light;
-  }
-}
+/* the accent: one of the flavour's fourteen colours, picked by data-accent on the root (peach without one) */
+:root[data-accent="rosewater"] { --ctp-accent: var(--ctp-rosewater); }
+:root[data-accent="flamingo"] { --ctp-accent: var(--ctp-flamingo); }
+:root[data-accent="pink"] { --ctp-accent: var(--ctp-pink); }
+:root[data-accent="mauve"] { --ctp-accent: var(--ctp-mauve); }
+:root[data-accent="red"] { --ctp-accent: var(--ctp-red); }
+:root[data-accent="maroon"] { --ctp-accent: var(--ctp-maroon); }
+:root[data-accent="peach"] { --ctp-accent: var(--ctp-peach); }
+:root[data-accent="yellow"] { --ctp-accent: var(--ctp-yellow); }
+:root[data-accent="green"] { --ctp-accent: var(--ctp-green); }
+:root[data-accent="teal"] { --ctp-accent: var(--ctp-teal); }
+:root[data-accent="sky"] { --ctp-accent: var(--ctp-sky); }
+:root[data-accent="sapphire"] { --ctp-accent: var(--ctp-sapphire); }
+:root[data-accent="blue"] { --ctp-accent: var(--ctp-blue); }
+:root[data-accent="lavender"] { --ctp-accent: var(--ctp-lavender); }
 
 /* ---- reset & base ---- */
 *,
@@ -7321,6 +7475,276 @@ body.popout {
   .toasts {
     bottom: calc(128px + env(safe-area-inset-bottom));
   }
+}
+
+/* ---- the lines around a hunk (features/review/context.ts): a ↑ in the gutter of the @@ row and "all N lines" at its
+   end, the same downward on the last hunk's foot; the row keeps its height whether the controls are there or not ---- */
+.review-hunk .fv-line.hunk {
+  min-height: 30px;
+}
+
+.review-hunk .fv-line.hunk .hunk-unfold {
+  flex: 0 0 22px;
+  display: flex;
+  justify-content: center;
+  margin-left: 6px;
+}
+
+.review-hunk .fv-line.hunk .hunk-unfold .icon-btn {
+  color: var(--fg-dim);
+}
+
+.review-hunk .fv-line.hunk .hunk-unfold-all {
+  font: 11px/1 var(--sans);
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.review-hunk .fv-line.hunk .hunk-unfold-all:hover {
+  color: var(--fg);
+}
+
+.review-hunk .fv-line.hunk.hunk-foot {
+  color: var(--fg-faint);
+  margin-top: 0;
+}
+
+.review-hunk .fv-line.hunk [aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---- the look: flavour and accent swatches in Settings (features/settings/SettingsDialog.tsx) ---- */
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  flex-shrink: 0;
+}
+
+.accent-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+  max-width: 220px;
+  flex-shrink: 0;
+}
+
+.accent-swatch .swatch {
+  width: 16px;
+  height: 16px;
+  border-color: transparent;
+}
+
+.accent-swatch.on {
+  box-shadow: 0 0 0 2px var(--bg-overlay), 0 0 0 3.5px var(--accent);
+}
+
+@media (max-width: 920px) {
+  .accent-swatches {
+    max-width: 160px;
+  }
+}
+
+/* ---- schedules: what runs (a prompt, or the standup as a digest) ---- */
+.schedule-kind {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-md);
+  background: var(--bg-input);
+  box-shadow: var(--inset-well);
+}
+
+.schedule-kind button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-dim);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+
+.schedule-kind button:hover {
+  color: var(--fg);
+}
+
+.schedule-kind button.on {
+  background: var(--bg-active);
+  color: var(--fg);
+  box-shadow: var(--inset-top), var(--shadow-sm);
+}
+
+.schedule-note {
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.schedule-label .schedule-digest-mark {
+  margin-right: 5px;
+  vertical-align: -1px;
+  color: var(--amber);
+}
+
+/* ---- the pull request's state beside its link in a tile's head: a chip with the checks, one with the review (prStatus.ts) ---- */
+.tile-pr-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.pr-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--fg-dim);
+  background: var(--bg-active);
+}
+
+.pr-state .pr-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.pr-state.is-green {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.pr-state.is-red {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.pr-state.is-amber {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.pr-state.is-dim {
+  color: var(--fg-faint);
+}
+
+/* a narrow tile keeps the checks and lets the review chip go, so the title keeps its room */
+.tile {
+  container-type: inline-size;
+}
+
+@container (max-width: 560px) {
+  .pr-state.pr-review {
+    display: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .pr-state.pr-review {
+    display: none;
+  }
+}
+
+/* ---- the Options fold under the agent of the New workspace / tab / worktree dialogs (features/roster/dialogs.tsx) ---- */
+.start-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.start-options-toggle {
+  align-self: flex-start;
+  margin: -4px 0 0 -6px;
+}
+
+.start-options label small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--fg-faint);
+}
+
+.start-options textarea {
+  min-height: 72px;
+}
+
+/* ---- the Edit's change under its call in the chat lens (features/chat/EditChange.tsx): the review's row colours and marks,
+   a sign column instead of line numbers, long lines scrolled rather than wrapped ---- */
+.edit-diff {
+  margin: 6px 0 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+  font: 12px/1.45 var(--mono);
+  overflow-x: auto;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.edit-diff .fv-line {
+  width: max-content;
+  min-width: 100%;
+  padding-left: 6px;
+}
+
+.edit-diff .fv-line:not(.add):not(.del):not(.hunk):not(.meta) {
+  color: var(--fg-dim);
+}
+
+.edit-diff .fv-line:first-child {
+  padding-top: 4px;
+}
+
+.edit-diff .fv-line:last-child {
+  padding-bottom: 4px;
+}
+
+.edit-diff .edit-sign {
+  flex: 0 0 16px;
+  color: var(--fg-faint);
+  user-select: none;
+}
+
+.edit-diff .del .edit-sign,
+.edit-diff .add .edit-sign {
+  color: inherit;
+}
+
+.edit-diff .hunk {
+  margin-top: 4px;
+  padding-left: 22px;
+}
+
+.edit-diff .meta {
+  padding-left: 22px;
+}
+
+.edit-diff .edit-more {
+  position: sticky;
+  left: 0;
+  padding: 3px 10px 5px;
+  font: 12px var(--sans);
 }
 
 /* ---- a link to a turn: the copy button beside forward, revealed with the turn like it (turn-link PR) ---- */

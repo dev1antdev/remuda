@@ -76,7 +76,7 @@ self.addEventListener("push", (event) => {
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
         actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
-        data: { machine: data.machine, pane: data.pane },
+        data: { machine: data.machine, pane: data.pane, panel: data.panel },
       });
     })(),
   );
@@ -84,7 +84,7 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const { machine, pane } = event.notification.data || {};
+  const { machine, pane, panel } = event.notification.data || {};
   event.waitUntil(
     (async () => {
       // a button on a watchdog notification: Esc goes straight to the pane
@@ -104,11 +104,13 @@ self.addEventListener("notificationclick", (event) => {
         } catch {
           /* iOS may refuse; the message still lands */
         }
-        win.postMessage({ type: "select-pane", machine, pane });
+        // a digest names a panel of the page (the standup) instead of a pane
+        win.postMessage(panel ? { type: "open-panel", panel } : { type: "select-pane", machine, pane });
         return;
       }
-      const url =
-        machine && pane
+      const url = panel
+        ? `/?panel=${encodeURIComponent(panel)}`
+        : machine && pane
           ? `/?machine=${encodeURIComponent(machine)}&pane=${encodeURIComponent(pane)}`
           : "/";
       await self.clients.openWindow(url);

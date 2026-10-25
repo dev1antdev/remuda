@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { app } from "@/app/store";
 import { codeStatus, codeTheme, codeWorkspace, openInEditor, type CodeStatus } from "@/features/code/api";
-import { useTheme } from "@/app/theme";
+import { useFlavor } from "@/app/theme";
 import { newestEdit } from "@/features/code/follow";
 import { useChat } from "@/features/chat/useChat";
 import { actions } from "@/app/store";
@@ -142,21 +142,21 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
     setFrame({ key: `${place}|${asked?.n ?? 0}|${reloads}`, src, place });
   }, [machine?.id, folder, codeFile?.n, status?.available, reloads, workspacePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // the editor wears the page's theme: asked once per machine and theme; an editor already open takes a new theme, or
+  // the editor wears the page's flavour: asked once per machine and flavour; an editor already open takes a new theme, or
   // an extension installed under it, only on a fresh load, so the frame reloads then
-  const theme = useTheme();
+  const flavor = useFlavor();
   const themed = useRef<string>("");
   useEffect(() => {
     if (!machine || !status?.available) return;
-    const key = `${machine.id}|${theme}`;
+    const key = `${machine.id}|${flavor}`;
     if (themed.current === key) return;
     const first = !themed.current.startsWith(`${machine.id}|`);
     themed.current = key;
-    codeTheme(machine.id, theme).then(
+    codeTheme(machine.id, flavor).then(
       (r) => (r.installed || !first) && setReloads((n) => n + 1),
       (e) => actions.notify(`The editor keeps its own theme: ${errMsg(e)}`, { error: true }),
     );
-  }, [machine?.id, status?.available, theme]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [machine?.id, status?.available, flavor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Follow: the pane on screen in Agents is watched at a tile's pace, and every edit its agent finishes opens here as it lands
   const [follow, setFollow] = usePref("code.follow", false);
