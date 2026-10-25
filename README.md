@@ -83,6 +83,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the system by default; "Theme: Frappé" / "Theme: Latte" / "Theme:
   follow the system" in the palette (⌘K) pin one on this device. The
   terminal and the Wall's screens wear the matching Catppuccin palette.
+- **Two themes** — Catppuccin Frappé by night, Latte by day, following
+  the system by default; "Theme: Frappé" / "Theme: Latte" / "Theme:
+  follow the system" in the palette (⌘K) pin one on this device. The
+  terminal and the Wall's screens wear the matching Catppuccin palette.
 - **Panels** — the sidebar, the files rail, the Review queue and a
   task's detail each have a draggable edge: pull it to the width you
   like and it stays that way on this device; Tab to the edge and use
