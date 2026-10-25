@@ -7,6 +7,7 @@ import { actions, type RowMenu } from "@/app/store";
 import { agentTitle, askRestart } from "@/features/updates/restartPane";
 import { openUrl } from "@/lib/host";
 import { killSession, type Machine, type Session } from "./api";
+import { prWords } from "./prStatus";
 
 export function closeWorkspace(m: Machine, s: Session) {
   const n = s.tabs.reduce((a, t) => a + t.panes.length, 0);
@@ -47,7 +48,7 @@ export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) 
       {item("New worktree…", () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }))}
       {item("Rename workspace…", () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }))}
       {tab && item(`Rename tab ${tab.named ? `“${tab.label}”` : tab.number}…`, () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }))}
-      {pr && item(`Open ${pr.label}`, () => openUrl(pr.url))}
+      {pr && item(`Open ${pr.label}${pr.status ? ` · ${prWords(pr.status)}` : ""}`, () => openUrl(pr.url))}
       {chat && item(`Restart ${agentTitle(chat.agent)} on its session…`, () => askRestart(machine.id, chat.id, chat.agent))}
       {item("Close workspace", () => closeWorkspace(machine, session), "danger")}
     </div>

@@ -1,19 +1,23 @@
-// The form that makes or edits a schedule: a machine, a workspace folder, when (a preset that writes the cron, or cron by hand), the prompt.
+// The form that makes or edits a schedule: what runs — a prompt to the agent in a workspace folder, or the standup
+// as a digest to the person's devices — when (a preset that writes the cron, or cron by hand), and the kind's own fields.
 
 import { useEffect, useMemo, useState } from "react";
 import type { Machine } from "@/features/roster/api";
 import { connected, folderOptions, machineOptions } from "@/features/roster/options";
 import { Icon, Notice, Select, useSubmit } from "@/ui";
-import { putSchedule, type Schedule } from "./api";
+import { putSchedule, type DigestSince, type Schedule, type ScheduleKind } from "./api";
 import { cronFor, DEFAULT_CRON, parseCron, PRESETS } from "./cron";
+import { digestSchedule, kindOf, SINCE_OPTIONS } from "./digest";
 
 export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines: Machine[]; value: Partial<Schedule>; onClose: () => void; onSaved: () => void }) {
   const several = connected(machines).length > 1;
+  const [kind, setKind] = useState<ScheduleKind>(kindOf(value));
   const [machine, setMachine] = useState(value.machine ?? connected(machines)[0]?.id ?? "");
   const folders = useMemo(() => folderOptions(machines, machine), [machines, machine]);
   const [dir, setDir] = useState(value.dir ?? "");
   const [label, setLabel] = useState(value.label ?? "");
   const [prompt, setPrompt] = useState(value.prompt ?? "");
+  const [since, setSince] = useState<DigestSince>(value.since ?? "midnight");
   const [initial] = useState(() => parseCron(value.cron ?? DEFAULT_CRON));
   const [preset, setPreset] = useState(initial.preset);
   const [hh, setHH] = useState(initial.hh);
@@ -28,10 +32,15 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
   }, [preset, hh, mm]);
   const pad = (n: number) => String(n).padStart(2, "0");
   const { busy, err, run } = useSubmit(async () => {
-    await putSchedule({ id: value.id, machine, dir, label, cron, prompt, enabled: value.enabled ?? true });
+    await putSchedule(
+      kind === "digest"
+        ? digestSchedule({ id: value.id, label, cron, since, enabled: value.enabled })
+        : { id: value.id, kind: "prompt", machine, dir, label, cron, prompt, enabled: value.enabled ?? true },
+    );
     onSaved();
   });
   const folderIcon = <Icon name="folder" size={14} />;
+  const ready = kind === "digest" ? cron.trim() !== "" : !!dir && prompt.trim() !== "";
 
   return (
     <form
@@ -41,18 +50,28 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
         void run();
       }}
     >
-      <div className="schedule-row">
-        {several && (
-          <label>
-            Machine
-            <Select value={machine} onChange={setMachine} options={machineOptions(machines)} />
+      <nav className="schedule-kind" aria-label="What runs">
+        <button type="button" className={kind === "prompt" ? "on" : ""} onClick={() => setKind("prompt")}>
+          <Icon name="send" size={14} /> Prompt to an agent
+        </button>
+        <button type="button" className={kind === "digest" ? "on" : ""} onClick={() => setKind("digest")}>
+          <Icon name="sun" size={14} /> Standup digest
+        </button>
+      </nav>
+      {kind === "prompt" && (
+        <div className="schedule-row">
+          {several && (
+            <label>
+              Machine
+              <Select value={machine} onChange={setMachine} options={machineOptions(machines)} />
+            </label>
+          )}
+          <label className="grow">
+            Folder
+            <Select value={dir} onChange={setDir} placeholder="Pick a workspace" options={folders.some((f) => f.value === dir) || !dir ? folders : [{ value: dir, label: dir, icon: folderIcon }, ...folders]} />
           </label>
-        )}
-        <label className="grow">
-          Folder
-          <Select value={dir} onChange={setDir} placeholder="Pick a workspace" options={folders.some((f) => f.value === dir) || !dir ? folders : [{ value: dir, label: dir, icon: folderIcon }, ...folders]} />
-        </label>
-      </div>
+        </div>
+      )}
       <div className="schedule-row">
         <label>
           When
@@ -93,22 +112,44 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
           />
         </label>
       </div>
-      <label>
-        <span>
-          Name <span className="dim">(optional)</span>
-        </span>
-        <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Morning status" />
-      </label>
-      <label>
-        Prompt
-        <textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Run the tests and sum up what failed. If everything passes, say so in one line." required />
-      </label>
+      {kind === "digest" ? (
+        <div className="schedule-row">
+          <label className="grow">
+            <span>
+              Name <span className="dim">(optional)</span>
+            </span>
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Standup digest" />
+          </label>
+          <label>
+            Covers
+            <Select value={since} onChange={setSince} options={SINCE_OPTIONS} />
+          </label>
+        </div>
+      ) : (
+        <label>
+          <span>
+            Name <span className="dim">(optional)</span>
+          </span>
+          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Morning status" />
+        </label>
+      )}
+      {kind === "digest" ? (
+        <p className="schedule-note">
+          One push to every device that gets remuda's alerts: how many agents finished, how many wait for you, what it cost, and a line per agent. A tap
+          opens the Standup. Quiet hours hold it; a period with nothing in it sends nothing.
+        </p>
+      ) : (
+        <label>
+          Prompt
+          <textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Run the tests and sum up what failed. If everything passes, say so in one line." required />
+        </label>
+      )}
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>
           Cancel
         </button>
-        <button type="submit" className="btn primary" disabled={busy || !dir || !prompt.trim()}>
+        <button type="submit" className="btn primary" disabled={busy || !ready}>
           {value.id ? "Save" : "Create"}
         </button>
       </div>
