@@ -39,3 +39,9 @@ affiliation or endorsement.
 | crush | Charmbracelet, Inc. / Crush |
 
 `npm run marks` regenerates `src/marks.ts` from these files.
+
+## Colours
+
+The page's colours are [Catppuccin](https://github.com/catppuccin/catppuccin)'s
+Frappé and Latte palettes (MIT License, Copyright (c) 2021 Catppuccin), as
+values in `src/lib/theme.ts` and `src/styles.css`.

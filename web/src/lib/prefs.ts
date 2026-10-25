@@ -59,6 +59,16 @@ if (typeof window !== "undefined") {
   });
 }
 
+// watchPref calls back on every write of the key, through any hook or writePref, and on another tab's write
+export function watchPref(key: string, notify: () => void): () => void {
+  let set = listeners.get(key);
+  if (!set) listeners.set(key, (set = new Set()));
+  set.add(notify);
+  return () => {
+    set.delete(notify);
+  };
+}
+
 function current<T>(key: string, fallback: T): T {
   if (!values.has(key)) values.set(key, readPref(key, fallback));
   return values.get(key) as T;
