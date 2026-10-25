@@ -4,6 +4,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { setRosterRefresh } from "@/app/act";
 import { useQuery } from "@/lib/query";
+import type { BudgetStatus } from "@/features/usage/api";
 import { fetchRoster, type AgentKind, type Latest, type Machine, type Roster, type Tailscale } from "./api";
 
 export type RosterState = {
@@ -13,6 +14,7 @@ export type RosterState = {
   tailscale?: Tailscale;
   version?: string; // the server's
   feed?: number; // the newest activity entry: past the one seen here, the bell has news
+  budgets?: BudgetStatus[]; // the spending limits with what their periods have cost so far
   offline: boolean;
   stale: string | null; // the server's version when this page is older
   refresh: () => void;
@@ -44,6 +46,7 @@ export function RosterProvider({ children }: { children: ReactNode }) {
       tailscale: data?.tailscale,
       version: data?.version,
       feed: data?.feed,
+      budgets: data?.budgets,
       offline: !!error,
       stale,
       refresh: reload,

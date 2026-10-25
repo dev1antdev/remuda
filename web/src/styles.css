@@ -7831,6 +7831,138 @@ body.popout {
   flex-shrink: 0;
 }
 
+/* ---- budgets (features/usage/budgets.ts, BudgetDialog.tsx): the first section of the Usage panel — a row per limit with a
+   thin bar of its period's spend in the tone the pill wears, the scope, the words, an edit button — and the dialog's fields ---- */
+.budgets {
+  margin: 2px 0 6px;
+}
+
+.budgets h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 0 6px;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.budgets h3 .btn {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.budgets .empty {
+  padding: 8px 10px;
+  font-size: var(--fs-12);
+}
+
+.budget-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto var(--ctl-sm);
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-13);
+  color: var(--fg-dim);
+}
+
+.budget-row:nth-child(even) {
+  background: var(--bg-hover);
+}
+
+.budget-scope {
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.budget-bar {
+  display: block;
+  height: 5px;
+  border-radius: var(--r-xs);
+  background: var(--line-strong);
+  overflow: hidden;
+}
+
+.budget-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-xs);
+  background: var(--fg-faint);
+}
+
+.budget-row.is-dim .budget-bar > span {
+  background: var(--fg-dim);
+}
+
+.budget-row.is-amber .budget-bar > span {
+  background: var(--amber);
+}
+
+.budget-row.is-amber .budget-words {
+  color: var(--amber);
+}
+
+.budget-row.is-red .budget-bar > span {
+  background: var(--red);
+}
+
+.budget-row.is-red .budget-words {
+  color: var(--red);
+}
+
+.budget-words {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.budget-fields {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.budget-fields label {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.budget-fields label.grow {
+  flex: 1 1 200px;
+}
+
+.budget-fields input[type="number"] {
+  width: 120px;
+}
+
+.budget-remove {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.budget-hint {
+  margin: 0;
+  font-size: var(--fs-12);
+}
+
+@media (max-width: 920px) {
+  .budget-row {
+    grid-template-columns: minmax(0, 1fr) auto var(--ctl-sm);
+    row-gap: 4px;
+  }
+
+  .budget-row .budget-bar {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+}
+
 /* ---- text size and density (lib/look.ts; app/theme.ts puts data-text and data-density on the root): the type scale's
    --text-scale and the controls' --ctl-scale follow the text size; compact density tightens the rows, the tabs, the
    tile heads and the gap between turns — with a mouse on a wide screen only, a phone keeps its own sizes ---- */

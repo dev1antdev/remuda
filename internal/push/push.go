@@ -59,7 +59,7 @@ type Payload struct {
 	Title   string   `json:"title"`
 	Body    string   `json:"body"`
 	Tag     string   `json:"tag"`
-	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop | schedule | digest | task
+	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop | schedule | digest | task | budget
 	Actions []Action `json:"actions,omitempty"`
 	Panel   string   `json:"panel,omitempty"` // a panel of the page a tap opens instead of a pane (standup)
 }

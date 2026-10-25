@@ -199,6 +199,9 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 	if s.Tailscale != nil {
 		roster["tailscale"] = s.Tailscale()
 	}
+	if s.Budgets != nil {
+		roster["budgets"] = s.Budgets.Status() // from the cache: the pill and the rows know the limits without another poll
+	}
 	body, _ := json.Marshal(roster)
 	sum := sha256.Sum256(body)
 	etag := `"` + hex.EncodeToString(sum[:12]) + `"`

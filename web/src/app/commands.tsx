@@ -159,6 +159,7 @@ function useCommands(): (query: string) => Entry[] {
       command("settings", "Settings", () => actions.openDialog({ kind: "settings" }), { hint: "the theme, the sidebar, the panels, the alerts, the keys", icon: "sliders", keywords: ["settings", "preferences", "theme", "options"] });
       command("keys", "Keyboard shortcuts", () => actions.openDialog({ kind: "keys" }), { hint: "? · every key the page answers", icon: "keyboard", keywords: ["keys", "shortcuts", "help", "hotkeys", "bindings", "keyboard"] });
       command("machine", "Add a PC…", () => actions.openDialog({ kind: "machine" }), { hint: "a remote machine over SSH", icon: "monitor", keywords: ["machine", "remote", "ssh", "host"] });
+      command("budgets", "Budgets…", () => actions.openPanel("usage"), { hint: "a spending limit per day, week or month, with a push when it is near", icon: "chart", keywords: ["budget", "limit", "cost", "spend", "money"] });
       for (const flavor of DARK_FLAVORS) {
         command(`flavor-${flavor}`, `Dark flavour: ${FLAVOR_NAMES[flavor]}`, () => setDarkFlavorPref(flavor), { hint: `${darkFlavor === flavor ? "now · " : ""}Catppuccin ${FLAVOR_NAMES[flavor]} whenever the theme is dark`, icon: "moon", keywords: ["theme", "dark", "flavour", "flavor", "catppuccin", flavor] });
       }
