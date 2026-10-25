@@ -612,6 +612,15 @@ project, by model, by machine, the sessions that cost the most — every
 machine reads its own transcripts, nothing is sent anywhere. On a
 subscription it is a measure of where the work went, not a bill.
 
+**Budgets:** at the top of that report, a limit per day, week or month
+on everything, on one machine or on one of its folders. The usage pill
+in the header turns amber when a budget covering the pane is 80 % spent
+and red past the limit, with the budget in its tooltip; a push comes
+once at 80 % and once when the limit is crossed, then not again until
+the next period. The spend is read every five minutes from the same
+transcripts, at the same API-equivalent prices: on a subscription a
+measure, not a bill.
+
 **Command palette** (⌘K, Ctrl+K elsewhere): type a few letters and
 jump to any agent on any machine — by its name, workspace, folder,
 machine or tab — or run what the page has a button for: a mode, a lens,

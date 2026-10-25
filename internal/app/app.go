@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/events"
@@ -29,6 +30,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/server"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/setup"
+	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
@@ -94,6 +96,15 @@ func Run(ctx context.Context, o Options) error {
 	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer, Link: chats.PullRequest})
 	reviews := review.New(o.Dir)
 	meter := usage.NewTracker()
+	budgets := budget.New(o.Dir, func() []shell.Host {
+		var hosts []shell.Host
+		for _, mc := range fleet.List() {
+			if state, _ := mc.State(); state == machines.StateConnected {
+				hosts = append(hosts, mc)
+			}
+		}
+		return hosts
+	}, pushSvc.Notify)
 	input := sessions.NewInput(fleet, watcher)
 	health.PinnedCode = setup.CodeVersion
 	vitals := health.New(fleet, o.Version, o.VersionCheck)
@@ -163,6 +174,7 @@ func Run(ctx context.Context, o Options) error {
 		Notify:     pushSvc.Notify,
 	}).Loop(15 * time.Second)
 	go schedules.Loop()
+	go budgets.Loop(5 * time.Minute)
 
 	srv := &server.Server{
 		Machines:  fleet,
@@ -178,6 +190,7 @@ func Run(ctx context.Context, o Options) error {
 		Recap:     &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker},
 		Radar:     tracker,
 		Usage:     meter,
+		Budgets:   budgets,
 		Health:    vitals,
 		Review:    reviews,
 		Schedules: schedules,

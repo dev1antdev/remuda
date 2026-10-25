@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/feed"
@@ -54,6 +55,7 @@ type Server struct {
 	Said      *said.Tracker
 	Recap     *recap.Service
 	Usage     *usage.Tracker
+	Budgets   *budget.Service
 	Health    *health.Collector
 	Review    *review.Store
 	Schedules *schedule.Store
@@ -77,6 +79,7 @@ func (s *Server) Handler() http.Handler {
 	s.pushRoutes(api)
 	s.searchRoutes(api)
 	s.usageRoutes(api)
+	s.budgetRoutes(api)
 	s.quickRoutes(api)
 	s.scheduleRoutes(api)
 	s.reviewRoutes(api)

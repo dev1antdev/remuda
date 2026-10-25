@@ -12,7 +12,7 @@ import { Dialog, Icon, Logo, Notice, type IconName } from "@/ui";
 import { fetchFeed, type Entry } from "./api";
 import { groupByDay } from "./group";
 
-const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", task: "list", test: "bell" };
+const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", task: "list", test: "bell", budget: "chart" };
 
 export default function Activity({ onClose }: { onClose: () => void }) {
   const { machines, feed } = useRoster();

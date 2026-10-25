@@ -726,7 +726,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `internal/feed/` — the **activity**: what happened across the agents while
   nobody was looking. `push.Service.OnAlert` hears every alert the pushes
   carry, or would have carried without a subscribed device — a question
-  after 10 s, a finish after 10 s (any turn), a watchdog note, a schedule
+  after 10 s, a finish after 10 s (any turn), a watchdog note, a budget
+  near or past its limit, a schedule
   that failed, a task that moved — and `feed.Service.Add` keeps it in
   `feed.json` (300 newest, numbered); `GET /api/feed?limit=` lists them, the
   roster carries `feed` (the newest id) so the bell shows a dot when it is
@@ -901,10 +902,38 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the viewer's zone, per project/model/session; `usage.Collect` asks every
   connected host at once, and remotely the deployed binary runs `remuda
   usage -since -tz` (gated on the version, like search). UI: `features/usage/Usage.tsx` (📊 in the sidebar head, or the header pill),
-  the pill in the header (fill bar · cost) and on radar rows from 50% up
+  the pill in the header (fill bar · cost; it wears a budget's tone when
+  that is graver than the context's and says the budget in its tooltip,
+  its width unchanged) and on radar rows from 50% up
   (amber 70%, red 90%), Chat's compaction notice from 80% with "Compact
   now" (`/compact` through submit). Prices are API-equivalent: on a
   subscription a measure, not a bill.
+- `internal/budget/` — **budgets**: a spending limit per day, week
+  (from Monday) or month on everything, one machine or one folder of it
+  (`budgets.json` in the state dir, `GET/PUT /api/budgets`, the list
+  replaced whole and validated: a limit above zero, a known period, a
+  folder only with its machine). `PeriodStart(period, now, loc)` is the
+  period's first moment by the server's clock (tested across a DST
+  change and a year end); `Service.refresh` reads the spend of every
+  period in use through `usage.Collect` over the connected hosts — in
+  the background, every 5 minutes (`Loop`) and after an edit, one
+  reading at a time — and `Status()` answers from that cache (`spent`,
+  `start`, `collected`; a period not read yet asks for a reading and
+  answers without a figure), so the roster, which carries `budgets`,
+  never waits on a scan. A folder's spend is the projects the report
+  keys by that folder or by `transcript.EncodePath` of it. `alert` fires
+  `push.Notify` (`Kind: "budget"`, "Budget at 82 %: $16.4 of $20.0 this
+  week" / "Budget crossed: …", the note or the scope as the body) once
+  per threshold (80, 100; the higher alone when both are crossed in one
+  reading) per period, noted in `alerted` on the budget; an edit of the
+  scope, limit or period starts the period afresh. UI:
+  `features/usage/budgets.ts` (pure, tested: `budgetsFor` the budgets
+  covering a pane, `tightest`, `budgetTone` none / dim 50% / amber 80% /
+  red at the limit, `graver`, `budgetWords`, `scopeWords`), the Budgets
+  section at the top of the Usage panel (a row per limit with a thin
+  bar, Edit, "Add a budget"), `BudgetDialog.tsx` (dialog kind `budget`:
+  machine or Everything, a folder of the machine, the limit, the period,
+  a note, Remove behind a confirm), the palette's "Budgets…".
 - `internal/quick/` — saved prompts (`quick.json`, `GET/PUT /api/quick`,
   the list replaced whole), each for every folder or one `dir`; the chat
   composer offers them under ⚡ and edits them in a dialog; a text may

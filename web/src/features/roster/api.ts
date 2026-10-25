@@ -1,5 +1,6 @@
 // The roster: every machine with herdr's hierarchy, and what changes it — workspaces, tabs and worktrees made and closed, machines added and named.
 
+import type { BudgetStatus } from "@/features/usage/api";
 import { check, getJSON, sendJSON, withMachine } from "@/lib/http";
 
 export type Status = "run" | "input" | "idle" | "done" | "shell";
@@ -98,7 +99,7 @@ export type Machine = {
 
 export type AgentKind = { id: string; label: string };
 
-export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number }; // feed: the newest activity entry's id
+export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[] }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far
 
 // fetchRoster returns null when the roster is unchanged (304 via ETag).
 export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null }> {

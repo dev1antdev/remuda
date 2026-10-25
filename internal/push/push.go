@@ -59,7 +59,7 @@ type Payload struct {
 	Title   string   `json:"title"`
 	Body    string   `json:"body"`
 	Tag     string   `json:"tag"`
-	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop | schedule | task
+	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop | schedule | task | budget
 	Actions []Action `json:"actions,omitempty"`
 }
 

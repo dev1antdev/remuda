@@ -8,6 +8,7 @@ import { clamp, step } from "@/features/chat/find";
 import type { Machine, Session } from "@/features/roster/api";
 import type { FileTarget } from "@/features/files/target";
 import type { SearchHit } from "@/features/search/api";
+import type { BudgetStatus } from "@/features/usage/api";
 import { readURL } from "./url";
 
 export type Lens = "chat" | "terminal" | "changes";
@@ -26,6 +27,7 @@ export type AppDialog =
   | { kind: "settings" } // the theme, the sidebar, the panels, the way to the alerts and the keys
   | { kind: "renameMachine"; machine: Machine }
   | { kind: "recap"; machineId: string; paneId: string; session: string | null; dir: string; title: string } // one conversation's recap; paneId "" = a transcript on its own
+  | { kind: "budget"; budget: BudgetStatus | null } // a spending limit, new or the one given
   | null;
 
 export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
