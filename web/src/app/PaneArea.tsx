@@ -1,4 +1,5 @@
-// The pane area: the tab strip, the three lenses of the pane on screen with the files rail beside them, or a transcript on its own.
+// The pane area: the tab strip (its tools slot the lens's one control and the View menu), the three lenses of the pane on
+// screen with the files rail beside them, or a transcript on its own.
 // A lens stays mounted once seen, scoped to the pane: it never mounts hidden, since a terminal opened
 // unseen would attach at 80×24 and resize the shared pane.
 
@@ -7,24 +8,23 @@ import { useMedia } from "@/lib/media";
 import { basename } from "@/lib/text";
 import { closeTab, renameTab } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
-import { ChatTools } from "@/features/chat/ChatTools";
-import { FindTool } from "@/features/chat/FindBar";
-import { TimelineTool } from "@/features/chat/TimelineBar";
+import { ChatTools, useChatViewItems } from "@/features/chat/ChatTools";
 import TabStrip from "@/features/roster/TabStrip";
 import Chat from "@/features/chat/Chat";
-import FilesRail, { FilesRailToggle } from "@/features/chat/FilesRail";
+import FilesRail from "@/features/chat/FilesRail";
 import Review from "@/features/review/Review";
-import { TerminalLens, TerminalTools } from "@/features/terminal/TerminalLens";
+import { TerminalLens, TerminalTools, useTerminalViewItems } from "@/features/terminal/TerminalLens";
 import { Notice, PANELS, Resizer } from "@/ui";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
-import { FullToggle } from "./full";
 import { actions, app, type Lens } from "./store";
+import ViewMenu from "./ViewMenu";
 
 export default function PaneArea({ current }: { current: Located | null }) {
   const lens = app.use((s) => s.lens);
   const viewer = app.use((s) => s.viewer);
   const footprint = app.use((s) => s.footprint);
+  const chatSession = app.use((s) => s.chatSession);
   const narrow = useMedia("(max-width: 920px)"); // the stylesheet hides the rail there: it must not poll unseen
   const { refresh } = useRoster();
   const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
@@ -34,6 +34,13 @@ export default function PaneArea({ current }: { current: Located | null }) {
     setSeenLenses((m) => (m.pane === paneKey && m.lenses[lens] ? m : { pane: paneKey, lenses: { ...(m.pane === paneKey ? m.lenses : {}), [lens]: true } }));
   }, [paneKey, lens]);
   const seen = (l: Lens) => lens === l || (seenLenses.pane === paneKey && !!seenLenses.lenses[l]);
+  const place = viewer
+    ? { machineId: viewer.machine, paneId: "", session: viewer.session, dir: viewer.dir, agent: viewer.subagent ? "" : "claude", workspace: basename(viewer.dir), machine: "" }
+    : current
+      ? { machineId: current.machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), agent: current.pane.agent, workspace: current.session.name, machine: current.machine.label }
+      : { machineId: "", paneId: "", session: null, dir: "", agent: "", workspace: "", machine: "" };
+  const chatItems = useChatViewItems(place);
+  const terminalItems = useTerminalViewItems(current?.pane ?? { cols: 0, rows: 0 } as Located["pane"]);
 
   if (viewer) {
     const sub = viewer.subagent;
@@ -45,8 +52,8 @@ export default function PaneArea({ current }: { current: Located | null }) {
           className="viewer-bar"
           action={
             <>
-              <FindTool />
-              <TimelineTool />
+              <ChatTools />
+              <ViewMenu items={viewer.subagent ? chatItems.slice(0, 1) : chatItems} />
             </>
           }
           onDismiss={actions.closeViewer}
@@ -96,10 +103,9 @@ export default function PaneArea({ current }: { current: Located | null }) {
         pane={pane}
         tools={
           <>
-            {lens === "terminal" && <TerminalTools pane={pane} />}
-            {lens === "chat" && <ChatTools machineId={machine.id} paneId={pane.id} agent={pane.agent} workspace={session.name} machine={machine.label} dir={folder} />}
-            <FilesRailToggle disabled={!pane.agent} />
-            <FullToggle />
+            {lens === "terminal" && <TerminalTools />}
+            {lens === "chat" && <ChatTools />}
+            <ViewMenu items={lens === "terminal" ? terminalItems : lens === "chat" ? chatItems : []} shell={!pane.agent} />
           </>
         }
         onSelect={(paneId) => actions.selectPane(machine.id, paneId)}

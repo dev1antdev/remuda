@@ -560,6 +560,15 @@ input[type="checkbox"]:hover:not(:checked) {
   gap: 4px;
 }
 
+.tabs-tools .view-btn {
+  gap: 5px;
+  padding: 0 7px 0 8px;
+}
+
+.viewer-bar .view-btn {
+  margin-left: 4px;
+}
+
 .tabs-tools .kb-toggle:has(.kb-toggle-num) {
   width: auto;
   padding: 0 8px 0 6px;
