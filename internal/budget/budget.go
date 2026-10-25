@@ -82,10 +82,12 @@ type Service struct {
 	collect func(hosts []shell.Host, since time.Time, loc *time.Location, tz string) []usage.MachineReport
 	now     func() time.Time
 
-	mu       sync.Mutex
-	all      []Budget
-	spends   map[string]*spend // by period
-	inflight bool
+	mu     sync.Mutex
+	all    []Budget
+	spends map[string]*spend // by period
+
+	reading  sync.Mutex     // one reading at a time; a caller waits for the one under way rather than skipping
+	readings sync.WaitGroup // the background readings Refresh started, for Wait
 }
 
 // spend is one period's reading: when it started, when it was read, and every machine's report or its failure.
@@ -232,10 +234,17 @@ func missingOf(sp *spend, b Budget) []string {
 	return out
 }
 
-// Refresh reads the spend of every period in use in the background, unless a reading is under way.
+// Refresh reads the spend of every period in use in the background, after any reading under way.
 func (s *Service) Refresh() {
-	go s.refresh()
+	s.readings.Add(1)
+	go func() {
+		defer s.readings.Done()
+		s.refresh()
+	}()
 }
+
+// Wait blocks until the background readings Refresh started are done (tests).
+func (s *Service) Wait() { s.readings.Wait() }
 
 // Loop reads the spend every so often while budgets exist.
 func (s *Service) Loop(every time.Duration) {
@@ -246,22 +255,18 @@ func (s *Service) Loop(every time.Duration) {
 }
 
 func (s *Service) refresh() {
+	s.reading.Lock()
+	defer s.reading.Unlock()
 	s.mu.Lock()
-	if s.inflight || len(s.all) == 0 {
+	if len(s.all) == 0 {
 		s.mu.Unlock()
 		return
 	}
-	s.inflight = true
 	periods := map[string]bool{}
 	for _, b := range s.all {
 		periods[b.Period] = true
 	}
 	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		s.inflight = false
-		s.mu.Unlock()
-	}()
 
 	now := s.now()
 	hosts := s.Hosts()
