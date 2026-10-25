@@ -519,7 +519,11 @@ A diff shows in one column or two (the old file on the left, the new on
 the right) with the words that changed in a line marked, and the lens
 walks by keys: `j` `k` through the files, `↑` `↓` the lines, `n` `p` the
 hunks, `c` comments on the line, `o` opens the file there, `s` flips the
-columns.
+columns. A hunk shows three lines around a change; the `↑` on its `@@`
+row unfolds ten more from the file, "all N lines" the whole stretch up to
+the previous hunk, and the last hunk unfolds downward to the end of the
+file the same way — the unfolded lines walk and take comments like any
+other.
 **Approve** tells the agent the work is reviewed and it can carry on (a
 task it works on can move along) — tick *and ask the agent to commit* and
 it is **Approve & commit**: the agent commits the reviewed work and says
