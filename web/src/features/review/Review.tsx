@@ -6,6 +6,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { actions } from "@/app/store";
 import SendToAgent from "@/features/agents/SendToAgent";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
+import { fsText } from "@/features/files/api";
 import { submitPrompt } from "@/features/roster/api";
 import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
@@ -51,6 +52,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
   const error = actionError || fetchError || review?.error || "";
   const lookAgain = () => setLook((count) => count + 1);
   const loadDiff = useCallback((path: string) => fetchReviewDiff(machineId, dir, path), [machineId, dir]); // stable: every row's query keys on it
+  const loadSource = useCallback((path: string) => fsText(machineId, `${dir}/${path}`), [machineId, dir]); // the file itself, for the lines around a hunk
 
   // stable, so a memoised hunk is left alone by a roster poll or a keystroke elsewhere
   const addComment = useCallback(
@@ -134,6 +136,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       split={split}
       onToggle={() => setOpenFile(openFile === file.path ? null : file.path)}
       load={loadDiff}
+      loadSource={loadSource}
       onLoaded={keys.loaded}
       canComment={hasAgentToTell}
       draft={draftByFile.get(file.path) ?? NO_COMMENTS}
