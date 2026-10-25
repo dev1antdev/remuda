@@ -1,12 +1,14 @@
 // The address says where the page is: ?machine=&pane=&mode=&lens=. A reload or a shared link lands there;
-// a tapped notification carries machine and pane the same way.
+// a tapped notification carries machine and pane the same way. A link to a turn adds &session=&turn=, read once
+// at load into a jump and dropped by the first write, so a reload lands at the bottom as usual.
 
+import { readTurnLink, type TurnLinkTarget } from "@/features/chat/turnLink";
 import type { Lens, Mode, Selection } from "./store";
 
 const LENSES: Lens[] = ["chat", "terminal", "changes"];
 const MODES: Mode[] = ["herdr", "wall", "tasks", "code", "review"];
 
-export function readURL(): { requested: Selection | null; mode?: Mode; lens?: Lens } {
+export function readURL(): { requested: Selection | null; mode?: Mode; lens?: Lens; turn: TurnLinkTarget | null } {
   const q = new URLSearchParams(location.search);
   const paneId = q.get("pane");
   const mode = q.get("mode") as Mode | null;
@@ -15,6 +17,7 @@ export function readURL(): { requested: Selection | null; mode?: Mode; lens?: Le
     requested: paneId ? { machineId: q.get("machine") || "local", paneId } : null,
     mode: mode && MODES.includes(mode) ? mode : undefined,
     lens: lens && LENSES.includes(lens) ? lens : undefined,
+    turn: readTurnLink(location.search),
   };
 }
 

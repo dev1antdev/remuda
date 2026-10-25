@@ -67,10 +67,12 @@ export type AppState = {
 
 const fromURL = readURL();
 const mode = fromURL.mode ?? (fromURL.requested ? "herdr" : readPref<Mode>("mode", "herdr"));
+// a link to a turn is a jump waiting for that pane's chat, which opens on it
+const linked = fromURL.turn ? { machineId: fromURL.turn.machineId, paneId: fromURL.turn.paneId, session: fromURL.turn.session, turn: fromURL.turn.turn, n: 1 } : null;
 
 export const app = createStore<AppState>({
   requested: fromURL.requested,
-  lens: fromURL.lens ?? (isTouch ? "chat" : "terminal"),
+  lens: linked ? "chat" : (fromURL.lens ?? (isTouch ? "chat" : "terminal")),
   mode,
   drawer: false,
   dialog: null,
@@ -81,7 +83,7 @@ export const app = createStore<AppState>({
   confirm: null,
   file: null,
   viewer: null,
-  jump: null,
+  jump: linked,
   codeOpened: mode === "code",
   popout: null,
   footprint: readPref("footprint", !isTouch),
@@ -93,7 +95,7 @@ export const app = createStore<AppState>({
   find: null,
 });
 
-let jumps = 0;
+let jumps = linked ? 1 : 0;
 let codeOpens = 0;
 
 export const actions = {
