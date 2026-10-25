@@ -132,17 +132,16 @@ try {
   await until("the chat lens", () => present(".lens-pane:not([hidden]) .composer textarea"));
   step("the chat lens shows its composer");
 
-  if (!(await clickText(".mode-switch button", "Wall"))) fail("no Wall button in the mode switch");
+  if (!(await clickText(".rail-btn", "Wall"))) fail("no Wall button on the rail");
   await until("the Wall's bar", () => present(".wall-bar"));
   step("the Wall", await evaluate(`[...document.querySelectorAll('.wall-bar button')].map((b) => b.innerText.trim()).filter(Boolean).join(' | ')`));
   await shot("wall");
 
-  if (!(await clickText(".mode-switch button", "Review"))) fail("no Review button in the mode switch");
+  if (!(await clickText(".rail-btn", "Review"))) fail("no Review button on the rail");
   await until("the Review queue", () => present(".queue-head"));
   step("the Review mode", await evaluate(`document.querySelector('.queue-head')?.innerText.replace(/\\s+/g, ' ').trim()`));
 
-  const bell = `[...document.querySelectorAll('.topbar .bell')].find((b) => (b.title || '').startsWith('Activity'))`;
-  if (!(await evaluate(`(() => { const b = ${bell}; if (!b) return false; b.click(); return true; })()`))) fail("no Activity bell");
+  if (!(await clickText(".rail-btn", "Activity"))) fail("no Activity button on the rail");
   await until("the Activity panel", () => present(".activity-dialog"));
   step("the Activity panel opens");
   await shot("activity");
