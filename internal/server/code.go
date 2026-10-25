@@ -97,8 +97,10 @@ func (s *Server) handleCodeTheme(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	if req.Theme != "dark" && req.Theme != "light" {
-		httpErr(w, 400, fmt.Errorf("theme must be dark or light"))
+	switch req.Theme {
+	case "latte", "frappe", "macchiato", "mocha", "dark", "light":
+	default:
+		httpErr(w, 400, fmt.Errorf("theme must be latte, frappe, macchiato or mocha"))
 		return
 	}
 	installed, err := s.Code.Theme(mc, req.Theme)

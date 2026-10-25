@@ -27,7 +27,7 @@ import { useNextKey, useNextNeedingMe } from "./next";
 import { actions, app } from "./store";
 import { useBadge } from "./useBadge";
 import { useToasts } from "./toasts";
-import { writeURL } from "./url";
+import { panelOf, writeURL } from "./url";
 
 export default function Shell() {
   const mode = app.use((s) => s.mode);
@@ -91,13 +91,14 @@ export default function Shell() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
-  // a tapped notification in an already open tab arrives as a "select-pane" message from the service worker
+  // a tapped notification in an already open tab arrives as a "select-pane" message from the service worker, a digest's as "open-panel"
   useEffect(() => {
     void resyncPush(readAlertPrefs());
     if (!("serviceWorker" in navigator)) return;
     const onMsg = (e: MessageEvent) => {
-      const d = e.data as { type?: string; machine?: string; pane?: string };
+      const d = e.data as { type?: string; machine?: string; pane?: string; panel?: string };
       if (d?.type === "select-pane" && d.machine && d.pane) actions.selectPane(d.machine, d.pane);
+      if (d?.type === "open-panel" && panelOf(d.panel)) actions.openPanel(panelOf(d.panel));
     };
     navigator.serviceWorker.addEventListener("message", onMsg);
     return () => navigator.serviceWorker.removeEventListener("message", onMsg);

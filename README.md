@@ -72,21 +72,21 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   phone, the wall and the pop-out too. A dialog remuda cannot read leaves
   the blind ↑ ↓ Enter Esc.
 - **New workspace / close** — `workspace.create` + `agent.start` (any agent
-  herdr has a manifest for), `workspace.close`.
+  herdr has a manifest for, with the model, extra arguments and first
+  prompt you chose under Options), `workspace.close`.
 - **The rail** — the places of the page down the left edge, each an
   icon with its name: Agents, Wall, Tasks, Code, Review, then Standup,
   Usage, Schedules, Activity and Settings. On a phone it lies along the
   bottom under the thumb, with Code, the panels and Settings behind
   More. The sidebar's head keeps two buttons: + (a workspace, a PC) and
   ⋯ (message several agents, the order, the settings).
-- **Two themes** — Catppuccin Frappé by night, Latte by day, following
-  the system by default; "Theme: Frappé" / "Theme: Latte" / "Theme:
-  follow the system" in the palette (⌘K) pin one on this device. The
-  terminal and the Wall's screens wear the matching Catppuccin palette.
-- **Two themes** — Catppuccin Frappé by night, Latte by day, following
-  the system by default; "Theme: Frappé" / "Theme: Latte" / "Theme:
-  follow the system" in the palette (⌘K) pin one on this device. The
-  terminal and the Wall's screens wear the matching Catppuccin palette.
+- **Catppuccin, all four flavours** — Latte by day and Frappé, Macchiato
+  or Mocha by night, following the system by default; "Theme: …" and
+  "Dark flavour: …" in the palette (⌘K) or the Look section of Settings
+  pin one on this device, and the accent — peach unless you say — is
+  any of Catppuccin's fourteen colours, a swatch each in Settings. The
+  terminal, the Wall's screens and the Code editor wear the matching
+  palette.
 - **Panels** — the sidebar, the files rail, the Review queue and a
   task's detail each have a draggable edge: pull it to the width you
   like and it stays that way on this device; Tab to the edge and use
@@ -98,7 +98,12 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   call under way, else thinking or writing) and how far its plan is
   (3/7) or, once it has finished,
   the first line of what it answered, its pull request as a link when
-  it named one (GitHub or GitLab; the workspace's ⋯ menu has it too),
+  it named one (GitHub or GitLab; the workspace's ⋯ menu has it too)
+  and, for a GitHub one, how it stands beside the link — "2/2 checks ·
+  approved", red when a check failed, the branch conflicts or the
+  review asks for changes, amber while checks run — read with `gh` on
+  that machine as you, every two minutes while the page is open, so
+  remuda itself asks GitHub nothing;
   the last turns of its conversation and a line to answer it,
   in a grid that fits the window (S / M / L). Hide the idle ones, or
   keep only the agents that need you — a question, a watchdog note, a
@@ -130,7 +135,13 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   conversation — the session on screen, or a transcript opened from the
   search — is the sun button beside the chat's export, and in the
   palette. All of it is read from the transcripts remuda already has;
-  nothing is sent anywhere.
+  nothing is sent anywhere. **A standup digest every morning**: in
+  Schedules, pick "Standup digest" instead of a prompt, a time ("Weekdays"
+  at 9:00) and what it covers — since midnight, the last 24 hours, the
+  last 7 days, or since the previous digest — and every device that gets
+  remuda's alerts receives one push: how many agents finished, how many
+  wait for you, what it cost, a line per agent; a tap opens the Standup.
+  Quiet hours hold it, and a period with nothing in it sends nothing.
 - **Tasks** — the **Agents | Wall | Tasks | Code | Review** switch in the top bar opens remuda's
   own task list: projects on the left, Today / Upcoming / All open, quick
   add, done, due dates, priorities, labels, descriptions, search — and a
@@ -152,7 +163,13 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   with a push — and moves it on to *Testing*, unless you moved it first.
   A *Review* link beside the run opens its worktree in the Review mode.
   Which columns do what is the project's own setting. Mark it done from
-  there.
+  there. A task can also start as a **GitHub issue**: paste its address
+  (the link button in the Tasks head, or "New task from a GitHub
+  issue…" in the palette), and `gh` on the machine you pick reads it as
+  you — title, text and labels become a task whose first line names the
+  issue, so an agent started on it knows where it came from; **Create &
+  start an agent…** opens the agent dialog on it at once. Nothing is
+  written to GitHub.
 
 ## Install & run
 
@@ -360,8 +377,9 @@ one, through code-server's own command line, so nothing reloads. The
 Code bar's **Follow** opens every file the agent on screen finishes
 editing, as it happens; **Reload the editor** gives the folder a fresh
 frame when the connection was lost. The editor wears the page's own
-theme — Catppuccin Frappé or Latte, following the switch — through the
-Catppuccin extension remuda installs; and when a machine's code-server
+flavour — Catppuccin Latte, Frappé, Macchiato or Mocha, following the
+switch — through the Catppuccin extension remuda installs; and when a
+machine's code-server
 is older than the release remuda carries, the ⓘ says so and Updates
 offers the upgrade. Install it on a
 machine with
@@ -519,7 +537,11 @@ A diff shows in one column or two (the old file on the left, the new on
 the right) with the words that changed in a line marked, and the lens
 walks by keys: `j` `k` through the files, `↑` `↓` the lines, `n` `p` the
 hunks, `c` comments on the line, `o` opens the file there, `s` flips the
-columns.
+columns. A hunk shows three lines around a change; the `↑` on its `@@`
+row unfolds ten more from the file, "all N lines" the whole stretch up to
+the previous hunk, and the last hunk unfolds downward to the end of the
+file the same way — the unfolded lines walk and take comments like any
+other.
 **Approve** tells the agent the work is reviewed and it can carry on (a
 task it works on can move along) — tick *and ask the agent to commit* and
 it is **Approve & commit**: the agent commits the reviewed work and says
@@ -579,7 +601,16 @@ removes one you added here.
 
 **A new workspace** names a machine and a folder; the folder is picked
 from the machine's own folders (repositories marked, the workspaces
-already there as quick picks) or typed.
+already there as quick picks) or typed. Under the agent, **Options**
+unfolds what else to tell it: the model (Opus, Sonnet or Haiku for
+Claude Code, or any model id; an id for Codex, Gemini and Kimi Code),
+extra arguments as you would type them after the command
+(`--permission-mode plan`), and a first prompt, which remuda hands over
+once the agent is up — a trust question Claude Code asks for the folder
+is yours to answer first, and the prompt waits two minutes for it before
+giving up with a note in Activity. The model last used for each agent is
+remembered on the device. A new tab and a new worktree take the same
+options.
 
 **Several remuda at once:** each machine may run its own (the phone on
 the studio Mac's, the desk on its own). herdr lets one client attach to a terminal
@@ -602,7 +633,10 @@ far at Claude Code's own API prices. Under every answer in the chat, a
 quiet line says how long it took, the tokens it used and what it cost
 ("4 min 12 s · 38k tokens · $0.42"); every tool call in the log ends
 with how long it took, a failed one is red, and that line counts the
-failed and the repeated calls. On the Wall a tile says how long the
+failed and the repeated calls. An Edit shows what it changed right
+under its line — the old and new lines, the words that differ marked,
+a long one folded past two dozen lines — so a review of the agent's
+work needs no file opened. On the Wall a tile says how long the
 running command has gone on, amber past a minute. 📊 opens the report: by day, by
 project, by model, by machine, the sessions that cost the most — every
 machine reads its own transcripts, nothing is sent anywhere. On a
