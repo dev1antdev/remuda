@@ -464,7 +464,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   file for the browser to keep; `openUrl`: a
   new tab — nothing embeds remuda any more, the JetBrains plugin and its
   `window.herdrHost` bridge are gone), `transfer.ts` (`filesFrom`),
-  `version.ts` (`newer`), `theme.ts` (the four Catppuccin flavours as
+  `version.ts` (`newer`), `look.ts` (the text size, the density and the
+  monospace font: the pref keys `text.size` / `density` / `font.mono`,
+  `TEXT_SCALE`, `textSizeOf` / `densityOf` / `monoOf`, `MONO_FONTS` and
+  `monoStack`; `app/theme.ts` puts them on the root as `data-text`,
+  `data-density` and `--mono`), `theme.ts` (the four Catppuccin flavours as
   `Swatches` — `FLAVORS`, the fourteen `ACCENTS` — `resolveTheme` /
   `resolveFlavor` / `themeOf`, the pref readers `themePrefOf` /
   `flavorPrefOf` / `accentOf`, `ansiPalette` / `terminalTheme` /
@@ -804,7 +808,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `RadarFields`, the order, the row label, the idle tiers and the
   shells switch, shown by **Settings** (`features/settings/
   SettingsDialog.tsx`, dialog kind `settings`, the rail's last button
-  and a palette row: the theme, the panels' widths, the switch that syncs
+  and a palette row: the theme, the text size, the density, the
+  monospace font, the panels' widths, the switch that syncs
   those between devices (`internal/prefs`), the sidebar, the way to the
   alerts and the keys, the version, the signed-in devices);
   one spinner clock for
@@ -1056,7 +1061,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   1 MB; tested. Routes `GET /api/prefs` (an ETag, 304 when unchanged) and
   `PUT /api/prefs` (the part, the merged whole back). The page decides
   what travels: `lib/syncKeys.ts` (tested) is the allow-list — `theme`,
-  `theme.dark`, `theme.accent`, `radar`, `wall`, `review.split`,
+  `theme.dark`, `theme.accent`, `density`, `font.mono` (not `text.size`:
+  a size suits a screen, like `termFont`), `radar`, `wall`, `review.split`,
   `chat.timeline`, `footprint`, `tasks.view`, `standup.period`,
   `code.follow` and every `panel.*` — with `merge` / `plan` (apply the
   remote copies that are newer, push the local ones that are, a key one
@@ -1289,8 +1295,19 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   accent with `--on-accent` ink, every colour with a `-soft` fill and a
   `-ring` mixed from it (`color-mix`), shadows and sheen as inks the
   theme picks, a radius scale (`--r-xs` 4 … `--r-xl` 16 — never a px radius),
-  a type scale (11 / 12 / 13 / 13.5 body / 15 / 18 / 20 — never another
-  size), control heights `--ctl-lg`/`--ctl`/`--ctl-sm`/`--ctl-xs`, a layer
+  a type scale as tokens (`--fs-10` … `--fs-20`: 11 / 12 / 13 / 13.5
+  body / 15 / 18 / 20, each `calc(Npx * var(--text-scale))` — never a
+  literal px size; **Settings › Text size** puts `data-text` on the root,
+  small 0.92 / large 1.1 / larger 1.2, and the control heights
+  `--ctl-lg`/`--ctl`/`--ctl-sm`/`--ctl-xs` scale a little with it through
+  `--ctl-scale`), the density knobs (`--row-h`, `--row-pad-y`, `--tab-h`,
+  `--tile-pad-y`, `--task-row-h`, `--gap-row`, `--ctl-tighten`: the
+  sidebar rows, the tabs, a tile's head, the task rows, the gap between
+  turns, the controls — `data-density="compact"` tightens them, with a
+  mouse on a wide screen only), the monospace stack `--mono` (the pref
+  `font.mono` sets it on the root and hands the same stack to xterm;
+  `lib/look.ts` holds the keys, the scales and the stacks, its test
+  reads the stylesheet so the numbers cannot drift), a layer
   ladder (`--z-drawer` < `--z-dialog` < `--z-menu` < `--z-select`), three
   shadows, `--ease`/`--fast`/`--base` for motion (and
   `prefers-reduced-motion`). **Every `<button>` carries one family class**:
@@ -1354,7 +1371,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `features/terminal/engine/` is the terminal outside React (`engine.ts`
   wires `transport`, `modes`, `mouse`, `pointer`, `selection`, `layer`,
   `copy`, `links`, `paste`, `geometry`, `keys`); `Terminal.tsx` is the
-  mount that owns one engine per pane. **Paste**: xterm brackets a paste only once it has seen the app's
+  mount that owns one engine per pane (its `flavor`, `fontFamily` — the
+  page's `--mono` stack from the pref `font.mono`, `monoStack` in
+  `lib/look.ts` — and `fontSize` props re-apply live, the grid fitted
+  again). **Paste**: xterm brackets a paste only once it has seen the app's
   DECSET 2004 — and a viewer that attaches later gets no replay, so it
   never sees Claude Code's "bracketed paste on" from startup and would
   paste a multi-line text raw (every newline an Enter: the prompt goes

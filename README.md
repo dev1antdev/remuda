@@ -87,6 +87,15 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   any of Catppuccin's fourteen colours, a swatch each in Settings. The
   terminal, the Wall's screens and the Code editor wear the matching
   palette.
+- **Text size, density and font** — the Look section of Settings also
+  sets the page's text size (Small to Larger, "Text size: …" in the
+  palette too; the terminal keeps its own size in its View menu), the
+  density (Compact tightens the sidebar rows, the tabs, the tile heads
+  and the gaps between turns, on a wide screen with a mouse) and the
+  monospace font for code and the terminal, from the families installed
+  on this device — each shows in its own face in the list, an
+  uninstalled one falls back to the system's monospace. Nothing is
+  downloaded: no web fonts.
 - **Panels** — the sidebar, the files rail, the Review queue and a
   task's detail each have a draggable edge: pull it to the width you
   like and it stays that way on this device; Tab to the edge and use
@@ -94,13 +103,14 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   "Reset the panels' widths" in the palette puts them all back.
 - **Settings that follow you** — "Sync these settings between devices",
   the last row of Settings › Look, keeps the theme, its flavour and
-  accent, the sidebar's settings, the Wall's, the review's two columns,
-  the files rail, the timeline, the tasks view, the standup period, Code's
-  Follow and the panels' widths in this remuda, so the phone and the desk
-  agree: a change on one device reaches the others within a minute (at
-  once when they come back into view), the newer choice winning. Alerts,
-  quiet hours, read-aloud, the terminal's text size and the prompt
-  history stay on the device they were set on.
+  accent, the density, the code font, the sidebar's settings, the Wall's,
+  the review's two columns, the files rail, the timeline, the tasks view,
+  the standup period, Code's Follow and the panels' widths in this remuda,
+  so the phone and the desk agree: a change on one device reaches the
+  others within a minute (at once when they come back into view), the
+  newer choice winning. Alerts, quiet hours, read-aloud, the text sizes
+  (the page's and the terminal's) and the prompt history stay on the
+  device they were set on.
 - **Wall** — the **Wall** mode in the top bar puts every agent on one
   screen: a tile per agent pane on every connected machine, with its
   state and how long it has lasted, what it runs this second (the tool

@@ -1,7 +1,7 @@
 // Which prefs follow a person from device to device, and how two copies of one are reconciled: the newer stamp wins.
 // To let another pref travel, add its key (or its prefix with a trailing dot) to SHARED — the rest of the sync is generic.
 
-export const SHARED = ["theme", "theme.dark", "theme.accent", "radar", "wall", "review.split", "chat.timeline", "footprint", "tasks.view", "standup.period", "code.follow", "panel."] as const;
+export const SHARED = ["theme", "theme.dark", "theme.accent", "density", "font.mono", "radar", "wall", "review.split", "chat.timeline", "footprint", "tasks.view", "standup.period", "code.follow", "panel."] as const;
 
 // isShared says whether a pref key travels: an exact name, or anything under a prefix that ends in a dot
 export function isShared(key: string): boolean {
