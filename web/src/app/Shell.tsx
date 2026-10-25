@@ -50,8 +50,9 @@ export default function Shell() {
   useBadge();
 
   useEffect(() => {
+    if (!current && machines.length === 0) return; // the roster has not answered yet: the address keeps the pane it asked for
     writeURL({ selection: current ? { machineId: current.machine.id, paneId: current.pane.id } : null, mode, lens });
-  }, [current?.machine.id, current?.pane.id, mode, lens]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [current?.machine.id, current?.pane.id, machines.length === 0, mode, lens]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // ⌘K on a Mac, Ctrl+K elsewhere, by key code whatever the layout, opens the palette; a terminal keeps its own Ctrl+K.

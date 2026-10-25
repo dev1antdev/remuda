@@ -515,7 +515,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   confirm, the file viewer, the search viewer, a jump, the find bar; `actions` are the
   only writes. `current.ts` derives the shown pane from the requested
   one, falling back to the first agent pane — nothing fixes selection up
-  in effects. `url.ts`: the address bar follows the store
+  in effects. `url.ts`: the address bar follows the store once the roster has answered (before that a link's pane stays in the address rather than being dropped for a moment)
   (`?machine=&pane=&mode=&lens=`, `history.replaceState`) and is read
   once at load, so a link or a reload lands on the same pane in the same
   lens; `?panel=` (one of `panelOf`'s, a digest's tap) opens that panel
