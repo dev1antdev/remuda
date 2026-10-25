@@ -166,6 +166,7 @@ function useCommands(): (query: string) => Entry[] {
         command(`text-${size}`, `Text size: ${TEXT_SIZE_NAMES[size]}`, () => setTextSizePref(size), { hint: `${textSize === size ? "now · " : ""}the page's type scale${size === "normal" ? " as designed" : `, ${TEXT_SIZE_NAMES[size].toLowerCase()}`}; the terminal keeps its own size`, icon: size === "small" ? "text-smaller" : "text-larger", keywords: ["text", "size", "font", "zoom", "bigger", "smaller", size] });
       }
       const typed = query.trim();
+      command("import-issue", "New task from a GitHub issue…", () => actions.openDialog({ kind: "import-issue" }), { hint: "read with gh on the machine, as you; an agent can start on it at once", icon: "link", keywords: ["github", "issue", "import", "task", "new", "gh"] });
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },

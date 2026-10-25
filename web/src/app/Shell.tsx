@@ -1,7 +1,8 @@
 // The shell: the rail, the header, the sidebar and the pane area or the other modes (the wall, tasks, code), and the overlays. It also
 // keeps the address in step with the selection, hears the service worker, ⌘K (the palette), ⌘F (the find bar), ? (the keyboard
-// sheet) and Alt+N (the next agent that needs you), reads the roster aloud when asked, and tells the server when a finished
-// pane is being looked at.
+// sheet) and Alt+N (the next agent that needs you), reads the roster aloud when asked, keeps the browser tab's title and
+// favicon counting the agents that need you, says what the agents did while the page was away, and tells the server when
+// a finished pane is being looked at.
 
 import { useEffect, useRef } from "react";
 import { isMac } from "@/lib/prefs";
@@ -11,6 +12,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { resyncPush } from "@/features/alerts/push";
 import { readAlertPrefs } from "@/features/alerts/prefs";
 import { useVoice } from "@/features/alerts/useVoice";
+import { useWelcomeBack } from "@/features/standup/useWelcomeBack";
 import ReviewQueue from "@/features/review/ReviewQueue";
 import Tasks from "@/features/tasks/Tasks";
 import Code from "@/features/code/Code";
@@ -25,8 +27,9 @@ import { folderOf, useCurrent } from "./current";
 import { useFullKeys } from "./full";
 import { useNextKey, useNextNeedingMe } from "./next";
 import { actions, app } from "./store";
+import { useBadge } from "./useBadge";
 import { useToasts } from "./toasts";
-import { writeURL } from "./url";
+import { panelOf, writeURL } from "./url";
 
 export default function Shell() {
   const mode = app.use((s) => s.mode);
@@ -41,6 +44,8 @@ export default function Shell() {
   useFullKeys();
   useNextKey(useNextNeedingMe());
   useVoice();
+  useWelcomeBack();
+  useBadge();
 
   useEffect(() => {
     writeURL({ selection: current ? { machineId: current.machine.id, paneId: current.pane.id } : null, mode, lens });
@@ -89,13 +94,14 @@ export default function Shell() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
-  // a tapped notification in an already open tab arrives as a "select-pane" message from the service worker
+  // a tapped notification in an already open tab arrives as a "select-pane" message from the service worker, a digest's as "open-panel"
   useEffect(() => {
     void resyncPush(readAlertPrefs());
     if (!("serviceWorker" in navigator)) return;
     const onMsg = (e: MessageEvent) => {
-      const d = e.data as { type?: string; machine?: string; pane?: string };
+      const d = e.data as { type?: string; machine?: string; pane?: string; panel?: string };
       if (d?.type === "select-pane" && d.machine && d.pane) actions.selectPane(d.machine, d.pane);
+      if (d?.type === "open-panel" && panelOf(d.panel)) actions.openPanel(panelOf(d.panel));
     };
     navigator.serviceWorker.addEventListener("message", onMsg);
     return () => navigator.serviceWorker.removeEventListener("message", onMsg);

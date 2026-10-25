@@ -5,6 +5,7 @@
 import Tail, { TailAnswer, TileState } from "@/features/chat/Tail";
 import { displayOf, markOf, rowLabel, stateWords, type RadarPrefs } from "@/features/roster/radar";
 import { hueStyle } from "@/features/roster/hue";
+import { checksTone, checksWords, prWords, reviewTone, reviewWords } from "@/features/roster/prStatus";
 import type { Tile, WallView } from "@/features/roster/wall";
 import { Screen } from "@/features/terminal/Screen";
 import { fillClass, usd } from "@/features/usage/format";
@@ -56,9 +57,18 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           <span className="tile-where">{where}</span>
         </button>
         {pr && (
-          <button type="button" className="linkish tile-pr" title={`${pr.url}\nOpen in a new tab`} onClick={() => openUrl(pr.url)}>
-            <Icon name="external-link" size={12} /> {pr.label}
-          </button>
+          <span className="tile-pr-group">
+            <button type="button" className="linkish tile-pr" title={`${pr.url}${pr.status ? `\n${prWords(pr.status)}` : ""}\nOpen in a new tab`} onClick={() => openUrl(pr.url)}>
+              <Icon name="external-link" size={12} /> {pr.label}
+            </button>
+            {pr.status && (
+              <span className={`pr-state is-${checksTone(pr.status)}`} title={`${pr.label}: ${prWords(pr.status)} · read with gh on the machine`}>
+                <span className="pr-dot" />
+                {checksWords(pr.status)}
+              </span>
+            )}
+            {pr.status && reviewWords(pr.status) && <span className={`pr-state pr-review is-${reviewTone(pr.status)}`}>{reviewWords(pr.status)}</span>}
+          </span>
         )}
         {usage && usage.window > 0 && (
           <span className={`radar-ctx tile-usage${fillClass(fill)}`} title={`Context ${Math.round(100 * fill)}% full · ${usage.name} · ${usd(usage.cost)} API-equivalent so far`}>

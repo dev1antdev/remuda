@@ -148,5 +148,7 @@ export const removeTaskLabel = (taskId: number, labelId: number) => sendJSON<Tas
 
 export const startTask = (id: number, req: { machine: string; workspace: string; branch: string; base: string; agent: string; groom: boolean; prompt: string }) =>
   sendJSON<Task>("POST", `/api/tasks/${id}/start`, req);
+// importIssue makes a task of a GitHub issue, read with gh on the machine as the person
+export const importIssue = (machine: string, projectId: number, url: string) => sendJSON<Task>("POST", "/api/tasks/import", { machine, project_id: projectId, url });
 export const addComment = (id: number, body: string) => sendJSON<Comment>("POST", `/api/tasks/${id}/comments`, { body });
 export const deleteComment = (id: number) => sendJSON<unknown>("DELETE", `/api/tasks/comments/${id}`);
