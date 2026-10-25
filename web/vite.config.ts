@@ -14,6 +14,6 @@ export default defineConfig({
     },
   },
   build: { outDir: "dist" },
-  // the pure modules have tests beside them; nothing needs a DOM
-  test: { include: ["src/**/*.test.ts"], environment: "node" },
+  // the pure modules have tests beside them; nothing needs a DOM; the stylesheet is read as text by lib/theme.test.ts
+  test: { include: ["src/**/*.test.ts"], environment: "node", css: { include: /styles\.css/ } },
 });
