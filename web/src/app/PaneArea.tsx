@@ -53,7 +53,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
           action={
             <>
               <ChatTools />
-              <ViewMenu items={viewer.subagent ? chatItems.slice(0, 1) : chatItems} />
+              <ViewMenu items={viewer.subagent ? chatItems.slice(0, 1) : chatItems} page={false} />
             </>
           }
           onDismiss={actions.closeViewer}

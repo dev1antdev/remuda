@@ -6,10 +6,10 @@ import { Icon, Menu, type MenuItem } from "@/ui";
 import { enterFull, leaveFull } from "./full";
 import { actions, app } from "./store";
 
-export default function ViewMenu({ items, shell = false }: { items: MenuItem[]; shell?: boolean }) {
+export default function ViewMenu({ items, shell = false, page = true }: { items: MenuItem[]; shell?: boolean; page?: boolean }) {
   const footprint = app.use((s) => s.footprint);
   const full = app.use((s) => s.full);
-  const page: MenuItem[] = [
+  const pageRows: MenuItem[] = [
     { label: "Files the agent touched", icon: "folder", hint: shell ? "a shell pane has no transcript" : "a rail beside the lens, edited files first", checked: footprint && !shell, disabled: shell, onSelect: actions.toggleFootprint },
     { label: "Full screen", icon: "maximize", hint: "the lens takes the whole screen; Esc brings the page back", shortcut: full ? "Esc" : undefined, checked: full, onSelect: full ? leaveFull : enterFull },
   ];
@@ -23,7 +23,7 @@ export default function ViewMenu({ items, shell = false }: { items: MenuItem[]; 
           <Icon name="chevron-down" size={12} />
         </button>
       }
-      items={items.length ? [...items, { sep: true }, ...page] : page}
+      items={page ? (items.length ? [...items, { sep: true }, ...pageRows] : pageRows) : items}
     />
   );
 }
