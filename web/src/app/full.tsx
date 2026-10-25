@@ -17,20 +17,6 @@ export function leaveFull(): void {
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
 }
 
-export function FullToggle() {
-  const full = app.use((s) => s.full);
-  return (
-    <button
-      type="button"
-      className={`icon-btn kb-toggle full-toggle${full ? " on" : ""}`}
-      aria-pressed={full}
-      title={full ? "Back to the page (Esc outside the terminal)" : "Full screen: the lens takes the whole screen"}
-      onClick={full ? leaveFull : enterFull}
-    >
-      <Icon name={full ? "minimize" : "maximize"} />
-    </button>
-  );
-}
 
 // useFullKeys leaves full screen on Esc outside a field or the terminal (where Esc belongs to the app), and when the
 // browser's own full screen ends

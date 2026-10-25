@@ -1,12 +1,13 @@
 // A menu behind a button: Radix's DropdownMenu in the design system's clothes. The keyboard walks it, typing jumps, Esc
-// closes, it opens where there is room. Every row is a word, with an icon, a hint or a shortcut beside it when they help.
+// closes, it opens where there is room. Every row is a word, with an icon, a hint or a shortcut beside it when they help;
+// a row that steps a value (keepOpen) leaves the menu open for the next step.
 
 import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
 import Icon, { type IconName } from "./icons";
 
 export type MenuItem =
-  | { label: string; icon?: IconName; hint?: string; shortcut?: string; checked?: boolean; danger?: boolean; disabled?: boolean; onSelect: () => void }
+  | { label: string; icon?: IconName; hint?: string; shortcut?: string; checked?: boolean; danger?: boolean; disabled?: boolean; keepOpen?: boolean; onSelect: () => void }
   | { sep: true }
   | { heading: string };
 
@@ -24,7 +25,15 @@ export default function Menu({ trigger, items, align = "end", side = "bottom", l
                 {item.heading}
               </DropdownMenu.Label>
             ) : (
-              <DropdownMenu.Item key={i} className={`menu-item${item.danger ? " danger" : ""}${item.checked ? " checked" : ""}`} disabled={item.disabled} onSelect={item.onSelect}>
+              <DropdownMenu.Item
+                key={i}
+                className={`menu-item${item.danger ? " danger" : ""}${item.checked ? " checked" : ""}`}
+                disabled={item.disabled}
+                onSelect={(e) => {
+                  if (item.keepOpen) e.preventDefault();
+                  item.onSelect();
+                }}
+              >
                 <span className="menu-icon">{item.checked ? <Icon name="check" size={14} /> : item.icon ? <Icon name={item.icon} size={14} /> : null}</span>
                 <span className="menu-text">
                   {item.label}

@@ -461,8 +461,8 @@ is on this second or the first line of its report, how many tool calls —
 and *Open* reads its own conversation; a tile's state line says "waiting
 on 2 subagents" or "2 subagents working" while they run.
 
-**Files the agent touched:** a rail beside the chat and the terminal (the
-folder button in the tab strip) lists every file the agent edited or read
+**Files the agent touched:** a rail beside the chat and the terminal (View ›
+Files the agent touched) lists every file the agent edited or read
 in this conversation, from its own tool calls — newest first, with how
 many edits, when it last touched the file and a mark when that last edit
 failed. A click opens the file with its uncommitted diff; the code button
@@ -470,7 +470,7 @@ opens it in the Code mode, VS Code on that machine. Edits an agent made
 through shell commands are not its tool calls: the Changes lens shows
 those. Hidden on a phone.
 
-**Full screen** (the ⤢ in the tab strip, or the palette): the header,
+**Full screen** (View › Full screen, or the palette): the header,
 the sidebar and the rail go and the lens takes the whole screen — a
 terminal on the whole monitor, a chat on the whole phone. The tab strip
 stays with its tools; Esc outside the terminal, or the same button,
@@ -534,14 +534,14 @@ question refuses and is shown so, never queued. **Resume** an older conversation
 on an empty line brings back what you sent before from this device to
 that folder, newest first; ↓ walks forward and back to the line you were
 writing.
-**Export** (↓ in the tab strip on the chat lens, or the palette) saves
+**Export** (View › Export as Markdown on the chat lens, or the palette) saves
 the conversation as a Markdown file — the text as it is, thinking and
 tool calls folded — to share with someone who is not in remuda.
 **Find** (⌘F / Ctrl+F on the chat lens, or 🔍 in the tab strip) marks
 every place a word occurs in the conversation shown and says "3 of 12";
 Enter and Shift+Enter walk them, the current one brought into view, Esc
 closes. It works on a transcript opened from the search too.
-**The timeline** (🕒 in the tab strip, on by default with a mouse) is a
+**The timeline** (View › Timeline, on by default with a mouse) is a
 thin bar over the conversation: every prompt and its answer laid out in
 time — a break over ten minutes drawn as ten, so a lunch does not
 flatten the day — with the moments worth a look marked and named under

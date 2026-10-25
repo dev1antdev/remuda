@@ -89,22 +89,6 @@ function Row({ touch, dir, now, onOpen, onCode }: { touch: Touch; dir: string; n
   );
 }
 
-// FilesRailToggle is the rail's switch in the tab strip's tools slot: there whatever the lens, so nothing in the strip moves.
-export function FilesRailToggle({ disabled }: { disabled: boolean }) {
-  const on = app.use((s) => s.footprint);
-  return (
-    <button
-      type="button"
-      className={`icon-btn kb-toggle fp-toggle${on ? " on" : ""}`}
-      aria-pressed={on}
-      disabled={disabled}
-      title={disabled ? "The files an agent touched: a shell pane has no transcript" : on ? "Hide the files the agent touched" : "The files the agent touched this session"}
-      onClick={actions.toggleFootprint}
-    >
-      <Icon name="folder" />
-    </button>
-  );
-}
 
 // the "ago" words move on their own, half a minute at a time, while the rail is on screen
 function useClock(active: boolean): number {
