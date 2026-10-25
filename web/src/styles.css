@@ -7322,3 +7322,11 @@ body.popout {
     bottom: calc(128px + env(safe-area-inset-bottom));
   }
 }
+
+/* ---- a long conversation: a turn off screen is skipped — no layout, no paint — and stands at its last height, or an
+   estimate before it was ever seen; the log's scroll height is then approximate until the turns near the viewport
+   are laid out, which is why the follow and the reveals look twice (useFollowBottom, reveal.ts) ---- */
+.chat-log > .turn {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
+}
