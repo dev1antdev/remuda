@@ -1,6 +1,8 @@
-// Settings: the signed-in devices this remuda keeps.
+// Settings' server calls: the signed-in devices this remuda keeps, and the shared settings on the server, every synced
+// key with the moment it was set.
 
-import { getJSON, sendJSON } from "@/lib/http";
+import { check, getJSON, sendJSON } from "@/lib/http";
+import type { Stamped } from "@/lib/syncKeys";
 
 export type Device = {
   id: string;
@@ -16,10 +18,7 @@ export const fetchDevices = (): Promise<Device[]> => getJSON("/api/devices");
 export const renameDevice = (id: string, name: string): Promise<Device> => sendJSON("PATCH", `/api/devices/${encodeURIComponent(id)}`, { name });
 export const revokeDevice = (id: string): Promise<{ revoked: string; self: boolean }> => sendJSON("DELETE", `/api/devices/${encodeURIComponent(id)}`);
 export const revokeOtherDevices = (): Promise<{ revoked: number }> => sendJSON("DELETE", "/api/devices?others=1");
-// The shared settings on the server: every synced key with the moment it was set.
 
-import { check, sendJSON } from "@/lib/http";
-import type { Stamped } from "@/lib/syncKeys";
 
 export type SharedPrefs = Record<string, Stamped>;
 
