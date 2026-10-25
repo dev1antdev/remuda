@@ -457,8 +457,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   file for the browser to keep; `openUrl`: a
   new tab — nothing embeds remuda any more, the JetBrains plugin and its
   `window.herdrHost` bridge are gone), `transfer.ts` (`filesFrom`),
-  `version.ts` (`newer`), `theme.ts` (the two Catppuccin flavours,
-  `resolveTheme`, `ansiPalette` / `terminalTheme` / `pageColor`),
+  `version.ts` (`newer`), `theme.ts` (the four Catppuccin flavours as
+  `Swatches` — `FLAVORS`, the fourteen `ACCENTS` — `resolveTheme` /
+  `resolveFlavor` / `themeOf`, the pref readers `themePrefOf` /
+  `flavorPrefOf` / `accentOf`, `ansiPalette` / `terminalTheme` /
+  `pageColor` by flavour; its test reads `styles.css` so the `--ctp-*`
+  blocks never drift from the swatches),
   `perf.ts` (`watchStalls`: the browser's long
   tasks from 250 ms up, each reported with where the page was;
   `stallWords`, `toastDue` tested).
@@ -473,7 +477,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   in effects. `url.ts`: the address bar follows the store
   (`?machine=&pane=&mode=&lens=`, `history.replaceState`) and is read
   once at load, so a link or a reload lands on the same pane in the same
-  lens. `act.ts` (`act(promise)`: refresh the roster, else toast the
+  lens; `?panel=` (one of `panelOf`'s, a digest's tap) opens that panel
+  once and is never written back. `act.ts` (`act(promise)`: refresh the roster, else toast the
   error), `toasts.tsx`, `diag.ts` (`startDiagnostics`, from App: every
   stall of the main thread goes to the console as `[remuda] The page
   stalled 4.2 s on the Wall (13 tiles)` with the mode, the lens and the
@@ -571,6 +576,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   halves of a surrogate pair, drawn as `.fv-mark`; `Hunk` is memoised and
   the comment box holds its own text, so a keystroke or a roster poll
   redraws no cells, and the focus returns to the row when the box closes;
+  **the lines around a hunk unfold** from the working-tree file — its
+  `@@` row carries a ↑ for ten more lines above and "all N lines" for
+  the whole gap to the previous hunk or the file's start, the last hunk's
+  foot the same downward to the file's end; `context.ts` the pure part,
+  tested: `gapAbove` / `gapBelow` (new-side lines, the old side at a
+  fixed offset: added less removed above), `unfolded` the rows nearest
+  the hunk, `surround` what a hunk shows beyond its own rows,
+  `fileLines`, `whyNotUnfold`; the file's text comes through
+  `/api/fs/file` once per diff at the first unfold (`Diff` holds it, keyed
+  on the diff text, so a re-read diff starts folded against the file as
+  it is), a file past the 512 KB cap or gone from the tree leaves the
+  controls in place but disabled with the reason as their tip; unfolded
+  rows are context rows like any other — walked by ↑ ↓, commentable,
+  numbered on both sides — and an unfold redraws that hunk alone;
   `keys.ts` the keys — `useReviewKeys`, by key position so a Cyrillic
   layout works: j k walk the files, ↑ ↓ the lines of the open one, n p
   its hunks, c comments on the focused line, o opens the file there, s
@@ -628,7 +647,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   per master. `GET /api/code/{machine}` probes `/healthz` (a good answer is
   cached 15s; `?check=1` re-probes) and reads the workbench page for
   the remote authority and code-server's version (`settingOf`, tested),
-  which the Code bar shows beside a reload button (a fresh frame for the same folder when the editor lost its connection or shows a stale state). **The editor wears the page's theme**: `POST /api/code/{machine}/theme {theme}` → `code.Service.Theme`, once per machine and theme while remuda runs — Catppuccin's extension installed from Open VSX when missing, then `workbench.colorTheme` set in code-server's `settings.json` (`WithTheme`, tested: merged as JSON, else the line replaced in a file with comments), which the editor applies as the file changes; `Code.tsx` asks when the frame is up and whenever the page's theme changes; the installer seeds the same. **Its version** rides on the vitals (`code_server`, the release the `~/.local/opt/code-server` link names) and `Latest.Code` is `setup.CodeVersion`, the release the installer carries (`health.PinnedCode`, set by the app): the ⓘ says when a machine lags it and Updates offers `what = code`, `remuda code install` on the machine (`updates.Plan`, tested). `web/src/features/code/Code.tsx` is the picker (machine, then a folder from the roster's workspaces — or **All workspaces on the machine**, its first row and the default past one folder: `POST /api/code/{machine}/workspace` writes every folder herdr has a workspace in to `~/.config/code-server/remuda.code-workspace` on the machine, `code.Service.Workspace` / `WorkspaceJSON`, tested, and the frame opens `?workspace=` on it; the file is written again whenever the roster's folders change, and the editor, watching it, takes the new folders in place) and the iframe, kept mounted behind the other modes once opened. `actions.openInCode(machine, folder, path, line?)` (the files rail's code button, the Changes lens's per-file button, the file viewer's header button — the last two at a line; store field `codeFile`, a folder of "" keeps the one picked) switches the mode and moves the picker to that machine and folder; **when that editor is already on screen** the file goes to it in place — `POST /api/code/{machine}/open {path, line}` → `code.Service.Open`, code-server's own CLI with `--reuse-window` over its IPC socket (`OpenScript`, tested; `file:line` carries the line; the CLI exits 0 without a listener, so its last line is read for "error") — and nothing reloads; only a first frame mounts with `payload=[["openFile","vscode-remote://<authority>/path"]]`
+  which the Code bar shows beside a reload button (a fresh frame for the same folder when the editor lost its connection or shows a stale state). **The editor wears the page's flavour**: `POST /api/code/{machine}/theme {theme}` (latte / frappe / macchiato / mocha) → `code.Service.Theme`, once per machine and flavour while remuda runs — Catppuccin's extension installed from Open VSX when missing, then `workbench.colorTheme` set to `code.ThemeName(flavor)` ("Catppuccin Mocha" …, tested) in code-server's `settings.json` (`WithTheme`, tested: merged as JSON, else the line replaced in a file with comments), which the editor applies as the file changes; `Code.tsx` asks when the frame is up and whenever the page's flavour changes; the installer seeds Frappé. **Its version** rides on the vitals (`code_server`, the release the `~/.local/opt/code-server` link names) and `Latest.Code` is `setup.CodeVersion`, the release the installer carries (`health.PinnedCode`, set by the app): the ⓘ says when a machine lags it and Updates offers `what = code`, `remuda code install` on the machine (`updates.Plan`, tested). `web/src/features/code/Code.tsx` is the picker (machine, then a folder from the roster's workspaces — or **All workspaces on the machine**, its first row and the default past one folder: `POST /api/code/{machine}/workspace` writes every folder herdr has a workspace in to `~/.config/code-server/remuda.code-workspace` on the machine, `code.Service.Workspace` / `WorkspaceJSON`, tested, and the frame opens `?workspace=` on it; the file is written again whenever the roster's folders change, and the editor, watching it, takes the new folders in place) and the iframe, kept mounted behind the other modes once opened. `actions.openInCode(machine, folder, path, line?)` (the files rail's code button, the Changes lens's per-file button, the file viewer's header button — the last two at a line; store field `codeFile`, a folder of "" keeps the one picked) switches the mode and moves the picker to that machine and folder; **when that editor is already on screen** the file goes to it in place — `POST /api/code/{machine}/open {path, line}` → `code.Service.Open`, code-server's own CLI with `--reuse-window` over its IPC socket (`OpenScript`, tested; `file:line` carries the line; the CLI exits 0 without a listener, so its last line is read for "error") — and nothing reloads; only a first frame mounts with `payload=[["openFile","vscode-remote://<authority>/path"]]`
   (the path escaped per segment), which the workbench opens on load —
   the authority is what code-server's own page states (`Status.Authority`,
   read off `data-settings` by the probe: "remote" since 4.9x, the host
@@ -688,6 +707,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   The page re-reads the device's zone on every load (`readAlertPrefs`),
   so a window set at home fits the clock on a trip; the window last set
   is kept on the device (pref `alerts.quiet`) while the hours are off.
+  `Notify` goes to the devices that want the watchdog's word, `Broadcast`
+  to every device (the schedules' digest and failures); a `Payload` may
+  name a `Panel` of the page (`standup`) for its tap to open instead of a
+  pane.
   Routes: `GET /api/push` (public key), `POST/DELETE /api/push/subscribe`,
   `POST /api/push/test`. **Read aloud** (`features/alerts/voice.ts`,
   tested; `useVoice.ts`, called from Shell): with the switch in the
@@ -701,7 +724,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   browser has one.
 - `web/public/sw.js` shows every push (Safari revokes silent subscriptions),
   silent while a window is visible; click → `select-pane` message to an open
-  window or `openWindow(/?machine=&pane=)`; `pushsubscriptionchange`
+  window or `openWindow(/?machine=&pane=)` — a push naming a `panel` (a
+  digest) → `open-panel` or `openWindow(/?panel=standup)` instead, which
+  `Shell.tsx` and `url.ts` answer; `pushsubscriptionchange`
   re-subscribes. `web/src/features/alerts/push.ts` is single-flight and re-registers on every
   load with permission granted. Push needs a secure context: localhost or
   `tailscale serve` HTTPS; iPhone needs the home-screen app.
@@ -790,7 +815,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   times, the first line of the last answer (`said.FirstLine`).
   `Markdown(items, since, now)` is the report to paste: a heading per
   agent that did something (`Numbers`, `Calls`, the files, the last
-  answer), the quiet ones named at the end. `Service` reads through
+  answer), the quiet ones named at the end. `Digest(items, since, now)`
+  (tested) is the same as one notification for a digest schedule: the
+  title counts ("Standup: 3 finished, 1 waiting, 2 working, $4.20"), the body is a
+  line per agent in the standup's order — its workspace and the first
+  line of its last answer, else its figures — `DigestLines` of them then
+  "+N more", `empty` when nobody did anything. `Service` reads through
   `chat.Service.Open` + `Turns()` (priced turns; a remote pane's through
   the Reader as the chat does, nothing new runs on a remote): `GET
   /api/recap?machine&pane[&session]` or `?machine&dir&session`
@@ -822,18 +852,29 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`push.Notify`, pref `watchdog`, default on) with a reminder every 30
   min; the notification carries `actions` — Open, and **Send Esc**, which
   the service worker posts to `/api/keys` itself.
-- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — prompts to agents on a timetable. A schedule names
-  a machine and a **folder** (panes come and go; the project stays), a
-  five-field cron in the server's local time (`Parse`/`Matches`/`Next`,
-  tested), the prompt, and a switch. `Tick` every 30s fires what matches
-  the minute and has not run this minute; delivery is
-  `sessions.Input.SubmitToFolder` → the agent pane in that folder →
-  `Input.Submit`, the chat's own path (an agent busy with a question refuses: noted, never
-  queued). A failed run is pushed (`Kind: "schedule"`). `schedules.json`
-  in the state dir; routes `GET/PUT /api/schedules`, `DELETE
-  /api/schedules/{id}`, `POST /api/schedules/{id}/run`. `features/schedules/Schedules.tsx` is
-  the panel behind the calendar button in the sidebar head (`cron.ts` the
-  presets and their parsing, `ScheduleEditor.tsx` the form).
+- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — things on a timetable, two **kinds**
+  (`Kind`, `prompt` for a record from before the field). A **prompt**
+  schedule names a machine and a **folder** (panes come and go; the
+  project stays), a five-field cron in the server's local time
+  (`Parse`/`Matches`/`Next`, tested), the prompt, and a switch; delivery
+  is `sessions.Input.SubmitToFolder` → the agent pane in that folder →
+  `Input.Submit`, the chat's own path (an agent busy with a question
+  refuses: noted, never queued). A **digest** schedule has no machine,
+  folder or prompt (`Put` refuses them): at its cron it pushes the
+  standup since its period — `Since` is `midnight` (default), `24h`,
+  `7d` or `last` (its previous run; `digestSince`, tested) — through the
+  `Digest` func `New` takes (`recap.Digest` over `Service.Standup` in
+  app.go) as `push.Payload{Kind: "digest", Panel: "standup"}`, "nothing
+  to report" when the period was quiet. `Tick` every 30s fires what
+  matches the minute and has not run this minute. The schedules' pushes
+  — a digest, a failed prompt run (`Kind: "schedule"`) — go through
+  `push.Service.Broadcast`, every device whatever its watchdog pref: a
+  schedule is the person's own word. `schedules.json` in the state dir;
+  routes `GET/PUT /api/schedules`, `DELETE /api/schedules/{id}`, `POST
+  /api/schedules/{id}/run`. `features/schedules/Schedules.tsx` is the
+  panel behind the calendar button in the sidebar head (`cron.ts` the
+  presets and their parsing, `digest.ts` the periods and words, tested,
+  `ScheduleEditor.tsx` the form with the kind switch at its top).
 - `internal/search/` — **full-text search** over every transcript on every
   machine (`GET /api/search?q=&machine=&dir=&days=`; the 🔍 in the
   header, or the last row of the ⌘K palette with what was typed there). No index: `Scan` walks `~/.claude/projects` newest-first,
@@ -1053,16 +1094,28 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   place by double-click, or from the workspace's ⋯ menu (touch). The roster carries an ETag (304 when unchanged) and
   the agent list. Local files stream through `http.ServeContent` (Range for
   video); the WS uses per-message compression and coalesces queued chunks.
-- `web/src/styles.css` — one design system in **Catppuccin's colours,
-  Frappé by night and Latte by day** (`lib/theme.ts` holds the swatches,
-  tested): every token a `light-dark()` pair picked by the root's
-  `color-scheme`, which `app/theme.ts` sets through `data-theme` from the
-  pref `theme` (system / dark / light; `startTheme` in main.tsx before
-  the first render, `useTheme` / `useThemePref` / `setThemePref`, the
-  three "Theme: …" rows of the palette; the pop-out's document and
-  `<meta name="theme-color">` follow); the terminal lens takes
-  `terminalTheme` and the wall's screens `ansiPalette`, Catppuccin's own
-  terminal mapping, so a tile shows the lens's colours. Four surface
+- `web/src/styles.css` — one design system in **Catppuccin's colours:
+  Latte by day, Frappé, Macchiato or Mocha by night, one of the fourteen
+  named colours as the accent** (`lib/theme.ts` holds the swatches,
+  tested against the stylesheet): the palette sits on the root as
+  `--ctp-<name>` custom properties, one block per flavour picked by
+  `data-flavor` (a bare root wears Frappé; `color-scheme` follows), the
+  derived inks (`--ctp-input`, `--ctp-overlay`, `--ctp-active`,
+  `--ctp-on-accent`, the scrim and shadow inks) once for the dark
+  flavours and once for Latte, fourteen one-line `data-accent` blocks set
+  `--ctp-accent`, and every token reads `var(--ctp-…)` — never a literal
+  colour or `light-dark()` in the token block. `app/theme.ts` resolves
+  the prefs `theme` (system / dark / light), `theme.dark` (frappe /
+  macchiato / mocha) and `theme.accent` into `data-theme`, `data-flavor`
+  and `data-accent` (`startTheme` in main.tsx before the first render;
+  `useTheme` / `useFlavor` / `useAccent` / `useThemePref` /
+  `useDarkFlavorPref`, `setThemePref` / `setDarkFlavorPref` /
+  `setAccentPref`; the "Theme: …" and "Dark flavour: …" rows of the
+  palette, the Look section of Settings with the accent swatches; the
+  pop-out's document and `<meta name="theme-color">` follow); the
+  terminal lens takes `terminalTheme(flavor)` and the wall's screens
+  `ansiPalette(flavor)`, Catppuccin's own terminal mapping, so a tile
+  shows the lens's colours. Four surface
   layers (`--bg` base → `--bg-raised` mantle → `--bg-input` → `--bg-overlay`,
   `--bg-active` / `--bg-elev` for a raised chip), hairlines from the
   surfaces (`--line`, `--line-strong`, `--line-hover`), peach as the

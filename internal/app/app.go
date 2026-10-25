@@ -104,7 +104,10 @@ func Run(ctx context.Context, o Options) error {
 	}
 	restarter.Lock = input.Lock
 	keeper := &herdr.Keeper{Bin: bin, Socket: o.Socket}
-	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Notify)
+	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker}
+	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
+		return recap.Digest(recaps.Standup(since), since, time.Now())
+	})
 
 	// who hears what
 	events.Subscribe(bus, func(e events.Snapshot) { tracker.Observe(e.Machine, e.Snap, e.At) })
@@ -175,7 +178,7 @@ func Run(ctx context.Context, o Options) error {
 		Push:      pushSvc,
 		Feed:      activity,
 		Said:      sayings,
-		Recap:     &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker},
+		Recap:     recaps,
 		Radar:     tracker,
 		Usage:     meter,
 		Health:    vitals,

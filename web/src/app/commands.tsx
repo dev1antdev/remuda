@@ -22,7 +22,8 @@ import { enterFull, leaveFull } from "./full";
 import { NEXT_KEY, useNextNeedingMe } from "./next";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
-import { setThemePref, useThemePref } from "./theme";
+import { setDarkFlavorPref, setThemePref, useDarkFlavorPref, useThemePref } from "./theme";
+import { DARK_FLAVORS, FLAVOR_NAMES } from "@/lib/theme";
 
 const FIND_KEY = isMac ? "⌘F" : "Ctrl+F";
 
@@ -57,6 +58,7 @@ function useCommands(): (query: string) => Entry[] {
   const footprint = app.use((s) => s.footprint);
   const full = app.use((s) => s.full);
   const themePref = useThemePref();
+  const darkFlavor = useDarkFlavorPref();
   const current = useCurrent();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
@@ -149,17 +151,20 @@ function useCommands(): (query: string) => Entry[] {
       command("schedules", "Schedules", () => actions.openPanel("schedules"), { hint: "prompts sent to agents on a timetable", icon: "calendar", keywords: ["cron", "timer", "prompt"] });
       command("usage", "Usage report", () => actions.openPanel("usage"), { hint: "what the agents cost, by day, project and session", icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
       command("standup", "Standup: what every agent did today", () => actions.openPanel("standup"), { hint: "one report over every machine, ready to paste as Markdown", icon: "sun", keywords: ["standup", "report", "today", "summary", "recap", "daily", "digest", "morning"] });
-      command("theme-system", "Theme: follow the system", () => setThemePref("system"), { hint: `${themePref === "system" ? "now · " : ""}Frappé when the system is dark, Latte when it is light`, icon: "monitor", keywords: ["theme", "dark", "light", "catppuccin", "system", "auto"] });
-      command("theme-dark", "Theme: Frappé (dark)", () => setThemePref("dark"), { hint: `${themePref === "dark" ? "now · " : ""}Catppuccin Frappé, whatever the system says`, icon: "moon", keywords: ["theme", "dark", "catppuccin", "frappe"] });
+      command("theme-system", "Theme: follow the system", () => setThemePref("system"), { hint: `${themePref === "system" ? "now · " : ""}your dark flavour when the system is dark, Latte when it is light`, icon: "monitor", keywords: ["theme", "dark", "light", "catppuccin", "system", "auto"] });
+      command("theme-dark", `Theme: ${FLAVOR_NAMES[darkFlavor]} (dark)`, () => setThemePref("dark"), { hint: `${themePref === "dark" ? "now · " : ""}Catppuccin ${FLAVOR_NAMES[darkFlavor]}, whatever the system says`, icon: "moon", keywords: ["theme", "dark", "catppuccin", "frappe", "macchiato", "mocha"] });
       command("theme-light", "Theme: Latte (light)", () => setThemePref("light"), { hint: `${themePref === "light" ? "now · " : ""}Catppuccin Latte, whatever the system says`, icon: "sun", keywords: ["theme", "light", "catppuccin", "latte"] });
       command("settings", "Settings", () => actions.openDialog({ kind: "settings" }), { hint: "the theme, the sidebar, the panels, the alerts, the keys", icon: "sliders", keywords: ["settings", "preferences", "theme", "options"] });
       command("keys", "Keyboard shortcuts", () => actions.openDialog({ kind: "keys" }), { hint: "? · every key the page answers", icon: "keyboard", keywords: ["keys", "shortcuts", "help", "hotkeys", "bindings", "keyboard"] });
       command("machine", "Add a PC…", () => actions.openDialog({ kind: "machine" }), { hint: "a remote machine over SSH", icon: "monitor", keywords: ["machine", "remote", "ssh", "host"] });
+      for (const flavor of DARK_FLAVORS) {
+        command(`flavor-${flavor}`, `Dark flavour: ${FLAVOR_NAMES[flavor]}`, () => setDarkFlavorPref(flavor), { hint: `${darkFlavor === flavor ? "now · " : ""}Catppuccin ${FLAVOR_NAMES[flavor]} whenever the theme is dark`, icon: "moon", keywords: ["theme", "dark", "flavour", "flavor", "catppuccin", flavor] });
+      }
       const typed = query.trim();
       command("import-issue", "New task from a GitHub issue…", () => actions.openDialog({ kind: "import-issue" }), { hint: "read with gh on the machine, as you; an agent can start on it at once", icon: "link", keywords: ["github", "issue", "import", "task", "new", "gh"] });
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, chatSession, footprint, full, themePref, current, radar, wall, setWall, focus, setFocus, timelineShown, setTimelineShown, step, now, goNext],
+    [machines, mode, lens, viewer, chatSession, footprint, full, themePref, darkFlavor, current, radar, wall, setWall, focus, setFocus, timelineShown, setTimelineShown, step, now, goNext],
   );
 }
