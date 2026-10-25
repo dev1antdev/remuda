@@ -303,8 +303,13 @@ touches nothing there.
 
 On first run remuda generates an access token (stored at
 `~/Library/Application Support/remuda/token`, 0600) and prints a sign-in URL.
-Every request needs the token — as the printed `?token=` link once per device
-(it becomes an HttpOnly cookie), or `Authorization: Bearer`.
+Every request needs the token — as the printed `?token=` link once per device,
+or `Authorization: Bearer`. A browser that signs in becomes a **device**: its
+HttpOnly cookie carries a secret of its own, never the token, and Settings ›
+Devices lists every one ("Chrome on macOS", "Safari on iPhone", renameable,
+with when it was last seen and from where). Lost a phone? Revoke that device
+there, or sign out every other device at once; the rest keep working and the
+token stays what it was.
 
 ## As a background service on a Mac or Linux box
 
@@ -425,7 +430,9 @@ once, then "Add to Home Screen" — it installs as a PWA.
 - Outbound: nothing, except (unless `-no-version-check`) one request to
   the npm registry and one to GitHub every six hours to learn the newest
   Claude Code and herdr, so a machine can say it wants an update.
-- Single bearer token, constant-time compared, HttpOnly cookie, no accounts.
+- Single bearer token, constant-time compared, no accounts. A signed-in
+  browser holds a device cookie (a random secret, hashed on disk), never the
+  token: a device is revoked in Settings without touching the others.
 - Cross-origin mutations rejected (`Sec-Fetch-Site`).
 - Anyone with the token can type into your terminals — treat it like an SSH
   key.

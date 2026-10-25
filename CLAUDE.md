@@ -762,7 +762,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   shells switch, shown by **Settings** (`features/settings/
   SettingsDialog.tsx`, dialog kind `settings`, the rail's last button
   and a palette row: the theme, the panels' widths, the sidebar, the
-  way to the alerts and the keys, the version); one spinner clock for
+  way to the alerts and the keys, the version, the signed-in devices);
+  one spinner clock for
   the braille frames and the pulsing question). A finished or
   idle row says what the agent answered after its title, in the quiet
   colour and in its tooltip (`pane.said` from the roster, `.radar-said`:
@@ -1008,11 +1009,32 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `gone`. `comments` are markdown, a path in one opening on the run's
   machine relative to its worktree; the UI re-reads an open task every
   10 s while a run is live.
-- `internal/auth/` — single bearer token; HttpOnly cookie; no accounts.
+- `internal/auth/` — single bearer token, no accounts. **The token never
+  lives in a cookie**: a sign-in (the `?token=` pairing link or the login
+  form) mints a **device** (`devices.go`: `Devices` at
+  `<state>/devices.json`, 0600 — id, the sha256 of a random 32-byte
+  secret, a name read off the user agent by `DeviceName`, "Chrome on
+  macOS", created, last seen, ip) and the HttpOnly cookie `remuda_token`
+  carries `d.<id>.<secret>`; `Devices.Check` compares the hash in constant
+  time and bumps `last_seen` at most once a minute. `Authorization:
+  Bearer <token>` still passes with no device (API clients, the peer
+  relay, the e2e); a legacy cookie holding the raw token passes once and
+  is upgraded to a device cookie on that very response, so a browser
+  signed in before devices keeps working. A revoked device's cookie is
+  dropped and refused at once (no 500 ms wait: a page of the person's own
+  must not be slowed; logged once per id), a wrong token still waits.
+  `auth.DeviceID(ctx)` is the caller's device in a handler.
+  `internal/server/devices.go`: `GET /api/devices` (each with `this` for
+  the caller's own, never the hash), `PATCH /api/devices/{id} {name}`,
+  `DELETE /api/devices/{id}` (the caller's own too: signed out, the cookie
+  dropped), `DELETE /api/devices?others=1`. Settings' last section
+  (`features/settings/DevicesSection.tsx`, `devices.ts` tested) lists
+  them — the name edits in place, Revoke behind a confirm, "Sign out every
+  other device".
 - `internal/server/` — the HTTP adapter: one file per context (`roster.go`,
   `machines.go`, `sessions.go`, `chat.go`, `files.go`, `push.go`,
   `search.go`, `usage.go`, `quick.go`, `schedule.go`, `review.go`,
-  `code.go`, `update.go`, `tasks.go`, `screen.go`, `question.go`, `terminal.go` with `termhttp.go` and
+  `code.go`, `update.go`, `tasks.go`, `screen.go`, `question.go`, `devices.go`, `terminal.go` with `termhttp.go` and
   `peer.go`), each registering its routes in a `…Routes(mux)` that
   `Handler()` calls; a handler reads the request, asks one service and
   writes the answer, and the logic lives in the context packages.
@@ -1193,7 +1215,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `decode` caps a JSON body at 1 MB; the `-addr` server has header and
   idle timeouts. The sign-in URL is logged only on the first run or to a
   terminal; a wrong token is logged with the remote address and answered
-  after 500 ms; `REMUDA_TOKEN` must be ≥ 32 characters. Session ids from
+  after 500 ms; `REMUDA_TOKEN` must be ≥ 32 characters. A browser's
+  cookie holds a device secret of its own, never the token, so one
+  device is revoked without rotating the token for every other
+  (`internal/auth`). Session ids from
   herdr go through `text.SessionID` before naming a file or following
   `--resume` (the pane's own hooks report them: the agent chooses the
   value), and a `path` session must be a `.jsonl` under

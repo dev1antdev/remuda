@@ -7548,3 +7548,35 @@ body.popout {
     max-width: 160px;
   }
 }
+
+/* ---- the signed-in devices in Settings (features/settings/DevicesSection.tsx): the name is a link that edits in place,
+   the words under it say what the device is and when it was seen; the buttons keep the row's height ---- */
+.settings-dialog .device-row > span {
+  flex: 1;
+}
+
+.device-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--ctl-xs);
+}
+
+.device-row .device-name {
+  padding: 0;
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.device-row .device-name:hover {
+  text-decoration: underline;
+}
+
+.device-row .device-name-field {
+  width: 14em;
+  max-width: 100%;
+}
+
+.device-row .btn.sm {
+  flex-shrink: 0;
+}

@@ -77,6 +77,10 @@ func Run(ctx context.Context, o Options) error {
 	if err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
+	devices, err := auth.OpenDevices(o.Dir)
+	if err != nil {
+		return err
+	}
 	activity := feed.New(o.Dir)
 	pushSvc.OnAlert = func(p push.Payload) {
 		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body})
@@ -183,7 +187,7 @@ func Run(ctx context.Context, o Options) error {
 		Schedules: schedules,
 		Quick:     quick.New(o.Dir),
 		Code:      code.New(o.CodePort),
-		Guard:     auth.NewGuard(o.Token),
+		Guard:     auth.NewGuard(o.Token, devices),
 		UI:        ui,
 	}
 	if o.Tailscale {
