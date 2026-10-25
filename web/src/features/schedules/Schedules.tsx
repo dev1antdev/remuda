@@ -1,4 +1,5 @@
-// Schedules: prompts sent to an agent on a timetable. A list with the next and last run, a switch per row, "Run now", and the editor.
+// Schedules: prompts sent to an agent on a timetable, or the standup pushed as a digest. A list with the next and last run,
+// a switch per row, "Run now", and the editor.
 
 import { useState } from "react";
 import type { Machine } from "@/features/roster/api";
@@ -9,6 +10,7 @@ import { ago, whenShort } from "@/lib/time";
 import { Dialog, Icon, Notice } from "@/ui";
 import { deleteSchedule, fetchSchedules, putSchedule, runSchedule, type Schedule } from "./api";
 import { NEVER } from "./cron";
+import { kindOf, sinceWords } from "./digest";
 import { ScheduleEditor } from "./ScheduleEditor";
 
 export default function Schedules({ machines, onClose, ask }: {
@@ -46,8 +48,8 @@ export default function Schedules({ machines, onClose, ask }: {
       }
     >
       <Notice tone="hint">
-        A prompt sent to the agent running in a folder, on a timetable — in the remuda host's local time. A minute with no agent there, or an agent busy
-        with a question, is skipped and noted.
+        A prompt sent to the agent running in a folder, or the standup pushed to your devices as a digest, on a timetable — in the remuda host's local
+        time. A minute with no agent there, or an agent busy with a question, is skipped and noted.
       </Notice>
       {error && (
         <Notice tone="error" onDismiss={() => setActionError("")}>
@@ -60,9 +62,12 @@ export default function Schedules({ machines, onClose, ask }: {
           <div key={s.id} className={`schedule${s.enabled ? "" : " off"}`}>
             <input type="checkbox" checked={s.enabled} title={s.enabled ? "On" : "Off"} aria-label={s.enabled ? "On" : "Off"} onChange={(e) => toggle(s, e.target.checked)} />
             <div className="schedule-copy">
-              <div className="schedule-label">{s.label}</div>
+              <div className="schedule-label">
+                {kindOf(s) === "digest" && <Icon name="sun" size={12} className="schedule-digest-mark" aria-label="Standup digest" />}
+                {s.label}
+              </div>
               <div className="schedule-sub">
-                <code>{s.cron}</code> · {machineLabel(machines, s.machine)} · {basename(s.dir)}
+                <code>{s.cron}</code> · {kindOf(s) === "digest" ? `to your devices · ${sinceWords(s.since)}` : `${machineLabel(machines, s.machine)} · ${basename(s.dir)}`}
                 {s.enabled && s.next && s.next !== NEVER && <span> · next {whenShort(s.next)}</span>}
                 {s.last_run && s.last_run !== NEVER && (
                   <>

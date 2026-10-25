@@ -75,7 +75,7 @@ export const app = createStore<AppState>({
   drawer: false,
   dialog: null,
   menu: null,
-  panel: null,
+  panel: fromURL.panel,
   search: "",
   notice: null,
   confirm: null,

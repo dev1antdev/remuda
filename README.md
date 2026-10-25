@@ -129,7 +129,13 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   conversation — the session on screen, or a transcript opened from the
   search — is the sun button beside the chat's export, and in the
   palette. All of it is read from the transcripts remuda already has;
-  nothing is sent anywhere.
+  nothing is sent anywhere. **A standup digest every morning**: in
+  Schedules, pick "Standup digest" instead of a prompt, a time ("Weekdays"
+  at 9:00) and what it covers — since midnight, the last 24 hours, the
+  last 7 days, or since the previous digest — and every device that gets
+  remuda's alerts receives one push: how many agents finished, how many
+  wait for you, what it cost, a line per agent; a tap opens the Standup.
+  Quiet hours hold it, and a period with nothing in it sends nothing.
 - **Tasks** — the **Agents | Wall | Tasks | Code | Review** switch in the top bar opens remuda's
   own task list: projects on the left, Today / Upcoming / All open, quick
   add, done, due dates, priorities, labels, descriptions, search — and a
