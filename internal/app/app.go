@@ -18,6 +18,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/jobs"
+	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/prstatus"
@@ -86,9 +87,6 @@ func Run(ctx context.Context, o Options) error {
 		return err
 	}
 	activity := feed.New(o.Dir)
-	pushSvc.OnAlert = func(p push.Payload) {
-		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body})
-	}
 	taskStore, err := tasks.Open(o.Dir)
 	if err != nil {
 		return fmt.Errorf("tasks: %w", err)
@@ -97,6 +95,17 @@ func Run(ctx context.Context, o Options) error {
 
 	watcher := watch.New(fleet, bus)
 	chats := &chat.Service{Machines: fleet, Watch: watcher}
+	var srv *server.Server // named here: the live hub fingerprints the roster as the server serves it
+	hub := live.New(live.Inputs{
+		Fingerprint: func() string { return srv.RosterETag() },
+		Version:     chats.ConversationVersion,
+		Remote:      func(id string) bool { mc, err := fleet.Get(id); return err == nil && !mc.Local() },
+	})
+	defer hub.Close()
+	pushSvc.OnAlert = func(p push.Payload) {
+		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body})
+		hub.RosterChanged() // the bell's dot rides on the roster
+	}
 	tracker := radar.New(o.Dir, chats.LastWriteOf)
 	defer tracker.Flush()
 	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer, Link: chats.PullRequest}, bus)
@@ -142,9 +151,11 @@ func Run(ctx context.Context, o Options) error {
 		}
 	})
 	events.Subscribe(bus, func(e events.Snapshot) { sayings.Observe(e.Machine, e.Snap) })
+	events.Subscribe(bus, func(e events.Snapshot) { hub.RosterChanged() })
 	events.Subscribe(bus, func(e events.MachineRemoved) {
 		tracker.Forget(e.Machine)
 		sayings.Forget(e.Machine)
+		hub.RosterChanged()
 		requests.Forget(e.Machine)
 	})
 	events.Subscribe(bus, pushSvc.OnStatus)
@@ -152,10 +163,12 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, requests.OnNamed)
 	events.Subscribe(bus, requests.OnStatus)
 	events.Subscribe(bus, restarter.OnStatus)
+	events.Subscribe(bus, func(e events.PaneStatus) { hub.PaneChanged(e.Pane.Machine, e.Pane.Pane) })
 	events.Subscribe(bus, func(e events.JobDone) {
 		if mc, err := fleet.Get(e.Machine); err == nil {
 			vitals.Refresh(mc)
 		}
+		hub.RosterChanged()
 	})
 	events.Subscribe(bus, func(e events.LocalHerdrDown) { keeper.Revive(e.Err) })
 
@@ -193,9 +206,10 @@ func Run(ctx context.Context, o Options) error {
 		Notify:     pushSvc.Notify,
 	}).Loop(15 * time.Second)
 	go schedules.Loop()
+	go hub.Run(ctx)
 	go budgets.Loop(5 * time.Minute)
 
-	srv := &server.Server{
+	srv = &server.Server{
 		Machines:  fleet,
 		Watch:     watcher,
 		Input:     input,
@@ -219,6 +233,7 @@ func Run(ctx context.Context, o Options) error {
 		Code:      code.New(o.CodePort),
 		Guard:     auth.NewGuard(o.Token, devices),
 		UI:        ui,
+		Live:      hub,
 	}
 	if o.Tailscale {
 		var node *tsnetx.Node

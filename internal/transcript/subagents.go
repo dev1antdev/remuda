@@ -268,6 +268,15 @@ func (s *Subagent) settle(finished, answered bool, lastWrite, now time.Time) {
 	}
 }
 
+// SubagentsStamp is the folder's stamp alone, no file read: "" without a subagent.
+func (r *Reader) SubagentsStamp(sessionPath string, now time.Time) string {
+	versions, err := r.subagentFiles(SubagentsDir(sessionPath), now)
+	if err != nil || len(versions) == 0 {
+		return ""
+	}
+	return stamp(versions)
+}
+
 // stamp is a short hash of every listed file's name and version, in a fixed order.
 func stamp(versions map[string]Version) string {
 	names := make([]string, 0, len(versions))

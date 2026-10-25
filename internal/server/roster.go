@@ -172,6 +172,26 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 // handleRoster serves every machine from the watcher's cache, with an ETag so an unchanged roster is a 304.
 func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 	s.PRs.Touch() // somebody is looking: the pull requests named are worth reading again
+	body, etag := s.rosterBody()
+	w.Header().Set("X-Remuda-Version", buildversion.Build) // a page older than the server offers a reload
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(body)
+}
+
+// RosterETag is the roster's ETag as it stands: the live hub announces a change when it moves.
+func (s *Server) RosterETag() string {
+	_, etag := s.rosterBody()
+	return etag
+}
+
+// rosterBody is the roster as served, with its ETag, from the caches alone.
+func (s *Server) rosterBody() ([]byte, string) {
 	list := s.Machines.List()
 	out := make([]rosterMachine, 0, len(list))
 	for _, mc := range list {
@@ -204,14 +224,5 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 	}
 	body, _ := json.Marshal(roster)
 	sum := sha256.Sum256(body)
-	etag := `"` + hex.EncodeToString(sum[:12]) + `"`
-	w.Header().Set("X-Remuda-Version", buildversion.Build) // a page older than the server offers a reload
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(body)
+	return body, `"` + hex.EncodeToString(sum[:12]) + `"`
 }
