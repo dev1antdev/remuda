@@ -5,7 +5,7 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { actions, app } from "@/app/store";
 import { isMac } from "@/lib/prefs";
-import { Icon } from "@/ui";
+import { Icon, Tip } from "@/ui";
 import { countWords } from "./find";
 
 const SHORTCUT = isMac ? "⌘F" : "Ctrl+F";
@@ -61,9 +61,11 @@ export function FindTool() {
           </button>
         </span>
       )}
-      <button type="button" className={`icon-btn sm find-toggle${find ? " on" : ""}`} title={`Find in this conversation (${SHORTCUT})`} aria-label="Find in this conversation" aria-pressed={!!find} onClick={() => (find ? actions.closeFind() : actions.openFind())}>
-        <Icon name="search" size={14} />
-      </button>
+      <Tip text={`Find in this conversation (${SHORTCUT})`}>
+        <button type="button" className={`icon-btn sm find-toggle${find ? " on" : ""}`} aria-label="Find in this conversation" aria-pressed={!!find} onClick={() => (find ? actions.closeFind() : actions.openFind())}>
+          <Icon name="search" size={14} />
+        </button>
+      </Tip>
     </>
   );
 }
