@@ -618,7 +618,11 @@ conversation for what you typed. **?** opens the keyboard sheet: every
 key the page answers, in groups. **Alt+N** goes to the next agent that
 needs you — a question open, a watchdog note, a finish you have not
 looked at — round and round in the sidebar's order; on the Wall that
-tile takes the wall, elsewhere the agent opens on its chat.
+tile takes the wall, elsewhere the agent opens on its chat. The browser
+tab counts them too: its title reads "(2) remuda" and the favicon wears
+a dot in the colour of the most pressing one — red for a question,
+amber for a watchdog note, green for a finish — so another tab or the
+dock tells you before you switch.
 
 **Search** (🔍, or the palette's last row): full text over every conversation on every
 machine — what you or an agent said, never tool output — filtered by

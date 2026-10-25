@@ -479,7 +479,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   stalled 4.2 s on the Wall (13 tiles)` with the mode, the lens and the
   pane — what the Wall freeze hunt lacked — and one from 2 s up becomes
   a toast, a minute apart at most), `Shell.tsx` (URL sync, ⌘K → the palette, ⌘F → the find bar, the service worker's
-  select-pane, mark-seen, the four modes), `Rail.tsx` (the places),
+  select-pane, mark-seen, the four modes, and **the tab's badge** through `useBadge.ts`: `document.title` reads
+  "(2) remuda" while agents need the person — the Wall's Needs-me rule — and `<link rel="icon">` gets the icon redrawn
+  on a canvas with a dot in the most pressing one's colour, red for a question, amber for a watchdog note, green for a
+  finish not looked at, from the page's own tokens so it follows the theme; `badge.ts` is the pure part, tested:
+  `titleFor`, `toneOf`, `pressing`, `badgeOf`, `sameBadge`; the pop-out is left alone), `Rail.tsx` (the places),
   `Header.tsx`, `PaneArea.tsx`
   (the lenses, mounted once seen, and the files rail beside them in
   `.pane-body` — store field `footprint` from the pref of that name,

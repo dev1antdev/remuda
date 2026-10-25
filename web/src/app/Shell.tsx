@@ -1,7 +1,7 @@
 // The shell: the rail, the header, the sidebar and the pane area or the other modes (the wall, tasks, code), and the overlays. It also
 // keeps the address in step with the selection, hears the service worker, ⌘K (the palette), ⌘F (the find bar), ? (the keyboard
-// sheet) and Alt+N (the next agent that needs you), reads the roster aloud when asked, and tells the server when a finished
-// pane is being looked at.
+// sheet) and Alt+N (the next agent that needs you), reads the roster aloud when asked, keeps the browser tab's title and
+// favicon counting the agents that need you, and tells the server when a finished pane is being looked at.
 
 import { useEffect, useRef } from "react";
 import { isMac } from "@/lib/prefs";
@@ -25,6 +25,7 @@ import { folderOf, useCurrent } from "./current";
 import { useFullKeys } from "./full";
 import { useNextKey, useNextNeedingMe } from "./next";
 import { actions, app } from "./store";
+import { useBadge } from "./useBadge";
 import { useToasts } from "./toasts";
 import { writeURL } from "./url";
 
@@ -41,6 +42,7 @@ export default function Shell() {
   useFullKeys();
   useNextKey(useNextNeedingMe());
   useVoice();
+  useBadge();
 
   useEffect(() => {
     writeURL({ selection: current ? { machineId: current.machine.id, paneId: current.pane.id } : null, mode, lens });
