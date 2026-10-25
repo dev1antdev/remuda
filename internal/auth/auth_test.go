@@ -13,7 +13,9 @@ import (
 	"time"
 )
 
-const testToken = "0123456789abcdef0123456789abcdef01234567"
+// testToken is long enough for the guard and plain enough that a secret scan reads it as what it is
+var testToken = strings.Repeat("test-token-", 4)
+
 const chromeMac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
 // newGuard is a guard over a fresh device store whose handler answers with the device the request came from.
