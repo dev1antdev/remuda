@@ -2,7 +2,6 @@
 // strip's right slot — the size mode, the minimum width, the selection mode, the text size, the key bar.
 
 import { useTheme } from "@/app/theme";
-import { useTheme } from "@/app/theme";
 import { useCallback } from "react";
 import { actions } from "@/app/store";
 import { isTouch, usePref } from "@/lib/prefs";

@@ -83,16 +83,6 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the system by default; "Theme: Frappé" / "Theme: Latte" / "Theme:
   follow the system" in the palette (⌘K) pin one on this device. The
   terminal and the Wall's screens wear the matching Catppuccin palette.
-- **The rail** — the places of the page down the left edge, each an
-  icon with its name: Agents, Wall, Tasks, Code, Review, then Standup,
-  Usage, Schedules, Activity and Settings. On a phone it lies along the
-  bottom under the thumb, with Code, the panels and Settings behind
-  More. The sidebar's head keeps two buttons: + (a workspace, a PC) and
-  ⋯ (message several agents, the order, the settings).
-- **Two themes** — Catppuccin Frappé by night, Latte by day, following
-  the system by default; "Theme: Frappé" / "Theme: Latte" / "Theme:
-  follow the system" in the palette (⌘K) pin one on this device. The
-  terminal and the Wall's screens wear the matching Catppuccin palette.
 - **Two themes** — Catppuccin Frappé by night, Latte by day, following
   the system by default; "Theme: Frappé" / "Theme: Latte" / "Theme:
   follow the system" in the palette (⌘K) pin one on this device. The
