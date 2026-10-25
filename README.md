@@ -92,6 +92,15 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   like and it stays that way on this device; Tab to the edge and use
   ← → (⇧ for bigger steps), ↵ or a double-click for the usual width;
   "Reset the panels' widths" in the palette puts them all back.
+- **Settings that follow you** — "Sync these settings between devices",
+  the last row of Settings › Look, keeps the theme, its flavour and
+  accent, the sidebar's settings, the Wall's, the review's two columns,
+  the files rail, the timeline, the tasks view, the standup period, Code's
+  Follow and the panels' widths in this remuda, so the phone and the desk
+  agree: a change on one device reaches the others within a minute (at
+  once when they come back into view), the newer choice winning. Alerts,
+  quiet hours, read-aloud, the terminal's text size and the prompt
+  history stay on the device they were set on.
 - **Wall** — the **Wall** mode in the top bar puts every agent on one
   screen: a tile per agent pane on every connected machine, with its
   state and how long it has lasted, what it runs this second (the tool
