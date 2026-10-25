@@ -1,8 +1,9 @@
 // Settings: the few things the page keeps per device, in one place — the theme, its flavour and accent, how the sidebar
-// reads, the panels' widths, the way to the alerts and the keys, and which remuda this is.
+// reads, the panels' widths, the way to the alerts and the keys, which remuda this is, and the devices signed in to it.
 
 import { setAccentPref, setDarkFlavorPref, setThemePref, useAccent, useDarkFlavorPref, useFlavor, useThemePref } from "@/app/theme";
 import { actions } from "@/app/store";
+import DevicesSection from "./DevicesSection";
 import { RadarFields } from "@/features/roster/RadarSettings";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { usePref } from "@/lib/prefs";
@@ -113,6 +114,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
           </span>
         </div>
       </section>
+      <DevicesSection />
     </Dialog>
   );
 }

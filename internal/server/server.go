@@ -90,6 +90,7 @@ func (s *Server) Handler() http.Handler {
 	s.questionRoutes(api)
 	s.feedRoutes(api)
 	s.recapRoutes(api)
+	s.deviceRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard
