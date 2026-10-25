@@ -2,7 +2,7 @@
 // A lens's own controls go in the right slot (tools), never in the header.
 
 import { useState, type ReactNode } from "react";
-import { Icon, StatusDot } from "@/ui";
+import { Icon, StatusDot, Tip } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import type { Pane, Session, Status, Tab } from "./api";
 
@@ -73,15 +73,19 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onClo
                   {t.named && <span>{t.label}</span>}
                   {t.panes.length > 1 && <span className="tab-count">{t.panes.length}</span>}
                 </button>
-                <button type="button" className="icon-btn tab-close" title="Close tab" aria-label={`Close tab ${t.named ? t.label : t.number}`} onClick={() => onCloseTab(t)}>
-                  <Icon name="x" size={12} />
-                </button>
+                <Tip text="Close this tab">
+                  <button type="button" className="icon-btn tab-close" aria-label={`Close tab ${t.named ? t.label : t.number}`} onClick={() => onCloseTab(t)}>
+                    <Icon name="x" size={12} />
+                  </button>
+                </Tip>
               </div>
             );
           })}
-          <button type="button" className="icon-btn tab-add" title="New tab in this workspace" onClick={onNewTab}>
-            <Icon name="plus" size={14} />
-          </button>
+          <Tip text="New tab in this workspace">
+            <button type="button" className="icon-btn tab-add" aria-label="New tab" onClick={onNewTab}>
+              <Icon name="plus" size={14} />
+            </button>
+          </Tip>
         </div>
         {tools && <div className="tabs-tools">{tools}</div>}
       </div>

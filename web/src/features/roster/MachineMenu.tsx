@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import UpdatesDialog from "@/features/updates/Updates";
-import { Icon, useDismiss } from "@/ui";
+import { Icon, Tip, useDismiss } from "@/ui";
 import type { Machine } from "./api";
 
 export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machine; onRename: () => void; onRemove?: () => void }) {
@@ -16,11 +16,12 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
   };
   return (
     <>
+      <Tip text="Rename, copy the SSH host, remove">
       <button
         type="button"
         className={`icon-btn${open ? " on" : ""}`}
         data-machine-menu={m.id}
-        title="Machine…"
+        aria-label={`${m.label}: rename, copy the SSH host, remove`}
         aria-haspopup="menu"
         aria-expanded={!!open}
         onClick={(e) => {
@@ -31,6 +32,7 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
       >
         <Icon name="more" size={14} />
       </button>
+      </Tip>
       {open && (
         <div className="row-menu machine-menu" role="menu" style={{ left: open.x, top: open.y }} onClick={(e) => e.stopPropagation()}>
           <button type="button" role="menuitem" onClick={pick(onRename)}>

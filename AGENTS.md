@@ -100,8 +100,11 @@ not style.
   a project.
 - **One design system** (`web/src/styles.css`): every `<button>` carries a
   family class, radii and type sizes come from the scales, icons are
-  `icons.tsx` (never an emoji), transient status is a toast, nothing in a
-  bar moves when state changes. Reuse a rule before writing one.
+  `icons.tsx` (never an emoji), an icon-only button says what it does
+  through `Tip` (`ui/Tip.tsx`) with an `aria-label`, never a `title`
+  alone, a set of actions is a `Menu` with words rather than a row of
+  icons, transient status is a toast, nothing in a bar moves when state
+  changes. Reuse a rule before writing one.
 
 ## Conventions
 

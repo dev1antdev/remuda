@@ -6,7 +6,7 @@ import { useCallback } from "react";
 import { actions } from "@/app/store";
 import { isTouch, usePref } from "@/lib/prefs";
 import type { Pane } from "@/features/roster/api";
-import { Icon, type MenuItem } from "@/ui";
+import { Icon, type MenuItem, Tip } from "@/ui";
 import KeyBar from "./KeyBar";
 import TerminalView from "./Terminal";
 import type { SizeMode } from "./engine/types";
@@ -55,9 +55,11 @@ export function TerminalLens({ machineId, paneId, cols, rows, agent, active }: {
 export function TerminalTools() {
   const [keybar, setKeybar] = usePref("keybar", isTouch);
   return (
-    <button type="button" className={`icon-btn kb-toggle${keybar ? " on" : ""}`} title={keybar ? "Hide the key bar" : "Key bar: Esc, Tab, Ctrl, the arrows and more, for a screen without them"} aria-pressed={keybar} onClick={() => setKeybar(!keybar)}>
-      <Icon name="keyboard" />
-    </button>
+    <Tip text={keybar ? "Hide the key bar" : "Key bar: Esc, Tab, Ctrl, the arrows and more, for a screen without them"}>
+      <button type="button" className={`icon-btn kb-toggle${keybar ? " on" : ""}`} aria-label="Key bar" aria-pressed={keybar} onClick={() => setKeybar(!keybar)}>
+        <Icon name="keyboard" />
+      </button>
+    </Tip>
   );
 }
 

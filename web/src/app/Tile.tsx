@@ -9,7 +9,7 @@ import type { Tile, WallView } from "@/features/roster/wall";
 import { Screen } from "@/features/terminal/Screen";
 import { fillClass, usd } from "@/features/usage/format";
 import { openUrl } from "@/lib/host";
-import { Icon, Logo } from "@/ui";
+import { Icon, Logo, Tip } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import { folderOf } from "./current";
 import { actions } from "./store";
@@ -66,19 +66,25 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           </span>
         )}
         {onFocus && (
-          <button type="button" className={`icon-btn sm tile-focus${focused ? " on" : ""}`} title={focused ? "Back to the grid (Esc)" : "Focus: this agent takes the wall, the others wait in a strip"} aria-label={focused ? "Back to the grid" : "Focus this agent"} aria-pressed={focused} onClick={onFocus}>
-            <Icon name={focused ? "minimize" : "maximize"} size={14} />
-          </button>
+          <Tip text={focused ? "Back to the grid (Esc)" : "Focus: this agent takes the wall, the others wait in a strip"}>
+            <button type="button" className={`icon-btn sm tile-focus${focused ? " on" : ""}`} aria-label={focused ? "Back to the grid" : "Focus this agent"} aria-pressed={focused} onClick={onFocus}>
+              <Icon name={focused ? "minimize" : "maximize"} size={14} />
+            </button>
+          </Tip>
         )}
         {onPopOut && (
-          <button type="button" className="icon-btn sm tile-pop" title="Pop out: a small window above every other app" aria-label="Pop out" onClick={onPopOut}>
-            <Icon name="pip" size={14} />
-          </button>
+          <Tip text="Pop out: a small window above every other app">
+            <button type="button" className="icon-btn sm tile-pop" aria-label="Pop out" onClick={onPopOut}>
+              <Icon name="pip" size={14} />
+            </button>
+          </Tip>
         )}
         {onHide && (
-          <button type="button" className="icon-btn sm tile-hide" title="Hide this tile (Show hidden brings it back)" aria-label="Hide this tile" onClick={onHide}>
-            <Icon name="eye-off" size={14} />
-          </button>
+          <Tip text="Hide this tile; Show hidden brings it back">
+            <button type="button" className="icon-btn sm tile-hide" aria-label="Hide this tile" onClick={onHide}>
+              <Icon name="eye-off" size={14} />
+            </button>
+          </Tip>
         )}
       </header>
       {brief ? (

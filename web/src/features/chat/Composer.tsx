@@ -7,7 +7,7 @@ import { sendKeys, submitPrompt } from "@/features/roster/api";
 import { isTouch } from "@/lib/prefs";
 import { errMsg } from "@/lib/text";
 import { filesFrom } from "@/lib/transfer";
-import { Icon, Notice } from "@/ui";
+import { Icon, Notice, Tip } from "@/ui";
 import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
 import { useDictation } from "./dictation";
 import { expandPrompt, QuickPromptsDialog, QuickPromptsMenu } from "./QuickPrompts";
@@ -157,41 +157,38 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
         />
         {!compact && (
           <>
-            <button
-              type="button"
-              className="icon-btn lg composer-attach"
-              title={`Attach files (up to ${MAX_ATTACHMENTS}) — they are uploaded into the pane's folder`}
-              aria-label="Attach files"
-              disabled={att.items.length >= MAX_ATTACHMENTS}
-              onClick={() => picker.current?.click()}
-            >
-              <Icon name="paperclip" size={16} />
-            </button>
-            <button
-              type="button"
-              className={`icon-btn lg composer-attach${quick ? " on" : ""}`}
-              title="Quick prompts"
-              aria-label="Quick prompts"
-              aria-expanded={!!quick}
-              onClick={(e) => {
-                e.stopPropagation();
-                const r = e.currentTarget.getBoundingClientRect();
-                setQuick(quick ? null : { x: r.left, y: r.top - 6 });
-              }}
-            >
-              <Icon name="zap" size={16} />
-            </button>
-            {dictation.supported && (
+            <Tip text={`Attach files (up to ${MAX_ATTACHMENTS}): they are uploaded into the pane's folder`}>
+              <button type="button" className="icon-btn lg composer-attach" aria-label="Attach files" disabled={att.items.length >= MAX_ATTACHMENTS} onClick={() => picker.current?.click()}>
+                <Icon name="paperclip" size={16} />
+              </button>
+            </Tip>
+            <Tip text="Quick prompts: saved texts, with {dir}, {branch} and {file} filled in">
               <button
                 type="button"
-                className={`icon-btn lg composer-attach composer-mic${dictation.listening ? " listening" : ""}`}
-                title={dictation.listening ? "Stop dictating" : "Dictate (on this device's speech recognition)"}
-                aria-label={dictation.listening ? "Stop dictating" : "Dictate"}
-                aria-pressed={dictation.listening}
-                onClick={dictation.toggle}
+                className={`icon-btn lg composer-attach${quick ? " on" : ""}`}
+                aria-label="Quick prompts"
+                aria-expanded={!!quick}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setQuick(quick ? null : { x: r.left, y: r.top - 6 });
+                }}
               >
-                <Icon name="mic" size={16} />
+                <Icon name="zap" size={16} />
               </button>
+            </Tip>
+            {dictation.supported && (
+              <Tip text={dictation.listening ? "Stop dictating" : "Dictate through this device's own speech recognition"}>
+                <button
+                  type="button"
+                  className={`icon-btn lg composer-attach composer-mic${dictation.listening ? " listening" : ""}`}
+                  aria-label={dictation.listening ? "Stop dictating" : "Dictate"}
+                  aria-pressed={dictation.listening}
+                  onClick={dictation.toggle}
+                >
+                  <Icon name="mic" size={16} />
+                </button>
+              </Tip>
             )}
           </>
         )}
@@ -262,9 +259,11 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
           )}
         </button>
         {working && (
-          <button type="button" className="btn danger soft composer-stop" title="Send Esc to interrupt" onClick={() => void sendKeys(machineId, paneId, ["esc"]).catch((e) => setError(errMsg(e)))}>
-            <Icon name="square" size={12} /> <span>Stop</span>
-          </button>
+          <Tip text="Send Esc: the agent stops what it is doing">
+            <button type="button" className="btn danger soft composer-stop" aria-label="Stop" onClick={() => void sendKeys(machineId, paneId, ["esc"]).catch((e) => setError(errMsg(e)))}>
+              <Icon name="square" size={12} /> <span>Stop</span>
+            </button>
+          </Tip>
         )}
       </div>
     </>
