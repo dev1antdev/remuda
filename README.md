@@ -86,6 +86,15 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   any of Catppuccin's fourteen colours, a swatch each in Settings. The
   terminal, the Wall's screens and the Code editor wear the matching
   palette.
+- **Text size, density and font** — the Look section of Settings also
+  sets the page's text size (Small to Larger, "Text size: …" in the
+  palette too; the terminal keeps its own size in its View menu), the
+  density (Compact tightens the sidebar rows, the tabs, the tile heads
+  and the gaps between turns, on a wide screen with a mouse) and the
+  monospace font for code and the terminal, from the families installed
+  on this device — each shows in its own face in the list, an
+  uninstalled one falls back to the system's monospace. Nothing is
+  downloaded: no web fonts.
 - **Panels** — the sidebar, the files rail, the Review queue and a
   task's detail each have a draggable edge: pull it to the width you
   like and it stays that way on this device; Tab to the edge and use

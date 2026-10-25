@@ -22,7 +22,8 @@ import { enterFull, leaveFull } from "./full";
 import { NEXT_KEY, useNextNeedingMe } from "./next";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
-import { setDarkFlavorPref, setThemePref, useDarkFlavorPref, useThemePref } from "./theme";
+import { setDarkFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, useTextSize, useThemePref } from "./theme";
+import { TEXT_SIZE_NAMES, TEXT_SIZES } from "@/lib/look";
 import { DARK_FLAVORS, FLAVOR_NAMES } from "@/lib/theme";
 
 const FIND_KEY = isMac ? "⌘F" : "Ctrl+F";
@@ -59,6 +60,7 @@ function useCommands(): (query: string) => Entry[] {
   const full = app.use((s) => s.full);
   const themePref = useThemePref();
   const darkFlavor = useDarkFlavorPref();
+  const textSize = useTextSize();
   const current = useCurrent();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
@@ -160,10 +162,13 @@ function useCommands(): (query: string) => Entry[] {
       for (const flavor of DARK_FLAVORS) {
         command(`flavor-${flavor}`, `Dark flavour: ${FLAVOR_NAMES[flavor]}`, () => setDarkFlavorPref(flavor), { hint: `${darkFlavor === flavor ? "now · " : ""}Catppuccin ${FLAVOR_NAMES[flavor]} whenever the theme is dark`, icon: "moon", keywords: ["theme", "dark", "flavour", "flavor", "catppuccin", flavor] });
       }
+      for (const size of TEXT_SIZES) {
+        command(`text-${size}`, `Text size: ${TEXT_SIZE_NAMES[size]}`, () => setTextSizePref(size), { hint: `${textSize === size ? "now · " : ""}the page's type scale${size === "normal" ? " as designed" : `, ${TEXT_SIZE_NAMES[size].toLowerCase()}`}; the terminal keeps its own size`, icon: size === "small" ? "text-smaller" : "text-larger", keywords: ["text", "size", "font", "zoom", "bigger", "smaller", size] });
+      }
       const typed = query.trim();
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, chatSession, footprint, full, themePref, darkFlavor, current, radar, wall, setWall, focus, setFocus, timelineShown, setTimelineShown, step, now, goNext],
+    [machines, mode, lens, viewer, chatSession, footprint, full, themePref, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, timelineShown, setTimelineShown, step, now, goNext],
   );
 }
