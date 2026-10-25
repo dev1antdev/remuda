@@ -12,6 +12,7 @@ import { connected, machineOptions } from "@/features/roster/options";
 import Select from "@/ui/Select";
 import Icon from "@/ui/icons";
 import { openUrl } from "@/lib/host";
+import { Tip } from "@/ui";
 
 // escapePath keeps a #, ? or % in a file name as part of the path when the workbench parses its URI
 const escapePath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
@@ -78,9 +79,10 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
   }, [visible, status?.available, machine?.id]);
 
   // the frame's address is settled once per machine, folder and request: a file asked for rides along as the workbench's
-  // payload on that one mount (the authority is this page's host, which the proxy keeps as Host), and coming back to
-  // the folder later does not open it again
+  // payload on that one mount — named by the authority code-server's page states ("remote" these days; the page's host
+  // before, and still the fallback) — and coming back to the folder later does not open it again
   const [frame, setFrame] = useState<{ key: string; src: string } | null>(null);
+  const [reloads, setReloads] = useState(0); // a reload by hand: a new frame for the same folder, when the editor lost its way
   const carried = useRef(0); // the request a frame has carried
   useEffect(() => {
     if (!machine) {
@@ -89,11 +91,14 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
     }
     const asked = codeFile && codeFile.n !== carried.current ? codeFile : null;
     if (asked && (asked.machineId !== machine.id || asked.folder !== folder)) return; // the picker is on its way there
+    if (asked && !status?.available) return; // the authority comes with the status; the effect runs again once it is in
     if (asked) carried.current = asked.n;
-    const payload = asked ? `&payload=${encodeURIComponent(JSON.stringify([["openFile", `vscode-remote://${location.host}${escapePath(asked.path)}`]]))}` : "";
+    const authority = status?.authority || location.host;
+    const file = asked && asked.path.replace(/\/+$/, "") !== folder.replace(/\/+$/, "") ? asked.path : null; // the folder itself is no file to open
+    const payload = file ? `&payload=${encodeURIComponent(JSON.stringify([["openFile", `vscode-remote://${authority}${escapePath(file)}`]]))}` : "";
     const src = folder ? `/code/${encodeURIComponent(machine.id)}/?folder=${encodeURIComponent(folder)}${payload}` : `/code/${encodeURIComponent(machine.id)}/`;
-    setFrame({ key: `${machine.id}|${folder}|${asked?.n ?? 0}`, src });
-  }, [machine?.id, folder, codeFile?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+    setFrame({ key: `${machine.id}|${folder}|${asked?.n ?? 0}|${reloads}`, src });
+  }, [machine?.id, folder, codeFile?.n, status?.available, reloads]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="code-mode">
@@ -111,6 +116,14 @@ export default function Code({ machines, currentMachine, currentFolder, visible 
           />
         )}
         <span className="code-bar-spacer" />
+        {status?.available && status.version && <span className="code-version">code-server {status.version}</span>}
+        {status?.available && (
+          <Tip text="Reload the editor: a fresh frame for this folder, when it lost its connection or shows a stale state">
+            <button type="button" className="icon-btn" aria-label="Reload the editor" onClick={() => setReloads((n) => n + 1)}>
+              <Icon name="refresh-cw" size={16} />
+            </button>
+          </Tip>
+        )}
         {status?.available && (
           <button type="button" className="icon-btn" title="Open the editor in its own tab" onClick={() => frame && openUrl(frame.src)}>
             <Icon name="external-link" size={14} />

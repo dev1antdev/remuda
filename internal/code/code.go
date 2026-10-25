@@ -7,10 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +26,8 @@ const DefaultPort = 7320
 type Status struct {
 	Available bool   `json:"available"`
 	Port      int    `json:"port"`
+	Authority string `json:"authority,omitempty"` // the remote authority the workbench names its files by ("remote" since code-server 4.9x, the host before)
+	Version   string `json:"version,omitempty"`   // code-server's own, off the same page
 	Error     string `json:"error,omitempty"`
 }
 
@@ -82,7 +86,33 @@ func (s *Service) probe(mc *machines.Machine) Status {
 		return st
 	}
 	st.Available = true
+	st.Authority, st.Version = s.page(addr)
 	return st
+}
+
+// page reads the workbench page code-server serves for the remote authority — a file the page asks the editor to open
+// must carry it, or the editor cannot resolve the resource — and code-server's version. "" for what the page does not say.
+func (s *Service) page(addr string) (authority, version string) {
+	res, err := s.client.Get("http://" + addr + "/")
+	if err != nil {
+		return "", ""
+	}
+	defer res.Body.Close()
+	page, err := io.ReadAll(io.LimitReader(res.Body, 512*1024))
+	if err != nil {
+		return "", ""
+	}
+	return settingOf(page, "remoteAuthority"), settingOf(page, "codeServerVersion")
+}
+
+// settingOf finds one string setting in the workbench page's data-settings, written with its quotes escaped as &quot;
+func settingOf(page []byte, name string) string {
+	re := regexp.MustCompile(`(?:&quot;|")` + regexp.QuoteMeta(name) + `(?:&quot;|"):(?:&quot;|")([^&"]+)(?:&quot;|")`)
+	m := re.FindSubmatch(page)
+	if m == nil {
+		return ""
+	}
+	return html.UnescapeString(string(m[1]))
 }
 
 // Forget drops a cached verdict (after an install, say).

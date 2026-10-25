@@ -2,7 +2,7 @@
 
 import { getJSON } from "@/lib/http";
 
-export type CodeStatus = { available: boolean; port: number; error?: string };
+export type CodeStatus = { available: boolean; port: number; authority?: string; version?: string; error?: string }; // authority: what the workbench names its files by
 
 // whether the machine's code-server answers (force re-probes a cached "no")
 export const codeStatus = (machineId: string, force = false): Promise<CodeStatus> => getJSON(`/api/code/${encodeURIComponent(machineId)}${force ? "?check=1" : ""}`);
