@@ -16,6 +16,7 @@ import FileViewer from "@/features/files/FileViewer";
 import Schedules from "@/features/schedules/Schedules";
 import Search from "@/features/search/Search";
 import RecapDialog from "@/features/standup/RecapDialog";
+import ImportIssueDialog from "@/features/tasks/ImportIssueDialog";
 import Standup from "@/features/standup/StandupPanel";
 import UpdatesDialog from "@/features/updates/Updates";
 import BudgetDialog from "@/features/usage/BudgetDialog";
@@ -101,7 +102,7 @@ export default function Overlays() {
           agents={agents}
           defaultMachine={dialog.machineId}
           onClose={actions.closeDialog}
-          onCreate={async (machine, dir, name, agent) => landOn(machine, await createSession({ machine, name, dir, agent }))}
+          onCreate={async (machine, dir, name, agent, extras) => landOn(machine, await createSession({ machine, name, dir, agent, ...extras }))}
         />
       )}
       {dialog?.kind === "tab" && (
@@ -109,7 +110,7 @@ export default function Overlays() {
           session={dialog.session}
           agents={agents}
           onClose={actions.closeDialog}
-          onCreate={async (name, agent) => landOn(dialog.machineId, await createTab({ machine: dialog.machineId, workspace: dialog.session.id, name, agent }))}
+          onCreate={async (name, agent, extras) => landOn(dialog.machineId, await createTab({ machine: dialog.machineId, workspace: dialog.session.id, name, agent, ...extras }))}
         />
       )}
       {dialog?.kind === "worktree" && (
@@ -117,8 +118,8 @@ export default function Overlays() {
           session={dialog.session}
           agents={agents}
           onClose={actions.closeDialog}
-          onCreate={async (branch, base, name, agent) =>
-            landOn(dialog.machineId, await createWorktree({ machine: dialog.machineId, workspace: dialog.session.id, branch, base, name, agent }))
+          onCreate={async (branch, base, name, agent, extras) =>
+            landOn(dialog.machineId, await createWorktree({ machine: dialog.machineId, workspace: dialog.session.id, branch, base, name, agent, ...extras }))
           }
         />
       )}
@@ -135,6 +136,16 @@ export default function Overlays() {
       {dialog?.kind === "broadcast" && <BroadcastDialog agents={targets} onClose={actions.closeDialog} />}
       {dialog?.kind === "keys" && <KeysDialog onClose={actions.closeDialog} />}
       {dialog?.kind === "settings" && <SettingsDialog onClose={actions.closeDialog} />}
+      {dialog?.kind === "import-issue" && (
+        <ImportIssueDialog
+          projectId={dialog.projectId}
+          onClose={actions.closeDialog}
+          onCreated={(task, start) => {
+            actions.closeDialog();
+            actions.openTask(task.project_id, task.id, start);
+          }}
+        />
+      )}
       {dialog?.kind === "recap" && <RecapDialog machineId={dialog.machineId} paneId={dialog.paneId} session={dialog.session} dir={dialog.dir} title={dialog.title} onClose={actions.closeDialog} />}
       {dialog?.kind === "budget" && <BudgetDialog machines={machines} budget={dialog.budget} onClose={actions.closeDialog} onSaved={done} ask={actions.ask} />}
       {dialog?.kind === "machine" && (

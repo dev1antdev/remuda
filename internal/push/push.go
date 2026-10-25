@@ -59,8 +59,9 @@ type Payload struct {
 	Title   string   `json:"title"`
 	Body    string   `json:"body"`
 	Tag     string   `json:"tag"`
-	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop | schedule | task | budget
+	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop | schedule | digest | task | budget
 	Actions []Action `json:"actions,omitempty"`
+	Panel   string   `json:"panel,omitempty"` // a panel of the page a tap opens instead of a pane (standup)
 }
 
 // Action is a button on the notification; the service worker performs it.
@@ -270,6 +271,12 @@ func (s *Service) Notify(p Payload) {
 		targets = append(targets, sub)
 	}
 	s.deliver(targets, p)
+}
+
+// Broadcast sends one payload now to every device, whatever its watchdog pref: a schedule's word is the person's own.
+func (s *Service) Broadcast(p Payload) {
+	s.record(p)
+	s.deliver(s.list(), p)
 }
 
 // deliver sends one payload to each device, skipping the ones inside their quiet hours right now.
