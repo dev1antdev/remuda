@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"sort"
 	"strconv"
 	"strings"
@@ -295,8 +294,7 @@ func (t *Tools) Create(a CreateArgs) (tasksapi.Task, []string, error) {
 	title := strings.TrimSpace(a.Title)
 	w := tasksapi.Write{Title: &title, Source: t.Source}
 	if a.Description != "" {
-		plain := paragraphsHTML(a.Description)
-		w.Description, w.Markdown = &plain, a.Description
+		w.Markdown = a.Description // the server renders it; a plain description beside it would win over the Markdown
 	}
 	if a.Column != "" {
 		status, err := findColumn(project, a.Column)
@@ -377,8 +375,7 @@ func (t *Tools) Update(a UpdateArgs) (tasksapi.Task, error) {
 	}
 	w := tasksapi.Write{Title: a.Title, Done: a.Done, Priority: a.Priority}
 	if a.Description != nil {
-		plain := paragraphsHTML(*a.Description)
-		w.Description, w.Markdown = &plain, *a.Description
+		w.Markdown = *a.Description
 	}
 	if a.Column != "" {
 		projects, err := t.Client.Projects()
@@ -619,27 +616,4 @@ func dueOf(s string) (string, error) {
 		return t.UTC().Format(time.RFC3339), nil
 	}
 	return "", fmt.Errorf("a due date is YYYY-MM-DD or RFC 3339, not %q", s)
-}
-
-// paragraphsHTML is the plain reading of a Markdown text for a list that cannot render Markdown itself: a paragraph
-// per blank-line block, fenced code kept as it is.
-func paragraphsHTML(md string) string {
-	var b strings.Builder
-	blocks := strings.Split(strings.ReplaceAll(strings.TrimSpace(md), "\r\n", "\n"), "\n\n")
-	for _, block := range blocks {
-		block = strings.TrimSpace(block)
-		if block == "" {
-			continue
-		}
-		if strings.HasPrefix(block, "```") {
-			code := strings.Trim(strings.TrimPrefix(block, "```"), "`")
-			if _, rest, ok := strings.Cut(code, "\n"); ok {
-				code = rest
-			}
-			b.WriteString("<pre>" + html.EscapeString(strings.TrimSpace(code)) + "</pre>")
-			continue
-		}
-		b.WriteString("<p>" + strings.ReplaceAll(html.EscapeString(block), "\n", "<br>") + "</p>")
-	}
-	return b.String()
 }

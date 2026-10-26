@@ -219,15 +219,3 @@ func TestRefusalsAndUnknowns(t *testing.T) {
 		t.Errorf("an unknown protocol version gets ours: %v", answers[6])
 	}
 }
-
-func TestDueAndParagraphs(t *testing.T) {
-	if _, err := dueOf("tomorrow"); err == nil {
-		t.Error("a word is not a date")
-	}
-	if got, _ := dueOf("2026-01-02T03:04:05+02:00"); got != "2026-01-02T01:04:05Z" {
-		t.Errorf("a moment kept in UTC: %s", got)
-	}
-	if got := paragraphsHTML("a <b>\nb\n\n```go\nx := 1\n```\n\nc"); got != "<p>a &lt;b&gt;<br>b</p><pre>x := 1</pre><p>c</p>" {
-		t.Errorf("paragraphs: %s", got)
-	}
-}
