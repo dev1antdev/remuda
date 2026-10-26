@@ -47,6 +47,7 @@ type Manager struct {
 	dir      string // the state dir, where labels.json lives
 	names    map[string]string
 	herdrBin string
+	door     *Door      // how every remote's agents reach the tasks here; nil opens none
 	saveMu   sync.Mutex // writes of machines.json, one at a time
 }
 
@@ -79,7 +80,8 @@ func (m *Manager) Rename(id, label string) (*Machine, error) {
 }
 
 // NewManager builds the registry: the local machine plus what machines.json lists; herdr's own come through SyncHerdr.
-func NewManager(dir, localSocket, localHerdrBin string) *Manager {
+// Every remote gets the door given once it connects (nil: none).
+func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 	host, _ := os.Hostname()
 	local := &Machine{
 		Cfg:      Config{ID: LocalID, Label: "This Mac · " + strings.TrimSuffix(host, ".local")},
@@ -98,6 +100,7 @@ func NewManager(dir, localSocket, localHerdrBin string) *Manager {
 		dir:      dir,
 		names:    map[string]string{},
 		herdrBin: localHerdrBin,
+		door:     door,
 	}
 	_ = state.LoadJSON(m.dir, labelsFile, &m.names)
 	if m.names == nil {
@@ -140,6 +143,7 @@ func (m *Manager) save() error {
 
 func (m *Manager) add(cfg Config) *Machine {
 	mc := newRemote(cfg)
+	mc.door = m.door
 	m.mu.Lock()
 	mc.setLabel(m.names[cfg.ID])
 	m.machines[cfg.ID] = mc

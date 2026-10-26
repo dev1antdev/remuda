@@ -361,6 +361,13 @@ with when it was last seen and from where). Lost a phone? Revoke that device
 there, or sign out every other device at once; the rest keep working and the
 token stays what it was.
 
+**Agents and your tasks.** The agents on every machine get a key of their
+own that opens this remuda's task list and nothing else: remuda places it,
+with the address to reach it at, in the machine's own state dir (on a remote,
+over the same SSH connection, with this remuda's port forwarded back to the
+machine's loopback), and `remuda mcp` / `remuda tasks` there read the two
+files. Settings › Devices lists the keys, one per machine, with a Revoke each.
+
 ## As a background service on a Mac or Linux box
 
 ```bash
@@ -483,6 +490,9 @@ once, then "Add to Home Screen" — it installs as a PWA.
 - Single bearer token, constant-time compared, no accounts. A signed-in
   browser holds a device cookie (a random secret, hashed on disk), never the
   token: a device is revoked in Settings without touching the others.
+- An agent's key (hashed on disk too) reaches the task routes and nothing
+  else; it is refused at once anywhere else. One per machine, revocable in
+  Settings; a revoked one is replaced when remuda next connects there.
 - Cross-origin mutations rejected (`Sec-Fetch-Site`).
 - Anyone with the token can type into your terminals — treat it like an SSH
   key.

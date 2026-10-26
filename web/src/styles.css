@@ -8061,6 +8061,26 @@ body.popout {
   contain-intrinsic-size: auto 300px;
 }
 
+/* ---- the agents' keys at the end of Settings › Devices (features/settings/AgentKeys.tsx): a head row that explains
+   them, then a row per machine shaped like a device's ---- */
+.settings-dialog .keys-head {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.settings-dialog .keys-head > span {
+  font-weight: 600;
+}
+
+.settings-dialog .keys-head > span small {
+  font-weight: 400;
+}
+
+.settings-dialog .key-row .device-head {
+  font-weight: 500;
+}
+
 /* ---- tasks: who made a task (an agent's key and pane), and the Markdown an agent writes a description in
    (internal/tasks/markdown.go): headings, quotes and rules the editor never wrote before ---- */
 .task-source {

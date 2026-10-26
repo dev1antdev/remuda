@@ -41,6 +41,9 @@ type Machine struct {
 	fwds map[int]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda)
 	peer *Peer
 
+	door    *Door  // the way its agents reach the tasks here, opened after every connect
+	doorKey string // the key placed there, kept so a reconnect places the same one
+
 	// Transcripts reads the session files on this machine.
 	Transcripts *transcript.Reader
 }
@@ -179,6 +182,7 @@ func (mc *Machine) connect() {
 	mc.state = StateConnected
 	mc.errMsg = ""
 	mc.mu.Unlock()
+	go mc.openDoor(conn)
 }
 
 // rpcClient picks the RPC transport: a forwarded unix socket, else one `nc -U` exec per request over the master
