@@ -1,7 +1,8 @@
 // Package auth is deliberately small: one bearer token, required on every
 // request behind the guard. No accounts, no third parties. The token lives in
 // a 0600 file in the state dir; a signed-in browser keeps a device cookie with a
-// secret of its own (devices.go), never the token itself.
+// secret of its own (devices.go), never the token itself; the agents on a
+// machine hold a key that opens the task routes and nothing else (keys.go).
 package auth
 
 import (
@@ -54,13 +55,16 @@ type Guard struct {
 	token   string
 	host    string
 	Devices *Devices // the signed-in browsers; nil keeps the token itself in the cookie, as before devices
+	Keys    *Keys    // the agents' keys; nil refuses every rk_ bearer
 	stale   sync.Map // ids of revoked devices whose cookie was already logged
+	strayed sync.Map // key ids whose reach past their scope was logged, with when
 }
 
-// NewGuard guards with one token; with a Devices store every signed-in browser gets a secret of its own instead.
-func NewGuard(token string, devices *Devices) *Guard {
+// NewGuard guards with one token; with a Devices store every signed-in browser gets a secret of its own instead,
+// and with a Keys store an agent key opens the routes of its scope.
+func NewGuard(token string, devices *Devices, keys *Keys) *Guard {
 	h, _ := os.Hostname()
-	return &Guard{token: token, host: strings.TrimSuffix(h, ".local"), Devices: devices}
+	return &Guard{token: token, host: strings.TrimSuffix(h, ".local"), Devices: devices, Keys: keys}
 }
 
 func (g *Guard) ok(presented string) bool {
@@ -68,10 +72,11 @@ func (g *Guard) ok(presented string) bool {
 		subtle.ConstantTimeCompare([]byte(presented), []byte(g.token)) == 1
 }
 
-// caller is who a request comes from: a device, the bearer token (no device), a legacy cookie holding the token (to upgrade),
-// a device no longer signed in (stale), or nobody.
+// caller is who a request comes from: a device, the bearer token (no device), an agent key (reaching its scope only),
+// a legacy cookie holding the token (to upgrade), a device no longer signed in (stale), or nobody.
 type caller struct {
 	device  string
+	key     *Key
 	ok      bool
 	upgrade bool
 	stale   bool
@@ -79,7 +84,18 @@ type caller struct {
 
 func (g *Guard) authenticate(r *http.Request) caller {
 	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
-		return caller{ok: g.ok(strings.TrimPrefix(h, "Bearer "))}
+		bearer := strings.TrimPrefix(h, "Bearer ")
+		if IsKey(bearer) {
+			if g.Keys == nil {
+				return caller{}
+			}
+			key, ok := g.Keys.Check(bearer)
+			if !ok {
+				return caller{}
+			}
+			return caller{key: &key, ok: true}
+		}
+		return caller{ok: g.ok(bearer)}
 	}
 	c, err := r.Cookie(CookieName)
 	if err != nil {
@@ -102,11 +118,18 @@ func (g *Guard) authenticate(r *http.Request) caller {
 }
 
 type deviceKey struct{}
+type callerKey struct{}
 
 // DeviceID is the signed-in device a request came from, "" for a bearer caller.
 func DeviceID(ctx context.Context) string {
 	id, _ := ctx.Value(deviceKey{}).(string)
 	return id
+}
+
+// CallerName is the name of the agent key a request came with (the machine it was placed on), "" for the token or a device.
+func CallerName(ctx context.Context) string {
+	name, _ := ctx.Value(callerKey{}).(string)
+	return name
 }
 
 // Middleware rejects unauthenticated requests; a valid ?token= (the pairing link) signs the browser in and is stripped from the URL.
@@ -131,6 +154,15 @@ func (g *Guard) Middleware(next http.Handler) http.Handler {
 		}
 		who := g.authenticate(r)
 		if who.ok {
+			if who.key != nil {
+				if !who.key.Allows(r.URL.Path) {
+					g.strayedKey(*who.key, r)
+					http.Error(w, "this key is for tasks only", http.StatusForbidden)
+					return
+				}
+				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), callerKey{}, who.key.Name)))
+				return
+			}
 			if who.upgrade && !g.signIn(w, r) {
 				return
 			}
@@ -198,6 +230,16 @@ func (g *Guard) staleCookie(w http.ResponseWriter, r *http.Request) {
 	if _, seen := g.stale.LoadOrStore(id, true); !seen {
 		log.Printf("auth: device %s is no longer signed in (from %s)", id, r.RemoteAddr)
 	}
+}
+
+// strayedKey logs an agent key reaching past its scope, once an hour per key: a misconfigured agent, not a guess at the token.
+func (g *Guard) strayedKey(key Key, r *http.Request) {
+	now := time.Now()
+	if last, seen := g.strayed.Load(key.ID); seen && now.Sub(last.(time.Time)) < time.Hour {
+		return
+	}
+	g.strayed.Store(key.ID, now)
+	log.Printf("auth: the %s key of %s asked for %s; it opens tasks only", key.Scope, key.Name, r.URL.Path)
 }
 
 // refused logs a wrong token with its address and makes the caller wait, so guessing is slow.
