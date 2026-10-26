@@ -87,6 +87,7 @@ type Task struct {
 	Labels      []Label        `json:"labels"`
 	Fields      map[string]any `json:"fields"`     // the project's fields' values, by field id
 	Identifier  string         `json:"identifier"` // "#12"
+	Source      string         `json:"source"`     // "" for a person; an agent's: the key's name and its pane, "GOG · w3:p1"
 	Created     string         `json:"created"`
 	Updated     string         `json:"updated"`
 	Run         *Run           `json:"run,omitempty"`
@@ -290,6 +291,9 @@ CREATE TABLE IF NOT EXISTS task_fields (
 	}
 	// the column came with the workflow; a store from before gets it here
 	if err := st.addColumn("tasks", "status_id", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := st.addColumn("tasks", "source", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	if _, err := st.db.Exec(`CREATE INDEX IF NOT EXISTS tasks_status ON tasks(project_id, status_id, position)`); err != nil {
@@ -968,11 +972,11 @@ func (st *Store) RemoveLabel(taskID, labelID int64) error {
 
 // ---- tasks ----
 
-const taskCols = `id, project_id, status_id, title, description, done, done_at, due_date, priority, position, created, updated`
+const taskCols = `id, project_id, status_id, title, description, done, done_at, due_date, priority, position, created, updated, source`
 
 func scanTask(sc interface{ Scan(...any) error }) (Task, error) {
 	var t Task
-	err := sc.Scan(&t.ID, &t.ProjectID, &t.StatusID, &t.Title, &t.Description, &t.Done, &t.DoneAt, &t.DueDate, &t.Priority, &t.Position, &t.Created, &t.Updated)
+	err := sc.Scan(&t.ID, &t.ProjectID, &t.StatusID, &t.Title, &t.Description, &t.Done, &t.DoneAt, &t.DueDate, &t.Priority, &t.Position, &t.Created, &t.Updated, &t.Source)
 	t.Identifier = fmt.Sprintf("#%d", t.ID)
 	t.Labels = []Label{}
 	t.Fields = map[string]any{}
@@ -1059,7 +1063,13 @@ func (st *Store) fillLabels(tasks []*Task) error {
 }
 
 // Create makes a task in a project: in the column asked for, else the done column for a task born done, else where new tasks land.
+// Create makes a task a person wrote.
 func (st *Store) Create(projectID int64, p Patch) (Task, error) {
+	return st.CreateFrom(projectID, p, "")
+}
+
+// CreateFrom makes a task and notes its source, an agent's name (see Source), which no patch changes later.
+func (st *Store) CreateFrom(projectID int64, p Patch, source string) (Task, error) {
 	project, err := st.Project(projectID)
 	if err != nil {
 		return Task{}, fmt.Errorf("project: %w", err)
@@ -1071,7 +1081,7 @@ func (st *Store) Create(projectID int64, p Patch) (Task, error) {
 	if title == "" {
 		return Task{}, invalid("a task needs a title")
 	}
-	t := Task{ProjectID: projectID, Title: title}
+	t := Task{ProjectID: projectID, Title: title, Source: source}
 	if p.Description != nil {
 		t.Description = *p.Description
 	}
@@ -1111,8 +1121,8 @@ func (st *Store) Create(projectID int64, p Patch) (Task, error) {
 	}
 	defer tx.Rollback()
 	t.Position = bottom(tx, projectID, s.ID)
-	res, err := tx.Exec(`INSERT INTO tasks (project_id, status_id, title, description, done, done_at, due_date, priority, position, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ProjectID, t.StatusID, t.Title, t.Description, t.Done, t.DoneAt, t.DueDate, t.Priority, t.Position, now, now)
+	res, err := tx.Exec(`INSERT INTO tasks (project_id, status_id, title, description, done, done_at, due_date, priority, position, created, updated, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ProjectID, t.StatusID, t.Title, t.Description, t.Done, t.DoneAt, t.DueDate, t.Priority, t.Position, now, now, t.Source)
 	if err != nil {
 		return Task{}, err
 	}

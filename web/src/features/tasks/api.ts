@@ -72,6 +72,7 @@ export type Task = {
   labels: Label[];
   fields: Record<string, FieldValue>; // by field id; no key, no value
   identifier: string; // "#12"
+  source: string; // "" for a person's; an agent's names its key's machine and its pane, "GOG · w3:p1"
   created: string;
   updated: string;
   run?: Run | null; // the latest agent started on it

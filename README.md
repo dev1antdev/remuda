@@ -197,7 +197,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   you — title, text and labels become a task whose first line names the
   issue, so an agent started on it knows where it came from; **Create &
   start an agent…** opens the agent dialog on it at once. Nothing is
-  written to GitHub.
+  written to GitHub. A task an agent made (through its key, see the
+  agents' tools) wears a small robot badge and says which machine and
+  pane it came from; an agent writes its description in Markdown
+  (headings, lists with checkboxes, code, links), rendered as it would
+  be anywhere else.
 
 ## Install & run
 
