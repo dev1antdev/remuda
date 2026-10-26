@@ -170,6 +170,16 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   remuda's alerts receives one push: how many agents finished, how many
   wait for you, what it cost, a line per agent; a tap opens the Standup.
   Quiet hours hold it, and a period with nothing in it sends nothing.
+  **A scout every few hours**: the third kind of schedule, "Start an
+  agent", opens a fresh tab in a folder, starts the agent you name (with
+  a model and arguments if you like) and hands it your prompt once it is
+  up — "look through this project for what could be better and create a
+  task for each" is the one the form suggests; with "Close the tab when
+  the agent has answered" on, the tab goes by itself once the agent is
+  done, a push says what it answered, and the conversation stays
+  readable through the search. A question the agent asks is yours:
+  nothing closes while it waits. For the scout to create tasks, its
+  agent needs remuda's tasks MCP set up (see Tasks below).
 - **Tasks** — the **Agents | Wall | Tasks | Code | Review** switch in the top bar opens remuda's
   own task list: projects on the left, Today / Upcoming / All open, quick
   add, done, due dates, priorities, labels, descriptions, search — and a

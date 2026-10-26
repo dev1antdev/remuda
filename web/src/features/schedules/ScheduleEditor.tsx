@@ -1,23 +1,35 @@
-// The form that makes or edits a schedule: what runs — a prompt to the agent in a workspace folder, or the standup
-// as a digest to the person's devices — when (a preset that writes the cron, or cron by hand), and the kind's own fields.
+// The form that makes or edits a schedule: what runs — a prompt to the agent in a workspace folder, the standup as a
+// digest to the person's devices, or a fresh agent started in a folder with a prompt — when (a preset that writes the
+// cron, or cron by hand), and the kind's own fields.
 
 import { useEffect, useMemo, useState } from "react";
 import type { Machine } from "@/features/roster/api";
 import { connected, folderOptions, machineOptions } from "@/features/roster/options";
-import { Icon, Notice, Select, useSubmit } from "@/ui";
+import { choiceFor, CUSTOM, EMPTY_DRAFT, hasModelFlag, modelChoices, modelOf, modelPlaceholder } from "@/features/roster/startOptions";
+import { useRoster } from "@/features/roster/useRoster";
+import { Icon, Logo, Notice, Select, useSubmit } from "@/ui";
+import { agentSchedule, SCOUT_PROMPT } from "./agent";
 import { putSchedule, type DigestSince, type Schedule, type ScheduleKind } from "./api";
-import { cronFor, DEFAULT_CRON, parseCron, PRESETS } from "./cron";
+import { cronFor, DEFAULT_CRON, minuteOnly, parseCron, PRESETS } from "./cron";
 import { digestSchedule, kindOf, SINCE_OPTIONS } from "./digest";
 
+const OTHER_FOLDER = "\u0000other"; // the folder Select's last row: a path typed by hand
+
 export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines: Machine[]; value: Partial<Schedule>; onClose: () => void; onSaved: () => void }) {
+  const { agents } = useRoster();
   const several = connected(machines).length > 1;
   const [kind, setKind] = useState<ScheduleKind>(kindOf(value));
   const [machine, setMachine] = useState(value.machine ?? connected(machines)[0]?.id ?? "");
   const folders = useMemo(() => folderOptions(machines, machine), [machines, machine]);
   const [dir, setDir] = useState(value.dir ?? "");
+  const [typedDir, setTypedDir] = useState(value.dir && !folders.some((f) => f.value === value.dir) ? value.dir : "");
   const [label, setLabel] = useState(value.label ?? "");
   const [prompt, setPrompt] = useState(value.prompt ?? "");
   const [since, setSince] = useState<DigestSince>(value.since ?? "midnight");
+  const [agent, setAgent] = useState(value.agent ?? (agents.some((a) => a.id === "claude") ? "claude" : (agents[0]?.id ?? "")));
+  const [model, setModel] = useState(() => choiceFor(agent, value.model ?? ""));
+  const [args, setArgs] = useState(value.args ?? "");
+  const [close, setClose] = useState(value.close ?? true);
   const [initial] = useState(() => parseCron(value.cron ?? DEFAULT_CRON));
   const [preset, setPreset] = useState(initial.preset);
   const [hh, setHH] = useState(initial.hh);
@@ -31,16 +43,22 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
     if (written) setCron(written);
   }, [preset, hh, mm]);
   const pad = (n: number) => String(n).padStart(2, "0");
+  const folder = dir === OTHER_FOLDER ? typedDir.trim() : dir;
   const { busy, err, run } = useSubmit(async () => {
     await putSchedule(
       kind === "digest"
         ? digestSchedule({ id: value.id, label, cron, since, enabled: value.enabled })
-        : { id: value.id, kind: "prompt", machine, dir, label, cron, prompt, enabled: value.enabled ?? true },
+        : kind === "agent"
+          ? agentSchedule({ id: value.id, machine, dir: folder, label, cron, prompt, agent, model: modelOf(agent, { ...EMPTY_DRAFT, ...model }), args, close, enabled: value.enabled })
+          : { id: value.id, kind: "prompt", machine, dir: folder, label, cron, prompt, enabled: value.enabled ?? true },
     );
     onSaved();
   });
   const folderIcon = <Icon name="folder" size={14} />;
-  const ready = kind === "digest" ? cron.trim() !== "" : !!dir && prompt.trim() !== "";
+  const folderRows = [...(folders.some((f) => f.value === dir) || !dir || dir === OTHER_FOLDER ? folders : [{ value: dir, label: dir, icon: folderIcon }, ...folders]), { value: OTHER_FOLDER, label: "Another folder…", icon: folderIcon }];
+  const choices = modelChoices(agent);
+  const typedModel = hasModelFlag(agent) && (choices.length === 0 || model.choice === CUSTOM);
+  const ready = kind === "digest" ? cron.trim() !== "" : !!folder && prompt.trim() !== "" && (kind !== "agent" || !!agent);
 
   return (
     <form
@@ -57,8 +75,11 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
         <button type="button" className={kind === "digest" ? "on" : ""} onClick={() => setKind("digest")}>
           <Icon name="sun" size={14} /> Standup digest
         </button>
+        <button type="button" className={kind === "agent" ? "on" : ""} onClick={() => setKind("agent")}>
+          <Icon name="play" size={14} /> Start an agent
+        </button>
       </nav>
-      {kind === "prompt" && (
+      {kind !== "digest" && (
         <div className="schedule-row">
           {several && (
             <label>
@@ -68,7 +89,44 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
           )}
           <label className="grow">
             Folder
-            <Select value={dir} onChange={setDir} placeholder="Pick a workspace" options={folders.some((f) => f.value === dir) || !dir ? folders : [{ value: dir, label: dir, icon: folderIcon }, ...folders]} />
+            <Select value={dir} onChange={setDir} placeholder="Pick a workspace" options={folderRows} />
+          </label>
+          {dir === OTHER_FOLDER && (
+            <label className="grow">
+              Folder path
+              <input value={typedDir} onChange={(e) => setTypedDir(e.target.value)} placeholder="/home/me/project" spellCheck={false} />
+            </label>
+          )}
+        </div>
+      )}
+      {kind === "agent" && (
+        <div className="schedule-row">
+          <label>
+            Agent
+            <Select
+              value={agent}
+              onChange={(next) => {
+                setAgent(next);
+                setModel(choiceFor(next, ""));
+              }}
+              options={agents.map((a) => ({ value: a.id, label: a.label, icon: <Logo agent={a.id} /> }))}
+            />
+          </label>
+          {hasModelFlag(agent) && choices.length > 0 && (
+            <label>
+              Model
+              <Select value={model.choice} onChange={(choice) => setModel({ ...model, choice })} options={choices} />
+            </label>
+          )}
+          {typedModel && (
+            <label>
+              {choices.length > 0 ? "Model id" : "Model"}
+              <input value={model.custom} placeholder={modelPlaceholder(agent)} spellCheck={false} onChange={(e) => setModel({ ...model, custom: e.target.value })} />
+            </label>
+          )}
+          <label className="grow">
+            Extra arguments
+            <input value={args} placeholder="--permission-mode plan" spellCheck={false} onChange={(e) => setArgs(e.target.value)} />
           </label>
         </div>
       )}
@@ -77,7 +135,7 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
           When
           <Select value={preset} onChange={setPreset} options={PRESETS.map((p) => ({ value: p.id, label: p.label }))} />
         </label>
-        {preset !== "hourly" && preset !== "custom" && (
+        {!minuteOnly(preset) && preset !== "custom" && (
           <label>
             At
             <input
@@ -93,7 +151,7 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
             />
           </label>
         )}
-        {preset === "hourly" && (
+        {minuteOnly(preset) && (
           <label>
             Minute
             <input type="number" min={0} max={59} value={mm} onChange={(e) => setMM(Math.max(0, Math.min(59, Number(e.target.value) || 0)))} />
@@ -130,7 +188,7 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
           <span>
             Name <span className="dim">(optional)</span>
           </span>
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Morning status" />
+          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={kind === "agent" ? "Scout" : "Morning status"} />
         </label>
       )}
       {kind === "digest" ? (
@@ -141,8 +199,26 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
       ) : (
         <label>
           Prompt
-          <textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Run the tests and sum up what failed. If everything passes, say so in one line." required />
+          <textarea
+            rows={4}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder={kind === "agent" ? SCOUT_PROMPT : "Run the tests and sum up what failed. If everything passes, say so in one line."}
+            required
+          />
         </label>
+      )}
+      {kind === "agent" && (
+        <>
+          <label className="schedule-check">
+            <input type="checkbox" checked={close} onChange={(e) => setClose(e.target.checked)} />
+            Close the tab when the agent has answered
+          </label>
+          <p className="schedule-note">
+            Each run opens a fresh tab in the folder's workspace (or a workspace on the folder) and hands the agent the prompt once it is up. A question
+            the agent asks is yours to answer: nothing closes while it waits. The conversation stays readable through the search after the tab is gone.
+          </p>
+        </>
       )}
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">

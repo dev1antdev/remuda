@@ -991,7 +991,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`push.Notify`, pref `watchdog`, default on) with a reminder every 30
   min; the notification carries `actions` — Open, and **Send Esc**, which
   the service worker posts to `/api/keys` itself.
-- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — things on a timetable, two **kinds**
+- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — things on a timetable, three **kinds**
   (`Kind`, `prompt` for a record from before the field). A **prompt**
   schedule names a machine and a **folder** (panes come and go; the
   project stays), a five-field cron in the server's local time
@@ -1004,7 +1004,27 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `7d` or `last` (its previous run; `digestSince`, tested) — through the
   `Digest` func `New` takes (`recap.Digest` over `Service.Standup` in
   app.go) as `push.Payload{Kind: "digest", Panel: "standup"}`, "nothing
-  to report" when the period was quiet. `Tick` every 30s fires what
+  to report" when the period was quiet. An **agent** schedule (`agent.go`,
+  tested) starts a fresh agent in a folder with a prompt — the "scout"
+  that looks around a project every few hours and makes tasks: `Agent`,
+  `Model`, `Args` (split by `sessions.SplitArgs`), `Prompt`, `Close`;
+  `checkAgent` refuses a shell, an unknown agent, no prompt, arguments
+  that do not split. Firing goes through `Store.Agents` (`Start`, `Close`,
+  `Answer`, closures the app sets after `New` over
+  `sessions.Launcher`): a new tab of the folder's workspace, else a new
+  workspace on the folder, the agent started with the model and
+  arguments, the prompt handed over in the background (`FirstPrompt`;
+  not delivered → a push), `LastResult` "started in w5:p2". With `Close`
+  on, the place is kept as `LastPane` (`Started`, persisted in
+  `schedules.json` so a restart still watches it) and `Store.OnStatus`
+  hears every `events.PaneStatus`: `done`, or `idle` after the pane was
+  seen `working`, takes the tab down — the workspace when it was made
+  for the run — through `Close`, off the watcher's goroutine, and notes
+  "answered: <first line of the last answer>" plus a push "Scout “…”
+  answered" (the session file stays, so the conversation is still found
+  by the search); `blocked` never closes (the person decides); a pane
+  gone on its own is forgotten; a finish that happened while remuda was
+  down is caught at the pane's next status change. `Tick` every 30s fires what
   matches the minute and has not run this minute. The schedules' pushes
   — a digest, a failed prompt run (`Kind: "schedule"`) — go through
   `push.Service.Broadcast`, every device whatever its watchdog pref: a
@@ -1012,8 +1032,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   routes `GET/PUT /api/schedules`, `DELETE /api/schedules/{id}`, `POST
   /api/schedules/{id}/run`. `features/schedules/Schedules.tsx` is the
   panel behind the calendar button in the sidebar head (`cron.ts` the
-  presets and their parsing, `digest.ts` the periods and words, tested,
-  `ScheduleEditor.tsx` the form with the kind switch at its top).
+  presets and their parsing — "Every 3 hours" among them — `digest.ts`
+  the periods and words, `agent.ts` the scout's suggested prompt and an
+  agent schedule's words, all tested, `ScheduleEditor.tsx` the form with
+  the kind switch at its top: the agent kind takes the machine, the
+  folder — a known workspace or a path typed by hand — the agent, its
+  model and arguments, the prompt and the close switch).
 - `internal/search/` — **full-text search** over every transcript on every
   machine (`GET /api/search?q=&machine=&dir=&days=`; the 🔍 in the
   header, or the last row of the ⌘K palette with what was typed there). No index: `Scan` walks `~/.claude/projects` newest-first,
@@ -1326,7 +1350,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (herdr's `send_keys` grammar), `RefOK` (a branch name git gets as an
   argument), and `Input`: one lock per pane, `Submit` (`agent.prompt`, else
   `send_text` + Enter; `ErrAgentBusy` while a menu is open), `SendKeys`,
-  `SubmitToFolder` (the scheduler's door), and `FirstPrompt` (the text a
+  `SubmitToFolder` (the scheduler's door); `StartIn(client, snap, dir,
+  label, kind, start)` (place.go, tested) starts an agent in a folder —
+  a new tab of the folder's workspace when the snapshot has one, else a
+  new workspace on the folder — and answers a `Place` (pane, tab,
+  workspace, whether the workspace was made), and `Launcher` (`Machines`,
+  `Watch`, `Input`, `Notify`) does that on a machine (`StartInFolder`,
+  the first prompt handed over in the background, a push when it was
+  not delivered) and takes the place down again (`Close`: the workspace
+  it made, else the tab) — the agent schedules' door; and `FirstPrompt` (the text a
   person wrote in the New workspace / tab / worktree dialog for the agent
   they started: `agent.prompt` under the pane's lock every
   `FirstPromptRetry` while the agent is still coming up, until it takes
