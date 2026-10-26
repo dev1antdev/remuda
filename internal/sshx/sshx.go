@@ -191,6 +191,33 @@ func (c *Conn) Put(path string, data []byte, timeout time.Duration) error {
 	return err
 }
 
+// RunWithInput runs a script on the host with data on its stdin: the way for a secret that must not travel on a command line.
+func (c *Conn) RunWithInput(command string, stdin []byte, timeout time.Duration) ([]byte, error) {
+	return c.run(command, timeout, bytes.NewReader(stdin))
+}
+
+// ForwardBack opens 127.0.0.1:remotePort on the host leading to 127.0.0.1:localPort here, for as long as the master
+// lives; a forward of that port left on a reused master is cancelled first, so the new one is not refused as taken.
+func (c *Conn) ForwardBack(remotePort, localPort int) error {
+	c.cmd("-O", "cancel", "-R", forwardBackSpec(remotePort, localPort), c.Host).Run()
+	cmd := c.forwardBackCmd(remotePort, localPort)
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ssh reverse forward: %s", strings.TrimSpace(errb.String()))
+	}
+	return nil
+}
+
+func (c *Conn) forwardBackCmd(remotePort, localPort int) *exec.Cmd {
+	return c.cmd("-O", "forward", "-R", forwardBackSpec(remotePort, localPort), c.Host)
+}
+
+// forwardBackSpec is the -R argument: the host's loopback port leading to this side's loopback port.
+func forwardBackSpec(remotePort, localPort int) string {
+	return fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", remotePort, localPort)
+}
+
 // ForwardSocket forwards a local unix socket to a remote one over the master and returns the local path.
 func (c *Conn) ForwardSocket(remoteSock string) (string, error) {
 	local := tmpPath("remuda-fw-", c.Host+"\x00"+remoteSock, ".sock")

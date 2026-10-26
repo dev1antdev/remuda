@@ -1,10 +1,12 @@
 // The signed-in devices, a section of Settings: each with a name of its own (a click on it edits), what it is and when
-// it was last seen, a Revoke behind a confirm; under the list, every other device signed out at once.
+// it was last seen, a Revoke behind a confirm; under the list, every other device signed out at once, then the
+// agents' keys (AgentKeys.tsx).
 
 import { useState, type KeyboardEvent } from "react";
 import { actions } from "@/app/store";
 import { useQuery } from "@/lib/query";
 import { errMsg, plural } from "@/lib/text";
+import AgentKeys from "./AgentKeys";
 import { fetchDevices, renameDevice, revokeDevice, revokeOtherDevices, type Device } from "./api";
 import { deviceLine, revokeQuestion } from "./devices";
 
@@ -81,6 +83,7 @@ export default function DevicesSection() {
           </button>
         </div>
       )}
+      <AgentKeys />
     </section>
   );
 }

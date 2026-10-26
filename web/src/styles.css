@@ -8060,3 +8060,23 @@ body.popout {
   content-visibility: auto;
   contain-intrinsic-size: auto 300px;
 }
+
+/* ---- the agents' keys at the end of Settings › Devices (features/settings/AgentKeys.tsx): a head row that explains
+   them, then a row per machine shaped like a device's ---- */
+.settings-dialog .keys-head {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.settings-dialog .keys-head > span {
+  font-weight: 600;
+}
+
+.settings-dialog .keys-head > span small {
+  font-weight: 400;
+}
+
+.settings-dialog .key-row .device-head {
+  font-weight: 500;
+}

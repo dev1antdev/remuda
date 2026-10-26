@@ -69,9 +69,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Status*`/`UI*` constants with `UIStatus(status, hasAgent)` as the one
   mapping.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
-  never prompt), with socket forwarding (`-O forward -L`), remote exec, and
-  the `ssh -tt … herdr terminal attach` command builder. remuda implements
-  no SSH itself.
+  never prompt), with socket and port forwarding (`-O forward -L`), the
+  reverse forward of this remuda's port (`ForwardBack`: `-O forward -R
+  127.0.0.1:<remote>:127.0.0.1:<ours>`, a forward of that port left on a
+  reused master cancelled first), remote exec (`RunWithInput` for a secret
+  that must not travel on a command line), and the `ssh -tt … herdr
+  terminal attach` command builder. remuda implements no SSH itself.
 - `internal/machines/` — the multi-PC registry: `manager.go` (the
   registry), `machine.go` (one machine: its state, the ssh master, the
   herdr client and attach manager, the peer, port forwards), `herdr.go`
@@ -90,7 +93,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   back. The sidebar's per-machine ⋯ menu (`MachineMenu`) has Rename, Copy
   SSH host and, for a manually added one, Remove. Each remote connects in the
   background: dial master → one script reads `$HOME` and finds the herdr
-  bin (incl. `~/.local/bin`) → RPC transport → `Ping`. **Two RPC
+  bin (incl. `~/.local/bin`) → RPC transport → `Ping` → **the door**
+  (`door.go`, in a goroutine, once per connection): this remuda's port
+  forwarded back to `DoorPort` 7318 on the machine's loopback and
+  `DoorScript` placing `agent-key` (the machine's tasks-only key, on
+  stdin, never on a command line, kept on the `Machine` so a reconnect
+  places the same one while it still passes) and `agent-url`
+  (`http://127.0.0.1:7318`) in the machine's state dir, 0600 — the files
+  `remuda mcp` and `remuda tasks` read there; `Door{LocalPort, Key}` is
+  the manager's, given by `internal/app`; a sshd that forbids `-R` is a
+  log line, not a failure of the connection. **Two RPC
   transports**: a forwarded unix socket when the sshd allows streamlocal
   forwarding, else one `ssh host nc -U <sock>` exec per request
   (one sshd on :2222 answers "unknown channel type"). Remote
@@ -859,7 +871,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and a palette row: the theme, the text size, the density, the
   monospace font, the panels' widths, the switch that syncs
   those between devices (`internal/prefs`), the sidebar, the way to the
-  alerts and the keys, the version, the signed-in devices);
+  alerts and the keys, the version, the signed-in devices and, under
+  them, the agents' tasks-only keys with a Revoke each);
   one spinner clock for
   the braille frames and the pulsing question). A finished or
   idle row says what the agent answered after its title, in the quiet
@@ -1246,11 +1259,28 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   dropped), `DELETE /api/devices?others=1`. Settings' last section
   (`features/settings/DevicesSection.tsx`, `devices.ts` tested) lists
   them — the name edits in place, Revoke behind a confirm, "Sign out every
-  other device".
+  other device". **Agent keys** (`keys.go`): `Keys` at
+  `<state>/agent-keys.json`, one per machine, named after it (`Mint(name)`
+  replaces the machine's earlier key; only the sha256 is kept; `Check` in
+  constant time, `last_used` bumped at most once a minute); a bearer that
+  reads `rk_…` is a key and `Key.Allows(path)` keeps it to `/api/tasks`
+  and `/api/tasks/…` — anything else is a 403 "this key is for tasks
+  only" at once, logged once an hour per key (`strayedKey`); the key's
+  name is `auth.CallerName(ctx)` in a handler (a task made through one
+  carries it as its source). **The door** (`door.go`): `EnsureDoor(dir,
+  keys, name, url)` keeps the cockpit's own `agent-key` / `agent-url`
+  files (a key of the local machine's label, minted when the file is
+  missing or its key no longer passes; the url `LoopbackURL(-addr)`), the
+  files `remuda mcp` and `remuda tasks` read; a remote machine's are
+  placed by `internal/machines` (`door.go` there). `internal/server/
+  keys.go`: `GET /api/agent-keys` (never the hash or the key), `DELETE
+  /api/agent-keys/{id}` — `/api/keys` itself is the chat's keystroke
+  route; Settings' Devices section ends with the keys
+  (`features/settings/AgentKeys.tsx`, `keys.ts` tested), a Revoke each.
 - `internal/server/` — the HTTP adapter: one file per context (`roster.go`,
   `machines.go`, `sessions.go`, `chat.go`, `files.go`, `push.go`,
   `search.go`, `usage.go`, `quick.go`, `schedule.go`, `review.go`,
-  `code.go`, `update.go`, `tasks.go`, `screen.go`, `question.go`, `devices.go`, `terminal.go` with `termhttp.go` and
+  `code.go`, `update.go`, `tasks.go`, `screen.go`, `question.go`, `devices.go`, `keys.go`, `terminal.go` with `termhttp.go` and
   `peer.go`), each registering its routes in a `…Routes(mux)` that
   `Handler()` calls; a handler reads the request, asks one service and
   writes the answer, and the logic lives in the context packages.
@@ -1472,7 +1502,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   after 500 ms; `REMUDA_TOKEN` must be ≥ 32 characters. A browser's
   cookie holds a device secret of its own, never the token, so one
   device is revoked without rotating the token for every other
-  (`internal/auth`). Session ids from
+  (`internal/auth`). An agent's key (`rk_…`) opens `/api/tasks…` and
+  nothing else — 403 at once past that, logged once an hour — and
+  travels to a remote machine on stdin over the ssh master, never on a
+  command line. Session ids from
   herdr go through `text.SessionID` before naming a file or following
   `--resume` (the pane's own hooks report them: the agent chooses the
   value), and a `path` session must be a `.jsonl` under
