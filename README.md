@@ -437,6 +437,47 @@ cookie is stripped on the way to code-server), but the editor itself is
 as trusted as this page. Open the Code mode only on machines you trust
 with everything remuda can do; see SECURITY.md.
 
+## Agents and your tasks
+
+Any coding agent remuda runs — Claude Code, Codex, Gemini CLI, Kimi Code —
+can read and write your task list through **MCP**: `remuda mcp` is a Model
+Context Protocol server over stdio with seven tools — `tasks_list`,
+`task_get`, `task_create` (a Markdown description, a column, a due date, a
+priority, labels, the project's fields), `task_update` (move it to another
+column, mark it done, retitle, rewrite), `task_comment`, `projects_list` and
+`labels_list` — and it tells the agent when to use which. A task an agent
+makes remembers the pane that made it. One command registers the server with
+every agent on a machine, through the agent's own CLI (`claude mcp add`,
+`codex mcp add`, `gemini mcp add`; Kimi when its CLI can):
+
+    remuda mcp install            # on this machine
+    remuda mcp install -host gog  # on a remote, over ssh
+    remuda mcp status
+
+or the row **Connect the agents to your tasks** under a machine's ⓘ →
+Updates. An agent already running sees the tools once it is restarted. From
+a shell, `remuda tasks list | show | add | move | comment` is the same thing
+(`-json` for scripts). With that, a schedule such as *"every three hours:
+look through this project for what could be improved and create a task for
+each, with a description"* turns an agent into a scout that fills the board
+while you are away.
+
+How the agents get in: the remuda that holds the list leaves an `agent-key`
+and an `agent-url` in remuda's state dir on every machine its agents run on;
+the key opens the tasks routes and nothing else, on the cockpit itself or
+through its door forwarded over ssh (`REMUDA_AGENT_URL` and
+`REMUDA_AGENT_KEY` override them, for a script of your own). An agent whose
+CLI cannot register a server gets the lines by hand — Claude Code's
+`.mcp.json`:
+
+    { "mcpServers": { "remuda": { "command": "/Users/you/.local/bin/remuda", "args": ["mcp"] } } }
+
+Codex's `~/.codex/config.toml`:
+
+    [mcp_servers.remuda]
+    command = "/Users/you/.local/bin/remuda"
+    args = ["mcp"]
+
 ## From your phone
 
 The simplest way: let remuda join your tailnet by itself.

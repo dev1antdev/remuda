@@ -21,9 +21,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `-tailscale-hostname`, `-no-version-check`, `-code-port`; subcommands
   `search` and `usage` for the deployed binary on a remote machine, and
   `setup`, `uninstall` and `code` (see "Installing and uninstalling"
-  below); `remuda -h` lists them (`help` in main.go). `main.go` parses the
-  flags and hands `app.Options` to `internal/app`; the subcommands are
-  `commands.go`.
+  below), `mcp` and `tasks` (the agents' door to the task list, see
+  `internal/mcp`); `remuda -h` lists them (`help` in main.go). `main.go`
+  parses the flags and hands `app.Options` to `internal/app`; the
+  subcommands are `commands.go`, with `mcp.go` and `tasks.go` for those two.
 - `internal/app/` — the composition root: `Run(ctx, Options)` builds every
   service, lists who hears which event (the one place the subscriptions
   live), starts the loops and serves. Nothing here does work of its own.
@@ -254,7 +255,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `release.go`: the newest release with its assets (`Collector.Release`).
   **`internal/updates`** turns all of that into what the page offers:
   `Plan(what, report)` / `Offered(report, latest)` are the commands for
-  herdr and the agents, `ReleaseUpdate(have, os, arch, rel, local)` offers
+  herdr and the agents (and `what = mcp`, "Connect the agents to your
+  tasks": `remuda mcp install` on every machine with a remuda, see
+  `internal/mcp`), `ReleaseUpdate(have, os, arch, rel, local)` offers
   `what = remuda-release` ("Download & install remuda vX") when the
   release's x.y.z is newer than the machine's (a build past a tag,
   `v0.4.0-24-g…`, is 0.4.0) and it has `remuda-<os>-<arch>` for the
@@ -315,7 +318,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   server stop` stops the user's real server (it happened). The env var is
   what `herdr server`, `status server` and `server stop` all honour;
   `internal/herdr/server_test.go` is the pattern.
-- **Installing and uninstalling need no checkout** (`internal/setup`: five
+- **Installing and uninstalling need no checkout** (`internal/setup`: six
   embedded POSIX scripts, and `setup_test.go` drives them in a temp HOME
   with stand-ins for launchctl, systemctl, herdr, brew and ssh first on
   PATH — never against the real machine). `install.sh` is the one line
@@ -1225,6 +1228,39 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `gone`. `comments` are markdown, a path in one opening on the run's
   machine relative to its worktree; the UI re-reads an open task every
   10 s while a run is live.
+- `internal/mcp/` + `internal/tasksapi/` — **the agents and the tasks**.
+  `remuda mcp` is a Model Context Protocol server over stdio
+  (`mcp.Server`: hand-written JSON-RPC 2.0, one message a line, no
+  dependency — `initialize` answers the client's protocol version when
+  it is a known one, else `Version`; `tools/list`, `tools/call`, `ping`;
+  empty resources and prompts; an unknown method is -32601, a bad line
+  -32700, and a notification gets no answer). Its tools (`mcp.Tools`,
+  tested on a fake list: `tasks_list`, `task_get`, `task_create`,
+  `task_update`, `task_comment`, `projects_list`, `labels_list`, each
+  answering Markdown an agent reads; the `initialize` answer carries
+  `instructions` saying when to use which) name a project or a column
+  case-folded, read a due date `YYYY-MM-DD` as the end of that day here,
+  send a Markdown description as `markdown` with a paragraphs-only
+  `description` beside it for a list without the renderer, mark a task
+  with the agent's `HERDR_PANE_ID` as `source`, and make a label that is
+  missing. They speak through `tasksapi.Client` (the tasks routes with
+  `Authorization: Bearer <key>`, a refusal as `*tasksapi.Error`, tested
+  on `httptest`) found by `tasksapi.FindDoor()`: `REMUDA_AGENT_URL` /
+  `REMUDA_AGENT_KEY`, else the state dir's `agent-url` and `agent-key`
+  files the remuda holding the list leaves on every machine its agents
+  run on (`http://127.0.0.1:7317` on the cockpit, its door forwarded
+  over ssh on a remote); without a door the server still answers, every
+  tool saying why (`Tools.Trouble`), so the agent can tell the person.
+  `remuda tasks list|show|add|move|comment` is the same from a shell
+  (`cmd/remuda/tasks.go`; `-json` is the list's own answer). `remuda mcp
+  install|status|uninstall [-host H]` (`setup.MCP`, `install-mcp.sh`,
+  tested on stand-ins) registers the server through each agent's own
+  command — `claude mcp add --scope user`, `codex mcp add`, `gemini mcp
+  add -s user`, Kimi when its CLI has `mcp` — with remuda's absolute
+  path, removed first so it can run again; the Updates panel offers it as
+  `what = mcp` on every machine with a remuda. Never run the install
+  against the person's real agents from a test: `setup_test.go`'s
+  stand-ins are the pattern.
 - `internal/auth/` — single bearer token, no accounts. **The token never
   lives in a cookie**: a sign-in (the `?token=` pairing link or the login
   form) mints a **device** (`devices.go`: `Devices` at

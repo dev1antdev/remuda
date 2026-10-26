@@ -18,13 +18,16 @@ import (
 	"github.com/dev1antdev/remuda/internal/usage"
 )
 
-// commands are the subcommands beside the server: setup, uninstall and code for people, search and usage for a remuda on a remote machine.
+// commands are the subcommands beside the server: setup, uninstall and code for people, search and usage for a remuda on a
+// remote machine, mcp and tasks for the coding agents (and a person at a shell) to reach the task list.
 var commands = map[string]func(args []string){
 	"setup":     setupCmd,
 	"uninstall": uninstallCmd,
 	"code":      codeCmd,
 	"search":    searchCmd,
 	"usage":     usageCmd,
+	"mcp":       mcpCmd,
+	"tasks":     tasksCmd,
 }
 
 // searchCmd is the scanner a remote machine's remuda runs for the search lens.

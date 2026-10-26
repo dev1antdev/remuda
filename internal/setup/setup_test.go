@@ -17,7 +17,7 @@ import (
 )
 
 func TestScriptsParse(t *testing.T) {
-	for name, script := range map[string]string{"setup": setupScript, "install-service": serviceScript, "install": installScript, "uninstall": uninstallScript, "install-code": codeScript} {
+	for name, script := range map[string]string{"setup": setupScript, "install-service": serviceScript, "install": installScript, "uninstall": uninstallScript, "install-code": codeScript, "install-mcp": mcpScript} {
 		cmd := exec.Command("sh", "-n")
 		cmd.Stdin = strings.NewReader(script)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -510,5 +510,86 @@ func TestARemudaStartedByHandStopsWhenHerdrGoes(t *testing.T) {
 func TestCodeVersionMatchesTheScript(t *testing.T) {
 	if !strings.Contains(codeScript, `CODE_VERSION:-`+CodeVersion+`}`) {
 		t.Fatalf("install-code.sh does not default to code-server %s", CodeVersion)
+	}
+}
+
+// --- the agents' MCP registration ---
+
+// agents lays a home out with stand-ins for the agents' commands, each recording its arguments; kimi's has no mcp subcommand.
+// The script puts Homebrew's bin on PATH by itself, where the real codex lives: every agent name is shadowed by a stand-in
+// in the home's bin, which comes first, and the rest of PATH is the bare system, so nothing real is ever asked to register.
+func agents(t *testing.T, withRemuda bool) (string, func() string) {
+	t.Helper()
+	dir := home(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+	bin := filepath.Join(dir, ".local", "bin")
+	record := "#!/bin/sh\necho \"$(basename \"$0\") $*\" >> \"$HOME/calls.log\"\n"
+	for _, name := range []string{"claude", "codex", "gemini"} {
+		write(t, filepath.Join(bin, name), record+`case "$1 $2" in "mcp list") echo "remuda: $HOME/.local/bin/remuda mcp" ;; esac`+"\n", 0o755)
+	}
+	write(t, filepath.Join(bin, "kimi"), record+"[ \"$1\" = mcp ] && exit 1\nexit 0\n", 0o755)
+	if withRemuda {
+		write(t, filepath.Join(bin, "remuda"), fakeBinary, 0o755)
+	}
+	for _, name := range []string{"claude", "codex", "gemini", "kimi"} {
+		out, err := exec.Command("sh", "-c", `PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; command -v "$1"`, "sh", name).Output()
+		if got := strings.TrimSpace(string(out)); err != nil || got != filepath.Join(bin, name) {
+			t.Fatalf("%s resolves to %q, not to its stand-in: the real agent would be asked to register", name, got)
+		}
+	}
+	return dir, func() string {
+		b, _ := os.ReadFile(filepath.Join(dir, "calls.log"))
+		return string(b)
+	}
+}
+
+func TestMCPInstallRegistersThroughEachAgentsOwnCommand(t *testing.T) {
+	dir, calls := agents(t, true)
+	var out strings.Builder
+	if err := MCP("", "install", &out); err != nil {
+		t.Fatalf("install: %v\n%s", err, out.String())
+	}
+	remuda := filepath.Join(dir, ".local", "bin", "remuda")
+	for _, want := range []string{
+		"claude mcp remove -s user remuda\n",
+		"claude mcp add --scope user remuda -- " + remuda + " mcp\n",
+		"codex mcp remove remuda\n",
+		"codex mcp add remuda -- " + remuda + " mcp\n",
+		"gemini mcp remove -s user remuda\n",
+		"gemini mcp add -s user remuda " + remuda + " mcp\n",
+	} {
+		if !strings.Contains(calls(), want) {
+			t.Errorf("missing call %q in:\n%s", want, calls())
+		}
+	}
+	if strings.Contains(calls(), "kimi mcp add") {
+		t.Errorf("kimi has no mcp command and was still asked:\n%s", calls())
+	}
+	for _, line := range []string{"claude: registered (" + remuda + " mcp)", "codex: registered", "gemini: registered", "kimi: its command has no mcp subcommand"} {
+		if !strings.Contains(out.String(), line) {
+			t.Errorf("the install did not say %q:\n%s", line, out.String())
+		}
+	}
+	out.Reset()
+	if err := MCP("", "status", &out); err != nil || !strings.Contains(out.String(), "claude: registered") || !strings.Contains(out.String(), "codex: registered") {
+		t.Errorf("status: %v\n%s", err, out.String())
+	}
+	out.Reset()
+	if err := MCP("", "uninstall", &out); err != nil || !strings.Contains(out.String(), "gemini: the server is removed") {
+		t.Errorf("uninstall: %v\n%s", err, out.String())
+	}
+	if MCP("", "dance", &out) == nil {
+		t.Error("an unknown action was accepted")
+	}
+}
+
+func TestMCPInstallWithoutRemudaStopsBeforeAnyAgent(t *testing.T) {
+	_, calls := agents(t, false)
+	var out strings.Builder
+	if err := MCP("", "install", &out); err == nil || !strings.Contains(out.String(), "remuda is not installed here") {
+		t.Errorf("without the binary: %v\n%s", err, out.String())
+	}
+	if calls() != "" {
+		t.Errorf("an agent was asked without a remuda to register:\n%s", calls())
 	}
 }
