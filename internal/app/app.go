@@ -76,8 +76,25 @@ func Run(ctx context.Context, o Options) error {
 	}
 
 	bus := events.NewBus()
-	fleet := machines.NewManager(o.Dir, o.Socket, bin)
+	keys, err := auth.OpenKeys(o.Dir)
+	if err != nil {
+		return err
+	}
+	// the door: every machine's agents reach the task list here with a tasks-only key, the machine's own when it still passes
+	door := &machines.Door{LocalPort: auth.PortOf(o.Addr), Key: func(name, have string) (string, error) {
+		if _, ok := keys.Check(have); ok {
+			return have, nil
+		}
+		key, _, err := keys.Mint(name)
+		return key, err
+	}}
+	fleet := machines.NewManager(o.Dir, o.Socket, bin, door)
 	defer fleet.Close()
+	if local, err := fleet.Get(machines.LocalID); err == nil {
+		if err := auth.EnsureDoor(o.Dir, keys, local.Label(), auth.LoopbackURL(o.Addr)); err != nil {
+			log.Printf("WARNING: %v; the agents on this machine cannot reach the tasks", err)
+		}
+	}
 	pushSvc, err := push.New(o.Dir)
 	if err != nil {
 		return fmt.Errorf("push: %w", err)
@@ -250,7 +267,8 @@ func Run(ctx context.Context, o Options) error {
 		Quick:     quick.New(o.Dir),
 		Prefs:     prefs.New(o.Dir),
 		Code:      code.New(o.CodePort),
-		Guard:     auth.NewGuard(o.Token, devices),
+		Guard:     auth.NewGuard(o.Token, devices, keys),
+		Keys:      keys,
 		UI:        ui,
 		Live:      hub,
 	}

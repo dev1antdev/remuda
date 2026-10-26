@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"github.com/dev1antdev/remuda/internal/auth"
 	"net/http"
 	"strconv"
 	"time"
@@ -106,13 +107,16 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/tasks", s.handleTaskList)
 	api.HandleFunc("POST /api/tasks", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			ProjectID int64 `json:"project_id"`
+			ProjectID int64  `json:"project_id"`
+			Markdown  string `json:"markdown"` // the description as Markdown, when no HTML description comes
+			Source    string `json:"source"`   // what an agent says of itself (its pane); a person's is ignored
 			tasks.Patch
 		}
 		if !decode(w, r, &req) {
 			return
 		}
-		t, err := s.Tasks.Create(req.ProjectID, req.Patch)
+		withMarkdown(&req.Patch, req.Markdown)
+		t, err := s.Tasks.CreateFrom(req.ProjectID, req.Patch, tasks.Source(auth.CallerName(r.Context()), req.Source))
 		s.taskReply(w, t, err)
 	})
 	api.HandleFunc("GET /api/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -126,11 +130,15 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 		if !ok {
 			return
 		}
-		var p tasks.Patch
-		if !decode(w, r, &p) {
+		var req struct {
+			Markdown string `json:"markdown"`
+			tasks.Patch
+		}
+		if !decode(w, r, &req) {
 			return
 		}
-		t, err := s.Tasks.Update(id, p)
+		withMarkdown(&req.Patch, req.Markdown)
+		t, err := s.Tasks.Update(id, req.Patch)
 		s.taskReply(w, t, err)
 	})
 	api.HandleFunc("DELETE /api/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -150,7 +158,11 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 		if !decode(w, r, &req) {
 			return
 		}
-		c, err := s.Tasks.AddComment(id, "you", req.Body)
+		author := "you"
+		if auth.CallerName(r.Context()) != "" {
+			author = "agent"
+		}
+		c, err := s.Tasks.AddComment(id, author, req.Body)
 		s.taskReply(w, c, err)
 	})
 	api.HandleFunc("DELETE /api/tasks/comments/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -308,4 +320,13 @@ func (s *Server) handleTaskImport(w http.ResponseWriter, r *http.Request) {
 	}
 	task, err := tasks.ImportIssue(s.Tasks, req.ProjectID, issue)
 	s.taskReply(w, task, err)
+}
+
+// withMarkdown puts a Markdown description on a patch as the HTML the page renders, unless an HTML description came too.
+func withMarkdown(p *tasks.Patch, markdown string) {
+	if markdown == "" || p.Description != nil {
+		return
+	}
+	description := tasks.MarkdownHTML(markdown)
+	p.Description = &description
 }
