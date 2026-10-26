@@ -52,6 +52,7 @@ func (f *fakeList) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for k, v := range body {
 			task[k] = v
 		}
+		renderMarkdown(task)
 		if body["status_id"] == nil {
 			task["status_id"] = float64(10)
 		}
@@ -75,6 +76,7 @@ func (f *fakeList) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					for k, v := range body {
 						t[k] = v
 					}
+					renderMarkdown(t)
 				}
 				json.NewEncoder(w).Encode(t)
 				return
@@ -218,4 +220,17 @@ func TestRefusalsAndUnknowns(t *testing.T) {
 	if answers[6]["result"].(map[string]any)["protocolVersion"] != Version {
 		t.Errorf("an unknown protocol version gets ours: %v", answers[6])
 	}
+}
+
+// renderMarkdown does what the server does with a markdown field: the description becomes paragraphs of it.
+func renderMarkdown(task map[string]any) {
+	md, _ := task["markdown"].(string)
+	if md == "" {
+		return
+	}
+	var html string
+	for _, para := range strings.Split(strings.TrimSpace(md), "\n\n") {
+		html += "<p>" + strings.ReplaceAll(strings.TrimSpace(para), "\n", "<br>") + "</p>"
+	}
+	task["description"] = html
 }
