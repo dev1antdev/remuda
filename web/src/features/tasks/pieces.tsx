@@ -1,7 +1,7 @@
 // The small pieces a task is drawn with: its chips, a project or status as a Select option, the priority's mark, a due-date field.
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { Icon, Logo } from "@/ui";
+import { Icon, Logo, Tip } from "@/ui";
 import { PRIORITIES, type Field, type Label, type Project, type Status, type Task } from "./api";
 import { FieldChip } from "./fields";
 import { dueLabel, toLocalInput } from "./prompt";
@@ -38,6 +38,13 @@ export function TaskChips({ task: t, project, status, fields }: { task: Task; pr
       {(fields ?? []).filter((f) => f.on_card).map((f) => (
         <FieldChip key={f.id} field={f} value={t.fields?.[String(f.id)]} />
       ))}
+      {t.source && (
+        <Tip text={`Made by an agent on ${t.source}`}>
+          <span className="badge quiet task-source" aria-label={`Made by an agent on ${t.source}`}>
+            <Icon name="bot" size={12} />
+          </span>
+        </Tip>
+      )}
       {t.run && t.run.state !== "gone" && t.run.state !== "failed" && (
         <span className={`tasks-row-run is-${t.run.state}`} title={`${t.run.agent} on ${t.run.branch}: ${t.run.state}`}>
           <Logo agent={t.run.agent} />

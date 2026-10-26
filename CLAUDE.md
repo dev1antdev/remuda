@@ -1206,7 +1206,21 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   prompt's text carries the address once; the body's paragraphs
   escaped, a fenced block as `<pre>`), GitHub's labels matched to the
   store's by name and made with GitHub's colour when missing; the same
-  issue twice in one project is refused. `POST /api/tasks/import
+  issue twice in one project is refused. **A task an agent made** says so:
+  `Task.Source` (`source` column, "" for a person) is set once on create —
+  `tasks.Source(auth.CallerName(ctx), body.source)`, the agent key's name
+  (the machine it sits on) and what the caller said of itself (its pane),
+  "GOG · w3:p1" — and no patch changes it; a key caller's comment is by
+  "agent". `POST /api/tasks` and `PATCH /api/tasks/{id}` take `markdown`
+  beside `description` (`withMarkdown`: the HTML wins when both come):
+  `tasks.MarkdownHTML` (markdown.go, tested) draws the allow-listed
+  HTML the page renders — paragraphs with line breaks, `#`–`####`
+  headings, lists one level deep with `- [ ]` items as checkboxes,
+  fenced and inline code, bold, italic, http links and bare addresses,
+  rules and quotes, everything escaped, `MaxMarkdown` 64 KB. On the
+  page a `.task-source` badge (the `bot` icon, the source in its Tip) in
+  the list rows and the board cards, "by <source>" in the detail head;
+  `.tasks-html` has styles for headings, quotes and rules. `POST /api/tasks/import
   {machine, project_id, url}`; the page: `ImportIssueDialog.tsx` (dialog
   kind `import-issue`, the link button in the Tasks head and the
   palette's "New task from a GitHub issue…"; Create, or Create & start an
