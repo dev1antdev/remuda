@@ -70,9 +70,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Status*`/`UI*` constants with `UIStatus(status, hasAgent)` as the one
   mapping.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
-  never prompt), with socket forwarding (`-O forward -L`), remote exec, and
-  the `ssh -tt … herdr terminal attach` command builder. remuda implements
-  no SSH itself.
+  never prompt), with socket and port forwarding (`-O forward -L`), the
+  reverse forward of this remuda's port (`ForwardBack`: `-O forward -R
+  127.0.0.1:<remote>:127.0.0.1:<ours>`, a forward of that port left on a
+  reused master cancelled first), remote exec (`RunWithInput` for a secret
+  that must not travel on a command line), and the `ssh -tt … herdr
+  terminal attach` command builder. remuda implements no SSH itself.
 - `internal/machines/` — the multi-PC registry: `manager.go` (the
   registry), `machine.go` (one machine: its state, the ssh master, the
   herdr client and attach manager, the peer, port forwards), `herdr.go`
@@ -91,7 +94,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   back. The sidebar's per-machine ⋯ menu (`MachineMenu`) has Rename, Copy
   SSH host and, for a manually added one, Remove. Each remote connects in the
   background: dial master → one script reads `$HOME` and finds the herdr
-  bin (incl. `~/.local/bin`) → RPC transport → `Ping`. **Two RPC
+  bin (incl. `~/.local/bin`) → RPC transport → `Ping` → **the door**
+  (`door.go`, in a goroutine, once per connection): this remuda's port
+  forwarded back to `DoorPort` 7318 on the machine's loopback and
+  `DoorScript` placing `agent-key` (the machine's tasks-only key, on
+  stdin, never on a command line, kept on the `Machine` so a reconnect
+  places the same one while it still passes) and `agent-url`
+  (`http://127.0.0.1:7318`) in the machine's state dir, 0600 — the files
+  `remuda mcp` and `remuda tasks` read there; `Door{LocalPort, Key}` is
+  the manager's, given by `internal/app`; a sshd that forbids `-R` is a
+  log line, not a failure of the connection. **Two RPC
   transports**: a forwarded unix socket when the sshd allows streamlocal
   forwarding, else one `ssh host nc -U <sock>` exec per request
   (one sshd on :2222 answers "unknown channel type"). Remote
@@ -862,7 +874,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and a palette row: the theme, the text size, the density, the
   monospace font, the panels' widths, the switch that syncs
   those between devices (`internal/prefs`), the sidebar, the way to the
-  alerts and the keys, the version, the signed-in devices);
+  alerts and the keys, the version, the signed-in devices and, under
+  them, the agents' tasks-only keys with a Revoke each);
   one spinner clock for
   the braille frames and the pulsing question). A finished or
   idle row says what the agent answered after its title, in the quiet
@@ -981,7 +994,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`push.Notify`, pref `watchdog`, default on) with a reminder every 30
   min; the notification carries `actions` — Open, and **Send Esc**, which
   the service worker posts to `/api/keys` itself.
-- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — things on a timetable, two **kinds**
+- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — things on a timetable, three **kinds**
   (`Kind`, `prompt` for a record from before the field). A **prompt**
   schedule names a machine and a **folder** (panes come and go; the
   project stays), a five-field cron in the server's local time
@@ -994,7 +1007,27 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `7d` or `last` (its previous run; `digestSince`, tested) — through the
   `Digest` func `New` takes (`recap.Digest` over `Service.Standup` in
   app.go) as `push.Payload{Kind: "digest", Panel: "standup"}`, "nothing
-  to report" when the period was quiet. `Tick` every 30s fires what
+  to report" when the period was quiet. An **agent** schedule (`agent.go`,
+  tested) starts a fresh agent in a folder with a prompt — the "scout"
+  that looks around a project every few hours and makes tasks: `Agent`,
+  `Model`, `Args` (split by `sessions.SplitArgs`), `Prompt`, `Close`;
+  `checkAgent` refuses a shell, an unknown agent, no prompt, arguments
+  that do not split. Firing goes through `Store.Agents` (`Start`, `Close`,
+  `Answer`, closures the app sets after `New` over
+  `sessions.Launcher`): a new tab of the folder's workspace, else a new
+  workspace on the folder, the agent started with the model and
+  arguments, the prompt handed over in the background (`FirstPrompt`;
+  not delivered → a push), `LastResult` "started in w5:p2". With `Close`
+  on, the place is kept as `LastPane` (`Started`, persisted in
+  `schedules.json` so a restart still watches it) and `Store.OnStatus`
+  hears every `events.PaneStatus`: `done`, or `idle` after the pane was
+  seen `working`, takes the tab down — the workspace when it was made
+  for the run — through `Close`, off the watcher's goroutine, and notes
+  "answered: <first line of the last answer>" plus a push "Scout “…”
+  answered" (the session file stays, so the conversation is still found
+  by the search); `blocked` never closes (the person decides); a pane
+  gone on its own is forgotten; a finish that happened while remuda was
+  down is caught at the pane's next status change. `Tick` every 30s fires what
   matches the minute and has not run this minute. The schedules' pushes
   — a digest, a failed prompt run (`Kind: "schedule"`) — go through
   `push.Service.Broadcast`, every device whatever its watchdog pref: a
@@ -1002,8 +1035,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   routes `GET/PUT /api/schedules`, `DELETE /api/schedules/{id}`, `POST
   /api/schedules/{id}/run`. `features/schedules/Schedules.tsx` is the
   panel behind the calendar button in the sidebar head (`cron.ts` the
-  presets and their parsing, `digest.ts` the periods and words, tested,
-  `ScheduleEditor.tsx` the form with the kind switch at its top).
+  presets and their parsing — "Every 3 hours" among them — `digest.ts`
+  the periods and words, `agent.ts` the scout's suggested prompt and an
+  agent schedule's words, all tested, `ScheduleEditor.tsx` the form with
+  the kind switch at its top: the agent kind takes the machine, the
+  folder — a known workspace or a path typed by hand — the agent, its
+  model and arguments, the prompt and the close switch).
 - `internal/search/` — **full-text search** over every transcript on every
   machine (`GET /api/search?q=&machine=&dir=&days=`; the 🔍 in the
   header, or the last row of the ⌘K palette with what was typed there). No index: `Scan` walks `~/.claude/projects` newest-first,
@@ -1196,7 +1233,21 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   prompt's text carries the address once; the body's paragraphs
   escaped, a fenced block as `<pre>`), GitHub's labels matched to the
   store's by name and made with GitHub's colour when missing; the same
-  issue twice in one project is refused. `POST /api/tasks/import
+  issue twice in one project is refused. **A task an agent made** says so:
+  `Task.Source` (`source` column, "" for a person) is set once on create —
+  `tasks.Source(auth.CallerName(ctx), body.source)`, the agent key's name
+  (the machine it sits on) and what the caller said of itself (its pane),
+  "GOG · w3:p1" — and no patch changes it; a key caller's comment is by
+  "agent". `POST /api/tasks` and `PATCH /api/tasks/{id}` take `markdown`
+  beside `description` (`withMarkdown`: the HTML wins when both come):
+  `tasks.MarkdownHTML` (markdown.go, tested) draws the allow-listed
+  HTML the page renders — paragraphs with line breaks, `#`–`####`
+  headings, lists one level deep with `- [ ]` items as checkboxes,
+  fenced and inline code, bold, italic, http links and bare addresses,
+  rules and quotes, everything escaped, `MaxMarkdown` 64 KB. On the
+  page a `.task-source` badge (the `bot` icon, the source in its Tip) in
+  the list rows and the board cards, "by <source>" in the detail head;
+  `.tasks-html` has styles for headings, quotes and rules. `POST /api/tasks/import
   {machine, project_id, url}`; the page: `ImportIssueDialog.tsx` (dialog
   kind `import-issue`, the link button in the Tasks head and the
   palette's "New task from a GitHub issue…"; Create, or Create & start an
@@ -1282,11 +1333,28 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   dropped), `DELETE /api/devices?others=1`. Settings' last section
   (`features/settings/DevicesSection.tsx`, `devices.ts` tested) lists
   them — the name edits in place, Revoke behind a confirm, "Sign out every
-  other device".
+  other device". **Agent keys** (`keys.go`): `Keys` at
+  `<state>/agent-keys.json`, one per machine, named after it (`Mint(name)`
+  replaces the machine's earlier key; only the sha256 is kept; `Check` in
+  constant time, `last_used` bumped at most once a minute); a bearer that
+  reads `rk_…` is a key and `Key.Allows(path)` keeps it to `/api/tasks`
+  and `/api/tasks/…` — anything else is a 403 "this key is for tasks
+  only" at once, logged once an hour per key (`strayedKey`); the key's
+  name is `auth.CallerName(ctx)` in a handler (a task made through one
+  carries it as its source). **The door** (`door.go`): `EnsureDoor(dir,
+  keys, name, url)` keeps the cockpit's own `agent-key` / `agent-url`
+  files (a key of the local machine's label, minted when the file is
+  missing or its key no longer passes; the url `LoopbackURL(-addr)`), the
+  files `remuda mcp` and `remuda tasks` read; a remote machine's are
+  placed by `internal/machines` (`door.go` there). `internal/server/
+  keys.go`: `GET /api/agent-keys` (never the hash or the key), `DELETE
+  /api/agent-keys/{id}` — `/api/keys` itself is the chat's keystroke
+  route; Settings' Devices section ends with the keys
+  (`features/settings/AgentKeys.tsx`, `keys.ts` tested), a Revoke each.
 - `internal/server/` — the HTTP adapter: one file per context (`roster.go`,
   `machines.go`, `sessions.go`, `chat.go`, `files.go`, `push.go`,
   `search.go`, `usage.go`, `quick.go`, `schedule.go`, `review.go`,
-  `code.go`, `update.go`, `tasks.go`, `screen.go`, `question.go`, `devices.go`, `terminal.go` with `termhttp.go` and
+  `code.go`, `update.go`, `tasks.go`, `screen.go`, `question.go`, `devices.go`, `keys.go`, `terminal.go` with `termhttp.go` and
   `peer.go`), each registering its routes in a `…Routes(mux)` that
   `Handler()` calls; a handler reads the request, asks one service and
   writes the answer, and the logic lives in the context packages.
@@ -1318,7 +1386,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (herdr's `send_keys` grammar), `RefOK` (a branch name git gets as an
   argument), and `Input`: one lock per pane, `Submit` (`agent.prompt`, else
   `send_text` + Enter; `ErrAgentBusy` while a menu is open), `SendKeys`,
-  `SubmitToFolder` (the scheduler's door), and `FirstPrompt` (the text a
+  `SubmitToFolder` (the scheduler's door); `StartIn(client, snap, dir,
+  label, kind, start)` (place.go, tested) starts an agent in a folder —
+  a new tab of the folder's workspace when the snapshot has one, else a
+  new workspace on the folder — and answers a `Place` (pane, tab,
+  workspace, whether the workspace was made), and `Launcher` (`Machines`,
+  `Watch`, `Input`, `Notify`) does that on a machine (`StartInFolder`,
+  the first prompt handed over in the background, a push when it was
+  not delivered) and takes the place down again (`Close`: the workspace
+  it made, else the tab) — the agent schedules' door; and `FirstPrompt` (the text a
   person wrote in the New workspace / tab / worktree dialog for the agent
   they started: `agent.prompt` under the pane's lock every
   `FirstPromptRetry` while the agent is still coming up, until it takes
@@ -1508,7 +1584,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   after 500 ms; `REMUDA_TOKEN` must be ≥ 32 characters. A browser's
   cookie holds a device secret of its own, never the token, so one
   device is revoked without rotating the token for every other
-  (`internal/auth`). Session ids from
+  (`internal/auth`). An agent's key (`rk_…`) opens `/api/tasks…` and
+  nothing else — 403 at once past that, logged once an hour — and
+  travels to a remote machine on stdin over the ssh master, never on a
+  command line. Session ids from
   herdr go through `text.SessionID` before naming a file or following
   `--resume` (the pane's own hooks report them: the agent chooses the
   value), and a `path` session must be a `.jsonl` under

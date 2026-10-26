@@ -73,6 +73,11 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
           aria-label={t.done ? "Mark undone" : "Mark done"}
         />
         <span className="tasks-ident">{t.identifier}</span>
+        {t.source && (
+          <span className="tasks-source" title={`Made by an agent on ${t.source}`}>
+            <Icon name="bot" size={12} /> by {t.source}
+          </span>
+        )}
         {issue && (
           <button type="button" className="linkish tasks-issue" title={issue} onClick={() => openUrl(issue)}>
             {issueLabel(issue)} <Icon name="external-link" size={12} />

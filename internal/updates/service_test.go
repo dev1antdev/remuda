@@ -17,7 +17,7 @@ import (
 // TestStartRefusesWhatItCannotRun covers the refusals, each before any job starts: nothing here reaches a shell.
 func TestStartRefusesWhatItCannotRun(t *testing.T) {
 	bus := events.NewBus()
-	fleet := machines.NewManager(t.TempDir(), "/nonexistent/herdr.sock", "herdr")
+	fleet := machines.NewManager(t.TempDir(), "/nonexistent/herdr.sock", "herdr", nil)
 	service := &Service{Health: health.New(fleet, "dev", false), Jobs: jobs.New(bus), Restart: restart.New(fleet), Watch: watch.New(fleet, bus)}
 	local, _ := fleet.Get("")
 

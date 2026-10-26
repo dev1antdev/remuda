@@ -68,6 +68,7 @@ type Server struct {
 	Code      *code.Service
 	Tailscale func() tsnetx.Status
 	Guard     *auth.Guard
+	Keys      *auth.Keys // the agents' tasks-only keys, listed and revoked in Settings
 	UI        fs.FS
 	Live      *live.Hub // the page's event stream, nil without one
 
@@ -100,6 +101,7 @@ func (s *Server) Handler() http.Handler {
 	s.recapRoutes(api)
 	s.liveRoutes(api)
 	s.deviceRoutes(api)
+	s.agentKeyRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

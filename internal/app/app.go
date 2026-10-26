@@ -76,8 +76,25 @@ func Run(ctx context.Context, o Options) error {
 	}
 
 	bus := events.NewBus()
-	fleet := machines.NewManager(o.Dir, o.Socket, bin)
+	keys, err := auth.OpenKeys(o.Dir)
+	if err != nil {
+		return err
+	}
+	// the door: every machine's agents reach the task list here with a tasks-only key, the machine's own when it still passes
+	door := &machines.Door{LocalPort: auth.PortOf(o.Addr), Key: func(name, have string) (string, error) {
+		if _, ok := keys.Check(have); ok {
+			return have, nil
+		}
+		key, _, err := keys.Mint(name)
+		return key, err
+	}}
+	fleet := machines.NewManager(o.Dir, o.Socket, bin, door)
 	defer fleet.Close()
+	if local, err := fleet.Get(machines.LocalID); err == nil {
+		if err := auth.EnsureDoor(o.Dir, keys, local.Label(), auth.LoopbackURL(o.Addr)); err != nil {
+			log.Printf("WARNING: %v; the agents on this machine cannot reach the tasks", err)
+		}
+	}
 	pushSvc, err := push.New(o.Dir)
 	if err != nil {
 		return fmt.Errorf("push: %w", err)
@@ -141,6 +158,24 @@ func Run(ctx context.Context, o Options) error {
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
 	})
+	scouts := &sessions.Launcher{Machines: fleet, Watch: watcher, Input: input, Notify: pushSvc.Broadcast}
+	schedules.Agents = schedule.Agents{
+		Start: func(s schedule.Schedule) (schedule.Started, error) {
+			args, err := sessions.SplitArgs(s.Args)
+			if err != nil {
+				return schedule.Started{}, err
+			}
+			place, err := scouts.StartInFolder(s.Machine, s.Dir, s.Label, s.Agent, sessions.Start{Model: s.Model, Args: args}, s.Prompt)
+			return schedule.Started{Pane: place.Pane, Tab: place.Tab, Workspace: place.Workspace, MadeWorkspace: place.MadeWorkspace}, err
+		},
+		Close: func(run schedule.Started) error {
+			return scouts.Close(run.Machine, sessions.Place{Pane: run.Pane, Tab: run.Tab, Workspace: run.Workspace, MadeWorkspace: run.MadeWorkspace})
+		},
+		Answer: func(machine, pane string) string {
+			answer, _ := chats.LastAnswer(machine, pane)
+			return answer
+		},
+	}
 
 	// who hears what
 	events.Subscribe(bus, func(e events.Snapshot) { tracker.Observe(e.Machine, e.Snap, e.At) })
@@ -163,6 +198,7 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, requests.OnNamed)
 	events.Subscribe(bus, requests.OnStatus)
 	events.Subscribe(bus, restarter.OnStatus)
+	events.Subscribe(bus, schedules.OnStatus)
 	events.Subscribe(bus, func(e events.PaneStatus) { hub.PaneChanged(e.Pane.Machine, e.Pane.Pane) })
 	events.Subscribe(bus, func(e events.JobDone) {
 		if mc, err := fleet.Get(e.Machine); err == nil {
@@ -231,7 +267,8 @@ func Run(ctx context.Context, o Options) error {
 		Quick:     quick.New(o.Dir),
 		Prefs:     prefs.New(o.Dir),
 		Code:      code.New(o.CodePort),
-		Guard:     auth.NewGuard(o.Token, devices),
+		Guard:     auth.NewGuard(o.Token, devices, keys),
+		Keys:      keys,
 		UI:        ui,
 		Live:      hub,
 	}

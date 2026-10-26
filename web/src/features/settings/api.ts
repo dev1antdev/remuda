@@ -19,6 +19,18 @@ export const renameDevice = (id: string, name: string): Promise<Device> => sendJ
 export const revokeDevice = (id: string): Promise<{ revoked: string; self: boolean }> => sendJSON("DELETE", `/api/devices/${encodeURIComponent(id)}`);
 export const revokeOtherDevices = (): Promise<{ revoked: number }> => sendJSON("DELETE", "/api/devices?others=1");
 
+// AgentKey is a machine's tasks-only key as the page sees it: never the key itself
+export type AgentKey = {
+  id: string;
+  name: string; // the machine it was placed on
+  scope: string; // "tasks"
+  created: string;
+  last_used: string;
+};
+
+export const fetchKeys = (): Promise<AgentKey[]> => getJSON("/api/agent-keys");
+export const revokeKey = (id: string): Promise<{ revoked: string }> => sendJSON("DELETE", `/api/agent-keys/${encodeURIComponent(id)}`);
+
 
 export type SharedPrefs = Record<string, Stamped>;
 

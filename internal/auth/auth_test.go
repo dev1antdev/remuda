@@ -25,7 +25,7 @@ func newGuard(t *testing.T) (*Guard, http.Handler) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g := NewGuard(testToken, devices)
+	g := NewGuard(testToken, devices, nil)
 	return g, g.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "device="+DeviceID(r.Context()))
 	}))

@@ -1,7 +1,8 @@
 // Package schedule runs things on a timetable: a prompt to the agent in a
-// workspace folder (panes come and go, the project stays), or the standup as a
-// digest pushed to the person's devices; a five-field cron in local time; a run
-// is never queued or retried.
+// workspace folder (panes come and go, the project stays), the standup as a
+// digest pushed to the person's devices, or a fresh agent started in a folder
+// with a prompt and taken down once it has answered; a five-field cron in
+// local time; a run is never queued or retried.
 package schedule
 
 import (
@@ -22,10 +23,11 @@ import (
 
 const file = "schedules.json"
 
-// The kinds of schedule: a prompt to an agent, or the standup pushed as a digest.
+// The kinds of schedule: a prompt to an agent, the standup pushed as a digest, or a fresh agent started in a folder.
 const (
 	KindPrompt = "prompt"
 	KindDigest = "digest"
+	KindAgent  = "agent"
 )
 
 // What a digest covers: since local midnight, the last 24 hours, the last 7 days, or since its previous run.
@@ -38,19 +40,24 @@ const (
 
 type Schedule struct {
 	ID      string `json:"id"`
-	Kind    string `json:"kind"` // prompt (the default) | digest
+	Kind    string `json:"kind"` // prompt (the default) | digest | agent
 	Machine string `json:"machine"`
 	Dir     string `json:"dir"`
 	Label   string `json:"label"`
 	Cron    string `json:"cron"`
 	Prompt  string `json:"prompt"`
 	Since   string `json:"since,omitempty"` // a digest's period: midnight | 24h | 7d | last
+	Agent   string `json:"agent,omitempty"` // an agent schedule's kind of agent
+	Model   string `json:"model,omitempty"` // the model as the agent's own CLI names it, "" for its default
+	Args    string `json:"args,omitempty"`  // extra arguments, as the person wrote them
+	Close   bool   `json:"close,omitempty"` // take the tab down once the agent has answered
 	Enabled bool   `json:"enabled"`
 
 	Next       time.Time `json:"next,omitzero"` // the coming run, filled in by List
 	LastRun    time.Time `json:"last_run,omitzero"`
 	LastResult string    `json:"last_result,omitempty"`
 	LastOK     bool      `json:"last_ok"`
+	LastPane   *Started  `json:"last_pane,omitempty"` // the agent the last run started, while it is watched for its answer
 }
 
 // Submit delivers a prompt to the agent in a folder and names the pane it went to.
@@ -64,6 +71,7 @@ type Store struct {
 	submit Submit
 	notify func(push.Payload)
 	digest Digest
+	Agents Agents // the app's way to start, close and read an agent schedule's agent; set after New
 	now    func() time.Time
 
 	mu       sync.Mutex
@@ -155,8 +163,12 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 		if s.Label == "" {
 			s.Label = "Standup digest"
 		}
+	case KindAgent:
+		if err := checkAgent(&s); err != nil {
+			return s, err
+		}
 	default:
-		return s, errors.New("a schedule is a prompt or a digest")
+		return s, errors.New("a schedule is a prompt, a digest or an agent")
 	}
 	if _, err := Parse(s.Cron); err != nil {
 		return s, err
@@ -166,7 +178,7 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 	if s.ID == "" {
 		s.ID = state.NewID()
 	} else if old, ok := st.items[s.ID]; ok {
-		s.LastRun, s.LastResult, s.LastOK = old.LastRun, old.LastResult, old.LastOK
+		s.LastRun, s.LastResult, s.LastOK, s.LastPane = old.LastRun, old.LastResult, old.LastOK, old.LastPane
 	}
 	cp := s
 	st.items[s.ID] = &cp
@@ -201,8 +213,12 @@ func (st *Store) Run(id string) (Schedule, error) {
 }
 
 func (st *Store) fire(s *Schedule) {
-	if s.Kind == KindDigest {
+	switch s.Kind {
+	case KindDigest:
 		st.fireDigest(s)
+		return
+	case KindAgent:
+		st.fireAgent(s)
 		return
 	}
 	pane, err := st.submit(s.Machine, s.Dir, s.Prompt)
