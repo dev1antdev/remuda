@@ -141,6 +141,24 @@ func Run(ctx context.Context, o Options) error {
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
 	})
+	scouts := &sessions.Launcher{Machines: fleet, Watch: watcher, Input: input, Notify: pushSvc.Broadcast}
+	schedules.Agents = schedule.Agents{
+		Start: func(s schedule.Schedule) (schedule.Started, error) {
+			args, err := sessions.SplitArgs(s.Args)
+			if err != nil {
+				return schedule.Started{}, err
+			}
+			place, err := scouts.StartInFolder(s.Machine, s.Dir, s.Label, s.Agent, sessions.Start{Model: s.Model, Args: args}, s.Prompt)
+			return schedule.Started{Pane: place.Pane, Tab: place.Tab, Workspace: place.Workspace, MadeWorkspace: place.MadeWorkspace}, err
+		},
+		Close: func(run schedule.Started) error {
+			return scouts.Close(run.Machine, sessions.Place{Pane: run.Pane, Tab: run.Tab, Workspace: run.Workspace, MadeWorkspace: run.MadeWorkspace})
+		},
+		Answer: func(machine, pane string) string {
+			answer, _ := chats.LastAnswer(machine, pane)
+			return answer
+		},
+	}
 
 	// who hears what
 	events.Subscribe(bus, func(e events.Snapshot) { tracker.Observe(e.Machine, e.Snap, e.At) })
@@ -163,6 +181,7 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, requests.OnNamed)
 	events.Subscribe(bus, requests.OnStatus)
 	events.Subscribe(bus, restarter.OnStatus)
+	events.Subscribe(bus, schedules.OnStatus)
 	events.Subscribe(bus, func(e events.PaneStatus) { hub.PaneChanged(e.Pane.Machine, e.Pane.Pane) })
 	events.Subscribe(bus, func(e events.JobDone) {
 		if mc, err := fleet.Get(e.Machine); err == nil {

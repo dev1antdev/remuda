@@ -6,12 +6,14 @@ describe("cron presets", () => {
     expect(cronFor("daily", 9, 30)).toBe("30 9 * * *");
     expect(cronFor("weekdays", 7, 0)).toBe("0 7 * * 1-5");
     expect(cronFor("hourly", 9, 15)).toBe("15 * * * *");
+    expect(cronFor("every3h", 9, 5)).toBe("5 */3 * * *");
     expect(cronFor("custom", 9, 15)).toBeNull();
   });
   it("read their own cron back, with the time", () => {
     expect(parseCron("30 9 * * *")).toEqual({ preset: "daily", hh: 9, mm: 30 });
     expect(parseCron("0 7 * * 1-5")).toEqual({ preset: "weekdays", hh: 7, mm: 0 });
     expect(parseCron("15 * * * *")).toEqual({ preset: "hourly", hh: 9, mm: 15 });
+    expect(parseCron("5 */3 * * *")).toEqual({ preset: "every3h", hh: 9, mm: 5 });
     expect(parseCron(DEFAULT_CRON)).toEqual({ preset: "weekdays", hh: 9, mm: 0 });
   });
   it("call anything else custom, keeping a readable time", () => {

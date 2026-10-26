@@ -8060,3 +8060,40 @@ body.popout {
   content-visibility: auto;
   contain-intrinsic-size: auto 300px;
 }
+
+/* ---- an agent schedule (features/schedules/ScheduleEditor.tsx, Schedules.tsx): the agent's mark before the label, the
+   close switch under the prompt ---- */
+.schedule-label .schedule-agent-mark {
+  display: inline-flex;
+  margin-right: 5px;
+  vertical-align: -2px;
+}
+
+.schedule-label .schedule-agent-mark svg {
+  width: 12px;
+  height: 12px;
+}
+
+.schedule-editor .schedule-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+
+.schedule-editor .schedule-check input {
+  width: auto;
+}
+
+@media (max-width: 920px) {
+  /* three kinds do not fit one line on a phone: the switch wraps, each kind taking what room it needs */
+  .schedule-kind {
+    flex-wrap: wrap;
+    align-self: stretch;
+  }
+
+  .schedule-kind button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}

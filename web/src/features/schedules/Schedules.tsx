@@ -1,13 +1,15 @@
-// Schedules: prompts sent to an agent on a timetable, or the standup pushed as a digest. A list with the next and last run,
-// a switch per row, "Run now", and the editor.
+// Schedules: prompts sent to an agent on a timetable, the standup pushed as a digest, or a fresh agent started in a
+// folder. A list with the next and last run, a switch per row, "Run now", and the editor.
 
 import { useState } from "react";
 import type { Machine } from "@/features/roster/api";
 import { machineLabel } from "@/features/roster/options";
+import { useRoster } from "@/features/roster/useRoster";
 import { useQuery } from "@/lib/query";
 import { basename, errMsg } from "@/lib/text";
 import { ago, whenShort } from "@/lib/time";
-import { Dialog, Icon, Notice } from "@/ui";
+import { Dialog, Icon, Logo, Notice } from "@/ui";
+import { agentWords, watchedWords } from "./agent";
 import { deleteSchedule, fetchSchedules, putSchedule, runSchedule, type Schedule } from "./api";
 import { NEVER } from "./cron";
 import { kindOf, sinceWords } from "./digest";
@@ -18,6 +20,8 @@ export default function Schedules({ machines, onClose, ask }: {
   onClose: () => void;
   ask: (text: string, label: string, run: () => void) => void;
 }) {
+  const { agents } = useRoster();
+  const agentLabel = (id: string | undefined) => agents.find((a) => a.id === id)?.label ?? id ?? "";
   const [actionError, setActionError] = useState("");
   const [editing, setEditing] = useState<Partial<Schedule> | null>(null);
   const { data: items, error: fetchError, reload, mutate } = useQuery(fetchSchedules, []);
@@ -48,8 +52,8 @@ export default function Schedules({ machines, onClose, ask }: {
       }
     >
       <Notice tone="hint">
-        A prompt sent to the agent running in a folder, or the standup pushed to your devices as a digest, on a timetable — in the remuda host's local
-        time. A minute with no agent there, or an agent busy with a question, is skipped and noted.
+        A prompt sent to the agent running in a folder, the standup pushed to your devices as a digest, or a fresh agent started in a folder with a
+        prompt, on a timetable — in the remuda host's local time. A minute with no agent there, or an agent busy with a question, is skipped and noted.
       </Notice>
       {error && (
         <Notice tone="error" onDismiss={() => setActionError("")}>
@@ -64,10 +68,21 @@ export default function Schedules({ machines, onClose, ask }: {
             <div className="schedule-copy">
               <div className="schedule-label">
                 {kindOf(s) === "digest" && <Icon name="sun" size={12} className="schedule-digest-mark" aria-label="Standup digest" />}
+                {kindOf(s) === "agent" && (
+                  <span className="schedule-agent-mark" aria-label={`Starts ${agentLabel(s.agent)}`}>
+                    <Logo agent={s.agent ?? ""} />
+                  </span>
+                )}
                 {s.label}
               </div>
               <div className="schedule-sub">
-                <code>{s.cron}</code> · {kindOf(s) === "digest" ? `to your devices · ${sinceWords(s.since)}` : `${machineLabel(machines, s.machine)} · ${basename(s.dir)}`}
+                <code>{s.cron}</code> ·{" "}
+                {kindOf(s) === "digest"
+                  ? `to your devices · ${sinceWords(s.since)}`
+                  : kindOf(s) === "agent"
+                    ? agentWords(s, machineLabel(machines, s.machine), basename(s.dir), agentLabel(s.agent))
+                    : `${machineLabel(machines, s.machine)} · ${basename(s.dir)}`}
+                {watchedWords(s) && <span> · {watchedWords(s)}</span>}
                 {s.enabled && s.next && s.next !== NEVER && <span> · next {whenShort(s.next)}</span>}
                 {s.last_run && s.last_run !== NEVER && (
                   <>
