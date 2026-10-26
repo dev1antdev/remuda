@@ -184,3 +184,19 @@ func TestOfferedIncludesCodeServerWhenInstalled(t *testing.T) {
 		}
 	}
 }
+
+func TestOfferedIncludesTheMCPRegistrationWhereRemudaIs(t *testing.T) {
+	var mcp *Update
+	for _, u := range Offered(&health.Report{Remuda: "v0.8.2"}, health.Latest{}) {
+		if u.What == "mcp" {
+			u := u
+			mcp = &u
+		}
+	}
+	if mcp == nil || !strings.Contains(mcp.Command, `remuda" mcp install`) || !strings.Contains(mcp.Note, "claude mcp add") {
+		t.Fatalf("mcp row = %+v", mcp)
+	}
+	if _, err := Plan("mcp", &health.Report{}); err == nil {
+		t.Fatal("no remuda on the machine, nothing to register")
+	}
+}

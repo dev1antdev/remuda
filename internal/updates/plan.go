@@ -103,6 +103,12 @@ func Plan(what string, r *health.Report) (Update, error) {
 			return Update{}, fmt.Errorf("remuda is not installed there to run its installer")
 		}
 		return Update{What: what, Title: "Update code-server", Command: path + `"$HOME/.local/bin/remuda" code install && readlink "$HOME/.local/opt/code-server"`, Note: "remuda's own installer: the pinned release, its checksum verified, the service restarted; an editor open on it reconnects (Reload the editor if it does not)."}, nil
+	case "mcp":
+		if r == nil || r.Remuda == "" {
+			return Update{}, fmt.Errorf("remuda is not installed there to serve the tasks")
+		}
+		return Update{What: what, Title: "Connect the agents to your tasks (MCP)", Command: path + `"$HOME/.local/bin/remuda" mcp install`,
+			Note: "Registers remuda's MCP server with every coding agent on the machine through the agent's own command (claude mcp add, codex mcp add, gemini mcp add; Kimi when its CLI can): the agents can then list, create, move and comment on your tasks. Safe to run again; an agent already running sees the server once restarted."}, nil
 	case "claude":
 		if r == nil || r.Claude == "" {
 			return Update{}, fmt.Errorf("Claude Code is not installed there")
@@ -199,6 +205,9 @@ func Offered(r *health.Report, l health.Latest) []Update {
 		} else {
 			u.Note = r.CodeServer + " is what this remuda installs. " + u.Note
 		}
+		out = append(out, u)
+	}
+	if u, err := Plan("mcp", r); err == nil {
 		out = append(out, u)
 	}
 	return out

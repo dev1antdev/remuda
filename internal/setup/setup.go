@@ -35,6 +35,9 @@ var uninstallScript string
 //go:embed scripts/install-code.sh
 var codeScript string
 
+//go:embed scripts/install-mcp.sh
+var mcpScript string
+
 // CodeVersion is the code-server release install-code.sh installs and the Updates row offers; the script's default must match.
 const CodeVersion = "4.140.0"
 
@@ -154,6 +157,11 @@ func Code(host, action string, port int, out io.Writer) error {
 		env = append(env, "CODE_PORT="+strconv.Itoa(port))
 	}
 	return run(host, env, codeScript, []string{action}, out)
+}
+
+// MCP registers `remuda mcp` with every coding agent on the machine (install), says which have it (status) or takes it out (uninstall), here or on a host.
+func MCP(host, action string, out io.Writer) error {
+	return run(host, nil, mcpScript, []string{action}, out)
 }
 
 func where(host string) string {
