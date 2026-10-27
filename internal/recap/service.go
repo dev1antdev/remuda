@@ -31,7 +31,9 @@ func (s *Service) Conversation(mc *machines.Machine, paneID, sessionID, dir stri
 	if err != nil {
 		return Recap{}, err
 	}
-	return Of(turns, since), nil
+	r := Of(turns, since)
+	r.Spans = Spans(turns, since, time.Now())
+	return r, nil
 }
 
 // Standup is one item per agent pane on every connected machine, the machines read side by side, in the roster's order.
