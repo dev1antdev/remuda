@@ -94,6 +94,27 @@ func Lines(r Recap) []string {
 	return lines
 }
 
+// Conversation is one conversation's report: the same lines the standup gives an agent, under a heading of its own.
+func Conversation(r Recap, since time.Time, now time.Time) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Recap · %s\n\n", now.Format("2 Jan 2006"))
+	if !since.IsZero() {
+		fmt.Fprintf(&b, "Since %s.\n\n", since.Format("2 Jan 15:04"))
+	}
+	if r.Quiet() {
+		b.WriteString("Nothing happened in this period.\n")
+		return b.String()
+	}
+	for _, line := range Lines(r) {
+		fmt.Fprintf(&b, "- %s\n", line)
+	}
+	if r.Asking {
+		b.WriteString("- A question is open: the agent waits for the person\n")
+	}
+	return b.String()
+}
+
+
 // Numbers is the one line of figures: prompts, answers, time, tokens, cost.
 func Numbers(r Recap) string {
 	parts := []string{plural(r.Prompts, "prompt"), plural(r.Answers, "answer")}

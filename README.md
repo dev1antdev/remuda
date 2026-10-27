@@ -372,7 +372,8 @@ there, or sign out every other device at once; the rest keep working and the
 token stays what it was.
 
 **Agents and your tasks.** The agents on every machine get a key of their
-own that opens this remuda's task list and nothing else: remuda places it,
+own that opens this remuda's task list, and a read of what the other agents
+are doing, nothing else: remuda places it,
 with the address to reach it at, in the machine's own state dir (on a remote,
 over the same SSH connection, with this remuda's port forwarded back to the
 machine's loopback), and `remuda mcp` / `remuda tasks` there read the two
@@ -462,12 +463,17 @@ with everything remuda can do; see SECURITY.md.
 
 Any coding agent remuda runs — Claude Code, Codex, Gemini CLI, Kimi Code —
 can read and write your task list through **MCP**: `remuda mcp` is a Model
-Context Protocol server over stdio with seven tools — `tasks_list`,
+Context Protocol server over stdio with ten tools — `tasks_list`,
 `task_get`, `task_create` (a Markdown description, a column, a due date, a
 priority, labels, the project's fields), `task_update` (move it to another
-column, mark it done, retitle, rewrite), `task_comment`, `projects_list` and
-`labels_list` — and it tells the agent when to use which. A task an agent
-makes remembers the pane that made it. One command registers the server with
+column, mark it done, retitle, rewrite), `task_comment`, `projects_list`,
+`labels_list`, and three that only read what your agents are doing:
+`agents_list` (every agent on every machine, its state and for how long,
+its last answer, its pull request, its cost; the agent's own pane marked),
+`agent_recap` (what one conversation came to, as the Recap dialog shows it)
+and `standup` (the report over all of them) — and it tells the agent when
+to use which: look who is already on what before filing or taking a task.
+A task an agent makes remembers the pane that made it. One command registers the server with
 every agent on a machine, through the agent's own CLI (`claude mcp add`,
 `codex mcp add`, `gemini mcp add`; Kimi when its CLI can):
 
@@ -485,7 +491,8 @@ while you are away.
 
 How the agents get in: the remuda that holds the list leaves an `agent-key`
 and an `agent-url` in remuda's state dir on every machine its agents run on;
-the key opens the tasks routes and nothing else, on the cockpit itself or
+the key opens the tasks routes and a read of the roster, a recap and the
+standup, nothing else, on the cockpit itself or
 through its door forwarded over ssh (`REMUDA_AGENT_URL` and
 `REMUDA_AGENT_KEY` override them, for a script of your own). An agent whose
 CLI cannot register a server gets the lines by hand — Claude Code's
