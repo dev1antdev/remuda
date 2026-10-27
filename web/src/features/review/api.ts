@@ -9,7 +9,7 @@ export type Review = {
   repo?: string;
   branch?: string;
   head?: string;
-  baseline?: { head: string; at: string; verdict?: Verdict };
+  baseline?: { head: string; at: string; verdict?: Verdict; ready?: string }; // ready: when the agent said the rejected work is ready for another look
   commits: ReviewCommit[];
   files: ReviewFile[];
   fresh: number;
