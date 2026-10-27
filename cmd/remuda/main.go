@@ -41,6 +41,8 @@ func main() {
 	tailscale := flag.Bool("tailscale", false, "join your tailnet as a node of its own and serve HTTPS there (no tailscale serve needed); first run prints a login URL unless TS_AUTHKEY is set")
 	tsName := flag.String("tailscale-hostname", "remuda", "the node's name on the tailnet (https://<name>.<tailnet>.ts.net)")
 	noCheck := flag.Bool("no-version-check", false, "never ask npm and GitHub what the newest Claude Code, herdr and remuda are")
+	noDoor := flag.Bool("no-door", false, "keep the agents' door closed: no agent-key / agent-url files here or on a remote machine (a scratch instance beside the real one must not overwrite the real one's)")
+	withDoor := flag.Bool("door", false, "open the agents' door although REMUDA_STATE_DIR is set, which closes it by itself")
 	flag.Usage = help
 	flag.Parse()
 
@@ -70,11 +72,21 @@ func main() {
 		Addr: *addr, HerdrBin: *herdrBin, Socket: *socket, CodePort: *codePort,
 		Tailscale: *tailscale, TailscaleName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"),
 		VersionCheck: !*noCheck, Version: version,
+		Door: doorOpen(*noDoor, *withDoor, os.Getenv("REMUDA_STATE_DIR") != ""),
 	})
 	if err != nil {
 		log.Print(err)
 		os.Exit(1)
 	}
+}
+
+// doorOpen says whether this instance places the agents' door files: never with -no-door, and not for a scratch
+// instance (REMUDA_STATE_DIR set) unless -door asks, so a second remuda beside the real one leaves its door alone.
+func doorOpen(noDoor, withDoor, scratch bool) bool {
+	if noDoor {
+		return false
+	}
+	return !scratch || withDoor
 }
 
 // help is `remuda -h`: the server's flags, and the commands a person with nothing but the binary needs to know are there.

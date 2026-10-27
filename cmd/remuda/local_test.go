@@ -23,3 +23,20 @@ func TestOpenScriptKeepsTheAddressAString(t *testing.T) {
 		}
 	}
 }
+
+func TestDoorOpen(t *testing.T) {
+	cases := []struct {
+		noDoor, withDoor, scratch, want bool
+	}{
+		{false, false, false, true}, // the real service
+		{true, false, false, false}, // -no-door
+		{false, false, true, false}, // a scratch instance (REMUDA_STATE_DIR)
+		{false, true, true, true},   // a scratch instance that asked for the door
+		{true, true, true, false},   // -no-door wins over -door
+	}
+	for _, c := range cases {
+		if got := doorOpen(c.noDoor, c.withDoor, c.scratch); got != c.want {
+			t.Errorf("doorOpen(noDoor %v, door %v, scratch %v) = %v, want %v", c.noDoor, c.withDoor, c.scratch, got, c.want)
+		}
+	}
+}

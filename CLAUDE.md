@@ -18,7 +18,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 
 - `cmd/remuda/` — main; flags `-addr` (default `127.0.0.1:7317`), `-socket`,
   `-herdr-bin`, `-print-token`, `-version`, `-tailscale` /
-  `-tailscale-hostname`, `-no-version-check`, `-code-port`; subcommands
+  `-tailscale-hostname`, `-no-version-check`, `-code-port`, `-no-door` /
+  `-door` (`doorOpen`, tested: the agents' door files are placed by the
+  real service only — never with `-no-door`, and not by a scratch
+  instance with `REMUDA_STATE_DIR` set unless `-door` asks, so a look or
+  the e2e beside the real one never overwrites its door on a remote;
+  `app.Options.Door`, one log line when it stays closed); subcommands
   `search` and `usage` for the deployed binary on a remote machine, and
   `setup`, `uninstall` and `code` (see "Installing and uninstalling"
   below), `mcp` and `tasks` (the agents' door to the task list, see

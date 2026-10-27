@@ -30,7 +30,9 @@ you skipped is reported as skipped, never as passed.
    ```
 
    A second instance beside the running one, with its own token, tasks
-   and pushes, sharing the real herdr. `REMUDA_STATE_DIR=<that dir>
+   and pushes, sharing the real herdr; with `REMUDA_STATE_DIR` set it
+   places no agent door, so the real service's `agent-key` / `agent-url`
+   on every machine stay (`-door` would open one). `REMUDA_STATE_DIR=<that dir>
    ./bin/remuda -print-token` prints its token; `http://127.0.0.1:7417/
    ?token=<token>` logs the browser in. Do not open the person's panes'
    terminals from it (one attach per terminal, theirs holds it); a

@@ -57,6 +57,7 @@ type Options struct {
 	AuthKey       string // TS_AUTHKEY
 	VersionCheck  bool
 	Version       string
+	Door          bool // place the agents' door files here and on every remote (off for a scratch instance)
 }
 
 // Run builds remuda and serves until ctx ends.
@@ -81,16 +82,21 @@ func Run(ctx context.Context, o Options) error {
 		return err
 	}
 	// the door: every machine's agents reach the task list here with a tasks-only key, the machine's own when it still passes
-	door := &machines.Door{LocalPort: auth.PortOf(o.Addr), Key: func(name, have string) (string, error) {
-		if _, ok := keys.Check(have); ok {
-			return have, nil
-		}
-		key, _, err := keys.Mint(name)
-		return key, err
-	}}
+	var door *machines.Door
+	if o.Door {
+		door = &machines.Door{LocalPort: auth.PortOf(o.Addr), Key: func(name, have string) (string, error) {
+			if _, ok := keys.Check(have); ok {
+				return have, nil
+			}
+			key, _, err := keys.Mint(name)
+			return key, err
+		}}
+	} else {
+		log.Print("the agents' door stays closed: no agent-key / agent-url files are placed here or on a remote machine (-door opens it)")
+	}
 	fleet := machines.NewManager(o.Dir, o.Socket, bin, door)
 	defer fleet.Close()
-	if local, err := fleet.Get(machines.LocalID); err == nil {
+	if local, err := fleet.Get(machines.LocalID); err == nil && o.Door {
 		if err := auth.EnsureDoor(o.Dir, keys, local.Label(), auth.LoopbackURL(o.Addr)); err != nil {
 			log.Printf("WARNING: %v; the agents on this machine cannot reach the tasks", err)
 		}
