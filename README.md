@@ -784,7 +784,12 @@ scans its own `~/.claude/projects` on demand (remuda's scanner where the
 binary is deployed, grep otherwise). Every turn of a pane's conversation
 has a **Copy link** button of its own: the address opens remuda on that
 pane, in its chat, scrolled to that turn — for a note, a ticket or a
-teammate on the same tailnet.
+teammate on the same tailnet. Beside it a **pin** keeps the turn: a
+pinned turn wears a mark in the margin, and **Pins…** in the View menu
+(or the palette) lists every turn you pinned in that folder's
+conversations, newest first — a click opens the conversation there, an
+older session of the folder included, so a pin survives a compaction.
+Pins travel with your settings when sync is on.
 
 **Wall:** a mode for the big screen — every agent on every connected
 machine as a tile: its state and workspace, its context and cost, how

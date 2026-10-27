@@ -1,6 +1,6 @@
 // One turn of the transcript: its text as Markdown, its thinking and tool calls folded (each call with how long it took, a
 // failed one in red), an Edit's change under its call in the lens, a picture the agent read or wrote as a thumbnail, a foot
-// with what the answer spent and what went wrong, a forward button and a link to the turn.
+// with what the answer spent and what went wrong, a forward button, a link to the turn and a pin that keeps it in the Pins list.
 
 import { memo, useState, type ReactNode } from "react";
 import { fileUrl } from "@/features/files/api";
@@ -22,17 +22,19 @@ import { sameSubagents, subagentsOf } from "./subagents";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 export const TurnView = memo(
-  function TurnView({ turn, machineId, onOpenFile, onForward, onLink, subagents, onOpenSubagent, diffs }: {
+  function TurnView({ turn, machineId, onOpenFile, onForward, onLink, onPin, pinned, subagents, onOpenSubagent, diffs }: {
     turn: Turn;
     machineId?: string;
     onOpenFile: OpenFile;
     onForward?: (text: string) => void;
     onLink?: (turn: Turn) => void; // copies a link to this turn; only a pane's conversation has one
+    onPin?: (turn: Turn) => void; // pins or unpins this turn; only a pane's conversation has one
+    pinned?: boolean; // the turn is in the Pins list: a mark in its corner, the pin button on
     subagents?: Subagent[]; // the conversation's, drawn under the Agent calls that spawned them
     onOpenSubagent?: (s: Subagent) => void;
     diffs?: boolean; // an Edit's change drawn under its call: the lens, not a tile
   }) {
-    const cls = turn.role === "user" ? "turn turn-user" : "turn turn-assistant";
+    const cls = `turn ${turn.role === "user" ? "turn-user" : "turn-assistant"}${pinned ? " turn-pinned" : ""}`;
     const text = turn.parts
       .filter((p) => p.type === "text")
       .map((p) => p.text ?? "")
@@ -40,13 +42,18 @@ export const TurnView = memo(
       .trim();
     return (
       <div className={cls} data-ids={turn.ids?.join(" ")}>
+        {pinned && (
+          <span className="turn-pin-mark" title="Pinned">
+            <Icon name="pin" size={12} />
+          </span>
+        )}
         <ErrorBoundary fallback={(message) => <Notice tone="error">This turn could not be drawn: {message}</Notice>}>
           {turn.parts.map((p, i) => (
             <PartView key={i} part={p} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} diffs={diffs} />
           ))}
         </ErrorBoundary>
         {turn.role === "assistant" && <Spent turn={turn} />}
-        {(!!(onForward && text && turn.role === "assistant") || !!(onLink && turn.ids?.length)) && (
+        {(!!(onForward && text && turn.role === "assistant") || !!((onLink || onPin) && turn.ids?.length)) && (
           <div className="turn-actions">
             {onForward && text && turn.role === "assistant" && (
               <button type="button" className="linkish turn-forward" title="Forward this to another agent" onClick={() => onForward(text)}>
@@ -60,6 +67,13 @@ export const TurnView = memo(
                 </button>
               </Tip>
             )}
+            {onPin && !!turn.ids?.length && (
+              <Tip text={pinned ? "Unpin this turn" : "Pin this turn: the Pins list in the View menu finds it again"}>
+                <button type="button" className={pinned ? "icon-btn sm turn-pin on" : "icon-btn sm turn-pin"} aria-label={pinned ? "Unpin this turn" : "Pin this turn"} aria-pressed={!!pinned} onClick={() => onPin(turn)}>
+                  <Icon name="pin" size={12} />
+                </button>
+              </Tip>
+            )}
           </div>
         )}
       </div>
@@ -70,6 +84,8 @@ export const TurnView = memo(
     a.onOpenFile === b.onOpenFile &&
     a.onForward === b.onForward &&
     a.onLink === b.onLink &&
+    a.onPin === b.onPin &&
+    a.pinned === b.pinned &&
     a.onOpenSubagent === b.onOpenSubagent &&
     a.diffs === b.diffs &&
     sameTurn(a.turn, b.turn) &&

@@ -56,6 +56,7 @@ function useCommands(): (query: string) => Entry[] {
   const lens = app.use((s) => s.lens);
   const viewer = app.use((s) => s.viewer);
   const chatSession = app.use((s) => s.chatSession);
+  const chatLive = app.use((s) => s.chatLive);
   const footprint = app.use((s) => s.footprint);
   const full = app.use((s) => s.full);
   const themePref = useThemePref();
@@ -108,6 +109,7 @@ function useCommands(): (query: string) => Entry[] {
         if (popOutSupported) command("popout", "Pop out this agent", () => void popOut(selection!), { hint: "a small window above every other app", icon: "pip", keywords: ["picture", "window", "float"] });
         if (current.pane.agent) command("export", "Export this conversation as Markdown", () => void exportConversation(machine.id, current.pane.id, chatSession, folderOf(current), { agent: current.pane.agent, workspace: session.name, machine: machine.label }).catch(toastError), { hint: "the session shown, as a file", icon: "download", keywords: ["save", "download", "markdown", "transcript", "share", "file"] });
         if (current.pane.agent) command("recap", "Recap this conversation", () => actions.openDialog({ kind: "recap", machineId: machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), title: machine.id !== "local" ? `${session.name} on ${machine.label}` : session.name }), { hint: "prompts, answers, tools, files, cost — Copy as Markdown", icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest", "what happened"] });
+        if (current.pane.agent) command("pins", "Pins in this conversation…", () => actions.openDialog({ kind: "pins", machineId: machine.id, paneId: current.pane.id, dir: folderOf(current), shown: chatSession ?? chatLive, title: machine.id !== "local" ? `${session.name} on ${machine.label}` : session.name }), { hint: "the turns you pinned in this folder's conversations, a click opens each", icon: "pin", keywords: ["pin", "pins", "pinned", "bookmark", "bookmarks", "saved", "mark"] });
         if (current.pane.agent) command("find", "Find in this conversation", () => {
           actions.setMode("herdr");
           actions.setLens("chat");
