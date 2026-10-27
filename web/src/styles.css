@@ -8192,3 +8192,58 @@ body.popout {
     justify-content: center;
   }
 }
+
+/* ---- #10 Standup strip: when an agent worked, waited and sat idle over the period ---- */
+
+.strip {
+  margin: 2px 0 4px;
+}
+
+.strip-bar {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border-radius: var(--r-xs);
+  background: var(--bg-input);
+  overflow: hidden;
+}
+
+.strip-span {
+  fill: var(--bg-active);
+}
+
+.strip-span.is-working {
+  fill: var(--green);
+}
+
+.strip-span.is-waiting {
+  fill: var(--red);
+}
+
+.strip-span.is-link {
+  cursor: pointer;
+}
+
+.strip-span.is-link:hover {
+  opacity: 0.75;
+}
+
+.strip-mark {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.strip-hours {
+  position: relative;
+  height: 12px;
+  font-size: var(--fs-10);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.strip-hours span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
