@@ -49,7 +49,10 @@ export function keyGroups(mac: boolean): KeyGroup[] {
     },
     {
       title: "Wall",
-      rows: [{ keys: ["Esc"], what: "back to the grid from a focused tile" }],
+      rows: [
+        { keys: ["Esc"], what: "back to the grid from a focused tile, or out of office mode" },
+        { keys: ["←", "→"], what: "office mode: feature the previous or next agent, pinned" },
+      ],
     },
     {
       title: "Tasks",

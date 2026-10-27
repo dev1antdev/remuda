@@ -15,15 +15,18 @@ import { brandColor } from "@/ui/brand";
 import { folderOf } from "./current";
 import { actions } from "./store";
 
-export function TileView({ tile, view = "chat", radar, step, now, brief = false, focused = false, onFocus, onHide, onPopOut }: {
+export function TileView({ tile, view = "chat", radar, step, now, brief = false, focused = false, pinned = false, onFocus, onPin, onPick, onHide, onPopOut }: {
   tile: Tile;
   view?: WallView;
   radar: RadarPrefs;
   step: number;
   now: number;
-  brief?: boolean; // the strip under a focused tile: the head and the state line only
+  brief?: boolean; // the strip under a focused tile, or a card of office mode: the head and the state line only
   focused?: boolean; // this tile has the whole wall
+  pinned?: boolean; // a card of office mode pinned by hand: its agent stays the featured one
   onFocus?: () => void; // the wall's focus button: give this tile the wall, or the wall back
+  onPin?: () => void; // office mode's pin button: keep this agent featured, or let the wall pick again
+  onPick?: () => void; // a card of office mode: the head's click pins its agent instead of opening it
   onHide?: () => void; // the wall's eye
   onPopOut?: () => void; // the wall's pop-out, when the browser can
 }) {
@@ -46,9 +49,15 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
   const said = settled ? pane.said : undefined;
   const pr = pane.pr;
   return (
-    <section className={`tile is-${d}${alert ? " is-alert" : ""}${brief ? " brief" : ""}${machine.id !== "local" ? " has-hue" : ""}`} style={hueStyle(machine.id)} aria-label={`${pane.agent} in ${where}`}>
+    <section className={`tile is-${d}${alert ? " is-alert" : ""}${brief ? " brief" : ""}${pinned ? " is-pinned" : ""}${machine.id !== "local" ? " has-hue" : ""}`} style={hueStyle(machine.id)} aria-label={`${pane.agent} in ${where}`}>
       <header className="tile-head">
-        <button type="button" className="linkish tile-open" title={`${words}\n${pane.cwd}\nOpen the ${screen ? "terminal" : "chat"} in Agents`} onClick={open}>
+        <button
+          type="button"
+          className="linkish tile-open"
+          aria-pressed={onPick ? pinned : undefined}
+          title={onPick ? `${words}\n${pane.cwd}\nClick to feature this agent and keep it there (pin)` : `${words}\n${pane.cwd}\nOpen the ${screen ? "terminal" : "chat"} in Agents`}
+          onClick={onPick ?? open}
+        >
           <span className="radar-mark" style={markStyle}>
             {alert ? "!" : markOf(d, step)}
           </span>
@@ -74,6 +83,13 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           <span className={`radar-ctx tile-usage${fillClass(fill)}`} title={`Context ${Math.round(100 * fill)}% full · ${usage.name} · ${usd(usage.cost)} API-equivalent so far`}>
             {Math.round(100 * fill)}% · {usd(usage.cost)}
           </span>
+        )}
+        {onPin && (
+          <Tip text={pinned ? "Pinned: this agent stays featured. Unpin to let the wall pick again" : "Pin: keep this agent featured"}>
+            <button type="button" className={`icon-btn sm tile-pin${pinned ? " on" : ""}`} aria-label={pinned ? "Unpin this agent" : "Pin this agent as the featured one"} aria-pressed={pinned} onClick={onPin}>
+              <Icon name="pin" size={14} />
+            </button>
+          </Tip>
         )}
         {onFocus && (
           <Tip text={focused ? "Back to the grid (Esc)" : "Focus: this agent takes the wall, the others wait in a strip"}>
