@@ -1,12 +1,15 @@
 // The small pieces a task is drawn with: its chips, a project or status as a Select option, the priority's mark, a due-date field.
 
 import { useEffect, useState, type CSSProperties } from "react";
+import { checksTone, checksWords, prWords } from "@/features/roster/prStatus";
+import { openUrl } from "@/lib/host";
 import { Icon, Logo, Tip } from "@/ui";
 import { usd } from "@/features/usage/format";
 import { PRIORITIES, type Field, type Label, type Project, type Status, type Task } from "./api";
 import { FieldChip } from "./fields";
 import { dueLabel, toLocalInput } from "./prompt";
 import { taskCost } from "./runCost";
+import type { RunPR } from "./runPR";
 
 export const projectOption = (p: Project) => ({
   value: p.id,
@@ -33,7 +36,7 @@ export function PrioMark({ level }: { level: number }) {
 }
 
 // TaskChips is what a task shows beside its title, on a list row and a board card alike
-export function TaskChips({ task: t, project, status, fields }: { task: Task; project?: Project; status?: Status; fields?: Field[] }) {
+export function TaskChips({ task: t, project, status, fields, pr }: { task: Task; project?: Project; status?: Status; fields?: Field[]; pr?: RunPR | null }) {
   const due = dueLabel(t);
   return (
     <>
@@ -56,6 +59,24 @@ export function TaskChips({ task: t, project, status, fields }: { task: Task; pr
         <span className="tasks-cost" title="What the agents started on it spent, at API prices">
           {usd(taskCost(t))}
         </span>
+      )}
+      {pr && (
+        <Tip text={`${pr.label}: ${pr.status ? prWords(pr.status) : "opened by the agent on the task"} · opens in a new tab`}>
+          <button
+            type="button"
+            className="linkish tasks-pr"
+            aria-label={`${pr.label}, opens in a new tab`}
+            onClick={(e) => {
+              e.stopPropagation();
+              openUrl(pr.url);
+            }}
+          >
+            <span className={`pr-state is-${pr.status ? checksTone(pr.status) : "dim"}`}>
+              <Icon name="external-link" size={12} /> {pr.label}
+              {pr.status ? ` · ${checksWords(pr.status)}` : ""}
+            </span>
+          </button>
+        </Tip>
       )}
       {t.priority >= 3 && (
         <span className={`tasks-prio p${t.priority}`} title={PRIORITIES[t.priority]}>

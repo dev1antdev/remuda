@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Icon, Notice, useSubmit } from "@/ui";
 import type { Field, Project, Status, Task } from "./api";
 import { TaskChips } from "./pieces";
+import type { RunPR } from "./runPR";
 import { longPress } from "./press";
 import { pickHow, type Pick } from "./selection";
 
@@ -36,11 +37,12 @@ export function QuickAdd({ placeholder, disabled, onAdd }: { placeholder: string
   );
 }
 
-export function TaskRow({ task: t, project, status, fields, selected, picked, selecting, onToggle, onOpen, onPick, actions }: {
+export function TaskRow({ task: t, project, status, fields, pr, selected, picked, selecting, onToggle, onOpen, onPick, actions }: {
   task: Task;
   project?: Project;
   status?: Status;
   fields?: Field[];
+  pr?: RunPR | null; // the pull request the task's run noted
   selected: boolean; // open on the right
   picked?: boolean; // one of several selected for a bulk action
   selecting?: boolean; // a phone's selection is on: a tap picks instead of opening
@@ -85,7 +87,7 @@ export function TaskRow({ task: t, project, status, fields, selected, picked, se
         aria-label={t.done ? "Mark undone" : "Mark done"}
       />
       <span className="tasks-row-title">{t.title}</span>
-      <TaskChips task={t} project={project} status={status} fields={fields} />
+      <TaskChips task={t} project={project} status={status} fields={fields} pr={pr} />
       {actions}
     </div>
   );

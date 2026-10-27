@@ -217,6 +217,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   worktree is answered for you), the task moves to *In progress*, and
   every answer the agent finishes comes back to the task as a comment
   with a push — and moves it on to *Testing*, unless you moved it first.
+  When the agent opens a pull request and names it (the Review mode's
+  *Approve & open PR* asks for exactly that), the task notes the link, moves
+  on the same way, and shows the request with its checks on the card and in
+  the task while the agent's pane is still there.
   A *Review* link beside the run opens its worktree in the Review mode.
   The card says what the agents started on it have spent so far
   ("$4.20", in the quiet colour), and the run in the task says the time
@@ -679,9 +683,12 @@ the previous hunk, and the last hunk unfolds downward to the end of the
 file the same way — the unfolded lines walk and take comments like any
 other.
 **Approve** tells the agent the work is reviewed and it can carry on (a
-task it works on can move along) — tick *and ask the agent to commit* and
+task it works on can move along) — pick *and ask the agent to commit* and
 it is **Approve & commit**: the agent commits the reviewed work and says
-so (remuda itself never writes into a repository); **Reject** tells it
+so; pick *and ask it to commit, push and open a pull request* and it is
+**Approve & open PR**: the agent commits, pushes, opens the pull request
+with `gh` and names its link, which a task it works on picks up (remuda
+itself never writes into a repository); **Reject** tells it
 what to fix and to end the answer that brings the work back with the line
 `READY FOR REVIEW` — when it does, the queue lists that workspace first,
 marked *ready again*, and a push says so; both take a note and carry
