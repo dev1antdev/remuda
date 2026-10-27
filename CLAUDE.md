@@ -964,7 +964,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `chat.Service.Open` + `Turns()` (priced turns; a remote pane's through
   the Reader as the chat does, nothing new runs on a remote): `GET
   /api/recap?machine&pane[&session]` or `?machine&dir&session`
-  [`&since`] is one conversation's, `GET /api/standup?tz[&since]` is
+  [`&since`] is one conversation's, with the report as `markdown`
+  (`recap.Conversation`: a heading, the period, the lines `recap.Lines`
+  gives an agent's section of the standup, a note when a question is
+  open), `GET /api/standup?tz[&since]` is
   every agent pane on every connected machine (`Standup`, the machines
   read side by side) with the radar's state and alert, since local
   midnight in `tz` unless `since` says, and the Markdown.
@@ -1311,22 +1314,36 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   dependency — `initialize` answers the client's protocol version when
   it is a known one, else `Version`; `tools/list`, `tools/call`, `ping`;
   empty resources and prompts; an unknown method is -32601, a bad line
-  -32700, and a notification gets no answer). Its tools (`mcp.Tools`,
-  tested on a fake list: `tasks_list`, `task_get`, `task_create`,
-  `task_update`, `task_comment`, `projects_list`, `labels_list`, each
+  -32700, and a notification gets no answer). Its tools (`mcp.Tools`, tested on a fake list: `tasks_list`,
+  `task_get`, `task_create`, `task_update`, `task_comment`,
+  `projects_list`, `labels_list`, and the three read tools of `read.go`
+  — `agents_list`, every agent pane on every connected machine as a
+  table with its state and for how long (`agentState` from the roster's
+  `radar`), the first line of its last answer, its PR link and its
+  conversation's cost, shells left out, the caller's own pane marked
+  "(you)" by `HERDR_PANE_ID`, a machine away named under the count;
+  `agent_recap {machine, pane, since?}`, the pane found on the machine
+  named by id or label, the recap route's `markdown` under a line saying
+  where the agent is and how it stands; `standup {since?}`, the standup
+  route's `markdown` in the server's own zone; `since` is `midnight`,
+  `24h`, `7d`, a date or an RFC 3339 moment (`sinceOf`), nothing for the
+  tool's own default; `Tools.Now` is the clock for tests — each
   answering Markdown an agent reads; the `initialize` answer carries
-  `instructions` saying when to use which, and that a task the agent
-  creates lands in the project's Proposed column until the person accepts
-  it) name a project or a column
-  case-folded (`task_create` answers with the column the task went to —
-  `Made{Task, Column, Notes}`, `Created` — and that a proposal is the
-  person's to accept or decline), read a due date `YYYY-MM-DD` as the end of that day here,
+  `instructions` saying when to use which, the read tools before filing
+  or taking a task, and that a task the agent creates lands in the
+  project's Proposed column until the person accepts it) name a project
+  or a column case-folded (`task_create` answers with the column the task
+  went to — `Made{Task, Column, Notes}`, `Created` — and that a proposal
+  is the person's to accept or decline), read a due date `YYYY-MM-DD` as the end of that day here,
   send a Markdown description as `markdown` with a paragraphs-only
   `description` beside it for a list without the renderer, mark a task
   with the agent's `HERDR_PANE_ID` as `source`, and make a label that is
   missing. They speak through `tasksapi.Client` (the tasks routes with
   `Authorization: Bearer <key>`, a refusal as `*tasksapi.Error`, tested
-  on `httptest`) found by `tasksapi.FindDoor()`: `REMUDA_AGENT_URL` /
+  on `httptest`; `read.go` is the read side — `Roster()` into
+  `tasksapi.Roster` with `Machine.AgentPanes()`, `Recap(machine, pane,
+  session, since)` and `Standup(since, tz)`, each the route's `markdown`)
+  found by `tasksapi.FindDoor()`: `REMUDA_AGENT_URL` /
   `REMUDA_AGENT_KEY`, else the state dir's `agent-url` and `agent-key`
   files the remuda holding the list leaves on every machine its agents
   run on (`http://127.0.0.1:7317` on the cockpit, its door forwarded
@@ -1367,9 +1384,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `<state>/agent-keys.json`, one per machine, named after it (`Mint(name)`
   replaces the machine's earlier key; only the sha256 is kept; `Check` in
   constant time, `last_used` bumped at most once a minute); a bearer that
-  reads `rk_…` is a key and `Key.Allows(path)` keeps it to `/api/tasks`
-  and `/api/tasks/…` — anything else is a 403 "this key is for tasks
-  only" at once, logged once an hour per key (`strayedKey`); the key's
+  reads `rk_…` is a key and `Key.Allows(method, path)` keeps it to
+  `/api/tasks` and `/api/tasks/…` with any method and to a GET of
+  `/api/roster`, `/api/recap` and `/api/standup` (`readRoutes`: what the
+  agents are doing, so a scout sees who is on what) — anything else is a
+  403 "this key is for tasks and reading only" at once, logged once an
+  hour per key (`strayedKey`); the key's
   name is `auth.CallerName(ctx)` in a handler (a task made through one
   carries it as its source). **The door** (`door.go`): `EnsureDoor(dir,
   keys, name, url)` keeps the cockpit's own `agent-key` / `agent-url`
@@ -1614,9 +1634,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   after 500 ms; `REMUDA_TOKEN` must be ≥ 32 characters. A browser's
   cookie holds a device secret of its own, never the token, so one
   device is revoked without rotating the token for every other
-  (`internal/auth`). An agent's key (`rk_…`) opens `/api/tasks…` and
-  nothing else — 403 at once past that, logged once an hour — and
-  travels to a remote machine on stdin over the ssh master, never on a
+  (`internal/auth`). An agent's key (`rk_…`) opens `/api/tasks…`, and a
+  GET of `/api/roster`, `/api/recap` and `/api/standup`, nothing else —
+  403 at once past that, logged once an hour — and travels to a remote machine on stdin over the ssh master, never on a
   command line. Session ids from
   herdr go through `text.SessionID` before naming a file or following
   `--resume` (the pane's own hooks report them: the agent chooses the

@@ -155,9 +155,9 @@ func (g *Guard) Middleware(next http.Handler) http.Handler {
 		who := g.authenticate(r)
 		if who.ok {
 			if who.key != nil {
-				if !who.key.Allows(r.URL.Path) {
+				if !who.key.Allows(r.Method, r.URL.Path) {
 					g.strayedKey(*who.key, r)
-					http.Error(w, "this key is for tasks only", http.StatusForbidden)
+					http.Error(w, "this key is for tasks and reading only", http.StatusForbidden)
 					return
 				}
 				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), callerKey{}, who.key.Name)))
@@ -239,7 +239,7 @@ func (g *Guard) strayedKey(key Key, r *http.Request) {
 		return
 	}
 	g.strayed.Store(key.ID, now)
-	log.Printf("auth: the %s key of %s asked for %s; it opens tasks only", key.Scope, key.Name, r.URL.Path)
+	log.Printf("auth: the %s key of %s asked for %s %s; it opens the tasks, and a read of the roster, a recap and the standup", key.Scope, key.Name, r.Method, r.URL.Path)
 }
 
 // refused logs a wrong token with its address and makes the caller wait, so guessing is slow.
