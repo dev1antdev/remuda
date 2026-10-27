@@ -135,7 +135,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   finish you have not looked at, each ringed on the wall — hide any
   tile, bring them back; **focus** one agent and it takes the whole wall
   while the others wait in a strip under it; a click on a tile's head opens that agent
-  in Agents. The tiles ask only for the last few turns, so a wall of a
+  in Agents. **Office** turns the wall into a show for a second screen or
+  a TV: one agent large — the one asking you something, else whoever
+  needs you, else each in turn every 20 s — the rest as cards in a column
+  beside it, in full screen; a card's click or the pin on any tile keeps
+  that agent featured, ← and → walk them by hand, Esc leaves. The tiles ask only for the last few turns, so a wall of a
   dozen agents stays light. **Screen** turns every tile into the pane's
   terminal as it is — the rows with their colours, scaled to the tile,
   the prompt and the status at the bottom — a wall of monitors, read
@@ -799,8 +803,10 @@ conversation, the question it asks with its choices as buttons,
 and a line to answer. Tiles keep the roster's order, so nothing jumps
 when an agent changes state; hide the idle ones, keep only the ones that
 need you, or hide any single tile, focus one agent with the rest in a
-strip under it, pick the tile size, click a head to open the agent in full, or switch the
-wall to **Screen** to see every terminal as it is instead of its chat. In Chrome, a tile
+strip under it, pick the tile size, click a head to open the agent in full, switch the
+wall to **Screen** to see every terminal as it is instead of its chat, or put it in
+**Office** mode for a TV — one agent large, whoever needs you first, else each in turn,
+the rest as cards, pinnable, full screen. In Chrome, a tile
 or the current agent **pops out** into a small always-on-top window
 (Document Picture-in-Picture), one at a time, closed from its own frame.
 
