@@ -1036,7 +1036,38 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   up — "Away 3 h: 2 agents answered, 1 waits for you, $4.20 spent", a
   Standup button opens the panel — store field `away`, nothing when
   nothing happened, once per return; `away.ts` the pure part, tested:
-  `awayGap`, `awayWords`, `awayCounts`, `awayLine`.
+  `awayGap`, `awayWords`, `awayCounts`, `awayLine`. `Lines(r)` is one
+  recap as the lines of a report — the figures, the tools, Ran / Edited
+  / Read, subagents and questions, the last answer — which `Markdown`
+  and the handover share; `Hint(part)` is what a call was about.
+- `internal/handover/` — **a conversation continued by another agent**:
+  Claude got stuck, the budget says a cheaper model, the person wants
+  Codex's take; a resume works only for the same agent, this works
+  across them. `Text(from, recap, turns, lastN)` (pure, tested) is the
+  new agent's first prompt: a heading naming who hands over, "What was
+  done so far" (`recap.Lines`), "The last N exchanges in full" — an
+  exchange (`Exchanges`, tested) is a prompt of the person's and the
+  agent's text as it came with every tool call as one line (`recap.Hint`,
+  "(failed)"), outputs left out — and "Carry on from here"; kept under
+  `MaxText` 60 KB by dropping the oldest exchanges first, then the
+  recap's lists, then a cut at a rune with a note; `MaxLastN` 10. `POST
+  /api/handover {machine, pane, session?, agent, model?, args?, turns?}`
+  (`internal/server/handover.go`; the model and arguments checked as the
+  create routes check them) reads the conversation through
+  `chat.Service.Open` + `Turns()`, makes a tab of the pane's workspace
+  named "<Agent> handover", starts the agent (`sessions.StartAgentWith`),
+  hands the text over in the background (`firstPrompt`, a push when it
+  is not delivered), notes it in the activity (kind `handover`, the new
+  pane to open) and answers `{id, pane, size, from}` with `agent_error`
+  as the tab route does; the pane handing over is untouched. The page:
+  `features/chat/HandoverDialog.tsx` (dialog kind `handover`: the agent,
+  its model as the start dialogs offer it, how much goes in full — the
+  recap only or the last 1–10 exchanges — extra arguments folded;
+  `handover.ts` the pure part, tested: `clampTurns`, `turnOptions`,
+  `handoverWords`, `nextAgent`, `handedOverWords`), opened by "Continue
+  with another agent…" in the chat's View menu (a pane's conversation
+  only, never the viewer's) and the palette; on success the new pane is
+  selected on its chat lens and a toast says what went over.
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥
