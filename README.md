@@ -731,7 +731,11 @@ vitals probe finds it and reads its token over your SSH; without it the
 direct attach stays.
 
 **Machine vitals:** the ⓘ next to each machine shows which Claude Code,
-herdr and remuda run there, disk and load; it turns amber when an update
+herdr and remuda run there, disk and load — and the day they had: a small
+chart under each from the readings remuda already takes every fifteen
+minutes (kept in `vitals.json`, nothing new is probed), with the limits
+drawn as dashed lines, so a disk filling up or a load that never drops
+is visible as a trend, not a number. It turns amber when an update
 is out (with the right command for how it was installed), a remote
 remuda is behind this one, or the disk is nearly full.
 

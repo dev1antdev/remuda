@@ -262,9 +262,22 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   remuda versions, how Claude Code was installed, herdr's agent hooks
   that lag the installed herdr (`OutdatedHooks`, the shell behind
   `Report.OutdatedHooks`) and its plugins from GitHub (`GitHubPlugins` →
-  `Report.Plugins`), disk, load, uptime)
+  `Report.Plugins`), disk, load, the core count, uptime)
   from one POSIX script per machine through `shell.Text`, every 15
-  minutes and on demand (`POST /api/machines/{id}/health`); the newest
+  minutes and on demand (`POST /api/machines/{id}/health`). **The day's
+  vitals are kept** (`history.go`, tested): every probe that read the
+  machine adds a `Sample{At, Load, DiskFree %}` to the machine's history
+  — one on demand within a minute of the last replaces it — the last
+  `HistoryKeep` (96, a day of probes) per machine, written to
+  `<state>/vitals.json` after each probe and read back at start (a
+  damaged file is an empty history, logged once); `Collector.Report`
+  attaches them as `Report.History`, so the roster's `health.history`
+  carries the day and the ⓘ draws it: two sparklines under the Disk and
+  Load rows (`features/roster/Sparkline.tsx` over `spark.ts`,
+  tested — `sparkPath`, `thresholdY`, `rangeOf`, `loadThresholds` one
+  and two per core, `DISK_THRESHOLDS` 10 % / 5 % free, `spanWords`,
+  `sparkTitle`), pure SVG, the thresholds as dashed amber and red lines,
+  hidden with fewer than two samples; the newest
   Claude Code, Codex, Gemini CLI and Kimi Code (npm registry), herdr and **remuda
   itself** (GitHub releases) every 6 hours unless `-no-version-check` —
   the only outbound requests remuda makes by itself (a read on demand

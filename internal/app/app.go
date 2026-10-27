@@ -152,7 +152,7 @@ func Run(ctx context.Context, o Options) error {
 	}, pushSvc.Notify)
 	input := sessions.NewInput(fleet, watcher)
 	health.PinnedCode = setup.CodeVersion
-	vitals := health.New(fleet, o.Version, o.VersionCheck)
+	vitals := health.New(o.Dir, fleet, o.Version, o.VersionCheck)
 	runner := jobs.New(bus)
 	restarter := restart.New(fleet)
 	restarter.Later = func(mc *machines.Machine, title string, fn func(say func(string)) error) {

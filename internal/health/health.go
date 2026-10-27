@@ -41,10 +41,12 @@ type Report struct {
 	DiskFreeGB    float64  `json:"disk_free_gb"`
 	DiskUsedPct   int      `json:"disk_used_pct"`
 	Load1         float64  `json:"load1"`
+	Cores         int      `json:"cores,omitempty"` // what a load of 1.0 per core means
 	Uptime        string   `json:"uptime,omitempty"`
 	OutdatedHooks []Hook   `json:"outdated_hooks,omitempty"` // herdr's agent integrations behind what the installed herdr writes
 	Plugins       []Plugin `json:"plugins,omitempty"`        // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
 	Error         string   `json:"error,omitempty"`
+	History       []Sample `json:"history,omitempty"` // the day's samples, oldest first (Collector.Report attaches them)
 }
 
 // Hook is one of herdr's agent integrations as `herdr integration status` reports it outdated: the version on the machine and the one the installed herdr writes.
@@ -89,15 +91,19 @@ type Collector struct {
 	// Check turns the outbound version lookups on
 	Check bool
 
+	dir string // the state dir, where the day's samples are kept; "" keeps them in memory only
+
 	mu      sync.Mutex
 	reports map[string]*Report
+	history history
 	latest  Latest
 	release Release
 	locks   map[string]*sync.Mutex // one read of a machine at a time; a second waits for it
 }
 
-func New(m *machines.Manager, version string, check bool) *Collector {
-	return &Collector{machines: m, Version: version, Check: check, reports: map[string]*Report{}, locks: map[string]*sync.Mutex{}}
+// New makes a collector keeping its samples in dir ("" for none on disk).
+func New(dir string, m *machines.Manager, version string, check bool) *Collector {
+	return &Collector{dir: dir, machines: m, Version: version, Check: check, reports: map[string]*Report{}, history: loadHistory(dir), locks: map[string]*sync.Mutex{}}
 }
 
 // Start keeps every connected machine's report no older than interval and the versions fresh.
@@ -123,7 +129,7 @@ func (c *Collector) Start(interval time.Duration) {
 	}()
 }
 
-// Report is the machine's last reading, nil before the first.
+// Report is the machine's last reading with the day's samples, nil before the first.
 func (c *Collector) Report(id string) *Report {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -132,6 +138,7 @@ func (c *Collector) Report(id string) *Report {
 		return nil
 	}
 	cp := *r
+	cp.History = append([]Sample(nil), c.history[id]...)
 	return &cp
 }
 
@@ -190,6 +197,7 @@ func (c *Collector) Refresh(mc *machines.Machine) {
 	c.mu.Lock()
 	c.reports[mc.ID()] = &r
 	c.mu.Unlock()
+	c.remember(mc.ID(), r)
 }
 
 // Script prints the vitals, one "key=value" per line, every probe silent when its tool is missing.
@@ -202,6 +210,7 @@ for a in claude codex gemini kimi; do c=$(command -v "$a" 2>/dev/null); if [ -n 
 h=$(command -v herdr 2>/dev/null); if [ -n "$h" ]; then echo "herdr=$(herdr --version 2>/dev/null | head -1)"; echo "herdr_path=$(readlink "$h" 2>/dev/null || printf %s "$h")"; echo "herdr_server=$(herdr status server 2>/dev/null | sed -n 's/^version: //p' | head -1)"; fi
 if [ -n "$h" ]; then ` + OutdatedHooks + ` | sed 's/^/hook=/'; ` + GitHubPlugins + ` | sed 's/^/plugin=/'; fi
 echo "arch=$(uname -m)"
+echo "cores=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null)"
 if [ -x "$HOME/.local/bin/remuda" ]; then echo "remuda=$("$HOME/.local/bin/remuda" -version 2>/dev/null)"; fi
 cs=$(readlink "$HOME/.local/opt/code-server" 2>/dev/null); case "$cs" in *code-server-*) echo "code_server=${cs##*code-server-}";; esac
 echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
@@ -275,6 +284,8 @@ func Parse(out string) (Report, *machines.Peer) {
 			default:
 				r.Arch = v
 			}
+		case "cores":
+			r.Cores, _ = strconv.Atoi(v)
 		case "remuda":
 			r.Remuda = strings.TrimPrefix(v, "remuda ")
 		case "code_server":
