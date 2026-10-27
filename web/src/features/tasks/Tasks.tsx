@@ -14,7 +14,7 @@ import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { Icon, Notice, PANELS, Resizer, Tip, type IconName, useDebounced, useTimedNotice } from "@/ui";
-import { createTask, deleteTask, getTask, listLabels, listProjects, listTasks, patchTask, type Task } from "./api";
+import { createTask, deleteTask, getTask, listLabels, listProjects, listTasks, patchTask, type Run, type Task } from "./api";
 import Board from "./Board";
 import { Loading, TaskChips } from "./pieces";
 import ProjectSettings from "./ProjectSettings";
@@ -24,6 +24,7 @@ import { StartAgentDialog } from "./StartAgentDialog";
 import { TaskDetail } from "./TaskDetail";
 import { ProposedActions, ProposedBar, useTriage } from "./Triage";
 import { acceptColumn, proposedTotal } from "./proposed";
+import { paneOf, runPR } from "./runPR";
 import { QuickAdd, TaskRow } from "./TaskList";
 
 type Smart = "today" | "upcoming" | "open" | "proposed";
@@ -42,6 +43,7 @@ const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 export default function Tasks() {
   const drawer = app.use((s) => s.drawer);
   const { machines } = useRoster();
+  const prOf = (r: Run | null | undefined) => runPR(r, r ? paneOf(machines, r.machine, r.pane) : null);
   const agents = useAgentTargets();
   const located = useCurrent();
   const currentPane = located ? { machineId: located.machine.id, paneId: located.pane.id } : null;
@@ -329,7 +331,7 @@ export default function Tasks() {
               onOpen={(id) => setOpenId(id === openId ? null : id)}
               onMove={moveCard}
               onAdd={addTo}
-              chips={(t) => <TaskChips task={t} fields={project.fields} />}
+              chips={(t) => <TaskChips task={t} fields={project.fields} pr={prOf(t.run)} />}
             />
           </div>
         ) : (
@@ -342,6 +344,7 @@ export default function Tasks() {
                 project={sel.kind === "smart" ? byId.get(t.project_id) : undefined}
                 status={statusOf(t)}
                 fields={byId.get(t.project_id)?.fields}
+                pr={prOf(t.run)}
                 selected={t.id === openId}
                 onToggle={() => void toggleDone(t)}
                 onOpen={() => setOpenId(t.id === openId ? null : t.id)}
@@ -385,6 +388,7 @@ export default function Tasks() {
           onStart={() => setStartReq(open)}
           machineLabel={(id) => machineLabel(machines, id)}
           liveStatus={(r) => agents.find((a) => a.machineId === r.machine && a.paneId === r.pane)?.status ?? null}
+          prOf={prOf}
           onOpenPane={actions.selectPane}
         />
       )}

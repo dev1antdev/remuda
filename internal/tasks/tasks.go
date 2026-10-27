@@ -112,6 +112,8 @@ type Run struct {
 	Finished   string `json:"finished,omitempty"`
 	Reported   string `json:"-"` // the transcript record the reported finish ended with
 	Error      string `json:"error,omitempty"`
+	PRURL      string `json:"pr_url,omitempty"`   // the pull request the agent opened, once it named it
+	PRLabel    string `json:"pr_label,omitempty"` // "PR #15" / "MR !9"
 }
 
 const (
@@ -303,6 +305,11 @@ CREATE TABLE IF NOT EXISTS task_fields (
 	}
 	if err := st.addColumn("projects", "proposed_seeded", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
+	}
+	for _, col := range []string{"pr_url", "pr_label"} {
+		if err := st.addColumn("task_runs", col, "TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
 	}
 	if _, err := st.db.Exec(`CREATE INDEX IF NOT EXISTS tasks_status ON tasks(project_id, status_id, position)`); err != nil {
 		return err
@@ -1476,11 +1483,11 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 
 // ---- runs and comments ----
 
-const runCols = `id, task_id, machine, workspace, pane, dir, branch, agent, state, started, prompt_sent, finished, reported, error`
+const runCols = `id, task_id, machine, workspace, pane, dir, branch, agent, state, started, prompt_sent, finished, reported, error, pr_url, pr_label`
 
 func scanRun(sc interface{ Scan(...any) error }) (Run, error) {
 	var r Run
-	err := sc.Scan(&r.ID, &r.TaskID, &r.Machine, &r.Workspace, &r.Pane, &r.Dir, &r.Branch, &r.Agent, &r.State, &r.Started, &r.PromptSent, &r.Finished, &r.Reported, &r.Error)
+	err := sc.Scan(&r.ID, &r.TaskID, &r.Machine, &r.Workspace, &r.Pane, &r.Dir, &r.Branch, &r.Agent, &r.State, &r.Started, &r.PromptSent, &r.Finished, &r.Reported, &r.Error, &r.PRURL, &r.PRLabel)
 	return r, err
 }
 

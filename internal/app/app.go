@@ -231,7 +231,7 @@ func Run(ctx context.Context, o Options) error {
 		Note:      tracker.SetAlert,
 		Notify:    pushSvc.Notify,
 	}).Run(time.Minute)
-	go (&tasks.RunWatch{
+	runWatch := &tasks.RunWatch{
 		Store: taskStore,
 		PaneState: func(machineID, paneID string) (string, time.Time, bool) {
 			pane, snap := chats.Pane(machineID, paneID)
@@ -246,7 +246,9 @@ func Run(ctx context.Context, o Options) error {
 		},
 		LastAnswer: chats.LastAnswer,
 		Notify:     pushSvc.Notify,
-	}).Loop(15 * time.Second)
+	}
+	go runWatch.Loop(15 * time.Second)
+	events.Subscribe(bus, func(e events.PullRequestNamed) { runWatch.OnPullRequest(e.Pane.Machine, e.Pane.Pane, e.URL, e.Label) })
 	go schedules.Loop()
 	go hub.Run(ctx)
 	go budgets.Loop(5 * time.Minute)

@@ -708,8 +708,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `verdictMessage` — the verdict, the note, the draft's comments, and
   what it means (approved: reviewed, carry on, a task can move on;
   rejected: work on it and say when it is ready for another look; an
-  approval with "and ask the agent to commit" ticked adds `COMMIT_ASK`,
-  the button reads **Approve & commit** — the agent commits, remuda never
+  approval's "Afterwards" choice (`VerdictAsk`: none, commit, pr) adds
+  `COMMIT_ASK` — the button reads **Approve & commit** — or `PR_ASK` —
+  **Approve & open PR**: commit, push the branch, open a pull request
+  with `gh pr create` against the usual base unless the note names one,
+  and name its link in the answer; the agent does it, remuda never
   writes into a repository) —
   through `/api/submit` first, then `markReviewed(verdict)`, so an
   agent's refusal leaves the baseline alone; a rejection needs a comment
@@ -1302,9 +1305,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a push, and `Store.OnFinish` moves the task to the `on_finish` column
   when it still sits in `on_start` (a card the person moved meanwhile
   stays; the push title says `→ Testing`); a pane gone two minutes →
-  `gone`. `comments` are markdown, a path in one opening on the run's
-  machine relative to its worktree; the UI re-reads an open task every
-  10 s while a run is live.
+  `gone`. **The run follows the pull request** (pr.go, tested): every
+  `events.PullRequestNamed` (the link `internal/said` reads off the
+  agent's answers) goes to `RunWatch.OnPullRequest` → `Store.OnPullRequest`,
+  which, when a live run (starting, running or finished) is on that
+  pane and does not name that link yet, keeps it on the run (`pr_url`,
+  `pr_label`), adds a comment by "agent" ("Opened PR #15: <url>"), moves
+  the task by the finish rule (`OnFinish`: to `on_finish` while it still
+  sits in `on_start`) and pushes "Task #N: PR #15 opened → Testing"; the
+  page (`runPR.ts`, tested: `paneOf`, `runPR`) draws the link in the
+  detail's run block and as a chip on list rows and board cards, with
+  the `.pr-state` checks and review chips of the Wall tile while the
+  run's pane is still on the roster naming that link. `comments` are
+  markdown, a path in one opening on the run's machine relative to its
+  worktree; the UI re-reads an open task every 10 s while a run is live.
 - `internal/mcp/` + `internal/tasksapi/` — **the agents and the tasks**.
   `remuda mcp` is a Model Context Protocol server over stdio
   (`mcp.Server`: hand-written JSON-RPC 2.0, one message a line, no

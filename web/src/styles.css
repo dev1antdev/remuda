@@ -8241,3 +8241,60 @@ body.popout {
     margin-left: auto;
   }
 }
+
+/* ---- #12 Approve & open PR: the verdict's choices, and the pull request a task's run noted in the detail and on a card ---- */
+.modal .verdict-asks {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+
+.modal .verdict-asks-name {
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.modal .verdict-ask {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--fs-13);
+  font-weight: 400;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.modal .verdict-ask input {
+  width: auto;
+  height: auto;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.modal .verdict-ask span {
+  flex: 1;
+  min-width: 0;
+}
+
+.tasks-run-pr {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.tasks-pr {
+  padding: 0;
+  border: 0;
+}
+
+.tasks-pr .pr-state {
+  gap: 4px;
+}
