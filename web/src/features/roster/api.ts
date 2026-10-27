@@ -61,7 +61,7 @@ export type Session = {
   active_tab_id: string;
   worktree?: { repo_key: string; repo_name: string; linked: boolean; checkout_path: string };
   dir?: string;
-  review?: { changed: number; fresh: number }; // uncommitted files; fresh = moved since the reviewer looked
+  review?: { changed: number; fresh: number; ready?: boolean }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another
   tabs: Tab[];
 };
 

@@ -8192,3 +8192,32 @@ body.popout {
     justify-content: center;
   }
 }
+
+/* #11 Ready again: a rejected workspace whose agent says it is ready for another look, in the review queue */
+.queue-item.ready .queue-name {
+  display: flex;
+  flex-direction: column;
+  white-space: normal;
+}
+
+.queue-title,
+.queue-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-sub {
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.queue-item.on .queue-sub {
+  color: var(--fg-dim);
+}
+
+.badge.ready {
+  background: var(--green-soft);
+  color: var(--green);
+  white-space: nowrap;
+}

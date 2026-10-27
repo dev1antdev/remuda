@@ -37,6 +37,7 @@ type Baseline struct {
 	Blobs   map[string]string `json:"files"` // blob hash by path of every file uncommitted then; "gone" for a deleted one
 	Verdict string            `json:"verdict,omitempty"`
 	At      time.Time         `json:"at"`
+	Ready   time.Time         `json:"ready,omitzero"` // when the agent said the rejected work is ready for another look
 }
 
 // Commit is one commit made since the baseline.
