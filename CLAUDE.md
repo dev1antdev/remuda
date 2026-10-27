@@ -1305,7 +1305,19 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a push, and `Store.OnFinish` moves the task to the `on_finish` column
   when it still sits in `on_start` (a card the person moved meanwhile
   stays; the push title says `→ Testing`); a pane gone two minutes →
-  `gone`. **The run follows the pull request** (pr.go, tested): every
+  `gone`. **A run says what it spent**: every sweep notes the meter's
+  reading of the pane on the run (`RunWatch.Usage`, `usage.Tracker.Display`
+  wired in app.go — `cost` at API prices, `tokens`, `model`, and `took`,
+  the seconds from the start to the finish, 0 while the agent works;
+  `SetRunUsage`, written only when a figure moved), so the figures stay
+  once the pane is gone; a task carries `cost`, its runs summed in
+  `fillRuns` (one query over the page), and the page shows it in the
+  quiet colour on the chips of a row and a card (`.tasks-cost`) and as
+  "Agent run: $4.20 · 38 min · Opus 4.5" under the run in the detail,
+  in the tone of the tightest budget covering the run's machine and
+  folder (`runCost.ts`, tested: `runSeconds` counts from the start while
+  the run is live, `runWords`, `taskCost`). Nothing is re-summed: the
+  standup and the usage report keep their own figures. **The run follows the pull request** (pr.go, tested): every
   `events.PullRequestNamed` (the link `internal/said` reads off the
   agent's answers) goes to `RunWatch.OnPullRequest` → `Store.OnPullRequest`,
   which, when a live run (starting, running or finished) is on that

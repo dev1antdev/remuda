@@ -4,9 +4,11 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { checksTone, checksWords, prWords } from "@/features/roster/prStatus";
 import { openUrl } from "@/lib/host";
 import { Icon, Logo, Tip } from "@/ui";
+import { usd } from "@/features/usage/format";
 import { PRIORITIES, type Field, type Label, type Project, type Status, type Task } from "./api";
 import { FieldChip } from "./fields";
 import { dueLabel, toLocalInput } from "./prompt";
+import { taskCost } from "./runCost";
 import type { RunPR } from "./runPR";
 
 export const projectOption = (p: Project) => ({
@@ -51,6 +53,11 @@ export function TaskChips({ task: t, project, status, fields, pr }: { task: Task
       {t.run && t.run.state !== "gone" && t.run.state !== "failed" && (
         <span className={`tasks-row-run is-${t.run.state}`} title={`${t.run.agent} on ${t.run.branch}: ${t.run.state}`}>
           <Logo agent={t.run.agent} />
+        </span>
+      )}
+      {taskCost(t) > 0 && (
+        <span className="tasks-cost" title="What the agents started on it spent, at API prices">
+          {usd(taskCost(t))}
         </span>
       )}
       {pr && (

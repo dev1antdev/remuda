@@ -92,6 +92,7 @@ type Task struct {
 	Source      string         `json:"source"`     // "" for a person; an agent's: the key's name and its pane, "GOG · w3:p1"
 	Created     string         `json:"created"`
 	Updated     string         `json:"updated"`
+	Cost        float64        `json:"cost,omitempty"` // USD: what every agent started on it spent, the runs' figures summed
 	Run         *Run           `json:"run,omitempty"`
 	Comments    []Comment      `json:"comments,omitempty"`
 }
@@ -112,8 +113,13 @@ type Run struct {
 	Finished   string `json:"finished,omitempty"`
 	Reported   string `json:"-"` // the transcript record the reported finish ended with
 	Error      string `json:"error,omitempty"`
-	PRURL      string `json:"pr_url,omitempty"`   // the pull request the agent opened, once it named it
-	PRLabel    string `json:"pr_label,omitempty"` // "PR #15" / "MR !9"
+	// what the agent spent, read off the meter while the pane is there and kept once it is gone
+	Cost    float64 `json:"cost,omitempty"`     // USD at API prices
+	Tokens  int64   `json:"tokens,omitempty"`   // input, output and cache tokens
+	Model   string  `json:"model,omitempty"`    // the model's name, "Opus 4.5"
+	Took    int     `json:"took,omitempty"`     // seconds from the start to the finish, 0 while the agent still works
+	PRURL   string  `json:"pr_url,omitempty"`   // the pull request the agent opened, once it named it
+	PRLabel string  `json:"pr_label,omitempty"` // "PR #15" / "MR !9"
 }
 
 const (
@@ -250,7 +256,11 @@ CREATE TABLE IF NOT EXISTS task_runs (
   prompt_sent TEXT NOT NULL DEFAULT '',
   finished TEXT NOT NULL DEFAULT '',
   reported TEXT NOT NULL DEFAULT '',
-  error TEXT NOT NULL DEFAULT ''
+  error TEXT NOT NULL DEFAULT '',
+  cost REAL NOT NULL DEFAULT 0,
+  tokens INTEGER NOT NULL DEFAULT 0,
+  model TEXT NOT NULL DEFAULT '',
+  took INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS task_runs_task ON task_runs(task_id, id);
 CREATE TABLE IF NOT EXISTS comments (
@@ -305,6 +315,11 @@ CREATE TABLE IF NOT EXISTS task_fields (
 	}
 	if err := st.addColumn("projects", "proposed_seeded", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
+	}
+	for col, def := range map[string]string{"cost": "REAL NOT NULL DEFAULT 0", "tokens": "INTEGER NOT NULL DEFAULT 0", "model": "TEXT NOT NULL DEFAULT ''", "took": "INTEGER NOT NULL DEFAULT 0"} {
+		if err := st.addColumn("task_runs", col, def); err != nil {
+			return err
+		}
 	}
 	for _, col := range []string{"pr_url", "pr_label"} {
 		if err := st.addColumn("task_runs", col, "TEXT NOT NULL DEFAULT ''"); err != nil {
@@ -1109,7 +1124,7 @@ func (st *Store) Get(id int64) (Task, error) {
 	return t, nil
 }
 
-// fillRuns attaches each task's latest run.
+// fillRuns attaches each task's latest run and what all of its runs cost, in two queries over the page.
 func (st *Store) fillRuns(tasks []*Task) error {
 	if len(tasks) == 0 {
 		return nil
@@ -1130,7 +1145,25 @@ func (st *Store) fillRuns(tasks []*Task) error {
 			t.Run = &rr
 		}
 	}
-	return rows.Err()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	sums, err := st.db.Query(`SELECT task_id, sum(cost) FROM task_runs WHERE task_id IN (` + ids + `) GROUP BY task_id`)
+	if err != nil {
+		return err
+	}
+	defer sums.Close()
+	for sums.Next() {
+		var id int64
+		var cost float64
+		if err := sums.Scan(&id, &cost); err != nil {
+			return err
+		}
+		if t := byID[id]; t != nil {
+			t.Cost = cost
+		}
+	}
+	return sums.Err()
 }
 
 // index maps the tasks by id and lists the ids for an IN (…) clause.
@@ -1483,12 +1516,24 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 
 // ---- runs and comments ----
 
-const runCols = `id, task_id, machine, workspace, pane, dir, branch, agent, state, started, prompt_sent, finished, reported, error, pr_url, pr_label`
+const runCols = `id, task_id, machine, workspace, pane, dir, branch, agent, state, started, prompt_sent, finished, reported, error, cost, tokens, model, took, pr_url, pr_label`
 
 func scanRun(sc interface{ Scan(...any) error }) (Run, error) {
 	var r Run
-	err := sc.Scan(&r.ID, &r.TaskID, &r.Machine, &r.Workspace, &r.Pane, &r.Dir, &r.Branch, &r.Agent, &r.State, &r.Started, &r.PromptSent, &r.Finished, &r.Reported, &r.Error, &r.PRURL, &r.PRLabel)
+	err := sc.Scan(&r.ID, &r.TaskID, &r.Machine, &r.Workspace, &r.Pane, &r.Dir, &r.Branch, &r.Agent, &r.State, &r.Started, &r.PromptSent, &r.Finished, &r.Reported, &r.Error, &r.Cost, &r.Tokens, &r.Model, &r.Took, &r.PRURL, &r.PRLabel)
 	return r, err
+}
+
+// SetRunUsage notes what a run's agent has spent so far and, once it finished, how long it took.
+func (st *Store) SetRunUsage(id int64, cost float64, tokens int64, model string, took int) error {
+	res, err := st.db.Exec(`UPDATE task_runs SET cost = ?, tokens = ?, model = ?, took = ? WHERE id = ?`, cost, tokens, model, took, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // StartRun records an agent started on a task and moves the task to its project's on_start column, in one transaction.

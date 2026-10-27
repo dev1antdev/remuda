@@ -245,7 +245,15 @@ func Run(ctx context.Context, o Options) error {
 			return display.State, time.UnixMilli(display.Since), true
 		},
 		LastAnswer: chats.LastAnswer,
-		Notify:     pushSvc.Notify,
+		Usage: func(machineID, paneID string) (float64, int64, string, bool) {
+			d, ok := meter.Display(machineID, paneID)
+			if !ok {
+				return 0, 0, "", false
+			}
+			tokens := d.Tokens
+			return d.Cost, tokens.Input + tokens.Output + tokens.CacheRead + tokens.CacheWrite5m + tokens.CacheWrite1h, d.Name, true
+		},
+		Notify: pushSvc.Notify,
 	}
 	go runWatch.Loop(15 * time.Second)
 	events.Subscribe(bus, func(e events.PullRequestNamed) { runWatch.OnPullRequest(e.Pane.Machine, e.Pane.Pane, e.URL, e.Label) })

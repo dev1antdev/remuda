@@ -211,6 +211,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   on the same way, and shows the request with its checks on the card and in
   the task while the agent's pane is still there.
   A *Review* link beside the run opens its worktree in the Review mode.
+  The card says what the agents started on it have spent so far
+  ("$4.20", in the quiet colour), and the run in the task says the time
+  it took and the model — read off the same meter as the header's pill,
+  a measure at API prices, and kept once the agent's pane is gone.
   Which columns do what is the project's own setting. Mark it done from
   there. A task can also start as a **GitHub issue**: paste its address
   (the link button in the Tasks head, or "New task from a GitHub
