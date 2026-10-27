@@ -114,7 +114,6 @@ func Conversation(r Recap, since time.Time, now time.Time) string {
 	return b.String()
 }
 
-
 // Numbers is the one line of figures: prompts, answers, time, tokens, cost.
 func Numbers(r Recap) string {
 	parts := []string{plural(r.Prompts, "prompt"), plural(r.Answers, "answer")}
