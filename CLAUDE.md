@@ -1603,7 +1603,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Branch/base names for a worktree go through `sessions.RefOK`. ssh control sockets
   live under `<state>/ssh` (`sshx.SocketDir`) while the path keeps
   within 86 bytes, a unix sockaddr's 104 less the 17-byte suffix
-  OpenSSH binds a master with, else in the temp dir, private on a Mac.
+  OpenSSH binds a master with, else in the temp dir, private on a Mac,
+  named by the state dir and the host there, so a scratch instance never
+  rides the real one's master (and never takes it down on exit).
   `TS_AUTHKEY` travels on stdin, never on a command line. Colours are six hex digits or nothing
   (`normColor`). A run of an update must send back the command shown.
   The installer installs nothing whose sha256 is not the release's; the
