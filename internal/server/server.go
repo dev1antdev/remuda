@@ -99,6 +99,7 @@ func (s *Server) Handler() http.Handler {
 	s.questionRoutes(api)
 	s.feedRoutes(api)
 	s.recapRoutes(api)
+	s.handoverRoutes(api)
 	s.liveRoutes(api)
 	s.deviceRoutes(api)
 	s.agentKeyRoutes(api)

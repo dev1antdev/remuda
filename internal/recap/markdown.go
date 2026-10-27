@@ -47,31 +47,8 @@ func Markdown(items []Item, since time.Time, now time.Time) string {
 		}
 		busy++
 		fmt.Fprintf(&b, "## %s — %s\n\n", where, stateWords(item))
-		fmt.Fprintf(&b, "- %s\n", Numbers(r))
-		if r.Calls > 0 {
-			fmt.Fprintf(&b, "- %s\n", Calls(r))
-		}
-		if len(r.Commands) > 0 {
-			fmt.Fprintf(&b, "- Ran: %s\n", strings.Join(quoteAll(shortened(r.Commands, 60), 6), ", "))
-		}
-		if len(r.Edited) > 0 {
-			fmt.Fprintf(&b, "- Edited: %s\n", strings.Join(quoteAll(r.Edited, 12), ", "))
-		}
-		if len(r.Read) > 0 {
-			fmt.Fprintf(&b, "- Read: %s\n", strings.Join(quoteAll(r.Read, 12), ", "))
-		}
-		if r.Subagents > 0 || r.Questions > 0 {
-			var parts []string
-			if r.Subagents > 0 {
-				parts = append(parts, plural(r.Subagents, "subagent"))
-			}
-			if r.Questions > 0 {
-				parts = append(parts, plural(r.Questions, "question"))
-			}
-			fmt.Fprintf(&b, "- %s\n", strings.Join(parts, " · "))
-		}
-		if r.Said != "" {
-			fmt.Fprintf(&b, "- Last answer: %s\n", r.Said)
+		for _, line := range Lines(r) {
+			fmt.Fprintf(&b, "- %s\n", line)
 		}
 		b.WriteString("\n")
 	}
@@ -83,6 +60,38 @@ func Markdown(items []Item, since time.Time, now time.Time) string {
 		fmt.Fprintf(&b, "Nothing to report from %s.\n", strings.Join(quiet, ", "))
 	}
 	return strings.TrimRight(b.String(), "\n") + "\n"
+}
+
+// Lines is one recap as the lines of a report: the figures, the tools, what ran, the files, the subagents and
+// questions, the last answer — each without its list mark, for the standup and for a handover alike.
+func Lines(r Recap) []string {
+	lines := []string{Numbers(r)}
+	if r.Calls > 0 {
+		lines = append(lines, Calls(r))
+	}
+	if len(r.Commands) > 0 {
+		lines = append(lines, "Ran: "+strings.Join(quoteAll(shortened(r.Commands, 60), 6), ", "))
+	}
+	if len(r.Edited) > 0 {
+		lines = append(lines, "Edited: "+strings.Join(quoteAll(r.Edited, 12), ", "))
+	}
+	if len(r.Read) > 0 {
+		lines = append(lines, "Read: "+strings.Join(quoteAll(r.Read, 12), ", "))
+	}
+	if r.Subagents > 0 || r.Questions > 0 {
+		var parts []string
+		if r.Subagents > 0 {
+			parts = append(parts, plural(r.Subagents, "subagent"))
+		}
+		if r.Questions > 0 {
+			parts = append(parts, plural(r.Questions, "question"))
+		}
+		lines = append(lines, strings.Join(parts, " · "))
+	}
+	if r.Said != "" {
+		lines = append(lines, "Last answer: "+r.Said)
+	}
+	return lines
 }
 
 // Numbers is the one line of figures: prompts, answers, time, tokens, cost.

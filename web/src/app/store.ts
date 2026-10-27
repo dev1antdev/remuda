@@ -29,6 +29,7 @@ export type AppDialog =
   | { kind: "recap"; machineId: string; paneId: string; session: string | null; dir: string; title: string } // one conversation's recap; paneId "" = a transcript on its own
   | { kind: "budget"; budget: BudgetStatus | null } // a spending limit, new or the one given
   | { kind: "import-issue"; projectId?: number } // a task from a GitHub issue, into the project named or the one picked in the dialog
+  | { kind: "handover"; machineId: string; paneId: string; session: string | null; agent: string; workspace: string } // this conversation continued by another agent in a new tab
   | null;
 
 export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
