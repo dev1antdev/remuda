@@ -8241,3 +8241,57 @@ body.popout {
     margin-left: auto;
   }
 }
+
+/* #17 Bulk actions: the rows and cards picked for one, the bar under the list while something is selected */
+.tasks-row.picked,
+.tasks-row.picked:hover {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+
+.board-card.picked,
+.board-card.picked:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-ring);
+}
+
+/* the count and the actions keep to the left: the toasts live in the bottom right corner, over the bar's other end */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 20px 0;
+  padding: 8px 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: var(--fs-13);
+}
+
+.bulk-count {
+  flex: none;
+  margin-right: 6px;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* a finger held on a row starts the selection: the browser's own callout and text selection stay out of it */
+@media (pointer: coarse) {
+  .tasks-row,
+  .board-card {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .bulk-bar {
+    margin: 8px 12px 0;
+    flex-wrap: wrap;
+  }
+
+  .bulk-count {
+    flex-basis: 100%;
+    margin-right: 0;
+  }
+}

@@ -56,6 +56,8 @@ export function keyGroups(mac: boolean): KeyGroup[] {
       rows: [
         { keys: [`${mod} ↵`], what: "post a comment" },
         { keys: ["↵"], what: "open the card under the focus" },
+        { keys: [`${mod} click`, "⇧ click"], what: "select a task, or the range up to it; a long press on a phone — the bar under the list moves, labels, finishes or deletes them" },
+        { keys: ["Esc"], what: "clear the selection" },
       ],
     },
     {
