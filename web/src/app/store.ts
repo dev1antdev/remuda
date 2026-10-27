@@ -30,6 +30,8 @@ export type AppDialog =
   | { kind: "budget"; budget: BudgetStatus | null } // a spending limit, new or the one given
   | { kind: "import-issue"; projectId?: number } // a task from a GitHub issue, into the project named or the one picked in the dialog
   | { kind: "handover"; machineId: string; paneId: string; session: string | null; agent: string; workspace: string } // this conversation continued by another agent in a new tab
+  | { kind: "recipes" } // the saved ways to start an agent, edited as a list
+  | { kind: "start-recipe"; machineId?: string; dir?: string } // an agent started from a recipe, in the folder at hand unless the recipe has its own
   | null;
 
 export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;

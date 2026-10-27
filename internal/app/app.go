@@ -26,6 +26,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/quick"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/recap"
+	"github.com/dev1antdev/remuda/internal/recipes"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
@@ -289,6 +290,7 @@ func Run(ctx context.Context, o Options) error {
 		Review:    reviews,
 		Schedules: schedules,
 		Quick:     quick.New(o.Dir),
+		Recipes:   recipes.New(o.Dir),
 		Prefs:     prefs.New(o.Dir),
 		Code:      code.New(o.CodePort),
 		Guard:     auth.NewGuard(o.Token, devices, keys),
