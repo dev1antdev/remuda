@@ -113,7 +113,9 @@ not style.
   `rpcErr`, JSON through `decode` / `writeJSON`. `go vet` is the linter,
   gofmt the formatter (a hook runs it in Claude Code). Tabs.
 - **TypeScript, React 19 function components**, 2-space indent, double
-  quotes, semicolons. Dependencies are react, react-dom, xterm and
+  quotes, semicolons. Dependencies are react, react-dom, xterm with its
+  search addon (`@xterm/addon-search`, the find over the terminal's
+  scrollback: the same project as xterm, not worth writing twice) and
   radix-ui (menus, tooltips, popovers: the primitives whose keyboard and
   focus behaviour is not worth writing twice; `ui/Menu.tsx` and
   `ui/Tip.tsx` are the only places that import it); add nothing without

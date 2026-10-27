@@ -610,7 +610,7 @@ issue and the cause is half found.
 
 Working today (verified against herdr 0.9.1, protocol 22, local + a real
 remote machine): multi-machine roster with herdr's agent statuses, live
-terminal (shared attach, replay, input, resize, touch key bar) on local **and
+terminal (shared attach, replay, input, resize, find, touch key bar) on local **and
 remote** panes, chat (exact session via `agent_session`, remote transcripts
 fetched by delta over SSH, thinking/tool folding, submit via `agent.prompt`,
 approval nudge), workspace create/close with `agent.start`, add/remove remote
@@ -724,7 +724,13 @@ tool calls folded — to share with someone who is not in remuda.
 **Find** (⌘F / Ctrl+F on the chat lens, or 🔍 in the tab strip) marks
 every place a word occurs in the conversation shown and says "3 of 12";
 Enter and Shift+Enter walk them, the current one brought into view, Esc
-closes. It works on a transcript opened from the search too.
+closes. It works on a transcript opened from the search too, and on the
+terminal lens over the pane's scrollback — the last five thousand rows
+herdr keeps, whatever this browser has seen of them — with ⌘F there as
+well on a Mac and Ctrl+Shift+F elsewhere, since Ctrl+F belongs to the
+shell: the pane scrolls to each match (for every viewer, as the wheel
+does), the match is marked on the screen, Esc gives the terminal the
+focus back, and on a phone the key bar has a search key.
 **The timeline** (View › Timeline, on by default with a mouse) is a
 thin bar over the conversation: every prompt and its answer laid out in
 time — a break over ten minutes drawn as ten, so a lunch does not
