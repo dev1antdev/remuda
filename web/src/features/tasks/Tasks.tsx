@@ -16,6 +16,7 @@ import { errMsg } from "@/lib/text";
 import { Icon, Notice, PANELS, Resizer, Tip, type IconName, useDebounced, useTimedNotice } from "@/ui";
 import { createTask, deleteTask, getTask, listLabels, listProjects, listTasks, patchTask, type Run, type Task } from "./api";
 import Board from "./Board";
+import { BulkBar } from "./BulkBar";
 import { Loading, TaskChips } from "./pieces";
 import ProjectSettings from "./ProjectSettings";
 import { NewProjectDialog, ProjectTree } from "./ProjectTree";
@@ -26,6 +27,7 @@ import { ProposedActions, ProposedBar, useTriage } from "./Triage";
 import { acceptColumn, proposedTotal } from "./proposed";
 import { paneOf, runPR } from "./runPR";
 import { QuickAdd, TaskRow } from "./TaskList";
+import { useSelection } from "./useSelection";
 
 type Smart = "today" | "upcoming" | "open" | "proposed";
 type Sel = { kind: "smart"; id: Smart } | { kind: "project"; id: number };
@@ -128,18 +130,20 @@ export default function Tasks() {
     setSel(next);
     setPage(1);
     setOpenId(null);
+    selection.clear();
     actions.closeDrawer();
+  };
+  // the rows leave the list at once; a deleted task that was open closes
+  const dropRows = (ids: number[]) => {
+    if (openId !== null && ids.includes(openId)) setOpenId(null);
+    list.mutate((d) => d && { ...d, tasks: d.tasks.filter((x) => !ids.includes(x.id)) });
   };
 
   const byId = useMemo(() => new Map((projects ?? []).map((p) => [p.id, p])), [projects]);
   const project = sel.kind === "project" ? byId.get(sel.id) : undefined;
   const statusOf = (t: Task) => byId.get(t.project_id)?.statuses.find((s) => s.id === t.status_id);
-  const triage = useTriage({
-    columnFor: (t) => acceptColumn(byId.get(t.project_id)),
-    drop: (ids) => list.mutate((d) => d && { ...d, tasks: d.tasks.filter((x) => !ids.includes(x.id)) }),
-    refresh,
-    onError: setActionError,
-  });
+  const triage = useTriage({ columnFor: (t) => acceptColumn(byId.get(t.project_id)), drop: dropRows, refresh, onError: setActionError });
+  const selection = useSelection({ tasks, labels, columns: (t) => byId.get(t.project_id)?.statuses ?? [], drop: dropRows, refresh });
 
   // replaceOrMove re-reads the list when the task left it — another project, another due date — or changed column, where the server knows the place
   const replaceOrMove = (t: Task) => {
@@ -328,7 +332,10 @@ export default function Tasks() {
               tasks={tasks}
               openId={openId}
               draggable={!isTouch}
+              picked={selection.picked}
+              selecting={selection.selecting}
               onOpen={(id) => setOpenId(id === openId ? null : id)}
+              onPick={(t, how) => selection.pick(t.id, how)}
               onMove={moveCard}
               onAdd={addTo}
               chips={(t) => <TaskChips task={t} fields={project.fields} pr={prOf(t.run)} />}
@@ -346,12 +353,18 @@ export default function Tasks() {
                 fields={byId.get(t.project_id)?.fields}
                 pr={prOf(t.run)}
                 selected={t.id === openId}
+                picked={selection.picked(t.id)}
+                selecting={selection.selecting}
                 onToggle={() => void toggleDone(t)}
                 onOpen={() => setOpenId(t.id === openId ? null : t.id)}
+                onPick={(how) => selection.pick(t.id, how)}
                 actions={proposedView ? <ProposedActions onAccept={() => void triage.accept(t)} onDecline={() => triage.decline(t)} /> : undefined}
               />
             ))}
           </div>
+        )}
+        {selection.count > 0 && (
+          <BulkBar count={selection.count} busy={selection.busy} columns={selection.columnChoices} labels={selection.labelChoices} onAct={selection.act} onClear={selection.clear} />
         )}
         {!board && pages > 1 && (
           <div className="tasks-pager">

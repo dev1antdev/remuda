@@ -193,7 +193,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   (it is deleted), one by one or all at once. Which column takes the
   proposals is one of the four marks in the project's ⚙; a project from
   before gets a Proposed column once, and stays without one if you remove
-  it. Each project can
+  it. Select several — ⌘-click, ⇧-click a range, a long press on a phone
+  — and the bar under the list moves, labels, finishes or deletes them at
+  once. Each project can
   carry its **own fields** (text, number, one choice, several, a date, a
   checkbox, a link), shown on the card and handed to the agent with the
   task. It lives in one SQLite file (`tasks.db`) in remuda's state dir —
