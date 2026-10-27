@@ -8557,6 +8557,28 @@ body.popout {
   }
 }
 
+/* #8 Task cost: what a task's agents spent, on the chips and under the run */
+.tasks-cost {
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tasks-run-spent {
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.tasks-run-spent.is-amber {
+  color: var(--amber);
+}
+
+.tasks-run-spent.is-red {
+  color: var(--red);
+}
+
 /* #11 Ready again: a rejected workspace whose agent says it is ready for another look, in the review queue */
 .queue-item.ready .queue-name {
   display: flex;
