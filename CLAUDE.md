@@ -984,7 +984,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `chat.Service.Open` + `Turns()` (priced turns; a remote pane's through
   the Reader as the chat does, nothing new runs on a remote): `GET
   /api/recap?machine&pane[&session]` or `?machine&dir&session`
-  [`&since`] is one conversation's, `GET /api/standup?tz[&since]` is
+  [`&since`] is one conversation's, with the report as `markdown`
+  (`recap.Conversation`: a heading, the period, the lines `recap.Lines`
+  gives an agent's section of the standup, a note when a question is
+  open), `GET /api/standup?tz[&since]` is
   every agent pane on every connected machine (`Standup`, the machines
   read side by side) with the radar's state and alert, since local
   midnight in `tz` unless `since` says, and the Markdown.
@@ -1006,7 +1009,38 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   up — "Away 3 h: 2 agents answered, 1 waits for you, $4.20 spent", a
   Standup button opens the panel — store field `away`, nothing when
   nothing happened, once per return; `away.ts` the pure part, tested:
-  `awayGap`, `awayWords`, `awayCounts`, `awayLine`.
+  `awayGap`, `awayWords`, `awayCounts`, `awayLine`. `Lines(r)` is one
+  recap as the lines of a report — the figures, the tools, Ran / Edited
+  / Read, subagents and questions, the last answer — which `Markdown`
+  and the handover share; `Hint(part)` is what a call was about.
+- `internal/handover/` — **a conversation continued by another agent**:
+  Claude got stuck, the budget says a cheaper model, the person wants
+  Codex's take; a resume works only for the same agent, this works
+  across them. `Text(from, recap, turns, lastN)` (pure, tested) is the
+  new agent's first prompt: a heading naming who hands over, "What was
+  done so far" (`recap.Lines`), "The last N exchanges in full" — an
+  exchange (`Exchanges`, tested) is a prompt of the person's and the
+  agent's text as it came with every tool call as one line (`recap.Hint`,
+  "(failed)"), outputs left out — and "Carry on from here"; kept under
+  `MaxText` 60 KB by dropping the oldest exchanges first, then the
+  recap's lists, then a cut at a rune with a note; `MaxLastN` 10. `POST
+  /api/handover {machine, pane, session?, agent, model?, args?, turns?}`
+  (`internal/server/handover.go`; the model and arguments checked as the
+  create routes check them) reads the conversation through
+  `chat.Service.Open` + `Turns()`, makes a tab of the pane's workspace
+  named "<Agent> handover", starts the agent (`sessions.StartAgentWith`),
+  hands the text over in the background (`firstPrompt`, a push when it
+  is not delivered), notes it in the activity (kind `handover`, the new
+  pane to open) and answers `{id, pane, size, from}` with `agent_error`
+  as the tab route does; the pane handing over is untouched. The page:
+  `features/chat/HandoverDialog.tsx` (dialog kind `handover`: the agent,
+  its model as the start dialogs offer it, how much goes in full — the
+  recap only or the last 1–10 exchanges — extra arguments folded;
+  `handover.ts` the pure part, tested: `clampTurns`, `turnOptions`,
+  `handoverWords`, `nextAgent`, `handedOverWords`), opened by "Continue
+  with another agent…" in the chat's View menu (a pane's conversation
+  only, never the viewer's) and the palette; on success the new pane is
+  selected on its chat lens and a toast says what went over.
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥
@@ -1311,18 +1345,32 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   dependency — `initialize` answers the client's protocol version when
   it is a known one, else `Version`; `tools/list`, `tools/call`, `ping`;
   empty resources and prompts; an unknown method is -32601, a bad line
-  -32700, and a notification gets no answer). Its tools (`mcp.Tools`,
-  tested on a fake list: `tasks_list`, `task_get`, `task_create`,
-  `task_update`, `task_comment`, `projects_list`, `labels_list`, each
+  -32700, and a notification gets no answer). Its tools (`mcp.Tools`, tested on a fake list: `tasks_list`,
+  `task_get`, `task_create`, `task_update`, `task_comment`,
+  `projects_list`, `labels_list`, and the three read tools of `read.go`
+  — `agents_list`, every agent pane on every connected machine as a
+  table with its state and for how long (`agentState` from the roster's
+  `radar`), the first line of its last answer, its PR link and its
+  conversation's cost, shells left out, the caller's own pane marked
+  "(you)" by `HERDR_PANE_ID`, a machine away named under the count;
+  `agent_recap {machine, pane, since?}`, the pane found on the machine
+  named by id or label, the recap route's `markdown` under a line saying
+  where the agent is and how it stands; `standup {since?}`, the standup
+  route's `markdown` in the server's own zone; `since` is `midnight`,
+  `24h`, `7d`, a date or an RFC 3339 moment (`sinceOf`), nothing for the
+  tool's own default; `Tools.Now` is the clock for tests — each
   answering Markdown an agent reads; the `initialize` answer carries
-  `instructions` saying when to use which) name a project or a column
-  case-folded, read a due date `YYYY-MM-DD` as the end of that day here,
+  `instructions` saying when to use which, the read tools before filing
+  or taking a task) name a project or a column case-folded, read a due date `YYYY-MM-DD` as the end of that day here,
   send a Markdown description as `markdown` with a paragraphs-only
   `description` beside it for a list without the renderer, mark a task
   with the agent's `HERDR_PANE_ID` as `source`, and make a label that is
   missing. They speak through `tasksapi.Client` (the tasks routes with
   `Authorization: Bearer <key>`, a refusal as `*tasksapi.Error`, tested
-  on `httptest`) found by `tasksapi.FindDoor()`: `REMUDA_AGENT_URL` /
+  on `httptest`; `read.go` is the read side — `Roster()` into
+  `tasksapi.Roster` with `Machine.AgentPanes()`, `Recap(machine, pane,
+  session, since)` and `Standup(since, tz)`, each the route's `markdown`)
+  found by `tasksapi.FindDoor()`: `REMUDA_AGENT_URL` /
   `REMUDA_AGENT_KEY`, else the state dir's `agent-url` and `agent-key`
   files the remuda holding the list leaves on every machine its agents
   run on (`http://127.0.0.1:7317` on the cockpit, its door forwarded
@@ -1363,9 +1411,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `<state>/agent-keys.json`, one per machine, named after it (`Mint(name)`
   replaces the machine's earlier key; only the sha256 is kept; `Check` in
   constant time, `last_used` bumped at most once a minute); a bearer that
-  reads `rk_…` is a key and `Key.Allows(path)` keeps it to `/api/tasks`
-  and `/api/tasks/…` — anything else is a 403 "this key is for tasks
-  only" at once, logged once an hour per key (`strayedKey`); the key's
+  reads `rk_…` is a key and `Key.Allows(method, path)` keeps it to
+  `/api/tasks` and `/api/tasks/…` with any method and to a GET of
+  `/api/roster`, `/api/recap` and `/api/standup` (`readRoutes`: what the
+  agents are doing, so a scout sees who is on what) — anything else is a
+  403 "this key is for tasks and reading only" at once, logged once an
+  hour per key (`strayedKey`); the key's
   name is `auth.CallerName(ctx)` in a handler (a task made through one
   carries it as its source). **The door** (`door.go`): `EnsureDoor(dir,
   keys, name, url)` keeps the cockpit's own `agent-key` / `agent-url`
@@ -1610,9 +1661,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   after 500 ms; `REMUDA_TOKEN` must be ≥ 32 characters. A browser's
   cookie holds a device secret of its own, never the token, so one
   device is revoked without rotating the token for every other
-  (`internal/auth`). An agent's key (`rk_…`) opens `/api/tasks…` and
-  nothing else — 403 at once past that, logged once an hour — and
-  travels to a remote machine on stdin over the ssh master, never on a
+  (`internal/auth`). An agent's key (`rk_…`) opens `/api/tasks…`, and a
+  GET of `/api/roster`, `/api/recap` and `/api/standup`, nothing else —
+  403 at once past that, logged once an hour — and travels to a remote machine on stdin over the ssh master, never on a
   command line. Session ids from
   herdr go through `text.SessionID` before naming a file or following
   `--resume` (the pane's own hooks report them: the agent chooses the

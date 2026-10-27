@@ -6,7 +6,7 @@ const now = Date.parse("2026-10-26T12:00:00Z");
 describe("keyLine", () => {
   it("says what the key opens, when it was used and since when", () => {
     const line = keyLine({ scope: "tasks", created: "2026-10-20T08:00:00Z", last_used: "2026-10-26T09:00:00Z" }, now);
-    expect(line.startsWith("tasks only · used 3 h ago · since ")).toBe(true);
+    expect(line.startsWith("tasks and reading · used 3 h ago · since ")).toBe(true);
   });
 
   it("knows a key never used", () => {

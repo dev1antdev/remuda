@@ -376,7 +376,8 @@ there, or sign out every other device at once; the rest keep working and the
 token stays what it was.
 
 **Agents and your tasks.** The agents on every machine get a key of their
-own that opens this remuda's task list and nothing else: remuda places it,
+own that opens this remuda's task list, and a read of what the other agents
+are doing, nothing else: remuda places it,
 with the address to reach it at, in the machine's own state dir (on a remote,
 over the same SSH connection, with this remuda's port forwarded back to the
 machine's loopback), and `remuda mcp` / `remuda tasks` there read the two
@@ -466,12 +467,17 @@ with everything remuda can do; see SECURITY.md.
 
 Any coding agent remuda runs — Claude Code, Codex, Gemini CLI, Kimi Code —
 can read and write your task list through **MCP**: `remuda mcp` is a Model
-Context Protocol server over stdio with seven tools — `tasks_list`,
+Context Protocol server over stdio with ten tools — `tasks_list`,
 `task_get`, `task_create` (a Markdown description, a column, a due date, a
 priority, labels, the project's fields), `task_update` (move it to another
-column, mark it done, retitle, rewrite), `task_comment`, `projects_list` and
-`labels_list` — and it tells the agent when to use which. A task an agent
-makes remembers the pane that made it. One command registers the server with
+column, mark it done, retitle, rewrite), `task_comment`, `projects_list`,
+`labels_list`, and three that only read what your agents are doing:
+`agents_list` (every agent on every machine, its state and for how long,
+its last answer, its pull request, its cost; the agent's own pane marked),
+`agent_recap` (what one conversation came to, as the Recap dialog shows it)
+and `standup` (the report over all of them) — and it tells the agent when
+to use which: look who is already on what before filing or taking a task.
+A task an agent makes remembers the pane that made it. One command registers the server with
 every agent on a machine, through the agent's own CLI (`claude mcp add`,
 `codex mcp add`, `gemini mcp add`; Kimi when its CLI can):
 
@@ -489,7 +495,8 @@ while you are away.
 
 How the agents get in: the remuda that holds the list leaves an `agent-key`
 and an `agent-url` in remuda's state dir on every machine its agents run on;
-the key opens the tasks routes and nothing else, on the cockpit itself or
+the key opens the tasks routes and a read of the roster, a recap and the
+standup, nothing else, on the cockpit itself or
 through its door forwarded over ssh (`REMUDA_AGENT_URL` and
 `REMUDA_AGENT_KEY` override them, for a script of your own). An agent whose
 CLI cannot register a server gets the lines by hand — Claude Code's
@@ -677,7 +684,7 @@ same dialog Tasks uses to send a task. **Message several agents** (✉ in
 the sidebar head, or the palette) sends one text to the agents you tick —
 everyone, the working ones, the resting ones, or by hand — each through
 the chat's own path in turn, and says how each went; an agent busy with a
-question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Quick prompts** (⚡ in the composer) are saved texts, for every folder or one, shared by all your devices; `{dir}`, `{branch}` and `{file}` in one become the pane's folder, its branch and the file you last opened. **↑**
+question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Continue with another agent** (View menu, or the palette) hands the conversation to a different agent — Codex's take, a cheaper model, a fresh Claude when this one is stuck: a new tab in the same workspace, the agent you pick started there with the recap of the conversation and its last exchanges in full as its first prompt (how many is yours to say; the whole stays under 60 KB), the old pane left as it is, the handover noted in the activity. **Quick prompts** (⚡ in the composer) are saved texts, for every folder or one, shared by all your devices; `{dir}`, `{branch}` and `{file}` in one become the pane's folder, its branch and the file you last opened. **↑**
 on an empty line brings back what you sent before from this device to
 that folder, newest first; ↓ walks forward and back to the line you were
 writing.

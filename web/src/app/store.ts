@@ -30,6 +30,7 @@ export type AppDialog =
   | { kind: "budget"; budget: BudgetStatus | null } // a spending limit, new or the one given
   | { kind: "import-issue"; projectId?: number } // a task from a GitHub issue, into the project named or the one picked in the dialog
   | { kind: "pins"; machineId: string; paneId: string; dir: string; shown: string | null; title: string } // the turns pinned in a folder's conversations; shown = the session on screen, whose pins name no session
+  | { kind: "handover"; machineId: string; paneId: string; session: string | null; agent: string; workspace: string } // this conversation continued by another agent in a new tab
   | null;
 
 export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
