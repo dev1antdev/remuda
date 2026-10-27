@@ -5,10 +5,11 @@ import type { Dictionary } from "../i18n";
 import { agents } from "./ru/agents";
 import { chat } from "./ru/chat";
 import { panels } from "./ru/panels";
+import { pieces } from "./ru/pieces";
 import { review } from "./ru/review";
 import { settings } from "./ru/settings";
 import { shell } from "./ru/shell";
 import { tasks } from "./ru/tasks";
 import { terminal } from "./ru/terminal";
 
-export const ru: Dictionary = { ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels };

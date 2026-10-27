@@ -86,13 +86,13 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
     >
       <nav className="schedule-kind" aria-label={t("What runs")}>
         <button type="button" className={kind === "prompt" ? "on" : ""} onClick={() => setKind("prompt")}>
-          <Icon name="send" size={14} /> Prompt to an agent
+          <Icon name="send" size={14} /> {t("Prompt to an agent")}
         </button>
         <button type="button" className={kind === "digest" ? "on" : ""} onClick={() => setKind("digest")}>
-          <Icon name="sun" size={14} /> Standup digest
+          <Icon name="sun" size={14} /> {t("Standup digest")}
         </button>
         <button type="button" className={kind === "agent" ? "on" : ""} onClick={() => setKind("agent")}>
-          <Icon name="play" size={14} /> Start an agent
+          <Icon name="play" size={14} /> {t("Start an agent")}
         </button>
       </nav>
       {kind !== "digest" && (
@@ -204,7 +204,7 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
         <div className="schedule-row">
           <label className="grow">
             <span>
-              Name <span className="dim">(optional)</span>
+              {t("Name")} <span className="dim">(optional)</span>
             </span>
             <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t("Standup digest")} />
           </label>
@@ -216,7 +216,7 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
       ) : (
         <label>
           <span>
-            Name <span className="dim">(optional)</span>
+            {t("Name")} <span className="dim">(optional)</span>
           </span>
           <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={kind === "agent" ? t("Scout") : t("Morning status")} />
         </label>

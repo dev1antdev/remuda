@@ -51,7 +51,7 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
   });
   return (
     <Dialog
-      title={<>Start an agent on {t.identifier}</>}
+      title={<>{tr("Start an agent on {task}", { task: t.identifier })}</>}
       icon="git-branch"
       size="md"
       as="form"

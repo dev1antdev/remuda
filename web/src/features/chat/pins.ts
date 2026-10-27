@@ -5,6 +5,7 @@
 import { ago } from "@/lib/time";
 import type { Turn } from "./api";
 import { firstLine } from "./said";
+import { t } from "@/lib/i18n";
 
 export type Pin = {
   session: string; // the session file the turn is in
@@ -64,5 +65,5 @@ export function shortSession(id: string): string {
 // pinWords says when the pin was made and, for a turn in another session than the one shown, which one
 export function pinWords(pin: Pin, shown: string | null, now = Date.now()): string {
   const when = ago(pin.at, now);
-  return pin.session && pin.session !== shown ? `${when} · session ${shortSession(pin.session)}` : when;
+  return pin.session && pin.session !== shown ? t("{when} · session {id}", { when, id: shortSession(pin.session) }) : when;
 }

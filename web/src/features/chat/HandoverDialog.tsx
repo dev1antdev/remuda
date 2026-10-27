@@ -42,10 +42,10 @@ export default function HandoverDialog({ machineId, paneId, session, agent, work
     <FormDialog
       title={t("Continue with another agent")}
       icon="arrow-right"
-      hint={`A new tab in ${workspace}: ${label} starts there with ${handoverWords(turns)} as its first prompt. This conversation stays as it is.`}
+      hint={t("A new tab in {workspace}: {agent} starts there with {what} as its first prompt. This conversation stays as it is.", { workspace, agent: label, what: handoverWords(turns) })}
       onClose={onClose}
       submit={submit}
-      submitLabel={`Hand over to ${label}`}
+      submitLabel={t("Hand over to {agent}", { agent: label })}
     >
       <label>
         {t("Agent")}

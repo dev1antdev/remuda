@@ -45,14 +45,14 @@ export function TaskChips({ task: t, project, status, fields, pr }: { task: Task
         <FieldChip key={f.id} field={f} value={t.fields?.[String(f.id)]} />
       ))}
       {t.source && (
-        <Tip text={`Made by an agent on ${t.source}`}>
-          <span className="badge quiet task-source" aria-label={`Made by an agent on ${t.source}`}>
+        <Tip text={tr("Made by an agent on {source}", { source: t.source })}>
+          <span className="badge quiet task-source" aria-label={tr("Made by an agent on {source}", { source: t.source })}>
             <Icon name="bot" size={12} />
           </span>
         </Tip>
       )}
       {t.run && t.run.state !== "gone" && t.run.state !== "failed" && (
-        <span className={`tasks-row-run is-${t.run.state}`} title={`${t.run.agent} on ${t.run.branch}: ${t.run.state}`}>
+        <span className={`tasks-row-run is-${t.run.state}`} title={tr("{agent} on {branch}: {state}", { agent: t.run.agent, branch: t.run.branch, state: t.run.state })}>
           <Logo agent={t.run.agent} />
         </span>
       )}
@@ -62,11 +62,11 @@ export function TaskChips({ task: t, project, status, fields, pr }: { task: Task
         </span>
       )}
       {pr && (
-        <Tip text={`${pr.label}: ${pr.status ? prWords(pr.status) : tr("opened by the agent on the task")} · opens in a new tab`}>
+        <Tip text={tr("{pr}: {status} · opens in a new tab", { pr: pr.label, status: pr.status ? prWords(pr.status) : tr("opened by the agent on the task") })}>
           <button
             type="button"
             className="linkish tasks-pr"
-            aria-label={`${pr.label}, opens in a new tab`}
+            aria-label={tr("{pr}, opens in a new tab", { pr: pr.label })}
             onClick={(e) => {
               e.stopPropagation();
               openUrl(pr.url);

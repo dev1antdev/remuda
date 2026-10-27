@@ -38,7 +38,7 @@ export function EditChange({ part }: { part: Part }) {
 function rowsOf(part: Part): EditRow[] {
   const edits = editsOf(part.tool_name, part.input);
   if (edits.length <= 1) return edits.flatMap((edit) => editRows(edit.old, edit.new));
-  return edits.flatMap((edit, i) => [{ kind: "hunk" as const, text: `edit ${i + 1} of ${edits.length}${edit.replaceAll ? t(", every occurrence") : ""}` }, ...editRows(edit.old, edit.new)]);
+  return edits.flatMap((edit, i) => [{ kind: "hunk" as const, text: t("edit {i} of {n}", { i: i + 1, n: edits.length }) + (edit.replaceAll ? t(", every occurrence") : "") }, ...editRows(edit.old, edit.new)]);
 }
 
 function Row({ row, tokens }: { row: EditRow; tokens: Token[] | undefined }) {

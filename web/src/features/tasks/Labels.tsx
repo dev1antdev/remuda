@@ -58,7 +58,7 @@ export function LabelsField({ task: t, labels, onChange, onLabelsChanged, onErro
         {(t.labels ?? []).map((l) => (
           <span key={l.id} className="tasks-label" style={labelStyle(l)}>
             {l.title}
-            <button type="button" className="icon-btn sm tasks-label-x" onClick={() => void dropLabel(l)} title={tr("Remove")} aria-label={`Remove ${l.title}`}>
+            <button type="button" className="icon-btn sm tasks-label-x" onClick={() => void dropLabel(l)} title={tr("Remove")} aria-label={tr("Remove {label}", { label: l.title })}>
               <Icon name="x" size={12} />
             </button>
           </span>
@@ -97,7 +97,7 @@ export function LabelsField({ task: t, labels, onChange, onLabelsChanged, onErro
           </span>
         ) : (
           <button type="button" className="linkish" onClick={() => setPicking(true)}>
-            <Icon name="plus" size={12} /> label
+            <Icon name="plus" size={12} /> {tr("label")}
           </button>
         )}
       </span>

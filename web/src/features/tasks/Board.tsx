@@ -91,14 +91,14 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
               <span className="tasks-dot" style={{ background: `#${s.hex_color || "888"}` }} />
               <span className="board-col-title">{s.title}</span>
               {s.on_agent && (
-                <Tip text="What agents propose lands here, for you to accept or decline">
+                <Tip text={tr("What agents propose lands here, for you to accept or decline")}>
                   <span className="board-col-mark" aria-label={tr("Agents' proposals land here")}>
                     <Icon name="bot" size={12} />
                   </span>
                 </Tip>
               )}
               <span className="badge quiet">{list.length}</span>
-              <button type="button" className="icon-btn sm" title={`Add a task to ${s.title}`} aria-label={`Add a task to ${s.title}`} onClick={() => setAdding(s.id)}>
+              <button type="button" className="icon-btn sm" title={tr("Add a task to {column}", { column: s.title })} aria-label={tr("Add a task to {column}", { column: s.title })} onClick={() => setAdding(s.id)}>
                 <Icon name="plus" size={14} />
               </button>
             </header>

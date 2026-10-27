@@ -178,7 +178,7 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
                   className="sm"
                   value={r.to ?? survivors[0]?.id ?? 0}
                   onChange={(to) => update(r.key, { to })}
-                  options={survivors.map((s) => ({ value: s.id, label: `its tasks → ${s.title}` }))}
+                  options={survivors.map((s) => ({ value: s.id, label: t("its tasks → {column}", { column: s.title }) }))}
                 />
                 <button type="button" className="linkish" onClick={() => update(r.key, { removed: false })}>
                   undo
@@ -194,7 +194,7 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
       </div>
       <div>
         <button type="button" className="btn sm" onClick={add}>
-          <Icon name="plus" size={12} /> Column
+          <Icon name="plus" size={12} /> {t("Column")}
         </button>
       </div>
       {!ok && kept.length > 0 && (!kept.some((r) => r.kind === "done") || !kept.some((r) => r.kind !== "done")) && (
@@ -250,7 +250,7 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
       </div>
       <div>
         <button type="button" className="btn sm" onClick={fadd}>
-          <Icon name="plus" size={12} /> Field
+          <Icon name="plus" size={12} /> {t("Field")}
         </button>
       </div>
       {err && <Notice tone="error">{err}</Notice>}

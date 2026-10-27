@@ -16,7 +16,7 @@ export default function ViewMenu({ items, shell = false, page = true }: { items:
   ];
   return (
     <Menu
-      label="View"
+      label={t("View")}
       trigger={
         <button type="button" className="btn sm view-btn" aria-label={t("View options")}>
           <Icon name="sliders" size={14} />

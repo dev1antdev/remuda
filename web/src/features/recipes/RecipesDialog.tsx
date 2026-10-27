@@ -124,7 +124,7 @@ export default function RecipesDialog({ initial, onClose, onSaved }: { initial?:
         {list && list.length === 0 && <Notice tone="hint">{t("No recipes yet.")}</Notice>}
       </div>
       <button type="button" className="btn sm" disabled={!list} onClick={add}>
-        <Icon name="plus" size={12} /> Add a recipe
+        <Icon name="plus" size={12} /> {t("Add a recipe")}
       </button>
       {(err || loaded.error) && <Notice tone="error">{err || loaded.error}</Notice>}
       <div className="modal-actions">
@@ -188,12 +188,12 @@ function RecipeForm({ form, agents, machines, onChange, onDone, onRemove }: {
       )}
       {!shell && (
         <label>
-          First prompt <small>{t("sent once the agent is up")}</small>
+          {t("First prompt")} <small>{t("sent once the agent is up")}</small>
           <textarea value={form.draft.prompt} rows={3} placeholder={t("What the agent should start on")} onChange={(e) => setDraft({ prompt: e.target.value })} />
         </label>
       )}
       <label>
-        Folder <small>{t("optional: the recipe belongs to this folder")}</small>
+        {t("Folder")} <small>{t("optional: the recipe belongs to this folder")}</small>
         <input value={form.dir} placeholder={t("any folder")} spellCheck={false} onChange={(e) => set({ dir: e.target.value })} />
       </label>
       {form.dir.trim() && several && (
@@ -204,10 +204,10 @@ function RecipeForm({ form, agents, machines, onChange, onDone, onRemove }: {
       )}
       <div className="recipe-form-actions">
         <button type="button" className="btn sm" onClick={onDone}>
-          <Icon name="check" size={12} /> Done
+          <Icon name="check" size={12} /> {t("Done")}
         </button>
         <button type="button" className="btn sm ghost" onClick={onRemove}>
-          <Icon name="trash" size={12} /> Remove
+          <Icon name="trash" size={12} /> {t("Remove")}
         </button>
       </div>
     </div>

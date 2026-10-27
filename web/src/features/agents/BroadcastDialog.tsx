@@ -8,7 +8,7 @@ import { Dialog, Icon, Notice, useSubmit } from "@/ui";
 import Logo from "@/ui/Logo";
 import { broadcast, picked, statusWords, type Outcome, type QuickPick } from "./broadcast";
 import { targetKey, type AgentTarget } from "./targets";
-import { t } from "@/lib/i18n";
+import { t, tn } from "@/lib/i18n";
 
 const PICKS: { pick: QuickPick; label: string; title: string }[] = [
   { pick: "all", label: t("All"), title: t("Every agent that would take a message") },
@@ -50,7 +50,7 @@ export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarg
     >
       {outcomes ? (
         <>
-          <Notice tone={failed ? "warn" : "success"}>{failed ? `Sent to ${outcomes.length - failed} of ${outcomes.length}; ${failed} refused.` : `Sent to ${outcomes.length} agent${outcomes.length === 1 ? "" : "s"}.`}</Notice>
+          <Notice tone={failed ? "warn" : "success"}>{failed ? t("Sent to {sent} of {total}; {failed} refused.", { sent: outcomes.length - failed, total: outcomes.length, failed }) : tn(outcomes.length, "Sent to {n} agent.", "Sent to {n} agents.")}</Notice>
           <ul className="pick-list">
             {outcomes.map(({ target, error }) => (
               <li key={targetKey(target)} className={`pick-row${error ? " failed" : ""}`}>
@@ -74,7 +74,7 @@ export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarg
       ) : (
         <>
           <div className="pick-quick">
-            <span className="modal-hint">{chosen.length} of {agents.length} ticked</span>
+            <span className="modal-hint">{t("{chosen} of {total} ticked", { chosen: chosen.length, total: agents.length })}</span>
             {PICKS.map((p) => (
               <button key={p.pick} type="button" className="btn sm" title={p.title} onClick={() => setTicked(picked(agents, p.pick))}>
                 {p.label}
@@ -117,7 +117,7 @@ export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarg
               {t("Cancel")}
             </button>
             <button type="submit" className="btn primary" disabled={busy || chosen.length === 0 || !text.trim()}>
-              {busy ? t("Sending…") : `Send to ${chosen.length}`}
+              {busy ? t("Sending…") : t("Send to {n}", { n: chosen.length })}
             </button>
           </div>
         </>

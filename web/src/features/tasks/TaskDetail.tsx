@@ -88,7 +88,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
         />
         <span className="tasks-ident">{t.identifier}</span>
         {t.source && (
-          <span className="tasks-source" title={`Made by an agent on ${t.source}`}>
+          <span className="tasks-source" title={tr("Made by an agent on {source}", { source: t.source })}>
             <Icon name="bot" size={12} /> by {t.source}
           </span>
         )}
@@ -176,7 +176,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
         </span>
         {!run && canStart && (
           <button type="button" className="linkish" onClick={onStart}>
-            <Icon name="git-branch" size={12} /> Start an agent on it
+            <Icon name="git-branch" size={12} /> {tr("Start an agent on it")}
           </button>
         )}
       </div>
@@ -202,11 +202,11 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
             )}
             {pr && (
               <span className="tasks-run-pr">
-                <button type="button" className="linkish" title={`${pr.url}\nOpen in a new tab`} onClick={() => openUrl(pr.url)}>
+                <button type="button" className="linkish" title={`${pr.url}\n${tr("Open in a new tab")}`} onClick={() => openUrl(pr.url)}>
                   <Icon name="external-link" size={12} /> {pr.label}
                 </button>
                 {pr.status && (
-                  <span className={`pr-state is-${checksTone(pr.status)}`} title={`${pr.label}: ${prWords(pr.status)} · read with gh on the machine`}>
+                  <span className={`pr-state is-${checksTone(pr.status)}`} title={tr("{pr}: {status} · read with gh on the machine", { pr: pr.label, status: prWords(pr.status) })}>
                     <span className="pr-dot" />
                     {checksWords(pr.status)}
                   </span>
@@ -217,12 +217,12 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
           </span>
           {paneStatus !== null && (
             <button type="button" className="linkish" onClick={() => onOpenPane(run.machine, run.pane)}>
-              Open <Icon name="chevron-right" size={12} />
+              {tr("Open")} <Icon name="chevron-right" size={12} />
             </button>
           )}
           {run.dir && (
             <button type="button" className="linkish" title={tr("The worktree's changes in the Review mode")} onClick={() => actions.openReview(run.machine, run.dir)}>
-              <Icon name="circle-check" size={12} /> Review
+              <Icon name="circle-check" size={12} /> {tr("Review")}
             </button>
           )}
         </div>
@@ -240,7 +240,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
                 setEditingDesc(true);
               }}
             >
-              <Icon name="edit" size={12} /> edit
+              <Icon name="edit" size={12} /> {tr("edit")}
             </button>
           )}
         </div>
@@ -276,11 +276,11 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
 
       <div className="tasks-detail-foot">
         <span className="tasks-meta">
-          created {fmtDate(t.created)}
-          {t.done && t.done_at && <> · done {fmtDate(t.done_at)}</>}
+          {tr("created {date}", { date: fmtDate(t.created) })}
+          {t.done && t.done_at && <> · {tr("done {date}", { date: fmtDate(t.done_at) })}</>}
         </span>
         <button type="button" className="linkish danger" onClick={onDelete}>
-          <Icon name="trash" size={12} /> Delete
+          <Icon name="trash" size={12} /> {tr("Delete")}
         </button>
       </div>
     </aside>

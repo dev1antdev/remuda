@@ -49,19 +49,19 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
             {basename(file.path)}
           </span>
           {draft.length > 0 && (
-            <span className="review-tag review-tag-comments" title={`${plural(draft.length, "comment")} in the draft`}>
+            <span className="review-tag review-tag-comments" title={t("{comments} in the draft", { comments: plural(draft.length, "comment") })}>
               {draft.length}
             </span>
           )}
           {file.untracked ? (
-            <span className="review-tag">new</span>
+            <span className="review-tag">{t("new")}</span>
           ) : (
             <span className="review-counts">
               +{file.added} −{file.removed}
             </span>
           )}
         </button>
-        <Tip text="Open the file in the viewer">
+        <Tip text={t("Open the file in the viewer")}>
           <button type="button" className="icon-btn sm" aria-label={t("Open the file")} onClick={() => onOpen()}>
             <Icon name="external-link" size={12} />
           </button>
@@ -183,7 +183,7 @@ function Diff({ text, split, canComment, draft, file, loadSource, onComment, onR
         <div className="review-orphans">
           <Notice tone="hint">{t("No longer on a line of this diff — still in the draft:")}</Notice>
           {strayComments.map((comment) => (
-            <Note key={comment.id} comment={comment} where={`line ${comment.line}${comment.removed ? " (removed)" : ""}`} onRemove={onRemove} />
+            <Note key={comment.id} comment={comment} where={t("line {n}", { n: comment.line }) + (comment.removed ? t(" (removed)") : "")} onRemove={onRemove} />
           ))}
         </div>
       )}

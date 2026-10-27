@@ -353,7 +353,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
       </pre>
       {long && (
         <button type="button" className="linkish md-more" onClick={() => setOpen((o) => !o)}>
-          {open ? t("Show less") : `Show all ${lines.length} lines`}
+          {open ? t("Show less") : t("Show all {n} lines", { n: lines.length })}
         </button>
       )}
     </div>

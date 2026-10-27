@@ -11,7 +11,7 @@ import { refreshHealth, type Health, type Latest, type Machine } from "./api";
 import { concerns, updateLabel } from "./concerns";
 import { Sparkline } from "./Sparkline";
 import { DISK_THRESHOLDS, loadThresholds, rangeOf, sparkTitle, spanWords } from "./spark";
-import { t } from "@/lib/i18n";
+import { t, tn } from "@/lib/i18n";
 
 export function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine; latest?: Latest; serverVersion?: string }) {
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
@@ -53,7 +53,7 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
         type="button"
         className={`icon-btn${worst ? ` health-${worst}` : ""}${open ? " on" : ""}`}
         data-health-btn={m.id}
-        title={list.length ? list.map((c) => c.text).join("\n") : h ? `${m.label}: all good — ${h.os ?? ""}` : t("Vitals not read yet")}
+        title={list.length ? list.map((c) => c.text).join("\n") : h ? t("{machine}: all good — {os}", { machine: m.label, os: h.os ?? "" }) : t("Vitals not read yet")}
         aria-expanded={!!open}
         onClick={(e) => {
           e.stopPropagation();
@@ -66,7 +66,7 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
       </button>
       {updateWhat !== null && <UpdatesDialog machine={m} what={updateWhat || undefined} onClose={() => setUpdateWhat(null)} onDone={() => void refresh()} />}
       {open && (
-        <div className="row-menu health-pop" role="dialog" aria-label={`${m.label} vitals`} style={{ left: open.x, top: open.y }} onClick={(e) => e.stopPropagation()}>
+        <div className="row-menu health-pop" role="dialog" aria-label={t("{machine} vitals", { machine: m.label })} style={{ left: open.x, top: open.y }} onClick={(e) => e.stopPropagation()}>
           <div className="health-head">
             <b>{m.label}</b>
             <span className="dim">{h?.os}</span>
@@ -111,7 +111,7 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
               <dt>herdr</dt>
               <dd>
                 {h.herdr ?? "—"}
-                {h.herdr_server && h.herdr !== h.herdr_server ? <span className="health-new"> · server {h.herdr_server}</span> : null}
+                {h.herdr_server && h.herdr !== h.herdr_server ? <span className="health-new"> · {t("server {version}", { version: h.herdr_server })}</span> : null}
                 {h.herdr && l?.herdr && newer(h.herdr, l.herdr) ? <span className="health-new"> → {l.herdr}</span> : null}
               </dd>
               {h.outdated_hooks?.length ? (
@@ -148,14 +148,14 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
               <dt>{t("Load")}</dt>
               <dd>
                 {h.load1.toFixed(2)}
-                {h.cores ? ` on ${h.cores} cores` : ""}
-                {h.uptime ? ` · up ${h.uptime}` : ""}
+                {h.cores ? ` ${tn(h.cores, "on {n} core", "on {n} cores")}` : ""}
+                {h.uptime ? ` · ${t("up {time}", { time: h.uptime })}` : ""}
                 {history && <Sparkline values={loads} min={loadRange.min} max={loadRange.max} color="var(--ctp-blue)" thresholds={loadThresholds(h.cores)} title={sparkTitle("Load", loads, (v) => v.toFixed(2), span)} />}
               </dd>
               <dt>{t("Read")}</dt>
               <dd>
                 {ago(h.at)}
-                {span ? <span className="dim"> · {span} kept</span> : null}
+                {span ? <span className="dim"> · {t("{span} kept", { span })}</span> : null}
               </dd>
             </dl>
           ) : (
@@ -177,7 +177,7 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
           )}
           <div className="health-foot">
             <button type="button" className="linkish" onClick={() => update("")}>
-              <Icon name="refresh-cw" size={12} /> All updates…
+              <Icon name="refresh-cw" size={12} /> {t("All updates…")}
             </button>
           </div>
           {h?.error && h.claude && <div className="dim">{h.error}</div>}

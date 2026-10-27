@@ -67,7 +67,7 @@ export default function Activity({ onClose }: { onClose: () => void }) {
         ))}
       <div className="modal-actions activity-foot">
         <button type="button" className="btn" onClick={() => actions.openPanel("alerts")}>
-          <Icon name="settings" size={14} /> Alerts on this device
+          <Icon name="settings" size={14} /> {t("Alerts on this device")}
         </button>
       </div>
     </Dialog>

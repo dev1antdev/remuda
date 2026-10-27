@@ -14,7 +14,7 @@ export default function App() {
     <ErrorBoundary
       fallback={(message) => (
         <div className="placeholder">
-          <Notice tone="error">The page hit an error: {message}</Notice>
+          <Notice tone="error">{t("The page hit an error: {message}", { message })}</Notice>
           <button type="button" className="btn primary" onClick={() => location.reload()}>
             {t("Reload")}
           </button>

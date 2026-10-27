@@ -56,17 +56,17 @@ export default function Standup({ onClose }: { onClose: () => void }) {
     >
       {error && <Notice tone="error">{error}</Notice>}
       {data && items.length === 0 && <Notice tone="hint">{t("No agent is running on a connected machine.")}</Notice>}
-      {data && items.length > 0 && busy.length === 0 && <Notice tone="hint">Nothing happened {periodWords}: no prompt, no answer, no tool call from any agent.</Notice>}
+      {data && items.length > 0 && busy.length === 0 && <Notice tone="hint">{t("Nothing happened {period}: no prompt, no answer, no tool call from any agent.", { period: periodWords })}</Notice>}
       {busy.map((item) => (
         <article key={`${item.machine}|${item.pane}`} className="standup-item">
-          <button type="button" className="linkish standup-open" onClick={() => open(item)} title={`${item.dir}\nOpen this agent's chat`}>
+          <button type="button" className="linkish standup-open" onClick={() => open(item)} title={`${item.dir}\n${t("Open this agent's chat")}`}>
             <Logo agent={item.agent} />
             <span className="standup-where">
               {item.workspace}
               {item.machine !== "local" && <span className="standup-machine"> · {item.label}</span>}
             </span>
             <span className={`standup-state is-${item.alert ? "blocked" : item.state}`} title={item.alert}>
-              {stateLabel(item)}
+              {t(stateLabel(item))}
             </span>
             {item.recap.cost > 0 && <span className="standup-cost">{usd(item.recap.cost)}</span>}
           </button>
@@ -92,7 +92,7 @@ export default function Standup({ onClose }: { onClose: () => void }) {
       )}
       <div className="modal-actions">
         <button type="button" className="btn primary" disabled={!data} onClick={() => void copy()}>
-          <Icon name="copy" size={14} /> Copy as Markdown
+          <Icon name="copy" size={14} /> {t("Copy as Markdown")}
         </button>
       </div>
     </Dialog>

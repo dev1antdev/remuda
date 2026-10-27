@@ -29,7 +29,7 @@ export default function RecapDialog({ machineId, paneId, session, dir, title, on
       {data && (data.recap.prompts || data.recap.answers || data.recap.calls ? <RecapBody recap={data.recap} dir={dir} since={data.since || undefined} onJump={jump} /> : <Notice tone="hint">{t("Nothing in this conversation yet.")}</Notice>)}
       <div className="modal-actions">
         <button type="button" className="btn primary" disabled={!data} onClick={() => void copy()}>
-          <Icon name="copy" size={14} /> Copy as Markdown
+          <Icon name="copy" size={14} /> {t("Copy as Markdown")}
         </button>
       </div>
     </Dialog>

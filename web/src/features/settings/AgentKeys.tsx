@@ -16,7 +16,7 @@ export default function AgentKeys() {
     const { text, label } = revokeKeyQuestion(key);
     actions.ask(text, label, () =>
       void revokeKey(key.id).then(() => {
-        actions.notify(`The key of ${key.name} is revoked`, { brief: true });
+        actions.notify(t("The key of {name} is revoked", { name: key.name }), { brief: true });
         reload();
       }, fail),
     );

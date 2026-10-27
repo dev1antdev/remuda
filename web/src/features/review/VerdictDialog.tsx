@@ -7,7 +7,7 @@ import { plural } from "@/lib/text";
 import { Dialog, Logo, Notice, Select, useSubmit } from "@/ui";
 import type { Verdict } from "./api";
 import type { VerdictAsk } from "./draft";
-import { t } from "@/lib/i18n";
+import { t, tn } from "@/lib/i18n";
 
 const ASKS: { value: VerdictAsk; label: string }[] = [
   { value: "none", label: t("Approve only") },
@@ -58,7 +58,7 @@ export function VerdictDialog({ verdict, paneAgent, agents, currentPane, comment
       ) : targets.length === 1 && chosen ? (
         <p className="modal-hint">
           To {chosen.agent}
-          {chosen.sessionName ? ` in ${chosen.sessionName}` : t(" in this pane")}.
+          {chosen.sessionName ? ` ${t("in {workspace}", { workspace: chosen.sessionName })}` : t(" in this pane")}.
         </p>
       ) : (
         <label>
@@ -99,7 +99,7 @@ export function VerdictDialog({ verdict, paneAgent, agents, currentPane, comment
         </div>
       )}
       <p className="modal-hint">
-        {comments > 0 ? `${plural(comments, "comment")} from the draft ${comments === 1 ? "goes" : "go"} along. ` : ""}
+        {comments > 0 ? tn(comments, "{n} comment from the draft goes along. ", "{n} comments from the draft go along. ") : ""}
         {approving ? t("The agent is told the changes are reviewed and it can carry on; the next look starts from now.") : t("The agent is told to work on this and say when it is ready for another look; the next look starts from now.")}
       </p>
       {failure && <Notice tone="error">{failure}</Notice>}

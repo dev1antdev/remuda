@@ -2,6 +2,7 @@
 // prompt the form suggests, a fresh record, and the words the list says about one.
 
 import type { Schedule } from "./api";
+import { t } from "@/lib/i18n";
 
 // SCOUT_PROMPT is what the form suggests: look around the project and make tasks for what could be better
 export const SCOUT_PROMPT =
@@ -25,8 +26,8 @@ export const agentSchedule = (s: Partial<Schedule> & { machine: string; dir: str
 
 // agentWords is an agent schedule's row: the machine, the folder, the agent, and whether its tab goes once it has answered
 export function agentWords(s: Pick<Schedule, "close">, machine: string, folder: string, agent: string): string {
-  return `${machine} · ${folder} · ${agent}${s.close ? " · closes when answered" : ""}`;
+  return `${machine} · ${folder} · ${agent}${s.close ? t(" · closes when answered") : ""}`;
 }
 
 // watchedWords says which pane the schedule still watches for its answer, "" when none
-export const watchedWords = (s: Pick<Schedule, "last_pane">): string => (s.last_pane ? `watching ${s.last_pane.pane}` : "");
+export const watchedWords = (s: Pick<Schedule, "last_pane">): string => (s.last_pane ? t("watching {pane}", { pane: s.last_pane.pane }) : "");

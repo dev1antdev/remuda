@@ -2,6 +2,7 @@
 // colours the chip beside the link — from `pane.pr.status`, read with gh on the agent's machine.
 
 import type { PRStatus } from "./api";
+import { t } from "@/lib/i18n";
 
 export type Tone = "green" | "red" | "amber" | "dim" | "none";
 
@@ -9,10 +10,10 @@ export type Tone = "green" | "red" | "amber" | "dim" | "none";
 export function checksWords(s: PRStatus): string {
   const c = s.checks;
   const counted = c.total - c.skipped;
-  if (c.fail > 0) return `${c.fail} failed`;
-  if (c.pending > 0) return `${c.pending} running`;
+  if (c.fail > 0) return t("{n} failed", { n: c.fail });
+  if (c.pending > 0) return t("{n} running", { n: c.pending });
   if (counted <= 0) return "no checks";
-  return `${c.pass}/${counted} checks`;
+  return t("{pass}/{total} checks", { pass: c.pass, total: counted });
 }
 
 // reviewWords is the request's standing beyond its checks: merged or closed, a draft, conflicts, the review's verdict

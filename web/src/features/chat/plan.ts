@@ -2,6 +2,7 @@
 // the one line a TodoWrite / TaskCreate / TaskUpdate call makes in the turn view. Pure; tested beside.
 
 import type { Part, PlanItem } from "./api";
+import { t, tn } from "@/lib/i18n";
 
 export const PLAN_TOOLS = new Set(["TodoWrite", "TaskCreate", "TaskUpdate"]);
 
@@ -33,7 +34,7 @@ export function planLine(plan: PlanItem[]): string {
   if (!words) return "";
   const now = current(plan);
   if (now) return `${words} · ${currentWords(now)}`;
-  return counts(plan).open ? words : `${words} · done`;
+  return counts(plan).open ? words : `${words} · ${t("done")}`;
 }
 
 // taskNumber is the id Claude Code gave a created task, read off the tool's answer ("Task #3 created…")
@@ -53,18 +54,18 @@ export function planCallWords(part: Part): PlanCall {
       const todos = Array.isArray(input["todos"]) ? (input["todos"] as { status?: string }[]) : [];
       if (!todos.length) return { words: "Plan", mark: "list" };
       const done = todos.filter((todo) => todo.status === "completed").length;
-      return { words: `Plan: ${todos.length} item${todos.length === 1 ? "" : "s"}, ${done} done`, mark: "list" };
+      return { words: tn(todos.length, "Plan: {n} item, {done} done", "Plan: {n} items, {done} done", { done }), mark: "list" };
     }
     case "TaskCreate": {
       const id = taskNumber(part.output);
       return { words: `Task${id ? ` #${id}` : ""}: ${str("subject")}`, mark: "pending" };
     }
     case "TaskUpdate": {
-      const task = `Task #${str("taskId")}`;
+      const task = t("Task #{id}", { id: str("taskId") });
       const status = str("status");
       if (status === "completed" || status === "in_progress") return { words: `${task} → ${status.replace("_", " ")}`, mark: status };
-      if (status === "deleted") return { words: `${task} deleted`, mark: "pending" };
-      return { words: status ? `${task} → ${status}` : `${task} edited`, mark: "pending" };
+      if (status === "deleted") return { words: t("{task} deleted", { task }), mark: "pending" };
+      return { words: status ? `${task} → ${status}` : t("{task} edited", { task }), mark: "pending" };
     }
   }
   return { words: part.tool_name ?? "", mark: "list" };

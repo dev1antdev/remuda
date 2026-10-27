@@ -31,7 +31,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
   const known = folderOptions(machines, machine.id);
   const here = data?.path ?? path;
   return (
-    <Dialog title={`Folder on ${machine.label.split(" · ")[0]}`} icon="folder" size="md" onClose={onClose} className="picker">
+    <Dialog title={t("Folder on {machine}", { machine: machine.label.split(" · ")[0] ?? "" })} icon="folder" size="md" onClose={onClose} className="picker">
       <form
         className="picker-path"
         onSubmit={(e) => {
@@ -74,7 +74,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
                 <span className="picker-name">{d.name}</span>
                 {d.git && <span className="picker-tag">repo</span>}
               </button>
-              <button type="button" className="icon-btn sm" title={`Choose ${d.name}`} aria-label={`Choose ${d.name}`} onClick={() => onPick(full)}>
+              <button type="button" className="icon-btn sm" title={t("Choose {name}", { name: d.name })} aria-label={t("Choose {name}", { name: d.name })} onClick={() => onPick(full)}>
                 <Icon name="check" size={12} />
               </button>
             </div>
@@ -83,7 +83,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
       </div>
       {known.length > 0 && (
         <div className="picker-known">
-          <span className="dim">Workspaces on {machine.label}</span>
+          <span className="dim">{t("Workspaces on {machine}", { machine: machine.label })}</span>
           {known.map((o) => (
             <button key={o.value} type="button" className="linkish" title={o.value} onClick={() => onPick(o.value)}>
               <Icon name="folder" size={12} /> {o.label}
@@ -93,7 +93,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
       )}
       <div className="modal-actions picker-foot">
         <label className="row">
-          <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} /> Hidden folders
+          <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} /> {t("Hidden folders")}
         </label>
         <span className="spacer" />
         <button type="button" className="btn" onClick={onClose}>

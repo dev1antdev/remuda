@@ -27,7 +27,7 @@ export function RecapBody({ recap, dir, since, onJump }: { recap: Recap; dir: st
         <div className="standup-files" title={recap.commands.join("\n")}>
           <span className="standup-label">{t("Ran")}</span>
           {recap.commands.slice(0, 4).join(" · ")}
-          {recap.commands.length > 4 ? ` · +${recap.commands.length - 4} more` : ""}
+          {recap.commands.length > 4 ? ` · ${t("+{n} more", { n: recap.commands.length - 4 })}` : ""}
         </div>
       )}
       {recap.asking && <div className="standup-line is-blocked">{t("A question is open.")}</div>}

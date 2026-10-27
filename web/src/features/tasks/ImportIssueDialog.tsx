@@ -76,7 +76,7 @@ export default function ImportIssueDialog({ projectId, onClose, onCreated }: {
           {t("Cancel")}
         </button>
         <button type="button" className="btn" disabled={busy || !ready} onClick={() => void run(true)}>
-          Create &amp; start an agent…
+          {t("Create & start an agent…")}
         </button>
         <button type="submit" className="btn primary" disabled={busy || !ready}>
           {busy ? t("Reading…") : t("Create")}

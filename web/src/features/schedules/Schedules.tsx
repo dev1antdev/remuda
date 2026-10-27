@@ -48,7 +48,7 @@ export default function Schedules({ machines, onClose, ask }: {
       onClose={onClose}
       controls={
         <button type="button" className="btn sm" onClick={() => setEditing({ enabled: true })}>
-          <Icon name="plus" size={12} /> New
+          <Icon name="plus" size={12} /> {t("New")}
         </button>
       }
     >
@@ -70,7 +70,7 @@ export default function Schedules({ machines, onClose, ask }: {
               <div className="schedule-label">
                 {kindOf(s) === "digest" && <Icon name="sun" size={12} className="schedule-digest-mark" aria-label={t("Standup digest")} />}
                 {kindOf(s) === "agent" && (
-                  <span className="schedule-agent-mark" aria-label={`Starts ${agentLabel(s.agent)}`}>
+                  <span className="schedule-agent-mark" aria-label={t("Starts {agent}", { agent: agentLabel(s.agent) })}>
                     <Logo agent={s.agent ?? ""} />
                   </span>
                 )}
@@ -79,12 +79,12 @@ export default function Schedules({ machines, onClose, ask }: {
               <div className="schedule-sub">
                 <code>{s.cron}</code> ·{" "}
                 {kindOf(s) === "digest"
-                  ? `to your devices · ${sinceWords(s.since)}`
+                  ? t("to your devices · {since}", { since: sinceWords(s.since) })
                   : kindOf(s) === "agent"
                     ? agentWords(s, machineLabel(machines, s.machine), basename(s.dir), agentLabel(s.agent))
                     : `${machineLabel(machines, s.machine)} · ${basename(s.dir)}`}
                 {watchedWords(s) && <span> · {watchedWords(s)}</span>}
-                {s.enabled && s.next && s.next !== NEVER && <span> · next {whenShort(s.next)}</span>}
+                {s.enabled && s.next && s.next !== NEVER && <span> · {t("next {when}", { when: whenShort(s.next) })}</span>}
                 {s.last_run && s.last_run !== NEVER && (
                   <>
                     {" · "}

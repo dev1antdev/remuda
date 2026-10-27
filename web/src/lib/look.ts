@@ -2,6 +2,8 @@
 // reads for each (data-text and data-density on the root, --mono on it; lib/look.test.ts keeps the numbers equal) and
 // the font stacks. app/theme.ts puts them on the document.
 
+import { t } from "@/lib/i18n";
+
 export type TextSize = "small" | "normal" | "large" | "larger";
 export type Density = "comfortable" | "compact";
 export const TEXT_SIZE_KEY = "text.size";
@@ -9,7 +11,7 @@ export const DENSITY_KEY = "density";
 export const MONO_KEY = "font.mono";
 
 export const TEXT_SIZES: TextSize[] = ["small", "normal", "large", "larger"];
-export const TEXT_SIZE_NAMES: Record<TextSize, string> = { small: "Small", normal: "Normal", large: "Large", larger: "Larger" };
+export const TEXT_SIZE_NAMES: Record<TextSize, string> = { small: t("Small"), normal: t("Normal"), large: t("Large"), larger: t("Larger") };
 
 // TEXT_SCALE is what --text-scale comes to for each size; the stylesheet's data-text rules carry the same numbers
 export const TEXT_SCALE: Record<TextSize, number> = { small: 0.92, normal: 1, large: 1.1, larger: 1.2 };
@@ -25,7 +27,7 @@ export function densityOf(value: unknown): Density {
   return value === "compact" ? "compact" : "comfortable";
 }
 
-export const DENSITY_NAMES: Record<Density, string> = { comfortable: "Comfortable", compact: "Compact" };
+export const DENSITY_NAMES: Record<Density, string> = { comfortable: t("Comfortable"), compact: t("Compact") };
 
 // SYSTEM_MONO is the stack the page and the terminal wear unless a font is picked: whatever monospace the system has
 export const SYSTEM_MONO = 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace';
@@ -44,7 +46,7 @@ export function monoStack(font: MonoFont): string {
   return font ? `"${font}", ${SYSTEM_MONO}` : SYSTEM_MONO;
 }
 
-export const monoName = (font: MonoFont): string => font || "System monospace";
+export const monoName = (font: MonoFont): string => font || t("System monospace");
 
 // Look is what dresses a document beside its colours
 export type Look = { text: TextSize; density: Density; mono: MonoFont };

@@ -24,7 +24,7 @@ export function useChatViewItems(place: ChatPlace): MenuItem[] {
   const { machineId, paneId, session, dir, agent, workspace, machine } = place;
   const chatLive = app.use((s) => s.chatLive);
   const [pins] = usePref<Pin[]>(pinKey(machineId, dir), []);
-  const title = machineId !== "local" && machine ? `${workspace} on ${machine}` : workspace;
+  const title = machineId !== "local" && machine ? t("{workspace} on {machine}", { workspace, machine }) : workspace;
   const save = () => void exportConversation(machineId, paneId, session, dir, { agent, workspace, machine }).catch((e) => actions.notify(errMsg(e), { error: true }));
   return [
     { label: t("Timeline"), icon: "clock", hint: t("every prompt and answer in time; the first error, the longest call, loops and questions marked"), checked: timeline, onSelect: () => setTimeline(!timeline) },

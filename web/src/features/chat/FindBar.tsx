@@ -43,7 +43,7 @@ export function FindTool({ what = "in this conversation", shortcut = SHORTCUT }:
             type="text"
             value={find.query}
             placeholder={t("Find")}
-            aria-label={`Find ${what}`}
+            aria-label={t("Find {what}", { what })}
             autoComplete="off"
             spellCheck={false}
             onChange={(e) => actions.setFindQuery(e.target.value)}
@@ -64,7 +64,7 @@ export function FindTool({ what = "in this conversation", shortcut = SHORTCUT }:
         </span>
       )}
       <Tip text={`Find ${what} (${shortcut})`}>
-        <button type="button" className={`icon-btn sm find-toggle${find ? " on" : ""}`} aria-label={`Find ${what}`} aria-pressed={!!find} onClick={() => (find ? actions.closeFind() : actions.openFind())}>
+        <button type="button" className={`icon-btn sm find-toggle${find ? " on" : ""}`} aria-label={t("Find {what}", { what })} aria-pressed={!!find} onClick={() => (find ? actions.closeFind() : actions.openFind())}>
           <Icon name="search" size={14} />
         </button>
       </Tip>

@@ -13,6 +13,7 @@ import { join } from "node:path";
 
 const root = new URL("../src/", import.meta.url).pathname;
 const mode = process.argv.includes("--keys") ? "keys" : process.argv.includes("--wrap") ? "wrap" : "list";
+const where = process.argv.includes("--where"); // with --keys: the file before each key
 
 function* walk(dir) {
   for (const name of readdirSync(dir)) {
@@ -32,7 +33,7 @@ const words = (s) => {
 // inClass says the string sits in a className expression
 const inClass = (line, at) => /className=\{[^}]*$/.test(line.slice(0, at));
 const KEYWORDS = /^(return|const|let|var|export|import|if|else|for|while|case|default|break|continue|throw|type|interface|function|async|await|yield|new|delete|typeof|void|in|of|switch|try|catch|finally|do)\b/;
-const ATTRS = "aria-label|title|placeholder|alt|tip";
+const ATTRS = "aria-label|title|placeholder|alt|tip|hint|submitLabel|text|label|empty|description|what";
 const PROPS = "label|hint|title|text|what|placeholder|detail|description|body|ok|tip|sub|empty";
 const CALLS = "notify|ask|setError|onError|fail";
 const q = (s) => JSON.stringify(s);
@@ -55,8 +56,8 @@ for (const path of walk(root)) {
   const rel = path.slice(root.length);
   const tsx = path.endsWith(".tsx");
   const src = readFileSync(path, "utf8");
-  for (const m of src.matchAll(/(?<![\w.$])tr?\(\s*(["'])((?:\\.|(?!\1)[^\\])*)\1/g)) keys.add(m[2]);
-  for (const m of src.matchAll(/\btn\(\s*[^,]+,\s*"((?:\\.|[^"\\])*)",\s*"((?:\\.|[^"\\])*)"/g)) keys.add(m[2]);
+  for (const m of src.matchAll(/(?<![\w.$])tr?\(\s*(["'])((?:\\.|(?!\1)[^\\])*)\1/g)) keys.add(where ? `${rel}\t${m[2]}` : m[2]);
+  for (const m of src.matchAll(/\btn\(\s*[^,]+,\s*"((?:\\.|[^"\\])*)",\s*"((?:\\.|[^"\\])*)"/g)) keys.add(where ? `${rel}\t${m[2]}` : m[2]);
   if (mode === "keys") continue;
 
   const lines = src.split("\n");
@@ -99,10 +100,13 @@ for (const path of walk(root)) {
       // JSX text on a tag's line
       line = line.replace(/>([^<>{}]+)</g, (whole, text, at) => (words(text) && !typeish(line, at, text) ? (note(i, "text", text), `>${wrapText(text)}<`) : whole));
       // JSX text on a line of its own: between a tag line and the next tag or brace
-      if (trimmed && !/[<>{}=;()[\]`'"]/.test(trimmed) && words(trimmed) && !KEYWORDS.test(trimmed) && /[>}]$/.test(prevCode(i)) && /^[<{)]/.test(nextCode(i))) {
+      if (trimmed && !/[<>{}=;()[\]`"]/.test(trimmed.replace(/&\w+;/g, "&")) && words(trimmed) && !KEYWORDS.test(trimmed) && /[>}]$/.test(prevCode(i)) && /^[<{)]/.test(nextCode(i))) {
         note(i, "text", trimmed);
         line = line.replace(trimmed, `{t(${q(decode(trimmed))})}`);
       }
+      // JSX text after the last tag on a line (`<Icon … /> Reject`), and before the first tag on a line that opens with text
+      line = line.replace(/(\/>|<\/[\w.]+>)(\s*)([^<>{}=;\n]+)$/, (whole, tag, sp, text) => (words(text) && !KEYWORDS.test(text.trim()) ? (note(i, "text", text), `${tag}${sp}{t(${q(decode(text.trim()))})}`) : whole));
+      line = line.replace(/^(\s*)([A-Za-z][^<>{}=;]*?)(\s*)(<[A-Za-z/])/, (whole, lead, text, sp, tag) => (words(text) && !KEYWORDS.test(text) && /[>}]$/.test(prevCode(i)) ? (note(i, "text", text), `${lead}{t(${q(decode(text.trim()))})}${sp}${tag}`) : whole));
       line = line.replace(new RegExp(`\\b(${ATTRS})="([^"]*)"`, "g"), (whole, attr, text) => (words(text) ? (note(i, attr, text), `${attr}={t(${q(decode(text))})}`) : whole));
       line = line.replace(/\{\s*"([^"]*)"\s*\}/g, (whole, text) => (words(text) ? (note(i, "brace", text), `{t(${q(text)})}`) : whole));
       line = line.replace(/(\?\?|\?|:)(\s*)"([^"]*)"(?=\s*[:})\],;]|\s*$)/g, (whole, op, sp, text, at) => (words(text) && !inClass(line, at) ? (note(i, "ternary", text), `${op}${sp}t(${q(text)})`) : whole));

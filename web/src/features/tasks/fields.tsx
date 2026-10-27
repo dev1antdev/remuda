@@ -121,7 +121,7 @@ function TextField({ field, value, onCommit }: { field: Field; value: FieldValue
     <span className="field-link">
       {input}
       {/^https?:\/\//.test(shown) && (
-        <button type="button" className="icon-btn sm" title={t("Open")} aria-label={`Open ${shown}`} onClick={() => openUrl(shown)}>
+        <button type="button" className="icon-btn sm" title={t("Open")} aria-label={t("Open {url}", { url: shown })} onClick={() => openUrl(shown)}>
           <Icon name="external-link" size={14} />
         </button>
       )}

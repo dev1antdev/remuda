@@ -32,7 +32,7 @@ export default function DevicesSection() {
       void revokeDevice(device.id).then(({ self }) => {
         if (self) location.reload();
         else {
-          actions.notify(`${device.name} signed out`, { brief: true });
+          actions.notify(t("{device} signed out", { device: device.name }), { brief: true });
           reload();
         }
       }, fail),
@@ -41,7 +41,7 @@ export default function DevicesSection() {
   const revokeOthers = () =>
     actions.ask(t("Sign out every other device? Each needs the token to sign in again."), "Sign out others", () =>
       void revokeOtherDevices().then(({ revoked }) => {
-        actions.notify(`${plural(revoked, "device")} signed out`, { brief: true });
+        actions.notify(t("{devices} signed out", { devices: plural(revoked, "device") }), { brief: true });
         reload();
       }, fail),
     );

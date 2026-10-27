@@ -41,10 +41,10 @@ export default function FilesRail({ machineId, paneId, status, dir, active, onOp
   return (
     <aside className="footprint" aria-label={t("Files the agent touched")}>
       <div className="footprint-head">
-        <Icon name="folder" size={14} /> Files
+        <Icon name="folder" size={14} /> {t("Files")}
         <span className="footprint-sub">
-          {edited.length > 0 ? `${plural(edited.length, "file")} edited` : t("nothing edited")}
-          {read.length > 0 && ` · ${read.length} read`}
+          {edited.length > 0 ? t("{files} edited", { files: plural(edited.length, "file") }) : t("nothing edited")}
+          {read.length > 0 && ` · ${t("{n} read", { n: read.length })}`}
         </span>
       </div>
       <div className="footprint-list">
@@ -55,7 +55,7 @@ export default function FilesRail({ machineId, paneId, status, dir, active, onOp
         {read.length > 0 && (
           <div className="fp-fold">
             <button type="button" className="linkish" aria-expanded={showRead} onClick={() => setShowRead((shown) => !shown)}>
-              <Icon name={showRead ? "chevron-down" : "chevron-right"} size={12} /> {plural(read.length, "file")} only read
+              <Icon name={showRead ? "chevron-down" : "chevron-right"} size={12} /> {t("{files} only read", { files: plural(read.length, "file") })}
             </button>
             {showRead && read.map(row)}
           </div>
@@ -70,7 +70,7 @@ function Row({ touch, dir, now, onOpen, onCode }: { touch: Touch; dir: string; n
   const recent = touch.at > 0 && now - touch.at < RECENT_MS;
   return (
     <div className={`fp-row${recent ? " recent" : ""}`}>
-      <button type="button" className="linkish fp-open" title={touch.edits > 0 ? `${touch.path}\nOpen the file with its changes` : `${touch.path}\nOpen the file`} onClick={onOpen}>
+      <button type="button" className="linkish fp-open" title={`${touch.path}\n${touch.edits > 0 ? t("Open the file with its changes") : t("Open the file")}`} onClick={onOpen}>
         <span className="fp-path">
           <span className="fp-name">{basename(shown)}</span>
           <span className="fp-dir">{dirname(shown)}</span>

@@ -2,6 +2,7 @@
 
 import type { BudgetStatus } from "@/features/usage/api";
 import { check, getJSON, sendJSON, withMachine } from "@/lib/http";
+import { t } from "@/lib/i18n";
 
 export type Status = "run" | "input" | "idle" | "done" | "shell";
 
@@ -144,7 +145,7 @@ async function create(url: string, req: unknown): Promise<Created> {
   const body = await sendJSON<{ pane: string; agent_error?: string }>("POST", url, req);
   return {
     pane: body.pane,
-    warning: body.agent_error ? `Created, but the agent failed to start: ${body.agent_error}` : undefined,
+    warning: body.agent_error ? t("Created, but the agent failed to start: {error}", { error: body.agent_error }) : undefined,
   };
 }
 

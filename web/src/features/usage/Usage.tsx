@@ -14,7 +14,7 @@ import { Dialog, Icon, Notice, Tip } from "@/ui";
 import { useQuery } from "@/lib/query";
 import Select from "@/ui/Select";
 import { budgetTone, budgetWords, missingWords, ratio, scopeWords } from "./budgets";
-import { t } from "@/lib/i18n";
+import { t, tn } from "@/lib/i18n";
 
 const PERIODS = [
   { value: "1", label: t("Today") },
@@ -147,10 +147,10 @@ export default function Usage({ machines, onClose, onOpenSession }: {
         </div>
         <div className="usage-card">
           <span className="usage-card-n">{tok(read)}</span>
-          <span className="usage-card-l">tokens read{sum.total.cache_read > 0 && ` · ${Math.round((100 * sum.total.cache_read) / Math.max(1, read))}% from cache`}</span>
+          <span className="usage-card-l">{t("tokens read")}{sum.total.cache_read > 0 && ` · ${t("{pct}% from cache", { pct: Math.round((100 * sum.total.cache_read) / Math.max(1, read)) })}`}</span>
         </div>
       </div>
-      {sum.total.unknown > 0 && <Notice tone="hint">{sum.total.unknown} responses came from a model with no price here and are counted, not priced.</Notice>}
+      {sum.total.unknown > 0 && <Notice tone="hint">{t("{n} responses came from a model with no price here and are counted, not priced.", { n: sum.total.unknown })}</Notice>}
       <div className="usage-chart" aria-label={t("cost per day")}>
         {sum.days.map((d) => (
           <div key={d.date} className="usage-bar" title={`${fmtDay(d.date)}: ${usd(d.cost)} · ${plural(d.turns, "response")}`}>
@@ -230,7 +230,7 @@ function Budgets({ budgets, machines }: { budgets: BudgetStatus[]; machines: Mac
       <h3>
         {t("Budgets")}
         <button type="button" className="btn sm" onClick={() => actions.openDialog({ kind: "budget", budget: null })}>
-          <Icon name="plus" size={12} /> Add a budget
+          <Icon name="plus" size={12} /> {t("Add a budget")}
         </button>
       </h3>
       {budgets.length === 0 && <div className="empty">{t("No budgets yet: a limit per day, week or month, on everything or one machine or folder. The usage pill turns amber at 80 %, a push comes at 80 % and at the limit.")}</div>}
@@ -243,13 +243,13 @@ function Budgets({ budgets, machines }: { budgets: BudgetStatus[]; machines: Mac
             <span className="budget-scope">
               {scopeWords(b, label)}
               {b.note && <span className="usage-row-sub"> · {b.note}</span>}
-              {missing && <span className="usage-row-sub"> · {b.missing?.length === 1 ? t("1 machine") : `${b.missing?.length} machines`} not counted</span>}
+              {missing && <span className="usage-row-sub"> · {tn(b.missing?.length ?? 0, "{n} machine not counted", "{n} machines not counted")}</span>}
             </span>
             <span className="budget-bar" aria-hidden="true">
               <span style={{ width: `${Math.min(100, 100 * r)}%` }} />
             </span>
             <span className="budget-words">{budgetWords(b)}</span>
-            <Tip text="Edit this budget">
+            <Tip text={t("Edit this budget")}>
               <button type="button" className="icon-btn sm" aria-label={t("Edit this budget")} onClick={() => actions.openDialog({ kind: "budget", budget: b })}>
                 <Icon name="edit" size={14} />
               </button>

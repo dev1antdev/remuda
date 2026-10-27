@@ -36,7 +36,7 @@ export function QuickPromptsMenu({ at, dir, onPick, onManage }: { at: { x: numbe
       ))}
       {error ? <Notice tone="error">{error}</Notice> : !prompts ? <Notice tone="hint">{t("Loading…")}</Notice> : visible.length === 0 && <Notice tone="hint">{t("No quick prompts yet.")}</Notice>}
       <button type="button" role="menuitem" className="quick-manage" onClick={onManage}>
-        <Icon name="sliders" size={12} className="quick-icon" /> Manage…
+        <Icon name="sliders" size={12} className="quick-icon" /> {t("Manage…")}
       </button>
     </div>
   );
@@ -89,7 +89,7 @@ export function QuickPromptsDialog({ dir, onClose }: { dir: string; onClose: () 
         ))}
       </div>
       <button type="button" className="btn sm" disabled={!list} onClick={() => setList((l) => [...(l ?? []), { label: "", text: "" }])}>
-        <Icon name="plus" size={12} /> Add
+        <Icon name="plus" size={12} /> {t("Add")}
       </button>
       {(err || loaded.error) && <Notice tone="error">{err || loaded.error}</Notice>}
       <div className="modal-actions">

@@ -48,7 +48,7 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
       if (folder && !seen.has(folder)) seen.set(folder, s.name);
     }
     const each = [...seen.entries()].map(([folder, name]) => ({ value: folder, label: name, hint: folder, icon: folderIcon }));
-    return each.length > 1 ? [{ value: ALL, label: `All workspaces on ${machine.label}`, hint: `${each.length} folders in one editor`, icon: <Icon name="layers" size={14} /> }, ...each] : each;
+    return each.length > 1 ? [{ value: ALL, label: t("All workspaces on {machine}", { machine: machine.label }), hint: t("{n} folders in one editor", { n: each.length }), icon: <Icon name="layers" size={14} /> }, ...each] : each;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [machine]);
   const roots = useMemo(() => options.filter((o) => o.value !== ALL).map((o) => o.value), [options]);
@@ -155,7 +155,7 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
     themed.current = key;
     codeTheme(machine.id, flavor).then(
       (r) => (r.installed || !first) && setReloads((n) => n + 1),
-      (e) => actions.notify(`The editor keeps its own theme: ${errMsg(e)}`, { error: true }),
+      (e) => actions.notify(t("The editor keeps its own theme: {error}", { error: errMsg(e) }), { error: true }),
     );
   }, [machine?.id, status?.available, flavor]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -198,7 +198,7 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
           />
         )}
         {watched && status?.available && (
-          <Tip text={follow ? t("Following the agent: every file it finishes editing opens here. Click to stop.") : `Follow the agent: open every file it edits in ${watched.dir.split("/").pop() || "its folder"}, as it happens`}>
+          <Tip text={follow ? t("Following the agent: every file it finishes editing opens here. Click to stop.") : t("Follow the agent: open every file it edits in {folder}, as it happens", { folder: watched.dir.split("/").pop() || t("its folder") })}>
             <button type="button" className={`btn sm code-follow${follow ? " on" : ""}`} aria-pressed={follow} onClick={() => setFollow(!follow)}>
               <Icon name="eye" size={14} />
               <span>{t("Follow")}</span>
@@ -208,7 +208,7 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
         <span className="code-bar-spacer" />
         {status?.available && status.version && <span className="code-version">code-server {status.version}</span>}
         {status?.available && (
-          <Tip text="Reload the editor: a fresh frame for this folder, when it lost its connection or shows a stale state">
+          <Tip text={t("Reload the editor: a fresh frame for this folder, when it lost its connection or shows a stale state")}>
             <button type="button" className="icon-btn" aria-label={t("Reload the editor")} onClick={() => setReloads((n) => n + 1)}>
               <Icon name="refresh-cw" size={16} />
             </button>
@@ -223,9 +223,9 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
       {!machine ? (
         <div className="empty">{t("No connected machine.")}</div>
       ) : status === null ? (
-        <div className="empty">Looking for code-server on {machine.label}…</div>
+        <div className="empty">{t("Looking for code-server on {machine}…", { machine: machine.label })}</div>
       ) : status.available ? (
-        frame && <iframe key={frame.key} className="code-frame" src={frame.src} title={`VS Code on ${machine.label}`} allow="clipboard-read; clipboard-write" onLoad={() => setReady(frame.key)} />
+        frame && <iframe key={frame.key} className="code-frame" src={frame.src} title={t("VS Code on {machine}", { machine: machine.label })} allow="clipboard-read; clipboard-write" onLoad={() => setReady(frame.key)} />
       ) : (
         <div className="code-install">
           <h2>

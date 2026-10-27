@@ -21,7 +21,7 @@ export default function PinsDialog({ machineId, paneId, dir, shown, title, onClo
     actions.jumpTo(machineId, paneId, pin.session, pin.turn);
   };
   const unpin = (pin: Pin) => setPins((prev) => prev.filter((p) => p.turn !== pin.turn));
-  const clear = () => actions.ask(`Remove all ${pins.length} pins of ${title}? The turns themselves stay.`, t("Remove all"), () => setPins([]));
+  const clear = () => actions.ask(t("Remove all {n} pins of {title}? The turns themselves stay.", { n: pins.length, title }), t("Remove all"), () => setPins([]));
   return (
     <Dialog title={t("Pins")} icon="pin" size="md" onClose={onClose}>
       <h3 className="standup-title">{title}</h3>
@@ -36,7 +36,7 @@ export default function PinsDialog({ machineId, paneId, dir, shown, title, onClo
                 <span className="pins-line">{pin.line}</span>
                 <span className="pins-when">{pinWords(pin, shown)}</span>
               </button>
-              <Tip text="Unpin">
+              <Tip text={t("Unpin")}>
                 <button type="button" className="icon-btn sm" aria-label={t("Unpin this turn")} onClick={() => unpin(pin)}>
                   <Icon name="x" size={12} />
                 </button>
@@ -48,7 +48,7 @@ export default function PinsDialog({ machineId, paneId, dir, shown, title, onClo
       {pins.length > 0 && (
         <div className="modal-actions">
           <button type="button" className="btn" onClick={clear}>
-            <Icon name="trash" size={14} /> Remove all
+            <Icon name="trash" size={14} /> {t("Remove all")}
           </button>
         </div>
       )}

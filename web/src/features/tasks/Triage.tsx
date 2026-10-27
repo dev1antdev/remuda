@@ -18,7 +18,7 @@ export function useTriage({ columnFor, drop, refresh, onError }: {
   const acceptOne = async (t: Task) => {
     const to = columnFor(t);
     if (!to) {
-      onError(`“${t.title}”: its project has no column to accept it into`);
+      onError(tr("“{title}”: its project has no column to accept it into", { title: t.title }));
       return false;
     }
     drop([t.id]);
@@ -35,7 +35,7 @@ export function useTriage({ columnFor, drop, refresh, onError }: {
     refresh();
   };
   const decline = (t: Task) =>
-    actions.ask(`Decline “${t.title}”? The task is deleted.`, tr("Decline"), () => {
+    actions.ask(tr("Decline “{title}”? The task is deleted.", { title: t.title }), tr("Decline"), () => {
       drop([t.id]);
       void deleteTask(t.id).then(refresh, (e) => {
         onError(errMsg(e));
@@ -62,7 +62,7 @@ export function useTriage({ columnFor, drop, refresh, onError }: {
         refresh();
       }
     };
-    if (what === "decline") actions.ask(`Decline ${plural(ts.length, "proposal")}? The tasks are deleted.`, "Decline all", () => void run());
+    if (what === "decline") actions.ask(tr("Decline {proposals}? The tasks are deleted.", { proposals: plural(ts.length, "proposal") }), tr("Decline all"), () => void run());
     else void run();
   };
   return { busy, accept, decline, all };

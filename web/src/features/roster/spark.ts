@@ -1,6 +1,8 @@
 // A sparkline's geometry: a day's samples as a path, a threshold as a height, the range a series is drawn in,
 // and the words of its title. The ⓘ draws load and disk free from the vitals' history with it.
 
+import { t } from "@/lib/i18n";
+
 export type Threshold = { value: number; tone: "amber" | "red" };
 
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -60,8 +62,8 @@ export function spanWords(from: string, to: string): string {
   const ms = new Date(to).getTime() - new Date(from).getTime();
   if (!Number.isFinite(ms) || ms < 0) return "";
   const minutes = Math.round(ms / 60000);
-  if (minutes < 60) return `last ${minutes} min`;
-  return `last ${Math.round(minutes / 60)} h`;
+  if (minutes < 60) return t("last {n} min", { n: minutes });
+  return t("last {n} h", { n: Math.round(minutes / 60) });
 }
 
 // sparkTitle is the chart's tooltip: the least, the most and the latest value, and the span.

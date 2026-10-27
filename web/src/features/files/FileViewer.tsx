@@ -185,7 +185,7 @@ export default function FileViewer({
             </div>
           )}
           {info?.kind === "dir" && <div className="empty">{t("That's a folder.")}</div>}
-          {info?.kind === "binary" && <div className="empty">Binary file · {fmtSize(info.size)}</div>}
+          {info?.kind === "binary" && <div className="empty">{t("Binary file · {size}", { size: fmtSize(info.size) })}</div>}
           {info?.kind === "image" && (
             <div className="fv-media">
               <img src={fileUrl(machineId, info.path)} alt={name} />
@@ -272,6 +272,6 @@ function DiffView({ diff }: { diff: FileDiff | null }) {
 
 function fmtSize(n: number): string {
   if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  if (n < 1024 * 1024) return t("{n} KB", { n: (n / 1024).toFixed(1) });
+  return t("{n} MB", { n: (n / 1024 / 1024).toFixed(1) });
 }

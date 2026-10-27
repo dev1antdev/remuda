@@ -5,7 +5,7 @@
 import { spent } from "@/lib/time";
 import type { Part, Turn } from "./api";
 import { toolLabel } from "./footprint";
-import { t } from "@/lib/i18n";
+import { t, tn } from "@/lib/i18n";
 
 export const SQUEEZE_MS = 10 * 60 * 1000; // a gap longer than this is drawn this long: one lunch break must not flatten the day
 export const LONG_WAIT_MS = 30 * 60 * 1000; // a gap from an answer to the next prompt that counts as the person away
@@ -71,7 +71,7 @@ export function timeline(turns: Turn[]): Timeline {
   let longest: (Mark & { took: number }) | null = null;
   let run: Run | null = null;
   const closeRun = () => {
-    if (run && run.count >= LOOP_FROM) marks.push({ kind: "loop", id: run.id, at: run.at, label: `Loop ×${run.count}`, detail: `${run.label}: ${run.count} identical calls in a row`, count: run.count });
+    if (run && run.count >= LOOP_FROM) marks.push({ kind: "loop", id: run.id, at: run.at, label: t("Loop ×{n}", { n: run.count }), detail: t("{call}: {n} identical calls in a row", { call: run.label, n: run.count }), count: run.count });
     run = null;
   };
   for (let i = 0; i < turns.length; i++) {
@@ -96,7 +96,7 @@ export function timeline(turns: Turn[]): Timeline {
         failed++;
         if (!firstError) firstError = { kind: "error", id, at, label: t("First error"), detail: callWords(part), count: 1 };
       }
-      if (part.took && (!longest || part.took > longest.took)) longest = { kind: "longest", id, at, label: `Longest call ${spent(part.took)}`, detail: callWords(part), count: 1, took: part.took };
+      if (part.took && (!longest || part.took > longest.took)) longest = { kind: "longest", id, at, label: t("Longest call {time}", { time: spent(part.took) }), detail: callWords(part), count: 1, took: part.took };
       if (part.tool_name === "AskUserQuestion") marks.push({ kind: "question", id, at, label: t("Question"), detail: callWords(part), count: 1 });
       const key = callKey(part);
       if (run && run.key === key) run.count++;
@@ -109,7 +109,7 @@ export function timeline(turns: Turn[]): Timeline {
   closeRun();
   if (firstError) {
     firstError.count = failed;
-    if (failed > 1) firstError.detail = `${firstError.detail} · ${failed} failed calls in all`;
+    if (failed > 1) firstError.detail = t("{detail} · {n} failed calls in all", { detail: firstError.detail, n: failed });
     marks.push(firstError);
   }
   if (longest) marks.push({ kind: "longest", id: longest.id, at: longest.at, label: longest.label, detail: longest.detail, count: 1 });
@@ -153,20 +153,20 @@ export function squeezer(points: number[]): (t: number) => number {
 export function chips(line: Timeline): Chip[] {
   const out: Chip[] = [];
   const error = line.highlights.find((h) => h.kind === "error");
-  if (error) out.push({ kind: "error", id: error.id, text: error.count > 1 ? `First of ${error.count} errors` : "First error", title: error.detail });
+  if (error) out.push({ kind: "error", id: error.id, text: error.count > 1 ? t("First of {n} errors", { n: error.count }) : t("First error"), title: error.detail });
   const longest = line.highlights.find((h) => h.kind === "longest");
   if (longest) out.push({ kind: "longest", id: longest.id, text: longest.label, title: longest.detail });
   for (const loop of line.highlights.filter((h) => h.kind === "loop").slice(0, 3)) out.push({ kind: "loop", id: loop.id, text: loop.label, title: loop.detail });
   const questions = line.highlights.filter((h) => h.kind === "question");
   if (questions.length === 1) out.push({ kind: "question", id: questions[0]!.id, text: t("1 question"), title: t("the agent asked once; the mark is where") });
-  if (questions.length > 1) out.push({ kind: "question", id: questions[0]!.id, text: `${questions.length} questions`, title: `the agent asked ${questions.length} times; this goes to the first` });
+  if (questions.length > 1) out.push({ kind: "question", id: questions[0]!.id, text: t("{n} questions", { n: questions.length }), title: t("the agent asked {n} times; this goes to the first", { n: questions.length }) });
   const compactions = line.highlights.filter((h) => h.kind === "compaction");
-  if (compactions.length) out.push({ kind: "compaction", id: compactions[0]!.id, text: compactions.length === 1 ? "Compacted" : `Compacted ×${compactions.length}`, title: compactions[0]!.detail });
+  if (compactions.length) out.push({ kind: "compaction", id: compactions[0]!.id, text: compactions.length === 1 ? t("Compacted") : t("Compacted ×{n}", { n: compactions.length }), title: compactions[0]!.detail });
   return out;
 }
 
 // summary is the bar's own title: the session's length and the breaks in it
 export function summary(line: Timeline): string {
-  const breaks = line.waits ? `, ${line.waits} break${line.waits === 1 ? "" : "s"} over 30 min` : "";
-  return `${spent(line.total)} from the first prompt to the end of the last answer${breaks}; a gap over 10 min is drawn as 10`;
+  const breaks = line.waits ? `, ${tn(line.waits, "{n} break over 30 min", "{n} breaks over 30 min")}` : "";
+  return t("{time} from the first prompt to the end of the last answer{breaks}; a gap over 10 min is drawn as 10", { time: spent(line.total), breaks });
 }

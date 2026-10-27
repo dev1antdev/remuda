@@ -48,7 +48,7 @@ export const TurnView = memo(
             <Icon name="pin" size={12} />
           </span>
         )}
-        <ErrorBoundary fallback={(message) => <Notice tone="error">This turn could not be drawn: {message}</Notice>}>
+        <ErrorBoundary fallback={(message) => <Notice tone="error">{t("This turn could not be drawn: {message}", { message })}</Notice>}>
           {turn.parts.map((p, i) => (
             <PartView key={i} part={p} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} diffs={diffs} />
           ))}
@@ -62,7 +62,7 @@ export const TurnView = memo(
               </button>
             )}
             {onLink && !!turn.ids?.length && (
-              <Tip text="Copy a link that opens this conversation at this turn">
+              <Tip text={t("Copy a link that opens this conversation at this turn")}>
                 <button type="button" className="icon-btn sm turn-link" aria-label={t("Copy link to this turn")} onClick={() => onLink(turn)}>
                   <Icon name="link" size={12} />
                 </button>
@@ -108,7 +108,7 @@ export function sameTurn(a: Turn, b: Turn): boolean {
 // Spent is the quiet foot of an answer: how long it took, the tokens it used, what it cost at API prices, and what
 // went wrong among its calls — the failed ones, the ones repeating an earlier call exactly. Nothing when there is nothing to say.
 function Spent({ turn }: { turn: Turn }) {
-  const words = [turn.took ? spent(turn.took) : "", turn.tokens ? `${tok(turn.tokens)} tokens` : "", turn.cost ? usd(turn.cost) : ""].filter(Boolean);
+  const words = [turn.took ? spent(turn.took) : "", turn.tokens ? t("{n} tokens", { n: tok(turn.tokens) }) : "", turn.cost ? usd(turn.cost) : ""].filter(Boolean);
   const wrong = callWords(callStats(turn));
   if (!words.length && !wrong) return null;
   const title = `${turn.model ? `${turn.model} · ` : ""}from your prompt to the end of this answer; the tokens of its API responses, cache included, at API prices — on a subscription a measure, not a bill${wrong ? t("; a repeated call is one whose tool and input match an earlier call of this answer exactly") : ""}`;
@@ -141,7 +141,7 @@ function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent, diff
         className="part-thinking"
         summary={
           <>
-            <Icon name="sparkles" size={12} className="part-tool-icon" /> Thinking
+            <Icon name="sparkles" size={12} className="part-tool-icon" /> {t("Thinking")}
           </>
         }
       >
@@ -215,7 +215,7 @@ function Thumb({ machineId, path, onOpenFile }: { machineId: string; path: strin
   const [gone, setGone] = useState(false);
   if (gone) return null;
   return (
-    <button type="button" className="linkish part-image" title={`${path}\nOpen the file`} onClick={() => onOpenFile({ path, prefer: "file" })}>
+    <button type="button" className="linkish part-image" title={`${path}\n${t("Open the file")}`} onClick={() => onOpenFile({ path, prefer: "file" })}>
       <img src={fileUrl(machineId, path)} alt={basename(path)} loading="lazy" onError={() => setGone(true)} />
     </button>
   );

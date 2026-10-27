@@ -122,9 +122,9 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
   });
 
   if (review === null && !error) return <div className="empty">{t("Looking at the folder…")}</div>;
-  if (review && !review.repo) return <div className="empty">{basename(dir)} is not a git checkout — nothing to review.</div>;
+  if (review && !review.repo) return <div className="empty">{t("{folder} is not a git checkout — nothing to review.", { folder: basename(dir) })}</div>;
   const lastVerdict = review?.baseline?.verdict;
-  const lastLookText = !lastLook ? t("not reviewed yet") : lastVerdict === "approved" ? `approved ${ago(lastLook)}` : lastVerdict === "changes" ? `rejected ${ago(lastLook)}${review?.baseline?.ready ? t(" · ready again") : ""}` : `since you looked ${ago(lastLook)}`;
+  const lastLookText = !lastLook ? t("not reviewed yet") : lastVerdict === "approved" ? t("approved {ago}", { ago: ago(lastLook) }) : lastVerdict === "changes" ? t("rejected {ago}", { ago: ago(lastLook) }) + (review?.baseline?.ready ? t(" · ready again") : "") : t("since you looked {ago}", { ago: ago(lastLook) });
   const added = files.reduce((sum, file) => sum + file.added, 0);
   const removed = files.reduce((sum, file) => sum + file.removed, 0);
   const orphanComments = draft.filter((comment) => !files.some((file) => file.path === comment.file));
@@ -158,14 +158,14 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           <span className="review-sub">
             {lastLookText}
             {commits.length > 0 && ` · ${plural(commits.length, "commit")}`}
-            {files.length > 0 && ` · ${plural(files.length, "file")} uncommitted +${added} −${removed}`}
+            {files.length > 0 && ` · ${t("{files} uncommitted +{added} −{removed}", { files: plural(files.length, "file"), added, removed })}`}
           </span>
         </div>
         <span className="review-keys" aria-hidden="true">
           {KEYS.map(([first, second, what]) => (
             <span key={what}>
               <kbd>{first}</kbd>
-              {second && <kbd>{second}</kbd>} {what}
+              {second && <kbd>{second}</kbd>} {t(what)}
             </span>
           ))}
         </span>
@@ -182,7 +182,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           onClick={() => void markReviewedSilently()}
           title={t("The counts clear and the next look starts from now; the agent hears nothing")}
         >
-          <Icon name="check" size={14} /> Mark reviewed
+          <Icon name="check" size={14} /> {t("Mark reviewed")}
         </button>
       </div>
       {error && (
@@ -239,8 +239,8 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
               </button>
               {agent ? (
                 <>
-                  <button type="button" className="btn" disabled={sending} title={`Send the comments to ${agent}, with no verdict`} onClick={() => sendComments({ machineId, paneId, agent }).catch((failure) => setActionError(errMsg(failure)))}>
-                    <Icon name="send" size={12} /> Send
+                  <button type="button" className="btn" disabled={sending} title={t("Send the comments to {agent}, with no verdict", { agent })} onClick={() => sendComments({ machineId, paneId, agent }).catch((failure) => setActionError(errMsg(failure)))}>
+                    <Icon name="send" size={12} /> {t("Send")}
                   </button>
                   {agents.length > 1 && (
                     <button type="button" className="icon-btn" title={t("Send the comments to another agent")} disabled={sending} onClick={() => setPickingAgent(true)}>
@@ -250,17 +250,17 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
                 </>
               ) : (
                 <button type="button" className="btn" disabled={sending} title={t("Send the comments to an agent, with no verdict")} onClick={() => setPickingAgent(true)}>
-                  <Icon name="send" size={12} /> Send…
+                  <Icon name="send" size={12} /> {t("Send…")}
                 </button>
               )}
             </>
           )}
           <span className="review-verdicts">
             <button type="button" className="btn" onClick={() => setOpenVerdict("changes")} title={t("Tell the agent what to change: the comments and a note go to it, and the next look starts from now")}>
-              <Icon name="x" size={12} /> Reject
+              <Icon name="x" size={12} /> {t("Reject")}
             </button>
             <button type="button" className="btn primary" onClick={() => setOpenVerdict("approved")} title={t("Tell the agent the changes are reviewed and it can carry on; the next look starts from now")}>
-              <Icon name="check" size={12} /> Approve
+              <Icon name="check" size={12} /> {t("Approve")}
             </button>
           </span>
         </div>

@@ -26,7 +26,7 @@ export function useToasts(): ToastItem[] {
     toasts.push({
       id: "stale",
       tone: "info",
-      text: `remuda ${stale} is on the server; this page runs ${__REMUDA_VERSION__}.`,
+      text: t("remuda {server} is on the server; this page runs {page}.", { server: stale, page: __REMUDA_VERSION__ }),
       action: (
         <button type="button" className="btn sm primary" onClick={() => location.reload()}>
           {t("Reload")}
@@ -39,7 +39,7 @@ export function useToasts(): ToastItem[] {
     toasts.push({
       id: "release",
       tone: "info",
-      text: `remuda ${release} is out; this one is ${version}.`,
+      text: t("remuda {release} is out; this one is {version}.", { release, version }),
       action: local && (
         <button type="button" className="btn sm primary" onClick={() => actions.openPanel("release")}>
           {t("Download & install")}
@@ -78,6 +78,6 @@ export function useToasts(): ToastItem[] {
         </a>
       ),
     });
-  if (tailscale?.state === "error") toasts.push({ id: "tailscale", tone: "error", text: `Tailscale: ${tailscale.error}` });
+  if (tailscale?.state === "error") toasts.push({ id: "tailscale", tone: "error", text: `Tailscale: ${tailscale.error}` }); // the error is the daemon's own words
   return toasts;
 }

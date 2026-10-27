@@ -109,7 +109,7 @@ export type Run = {
 
 export type Comment = { id: number; task_id: number; author: "agent" | "you" | "remuda"; body: string; created: string };
 
-export const PRIORITIES = ["None", "Low", "Medium", "High", "Urgent", "DO NOW"];
+export const PRIORITIES = [t("None"), t("Low"), t("Medium"), t("High"), t("Urgent"), t("DO NOW")];
 
 const get = <T,>(path: string): Promise<T> =>
   fetch(path)

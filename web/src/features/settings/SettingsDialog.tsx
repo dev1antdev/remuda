@@ -12,7 +12,8 @@ import { usePref } from "@/lib/prefs";
 import { ACCENTS, accentName, DARK_FLAVORS, FLAVOR_NAMES, FLAVORS, swatches } from "@/lib/theme";
 import { Dialog, Icon, resetPanels, Select, Tip } from "@/ui";
 import { SYNC_PREF } from "./useSyncPrefs";
-import { t } from "@/lib/i18n";
+import { LANG_NAMES, LANGS, t } from "@/lib/i18n";
+import { readLangPref, setLangPref } from "@/app/lang";
 
 const DENSITIES: Density[] = ["comfortable", "compact"];
 const MONO_CHOICES: MonoFont[] = ["", ...MONO_FONTS];
@@ -65,7 +66,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         <div className="settings-row">
           <span>
             {t("Accent")}
-            <small>The colour of the buttons, the rings and the marks: {accentName(accent)}</small>
+            <small>{t("The colour of the buttons, the rings and the marks: {accent}", { accent: accentName(accent) })}</small>
           </span>
           <div className="accent-swatches" role="radiogroup" aria-label={t("Accent")}>
             {ACCENTS.map((a) => (
@@ -86,8 +87,22 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         </div>
         <label className="settings-row">
           <span>
+            {t("Language")}
+            <small>{t("The page's own words; the agents' answers, the pushes and the reports stay as they are")}</small>
+          </span>
+          <Select
+            value={readLangPref()}
+            onChange={setLangPref}
+            options={[
+              { value: "system", label: t("Follow the browser"), icon: <Icon name="monitor" size={14} /> },
+              ...LANGS.map((l) => ({ value: l, label: LANG_NAMES[l] })),
+            ]}
+          />
+        </label>
+        <label className="settings-row">
+          <span>
             {t("Text size")}
-            <small>The page's type scale; the terminal keeps its own size in its View menu</small>
+            <small>{t("The page's type scale; the terminal keeps its own size in its View menu")}</small>
           </span>
           <Select
             value={textSize}
@@ -104,8 +119,8 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         </label>
         <label className="settings-row">
           <span>
-            Code &amp; terminal font
-            <small>The ones installed on this device show in their own face; the rest fall back to the system's monospace</small>
+            {t("Code & terminal font")}
+            <small>{t("The ones installed on this device show in their own face; the rest fall back to the system's monospace")}</small>
           </span>
           <Select
             value={mono}
@@ -125,7 +140,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         <label className="settings-row">
           <span>
             {t("Sync these settings between devices")}
-            <small>The theme, the density, the code font, the sidebar, the wall, the review and the panels travel through this remuda; alerts, the text sizes and the prompt history stay on the device</small>
+            <small>{t("The theme, the density, the code font, the sidebar, the wall, the review and the panels travel through this remuda; alerts, the text sizes and the prompt history stay on the device")}</small>
           </span>
           <input type="checkbox" checked={sync} onChange={(e) => setSync(e.target.checked)} />
         </label>

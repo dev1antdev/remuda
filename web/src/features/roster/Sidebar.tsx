@@ -29,7 +29,7 @@ export default function Sidebar() {
   const onToggle = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
   const onFold = (key: string) => setWsFolded((f) => ({ ...f, [key]: !f[key] }));
   const onMenu = (m: Machine, s: Session, x: number, y: number) => actions.openMenu({ machine: m, session: s, x, y });
-  const onRemoveMachine = (m: Machine) => actions.ask(`Remove machine “${m.label}”? Nothing on the PC is touched.`, t("Remove"), () => void act(removeMachine(m.id)));
+  const onRemoveMachine = (m: Machine) => actions.ask(t("Remove machine “{machine}”? Nothing on the PC is touched.", { machine: m.label }), t("Remove"), () => void act(removeMachine(m.id)));
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
 
@@ -40,7 +40,7 @@ export default function Sidebar() {
         <span>{t("Machines")}</span>
         <span className="sidebar-head-actions">
           <Menu
-            label="New"
+            label={t("New")}
             align="end"
             tip={t("New: a workspace on a machine, or a PC")}
             trigger={
@@ -49,14 +49,14 @@ export default function Sidebar() {
               </button>
             }
             items={[
-              ...machines.filter((m) => m.state === "connected").map((m) => ({ label: `New workspace on ${m.label}…`, icon: "terminal" as const, onSelect: () => actions.openDialog({ kind: "workspace", machineId: m.id }) })),
+              ...machines.filter((m) => m.state === "connected").map((m) => ({ label: t("New workspace on {machine}…", { machine: m.label }), icon: "terminal" as const, onSelect: () => actions.openDialog({ kind: "workspace", machineId: m.id }) })),
               { label: t("Agent from recipe…"), icon: "sparkles", hint: t("a saved agent, model, arguments and first prompt"), onSelect: () => actions.openDialog({ kind: "start-recipe" }) },
               { sep: true },
               { label: t("Add a PC…"), icon: "monitor", hint: t("a remote machine over SSH"), onSelect: () => actions.openDialog({ kind: "machine" }) },
             ]}
           />
           <Menu
-            label="Sidebar"
+            label={t("Sidebar")}
             align="end"
             tip={t("Message several agents, the order, the sidebar settings")}
             trigger={
@@ -104,8 +104,8 @@ export default function Sidebar() {
                 </span>
               )}
               <HealthButton machine={m} latest={latest} serverVersion={serverVersion} />
-              <Tip text={`New workspace on ${m.label}`}>
-                <button type="button" className="icon-btn" aria-label={`New workspace on ${m.label}`} disabled={m.state !== "connected"} onClick={() => actions.openDialog({ kind: "workspace", machineId: m.id })}>
+              <Tip text={t("New workspace on {machine}", { machine: m.label })}>
+                <button type="button" className="icon-btn" aria-label={t("New workspace on {machine}", { machine: m.label })} disabled={m.state !== "connected"} onClick={() => actions.openDialog({ kind: "workspace", machineId: m.id })}>
                   <Icon name="plus" size={14} />
                 </button>
               </Tip>

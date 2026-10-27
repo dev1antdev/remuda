@@ -21,7 +21,7 @@ export default function Header({ current }: { current: Located | null }) {
   const viewer = app.use((s) => s.viewer);
   return (
     <header className="topbar">
-      <Tip text="The machines and their agents">
+      <Tip text={t("The machines and their agents")}>
         <button type="button" className="burger icon-btn" onClick={actions.toggleDrawer} aria-label={t("Machines")} aria-expanded={drawer}>
           <Icon name="menu" size={18} />
         </button>
@@ -50,7 +50,7 @@ export default function Header({ current }: { current: Located | null }) {
         </div>
       )}
       {popOutSupported && (
-        <Tip text="Pop out this agent: a small window above every other app">
+        <Tip text={t("Pop out this agent: a small window above every other app")}>
           <button type="button" className="icon-btn bell" aria-label={t("Pop out")} disabled={!current || !!viewer} onClick={() => current && void popOut({ machineId: current.machine.id, paneId: current.pane.id })}>
             <Icon name="pip" size={18} />
           </button>
@@ -97,9 +97,9 @@ function LensSwitch({ lens, current }: { lens: Lens; current: Located }) {
   );
   return (
     <nav className="lens-switch" role="tablist" aria-label={t("View")}>
-      {tab("chat", "Chat")}
-      {tab("terminal", "Terminal")}
-      {tab("changes", "Changes", {
+      {tab("chat", t("Chat"))}
+      {tab("terminal", t("Terminal"))}
+      {tab("changes", t("Changes"), {
         disabled: !(current.session.dir || current.pane.cwd),
         title: t("What changed in this workspace's folder since you last looked"),
         badge: current.session.review?.fresh,

@@ -46,7 +46,7 @@ export default function BudgetDialog({ machines, budget, onClose, onSaved, ask }
     <FormDialog
       title={budget ? t("Edit the budget") : t("Add a budget")}
       icon="chart"
-      hint="A limit on what the agents cost in a period, at Claude Code's own API prices — on a subscription a measure, not a bill. The usage pill turns amber at 80 %, and a push comes at 80 % and at the limit."
+      hint={t("A limit on what the agents cost in a period, at Claude Code's own API prices — on a subscription a measure, not a bill. The usage pill turns amber at 80 %, and a push comes at 80 % and at the limit.")}
       onClose={onClose}
       submit={{ busy, err, run }}
       submitLabel={budget ? t("Save") : t("Add")}
@@ -86,7 +86,7 @@ export default function BudgetDialog({ machines, budget, onClose, onSaved, ask }
       </div>
       <label>
         <span>
-          Note <span className="dim">(optional)</span>
+          {t("Note")} <span className="dim">(optional)</span>
         </span>
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("What this budget is for")} />
       </label>

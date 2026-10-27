@@ -163,7 +163,7 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
                 <Icon name="paperclip" size={16} />
               </button>
             </Tip>
-            <Tip text="Quick prompts: saved texts, with {dir}, {branch} and {file} filled in">
+            <Tip text={t("Quick prompts: saved texts, with {dir}, {branch} and {file} filled in")}>
               <button
                 type="button"
                 className={`icon-btn lg composer-attach${quick ? " on" : ""}`}
@@ -214,7 +214,7 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
         <textarea
           ref={area}
           value={draft}
-          placeholder={compact ? t("Message…") : isTouch ? "Message the agent… (Enter = new line)" : "Message the agent… (Shift+Enter = new line)"}
+          placeholder={compact ? t("Message…") : isTouch ? t("Message the agent… (Enter = new line)") : t("Message the agent… (Shift+Enter = new line)")}
           rows={Math.min(compact ? 3 : 6, Math.max(1, draft.split("\n").length))}
           onChange={(e) => {
             history.reset();
@@ -260,7 +260,7 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
           )}
         </button>
         {working && (
-          <Tip text="Send Esc: the agent stops what it is doing">
+          <Tip text={t("Send Esc: the agent stops what it is doing")}>
             <button type="button" className="btn danger soft composer-stop" aria-label={t("Stop")} onClick={() => void sendKeys(machineId, paneId, ["esc"]).catch((e) => setError(errMsg(e)))}>
               <Icon name="square" size={12} /> <span>{t("Stop")}</span>
             </button>

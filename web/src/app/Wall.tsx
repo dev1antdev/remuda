@@ -90,16 +90,16 @@ export default function Wall() {
           title={t("Only the agents waiting for you: a question open, a watchdog note, a finish you have not looked at")}
           onClick={() => setPrefs({ ...prefs, needsMe: !prefs.needsMe })}
         >
-          Needs me{prefs.needsMe && list.calm ? ` (${list.calm})` : ""}
+          {t("Needs me")}{prefs.needsMe && list.calm ? ` (${list.calm})` : ""}
         </button>
         <button
           type="button"
           className={`btn sm${prefs.hideIdle ? " on" : ""}`}
           aria-pressed={prefs.hideIdle}
-          title={`Hide the agents idle for over ${radar.freshMinutes} min (the sidebar's fresh tier)`}
+          title={t("Hide the agents idle for over {n} min (the sidebar's fresh tier)", { n: radar.freshMinutes })}
           onClick={() => setPrefs({ ...prefs, hideIdle: !prefs.hideIdle })}
         >
-          Hide idle{prefs.hideIdle && list.idle ? ` (${list.idle})` : ""}
+          {t("Hide idle")}{prefs.hideIdle && list.idle ? ` (${list.idle})` : ""}
         </button>
         {list.hidden > 0 && (
           <button type="button" className="btn sm" title={t("Bring back the tiles hidden by hand")} onClick={() => setHidden([])}>
@@ -128,10 +128,10 @@ export default function Wall() {
           title={office ? "Leave office mode (Esc)" : t("Office mode for a second screen: one agent large — the one that needs you, else each in turn every 20 s — the rest as cards; a card pins its agent; full screen")}
           onClick={toggleOffice}
         >
-          <Icon name="monitor" size={12} /> Office
+          <Icon name="monitor" size={12} /> {t("Office")}
         </button>
         <button type="button" className="btn sm" title={t("Start an agent in a new workspace")} onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
-          <Icon name="plus" size={12} /> Agent
+          <Icon name="plus" size={12} /> {t("Agent")}
         </button>
       </div>
       {n === 0 ? (

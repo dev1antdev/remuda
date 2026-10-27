@@ -57,7 +57,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
   const [voice, setVoice] = usePref<VoicePrefs>("alerts.voice", DEFAULT_VOICE);
   const voices = useVoices();
   const voiceOptions = [{ value: "", label: t("The browser's default voice") }, ...voices.map((v) => ({ value: v.name, label: v.name, hint: v.lang, group: v.lang }))];
-  const sayOne = () => speak(/[\u0400-\u04ff]/.test(voice.voice ?? "") ? t("api: Все тесты прошли, ветка запушена.") : t("api: The tests pass and the branch is pushed."), "", voice.voice);
+  const sayOne = () => speak(/[\u0400-\u04ff]/.test(voice.voice ?? "") ? "api: Все тесты прошли, ветка запушена." : t("api: The tests pass and the branch is pushed."), "", voice.voice);
 
   return (
     <Dialog title={t("Alerts on this device")} icon="bell" onClose={onClose} className="alerts-dialog">
@@ -122,7 +122,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
         <input type="checkbox" checked={!!prefs.quiet} onChange={(e) => changeQuiet(e.target.checked)} />
         <span>
           <b>{t("Quiet hours")}</b>
-          <small>Nothing is sent to this device between the two times, by its own clock ({zone}). Activity keeps what happened meanwhile.</small>
+          <small>{t("Nothing is sent to this device between the two times, by its own clock ({zone}). Activity keeps what happened meanwhile.", { zone })}</small>
         </span>
       </label>
       <div className="alerts-quiet">
@@ -134,7 +134,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
       <label className="alerts-opt">
         <input type="checkbox" checked={voice.on} disabled={!voiceSupported} onChange={(e) => setVoice({ ...voice, on: e.target.checked })} />
         <span>
-          <b>{t("Read aloud")}</b> on this device
+          <b>{t("Read aloud")}</b> {t("on this device")}
           <small>
             {voiceSupported
               ? t("The browser's own voice says what an agent answered when it finishes, that one waits for you, a watchdog note — while this page is open and in front. Nothing passes through remuda.")

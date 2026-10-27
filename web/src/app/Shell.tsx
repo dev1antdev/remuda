@@ -31,6 +31,7 @@ import { actions, app } from "./store";
 import { useBadge } from "./useBadge";
 import { useToasts } from "./toasts";
 import { panelOf, writeURL } from "./url";
+import { t } from "@/lib/i18n";
 
 export default function Shell() {
   const mode = app.use((s) => s.mode);
@@ -150,7 +151,7 @@ export default function Shell() {
             <aside className={drawer ? "sidebar open" : "sidebar"}>
               <Sidebar />
             </aside>
-            <Resizer spec={PANELS.sidebar} edge="right" label="Sidebar width" />
+            <Resizer spec={PANELS.sidebar} edge="right" label={t("Sidebar width")} />
             {drawer && <div className="scrim" onClick={actions.closeDrawer} />}
             <PaneArea current={current} />
           </>

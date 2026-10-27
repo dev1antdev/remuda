@@ -46,7 +46,7 @@ export default function Rail() {
           <RailButton key={m.mode} place={m} on={mode === m.mode} desk={m.desk} onClick={() => actions.setMode(m.mode)} />
         ))}
         <Menu
-          label="More places"
+          label={t("More places")}
           side="top"
           trigger={
             <button type="button" className="rail-btn rail-more" aria-label={t("More")}>

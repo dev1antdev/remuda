@@ -21,7 +21,7 @@ export function keyGroups(mac: boolean): KeyGroup[] {
     {
       title: t("Chat"),
       rows: [
-        { keys: ["↵"], what: "send" },
+        { keys: ["↵"], what: t("send") },
         { keys: ["⇧ ↵"], what: t("a new line") },
         { keys: ["↑", "↓"], what: t("what you sent before, on an empty line") },
         { keys: [`${mod} F`], what: t("find in this conversation") },
@@ -43,9 +43,9 @@ export function keyGroups(mac: boolean): KeyGroup[] {
     {
       title: t("Palette"),
       rows: [
-        { keys: ["↑", "↓"], what: "move" },
-        { keys: ["↵"], what: "run" },
-        { keys: ["Esc"], what: "close" },
+        { keys: ["↑", "↓"], what: t("move") },
+        { keys: ["↵"], what: t("run") },
+        { keys: ["Esc"], what: t("close") },
       ],
     },
     {
@@ -60,7 +60,7 @@ export function keyGroups(mac: boolean): KeyGroup[] {
       rows: [
         { keys: [`${mod} ↵`], what: t("post a comment") },
         { keys: ["↵"], what: t("open the card under the focus") },
-        { keys: [`${mod} click`, "⇧ click"], what: t("select a task, or the range up to it; a long press on a phone — the bar under the list moves, labels, finishes or deletes them") },
+        { keys: [`${mod} ${t("click")}`, `⇧ ${t("click")}`], what: t("select a task, or the range up to it; a long press on a phone — the bar under the list moves, labels, finishes or deletes them") },
         { keys: ["Esc"], what: t("clear the selection") },
       ],
     },

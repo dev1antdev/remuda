@@ -37,7 +37,7 @@ export function languageOf(pref: string, languages: readonly string[] = []): Lan
   return "en";
 }
 
-export type Vars = Record<string, string | number>;
+export type Vars = Record<string, string | number | undefined>;
 
 // t is the string in the current language with its placeholders filled; a form table picks its form by vars.n
 export function t(text: string, vars?: Vars): string {
@@ -55,7 +55,7 @@ export function tn(n: number, one: string, many: string, vars?: Vars): string {
 
 // fill puts the vars into their {name} slots; a slot without a var stays as written
 export function fill(text: string, vars: Vars): string {
-  return text.replace(/\{(\w+)\}/g, (slot, name: string) => (name in vars ? String(vars[name]) : slot));
+  return text.replace(/\{(\w+)\}/g, (slot, name: string) => (name in vars ? String(vars[name] ?? "") : slot));
 }
 
 // pluralIndex is the form a count takes: English one / other; Russian one (1, 21, 31…), few (2–4, 22–24…), many (0, 5–20, 25–30…)

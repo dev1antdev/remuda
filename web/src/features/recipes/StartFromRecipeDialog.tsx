@@ -52,7 +52,7 @@ export default function StartFromRecipeDialog({ machineId, dir, onClose, onStart
   });
   const several = connected(machines).length > 1;
   return (
-    <FormDialog title={t("New agent from recipe")} icon="sparkles" onClose={onClose} submit={submit} submitLabel="Start">
+    <FormDialog title={t("New agent from recipe")} icon="sparkles" onClose={onClose} submit={submit} submitLabel={t("Start")}>
       {recipes.error && <Notice tone="error">{recipes.error}</Notice>}
       {recipes.data && list.length === 0 && (
         <Notice
@@ -90,7 +90,7 @@ export default function StartFromRecipeDialog({ machineId, dir, onClose, onStart
         </label>
       )}
       <button type="button" className="linkish recipe-manage" onClick={() => setManaging(true)}>
-        <Icon name="sliders" size={12} /> Manage recipes…
+        <Icon name="sliders" size={12} /> {t("Manage recipes…")}
       </button>
       {managing && (
         <RecipesDialog

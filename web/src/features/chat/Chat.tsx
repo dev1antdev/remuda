@@ -176,7 +176,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
     if (!jump || !fetchError || !pendingTurn.current || (chat && chat.session_id === jump.session)) return;
     pendingTurn.current = null;
     actions.clearJump();
-    actions.notify(`That turn's conversation could not be opened: ${fetchError}`, { error: true });
+    actions.notify(t("That turn's conversation could not be opened: {error}", { error: fetchError }), { error: true });
     if (!readOnly) setSessionId(null);
   }, [fetchError, jump, chat, readOnly]);
 
@@ -203,7 +203,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           />
           {older && workspaceId && agent && (
             <button type="button" className="btn sm" title={t("A new tab in this workspace, the agent started on this conversation")} onClick={resume}>
-              <Icon name="corner-down-left" size={12} /> Resume in a new tab
+              <Icon name="corner-down-left" size={12} /> {t("Resume in a new tab")}
             </button>
           )}
         </div>
@@ -277,7 +277,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           onSend={async (target, text) => {
             await submitPrompt(target.machineId, target.paneId, text);
             setForward(null);
-            showForwarded(`Forwarded to ${target.agent} in ${target.sessionName}.`);
+            showForwarded(t("Forwarded to {agent} in {workspace}.", { agent: target.agent, workspace: target.sessionName }));
           }}
         />
       )}

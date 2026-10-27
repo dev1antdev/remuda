@@ -5,6 +5,7 @@
 import { useLayoutEffect, useRef, type PointerEvent } from "react";
 import { usePref, writePref } from "@/lib/prefs";
 import { clampWidth, dragWidth, keyWidth, PANELS, type Edge, type PanelSpec } from "./panels";
+import { t } from "@/lib/i18n";
 
 export default function Resizer({ spec, edge, label }: { spec: PanelSpec; edge: Edge; label: string }) {
   const [stored, setStored] = usePref<number>(spec.key, spec.width);
@@ -51,7 +52,7 @@ export default function Resizer({ spec, edge, label }: { spec: PanelSpec; edge: 
       aria-valuemin={spec.min}
       aria-valuemax={spec.max}
       tabIndex={0}
-      title={`${label}: drag it, or ← → once it has the focus; double-click for the usual ${spec.width} px`}
+      title={t("{label}: drag it, or ← → once it has the focus; double-click for the usual {px} px", { label, px: spec.width })}
       onPointerDown={begin}
       onPointerMove={move}
       onPointerUp={end}

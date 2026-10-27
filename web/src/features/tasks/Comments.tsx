@@ -82,7 +82,7 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
       ))}
       {run?.state === "finished" && !t.done && (
         <button type="button" className="btn primary tasks-comment-done" onClick={onMarkDone}>
-          <Icon name="check" size={14} /> Mark done
+          <Icon name="check" size={14} /> {tr("Mark done")}
         </button>
       )}
       <div className="tasks-comment-add">

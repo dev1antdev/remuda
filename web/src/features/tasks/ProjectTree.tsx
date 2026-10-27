@@ -35,7 +35,7 @@ export function ProjectTree({ projects, selected, onSelect }: { projects: Projec
           <span className="tasks-dot" style={{ background: p.hex_color ? `#${p.hex_color}` : "var(--line-strong)" }} />
           <span className="tasks-nav-label">{p.title}</span>
           {p.proposed > 0 && (
-            <span className="badge quiet" title={`${plural(p.proposed, "task")} proposed by agents`}>
+            <span className="badge quiet" title={t("{tasks} proposed by agents", { tasks: plural(p.proposed, "task") })}>
               {p.proposed}
             </span>
           )}

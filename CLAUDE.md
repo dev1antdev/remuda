@@ -534,7 +534,31 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   blocks never drift from the swatches),
   `perf.ts` (`watchStalls`: the browser's long
   tasks from 250 ms up, each reported with where the page was;
-  `stallWords`, `toastDue` tested), `highlight.ts` (**the syntax
+  `stallWords`, `toastDue` tested), `i18n.ts` (**the page's language**,
+  tested: `t(text, vars)` looks the English string itself up in the
+  dictionary of the language set — `lib/i18n/ru.ts`, joined from the
+  area files under `lib/i18n/ru/`, English → Russian, or a three-form
+  table for a counted phrase — and answers the English when there is no
+  entry, so a string nobody translated shows no gap; `{name}` slots
+  filled from `vars`, `tn(n, one, many)` the counted pair in English and
+  the form table under the plural key elsewhere (`text.ts`'s `plural`
+  goes through it), `pluralIndex` the one / few / many rule, `setLang` /
+  `currentLang` module state read at every call so a pure module's words
+  follow too, `locale()` for the Intl formats in `time.ts`, `languageOf`
+  resolving the pref `lang` — system / en / ru, on the sync allow-list —
+  against the browser's languages; `app/lang.ts` is main.tsx's first
+  import, so every table a module builds at load is already in the
+  language, and `setLangPref` writes the pref and reloads the page, since
+  those tables, the terminal engines and the pure modules could not be
+  re-rendered into another language; the Settings row Language and the
+  palette's "Language: English" / "Язык: Русский"; the keys are the
+  English strings in `t("…")` across the components — JSX text, the
+  attributes a person reads, the props of menus, palette rows and the
+  keys sheet, a file with a local `t` imports it as `tr` — and
+  `web/scripts/strings.mjs` lists what is still outside `t()` (or `--keys`
+  every key, `--wrap` wraps the plain cases); the server's words — pushes,
+  the feed, the recap and standup Markdown, the MCP answers — and the
+  agents' own prompts stay English), `highlight.ts` (**the syntax
   highlighter**, dependency-free and tested: `tokenize(text, lang)` is one
   hand-written scanner driven by a table per language — comments,
   strings with their escapes and prefixes, numbers, keywords, builtins,
@@ -936,8 +960,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `RadarFields`, the order, the row label, the idle tiers and the
   shells switch, shown by **Settings** (`features/settings/
   SettingsDialog.tsx`, dialog kind `settings`, the rail's last button
-  and a palette row: the theme, the text size, the density, the
-  monospace font, the panels' widths, the switch that syncs
+  and a palette row: the theme, the language (`lib/i18n`), the text
+  size, the density, the monospace font, the panels' widths, the switch that syncs
   those between devices (`internal/prefs`), the sidebar, the way to the
   alerts and the keys, the version, the signed-in devices and, under
   them, the agents' tasks-only keys with a Revoke each);
@@ -1308,7 +1332,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   1 MB; tested. Routes `GET /api/prefs` (an ETag, 304 when unchanged) and
   `PUT /api/prefs` (the part, the merged whole back). The page decides
   what travels: `lib/syncKeys.ts` (tested) is the allow-list — `theme`,
-  `theme.dark`, `theme.accent`, `density`, `font.mono` (not `text.size`:
+  `theme.dark`, `theme.accent`, `density`, `font.mono`, `lang` (not `text.size`:
   a size suits a screen, like `termFont`), `radar`, `wall`, `review.split`,
   `chat.timeline`, `footprint`, `tasks.view`, `standup.period`,
   `code.follow`, every `panel.*` and every `pins:*` (a folder's pinned
