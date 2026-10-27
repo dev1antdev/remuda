@@ -29,6 +29,8 @@ export type AppDialog =
   | { kind: "recap"; machineId: string; paneId: string; session: string | null; dir: string; title: string } // one conversation's recap; paneId "" = a transcript on its own
   | { kind: "budget"; budget: BudgetStatus | null } // a spending limit, new or the one given
   | { kind: "import-issue"; projectId?: number } // a task from a GitHub issue, into the project named or the one picked in the dialog
+  | { kind: "recipes" } // the saved ways to start an agent, edited as a list
+  | { kind: "start-recipe"; machineId?: string; dir?: string } // an agent started from a recipe, in the folder at hand unless the recipe has its own
   | null;
 
 export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;

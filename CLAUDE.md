@@ -871,7 +871,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   last; a flat `recent` order; herdr's own; `radar.test.ts`),
   `features/roster/Sidebar.tsx` draws it (`rows.tsx` the rows,
   `HealthButton.tsx`, `MachineMenu.tsx`; its head is a + menu — a
-  workspace on a connected machine, a PC — and a ⋯ menu — message
+  workspace on a connected machine, an agent from a recipe, a PC — and a ⋯ menu — message
   several agents, the order, Sidebar settings; `RadarSettings.tsx` is
   `RadarFields`, the order, the row label, the idle tiers and the
   shells switch, shown by **Settings** (`features/settings/
@@ -1044,7 +1044,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the periods and words, `agent.ts` the scout's suggested prompt and an
   agent schedule's words, all tested, `ScheduleEditor.tsx` the form with
   the kind switch at its top: the agent kind takes the machine, the
-  folder — a known workspace or a path typed by hand — the agent, its
+  folder — a known workspace or a path typed by hand — a recipe that
+  fills the next four (`features/recipes`), the agent, its
   model and arguments, the prompt and the close switch).
 - `internal/search/` — **full-text search** over every transcript on every
   machine (`GET /api/search?q=&machine=&dir=&days=`; the 🔍 in the
@@ -1146,6 +1147,39 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   is never picked — one text goes to each in turn through `/api/submit`, and
   the dialog says how each went; a refusal is shown, never retried or queued
   (`broadcast.ts` the pure part, tested).
+- `internal/recipes/` — **recipes**, the saved ways to start an agent
+  (`recipes.json`, `GET/PUT /api/recipes`, the list replaced whole like
+  quick's): `Recipe{ID, Name, Agent, Model, Args, Prompt, Dir, Machine}`,
+  a folder and its machine only when the recipe belongs to one; `Check`
+  (tested) refuses what the create routes would — no name, an agent
+  herdr does not know (`sessions.KnownAgent`), arguments `SplitArgs`
+  cannot read, a model for a kind without a model flag (`StartArgs`),
+  extras on a plain shell, a machine without a folder. The page:
+  `features/recipes/` — `api.ts`, `recipes.ts` (pure, tested: `draftOf`
+  a recipe as the Options fold's `Draft`, `recipeOf` the way back with
+  only what says something, `startRequest` what the create route takes,
+  `recipeWords` "Claude Code · Opus · --permission-mode plan · Review
+  the diff… · only in app", `folderFor` / `machineFor` — the recipe's
+  own folder and machine, else the folder it was started in last (pref
+  `recipe.dir:<id>`), else the one at hand — `pickFirst` on the recipe
+  last used in a folder (pref `recipe.last:<machine>|<dir>`),
+  `firstWords`), `RecipeMark` (the agent's logo, the terminal for a
+  shell), `RecipesDialog.tsx` (dialog kind `recipes`: the list, a row's
+  form — name, agent, model, arguments, first prompt, an optional folder
+  and its machine — saved whole; opened on its own from the palette's
+  "Recipes…" or nested in a "make something" dialog with `initial`, a
+  new row to name) and `StartFromRecipeDialog.tsx` (dialog kind
+  `start-recipe`, the palette's "New agent from recipe…" and the sidebar
+  head's "Agent from recipe…": a recipe, the machine, the folder — a
+  known workspace or a path typed by hand — Start → `POST /api/sessions`
+  with the recipe's agent, model, args and prompt, the new pane
+  selected, both prefs written). `StartOptionsFields` in
+  `features/roster/dialogs.tsx` has a Recipe pick above the fold that
+  fills the agent and its options (`useStart.applyRecipe`) and, at the
+  fold's end, "Save as recipe…" (the manager with the fields as a new
+  row) and "Manage recipes…"; the schedule editor's agent kind has the
+  same pick, filling agent, model, arguments and prompt (shell recipes
+  left out: a schedule starts no shell).
 - `internal/prefs/` — **settings that follow the person between devices**:
   `prefs.json` in the state dir, `{"<key>": {"value", "at"}}`; `Store.All`,
   `Store.Put` merges a part by key, the newer stamp winning (an equal one
@@ -1411,7 +1445,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   for the model last used) under the dialogs' folded **Options**
   (`StartOptionsFields` in `dialogs.tsx`: the model — Opus / Sonnet /
   Haiku or a typed id for Claude Code, an id for the others — extra
-  arguments, a first prompt).
+  arguments, a first prompt; a Recipe pick above the fold fills them
+  all with a saved recipe, and the fold ends with "Save as recipe…" and
+  "Manage recipes…", see `internal/recipes`).
 - `internal/chat/` — the conversation behind a pane: `Service.Open` (which
   file the chat lens shows: the pane's live one followed through
   compactions, a session of its folder by id, or a transcript on its own
