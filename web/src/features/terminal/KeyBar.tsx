@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
+import { actions } from "@/app/store";
 import Icon from "@/ui/icons";
 import type { Modifier, TermApi } from "@/features/terminal/engine/types";
 
-type Key = { id: string; label: ReactNode; title?: string; wide?: boolean } & ({ seq: string } | { arrow: "A" | "B" | "C" | "D" } | { mod: Exclude<Modifier, null> });
+type Key = { id: string; label: ReactNode; title?: string; wide?: boolean } & ({ seq: string } | { arrow: "A" | "B" | "C" | "D" } | { mod: Exclude<Modifier, null> } | { find: true });
 
 // ROW1 is what a phone keyboard lacks and an agent TUI needs constantly, ROW2 the rest of a
 // keyboard; the sequences are what a terminal sends, arrows following DECCKM.
@@ -35,6 +36,7 @@ const ROW2: Key[] = [
   { id: "^R", label: "^R", seq: "\x12", title: "Search history" },
   { id: "^A", label: "^A", seq: "\x01" },
   { id: "^E", label: "^E", seq: "\x05" },
+  { id: "Find", label: <Icon name="search" size={14} />, find: true, title: "Find in the scrollback" },
 ];
 
 // KeyBar is the terminal lens's key bar: every key goes through the live terminal's own input path, like
@@ -52,6 +54,10 @@ export default function KeyBar({
     if (!term) return;
     if ("mod" in k) {
       setModifier(modifier === k.mod ? null : k.mod);
+      return;
+    }
+    if ("find" in k) {
+      actions.openFind();
       return;
     }
     term.input("arrow" in k ? (term.appCursor() ? "\x1bO" : "\x1b[") + k.arrow : k.seq);

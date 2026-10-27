@@ -81,15 +81,18 @@ export default function Shell() {
   }, []);
 
   // ⌘F / Ctrl+F, by key code, opens the find bar over the chat lens or the transcript viewer — from the composer too,
-  // since no field there has a find of its own — unless an overlay is open
+  // since no field there has a find of its own — unless an overlay is open; the terminal lens has it too, ⌘F on a Mac
+  // and Ctrl+Shift+F elsewhere, where Ctrl+F is the shell's own
   const shown = useRef(current);
   shown.current = current;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "KeyF" || e.altKey || e.shiftKey || (isMac ? !e.metaKey : !e.ctrlKey)) return;
+      if (e.code !== "KeyF" || e.altKey || (isMac ? !e.metaKey : !e.ctrlKey)) return;
       const s = app.get();
       if (s.mode !== "herdr" || s.dialog || s.panel || s.file || s.confirm) return;
-      if (!s.viewer && (s.lens !== "chat" || !shown.current)) return;
+      const terminal = !s.viewer && s.lens === "terminal" && !!shown.current;
+      if (isMac ? e.shiftKey : e.shiftKey !== terminal) return;
+      if (!s.viewer && !terminal && (s.lens !== "chat" || !shown.current)) return;
       e.preventDefault();
       actions.openFind();
     };

@@ -5,10 +5,12 @@
 
 import { useEffect, useState } from "react";
 import { useMedia } from "@/lib/media";
+import { isMac } from "@/lib/prefs";
 import { basename } from "@/lib/text";
 import { closeTab, renameTab } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
 import { ChatTools, useChatViewItems } from "@/features/chat/ChatTools";
+import { FindTool } from "@/features/chat/FindBar";
 import TabStrip from "@/features/roster/TabStrip";
 import Chat from "@/features/chat/Chat";
 import FilesRail from "@/features/chat/FilesRail";
@@ -103,6 +105,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
         pane={pane}
         tools={
           <>
+            {lens === "terminal" && <FindTool what="in the scrollback" shortcut={isMac ? "⌘F" : "Ctrl+Shift+F"} />}
             {lens === "terminal" && <TerminalTools />}
             {lens === "chat" && <ChatTools />}
             <ViewMenu items={lens === "terminal" ? terminalItems : lens === "chat" ? chatItems : []} shell={!pane.agent} />

@@ -14,5 +14,12 @@ export function applyModifier(mod: Modifier, seq: string): string {
   return mod === "ctrl" ? String.fromCharCode(seq.toUpperCase().charCodeAt(0) & 0x1f) : "\x1b" + seq;
 }
 
+// isFindKey is the find bar's key in the terminal lens — ⌘F on a Mac, Ctrl+Shift+F elsewhere, where Ctrl+F is the
+// shell's own — which xterm must leave to the page.
+export function isFindKey(e: { code: string; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }, mac: boolean): boolean {
+  if (e.code !== "KeyF" || e.altKey) return false;
+  return mac ? e.metaKey && !e.shiftKey : e.ctrlKey && e.shiftKey;
+}
+
 // bracketed wraps a pasted text the way xterm would with DECSET 2004 on: CRLF/LF → CR between the markers.
 export const bracketed = (text: string) => "\x1b[200~" + text.replace(/\r\n/g, "\r").replace(/\n/g, "\r") + "\x1b[201~";

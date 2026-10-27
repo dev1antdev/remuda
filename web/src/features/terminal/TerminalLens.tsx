@@ -12,6 +12,7 @@ import KeyBar from "./KeyBar";
 import TerminalView from "./Terminal";
 import type { SizeMode } from "./engine/types";
 import { terminal } from "./state";
+import { useTerminalFind } from "./useTerminalFind";
 
 // minimum terminal widths on offer, in columns (0 = fit the screen)
 const MIN_WIDTHS = [0, 120, 160, 200, 240, 320];
@@ -25,6 +26,7 @@ export function TerminalLens({ machineId, paneId, cols, rows, agent, active }: {
   const modifier = terminal.use((s) => s.modifier);
   const selectMode = terminal.use((s) => s.selectMode);
   const api = terminal.use((s) => s.api);
+  useTerminalFind(api, active, machineId, paneId);
   const flavor = useFlavor();
   const mono = useMono();
   const onOpenFile = useCallback((target: { path: string; line?: number; prefer?: "file" | "changes" }) => actions.openFile(machineId, paneId, target), [machineId, paneId]);

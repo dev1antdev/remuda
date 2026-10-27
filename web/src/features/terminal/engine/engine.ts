@@ -10,12 +10,13 @@ import { uploadFiles } from "@/features/files/api";
 import type { OpenFile } from "@/features/files/target";
 import { installCopy } from "./copy";
 import { applyGeometry, keepFollower, type Geometry } from "./geometry";
-import { applyModifier } from "./keys";
+import { applyModifier, isFindKey, MAC } from "./keys";
 import { createLayer } from "./layer";
 import { provideLinks } from "./links";
 import { interceptModes, splitTracking } from "./modes";
 import { createReporter } from "./mouse";
 import { installPaste } from "./paste";
+import { installSearch } from "./search";
 import { installPointer, type Flags } from "./pointer";
 import { trackSelection } from "./selection";
 import { connect, type Transport } from "./transport";
@@ -53,6 +54,9 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(mount);
+  let forgetSelection = () => {};
+  const search = installSearch(term, () => flavorNow, () => forgetSelection());
+  term.attachCustomKeyEventHandler((e) => !isFindKey(e, MAC)); // the find bar's key is the page's
 
   let lastSize = "";
   let transport: Transport | null = null;
@@ -75,6 +79,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     if (props().flavor !== flavorNow) {
       flavorNow = props().flavor;
       term.options.theme = terminalTheme(flavorNow);
+      search.refresh();
     }
     if (props().fontFamily !== fontNow) {
       fontNow = props().fontFamily;
@@ -87,6 +92,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   const modes = interceptModes(term, mount);
   const reporter = createReporter(term, modes, sendInput);
   const selection = trackSelection(term, reporter, modes);
+  forgetSelection = () => selection.forget();
   const layer = createLayer(term);
   const flags: Flags = { linkUsed: false };
   const follow = keepFollower(mount);
@@ -140,7 +146,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
     onBytes: paint,
     note,
   });
-  props().onReady({ input, appCursor: () => term.modes.applicationCursorKeysMode });
+  props().onReady({ input, appCursor: () => term.modes.applicationCursorKeysMode, focus: () => term.focus(), search });
 
   return {
     apply,
@@ -160,6 +166,7 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
       if (settle) clearTimeout(settle);
       transport?.close();
       transport = null;
+      search.dispose();
       term.dispose();
     },
   };

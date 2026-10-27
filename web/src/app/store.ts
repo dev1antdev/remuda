@@ -40,8 +40,9 @@ export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" |
 // what the transcript viewer shows, read-only: a session by folder and id, or one of its subagents
 export type Viewer = Pick<SearchHit, "machine" | "dir" | "session"> & { subagent?: { id: string; description: string } };
 // the find bar over the conversation shown: the bar writes the query and the step, the chat writes the count;
-// opened counts the ⌘F presses, so each one puts the focus back in the field
-export type Find = { query: string; at: number; total: number; opened: number };
+// opened counts the ⌘F presses, so each one puts the focus back in the field; steps counts the bar's steps and by
+// says which way the last one went, for a lens whose matches are walked outside the page (the terminal's)
+export type Find = { query: string; at: number; total: number; opened: number; steps: number; by: 1 | -1 };
 
 export type AppState = {
   requested: Selection | null; // the selection is a request; the pane shown is derived from it, never fixed up in an effect
@@ -212,7 +213,7 @@ export const actions = {
   },
   // the find bar: opened again, it keeps its query and takes the focus back
   openFind() {
-    app.set((s) => ({ find: { query: s.find?.query ?? "", at: s.find?.at ?? 0, total: s.find?.total ?? 0, opened: (s.find?.opened ?? 0) + 1 } }));
+    app.set((s) => ({ find: { query: s.find?.query ?? "", at: s.find?.at ?? 0, total: s.find?.total ?? 0, opened: (s.find?.opened ?? 0) + 1, steps: s.find?.steps ?? 0, by: s.find?.by ?? 1 } }));
   },
   closeFind() {
     app.set({ find: null });
@@ -221,11 +222,15 @@ export const actions = {
     app.set((s) => (s.find ? { find: { ...s.find, query, at: 0 } } : {}));
   },
   stepFind(by: 1 | -1) {
-    app.set((s) => (s.find ? { find: { ...s.find, at: step(s.find.at, s.find.total, by) } } : {}));
+    app.set((s) => (s.find ? { find: { ...s.find, at: step(s.find.at, s.find.total, by), steps: s.find.steps + 1, by } } : {}));
   },
-  // the chat counted the matches of the query shown
-  foundMatches(total: number) {
-    app.set((s) => (s.find && s.find.total !== total ? { find: { ...s.find, total, at: clamp(s.find.at, total) } } : {}));
+  // the lens counted the matches of the query shown; the terminal says which one it stands on too
+  foundMatches(total: number, at?: number) {
+    app.set((s) => {
+      if (!s.find) return {};
+      const now = at ?? clamp(s.find.at, total);
+      return s.find.total !== total || s.find.at !== now ? { find: { ...s.find, total, at: now } } : {};
+    });
   },
   openInCode(machineId: string, folder: string, path: string, line?: number) {
     app.set({ mode: "code", codeOpened: true, codeFile: { machineId, folder, path, line, n: ++codeOpens } });

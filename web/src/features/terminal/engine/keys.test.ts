@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyModifier, bracketed } from "./keys";
+import { applyModifier, bracketed, isFindKey } from "./keys";
 
 describe("applyModifier", () => {
   it("leaves everything alone without a modifier", () => {
@@ -18,6 +18,21 @@ describe("applyModifier", () => {
   it("passes anything else through", () => {
     expect(applyModifier("ctrl", "\r")).toBe("\r");
     expect(applyModifier("alt", "ab")).toBe("ab");
+  });
+});
+
+describe("isFindKey", () => {
+  const key = (over: Partial<{ code: string; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }>) => ({ code: "KeyF", metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...over });
+  it("is ⌘F on a Mac, never with Shift or Alt", () => {
+    expect(isFindKey(key({ metaKey: true }), true)).toBe(true);
+    expect(isFindKey(key({ metaKey: true, shiftKey: true }), true)).toBe(false);
+    expect(isFindKey(key({ ctrlKey: true, shiftKey: true }), true)).toBe(false);
+  });
+  it("is Ctrl+Shift+F elsewhere, leaving Ctrl+F to the shell", () => {
+    expect(isFindKey(key({ ctrlKey: true, shiftKey: true }), false)).toBe(true);
+    expect(isFindKey(key({ ctrlKey: true }), false)).toBe(false);
+    expect(isFindKey(key({ ctrlKey: true, shiftKey: true, altKey: true }), false)).toBe(false);
+    expect(isFindKey(key({ code: "KeyG", ctrlKey: true, shiftKey: true }), false)).toBe(false);
   });
 });
 

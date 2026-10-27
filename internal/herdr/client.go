@@ -217,6 +217,15 @@ type PaneInfo struct {
 	Title         string        `json:"title"`
 	TitleStripped string        `json:"terminal_title_stripped"`
 	Focused       bool          `json:"focused"`
+	Scroll        Scroll        `json:"scroll"` // where the viewport stands; zero rows when herdr said nothing
+}
+
+// Scroll is where a pane's viewport stands in its scrollback: rows above the bottom, the most it can be, and the
+// viewport's height — herdr draws the pane, so the viewport is one for every viewer.
+type Scroll struct {
+	Offset int `json:"offset_from_bottom"`
+	Max    int `json:"max_offset_from_bottom"`
+	Rows   int `json:"viewport_rows"`
 }
 
 // Dir is the pane's folder: the shell's cwd, else the foreground process's.
@@ -361,6 +370,36 @@ func (c *Client) PaneScreen(paneID string) (Screen, error) {
 		return Screen{}, err
 	}
 	return Screen{Text: out.Read.Text, Truncated: out.Read.Truncated}, nil
+}
+
+// PaneRecent is the pane's last n rows — the screen and herdr's scrollback above it, down to the last row with text —
+// as text, and whether rows before them were left out (pane.read, source recent).
+func (c *Client) PaneRecent(paneID string, n int) (text string, truncated bool, err error) {
+	var out struct {
+		Read struct {
+			Text      string `json:"text"`
+			Truncated bool   `json:"truncated"`
+		} `json:"read"`
+	}
+	params := map[string]any{"pane_id": paneID, "source": "recent", "lines": n}
+	if err := c.Call("pane.read", params, &out); err != nil {
+		return "", false, err
+	}
+	return out.Read.Text, out.Read.Truncated, nil
+}
+
+// PaneScroll moves the pane's viewport, every viewer's, to offset rows above the bottom (herdr keeps it within what
+// there is) and answers where it stands.
+func (c *Client) PaneScroll(paneID string, offset int) (Scroll, error) {
+	var out struct {
+		Pane struct {
+			Scroll Scroll `json:"scroll"`
+		} `json:"pane"`
+	}
+	if err := c.Call("pane.scroll", map[string]any{"pane_id": paneID, "offset_from_bottom": offset}, &out); err != nil {
+		return Scroll{}, err
+	}
+	return out.Pane.Scroll, nil
 }
 
 func (c *Client) PaneSendKeys(paneID string, keys []string) error {
