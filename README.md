@@ -207,6 +207,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   every answer the agent finishes comes back to the task as a comment
   with a push — and moves it on to *Testing*, unless you moved it first.
   A *Review* link beside the run opens its worktree in the Review mode.
+  The card says what the agents started on it have spent so far
+  ("$4.20", in the quiet colour), and the run in the task says the time
+  it took and the model — read off the same meter as the header's pill,
+  a measure at API prices, and kept once the agent's pane is gone.
   Which columns do what is the project's own setting. Mark it done from
   there. A task can also start as a **GitHub issue**: paste its address
   (the link button in the Tasks head, or "New task from a GitHub
