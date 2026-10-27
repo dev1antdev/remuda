@@ -65,6 +65,7 @@ function useCommands(): (query: string) => Entry[] {
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
   const [focus, setFocus] = usePref<string>("wall.focus", "");
+  const [office, setOffice] = usePref<boolean>("wall.office", false);
   const [timelineShown, setTimelineShown] = useTimelineShown();
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
@@ -143,6 +144,14 @@ function useCommands(): (query: string) => Entry[] {
           setFocus(tileKey(current.machine.id, current.pane.id));
           actions.setMode("wall");
         }, { hint: "this agent takes the wall, the others wait in a strip", icon: "maximize", keywords: ["wall", "focus", "big", "zoom"] });
+      command("wall-office", office ? "Wall: leave office mode" : "Office mode on the Wall", () => {
+        setOffice(!office);
+        if (office) leaveFull();
+        else {
+          actions.setMode("wall");
+          enterFull();
+        }
+      }, { hint: office ? "the grid back, the full screen left" : "one agent large for a second screen — whoever needs you, else each in turn — the rest as cards; full screen", icon: "monitor", keywords: ["wall", "office", "tv", "screen", "kiosk", "show", "featured", "big"] });
       command("wall-view", screens ? "Wall of chats" : "Wall of screens", onTheWall({ view: screens ? "chat" : "screen" }), { hint: screens ? "each tile the last turns of its conversation" : "each tile its terminal as it is, scaled to fit", icon: "layers", keywords: ["wall", "terminal", "screen", "chat", "view", "tiles"] });
       if (current && !viewer && mode === "herdr") command("full", full ? "Leave full screen" : "Full screen", full ? leaveFull : enterFull, { hint: full ? "the header and the sidebar back" : "the lens takes the whole screen; Esc leaves", icon: full ? "minimize" : "maximize", keywords: ["fullscreen", "zen", "focus", "maximize", "screen"] });
       command("rail", footprint ? "Hide the files rail" : "Show the files rail", actions.toggleFootprint, { hint: "the files the agent touched, beside the lenses", icon: "folder", keywords: ["footprint", "files"] });
@@ -171,6 +180,6 @@ function useCommands(): (query: string) => Entry[] {
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, chatSession, footprint, full, themePref, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, timelineShown, setTimelineShown, step, now, goNext],
+    [machines, mode, lens, viewer, chatSession, footprint, full, themePref, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
   );
 }
