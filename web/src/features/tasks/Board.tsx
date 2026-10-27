@@ -7,6 +7,7 @@ import Icon from "@/ui/icons";
 import { Notice, Tip, useDismiss, useSubmit } from "@/ui";
 import { longPress } from "./press";
 import { pickHow, type Pick } from "./selection";
+import { t as tr } from "@/lib/i18n";
 
 export default function Board({ project, tasks, openId, draggable, picked, selecting, onOpen, onPick, onMove, onAdd, chips }: {
   project: Project;
@@ -91,7 +92,7 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
               <span className="board-col-title">{s.title}</span>
               {s.on_agent && (
                 <Tip text="What agents propose lands here, for you to accept or decline">
-                  <span className="board-col-mark" aria-label="Agents' proposals land here">
+                  <span className="board-col-mark" aria-label={tr("Agents' proposals land here")}>
                     <Icon name="bot" size={12} />
                   </span>
                 </Tip>
@@ -191,8 +192,8 @@ function Card({ task: t, statuses, selected, picked, selecting, dragging, before
           <button
             type="button"
             className="icon-btn sm"
-            title="Move to…"
-            aria-label="Move to another column"
+            title={tr("Move to…")}
+            aria-label={tr("Move to another column")}
             aria-haspopup="menu"
             aria-expanded={menu}
             disabled={elsewhere.length === 0}
@@ -249,7 +250,7 @@ function ColumnAdd({ onAdd, onClose }: { onAdd: (title: string) => Promise<void>
       <input
         autoFocus
         value={value}
-        placeholder="A task…"
+        placeholder={tr("A task…")}
         disabled={busy}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {

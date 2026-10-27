@@ -10,6 +10,7 @@ import { FieldChip } from "./fields";
 import { dueLabel, toLocalInput } from "./prompt";
 import { taskCost } from "./runCost";
 import type { RunPR } from "./runPR";
+import { t as tr } from "@/lib/i18n";
 
 export const projectOption = (p: Project) => ({
   value: p.id,
@@ -56,12 +57,12 @@ export function TaskChips({ task: t, project, status, fields, pr }: { task: Task
         </span>
       )}
       {taskCost(t) > 0 && (
-        <span className="tasks-cost" title="What the agents started on it spent, at API prices">
+        <span className="tasks-cost" title={tr("What the agents started on it spent, at API prices")}>
           {usd(taskCost(t))}
         </span>
       )}
       {pr && (
-        <Tip text={`${pr.label}: ${pr.status ? prWords(pr.status) : "opened by the agent on the task"} · opens in a new tab`}>
+        <Tip text={`${pr.label}: ${pr.status ? prWords(pr.status) : tr("opened by the agent on the task")} · opens in a new tab`}>
           <button
             type="button"
             className="linkish tasks-pr"
@@ -90,7 +91,7 @@ export function TaskChips({ task: t, project, status, fields, pr }: { task: Task
       ))}
       {due && <span className={`tasks-due${due.over && !t.done ? " over" : ""}`}>{due.text}</span>}
       {status && (
-        <span className="tasks-status" title="The column it is in">
+        <span className="tasks-status" title={tr("The column it is in")}>
           <span className="tasks-dot" style={{ background: `#${status.hex_color || "888"}` }} />
           {status.title}
         </span>
@@ -125,5 +126,5 @@ export function DueInput({ value, onCommit }: { value: string; onCommit: (iso: s
 }
 
 export function Loading() {
-  return <div className="placeholder">Loading…</div>;
+  return <div className="placeholder">{tr("Loading…")}</div>;
 }

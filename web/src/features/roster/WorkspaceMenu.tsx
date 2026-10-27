@@ -8,10 +8,11 @@ import { agentTitle, askRestart } from "@/features/updates/restartPane";
 import { openUrl } from "@/lib/host";
 import { killSession, type Machine, type Session } from "./api";
 import { prWords } from "./prStatus";
+import { t } from "@/lib/i18n";
 
 export function closeWorkspace(m: Machine, s: Session) {
   const n = s.tabs.reduce((a, t) => a + t.panes.length, 0);
-  actions.ask(`Close “${s.name}”? ${n} pane${n === 1 ? "" : "s"} close and the agents in them stop.`, "Close workspace", () => void act(killSession(m.id, s.id)));
+  actions.ask(`Close “${s.name}”? ${n} pane${n === 1 ? "" : "s"} close and the agents in them stop.`, t("Close workspace"), () => void act(killSession(m.id, s.id)));
 }
 
 export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) {

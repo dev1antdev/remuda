@@ -5,6 +5,7 @@ import { plural } from "@/lib/text";
 import { Dialog, Icon, Notice, Select, useSubmit } from "@/ui";
 import { createProject, type Project } from "./api";
 import { projectOption } from "./pieces";
+import { t } from "@/lib/i18n";
 
 export function ProjectTree({ projects, selected, onSelect }: { projects: Project[]; selected: number; onSelect: (id: number) => void }) {
   const children = useMemo(() => {
@@ -52,7 +53,7 @@ export function NewProjectDialog({ projects, onClose, onCreated }: { projects: P
   const { busy, err, run } = useSubmit(async () => onCreated(await createProject(title.trim(), parent)));
   return (
     <Dialog
-      title="New project"
+      title={t("New project")}
       icon="folder"
       as="form"
       onClose={onClose}
@@ -62,20 +63,20 @@ export function NewProjectDialog({ projects, onClose, onCreated }: { projects: P
       }}
     >
       <label>
-        Name
+        {t("Name")}
         <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus required />
       </label>
       <label>
-        Inside
-        <Select value={parent} onChange={setParent} options={[{ value: 0, label: "— top level —" }, ...projects.filter((p) => !p.is_archived).map(projectOption)]} />
+        {t("Inside")}
+        <Select value={parent} onChange={setParent} options={[{ value: 0, label: t("— top level —") }, ...projects.filter((p) => !p.is_archived).map(projectOption)]} />
       </label>
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" className="btn primary" disabled={busy || !title.trim()}>
-          {busy ? "Creating…" : "Create"}
+          {busy ? t("Creating…") : t("Create")}
         </button>
       </div>
     </Dialog>

@@ -6,6 +6,7 @@ import { elapsed, spent } from "@/lib/time";
 import { StatusDot } from "@/ui";
 import type { Subagent } from "./api";
 import { subagentLine } from "./subagents";
+import { t } from "@/lib/i18n";
 
 const DOTS: Record<Subagent["status"], string> = { working: "run", quiet: "idle", done: "done" };
 
@@ -23,8 +24,8 @@ export function SubagentRow({ subagent: s, onOpen }: { subagent: Subagent; onOpe
         {s.failed ? ` · ${s.failed} failed` : ""}
       </span>
       {onOpen && (
-        <button type="button" className="linkish subagent-open" title="This agent's own conversation, read-only" onClick={() => onOpen(s)}>
-          Open
+        <button type="button" className="linkish subagent-open" title={t("This agent's own conversation, read-only")} onClick={() => onOpen(s)}>
+          {t("Open")}
         </button>
       )}
     </div>

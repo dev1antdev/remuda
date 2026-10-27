@@ -6,6 +6,7 @@ import { actions } from "@/app/store";
 import { errMsg, plural } from "@/lib/text";
 import { deleteTask, patchTask, type Status, type Task } from "./api";
 import { proposedWords } from "./proposed";
+import { t as tr } from "@/lib/i18n";
 
 export function useTriage({ columnFor, drop, refresh, onError }: {
   columnFor: (t: Task) => Status | undefined; // where an accepted task goes
@@ -34,7 +35,7 @@ export function useTriage({ columnFor, drop, refresh, onError }: {
     refresh();
   };
   const decline = (t: Task) =>
-    actions.ask(`Decline “${t.title}”? The task is deleted.`, "Decline", () => {
+    actions.ask(`Decline “${t.title}”? The task is deleted.`, tr("Decline"), () => {
       drop([t.id]);
       void deleteTask(t.id).then(refresh, (e) => {
         onError(errMsg(e));
@@ -73,10 +74,10 @@ export function ProposedBar({ count, busy, onAcceptAll, onDeclineAll }: { count:
     <div className="proposed-bar">
       <span>{proposedWords(count)}</span>
       <button type="button" className="btn sm" disabled={count === 0 || busy} onClick={onAcceptAll}>
-        {busy ? "Working…" : "Accept all"}
+        {busy ? tr("Working…") : tr("Accept all")}
       </button>
       <button type="button" className="btn sm danger soft" disabled={count === 0 || busy} onClick={onDeclineAll}>
-        Decline all…
+        {tr("Decline all…")}
       </button>
     </div>
   );
@@ -89,24 +90,24 @@ export function ProposedActions({ onAccept, onDecline }: { onAccept: () => void;
       <button
         type="button"
         className="btn sm"
-        title="Accept: the task goes to the project's New column"
+        title={tr("Accept: the task goes to the project's New column")}
         onClick={(e) => {
           e.stopPropagation();
           onAccept();
         }}
       >
-        Accept
+        {tr("Accept")}
       </button>
       <button
         type="button"
         className="btn sm danger soft"
-        title="Decline: the task is deleted"
+        title={tr("Decline: the task is deleted")}
         onClick={(e) => {
           e.stopPropagation();
           onDecline();
         }}
       >
-        Decline
+        {tr("Decline")}
       </button>
     </span>
   );

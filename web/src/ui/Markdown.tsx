@@ -5,6 +5,7 @@ import type { OpenFile } from "@/features/files/target";
 import Icon from "@/ui/icons";
 import { tokenNodes } from "@/ui/Tokens";
 import { copyText, openUrl } from "@/lib/host";
+import { t } from "@/lib/i18n";
 
 // links open in a new tab — never by navigating this page
 const link = (url: string) => (e: MouseEvent) => {
@@ -352,7 +353,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
       </pre>
       {long && (
         <button type="button" className="linkish md-more" onClick={() => setOpen((o) => !o)}>
-          {open ? "Show less" : `Show all ${lines.length} lines`}
+          {open ? t("Show less") : `Show all ${lines.length} lines`}
         </button>
       )}
     </div>

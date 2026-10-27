@@ -7,6 +7,7 @@ import { speak, useVoices, voiceSupported } from "@/features/alerts/useVoice";
 import { DEFAULT_VOICE, type VoicePrefs } from "@/features/alerts/voice";
 import Select from "@/ui/Select";
 import { Dialog, Notice, useTimedNotice } from "@/ui";
+import { t } from "@/lib/i18n";
 
 // Push alerts for this device: enable, what to be told about, quiet hours, a test push; and the browser's voice reading the agents aloud.
 export default function AlertsPanel({ onClose }: { onClose: () => void }) {
@@ -55,22 +56,22 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
 
   const [voice, setVoice] = usePref<VoicePrefs>("alerts.voice", DEFAULT_VOICE);
   const voices = useVoices();
-  const voiceOptions = [{ value: "", label: "The browser's default voice" }, ...voices.map((v) => ({ value: v.name, label: v.name, hint: v.lang, group: v.lang }))];
-  const sayOne = () => speak(/[\u0400-\u04ff]/.test(voice.voice ?? "") ? "api: Все тесты прошли, ветка запушена." : "api: The tests pass and the branch is pushed.", "", voice.voice);
+  const voiceOptions = [{ value: "", label: t("The browser's default voice") }, ...voices.map((v) => ({ value: v.name, label: v.name, hint: v.lang, group: v.lang }))];
+  const sayOne = () => speak(/[\u0400-\u04ff]/.test(voice.voice ?? "") ? t("api: Все тесты прошли, ветка запушена.") : t("api: The tests pass and the branch is pushed."), "", voice.voice);
 
   return (
-    <Dialog title="Alerts on this device" icon="bell" onClose={onClose} className="alerts-dialog">
-      {!state && <Notice tone="hint">Checking…</Notice>}
+    <Dialog title={t("Alerts on this device")} icon="bell" onClose={onClose} className="alerts-dialog">
+      {!state && <Notice tone="hint">{t("Checking…")}</Notice>}
       {state && !state.supported && <Notice tone="warn">{state.reason}</Notice>}
       {state?.supported && state.permission === "denied" && (
-        <Notice tone="warn">Notifications are blocked for this site — allow them in the browser's site settings.</Notice>
+        <Notice tone="warn">{t("Notifications are blocked for this site — allow them in the browser's site settings.")}</Notice>
       )}
 
       {state?.supported && (
         <div className="alerts-row">
           <span>
-            {state.subscribed ? "Push alerts are on" : "Push alerts are off"}
-            <small>Delivered with the app closed, through your browser's push service.</small>
+            {state.subscribed ? t("Push alerts are on") : t("Push alerts are off")}
+            <small>{t("Delivered with the app closed, through your browser's push service.")}</small>
           </span>
           <button
             type="button"
@@ -79,11 +80,11 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
             onClick={() =>
               void run(
                 state.subscribed ? disablePush : () => enablePush(prefs),
-                state.subscribed ? "Alerts turned off." : "Alerts are on — try a test push.",
+                state.subscribed ? t("Alerts turned off.") : t("Alerts are on — try a test push."),
               )
             }
           >
-            {state.subscribed ? "Turn off" : "Turn on"}
+            {state.subscribed ? t("Turn off") : t("Turn on")}
           </button>
         </div>
       )}
@@ -91,15 +92,15 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
       <label className="alerts-opt">
         <input type="checkbox" checked={prefs.input} onChange={(e) => changePrefs({ ...prefs, input: e.target.checked })} />
         <span>
-          When an agent <b>needs you</b>
-          <small>A question or approval still open after 10 s — answered at the desk, it's never sent.</small>
+          When an agent <b>{t("needs you")}</b>
+          <small>{t("A question or approval still open after 10 s — answered at the desk, it's never sent.")}</small>
         </span>
       </label>
       <label className="alerts-opt">
         <input type="checkbox" checked={prefs.watchdog ?? true} onChange={(e) => changePrefs({ ...prefs, watchdog: e.target.checked })} />
         <span>
-          When an agent <b>looks stuck</b>
-          <small>Working 20 min with nothing written, waiting for an answer 15 min, or looping on one tool call — with an Esc button on the notification.</small>
+          When an agent <b>{t("looks stuck")}</b>
+          <small>{t("Working 20 min with nothing written, waiting for an answer 15 min, or looping on one tool call — with an Esc button on the notification.")}</small>
         </span>
       </label>
       <label className="alerts-opt">
@@ -112,7 +113,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
           onChange={(done) => changePrefs({ ...prefs, done })}
           options={[
             { value: "off", label: "never" },
-            { value: "long", label: "long turns" },
+            { value: "long", label: t("long turns") },
             { value: "always", label: "always" },
           ]}
         />
@@ -120,31 +121,31 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
       <label className="alerts-opt">
         <input type="checkbox" checked={!!prefs.quiet} onChange={(e) => changeQuiet(e.target.checked)} />
         <span>
-          <b>Quiet hours</b>
+          <b>{t("Quiet hours")}</b>
           <small>Nothing is sent to this device between the two times, by its own clock ({zone}). Activity keeps what happened meanwhile.</small>
         </span>
       </label>
       <div className="alerts-quiet">
-        <input type="time" className="sm" value={quietWindow.from} disabled={!prefs.quiet} aria-label="Quiet from" onChange={(e) => changeWindow({ ...quietWindow, from: e.target.value })} />
+        <input type="time" className="sm" value={quietWindow.from} disabled={!prefs.quiet} aria-label={t("Quiet from")} onChange={(e) => changeWindow({ ...quietWindow, from: e.target.value })} />
         <span>to</span>
-        <input type="time" className="sm" value={quietWindow.to} disabled={!prefs.quiet} aria-label="Quiet until" onChange={(e) => changeWindow({ ...quietWindow, to: e.target.value })} />
+        <input type="time" className="sm" value={quietWindow.to} disabled={!prefs.quiet} aria-label={t("Quiet until")} onChange={(e) => changeWindow({ ...quietWindow, to: e.target.value })} />
       </div>
 
       <label className="alerts-opt">
         <input type="checkbox" checked={voice.on} disabled={!voiceSupported} onChange={(e) => setVoice({ ...voice, on: e.target.checked })} />
         <span>
-          <b>Read aloud</b> on this device
+          <b>{t("Read aloud")}</b> on this device
           <small>
             {voiceSupported
-              ? "The browser's own voice says what an agent answered when it finishes, that one waits for you, a watchdog note — while this page is open and in front. Nothing passes through remuda."
-              : "This browser has no speech synthesis."}
+              ? t("The browser's own voice says what an agent answered when it finishes, that one waits for you, a watchdog note — while this page is open and in front. Nothing passes through remuda.")
+              : t("This browser has no speech synthesis.")}
           </small>
         </span>
       </label>
       <div className="alerts-quiet alerts-voice">
         <Select value={voice.voice ?? ""} options={voiceOptions} onChange={(name) => setVoice({ ...voice, voice: name || undefined })} />
         <button type="button" className="btn sm" disabled={!voice.on} onClick={sayOne}>
-          Say a line
+          {t("Say a line")}
         </button>
       </div>
 
@@ -155,7 +156,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
           disabled={busy}
           onClick={() => void run(() => sendTestPush(state.endpoint!), "Test push sent — it should appear in a moment.")}
         >
-          Send a test push
+          {t("Send a test push")}
         </button>
       )}
       {err && <Notice tone="error" onDismiss={() => setErr("")}>{err}</Notice>}

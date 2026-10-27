@@ -21,6 +21,7 @@ import { act } from "./act";
 import { folderOf, type Located } from "./current";
 import { actions, app, type Lens } from "./store";
 import ViewMenu from "./ViewMenu";
+import { t as tr } from "@/lib/i18n";
 
 export default function PaneArea({ current }: { current: Located | null }) {
   const lens = app.use((s) => s.lens);
@@ -87,9 +88,9 @@ export default function PaneArea({ current }: { current: Located | null }) {
     return (
       <main className="pane-area">
         <div className="placeholder">
-          <p>No pane selected.</p>
+          <p>{tr("No pane selected.")}</p>
           <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
-            Start an agent
+            {tr("Start an agent")}
           </button>
         </div>
       </main>
@@ -117,7 +118,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
         onCloseTab={(t) => {
           const last = session.tabs.length === 1;
           const msg = last ? `Close the last tab? Workspace “${session.name}” closes with it.` : `Close tab “${t.label}”? Its ${t.panes.length} pane${t.panes.length === 1 ? "" : "s"} and agents stop.`;
-          actions.ask(msg, "Close tab", () => void act(closeTab(machine.id, t.id)));
+          actions.ask(msg, tr("Close tab"), () => void act(closeTab(machine.id, t.id)));
         }}
       />
       <div className="pane-body">

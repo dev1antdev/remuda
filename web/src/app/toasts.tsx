@@ -7,6 +7,7 @@ import { newer } from "@/lib/version";
 import { useRoster } from "@/features/roster/useRoster";
 import type { ToastItem } from "@/ui";
 import { actions, app } from "./store";
+import { t } from "@/lib/i18n";
 
 export function useToasts(): ToastItem[] {
   const { machines, latest, tailscale, version, offline, stale } = useRoster();
@@ -20,7 +21,7 @@ export function useToasts(): ToastItem[] {
   }, [notice]);
 
   const toasts: ToastItem[] = [];
-  if (offline) toasts.push({ id: "offline", tone: "warn", text: "Reconnecting to remuda…", busy: true });
+  if (offline) toasts.push({ id: "offline", tone: "warn", text: t("Reconnecting to remuda…"), busy: true });
   if (stale && !offline)
     toasts.push({
       id: "stale",
@@ -28,7 +29,7 @@ export function useToasts(): ToastItem[] {
       text: `remuda ${stale} is on the server; this page runs ${__REMUDA_VERSION__}.`,
       action: (
         <button type="button" className="btn sm primary" onClick={() => location.reload()}>
-          Reload
+          {t("Reload")}
         </button>
       ),
     });
@@ -41,7 +42,7 @@ export function useToasts(): ToastItem[] {
       text: `remuda ${release} is out; this one is ${version}.`,
       action: local && (
         <button type="button" className="btn sm primary" onClick={() => actions.openPanel("release")}>
-          Download & install
+          {t("Download & install")}
         </button>
       ),
       onDismiss: () => setReleaseSeen(release),
@@ -60,7 +61,7 @@ export function useToasts(): ToastItem[] {
             actions.openPanel("standup");
           }}
         >
-          Standup
+          {t("Standup")}
         </button>
       ),
       onDismiss: () => actions.setAway(null),
@@ -70,10 +71,10 @@ export function useToasts(): ToastItem[] {
     toasts.push({
       id: "tailscale",
       tone: "info",
-      text: "Tailscale: this remuda is not on your tailnet yet.",
+      text: t("Tailscale: this remuda is not on your tailnet yet."),
       action: (
         <a className="btn sm primary" href={tailscale.login_url} target="_blank" rel="noreferrer">
-          Log in
+          {t("Log in")}
         </a>
       ),
     });

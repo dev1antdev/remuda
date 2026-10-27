@@ -8,6 +8,7 @@ import { Dialog, Notice, Select, useSubmit } from "@/ui";
 import { importIssue, listProjects, type Task } from "./api";
 import { isIssueURL } from "./issue";
 import { projectOption } from "./pieces";
+import { t } from "@/lib/i18n";
 
 export default function ImportIssueDialog({ projectId, onClose, onCreated }: {
   projectId?: number; // the project picked on screen, if any
@@ -30,7 +31,7 @@ export default function ImportIssueDialog({ projectId, onClose, onCreated }: {
   const where = machines.find((m) => m.id === machine);
   return (
     <Dialog
-      title="New task from a GitHub issue"
+      title={t("New task from a GitHub issue")}
       icon="link"
       size="md"
       as="form"
@@ -42,11 +43,11 @@ export default function ImportIssueDialog({ projectId, onClose, onCreated }: {
       }}
     >
       <p className="modal-hint">
-        The issue is read with <code>gh</code> on {where && where.id !== "local" ? where.label : "this machine"}, as you; its title, text and labels become a task
+        The issue is read with <code>gh</code> on {where && where.id !== "local" ? where.label : t("this machine")}, as you; its title, text and labels become a task
         that names it, so an agent started on the task knows where it came from. Nothing is written to GitHub.
       </p>
       <label>
-        Issue
+        {t("Issue")}
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
@@ -59,12 +60,12 @@ export default function ImportIssueDialog({ projectId, onClose, onCreated }: {
       </label>
       <div className="schedule-row">
         <label className="grow">
-          Project
-          <Select value={project} onChange={setPicked} placeholder={projects.loading ? "Loading…" : "Pick a project"} options={list.map(projectOption)} />
+          {t("Project")}
+          <Select value={project} onChange={setPicked} placeholder={projects.loading ? t("Loading…") : t("Pick a project")} options={list.map(projectOption)} />
         </label>
         {connected.length > 1 && (
           <label>
-            Machine
+            {t("Machine")}
             <Select value={machine} onChange={setMachine} options={machineOptions(connected)} />
           </label>
         )}
@@ -72,13 +73,13 @@ export default function ImportIssueDialog({ projectId, onClose, onCreated }: {
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="button" className="btn" disabled={busy || !ready} onClick={() => void run(true)}>
           Create &amp; start an agent…
         </button>
         <button type="submit" className="btn primary" disabled={busy || !ready}>
-          {busy ? "Reading…" : "Create"}
+          {busy ? t("Reading…") : t("Create")}
         </button>
       </div>
     </Dialog>

@@ -2,6 +2,7 @@
 // host (internal/tasks). Dates are RFC 3339 UTC strings; an unset one is "".
 
 import { check, sendJSON } from "@/lib/http";
+import { t } from "@/lib/i18n";
 
 export type Label = { id: number; title: string; hex_color: string };
 
@@ -33,13 +34,13 @@ export type Field = {
   in_prompt: boolean;
 };
 export const FIELD_KINDS: { value: FieldKind; label: string }[] = [
-  { value: "text", label: "Text" },
-  { value: "number", label: "Number" },
-  { value: "select", label: "One choice" },
-  { value: "multi", label: "Several choices" },
-  { value: "date", label: "Date" },
-  { value: "check", label: "Checkbox" },
-  { value: "link", label: "Link" },
+  { value: "text", label: t("Text") },
+  { value: "number", label: t("Number") },
+  { value: "select", label: t("One choice") },
+  { value: "multi", label: t("Several choices") },
+  { value: "date", label: t("Date") },
+  { value: "check", label: t("Checkbox") },
+  { value: "link", label: t("Link") },
 ];
 // a task's value for a field; null clears it in a patch
 export type FieldValue = string | number | boolean | string[] | null;

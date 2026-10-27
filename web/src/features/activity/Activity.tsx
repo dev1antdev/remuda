@@ -11,6 +11,7 @@ import { whenShort } from "@/lib/time";
 import { Dialog, Icon, Logo, Notice, type IconName } from "@/ui";
 import { fetchFeed, type Entry } from "./api";
 import { groupByDay } from "./group";
+import { t } from "@/lib/i18n";
 
 const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", digest: "sun", task: "list", test: "bell", budget: "chart", review: "eye", handover: "arrow-right" };
 
@@ -35,9 +36,9 @@ export default function Activity({ onClose }: { onClose: () => void }) {
     return { agent: found?.pane.agent ?? "", gone: !!entry.pane && !found, machine: entry.machine !== "local" ? machine?.label ?? entry.machine : "" };
   };
   return (
-    <Dialog title="Activity" icon="bell" size="md" className="activity-dialog" onClose={onClose}>
+    <Dialog title={t("Activity")} icon="bell" size="md" className="activity-dialog" onClose={onClose}>
       {error && <Notice tone="error">{error}</Notice>}
-      {entries && entries.length === 0 && <Notice tone="hint">Nothing yet: a finish, a question, a watchdog note or a task's move lands here as it happens.</Notice>}
+      {entries && entries.length === 0 && <Notice tone="hint">{t("Nothing yet: a finish, a question, a watchdog note or a task's move lands here as it happens.")}</Notice>}
       {entries &&
         groupByDay(entries).map((day) => (
           <section key={day.label} className="activity-day">
@@ -47,7 +48,7 @@ export default function Activity({ onClose }: { onClose: () => void }) {
                 const at = where(entry);
                 return (
                   <li key={entry.id}>
-                    <button type="button" className={`activity-row${at.gone ? " gone" : ""}`} disabled={!entry.pane} onClick={() => open(entry)} title={at.gone ? "That pane is gone" : entry.pane ? "Open the pane" : undefined}>
+                    <button type="button" className={`activity-row${at.gone ? " gone" : ""}`} disabled={!entry.pane} onClick={() => open(entry)} title={at.gone ? t("That pane is gone") : entry.pane ? t("Open the pane") : undefined}>
                       <span className="activity-when">{whenShort(entry.at)}</span>
                       {at.agent ? <Logo agent={at.agent} /> : <Icon name={KIND_ICONS[entry.kind] ?? "bell"} size={14} />}
                       <span className="activity-text">

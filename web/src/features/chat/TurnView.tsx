@@ -19,6 +19,7 @@ import { PLAN_TOOLS, planCallWords } from "./plan";
 import { PLAN_MARK } from "./PlanBar";
 import { SubagentRow } from "./SubagentRow";
 import { sameSubagents, subagentsOf } from "./subagents";
+import { t } from "@/lib/i18n";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 export const TurnView = memo(
@@ -43,7 +44,7 @@ export const TurnView = memo(
     return (
       <div className={cls} data-ids={turn.ids?.join(" ")}>
         {pinned && (
-          <span className="turn-pin-mark" title="Pinned">
+          <span className="turn-pin-mark" title={t("Pinned")}>
             <Icon name="pin" size={12} />
           </span>
         )}
@@ -56,20 +57,20 @@ export const TurnView = memo(
         {(!!(onForward && text && turn.role === "assistant") || !!((onLink || onPin) && turn.ids?.length)) && (
           <div className="turn-actions">
             {onForward && text && turn.role === "assistant" && (
-              <button type="button" className="linkish turn-forward" title="Forward this to another agent" onClick={() => onForward(text)}>
+              <button type="button" className="linkish turn-forward" title={t("Forward this to another agent")} onClick={() => onForward(text)}>
                 <Icon name="send" size={12} /> forward
               </button>
             )}
             {onLink && !!turn.ids?.length && (
               <Tip text="Copy a link that opens this conversation at this turn">
-                <button type="button" className="icon-btn sm turn-link" aria-label="Copy link to this turn" onClick={() => onLink(turn)}>
+                <button type="button" className="icon-btn sm turn-link" aria-label={t("Copy link to this turn")} onClick={() => onLink(turn)}>
                   <Icon name="link" size={12} />
                 </button>
               </Tip>
             )}
             {onPin && !!turn.ids?.length && (
-              <Tip text={pinned ? "Unpin this turn" : "Pin this turn: the Pins list in the View menu finds it again"}>
-                <button type="button" className={pinned ? "icon-btn sm turn-pin on" : "icon-btn sm turn-pin"} aria-label={pinned ? "Unpin this turn" : "Pin this turn"} aria-pressed={!!pinned} onClick={() => onPin(turn)}>
+              <Tip text={pinned ? t("Unpin this turn") : t("Pin this turn: the Pins list in the View menu finds it again")}>
+                <button type="button" className={pinned ? "icon-btn sm turn-pin on" : "icon-btn sm turn-pin"} aria-label={pinned ? t("Unpin this turn") : t("Pin this turn")} aria-pressed={!!pinned} onClick={() => onPin(turn)}>
                   <Icon name="pin" size={12} />
                 </button>
               </Tip>
@@ -110,7 +111,7 @@ function Spent({ turn }: { turn: Turn }) {
   const words = [turn.took ? spent(turn.took) : "", turn.tokens ? `${tok(turn.tokens)} tokens` : "", turn.cost ? usd(turn.cost) : ""].filter(Boolean);
   const wrong = callWords(callStats(turn));
   if (!words.length && !wrong) return null;
-  const title = `${turn.model ? `${turn.model} · ` : ""}from your prompt to the end of this answer; the tokens of its API responses, cache included, at API prices — on a subscription a measure, not a bill${wrong ? "; a repeated call is one whose tool and input match an earlier call of this answer exactly" : ""}`;
+  const title = `${turn.model ? `${turn.model} · ` : ""}from your prompt to the end of this answer; the tokens of its API responses, cache included, at API prices — on a subscription a measure, not a bill${wrong ? t("; a repeated call is one whose tool and input match an earlier call of this answer exactly") : ""}`;
   return (
     <span className="turn-spent" title={title}>
       {words.join(" · ")}
@@ -179,16 +180,16 @@ function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent, diff
                     e.preventDefault();
                     onOpenFile({ path: file, prefer: EDIT_TOOLS.has(name) ? "changes" : "file" });
                   }}
-                  title={EDIT_TOOLS.has(name) ? "Open the file with its changes" : "Open the file"}
+                  title={EDIT_TOOLS.has(name) ? t("Open the file with its changes") : t("Open the file")}
                 >
                   {hint}
                 </button>
               ) : (
                 <span className="part-hint">{hint}</span>
               )}
-              {everywhere && <span className="part-hint"> · every occurrence</span>}
+              {everywhere && <span className="part-hint"> {t("· every occurrence")}</span>}
               {part.took ? (
-                <span className="part-took" title={part.is_error ? "The call failed, and how long it took" : "How long the call took"}>
+                <span className="part-took" title={part.is_error ? t("The call failed, and how long it took") : t("How long the call took")}>
                   {took(part.took)}
                 </span>
               ) : null}

@@ -8,6 +8,7 @@ import { whenShort } from "@/lib/time";
 import { Icon, Logo } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import { addComment, deleteComment, type Run, type Task } from "./api";
+import { t as tr } from "@/lib/i18n";
 
 export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
   task: Task;
@@ -37,7 +38,7 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
   };
   return (
     <div className="tasks-comments">
-      <div className="tasks-field-name">Comments</div>
+      <div className="tasks-field-name">{tr("Comments")}</div>
       {comments.map((c) => (
         <div key={c.id} className={`tasks-comment by-${c.author}`}>
           <div className="tasks-comment-head">
@@ -62,8 +63,8 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
             <button
               type="button"
               className="icon-btn sm"
-              title="Delete comment"
-              aria-label="Delete comment"
+              title={tr("Delete comment")}
+              aria-label={tr("Delete comment")}
               onClick={() =>
                 void deleteComment(c.id).then(
                   () => onChange({ ...t, comments: comments.filter((x) => x.id !== c.id) }),
@@ -88,14 +89,14 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
         <textarea
           rows={2}
           value={comment}
-          placeholder="A note on this task…"
+          placeholder={tr("A note on this task…")}
           onChange={(e) => setComment(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void post();
           }}
         />
         <button type="button" className="btn" disabled={posting || !comment.trim()} onClick={() => void post()}>
-          Comment
+          {tr("Comment")}
         </button>
       </div>
     </div>

@@ -13,6 +13,7 @@ import { Dialog, Icon, Logo, Notice, Select } from "@/ui";
 import { fetchRecipes, saveRecipes, type Recipe } from "./api";
 import RecipeMark from "./RecipeMark";
 import { draftOf, recipeOf, recipeWords } from "./recipes";
+import { t } from "@/lib/i18n";
 
 // Form is the row being edited, as the fields hold it
 type Form = { name: string; agent: string; draft: Draft; dir: string; machine: string };
@@ -79,7 +80,7 @@ export default function RecipesDialog({ initial, onClose, onSaved }: { initial?:
 
   return (
     <Dialog
-      title="Recipes"
+      title={t("Recipes")}
       icon="sparkles"
       size="md"
       as="form"
@@ -90,8 +91,8 @@ export default function RecipesDialog({ initial, onClose, onSaved }: { initial?:
         save();
       }}
     >
-      <p className="modal-hint">A recipe is an agent with its model, extra arguments and first prompt, saved under a name: one pick fills the New workspace dialog, starts an agent from the palette, or sets up a scout schedule. Shared by every device that uses this remuda.</p>
-      {!list && !loaded.error && <Notice tone="hint">Loading…</Notice>}
+      <p className="modal-hint">{t("A recipe is an agent with its model, extra arguments and first prompt, saved under a name: one pick fills the New workspace dialog, starts an agent from the palette, or sets up a scout schedule. Shared by every device that uses this remuda.")}</p>
+      {!list && !loaded.error && <Notice tone="hint">{t("Loading…")}</Notice>}
       <div className="recipe-list">
         {(list ?? []).map((r, i) =>
           open === i && form ? (
@@ -112,15 +113,15 @@ export default function RecipesDialog({ initial, onClose, onSaved }: { initial?:
                   edit(i, rows[i] ?? r);
                 }}
               >
-                Edit
+                {t("Edit")}
               </button>
-              <button type="button" className="icon-btn danger" title="Remove" aria-label="Remove" onClick={() => remove(i)}>
+              <button type="button" className="icon-btn danger" title={t("Remove")} aria-label={t("Remove")} onClick={() => remove(i)}>
                 <Icon name="trash" size={14} />
               </button>
             </div>
           ),
         )}
-        {list && list.length === 0 && <Notice tone="hint">No recipes yet.</Notice>}
+        {list && list.length === 0 && <Notice tone="hint">{t("No recipes yet.")}</Notice>}
       </div>
       <button type="button" className="btn sm" disabled={!list} onClick={add}>
         <Icon name="plus" size={12} /> Add a recipe
@@ -128,10 +129,10 @@ export default function RecipesDialog({ initial, onClose, onSaved }: { initial?:
       {(err || loaded.error) && <Notice tone="error">{err || loaded.error}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" className="btn primary" disabled={busy || !list}>
-          Save
+          {t("Save")}
         </button>
       </div>
     </Dialog>
@@ -156,48 +157,48 @@ function RecipeForm({ form, agents, machines, onChange, onDone, onRemove }: {
   return (
     <div className="recipe-form">
       <label>
-        Name
-        <input autoFocus value={form.name} placeholder="Planner" onChange={(e) => set({ name: e.target.value })} />
+        {t("Name")}
+        <input autoFocus value={form.name} placeholder={t("Planner")} onChange={(e) => set({ name: e.target.value })} />
       </label>
       <label>
-        Agent
+        {t("Agent")}
         <Select
           value={shell ? "shell" : form.agent}
           onChange={(agent) => set({ agent, draft: { ...EMPTY_DRAFT, args: form.draft.args, prompt: form.draft.prompt } })}
-          options={[...agents.map((a) => ({ value: a.id, label: a.label, icon: <Logo agent={a.id} /> })), { value: "shell", label: "Plain shell", icon: <Icon name="terminal" size={14} /> }]}
+          options={[...agents.map((a) => ({ value: a.id, label: a.label, icon: <Logo agent={a.id} /> })), { value: "shell", label: t("Plain shell"), icon: <Icon name="terminal" size={14} /> }]}
         />
       </label>
       {!shell && hasModelFlag(form.agent) && choices.length > 0 && (
         <label>
-          Model
+          {t("Model")}
           <Select value={form.draft.choice} onChange={(choice) => setDraft({ choice })} options={choices} />
         </label>
       )}
       {!shell && typedModel && (
         <label>
-          {choices.length > 0 ? "Model id" : "Model"}
+          {choices.length > 0 ? t("Model id") : t("Model")}
           <input value={form.draft.custom} placeholder={modelPlaceholder(form.agent)} spellCheck={false} onChange={(e) => setDraft({ custom: e.target.value })} />
         </label>
       )}
       {!shell && (
         <label>
-          Extra arguments
-          <input value={form.draft.args} placeholder="--permission-mode plan" spellCheck={false} onChange={(e) => setDraft({ args: e.target.value })} />
+          {t("Extra arguments")}
+          <input value={form.draft.args} placeholder={t("--permission-mode plan")} spellCheck={false} onChange={(e) => setDraft({ args: e.target.value })} />
         </label>
       )}
       {!shell && (
         <label>
-          First prompt <small>sent once the agent is up</small>
-          <textarea value={form.draft.prompt} rows={3} placeholder="What the agent should start on" onChange={(e) => setDraft({ prompt: e.target.value })} />
+          First prompt <small>{t("sent once the agent is up")}</small>
+          <textarea value={form.draft.prompt} rows={3} placeholder={t("What the agent should start on")} onChange={(e) => setDraft({ prompt: e.target.value })} />
         </label>
       )}
       <label>
-        Folder <small>optional: the recipe belongs to this folder</small>
-        <input value={form.dir} placeholder="any folder" spellCheck={false} onChange={(e) => set({ dir: e.target.value })} />
+        Folder <small>{t("optional: the recipe belongs to this folder")}</small>
+        <input value={form.dir} placeholder={t("any folder")} spellCheck={false} onChange={(e) => set({ dir: e.target.value })} />
       </label>
       {form.dir.trim() && several && (
         <label>
-          Machine
+          {t("Machine")}
           <Select value={form.machine || connected(machines)[0]?.id || ""} onChange={(machine) => set({ machine })} options={machineOptions(machines)} />
         </label>
       )}

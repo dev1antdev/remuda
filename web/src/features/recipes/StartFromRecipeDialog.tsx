@@ -12,6 +12,7 @@ import { fetchRecipes, type Recipe } from "./api";
 import RecipeMark from "./RecipeMark";
 import { folderFor, lastRecipeKey, machineFor, pickFirst, recipeDirKey, recipeWords, startRequest, type StartRequest } from "./recipes";
 import RecipesDialog from "./RecipesDialog";
+import { t } from "@/lib/i18n";
 
 const OTHER_FOLDER = "\u0000other"; // the folder Select's last row: a path typed by hand
 
@@ -40,7 +41,7 @@ export default function StartFromRecipeDialog({ machineId, dir, onClose, onStart
   const folders = useMemo(() => folderOptions(machines, machine), [machines, machine]);
   const folderIcon = <Icon name="folder" size={14} />;
   const listed = folders.some((f) => f.value === folder);
-  const folderRows = [...(listed || !folder || folder === OTHER_FOLDER ? folders : [{ value: folder, label: folder, icon: folderIcon }, ...folders]), { value: OTHER_FOLDER, label: "Another folder…", icon: folderIcon }];
+  const folderRows = [...(listed || !folder || folder === OTHER_FOLDER ? folders : [{ value: folder, label: folder, icon: folderIcon }, ...folders]), { value: OTHER_FOLDER, label: t("Another folder…"), icon: folderIcon }];
   const where = folder === OTHER_FOLDER ? typed.trim() : folder;
   const submit = useSubmit(async () => {
     if (!recipe) throw new Error("Pick a recipe");
@@ -51,40 +52,40 @@ export default function StartFromRecipeDialog({ machineId, dir, onClose, onStart
   });
   const several = connected(machines).length > 1;
   return (
-    <FormDialog title="New agent from recipe" icon="sparkles" onClose={onClose} submit={submit} submitLabel="Start">
+    <FormDialog title={t("New agent from recipe")} icon="sparkles" onClose={onClose} submit={submit} submitLabel="Start">
       {recipes.error && <Notice tone="error">{recipes.error}</Notice>}
       {recipes.data && list.length === 0 && (
         <Notice
           tone="hint"
           action={
             <button type="button" className="btn sm" onClick={() => setManaging(true)}>
-              Add a recipe…
+              {t("Add a recipe…")}
             </button>
           }
         >
-          No recipes yet: a recipe is an agent with its model, arguments and first prompt, saved under a name.
+          {t("No recipes yet: a recipe is an agent with its model, arguments and first prompt, saved under a name.")}
         </Notice>
       )}
       {list.length > 0 && (
         <label>
-          Recipe
+          {t("Recipe")}
           <Select value={recipeId} onChange={(id) => pick(list.find((r) => r.id === id) ?? null)} options={list.map((r) => ({ value: r.id ?? "", label: r.name, hint: recipeWords(r, agents), icon: <RecipeMark agent={r.agent} /> }))} />
         </label>
       )}
       {recipe && <p className="recipe-words start-recipe-words">{recipeWords(recipe, agents)}</p>}
       {several && (
         <label>
-          Machine
+          {t("Machine")}
           <Select value={machine} onChange={setMachine} options={machineOptions(machines)} />
         </label>
       )}
       <label>
-        Folder
-        <Select value={folder} onChange={setFolder} placeholder="Pick a workspace" options={folderRows} />
+        {t("Folder")}
+        <Select value={folder} onChange={setFolder} placeholder={t("Pick a workspace")} options={folderRows} />
       </label>
       {folder === OTHER_FOLDER && (
         <label>
-          Folder path
+          {t("Folder path")}
           <input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="/home/me/project" spellCheck={false} />
         </label>
       )}

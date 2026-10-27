@@ -10,6 +10,7 @@ import { folderOptions } from "@/features/roster/options";
 import { basename } from "@/lib/text";
 import { Dialog, Notice } from "@/ui";
 import { useQuery } from "@/lib/query";
+import { t } from "@/lib/i18n";
 
 export default function FolderPicker({ machine, machines, start, onPick, onClose }: {
   machine: Machine;
@@ -38,19 +39,19 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
           go(typed.trim());
         }}
       >
-        <button type="button" className="icon-btn" title="Up one folder" disabled={!data?.parent} onClick={() => data?.parent && go(data.parent)}>
+        <button type="button" className="icon-btn" title={t("Up one folder")} disabled={!data?.parent} onClick={() => data?.parent && go(data.parent)}>
           <Icon name="arrow-left" size={14} />
         </button>
-        <button type="button" className="icon-btn" title="Home" onClick={() => go("")}>
+        <button type="button" className="icon-btn" title={t("Home")} onClick={() => go("")}>
           <Icon name="user" size={14} />
         </button>
-        <input className="sm" value={typed} spellCheck={false} onChange={(e) => setTyped(e.target.value)} placeholder="/path/to/folder" aria-label="Path" />
-        <button type="submit" className="btn sm" title="Go to the typed path">
-          Go
+        <input className="sm" value={typed} spellCheck={false} onChange={(e) => setTyped(e.target.value)} placeholder="/path/to/folder" aria-label={t("Path")} />
+        <button type="submit" className="btn sm" title={t("Go to the typed path")}>
+          {t("Go")}
         </button>
       </form>
       {crumbs.length > 0 && (
-        <div className="picker-crumbs" aria-label="Path">
+        <div className="picker-crumbs" aria-label={t("Path")}>
           <button type="button" className="linkish" onClick={() => go("/")}>
             /
           </button>
@@ -63,7 +64,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
       )}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="picker-list" aria-busy={loading}>
-        {data && data.dirs.length === 0 && !loading && <div className="notice hint">No subfolders here.</div>}
+        {data && data.dirs.length === 0 && !loading && <div className="notice hint">{t("No subfolders here.")}</div>}
         {data?.dirs.map((d) => {
           const full = (data.path === "/" ? "" : data.path) + "/" + d.name;
           return (
@@ -96,7 +97,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
         </label>
         <span className="spacer" />
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="button" className="btn primary" disabled={!here} onClick={() => onPick(here)}>
           Choose {here ? basename(here) || "/" : "…"}

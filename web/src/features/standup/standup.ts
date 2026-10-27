@@ -5,13 +5,14 @@ import { tok, usd } from "@/features/usage/format";
 import { plural } from "@/lib/text";
 import { spent } from "@/lib/time";
 import type { Item, Recap } from "./api";
+import { t } from "@/lib/i18n";
 
 export type Period = "today" | "day" | "week";
 
 export const PERIODS: { value: Period; label: string }[] = [
-  { value: "today", label: "Since midnight" },
-  { value: "day", label: "Last 24 h" },
-  { value: "week", label: "Last 7 days" },
+  { value: "today", label: t("Since midnight") },
+  { value: "day", label: t("Last 24 h") },
+  { value: "week", label: t("Last 7 days") },
 ];
 
 // sinceFor is the period's start as RFC 3339, or nothing for "today": the server cuts at midnight in the device's zone

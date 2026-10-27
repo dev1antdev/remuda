@@ -14,6 +14,7 @@ import { Rows, StateMarks, type Current } from "./rows";
 import { hueStyle } from "./hue";
 import { moving, useClock, useSpinner } from "./useClocks";
 import { useRoster } from "./useRoster";
+import { t } from "@/lib/i18n";
 
 export type { Current } from "./rows";
 
@@ -28,7 +29,7 @@ export default function Sidebar() {
   const onToggle = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
   const onFold = (key: string) => setWsFolded((f) => ({ ...f, [key]: !f[key] }));
   const onMenu = (m: Machine, s: Session, x: number, y: number) => actions.openMenu({ machine: m, session: s, x, y });
-  const onRemoveMachine = (m: Machine) => actions.ask(`Remove machine “${m.label}”? Nothing on the PC is touched.`, "Remove", () => void act(removeMachine(m.id)));
+  const onRemoveMachine = (m: Machine) => actions.ask(`Remove machine “${m.label}”? Nothing on the PC is touched.`, t("Remove"), () => void act(removeMachine(m.id)));
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
 
@@ -36,42 +37,42 @@ export default function Sidebar() {
   return (
     <>
       <div className="sidebar-head">
-        <span>Machines</span>
+        <span>{t("Machines")}</span>
         <span className="sidebar-head-actions">
           <Menu
             label="New"
             align="end"
-            tip="New: a workspace on a machine, or a PC"
+            tip={t("New: a workspace on a machine, or a PC")}
             trigger={
-              <button type="button" className="icon-btn" aria-label="New">
+              <button type="button" className="icon-btn" aria-label={t("New")}>
                 <Icon name="plus" size={14} />
               </button>
             }
             items={[
               ...machines.filter((m) => m.state === "connected").map((m) => ({ label: `New workspace on ${m.label}…`, icon: "terminal" as const, onSelect: () => actions.openDialog({ kind: "workspace", machineId: m.id }) })),
-              { label: "Agent from recipe…", icon: "sparkles", hint: "a saved agent, model, arguments and first prompt", onSelect: () => actions.openDialog({ kind: "start-recipe" }) },
+              { label: t("Agent from recipe…"), icon: "sparkles", hint: t("a saved agent, model, arguments and first prompt"), onSelect: () => actions.openDialog({ kind: "start-recipe" }) },
               { sep: true },
-              { label: "Add a PC…", icon: "monitor", hint: "a remote machine over SSH", onSelect: () => actions.openDialog({ kind: "machine" }) },
+              { label: t("Add a PC…"), icon: "monitor", hint: t("a remote machine over SSH"), onSelect: () => actions.openDialog({ kind: "machine" }) },
             ]}
           />
           <Menu
             label="Sidebar"
             align="end"
-            tip="Message several agents, the order, the sidebar settings"
+            tip={t("Message several agents, the order, the sidebar settings")}
             trigger={
-              <button type="button" className="icon-btn" aria-label="More">
+              <button type="button" className="icon-btn" aria-label={t("More")}>
                 <Icon name="more" size={14} />
               </button>
             }
             items={[
-              { label: "Message several agents…", icon: "send", hint: "one text to the ones you tick, each in turn", onSelect: () => actions.openDialog({ kind: "broadcast" }) },
+              { label: t("Message several agents…"), icon: "send", hint: t("one text to the ones you tick, each in turn"), onSelect: () => actions.openDialog({ kind: "broadcast" }) },
               { sep: true },
-              { heading: "Order" },
-              { label: "Grouped by activity", checked: prefs.order === "active", onSelect: () => onPrefs({ ...prefs, order: "active" }) },
-              { label: "Flat, by activity", checked: prefs.order === "recent", onSelect: () => onPrefs({ ...prefs, order: "recent" }) },
-              { label: "herdr's own order", checked: prefs.order === "herdr", onSelect: () => onPrefs({ ...prefs, order: "herdr" }) },
+              { heading: t("Order") },
+              { label: t("Grouped by activity"), checked: prefs.order === "active", onSelect: () => onPrefs({ ...prefs, order: "active" }) },
+              { label: t("Flat, by activity"), checked: prefs.order === "recent", onSelect: () => onPrefs({ ...prefs, order: "recent" }) },
+              { label: t("herdr's own order"), checked: prefs.order === "herdr", onSelect: () => onPrefs({ ...prefs, order: "herdr" }) },
               { sep: true },
-              { label: "Sidebar settings…", icon: "sliders", hint: "labels, idle tiers, shells", onSelect: () => actions.openDialog({ kind: "settings" }) },
+              { label: t("Sidebar settings…"), icon: "sliders", hint: t("labels, idle tiers, shells"), onSelect: () => actions.openDialog({ kind: "settings" }) },
             ]}
           />
         </span>
@@ -82,7 +83,7 @@ export default function Sidebar() {
         return (
           <div key={m.id} className={`machine${folded ? " folded" : ""}${m.id !== "local" ? " has-hue" : ""}`} style={hueStyle(m.id)}>
             <div className="machine-head">
-              <button type="button" className="machine-toggle" title={folded ? "Show workspaces" : "Hide workspaces"} aria-expanded={!folded} onClick={() => onToggle(m.id)}>
+              <button type="button" className="machine-toggle" title={folded ? t("Show workspaces") : t("Hide workspaces")} aria-expanded={!folded} onClick={() => onToggle(m.id)}>
                 <span className={`machine-state is-${m.state}`} title={m.error || m.state} />
                 <span className="machine-label" title={m.host}>
                   {m.label}
@@ -98,7 +99,7 @@ export default function Sidebar() {
                 </span>
               </button>
               {m.source === "herdr" && (
-                <span className="machine-tag" title="Mirrored from `herdr machine list`">
+                <span className="machine-tag" title={t("Mirrored from `herdr machine list`")}>
                   herdr
                 </span>
               )}
@@ -117,7 +118,7 @@ export default function Sidebar() {
             )}
             {m.state === "connecting" && (
               <Notice tone="hint" className="machine-error dim">
-                connecting…
+                {t("connecting…")}
               </Notice>
             )}
             {!folded && <Rows machine={m} current={current} prefs={prefs} step={step} now={now} onSelect={actions.selectPane} onMenu={onMenu} folded={wsFolded} onFold={onFold} />}

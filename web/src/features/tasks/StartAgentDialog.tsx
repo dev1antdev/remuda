@@ -7,6 +7,7 @@ import { usePref } from "@/lib/prefs";
 import { Dialog, Icon, Notice, Select, useSubmit } from "@/ui";
 import { startTask, type Project, type Task } from "./api";
 import { branchFor, taskPrompt } from "./prompt";
+import { t as tr } from "@/lib/i18n";
 
 export function StartAgentDialog({ task: t, project, moveTo, machines, currentPane, onClose, onStarted }: {
   task: Task;
@@ -46,7 +47,7 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
   const { busy, err, run } = useSubmit(async () => {
     setRemembered({ ...remembered, [String(t.project_id)]: { machine, workspace } });
     const task = await startTask(t.id, { machine, workspace, branch: branch.trim(), base: base.trim(), agent: "claude", groom, prompt });
-    onStarted(task, `${ws?.label ?? "the workspace"}${m && m.id !== "local" ? ` on ${m.label}` : ""}`);
+    onStarted(task, `${ws?.label ?? tr("the workspace")}${m && m.id !== "local" ? ` on ${m.label}` : ""}`);
   });
   return (
     <Dialog
@@ -70,35 +71,35 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
         ) : (
           "The task stays where it is;"
         )}{" "}
-        every answer the agent finishes comes back here as a comment.
+        {tr("every answer the agent finishes comes back here as a comment.")}
       </p>
       <div className="schedule-row">
         {connected.length > 1 && (
           <label>
-            Machine
+            {tr("Machine")}
             <Select value={machine} onChange={setMachine} options={machineOptions(connected, { onlyConnected: false })} />
           </label>
         )}
         <label className="grow">
-          Workspace
-          <Select value={workspace} onChange={setWorkspace} placeholder="Pick a repository" options={workspaces} />
+          {tr("Workspace")}
+          <Select value={workspace} onChange={setWorkspace} placeholder={tr("Pick a repository")} options={workspaces} />
         </label>
       </div>
       <div className="schedule-row">
         <label className="grow">
-          Branch
+          {tr("Branch")}
           <input value={branch} onChange={(e) => setBranch(e.target.value)} spellCheck={false} required />
         </label>
         <label className="grow">
-          From
-          <input value={base} onChange={(e) => setBase(e.target.value)} placeholder="the current branch" spellCheck={false} />
+          {tr("From")}
+          <input value={base} onChange={(e) => setBase(e.target.value)} placeholder={tr("the current branch")} spellCheck={false} />
         </label>
       </div>
       <label className="tasks-toggle">
         <input type="checkbox" checked={groom} onChange={(e) => toggleGroom(e.target.checked)} /> groom first (<code>/grill-me</code>)
       </label>
       <label>
-        Prompt
+        {tr("Prompt")}
         <textarea
           rows={6}
           value={prompt}
@@ -111,10 +112,10 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {tr("Cancel")}
         </button>
         <button type="submit" className="btn primary" disabled={busy || !ready}>
-          {busy ? "Starting…" : "Start"}
+          {busy ? tr("Starting…") : tr("Start")}
         </button>
       </div>
     </Dialog>

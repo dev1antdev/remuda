@@ -5,6 +5,7 @@
 import { spent } from "@/lib/time";
 import type { Part, Turn } from "./api";
 import { toolLabel } from "./footprint";
+import { t } from "@/lib/i18n";
 
 export const SQUEEZE_MS = 10 * 60 * 1000; // a gap longer than this is drawn this long: one lunch break must not flatten the day
 export const LONG_WAIT_MS = 30 * 60 * 1000; // a gap from an answer to the next prompt that counts as the person away
@@ -80,7 +81,7 @@ export function timeline(turns: Turn[]): Timeline {
     if (turn.role === "user") {
       closeRun();
       const text = firstText(turn);
-      if (text.startsWith(COMPACTION_PREFIX)) marks.push({ kind: "compaction", id, at: ts, label: "Compacted", detail: "the conversation went on in a new file, from a summary of the one before", count: 1 });
+      if (text.startsWith(COMPACTION_PREFIX)) marks.push({ kind: "compaction", id, at: ts, label: t("Compacted"), detail: t("the conversation went on in a new file, from a summary of the one before"), count: 1 });
       const answer = turns[i + 1];
       if (answer?.role === "assistant" && ts) {
         const end = answer.took ? ts + answer.took * 1000 : when(answer.ts) || ts;
@@ -93,10 +94,10 @@ export function timeline(turns: Turn[]): Timeline {
       const at = when(part.at) || ts;
       if (part.is_error) {
         failed++;
-        if (!firstError) firstError = { kind: "error", id, at, label: "First error", detail: callWords(part), count: 1 };
+        if (!firstError) firstError = { kind: "error", id, at, label: t("First error"), detail: callWords(part), count: 1 };
       }
       if (part.took && (!longest || part.took > longest.took)) longest = { kind: "longest", id, at, label: `Longest call ${spent(part.took)}`, detail: callWords(part), count: 1, took: part.took };
-      if (part.tool_name === "AskUserQuestion") marks.push({ kind: "question", id, at, label: "Question", detail: callWords(part), count: 1 });
+      if (part.tool_name === "AskUserQuestion") marks.push({ kind: "question", id, at, label: t("Question"), detail: callWords(part), count: 1 });
       const key = callKey(part);
       if (run && run.key === key) run.count++;
       else {
@@ -157,7 +158,7 @@ export function chips(line: Timeline): Chip[] {
   if (longest) out.push({ kind: "longest", id: longest.id, text: longest.label, title: longest.detail });
   for (const loop of line.highlights.filter((h) => h.kind === "loop").slice(0, 3)) out.push({ kind: "loop", id: loop.id, text: loop.label, title: loop.detail });
   const questions = line.highlights.filter((h) => h.kind === "question");
-  if (questions.length === 1) out.push({ kind: "question", id: questions[0]!.id, text: "1 question", title: "the agent asked once; the mark is where" });
+  if (questions.length === 1) out.push({ kind: "question", id: questions[0]!.id, text: t("1 question"), title: t("the agent asked once; the mark is where") });
   if (questions.length > 1) out.push({ kind: "question", id: questions[0]!.id, text: `${questions.length} questions`, title: `the agent asked ${questions.length} times; this goes to the first` });
   const compactions = line.highlights.filter((h) => h.kind === "compaction");
   if (compactions.length) out.push({ kind: "compaction", id: compactions[0]!.id, text: compactions.length === 1 ? "Compacted" : `Compacted ×${compactions.length}`, title: compactions[0]!.detail });

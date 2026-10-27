@@ -10,6 +10,7 @@ import { ago } from "@/lib/time";
 import { Icon } from "@/ui";
 import { footprint, shownPath, type Touch } from "./footprint";
 import { useChat } from "./useChat";
+import { t } from "@/lib/i18n";
 
 const RECENT_MS = 60_000;
 
@@ -38,18 +39,18 @@ export default function FilesRail({ machineId, paneId, status, dir, active, onOp
     />
   );
   return (
-    <aside className="footprint" aria-label="Files the agent touched">
+    <aside className="footprint" aria-label={t("Files the agent touched")}>
       <div className="footprint-head">
         <Icon name="folder" size={14} /> Files
         <span className="footprint-sub">
-          {edited.length > 0 ? `${plural(edited.length, "file")} edited` : "nothing edited"}
+          {edited.length > 0 ? `${plural(edited.length, "file")} edited` : t("nothing edited")}
           {read.length > 0 && ` · ${read.length} read`}
         </span>
       </div>
       <div className="footprint-list">
-        {chat === null && !error && <div className="empty">Loading…</div>}
+        {chat === null && !error && <div className="empty">{t("Loading…")}</div>}
         {error && <div className="empty">{error}</div>}
-        {chat && edited.length === 0 && read.length === 0 && <div className="empty">No file touched yet.</div>}
+        {chat && edited.length === 0 && read.length === 0 && <div className="empty">{t("No file touched yet.")}</div>}
         {edited.map(row)}
         {read.length > 0 && (
           <div className="fp-fold">

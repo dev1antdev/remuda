@@ -20,6 +20,7 @@ import { subagentWords } from "./subagents";
 import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFollowBottom } from "./useFollowBottom";
+import { t } from "@/lib/i18n";
 
 export const TAIL_TURNS = 12;
 
@@ -51,7 +52,7 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, words, settled
     <div className="chat tail">
       <TileState words={words} doing={now} said={answered} plan={progress} subagents={subs} />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
-        {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : "No transcript yet."}</div>}
+        {turns.length === 0 && <div className="empty chat-empty">{chat === null ? t("Loading…") : t("No transcript yet.")}</div>}
         {turns.map((t, i) => (
           <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} />
         ))}
@@ -70,7 +71,7 @@ export function TileState({ words, doing, said, plan, subagents }: { words: stri
     <div className="tile-state">
       <span className="tile-words">{words}</span>
       {plan && (
-        <span className="tile-plan" title="The agent's plan: items done of all">
+        <span className="tile-plan" title={t("The agent's plan: items done of all")}>
           {plan}
         </span>
       )}
@@ -107,7 +108,7 @@ function Running({ since }: { since: string }) {
   const seconds = Math.max(0, (now - new Date(since).getTime()) / 1000);
   if (!Number.isFinite(seconds)) return null;
   return (
-    <span className={seconds >= LONG_CALL ? "tile-running is-long" : "tile-running"} title={seconds >= LONG_CALL ? "This call has run for over a minute" : undefined}>
+    <span className={seconds >= LONG_CALL ? "tile-running is-long" : "tile-running"} title={seconds >= LONG_CALL ? t("This call has run for over a minute") : undefined}>
       {" · "}
       {took(seconds)}
     </span>
@@ -124,7 +125,7 @@ export function TailAnswer({ machineId, paneId, status, dir, active = true, erro
       {status === "input" && (
         <Notice tone="warn" icon="alert-triangle" className="chat-notice">
           <QuestionCard machineId={machineId} paneId={paneId} active={active} compact onKeys={keys}>
-            Waiting for an answer:
+            {t("Waiting for an answer:")}
           </QuestionCard>
         </Notice>
       )}

@@ -12,6 +12,7 @@ import { Dialog, Icon, Logo, Notice, Select } from "@/ui";
 import { fetchStandup, type Item } from "./api";
 import { RecapBody } from "./RecapBody";
 import { order, PERIODS, quiet, sinceFor, stateLabel, where, type Period } from "./standup";
+import { t } from "@/lib/i18n";
 
 export default function Standup({ onClose }: { onClose: () => void }) {
   const [period, setPeriod] = usePref<Period>("standup.period", "today");
@@ -34,14 +35,14 @@ export default function Standup({ onClose }: { onClose: () => void }) {
   };
   const copy = async () => {
     if (!data) return;
-    if (await copyText(data.markdown)) actions.notify("Copied the standup as Markdown", { brief: true });
-    else actions.notify("Could not copy", { error: true });
+    if (await copyText(data.markdown)) actions.notify(t("Copied the standup as Markdown"), { brief: true });
+    else actions.notify(t("Could not copy"), { error: true });
   };
-  const periodWords = period === "today" ? "today" : period === "day" ? "in the last 24 hours" : "in the last 7 days";
+  const periodWords = period === "today" ? "today" : period === "day" ? t("in the last 24 hours") : t("in the last 7 days");
 
   return (
     <Dialog
-      title="Standup"
+      title={t("Standup")}
       icon="sun"
       size="lg"
       className="standup"
@@ -54,7 +55,7 @@ export default function Standup({ onClose }: { onClose: () => void }) {
       }
     >
       {error && <Notice tone="error">{error}</Notice>}
-      {data && items.length === 0 && <Notice tone="hint">No agent is running on a connected machine.</Notice>}
+      {data && items.length === 0 && <Notice tone="hint">{t("No agent is running on a connected machine.")}</Notice>}
       {data && items.length > 0 && busy.length === 0 && <Notice tone="hint">Nothing happened {periodWords}: no prompt, no answer, no tool call from any agent.</Notice>}
       {busy.map((item) => (
         <article key={`${item.machine}|${item.pane}`} className="standup-item">

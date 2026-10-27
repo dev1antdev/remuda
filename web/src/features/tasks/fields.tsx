@@ -6,6 +6,7 @@ import type { Field, FieldValue } from "@/features/tasks/api";
 import Select from "@/ui/Select";
 import Icon from "@/ui/icons";
 import { openUrl } from "@/lib/host";
+import { t } from "@/lib/i18n";
 
 export function valueText(f: Field, v: FieldValue | undefined): string {
   if (v === undefined || v === null || v === "" || v === false) return "";
@@ -72,7 +73,7 @@ export function FieldInput({ field, value, onCommit }: { field: Field; value: Fi
               </button>
             );
           })}
-          {field.options.length === 0 && <span className="placeholder small">No options yet — add some in the project's settings.</span>}
+          {field.options.length === 0 && <span className="placeholder small">{t("No options yet — add some in the project's settings.")}</span>}
         </span>
       );
     }
@@ -105,7 +106,7 @@ function TextField({ field, value, onCommit }: { field: Field; value: FieldValue
       type={field.kind === "number" ? "number" : field.kind === "link" ? "url" : "text"}
       inputMode={field.kind === "number" ? "decimal" : undefined}
       value={local}
-      placeholder={field.kind === "link" ? "https://…" : "—"}
+      placeholder={field.kind === "link" ? t("https://…") : "—"}
       spellCheck={field.kind === "text"}
       onChange={(e) => setLocal(e.target.value)}
       onBlur={commit}
@@ -120,7 +121,7 @@ function TextField({ field, value, onCommit }: { field: Field; value: FieldValue
     <span className="field-link">
       {input}
       {/^https?:\/\//.test(shown) && (
-        <button type="button" className="icon-btn sm" title="Open" aria-label={`Open ${shown}`} onClick={() => openUrl(shown)}>
+        <button type="button" className="icon-btn sm" title={t("Open")} aria-label={`Open ${shown}`} onClick={() => openUrl(shown)}>
           <Icon name="external-link" size={14} />
         </button>
       )}

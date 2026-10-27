@@ -5,6 +5,7 @@ import { actions } from "@/app/store";
 import { usePref } from "@/lib/prefs";
 import { Dialog, Icon, Notice, Tip } from "@/ui";
 import { pinKey, pinWords, type Pin } from "./pins";
+import { t } from "@/lib/i18n";
 
 export default function PinsDialog({ machineId, paneId, dir, shown, title, onClose }: {
   machineId: string;
@@ -20,23 +21,23 @@ export default function PinsDialog({ machineId, paneId, dir, shown, title, onClo
     actions.jumpTo(machineId, paneId, pin.session, pin.turn);
   };
   const unpin = (pin: Pin) => setPins((prev) => prev.filter((p) => p.turn !== pin.turn));
-  const clear = () => actions.ask(`Remove all ${pins.length} pins of ${title}? The turns themselves stay.`, "Remove all", () => setPins([]));
+  const clear = () => actions.ask(`Remove all ${pins.length} pins of ${title}? The turns themselves stay.`, t("Remove all"), () => setPins([]));
   return (
-    <Dialog title="Pins" icon="pin" size="md" onClose={onClose}>
+    <Dialog title={t("Pins")} icon="pin" size="md" onClose={onClose}>
       <h3 className="standup-title">{title}</h3>
       {pins.length === 0 ? (
-        <Notice tone="hint">Nothing pinned here yet. The pin beside a turn's link keeps that turn in this list.</Notice>
+        <Notice tone="hint">{t("Nothing pinned here yet. The pin beside a turn's link keeps that turn in this list.")}</Notice>
       ) : (
-        <ul className="pins-list" aria-label="Pinned turns">
+        <ul className="pins-list" aria-label={t("Pinned turns")}>
           {pins.map((pin) => (
             <li key={pin.turn} className="pins-item">
-              <button type="button" className="pins-row" onClick={() => go(pin)} title="Open the conversation at this turn">
+              <button type="button" className="pins-row" onClick={() => go(pin)} title={t("Open the conversation at this turn")}>
                 <Icon name={pin.kind === "prompt" ? "user" : "sparkles"} size={12} className="pins-kind" />
                 <span className="pins-line">{pin.line}</span>
                 <span className="pins-when">{pinWords(pin, shown)}</span>
               </button>
               <Tip text="Unpin">
-                <button type="button" className="icon-btn sm" aria-label="Unpin this turn" onClick={() => unpin(pin)}>
+                <button type="button" className="icon-btn sm" aria-label={t("Unpin this turn")} onClick={() => unpin(pin)}>
                   <Icon name="x" size={12} />
                 </button>
               </Tip>

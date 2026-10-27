@@ -16,16 +16,17 @@ import { popOut, popOutSupported } from "./pip";
 import { actions } from "./store";
 import { TileView } from "./Tile";
 import { useOffice } from "./useOffice";
+import { t } from "@/lib/i18n";
 
 const VIEWS: { view: WallView; label: string; title: string }[] = [
-  { view: "chat", label: "Chat", title: "Each tile the last turns of its conversation" },
-  { view: "screen", label: "Screen", title: "Each tile its terminal as it is, scaled to fit" },
+  { view: "chat", label: t("Chat"), title: t("Each tile the last turns of its conversation") },
+  { view: "screen", label: t("Screen"), title: t("Each tile its terminal as it is, scaled to fit") },
 ];
 
 const SIZES: { size: WallPrefs["size"]; title: string }[] = [
-  { size: "s", title: "Small tiles: the most on screen" },
-  { size: "m", title: "Medium tiles" },
-  { size: "l", title: "Large tiles: the most of each conversation" },
+  { size: "s", title: t("Small tiles: the most on screen") },
+  { size: "m", title: t("Medium tiles") },
+  { size: "l", title: t("Large tiles: the most of each conversation") },
 ];
 
 export default function Wall() {
@@ -86,7 +87,7 @@ export default function Wall() {
           type="button"
           className={`btn sm${prefs.needsMe ? " on" : ""}`}
           aria-pressed={prefs.needsMe}
-          title="Only the agents waiting for you: a question open, a watchdog note, a finish you have not looked at"
+          title={t("Only the agents waiting for you: a question open, a watchdog note, a finish you have not looked at")}
           onClick={() => setPrefs({ ...prefs, needsMe: !prefs.needsMe })}
         >
           Needs me{prefs.needsMe && list.calm ? ` (${list.calm})` : ""}
@@ -101,7 +102,7 @@ export default function Wall() {
           Hide idle{prefs.hideIdle && list.idle ? ` (${list.idle})` : ""}
         </button>
         {list.hidden > 0 && (
-          <button type="button" className="btn sm" title="Bring back the tiles hidden by hand" onClick={() => setHidden([])}>
+          <button type="button" className="btn sm" title={t("Bring back the tiles hidden by hand")} onClick={() => setHidden([])}>
             Show {list.hidden} hidden
           </button>
         )}
@@ -124,26 +125,26 @@ export default function Wall() {
           type="button"
           className={`btn sm wall-office-btn${office ? " on" : ""}`}
           aria-pressed={office}
-          title={office ? "Leave office mode (Esc)" : "Office mode for a second screen: one agent large — the one that needs you, else each in turn every 20 s — the rest as cards; a card pins its agent; full screen"}
+          title={office ? "Leave office mode (Esc)" : t("Office mode for a second screen: one agent large — the one that needs you, else each in turn every 20 s — the rest as cards; a card pins its agent; full screen")}
           onClick={toggleOffice}
         >
           <Icon name="monitor" size={12} /> Office
         </button>
-        <button type="button" className="btn sm" title="Start an agent in a new workspace" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
+        <button type="button" className="btn sm" title={t("Start an agent in a new workspace")} onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
           <Icon name="plus" size={12} /> Agent
         </button>
       </div>
       {n === 0 ? (
         <div className="placeholder">
-          <p>{machines.some((m) => m.state === "connected") ? (list.calm ? "Nobody needs you right now." : list.hidden || list.idle ? "Every agent is hidden or idle." : "No agent runs anywhere.") : "No machine connected."}</p>
+          <p>{machines.some((m) => m.state === "connected") ? (list.calm ? t("Nobody needs you right now.") : list.hidden || list.idle ? t("Every agent is hidden or idle.") : t("No agent runs anywhere.")) : t("No machine connected.")}</p>
           <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
-            Start an agent
+            {t("Start an agent")}
           </button>
         </div>
       ) : featuredTile ? (
         <div className="wall-office">
           <div className="wall-office-main">{tile(featuredTile)}</div>
-          <div className="wall-office-cards" aria-label="The other agents; a click pins one">
+          <div className="wall-office-cards" aria-label={t("The other agents; a click pins one")}>
             {cards.map((t) => tile(t, true))}
           </div>
         </div>

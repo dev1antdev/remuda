@@ -6,6 +6,7 @@ import Icon from "@/ui/icons";
 
 import type { FileTarget } from "./target";
 import { actions } from "@/app/store";
+import { t } from "@/lib/i18n";
 
 type Tab = "file" | "changes";
 
@@ -130,18 +131,18 @@ export default function FileViewer({
             </span>
           </div>
           {info?.kind === "text" && (
-            <nav className="fv-tabs" aria-label="View">
+            <nav className="fv-tabs" aria-label={t("View")}>
               <button type="button" className={tab === "file" ? "on" : ""} aria-pressed={tab === "file"} onClick={() => setTab("file")}>
-                File
+                {t("File")}
               </button>
               <button
                 type="button"
                 className={tab === "changes" ? "on" : ""}
                 aria-pressed={tab === "changes"}
                 onClick={() => setTab("changes")}
-                title={diff?.untracked ? "New file, not yet in git" : diff?.repo ? "Uncommitted change against HEAD" : "Not inside a git repository"}
+                title={diff?.untracked ? t("New file, not yet in git") : diff?.repo ? t("Uncommitted change against HEAD") : t("Not inside a git repository")}
               >
-                Changes
+                {t("Changes")}
                 {hasDiff && <span className="fv-badge">{`+${counts.add} −${counts.del}`}</span>}
               </button>
             </nav>
@@ -150,7 +151,7 @@ export default function FileViewer({
             <button
               type="button"
               className="icon-btn"
-              aria-label="Open in Code"
+              aria-label={t("Open in Code")}
               onClick={() => {
                 close();
                 actions.openInCode(machineId, dir, info?.path ?? target.path, target.line);
@@ -159,19 +160,19 @@ export default function FileViewer({
               <Icon name="code" size={16} />
             </button>
           </Tip>
-          <button type="button" className="icon-btn" onClick={close} title="Close (Esc)" aria-label="Close">
+          <button type="button" className="icon-btn" onClick={close} title="Close (Esc)" aria-label={t("Close")}>
             <Icon name="x" size={16} />
           </button>
         </header>
 
         <div className="fv-body">
           {error && <Notice tone="error">{error}</Notice>}
-          {!error && !info && <div className="empty">Loading…</div>}
+          {!error && !info && <div className="empty">{t("Loading…")}</div>}
           {info?.kind === "missing" && (
             <div className="empty">
               {info.candidates?.length ? (
                 <>
-                  <p>Several files match — pick one:</p>
+                  <p>{t("Several files match — pick one:")}</p>
                   {info.candidates.map((c) => (
                     <button key={c} type="button" className="btn fv-cand" onClick={() => onRetarget({ ...target, path: c })}>
                       {c}
@@ -179,11 +180,11 @@ export default function FileViewer({
                   ))}
                 </>
               ) : (
-                <p>File not found on this machine.</p>
+                <p>{t("File not found on this machine.")}</p>
               )}
             </div>
           )}
-          {info?.kind === "dir" && <div className="empty">That's a folder.</div>}
+          {info?.kind === "dir" && <div className="empty">{t("That's a folder.")}</div>}
           {info?.kind === "binary" && <div className="empty">Binary file · {fmtSize(info.size)}</div>}
           {info?.kind === "image" && (
             <div className="fv-media">
@@ -254,10 +255,10 @@ function countChanges(diff: string): { add: number; del: number } {
 
 function DiffView({ diff }: { diff: FileDiff | null }) {
   const lines = useMemo(() => (diff?.diff ?? "").split("\n"), [diff]);
-  if (!diff) return <div className="empty">Could not run git here.</div>;
-  if (!diff.repo) return <div className="empty">Not inside a git repository.</div>;
-  if (diff.untracked) return <div className="empty">New file — not yet added to git, so the whole file is the change.</div>;
-  if (!diff.diff) return <div className="empty">No uncommitted changes — the file matches HEAD.</div>;
+  if (!diff) return <div className="empty">{t("Could not run git here.")}</div>;
+  if (!diff.repo) return <div className="empty">{t("Not inside a git repository.")}</div>;
+  if (diff.untracked) return <div className="empty">{t("New file — not yet added to git, so the whole file is the change.")}</div>;
+  if (!diff.diff) return <div className="empty">{t("No uncommitted changes — the file matches HEAD.")}</div>;
   return (
     <div className="fv-code fv-diff">
       {lines.map((l, i) => (

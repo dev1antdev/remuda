@@ -3,6 +3,7 @@
 import { newer } from "@/lib/version";
 import { VENDOR_NAME } from "@/ui/brand";
 import type { Health, Latest } from "./api";
+import { t } from "@/lib/i18n";
 
 export type Concern = { key: string; text: string; bad?: boolean; update?: string };
 
@@ -18,7 +19,7 @@ export function concerns(h: Health | undefined, latest: Latest | undefined, serv
   if (h.code_server && latest?.code && newer(h.code_server, latest.code)) out.push({ key: "code", text: `code-server ${latest.code} is what remuda installs now (${h.code_server} here)`, update: "code" });
   if (h.outdated_hooks?.length) out.push({ key: "hooks", text: `herdr's hooks for ${hookNames(h.outdated_hooks)} are outdated`, update: "hooks" });
   if (remote && serverVersion && h.remuda && h.remuda !== serverVersion) out.push({ key: "ui", text: `remuda there is ${h.remuda}; this one is ${serverVersion}`, update: "remuda" });
-  if (remote && serverVersion && !h.remuda) out.push({ key: "ui", text: "no remuda deployed there — search and usage fall back to slower paths", update: "remuda" });
+  if (remote && serverVersion && !h.remuda) out.push({ key: "ui", text: t("no remuda deployed there — search and usage fall back to slower paths"), update: "remuda" });
   const have = remote ? h.remuda : serverVersion;
   if (have && latest?.remuda && newer(have, latest.remuda)) out.push({ key: "release", text: `remuda ${latest.remuda} is out (${have} here)`, update: "remuda-release" });
   if (h.disk_used_pct >= 90 || (h.disk_free_gb > 0 && h.disk_free_gb < 10)) out.push({ key: "disk", text: `Disk ${h.disk_used_pct}% full, ${h.disk_free_gb.toFixed(0)} GB free`, bad: h.disk_used_pct >= 95 });

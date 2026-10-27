@@ -14,6 +14,7 @@ import { deleteSchedule, fetchSchedules, putSchedule, runSchedule, type Schedule
 import { NEVER } from "./cron";
 import { kindOf, sinceWords } from "./digest";
 import { ScheduleEditor } from "./ScheduleEditor";
+import { t } from "@/lib/i18n";
 
 export default function Schedules({ machines, onClose, ask }: {
   machines: Machine[];
@@ -40,7 +41,7 @@ export default function Schedules({ machines, onClose, ask }: {
 
   return (
     <Dialog
-      title="Schedules"
+      title={t("Schedules")}
       icon="calendar"
       size="md"
       className="schedules"
@@ -60,14 +61,14 @@ export default function Schedules({ machines, onClose, ask }: {
           {error}
         </Notice>
       )}
-      {items && items.length === 0 && !editing && <div className="empty">No schedules yet.</div>}
+      {items && items.length === 0 && !editing && <div className="empty">{t("No schedules yet.")}</div>}
       <div className="schedules-list">
         {items?.map((s) => (
           <div key={s.id} className={`schedule${s.enabled ? "" : " off"}`}>
-            <input type="checkbox" checked={s.enabled} title={s.enabled ? "On" : "Off"} aria-label={s.enabled ? "On" : "Off"} onChange={(e) => toggle(s, e.target.checked)} />
+            <input type="checkbox" checked={s.enabled} title={s.enabled ? t("On") : t("Off")} aria-label={s.enabled ? t("On") : t("Off")} onChange={(e) => toggle(s, e.target.checked)} />
             <div className="schedule-copy">
               <div className="schedule-label">
-                {kindOf(s) === "digest" && <Icon name="sun" size={12} className="schedule-digest-mark" aria-label="Standup digest" />}
+                {kindOf(s) === "digest" && <Icon name="sun" size={12} className="schedule-digest-mark" aria-label={t("Standup digest")} />}
                 {kindOf(s) === "agent" && (
                   <span className="schedule-agent-mark" aria-label={`Starts ${agentLabel(s.agent)}`}>
                     <Logo agent={s.agent ?? ""} />
@@ -94,17 +95,17 @@ export default function Schedules({ machines, onClose, ask }: {
                 )}
               </div>
             </div>
-            <button type="button" className="icon-btn" title="Run now" onClick={() => void runSchedule(s.id ?? "").then(reload, fail)}>
+            <button type="button" className="icon-btn" title={t("Run now")} onClick={() => void runSchedule(s.id ?? "").then(reload, fail)}>
               <Icon name="zap" size={14} />
             </button>
-            <button type="button" className="icon-btn" title="Edit" onClick={() => setEditing(s)}>
+            <button type="button" className="icon-btn" title={t("Edit")} onClick={() => setEditing(s)}>
               <Icon name="sliders" size={14} />
             </button>
             <button
               type="button"
               className="icon-btn danger"
-              title="Delete"
-              onClick={() => ask(`Delete the schedule “${s.label}”?`, "Delete", () => void deleteSchedule(s.id ?? "").then(reload, fail))}
+              title={t("Delete")}
+              onClick={() => ask(`Delete the schedule “${s.label}”?`, t("Delete"), () => void deleteSchedule(s.id ?? "").then(reload, fail))}
             >
               <Icon name="trash" size={14} />
             </button>

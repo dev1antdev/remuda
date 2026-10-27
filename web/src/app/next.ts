@@ -8,6 +8,7 @@ import { nextNeedingMe, tileKey } from "@/features/roster/wall";
 import { usePref } from "@/lib/prefs";
 import { useCurrent } from "./current";
 import { actions, app } from "./store";
+import { t } from "@/lib/i18n";
 
 export const NEXT_KEY = "Alt+N";
 
@@ -22,11 +23,11 @@ export function useNextNeedingMe(): () => void {
     const from = onWall && focus ? focus : current ? tileKey(current.machine.id, current.pane.id) : "";
     const next = nextNeedingMe(machines, radar, Date.now(), from);
     if (!next) {
-      actions.notify("Nobody needs you right now", { brief: true });
+      actions.notify(t("Nobody needs you right now"), { brief: true });
       return;
     }
     if (next.key === from) {
-      actions.notify("No one else needs you right now", { brief: true });
+      actions.notify(t("No one else needs you right now"), { brief: true });
       return;
     }
     if (onWall) {

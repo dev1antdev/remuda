@@ -4,13 +4,14 @@
 import { basename } from "@/lib/text";
 import type { BudgetStatus, Period } from "./api";
 import { usd } from "./format";
+import { t } from "@/lib/i18n";
 
 export type BudgetTone = "" | "dim" | "amber" | "red";
 
 export const PERIODS: { value: Period; label: string }[] = [
-  { value: "day", label: "A day" },
+  { value: "day", label: t("A day") },
   { value: "week", label: "A week (from Monday)" },
-  { value: "month", label: "A month" },
+  { value: "month", label: t("A month") },
 ];
 
 // ratio is how far along a budget is: spent over its limit, 0 while the spend is not known yet

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 // Handing a conversation to another agent: the words of the dialog and of the toast, and the choices it offers.
 
 export const DEFAULT_TURNS = 3;
@@ -11,7 +12,7 @@ export function clampTurns(n: number): number {
 
 // turnOptions is the Select over how much goes over in full: the recap alone, or the last N exchanges
 export function turnOptions(): { value: number; label: string }[] {
-  const out = [{ value: 0, label: "The recap only" }];
+  const out = [{ value: 0, label: t("The recap only") }];
   for (let n = 1; n <= MAX_TURNS; n++) out.push({ value: n, label: n === 1 ? "The last exchange" : `The last ${n} exchanges` });
   return out;
 }

@@ -9,6 +9,7 @@ import Icon from "@/ui/icons";
 import { errMsg } from "@/lib/text";
 import { Dialog, Notice } from "@/ui";
 import { useQuery } from "@/lib/query";
+import { t as tr } from "@/lib/i18n";
 
 // missingText says why the update asked for is not on the machine's list
 function missingText(what: string): string {
@@ -62,7 +63,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
       fetchJob(id).then(setJob, (e) => {
         clearInterval(t);
         setErr(errMsg(e));
-        setJob((j) => (j && j.id === id ? { ...j, done: true, ok: false, error: "lost track of the job" } : j));
+        setJob((j) => (j && j.id === id ? { ...j, done: true, ok: false, error: tr("lost track of the job") } : j));
       });
     }, 1000);
     return () => clearInterval(t);
@@ -123,7 +124,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
                 </Notice>
               ) : (
                 <Notice tone="success" icon="check">
-                  Done.
+                  {tr("Done.")}
                 </Notice>
               )
             ) : (
@@ -137,11 +138,11 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           <div className="modal-actions">
             {job.done && (
               <button type="button" className="btn" onClick={back}>
-                Back
+                {tr("Back")}
               </button>
             )}
             <button type="button" className="btn primary" onClick={onClose}>
-              Close
+              {tr("Close")}
             </button>
           </div>
         </>
@@ -158,7 +159,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           <code className="updates-cmd">{picked.command}</code>
           <div className="modal-actions">
             <button type="button" className="btn" onClick={back}>
-              Back
+              {tr("Back")}
             </button>
             <button type="button" className="btn primary" onClick={() => void run(picked)}>
               <Icon name="play" size={14} /> Run
@@ -168,8 +169,8 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
       ) : (
         <>
           {missing && <Notice tone="warn" onDismiss={() => setMissing("")}>{missing}</Notice>}
-          {loading && <div className="notice hint">Looking…</div>}
-          {data && data.length === 0 && <div className="empty">Nothing here that remuda knows how to update.</div>}
+          {loading && <div className="notice hint">{tr("Looking…")}</div>}
+          {data && data.length === 0 && <div className="empty">{tr("Nothing here that remuda knows how to update.")}</div>}
           <div className="updates-list">
             {data?.map((u) => (
               <button key={u.what} type="button" className="updates-row" onClick={() => setPicked(u)}>
@@ -185,7 +186,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           {recent.data && recent.data.jobs.length > 0 && (
             <div className="updates-recent">
               <span className="dim">
-                Ran here lately
+                {tr("Ran here lately")}
                 {recent.data.pending > 0 ? ` · ${recent.data.pending} chat${recent.data.pending > 1 ? "s" : ""} waiting to restart` : ""}
               </span>
               {recent.data.jobs.map((j) => (
@@ -197,7 +198,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           )}
           <div className="modal-actions">
             <button type="button" className="btn" onClick={onClose}>
-              Close
+              {tr("Close")}
             </button>
           </div>
         </>

@@ -7,16 +7,17 @@ import { FIELD_KINDS, patchProject, putFields, putStatuses, type Field, type Fie
 import Icon, { type IconName } from "@/ui/icons";
 import Select from "@/ui/Select";
 import { Dialog, Notice, useDismiss, useSubmit } from "@/ui";
+import { t } from "@/lib/i18n";
 
 export const PALETTE = ["e67e22", "2ecc71", "3498db", "9b59b6", "e74c3c", "1abc9c", "f1c40f", "95a5a6"];
 export const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)]!;
 
 type Flag = "on_agent" | "on_new" | "on_start" | "on_finish";
 const FLAGS: { flag: Flag; icon: IconName; title: string }[] = [
-  { flag: "on_agent", icon: "bot", title: "Tasks agents propose land here, for you to accept or decline" },
-  { flag: "on_new", icon: "inbox", title: "New tasks land here" },
-  { flag: "on_start", icon: "play", title: "A task an agent is started on moves here" },
-  { flag: "on_finish", icon: "circle-check", title: "A task whose agent finished moves here" },
+  { flag: "on_agent", icon: "bot", title: t("Tasks agents propose land here, for you to accept or decline") },
+  { flag: "on_new", icon: "inbox", title: t("New tasks land here") },
+  { flag: "on_start", icon: "play", title: t("A task an agent is started on moves here") },
+  { flag: "on_finish", icon: "circle-check", title: t("A task whose agent finished moves here") },
 ];
 
 // Row is a column as edited: its key outlives a rename, a removed one keeps its row so the choice of where its tasks go sits beside it
@@ -107,7 +108,7 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
 
   return (
     <Dialog
-      title="Project settings"
+      title={t("Project settings")}
       icon="settings"
       size="lg"
       as="form"
@@ -120,16 +121,16 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
     >
       <div className="schedule-row">
         <label className="grow">
-          Name
+          {t("Name")}
           <input value={title} onChange={(e) => setTitle(e.target.value)} required />
         </label>
         <label>
-          Colour
+          {t("Colour")}
           <ColorPick value={color} onChange={setColor} />
         </label>
       </div>
 
-      <div className="tasks-field-name">Columns</div>
+      <div className="tasks-field-name">{t("Columns")}</div>
       <p className="modal-hint">
         A task is always in one column, and a column that is <b>done</b> makes its tasks done. The four marks on a column say what the workflow does by itself: where the tasks
         agents propose land (for you to accept or decline), where your new tasks land, where a task goes when an agent is started on it, where it goes when that agent finishes
@@ -139,14 +140,14 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
         {rows.map((r, i) => (
           <div key={r.key} className={`ps-row${r.removed ? " removed" : ""}`}>
             <ColorPick value={r.hex_color} onChange={(c) => update(r.key, { hex_color: c })} />
-            <input className="ps-name" value={r.title} placeholder="Column name" disabled={r.removed} onChange={(e) => update(r.key, { title: e.target.value })} />
+            <input className="ps-name" value={r.title} placeholder={t("Column name")} disabled={r.removed} onChange={(e) => update(r.key, { title: e.target.value })} />
             <Select<"open" | "done">
               className="sm"
               value={r.kind}
               onChange={(kind) => update(r.key, { kind })}
               options={[
-                { value: "open", label: "Open" },
-                { value: "done", label: "Done" },
+                { value: "open", label: t("Open") },
+                { value: "done", label: t("Done") },
               ]}
             />
             <span className="ps-flags">
@@ -165,10 +166,10 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
                 </button>
               ))}
             </span>
-            <button type="button" className="icon-btn sm" title="Move up" aria-label="Move up" disabled={i === 0} onClick={() => shift(r.key, -1)}>
+            <button type="button" className="icon-btn sm" title={t("Move up")} aria-label={t("Move up")} disabled={i === 0} onClick={() => shift(r.key, -1)}>
               <Icon name="chevron-up" size={14} />
             </button>
-            <button type="button" className="icon-btn sm" title="Move down" aria-label="Move down" disabled={i === rows.length - 1} onClick={() => shift(r.key, 1)}>
+            <button type="button" className="icon-btn sm" title={t("Move down")} aria-label={t("Move down")} disabled={i === rows.length - 1} onClick={() => shift(r.key, 1)}>
               <Icon name="chevron-down" size={14} />
             </button>
             {r.removed ? (
@@ -184,7 +185,7 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
                 </button>
               </span>
             ) : (
-              <button type="button" className="icon-btn sm" title="Remove column" aria-label="Remove column" disabled={kept.length <= 1} onClick={() => remove(r.key)}>
+              <button type="button" className="icon-btn sm" title={t("Remove column")} aria-label={t("Remove column")} disabled={kept.length <= 1} onClick={() => remove(r.key)}>
                 <Icon name="x" size={14} />
               </button>
             )}
@@ -197,28 +198,28 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
         </button>
       </div>
       {!ok && kept.length > 0 && (!kept.some((r) => r.kind === "done") || !kept.some((r) => r.kind !== "done")) && (
-        <Notice tone="hint">A project needs an open column and a done column.</Notice>
+        <Notice tone="hint">{t("A project needs an open column and a done column.")}</Notice>
       )}
 
-      <div className="tasks-field-name">Fields</div>
+      <div className="tasks-field-name">{t("Fields")}</div>
       <p className="modal-hint">
-        What this project's tasks carry besides a title, description, due date, priority and labels. A field <b>on the card</b> shows beside the title; one <b>in the prompt</b>{" "}
-        goes to the agent with the task. A removed field takes its values with it, and so does a change of type.
+        What this project's tasks carry besides a title, description, due date, priority and labels. A field <b>{t("on the card")}</b> shows beside the title; one <b>{t("in the prompt")}</b>{" "}
+        {t("goes to the agent with the task. A removed field takes its values with it, and so does a change of type.")}
       </p>
       <div className="ps-rows">
         {frows.map((r, i) => (
           <div key={r.key} className="ps-row">
-            <input className="ps-name" value={r.title} placeholder="Field name" onChange={(e) => fupdate(r.key, { title: e.target.value })} />
+            <input className="ps-name" value={r.title} placeholder={t("Field name")} onChange={(e) => fupdate(r.key, { title: e.target.value })} />
             <Select<FieldKind> className="sm" value={r.kind} onChange={(kind) => fupdate(r.key, { kind })} options={FIELD_KINDS} />
             {(r.kind === "select" || r.kind === "multi") && (
-              <input className="ps-options" value={r.optionsText} placeholder="options, comma-separated" onChange={(e) => fupdate(r.key, { optionsText: e.target.value })} />
+              <input className="ps-options" value={r.optionsText} placeholder={t("options, comma-separated")} onChange={(e) => fupdate(r.key, { optionsText: e.target.value })} />
             )}
             <span className="ps-flags">
               <button
                 type="button"
                 className={`icon-btn sm${r.on_card ? " on" : ""}`}
-                title="Show on the card and the list row"
-                aria-label="Show on the card"
+                title={t("Show on the card and the list row")}
+                aria-label={t("Show on the card")}
                 aria-pressed={r.on_card}
                 onClick={() => fupdate(r.key, { on_card: !r.on_card })}
               >
@@ -227,21 +228,21 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
               <button
                 type="button"
                 className={`icon-btn sm${r.in_prompt ? " on" : ""}`}
-                title="Send to the agent with the task"
-                aria-label="Send to the agent"
+                title={t("Send to the agent with the task")}
+                aria-label={t("Send to the agent")}
                 aria-pressed={r.in_prompt}
                 onClick={() => fupdate(r.key, { in_prompt: !r.in_prompt })}
               >
                 <Icon name="send" size={14} />
               </button>
             </span>
-            <button type="button" className="icon-btn sm" title="Move up" aria-label="Move up" disabled={i === 0} onClick={() => setFrows((rs) => shifted(rs, r.key, -1))}>
+            <button type="button" className="icon-btn sm" title={t("Move up")} aria-label={t("Move up")} disabled={i === 0} onClick={() => setFrows((rs) => shifted(rs, r.key, -1))}>
               <Icon name="chevron-up" size={14} />
             </button>
-            <button type="button" className="icon-btn sm" title="Move down" aria-label="Move down" disabled={i === frows.length - 1} onClick={() => setFrows((rs) => shifted(rs, r.key, 1))}>
+            <button type="button" className="icon-btn sm" title={t("Move down")} aria-label={t("Move down")} disabled={i === frows.length - 1} onClick={() => setFrows((rs) => shifted(rs, r.key, 1))}>
               <Icon name="chevron-down" size={14} />
             </button>
-            <button type="button" className="icon-btn sm" title="Remove field" aria-label="Remove field" onClick={() => setFrows((rs) => rs.filter((x) => x.key !== r.key))}>
+            <button type="button" className="icon-btn sm" title={t("Remove field")} aria-label={t("Remove field")} onClick={() => setFrows((rs) => rs.filter((x) => x.key !== r.key))}>
               <Icon name="x" size={14} />
             </button>
           </div>
@@ -255,10 +256,10 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" className="btn primary" disabled={busy || !ok}>
-          {busy ? "Saving…" : "Save"}
+          {busy ? t("Saving…") : t("Save")}
         </button>
       </div>
     </Dialog>
@@ -272,7 +273,7 @@ export function ColorPick({ value, onChange }: { value: string; onChange: (hex: 
   useDismiss(open, close, [".color-pick"]);
   return (
     <span className="color-pick">
-      <button type="button" className="icon-btn sm" title="Colour" aria-label="Colour" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="icon-btn sm" title={t("Colour")} aria-label={t("Colour")} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <span className="tasks-dot lg" style={{ background: value ? `#${value}` : "var(--line-strong)" }} />
       </button>
       {open && (

@@ -9,6 +9,7 @@ import { brandColor } from "@/ui/brand";
 import type { Machine, Session } from "./api";
 import { prWords } from "./prStatus";
 import { agentRows, displayOf, groups, markOf, recentRows, rowLabel, stateWords, type AgentRow, type Display, type Group, type RadarPrefs } from "./radar";
+import { t } from "@/lib/i18n";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
 
@@ -128,7 +129,7 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
         <button
           type="button"
           className={`icon-btn ws-fold${isFolded ? "" : " open"}`}
-          title={isFolded ? "Show agents" : "Hide agents"}
+          title={isFolded ? t("Show agents") : t("Hide agents")}
           aria-expanded={!isFolded}
           onClick={(e) => {
             e.stopPropagation();
@@ -170,7 +171,7 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
       <button
         type="button"
         className="icon-btn ws-menu-btn"
-        title="Workspace actions"
+        title={t("Workspace actions")}
         aria-haspopup="menu"
         onClick={(e) => {
           e.stopPropagation();
@@ -240,7 +241,7 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
           <button
             type="button"
             className="icon-btn ws-menu-btn"
-            title="Workspace actions"
+            title={t("Workspace actions")}
             aria-haspopup="menu"
             onClick={(e) => {
               e.stopPropagation();

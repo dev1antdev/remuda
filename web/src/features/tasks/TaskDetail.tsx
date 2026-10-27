@@ -19,6 +19,7 @@ import { LabelsField } from "./Labels";
 import { DueInput, PrioMark, projectOption, statusOption } from "./pieces";
 import { runWords } from "./runCost";
 import type { RunPR } from "./runPR";
+import { t as tr } from "@/lib/i18n";
 
 export function TaskDetail({ task: t, projects, statuses, fields, labels, onChange, onLabelsChanged, onClose, onDelete, onError, canSend, onSend, canStart, onStart, machineLabel, liveStatus, prOf, onOpenPane, budgets }: {
   task: Task;
@@ -49,7 +50,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
   const issue = issueLink(t.description);
   const paneStatus = run ? liveStatus(run) : null;
   const pr = run ? prOf(run) : null;
-  const runLabel = !run ? "" : run.state === "starting" ? "starting…" : run.state === "failed" ? "failed" : run.state === "gone" ? "closed" : paneStatus === "run" ? "working" : paneStatus === "input" ? "waiting for you" : paneStatus === null ? "closed" : run.state === "finished" ? "finished" : "running";
+  const runLabel = !run ? "" : run.state === "starting" ? tr("starting…") : run.state === "failed" ? "failed" : run.state === "gone" ? "closed" : paneStatus === "run" ? "working" : paneStatus === "input" ? tr("waiting for you") : paneStatus === null ? "closed" : run.state === "finished" ? "finished" : "running";
   const [title, setTitle] = useState(t.title);
   const [sendMenu, setSendMenu] = useState(false);
   const closeSendMenu = useCallback(() => setSendMenu(false), []);
@@ -82,8 +83,8 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
           className="tasks-check"
           checked={t.done}
           onChange={() => void patch({ done: !t.done })}
-          title={t.done ? "Mark undone" : "Mark done"}
-          aria-label={t.done ? "Mark undone" : "Mark done"}
+          title={t.done ? tr("Mark undone") : tr("Mark done")}
+          aria-label={t.done ? tr("Mark undone") : tr("Mark done")}
         />
         <span className="tasks-ident">{t.identifier}</span>
         {t.source && (
@@ -96,7 +97,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
             {issueLabel(issue)} <Icon name="external-link" size={12} />
           </button>
         )}
-        <button type="button" className="icon-btn tasks-close" onClick={onClose} title="Close" aria-label="Close">
+        <button type="button" className="icon-btn tasks-close" onClick={onClose} title={tr("Close")} aria-label={tr("Close")}>
           <Icon name="x" size={16} />
         </button>
       </div>
@@ -112,11 +113,11 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
       />
 
       <div className="tasks-field">
-        <span className="tasks-field-name">Status</span>
+        <span className="tasks-field-name">{tr("Status")}</span>
         <Select value={t.status_id} onChange={(status_id) => void patch({ status_id })} options={statuses.map(statusOption)} />
       </div>
       <div className="tasks-field">
-        <span className="tasks-field-name">Project</span>
+        <span className="tasks-field-name">{tr("Project")}</span>
         <Select
           value={t.project_id}
           onChange={(project_id) => void patch({ project_id })}
@@ -124,7 +125,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
         />
       </div>
       <div className="tasks-field">
-        <span className="tasks-field-name">Due</span>
+        <span className="tasks-field-name">{tr("Due")}</span>
         <DueInput value={t.due_date} onCommit={(iso) => void patch({ due_date: iso })} />
         {t.due_date && (
           <button type="button" className="linkish" onClick={() => void patch({ due_date: "" })}>
@@ -133,7 +134,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
         )}
       </div>
       <div className="tasks-field">
-        <span className="tasks-field-name">Priority</span>
+        <span className="tasks-field-name">{tr("Priority")}</span>
         <Select
           value={t.priority}
           onChange={(priority) => void patch({ priority })}
@@ -143,7 +144,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
       <LabelsField task={t} labels={labels} onChange={onChange} onLabelsChanged={onLabelsChanged} onError={onError} />
       {fields.map((f) => (
         <div key={f.id} className={`tasks-field kind-${f.kind}`}>
-          <span className="tasks-field-name" title={f.in_prompt ? "Goes to the agent with the task" : undefined}>
+          <span className="tasks-field-name" title={f.in_prompt ? tr("Goes to the agent with the task") : undefined}>
             {f.title}
           </span>
           <FieldInput field={f} value={t.fields?.[String(f.id)]} onCommit={(v) => void patch({ fields: { [String(f.id)]: v } })} />
@@ -151,24 +152,24 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
       ))}
 
       <div className="tasks-send">
-        <span className={`split${canSend ? "" : " off"}`} title={canSend ? "" : "No agent is running in herdr"}>
+        <span className={`split${canSend ? "" : " off"}`} title={canSend ? "" : tr("No agent is running in herdr")}>
           <button type="button" className="split-main" disabled={!canSend} onClick={() => onSend(false)}>
-            Send to agent
+            {tr("Send to agent")}
           </button>
-          <button type="button" className="split-arrow" disabled={!canSend} onClick={() => setSendMenu((m) => !m)} title="More ways to send" aria-haspopup="menu" aria-expanded={sendMenu}>
+          <button type="button" className="split-arrow" disabled={!canSend} onClick={() => setSendMenu((m) => !m)} title={tr("More ways to send")} aria-haspopup="menu" aria-expanded={sendMenu}>
             <Icon name="chevron-down" size={14} />
           </button>
           {sendMenu && (
             <span className="row-menu split-menu" role="menu">
               <button type="button" role="menuitem" onClick={pickSend(() => onSend(false))}>
-                Send to agent
+                {tr("Send to agent")}
               </button>
               <button type="button" role="menuitem" onClick={pickSend(() => onSend(true))}>
-                Send to agent for grooming
+                {tr("Send to agent for grooming")}
                 <span className="split-hint">/grill-me</span>
               </button>
-              <button type="button" role="menuitem" disabled={!canStart} onClick={pickSend(onStart)} title={canStart ? "" : "No connected machine has a workspace to branch off"}>
-                Start an agent in a new worktree…
+              <button type="button" role="menuitem" disabled={!canStart} onClick={pickSend(onStart)} title={canStart ? "" : tr("No connected machine has a workspace to branch off")}>
+                {tr("Start an agent in a new worktree…")}
               </button>
             </span>
           )}
@@ -195,7 +196,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
               {run.error && <> — {run.error}</>}
             </span>
             {spent && (
-              <span className={`tasks-run-spent${toneClass(spentTone)}`} title="What this run spent at API prices, how long it took, the model">
+              <span className={`tasks-run-spent${toneClass(spentTone)}`} title={tr("What this run spent at API prices, how long it took, the model")}>
                 Agent run: {spent}
               </span>
             )}
@@ -220,7 +221,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
             </button>
           )}
           {run.dir && (
-            <button type="button" className="linkish" title="The worktree's changes in the Review mode" onClick={() => actions.openReview(run.machine, run.dir)}>
+            <button type="button" className="linkish" title={tr("The worktree's changes in the Review mode")} onClick={() => actions.openReview(run.machine, run.dir)}>
               <Icon name="circle-check" size={12} /> Review
             </button>
           )}
@@ -229,7 +230,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
 
       <div className="tasks-desc">
         <div className="tasks-field-name">
-          Description
+          {tr("Description")}
           {!editingDesc && (
             <button
               type="button"
@@ -248,7 +249,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
             <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={8} autoFocus />
             <div className="modal-actions">
               <button type="button" className="btn" onClick={() => setEditingDesc(false)}>
-                Cancel
+                {tr("Cancel")}
               </button>
               <button
                 type="button"
@@ -258,7 +259,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
                   void patch({ description: textToHtml(desc) });
                 }}
               >
-                Save
+                {tr("Save")}
               </button>
             </div>
           </>
@@ -267,7 +268,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
             <Html html={t.description} />
           </div>
         ) : (
-          <div className="placeholder small">No description.</div>
+          <div className="placeholder small">{tr("No description.")}</div>
         )}
       </div>
 

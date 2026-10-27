@@ -26,6 +26,7 @@ import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFind } from "./useFind";
 import { useFollowBottom } from "./useFollowBottom";
+import { t } from "@/lib/i18n";
 
 export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session }: {
   machineId: string;
@@ -118,7 +119,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       const id = turn.ids?.[0];
       if (!id) return;
       void copyText(turnLink(location.origin, { machineId, paneId, session: shownSession.current ?? "", turn: id })).then((ok) =>
-        actions.notify(ok ? "Link copied" : "The link could not be copied", { brief: true, error: !ok }),
+        actions.notify(ok ? t("Link copied") : t("The link could not be copied"), { brief: true, error: !ok }),
       );
     },
     [machineId, paneId],
@@ -134,7 +135,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       if (!pin) return;
       const was = isPinned(pinsRef.current, pin.turn);
       setPins((prev) => togglePin(prev, pin));
-      actions.notify(was ? "Unpinned" : "Pinned — Pins… in the View menu lists it", { brief: true });
+      actions.notify(was ? t("Unpinned") : t("Pinned — Pins… in the View menu lists it"), { brief: true });
     },
     [setPins],
   );
@@ -201,7 +202,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
             options={sessions.map((s) => ({ value: s.id, label: s.title || s.id.slice(0, 8), hint: whenShort(s.mod_time) }))}
           />
           {older && workspaceId && agent && (
-            <button type="button" className="btn sm" title="A new tab in this workspace, the agent started on this conversation" onClick={resume}>
+            <button type="button" className="btn sm" title={t("A new tab in this workspace, the agent started on this conversation")} onClick={resume}>
               <Icon name="corner-down-left" size={12} /> Resume in a new tab
             </button>
           )}
@@ -210,7 +211,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       <TimelineBar turns={turns} machineId={machineId} paneId={paneId} session={chat?.session_id} />
       <PlanBar plan={chat?.plan} />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
-        {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : readOnly ? "This transcript is empty." : "No transcript for this pane's folder yet."}</div>}
+        {turns.length === 0 && <div className="empty chat-empty">{chat === null ? t("Loading…") : readOnly ? t("This transcript is empty.") : t("No transcript for this pane's folder yet.")}</div>}
         {turns.slice(hidden).map((t, i) => (
           <TurnView
             key={t.ids?.[0] || hidden + i}
@@ -230,7 +231,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       {!readOnly && status === "input" && (
         <Notice tone="warn" icon="alert-triangle" className="chat-notice">
           <QuestionCard machineId={machineId} paneId={paneId} active={active} onKeys={keys}>
-            The agent is waiting for an answer — check the terminal, or:
+            {t("The agent is waiting for an answer — check the terminal, or:")}
           </QuestionCard>
         </Notice>
       )}
@@ -246,7 +247,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           className={`chat-notice${context >= 0.9 ? " is-red" : ""}`}
           action={
             <button type="button" className="linkish" onClick={() => void submitPrompt(machineId, paneId, "/compact").catch((e) => setActionError(errMsg(e)))}>
-              Compact now
+              {t("Compact now")}
             </button>
           }
         >
@@ -266,7 +267,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       )}
       {forward !== null && (
         <SendToAgent
-          title="Forward to another agent"
+          title={t("Forward to another agent")}
           text={forward}
           agents={agents}
           currentPane={{ machineId, paneId }}

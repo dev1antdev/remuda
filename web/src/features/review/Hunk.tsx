@@ -11,6 +11,7 @@ import { tokenNodes } from "@/ui/Tokens";
 import { gapAbove, gapBelow, gapLength, surround, UNFOLD_STEP, type Unfold } from "./context";
 import type { DraftComment } from "./draft";
 import { changedSpan, pairRows, partners, rowsOf, rowTokens, type DiffHunk, type DiffRow } from "./hunks";
+import { t } from "@/lib/i18n";
 
 export type NewComment = Omit<DraftComment, "id" | "file">;
 
@@ -88,7 +89,7 @@ export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComm
               }
             : undefined
         }
-        title={commentable ? "Comment on this line" : undefined}
+        title={commentable ? t("Comment on this line") : undefined}
       >
         <span className="fv-ln">{line ?? ""}</span>
         <Source row={row} partner={partnerOf.get(row) ?? null} marker={side === "both"} tokens={tokensOf.get(row)} />
@@ -128,7 +129,7 @@ export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComm
       {leftBelow !== 0 && (
         <div className="fv-line hunk hunk-foot">
           <UnfoldStep side="below" left={leftBelow} blocked={blocked} onClick={() => onUnfold(index, "below", UNFOLD_STEP)} />
-          <span className="fv-src">{leftBelow === null ? "the rest of the file" : `${plural(leftBelow, "line")} to the end of the file`}</span>
+          <span className="fv-src">{leftBelow === null ? t("the rest of the file") : `${plural(leftBelow, "line")} to the end of the file`}</span>
           <UnfoldAll left={leftBelow} blocked={blocked} onClick={() => onUnfold(index, "below", Infinity)} />
         </div>
       )}
@@ -189,7 +190,7 @@ function CommentBox({ row, onAdd, onClose }: { row: DiffRow; onAdd: (text: strin
       />
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" className="btn primary" disabled={!text.trim()}>
           <Icon name="plus" size={12} /> Add to the review
@@ -238,7 +239,7 @@ export function Note({ comment, where, onRemove }: { comment: DraftComment; wher
         )}
         {comment.text}
       </span>
-      <button type="button" className="icon-btn sm" title="Remove this comment" onClick={() => onRemove(comment.id)}>
+      <button type="button" className="icon-btn sm" title={t("Remove this comment")} onClick={() => onRemove(comment.id)}>
         <Icon name="x" size={12} />
       </button>
     </div>

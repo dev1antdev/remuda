@@ -13,6 +13,7 @@ import TerminalView from "./Terminal";
 import type { SizeMode } from "./engine/types";
 import { terminal } from "./state";
 import { useTerminalFind } from "./useTerminalFind";
+import { t } from "@/lib/i18n";
 
 // minimum terminal widths on offer, in columns (0 = fit the screen)
 const MIN_WIDTHS = [0, 120, 160, 200, 240, 320];
@@ -60,8 +61,8 @@ export function TerminalLens({ machineId, paneId, cols, rows, agent, active }: {
 export function TerminalTools() {
   const [keybar, setKeybar] = usePref("keybar", isTouch);
   return (
-    <Tip text={keybar ? "Hide the key bar" : "Key bar: Esc, Tab, Ctrl, the arrows and more, for a screen without them"}>
-      <button type="button" className={`icon-btn kb-toggle${keybar ? " on" : ""}`} aria-label="Key bar" aria-pressed={keybar} onClick={() => setKeybar(!keybar)}>
+    <Tip text={keybar ? t("Hide the key bar") : t("Key bar: Esc, Tab, Ctrl, the arrows and more, for a screen without them")}>
+      <button type="button" className={`icon-btn kb-toggle${keybar ? " on" : ""}`} aria-label={t("Key bar")} aria-pressed={keybar} onClick={() => setKeybar(!keybar)}>
         <Icon name="keyboard" />
       </button>
     </Tip>
@@ -76,17 +77,17 @@ export function useTerminalViewItems(pane: Pane): MenuItem[] {
   const [minCols, setMinCols] = usePref("minCols", 0);
   const selectMode = terminal.use((s) => s.selectMode);
   return [
-    { heading: "Size" },
-    { label: "Resize the pane to this screen", hint: "herdr follows the smallest attached client", checked: sizeMode === "fit", onSelect: () => setSizeMode("fit") },
-    { label: `Keep the pane's own size (${pane.cols}×${pane.rows})`, hint: "a smaller font to fit the width, scrolling when it cannot", checked: sizeMode === "keep", onSelect: () => setSizeMode("keep") },
-    { heading: "Minimum width" },
-    ...MIN_WIDTHS.map((n) => ({ label: n ? `At least ${n} columns` : "Fit the screen", hint: n ? (n === minCols ? "a narrower screen scrolls sideways" : undefined) : undefined, checked: n === minCols, disabled: sizeMode !== "fit", onSelect: () => setMinCols(n) })),
+    { heading: t("Size") },
+    { label: t("Resize the pane to this screen"), hint: t("herdr follows the smallest attached client"), checked: sizeMode === "fit", onSelect: () => setSizeMode("fit") },
+    { label: `Keep the pane's own size (${pane.cols}×${pane.rows})`, hint: t("a smaller font to fit the width, scrolling when it cannot"), checked: sizeMode === "keep", onSelect: () => setSizeMode("keep") },
+    { heading: t("Minimum width") },
+    ...MIN_WIDTHS.map((n) => ({ label: n ? `At least ${n} columns` : t("Fit the screen"), hint: n ? (n === minCols ? t("a narrower screen scrolls sideways") : undefined) : undefined, checked: n === minCols, disabled: sizeMode !== "fit", onSelect: () => setMinCols(n) })),
     { sep: true },
-    { label: "Selection mode", icon: "text-select", hint: selectMode ? "drag selects and copies; off gives the mouse back to the agent" : "drag selects and copies text (or hold Option/Alt while dragging)", checked: selectMode, onSelect: () => terminal.set({ selectMode: !selectMode }) },
+    { label: t("Selection mode"), icon: "text-select", hint: selectMode ? t("drag selects and copies; off gives the mouse back to the agent") : "drag selects and copies text (or hold Option/Alt while dragging)", checked: selectMode, onSelect: () => terminal.set({ selectMode: !selectMode }) },
     { sep: true },
-    { label: "Smaller text", icon: "text-smaller", hint: `${fontSize} px`, keepOpen: true, disabled: fontSize <= 8, onSelect: () => setFontSize(Math.max(8, fontSize - 1)) },
-    { label: "Larger text", icon: "text-larger", hint: `${fontSize} px`, keepOpen: true, disabled: fontSize >= 20, onSelect: () => setFontSize(Math.min(20, fontSize + 1)) },
+    { label: t("Smaller text"), icon: "text-smaller", hint: `${fontSize} px`, keepOpen: true, disabled: fontSize <= 8, onSelect: () => setFontSize(Math.max(8, fontSize - 1)) },
+    { label: t("Larger text"), icon: "text-larger", hint: `${fontSize} px`, keepOpen: true, disabled: fontSize >= 20, onSelect: () => setFontSize(Math.min(20, fontSize + 1)) },
     { sep: true },
-    { label: "Key bar", icon: "keyboard", hint: "Esc, Tab, Ctrl, the arrows and more", checked: keybar, onSelect: () => setKeybar(!keybar) },
+    { label: t("Key bar"), icon: "keyboard", hint: t("Esc, Tab, Ctrl, the arrows and more"), checked: keybar, onSelect: () => setKeybar(!keybar) },
   ];
 }
