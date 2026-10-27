@@ -46,10 +46,11 @@ type Project struct {
 	Updated     string   `json:"updated"`
 	Statuses    []Status `json:"statuses"`
 	Fields      []Field  `json:"fields"`
+	Proposed    int      `json:"proposed"` // the open tasks agents put in its on_agent column, for the person to triage
 }
 
 // Status is one column of a project's board; a task is always in exactly one, and done follows the column's kind.
-// The flags say where the workflow's own moves land (new tasks, a started agent, a finish), at most one column per flag.
+// The flags say where the workflow's own moves land (new tasks, a started agent, a finish, an agent's proposal), at most one column per flag.
 type Status struct {
 	ID        int64   `json:"id"`
 	ProjectID int64   `json:"project_id"`
@@ -60,6 +61,7 @@ type Status struct {
 	OnNew     bool    `json:"on_new"`
 	OnStart   bool    `json:"on_start"`
 	OnFinish  bool    `json:"on_finish"`
+	OnAgent   bool    `json:"on_agent"` // where a task an agent makes lands, for the person to accept or decline
 }
 
 const (
@@ -158,7 +160,7 @@ type ProjectPatch struct {
 
 // Query is one page of the list: a smart view or a project, a search, in the viewer's time zone.
 type Query struct {
-	View    string // today | upcoming | open | project | board
+	View    string // today | upcoming | open | proposed | project | board
 	Project int64
 	Done    bool
 	Search  string
@@ -296,6 +298,12 @@ CREATE TABLE IF NOT EXISTS task_fields (
 	if err := st.addColumn("tasks", "source", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
+	if err := st.addColumn("statuses", "on_agent", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := st.addColumn("projects", "proposed_seeded", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 	if _, err := st.db.Exec(`CREATE INDEX IF NOT EXISTS tasks_status ON tasks(project_id, status_id, position)`); err != nil {
 		return err
 	}
@@ -308,7 +316,47 @@ CREATE TABLE IF NOT EXISTS task_fields (
 			return err
 		}
 	}
-	return st.seedWorkflows()
+	if err := st.seedWorkflows(); err != nil {
+		return err
+	}
+	return st.seedProposed()
+}
+
+// seedProposed gives every project from before the agents' column a "Proposed" column right before where new tasks land,
+// once: a project the person later strips of it never gets it back (proposed_seeded notes the visit).
+func (st *Store) seedProposed() error {
+	rows, err := st.db.Query(`SELECT id FROM projects WHERE proposed_seeded = 0`)
+	if err != nil {
+		return err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	for _, id := range ids {
+		ss, err := st.statusesOf(id)
+		if err != nil {
+			return err
+		}
+		if proposals(ss) == nil {
+			if at := landing(ss); at != nil {
+				if _, err := st.db.Exec(`INSERT INTO statuses (project_id, title, hex_color, kind, position, on_agent) VALUES (?, ?, ?, ?, ?, 1)`,
+					id, proposedColumn.Title, proposedColumn.HexColor, KindOpen, at.Position-0.5); err != nil {
+					return err
+				}
+			}
+		}
+		if _, err := st.db.Exec(`UPDATE projects SET proposed_seeded = 1 WHERE id = ?`, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // addColumn adds a column to a table that does not have it yet.
@@ -445,6 +493,10 @@ func (st *Store) Projects() ([]Project, error) {
 	for _, f := range allFields {
 		fieldsByProject[f.ProjectID] = append(fieldsByProject[f.ProjectID], f)
 	}
+	proposed, err := st.proposedCounts(0)
+	if err != nil {
+		return nil, err
+	}
 	for i := range out {
 		if ss := byProject[out[i].ID]; ss != nil {
 			out[i].Statuses = ss
@@ -452,8 +504,34 @@ func (st *Store) Projects() ([]Project, error) {
 		if fs := fieldsByProject[out[i].ID]; fs != nil {
 			out[i].Fields = fs
 		}
+		out[i].Proposed = proposed[out[i].ID]
 	}
 	return out, nil
+}
+
+// proposedCounts is how many open tasks sit in each project's on_agent column; project 0 counts every project's.
+func (st *Store) proposedCounts(projectID int64) (map[int64]int, error) {
+	q := `SELECT t.project_id, count(*) FROM tasks t JOIN statuses s ON s.id = t.status_id WHERE s.on_agent = 1 AND t.done = 0`
+	var args []any
+	if projectID != 0 {
+		q += ` AND t.project_id = ?`
+		args = append(args, projectID)
+	}
+	rows, err := st.db.Query(q+` GROUP BY t.project_id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]int{}
+	for rows.Next() {
+		var id int64
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, err
+		}
+		out[id] = n
+	}
+	return out, rows.Err()
 }
 
 func (st *Store) Project(id int64) (Project, error) {
@@ -470,6 +548,11 @@ func (st *Store) Project(id int64) (Project, error) {
 	if p.Fields, err = st.fieldsOf(id); err != nil {
 		return p, err
 	}
+	proposed, err := st.proposedCounts(id)
+	if err != nil {
+		return p, err
+	}
+	p.Proposed = proposed[id]
 	return p, nil
 }
 
@@ -494,7 +577,7 @@ func (st *Store) CreateProject(title string, parent int64) (Project, error) {
 	now := st.stamp()
 	var pos float64
 	_ = st.db.QueryRow(`SELECT coalesce(max(position), 0) + 1 FROM projects`).Scan(&pos)
-	res, err := st.db.Exec(`INSERT INTO projects (title, parent_id, position, created, updated) VALUES (?, ?, ?, ?, ?)`, title, parent, pos, now, now)
+	res, err := st.db.Exec(`INSERT INTO projects (title, parent_id, position, created, updated, proposed_seeded) VALUES (?, ?, ?, ?, ?, 1)`, title, parent, pos, now, now)
 	if err != nil {
 		return Project{}, err
 	}
@@ -590,8 +673,13 @@ func (st *Store) DeleteProject(id int64) error {
 // ---- the workflow: a project's columns ----
 
 // DefaultStatuses is the workflow a project starts with when it has no parent to copy.
+// proposedColumn is the column agents' tasks land in, as the default workflow and the seeding of an older project make it.
+var proposedColumn = Status{Title: "Proposed", HexColor: "9b59b6", Kind: KindOpen, OnAgent: true}
+
+// DefaultStatuses is the workflow a new top-level project gets: agents' proposals, then the person's own columns.
 func DefaultStatuses() []Status {
 	return []Status{
+		proposedColumn,
 		{Title: "New", HexColor: "95a5a6", Kind: KindOpen, OnNew: true},
 		{Title: "In progress", HexColor: "3498db", Kind: KindOpen, OnStart: true},
 		{Title: "Testing", HexColor: "e67e22", Kind: KindOpen, OnFinish: true},
@@ -599,7 +687,7 @@ func DefaultStatuses() []Status {
 	}
 }
 
-const statusCols = `id, project_id, title, hex_color, kind, position, on_new, on_start, on_finish`
+const statusCols = `id, project_id, title, hex_color, kind, position, on_new, on_start, on_finish, on_agent`
 
 // statusesOf lists a project's columns in order; project 0 lists every project's.
 func (st *Store) statusesOf(projectID int64) ([]Status, error) {
@@ -617,7 +705,7 @@ func (st *Store) statusesOf(projectID int64) ([]Status, error) {
 	out := []Status{}
 	for rows.Next() {
 		var s Status
-		if err := rows.Scan(&s.ID, &s.ProjectID, &s.Title, &s.HexColor, &s.Kind, &s.Position, &s.OnNew, &s.OnStart, &s.OnFinish); err != nil {
+		if err := rows.Scan(&s.ID, &s.ProjectID, &s.Title, &s.HexColor, &s.Kind, &s.Position, &s.OnNew, &s.OnStart, &s.OnFinish, &s.OnAgent); err != nil {
 			return nil, err
 		}
 		out = append(out, s)
@@ -664,6 +752,11 @@ func landing(ss []Status) *Status {
 		return &ss[0]
 	}
 	return nil
+}
+
+// proposals is the column an agent's task lands in for the person to triage, nil when the project keeps none.
+func proposals(ss []Status) *Status {
+	return flagged(ss, func(x Status) bool { return x.OnAgent })
 }
 
 // doneStatus is the first done column, else nil.
@@ -718,6 +811,9 @@ func (st *Store) SetStatuses(projectID int64, want []Status, moves map[int64]int
 		}
 		if w.OnFinish {
 			flags["take a task its agent finished"]++
+		}
+		if w.OnAgent {
+			flags["take the tasks agents propose"]++
 		}
 		if w.ID != 0 {
 			if statusByID(cur, w.ID) == nil {
@@ -775,14 +871,14 @@ func (st *Store) SetStatuses(projectID int64, want []Status, moves map[int64]int
 		w.ProjectID = projectID
 		w.Position = float64(i + 1)
 		if w.ID == 0 {
-			res, err := tx.Exec(`INSERT INTO statuses (project_id, title, hex_color, kind, position, on_new, on_start, on_finish) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-				projectID, w.Title, w.HexColor, w.Kind, w.Position, w.OnNew, w.OnStart, w.OnFinish)
+			res, err := tx.Exec(`INSERT INTO statuses (project_id, title, hex_color, kind, position, on_new, on_start, on_finish, on_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				projectID, w.Title, w.HexColor, w.Kind, w.Position, w.OnNew, w.OnStart, w.OnFinish, w.OnAgent)
 			if err != nil {
 				return nil, err
 			}
 			w.ID, _ = res.LastInsertId()
-		} else if _, err := tx.Exec(`UPDATE statuses SET title=?, hex_color=?, kind=?, position=?, on_new=?, on_start=?, on_finish=? WHERE id=?`,
-			w.Title, w.HexColor, w.Kind, w.Position, w.OnNew, w.OnStart, w.OnFinish, w.ID); err != nil {
+		} else if _, err := tx.Exec(`UPDATE statuses SET title=?, hex_color=?, kind=?, position=?, on_new=?, on_start=?, on_finish=?, on_agent=? WHERE id=?`,
+			w.Title, w.HexColor, w.Kind, w.Position, w.OnNew, w.OnStart, w.OnFinish, w.OnAgent, w.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -1068,7 +1164,8 @@ func (st *Store) Create(projectID int64, p Patch) (Task, error) {
 	return st.CreateFrom(projectID, p, "")
 }
 
-// CreateFrom makes a task and notes its source, an agent's name (see Source), which no patch changes later.
+// CreateFrom makes a task and notes its source, an agent's name (see Source), which no patch changes later;
+// an agent's task that names no column goes to the project's on_agent column, for the person to accept or decline.
 func (st *Store) CreateFrom(projectID int64, p Patch, source string) (Task, error) {
 	project, err := st.Project(projectID)
 	if err != nil {
@@ -1103,6 +1200,8 @@ func (st *Store) CreateFrom(projectID int64, p Patch, source string) (Task, erro
 		}
 	case p.Done != nil && *p.Done:
 		s = doneStatus(project.Statuses)
+	case source != "":
+		s = proposals(project.Statuses)
 	}
 	if s == nil {
 		s = landing(project.Statuses)
@@ -1290,6 +1389,13 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 		args = append(args, now.Add(7*24*time.Hour).UTC().Format(time.RFC3339))
 	case "open":
 		where = append(where, "done = 0")
+	case "proposed":
+		where = append(where, "done = 0", "status_id IN (SELECT id FROM statuses WHERE on_agent = 1)")
+		if q.Project != 0 {
+			where = append(where, "project_id = ?")
+			args = append(args, q.Project)
+		}
+		order = ` ORDER BY id DESC`
 	case "project":
 		where = append(where, "project_id = ?")
 		args = append(args, q.Project)

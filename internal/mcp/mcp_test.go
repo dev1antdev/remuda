@@ -38,7 +38,7 @@ func (f *fakeList) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.URL.Path == "/api/tasks/projects":
-		json.NewEncoder(w).Encode([]map[string]any{{"id": 1, "title": "remuda", "statuses": []map[string]any{{"id": 10, "title": "New", "position": 1, "on_new": true}, {"id": 11, "title": "In progress", "position": 2}}, "fields": []map[string]any{{"id": 5, "title": "Estimate", "kind": "number"}}}})
+		json.NewEncoder(w).Encode([]map[string]any{{"id": 1, "title": "remuda", "statuses": []map[string]any{{"id": 9, "title": "Proposed", "position": 1, "on_agent": true}, {"id": 10, "title": "New", "position": 2, "on_new": true}, {"id": 11, "title": "In progress", "position": 3}}, "fields": []map[string]any{{"id": 5, "title": "Estimate", "kind": "number"}}}})
 	case r.URL.Path == "/api/tasks/labels" && r.Method == "GET":
 		json.NewEncoder(w).Encode(f.labels)
 	case r.URL.Path == "/api/tasks/labels":
@@ -53,8 +53,11 @@ func (f *fakeList) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			task[k] = v
 		}
 		renderMarkdown(task)
-		if body["status_id"] == nil {
+		if body["status_id"] == nil { // as the server places them: an agent's task in the Proposed column, a person's in New
 			task["status_id"] = float64(10)
+			if source, _ := body["source"].(string); source != "" {
+				task["status_id"] = float64(9)
+			}
 		}
 		f.tasks = append(f.tasks, task)
 		json.NewEncoder(w).Encode(task)
@@ -142,9 +145,10 @@ func TestSessionInitializesListsAndCallsTools(t *testing.T) {
 		`{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"task_update","arguments":{"id":1,"done":true}}}`,
 		`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"task_comment","arguments":{"id":1,"body":"On it."}}}`,
 		`{"jsonrpc":"2.0","id":8,"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"task_create","arguments":{"title":"Proposed thing","project":"remuda"}}}`,
 	)
-	if len(answers) != 8 {
-		t.Fatalf("%d answers to 8 requests and a notification", len(answers))
+	if len(answers) != 9 {
+		t.Fatalf("%d answers to 9 requests and a notification", len(answers))
 	}
 	init := answers[0]["result"].(map[string]any)
 	if init["protocolVersion"] != "2025-03-26" || init["serverInfo"].(map[string]any)["name"] != "remuda" || init["instructions"] == "" {
@@ -154,11 +158,17 @@ func TestSessionInitializesListsAndCallsTools(t *testing.T) {
 	if len(tools) != 7 || tools[0].(map[string]any)["name"] != "tasks_list" {
 		t.Errorf("tools/list: %d tools, first %v", len(tools), tools[0])
 	}
-	if !strings.Contains(text(answers[2]), "**remuda** (id 1): columns New → In progress; fields Estimate (number)") {
+	if !strings.Contains(text(answers[2]), "**remuda** (id 1): columns Proposed → New → In progress; fields Estimate (number)") {
 		t.Errorf("projects_list: %q", text(answers[2]))
 	}
-	if !strings.HasPrefix(text(answers[3]), "Created task #1 (id 1) \"Fix the thing\"") {
+	if text(answers[3]) != "Created task #1 (id 1) \"Fix the thing\" in In progress" {
 		t.Errorf("task_create: %q", text(answers[3]))
+	}
+	if got := text(answers[8]); got != "Created task #2 (id 2) \"Proposed thing\" in Proposed — the person accepts or declines it there; leave it to them" || list.tasks[1]["status_id"] != float64(9) {
+		t.Errorf("a task without a column goes to Proposed and the answer says so: %q (status %v)", got, list.tasks[1]["status_id"])
+	}
+	if !strings.Contains(answers[0]["result"].(map[string]any)["instructions"].(string), "Proposed column") {
+		t.Errorf("the instructions do not mention the Proposed column")
 	}
 	created := list.tasks[0]
 	if created["status_id"] != float64(11) || created["priority"] != float64(3) || created["source"] != "w1:p1" || created["markdown"] != "It breaks.\n\nSee main.go." || created["description"] != "<p>It breaks.</p><p>See main.go.</p>" {
@@ -208,7 +218,7 @@ func TestRefusalsAndUnknowns(t *testing.T) {
 	if code(answers[1]) != codeInvalidParams {
 		t.Errorf("unknown tool: %v", answers[1])
 	}
-	for i, want := range map[int]string{2: `no project "nope"; the projects: remuda (id 1)`, 3: `has no column "Done"; its columns: New → In progress`, 4: "not found: no such task"} {
+	for i, want := range map[int]string{2: `no project "nope"; the projects: remuda (id 1)`, 3: `has no column "Done"; its columns: Proposed → New → In progress`, 4: "not found: no such task"} {
 		result := answers[i]["result"].(map[string]any)
 		if result["isError"] != true || !strings.Contains(text(answers[i]), want) {
 			t.Errorf("answer %d: %v", i, answers[i])

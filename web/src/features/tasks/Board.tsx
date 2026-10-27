@@ -4,7 +4,7 @@
 import { useCallback, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import type { Project, Status, Task } from "@/features/tasks/api";
 import Icon from "@/ui/icons";
-import { Notice, useDismiss, useSubmit } from "@/ui";
+import { Notice, Tip, useDismiss, useSubmit } from "@/ui";
 
 export default function Board({ project, tasks, openId, draggable, onOpen, onMove, onAdd, chips }: {
   project: Project;
@@ -84,6 +84,13 @@ export default function Board({ project, tasks, openId, draggable, onOpen, onMov
             <header className="board-col-head">
               <span className="tasks-dot" style={{ background: `#${s.hex_color || "888"}` }} />
               <span className="board-col-title">{s.title}</span>
+              {s.on_agent && (
+                <Tip text="What agents propose lands here, for you to accept or decline">
+                  <span className="board-col-mark" aria-label="Agents' proposals land here">
+                    <Icon name="bot" size={12} />
+                  </span>
+                </Tip>
+              )}
               <span className="badge quiet">{list.length}</span>
               <button type="button" className="icon-btn sm" title={`Add a task to ${s.title}`} aria-label={`Add a task to ${s.title}`} onClick={() => setAdding(s.id)}>
                 <Icon name="plus" size={14} />

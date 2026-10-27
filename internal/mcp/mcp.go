@@ -160,6 +160,7 @@ func toolResult(text string, isError bool) map[string]any {
 }
 
 // instructions is what the client shows its model about this server.
-const instructions = `remuda keeps the person's task list: projects, each with workflow columns (New → In progress → Testing → Done by default) and fields, tasks with labels, due dates, priorities and comments.
+const instructions = `remuda keeps the person's task list: projects, each with workflow columns (Proposed → New → In progress → Testing → Done by default) and fields, tasks with labels, due dates, priorities and comments.
 Use tasks_list to see what is open (today, upcoming or everything, by project, searched), task_get for one task in full, task_create for every new piece of work you propose or are asked to record, task_update to move a task to another column or mark it done, and task_comment to leave a note on a task.
+A task you create lands in the project's Proposed column until the person accepts it: do not move it out yourself.
 Write descriptions in Markdown: what is wrong or missing, where in the code, what done looks like. One task per improvement, titled as an imperative sentence. Check tasks_list before creating a task so nothing is filed twice.`

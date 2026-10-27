@@ -1175,8 +1175,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   tree: `parent_project_id`, archived, favorite, position), tasks (HTML
   description, done/done_at, due_date, priority 0–5, labels), labels.
   Dates are RFC 3339 UTC strings, "" when unset. `GET /api/tasks?view=
-  today|upcoming|open|project&project=&done=1&q=&page=&tz=` — the smart
-  views cut by the viewer's local day (`tz`), the search case-folds in Go
+  today|upcoming|open|proposed|project&project=&done=1&q=&page=&tz=` — the smart
+  views cut by the viewer's local day (`tz`), `proposed` the open tasks
+  sitting in an `on_agent` column, newest first, every project's or one's,
+  the search case-folds in Go
   (SQLite's `lower()` is ASCII only), 50 a page; `POST /api/tasks`,
   `GET/PATCH/DELETE /api/tasks/{id}` (PATCH is partial: nil keeps, `""`
   clears a date), `PUT /api/tasks/{id}/labels {label_id}`, `DELETE
@@ -1190,13 +1192,21 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   innerHTML) and edited as plain text that goes back as paragraphs. The
   top-bar `mode-switch` (Agents | Wall | Tasks | Code | Review) is a per-device pref.
   **Workflow**: every project has its columns (`statuses`: title, colour,
-  `kind` open|done, position, the flags `on_new` / `on_start` /
-  `on_finish` on at most one column each) — New / In progress / Testing /
-  Done by default (`DefaultStatuses`), a copy of the parent's for a
+  `kind` open|done, position, the flags `on_agent` / `on_new` / `on_start` /
+  `on_finish` on at most one column each) — Proposed / New / In progress /
+  Testing / Done by default (`DefaultStatuses`, `proposedColumn` the
+  first), a copy of the parent's for a
   sub-project (`CreateProject`); a store from before is seeded by
   `seedWorkflows` at every open (done → the done column, the old "in
   progress" label → on_start, else on_new; the label is read once and
-  never written again). A task is always in one column (`status_id`) and
+  never written again) and by `seedProposed` once per project
+  (`projects.proposed_seeded`, set by `CreateProject` too): a project with
+  no `on_agent` column gets "Proposed" right before where new tasks land,
+  and one the person strips of it never gets it back. **An agent's task
+  lands in the `on_agent` column** (`proposals`): `CreateFrom` with a
+  source and no `status_id` goes there, else where new tasks land; a
+  person's task is unchanged. `Project.Proposed` (`proposedCounts`, one
+  query) counts the open tasks waiting there, for the page's badges. A task is always in one column (`status_id`) and
   `done`/`done_at` **follow the column's kind**, so the smart lists and
   the checkbox stand: `Patch{Done}` moves to the done column or to where
   new tasks land, `Patch{StatusID}` sets done by kind, a move to another
@@ -1243,7 +1253,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `tasks.Source(auth.CallerName(ctx), body.source)`, the agent key's name
   (the machine it sits on) and what the caller said of itself (its pane),
   "GOG · w3:p1" — and no patch changes it; a key caller's comment is by
-  "agent". `POST /api/tasks` and `PATCH /api/tasks/{id}` take `markdown`
+  "agent". On the page the **Proposed** smart list (`Tasks.tsx`, `view=proposed`,
+  a `.badge` with the count on its nav row and `.badge quiet` per project
+  in the tree) is the triage: `Triage.tsx` — `ProposedBar` (how many,
+  Accept all, Decline all… behind a confirm), `ProposedActions` on each
+  row (`TaskRow`'s `actions` slot), `useTriage` (Accept = `PATCH
+  {status_id}` to `acceptColumn`'s — the on_new column, else the first
+  open one that is not the proposals' — the row gone at once, Decline =
+  DELETE behind `actions.ask`, "all" one request after another, stopping
+  at the first refusal); `proposed.ts` the pure part, tested
+  (`acceptColumn`, `proposedTotal`, `proposedWords`). The board shows the
+  column like any other with a `.board-col-mark` (the bot icon) on it;
+  `ProjectSettings` edits the flag as the first of the four marks. `POST /api/tasks` and `PATCH /api/tasks/{id}` take `markdown`
   beside `description` (`withMarkdown`: the HTML wins when both come):
   `tasks.MarkdownHTML` (markdown.go, tested) draws the allow-listed
   HTML the page renders — paragraphs with line breaks, `#`–`####`
@@ -1294,8 +1315,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   tested on a fake list: `tasks_list`, `task_get`, `task_create`,
   `task_update`, `task_comment`, `projects_list`, `labels_list`, each
   answering Markdown an agent reads; the `initialize` answer carries
-  `instructions` saying when to use which) name a project or a column
-  case-folded, read a due date `YYYY-MM-DD` as the end of that day here,
+  `instructions` saying when to use which, and that a task the agent
+  creates lands in the project's Proposed column until the person accepts
+  it) name a project or a column
+  case-folded (`task_create` answers with the column the task went to —
+  `Made{Task, Column, Notes}`, `Created` — and that a proposal is the
+  person's to accept or decline), read a due date `YYYY-MM-DD` as the end of that day here,
   send a Markdown description as `markdown` with a paragraphs-only
   `description` beside it for a list without the renderer, mark a task
   with the agent's `HERDR_PANE_ID` as `source`, and make a label that is
