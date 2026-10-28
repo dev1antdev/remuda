@@ -8193,6 +8193,96 @@ body.popout {
   }
 }
 
+/* ---- #6 Recipes: the saved ways to start an agent (features/recipes) — the list in the Recipes dialog, a row's form,
+   the recipe pick and the save/manage links in a "make something" dialog's Options, the words under the pick ---- */
+.recipe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.recipe-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.recipe-row > svg,
+.recipe-row > .radar-logo {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.recipe-row-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.recipe-row-text strong {
+  font-size: var(--fs-13);
+  font-weight: 600;
+}
+
+.recipe-words {
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recipe-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.recipe-form label small {
+  font-size: var(--fs-11);
+  font-weight: 400;
+  color: var(--fg-faint);
+}
+
+.recipe-form textarea {
+  min-height: 64px;
+}
+
+.recipe-form-actions,
+.start-options-recipes {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.start-options-recipes {
+  margin-top: -2px;
+}
+
+.recipes-dialog > .btn {
+  align-self: flex-start;
+}
+
+.start-recipe-words {
+  margin: -6px 0 2px;
+}
+
+.recipe-manage {
+  align-self: flex-start;
+}
+
 /* #5 Proposed column: the triage of what agents filed — the line over the list, a row's Accept / Decline, the column's mark */
 .proposed-bar {
   display: flex;

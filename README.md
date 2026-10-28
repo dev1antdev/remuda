@@ -176,7 +176,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   Quiet hours hold it, and a period with nothing in it sends nothing.
   **A scout every few hours**: the third kind of schedule, "Start an
   agent", opens a fresh tab in a folder, starts the agent you name (with
-  a model and arguments if you like) and hands it your prompt once it is
+  a model and arguments if you like, or a saved recipe that fills the
+  four fields at once) and hands it your prompt once it is
   up — "look through this project for what could be better and create a
   task for each" is the one the form suggests; with "Close the tab when
   the agent has answered" on, the tab goes by itself once the agent is
@@ -743,6 +744,19 @@ is yours to answer first, and the prompt waits two minutes for it before
 giving up with a note in Activity. The model last used for each agent is
 remembered on the device. A new tab and a new worktree take the same
 options.
+
+**Recipes** save a start you make again and again — the agent, its
+model, the extra arguments and the first prompt, under a name like
+"Planner" or "Scout", with a folder when the recipe belongs to one.
+Pick one in the Recipe field of the New workspace, tab or worktree
+dialog and every option fills in (each field stays yours to change);
+"Save as recipe…" under the options keeps what you typed; "New agent
+from recipe…" in the palette and "Agent from recipe…" in the sidebar's
++ menu start one straight away in a folder — the recipe's own, else the
+folder you last started it in, else the one you are looking at. A
+recipe also fills the "Start an agent" kind of schedule. Recipes are
+kept on this remuda and shared by every device that uses it;
+"Recipes…" in the palette edits the list.
 
 **Several remuda at once:** each machine may run its own (the phone on
 the studio Mac's, the desk on its own). herdr lets one client attach to a terminal

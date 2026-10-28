@@ -19,6 +19,8 @@ import RecapDialog from "@/features/standup/RecapDialog";
 import HandoverDialog from "@/features/chat/HandoverDialog";
 import { handedOverWords } from "@/features/chat/handover";
 import ImportIssueDialog from "@/features/tasks/ImportIssueDialog";
+import RecipesDialog from "@/features/recipes/RecipesDialog";
+import StartFromRecipeDialog from "@/features/recipes/StartFromRecipeDialog";
 import Standup from "@/features/standup/StandupPanel";
 import UpdatesDialog from "@/features/updates/Updates";
 import BudgetDialog from "@/features/usage/BudgetDialog";
@@ -170,6 +172,10 @@ export default function Overlays() {
         />
       )}
       {dialog?.kind === "budget" && <BudgetDialog machines={machines} budget={dialog.budget} onClose={actions.closeDialog} onSaved={done} ask={actions.ask} />}
+      {dialog?.kind === "recipes" && <RecipesDialog onClose={actions.closeDialog} />}
+      {dialog?.kind === "start-recipe" && (
+        <StartFromRecipeDialog machineId={dialog.machineId} dir={dialog.dir} onClose={actions.closeDialog} onStart={async (req) => landOn(req.machine, await createSession(req))} />
+      )}
       {dialog?.kind === "machine" && (
         <AddMachineDialog
           onClose={actions.closeDialog}
