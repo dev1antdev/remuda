@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -19,8 +20,12 @@ const keysFile = "agent-keys.json"
 // KeyPrefix tells an agent key from the token in a bearer header.
 const KeyPrefix = "rk_"
 
-// ScopeTasks is the one scope a key has today: the task routes and nothing else.
+// ScopeTasks is the one scope a key has today: the task routes, and a read of what the agents are doing.
 const ScopeTasks = "tasks"
+
+// readRoutes is what a tasks key may GET beside the tasks: the roster, a conversation's recap and the standup,
+// so an agent sees who is on what before it files or takes a task. Nothing there is written.
+var readRoutes = map[string]bool{"/api/roster": true, "/api/recap": true, "/api/standup": true}
 
 // Key is one agent key: only the sha256 of the key itself is kept, with the machine it was placed on as its name.
 type Key struct {
@@ -141,11 +146,15 @@ func (k *Keys) Revoke(id string) bool {
 	return true
 }
 
-// Allows says whether a key of this scope may reach a route: a tasks key reaches the task routes and nothing else.
-func (key Key) Allows(path string) bool {
+// Allows says whether a key of this scope may make a request: a tasks key reaches the task routes with any method
+// and the read routes with GET, nothing else.
+func (key Key) Allows(method, path string) bool {
 	switch key.Scope {
 	case ScopeTasks:
-		return path == "/api/tasks" || strings.HasPrefix(path, "/api/tasks/")
+		if path == "/api/tasks" || strings.HasPrefix(path, "/api/tasks/") {
+			return true
+		}
+		return method == http.MethodGet && readRoutes[path]
 	}
 	return false
 }

@@ -141,6 +141,24 @@ func Run(ctx context.Context, o Options) error {
 		return mc, true
 	})
 	reviews := review.New(o.Dir)
+	// a rejected folder whose agent answers that it is ready again: the review notes it, the person is told
+	sayings.OnAnswer = func(machineID, paneID, text string) {
+		snap, _ := watcher.Snapshot(machineID)
+		if snap == nil {
+			return
+		}
+		pane := snap.Pane(paneID)
+		if pane == nil {
+			return
+		}
+		ws := snap.Workspace(pane.WorkspaceID)
+		if ws == nil {
+			return
+		}
+		if dir := snap.WorkspaceDir(ws); dir != "" && reviews.OnAnswer(machineID, dir, text, time.Now()) {
+			pushSvc.Notify(review.ReadyNotice(machineID, paneID, ws.Label, text))
+		}
+	}
 	meter := usage.NewTracker()
 	budgets := budget.New(o.Dir, func() []shell.Host {
 		var hosts []shell.Host

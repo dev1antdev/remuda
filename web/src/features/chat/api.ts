@@ -77,6 +77,14 @@ export async function fetchChat(
   return { body: (await res.json()) as ChatResponse, etag: res.headers.get("ETag") };
 }
 
+// ---- a handover: this conversation continued by another agent in a new tab of the same workspace ----
+
+export type HandedOver = { id: string; pane: string; size: number; from: string; agent_error?: string };
+
+// handOver starts the agent asked in a new tab of the pane's workspace with the gist of its conversation as the first prompt
+export const handOver = (req: { machine: string; pane: string; session: string | null; agent: string; model?: string; args?: string; turns: number }) =>
+  sendJSON<HandedOver>("POST", "/api/handover", req);
+
 // ---- quick prompts: saved texts for the composer ----
 export type QuestionOption = { n: number; label: string; picked: boolean };
 // Question is the dialog on the pane's screen: its words, and its choices with the cursor on one.

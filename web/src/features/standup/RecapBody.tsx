@@ -1,11 +1,13 @@
-// The lines a recap reads as on the page: the numbers, the calls, the files, the last answer.
+// The lines a recap reads as on the page: the day strip, the numbers, the calls, the files, the last answer.
 
 import type { Recap } from "./api";
 import { calls, fileList, numbers } from "./standup";
+import { DayStrip } from "./DayStrip";
 
-export function RecapBody({ recap, dir }: { recap: Recap; dir: string }) {
+export function RecapBody({ recap, dir, since, onJump }: { recap: Recap; dir: string; since?: string; onJump?: (turn: string) => void }) {
   return (
     <>
+      {recap.spans && recap.spans.length > 0 && <DayStrip spans={recap.spans} since={since} onJump={onJump} />}
       <div className="standup-line">{numbers(recap)}</div>
       {recap.calls > 0 && <div className="standup-line quiet">{calls(recap)}</div>}
       {recap.edited.length > 0 && (

@@ -155,7 +155,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the tools it called and which failed, the longest call, the commands
   it ran, the files it edited and read, subagents started, questions
   asked — and the first line of its last answer, the agents that need
-  you first. Switch to the last 24 hours or 7 days; **Copy as Markdown**
+  you first. Under each agent a thin **day strip** shows *when*: green
+  while it worked, red while it waited on a question of its own, dim
+  while it sat idle, the hours marked under it; hover a stretch for its
+  times, click one to open the chat right there. Switch to the last 24
+  hours or 7 days; **Copy as Markdown**
   gives the report ready to paste into a channel. Come back to the page
   after an hour or more and a toast says what happened meanwhile —
   "Away 3 h: 2 agents answered, 1 waits for you, $4.20 spent" — with the
@@ -182,12 +186,19 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   nothing closes while it waits. For the scout to create tasks, its
   agent needs remuda's tasks MCP set up (see Tasks below).
 - **Tasks** — the **Agents | Wall | Tasks | Code | Review** switch in the top bar opens remuda's
-  own task list: projects on the left, Today / Upcoming / All open, quick
-  add, done, due dates, priorities, labels, descriptions, search — and a
-  **board** per project: the columns a task moves through (New → In
-  progress → Testing → Done out of the box; yours to rename, recolour,
-  reorder and add to, in the project's ⚙), cards dragged between them on
-  a desk, swiped through a column at a time on a phone. Each project can
+  own task list: projects on the left, Today / Upcoming / All open /
+  Proposed, quick add, done, due dates, priorities, labels, descriptions,
+  search — and a **board** per project: the columns a task moves through
+  (Proposed → New → In progress → Testing → Done out of the box; yours to
+  rename, recolour, reorder and add to, in the project's ⚙), cards
+  dragged between them on a desk, swiped through a column at a time on a
+  phone. **Proposed** is where what an agent files lands (see "Agents and
+  your tasks" below), apart from your own New column: the Proposed list
+  shows every proposal with **Accept** (it goes to New) and **Decline**
+  (it is deleted), one by one or all at once. Which column takes the
+  proposals is one of the four marks in the project's ⚙; a project from
+  before gets a Proposed column once, and stays without one if you remove
+  it. Each project can
   carry its **own fields** (text, number, one choice, several, a date, a
   checkbox, a link), shown on the card and handed to the agent with the
   task. It lives in one SQLite file (`tasks.db`) in remuda's state dir —
@@ -373,7 +384,8 @@ there, or sign out every other device at once; the rest keep working and the
 token stays what it was.
 
 **Agents and your tasks.** The agents on every machine get a key of their
-own that opens this remuda's task list and nothing else: remuda places it,
+own that opens this remuda's task list, and a read of what the other agents
+are doing, nothing else: remuda places it,
 with the address to reach it at, in the machine's own state dir (on a remote,
 over the same SSH connection, with this remuda's port forwarded back to the
 machine's loopback), and `remuda mcp` / `remuda tasks` there read the two
@@ -463,12 +475,20 @@ with everything remuda can do; see SECURITY.md.
 
 Any coding agent remuda runs — Claude Code, Codex, Gemini CLI, Kimi Code —
 can read and write your task list through **MCP**: `remuda mcp` is a Model
-Context Protocol server over stdio with seven tools — `tasks_list`,
+Context Protocol server over stdio with ten tools — `tasks_list`,
 `task_get`, `task_create` (a Markdown description, a column, a due date, a
 priority, labels, the project's fields), `task_update` (move it to another
-column, mark it done, retitle, rewrite), `task_comment`, `projects_list` and
-`labels_list` — and it tells the agent when to use which. A task an agent
-makes remembers the pane that made it. One command registers the server with
+column, mark it done, retitle, rewrite), `task_comment`, `projects_list`,
+`labels_list`, and three that only read what your agents are doing:
+`agents_list` (every agent on every machine, its state and for how long,
+its last answer, its pull request, its cost; the agent's own pane marked),
+`agent_recap` (what one conversation came to, as the Recap dialog shows it)
+and `standup` (the report over all of them) — and it tells the agent when
+to use which: look who is already on what before filing or taking a task.
+A task an agent makes remembers the pane that made it and lands in the project's
+**Proposed** column (unless the agent named a column), where the Tasks
+mode's Proposed list lets you accept or decline it — so a scout's dozen
+never mixes with your own New tasks. One command registers the server with
 every agent on a machine, through the agent's own CLI (`claude mcp add`,
 `codex mcp add`, `gemini mcp add`; Kimi when its CLI can):
 
@@ -486,7 +506,8 @@ while you are away.
 
 How the agents get in: the remuda that holds the list leaves an `agent-key`
 and an `agent-url` in remuda's state dir on every machine its agents run on;
-the key opens the tasks routes and nothing else, on the cockpit itself or
+the key opens the tasks routes and a read of the roster, a recap and the
+standup, nothing else, on the cockpit itself or
 through its door forwarded over ssh (`REMUDA_AGENT_URL` and
 `REMUDA_AGENT_KEY` override them, for a script of your own). An agent whose
 CLI cannot register a server gets the lines by hand — Claude Code's
@@ -651,14 +672,16 @@ other.
 task it works on can move along) — tick *and ask the agent to commit* and
 it is **Approve & commit**: the agent commits the reviewed work and says
 so (remuda itself never writes into a repository); **Reject** tells it
-what to fix and to come back for another look; both take a note and carry
+what to fix and to end the answer that brings the work back with the line
+`READY FOR REVIEW` — when it does, the queue lists that workspace first,
+marked *ready again*, and a push says so; both take a note and carry
 your comments, and both start the next look from now. The comments can also go on their own,
 to this agent or any other. "Mark reviewed" just clears the counts — the
 agent hears nothing.
 
 **Activity** (the bell in the header) is what happened while you were
-away: every finish, question, watchdog note, failed schedule and task
-move, by day, newest first, from every machine — the same things the
+away: every finish, question, watchdog note, failed schedule, task
+move and workspace ready for another look, by day, newest first, from every machine — the same things the
 pushes carry, kept whether or not a device is subscribed. A row opens
 its pane; the bell wears a dot until you look. The alert settings sit at
 the panel's foot.
@@ -674,7 +697,7 @@ same dialog Tasks uses to send a task. **Message several agents** (✉ in
 the sidebar head, or the palette) sends one text to the agents you tick —
 everyone, the working ones, the resting ones, or by hand — each through
 the chat's own path in turn, and says how each went; an agent busy with a
-question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Quick prompts** (⚡ in the composer) are saved texts, for every folder or one, shared by all your devices; `{dir}`, `{branch}` and `{file}` in one become the pane's folder, its branch and the file you last opened. **↑**
+question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Continue with another agent** (View menu, or the palette) hands the conversation to a different agent — Codex's take, a cheaper model, a fresh Claude when this one is stuck: a new tab in the same workspace, the agent you pick started there with the recap of the conversation and its last exchanges in full as its first prompt (how many is yours to say; the whole stays under 60 KB), the old pane left as it is, the handover noted in the activity. **Quick prompts** (⚡ in the composer) are saved texts, for every folder or one, shared by all your devices; `{dir}`, `{branch}` and `{file}` in one become the pane's folder, its branch and the file you last opened. **↑**
 on an empty line brings back what you sent before from this device to
 that folder, newest first; ↓ walks forward and back to the line you were
 writing.
