@@ -21,7 +21,7 @@ const (
 type Entry struct {
 	ID      int64     `json:"id"`
 	At      time.Time `json:"at"`
-	Kind    string    `json:"kind"` // input | done | stuck | waiting | loop | schedule | task | test | budget
+	Kind    string    `json:"kind"` // input | done | stuck | waiting | loop | schedule | task | test | budget | review
 	Machine string    `json:"machine"`
 	Pane    string    `json:"pane,omitempty"`
 	Title   string    `json:"title"`
