@@ -32,6 +32,7 @@ export type AppDialog =
   | { kind: "handover"; machineId: string; paneId: string; session: string | null; agent: string; workspace: string } // this conversation continued by another agent in a new tab
   | { kind: "recipes" } // the saved ways to start an agent, edited as a list
   | { kind: "start-recipe"; machineId?: string; dir?: string } // an agent started from a recipe, in the folder at hand unless the recipe has its own
+  | { kind: "pins"; machineId: string; paneId: string; dir: string; shown: string | null; title: string } // the turns pinned in a folder's conversations; shown = the session on screen, whose pins name no session
   | null;
 
 export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
@@ -65,6 +66,7 @@ export type AppState = {
   footprint: boolean; // the files rail beside the lenses, a per-device pref
   codeFile: { machineId: string; folder: string; path: string; line?: number; n: number } | null; // a file the Code mode is asked to open, once; folder "" keeps the one picked
   chatSession: string | null; // an older session of its folder the chat lens shows instead of the pane's live one; the export follows it
+  chatLive: string | null; // the pane's own session id while its chat lens is mounted, so the pins list can tell its pins from an older session's
   reviewAsked: { machineId: string; dir: string } | null; // a folder the Review mode is asked to pick, once (a task's run)
   lastFile: { machineId: string; path: string } | null; // the file last opened in the viewer: what {file} means in a quick prompt
   full: boolean; // the lens takes the whole screen: no header, no sidebar, no rail (app/full.tsx)
@@ -97,6 +99,7 @@ export const app = createStore<AppState>({
   footprint: readPref("footprint", !isTouch),
   codeFile: null,
   chatSession: null,
+  chatLive: null,
   reviewAsked: null,
   lastFile: null,
   full: false,
@@ -212,6 +215,10 @@ export const actions = {
   // the Code mode on that machine and folder, with the file open
   showChatSession(chatSession: string | null) {
     app.set({ chatSession });
+  },
+  // the chat lens noted the pane's own session id (null once it is gone)
+  setChatLive(chatLive: string | null) {
+    app.set((s) => (s.chatLive === chatLive ? {} : { chatLive }));
   },
   // the find bar: opened again, it keeps its query and takes the focus back
   openFind() {

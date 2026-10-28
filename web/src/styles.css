@@ -8258,6 +8258,132 @@ body.popout {
   }
 }
 
+/* ---- #13 Pins: the pin beside a turn's link, the mark on a pinned turn, the Pins dialog's list ---- */
+.turn-pin {
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.turn:hover .turn-pin,
+.turn-pin:focus-visible,
+.turn-pin.on {
+  opacity: 1;
+}
+
+.turn-pin.on {
+  color: var(--accent);
+}
+
+@media (pointer: coarse) {
+  .turn-pin {
+    opacity: 1;
+  }
+}
+
+.turn-pinned {
+  position: relative;
+}
+
+/* the mark sits in the turn's top corner, inside its box: a turn is paint-contained (content-visibility), so nothing
+   outside its box would show; a pinned turn keeps the corner clear of its text */
+.turn-pin-mark {
+  position: absolute;
+  top: 0;
+  right: 0;
+  color: var(--accent);
+  line-height: 0;
+  pointer-events: none;
+}
+
+.turn-assistant.turn-pinned {
+  padding-right: 18px;
+}
+
+.turn-user.turn-pinned {
+  padding-right: 28px;
+}
+
+.turn-user.turn-pinned .turn-pin-mark {
+  top: 9px;
+  right: 10px;
+}
+
+.pins-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pins-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pins-row {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pins-row:hover {
+  background: var(--bg-active);
+}
+
+.pins-row:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -2px;
+}
+
+.pins-kind {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+.pins-line {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pins-when {
+  flex-shrink: 0;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  /* a phone's row keeps the line whole and puts the time under it */
+  .pins-row {
+    flex-wrap: wrap;
+  }
+
+  .pins-line {
+    flex-basis: calc(100% - 20px);
+    white-space: normal;
+  }
+
+  .pins-when {
+    margin-left: 20px;
+  }
+}
+
 /* #16 Vitals sparklines: the day's disk free and load drawn under the ⓘ's numbers, the thresholds as dashed lines */
 .health-rows .spark {
   display: block;

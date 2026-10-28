@@ -1,7 +1,7 @@
 // Chat is the chat lens: the transcript from Claude Code's own session file, read server-side and polled
 // at the pane's pace; sending types into the live pane.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { actions, app } from "@/app/store";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import SendToAgent from "@/features/agents/SendToAgent";
@@ -9,12 +9,14 @@ import type { OpenFile } from "@/features/files/target";
 import { act } from "@/app/act";
 import { createTab, sendKeys, submitPrompt, type PaneUsage } from "@/features/roster/api";
 import { copyText } from "@/lib/host";
+import { usePref } from "@/lib/prefs";
 import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
 import { Icon, Notice, Select, useTimedNotice } from "@/ui";
 import type { Subagent, Turn } from "./api";
 import Composer from "./Composer";
 import { anchorsItself, hiddenCount, idle, nextReveal } from "./mount";
+import { isPinned, pinKey, pinOf, togglePin, type Pin } from "./pins";
 import { PlanBar } from "./PlanBar";
 import { QuestionCard } from "./QuestionCard";
 import { revealTurn } from "./reveal";
@@ -62,6 +64,12 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
 
   // the transcript, at the pane's pace: two seconds while the agent works or asks, ten otherwise
   const { data: chat, error: fetchError } = useChat({ machineId, paneId, sessionId, dir, every: busy ? 2000 : 10000, active, subagent });
+  // the pane's own session id goes to the store, so the Pins list can tell its pins from an older session's
+  useEffect(() => {
+    if (readOnly || sessionId !== null || !chat?.session_id) return;
+    actions.setChatLive(chat.session_id);
+  }, [readOnly, sessionId, chat?.session_id]);
+  useEffect(() => () => actions.setChatLive(null), []);
 
   // a long conversation mounts from its end: the last turns at once, the earlier ones in idle slices; the find bar and a
   // jump to an earlier turn want them all at once. `revealed` belongs to one session, so a switch starts over.
@@ -115,6 +123,21 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
     },
     [machineId, paneId],
   );
+  // the pins of this folder's conversations: a bookmark on a turn of the session shown, kept per folder so it outlives a compaction
+  const [pins, setPins] = usePref<Pin[]>(pinKey(machineId, dir), []);
+  const pinnedIds = useMemo(() => new Set(pins.map((p) => p.turn)), [pins]);
+  const pinsRef = useRef(pins);
+  pinsRef.current = pins;
+  const onPin = useCallback(
+    (turn: Turn) => {
+      const pin = pinOf(turn, shownSession.current ?? "");
+      if (!pin) return;
+      const was = isPinned(pinsRef.current, pin.turn);
+      setPins((prev) => togglePin(prev, pin));
+      actions.notify(was ? "Unpinned" : "Pinned — Pins… in the View menu lists it", { brief: true });
+    },
+    [setPins],
+  );
   useEffect(() => {
     if (!jump) return;
     pendingTurn.current = jump.turn || null;
@@ -147,6 +170,14 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
     el.classList.add("turn-hit");
     setTimeout(() => el.classList.remove("turn-hit"), 2600);
   }, [chat, jump, hidden]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a jump into a session the lens cannot open (a pin whose file is gone): said once, the conversation shown stays
+  useEffect(() => {
+    if (!jump || !fetchError || !pendingTurn.current || (chat && chat.session_id === jump.session)) return;
+    pendingTurn.current = null;
+    actions.clearJump();
+    actions.notify(`That turn's conversation could not be opened: ${fetchError}`, { error: true });
+    if (!readOnly) setSessionId(null);
+  }, [fetchError, jump, chat, readOnly]);
 
   const sessions = chat?.sessions ?? [];
   if (sessionId === null && chat?.session_id) live.current = chat.session_id;
@@ -181,7 +212,19 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : readOnly ? "This transcript is empty." : "No transcript for this pane's folder yet."}</div>}
         {turns.slice(hidden).map((t, i) => (
-          <TurnView key={t.ids?.[0] || hidden + i} turn={t} machineId={machineId} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} onLink={readOnly ? undefined : onLink} subagents={chat?.subagents} onOpenSubagent={onOpenSubagent} diffs />
+          <TurnView
+            key={t.ids?.[0] || hidden + i}
+            turn={t}
+            machineId={machineId}
+            onOpenFile={onOpenFile}
+            onForward={others ? onForward : undefined}
+            onLink={readOnly ? undefined : onLink}
+            onPin={readOnly ? undefined : onPin}
+            pinned={!!t.ids?.[0] && pinnedIds.has(t.ids[0])}
+            subagents={chat?.subagents}
+            onOpenSubagent={onOpenSubagent}
+            diffs
+          />
         ))}
       </div>
       {!readOnly && status === "input" && (
