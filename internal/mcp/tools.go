@@ -23,8 +23,9 @@ var priorities = []string{"none", "low", "medium", "high", "urgent", "do now"}
 // Tools is the task list as the tools see it.
 type Tools struct {
 	Client  *tasksapi.Client
-	Source  string // what a task made here is marked with: the agent's pane, from HERDR_PANE_ID
-	Trouble error  // no door on this machine: every call answers the reason, so the agent can say so
+	Source  string           // what a task made here is marked with: the agent's pane, from HERDR_PANE_ID
+	Trouble error            // no door on this machine: every call answers the reason, so the agent can say so
+	Now     func() time.Time // the clock, for the spans agents_list says; nil is time.Now
 }
 
 // Spec is one tool as tools/list describes it.
@@ -86,6 +87,18 @@ func Specs() []Spec {
 			InputSchema: schema(nil, map[string]any{})},
 		{Name: "labels_list", Description: "The labels that exist, for task_create's labels.",
 			InputSchema: schema(nil, map[string]any{})},
+		{Name: "agents_list", Description: "Every coding agent on every machine the person runs: its workspace, state (working, waiting for the person, finished, idle, and for how long), the first line of its last answer, the pull request it named, what its conversation has cost. Look here before filing or taking a task, to see who is already on what; your own pane is marked (you).",
+			InputSchema: schema(nil, map[string]any{})},
+		{Name: "agent_recap", Description: "What one agent's conversation came to — prompts and answers, time, tokens and cost, the tools it called, the commands it ran, the files it edited and read, its last answer — as the person's Recap shows it.",
+			InputSchema: schema([]string{"pane"}, map[string]any{
+				"machine": prop("string", "the machine by name or id as agents_list shows it; omit for the cockpit's own"),
+				"pane":    prop("string", "the pane as agents_list lists it, like w3:p1"),
+				"since":   prop("string", "the period: midnight, 24h, 7d, a date YYYY-MM-DD or an RFC 3339 moment; omit for the whole conversation"),
+			})},
+		{Name: "standup", Description: "The standup over every agent: what each did and answered in the period, as the person's Standup panel shows it.",
+			InputSchema: schema(nil, map[string]any{
+				"since": prop("string", "the period: midnight (the default), 24h, 7d, a date YYYY-MM-DD or an RFC 3339 moment"),
+			})},
 	}
 }
 
@@ -154,6 +167,20 @@ func (t *Tools) Call(name string, args json.RawMessage) (string, error) {
 		return t.Comment(a.ID, a.Body)
 	case "projects_list":
 		return t.Projects()
+	case "agents_list":
+		return t.Agents()
+	case "agent_recap":
+		var a RecapArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return "", fmt.Errorf("bad arguments: %w", err)
+		}
+		return t.AgentRecap(a)
+	case "standup":
+		var a StandupArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return "", fmt.Errorf("bad arguments: %w", err)
+		}
+		return t.Standup(a)
 	}
 	return t.Labels()
 }
