@@ -1,7 +1,12 @@
 // The "make something" dialogs: a workspace, a tab, a worktree, a rename, a machine added or renamed.
 
 import { useState } from "react";
+import { fetchRecipes, type Recipe } from "@/features/recipes/api";
+import { draftOf, recipeOf, recipeWords } from "@/features/recipes/recipes";
+import RecipeMark from "@/features/recipes/RecipeMark";
+import RecipesDialog from "@/features/recipes/RecipesDialog";
 import { readPref, writePref } from "@/lib/prefs";
+import { useQuery } from "@/lib/query";
 import { dirname } from "@/lib/text";
 import { FormDialog, Icon, Logo, Select, useSubmit } from "@/ui";
 import type { AgentKind, Machine, Session, StartExtras } from "./api";
@@ -52,18 +57,49 @@ function useStart(initial: string) {
     if (hasModelFlag(agent)) writePref(lastModelKey(agent), extras.model ?? "");
     return extras;
   };
-  return { agent, pickAgent, draft, setDraft, options };
+  // applyRecipe fills the agent and its options from a saved recipe; every field stays the person's to change
+  const applyRecipe = (r: Recipe) => {
+    setAgent(r.agent);
+    setDraft(draftOf(r));
+  };
+  return { agent, pickAgent, draft, setDraft, options, applyRecipe };
 }
 
-// StartOptionsFields is the folded "Options" under the agent: the model, extra arguments, a first prompt; nothing for a shell
-function StartOptionsFields({ kind, draft, onChange }: { kind: string; draft: Draft; onChange: (d: Draft) => void }) {
+// StartOptionsFields is the recipe pick and the folded "Options" under the agent — the model, extra arguments, a first
+// prompt, and at the fold's end the ways to save them as a recipe and to manage the recipes; a shell keeps the pick alone
+function StartOptionsFields({ kind, draft, agents, onChange, onRecipe }: { kind: string; draft: Draft; agents: AgentKind[]; onChange: (d: Draft) => void; onRecipe: (r: Recipe) => void }) {
   const [open, setOpen] = useState(false);
-  if (kind === "" || kind === "shell") return null;
+  const [picked, setPicked] = useState("");
+  const [managing, setManaging] = useState<{ initial?: Recipe } | null>(null);
+  const recipes = useQuery(fetchRecipes, []);
+  const list = recipes.data ?? [];
+  const shell = kind === "" || kind === "shell";
   const choices = modelChoices(kind);
   const set = (patch: Partial<Draft>) => onChange({ ...draft, ...patch });
   const typedModel = hasModelFlag(kind) && (choices.length === 0 || draft.choice === CUSTOM);
+  const pick = (id: string) => {
+    setPicked(id);
+    const r = list.find((x) => x.id === id);
+    if (r) onRecipe(r);
+  };
+  const recipePick = list.length > 0 && (
+    <label>
+      Recipe
+      <Select value={picked} onChange={pick} options={[{ value: "", label: "None", hint: "the fields as they are" }, ...list.map((r) => ({ value: r.id ?? "", label: r.name, hint: recipeWords(r, agents), icon: <RecipeMark agent={r.agent} /> }))]} />
+    </label>
+  );
+  const manager = managing && <RecipesDialog initial={managing.initial} onClose={() => setManaging(null)} onSaved={() => recipes.reload()} />;
+  if (shell) {
+    return list.length > 0 ? (
+      <div className="start-options">
+        {recipePick}
+        {manager}
+      </div>
+    ) : null;
+  }
   return (
     <div className="start-options">
+      {recipePick}
       <button type="button" className="linkish start-options-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
         <Icon name={open ? "chevron-down" : "chevron-right"} size={12} />
         Options{!open && hasOptions(kind, draft) ? " · set" : ""}
@@ -90,8 +126,17 @@ function StartOptionsFields({ kind, draft, onChange }: { kind: string; draft: Dr
             First prompt <small>sent once the agent is up</small>
             <textarea value={draft.prompt} rows={3} placeholder="What the agent should start on" onChange={(e) => set({ prompt: e.target.value })} />
           </label>
+          <div className="start-options-recipes">
+            <button type="button" className="linkish" onClick={() => setManaging({ initial: recipeOf("", kind, draft) })}>
+              <Icon name="sparkles" size={12} /> Save as recipe…
+            </button>
+            <button type="button" className="linkish" onClick={() => setManaging({})}>
+              <Icon name="sliders" size={12} /> Manage recipes…
+            </button>
+          </div>
         </>
       )}
+      {manager}
     </div>
   );
 }
@@ -119,7 +164,7 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate,
   const [machine, setMachine] = useState(defaultMachine);
   const [dir, setDir] = useState("");
   const [name, setName] = useState("");
-  const { agent, pickAgent, draft, setDraft, options: extras } = useStart(defaultAgent(agents, "claude"));
+  const { agent, pickAgent, draft, setDraft, options: extras, applyRecipe } = useStart(defaultAgent(agents, "claude"));
   const [picking, setPicking] = useState(false);
   const submit = useSubmit(async () => {
     if (!dir.trim()) throw new Error("Project folder is required");
@@ -164,7 +209,7 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate,
         <input value={name} placeholder="checkout-api" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
-      <StartOptionsFields kind={agent} draft={draft} onChange={setDraft} />
+      <StartOptionsFields kind={agent} draft={draft} agents={agents} onChange={setDraft} onRecipe={applyRecipe} />
     </FormDialog>
   );
 }
@@ -176,7 +221,7 @@ export function NewTabDialog({ session, agents, onCreate, onClose }: {
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
-  const { agent, pickAgent, draft, setDraft, options } = useStart("shell");
+  const { agent, pickAgent, draft, setDraft, options, applyRecipe } = useStart("shell");
   const submit = useSubmit(() => onCreate(name.trim(), agent, options()));
   return (
     <FormDialog title={`New tab in ${session.name}`} icon="plus" hint="Opens in the workspace's folder, like herdr's prefix+c." onClose={onClose} submit={submit} submitLabel="Create tab">
@@ -185,7 +230,7 @@ export function NewTabDialog({ session, agents, onCreate, onClose }: {
         <input autoFocus value={name} placeholder="tests" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
-      <StartOptionsFields kind={agent} draft={draft} onChange={setDraft} />
+      <StartOptionsFields kind={agent} draft={draft} agents={agents} onChange={setDraft} onRecipe={applyRecipe} />
     </FormDialog>
   );
 }
@@ -199,7 +244,7 @@ export function NewWorktreeDialog({ session, agents, onCreate, onClose }: {
   const [branch, setBranch] = useState(suggestBranch);
   const [base, setBase] = useState("");
   const [name, setName] = useState("");
-  const { agent, pickAgent, draft, setDraft, options } = useStart(defaultAgent(agents, "claude"));
+  const { agent, pickAgent, draft, setDraft, options, applyRecipe } = useStart(defaultAgent(agents, "claude"));
   const submit = useSubmit(async () => {
     if (!branch.trim()) throw new Error("Branch name is required");
     await onCreate(branch.trim(), base.trim(), name.trim(), agent, options());
@@ -231,7 +276,7 @@ export function NewWorktreeDialog({ session, agents, onCreate, onClose }: {
         <input value={name} placeholder="defaults to the branch" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
-      <StartOptionsFields kind={agent} draft={draft} onChange={setDraft} />
+      <StartOptionsFields kind={agent} draft={draft} agents={agents} onChange={setDraft} onRecipe={applyRecipe} />
     </FormDialog>
   );
 }

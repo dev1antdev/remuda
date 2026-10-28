@@ -11,6 +11,12 @@ describe("isShared", () => {
     expect(isShared("panel.")).toBe(false);
     expect(isShared("panels")).toBe(false);
   });
+  it("takes every folder's pins by their prefix, not the bare prefix", () => {
+    expect(isShared("pins:local|/Users/me/remuda")).toBe(true);
+    expect(isShared("pins:gog|/home/me/x")).toBe(true);
+    expect(isShared("pins:")).toBe(false);
+    expect(isShared("pins")).toBe(false);
+  });
   it("keeps the device's own keys at home", () => {
     for (const key of ["alerts", "alerts.voice", "alerts.quiet", "prompt.history:local|/x", "feed.seen", "release.seen", "wall.hidden", "collapsed", "wsFolded", "termFont", "text.size", "send.targets", "mode", "prefs.sync", "__stamps", "theme.other"]) expect(isShared(key), key).toBe(false);
     for (const key of ["density", "font.mono"]) expect(isShared(key), key).toBe(true);

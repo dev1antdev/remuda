@@ -22,7 +22,7 @@ Three rings, and a dependency may only point inwards.
 │  updates    what a machine can update, and running it as a job       │
 │  tasks      the task list, and starting an agent on a task           │
 │  health · jobs · restart · watch · radar · watchdog · push ·         │
-│  schedule · search · usage · quick · code                            │
+│  schedule · search · usage · quick · recipes · code                  │
 ├─ the floor ──────────────────────────────────────────────────────────┤
 │  machines   the registry; a Machine is a shell.Host with herdr on it │
 │  herdr      the RPC client, the attach PTYs, the snapshot questions  │
@@ -40,7 +40,7 @@ The contexts are the bounded contexts of the product, in its own words:
 | Context | Owns | Package(s) |
 |---|---|---|
 | Fleet | the machines, their vitals, the newest versions out there | `machines`, `health` |
-| Sessions | workspaces, tabs, panes; what reaches an agent | `sessions`, `watch`, `radar`, `watchdog` |
+| Sessions | workspaces, tabs, panes; what reaches an agent | `sessions`, `watch`, `radar`, `watchdog`, `handover` |
 | Live | the page's one event stream: the roster moved, a transcript grew | `live` |
 | Transcripts | what an agent said, read-only | `transcript`, `chat`, `search`, `usage` |
 | Review | a folder's uncommitted work since the last look | `review` |
@@ -48,6 +48,7 @@ The contexts are the bounded contexts of the product, in its own words:
 | Tasks | remuda's own list, and an agent started on a task | `tasks` |
 | Alerts | pushes to the phone | `push` |
 | Schedules | prompts on a timetable | `schedule` |
+| Recipes | the saved ways to start an agent | `recipes` |
 
 ## The rules
 
@@ -99,7 +100,8 @@ down through, and one folder per lens.
 │         Wall, PopOut, Overlays — the only place features compose     │
 ├─ features ───────────────────────────────────────────────────────────┤
 │  roster · chat · terminal · review · tasks · updates · usage ·       │
-│  search · schedules · alerts · files · code · agents · quick         │
+│  search · schedules · alerts · files · code · agents · quick ·       │
+│  recipes                                                             │
 │  one folder each: api.ts (its routes), pure modules with their       │
 │  tests, the screen in pieces                                         │
 ├─ ui ─────────────────────────────────────────────────────────────────┤

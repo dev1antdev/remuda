@@ -1,6 +1,8 @@
 // The Wall mode: every agent on one screen, a tile each — its state, its last turns or its terminal as it is, a
-// line to answer — in a grid that fits the window, or one of them given the whole wall with the rest in a strip under it. app composes: the tile is ./Tile over features/chat/Tail, which panes make a tile
-// and in what order is features/roster/wall.
+// line to answer — in a grid that fits the window, or one of them given the whole wall with the rest in a strip under it,
+// or, in office mode for a second screen, one of them large beside a column of cards, the one that needs the person or
+// the next in turn every 20 s unless a card is pinned. app composes: the tile is ./Tile over features/chat/Tail, which
+// panes make a tile, in what order and which one office mode features is features/roster/wall.
 
 import { useEffect, useMemo, type CSSProperties } from "react";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
@@ -9,9 +11,11 @@ import { useRoster } from "@/features/roster/useRoster";
 import { DEFAULT_WALL, TILE_MIN, tiles, withFocus, type Tile, type WallPrefs, type WallView } from "@/features/roster/wall";
 import { usePref } from "@/lib/prefs";
 import { Icon } from "@/ui";
+import { enterFull, leaveFull } from "./full";
 import { popOut, popOutSupported } from "./pip";
 import { actions } from "./store";
 import { TileView } from "./Tile";
+import { useOffice } from "./useOffice";
 
 const VIEWS: { view: WallView; label: string; title: string }[] = [
   { view: "chat", label: "Chat", title: "Each tile the last turns of its conversation" },
@@ -34,16 +38,26 @@ export default function Wall() {
   const list = useMemo(() => tiles(machines, hidden, prefs, radar, now), [machines, hidden, prefs, radar, now]);
   const [focus, setFocus] = usePref<string>("wall.focus", "");
   const { big, rest } = useMemo(() => withFocus(list.shown, focus), [list.shown, focus]);
+  const [office, setOffice] = usePref<boolean>("wall.office", false);
+  const show = useOffice(office, list.shown, radar, setOffice);
   useEffect(() => {
-    if (!big) return;
+    if (!big && !office) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || (event.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]") || document.querySelector(".modal-scrim, .sel-pop")) return;
-      setFocus("");
+      if ((event.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]") || document.querySelector(".modal-scrim, .sel-pop")) return;
+      if (event.key === "Escape" && big && !office) setFocus("");
+      if (office && (event.code === "ArrowRight" || event.code === "ArrowLeft")) show.step(event.code === "ArrowRight" ? 1 : -1);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [big, setFocus]);
+  }, [big, office, setFocus, show.step]);
+  const toggleOffice = () => {
+    setOffice(!office);
+    if (office) leaveFull();
+    else enterFull();
+  };
   const n = list.shown.length;
+  const featuredTile = office ? (list.shown.find((t) => t.key === show.key) ?? null) : null;
+  const cards = featuredTile ? list.shown.filter((t) => t !== featuredTile) : [];
   const tile = (t: Tile, brief = false) => (
     <TileView
       key={t.key}
@@ -53,8 +67,11 @@ export default function Wall() {
       step={step}
       now={now}
       brief={brief}
-      focused={t === big}
-      onFocus={() => setFocus(t === big ? "" : t.key)}
+      focused={!office && t === big}
+      onFocus={office ? undefined : () => setFocus(t === big ? "" : t.key)}
+      onPin={office ? () => show.pin(t.key) : undefined}
+      onPick={office && t !== featuredTile ? () => show.pin(t.key) : undefined}
+      pinned={office && t.key === show.pinned}
       onHide={() => setHidden((h) => [...h.filter((k) => k !== t.key), t.key])}
       onPopOut={popOutSupported ? () => void popOut({ machineId: t.machine.id, paneId: t.pane.id }) : undefined}
     />
@@ -103,6 +120,15 @@ export default function Wall() {
             </button>
           ))}
         </span>
+        <button
+          type="button"
+          className={`btn sm wall-office-btn${office ? " on" : ""}`}
+          aria-pressed={office}
+          title={office ? "Leave office mode (Esc)" : "Office mode for a second screen: one agent large — the one that needs you, else each in turn every 20 s — the rest as cards; a card pins its agent; full screen"}
+          onClick={toggleOffice}
+        >
+          <Icon name="monitor" size={12} /> Office
+        </button>
         <button type="button" className="btn sm" title="Start an agent in a new workspace" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
           <Icon name="plus" size={12} /> Agent
         </button>
@@ -113,6 +139,13 @@ export default function Wall() {
           <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
             Start an agent
           </button>
+        </div>
+      ) : featuredTile ? (
+        <div className="wall-office">
+          <div className="wall-office-main">{tile(featuredTile)}</div>
+          <div className="wall-office-cards" aria-label="The other agents; a click pins one">
+            {cards.map((t) => tile(t, true))}
+          </div>
         </div>
       ) : big ? (
         <>

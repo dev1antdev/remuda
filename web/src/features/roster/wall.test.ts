@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session } from "./api";
 import { DEFAULT_RADAR } from "./radar";
-import { DEFAULT_WALL, isIdle, needsMe, nextNeedingMe, tileKey, tiles, withFocus } from "./wall";
+import { DEFAULT_WALL, OFFICE_ROTATE, featured, isIdle, needsMe, neighbour, nextNeedingMe, rotates, tileKey, tiles, withFocus } from "./wall";
 
 const NOW = 1_700_000_000_000;
 const MIN = 60_000;
@@ -119,5 +119,48 @@ describe("nextNeedingMe", () => {
   it("answers nobody when every agent is fine, and the same one when it is alone", () => {
     expect(nextNeedingMe([machine("local", [session("a", [working, fresh])])], DEFAULT_RADAR, NOW, "")).toBeNull();
     expect(nextNeedingMe([machine("local", [session("a", [working, blocked])])], DEFAULT_RADAR, NOW, "local|b")?.key).toBe("local|b");
+  });
+});
+
+describe("featured", () => {
+  const calm = tiles([machine("local", [session("a", [working, fresh])]), machine("gog", [session("b", [old])])], [], DEFAULT_WALL, DEFAULT_RADAR, NOW).shown;
+  const busy = tiles([machine("local", [session("a", [working, noted, blocked, done])])], [], DEFAULT_WALL, DEFAULT_RADAR, NOW).shown;
+
+  it("keeps a pinned agent while it is on the wall, whoever else waits", () => {
+    expect(featured(busy, "local|d", "", 0, NOW, DEFAULT_RADAR)).toBe("local|d");
+    expect(featured(busy, "local|gone", "", 0, NOW, DEFAULT_RADAR)).toBe("local|b");
+  });
+
+  it("shows the one asking a question before a note or a finish, then the first that needs the person", () => {
+    expect(featured(busy, "", "", 0, NOW, DEFAULT_RADAR)).toBe("local|b");
+    const noQuestion = busy.filter((t) => t.key !== "local|b");
+    expect(featured(noQuestion, "", "local|w", NOW, NOW, DEFAULT_RADAR)).toBe("local|a");
+  });
+
+  it("rotates through the wall's order every OFFICE_ROTATE when nobody needs the person", () => {
+    expect(featured(calm, "", "", 0, NOW, DEFAULT_RADAR)).toBe("local|w");
+    expect(featured(calm, "", "local|w", NOW, NOW + OFFICE_ROTATE - 1, DEFAULT_RADAR)).toBe("local|w");
+    expect(featured(calm, "", "local|w", NOW, NOW + OFFICE_ROTATE, DEFAULT_RADAR)).toBe("local|f");
+    expect(featured(calm, "", "gog|o", NOW, NOW + OFFICE_ROTATE, DEFAULT_RADAR)).toBe("local|w");
+    expect(featured(calm, "", "nowhere|x", NOW, NOW, DEFAULT_RADAR)).toBe("local|w");
+    expect(featured([], "", "local|w", NOW, NOW, DEFAULT_RADAR)).toBe("");
+  });
+
+  it("stays on the only agent, and says when it rotates at all", () => {
+    const alone = calm.slice(0, 1);
+    expect(featured(alone, "", "local|w", NOW, NOW + 2 * OFFICE_ROTATE, DEFAULT_RADAR)).toBe("local|w");
+    expect(rotates(alone, "", NOW, DEFAULT_RADAR)).toBe(false);
+    expect(rotates(calm, "", NOW, DEFAULT_RADAR)).toBe(true);
+    expect(rotates(calm, "local|f", NOW, DEFAULT_RADAR)).toBe(false);
+    expect(rotates(busy, "", NOW, DEFAULT_RADAR)).toBe(false);
+  });
+
+  it("steps to a neighbour by hand, round and round", () => {
+    expect(neighbour(calm, "local|w", 1)).toBe("local|f");
+    expect(neighbour(calm, "local|w", -1)).toBe("gog|o");
+    expect(neighbour(calm, "gog|o", 1)).toBe("local|w");
+    expect(neighbour(calm, "", 1)).toBe("local|w");
+    expect(neighbour(calm, "", -1)).toBe("gog|o");
+    expect(neighbour([], "local|w", 1)).toBe("");
   });
 });

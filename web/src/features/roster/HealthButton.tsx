@@ -9,6 +9,8 @@ import { newer } from "@/lib/version";
 import { Icon, useDismiss } from "@/ui";
 import { refreshHealth, type Health, type Latest, type Machine } from "./api";
 import { concerns, updateLabel } from "./concerns";
+import { Sparkline } from "./Sparkline";
+import { DISK_THRESHOLDS, loadThresholds, rangeOf, sparkTitle, spanWords } from "./spark";
 
 export function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine; latest?: Latest; serverVersion?: string }) {
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
@@ -35,6 +37,11 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
     }
   };
   const remudaHave = m.id === "local" ? serverVersion : h?.remuda;
+  const history = h?.history && h.history.length >= 2 ? h.history : null;
+  const span = history ? spanWords(history[0]!.at, history[history.length - 1]!.at) : "";
+  const loads = history ? history.map((s) => s.load) : [];
+  const free = history ? history.map((s) => s.disk_free) : [];
+  const loadRange = rangeOf(loads, 0, h?.cores ?? 0);
   const update = (what: string) => {
     setOpen(null);
     setUpdateWhat(what);
@@ -135,14 +142,20 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
               <dt>Disk</dt>
               <dd>
                 {h.disk_free_gb.toFixed(0)} GB free · {h.disk_used_pct}% used
+                {history && <Sparkline values={free} min={0} max={100} color="var(--ctp-green)" thresholds={DISK_THRESHOLDS} title={sparkTitle("Disk free", free, (v) => `${v.toFixed(0)}%`, span)} />}
               </dd>
               <dt>Load</dt>
               <dd>
                 {h.load1.toFixed(2)}
+                {h.cores ? ` on ${h.cores} cores` : ""}
                 {h.uptime ? ` · up ${h.uptime}` : ""}
+                {history && <Sparkline values={loads} min={loadRange.min} max={loadRange.max} color="var(--ctp-blue)" thresholds={loadThresholds(h.cores)} title={sparkTitle("Load", loads, (v) => v.toFixed(2), span)} />}
               </dd>
               <dt>Read</dt>
-              <dd>{ago(h.at)}</dd>
+              <dd>
+                {ago(h.at)}
+                {span ? <span className="dim"> · {span} kept</span> : null}
+              </dd>
             </dl>
           ) : (
             <div className="dim">Not read yet.</div>
