@@ -40,7 +40,7 @@ The contexts are the bounded contexts of the product, in its own words:
 | Context | Owns | Package(s) |
 |---|---|---|
 | Fleet | the machines, their vitals, the newest versions out there | `machines`, `health` |
-| Sessions | workspaces, tabs, panes; what reaches an agent | `sessions`, `watch`, `radar`, `watchdog` |
+| Sessions | workspaces, tabs, panes; what reaches an agent | `sessions`, `watch`, `radar`, `watchdog`, `handover` |
 | Live | the page's one event stream: the roster moved, a transcript grew | `live` |
 | Transcripts | what an agent said, read-only | `transcript`, `chat`, `search`, `usage` |
 | Review | a folder's uncommitted work since the last look | `review` |
