@@ -99,15 +99,15 @@ func tasksCmd(args []string) {
 			a.Priority = &priority
 		}
 		a.Labels = labelList
-		task, notes, cerr := tools.Create(a)
+		made, cerr := tools.Create(a)
 		if cerr != nil {
 			err = cerr
 			break
 		}
 		if *asJSON {
-			answer = task
+			answer = made.Task
 		} else {
-			text = mcp.Created(task, notes)
+			text = mcp.Created(made)
 		}
 	case "move":
 		id, rest := idArg(args[1:], "move")

@@ -171,3 +171,79 @@ func TestFreshPaneIsNotGoneYet(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRunUsageIsKept(t *testing.T) {
+	st := open(t)
+	clock := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	st.now = func() time.Time { return clock }
+	inbox, _ := st.Projects()
+	tk, _ := st.Create(inbox[0].ID, Patch{Title: str("Price it")})
+	run, err := st.StartRun(Run{TaskID: tk.ID, Machine: "local", Workspace: "w1", Pane: "w1:p2", Dir: "/w/x", Branch: "task-1-price-it", Agent: "claude"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, answer, answerID, gone := "working", "", "", false
+	cost, tokens, model, metered := 0.0, int64(0), "", false
+	w := &RunWatch{
+		Store:      st,
+		PaneState:  func(m, p string) (string, time.Time, bool) { return state, clock, !gone },
+		LastAnswer: func(m, p string) (string, string) { return answer, answerID },
+		Usage:      func(m, p string) (float64, int64, string, bool) { return cost, tokens, model, metered },
+		Now:        func() time.Time { return clock },
+	}
+	if err := st.SetRun(run.ID, RunRunning, ""); err != nil {
+		t.Fatal(err)
+	}
+	w.Sweep()
+	if r, _ := st.Run(run.ID); r.Cost != 0 || r.Model != "" {
+		t.Fatalf("figures before the meter read anything: %+v", r)
+	}
+	cost, tokens, model, metered = 1.25, 38000, "Opus 4.5", true
+	clock = clock.Add(time.Minute)
+	w.Sweep()
+	r, _ := st.Run(run.ID)
+	if r.Cost != 1.25 || r.Tokens != 38000 || r.Model != "Opus 4.5" || r.Took != 0 {
+		t.Fatalf("figures while working: %+v", r)
+	}
+	state, answer, answerID = "idle", "Priced.", "rec-1"
+	clock = clock.Add(time.Minute)
+	w.Sweep()
+	if r, _ = st.Run(run.ID); r.State != RunFinished || r.Took != 120 || r.Cost != 1.25 {
+		t.Fatalf("the finish did not note the time taken: %+v", r)
+	}
+	cost = 2.5
+	clock = clock.Add(time.Minute)
+	w.Sweep()
+	if r, _ = st.Run(run.ID); r.Cost != 2.5 || r.Took != 120 {
+		t.Fatalf("a later reading moved the cost but not the time: %+v", r)
+	}
+	gone = true
+	w.Sweep()
+	clock = clock.Add(3 * time.Minute)
+	cost = 99
+	w.Sweep()
+	if r, _ = st.Run(run.ID); r.State != RunGone || r.Cost != 2.5 {
+		t.Fatalf("a gone pane kept its last figures: %+v", r)
+	}
+	gone, state, metered, cost = false, "working", true, 1.0
+	second, err := st.StartRun(Run{TaskID: tk.ID, Machine: "local", Workspace: "w1", Pane: "w1:p3", Agent: "codex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Sweep()
+	if r, _ := st.Run(second.ID); r.Cost != 0 {
+		t.Fatalf("a run still waiting for its prompt is not metered: %+v", r)
+	}
+	if err := st.SetRun(second.ID, RunRunning, ""); err != nil {
+		t.Fatal(err)
+	}
+	w.Sweep()
+	got, _ := st.Get(tk.ID)
+	if got.Cost != 3.5 || got.Run == nil || got.Run.Cost != 1.0 {
+		t.Fatalf("the task sums its runs: cost %v run %+v", got.Cost, got.Run)
+	}
+	list, _, _ := st.List(Query{View: "open"})
+	if len(list) != 1 || list[0].Cost != 3.5 {
+		t.Fatalf("the list carries the sum: %+v", list)
+	}
+}

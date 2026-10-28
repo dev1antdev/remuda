@@ -1,17 +1,22 @@
 // The board: a project's columns side by side, its tasks as cards — dragged on a desk, moved from a
 // ⋯ menu on a phone, shown in the order given: the server's, or the one the last drop made.
 
-import { useCallback, useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import type { Project, Status, Task } from "@/features/tasks/api";
 import Icon from "@/ui/icons";
-import { Notice, useDismiss, useSubmit } from "@/ui";
+import { Notice, Tip, useDismiss, useSubmit } from "@/ui";
+import { longPress } from "./press";
+import { pickHow, type Pick } from "./selection";
 
-export default function Board({ project, tasks, openId, draggable, onOpen, onMove, onAdd, chips }: {
+export default function Board({ project, tasks, openId, draggable, picked, selecting, onOpen, onPick, onMove, onAdd, chips }: {
   project: Project;
   tasks: Task[]; // in column order
   openId: number | null;
   draggable: boolean; // a mouse can drag; a finger uses the menu
+  picked?: (id: number) => boolean; // the cards selected for a bulk action
+  selecting?: boolean; // a phone's selection is on: a tap picks instead of opening
   onOpen: (id: number) => void;
+  onPick?: (task: Task, how: Pick) => void; // ⌘-click, ⇧-click, a long press
   // after: the card to sit behind in the column, 0 for the top, undefined for the bottom
   onMove: (task: Task, statusId: number, after: number | undefined) => void;
   onAdd: (title: string, statusId: number) => Promise<void>;
@@ -84,6 +89,13 @@ export default function Board({ project, tasks, openId, draggable, onOpen, onMov
             <header className="board-col-head">
               <span className="tasks-dot" style={{ background: `#${s.hex_color || "888"}` }} />
               <span className="board-col-title">{s.title}</span>
+              {s.on_agent && (
+                <Tip text="What agents propose lands here, for you to accept or decline">
+                  <span className="board-col-mark" aria-label="Agents' proposals land here">
+                    <Icon name="bot" size={12} />
+                  </span>
+                </Tip>
+              )}
               <span className="badge quiet">{list.length}</span>
               <button type="button" className="icon-btn sm" title={`Add a task to ${s.title}`} aria-label={`Add a task to ${s.title}`} onClick={() => setAdding(s.id)}>
                 <Icon name="plus" size={14} />
@@ -97,10 +109,13 @@ export default function Board({ project, tasks, openId, draggable, onOpen, onMov
                   task={t}
                   statuses={project.statuses}
                   selected={t.id === openId}
+                  picked={!!picked?.(t.id)}
+                  selecting={!!selecting}
                   dragging={t.id === drag}
                   before={here && over!.index === i}
                   draggable={draggable}
                   onOpen={() => onOpen(t.id)}
+                  onPick={onPick && ((how) => onPick(t, how))}
                   onMoveTo={(statusId) => onMove(t, statusId, undefined)}
                   onDragStart={(e) => {
                     e.dataTransfer.setData("text/plain", String(t.id));
@@ -120,14 +135,17 @@ export default function Board({ project, tasks, openId, draggable, onOpen, onMov
   );
 }
 
-function Card({ task: t, statuses, selected, dragging, before, draggable, onOpen, onMoveTo, onDragStart, onDragEnd, chips }: {
+function Card({ task: t, statuses, selected, picked, selecting, dragging, before, draggable, onOpen, onPick, onMoveTo, onDragStart, onDragEnd, chips }: {
   task: Task;
   statuses: Status[];
   selected: boolean;
+  picked: boolean;
+  selecting: boolean;
   dragging: boolean;
   before: boolean; // a dropped card would land right above this one
   draggable: boolean;
   onOpen: () => void;
+  onPick?: (how: Pick) => void;
   onMoveTo: (statusId: number) => void;
   onDragStart: (e: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
@@ -137,15 +155,26 @@ function Card({ task: t, statuses, selected, dragging, before, draggable, onOpen
   const closeMenu = useCallback(() => setMenu(false), []);
   useDismiss(menu, closeMenu, [".board-card-menu"]);
   const elsewhere = statuses.filter((s) => s.id !== t.status_id);
+  const pickRef = useRef(onPick);
+  pickRef.current = onPick;
+  const press = useMemo(() => longPress(() => pickRef.current?.("toggle")), []);
   return (
     <article
-      className={`board-card${selected ? " sel" : ""}${dragging ? " dragging" : ""}${before ? " drop-before" : ""}${t.done ? " done" : ""}`}
+      className={`board-card${selected ? " sel" : ""}${picked ? " picked" : ""}${dragging ? " dragging" : ""}${before ? " drop-before" : ""}${t.done ? " done" : ""}`}
       data-id={t.id}
       draggable={draggable}
       role="button"
       tabIndex={0}
       aria-expanded={selected}
-      onClick={onOpen}
+      onMouseDown={(e) => {
+        if (e.shiftKey && onPick) e.preventDefault(); // a range, not the browser's text selection
+      }}
+      onClick={(e) => {
+        const how = onPick ? pickHow(e, selecting) : "open";
+        if (how === "open") onOpen();
+        else onPick!(how);
+      }}
+      {...press}
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {

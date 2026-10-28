@@ -17,6 +17,7 @@ export type Status = {
   on_new: boolean;
   on_start: boolean;
   on_finish: boolean;
+  on_agent: boolean; // where a task an agent makes lands, for the person to accept or decline
 };
 
 // a project's own field: what its tasks carry besides what every task has
@@ -56,6 +57,7 @@ export type Project = {
   updated: string;
   statuses: Status[]; // the workflow, in order
   fields: Field[]; // its own fields, in order
+  proposed: number; // the open tasks agents put in its on_agent column
 };
 
 export type Task = {
@@ -75,6 +77,7 @@ export type Task = {
   source: string; // "" for a person's; an agent's names its key's machine and its pane, "GOG · w3:p1"
   created: string;
   updated: string;
+  cost?: number; // USD: what every agent started on it spent, its runs summed
   run?: Run | null; // the latest agent started on it
   comments?: Comment[]; // on a single-task fetch
 };
@@ -94,6 +97,13 @@ export type Run = {
   prompt_sent?: string;
   finished?: string;
   error?: string;
+  // what the agent spent, read off the meter while the pane is there and kept once it is gone
+  cost?: number; // USD at API prices
+  tokens?: number;
+  model?: string; // "Opus 4.5"
+  took?: number; // seconds from the start to the finish, 0 while the agent still works
+  pr_url?: string; // the pull request the agent opened, once it named it
+  pr_label?: string; // "PR #15" / "MR !9"
 };
 
 export type Comment = { id: number; task_id: number; author: "agent" | "you" | "remuda"; body: string; created: string };
@@ -120,7 +130,7 @@ export const listLabels = () => get<Label[]>("/api/tasks/labels");
 export const createLabel = (title: string, hex_color: string) => sendJSON<Label>("POST", "/api/tasks/labels", { title, hex_color });
 
 export type TaskQuery = {
-  view: "today" | "upcoming" | "open" | "project" | "board"; // board: a project whole, in column order, one page
+  view: "today" | "upcoming" | "open" | "proposed" | "project" | "board"; // proposed: what agents filed, newest first; board: a project whole, in column order, one page
   project?: number;
   done?: boolean; // include done tasks (project view)
   search?: string;

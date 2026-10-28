@@ -17,7 +17,7 @@ import { fetchReview, fetchReviewDiff, markReviewed, type Review as ReviewData, 
 import { FileRow, type NewComment } from "./Diff";
 import { Note } from "./Hunk";
 import { KEYS, useReviewKeys } from "./keys";
-import { commentsMessage, place, verdictMessage, type DraftComment } from "./draft";
+import { commentsMessage, place, verdictMessage, type DraftComment, type VerdictAsk } from "./draft";
 import { VerdictDialog } from "./VerdictDialog";
 
 export type { DraftComment } from "./draft";
@@ -94,15 +94,15 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
     }
   };
   // the agent first, the baseline second: a refusal leaves everything as it was
-  const sendVerdict = async (verdict: Verdict, target: { machineId: string; paneId: string; agent: string; sessionName?: string }, note: string, commit: boolean) => {
-    await submitPrompt(target.machineId, target.paneId, verdictMessage(verdict, note, draft, where(), commit));
+  const sendVerdict = async (verdict: Verdict, target: { machineId: string; paneId: string; agent: string; sessionName?: string }, note: string, ask: VerdictAsk) => {
+    await submitPrompt(target.machineId, target.paneId, verdictMessage(verdict, note, draft, where(), ask));
     await markReviewed(machineId, dir, verdict);
     setDraft([]);
     setOpenVerdict(null);
     setOpenFile(null);
     lookAgain();
     onSeen?.();
-    showNotice(`${verdict === "approved" ? "Approved" : "Rejected"} — ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""} has been told${commit ? " and asked to commit" : ""}.`);
+    showNotice(`${verdict === "approved" ? "Approved" : "Rejected"} — ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""} has been told${ask === "pr" ? " and asked to open a pull request" : ask === "commit" ? " and asked to commit" : ""}.`);
   };
 
   const files = review?.files ?? [];
@@ -123,7 +123,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
   if (review === null && !error) return <div className="empty">Looking at the folder…</div>;
   if (review && !review.repo) return <div className="empty">{basename(dir)} is not a git checkout — nothing to review.</div>;
   const lastVerdict = review?.baseline?.verdict;
-  const lastLookText = !lastLook ? "not reviewed yet" : lastVerdict === "approved" ? `approved ${ago(lastLook)}` : lastVerdict === "changes" ? `rejected ${ago(lastLook)}` : `since you looked ${ago(lastLook)}`;
+  const lastLookText = !lastLook ? "not reviewed yet" : lastVerdict === "approved" ? `approved ${ago(lastLook)}` : lastVerdict === "changes" ? `rejected ${ago(lastLook)}${review?.baseline?.ready ? " · ready again" : ""}` : `since you looked ${ago(lastLook)}`;
   const added = files.reduce((sum, file) => sum + file.added, 0);
   const removed = files.reduce((sum, file) => sum + file.removed, 0);
   const orphanComments = draft.filter((comment) => !files.some((file) => file.path === comment.file));
@@ -283,7 +283,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           currentPane={currentPane}
           comments={draft.length}
           onClose={() => setOpenVerdict(null)}
-          onSend={(target, note, commit) => sendVerdict(openVerdict, target, note, commit)}
+          onSend={(target, note, ask) => sendVerdict(openVerdict, target, note, ask)}
         />
       )}
     </div>

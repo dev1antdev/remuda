@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/tasksapi"
 )
@@ -37,8 +38,19 @@ func (f *fakeList) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		json.Unmarshal(data, &body)
 	}
 	switch {
+	case r.URL.Path == "/api/roster":
+		w.Write([]byte(fakeRoster))
+	case r.URL.Path == "/api/recap":
+		if q := r.URL.Query(); q.Get("machine") != "local" || q.Get("pane") != "w1:p1" {
+			w.WriteHeader(404)
+			w.Write([]byte(`{"error":"no such pane"}`))
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"since": r.URL.Query().Get("since"), "markdown": "# Recap · 27 Oct 2026\n\n- 3 prompts · 3 answers · $0.42\n- Last answer: Fixed\n"})
+	case r.URL.Path == "/api/standup":
+		json.NewEncoder(w).Encode(map[string]any{"since": r.URL.Query().Get("since"), "markdown": "# Standup · 27 Oct 2026\n\n## remuda — working\n\n- 3 prompts\n\ntz=" + r.URL.Query().Get("tz")})
 	case r.URL.Path == "/api/tasks/projects":
-		json.NewEncoder(w).Encode([]map[string]any{{"id": 1, "title": "remuda", "statuses": []map[string]any{{"id": 10, "title": "New", "position": 1, "on_new": true}, {"id": 11, "title": "In progress", "position": 2}}, "fields": []map[string]any{{"id": 5, "title": "Estimate", "kind": "number"}}}})
+		json.NewEncoder(w).Encode([]map[string]any{{"id": 1, "title": "remuda", "statuses": []map[string]any{{"id": 9, "title": "Proposed", "position": 1, "on_agent": true}, {"id": 10, "title": "New", "position": 2, "on_new": true}, {"id": 11, "title": "In progress", "position": 3}}, "fields": []map[string]any{{"id": 5, "title": "Estimate", "kind": "number"}}}})
 	case r.URL.Path == "/api/tasks/labels" && r.Method == "GET":
 		json.NewEncoder(w).Encode(f.labels)
 	case r.URL.Path == "/api/tasks/labels":
@@ -53,8 +65,11 @@ func (f *fakeList) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			task[k] = v
 		}
 		renderMarkdown(task)
-		if body["status_id"] == nil {
+		if body["status_id"] == nil { // as the server places them: an agent's task in the Proposed column, a person's in New
 			task["status_id"] = float64(10)
+			if source, _ := body["source"].(string); source != "" {
+				task["status_id"] = float64(9)
+			}
 		}
 		f.tasks = append(f.tasks, task)
 		json.NewEncoder(w).Encode(task)
@@ -118,8 +133,19 @@ func newServer(t *testing.T) (*Server, *fakeList) {
 	web := httptest.NewServer(list)
 	t.Cleanup(web.Close)
 	client := tasksapi.New(tasksapi.Door{URL: web.URL, Key: "rk_test"})
-	return New(&Tools{Client: client, Source: "w1:p1"}, "test"), list
+	now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	return New(&Tools{Client: client, Source: "w1:p1", Now: func() time.Time { return now }}, "test"), list
 }
+
+// fakeRoster is two machines as the cockpit answers them: this one with a working Claude, a finished Codex and a
+// shell, and a laptop that is away. The clock of the tests is 2026-10-27 12:00 UTC.
+const fakeRoster = `{"version":"test","machines":[
+  {"id":"local","label":"This Mac","state":"connected","sessions":[{"id":"w1","name":"remuda","dir":"/Users/me/remuda","tabs":[{"id":"t1","label":"1","panes":[
+    {"id":"w1:p1","title":"remuda","agent":"claude","cwd":"/Users/me/remuda","status":"run","radar":{"state":"working","since":1793098800000},"usage":{"model":"claude-opus-4-1","name":"Opus","cost":4.2},"pr":{"url":"https://github.com/o/r/pull/15","label":"PR #15"}},
+    {"id":"w1:p2","title":"zsh","agent":"","cwd":"/Users/me/remuda","status":"shell"}]}]},
+   {"id":"w2","name":"api","dir":"/Users/me/api","tabs":[{"id":"t2","label":"1","panes":[
+    {"id":"w2:p1","title":"api","agent":"codex","cwd":"/Users/me/api","status":"done","radar":{"state":"done","since":1793095200000},"said":"The tests pass now.\nMore below."}]}]}]},
+  {"id":"gog","label":"GOG","state":"connecting","sessions":[]}]}`
 
 func text(answer map[string]any) string {
 	result, _ := answer["result"].(map[string]any)
@@ -142,23 +168,30 @@ func TestSessionInitializesListsAndCallsTools(t *testing.T) {
 		`{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"task_update","arguments":{"id":1,"done":true}}}`,
 		`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"task_comment","arguments":{"id":1,"body":"On it."}}}`,
 		`{"jsonrpc":"2.0","id":8,"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"task_create","arguments":{"title":"Proposed thing","project":"remuda"}}}`,
 	)
-	if len(answers) != 8 {
-		t.Fatalf("%d answers to 8 requests and a notification", len(answers))
+	if len(answers) != 9 {
+		t.Fatalf("%d answers to 9 requests and a notification", len(answers))
 	}
 	init := answers[0]["result"].(map[string]any)
 	if init["protocolVersion"] != "2025-03-26" || init["serverInfo"].(map[string]any)["name"] != "remuda" || init["instructions"] == "" {
 		t.Errorf("initialize: %v", init)
 	}
 	tools := answers[1]["result"].(map[string]any)["tools"].([]any)
-	if len(tools) != 7 || tools[0].(map[string]any)["name"] != "tasks_list" {
+	if len(tools) != 10 || tools[0].(map[string]any)["name"] != "tasks_list" {
 		t.Errorf("tools/list: %d tools, first %v", len(tools), tools[0])
 	}
-	if !strings.Contains(text(answers[2]), "**remuda** (id 1): columns New → In progress; fields Estimate (number)") {
+	if !strings.Contains(text(answers[2]), "**remuda** (id 1): columns Proposed → New → In progress; fields Estimate (number)") {
 		t.Errorf("projects_list: %q", text(answers[2]))
 	}
-	if !strings.HasPrefix(text(answers[3]), "Created task #1 (id 1) \"Fix the thing\"") {
+	if text(answers[3]) != "Created task #1 (id 1) \"Fix the thing\" in In progress" {
 		t.Errorf("task_create: %q", text(answers[3]))
+	}
+	if got := text(answers[8]); got != "Created task #2 (id 2) \"Proposed thing\" in Proposed — the person accepts or declines it there; leave it to them" || list.tasks[1]["status_id"] != float64(9) {
+		t.Errorf("a task without a column goes to Proposed and the answer says so: %q (status %v)", got, list.tasks[1]["status_id"])
+	}
+	if !strings.Contains(answers[0]["result"].(map[string]any)["instructions"].(string), "Proposed column") {
+		t.Errorf("the instructions do not mention the Proposed column")
 	}
 	created := list.tasks[0]
 	if created["status_id"] != float64(11) || created["priority"] != float64(3) || created["source"] != "w1:p1" || created["markdown"] != "It breaks.\n\nSee main.go." || created["description"] != "<p>It breaks.</p><p>See main.go.</p>" {
@@ -187,6 +220,42 @@ func TestSessionInitializesListsAndCallsTools(t *testing.T) {
 	}
 }
 
+func TestReadToolsSeeTheOtherAgents(t *testing.T) {
+	srv, _ := newServer(t)
+	answers := session(t, srv,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"agents_list","arguments":{}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"agent_recap","arguments":{"pane":"w1:p1","since":"24h"}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"agent_recap","arguments":{"machine":"this mac","pane":"w1:p2"}}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"agent_recap","arguments":{"machine":"GOG","pane":"w3:p1"}}}`,
+		`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"standup","arguments":{"since":"7d"}}}`,
+		`{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"standup","arguments":{"since":"yesterday-ish"}}}`,
+	)
+	if len(answers) != 6 {
+		t.Fatalf("%d answers", len(answers))
+	}
+	agents := text(answers[0])
+	for _, want := range []string{"2 agents; not reachable now: GOG (connecting)", "| machine | workspace | pane | agent | state | last answer | PR | cost |", "| This Mac | remuda | w1:p1 (you) | claude | working 1 h |  | [PR #15](https://github.com/o/r/pull/15) | $4.20 |", "| This Mac | api | w2:p1 | codex | finished 2 h ago | The tests pass now. |  |  |"} {
+		if !strings.Contains(agents, want) {
+			t.Errorf("agents_list lacks %q:\n%s", want, agents)
+		}
+	}
+	if strings.Contains(agents, "zsh") || strings.Contains(agents, "w1:p2") {
+		t.Errorf("a shell is listed:\n%s", agents)
+	}
+	if got := text(answers[1]); !strings.HasPrefix(got, "claude in remuda (w1:p1) — working 1 h\n\n# Recap · 27 Oct 2026") || !strings.Contains(got, "- Last answer: Fixed") {
+		t.Errorf("agent_recap: %q", got)
+	}
+	for i, want := range map[int]string{2: "no agent pane w1:p2 on This Mac; its agents: w1:p1, w2:p1", 3: "GOG is connecting now", 5: "since is midnight, 24h, 7d"} {
+		result := answers[i]["result"].(map[string]any)
+		if result["isError"] != true || !strings.Contains(text(answers[i]), want) {
+			t.Errorf("answer %d: %v", i, answers[i])
+		}
+	}
+	if got := text(answers[4]); !strings.HasPrefix(got, "# Standup · 27 Oct 2026") || !strings.Contains(got, "tz="+time.Local.String()) {
+		t.Errorf("standup: %q", got)
+	}
+}
+
 func TestRefusalsAndUnknowns(t *testing.T) {
 	srv, _ := newServer(t)
 	answers := session(t, srv,
@@ -208,7 +277,7 @@ func TestRefusalsAndUnknowns(t *testing.T) {
 	if code(answers[1]) != codeInvalidParams {
 		t.Errorf("unknown tool: %v", answers[1])
 	}
-	for i, want := range map[int]string{2: `no project "nope"; the projects: remuda (id 1)`, 3: `has no column "Done"; its columns: New → In progress`, 4: "not found: no such task"} {
+	for i, want := range map[int]string{2: `no project "nope"; the projects: remuda (id 1)`, 3: `has no column "Done"; its columns: Proposed → New → In progress`, 4: "not found: no such task"} {
 		result := answers[i]["result"].(map[string]any)
 		if result["isError"] != true || !strings.Contains(text(answers[i]), want) {
 			t.Errorf("answer %d: %v", i, answers[i])

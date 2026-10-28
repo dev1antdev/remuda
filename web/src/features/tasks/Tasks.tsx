@@ -1,5 +1,5 @@
-// The Tasks mode: remuda's own task list (internal/tasks). Projects on the left with three smart lists
-// above them, the list or board in the middle, the open task on the right. Nothing is cached beyond the
+// The Tasks mode: remuda's own task list (internal/tasks). Projects on the left with four smart lists
+// above them (the last the proposals agents filed, to accept or decline), the list or board in the middle, the open task on the right. Nothing is cached beyond the
 // screen: every change goes to the server and the list is re-read.
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -14,17 +14,22 @@ import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { Icon, Notice, PANELS, Resizer, Tip, type IconName, useDebounced, useTimedNotice } from "@/ui";
-import { createTask, deleteTask, getTask, listLabels, listProjects, listTasks, patchTask, type Task } from "./api";
+import { createTask, deleteTask, getTask, listLabels, listProjects, listTasks, patchTask, type Run, type Task } from "./api";
 import Board from "./Board";
+import { BulkBar } from "./BulkBar";
 import { Loading, TaskChips } from "./pieces";
 import ProjectSettings from "./ProjectSettings";
 import { NewProjectDialog, ProjectTree } from "./ProjectTree";
 import { endOfToday, taskPrompt } from "./prompt";
 import { StartAgentDialog } from "./StartAgentDialog";
 import { TaskDetail } from "./TaskDetail";
+import { ProposedActions, ProposedBar, useTriage } from "./Triage";
+import { acceptColumn, proposedTotal } from "./proposed";
+import { paneOf, runPR } from "./runPR";
 import { QuickAdd, TaskRow } from "./TaskList";
+import { useSelection } from "./useSelection";
 
-type Smart = "today" | "upcoming" | "open";
+type Smart = "today" | "upcoming" | "open" | "proposed";
 type Sel = { kind: "smart"; id: Smart } | { kind: "project"; id: number };
 
 // the smart lists: due by the end of today, due within a week, everything open
@@ -32,13 +37,15 @@ const SMART: { id: Smart; label: string; icon: IconName }[] = [
   { id: "today", label: "Today", icon: "sun" },
   { id: "upcoming", label: "Upcoming", icon: "calendar" },
   { id: "open", label: "All open", icon: "circle-check" },
+  { id: "proposed", label: "Proposed", icon: "bot" },
 ];
 
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 export default function Tasks() {
   const drawer = app.use((s) => s.drawer);
-  const { machines } = useRoster();
+  const { machines, budgets } = useRoster();
+  const prOf = (r: Run | null | undefined) => runPR(r, r ? paneOf(machines, r.machine, r.pane) : null);
   const agents = useAgentTargets();
   const located = useCurrent();
   const currentPane = located ? { machineId: located.machine.id, paneId: located.pane.id } : null;
@@ -64,6 +71,8 @@ export default function Tasks() {
   const projects = catalog.data?.projects ?? null;
   const labels = catalog.data?.labels ?? [];
   const defaultProject = projects ? projects.find((p) => p.title === "Inbox" && !p.is_archived)?.id || projects.find((p) => !p.is_archived)?.id || 0 : 0;
+  const proposedView = sel.kind === "smart" && sel.id === "proposed";
+  const proposedCount = proposedTotal(projects ?? []);
 
   const board = sel.kind === "project" && view === "board";
   const withDone = showDone && sel.kind === "project" && !board;
@@ -121,12 +130,20 @@ export default function Tasks() {
     setSel(next);
     setPage(1);
     setOpenId(null);
+    selection.clear();
     actions.closeDrawer();
+  };
+  // the rows leave the list at once; a deleted task that was open closes
+  const dropRows = (ids: number[]) => {
+    if (openId !== null && ids.includes(openId)) setOpenId(null);
+    list.mutate((d) => d && { ...d, tasks: d.tasks.filter((x) => !ids.includes(x.id)) });
   };
 
   const byId = useMemo(() => new Map((projects ?? []).map((p) => [p.id, p])), [projects]);
   const project = sel.kind === "project" ? byId.get(sel.id) : undefined;
   const statusOf = (t: Task) => byId.get(t.project_id)?.statuses.find((s) => s.id === t.status_id);
+  const triage = useTriage({ columnFor: (t) => acceptColumn(byId.get(t.project_id)), drop: dropRows, refresh, onError: setActionError });
+  const selection = useSelection({ tasks, labels, columns: (t) => byId.get(t.project_id)?.statuses ?? [], drop: dropRows, refresh });
 
   // replaceOrMove re-reads the list when the task left it — another project, another due date — or changed column, where the server knows the place
   const replaceOrMove = (t: Task) => {
@@ -206,7 +223,7 @@ export default function Tasks() {
   }
 
   const addTarget = sel.kind === "project" ? byId.get(sel.id) : byId.get(defaultProject);
-  const title = sel.kind === "smart" ? SMART.find((s) => s.id === sel.id)!.label : (byId.get(sel.id)?.title ?? "…");
+  const title = proposedView ? "Proposed by agents" : sel.kind === "smart" ? SMART.find((s) => s.id === sel.id)!.label : (byId.get(sel.id)?.title ?? "…");
 
   return (
     <>
@@ -223,6 +240,7 @@ export default function Tasks() {
               <Icon name={s.icon} size={14} />
             </span>
             {s.label}
+            {s.id === "proposed" && proposedCount > 0 && <span className="badge">{proposedCount}</span>}
           </button>
         ))}
         <div className="sidebar-head">
@@ -280,7 +298,11 @@ export default function Tasks() {
             </button>
           )}
         </div>
-        <QuickAdd placeholder={addTarget ? `Add a task to ${addTarget.title}…` : "Add a task…"} disabled={!addTarget} onAdd={addTask} />
+        {proposedView ? (
+          <ProposedBar count={tasks.length} busy={triage.busy} onAcceptAll={() => triage.all(tasks, "accept")} onDeclineAll={() => triage.all(tasks, "decline")} />
+        ) : (
+          <QuickAdd placeholder={addTarget ? `Add a task to ${addTarget.title}…` : "Add a task…"} disabled={!addTarget} onAdd={addTask} />
+        )}
         {error && (
           <Notice tone="error" icon="alert-triangle" className="tasks-notice" onDismiss={() => setActionError("")}>
             {error}
@@ -310,15 +332,18 @@ export default function Tasks() {
               tasks={tasks}
               openId={openId}
               draggable={!isTouch}
+              picked={selection.picked}
+              selecting={selection.selecting}
               onOpen={(id) => setOpenId(id === openId ? null : id)}
+              onPick={(t, how) => selection.pick(t.id, how)}
               onMove={moveCard}
               onAdd={addTo}
-              chips={(t) => <TaskChips task={t} fields={project.fields} />}
+              chips={(t) => <TaskChips task={t} fields={project.fields} pr={prOf(t.run)} />}
             />
           </div>
         ) : (
           <div className={`tasks-list${list.fetching ? " loading" : ""}`}>
-            {tasks.length === 0 && !list.fetching && <div className="placeholder">Nothing here.</div>}
+            {tasks.length === 0 && !list.fetching && <div className="placeholder">{proposedView ? "Nothing proposed: a task an agent files lands here for you to accept or decline." : "Nothing here."}</div>}
             {tasks.map((t) => (
               <TaskRow
                 key={t.id}
@@ -326,12 +351,20 @@ export default function Tasks() {
                 project={sel.kind === "smart" ? byId.get(t.project_id) : undefined}
                 status={statusOf(t)}
                 fields={byId.get(t.project_id)?.fields}
+                pr={prOf(t.run)}
                 selected={t.id === openId}
+                picked={selection.picked(t.id)}
+                selecting={selection.selecting}
                 onToggle={() => void toggleDone(t)}
                 onOpen={() => setOpenId(t.id === openId ? null : t.id)}
+                onPick={(how) => selection.pick(t.id, how)}
+                actions={proposedView ? <ProposedActions onAccept={() => void triage.accept(t)} onDecline={() => triage.decline(t)} /> : undefined}
               />
             ))}
           </div>
+        )}
+        {selection.count > 0 && (
+          <BulkBar count={selection.count} busy={selection.busy} columns={selection.columnChoices} labels={selection.labelChoices} onAct={selection.act} onClear={selection.clear} />
         )}
         {!board && pages > 1 && (
           <div className="tasks-pager">
@@ -368,6 +401,8 @@ export default function Tasks() {
           onStart={() => setStartReq(open)}
           machineLabel={(id) => machineLabel(machines, id)}
           liveStatus={(r) => agents.find((a) => a.machineId === r.machine && a.paneId === r.pane)?.status ?? null}
+          budgets={budgets}
+          prOf={prOf}
           onOpenPane={actions.selectPane}
         />
       )}

@@ -2,9 +2,13 @@
 
 import { useCallback, useState } from "react";
 import { actions } from "@/app/store";
+import { useNow } from "@/lib/clock";
+import { checksTone, checksWords, prWords, reviewTone, reviewWords } from "@/features/roster/prStatus";
 import { openUrl } from "@/lib/host";
 import { errMsg } from "@/lib/text";
 import { fmtDate } from "@/lib/time";
+import type { BudgetStatus } from "@/features/usage/api";
+import { budgetsFor, budgetTone, ratio, tightest, toneClass } from "@/features/usage/budgets";
 import { Icon, Logo, Select, useDismiss } from "@/ui";
 import { patchTask, PRIORITIES, type Field, type Label, type Project, type Run, type Status, type Task } from "./api";
 import { CommentsField } from "./Comments";
@@ -13,8 +17,10 @@ import { Html, htmlToText, textToHtml } from "./html";
 import { issueLabel, issueLink } from "./issue";
 import { LabelsField } from "./Labels";
 import { DueInput, PrioMark, projectOption, statusOption } from "./pieces";
+import { runWords } from "./runCost";
+import type { RunPR } from "./runPR";
 
-export function TaskDetail({ task: t, projects, statuses, fields, labels, onChange, onLabelsChanged, onClose, onDelete, onError, canSend, onSend, canStart, onStart, machineLabel, liveStatus, onOpenPane }: {
+export function TaskDetail({ task: t, projects, statuses, fields, labels, onChange, onLabelsChanged, onClose, onDelete, onError, canSend, onSend, canStart, onStart, machineLabel, liveStatus, prOf, onOpenPane, budgets }: {
   task: Task;
   projects: Project[];
   statuses: Status[];
@@ -31,11 +37,18 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
   onStart: () => void;
   machineLabel: (id: string) => string;
   liveStatus: (r: Run) => string | null; // the pane's status from the roster, null when it is not there
+  prOf: (r: Run) => RunPR | null; // the pull request the run noted, with its state while the pane is there
   onOpenPane: (machineId: string, paneId: string) => void;
+  budgets?: BudgetStatus[]; // the spending limits, for the tone of what the run spent
 }) {
   const run = t.run ?? null;
+  const now = useNow(15000);
+  const spent = run ? runWords(run, now) : "";
+  const tightBudget = run ? tightest(budgetsFor(budgets, run.machine, run.dir)) : null;
+  const spentTone = tightBudget ? budgetTone(ratio(tightBudget)) : "";
   const issue = issueLink(t.description);
   const paneStatus = run ? liveStatus(run) : null;
+  const pr = run ? prOf(run) : null;
   const runLabel = !run ? "" : run.state === "starting" ? "starting…" : run.state === "failed" ? "failed" : run.state === "gone" ? "closed" : paneStatus === "run" ? "working" : paneStatus === "input" ? "waiting for you" : paneStatus === null ? "closed" : run.state === "finished" ? "finished" : "running";
   const [title, setTitle] = useState(t.title);
   const [sendMenu, setSendMenu] = useState(false);
@@ -181,6 +194,25 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
               {runLabel}
               {run.error && <> — {run.error}</>}
             </span>
+            {spent && (
+              <span className={`tasks-run-spent${toneClass(spentTone)}`} title="What this run spent at API prices, how long it took, the model">
+                Agent run: {spent}
+              </span>
+            )}
+            {pr && (
+              <span className="tasks-run-pr">
+                <button type="button" className="linkish" title={`${pr.url}\nOpen in a new tab`} onClick={() => openUrl(pr.url)}>
+                  <Icon name="external-link" size={12} /> {pr.label}
+                </button>
+                {pr.status && (
+                  <span className={`pr-state is-${checksTone(pr.status)}`} title={`${pr.label}: ${prWords(pr.status)} · read with gh on the machine`}>
+                    <span className="pr-dot" />
+                    {checksWords(pr.status)}
+                  </span>
+                )}
+                {pr.status && reviewWords(pr.status) && <span className={`pr-state pr-review is-${reviewTone(pr.status)}`}>{reviewWords(pr.status)}</span>}
+              </span>
+            )}
           </span>
           {paneStatus !== null && (
             <button type="button" className="linkish" onClick={() => onOpenPane(run.machine, run.pane)}>

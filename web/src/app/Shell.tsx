@@ -126,7 +126,7 @@ export default function Shell() {
   }, [mode, !!viewer, current?.machine.id, current?.pane.id, seenState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className={full && mode === "herdr" ? "app is-full" : "app"}>
+    <div className={full && (mode === "herdr" || mode === "wall") ? "app is-full" : "app"}>
       <Rail />
       <div className="app-main">
         <Header current={current} />

@@ -49,6 +49,7 @@ export default function Sidebar() {
             }
             items={[
               ...machines.filter((m) => m.state === "connected").map((m) => ({ label: `New workspace on ${m.label}…`, icon: "terminal" as const, onSelect: () => actions.openDialog({ kind: "workspace", machineId: m.id }) })),
+              { label: "Agent from recipe…", icon: "sparkles", hint: "a saved agent, model, arguments and first prompt", onSelect: () => actions.openDialog({ kind: "start-recipe" }) },
               { sep: true },
               { label: "Add a PC…", icon: "monitor", hint: "a remote machine over SSH", onSelect: () => actions.openDialog({ kind: "machine" }) },
             ]}

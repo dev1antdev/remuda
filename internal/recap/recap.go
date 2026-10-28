@@ -39,7 +39,8 @@ type Recap struct {
 	Asking    bool           `json:"asking"` // the last turn ends in a question still without an answer
 	First     string         `json:"first,omitempty"`
 	Last      string         `json:"last,omitempty"`
-	Said      string         `json:"said,omitempty"` // the first line of the last answer
+	Said      string         `json:"said,omitempty"`  // the first line of the last answer
+	Spans     []Span         `json:"spans,omitempty"` // when it worked, waited and sat idle over the period, set by the Service
 }
 
 // MaxCommands is how many shell commands a recap lists.
@@ -94,7 +95,7 @@ func Of(turns []transcript.Turn, since time.Time) Recap {
 				r.Failed++
 			}
 			if r.Longest == nil || p.Took > r.Longest.Took {
-				r.Longest = &Call{Name: p.ToolName, Hint: hint(p), Took: p.Took}
+				r.Longest = &Call{Name: p.ToolName, Hint: Hint(p), Took: p.Took}
 			}
 			switch {
 			case p.ToolName == "Bash":
@@ -171,8 +172,8 @@ func inputField(input json.RawMessage, keys ...string) string {
 	return ""
 }
 
-// hint is what a call was about in a few words: its file, else its command, pattern, address or description.
-func hint(p *transcript.Part) string {
+// Hint is what a call was about in a few words: its file, else its command, pattern, address or description.
+func Hint(p *transcript.Part) string {
 	if path := inputField(p.Input, "file_path", "notebook_path", "path"); path != "" {
 		return path
 	}
