@@ -421,7 +421,19 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the user through the shell remuda already has on the machine.
 - **Chats follow an agent update** (`internal/restart`). When an update
   job changed an agent's version (the vitals re-read right after), every
-  pane running that agent is restarted onto it: `agent.prompt` with the
+  pane running that agent is restarted onto it. **Claude Code restarts in
+  place**: `agent.prompt` with its own `/restart` (2.1.312, behind a flag
+  of Claude Code's own, so not every build has it), which starts the
+  installed version on the same session in the same process slot — herdr
+  sees no change at all, the status and the session id stand — so the
+  outcome is read off the pane's screen (`inplace.go`, tested): `Outcome`
+  looks past the command's newest echo (`Echoes` counted before it was
+  sent, so an older one does not count) for "Session resumed", for
+  "Unknown slash command" or "isn't available" (no such command here →
+  the exit and resume below), or for a "Can't restart…" line (reported,
+  the pane left as it is), `Version` the banner's version for the log;
+  nothing within `inPlaceWait` is reported too. The others, and a Claude
+  Code without the command, leave and come back: `agent.prompt` with the
   agent's own `/exit` (Ctrl-C twice if it lingers), a wait for the shell
   prompt, then `agent.start` with `--resume <session id>` (`codex resume`,
   `gemini --resume`, `kimi --session`) from the snapshot's `agent_session`. Idle/done chats
