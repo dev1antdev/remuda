@@ -62,27 +62,8 @@ func Markdown(items []Item, since time.Time, now time.Time) string {
 	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
-// Conversation is one conversation's report: the same lines the standup gives an agent, under a heading of its own.
-func Conversation(r Recap, since time.Time, now time.Time) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "# Recap · %s\n\n", now.Format("2 Jan 2006"))
-	if !since.IsZero() {
-		fmt.Fprintf(&b, "Since %s.\n\n", since.Format("2 Jan 15:04"))
-	}
-	if r.Quiet() {
-		b.WriteString("Nothing happened in this period.\n")
-		return b.String()
-	}
-	for _, line := range Lines(r) {
-		fmt.Fprintf(&b, "- %s\n", line)
-	}
-	if r.Asking {
-		b.WriteString("- A question is open: the agent waits for the person\n")
-	}
-	return b.String()
-}
-
-// Lines is what a recap says, one line a bullet: the figures, the calls, the commands, the files, the last answer.
+// Lines is one recap as the lines of a report: the figures, the tools, what ran, the files, the subagents and
+// questions, the last answer — each without its list mark, for the standup and for a handover alike.
 func Lines(r Recap) []string {
 	lines := []string{Numbers(r)}
 	if r.Calls > 0 {
@@ -111,6 +92,26 @@ func Lines(r Recap) []string {
 		lines = append(lines, "Last answer: "+r.Said)
 	}
 	return lines
+}
+
+// Conversation is one conversation's report: the same lines the standup gives an agent, under a heading of its own.
+func Conversation(r Recap, since time.Time, now time.Time) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Recap · %s\n\n", now.Format("2 Jan 2006"))
+	if !since.IsZero() {
+		fmt.Fprintf(&b, "Since %s.\n\n", since.Format("2 Jan 15:04"))
+	}
+	if r.Quiet() {
+		b.WriteString("Nothing happened in this period.\n")
+		return b.String()
+	}
+	for _, line := range Lines(r) {
+		fmt.Fprintf(&b, "- %s\n", line)
+	}
+	if r.Asking {
+		b.WriteString("- A question is open: the agent waits for the person\n")
+	}
+	return b.String()
 }
 
 // Numbers is the one line of figures: prompts, answers, time, tokens, cost.

@@ -689,7 +689,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   **The Review mode** (`features/review/ReviewQueue.tsx`, the fifth mode,
   `?mode=review`): every workspace with uncommitted work in one list —
   `queue.ts` (`reviewQueue`, tested) reads the roster's `session.dir` and
-  `session.review`, the ones with changes since the last look first — and
+  `session.review`, the ones ready again first, then the ones with
+  changes since the last look — and
   the Changes lens of the picked one beside it, its pane the workspace's
   first agent pane (a shell when none runs there, comments then go to any
   agent), `onSeen` the roster's refresh; under 920 px the list and the
@@ -707,7 +708,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   agent: Approve and Reject (`VerdictDialog`) each take a note and send
   `verdictMessage` — the verdict, the note, the draft's comments, and
   what it means (approved: reviewed, carry on, a task can move on;
-  rejected: work on it and say when it is ready for another look; an
+  rejected: work on it and say when it is ready for another look, ending
+  that answer with the line `READY FOR REVIEW` (`READY_MARKER`); an
   approval with "and ask the agent to commit" ticked adds `COMMIT_ASK`,
   the button reads **Approve & commit** — the agent commits, remuda never
   writes into a repository) —
@@ -715,8 +717,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   agent's refusal leaves the baseline alone; a rejection needs a comment
   or a note. "Mark reviewed" is the silent one: the baseline moves, the
   agent hears nothing. The subtitle says "approved" / "rejected" / "since
-  you looked" from the baseline's verdict. Nothing goes until one of
-  those buttons.
+  you looked" from the baseline's verdict, "rejected · ready again" once
+  the agent has said so. Nothing goes until one of those buttons.
+  **Ready again** (`ready.go`, tested): the baseline of a rejected folder
+  notes `ready` when the agent's finish answer says the work is ready —
+  `ReadyWords`: the `Marker` line `READY FOR REVIEW` on a line of its own
+  or ending the answer, or a few plain phrases case-folded ("ready for
+  another look", "готово к ревью"), never in a fence and never beside a
+  "not" or a promise for later — `Store.OnAnswer(machine, dir, text,
+  now)`, true once per rejection, heard through `said.Tracker.OnAnswer`
+  (wired in `internal/app`: the pane's workspace folder from the
+  watcher's snapshot, `Snapshot.Workspace`) and answered with one push,
+  `ReadyNotice` (`Kind: "review"`, "<workspace> is ready for another
+  look", the answer's first line, the pane to open) through
+  `push.Notify`, so the feed has it too; the next look (`MarkSeen`, any
+  verdict) clears it. The roster's `session.review` carries `ready` (and
+  lists the workspace even with nothing uncommitted, since the agent may
+  have committed its fixes); the queue sorts such a workspace first with
+  a green "ready again" badge and "says it is ready again" under its name.
 - `internal/code/` — the **Code mode**: each machine runs its own
   code-server (VS Code in the browser) on `127.0.0.1:7320`, `auth: none`,
   installed by `remuda code [-host H]` (`internal/setup/scripts/
@@ -814,7 +832,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   The page re-reads the device's zone on every load (`readAlertPrefs`),
   so a window set at home fits the clock on a trip; the window last set
   is kept on the device (pref `alerts.quiet`) while the hours are off.
-  `Notify` goes to the devices that want the watchdog's word, `Broadcast`
+  `Notify` goes to the devices that want the watchdog's word — the
+  review's "ready for another look" (`Kind: "review"`) rides on it too —
+  `Broadcast`
   to every device (the schedules' digest and failures); a `Payload` may
   name a `Panel` of the page (`standup`) for its tap to open instead of a
   pane.
@@ -842,7 +862,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   carry, or would have carried without a subscribed device — a question
   after 10 s, a finish after 10 s (any turn), a watchdog note, a budget
   near or past its limit, a schedule
-  that failed, a task that moved — and `feed.Service.Add` keeps it in
+  that failed, a task that moved, a rejected workspace whose agent says
+  it is ready again — and `feed.Service.Add` keeps it in
   `feed.json` (300 newest, numbered); `GET /api/feed?limit=` lists them, the
   roster carries `feed` (the newest id) so the bell shows a dot when it is
   past pref `feed.seen`. `features/activity/Activity.tsx` is the panel behind
@@ -905,7 +926,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `chat.Service` (`SessionVersion`, then `LastAnswer`) in one goroutine
   per machine, off the request path — a remote read is a script over
   ssh — and a file whose version is the one read last is not parsed
-  again. `FirstLine` strips the Markdown marks (headings, list and quote
+  again; `Tracker.OnAnswer`, set by the app, hears the whole text of
+  every new answer read after a finish (never a seed from a snapshot):
+  the review's ready mark rides on it. `FirstLine` strips the Markdown marks (headings, list and quote
   marks, emphasis, code, links, tags; fences and rules skipped) and cuts
   at a word by `Max` 120 characters; `features/chat/said.ts` is the same
   cut on the page, both tested. The same read notes **the pull request
@@ -970,7 +993,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   open), `GET /api/standup?tz[&since]` is
   every agent pane on every connected machine (`Standup`, the machines
   read side by side) with the radar's state and alert, since local
-  midnight in `tz` unless `since` says, and the Markdown.
+  midnight in `tz` unless `since` says, and the Markdown. **When each
+  agent worked** (`spans.go`, tested): `Spans(turns, since, now)` lays a
+  conversation out in time as `Span{From, To, State, Turn}` — `working`
+  from a prompt for as long as its answer took (a turn after a
+  compaction, with no prompt before it, spans its own tool calls),
+  `waiting` from an `AskUserQuestion` for as long as its result took
+  (an open one until the next prompt, else now), cut out of the work it
+  interrupted, `idle` for every gap of `IdleGap` (2 min) or more,
+  everything clipped to [since, now], `Turn` the first record of the
+  prompt (else the answer) for the page's jump — set on `Recap.Spans`
+  by the `Service` (not by `Of`), so a standup item and one
+  conversation's recap both carry `spans`; the Markdown ignores them.
   `features/standup/`: `StandupPanel.tsx` is the panel (store panel
   `standup`; the sun button in the sidebar head beside Usage, the
   palette's "Standup"; a `Select` for since midnight / 24 h / 7 days,
@@ -982,14 +1016,58 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   conversation's (dialog kind `recap`: the Recap button in
   `chat/ChatTools.tsx` for the session shown, the palette for the pane
   and for a transcript open from the search), `RecapBody.tsx` the lines
-  both draw. **While you were away** (`useWelcomeBack.ts`, called from
+  both draw, under **the day strip** (`DayStrip.tsx` over `strip.ts`, pure
+  and tested: `window` — the period from `since` to now, the last 8
+  hours on a phone under 600 px, the last day for a recap without a
+  since — `layout` places the spans on a bar of `WIDTH` units, trimmed
+  at the edges, `hourMarks` one per whole hour of the clock, labelled
+  every 3 hours (6 on a phone), `spanWords` the tooltip "Working
+  14:02–14:48, 46 min"): one inline SVG, `viewBox` 1000 × 8 stretched
+  to the row, a `rect` per span — green working, red waiting, the dim
+  surface idle — with a `<title>`, the marks as non-scaling lines, the
+  hours as positioned labels under it, a click on a stretch of work or
+  waiting opening the chat jumped to its turn (`actions.jumpTo`; the
+  pane's chat from the standup, the pane's or the viewer's from the
+  recap dialog); drawn only when the recap carries spans. **While you
+  were away** (`useWelcomeBack.ts`, called from
   `app/Shell.tsx`): pref `page.lastSeen` is stamped when the page hides
   or is left and every minute while it is visible; a return after an
   hour or more fetches the standup since that stamp and puts one toast
   up — "Away 3 h: 2 agents answered, 1 waits for you, $4.20 spent", a
   Standup button opens the panel — store field `away`, nothing when
   nothing happened, once per return; `away.ts` the pure part, tested:
-  `awayGap`, `awayWords`, `awayCounts`, `awayLine`.
+  `awayGap`, `awayWords`, `awayCounts`, `awayLine`. `Lines(r)` is one
+  recap as the lines of a report — the figures, the tools, Ran / Edited
+  / Read, subagents and questions, the last answer — which `Markdown`
+  and the handover share; `Hint(part)` is what a call was about.
+- `internal/handover/` — **a conversation continued by another agent**:
+  Claude got stuck, the budget says a cheaper model, the person wants
+  Codex's take; a resume works only for the same agent, this works
+  across them. `Text(from, recap, turns, lastN)` (pure, tested) is the
+  new agent's first prompt: a heading naming who hands over, "What was
+  done so far" (`recap.Lines`), "The last N exchanges in full" — an
+  exchange (`Exchanges`, tested) is a prompt of the person's and the
+  agent's text as it came with every tool call as one line (`recap.Hint`,
+  "(failed)"), outputs left out — and "Carry on from here"; kept under
+  `MaxText` 60 KB by dropping the oldest exchanges first, then the
+  recap's lists, then a cut at a rune with a note; `MaxLastN` 10. `POST
+  /api/handover {machine, pane, session?, agent, model?, args?, turns?}`
+  (`internal/server/handover.go`; the model and arguments checked as the
+  create routes check them) reads the conversation through
+  `chat.Service.Open` + `Turns()`, makes a tab of the pane's workspace
+  named "<Agent> handover", starts the agent (`sessions.StartAgentWith`),
+  hands the text over in the background (`firstPrompt`, a push when it
+  is not delivered), notes it in the activity (kind `handover`, the new
+  pane to open) and answers `{id, pane, size, from}` with `agent_error`
+  as the tab route does; the pane handing over is untouched. The page:
+  `features/chat/HandoverDialog.tsx` (dialog kind `handover`: the agent,
+  its model as the start dialogs offer it, how much goes in full — the
+  recap only or the last 1–10 exchanges — extra arguments folded;
+  `handover.ts` the pure part, tested: `clampTurns`, `turnOptions`,
+  `handoverWords`, `nextAgent`, `handedOverWords`), opened by "Continue
+  with another agent…" in the chat's View menu (a pane's conversation
+  only, never the viewer's) and the palette; on success the new pane is
+  selected on its chat lens and a toast says what went over.
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥

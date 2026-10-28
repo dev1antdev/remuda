@@ -1,5 +1,6 @@
-// The chat lens's tools: Find stays in the tab strip's slot as the one control; the timeline, the recap and the export
-// are rows of the View menu (useChatViewItems), for the pane's conversation and for a transcript on its own.
+// The chat lens's tools: Find stays in the tab strip's slot as the one control; the timeline, the recap, the export and
+// the handover to another agent are rows of the View menu (useChatViewItems), for the pane's conversation and — but for
+// the handover, which needs a pane — for a transcript on its own.
 
 import { actions } from "@/app/store";
 import { errMsg } from "@/lib/text";
@@ -25,5 +26,7 @@ export function useChatViewItems(place: ChatPlace): MenuItem[] {
     { sep: true },
     { label: "Recap this conversation…", icon: "sun", hint: "prompts, answers, tools, files, cost", disabled: !agent, onSelect: () => actions.openDialog({ kind: "recap", machineId, paneId, session, dir, title }) },
     { label: "Export as Markdown", icon: "download", hint: "the conversation shown, as a file", disabled: !agent, onSelect: save },
+    { sep: true },
+    { label: "Continue with another agent…", icon: "arrow-right", hint: "a new tab here, the gist of this conversation as its first prompt", disabled: !agent || !paneId, onSelect: () => actions.openDialog({ kind: "handover", machineId, paneId, session, agent, workspace: title }) },
   ];
 }
