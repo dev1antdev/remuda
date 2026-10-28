@@ -1385,7 +1385,21 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   on screen — the List | Board switch is the `tasks.view` pref, ⚙ opens
   `ProjectSettings.tsx` (name, colour, columns with their marks, fields;
   saved whole, a removed column asked where its tasks go), `fields.tsx`
-  holds `FieldChip` / `FieldInput` / `valueText`.
+  holds `FieldChip` / `FieldInput` / `valueText`. **Several at once**
+  (`selection.ts`, `bulk.ts`, `press.ts` — pure, tested — `useSelection.ts`
+  the hook, `BulkBar.tsx` the bar): ⌘-click toggles a row or a card,
+  ⇧-click takes the range from the anchor over the rows as listed
+  (`pickHow`, `toggle`, `range`), a long press on a phone (500 ms, pointer
+  events, a move or a lift calls it off, the click after it swallowed —
+  `longPress`) starts the selection and taps toggle from then on; the
+  `.bulk-bar` under the list or the board while something is selected —
+  Move to… (one project's columns, or across projects a column title in
+  each task's own project, a task without it skipped — `columnChoices`),
+  Add label…, Mark done, Delete… behind the confirm — is one PATCH /
+  DELETE per task in sequence (`plan` → `runInSequence`, going on past a
+  refusal), a toast with the count and the first refusal, Esc or × clears,
+  and the rows that left the list are dropped from the selection
+  (`prune`).
   **A task from a GitHub issue** (`issue.go`, tested on a `shell.Fake`):
   `IssueURL` takes only `https://github.com/<owner>/<repo>/issues/<n>`
   (a trailing slash, query or fragment allowed; never a pull request),
