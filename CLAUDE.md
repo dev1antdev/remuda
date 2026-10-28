@@ -604,7 +604,27 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   window's body — the same `TileView` as the wall, the roster, the store
   and every handler shared, "That pane is gone" once the roster lost it.
   Store field `popout`, buttons on every wall tile and in the header,
-  disabled there without a pane), `Overlays.tsx` (panels, dialogs, the
+  disabled there without a pane; **office mode** for a second screen or
+  a TV — the Office button in the wall's bar, hidden under 920 px, and
+  the palette's "Office mode on the Wall", pref `wall.office` (per
+  device, not synced: a TV's show must not follow the phone) — lays one
+  agent large over two thirds of the wall (`.wall-office`, the tile's
+  own `TileView` in the wall's view) beside a scrolling column of the
+  others as cards (`brief`), asks for full screen on entering
+  (`enterFull`; `.app.is-full` applies on the Wall too) and leaves with
+  it: Esc or the browser's own exit ends the full screen and `useOffice`
+  (`app/useOffice.ts`) ends the mode with it, a mode change clears both,
+  and a page back on the Wall with the pref on takes the page's full
+  screen again (the browser's needs a gesture); who is featured is
+  `featured` in `wall.ts`, tested: the pinned one while it is on the
+  wall, else the first that needs the person with a question before a
+  note or a finish, else the tiles in the wall's order, each for
+  `OFFICE_ROTATE` 20 s from one timer set at the last switch (`rotates`
+  says when there is one; nothing polled beyond the Wall's own); a
+  card's head click or any tile's pin button (`onPick` / `onPin` /
+  `pinned` on `TileView`, the `pin` icon) pins it with the accent ring,
+  the featured tile's pin button unpins, ← → pin the previous or next
+  (`neighbour`), the featured tile's head keeps its usual click), `Overlays.tsx` (panels, dialogs, the
   menu, the confirm, the file viewer; the keyboard sheet behind **?** — Shift and the slash key by position, never over a field or another dialog, the same key closes it — is `features/help/KeysDialog.tsx` over `help/keys.ts`, the one list of every key the page answers, tested; the palette has it as "Keyboard shortcuts"), `commands.tsx` (the **command
   palette** on ⌘K / Ctrl+K, by key code so any layout works: every pane
   as a row to jump to — each machine's liveliest first, shells at its
