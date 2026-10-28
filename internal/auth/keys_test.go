@@ -89,26 +89,38 @@ func TestKeysNoteUseOnceAMinute(t *testing.T) {
 	}
 }
 
-func TestKeyAllowsTasksOnly(t *testing.T) {
+func TestKeyAllowsTasksAndReadsOnly(t *testing.T) {
 	key := Key{Scope: ScopeTasks}
 	for _, path := range []string{"/api/tasks", "/api/tasks/12", "/api/tasks/projects", "/api/tasks/12/comments"} {
-		if !key.Allows(path) {
+		if !key.Allows("GET", path) || !key.Allows("POST", path) || !key.Allows("DELETE", path) {
 			t.Errorf("%s refused", path)
 		}
 	}
-	for _, path := range []string{"/api/roster", "/api/tasks2", "/api/keys", "/ws/pane", "/", "/api/health"} {
-		if key.Allows(path) {
+	for _, path := range []string{"/api/roster", "/api/recap", "/api/standup"} {
+		if !key.Allows("GET", path) {
+			t.Errorf("a read of %s refused", path)
+		}
+		if key.Allows("POST", path) || key.Allows("PUT", path) {
+			t.Errorf("a write to %s allowed", path)
+		}
+	}
+	for _, path := range []string{"/api/roster/", "/api/tasks2", "/api/keys", "/api/submit", "/api/recap/x", "/ws/pane", "/", "/api/health"} {
+		if key.Allows("GET", path) {
 			t.Errorf("%s allowed", path)
 		}
 	}
-	if (Key{}).Allows("/api/tasks") {
+	if (Key{}).Allows("GET", "/api/tasks") {
 		t.Error("a key without a scope opens nothing")
 	}
 }
 
 // withKey asks a path with a bearer, through a guard whose handler names the caller.
 func withKey(h http.Handler, path, bearer string) (int, string) {
-	req := httptest.NewRequest("GET", path, nil)
+	return withKeyMethod(h, "GET", path, bearer)
+}
+
+func withKeyMethod(h http.Handler, method, path, bearer string) (int, string) {
+	req := httptest.NewRequest(method, path, nil)
 	if bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)
 	}
@@ -134,8 +146,14 @@ func TestGuardLetsAKeyReachTasksOnly(t *testing.T) {
 	if code, body := withKey(h, "/api/tasks/3/comments", key); code != 200 || body != "caller=GOG device=" {
 		t.Fatalf("a task's comments with the key: %d %q", code, body)
 	}
-	if code, body := withKey(h, "/api/roster", key); code != 403 || body != "this key is for tasks only" {
-		t.Fatalf("the roster with the key: %d %q", code, body)
+	if code, body := withKey(h, "/api/roster", key); code != 200 || body != "caller=GOG device=" {
+		t.Fatalf("a read of the roster with the key: %d %q", code, body)
+	}
+	if code, body := withKeyMethod(h, "POST", "/api/standup", key); code != 403 || body != "this key is for tasks and reading only" {
+		t.Fatalf("a write to a read route with the key: %d %q", code, body)
+	}
+	if code, body := withKeyMethod(h, "POST", "/api/submit", key); code != 403 || body != "this key is for tasks and reading only" {
+		t.Fatalf("submit with the key: %d %q", code, body)
 	}
 	if code, _ := withKey(h, "/api/agent-keys", key); code != 403 {
 		t.Fatalf("the keys with a key: %d", code)

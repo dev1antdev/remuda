@@ -47,31 +47,8 @@ func Markdown(items []Item, since time.Time, now time.Time) string {
 		}
 		busy++
 		fmt.Fprintf(&b, "## %s — %s\n\n", where, stateWords(item))
-		fmt.Fprintf(&b, "- %s\n", Numbers(r))
-		if r.Calls > 0 {
-			fmt.Fprintf(&b, "- %s\n", Calls(r))
-		}
-		if len(r.Commands) > 0 {
-			fmt.Fprintf(&b, "- Ran: %s\n", strings.Join(quoteAll(shortened(r.Commands, 60), 6), ", "))
-		}
-		if len(r.Edited) > 0 {
-			fmt.Fprintf(&b, "- Edited: %s\n", strings.Join(quoteAll(r.Edited, 12), ", "))
-		}
-		if len(r.Read) > 0 {
-			fmt.Fprintf(&b, "- Read: %s\n", strings.Join(quoteAll(r.Read, 12), ", "))
-		}
-		if r.Subagents > 0 || r.Questions > 0 {
-			var parts []string
-			if r.Subagents > 0 {
-				parts = append(parts, plural(r.Subagents, "subagent"))
-			}
-			if r.Questions > 0 {
-				parts = append(parts, plural(r.Questions, "question"))
-			}
-			fmt.Fprintf(&b, "- %s\n", strings.Join(parts, " · "))
-		}
-		if r.Said != "" {
-			fmt.Fprintf(&b, "- Last answer: %s\n", r.Said)
+		for _, line := range Lines(r) {
+			fmt.Fprintf(&b, "- %s\n", line)
 		}
 		b.WriteString("\n")
 	}
@@ -83,6 +60,57 @@ func Markdown(items []Item, since time.Time, now time.Time) string {
 		fmt.Fprintf(&b, "Nothing to report from %s.\n", strings.Join(quiet, ", "))
 	}
 	return strings.TrimRight(b.String(), "\n") + "\n"
+}
+
+// Conversation is one conversation's report: the same lines the standup gives an agent, under a heading of its own.
+func Conversation(r Recap, since time.Time, now time.Time) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Recap · %s\n\n", now.Format("2 Jan 2006"))
+	if !since.IsZero() {
+		fmt.Fprintf(&b, "Since %s.\n\n", since.Format("2 Jan 15:04"))
+	}
+	if r.Quiet() {
+		b.WriteString("Nothing happened in this period.\n")
+		return b.String()
+	}
+	for _, line := range Lines(r) {
+		fmt.Fprintf(&b, "- %s\n", line)
+	}
+	if r.Asking {
+		b.WriteString("- A question is open: the agent waits for the person\n")
+	}
+	return b.String()
+}
+
+// Lines is what a recap says, one line a bullet: the figures, the calls, the commands, the files, the last answer.
+func Lines(r Recap) []string {
+	lines := []string{Numbers(r)}
+	if r.Calls > 0 {
+		lines = append(lines, Calls(r))
+	}
+	if len(r.Commands) > 0 {
+		lines = append(lines, "Ran: "+strings.Join(quoteAll(shortened(r.Commands, 60), 6), ", "))
+	}
+	if len(r.Edited) > 0 {
+		lines = append(lines, "Edited: "+strings.Join(quoteAll(r.Edited, 12), ", "))
+	}
+	if len(r.Read) > 0 {
+		lines = append(lines, "Read: "+strings.Join(quoteAll(r.Read, 12), ", "))
+	}
+	if r.Subagents > 0 || r.Questions > 0 {
+		var parts []string
+		if r.Subagents > 0 {
+			parts = append(parts, plural(r.Subagents, "subagent"))
+		}
+		if r.Questions > 0 {
+			parts = append(parts, plural(r.Questions, "question"))
+		}
+		lines = append(lines, strings.Join(parts, " · "))
+	}
+	if r.Said != "" {
+		lines = append(lines, "Last answer: "+r.Said)
+	}
+	return lines
 }
 
 // Numbers is the one line of figures: prompts, answers, time, tokens, cost.

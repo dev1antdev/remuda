@@ -987,10 +987,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `chat.Service.Open` + `Turns()` (priced turns; a remote pane's through
   the Reader as the chat does, nothing new runs on a remote): `GET
   /api/recap?machine&pane[&session]` or `?machine&dir&session`
-  [`&since`] is one conversation's, `GET /api/standup?tz[&since]` is
+  [`&since`] is one conversation's, with the report as `markdown`
+  (`recap.Conversation`: a heading, the period, the lines `recap.Lines`
+  gives an agent's section of the standup, a note when a question is
+  open), `GET /api/standup?tz[&since]` is
   every agent pane on every connected machine (`Standup`, the machines
   read side by side) with the radar's state and alert, since local
-  midnight in `tz` unless `since` says, and the Markdown.
+  midnight in `tz` unless `since` says, and the Markdown. **When each
+  agent worked** (`spans.go`, tested): `Spans(turns, since, now)` lays a
+  conversation out in time as `Span{From, To, State, Turn}` — `working`
+  from a prompt for as long as its answer took (a turn after a
+  compaction, with no prompt before it, spans its own tool calls),
+  `waiting` from an `AskUserQuestion` for as long as its result took
+  (an open one until the next prompt, else now), cut out of the work it
+  interrupted, `idle` for every gap of `IdleGap` (2 min) or more,
+  everything clipped to [since, now], `Turn` the first record of the
+  prompt (else the answer) for the page's jump — set on `Recap.Spans`
+  by the `Service` (not by `Of`), so a standup item and one
+  conversation's recap both carry `spans`; the Markdown ignores them.
   `features/standup/`: `StandupPanel.tsx` is the panel (store panel
   `standup`; the sun button in the sidebar head beside Usage, the
   palette's "Standup"; a `Select` for since midnight / 24 h / 7 days,
@@ -1002,7 +1016,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   conversation's (dialog kind `recap`: the Recap button in
   `chat/ChatTools.tsx` for the session shown, the palette for the pane
   and for a transcript open from the search), `RecapBody.tsx` the lines
-  both draw. **While you were away** (`useWelcomeBack.ts`, called from
+  both draw, under **the day strip** (`DayStrip.tsx` over `strip.ts`, pure
+  and tested: `window` — the period from `since` to now, the last 8
+  hours on a phone under 600 px, the last day for a recap without a
+  since — `layout` places the spans on a bar of `WIDTH` units, trimmed
+  at the edges, `hourMarks` one per whole hour of the clock, labelled
+  every 3 hours (6 on a phone), `spanWords` the tooltip "Working
+  14:02–14:48, 46 min"): one inline SVG, `viewBox` 1000 × 8 stretched
+  to the row, a `rect` per span — green working, red waiting, the dim
+  surface idle — with a `<title>`, the marks as non-scaling lines, the
+  hours as positioned labels under it, a click on a stretch of work or
+  waiting opening the chat jumped to its turn (`actions.jumpTo`; the
+  pane's chat from the standup, the pane's or the viewer's from the
+  recap dialog); drawn only when the recap carries spans. **While you
+  were away** (`useWelcomeBack.ts`, called from
   `app/Shell.tsx`): pref `page.lastSeen` is stamped when the page hides
   or is left and every minute while it is visible; a return after an
   hour or more fetches the standup since that stamp and puts one toast
@@ -1313,18 +1340,32 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   dependency — `initialize` answers the client's protocol version when
   it is a known one, else `Version`; `tools/list`, `tools/call`, `ping`;
   empty resources and prompts; an unknown method is -32601, a bad line
-  -32700, and a notification gets no answer). Its tools (`mcp.Tools`,
-  tested on a fake list: `tasks_list`, `task_get`, `task_create`,
-  `task_update`, `task_comment`, `projects_list`, `labels_list`, each
+  -32700, and a notification gets no answer). Its tools (`mcp.Tools`, tested on a fake list: `tasks_list`,
+  `task_get`, `task_create`, `task_update`, `task_comment`,
+  `projects_list`, `labels_list`, and the three read tools of `read.go`
+  — `agents_list`, every agent pane on every connected machine as a
+  table with its state and for how long (`agentState` from the roster's
+  `radar`), the first line of its last answer, its PR link and its
+  conversation's cost, shells left out, the caller's own pane marked
+  "(you)" by `HERDR_PANE_ID`, a machine away named under the count;
+  `agent_recap {machine, pane, since?}`, the pane found on the machine
+  named by id or label, the recap route's `markdown` under a line saying
+  where the agent is and how it stands; `standup {since?}`, the standup
+  route's `markdown` in the server's own zone; `since` is `midnight`,
+  `24h`, `7d`, a date or an RFC 3339 moment (`sinceOf`), nothing for the
+  tool's own default; `Tools.Now` is the clock for tests — each
   answering Markdown an agent reads; the `initialize` answer carries
-  `instructions` saying when to use which) name a project or a column
-  case-folded, read a due date `YYYY-MM-DD` as the end of that day here,
+  `instructions` saying when to use which, the read tools before filing
+  or taking a task) name a project or a column case-folded, read a due date `YYYY-MM-DD` as the end of that day here,
   send a Markdown description as `markdown` with a paragraphs-only
   `description` beside it for a list without the renderer, mark a task
   with the agent's `HERDR_PANE_ID` as `source`, and make a label that is
   missing. They speak through `tasksapi.Client` (the tasks routes with
   `Authorization: Bearer <key>`, a refusal as `*tasksapi.Error`, tested
-  on `httptest`) found by `tasksapi.FindDoor()`: `REMUDA_AGENT_URL` /
+  on `httptest`; `read.go` is the read side — `Roster()` into
+  `tasksapi.Roster` with `Machine.AgentPanes()`, `Recap(machine, pane,
+  session, since)` and `Standup(since, tz)`, each the route's `markdown`)
+  found by `tasksapi.FindDoor()`: `REMUDA_AGENT_URL` /
   `REMUDA_AGENT_KEY`, else the state dir's `agent-url` and `agent-key`
   files the remuda holding the list leaves on every machine its agents
   run on (`http://127.0.0.1:7317` on the cockpit, its door forwarded
@@ -1365,9 +1406,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `<state>/agent-keys.json`, one per machine, named after it (`Mint(name)`
   replaces the machine's earlier key; only the sha256 is kept; `Check` in
   constant time, `last_used` bumped at most once a minute); a bearer that
-  reads `rk_…` is a key and `Key.Allows(path)` keeps it to `/api/tasks`
-  and `/api/tasks/…` — anything else is a 403 "this key is for tasks
-  only" at once, logged once an hour per key (`strayedKey`); the key's
+  reads `rk_…` is a key and `Key.Allows(method, path)` keeps it to
+  `/api/tasks` and `/api/tasks/…` with any method and to a GET of
+  `/api/roster`, `/api/recap` and `/api/standup` (`readRoutes`: what the
+  agents are doing, so a scout sees who is on what) — anything else is a
+  403 "this key is for tasks and reading only" at once, logged once an
+  hour per key (`strayedKey`); the key's
   name is `auth.CallerName(ctx)` in a handler (a task made through one
   carries it as its source). **The door** (`door.go`): `EnsureDoor(dir,
   keys, name, url)` keeps the cockpit's own `agent-key` / `agent-url`
@@ -1612,9 +1656,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   after 500 ms; `REMUDA_TOKEN` must be ≥ 32 characters. A browser's
   cookie holds a device secret of its own, never the token, so one
   device is revoked without rotating the token for every other
-  (`internal/auth`). An agent's key (`rk_…`) opens `/api/tasks…` and
-  nothing else — 403 at once past that, logged once an hour — and
-  travels to a remote machine on stdin over the ssh master, never on a
+  (`internal/auth`). An agent's key (`rk_…`) opens `/api/tasks…`, and a
+  GET of `/api/roster`, `/api/recap` and `/api/standup`, nothing else —
+  403 at once past that, logged once an hour — and travels to a remote machine on stdin over the ssh master, never on a
   command line. Session ids from
   herdr go through `text.SessionID` before naming a file or following
   `--resume` (the pane's own hooks report them: the agent chooses the
@@ -1626,7 +1670,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Branch/base names for a worktree go through `sessions.RefOK`. ssh control sockets
   live under `<state>/ssh` (`sshx.SocketDir`) while the path keeps
   within 86 bytes, a unix sockaddr's 104 less the 17-byte suffix
-  OpenSSH binds a master with, else in the temp dir, private on a Mac.
+  OpenSSH binds a master with, else in the temp dir, private on a Mac,
+  named by the state dir and the host there, so a scratch instance never
+  rides the real one's master (and never takes it down on exit).
   `TS_AUTHKEY` travels on stdin, never on a command line. Colours are six hex digits or nothing
   (`normColor`). A run of an update must send back the command shown.
   The installer installs nothing whose sha256 is not the release's; the

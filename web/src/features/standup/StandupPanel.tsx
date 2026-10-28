@@ -26,6 +26,12 @@ export default function Standup({ onClose }: { onClose: () => void }) {
     actions.setLens("chat");
     onClose();
   };
+  // a stretch of the strip opens the chat at the turn it belongs to
+  const jump = (item: Item, turn: string) => {
+    actions.selectPane(item.machine, item.pane);
+    actions.jumpTo(item.machine, item.pane, "", turn);
+    onClose();
+  };
   const copy = async () => {
     if (!data) return;
     if (await copyText(data.markdown)) actions.notify("Copied the standup as Markdown", { brief: true });
@@ -63,7 +69,7 @@ export default function Standup({ onClose }: { onClose: () => void }) {
             </span>
             {item.recap.cost > 0 && <span className="standup-cost">{usd(item.recap.cost)}</span>}
           </button>
-          {item.error ? <Notice tone="error">{item.error}</Notice> : <RecapBody recap={item.recap} dir={item.dir} />}
+          {item.error ? <Notice tone="error">{item.error}</Notice> : <RecapBody recap={item.recap} dir={item.dir} since={data?.since} onJump={(turn) => jump(item, turn)} />}
         </article>
       ))}
       {idle.length > 0 && (

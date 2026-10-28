@@ -37,14 +37,22 @@ var SocketDir string
 // and OpenSSH binds a master at the path plus a 17-byte random suffix ("too long for Unix domain socket").
 const socketPathMax = 86
 
-// tmpPath is a short, deterministic socket path under SocketDir, or the temp dir when that leaves no room.
+// tmpPath is a short, deterministic socket path under SocketDir, or the temp dir when that leaves no room — named by
+// the state dir as well there: every instance shares the temp dir, and a scratch one must not ride the real one's master.
 func tmpPath(prefix, seed, ext string) string {
-	sum := sha256.Sum256([]byte(seed))
-	name := prefix + hex.EncodeToString(sum[:8]) + ext
-	if SocketDir != "" && len(SocketDir)+1+len(name) <= socketPathMax {
-		return filepath.Join(SocketDir, name)
+	if SocketDir != "" {
+		name := prefix + digest(seed) + ext
+		if len(SocketDir)+1+len(name) <= socketPathMax {
+			return filepath.Join(SocketDir, name)
+		}
+		seed = SocketDir + "\n" + seed
 	}
-	return filepath.Join(os.TempDir(), name)
+	return filepath.Join(os.TempDir(), prefix+digest(seed)+ext)
+}
+
+func digest(seed string) string {
+	sum := sha256.Sum256([]byte(seed))
+	return hex.EncodeToString(sum[:8])
 }
 
 func (c *Conn) cmd(args ...string) *exec.Cmd {
