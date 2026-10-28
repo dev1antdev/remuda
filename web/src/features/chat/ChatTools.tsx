@@ -31,8 +31,8 @@ export function useChatViewItems(place: ChatPlace): MenuItem[] {
     { label: "Recap this conversation…", icon: "sun", hint: "prompts, answers, tools, files, cost", disabled: !agent, onSelect: () => actions.openDialog({ kind: "recap", machineId, paneId, session, dir, title }) },
     { label: "Export as Markdown", icon: "download", hint: "the conversation shown, as a file", disabled: !agent, onSelect: save },
     { sep: true },
-    { label: "Pins…", icon: "pin", hint: pins.length ? plural(pins.length, "pinned turn") : "the turns you pin, each a jump back to it", disabled: !agent || !paneId, onSelect: () => actions.openDialog({ kind: "pins", machineId, paneId, dir, shown: session ?? chatLive, title }) },
-    { sep: true },
     { label: "Continue with another agent…", icon: "arrow-right", hint: "a new tab here, the gist of this conversation as its first prompt", disabled: !agent || !paneId, onSelect: () => actions.openDialog({ kind: "handover", machineId, paneId, session, agent, workspace: title }) },
+    { sep: true },
+    { label: "Pins…", icon: "pin", hint: pins.length ? plural(pins.length, "pinned turn") : "the turns you pin, each a jump back to it", disabled: !agent || !paneId, onSelect: () => actions.openDialog({ kind: "pins", machineId, paneId, dir, shown: session ?? chatLive, title }) },
   ];
 }

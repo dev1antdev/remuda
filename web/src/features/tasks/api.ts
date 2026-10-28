@@ -17,6 +17,7 @@ export type Status = {
   on_new: boolean;
   on_start: boolean;
   on_finish: boolean;
+  on_agent: boolean; // where a task an agent makes lands, for the person to accept or decline
 };
 
 // a project's own field: what its tasks carry besides what every task has
@@ -56,6 +57,7 @@ export type Project = {
   updated: string;
   statuses: Status[]; // the workflow, in order
   fields: Field[]; // its own fields, in order
+  proposed: number; // the open tasks agents put in its on_agent column
 };
 
 export type Task = {
@@ -120,7 +122,7 @@ export const listLabels = () => get<Label[]>("/api/tasks/labels");
 export const createLabel = (title: string, hex_color: string) => sendJSON<Label>("POST", "/api/tasks/labels", { title, hex_color });
 
 export type TaskQuery = {
-  view: "today" | "upcoming" | "open" | "project" | "board"; // board: a project whole, in column order, one page
+  view: "today" | "upcoming" | "open" | "proposed" | "project" | "board"; // proposed: what agents filed, newest first; board: a project whole, in column order, one page
   project?: number;
   done?: boolean; // include done tasks (project view)
   search?: string;

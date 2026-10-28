@@ -39,7 +39,8 @@ type Recap struct {
 	Asking    bool           `json:"asking"` // the last turn ends in a question still without an answer
 	First     string         `json:"first,omitempty"`
 	Last      string         `json:"last,omitempty"`
-	Said      string         `json:"said,omitempty"` // the first line of the last answer
+	Said      string         `json:"said,omitempty"`  // the first line of the last answer
+	Spans     []Span         `json:"spans,omitempty"` // when it worked, waited and sat idle over the period, set by the Service
 }
 
 // MaxCommands is how many shell commands a recap lists.

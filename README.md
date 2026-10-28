@@ -159,7 +159,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the tools it called and which failed, the longest call, the commands
   it ran, the files it edited and read, subagents started, questions
   asked — and the first line of its last answer, the agents that need
-  you first. Switch to the last 24 hours or 7 days; **Copy as Markdown**
+  you first. Under each agent a thin **day strip** shows *when*: green
+  while it worked, red while it waited on a question of its own, dim
+  while it sat idle, the hours marked under it; hover a stretch for its
+  times, click one to open the chat right there. Switch to the last 24
+  hours or 7 days; **Copy as Markdown**
   gives the report ready to paste into a channel. Come back to the page
   after an hour or more and a toast says what happened meanwhile —
   "Away 3 h: 2 agents answered, 1 waits for you, $4.20 spent" — with the
@@ -176,7 +180,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   Quiet hours hold it, and a period with nothing in it sends nothing.
   **A scout every few hours**: the third kind of schedule, "Start an
   agent", opens a fresh tab in a folder, starts the agent you name (with
-  a model and arguments if you like) and hands it your prompt once it is
+  a model and arguments if you like, or a saved recipe that fills the
+  four fields at once) and hands it your prompt once it is
   up — "look through this project for what could be better and create a
   task for each" is the one the form suggests; with "Close the tab when
   the agent has answered" on, the tab goes by itself once the agent is
@@ -185,12 +190,19 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   nothing closes while it waits. For the scout to create tasks, its
   agent needs remuda's tasks MCP set up (see Tasks below).
 - **Tasks** — the **Agents | Wall | Tasks | Code | Review** switch in the top bar opens remuda's
-  own task list: projects on the left, Today / Upcoming / All open, quick
-  add, done, due dates, priorities, labels, descriptions, search — and a
-  **board** per project: the columns a task moves through (New → In
-  progress → Testing → Done out of the box; yours to rename, recolour,
-  reorder and add to, in the project's ⚙), cards dragged between them on
-  a desk, swiped through a column at a time on a phone. Each project can
+  own task list: projects on the left, Today / Upcoming / All open /
+  Proposed, quick add, done, due dates, priorities, labels, descriptions,
+  search — and a **board** per project: the columns a task moves through
+  (Proposed → New → In progress → Testing → Done out of the box; yours to
+  rename, recolour, reorder and add to, in the project's ⚙), cards
+  dragged between them on a desk, swiped through a column at a time on a
+  phone. **Proposed** is where what an agent files lands (see "Agents and
+  your tasks" below), apart from your own New column: the Proposed list
+  shows every proposal with **Accept** (it goes to New) and **Decline**
+  (it is deleted), one by one or all at once. Which column takes the
+  proposals is one of the four marks in the project's ⚙; a project from
+  before gets a Proposed column once, and stays without one if you remove
+  it. Each project can
   carry its **own fields** (text, number, one choice, several, a date, a
   checkbox, a link), shown on the card and handed to the agent with the
   task. It lives in one SQLite file (`tasks.db`) in remuda's state dir —
@@ -477,7 +489,10 @@ its last answer, its pull request, its cost; the agent's own pane marked),
 `agent_recap` (what one conversation came to, as the Recap dialog shows it)
 and `standup` (the report over all of them) — and it tells the agent when
 to use which: look who is already on what before filing or taking a task.
-A task an agent makes remembers the pane that made it. One command registers the server with
+A task an agent makes remembers the pane that made it and lands in the project's
+**Proposed** column (unless the agent named a column), where the Tasks
+mode's Proposed list lets you accept or decline it — so a scout's dozen
+never mixes with your own New tasks. One command registers the server with
 every agent on a machine, through the agent's own CLI (`claude mcp add`,
 `codex mcp add`, `gemini mcp add`; Kimi when its CLI can):
 
@@ -661,14 +676,16 @@ other.
 task it works on can move along) — tick *and ask the agent to commit* and
 it is **Approve & commit**: the agent commits the reviewed work and says
 so (remuda itself never writes into a repository); **Reject** tells it
-what to fix and to come back for another look; both take a note and carry
+what to fix and to end the answer that brings the work back with the line
+`READY FOR REVIEW` — when it does, the queue lists that workspace first,
+marked *ready again*, and a push says so; both take a note and carry
 your comments, and both start the next look from now. The comments can also go on their own,
 to this agent or any other. "Mark reviewed" just clears the counts — the
 agent hears nothing.
 
 **Activity** (the bell in the header) is what happened while you were
-away: every finish, question, watchdog note, failed schedule and task
-move, by day, newest first, from every machine — the same things the
+away: every finish, question, watchdog note, failed schedule, task
+move and workspace ready for another look, by day, newest first, from every machine — the same things the
 pushes carry, kept whether or not a device is subscribed. A row opens
 its pane; the bell wears a dot until you look. The alert settings sit at
 the panel's foot.
@@ -732,6 +749,19 @@ giving up with a note in Activity. The model last used for each agent is
 remembered on the device. A new tab and a new worktree take the same
 options.
 
+**Recipes** save a start you make again and again — the agent, its
+model, the extra arguments and the first prompt, under a name like
+"Planner" or "Scout", with a folder when the recipe belongs to one.
+Pick one in the Recipe field of the New workspace, tab or worktree
+dialog and every option fills in (each field stays yours to change);
+"Save as recipe…" under the options keeps what you typed; "New agent
+from recipe…" in the palette and "Agent from recipe…" in the sidebar's
++ menu start one straight away in a folder — the recipe's own, else the
+folder you last started it in, else the one you are looking at. A
+recipe also fills the "Start an agent" kind of schedule. Recipes are
+kept on this remuda and shared by every device that uses it;
+"Recipes…" in the palette edits the list.
+
 **Several remuda at once:** each machine may run its own (the phone on
 the studio Mac's, the desk on its own). herdr lets one client attach to a terminal
 at a time, so when a remote machine's own remuda is running (and
@@ -742,7 +772,11 @@ vitals probe finds it and reads its token over your SSH; without it the
 direct attach stays.
 
 **Machine vitals:** the ⓘ next to each machine shows which Claude Code,
-herdr and remuda run there, disk and load; it turns amber when an update
+herdr and remuda run there, disk and load — and the day they had: a small
+chart under each from the readings remuda already takes every fifteen
+minutes (kept in `vitals.json`, nothing new is probed), with the limits
+drawn as dashed lines, so a disk filling up or a load that never drops
+is visible as a trend, not a number. It turns amber when an update
 is out (with the right command for how it was installed), a remote
 remuda is behind this one, or the disk is nearly full.
 

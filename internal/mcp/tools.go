@@ -141,11 +141,11 @@ func (t *Tools) Call(name string, args json.RawMessage) (string, error) {
 		if err := json.Unmarshal(args, &a); err != nil {
 			return "", fmt.Errorf("bad arguments: %w", err)
 		}
-		task, notes, err := t.Create(a)
+		made, err := t.Create(a)
 		if err != nil {
 			return "", err
 		}
-		return Created(task, notes), nil
+		return Created(made), nil
 	case "task_update":
 		var a UpdateArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -305,18 +305,25 @@ type CreateArgs struct {
 	Fields      map[string]any `json:"fields"`
 }
 
-// Create is task_create: the task made, and a note per label that could not be put on it.
-func (t *Tools) Create(a CreateArgs) (tasksapi.Task, []string, error) {
+// Made is what task_create did: the task, the column it landed in, and a note per label that could not be put on it.
+type Made struct {
+	Task   tasksapi.Task
+	Column *tasks.Status
+	Notes  []string
+}
+
+// Create is task_create: the task made in the column asked for, else where the project puts an agent's tasks.
+func (t *Tools) Create(a CreateArgs) (Made, error) {
 	if strings.TrimSpace(a.Title) == "" || strings.TrimSpace(a.Project) == "" {
-		return tasksapi.Task{}, nil, errors.New("task_create needs a title and a project")
+		return Made{}, errors.New("task_create needs a title and a project")
 	}
 	projects, err := t.Client.Projects()
 	if err != nil {
-		return tasksapi.Task{}, nil, err
+		return Made{}, err
 	}
 	project, err := findProject(projects, a.Project)
 	if err != nil {
-		return tasksapi.Task{}, nil, err
+		return Made{}, err
 	}
 	title := strings.TrimSpace(a.Title)
 	w := tasksapi.Write{Title: &title, Source: t.Source}
@@ -326,20 +333,20 @@ func (t *Tools) Create(a CreateArgs) (tasksapi.Task, []string, error) {
 	if a.Column != "" {
 		status, err := findColumn(project, a.Column)
 		if err != nil {
-			return tasksapi.Task{}, nil, err
+			return Made{}, err
 		}
 		w.StatusID = &status.ID
 	}
 	if a.Due != "" {
 		due, err := dueOf(a.Due)
 		if err != nil {
-			return tasksapi.Task{}, nil, err
+			return Made{}, err
 		}
 		w.DueDate = &due
 	}
 	if a.Priority != nil {
 		if *a.Priority < 0 || *a.Priority > 5 {
-			return tasksapi.Task{}, nil, errors.New("priority runs from 0 (none) to 5 (do now)")
+			return Made{}, errors.New("priority runs from 0 (none) to 5 (do now)")
 		}
 		w.Priority = a.Priority
 	}
@@ -348,7 +355,7 @@ func (t *Tools) Create(a CreateArgs) (tasksapi.Task, []string, error) {
 		for name, value := range a.Fields {
 			f, ok := findField(project, name)
 			if !ok {
-				return tasksapi.Task{}, nil, fmt.Errorf("project %s has no field %q; its fields: %s", project.Title, name, fieldNames(project))
+				return Made{}, fmt.Errorf("project %s has no field %q; its fields: %s", project.Title, name, fieldNames(project))
 			}
 			raw, _ := json.Marshal(value)
 			w.Fields[strconv.FormatInt(f.ID, 10)] = raw
@@ -356,29 +363,45 @@ func (t *Tools) Create(a CreateArgs) (tasksapi.Task, []string, error) {
 	}
 	task, err := t.Client.Create(project.ID, w)
 	if err != nil {
-		return tasksapi.Task{}, nil, err
+		return Made{}, err
 	}
-	var notes []string
+	made := Made{Task: task, Column: columnOf(project, task.StatusID)}
 	for _, name := range a.Labels {
 		label, err := t.label(name)
 		if err != nil {
-			notes = append(notes, fmt.Sprintf("label %q: %v", name, err))
+			made.Notes = append(made.Notes, fmt.Sprintf("label %q: %v", name, err))
 			continue
 		}
 		if _, err := t.Client.AddLabel(task.ID, label.ID); err != nil {
-			notes = append(notes, fmt.Sprintf("label %q: %v", name, err))
+			made.Notes = append(made.Notes, fmt.Sprintf("label %q: %v", name, err))
 		}
 	}
-	return task, notes, nil
+	return made, nil
 }
 
-// Created is what task_create answers.
-func Created(task tasksapi.Task, notes []string) string {
-	out := fmt.Sprintf("Created task %s (id %d) \"%s\"", task.Identifier, task.ID, task.Title)
-	if len(notes) > 0 {
-		out += "\n" + strings.Join(notes, "\n")
+// Created is what task_create answers: the task and its column, and that a proposal waits for the person's word.
+func Created(m Made) string {
+	out := fmt.Sprintf("Created task %s (id %d) \"%s\"", m.Task.Identifier, m.Task.ID, m.Task.Title)
+	if m.Column != nil {
+		out += " in " + m.Column.Title
+		if m.Column.OnAgent {
+			out += " — the person accepts or declines it there; leave it to them"
+		}
+	}
+	if len(m.Notes) > 0 {
+		out += "\n" + strings.Join(m.Notes, "\n")
 	}
 	return out
+}
+
+// columnOf is the project's column with that id, nil for one it does not know.
+func columnOf(p tasks.Project, id int64) *tasks.Status {
+	for i := range p.Statuses {
+		if p.Statuses[i].ID == id {
+			return &p.Statuses[i]
+		}
+	}
+	return nil
 }
 
 type UpdateArgs struct {

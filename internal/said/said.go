@@ -36,12 +36,22 @@ type Tracker struct {
 	bus     *events.Bus
 	mu      sync.Mutex
 	lines   map[string]entry
-	queue   map[string][]string
+	queue   map[string][]request
 	running map[string]bool
+
+	// OnAnswer hears the whole text of every answer read after a finish (never a seed from a snapshot), off the
+	// request path, in the machine's reader goroutine; the app sets it.
+	OnAnswer func(machineID, paneID, text string)
+}
+
+// request is one pane waiting to be read, and whether a finish asked for it.
+type request struct {
+	pane   string
+	finish bool
 }
 
 func New(in Inputs, bus *events.Bus) *Tracker {
-	return &Tracker{in: in, bus: bus, lines: map[string]entry{}, queue: map[string][]string{}, running: map[string]bool{}}
+	return &Tracker{in: in, bus: bus, lines: map[string]entry{}, queue: map[string][]request{}, running: map[string]bool{}}
 }
 
 func key(machineID, paneID string) string { return machineID + "|" + paneID }
@@ -76,7 +86,7 @@ func (t *Tracker) OnStatus(ev events.PaneStatus) {
 	k := key(ev.Pane.Machine, ev.Pane.Pane)
 	switch ev.To {
 	case herdr.StatusDone, herdr.StatusIdle:
-		t.ask(ev.Pane.Machine, ev.Pane.Pane)
+		t.ask(ev.Pane.Machine, ev.Pane.Pane, true)
 	case herdr.StatusWorking:
 		t.mu.Lock()
 		if e, ok := t.lines[k]; ok {
@@ -104,7 +114,7 @@ func (t *Tracker) Observe(machineID string, snap *herdr.Snapshot) {
 		_, known := t.lines[key(machineID, pane.PaneID)]
 		t.mu.Unlock()
 		if !known {
-			t.ask(machineID, pane.PaneID)
+			t.ask(machineID, pane.PaneID, false)
 		}
 	}
 }
@@ -120,16 +130,17 @@ func (t *Tracker) Forget(machineID string) {
 	}
 }
 
-// ask queues a read of the pane and starts the machine's reader when none runs.
-func (t *Tracker) ask(machineID, paneID string) {
+// ask queues a read of the pane and starts the machine's reader when none runs; a finish's ask joins a seed's.
+func (t *Tracker) ask(machineID, paneID string, finish bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	for _, waiting := range t.queue[machineID] {
-		if waiting == paneID {
+	for i, waiting := range t.queue[machineID] {
+		if waiting.pane == paneID {
+			t.queue[machineID][i].finish = waiting.finish || finish
 			return
 		}
 	}
-	t.queue[machineID] = append(t.queue[machineID], paneID)
+	t.queue[machineID] = append(t.queue[machineID], request{pane: paneID, finish: finish})
 	if t.running[machineID] {
 		return
 	}
@@ -146,15 +157,16 @@ func (t *Tracker) drain(machineID string) {
 			t.mu.Unlock()
 			return
 		}
-		paneID := waiting[0]
+		next := waiting[0]
 		t.queue[machineID] = waiting[1:]
 		t.mu.Unlock()
-		t.read(machineID, paneID)
+		t.read(machineID, next.pane, next.finish)
 	}
 }
 
-// read brings the pane's line up to its file: an unchanged file is not parsed again.
-func (t *Tracker) read(machineID, paneID string) {
+// read brings the pane's line up to its file: an unchanged file is not parsed again; a new answer after a finish
+// is handed whole to OnAnswer.
+func (t *Tracker) read(machineID, paneID string, finish bool) {
 	k := key(machineID, paneID)
 	version, ok := t.in.Version(machineID, paneID)
 	if !ok {
@@ -181,6 +193,9 @@ func (t *Tracker) read(machineID, paneID string) {
 	t.mu.Unlock()
 	if e.hasLink && (!have.hasLink || have.link.URL != e.link.URL) {
 		events.Publish(t.bus, events.PullRequestNamed{Pane: events.PaneRef{Machine: machineID, Pane: paneID}, URL: e.link.URL, Label: e.link.Label})
+	}
+	if finish && text != "" && t.OnAnswer != nil {
+		t.OnAnswer(machineID, paneID, text)
 	}
 }
 
