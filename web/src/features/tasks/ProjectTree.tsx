@@ -1,6 +1,7 @@
 // The projects as a tree in the mode's sidebar, favourites first, and the dialog that makes one.
 
 import { useMemo, useState, type ReactNode } from "react";
+import { plural } from "@/lib/text";
 import { Dialog, Icon, Notice, Select, useSubmit } from "@/ui";
 import { createProject, type Project } from "./api";
 import { projectOption } from "./pieces";
@@ -32,6 +33,11 @@ export function ProjectTree({ projects, selected, onSelect }: { projects: Projec
         >
           <span className="tasks-dot" style={{ background: p.hex_color ? `#${p.hex_color}` : "var(--line-strong)" }} />
           <span className="tasks-nav-label">{p.title}</span>
+          {p.proposed > 0 && (
+            <span className="badge quiet" title={`${plural(p.proposed, "task")} proposed by agents`}>
+              {p.proposed}
+            </span>
+          )}
           {p.is_favorite && <Icon name="star" size={12} className="tasks-star" />}
         </button>
         {render(children.get(p.id) ?? [], depth + 1)}

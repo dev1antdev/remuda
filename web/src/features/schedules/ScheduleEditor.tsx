@@ -3,10 +3,13 @@
 // cron, or cron by hand), and the kind's own fields.
 
 import { useEffect, useMemo, useState } from "react";
+import { fetchRecipes, type Recipe } from "@/features/recipes/api";
+import { draftOf, recipeWords } from "@/features/recipes/recipes";
 import type { Machine } from "@/features/roster/api";
 import { connected, folderOptions, machineOptions } from "@/features/roster/options";
 import { choiceFor, CUSTOM, EMPTY_DRAFT, hasModelFlag, modelChoices, modelOf, modelPlaceholder } from "@/features/roster/startOptions";
 import { useRoster } from "@/features/roster/useRoster";
+import { useQuery } from "@/lib/query";
 import { Icon, Logo, Notice, Select, useSubmit } from "@/ui";
 import { agentSchedule, SCOUT_PROMPT } from "./agent";
 import { putSchedule, type DigestSince, type Schedule, type ScheduleKind } from "./api";
@@ -30,6 +33,18 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
   const [model, setModel] = useState(() => choiceFor(agent, value.model ?? ""));
   const [args, setArgs] = useState(value.args ?? "");
   const [close, setClose] = useState(value.close ?? true);
+  const recipes = useQuery(fetchRecipes, []);
+  const [recipeId, setRecipeId] = useState("");
+  // a recipe fills the agent's fields, which stay the person's to change
+  const pickRecipe = (r: Recipe) => {
+    setRecipeId(r.id ?? "");
+    const filled = draftOf(r);
+    setAgent(r.agent);
+    setModel({ choice: filled.choice, custom: filled.custom });
+    setArgs(filled.args);
+    setPrompt(filled.prompt);
+  };
+  const agentRecipes = (recipes.data ?? []).filter((r) => r.agent !== "" && r.agent !== "shell");
   const [initial] = useState(() => parseCron(value.cron ?? DEFAULT_CRON));
   const [preset, setPreset] = useState(initial.preset);
   const [hh, setHH] = useState(initial.hh);
@@ -101,6 +116,20 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
       )}
       {kind === "agent" && (
         <div className="schedule-row">
+          {agentRecipes.length > 0 && (
+            <label>
+              Recipe
+              <Select
+                value={recipeId}
+                placeholder="Fill from a recipe"
+                onChange={(id) => {
+                  const r = agentRecipes.find((x) => x.id === id);
+                  if (r) pickRecipe(r);
+                }}
+                options={agentRecipes.map((r) => ({ value: r.id ?? "", label: r.name, hint: recipeWords(r, agents), icon: <Logo agent={r.agent} /> }))}
+              />
+            </label>
+          )}
           <label>
             Agent
             <Select

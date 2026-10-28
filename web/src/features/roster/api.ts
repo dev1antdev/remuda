@@ -61,11 +61,14 @@ export type Session = {
   active_tab_id: string;
   worktree?: { repo_key: string; repo_name: string; linked: boolean; checkout_path: string };
   dir?: string;
-  review?: { changed: number; fresh: number }; // uncommitted files; fresh = moved since the reviewer looked
+  review?: { changed: number; fresh: number; ready?: boolean }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another
   tabs: Tab[];
 };
 
 // a machine's vitals, read by internal/health a few minutes apart
+// one probe's load and the disk's free percentage
+export type Sample = { at: string; load: number; disk_free: number };
+
 export type Health = {
   at: string;
   os?: string;
@@ -86,6 +89,8 @@ export type Health = {
   disk_free_gb: number;
   disk_used_pct: number;
   load1: number;
+  cores?: number; // what a load of 1.0 per core means
+  history?: Sample[]; // the day's probes, oldest first, kept in the state dir's vitals.json
   uptime?: string;
   outdated_hooks?: { agent: string; have?: string; want?: string }[]; // herdr's agent integrations behind the installed herdr
   plugins?: { id: string; source: string }[]; // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
