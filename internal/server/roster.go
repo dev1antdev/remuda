@@ -56,8 +56,9 @@ type rosterTab struct {
 }
 
 type rosterReview struct {
-	Changed int `json:"changed"` // uncommitted files in the folder: changed against HEAD, or untracked
-	Fresh   int `json:"fresh"`   // of those, moved since the reviewer looked
+	Changed int  `json:"changed"`         // uncommitted files in the folder: changed against HEAD, or untracked
+	Fresh   int  `json:"fresh"`           // of those, moved since the reviewer looked
+	Ready   bool `json:"ready,omitempty"` // rejected at the last look, and the agent has said it is ready for another
 }
 
 type rosterWorktree struct {
@@ -161,8 +162,12 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			}
 		}
 		session.Dir = snap.WorkspaceDir(&ws)
-		if badge, ok := s.Review.Badge(machineID, session.Dir); session.Dir != "" && ok && badge.Changed > 0 {
-			session.Review = &rosterReview{Changed: badge.Changed, Fresh: badge.Fresh}
+		if session.Dir != "" {
+			badge, ok := s.Review.Badge(machineID, session.Dir)
+			ready := s.Review.Ready(machineID, session.Dir)
+			if (ok && badge.Changed > 0) || ready {
+				session.Review = &rosterReview{Changed: badge.Changed, Fresh: badge.Fresh, Ready: ready}
+			}
 		}
 		out = append(out, session)
 	}
