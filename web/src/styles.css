@@ -8193,6 +8193,40 @@ body.popout {
   }
 }
 
+/* #16 Vitals sparklines: the day's disk free and load drawn under the ⓘ's numbers, the thresholds as dashed lines */
+.health-rows .spark {
+  display: block;
+  width: 100%;
+  height: 28px;
+  margin-top: 4px;
+  overflow: visible;
+}
+
+.spark .spark-line {
+  fill: none;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark .spark-area {
+  opacity: 0.12;
+}
+
+.spark line {
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.8;
+}
+
+.spark .spark-amber {
+  stroke: var(--amber);
+}
+
+.spark .spark-red {
+  stroke: var(--red);
+}
+
 /* ---- #6 Recipes: the saved ways to start an agent (features/recipes) — the list in the Recipes dialog, a row's form,
    the recipe pick and the save/manage links in a "make something" dialog's Options, the words under the pick ---- */
 .recipe-list {
