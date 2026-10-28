@@ -102,6 +102,8 @@ export type Run = {
   tokens?: number;
   model?: string; // "Opus 4.5"
   took?: number; // seconds from the start to the finish, 0 while the agent still works
+  pr_url?: string; // the pull request the agent opened, once it named it
+  pr_label?: string; // "PR #15" / "MR !9"
 };
 
 export type Comment = { id: number; task_id: number; author: "agent" | "you" | "remuda"; body: string; created: string };

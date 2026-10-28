@@ -14,7 +14,7 @@ import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { Icon, Notice, PANELS, Resizer, Tip, type IconName, useDebounced, useTimedNotice } from "@/ui";
-import { createTask, deleteTask, getTask, listLabels, listProjects, listTasks, patchTask, type Task } from "./api";
+import { createTask, deleteTask, getTask, listLabels, listProjects, listTasks, patchTask, type Run, type Task } from "./api";
 import Board from "./Board";
 import { BulkBar } from "./BulkBar";
 import { Loading, TaskChips } from "./pieces";
@@ -25,6 +25,7 @@ import { StartAgentDialog } from "./StartAgentDialog";
 import { TaskDetail } from "./TaskDetail";
 import { ProposedActions, ProposedBar, useTriage } from "./Triage";
 import { acceptColumn, proposedTotal } from "./proposed";
+import { paneOf, runPR } from "./runPR";
 import { QuickAdd, TaskRow } from "./TaskList";
 import { useSelection } from "./useSelection";
 
@@ -44,6 +45,7 @@ const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 export default function Tasks() {
   const drawer = app.use((s) => s.drawer);
   const { machines, budgets } = useRoster();
+  const prOf = (r: Run | null | undefined) => runPR(r, r ? paneOf(machines, r.machine, r.pane) : null);
   const agents = useAgentTargets();
   const located = useCurrent();
   const currentPane = located ? { machineId: located.machine.id, paneId: located.pane.id } : null;
@@ -336,7 +338,7 @@ export default function Tasks() {
               onPick={(t, how) => selection.pick(t.id, how)}
               onMove={moveCard}
               onAdd={addTo}
-              chips={(t) => <TaskChips task={t} fields={project.fields} />}
+              chips={(t) => <TaskChips task={t} fields={project.fields} pr={prOf(t.run)} />}
             />
           </div>
         ) : (
@@ -349,6 +351,7 @@ export default function Tasks() {
                 project={sel.kind === "smart" ? byId.get(t.project_id) : undefined}
                 status={statusOf(t)}
                 fields={byId.get(t.project_id)?.fields}
+                pr={prOf(t.run)}
                 selected={t.id === openId}
                 picked={selection.picked(t.id)}
                 selecting={selection.selecting}
@@ -399,6 +402,7 @@ export default function Tasks() {
           machineLabel={(id) => machineLabel(machines, id)}
           liveStatus={(r) => agents.find((a) => a.machineId === r.machine && a.paneId === r.pane)?.status ?? null}
           budgets={budgets}
+          prOf={prOf}
           onOpenPane={actions.selectPane}
         />
       )}

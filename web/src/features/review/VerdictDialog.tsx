@@ -1,11 +1,20 @@
-// Approve or Reject: the agent to tell, a note, the draft's comments along with it, and on an approval the commit asked of
-// the agent — remuda never writes into a repository.
+// Approve or Reject: the agent to tell, a note, the draft's comments along with it, and on an approval what is asked of
+// the agent beyond the word — the commit, or the commit pushed as a pull request; remuda never writes into a repository.
 
 import { useState } from "react";
 import { targetKey, type AgentTarget } from "@/features/agents/targets";
 import { plural } from "@/lib/text";
 import { Dialog, Logo, Notice, Select, useSubmit } from "@/ui";
 import type { Verdict } from "./api";
+import type { VerdictAsk } from "./draft";
+
+const ASKS: { value: VerdictAsk; label: string }[] = [
+  { value: "none", label: "Approve only" },
+  { value: "commit", label: "and ask the agent to commit the reviewed work" },
+  { value: "pr", label: "and ask it to commit, push and open a pull request" },
+];
+
+export const approveWords = (ask: VerdictAsk) => (ask === "pr" ? "Approve & open PR" : ask === "commit" ? "Approve & commit" : "Approve");
 
 export function VerdictDialog({ verdict, paneAgent, agents, currentPane, comments, onClose, onSend }: {
   verdict: Verdict;
@@ -14,11 +23,11 @@ export function VerdictDialog({ verdict, paneAgent, agents, currentPane, comment
   currentPane: { machineId: string; paneId: string } | null;
   comments: number;
   onClose: () => void;
-  onSend: (target: AgentTarget, note: string, commit: boolean) => Promise<void>;
+  onSend: (target: AgentTarget, note: string, ask: VerdictAsk) => Promise<void>;
 }) {
   const approving = verdict === "approved";
   const [note, setNote] = useState("");
-  const [commit, setCommit] = useState(false);
+  const [ask, setAsk] = useState<VerdictAsk>("none");
   const paneTarget =
     currentPane && paneAgent
       ? (agents.find((candidate) => targetKey(candidate) === targetKey(currentPane)) ?? { ...currentPane, agent: paneAgent, machineLabel: "", sessionName: "", paneTitle: "", status: "", cwd: "" })
@@ -29,7 +38,7 @@ export function VerdictDialog({ verdict, paneAgent, agents, currentPane, comment
   const nothingToFix = !approving && comments === 0 && !note.trim();
   const { busy, err: failure, run: submit } = useSubmit(async () => {
     if (!chosen || nothingToFix) return;
-    await onSend(chosen, note, approving && commit);
+    await onSend(chosen, note, approving ? ask : "none");
   });
   return (
     <Dialog
@@ -78,9 +87,15 @@ export function VerdictDialog({ verdict, paneAgent, agents, currentPane, comment
         />
       </label>
       {approving && (
-        <label className="alerts-opt">
-          <input type="checkbox" checked={commit} onChange={(event) => setCommit(event.target.checked)} /> and ask the agent to commit the reviewed work
-        </label>
+        <div className="verdict-asks" role="radiogroup" aria-label="Afterwards">
+          <span className="verdict-asks-name">Afterwards</span>
+          {ASKS.map((option) => (
+            <label key={option.value} className="verdict-ask">
+              <input type="radio" name="verdict-ask" value={option.value} checked={ask === option.value} onChange={() => setAsk(option.value)} />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
       )}
       <p className="modal-hint">
         {comments > 0 ? `${plural(comments, "comment")} from the draft ${comments === 1 ? "goes" : "go"} along. ` : ""}
@@ -92,7 +107,7 @@ export function VerdictDialog({ verdict, paneAgent, agents, currentPane, comment
           Cancel
         </button>
         <button type="submit" className={`btn ${approving ? "primary" : "danger"}`} disabled={busy || !chosen || nothingToFix}>
-          {busy ? "Sending…" : approving ? (commit ? "Approve & commit" : "Approve") : "Reject"}
+          {busy ? "Sending…" : approving ? approveWords(ask) : "Reject"}
         </button>
       </div>
     </Dialog>
