@@ -155,7 +155,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the tools it called and which failed, the longest call, the commands
   it ran, the files it edited and read, subagents started, questions
   asked — and the first line of its last answer, the agents that need
-  you first. Switch to the last 24 hours or 7 days; **Copy as Markdown**
+  you first. Under each agent a thin **day strip** shows *when*: green
+  while it worked, red while it waited on a question of its own, dim
+  while it sat idle, the hours marked under it; hover a stretch for its
+  times, click one to open the chat right there. Switch to the last 24
+  hours or 7 days; **Copy as Markdown**
   gives the report ready to paste into a channel. Come back to the page
   after an hour or more and a toast says what happened meanwhile —
   "Away 3 h: 2 agents answered, 1 waits for you, $4.20 spent" — with the
