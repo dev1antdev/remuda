@@ -56,6 +56,7 @@ function useCommands(): (query: string) => Entry[] {
   const lens = app.use((s) => s.lens);
   const viewer = app.use((s) => s.viewer);
   const chatSession = app.use((s) => s.chatSession);
+  const chatLive = app.use((s) => s.chatLive);
   const footprint = app.use((s) => s.footprint);
   const full = app.use((s) => s.full);
   const themePref = useThemePref();
@@ -65,6 +66,7 @@ function useCommands(): (query: string) => Entry[] {
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
   const [focus, setFocus] = usePref<string>("wall.focus", "");
+  const [office, setOffice] = usePref<boolean>("wall.office", false);
   const [timelineShown, setTimelineShown] = useTimelineShown();
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
@@ -108,6 +110,8 @@ function useCommands(): (query: string) => Entry[] {
         if (popOutSupported) command("popout", "Pop out this agent", () => void popOut(selection!), { hint: "a small window above every other app", icon: "pip", keywords: ["picture", "window", "float"] });
         if (current.pane.agent) command("export", "Export this conversation as Markdown", () => void exportConversation(machine.id, current.pane.id, chatSession, folderOf(current), { agent: current.pane.agent, workspace: session.name, machine: machine.label }).catch(toastError), { hint: "the session shown, as a file", icon: "download", keywords: ["save", "download", "markdown", "transcript", "share", "file"] });
         if (current.pane.agent) command("recap", "Recap this conversation", () => actions.openDialog({ kind: "recap", machineId: machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), title: machine.id !== "local" ? `${session.name} on ${machine.label}` : session.name }), { hint: "prompts, answers, tools, files, cost — Copy as Markdown", icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest", "what happened"] });
+        if (current.pane.agent) command("handover", "Continue this conversation with another agent", () => actions.openDialog({ kind: "handover", machineId: machine.id, paneId: current.pane.id, session: chatSession, agent: current.pane.agent, workspace: machine.id !== "local" ? `${session.name} on ${machine.label}` : session.name }), { hint: "a new tab here with Codex, Gemini or a fresh Claude, the gist of this conversation as its first prompt", icon: "arrow-right", keywords: ["handover", "hand over", "continue", "switch", "codex", "gemini", "kimi", "another agent", "model", "cheaper", "stuck"] });
+        if (current.pane.agent) command("pins", "Pins in this conversation…", () => actions.openDialog({ kind: "pins", machineId: machine.id, paneId: current.pane.id, dir: folderOf(current), shown: chatSession ?? chatLive, title: machine.id !== "local" ? `${session.name} on ${machine.label}` : session.name }), { hint: "the turns you pinned in this folder's conversations, a click opens each", icon: "pin", keywords: ["pin", "pins", "pinned", "bookmark", "bookmarks", "saved", "mark"] });
         if (current.pane.agent) command("find", "Find in this conversation", () => {
           actions.setMode("herdr");
           actions.setLens("chat");
@@ -143,6 +147,14 @@ function useCommands(): (query: string) => Entry[] {
           setFocus(tileKey(current.machine.id, current.pane.id));
           actions.setMode("wall");
         }, { hint: "this agent takes the wall, the others wait in a strip", icon: "maximize", keywords: ["wall", "focus", "big", "zoom"] });
+      command("wall-office", office ? "Wall: leave office mode" : "Office mode on the Wall", () => {
+        setOffice(!office);
+        if (office) leaveFull();
+        else {
+          actions.setMode("wall");
+          enterFull();
+        }
+      }, { hint: office ? "the grid back, the full screen left" : "one agent large for a second screen — whoever needs you, else each in turn — the rest as cards; full screen", icon: "monitor", keywords: ["wall", "office", "tv", "screen", "kiosk", "show", "featured", "big"] });
       command("wall-view", screens ? "Wall of chats" : "Wall of screens", onTheWall({ view: screens ? "chat" : "screen" }), { hint: screens ? "each tile the last turns of its conversation" : "each tile its terminal as it is, scaled to fit", icon: "layers", keywords: ["wall", "terminal", "screen", "chat", "view", "tiles"] });
       if (current && !viewer && mode === "herdr") command("full", full ? "Leave full screen" : "Full screen", full ? leaveFull : enterFull, { hint: full ? "the header and the sidebar back" : "the lens takes the whole screen; Esc leaves", icon: full ? "minimize" : "maximize", keywords: ["fullscreen", "zen", "focus", "maximize", "screen"] });
       command("rail", footprint ? "Hide the files rail" : "Show the files rail", actions.toggleFootprint, { hint: "the files the agent touched, beside the lenses", icon: "folder", keywords: ["footprint", "files"] });
@@ -150,6 +162,8 @@ function useCommands(): (query: string) => Entry[] {
       command("activity", "Activity", () => actions.openPanel("activity"), { hint: "what happened across the agents while you were away", icon: "bell", keywords: ["feed", "history", "log", "news", "notifications", "away"] });
       command("broadcast", "Message several agents…", () => actions.openDialog({ kind: "broadcast" }), { hint: "one text to the agents you tick, each in turn", icon: "send", keywords: ["broadcast", "all", "every", "everyone", "prompt", "compact", "send"] });
       command("alerts", "Alerts on this device", () => actions.openPanel("alerts"), { hint: "which pushes to get here", icon: "bell", keywords: ["push", "notifications"] });
+      command("start-recipe", "New agent from recipe…", () => actions.openDialog({ kind: "start-recipe", machineId: here, dir: current ? folderOf(current) : "" }), { hint: "a saved agent with its model, arguments and first prompt, in a folder", icon: "sparkles", keywords: ["recipe", "start", "agent", "saved", "preset", "template", "new"] });
+      command("recipes", "Recipes…", () => actions.openDialog({ kind: "recipes" }), { hint: "the saved ways to start an agent: agent, model, arguments, first prompt", icon: "sparkles", keywords: ["recipe", "recipes", "preset", "template", "saved", "manage"] });
       command("schedules", "Schedules", () => actions.openPanel("schedules"), { hint: "prompts sent to agents on a timetable", icon: "calendar", keywords: ["cron", "timer", "prompt"] });
       command("usage", "Usage report", () => actions.openPanel("usage"), { hint: "what the agents cost, by day, project and session", icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
       command("standup", "Standup: what every agent did today", () => actions.openPanel("standup"), { hint: "one report over every machine, ready to paste as Markdown", icon: "sun", keywords: ["standup", "report", "today", "summary", "recap", "daily", "digest", "morning"] });
@@ -171,6 +185,6 @@ function useCommands(): (query: string) => Entry[] {
       command("search", typed ? `Search every conversation for “${typed}”` : "Search every conversation…", () => actions.openSearch(typed), { hint: "what you or an agent said, on every machine", icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, chatSession, footprint, full, themePref, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, timelineShown, setTimelineShown, step, now, goNext],
+    [machines, mode, lens, viewer, chatSession, footprint, full, themePref, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
   );
 }

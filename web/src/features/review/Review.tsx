@@ -123,7 +123,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
   if (review === null && !error) return <div className="empty">Looking at the folder…</div>;
   if (review && !review.repo) return <div className="empty">{basename(dir)} is not a git checkout — nothing to review.</div>;
   const lastVerdict = review?.baseline?.verdict;
-  const lastLookText = !lastLook ? "not reviewed yet" : lastVerdict === "approved" ? `approved ${ago(lastLook)}` : lastVerdict === "changes" ? `rejected ${ago(lastLook)}` : `since you looked ${ago(lastLook)}`;
+  const lastLookText = !lastLook ? "not reviewed yet" : lastVerdict === "approved" ? `approved ${ago(lastLook)}` : lastVerdict === "changes" ? `rejected ${ago(lastLook)}${review?.baseline?.ready ? " · ready again" : ""}` : `since you looked ${ago(lastLook)}`;
   const added = files.reduce((sum, file) => sum + file.added, 0);
   const removed = files.reduce((sum, file) => sum + file.removed, 0);
   const orphanComments = draft.filter((comment) => !files.some((file) => file.path === comment.file));

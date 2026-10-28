@@ -3,9 +3,9 @@
 import { ago, fmtDay } from "@/lib/time";
 import type { AgentKey } from "./api";
 
-// keyLine is "tasks only · used 3 h ago · since Oct 26": what the key opens, its last use, its first day
+// keyLine is "tasks and reading · used 3 h ago · since Oct 26": what the key opens, its last use, its first day
 export function keyLine(key: Pick<AgentKey, "scope" | "created" | "last_used">, now = Date.now()): string {
-  const parts = [key.scope === "tasks" ? "tasks only" : key.scope];
+  const parts = [key.scope === "tasks" ? "tasks and reading" : key.scope];
   parts.push(key.last_used === key.created ? "never used" : `used ${ago(key.last_used, now)}`);
   parts.push(`since ${fmtDay(key.created.slice(0, 10))}`); // fmtDay takes the day alone, YYYY-MM-DD
   return parts.join(" · ");

@@ -8193,6 +8193,321 @@ body.popout {
   }
 }
 
+/* #14 Office mode: one agent large for a second screen, the rest as cards in a column beside it; a pinned card wears the accent ring */
+.wall-office {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.wall-office-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.wall-office-main .tile {
+  flex: 1;
+  min-width: 0;
+}
+
+.wall-office-cards {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wall-office-cards .tile {
+  flex-shrink: 0;
+}
+
+.wall-office-cards .tile-open {
+  cursor: pointer;
+}
+
+.tile.is-pinned {
+  border-color: var(--accent-ring);
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+@media (max-width: 920px) {
+  .wall-office-btn {
+    display: none; /* the wall is one column there already */
+  }
+
+  .wall-office {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+
+  .wall-office-cards {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-height: 40%;
+  }
+
+  .wall-office-cards .tile {
+    width: 300px;
+  }
+}
+
+/* ---- #13 Pins: the pin beside a turn's link, the mark on a pinned turn, the Pins dialog's list ---- */
+.turn-pin {
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.turn:hover .turn-pin,
+.turn-pin:focus-visible,
+.turn-pin.on {
+  opacity: 1;
+}
+
+.turn-pin.on {
+  color: var(--accent);
+}
+
+@media (pointer: coarse) {
+  .turn-pin {
+    opacity: 1;
+  }
+}
+
+.turn-pinned {
+  position: relative;
+}
+
+/* the mark sits in the turn's top corner, inside its box: a turn is paint-contained (content-visibility), so nothing
+   outside its box would show; a pinned turn keeps the corner clear of its text */
+.turn-pin-mark {
+  position: absolute;
+  top: 0;
+  right: 0;
+  color: var(--accent);
+  line-height: 0;
+  pointer-events: none;
+}
+
+.turn-assistant.turn-pinned {
+  padding-right: 18px;
+}
+
+.turn-user.turn-pinned {
+  padding-right: 28px;
+}
+
+.turn-user.turn-pinned .turn-pin-mark {
+  top: 9px;
+  right: 10px;
+}
+
+.pins-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pins-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pins-row {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pins-row:hover {
+  background: var(--bg-active);
+}
+
+.pins-row:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -2px;
+}
+
+.pins-kind {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+.pins-line {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pins-when {
+  flex-shrink: 0;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  /* a phone's row keeps the line whole and puts the time under it */
+  .pins-row {
+    flex-wrap: wrap;
+  }
+
+  .pins-line {
+    flex-basis: calc(100% - 20px);
+    white-space: normal;
+  }
+
+  .pins-when {
+    margin-left: 20px;
+  }
+}
+
+/* #16 Vitals sparklines: the day's disk free and load drawn under the ⓘ's numbers, the thresholds as dashed lines */
+.health-rows .spark {
+  display: block;
+  width: 100%;
+  height: 28px;
+  margin-top: 4px;
+  overflow: visible;
+}
+
+.spark .spark-line {
+  fill: none;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark .spark-area {
+  opacity: 0.12;
+}
+
+.spark line {
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.8;
+}
+
+.spark .spark-amber {
+  stroke: var(--amber);
+}
+
+.spark .spark-red {
+  stroke: var(--red);
+}
+
+/* ---- #6 Recipes: the saved ways to start an agent (features/recipes) — the list in the Recipes dialog, a row's form,
+   the recipe pick and the save/manage links in a "make something" dialog's Options, the words under the pick ---- */
+.recipe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.recipe-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.recipe-row > svg,
+.recipe-row > .radar-logo {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.recipe-row-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.recipe-row-text strong {
+  font-size: var(--fs-13);
+  font-weight: 600;
+}
+
+.recipe-words {
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recipe-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.recipe-form label small {
+  font-size: var(--fs-11);
+  font-weight: 400;
+  color: var(--fg-faint);
+}
+
+.recipe-form textarea {
+  min-height: 64px;
+}
+
+.recipe-form-actions,
+.start-options-recipes {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.start-options-recipes {
+  margin-top: -2px;
+}
+
+.recipes-dialog > .btn {
+  align-self: flex-start;
+}
+
+.start-recipe-words {
+  margin: -6px 0 2px;
+}
+
+.recipe-manage {
+  align-self: flex-start;
+}
+
 /* #5 Proposed column: the triage of what agents filed — the line over the list, a row's Accept / Decline, the column's mark */
 .proposed-bar {
   display: flex;
@@ -8316,6 +8631,90 @@ body.popout {
 
 .tasks-run-spent.is-red {
   color: var(--red);
+}
+
+/* #11 Ready again: a rejected workspace whose agent says it is ready for another look, in the review queue */
+.queue-item.ready .queue-name {
+  display: flex;
+  flex-direction: column;
+  white-space: normal;
+}
+
+.queue-title,
+.queue-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-sub {
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.queue-item.on .queue-sub {
+  color: var(--fg-dim);
+}
+
+.badge.ready {
+  background: var(--green-soft);
+  color: var(--green);
+  white-space: nowrap;
+}
+
+/* ---- #10 Standup strip: when an agent worked, waited and sat idle over the period ---- */
+
+.strip {
+  margin: 2px 0 4px;
+}
+
+.strip-bar {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border-radius: var(--r-xs);
+  background: var(--bg-input);
+  overflow: hidden;
+}
+
+.strip-span {
+  fill: var(--bg-active);
+}
+
+.strip-span.is-working {
+  fill: var(--green);
+}
+
+.strip-span.is-waiting {
+  fill: var(--red);
+}
+
+.strip-span.is-link {
+  cursor: pointer;
+}
+
+.strip-span.is-link:hover {
+  opacity: 0.75;
+}
+
+.strip-mark {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.strip-hours {
+  position: relative;
+  height: 12px;
+  font-size: var(--fs-10);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.strip-hours span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 /* ---- #12 Approve & open PR: the verdict's choices, and the pull request a task's run noted in the detail and on a card ---- */

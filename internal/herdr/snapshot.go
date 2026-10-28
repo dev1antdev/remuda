@@ -13,6 +13,16 @@ func (s *Snapshot) Pane(paneID string) *PaneInfo {
 	return nil
 }
 
+// Workspace finds a workspace by id, or nil.
+func (s *Snapshot) Workspace(workspaceID string) *WorkspaceInfo {
+	for i := range s.Workspaces {
+		if s.Workspaces[i].WorkspaceID == workspaceID {
+			return &s.Workspaces[i]
+		}
+	}
+	return nil
+}
+
 // WorkspaceLabel is the label of the workspace with that id, "" for none.
 func (s *Snapshot) WorkspaceLabel(workspaceID string) string {
 	for i := range s.Workspaces {

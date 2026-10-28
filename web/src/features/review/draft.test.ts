@@ -30,7 +30,7 @@ describe("verdictMessage", () => {
   });
   it("rejects: changes requested, and the work is not finished until approved", () => {
     const msg = verdictMessage("changes", "", [], "/x");
-    expect(msg).toBe("Review of /x: changes requested.\n\nWork on what is asked above, then say when the changes are ready for another look. The work is not finished until it is approved.");
+    expect(msg).toBe("Review of /x: changes requested.\n\nWork on what is asked above, then say when the changes are ready for another look, ending that answer with a line reading READY FOR REVIEW. The work is not finished until it is approved.");
   });
 });
 

@@ -62,7 +62,7 @@ func TestKeysListedWithoutTheirHashAndRevoked(t *testing.T) {
 	if code, body := keyCall(h, "GET", "/api/tasks", nil, key); code != 200 || body != "by GOG" {
 		t.Fatalf("tasks with the key: %d %s", code, body)
 	}
-	if code, body := keyCall(h, "GET", "/api/agent-keys", nil, key); code != 403 || body != "this key is for tasks only" {
+	if code, body := keyCall(h, "GET", "/api/agent-keys", nil, key); code != 403 || body != "this key is for tasks and reading only" {
 		t.Fatalf("the keys with a key: %d %s", code, body)
 	}
 
