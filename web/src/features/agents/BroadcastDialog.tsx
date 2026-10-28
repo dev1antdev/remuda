@@ -8,12 +8,13 @@ import { Dialog, Icon, Notice, useSubmit } from "@/ui";
 import Logo from "@/ui/Logo";
 import { broadcast, picked, statusWords, type Outcome, type QuickPick } from "./broadcast";
 import { targetKey, type AgentTarget } from "./targets";
+import { t, tn } from "@/lib/i18n";
 
 const PICKS: { pick: QuickPick; label: string; title: string }[] = [
-  { pick: "all", label: "All", title: "Every agent that would take a message" },
-  { pick: "working", label: "Working", title: "The agents in the middle of something" },
-  { pick: "resting", label: "Resting", title: "The idle and the finished ones" },
-  { pick: "none", label: "None", title: "Untick everyone" },
+  { pick: "all", label: t("All"), title: t("Every agent that would take a message") },
+  { pick: "working", label: t("Working"), title: t("The agents in the middle of something") },
+  { pick: "resting", label: t("Resting"), title: t("The idle and the finished ones") },
+  { pick: "none", label: t("None"), title: t("Untick everyone") },
 ];
 
 export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarget[]; onClose: () => void }) {
@@ -36,7 +37,7 @@ export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarg
   const failed = outcomes?.filter((outcome) => outcome.error).length ?? 0;
   return (
     <Dialog
-      title="Message several agents"
+      title={t("Message several agents")}
       icon="send"
       size="md"
       as="form"
@@ -49,7 +50,7 @@ export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarg
     >
       {outcomes ? (
         <>
-          <Notice tone={failed ? "warn" : "success"}>{failed ? `Sent to ${outcomes.length - failed} of ${outcomes.length}; ${failed} refused.` : `Sent to ${outcomes.length} agent${outcomes.length === 1 ? "" : "s"}.`}</Notice>
+          <Notice tone={failed ? "warn" : "success"}>{failed ? t("Sent to {sent} of {total}; {failed} refused.", { sent: outcomes.length - failed, total: outcomes.length, failed }) : tn(outcomes.length, "Sent to {n} agent.", "Sent to {n} agents.")}</Notice>
           <ul className="pick-list">
             {outcomes.map(({ target, error }) => (
               <li key={targetKey(target)} className={`pick-row${error ? " failed" : ""}`}>
@@ -64,16 +65,16 @@ export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarg
           </ul>
           <div className="modal-actions">
             <button type="button" className="btn primary" onClick={onClose}>
-              Done
+              {t("Done")}
             </button>
           </div>
         </>
       ) : agents.length === 0 ? (
-        <Notice tone="hint">No agent is running.</Notice>
+        <Notice tone="hint">{t("No agent is running.")}</Notice>
       ) : (
         <>
           <div className="pick-quick">
-            <span className="modal-hint">{chosen.length} of {agents.length} ticked</span>
+            <span className="modal-hint">{t("{chosen} of {total} ticked", { chosen: chosen.length, total: agents.length })}</span>
             {PICKS.map((p) => (
               <button key={p.pick} type="button" className="btn sm" title={p.title} onClick={() => setTicked(picked(agents, p.pick))}>
                 {p.label}
@@ -107,16 +108,16 @@ export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarg
             ))}
           </ul>
           <label>
-            Message
-            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={5} placeholder="One text, to each of them in turn — /compact, a question, a nudge" />
+            {t("Message")}
+            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={5} placeholder={t("One text, to each of them in turn — /compact, a question, a nudge")} />
           </label>
           {err && <Notice tone="error">{err}</Notice>}
           <div className="modal-actions">
             <button type="button" className="btn" onClick={onClose}>
-              Cancel
+              {t("Cancel")}
             </button>
             <button type="submit" className="btn primary" disabled={busy || chosen.length === 0 || !text.trim()}>
-              {busy ? "Sending…" : `Send to ${chosen.length}`}
+              {busy ? t("Sending…") : t("Send to {n}", { n: chosen.length })}
             </button>
           </div>
         </>

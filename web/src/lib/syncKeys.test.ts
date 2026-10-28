@@ -19,7 +19,7 @@ describe("isShared", () => {
   });
   it("keeps the device's own keys at home", () => {
     for (const key of ["alerts", "alerts.voice", "alerts.quiet", "prompt.history:local|/x", "feed.seen", "release.seen", "wall.hidden", "collapsed", "wsFolded", "termFont", "text.size", "send.targets", "mode", "prefs.sync", "__stamps", "theme.other"]) expect(isShared(key), key).toBe(false);
-    for (const key of ["density", "font.mono"]) expect(isShared(key), key).toBe(true);
+    for (const key of ["density", "font.mono", "lang"]) expect(isShared(key), key).toBe(true);
   });
 });
 

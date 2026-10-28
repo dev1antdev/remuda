@@ -5,10 +5,11 @@ import { useState, type ReactNode } from "react";
 import { Icon, StatusDot, Tip } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import type { Pane, Session, Status, Tab } from "./api";
+import { t as tr } from "@/lib/i18n";
 
 const STATUS_LABEL: Record<Status, string> = {
   run: "working",
-  input: "needs you",
+  input: tr("needs you"),
   idle: "ready",
   done: "done",
   shell: "shell",
@@ -45,7 +46,7 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onClo
                     className="tab-edit"
                     autoFocus
                     value={editing.value}
-                    placeholder={`Tab ${t.number}`}
+                    placeholder={tr("Tab {n}", { n: t.number })}
                     onChange={(e) => setEditing({ id: t.id, value: e.target.value })}
                     onBlur={commit}
                     onKeyDown={(e) => {
@@ -64,7 +65,7 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onClo
                   aria-selected={t.id === tab.id}
                   className="tab-main"
                   disabled={!first}
-                  title={t.named ? `${t.label} — double-click to rename` : "Double-click to name this tab"}
+                  title={t.named ? tr("{label} — double-click to rename", { label: t.label }) : tr("Double-click to name this tab")}
                   onClick={() => first && onSelect(first.id)}
                   onDoubleClick={() => setEditing({ id: t.id, value: t.named ? t.label : "" })}
                 >
@@ -73,16 +74,16 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onClo
                   {t.named && <span>{t.label}</span>}
                   {t.panes.length > 1 && <span className="tab-count">{t.panes.length}</span>}
                 </button>
-                <Tip text="Close this tab">
-                  <button type="button" className="icon-btn tab-close" aria-label={`Close tab ${t.named ? t.label : t.number}`} onClick={() => onCloseTab(t)}>
+                <Tip text={tr("Close this tab")}>
+                  <button type="button" className="icon-btn tab-close" aria-label={tr("Close tab {tab}", { tab: t.named ? t.label : t.number })} onClick={() => onCloseTab(t)}>
                     <Icon name="x" size={12} />
                   </button>
                 </Tip>
               </div>
             );
           })}
-          <Tip text="New tab in this workspace">
-            <button type="button" className="icon-btn tab-add" aria-label="New tab" onClick={onNewTab}>
+          <Tip text={tr("New tab in this workspace")}>
+            <button type="button" className="icon-btn tab-add" aria-label={tr("New tab")} onClick={onNewTab}>
               <Icon name="plus" size={14} />
             </button>
           </Tip>

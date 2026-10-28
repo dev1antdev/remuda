@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import Icon, { type IconName } from "@/ui/icons";
+import { t } from "@/lib/i18n";
 
 export type Tone = "info" | "success" | "warn" | "error" | "hint";
 
@@ -19,7 +20,7 @@ export function Notice({ tone = "info", icon, children, action, onDismiss, class
       <span className="notice-text">{children}</span>
       {action}
       {onDismiss && (
-        <button type="button" className="icon-btn sm" onClick={onDismiss} title="Dismiss" aria-label="Dismiss">
+        <button type="button" className="icon-btn sm" onClick={onDismiss} title={t("Dismiss")} aria-label={t("Dismiss")}>
           <Icon name="x" size={12} />
         </button>
       )}

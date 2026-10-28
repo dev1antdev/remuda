@@ -5,6 +5,7 @@ import type { AgentKind } from "@/features/roster/api";
 import { choiceFor, EMPTY_DRAFT, modelChoices, modelOf, type Draft } from "@/features/roster/startOptions";
 import { basename } from "@/lib/text";
 import type { Recipe } from "./api";
+import { t } from "@/lib/i18n";
 
 export type StartRequest = { machine: string; dir: string; name: string; agent: string; model?: string; args?: string; prompt?: string };
 
@@ -56,7 +57,7 @@ export function recipeWords(r: Recipe, agents: AgentKind[]): string {
   if (r.model) parts.push(modelLabel(r.agent, r.model));
   if (r.args) parts.push(r.args);
   if (r.prompt) parts.push(firstWords(r.prompt, 48));
-  if (r.dir) parts.push(`only in ${basename(r.dir)}`);
+  if (r.dir) parts.push(t("only in {folder}", { folder: basename(r.dir) }));
   return parts.join(" · ");
 }
 

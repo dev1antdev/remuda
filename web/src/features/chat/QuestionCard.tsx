@@ -7,6 +7,7 @@ import { useQuery } from "@/lib/query";
 import { fetchQuestion } from "./api";
 import { PromptKeys } from "./PromptKeys";
 import { keysTo, questionLines } from "./question";
+import { t } from "@/lib/i18n";
 
 export function QuestionCard({ machineId, paneId, active, compact = false, onKeys, children }: {
   machineId: string;
@@ -55,8 +56,8 @@ export function QuestionCard({ machineId, paneId, active, compact = false, onKey
             {o.label}
           </button>
         ))}
-        <button type="button" className="btn sm question-esc" disabled={sending} title="Escape: close the dialog" onClick={() => void onKeys(["esc"])}>
-          Esc
+        <button type="button" className="btn sm question-esc" disabled={sending} title={t("Escape: close the dialog")} onClick={() => void onKeys(["esc"])}>
+          {t("Esc")}
         </button>
       </div>
     </div>

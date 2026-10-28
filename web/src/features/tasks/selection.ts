@@ -2,6 +2,8 @@
 // ⌘-click toggles one, ⇧-click takes the rows between the anchor and the row, a tap does the same once a
 // long press on a phone started the selection; the list that holds it drops the ids that left the screen.
 
+import { t } from "@/lib/i18n";
+
 export type Selection = { ids: number[]; anchor: number | null };
 
 export const NONE: Selection = { ids: [], anchor: null };
@@ -45,5 +47,5 @@ export function prune(sel: Selection, listed: number[]): Selection {
 
 // selectionWords says how many: "3 selected"
 export function selectionWords(n: number): string {
-  return `${n} selected`;
+  return t("{n} selected", { n });
 }

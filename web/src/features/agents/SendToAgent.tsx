@@ -8,6 +8,7 @@ import { usePref } from "@/lib/prefs";
 import Select from "@/ui/Select";
 import Logo from "@/ui/Logo";
 import { Dialog, Notice, useSubmit } from "@/ui";
+import { t } from "@/lib/i18n";
 
 export default function SendToAgent({ title, text: initialText, agents, currentPane, rememberKey, exclude, onClose, onSend }: {
   title: string;
@@ -47,10 +48,10 @@ export default function SendToAgent({ title, text: initialText, agents, currentP
       }}
     >
       {choices.length === 0 ? (
-        <Notice tone="hint">No other agent is running.</Notice>
+        <Notice tone="hint">{t("No other agent is running.")}</Notice>
       ) : (
         <label>
-          Agent
+          {t("Agent")}
           <Select
             value={target}
             onChange={setTarget}
@@ -66,16 +67,16 @@ export default function SendToAgent({ title, text: initialText, agents, currentP
       )}
       {chosen && <p className="modal-hint tasks-send-cwd">{chosen.cwd}</p>}
       <label>
-        Message
+        {t("Message")}
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={9} />
       </label>
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" className="btn primary" disabled={busy || !chosen || !text.trim()}>
-          {busy ? "Sending…" : "Send"}
+          {busy ? t("Sending…") : t("Send")}
         </button>
       </div>
     </Dialog>

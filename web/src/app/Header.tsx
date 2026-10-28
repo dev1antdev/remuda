@@ -11,6 +11,7 @@ import { Icon, Tip } from "@/ui";
 import type { Located } from "./current";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens } from "./store";
+import { t } from "@/lib/i18n";
 
 export default function Header({ current }: { current: Located | null }) {
   const { machines, budgets } = useRoster();
@@ -20,8 +21,8 @@ export default function Header({ current }: { current: Located | null }) {
   const viewer = app.use((s) => s.viewer);
   return (
     <header className="topbar">
-      <Tip text="The machines and their agents">
-        <button type="button" className="burger icon-btn" onClick={actions.toggleDrawer} aria-label="Machines" aria-expanded={drawer}>
+      <Tip text={t("The machines and their agents")}>
+        <button type="button" className="burger icon-btn" onClick={actions.toggleDrawer} aria-label={t("Machines")} aria-expanded={drawer}>
           <Icon name="menu" size={18} />
         </button>
       </Tip>
@@ -30,7 +31,7 @@ export default function Header({ current }: { current: Located | null }) {
           <>
             {viewer.machine !== "local" && <span className="title-machine">{machineLabel(machines, viewer.machine)} ›</span>}
             {basename(viewer.dir)}
-            <span className="title-agent"> · transcript</span>
+            <span className="title-agent"> {t("· transcript")}</span>
           </>
         ) : current ? (
           <>
@@ -49,14 +50,14 @@ export default function Header({ current }: { current: Located | null }) {
         </div>
       )}
       {popOutSupported && (
-        <Tip text="Pop out this agent: a small window above every other app">
-          <button type="button" className="icon-btn bell" aria-label="Pop out" disabled={!current || !!viewer} onClick={() => current && void popOut({ machineId: current.machine.id, paneId: current.pane.id })}>
+        <Tip text={t("Pop out this agent: a small window above every other app")}>
+          <button type="button" className="icon-btn bell" aria-label={t("Pop out")} disabled={!current || !!viewer} onClick={() => current && void popOut({ machineId: current.machine.id, paneId: current.pane.id })}>
             <Icon name="pip" size={18} />
           </button>
         </Tip>
       )}
       <Tip text="Search every conversation on every machine (⌘K / Ctrl+K has it too)">
-        <button type="button" className="icon-btn bell" aria-label="Search" onClick={() => actions.openSearch()}>
+        <button type="button" className="icon-btn bell" aria-label={t("Search")} onClick={() => actions.openSearch()}>
           <Icon name="search" size={18} />
         </button>
       </Tip>
@@ -95,12 +96,12 @@ function LensSwitch({ lens, current }: { lens: Lens; current: Located }) {
     </button>
   );
   return (
-    <nav className="lens-switch" role="tablist" aria-label="View">
-      {tab("chat", "Chat")}
-      {tab("terminal", "Terminal")}
-      {tab("changes", "Changes", {
+    <nav className="lens-switch" role="tablist" aria-label={t("View")}>
+      {tab("chat", t("Chat"))}
+      {tab("terminal", t("Terminal"))}
+      {tab("changes", t("Changes"), {
         disabled: !(current.session.dir || current.pane.cwd),
-        title: "What changed in this workspace's folder since you last looked",
+        title: t("What changed in this workspace's folder since you last looked"),
         badge: current.session.review?.fresh,
       })}
     </nav>

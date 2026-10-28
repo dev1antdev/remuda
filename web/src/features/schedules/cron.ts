@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 // The presets behind a schedule's "When", and the cron each one writes.
 
 export const NEVER = "0001-01-01T00:00:00Z"; // Go's zero time
@@ -6,11 +7,11 @@ export const DEFAULT_CRON = "0 9 * * 1-5";
 export type Preset = "daily" | "weekdays" | "hourly" | "every3h" | "custom";
 
 export const PRESETS: { id: Preset; label: string }[] = [
-  { id: "daily", label: "Every day" },
-  { id: "weekdays", label: "Weekdays" },
-  { id: "hourly", label: "Every hour" },
-  { id: "every3h", label: "Every 3 hours" },
-  { id: "custom", label: "Cron…" },
+  { id: "daily", label: t("Every day") },
+  { id: "weekdays", label: t("Weekdays") },
+  { id: "hourly", label: t("Every hour") },
+  { id: "every3h", label: t("Every 3 hours") },
+  { id: "custom", label: t("Cron…") },
 ];
 
 // minuteOnly says whether a preset asks for a minute alone, no hour

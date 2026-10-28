@@ -5,21 +5,22 @@
 import { Icon, Menu, type MenuItem } from "@/ui";
 import { enterFull, leaveFull } from "./full";
 import { actions, app } from "./store";
+import { t } from "@/lib/i18n";
 
 export default function ViewMenu({ items, shell = false, page = true }: { items: MenuItem[]; shell?: boolean; page?: boolean }) {
   const footprint = app.use((s) => s.footprint);
   const full = app.use((s) => s.full);
   const pageRows: MenuItem[] = [
-    { label: "Files the agent touched", icon: "folder", hint: shell ? "a shell pane has no transcript" : "a rail beside the lens, edited files first", checked: footprint && !shell, disabled: shell, onSelect: actions.toggleFootprint },
-    { label: "Full screen", icon: "maximize", hint: "the lens takes the whole screen; Esc brings the page back", shortcut: full ? "Esc" : undefined, checked: full, onSelect: full ? leaveFull : enterFull },
+    { label: t("Files the agent touched"), icon: "folder", hint: shell ? t("a shell pane has no transcript") : t("a rail beside the lens, edited files first"), checked: footprint && !shell, disabled: shell, onSelect: actions.toggleFootprint },
+    { label: t("Full screen"), icon: "maximize", hint: t("the lens takes the whole screen; Esc brings the page back"), shortcut: full ? t("Esc") : undefined, checked: full, onSelect: full ? leaveFull : enterFull },
   ];
   return (
     <Menu
-      label="View"
+      label={t("View")}
       trigger={
-        <button type="button" className="btn sm view-btn" aria-label="View options">
+        <button type="button" className="btn sm view-btn" aria-label={t("View options")}>
           <Icon name="sliders" size={14} />
-          <span>View</span>
+          <span>{t("View")}</span>
           <Icon name="chevron-down" size={12} />
         </button>
       }

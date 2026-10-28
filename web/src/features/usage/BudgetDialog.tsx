@@ -8,6 +8,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { FormDialog, Icon, Select, useSubmit } from "@/ui";
 import { putBudgets, type BudgetStatus, type Period } from "./api";
 import { PERIODS } from "./budgets";
+import { t } from "@/lib/i18n";
 
 const EVERY = "*";
 
@@ -36,67 +37,67 @@ export default function BudgetDialog({ machines, budget, onClose, onSaved, ask }
     onSaved();
   });
   const remove = () =>
-    ask("Remove this budget? Nothing else changes: the spend stays what it is.", "Remove", () => {
+    ask(t("Remove this budget? Nothing else changes: the spend stays what it is."), "Remove", () => {
       void putBudgets(others).then(onSaved);
     });
   const folderIcon = <Icon name="folder" size={14} />;
 
   return (
     <FormDialog
-      title={budget ? "Edit the budget" : "Add a budget"}
+      title={budget ? t("Edit the budget") : t("Add a budget")}
       icon="chart"
-      hint="A limit on what the agents cost in a period, at Claude Code's own API prices — on a subscription a measure, not a bill. The usage pill turns amber at 80 %, and a push comes at 80 % and at the limit."
+      hint={t("A limit on what the agents cost in a period, at Claude Code's own API prices — on a subscription a measure, not a bill. The usage pill turns amber at 80 %, and a push comes at 80 % and at the limit.")}
       onClose={onClose}
       submit={{ busy, err, run }}
-      submitLabel={budget ? "Save" : "Add"}
+      submitLabel={budget ? t("Save") : t("Add")}
     >
       <div className="budget-fields">
         <label>
-          Machine
+          {t("Machine")}
           <Select
             value={machine}
             onChange={(m) => {
               setMachine(m);
               setDir(EVERY);
             }}
-            options={[{ value: EVERY, label: "Everything", icon: <Icon name="layers" size={14} /> }, ...machineOptions(machines, { onlyConnected: false })]}
+            options={[{ value: EVERY, label: t("Everything"), icon: <Icon name="layers" size={14} /> }, ...machineOptions(machines, { onlyConnected: false })]}
           />
         </label>
         {machine !== EVERY && (
           <label className="grow">
-            Folder
+            {t("Folder")}
             <Select
               value={dir}
               onChange={setDir}
-              options={[{ value: EVERY, label: "Every folder", icon: folderIcon }, ...(folders.some((f) => f.value === dir) || dir === EVERY ? folders : [{ value: dir, label: dir, icon: folderIcon }, ...folders])]}
+              options={[{ value: EVERY, label: t("Every folder"), icon: folderIcon }, ...(folders.some((f) => f.value === dir) || dir === EVERY ? folders : [{ value: dir, label: dir, icon: folderIcon }, ...folders])]}
             />
           </label>
         )}
       </div>
       <div className="budget-fields">
         <label>
-          Limit, USD
+          {t("Limit, USD")}
           <input type="number" inputMode="decimal" min={0.01} step="any" value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="20" required autoFocus={!budget} />
         </label>
         <label className="grow">
-          Period
+          {t("Period")}
           <Select value={period} onChange={setPeriod} options={PERIODS} />
         </label>
       </div>
       <label>
         <span>
-          Note <span className="dim">(optional)</span>
+          {t("Note")} <span className="dim">(optional)</span>
         </span>
-        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What this budget is for" />
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("What this budget is for")} />
       </label>
       {budget && (
         <div className="budget-remove">
           <button type="button" className="btn danger sm" onClick={remove} disabled={busy}>
-            Remove this budget
+            {t("Remove this budget")}
           </button>
         </div>
       )}
-      {!valid && limit !== "" && <p className="dim budget-hint">The limit must be above zero.</p>}
+      {!valid && limit !== "" && <p className="dim budget-hint">{t("The limit must be above zero.")}</p>}
     </FormDialog>
   );
 }

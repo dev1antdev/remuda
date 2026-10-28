@@ -9,6 +9,7 @@ import { fileLines, surround, whyNotUnfold, type Unfold } from "./context";
 import type { DraftComment } from "./draft";
 import { commentKey, Hunk, Note, rowKey, type NewComment } from "./Hunk";
 import { rowsOf, splitHunks } from "./hunks";
+import { t } from "@/lib/i18n";
 
 export type { NewComment } from "./Hunk";
 
@@ -42,32 +43,32 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
           <span className={`chevron${open ? " open" : ""}`}>
             <Icon name="chevron-right" size={12} />
           </span>
-          {file.fresh && <span className="review-dot" title="Changed since you looked" />}
+          {file.fresh && <span className="review-dot" title={t("Changed since you looked")} />}
           <span className="review-path">
             <span className="review-dir">{dirname(file.path)}</span>
             {basename(file.path)}
           </span>
           {draft.length > 0 && (
-            <span className="review-tag review-tag-comments" title={`${plural(draft.length, "comment")} in the draft`}>
+            <span className="review-tag review-tag-comments" title={t("{comments} in the draft", { comments: plural(draft.length, "comment") })}>
               {draft.length}
             </span>
           )}
           {file.untracked ? (
-            <span className="review-tag">new</span>
+            <span className="review-tag">{t("new")}</span>
           ) : (
             <span className="review-counts">
               +{file.added} −{file.removed}
             </span>
           )}
         </button>
-        <Tip text="Open the file in the viewer">
-          <button type="button" className="icon-btn sm" aria-label="Open the file" onClick={() => onOpen()}>
+        <Tip text={t("Open the file in the viewer")}>
+          <button type="button" className="icon-btn sm" aria-label={t("Open the file")} onClick={() => onOpen()}>
             <Icon name="external-link" size={12} />
           </button>
         </Tip>
         {onCode && (
           <Tip text="Open the file in Code (VS Code on this machine)">
-            <button type="button" className="icon-btn sm" aria-label="Open in Code" onClick={onCode}>
+            <button type="button" className="icon-btn sm" aria-label={t("Open in Code")} onClick={onCode}>
               <Icon name="code" size={12} />
             </button>
           </Tip>
@@ -79,14 +80,14 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
             tone="error"
             action={
               <button type="button" className="linkish" onClick={() => setAttempt((n) => n + 1)}>
-                Try again
+                {t("Try again")}
               </button>
             }
           >
             {error}
           </Notice>
         ) : diff === null ? (
-          <div className="empty">Loading…</div>
+          <div className="empty">{t("Loading…")}</div>
         ) : (
           <Diff text={diff} split={split} canComment={canComment} draft={draft} file={file.path} loadSource={loadSource} onComment={onComment} onRemove={onRemove} />
         ))}
@@ -180,9 +181,9 @@ function Diff({ text, split, canComment, draft, file, loadSource, onComment, onR
       ))}
       {strayComments.length > 0 && (
         <div className="review-orphans">
-          <Notice tone="hint">No longer on a line of this diff — still in the draft:</Notice>
+          <Notice tone="hint">{t("No longer on a line of this diff — still in the draft:")}</Notice>
           {strayComments.map((comment) => (
-            <Note key={comment.id} comment={comment} where={`line ${comment.line}${comment.removed ? " (removed)" : ""}`} onRemove={onRemove} />
+            <Note key={comment.id} comment={comment} where={t("line {n}", { n: comment.line }) + (comment.removed ? t(" (removed)") : "")} onRemove={onRemove} />
           ))}
         </div>
       )}

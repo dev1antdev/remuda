@@ -7,6 +7,7 @@ import { TaskChips } from "./pieces";
 import type { RunPR } from "./runPR";
 import { longPress } from "./press";
 import { pickHow, type Pick } from "./selection";
+import { t as tr } from "@/lib/i18n";
 
 export function QuickAdd({ placeholder, disabled, onAdd }: { placeholder: string; disabled: boolean; onAdd: (title: string) => Promise<void> }) {
   const [value, setValue] = useState("");
@@ -83,8 +84,8 @@ export function TaskRow({ task: t, project, status, fields, pr, selected, picked
         checked={t.done}
         onChange={onToggle}
         onClick={(e) => e.stopPropagation()}
-        title={t.done ? "Mark undone" : "Mark done"}
-        aria-label={t.done ? "Mark undone" : "Mark done"}
+        title={t.done ? tr("Mark undone") : tr("Mark done")}
+        aria-label={t.done ? tr("Mark undone") : tr("Mark done")}
       />
       <span className="tasks-row-title">{t.title}</span>
       <TaskChips task={t} project={project} status={status} fields={fields} pr={pr} />

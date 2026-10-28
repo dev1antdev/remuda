@@ -28,16 +28,17 @@ import { acceptColumn, proposedTotal } from "./proposed";
 import { paneOf, runPR } from "./runPR";
 import { QuickAdd, TaskRow } from "./TaskList";
 import { useSelection } from "./useSelection";
+import { t as tr } from "@/lib/i18n";
 
 type Smart = "today" | "upcoming" | "open" | "proposed";
 type Sel = { kind: "smart"; id: Smart } | { kind: "project"; id: number };
 
 // the smart lists: due by the end of today, due within a week, everything open
 const SMART: { id: Smart; label: string; icon: IconName }[] = [
-  { id: "today", label: "Today", icon: "sun" },
-  { id: "upcoming", label: "Upcoming", icon: "calendar" },
-  { id: "open", label: "All open", icon: "circle-check" },
-  { id: "proposed", label: "Proposed", icon: "bot" },
+  { id: "today", label: tr("Today"), icon: "sun" },
+  { id: "upcoming", label: tr("Upcoming"), icon: "calendar" },
+  { id: "open", label: tr("All open"), icon: "circle-check" },
+  { id: "proposed", label: tr("Proposed"), icon: "bot" },
 ];
 
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -201,7 +202,7 @@ export default function Tasks() {
     });
   };
   const remove = (t: Task) =>
-    actions.ask(`Delete “${t.title}”?`, "Delete", () => {
+    actions.ask(`Delete “${t.title}”?`, tr("Delete"), () => {
       void deleteTask(t.id).then(() => {
         setOpenId(null);
         refresh();
@@ -223,15 +224,15 @@ export default function Tasks() {
   }
 
   const addTarget = sel.kind === "project" ? byId.get(sel.id) : byId.get(defaultProject);
-  const title = proposedView ? "Proposed by agents" : sel.kind === "smart" ? SMART.find((s) => s.id === sel.id)!.label : (byId.get(sel.id)?.title ?? "…");
+  const title = proposedView ? tr("Proposed by agents") : sel.kind === "smart" ? SMART.find((s) => s.id === sel.id)!.label : (byId.get(sel.id)?.title ?? "…");
 
   return (
     <>
       <aside className={drawer ? "sidebar tasks-sidebar open" : "sidebar tasks-sidebar"}>
         <div className="sidebar-head">
-          <span>Lists</span>
-          <button type="button" className="btn sm" onClick={() => setNewProject(true)} title="New project">
-            <Icon name="plus" size={12} /> Project
+          <span>{tr("Lists")}</span>
+          <button type="button" className="btn sm" onClick={() => setNewProject(true)} title={tr("New project")}>
+            <Icon name="plus" size={12} /> {tr("Project")}
           </button>
         </div>
         {SMART.map((s) => (
@@ -244,23 +245,23 @@ export default function Tasks() {
           </button>
         ))}
         <div className="sidebar-head">
-          <span>Projects</span>
+          <span>{tr("Projects")}</span>
         </div>
         <ProjectTree projects={projects} selected={sel.kind === "project" ? sel.id : 0} onSelect={(id) => select({ kind: "project", id })} />
       </aside>
-      <Resizer spec={PANELS.tasksSidebar} edge="right" label="Lists width" />
+      <Resizer spec={PANELS.tasksSidebar} edge="right" label={tr("Lists width")} />
       {drawer && <div className="scrim" onClick={actions.closeDrawer} />}
 
       <main className="pane-area tasks-main">
         <div className="tasks-head">
           <h1>{title}</h1>
           {sel.kind === "project" && (
-            <nav className="tasks-view" aria-label="View">
-              <button type="button" className={view === "list" ? "on" : ""} onClick={() => setView("list")} title="As a list">
-                <Icon name="list" size={14} /> List
+            <nav className="tasks-view" aria-label={tr("View")}>
+              <button type="button" className={view === "list" ? "on" : ""} onClick={() => setView("list")} title={tr("As a list")}>
+                <Icon name="list" size={14} /> {tr("List")}
               </button>
-              <button type="button" className={view === "board" ? "on" : ""} onClick={() => setView("board")} title="As a board: a column per status">
-                <Icon name="layers" size={14} /> Board
+              <button type="button" className={view === "board" ? "on" : ""} onClick={() => setView("board")} title={tr("As a board: a column per status")}>
+                <Icon name="layers" size={14} /> {tr("Board")}
               </button>
             </nav>
           )}
@@ -274,26 +275,26 @@ export default function Tasks() {
                   setPage(1);
                 }}
               />{" "}
-              done
+              {tr("done")}
             </label>
           )}
           <input
             className="tasks-search"
             type="search"
-            placeholder="Search…"
+            placeholder={tr("Search…")}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
               setPage(1);
             }}
           />
-          <Tip text="New task from a GitHub issue">
-            <button type="button" className="icon-btn" aria-label="New task from a GitHub issue" onClick={() => actions.openDialog({ kind: "import-issue", projectId: sel.kind === "project" ? sel.id : undefined })}>
+          <Tip text={tr("New task from a GitHub issue")}>
+            <button type="button" className="icon-btn" aria-label={tr("New task from a GitHub issue")} onClick={() => actions.openDialog({ kind: "import-issue", projectId: sel.kind === "project" ? sel.id : undefined })}>
               <Icon name="link" size={16} />
             </button>
           </Tip>
           {project && (
-            <button type="button" className="icon-btn" title="Project settings: name, colour, columns" aria-label="Project settings" onClick={() => setSettings(true)}>
+            <button type="button" className="icon-btn" title={tr("Project settings: name, colour, columns")} aria-label={tr("Project settings")} onClick={() => setSettings(true)}>
               <Icon name="settings" size={16} />
             </button>
           )}
@@ -301,7 +302,7 @@ export default function Tasks() {
         {proposedView ? (
           <ProposedBar count={tasks.length} busy={triage.busy} onAcceptAll={() => triage.all(tasks, "accept")} onDeclineAll={() => triage.all(tasks, "decline")} />
         ) : (
-          <QuickAdd placeholder={addTarget ? `Add a task to ${addTarget.title}…` : "Add a task…"} disabled={!addTarget} onAdd={addTask} />
+          <QuickAdd placeholder={addTarget ? tr("Add a task to {project}…", { project: addTarget.title }) : tr("Add a task…")} disabled={!addTarget} onAdd={addTask} />
         )}
         {error && (
           <Notice tone="error" icon="alert-triangle" className="tasks-notice" onDismiss={() => setActionError("")}>
@@ -317,7 +318,7 @@ export default function Tasks() {
             action={
               noticeAt && (
                 <button type="button" className="linkish" onClick={() => actions.selectPane(noticeAt.machineId, noticeAt.paneId)}>
-                  Open <Icon name="chevron-right" size={12} />
+                  {tr("Open")} <Icon name="chevron-right" size={12} />
                 </button>
               )
             }
@@ -343,7 +344,7 @@ export default function Tasks() {
           </div>
         ) : (
           <div className={`tasks-list${list.fetching ? " loading" : ""}`}>
-            {tasks.length === 0 && !list.fetching && <div className="placeholder">{proposedView ? "Nothing proposed: a task an agent files lands here for you to accept or decline." : "Nothing here."}</div>}
+            {tasks.length === 0 && !list.fetching && <div className="placeholder">{proposedView ? tr("Nothing proposed: a task an agent files lands here for you to accept or decline.") : tr("Nothing here.")}</div>}
             {tasks.map((t) => (
               <TaskRow
                 key={t.id}
@@ -368,20 +369,20 @@ export default function Tasks() {
         )}
         {!board && pages > 1 && (
           <div className="tasks-pager">
-            <button type="button" className="btn sm" disabled={page <= 1} onClick={() => setPage(page - 1)} title="Previous page" aria-label="Previous page">
+            <button type="button" className="btn sm" disabled={page <= 1} onClick={() => setPage(page - 1)} title={tr("Previous page")} aria-label={tr("Previous page")}>
               <Icon name="chevron-left" size={14} />
             </button>
             <span>
               {page} / {pages}
             </span>
-            <button type="button" className="btn sm" disabled={page >= pages} onClick={() => setPage(page + 1)} title="Next page" aria-label="Next page">
+            <button type="button" className="btn sm" disabled={page >= pages} onClick={() => setPage(page + 1)} title={tr("Next page")} aria-label={tr("Next page")}>
               <Icon name="chevron-right" size={14} />
             </button>
           </div>
         )}
       </main>
 
-      {open && <Resizer spec={PANELS.taskDetail} edge="left" label="Task width" />}
+      {open && <Resizer spec={PANELS.taskDetail} edge="left" label={tr("Task width")} />}
       {open && (
         <TaskDetail
           key={open.id}
@@ -417,7 +418,7 @@ export default function Tasks() {
           onStarted={(t, where) => {
             setStartReq(null);
             replace(t);
-            announce(`Started ${t.run?.agent ?? "an agent"} on ${t.run?.branch ?? "a worktree"} — ${where}. The task follows once it is up.`, {
+            announce(tr("Started {agent} on {branch} — {where}. The task follows once it is up.", { agent: t.run?.agent ?? tr("an agent"), branch: t.run?.branch ?? tr("a worktree"), where }), {
               machineId: t.run?.machine ?? "",
               paneId: t.run?.pane ?? "",
             });
@@ -426,7 +427,7 @@ export default function Tasks() {
       )}
       {sendReq && (
         <SendToAgent
-          title={sendReq.groom ? "Send for grooming" : "Send to agent"}
+          title={sendReq.groom ? tr("Send for grooming") : tr("Send to agent")}
           text={taskPrompt(sendReq.task, byId.get(sendReq.task.project_id), sendReq.groom)}
           agents={agents}
           currentPane={currentPane}

@@ -14,12 +14,13 @@ import { Dialog, Icon, Notice, Tip } from "@/ui";
 import { useQuery } from "@/lib/query";
 import Select from "@/ui/Select";
 import { budgetTone, budgetWords, missingWords, ratio, scopeWords } from "./budgets";
+import { t, tn } from "@/lib/i18n";
 
 const PERIODS = [
-  { value: "1", label: "Today" },
-  { value: "7", label: "Last 7 days" },
-  { value: "30", label: "Last 30 days" },
-  { value: "90", label: "Last 90 days" },
+  { value: "1", label: t("Today") },
+  { value: "7", label: t("Last 7 days") },
+  { value: "30", label: t("Last 30 days") },
+  { value: "90", label: t("Last 90 days") },
 ];
 
 import { tok, usd } from "./format";
@@ -105,7 +106,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
 
   return (
     <Dialog
-      title="Usage"
+      title={t("Usage")}
       icon="chart"
       size="lg"
       className="usage"
@@ -113,7 +114,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
       controls={
         <>
           <Select value={days} onChange={setDays} options={PERIODS} />
-          {several && <Select value={machine} onChange={setMachine} options={machineOptions(machines, { all: "All machines" })} />}
+          {several && <Select value={machine} onChange={setMachine} options={machineOptions(machines, { all: t("All machines") })} />}
           {loading && <span className="search-busy" />}
         </>
       }
@@ -142,15 +143,15 @@ export default function Usage({ machines, onClose, onOpenSession }: {
         </div>
         <div className="usage-card">
           <span className="usage-card-n">{tok(sum.total.output)}</span>
-          <span className="usage-card-l">tokens written</span>
+          <span className="usage-card-l">{t("tokens written")}</span>
         </div>
         <div className="usage-card">
           <span className="usage-card-n">{tok(read)}</span>
-          <span className="usage-card-l">tokens read{sum.total.cache_read > 0 && ` · ${Math.round((100 * sum.total.cache_read) / Math.max(1, read))}% from cache`}</span>
+          <span className="usage-card-l">{t("tokens read")}{sum.total.cache_read > 0 && ` · ${t("{pct}% from cache", { pct: Math.round((100 * sum.total.cache_read) / Math.max(1, read)) })}`}</span>
         </div>
       </div>
-      {sum.total.unknown > 0 && <Notice tone="hint">{sum.total.unknown} responses came from a model with no price here and are counted, not priced.</Notice>}
-      <div className="usage-chart" aria-label="cost per day">
+      {sum.total.unknown > 0 && <Notice tone="hint">{t("{n} responses came from a model with no price here and are counted, not priced.", { n: sum.total.unknown })}</Notice>}
+      <div className="usage-chart" aria-label={t("cost per day")}>
         {sum.days.map((d) => (
           <div key={d.date} className="usage-bar" title={`${fmtDay(d.date)}: ${usd(d.cost)} · ${plural(d.turns, "response")}`}>
             <div className="usage-bar-fill" style={{ height: `${Math.max(d.cost > 0 ? 3 : 0, (100 * d.cost) / maxDay)}%` }} />
@@ -160,8 +161,8 @@ export default function Usage({ machines, onClose, onOpenSession }: {
       </div>
       <div className="usage-tables">
         <section>
-          <h3>Projects</h3>
-          {sum.projects.length === 0 && <div className="empty">Nothing in this period.</div>}
+          <h3>{t("Projects")}</h3>
+          {sum.projects.length === 0 && <div className="empty">{t("Nothing in this period.")}</div>}
           {sum.projects.slice(0, 12).map((p) => (
             <div key={`${p.machine}|${p.project}`} className="usage-row" title={p.dir || p.project}>
               <span className="usage-row-name">
@@ -174,7 +175,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
           ))}
         </section>
         <section>
-          <h3>Models</h3>
+          <h3>{t("Models")}</h3>
           {sum.models.map((m) => (
             <div key={m.model} className="usage-row">
               <span className="usage-row-name">{m.name}</span>
@@ -186,11 +187,11 @@ export default function Usage({ machines, onClose, onOpenSession }: {
           ))}
           {sum.perMachine.length > 1 && (
             <>
-              <h3>Machines</h3>
+              <h3>{t("Machines")}</h3>
               {sum.perMachine.map((m) => (
                 <div key={m.id} className="usage-row">
                   <span className="usage-row-name">{m.label}</span>
-                  <span className="usage-row-meta">{m.error ? "no report" : plural(m.turns, "response")}</span>
+                  <span className="usage-row-meta">{m.error ? t("no report") : plural(m.turns, "response")}</span>
                   <span className="usage-row-cost">{m.error ? "—" : usd(m.cost)}</span>
                 </div>
               ))}
@@ -198,9 +199,9 @@ export default function Usage({ machines, onClose, onOpenSession }: {
           )}
         </section>
         <section className="usage-sessions">
-          <h3>Sessions</h3>
+          <h3>{t("Sessions")}</h3>
           {sum.sessions.map((s) => (
-            <button key={`${s.machine}|${s.session}`} type="button" className="usage-row" onClick={() => onOpenSession(s.machine, s.project, s.session, s.dir)} title="Open the transcript">
+            <button key={`${s.machine}|${s.session}`} type="button" className="usage-row" onClick={() => onOpenSession(s.machine, s.project, s.session, s.dir)} title={t("Open the transcript")}>
               <span className="usage-row-name">
                 {s.dir ? basename(s.dir) : s.project}
                 <span className="usage-row-sub">
@@ -227,12 +228,12 @@ function Budgets({ budgets, machines }: { budgets: BudgetStatus[]; machines: Mac
   return (
     <section className="budgets">
       <h3>
-        Budgets
+        {t("Budgets")}
         <button type="button" className="btn sm" onClick={() => actions.openDialog({ kind: "budget", budget: null })}>
-          <Icon name="plus" size={12} /> Add a budget
+          <Icon name="plus" size={12} /> {t("Add a budget")}
         </button>
       </h3>
-      {budgets.length === 0 && <div className="empty">No budgets yet: a limit per day, week or month, on everything or one machine or folder. The usage pill turns amber at 80 %, a push comes at 80 % and at the limit.</div>}
+      {budgets.length === 0 && <div className="empty">{t("No budgets yet: a limit per day, week or month, on everything or one machine or folder. The usage pill turns amber at 80 %, a push comes at 80 % and at the limit.")}</div>}
       {budgets.map((b) => {
         const r = ratio(b);
         const tone = budgetTone(r);
@@ -242,14 +243,14 @@ function Budgets({ budgets, machines }: { budgets: BudgetStatus[]; machines: Mac
             <span className="budget-scope">
               {scopeWords(b, label)}
               {b.note && <span className="usage-row-sub"> · {b.note}</span>}
-              {missing && <span className="usage-row-sub"> · {b.missing?.length === 1 ? "1 machine" : `${b.missing?.length} machines`} not counted</span>}
+              {missing && <span className="usage-row-sub"> · {tn(b.missing?.length ?? 0, "{n} machine not counted", "{n} machines not counted")}</span>}
             </span>
             <span className="budget-bar" aria-hidden="true">
               <span style={{ width: `${Math.min(100, 100 * r)}%` }} />
             </span>
             <span className="budget-words">{budgetWords(b)}</span>
-            <Tip text="Edit this budget">
-              <button type="button" className="icon-btn sm" aria-label="Edit this budget" onClick={() => actions.openDialog({ kind: "budget", budget: b })}>
+            <Tip text={t("Edit this budget")}>
+              <button type="button" className="icon-btn sm" aria-label={t("Edit this budget")} onClick={() => actions.openDialog({ kind: "budget", budget: b })}>
                 <Icon name="edit" size={14} />
               </button>
             </Tip>

@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useMedia } from "@/lib/media";
 import type { Span } from "./api";
 import { hourLabel, hourMarks, layout, spanWords, WIDTH, window, type Segment } from "./strip";
+import { t } from "@/lib/i18n";
 
 export function DayStrip({ spans, since, onJump }: { spans: Span[]; since?: string; onJump?: (turn: string) => void }) {
   const phone = useMedia("(max-width: 600px)");
@@ -15,7 +16,7 @@ export function DayStrip({ spans, since, onJump }: { spans: Span[]; since?: stri
   const linked = (seg: Segment) => Boolean(onJump && seg.turn && seg.state !== "idle");
   return (
     <div className="strip">
-      <svg className="strip-bar" viewBox={`0 0 ${WIDTH} 8`} preserveAspectRatio="none" aria-label="When the agent worked, waited and sat idle">
+      <svg className="strip-bar" viewBox={`0 0 ${WIDTH} 8`} preserveAspectRatio="none" aria-label={t("When the agent worked, waited and sat idle")}>
         {segments.map((seg, i) => (
           <rect key={i} x={seg.x} y={0} width={seg.w} height={8} className={`strip-span is-${seg.state}${linked(seg) ? " is-link" : ""}`} onClick={() => linked(seg) && onJump!(seg.turn!)}>
             <title>{spanWords(seg)}</title>

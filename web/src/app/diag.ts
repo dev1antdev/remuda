@@ -4,6 +4,7 @@
 import { stallWords, toastDue, watchStalls } from "@/lib/perf";
 import { plural } from "@/lib/text";
 import { actions, app } from "./store";
+import { t } from "@/lib/i18n";
 
 const MODE_NAMES = { herdr: "Agents", wall: "the Wall", tasks: "Tasks", code: "Code", review: "Review" } as const;
 
@@ -13,7 +14,7 @@ export function wherePage(): string {
   if (mode === "wall") return `on the Wall (${plural(document.querySelectorAll(".tile").length, "tile")})`;
   const url = new URLSearchParams(location.search);
   const pane = url.get("pane") ? `, ${url.get("machine") ?? "local"} ${url.get("pane")}` : "";
-  return mode === "herdr" ? `in Agents, ${lens} lens${pane}` : `in ${MODE_NAMES[mode]}`;
+  return mode === "herdr" ? t("in Agents, {lens} lens{pane}", { lens, pane }) : t("in {mode}", { mode: MODE_NAMES[mode] });
 }
 
 // startDiagnostics begins the watch; the console line carries the stall for a bug report, the toast says a long one happened
@@ -23,6 +24,6 @@ export function startDiagnostics(): () => void {
     console.warn(`[remuda] ${stallWords(stall)}`, stall);
     if (!toastDue(stall, lastToast)) return;
     lastToast = stall.at;
-    actions.notify(`${stallWords(stall)} — the console has the details`, { error: true });
+    actions.notify(t("{stall} — the console has the details", { stall: stallWords(stall) }), { error: true });
   });
 }

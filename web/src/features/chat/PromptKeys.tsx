@@ -1,21 +1,22 @@
 // PromptKeys answer an agent's menu blind: up, down, Enter and Esc into the pane.
 
 import { Icon } from "@/ui";
+import { t } from "@/lib/i18n";
 
 export function PromptKeys({ onKeys }: { onKeys: (keys: string[]) => void }) {
   return (
     <span className="prompt-card-keys">
-      <button type="button" className="btn sm" title="Up" aria-label="Up" onClick={() => onKeys(["up"])}>
+      <button type="button" className="btn sm" title={t("Up")} aria-label={t("Up")} onClick={() => onKeys(["up"])}>
         <Icon name="chevron-up" size={14} />
       </button>
-      <button type="button" className="btn sm" title="Down" aria-label="Down" onClick={() => onKeys(["down"])}>
+      <button type="button" className="btn sm" title={t("Down")} aria-label={t("Down")} onClick={() => onKeys(["down"])}>
         <Icon name="chevron-down" size={14} />
       </button>
       <button type="button" className="btn sm" onClick={() => onKeys(["enter"])}>
-        Enter
+        {t("Enter")}
       </button>
       <button type="button" className="btn sm" onClick={() => onKeys(["esc"])}>
-        Esc
+        {t("Esc")}
       </button>
     </span>
   );

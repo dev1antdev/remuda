@@ -12,6 +12,8 @@ import { usePref } from "@/lib/prefs";
 import { ACCENTS, accentName, DARK_FLAVORS, FLAVOR_NAMES, FLAVORS, swatches } from "@/lib/theme";
 import { Dialog, Icon, resetPanels, Select, Tip } from "@/ui";
 import { SYNC_PREF } from "./useSyncPrefs";
+import { LANG_NAMES, LANGS, t } from "@/lib/i18n";
+import { readLangPref, setLangPref } from "@/app/lang";
 
 const DENSITIES: Density[] = ["comfortable", "compact"];
 const MONO_CHOICES: MonoFont[] = ["", ...MONO_FONTS];
@@ -32,19 +34,19 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
     run();
   };
   return (
-    <Dialog title="Settings" icon="sliders" onClose={onClose} className="settings-dialog">
+    <Dialog title={t("Settings")} icon="sliders" onClose={onClose} className="settings-dialog">
       <section className="settings-section">
-        <h3>Look</h3>
+        <h3>{t("Look")}</h3>
         <label className="settings-row">
           <span>
-            Theme
-            <small>Catppuccin: your dark flavour by night, Latte by day</small>
+            {t("Theme")}
+            <small>{t("Catppuccin: your dark flavour by night, Latte by day")}</small>
           </span>
           <Select
             value={themePref}
             onChange={setThemePref}
             options={[
-              { value: "system", label: "Follow the system", icon: <Icon name="monitor" size={14} /> },
+              { value: "system", label: t("Follow the system"), icon: <Icon name="monitor" size={14} /> },
               { value: "dark", label: `${FLAVOR_NAMES[darkFlavor]} (dark)`, icon: <Icon name="moon" size={14} /> },
               { value: "light", label: "Latte (light)", icon: <Icon name="sun" size={14} /> },
             ]}
@@ -52,8 +54,8 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         </label>
         <label className="settings-row">
           <span>
-            Dark flavour
-            <small>Frappé is the softest, Mocha the deepest</small>
+            {t("Dark flavour")}
+            <small>{t("Frappé is the softest, Mocha the deepest")}</small>
           </span>
           <Select
             value={darkFlavor}
@@ -63,10 +65,10 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         </label>
         <div className="settings-row">
           <span>
-            Accent
-            <small>The colour of the buttons, the rings and the marks: {accentName(accent)}</small>
+            {t("Accent")}
+            <small>{t("The colour of the buttons, the rings and the marks: {accent}", { accent: accentName(accent) })}</small>
           </span>
-          <div className="accent-swatches" role="radiogroup" aria-label="Accent">
+          <div className="accent-swatches" role="radiogroup" aria-label={t("Accent")}>
             {ACCENTS.map((a) => (
               <Tip key={a} text={accentName(a)}>
                 <button
@@ -85,8 +87,22 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         </div>
         <label className="settings-row">
           <span>
-            Text size
-            <small>The page's type scale; the terminal keeps its own size in its View menu</small>
+            {t("Language")}
+            <small>{t("The page's own words; the agents' answers, the pushes and the reports stay as they are")}</small>
+          </span>
+          <Select
+            value={readLangPref()}
+            onChange={setLangPref}
+            options={[
+              { value: "system", label: t("Follow the browser"), icon: <Icon name="monitor" size={14} /> },
+              ...LANGS.map((l) => ({ value: l, label: LANG_NAMES[l] })),
+            ]}
+          />
+        </label>
+        <label className="settings-row">
+          <span>
+            {t("Text size")}
+            <small>{t("The page's type scale; the terminal keeps its own size in its View menu")}</small>
           </span>
           <Select
             value={textSize}
@@ -96,15 +112,15 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         </label>
         <label className="settings-row">
           <span>
-            Density
-            <small>Compact tightens the rows, the tabs and the gaps on a wide screen with a mouse</small>
+            {t("Density")}
+            <small>{t("Compact tightens the rows, the tabs and the gaps on a wide screen with a mouse")}</small>
           </span>
           <Select value={density} onChange={setDensityPref} options={DENSITIES.map((d) => ({ value: d, label: DENSITY_NAMES[d] }))} />
         </label>
         <label className="settings-row">
           <span>
-            Code &amp; terminal font
-            <small>The ones installed on this device show in their own face; the rest fall back to the system's monospace</small>
+            {t("Code & terminal font")}
+            <small>{t("The ones installed on this device show in their own face; the rest fall back to the system's monospace")}</small>
           </span>
           <Select
             value={mono}
@@ -114,49 +130,49 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         </label>
         <div className="settings-row">
           <span>
-            Panels
-            <small>The sidebar, the files rail, the review queue and a task's detail keep the width you drag them to</small>
+            {t("Panels")}
+            <small>{t("The sidebar, the files rail, the review queue and a task's detail keep the width you drag them to")}</small>
           </span>
-          <button type="button" className="btn sm" onClick={() => { resetPanels(); actions.notify("The panels are back to their usual widths", { brief: true }); }}>
-            Reset widths
+          <button type="button" className="btn sm" onClick={() => { resetPanels(); actions.notify(t("The panels are back to their usual widths"), { brief: true }); }}>
+            {t("Reset widths")}
           </button>
         </div>
         <label className="settings-row">
           <span>
-            Sync these settings between devices
-            <small>The theme, the density, the code font, the sidebar, the wall, the review and the panels travel through this remuda; alerts, the text sizes and the prompt history stay on the device</small>
+            {t("Sync these settings between devices")}
+            <small>{t("The theme, the density, the code font, the sidebar, the wall, the review and the panels travel through this remuda; alerts, the text sizes and the prompt history stay on the device")}</small>
           </span>
           <input type="checkbox" checked={sync} onChange={(e) => setSync(e.target.checked)} />
         </label>
       </section>
       <section className="settings-section">
-        <h3>Sidebar</h3>
+        <h3>{t("Sidebar")}</h3>
         <RadarFields prefs={radar} onPrefs={setRadar} />
       </section>
       <section className="settings-section">
-        <h3>More</h3>
+        <h3>{t("More")}</h3>
         <div className="settings-row">
           <span>
-            Alerts on this device
-            <small>Pushes, quiet hours, read aloud</small>
+            {t("Alerts on this device")}
+            <small>{t("Pushes, quiet hours, read aloud")}</small>
           </span>
           <button type="button" className="btn sm" onClick={after(() => actions.openPanel("alerts"))}>
-            Open
+            {t("Open")}
           </button>
         </div>
         <div className="settings-row">
           <span>
-            Keyboard shortcuts
+            {t("Keyboard shortcuts")}
             <small>Every key the page answers (also behind ?)</small>
           </span>
           <button type="button" className="btn sm" onClick={after(() => actions.openDialog({ kind: "keys" }))}>
-            Show
+            {t("Show")}
           </button>
         </div>
         <div className="settings-row">
           <span>
             remuda {__REMUDA_VERSION__}
-            <small>The updates of every machine sit under its ⓘ in the sidebar</small>
+            <small>{t("The updates of every machine sit under its ⓘ in the sidebar")}</small>
           </span>
         </div>
       </section>

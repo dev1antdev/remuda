@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import UpdatesDialog from "@/features/updates/Updates";
 import { Icon, Tip, useDismiss } from "@/ui";
 import type { Machine } from "./api";
+import { t } from "@/lib/i18n";
 
 export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machine; onRename: () => void; onRemove?: () => void }) {
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
@@ -16,12 +17,12 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
   };
   return (
     <>
-      <Tip text="Rename, copy the SSH host, remove">
+      <Tip text={t("Rename, copy the SSH host, remove")}>
       <button
         type="button"
         className={`icon-btn${open ? " on" : ""}`}
         data-machine-menu={m.id}
-        aria-label={`${m.label}: rename, copy the SSH host, remove`}
+        aria-label={t("{machine}: rename, copy the SSH host, remove", { machine: m.label })}
         aria-haspopup="menu"
         aria-expanded={!!open}
         onClick={(e) => {
@@ -36,19 +37,19 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
       {open && (
         <div className="row-menu machine-menu" role="menu" style={{ left: open.x, top: open.y }} onClick={(e) => e.stopPropagation()}>
           <button type="button" role="menuitem" onClick={pick(onRename)}>
-            <Icon name="edit" size={14} /> Rename…
+            <Icon name="edit" size={14} /> {t("Rename…")}
           </button>
           <button type="button" role="menuitem" onClick={pick(() => setUpdates(true))} disabled={m.state !== "connected"}>
-            <Icon name="refresh-cw" size={14} /> Updates…
+            <Icon name="refresh-cw" size={14} /> {t("Updates…")}
           </button>
           {m.host && (
             <button type="button" role="menuitem" onClick={pick(() => void navigator.clipboard?.writeText(m.host!))}>
-              <Icon name="copy" size={14} /> Copy SSH host
+              <Icon name="copy" size={14} /> {t("Copy SSH host")}
             </button>
           )}
           {onRemove && (
             <button type="button" role="menuitem" className="danger" onClick={pick(onRemove)}>
-              <Icon name="trash" size={14} /> Remove machine
+              <Icon name="trash" size={14} /> {t("Remove machine")}
             </button>
           )}
         </div>

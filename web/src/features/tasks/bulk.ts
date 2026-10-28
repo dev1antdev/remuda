@@ -2,6 +2,7 @@
 
 import { plural } from "@/lib/text";
 import type { Label, Status, Task } from "./api";
+import { t } from "@/lib/i18n";
 
 export type Action =
   | { kind: "move"; statusId: number } // one project's column
@@ -106,11 +107,11 @@ const VERBS: Record<Action["kind"], string> = { move: "moved", "move-named": "mo
 export function outcomeWords(action: Action, outcome: Outcome, skipped: number): string {
   const parts = [`${outcome.done} ${VERBS[action.kind]}`];
   if (outcome.failed) parts.push(`${outcome.failed} failed${outcome.error ? `: ${outcome.error}` : ""}`);
-  if (skipped) parts.push(`${skipped} skipped`);
+  if (skipped) parts.push(t("{n} skipped", { n: skipped }));
   return parts.join(", ");
 }
 
 // deleteWords asks before the one action that cannot be undone
 export function deleteWords(n: number): string {
-  return `Delete ${plural(n, "task")}? They are gone for good.`;
+  return t("Delete {tasks}? They are gone for good.", { tasks: plural(n, "task") });
 }

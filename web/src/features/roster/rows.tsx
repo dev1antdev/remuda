@@ -9,6 +9,7 @@ import { brandColor } from "@/ui/brand";
 import type { Machine, Session } from "./api";
 import { prWords } from "./prStatus";
 import { agentRows, displayOf, groups, markOf, recentRows, rowLabel, stateWords, type AgentRow, type Display, type Group, type RadarPrefs } from "./radar";
+import { t, tn } from "@/lib/i18n";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
 
@@ -128,7 +129,7 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
         <button
           type="button"
           className={`icon-btn ws-fold${isFolded ? "" : " open"}`}
-          title={isFolded ? "Show agents" : "Hide agents"}
+          title={isFolded ? t("Show agents") : t("Hide agents")}
           aria-expanded={!isFolded}
           onClick={(e) => {
             e.stopPropagation();
@@ -144,14 +145,14 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
         <span className="ws-label">
           {s.name}
           {s.review?.fresh ? (
-            <span className="ws-badge" title={`${s.review.fresh} file${s.review.fresh === 1 ? "" : "s"} changed since you last reviewed`}>
+            <span className="ws-badge" title={tn(s.review.fresh, "{n} file changed since you last reviewed", "{n} files changed since you last reviewed")}>
               {s.review.fresh}
             </span>
           ) : null}
         </span>
         {rows.length === 0 && (
           <span className="ws-sub">
-            {s.tabs.length > 1 && <span>{s.tabs.length} tabs</span>}
+            {s.tabs.length > 1 && <span>{tn(s.tabs.length, "{n} tab", "{n} tabs")}</span>}
             <span className="ws-folder">{basename(folder)}</span>
           </span>
         )}
@@ -162,7 +163,7 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
           {!summary.working && !summary.blocked && !summary.done && (
             <span className="machine-count">
               {summary.agents}
-              {summary.children ? ` · ${summary.children} wt` : ""}
+              {summary.children ? t(" · {n} wt", { n: summary.children }) : ""}
             </span>
           )}
         </span>
@@ -170,7 +171,7 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
       <button
         type="button"
         className="icon-btn ws-menu-btn"
-        title="Workspace actions"
+        title={t("Workspace actions")}
         aria-haspopup="menu"
         onClick={(e) => {
           e.stopPropagation();
@@ -230,7 +231,7 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
         {said && <span className="radar-said">· {said}</span>}
       </span>
       {p.usage && p.usage.window > 0 && p.usage.context / p.usage.window >= 0.5 && (
-        <span className={`radar-ctx${fillClass(p.usage.context / p.usage.window)}`} title={`Context ${Math.round((100 * p.usage.context) / p.usage.window)}% full · ${p.usage.name} · $${p.usage.cost.toFixed(2)}`}>
+        <span className={`radar-ctx${fillClass(p.usage.context / p.usage.window)}`} title={t("Context {pct}% full · {model} · ${cost}", { pct: Math.round((100 * p.usage.context) / p.usage.window), model: p.usage.name, cost: p.usage.cost.toFixed(2) })}>
           {Math.round((100 * p.usage.context) / p.usage.window)}%
         </span>
       )}
@@ -240,7 +241,7 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
           <button
             type="button"
             className="icon-btn ws-menu-btn"
-            title="Workspace actions"
+            title={t("Workspace actions")}
             aria-haspopup="menu"
             onClick={(e) => {
               e.stopPropagation();

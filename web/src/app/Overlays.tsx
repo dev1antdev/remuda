@@ -31,6 +31,7 @@ import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import CommandPalette from "./commands";
 import { useAllPanes } from "./current";
 import { actions, app } from "./store";
+import { t } from "@/lib/i18n";
 
 export default function Overlays() {
   const dialog = app.use((s) => s.dialog);
@@ -167,7 +168,7 @@ export default function Overlays() {
             actions.selectPane(dialog.machineId, made.pane);
             actions.setLens("chat");
             const label = agents.find((a) => a.id === kind)?.label ?? kind;
-            if (made.agent_error) actions.notify(`The tab is there, but ${label} failed to start: ${made.agent_error}`, { error: true });
+            if (made.agent_error) actions.notify(t("The tab is there, but {agent} failed to start: {error}", { agent: label, error: made.agent_error }), { error: true });
             else actions.notify(handedOverWords(label, made.size), { brief: true });
           }}
         />

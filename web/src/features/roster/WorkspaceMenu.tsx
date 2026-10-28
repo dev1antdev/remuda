@@ -8,10 +8,11 @@ import { agentTitle, askRestart } from "@/features/updates/restartPane";
 import { openUrl } from "@/lib/host";
 import { killSession, type Machine, type Session } from "./api";
 import { prWords } from "./prStatus";
+import { t, tn } from "@/lib/i18n";
 
 export function closeWorkspace(m: Machine, s: Session) {
   const n = s.tabs.reduce((a, t) => a + t.panes.length, 0);
-  actions.ask(`Close “${s.name}”? ${n} pane${n === 1 ? "" : "s"} close and the agents in them stop.`, "Close workspace", () => void act(killSession(m.id, s.id)));
+  actions.ask(tn(n, "Close “{name}”? {n} pane closes and the agent in it stops.", "Close “{name}”? {n} panes close and the agents in them stop.", { name: s.name }), t("Close workspace"), () => void act(killSession(m.id, s.id)));
 }
 
 export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) {
@@ -49,7 +50,7 @@ export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) 
       {item("Rename workspace…", () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }))}
       {tab && item(`Rename tab ${tab.named ? `“${tab.label}”` : tab.number}…`, () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }))}
       {pr && item(`Open ${pr.label}${pr.status ? ` · ${prWords(pr.status)}` : ""}`, () => openUrl(pr.url))}
-      {chat && item(`Restart ${agentTitle(chat.agent)} on its session…`, () => askRestart(machine.id, chat.id, chat.agent))}
+      {chat && item(t("Restart {agent} on its session…", { agent: agentTitle(chat.agent) }), () => askRestart(machine.id, chat.id, chat.agent))}
       {item("Close workspace", () => closeWorkspace(machine, session), "danger")}
     </div>
   );

@@ -93,6 +93,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   any of Catppuccin's fourteen colours, a swatch each in Settings. The
   terminal, the Wall's screens and the Code editor wear the matching
   palette.
+- **English or Russian** — the page speaks the language of your browser,
+  or the one you pick in Settings › Look › Language ("Язык: Русский" in
+  the palette); a change reloads the page. The agents' answers, the
+  pushes, the standup and the MCP answers stay as they are.
 - **Text size, density and font** — the Look section of Settings also
   sets the page's text size (Small to Larger, "Text size: …" in the
   palette too; the terminal keeps its own size in its View menu), the

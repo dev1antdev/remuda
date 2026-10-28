@@ -8,6 +8,7 @@ import { tokenNodes } from "@/ui/Tokens";
 import type { Part } from "./api";
 import { editRows, editsOf, foldRows, rowTokens, type EditRow } from "./editDiff";
 import { toolPath } from "./footprint";
+import { t } from "@/lib/i18n";
 
 export const FOLD_ROWS = 24;
 
@@ -20,7 +21,7 @@ export function EditChange({ part }: { part: Part }) {
   if (!rows.length) return null;
   const { shown, more } = unfolded ? { shown: rows, more: 0 } : foldRows(rows, FOLD_ROWS);
   return (
-    <div className="edit-diff fv-diff" aria-label="the change this call made">
+    <div className="edit-diff fv-diff" aria-label={t("the change this call made")}>
       {shown.map((row, i) => (
         <Row key={i} row={row} tokens={tokens.get(row)} />
       ))}
@@ -37,7 +38,7 @@ export function EditChange({ part }: { part: Part }) {
 function rowsOf(part: Part): EditRow[] {
   const edits = editsOf(part.tool_name, part.input);
   if (edits.length <= 1) return edits.flatMap((edit) => editRows(edit.old, edit.new));
-  return edits.flatMap((edit, i) => [{ kind: "hunk" as const, text: `edit ${i + 1} of ${edits.length}${edit.replaceAll ? ", every occurrence" : ""}` }, ...editRows(edit.old, edit.new)]);
+  return edits.flatMap((edit, i) => [{ kind: "hunk" as const, text: t("edit {i} of {n}", { i: i + 1, n: edits.length }) + (edit.replaceAll ? t(", every occurrence") : "") }, ...editRows(edit.old, edit.new)]);
 }
 
 function Row({ row, tokens }: { row: EditRow; tokens: Token[] | undefined }) {

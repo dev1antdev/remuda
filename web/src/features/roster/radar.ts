@@ -6,6 +6,7 @@ import type { Machine, Pane, Session, Tab } from "@/features/roster/api";
 import { basename } from "@/lib/text";
 import { ago, elapsed } from "@/lib/time";
 import { VENDOR_NAME } from "@/ui/brand";
+import { t } from "@/lib/i18n";
 
 // ---- state ----
 
@@ -81,23 +82,23 @@ export function rowLabel(p: Pane, tab: Tab, workspace: string, prefs: RadarPrefs
 
 // stateWords says what an agent is doing, for a title or a row's right edge: the state, and for a resting one when its last turn was.
 export function stateWords(d: Display, last: number | undefined, now: number, since?: number): string {
-  const when = last ? ` · last turn ${ago(last, now)}` : "";
-  const how = since ? ` for ${elapsed(since, now)}` : "";
+  const when = last ? ` · ${t("last turn {ago}", { ago: ago(last, now) })}` : "";
+  const how = since ? ` ${t("for {time}", { time: elapsed(since, now) })}` : "";
   switch (d) {
     case "working":
-      return `working${how}`;
+      return `${t("working")}${how}`;
     case "blocked":
-      return `waiting on you${how}`;
+      return `${t("waiting on you")}${how}`;
     case "done":
-      return `done${when}`;
+      return `${t("done")}${when}`;
     case "idle_fresh":
-      return `idle, just stopped${when}`;
+      return `${t("idle, just stopped")}${when}`;
     case "idle_stale":
-      return `idle for a long time${when}`;
+      return `${t("idle for a long time")}${when}`;
     case "unknown":
-      return "state unknown";
+      return t("state unknown");
     default:
-      return `idle${when}`;
+      return `${t("idle")}${when}`;
   }
 }
 

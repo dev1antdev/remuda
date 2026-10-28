@@ -4,6 +4,7 @@
 import { usd } from "@/features/usage/format";
 import { plural } from "@/lib/text";
 import type { Item } from "./api";
+import { t, tn } from "@/lib/i18n";
 
 export const LAST_SEEN_KEY = "page.lastSeen";
 export const AWAY_AFTER = 3600_000;
@@ -41,9 +42,9 @@ export function awayCounts(items: Item[]): AwayCounts {
 export function awayLine(items: Item[], gap: number): string | null {
   const { answered, waiting, cost } = awayCounts(items);
   const parts: string[] = [];
-  if (answered > 0) parts.push(`${plural(answered, "agent")} answered`);
-  if (waiting > 0) parts.push(`${waiting} ${waiting === 1 ? "waits" : "wait"} for you`);
-  if (cost > 0) parts.push(`${usd(cost)} spent`);
+  if (answered > 0) parts.push(t("{agents} answered", { agents: plural(answered, "agent") }));
+  if (waiting > 0) parts.push(tn(waiting, "{n} waits for you", "{n} wait for you"));
+  if (cost > 0) parts.push(t("{cost} spent", { cost: usd(cost) }));
   if (!parts.length) return null;
-  return `Away ${awayWords(gap)}: ${parts.join(", ")}`;
+  return t("Away {gap}: {parts}", { gap: awayWords(gap), parts: parts.join(", ") });
 }

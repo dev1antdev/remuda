@@ -3,10 +3,11 @@
 import { isMac } from "@/lib/prefs";
 import { Dialog } from "@/ui";
 import { keyGroups } from "./keys";
+import { t } from "@/lib/i18n";
 
 export default function KeysDialog({ onClose }: { onClose: () => void }) {
   return (
-    <Dialog title="Keyboard" icon="keyboard" size="md" onClose={onClose} className="keys-dialog">
+    <Dialog title={t("Keyboard")} icon="keyboard" size="md" onClose={onClose} className="keys-dialog">
       <div className="keys-groups">
         {keyGroups(isMac).map((group) => (
           <section key={group.title} className="keys-group">

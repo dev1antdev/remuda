@@ -8,6 +8,7 @@ import { readPref, writePref } from "@/lib/prefs";
 import { FormDialog, Icon, Logo, Select, useSubmit } from "@/ui";
 import { handOver, type HandedOver } from "./api";
 import { DEFAULT_TURNS, handoverWords, nextAgent, turnOptions } from "./handover";
+import { t } from "@/lib/i18n";
 
 export default function HandoverDialog({ machineId, paneId, session, agent, workspace, agents, onClose, onDone }: {
   machineId: string;
@@ -39,42 +40,42 @@ export default function HandoverDialog({ machineId, paneId, session, agent, work
   const label = agents.find((a) => a.id === kind)?.label ?? kind;
   return (
     <FormDialog
-      title="Continue with another agent"
+      title={t("Continue with another agent")}
       icon="arrow-right"
-      hint={`A new tab in ${workspace}: ${label} starts there with ${handoverWords(turns)} as its first prompt. This conversation stays as it is.`}
+      hint={t("A new tab in {workspace}: {agent} starts there with {what} as its first prompt. This conversation stays as it is.", { workspace, agent: label, what: handoverWords(turns) })}
       onClose={onClose}
       submit={submit}
-      submitLabel={`Hand over to ${label}`}
+      submitLabel={t("Hand over to {agent}", { agent: label })}
     >
       <label>
-        Agent
+        {t("Agent")}
         <Select value={kind} onChange={pick} options={agents.map((a) => ({ value: a.id, label: a.label, icon: <Logo agent={a.id} /> }))} />
       </label>
       {hasModelFlag(kind) && choices.length > 0 && (
         <label>
-          Model
+          {t("Model")}
           <Select value={draft.choice} onChange={(choice) => setDraft({ ...draft, choice })} options={choices} />
         </label>
       )}
       {typedModel && (
         <label>
-          {choices.length > 0 ? "Model id" : "Model"}
+          {choices.length > 0 ? t("Model id") : t("Model")}
           <input value={draft.custom} placeholder={modelPlaceholder(kind)} spellCheck={false} onChange={(e) => setDraft({ ...draft, custom: e.target.value })} />
         </label>
       )}
       <label>
-        In full
+        {t("In full")}
         <Select value={turns} onChange={setTurns} options={turnOptions()} />
       </label>
       <div className="start-options">
         <button type="button" className="linkish start-options-toggle" aria-expanded={more} onClick={() => setMore(!more)}>
           <Icon name={more ? "chevron-down" : "chevron-right"} size={12} />
-          Extra arguments{!more && draft.args.trim() ? " · set" : ""}
+          Extra arguments{!more && draft.args.trim() ? t(" · set") : ""}
         </button>
         {more && (
           <label>
-            Extra arguments
-            <input value={draft.args} placeholder="--permission-mode plan" spellCheck={false} onChange={(e) => setDraft({ ...draft, args: e.target.value })} />
+            {t("Extra arguments")}
+            <input value={draft.args} placeholder={t("--permission-mode plan")} spellCheck={false} onChange={(e) => setDraft({ ...draft, args: e.target.value })} />
           </label>
         )}
       </div>

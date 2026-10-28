@@ -9,6 +9,7 @@ import { basename, plural } from "@/lib/text";
 import { Icon, Logo, PANELS, Resizer } from "@/ui";
 import { reviewQueue, type QueueItem } from "./queue";
 import Review from "./Review";
+import { t } from "@/lib/i18n";
 
 export default function ReviewQueue() {
   const { machines, refresh } = useRoster();
@@ -20,7 +21,7 @@ export default function ReviewQueue() {
     if (!asked) return;
     const wanted = queue.find((candidate) => candidate.machine.id === asked.machineId && candidate.dir === asked.dir);
     if (wanted) setPicked(wanted.key);
-    else actions.notify(`Nothing to review in ${basename(asked.dir) || asked.dir} yet`, { brief: true });
+    else actions.notify(t("Nothing to review in {folder} yet", { folder: basename(asked.dir) || asked.dir }), { brief: true });
     actions.reviewPicked();
   }, [asked, queue]);
   const item = queue.find((candidate) => candidate.key === picked) ?? null;
@@ -29,22 +30,22 @@ export default function ReviewQueue() {
   const manyMachines = new Set(queue.map((candidate) => candidate.machine.id)).size > 1;
   return (
     <main className={`queue${item ? " has-pick" : ""}`}>
-      <aside className="queue-list" aria-label="Workspaces to review">
+      <aside className="queue-list" aria-label={t("Workspaces to review")}>
         <div className="queue-head">
-          <span className="queue-count">{queue.length === 0 ? "Nothing to review" : ready ? `${plural(ready, "workspace")} ready again` : fresh ? `${plural(fresh, "workspace")} with new changes` : `${plural(queue.length, "workspace")} with changes`}</span>
+          <span className="queue-count">{queue.length === 0 ? t("Nothing to review") : ready ? t("{workspaces} ready again", { workspaces: plural(ready, "workspace") }) : fresh ? t("{workspaces} with new changes", { workspaces: plural(fresh, "workspace") }) : t("{workspaces} with changes", { workspaces: plural(queue.length, "workspace") })}</span>
         </div>
-        {queue.length === 0 && <p className="queue-empty">Every workspace is clean or reviewed.</p>}
+        {queue.length === 0 && <p className="queue-empty">{t("Every workspace is clean or reviewed.")}</p>}
         {queue.map((candidate) => (
           <QueueRow key={candidate.key} item={candidate} on={candidate.key === picked} machine={manyMachines} onPick={() => setPicked(candidate.key)} />
         ))}
       </aside>
-      <Resizer spec={PANELS.queue} edge="right" label="Review queue width" />
+      <Resizer spec={PANELS.queue} edge="right" label={t("Review queue width")} />
       <section className="queue-main">
         {item ? (
           <>
             <div className="queue-main-head">
               <button type="button" className="btn sm queue-back" onClick={() => setPicked(null)}>
-                <Icon name="chevron-left" size={14} /> Queue
+                <Icon name="chevron-left" size={14} /> {t("Queue")}
               </button>
               <span className="queue-title">
                 {item.session.name}
@@ -55,7 +56,7 @@ export default function ReviewQueue() {
           </>
         ) : (
           <div className="placeholder">
-            <p>{queue.length === 0 ? "Nothing waits for a review." : "Pick a workspace to review its changes."}</p>
+            <p>{queue.length === 0 ? t("Nothing waits for a review.") : t("Pick a workspace to review its changes.")}</p>
           </div>
         )}
       </section>
@@ -65,20 +66,20 @@ export default function ReviewQueue() {
 
 function QueueRow({ item, on, machine, onPick }: { item: QueueItem; on: boolean; machine: boolean; onPick: () => void }) {
   const count = item.fresh || item.changed;
-  const countWords = item.fresh ? `${plural(item.fresh, "file")} changed since you looked` : item.changed ? `${plural(item.changed, "file")} changed, all seen` : "everything there is committed";
+  const countWords = item.fresh ? t("{files} changed since you looked", { files: plural(item.fresh, "file") }) : item.changed ? t("{files} changed, all seen", { files: plural(item.changed, "file") }) : t("everything there is committed");
   return (
-    <button type="button" className={`queue-item${on ? " on" : ""}${item.fresh ? " fresh" : ""}${item.ready ? " ready" : ""}`} onClick={onPick} title={item.ready ? `${item.dir}\nRejected at the last look; the agent says it is ready for another` : item.dir}>
+    <button type="button" className={`queue-item${on ? " on" : ""}${item.fresh ? " fresh" : ""}${item.ready ? " ready" : ""}`} onClick={onPick} title={item.ready ? `${item.dir}\n${t("Rejected at the last look; the agent says it is ready for another")}` : item.dir}>
       {item.pane?.agent ? <Logo agent={item.pane.agent} /> : <Icon name="terminal" size={14} />}
       <span className="queue-name">
         <span className="queue-title">
           {item.session.name}
           {machine && <span className="queue-where"> · {item.machine.label}</span>}
         </span>
-        {item.ready && <span className="queue-sub">says it is ready again</span>}
+        {item.ready && <span className="queue-sub">{t("says it is ready again")}</span>}
       </span>
       {item.ready ? (
         <span className="badge ready" title={countWords}>
-          ready again
+          {t("ready again")}
         </span>
       ) : (
         <span className={`badge${item.fresh ? "" : " quiet"}`} title={countWords}>

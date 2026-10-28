@@ -4,13 +4,14 @@
 import { basename } from "@/lib/text";
 import type { BudgetStatus, Period } from "./api";
 import { usd } from "./format";
+import { t, tn } from "@/lib/i18n";
 
 export type BudgetTone = "" | "dim" | "amber" | "red";
 
 export const PERIODS: { value: Period; label: string }[] = [
-  { value: "day", label: "A day" },
+  { value: "day", label: t("A day") },
   { value: "week", label: "A week (from Monday)" },
-  { value: "month", label: "A month" },
+  { value: "month", label: t("A month") },
 ];
 
 // ratio is how far along a budget is: spent over its limit, 0 while the spend is not known yet
@@ -50,15 +51,15 @@ export const periodWords = (p: Period): string => (p === "week" ? "this week" : 
 // budgetWords: "$16.40 of $20.0 this week · 82 %", or what is known while the spend is not read yet; a spend many
 // times the limit says so instead of a number nobody reads
 export function budgetWords(b: BudgetStatus): string {
-  if (!b.collected) return `${usd(b.limit)} ${periodWords(b.period)} · reading…`;
+  if (!b.collected) return t("{limit} {period} · reading…", { limit: usd(b.limit), period: periodWords(b.period) });
   const pct = Math.floor(100 * ratio(b) + 1e-9);
-  return `${usd(b.spent)} of ${usd(b.limit)} ${periodWords(b.period)} · ${pct > 999 ? "far past the limit" : `${pct} %`}`;
+  return t("{spent} of {limit} {period} · {pct}", { spent: usd(b.spent), limit: usd(b.limit), period: periodWords(b.period), pct: pct > 999 ? t("far past the limit") : `${pct} %` });
 }
 
 // missingWords says which machines a reading left out, "" when none: "GOG not counted: no report from it"
 export function missingWords(b: BudgetStatus, machineLabel: (id: string) => string): string {
   if (!b.missing?.length) return "";
-  return `${b.missing.map(machineLabel).join(", ")} not counted: no report from ${b.missing.length === 1 ? "it" : "them"}`;
+  return tn(b.missing.length, "{machines} not counted: no report from it", "{machines} not counted: no report from them", { machines: b.missing.map(machineLabel).join(", ") });
 }
 
 // scopeWords: "everything", a machine's name, or "<machine> · <folder>"

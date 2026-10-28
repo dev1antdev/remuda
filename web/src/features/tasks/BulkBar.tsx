@@ -4,6 +4,7 @@ import { Icon, Menu, Tip, type MenuItem } from "@/ui";
 import type { Label } from "./api";
 import type { Action, ColumnChoice } from "./bulk";
 import { selectionWords } from "./selection";
+import { t } from "@/lib/i18n";
 
 export function BulkBar({ count, busy, columns, labels, onAct, onClear }: {
   count: number;
@@ -13,7 +14,7 @@ export function BulkBar({ count, busy, columns, labels, onAct, onClear }: {
   onAct: (action: Action) => void;
   onClear: () => void;
 }) {
-  const partial = (n: number) => (n < count ? `${n} of ${count}` : undefined);
+  const partial = (n: number) => (n < count ? t("{n} of {count}", { n, count }) : undefined);
   const moveItems: MenuItem[] = columns.map((c) => ({
     label: c.title,
     hint: partial(c.have),
@@ -21,40 +22,40 @@ export function BulkBar({ count, busy, columns, labels, onAct, onClear }: {
   }));
   const labelItems: MenuItem[] = labels.length
     ? labels.map(({ label, lacking }) => ({ label: label.title, hint: partial(lacking), disabled: lacking === 0, onSelect: () => onAct({ kind: "label", labelId: label.id }) }))
-    : [{ label: "No labels yet", disabled: true, onSelect: () => {} }];
+    : [{ label: t("No labels yet"), disabled: true, onSelect: () => {} }];
   return (
-    <div className="bulk-bar" role="toolbar" aria-label="Selected tasks">
+    <div className="bulk-bar" role="toolbar" aria-label={t("Selected tasks")}>
       <span className="bulk-count">{selectionWords(count)}</span>
       <Menu
-        label="Move to"
+        label={t("Move to")}
         align="start"
         side="top"
         items={moveItems}
         trigger={
           <button type="button" className="btn sm" disabled={busy || columns.length === 0}>
-            <Icon name="columns" size={14} /> Move to…
+            <Icon name="columns" size={14} /> {t("Move to…")}
           </button>
         }
       />
       <Menu
-        label="Add label"
+        label={t("Add label")}
         align="start"
         side="top"
         items={labelItems}
         trigger={
           <button type="button" className="btn sm" disabled={busy}>
-            <Icon name="tag" size={14} /> Add label…
+            <Icon name="tag" size={14} /> {t("Add label…")}
           </button>
         }
       />
       <button type="button" className="btn sm" disabled={busy} onClick={() => onAct({ kind: "done" })}>
-        <Icon name="check" size={14} /> Mark done
+        <Icon name="check" size={14} /> {t("Mark done")}
       </button>
       <button type="button" className="btn sm danger soft" disabled={busy} onClick={() => onAct({ kind: "delete" })}>
-        <Icon name="trash" size={14} /> Delete…
+        <Icon name="trash" size={14} /> {t("Delete…")}
       </button>
       <Tip text="Clear the selection (Esc)">
-        <button type="button" className="icon-btn sm bulk-clear" aria-label="Clear the selection" disabled={busy} onClick={onClear}>
+        <button type="button" className="icon-btn sm bulk-clear" aria-label={t("Clear the selection")} disabled={busy} onClick={onClear}>
           <Icon name="x" size={14} />
         </button>
       </Tip>

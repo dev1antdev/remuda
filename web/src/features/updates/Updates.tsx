@@ -9,6 +9,7 @@ import Icon from "@/ui/icons";
 import { errMsg } from "@/lib/text";
 import { Dialog, Notice } from "@/ui";
 import { useQuery } from "@/lib/query";
+import { tn, t as tr } from "@/lib/i18n";
 
 // missingText says why the update asked for is not on the machine's list
 function missingText(what: string): string {
@@ -22,7 +23,7 @@ function missingText(what: string): string {
     case "plugins":
       return "No herdr plugin from GitHub is installed there, or herdr there is older than 0.9.4.";
   }
-  return `Nothing to update called “${what}” there any more.`;
+  return tr("Nothing to update called “{what}” there any more.", { what });
 }
 
 // lastJob is the job last started per machine, so the dialog opened again shows the one still running
@@ -62,7 +63,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
       fetchJob(id).then(setJob, (e) => {
         clearInterval(t);
         setErr(errMsg(e));
-        setJob((j) => (j && j.id === id ? { ...j, done: true, ok: false, error: "lost track of the job" } : j));
+        setJob((j) => (j && j.id === id ? { ...j, done: true, ok: false, error: tr("lost track of the job") } : j));
       });
     }, 1000);
     return () => clearInterval(t);
@@ -106,7 +107,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
   }, [listShown]);
   const when = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return (
-    <Dialog title={job ? job.title : picked ? picked.title : `Updates on ${label}`} icon="refresh-cw" size="md" onClose={onClose} className="updates">
+    <Dialog title={job ? job.title : picked ? picked.title : tr("Updates on {machine}", { machine: label })} icon="refresh-cw" size="md" onClose={onClose} className="updates">
       {error && <Notice tone="error">{error}</Notice>}
       {err && <Notice tone="error" onDismiss={() => setErr("")}>{err}</Notice>}
       {job ? (
@@ -123,7 +124,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
                 </Notice>
               ) : (
                 <Notice tone="success" icon="check">
-                  Done.
+                  {tr("Done.")}
                 </Notice>
               )
             ) : (
@@ -137,11 +138,11 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           <div className="modal-actions">
             {job.done && (
               <button type="button" className="btn" onClick={back}>
-                Back
+                {tr("Back")}
               </button>
             )}
             <button type="button" className="btn primary" onClick={onClose}>
-              Close
+              {tr("Close")}
             </button>
           </div>
         </>
@@ -150,26 +151,26 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           <p className="updates-note">{picked.note}</p>
           <p className="dim">
             {picked.what.startsWith("restart-")
-              ? `This goes through herdr on ${label}, pane by pane:`
+              ? tr("This goes through herdr on {machine}, pane by pane:", { machine: label })
               : picked.what === "remuda-release"
-                ? `This runs on ${label}, as you: the download from GitHub, the check, the install, the restart of remuda there:`
-                : `This runs on ${label}, as you, through the shell remuda already uses there:`}
+                ? tr("This runs on {machine}, as you: the download from GitHub, the check, the install, the restart of remuda there:", { machine: label })
+                : tr("This runs on {machine}, as you, through the shell remuda already uses there:", { machine: label })}
           </p>
           <code className="updates-cmd">{picked.command}</code>
           <div className="modal-actions">
             <button type="button" className="btn" onClick={back}>
-              Back
+              {tr("Back")}
             </button>
             <button type="button" className="btn primary" onClick={() => void run(picked)}>
-              <Icon name="play" size={14} /> Run
+              <Icon name="play" size={14} /> {tr("Run")}
             </button>
           </div>
         </>
       ) : (
         <>
           {missing && <Notice tone="warn" onDismiss={() => setMissing("")}>{missing}</Notice>}
-          {loading && <div className="notice hint">Looking…</div>}
-          {data && data.length === 0 && <div className="empty">Nothing here that remuda knows how to update.</div>}
+          {loading && <div className="notice hint">{tr("Looking…")}</div>}
+          {data && data.length === 0 && <div className="empty">{tr("Nothing here that remuda knows how to update.")}</div>}
           <div className="updates-list">
             {data?.map((u) => (
               <button key={u.what} type="button" className="updates-row" onClick={() => setPicked(u)}>
@@ -185,8 +186,8 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           {recent.data && recent.data.jobs.length > 0 && (
             <div className="updates-recent">
               <span className="dim">
-                Ran here lately
-                {recent.data.pending > 0 ? ` · ${recent.data.pending} chat${recent.data.pending > 1 ? "s" : ""} waiting to restart` : ""}
+                {tr("Ran here lately")}
+                {recent.data.pending > 0 ? ` · ${tn(recent.data.pending, "{n} chat waiting to restart", "{n} chats waiting to restart")}` : ""}
               </span>
               {recent.data.jobs.map((j) => (
                 <button key={j.id} type="button" className="linkish updates-job" onClick={() => open(j.id)} title={j.error || (j.done ? (j.ok ? "done" : "failed") : "running")}>
@@ -197,7 +198,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           )}
           <div className="modal-actions">
             <button type="button" className="btn" onClick={onClose}>
-              Close
+              {tr("Close")}
             </button>
           </div>
         </>

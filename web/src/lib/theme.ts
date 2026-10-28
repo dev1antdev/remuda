@@ -3,6 +3,8 @@
 // same colours as --ctp-* custom properties, one block per flavour (lib/theme.test.ts keeps the two equal); this is the
 // one place the values are typed out for scripts.
 
+import { t } from "@/lib/i18n";
+
 export type ThemePref = "system" | "dark" | "light";
 export type Theme = "dark" | "light";
 export type Flavor = "latte" | "frappe" | "macchiato" | "mocha";
@@ -92,7 +94,7 @@ export const FLAVORS: Record<Flavor, Swatches> = { latte: LATTE, frappe: FRAPPE,
 export const FLAVOR_NAMES: Record<Flavor, string> = { latte: "Latte", frappe: "Frappé", macchiato: "Macchiato", mocha: "Mocha" };
 
 // accentName is an accent's name with its first letter up, for a label
-export const accentName = (accent: Accent): string => accent[0]!.toUpperCase() + accent.slice(1);
+export const accentName = (accent: Accent): string => t(accent[0]!.toUpperCase() + accent.slice(1));
 
 export const swatches = (flavor: Flavor): Swatches => FLAVORS[flavor];
 

@@ -17,6 +17,7 @@ import Select from "@/ui/Select";
 import Icon from "@/ui/icons";
 import { openUrl } from "@/lib/host";
 import { Tip } from "@/ui";
+import { t } from "@/lib/i18n";
 
 // escapePath keeps a #, ? or % in a file name as part of the path when the workbench parses its URI
 const escapePath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
@@ -47,7 +48,7 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
       if (folder && !seen.has(folder)) seen.set(folder, s.name);
     }
     const each = [...seen.entries()].map(([folder, name]) => ({ value: folder, label: name, hint: folder, icon: folderIcon }));
-    return each.length > 1 ? [{ value: ALL, label: `All workspaces on ${machine.label}`, hint: `${each.length} folders in one editor`, icon: <Icon name="layers" size={14} /> }, ...each] : each;
+    return each.length > 1 ? [{ value: ALL, label: t("All workspaces on {machine}", { machine: machine.label }), hint: t("{n} folders in one editor", { n: each.length }), icon: <Icon name="layers" size={14} /> }, ...each] : each;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [machine]);
   const roots = useMemo(() => options.filter((o) => o.value !== ALL).map((o) => o.value), [options]);
@@ -154,7 +155,7 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
     themed.current = key;
     codeTheme(machine.id, flavor).then(
       (r) => (r.installed || !first) && setReloads((n) => n + 1),
-      (e) => actions.notify(`The editor keeps its own theme: ${errMsg(e)}`, { error: true }),
+      (e) => actions.notify(t("The editor keeps its own theme: {error}", { error: errMsg(e) }), { error: true }),
     );
   }, [machine?.id, status?.available, flavor]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -191,40 +192,40 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
           <Select
             className="code-folder"
             value={folder}
-            placeholder="Pick a folder"
+            placeholder={t("Pick a folder")}
             onChange={(f) => setFolders({ ...folders, [machine.id]: f })}
             options={options.some((o) => o.value === folder) || !folder || folder === ALL ? options : [{ value: folder, label: basename(folder), hint: folder, icon: folderIcon }, ...options]}
           />
         )}
         {watched && status?.available && (
-          <Tip text={follow ? "Following the agent: every file it finishes editing opens here. Click to stop." : `Follow the agent: open every file it edits in ${watched.dir.split("/").pop() || "its folder"}, as it happens`}>
+          <Tip text={follow ? t("Following the agent: every file it finishes editing opens here. Click to stop.") : t("Follow the agent: open every file it edits in {folder}, as it happens", { folder: watched.dir.split("/").pop() || t("its folder") })}>
             <button type="button" className={`btn sm code-follow${follow ? " on" : ""}`} aria-pressed={follow} onClick={() => setFollow(!follow)}>
               <Icon name="eye" size={14} />
-              <span>Follow</span>
+              <span>{t("Follow")}</span>
             </button>
           </Tip>
         )}
         <span className="code-bar-spacer" />
         {status?.available && status.version && <span className="code-version">code-server {status.version}</span>}
         {status?.available && (
-          <Tip text="Reload the editor: a fresh frame for this folder, when it lost its connection or shows a stale state">
-            <button type="button" className="icon-btn" aria-label="Reload the editor" onClick={() => setReloads((n) => n + 1)}>
+          <Tip text={t("Reload the editor: a fresh frame for this folder, when it lost its connection or shows a stale state")}>
+            <button type="button" className="icon-btn" aria-label={t("Reload the editor")} onClick={() => setReloads((n) => n + 1)}>
               <Icon name="refresh-cw" size={16} />
             </button>
           </Tip>
         )}
         {status?.available && (
-          <button type="button" className="icon-btn" title="Open the editor in its own tab" onClick={() => frame && openUrl(frame.src)}>
+          <button type="button" className="icon-btn" title={t("Open the editor in its own tab")} onClick={() => frame && openUrl(frame.src)}>
             <Icon name="external-link" size={14} />
           </button>
         )}
       </div>
       {!machine ? (
-        <div className="empty">No connected machine.</div>
+        <div className="empty">{t("No connected machine.")}</div>
       ) : status === null ? (
-        <div className="empty">Looking for code-server on {machine.label}…</div>
+        <div className="empty">{t("Looking for code-server on {machine}…", { machine: machine.label })}</div>
       ) : status.available ? (
-        frame && <iframe key={frame.key} className="code-frame" src={frame.src} title={`VS Code on ${machine.label}`} allow="clipboard-read; clipboard-write" onLoad={() => setReady(frame.key)} />
+        frame && <iframe key={frame.key} className="code-frame" src={frame.src} title={t("VS Code on {machine}", { machine: machine.label })} allow="clipboard-read; clipboard-write" onLoad={() => setReady(frame.key)} />
       ) : (
         <div className="code-install">
           <h2>
@@ -235,14 +236,14 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
             Install it there as a background service (VS Code in the browser, bound to 127.0.0.1:{status.port || "7320"} with no auth of its own — remuda's
             token is the door):
           </p>
-          <pre className="code-cmd">{machine.id === "local" ? "remuda code" : `remuda code -host ${machine.host ?? machine.label}`}</pre>
+          <pre className="code-cmd">{machine.id === "local" ? t("remuda code") : `remuda code -host ${machine.host ?? machine.label}`}</pre>
           <p className="modal-hint">
             …in a terminal on the machine that serves this page (<code>~/.local/bin/remuda</code> when it is not on your PATH). It downloads a pinned
             release of code-server and verifies its checksum.
           </p>
           <div className="modal-actions">
             <button type="button" className="btn" onClick={() => probe(true)} disabled={checking}>
-              {checking ? "…" : "Check again"}
+              {checking ? "…" : t("Check again")}
             </button>
           </div>
         </div>

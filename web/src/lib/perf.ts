@@ -2,6 +2,8 @@
 // reported with where the page was, so a stall can be traced to its mode and pane instead of guessed at. The
 // browser's PerformanceObserver on "longtask" entries; the words and the toast rule are pure and tested.
 
+import { t } from "@/lib/i18n";
+
 export type Stall = { ms: number; where: string; at: number };
 
 export const STALL_LOGGED = 250; // ms: a long task worth a line in the console
@@ -11,7 +13,7 @@ export const TOAST_SPACING = 60_000; // ms: one toast a minute at most
 // stallWords is the line: "The page stalled 4.2 s on the Wall (13 tiles)"
 export function stallWords(stall: Stall): string {
   const seconds = stall.ms >= 10_000 ? `${Math.round(stall.ms / 1000)} s` : `${(stall.ms / 1000).toFixed(1)} s`;
-  return `The page stalled ${seconds} ${stall.where}`.trimEnd();
+  return t("The page stalled {seconds} {where}", { seconds, where: stall.where }).trimEnd();
 }
 
 // toastDue says whether a stall gets a toast: long enough, and not within a minute of the last one

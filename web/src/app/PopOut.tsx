@@ -11,6 +11,7 @@ import { useAllPanes } from "./current";
 import { popOutWindow } from "./pip";
 import { app, type Selection } from "./store";
 import { TileView } from "./Tile";
+import { t } from "@/lib/i18n";
 
 export default function PopOut() {
   const popout = app.use((s) => s.popout);
@@ -34,7 +35,7 @@ function Popped({ popout }: { popout: Selection }) {
         <TileView tile={{ ...located, key: tileKey(located.machine.id, located.pane.id) }} view={wall.view} radar={radar} step={step} now={now} />
       ) : (
         <div className="placeholder">
-          <p>That pane is gone.</p>
+          <p>{t("That pane is gone.")}</p>
         </div>
       )}
     </div>

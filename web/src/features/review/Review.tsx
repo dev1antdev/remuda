@@ -19,6 +19,7 @@ import { Note } from "./Hunk";
 import { KEYS, useReviewKeys } from "./keys";
 import { commentsMessage, place, verdictMessage, type DraftComment, type VerdictAsk } from "./draft";
 import { VerdictDialog } from "./VerdictDialog";
+import { t } from "@/lib/i18n";
 
 export type { DraftComment } from "./draft";
 
@@ -102,7 +103,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
     setOpenFile(null);
     lookAgain();
     onSeen?.();
-    showNotice(`${verdict === "approved" ? "Approved" : "Rejected"} — ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""} has been told${ask === "pr" ? " and asked to open a pull request" : ask === "commit" ? " and asked to commit" : ""}.`);
+    showNotice(`${verdict === "approved" ? t("Approved") : t("Rejected")} — ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""} has been told${ask === "pr" ? t(" and asked to open a pull request") : ask === "commit" ? t(" and asked to commit") : ""}.`);
   };
 
   const files = review?.files ?? [];
@@ -120,10 +121,10 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
     toggleSplit: () => setSplit((on) => !on),
   });
 
-  if (review === null && !error) return <div className="empty">Looking at the folder…</div>;
-  if (review && !review.repo) return <div className="empty">{basename(dir)} is not a git checkout — nothing to review.</div>;
+  if (review === null && !error) return <div className="empty">{t("Looking at the folder…")}</div>;
+  if (review && !review.repo) return <div className="empty">{t("{folder} is not a git checkout — nothing to review.", { folder: basename(dir) })}</div>;
   const lastVerdict = review?.baseline?.verdict;
-  const lastLookText = !lastLook ? "not reviewed yet" : lastVerdict === "approved" ? `approved ${ago(lastLook)}` : lastVerdict === "changes" ? `rejected ${ago(lastLook)}${review?.baseline?.ready ? " · ready again" : ""}` : `since you looked ${ago(lastLook)}`;
+  const lastLookText = !lastLook ? t("not reviewed yet") : lastVerdict === "approved" ? t("approved {ago}", { ago: ago(lastLook) }) : lastVerdict === "changes" ? t("rejected {ago}", { ago: ago(lastLook) }) + (review?.baseline?.ready ? t(" · ready again") : "") : t("since you looked {ago}", { ago: ago(lastLook) });
   const added = files.reduce((sum, file) => sum + file.added, 0);
   const removed = files.reduce((sum, file) => sum + file.removed, 0);
   const orphanComments = draft.filter((comment) => !files.some((file) => file.path === comment.file));
@@ -157,21 +158,21 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           <span className="review-sub">
             {lastLookText}
             {commits.length > 0 && ` · ${plural(commits.length, "commit")}`}
-            {files.length > 0 && ` · ${plural(files.length, "file")} uncommitted +${added} −${removed}`}
+            {files.length > 0 && ` · ${t("{files} uncommitted +{added} −{removed}", { files: plural(files.length, "file"), added, removed })}`}
           </span>
         </div>
         <span className="review-keys" aria-hidden="true">
           {KEYS.map(([first, second, what]) => (
             <span key={what}>
               <kbd>{first}</kbd>
-              {second && <kbd>{second}</kbd>} {what}
+              {second && <kbd>{second}</kbd>} {t(what)}
             </span>
           ))}
         </span>
         <button type="button" className={`icon-btn${split ? " on" : ""}`} aria-pressed={split} title={split ? "Two columns, the old file on the left (s)" : "One column (s)"} onClick={() => setSplit((on) => !on)}>
           <Icon name="columns" size={14} />
         </button>
-        <button type="button" className="icon-btn" title="Look again" onClick={lookAgain}>
+        <button type="button" className="icon-btn" title={t("Look again")} onClick={lookAgain}>
           <Icon name="refresh-cw" size={14} />
         </button>
         <button
@@ -179,9 +180,9 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           className="btn review-seen"
           disabled={marking || (!files.length && !commits.length)}
           onClick={() => void markReviewedSilently()}
-          title="The counts clear and the next look starts from now; the agent hears nothing"
+          title={t("The counts clear and the next look starts from now; the agent hears nothing")}
         >
-          <Icon name="check" size={14} /> Mark reviewed
+          <Icon name="check" size={14} /> {t("Mark reviewed")}
         </button>
       </div>
       {error && (
@@ -194,7 +195,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
         {commits.length > 0 && (
           <div className="review-commits">
             {commits.map((commit) => (
-              <div key={commit.sha} className={`review-commit${commit.seen ? " seen" : ""}`} title={commit.seen ? "A commit of work you already reviewed" : undefined}>
+              <div key={commit.sha} className={`review-commit${commit.seen ? " seen" : ""}`} title={commit.seen ? t("A commit of work you already reviewed") : undefined}>
                 <code>{commit.sha}</code>
                 <span className="review-commit-subject">{commit.subject}</span>
                 {commit.seen && <span className="review-tag">reviewed</span>}
@@ -203,7 +204,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
             ))}
           </div>
         )}
-        {files.length === 0 && <div className="empty">{commits.length > 0 ? "Everything here is committed." : lastLook ? "Nothing has changed here since you looked." : "Nothing is uncommitted here."}</div>}
+        {files.length === 0 && <div className="empty">{commits.length > 0 ? t("Everything here is committed.") : lastLook ? t("Nothing has changed here since you looked.") : t("Nothing is uncommitted here.")}</div>}
         {freshFiles.map((file) => fileRow(file))}
         {unchangedFiles.length > 0 && (
           <div className="review-fold">
@@ -215,7 +216,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
         )}
         {review && orphanComments.length > 0 && (
           <div className="review-orphans">
-            <Notice tone="hint">Comments on files no longer in this list — still in the draft:</Notice>
+            <Notice tone="hint">{t("Comments on files no longer in this list — still in the draft:")}</Notice>
             {orphanComments.map((comment) => (
               <Note key={comment.id} comment={comment} where={`${comment.file}:${comment.line}`} onRemove={removeComment} />
             ))}
@@ -234,39 +235,39 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           {draft.length > 0 && (
             <>
               <button type="button" className="linkish" onClick={() => setDraft([])}>
-                Clear
+                {t("Clear")}
               </button>
               {agent ? (
                 <>
-                  <button type="button" className="btn" disabled={sending} title={`Send the comments to ${agent}, with no verdict`} onClick={() => sendComments({ machineId, paneId, agent }).catch((failure) => setActionError(errMsg(failure)))}>
-                    <Icon name="send" size={12} /> Send
+                  <button type="button" className="btn" disabled={sending} title={t("Send the comments to {agent}, with no verdict", { agent })} onClick={() => sendComments({ machineId, paneId, agent }).catch((failure) => setActionError(errMsg(failure)))}>
+                    <Icon name="send" size={12} /> {t("Send")}
                   </button>
                   {agents.length > 1 && (
-                    <button type="button" className="icon-btn" title="Send the comments to another agent" disabled={sending} onClick={() => setPickingAgent(true)}>
+                    <button type="button" className="icon-btn" title={t("Send the comments to another agent")} disabled={sending} onClick={() => setPickingAgent(true)}>
                       <Icon name="chevron-down" size={14} />
                     </button>
                   )}
                 </>
               ) : (
-                <button type="button" className="btn" disabled={sending} title="Send the comments to an agent, with no verdict" onClick={() => setPickingAgent(true)}>
-                  <Icon name="send" size={12} /> Send…
+                <button type="button" className="btn" disabled={sending} title={t("Send the comments to an agent, with no verdict")} onClick={() => setPickingAgent(true)}>
+                  <Icon name="send" size={12} /> {t("Send…")}
                 </button>
               )}
             </>
           )}
           <span className="review-verdicts">
-            <button type="button" className="btn" onClick={() => setOpenVerdict("changes")} title="Tell the agent what to change: the comments and a note go to it, and the next look starts from now">
-              <Icon name="x" size={12} /> Reject
+            <button type="button" className="btn" onClick={() => setOpenVerdict("changes")} title={t("Tell the agent what to change: the comments and a note go to it, and the next look starts from now")}>
+              <Icon name="x" size={12} /> {t("Reject")}
             </button>
-            <button type="button" className="btn primary" onClick={() => setOpenVerdict("approved")} title="Tell the agent the changes are reviewed and it can carry on; the next look starts from now">
-              <Icon name="check" size={12} /> Approve
+            <button type="button" className="btn primary" onClick={() => setOpenVerdict("approved")} title={t("Tell the agent the changes are reviewed and it can carry on; the next look starts from now")}>
+              <Icon name="check" size={12} /> {t("Approve")}
             </button>
           </span>
         </div>
       )}
       {pickingAgent && (
         <SendToAgent
-          title="Send the review to"
+          title={t("Send the review to")}
           text={commentsMessage(draft, where())}
           agents={agents}
           currentPane={currentPane}

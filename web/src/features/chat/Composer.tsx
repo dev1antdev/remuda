@@ -12,6 +12,7 @@ import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments"
 import { useDictation } from "./dictation";
 import { expandPrompt, QuickPromptsDialog, QuickPromptsMenu } from "./QuickPrompts";
 import { useHistory } from "./useHistory";
+import { t } from "@/lib/i18n";
 
 export default function Composer({ machineId, paneId, working, dir, compact = false }: { machineId: string; paneId: string; working: boolean; dir: string; compact?: boolean }) {
   // the insertions read the draft through a ref: a state updater must stay free of side effects
@@ -120,7 +121,7 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
               )}
               <span className="attachment-name">{a.file.name}</span>
               {!a.upload && !a.error && <span className="attachment-spin" />}
-              <button type="button" className="icon-btn sm danger attachment-x" title="Remove" aria-label="Remove" onClick={() => removeAttachment(a)}>
+              <button type="button" className="icon-btn sm danger attachment-x" title={t("Remove")} aria-label={t("Remove")} onClick={() => removeAttachment(a)}>
                 <Icon name="x" size={12} />
               </button>
             </div>
@@ -158,15 +159,15 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
         {!compact && (
           <>
             <Tip text={`Attach files (up to ${MAX_ATTACHMENTS}): they are uploaded into the pane's folder`}>
-              <button type="button" className="icon-btn lg composer-attach" aria-label="Attach files" disabled={att.items.length >= MAX_ATTACHMENTS} onClick={() => picker.current?.click()}>
+              <button type="button" className="icon-btn lg composer-attach" aria-label={t("Attach files")} disabled={att.items.length >= MAX_ATTACHMENTS} onClick={() => picker.current?.click()}>
                 <Icon name="paperclip" size={16} />
               </button>
             </Tip>
-            <Tip text="Quick prompts: saved texts, with {dir}, {branch} and {file} filled in">
+            <Tip text={t("Quick prompts: saved texts, with {dir}, {branch} and {file} filled in")}>
               <button
                 type="button"
                 className={`icon-btn lg composer-attach${quick ? " on" : ""}`}
-                aria-label="Quick prompts"
+                aria-label={t("Quick prompts")}
                 aria-expanded={!!quick}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -178,11 +179,11 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
               </button>
             </Tip>
             {dictation.supported && (
-              <Tip text={dictation.listening ? "Stop dictating" : "Dictate through this device's own speech recognition"}>
+              <Tip text={dictation.listening ? t("Stop dictating") : t("Dictate through this device's own speech recognition")}>
                 <button
                   type="button"
                   className={`icon-btn lg composer-attach composer-mic${dictation.listening ? " listening" : ""}`}
-                  aria-label={dictation.listening ? "Stop dictating" : "Dictate"}
+                  aria-label={dictation.listening ? t("Stop dictating") : t("Dictate")}
                   aria-pressed={dictation.listening}
                   onClick={dictation.toggle}
                 >
@@ -213,7 +214,7 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
         <textarea
           ref={area}
           value={draft}
-          placeholder={compact ? "Message…" : isTouch ? "Message the agent… (Enter = new line)" : "Message the agent… (Shift+Enter = new line)"}
+          placeholder={compact ? t("Message…") : isTouch ? t("Message the agent… (Enter = new line)") : t("Message the agent… (Shift+Enter = new line)")}
           rows={Math.min(compact ? 3 : 6, Math.max(1, draft.split("\n").length))}
           onChange={(e) => {
             history.reset();
@@ -246,22 +247,22 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
             }
           }}
         />
-        <button type="button" className="btn primary composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title={isTouch ? "Send" : "Send (Enter)"}>
+        <button type="button" className="btn primary composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title={isTouch ? t("Send") : "Send (Enter)"}>
           {sending ? (
             "…"
           ) : att.uploading ? (
             "Uploading…"
           ) : (
             <>
-              <span>Send</span>
+              <span>{t("Send")}</span>
               <Icon name="send" size={14} />
             </>
           )}
         </button>
         {working && (
-          <Tip text="Send Esc: the agent stops what it is doing">
-            <button type="button" className="btn danger soft composer-stop" aria-label="Stop" onClick={() => void sendKeys(machineId, paneId, ["esc"]).catch((e) => setError(errMsg(e)))}>
-              <Icon name="square" size={12} /> <span>Stop</span>
+          <Tip text={t("Send Esc: the agent stops what it is doing")}>
+            <button type="button" className="btn danger soft composer-stop" aria-label={t("Stop")} onClick={() => void sendKeys(machineId, paneId, ["esc"]).catch((e) => setError(errMsg(e)))}>
+              <Icon name="square" size={12} /> <span>{t("Stop")}</span>
             </button>
           </Tip>
         )}

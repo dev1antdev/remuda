@@ -11,6 +11,7 @@ import { tokenNodes } from "@/ui/Tokens";
 import { gapAbove, gapBelow, gapLength, surround, UNFOLD_STEP, type Unfold } from "./context";
 import type { DraftComment } from "./draft";
 import { changedSpan, pairRows, partners, rowsOf, rowTokens, type DiffHunk, type DiffRow } from "./hunks";
+import { t } from "@/lib/i18n";
 
 export type NewComment = Omit<DraftComment, "id" | "file">;
 
@@ -88,7 +89,7 @@ export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComm
               }
             : undefined
         }
-        title={commentable ? "Comment on this line" : undefined}
+        title={commentable ? t("Comment on this line") : undefined}
       >
         <span className="fv-ln">{line ?? ""}</span>
         <Source row={row} partner={partnerOf.get(row) ?? null} marker={side === "both"} tokens={tokensOf.get(row)} />
@@ -128,7 +129,7 @@ export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComm
       {leftBelow !== 0 && (
         <div className="fv-line hunk hunk-foot">
           <UnfoldStep side="below" left={leftBelow} blocked={blocked} onClick={() => onUnfold(index, "below", UNFOLD_STEP)} />
-          <span className="fv-src">{leftBelow === null ? "the rest of the file" : `${plural(leftBelow, "line")} to the end of the file`}</span>
+          <span className="fv-src">{leftBelow === null ? t("the rest of the file") : t("{lines} to the end of the file", { lines: plural(leftBelow, "line") })}</span>
           <UnfoldAll left={leftBelow} blocked={blocked} onClick={() => onUnfold(index, "below", Infinity)} />
         </div>
       )}
@@ -139,7 +140,7 @@ export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComm
 // UnfoldStep is the button at a hunk's edge for ten more lines of the gap there; it stays, disabled, when the file's lines cannot be had
 function UnfoldStep({ side, left, blocked, onClick }: { side: "above" | "below"; left: number | null; blocked: string | null; onClick: () => void }) {
   if (left === 0) return <span className="hunk-unfold" />;
-  const what = `${Math.min(UNFOLD_STEP, left ?? UNFOLD_STEP)} more ${left === 1 ? "line" : "lines"} ${side}`;
+  const what = `${plural(Math.min(UNFOLD_STEP, left ?? UNFOLD_STEP), "more line")} ${side}`;
   return (
     <span className="hunk-unfold">
       <Tip text={blocked ?? what}>
@@ -156,7 +157,7 @@ function UnfoldAll({ left, blocked, onClick }: { left: number | null; blocked: s
   if (left === 0) return null;
   return (
     <button type="button" className="linkish hunk-unfold-all" aria-disabled={blocked ? true : undefined} title={blocked ?? undefined} onClick={blocked ? undefined : onClick}>
-      {left === null ? "all" : `all ${plural(left, "line")}`}
+      {left === null ? t("all") : t("all {lines}", { lines: plural(left, "line") })}
     </button>
   );
 }
@@ -180,7 +181,7 @@ function CommentBox({ row, onAdd, onClose }: { row: DiffRow; onAdd: (text: strin
         autoFocus
         rows={3}
         value={text}
-        placeholder={`What should change at line ${row.newLine ?? row.oldLine}? It joins the draft; everything goes to the agent in one message.`}
+        placeholder={t("What should change at line {n}? It joins the draft; everything goes to the agent in one message.", { n: row.newLine ?? row.oldLine ?? "" })}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Escape") onClose();
@@ -189,10 +190,10 @@ function CommentBox({ row, onAdd, onClose }: { row: DiffRow; onAdd: (text: strin
       />
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" className="btn primary" disabled={!text.trim()}>
-          <Icon name="plus" size={12} /> Add to the review
+          <Icon name="plus" size={12} /> {t("Add to the review")}
         </button>
       </div>
     </form>
@@ -238,7 +239,7 @@ export function Note({ comment, where, onRemove }: { comment: DraftComment; wher
         )}
         {comment.text}
       </span>
-      <button type="button" className="icon-btn sm" title="Remove this comment" onClick={() => onRemove(comment.id)}>
+      <button type="button" className="icon-btn sm" title={t("Remove this comment")} onClick={() => onRemove(comment.id)}>
         <Icon name="x" size={12} />
       </button>
     </div>

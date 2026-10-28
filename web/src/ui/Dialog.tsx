@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Icon, { type IconName } from "@/ui/icons";
+import { t } from "@/lib/i18n";
 
 // openDialogs counts the open dialogs: the page behind them is inert until the last one closes.
 let openDialogs = 0;
@@ -63,7 +64,7 @@ export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit
               </h2>
             )}
             {controls && <div className="modal-head-controls">{controls}</div>}
-            <button type="button" className="icon-btn" onClick={onClose} title="Close" aria-label="Close">
+            <button type="button" className="icon-btn" onClick={onClose} title={t("Close")} aria-label={t("Close")}>
               <Icon name="x" size={16} />
             </button>
           </div>

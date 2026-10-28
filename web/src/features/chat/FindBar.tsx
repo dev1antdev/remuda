@@ -8,6 +8,7 @@ import { actions, app } from "@/app/store";
 import { isMac } from "@/lib/prefs";
 import { Icon, Tip } from "@/ui";
 import { countWords } from "./find";
+import { t } from "@/lib/i18n";
 
 const SHORTCUT = isMac ? "⌘F" : "Ctrl+F";
 
@@ -41,8 +42,8 @@ export function FindTool({ what = "in this conversation", shortcut = SHORTCUT }:
             className="sm"
             type="text"
             value={find.query}
-            placeholder="Find"
-            aria-label={`Find ${what}`}
+            placeholder={t("Find")}
+            aria-label={t("Find {what}", { what })}
             autoComplete="off"
             spellCheck={false}
             onChange={(e) => actions.setFindQuery(e.target.value)}
@@ -51,19 +52,19 @@ export function FindTool({ what = "in this conversation", shortcut = SHORTCUT }:
           <span className="find-count" aria-live="polite">
             {find.query ? countWords(find.at, find.total) : ""}
           </span>
-          <button type="button" className="icon-btn sm" title="Previous match (Shift+Enter)" aria-label="Previous match" disabled={find.total === 0} onClick={() => actions.stepFind(-1)}>
+          <button type="button" className="icon-btn sm" title="Previous match (Shift+Enter)" aria-label={t("Previous match")} disabled={find.total === 0} onClick={() => actions.stepFind(-1)}>
             <Icon name="chevron-up" size={14} />
           </button>
-          <button type="button" className="icon-btn sm" title="Next match (Enter)" aria-label="Next match" disabled={find.total === 0} onClick={() => actions.stepFind(1)}>
+          <button type="button" className="icon-btn sm" title="Next match (Enter)" aria-label={t("Next match")} disabled={find.total === 0} onClick={() => actions.stepFind(1)}>
             <Icon name="chevron-down" size={14} />
           </button>
-          <button type="button" className="icon-btn sm" title="Close (Esc)" aria-label="Close the find bar" onClick={actions.closeFind}>
+          <button type="button" className="icon-btn sm" title="Close (Esc)" aria-label={t("Close the find bar")} onClick={actions.closeFind}>
             <Icon name="x" size={14} />
           </button>
         </span>
       )}
       <Tip text={`Find ${what} (${shortcut})`}>
-        <button type="button" className={`icon-btn sm find-toggle${find ? " on" : ""}`} aria-label={`Find ${what}`} aria-pressed={!!find} onClick={() => (find ? actions.closeFind() : actions.openFind())}>
+        <button type="button" className={`icon-btn sm find-toggle${find ? " on" : ""}`} aria-label={t("Find {what}", { what })} aria-pressed={!!find} onClick={() => (find ? actions.closeFind() : actions.openFind())}>
           <Icon name="search" size={14} />
         </button>
       </Tip>

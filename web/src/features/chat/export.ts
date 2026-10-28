@@ -7,6 +7,7 @@ import { fmtDate } from "@/lib/time";
 import { VENDOR_NAME } from "@/ui/brand";
 import { fetchChat, type Part, type Turn } from "./api";
 import { toolLabel } from "./footprint";
+import { t, tn } from "@/lib/i18n";
 
 export type ExportMeta = {
   agent: string; // the vendor key, "" for a transcript on its own
@@ -18,8 +19,8 @@ export type ExportMeta = {
 
 export function conversationMarkdown(turns: Turn[], meta: ExportMeta): string {
   const who = meta.agent ? (VENDOR_NAME[meta.agent] ?? meta.agent) : "Agent";
-  const out: string[] = [`# ${meta.workspace} · ${who} on ${meta.machine}`, ""];
-  const made = [`Exported from remuda on ${fmtDate(meta.when)}`, meta.sessionId ? `session ${meta.sessionId}` : "", `${turns.length} turn${turns.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
+  const out: string[] = [`# ${meta.workspace} · ${t("{who} on {machine}", { who, machine: meta.machine })}`, ""];
+  const made = [t("Exported from remuda on {date}", { date: fmtDate(meta.when) }), meta.sessionId ? t("session {id}", { id: meta.sessionId }) : "", tn(turns.length, "{n} turn", "{n} turns")].filter(Boolean).join(" · ");
   out.push(made, "", "---", "");
   for (const turn of turns) {
     const at = turn.ts ? ` · ${new Date(turn.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "";

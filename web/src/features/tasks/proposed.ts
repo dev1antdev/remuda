@@ -2,6 +2,7 @@
 
 import { plural } from "@/lib/text";
 import type { Project, Status } from "./api";
+import { t } from "@/lib/i18n";
 
 // acceptColumn is where an accepted proposal goes: the project's new-task column, else its first open column that is not the proposals' own
 export function acceptColumn(project: Project | undefined): Status | undefined {
@@ -16,5 +17,5 @@ export function proposedTotal(projects: Project[]): number {
 
 // proposedWords says how many wait: "3 tasks proposed by agents", "1 task proposed by an agent"
 export function proposedWords(n: number): string {
-  return n === 1 ? "1 task proposed by an agent" : `${plural(n, "task")} proposed by agents`;
+  return n === 1 ? t("1 task proposed by an agent") : t("{tasks} proposed by agents", { tasks: plural(n, "task") });
 }

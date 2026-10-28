@@ -14,6 +14,7 @@ import { Icon, Logo, Tip } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import { folderOf } from "./current";
 import { actions } from "./store";
+import { t } from "@/lib/i18n";
 
 export function TileView({ tile, view = "chat", radar, step, now, brief = false, focused = false, pinned = false, onFocus, onPin, onPick, onHide, onPopOut }: {
   tile: Tile;
@@ -49,13 +50,13 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
   const said = settled ? pane.said : undefined;
   const pr = pane.pr;
   return (
-    <section className={`tile is-${d}${alert ? " is-alert" : ""}${brief ? " brief" : ""}${pinned ? " is-pinned" : ""}${machine.id !== "local" ? " has-hue" : ""}`} style={hueStyle(machine.id)} aria-label={`${pane.agent} in ${where}`}>
+    <section className={`tile is-${d}${alert ? " is-alert" : ""}${brief ? " brief" : ""}${pinned ? " is-pinned" : ""}${machine.id !== "local" ? " has-hue" : ""}`} style={hueStyle(machine.id)} aria-label={t("{agent} in {where}", { agent: pane.agent, where })}>
       <header className="tile-head">
         <button
           type="button"
           className="linkish tile-open"
           aria-pressed={onPick ? pinned : undefined}
-          title={onPick ? `${words}\n${pane.cwd}\nClick to feature this agent and keep it there (pin)` : `${words}\n${pane.cwd}\nOpen the ${screen ? "terminal" : "chat"} in Agents`}
+          title={`${words}\n${pane.cwd}\n${onPick ? t("Click to feature this agent and keep it there (pin)") : screen ? t("Open the terminal in Agents") : t("Open the chat in Agents")}`}
           onClick={onPick ?? open}
         >
           <span className="radar-mark" style={markStyle}>
@@ -71,7 +72,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
               <Icon name="external-link" size={12} /> {pr.label}
             </button>
             {pr.status && (
-              <span className={`pr-state is-${checksTone(pr.status)}`} title={`${pr.label}: ${prWords(pr.status)} · read with gh on the machine`}>
+              <span className={`pr-state is-${checksTone(pr.status)}`} title={t("{pr}: {status} · read with gh on the machine", { pr: pr.label, status: prWords(pr.status) })}>
                 <span className="pr-dot" />
                 {checksWords(pr.status)}
               </span>
@@ -80,34 +81,34 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           </span>
         )}
         {usage && usage.window > 0 && (
-          <span className={`radar-ctx tile-usage${fillClass(fill)}`} title={`Context ${Math.round(100 * fill)}% full · ${usage.name} · ${usd(usage.cost)} API-equivalent so far`}>
+          <span className={`radar-ctx tile-usage${fillClass(fill)}`} title={t("Context {pct}% full · {model} · {cost} API-equivalent so far", { pct: Math.round(100 * fill), model: usage.name, cost: usd(usage.cost) })}>
             {Math.round(100 * fill)}% · {usd(usage.cost)}
           </span>
         )}
         {onPin && (
-          <Tip text={pinned ? "Pinned: this agent stays featured. Unpin to let the wall pick again" : "Pin: keep this agent featured"}>
-            <button type="button" className={`icon-btn sm tile-pin${pinned ? " on" : ""}`} aria-label={pinned ? "Unpin this agent" : "Pin this agent as the featured one"} aria-pressed={pinned} onClick={onPin}>
+          <Tip text={pinned ? t("Pinned: this agent stays featured. Unpin to let the wall pick again") : t("Pin: keep this agent featured")}>
+            <button type="button" className={`icon-btn sm tile-pin${pinned ? " on" : ""}`} aria-label={pinned ? t("Unpin this agent") : t("Pin this agent as the featured one")} aria-pressed={pinned} onClick={onPin}>
               <Icon name="pin" size={14} />
             </button>
           </Tip>
         )}
         {onFocus && (
-          <Tip text={focused ? "Back to the grid (Esc)" : "Focus: this agent takes the wall, the others wait in a strip"}>
-            <button type="button" className={`icon-btn sm tile-focus${focused ? " on" : ""}`} aria-label={focused ? "Back to the grid" : "Focus this agent"} aria-pressed={focused} onClick={onFocus}>
+          <Tip text={focused ? "Back to the grid (Esc)" : t("Focus: this agent takes the wall, the others wait in a strip")}>
+            <button type="button" className={`icon-btn sm tile-focus${focused ? " on" : ""}`} aria-label={focused ? t("Back to the grid") : t("Focus this agent")} aria-pressed={focused} onClick={onFocus}>
               <Icon name={focused ? "minimize" : "maximize"} size={14} />
             </button>
           </Tip>
         )}
         {onPopOut && (
-          <Tip text="Pop out: a small window above every other app">
-            <button type="button" className="icon-btn sm tile-pop" aria-label="Pop out" onClick={onPopOut}>
+          <Tip text={t("Pop out: a small window above every other app")}>
+            <button type="button" className="icon-btn sm tile-pop" aria-label={t("Pop out")} onClick={onPopOut}>
               <Icon name="pip" size={14} />
             </button>
           </Tip>
         )}
         {onHide && (
-          <Tip text="Hide this tile; Show hidden brings it back">
-            <button type="button" className="icon-btn sm tile-hide" aria-label="Hide this tile" onClick={onHide}>
+          <Tip text={t("Hide this tile; Show hidden brings it back")}>
+            <button type="button" className="icon-btn sm tile-hide" aria-label={t("Hide this tile")} onClick={onHide}>
               <Icon name="eye-off" size={14} />
             </button>
           </Tip>

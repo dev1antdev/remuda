@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 // What a person may ask of an agent about to start, beyond its kind: a model, arguments of their own, a first prompt to
 // send once it is up. The dialogs hold a Draft; optionsFor turns it into what the create routes take.
 
@@ -11,9 +12,9 @@ export const EMPTY_DRAFT: Draft = { choice: "", custom: "", args: "", prompt: ""
 
 const MODELS: Record<string, { value: string; label: string }[]> = {
   claude: [
-    { value: "opus", label: "Opus" },
-    { value: "sonnet", label: "Sonnet" },
-    { value: "haiku", label: "Haiku" },
+    { value: "opus", label: t("Opus") },
+    { value: "sonnet", label: t("Sonnet") },
+    { value: "haiku", label: t("Haiku") },
   ],
 };
 
@@ -35,7 +36,7 @@ export const hasModelFlag = (kind: string): boolean => MODEL_KINDS.includes(kind
 export function modelChoices(kind: string): { value: string; label: string; hint?: string }[] {
   const known = MODELS[kind];
   if (!known) return [];
-  return [{ value: "", label: "Default", hint: "the agent's own choice" }, ...known, { value: CUSTOM, label: "Another model…", hint: "a full model id" }];
+  return [{ value: "", label: t("Default"), hint: t("the agent's own choice") }, ...known, { value: CUSTOM, label: t("Another model…"), hint: t("a full model id") }];
 }
 
 // modelPlaceholder is the example id a kind's text field shows

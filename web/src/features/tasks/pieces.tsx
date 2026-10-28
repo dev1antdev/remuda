@@ -10,6 +10,7 @@ import { FieldChip } from "./fields";
 import { dueLabel, toLocalInput } from "./prompt";
 import { taskCost } from "./runCost";
 import type { RunPR } from "./runPR";
+import { t as tr } from "@/lib/i18n";
 
 export const projectOption = (p: Project) => ({
   value: p.id,
@@ -44,28 +45,28 @@ export function TaskChips({ task: t, project, status, fields, pr }: { task: Task
         <FieldChip key={f.id} field={f} value={t.fields?.[String(f.id)]} />
       ))}
       {t.source && (
-        <Tip text={`Made by an agent on ${t.source}`}>
-          <span className="badge quiet task-source" aria-label={`Made by an agent on ${t.source}`}>
+        <Tip text={tr("Made by an agent on {source}", { source: t.source })}>
+          <span className="badge quiet task-source" aria-label={tr("Made by an agent on {source}", { source: t.source })}>
             <Icon name="bot" size={12} />
           </span>
         </Tip>
       )}
       {t.run && t.run.state !== "gone" && t.run.state !== "failed" && (
-        <span className={`tasks-row-run is-${t.run.state}`} title={`${t.run.agent} on ${t.run.branch}: ${t.run.state}`}>
+        <span className={`tasks-row-run is-${t.run.state}`} title={tr("{agent} on {branch}: {state}", { agent: t.run.agent, branch: t.run.branch, state: t.run.state })}>
           <Logo agent={t.run.agent} />
         </span>
       )}
       {taskCost(t) > 0 && (
-        <span className="tasks-cost" title="What the agents started on it spent, at API prices">
+        <span className="tasks-cost" title={tr("What the agents started on it spent, at API prices")}>
           {usd(taskCost(t))}
         </span>
       )}
       {pr && (
-        <Tip text={`${pr.label}: ${pr.status ? prWords(pr.status) : "opened by the agent on the task"} · opens in a new tab`}>
+        <Tip text={tr("{pr}: {status} · opens in a new tab", { pr: pr.label, status: pr.status ? prWords(pr.status) : tr("opened by the agent on the task") })}>
           <button
             type="button"
             className="linkish tasks-pr"
-            aria-label={`${pr.label}, opens in a new tab`}
+            aria-label={tr("{pr}, opens in a new tab", { pr: pr.label })}
             onClick={(e) => {
               e.stopPropagation();
               openUrl(pr.url);
@@ -90,7 +91,7 @@ export function TaskChips({ task: t, project, status, fields, pr }: { task: Task
       ))}
       {due && <span className={`tasks-due${due.over && !t.done ? " over" : ""}`}>{due.text}</span>}
       {status && (
-        <span className="tasks-status" title="The column it is in">
+        <span className="tasks-status" title={tr("The column it is in")}>
           <span className="tasks-dot" style={{ background: `#${status.hex_color || "888"}` }} />
           {status.title}
         </span>
@@ -125,5 +126,5 @@ export function DueInput({ value, onCommit }: { value: string; onCommit: (iso: s
 }
 
 export function Loading() {
-  return <div className="placeholder">Loading…</div>;
+  return <div className="placeholder">{tr("Loading…")}</div>;
 }

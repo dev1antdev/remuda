@@ -11,6 +11,7 @@ import { refreshHealth, type Health, type Latest, type Machine } from "./api";
 import { concerns, updateLabel } from "./concerns";
 import { Sparkline } from "./Sparkline";
 import { DISK_THRESHOLDS, loadThresholds, rangeOf, sparkTitle, spanWords } from "./spark";
+import { t, tn } from "@/lib/i18n";
 
 export function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine; latest?: Latest; serverVersion?: string }) {
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
@@ -52,7 +53,7 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
         type="button"
         className={`icon-btn${worst ? ` health-${worst}` : ""}${open ? " on" : ""}`}
         data-health-btn={m.id}
-        title={list.length ? list.map((c) => c.text).join("\n") : h ? `${m.label}: all good — ${h.os ?? ""}` : "Vitals not read yet"}
+        title={list.length ? list.map((c) => c.text).join("\n") : h ? t("{machine}: all good — {os}", { machine: m.label, os: h.os ?? "" }) : t("Vitals not read yet")}
         aria-expanded={!!open}
         onClick={(e) => {
           e.stopPropagation();
@@ -65,24 +66,24 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
       </button>
       {updateWhat !== null && <UpdatesDialog machine={m} what={updateWhat || undefined} onClose={() => setUpdateWhat(null)} onDone={() => void refresh()} />}
       {open && (
-        <div className="row-menu health-pop" role="dialog" aria-label={`${m.label} vitals`} style={{ left: open.x, top: open.y }} onClick={(e) => e.stopPropagation()}>
+        <div className="row-menu health-pop" role="dialog" aria-label={t("{machine} vitals", { machine: m.label })} style={{ left: open.x, top: open.y }} onClick={(e) => e.stopPropagation()}>
           <div className="health-head">
             <b>{m.label}</b>
             <span className="dim">{h?.os}</span>
-            <button type="button" className="icon-btn sm" title="Read again now" disabled={busy} onClick={() => void refresh()}>
+            <button type="button" className="icon-btn sm" title={t("Read again now")} disabled={busy} onClick={() => void refresh()}>
               <Icon name="refresh-cw" size={12} className={busy ? "spin" : undefined} />
             </button>
           </div>
           {h ? (
             <dl className="health-rows">
-              <dt>Claude Code</dt>
+              <dt>{t("Claude Code")}</dt>
               <dd>
                 {h.claude ?? "—"}
                 {h.claude && l?.claude && newer(h.claude, l.claude) ? <span className="health-new"> → {l.claude}</span> : null}
               </dd>
               {h.codex && (
                 <>
-                  <dt>Codex</dt>
+                  <dt>{t("Codex")}</dt>
                   <dd>
                     {h.codex}
                     {l?.codex && newer(h.codex, l.codex) ? <span className="health-new"> → {l.codex}</span> : null}
@@ -91,7 +92,7 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
               )}
               {h.gemini && (
                 <>
-                  <dt>Gemini CLI</dt>
+                  <dt>{t("Gemini CLI")}</dt>
                   <dd>
                     {h.gemini}
                     {l?.gemini && newer(h.gemini, l.gemini) ? <span className="health-new"> → {l.gemini}</span> : null}
@@ -100,7 +101,7 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
               )}
               {h.kimi && (
                 <>
-                  <dt>Kimi Code</dt>
+                  <dt>{t("Kimi Code")}</dt>
                   <dd>
                     {h.kimi}
                     {l?.kimi && newer(h.kimi, l.kimi) ? <span className="health-new"> → {l.kimi}</span> : null}
@@ -110,12 +111,12 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
               <dt>herdr</dt>
               <dd>
                 {h.herdr ?? "—"}
-                {h.herdr_server && h.herdr !== h.herdr_server ? <span className="health-new"> · server {h.herdr_server}</span> : null}
+                {h.herdr_server && h.herdr !== h.herdr_server ? <span className="health-new"> · {t("server {version}", { version: h.herdr_server })}</span> : null}
                 {h.herdr && l?.herdr && newer(h.herdr, l.herdr) ? <span className="health-new"> → {l.herdr}</span> : null}
               </dd>
               {h.outdated_hooks?.length ? (
                 <>
-                  <dt>herdr hooks</dt>
+                  <dt>{t("herdr hooks")}</dt>
                   <dd>
                     {h.outdated_hooks.map((k, i) => (
                       <span key={k.agent}>
@@ -129,36 +130,36 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
               ) : null}
               {h.plugins?.length ? (
                 <>
-                  <dt>herdr plugins</dt>
+                  <dt>{t("herdr plugins")}</dt>
                   <dd>{h.plugins.map((p) => p.id).join(", ")}</dd>
                 </>
               ) : null}
               <dt>remuda</dt>
               <dd>
-                {h.remuda ?? (m.id === "local" ? serverVersion : "not deployed")}
-                {m.id !== "local" && h.remuda ? <span className="dim"> · {h.remuda_running ? "running, terminals go through it" : "not running"}</span> : null}
+                {h.remuda ?? (m.id === "local" ? serverVersion : t("not deployed"))}
+                {m.id !== "local" && h.remuda ? <span className="dim"> · {h.remuda_running ? t("running, terminals go through it") : t("not running")}</span> : null}
                 {remudaHave && l?.remuda && newer(remudaHave, l.remuda) ? <span className="health-new"> → {l.remuda}</span> : null}
               </dd>
-              <dt>Disk</dt>
+              <dt>{t("Disk")}</dt>
               <dd>
                 {h.disk_free_gb.toFixed(0)} GB free · {h.disk_used_pct}% used
                 {history && <Sparkline values={free} min={0} max={100} color="var(--ctp-green)" thresholds={DISK_THRESHOLDS} title={sparkTitle("Disk free", free, (v) => `${v.toFixed(0)}%`, span)} />}
               </dd>
-              <dt>Load</dt>
+              <dt>{t("Load")}</dt>
               <dd>
                 {h.load1.toFixed(2)}
-                {h.cores ? ` on ${h.cores} cores` : ""}
-                {h.uptime ? ` · up ${h.uptime}` : ""}
+                {h.cores ? ` ${tn(h.cores, "on {n} core", "on {n} cores")}` : ""}
+                {h.uptime ? ` · ${t("up {time}", { time: h.uptime })}` : ""}
                 {history && <Sparkline values={loads} min={loadRange.min} max={loadRange.max} color="var(--ctp-blue)" thresholds={loadThresholds(h.cores)} title={sparkTitle("Load", loads, (v) => v.toFixed(2), span)} />}
               </dd>
-              <dt>Read</dt>
+              <dt>{t("Read")}</dt>
               <dd>
                 {ago(h.at)}
-                {span ? <span className="dim"> · {span} kept</span> : null}
+                {span ? <span className="dim"> · {t("{span} kept", { span })}</span> : null}
               </dd>
             </dl>
           ) : (
-            <div className="dim">Not read yet.</div>
+            <div className="dim">{t("Not read yet.")}</div>
           )}
           {list.length > 0 && (
             <ul className="health-list">
@@ -176,7 +177,7 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
           )}
           <div className="health-foot">
             <button type="button" className="linkish" onClick={() => update("")}>
-              <Icon name="refresh-cw" size={12} /> All updates…
+              <Icon name="refresh-cw" size={12} /> {t("All updates…")}
             </button>
           </div>
           {h?.error && h.claude && <div className="dim">{h.error}</div>}
