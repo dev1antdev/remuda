@@ -17,8 +17,10 @@ type RunWatch struct {
 	// LastAnswer is the text the agent's latest turn ended with and the id of its last record;
 	// "" when the turn ends in a tool call, since a permission stop or a question asked through a tool is no answer.
 	LastAnswer func(machine, pane string) (text string, id string)
-	Notify     func(push.Payload)
-	Now        func() time.Time
+	// Usage is the meter's reading of a pane: what its agent spent so far; ok is false before anything was read.
+	Usage  func(machine, pane string) (cost float64, tokens int64, model string, ok bool)
+	Notify func(push.Payload)
+	Now    func() time.Time
 
 	missing map[int64]time.Time
 }
@@ -65,6 +67,7 @@ func (w *RunWatch) Sweep() {
 			}
 			continue
 		}
+		w.noteUsage(r, started, now())
 		if state == "working" || state == "unknown" {
 			continue
 		}
@@ -79,6 +82,8 @@ func (w *RunWatch) Sweep() {
 		}
 		_, _ = w.Store.AddComment(r.TaskID, "agent", answer)
 		_ = w.Store.SetRun(r.ID, RunFinished, id)
+		r.State, r.Finished = RunFinished, now().UTC().Format(time.RFC3339)
+		w.noteUsage(r, started, now())
 		moved, _ := w.Store.OnFinish(r.TaskID)
 		if w.Notify != nil {
 			t, _ := w.Store.Get(r.TaskID)
@@ -95,6 +100,30 @@ func (w *RunWatch) Sweep() {
 			})
 		}
 	}
+}
+
+// noteUsage writes the meter's figures on the run when they moved: every sweep while the pane is there, so they stay
+// once it is gone; took is the seconds from the start to the finish, 0 while the agent still works.
+func (w *RunWatch) noteUsage(r Run, started, now time.Time) {
+	if w.Usage == nil {
+		return
+	}
+	cost, tokens, model, ok := w.Usage(r.Machine, r.Pane)
+	if !ok {
+		return
+	}
+	took := 0
+	if r.State == RunFinished {
+		finished, err := time.Parse(time.RFC3339, r.Finished)
+		if err != nil {
+			finished = now
+		}
+		took = int(finished.Sub(started).Round(time.Second).Seconds())
+	}
+	if cost == r.Cost && tokens == r.Tokens && model == r.Model && took == r.Took {
+		return
+	}
+	_ = w.Store.SetRunUsage(r.ID, cost, tokens, model, took)
 }
 
 // Loop sweeps forever.

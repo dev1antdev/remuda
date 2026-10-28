@@ -1451,9 +1451,21 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a push, and `Store.OnFinish` moves the task to the `on_finish` column
   when it still sits in `on_start` (a card the person moved meanwhile
   stays; the push title says `→ Testing`); a pane gone two minutes →
-  `gone`. `comments` are markdown, a path in one opening on the run's
-  machine relative to its worktree; the UI re-reads an open task every
-  10 s while a run is live.
+  `gone`. **A run says what it spent**: every sweep notes the meter's
+  reading of the pane on the run (`RunWatch.Usage`, `usage.Tracker.Display`
+  wired in app.go — `cost` at API prices, `tokens`, `model`, and `took`,
+  the seconds from the start to the finish, 0 while the agent works;
+  `SetRunUsage`, written only when a figure moved), so the figures stay
+  once the pane is gone; a task carries `cost`, its runs summed in
+  `fillRuns` (one query over the page), and the page shows it in the
+  quiet colour on the chips of a row and a card (`.tasks-cost`) and as
+  "Agent run: $4.20 · 38 min · Opus 4.5" under the run in the detail,
+  in the tone of the tightest budget covering the run's machine and
+  folder (`runCost.ts`, tested: `runSeconds` counts from the start while
+  the run is live, `runWords`, `taskCost`). Nothing is re-summed: the
+  standup and the usage report keep their own figures. `comments` are
+  markdown, a path in one opening on the run's machine relative to its
+  worktree; the UI re-reads an open task every 10 s while a run is live.
 - `internal/mcp/` + `internal/tasksapi/` — **the agents and the tasks**.
   `remuda mcp` is a Model Context Protocol server over stdio
   (`mcp.Server`: hand-written JSON-RPC 2.0, one message a line, no

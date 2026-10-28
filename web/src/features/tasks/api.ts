@@ -77,6 +77,7 @@ export type Task = {
   source: string; // "" for a person's; an agent's names its key's machine and its pane, "GOG · w3:p1"
   created: string;
   updated: string;
+  cost?: number; // USD: what every agent started on it spent, its runs summed
   run?: Run | null; // the latest agent started on it
   comments?: Comment[]; // on a single-task fetch
 };
@@ -96,6 +97,11 @@ export type Run = {
   prompt_sent?: string;
   finished?: string;
   error?: string;
+  // what the agent spent, read off the meter while the pane is there and kept once it is gone
+  cost?: number; // USD at API prices
+  tokens?: number;
+  model?: string; // "Opus 4.5"
+  took?: number; // seconds from the start to the finish, 0 while the agent still works
 };
 
 export type Comment = { id: number; task_id: number; author: "agent" | "you" | "remuda"; body: string; created: string };
