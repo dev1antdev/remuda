@@ -1,6 +1,7 @@
-// FindTool is the find bar of the chat lens, in the tab strip's tools slot: its toggle keeps its place and the
-// bar — a field, "3 of 12", the two steps and a close — opens to the toggle's left, so nothing else in the strip
-// moves. The chat does the matching (useFind); the store carries the query and the count between the two.
+// FindTool is the find bar of the chat lens and of the terminal lens, in the tab strip's tools slot: its toggle
+// keeps its place and the bar — a field, "3 of 12", the two steps and a close — opens to the toggle's left, so
+// nothing else in the strip moves. The lens does the matching (useFind in the chat, useTerminalFind over the
+// terminal); the store carries the query and the count between the bar and the lens.
 
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { actions, app } from "@/app/store";
@@ -10,7 +11,7 @@ import { countWords } from "./find";
 
 const SHORTCUT = isMac ? "⌘F" : "Ctrl+F";
 
-export function FindTool() {
+export function FindTool({ what = "in this conversation", shortcut = SHORTCUT }: { what?: string; shortcut?: string }) {
   const find = app.use((s) => s.find);
   const field = useRef<HTMLInputElement>(null);
   // every ⌘F puts the focus back in the field, with the query selected for a new one
@@ -41,7 +42,7 @@ export function FindTool() {
             type="text"
             value={find.query}
             placeholder="Find"
-            aria-label="Find in this conversation"
+            aria-label={`Find ${what}`}
             autoComplete="off"
             spellCheck={false}
             onChange={(e) => actions.setFindQuery(e.target.value)}
@@ -61,8 +62,8 @@ export function FindTool() {
           </button>
         </span>
       )}
-      <Tip text={`Find in this conversation (${SHORTCUT})`}>
-        <button type="button" className={`icon-btn sm find-toggle${find ? " on" : ""}`} aria-label="Find in this conversation" aria-pressed={!!find} onClick={() => (find ? actions.closeFind() : actions.openFind())}>
+      <Tip text={`Find ${what} (${shortcut})`}>
+        <button type="button" className={`icon-btn sm find-toggle${find ? " on" : ""}`} aria-label={`Find ${what}`} aria-pressed={!!find} onClick={() => (find ? actions.closeFind() : actions.openFind())}>
           <Icon name="search" size={14} />
         </button>
       </Tip>

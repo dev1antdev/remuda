@@ -65,7 +65,10 @@ export function keyGroups(mac: boolean): KeyGroup[] {
     },
     {
       title: "Terminal",
-      rows: [{ keys: ["any key"], what: "goes to the app in the pane; the tab strip's key bar types ⏎, Esc, Tab, the arrows, and holds Ctrl or Alt for the next key" }],
+      rows: [
+        { keys: [mac ? "⌘ F" : "Ctrl ⇧ F"], what: "find in the scrollback" },
+        { keys: ["any key"], what: "goes to the app in the pane; the tab strip's key bar types ⏎, Esc, Tab, the arrows, and holds Ctrl or Alt for the next key" },
+      ],
     },
   ];
 }
