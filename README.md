@@ -549,7 +549,10 @@ once, then "Add to Home Screen" — it installs as a PWA.
   key.
 
 A second copy beside the real one (to try `-tailscale`, say) gets its own
-token, tasks and push subscriptions with `REMUDA_STATE_DIR=/some/dir`.
+token, tasks and push subscriptions with `REMUDA_STATE_DIR=/some/dir`, and
+places no agent door of its own, here or on your other machines, so the
+agents keep talking to the real one (`-door` opens it anyway, `-no-door`
+closes it for any instance).
 
 ## Development
 

@@ -18,7 +18,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 
 - `cmd/remuda/` — main; flags `-addr` (default `127.0.0.1:7317`), `-socket`,
   `-herdr-bin`, `-print-token`, `-version`, `-tailscale` /
-  `-tailscale-hostname`, `-no-version-check`, `-code-port`; subcommands
+  `-tailscale-hostname`, `-no-version-check`, `-code-port`, `-no-door` /
+  `-door` (`doorOpen`, tested: the agents' door files are placed by the
+  real service only — never with `-no-door`, and not by a scratch
+  instance with `REMUDA_STATE_DIR` set unless `-door` asks, so a look or
+  the e2e beside the real one never overwrites its door on a remote;
+  `app.Options.Door`, one log line when it stays closed); subcommands
   `search` and `usage` for the deployed binary on a remote machine, and
   `setup`, `uninstall` and `code` (see "Installing and uninstalling"
   below), `mcp` and `tasks` (the agents' door to the task list, see
@@ -1598,7 +1603,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Branch/base names for a worktree go through `sessions.RefOK`. ssh control sockets
   live under `<state>/ssh` (`sshx.SocketDir`) while the path keeps
   within 86 bytes, a unix sockaddr's 104 less the 17-byte suffix
-  OpenSSH binds a master with, else in the temp dir, private on a Mac.
+  OpenSSH binds a master with, else in the temp dir, private on a Mac,
+  named by the state dir and the host there, so a scratch instance never
+  rides the real one's master (and never takes it down on exit).
   `TS_AUTHKEY` travels on stdin, never on a command line. Colours are six hex digits or nothing
   (`normColor`). A run of an update must send back the command shown.
   The installer installs nothing whose sha256 is not the release's; the
