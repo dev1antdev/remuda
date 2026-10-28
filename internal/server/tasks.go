@@ -207,7 +207,7 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/tasks/import", s.handleTaskImport)
 }
 
-// handleTaskList is GET /api/tasks?view=today|upcoming|open|project&project=&done=1&q=&page=&tz=.
+// handleTaskList is GET /api/tasks?view=today|upcoming|open|proposed|project&project=&done=1&q=&page=&tz=.
 func (s *Server) handleTaskList(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	project, _ := strconv.ParseInt(q.Get("project"), 10, 64)

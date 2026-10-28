@@ -23,8 +23,9 @@ var priorities = []string{"none", "low", "medium", "high", "urgent", "do now"}
 // Tools is the task list as the tools see it.
 type Tools struct {
 	Client  *tasksapi.Client
-	Source  string // what a task made here is marked with: the agent's pane, from HERDR_PANE_ID
-	Trouble error  // no door on this machine: every call answers the reason, so the agent can say so
+	Source  string           // what a task made here is marked with: the agent's pane, from HERDR_PANE_ID
+	Trouble error            // no door on this machine: every call answers the reason, so the agent can say so
+	Now     func() time.Time // the clock, for the spans agents_list says; nil is time.Now
 }
 
 // Spec is one tool as tools/list describes it.
@@ -86,6 +87,18 @@ func Specs() []Spec {
 			InputSchema: schema(nil, map[string]any{})},
 		{Name: "labels_list", Description: "The labels that exist, for task_create's labels.",
 			InputSchema: schema(nil, map[string]any{})},
+		{Name: "agents_list", Description: "Every coding agent on every machine the person runs: its workspace, state (working, waiting for the person, finished, idle, and for how long), the first line of its last answer, the pull request it named, what its conversation has cost. Look here before filing or taking a task, to see who is already on what; your own pane is marked (you).",
+			InputSchema: schema(nil, map[string]any{})},
+		{Name: "agent_recap", Description: "What one agent's conversation came to — prompts and answers, time, tokens and cost, the tools it called, the commands it ran, the files it edited and read, its last answer — as the person's Recap shows it.",
+			InputSchema: schema([]string{"pane"}, map[string]any{
+				"machine": prop("string", "the machine by name or id as agents_list shows it; omit for the cockpit's own"),
+				"pane":    prop("string", "the pane as agents_list lists it, like w3:p1"),
+				"since":   prop("string", "the period: midnight, 24h, 7d, a date YYYY-MM-DD or an RFC 3339 moment; omit for the whole conversation"),
+			})},
+		{Name: "standup", Description: "The standup over every agent: what each did and answered in the period, as the person's Standup panel shows it.",
+			InputSchema: schema(nil, map[string]any{
+				"since": prop("string", "the period: midnight (the default), 24h, 7d, a date YYYY-MM-DD or an RFC 3339 moment"),
+			})},
 	}
 }
 
@@ -128,11 +141,11 @@ func (t *Tools) Call(name string, args json.RawMessage) (string, error) {
 		if err := json.Unmarshal(args, &a); err != nil {
 			return "", fmt.Errorf("bad arguments: %w", err)
 		}
-		task, notes, err := t.Create(a)
+		made, err := t.Create(a)
 		if err != nil {
 			return "", err
 		}
-		return Created(task, notes), nil
+		return Created(made), nil
 	case "task_update":
 		var a UpdateArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -154,6 +167,20 @@ func (t *Tools) Call(name string, args json.RawMessage) (string, error) {
 		return t.Comment(a.ID, a.Body)
 	case "projects_list":
 		return t.Projects()
+	case "agents_list":
+		return t.Agents()
+	case "agent_recap":
+		var a RecapArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return "", fmt.Errorf("bad arguments: %w", err)
+		}
+		return t.AgentRecap(a)
+	case "standup":
+		var a StandupArgs
+		if err := json.Unmarshal(args, &a); err != nil {
+			return "", fmt.Errorf("bad arguments: %w", err)
+		}
+		return t.Standup(a)
 	}
 	return t.Labels()
 }
@@ -278,18 +305,25 @@ type CreateArgs struct {
 	Fields      map[string]any `json:"fields"`
 }
 
-// Create is task_create: the task made, and a note per label that could not be put on it.
-func (t *Tools) Create(a CreateArgs) (tasksapi.Task, []string, error) {
+// Made is what task_create did: the task, the column it landed in, and a note per label that could not be put on it.
+type Made struct {
+	Task   tasksapi.Task
+	Column *tasks.Status
+	Notes  []string
+}
+
+// Create is task_create: the task made in the column asked for, else where the project puts an agent's tasks.
+func (t *Tools) Create(a CreateArgs) (Made, error) {
 	if strings.TrimSpace(a.Title) == "" || strings.TrimSpace(a.Project) == "" {
-		return tasksapi.Task{}, nil, errors.New("task_create needs a title and a project")
+		return Made{}, errors.New("task_create needs a title and a project")
 	}
 	projects, err := t.Client.Projects()
 	if err != nil {
-		return tasksapi.Task{}, nil, err
+		return Made{}, err
 	}
 	project, err := findProject(projects, a.Project)
 	if err != nil {
-		return tasksapi.Task{}, nil, err
+		return Made{}, err
 	}
 	title := strings.TrimSpace(a.Title)
 	w := tasksapi.Write{Title: &title, Source: t.Source}
@@ -299,20 +333,20 @@ func (t *Tools) Create(a CreateArgs) (tasksapi.Task, []string, error) {
 	if a.Column != "" {
 		status, err := findColumn(project, a.Column)
 		if err != nil {
-			return tasksapi.Task{}, nil, err
+			return Made{}, err
 		}
 		w.StatusID = &status.ID
 	}
 	if a.Due != "" {
 		due, err := dueOf(a.Due)
 		if err != nil {
-			return tasksapi.Task{}, nil, err
+			return Made{}, err
 		}
 		w.DueDate = &due
 	}
 	if a.Priority != nil {
 		if *a.Priority < 0 || *a.Priority > 5 {
-			return tasksapi.Task{}, nil, errors.New("priority runs from 0 (none) to 5 (do now)")
+			return Made{}, errors.New("priority runs from 0 (none) to 5 (do now)")
 		}
 		w.Priority = a.Priority
 	}
@@ -321,7 +355,7 @@ func (t *Tools) Create(a CreateArgs) (tasksapi.Task, []string, error) {
 		for name, value := range a.Fields {
 			f, ok := findField(project, name)
 			if !ok {
-				return tasksapi.Task{}, nil, fmt.Errorf("project %s has no field %q; its fields: %s", project.Title, name, fieldNames(project))
+				return Made{}, fmt.Errorf("project %s has no field %q; its fields: %s", project.Title, name, fieldNames(project))
 			}
 			raw, _ := json.Marshal(value)
 			w.Fields[strconv.FormatInt(f.ID, 10)] = raw
@@ -329,29 +363,45 @@ func (t *Tools) Create(a CreateArgs) (tasksapi.Task, []string, error) {
 	}
 	task, err := t.Client.Create(project.ID, w)
 	if err != nil {
-		return tasksapi.Task{}, nil, err
+		return Made{}, err
 	}
-	var notes []string
+	made := Made{Task: task, Column: columnOf(project, task.StatusID)}
 	for _, name := range a.Labels {
 		label, err := t.label(name)
 		if err != nil {
-			notes = append(notes, fmt.Sprintf("label %q: %v", name, err))
+			made.Notes = append(made.Notes, fmt.Sprintf("label %q: %v", name, err))
 			continue
 		}
 		if _, err := t.Client.AddLabel(task.ID, label.ID); err != nil {
-			notes = append(notes, fmt.Sprintf("label %q: %v", name, err))
+			made.Notes = append(made.Notes, fmt.Sprintf("label %q: %v", name, err))
 		}
 	}
-	return task, notes, nil
+	return made, nil
 }
 
-// Created is what task_create answers.
-func Created(task tasksapi.Task, notes []string) string {
-	out := fmt.Sprintf("Created task %s (id %d) \"%s\"", task.Identifier, task.ID, task.Title)
-	if len(notes) > 0 {
-		out += "\n" + strings.Join(notes, "\n")
+// Created is what task_create answers: the task and its column, and that a proposal waits for the person's word.
+func Created(m Made) string {
+	out := fmt.Sprintf("Created task %s (id %d) \"%s\"", m.Task.Identifier, m.Task.ID, m.Task.Title)
+	if m.Column != nil {
+		out += " in " + m.Column.Title
+		if m.Column.OnAgent {
+			out += " — the person accepts or declines it there; leave it to them"
+		}
+	}
+	if len(m.Notes) > 0 {
+		out += "\n" + strings.Join(m.Notes, "\n")
 	}
 	return out
+}
+
+// columnOf is the project's column with that id, nil for one it does not know.
+func columnOf(p tasks.Project, id int64) *tasks.Status {
+	for i := range p.Statuses {
+		if p.Statuses[i].ID == id {
+			return &p.Statuses[i]
+		}
+	}
+	return nil
 }
 
 type UpdateArgs struct {

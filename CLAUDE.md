@@ -702,7 +702,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   **The Review mode** (`features/review/ReviewQueue.tsx`, the fifth mode,
   `?mode=review`): every workspace with uncommitted work in one list —
   `queue.ts` (`reviewQueue`, tested) reads the roster's `session.dir` and
-  `session.review`, the ones with changes since the last look first — and
+  `session.review`, the ones ready again first, then the ones with
+  changes since the last look — and
   the Changes lens of the picked one beside it, its pane the workspace's
   first agent pane (a shell when none runs there, comments then go to any
   agent), `onSeen` the roster's refresh; under 920 px the list and the
@@ -720,7 +721,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   agent: Approve and Reject (`VerdictDialog`) each take a note and send
   `verdictMessage` — the verdict, the note, the draft's comments, and
   what it means (approved: reviewed, carry on, a task can move on;
-  rejected: work on it and say when it is ready for another look; an
+  rejected: work on it and say when it is ready for another look, ending
+  that answer with the line `READY FOR REVIEW` (`READY_MARKER`); an
   approval with "and ask the agent to commit" ticked adds `COMMIT_ASK`,
   the button reads **Approve & commit** — the agent commits, remuda never
   writes into a repository) —
@@ -728,8 +730,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   agent's refusal leaves the baseline alone; a rejection needs a comment
   or a note. "Mark reviewed" is the silent one: the baseline moves, the
   agent hears nothing. The subtitle says "approved" / "rejected" / "since
-  you looked" from the baseline's verdict. Nothing goes until one of
-  those buttons.
+  you looked" from the baseline's verdict, "rejected · ready again" once
+  the agent has said so. Nothing goes until one of those buttons.
+  **Ready again** (`ready.go`, tested): the baseline of a rejected folder
+  notes `ready` when the agent's finish answer says the work is ready —
+  `ReadyWords`: the `Marker` line `READY FOR REVIEW` on a line of its own
+  or ending the answer, or a few plain phrases case-folded ("ready for
+  another look", "готово к ревью"), never in a fence and never beside a
+  "not" or a promise for later — `Store.OnAnswer(machine, dir, text,
+  now)`, true once per rejection, heard through `said.Tracker.OnAnswer`
+  (wired in `internal/app`: the pane's workspace folder from the
+  watcher's snapshot, `Snapshot.Workspace`) and answered with one push,
+  `ReadyNotice` (`Kind: "review"`, "<workspace> is ready for another
+  look", the answer's first line, the pane to open) through
+  `push.Notify`, so the feed has it too; the next look (`MarkSeen`, any
+  verdict) clears it. The roster's `session.review` carries `ready` (and
+  lists the workspace even with nothing uncommitted, since the agent may
+  have committed its fixes); the queue sorts such a workspace first with
+  a green "ready again" badge and "says it is ready again" under its name.
 - `internal/code/` — the **Code mode**: each machine runs its own
   code-server (VS Code in the browser) on `127.0.0.1:7320`, `auth: none`,
   installed by `remuda code [-host H]` (`internal/setup/scripts/
@@ -827,7 +845,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   The page re-reads the device's zone on every load (`readAlertPrefs`),
   so a window set at home fits the clock on a trip; the window last set
   is kept on the device (pref `alerts.quiet`) while the hours are off.
-  `Notify` goes to the devices that want the watchdog's word, `Broadcast`
+  `Notify` goes to the devices that want the watchdog's word — the
+  review's "ready for another look" (`Kind: "review"`) rides on it too —
+  `Broadcast`
   to every device (the schedules' digest and failures); a `Payload` may
   name a `Panel` of the page (`standup`) for its tap to open instead of a
   pane.
@@ -855,7 +875,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   carry, or would have carried without a subscribed device — a question
   after 10 s, a finish after 10 s (any turn), a watchdog note, a budget
   near or past its limit, a schedule
-  that failed, a task that moved — and `feed.Service.Add` keeps it in
+  that failed, a task that moved, a rejected workspace whose agent says
+  it is ready again — and `feed.Service.Add` keeps it in
   `feed.json` (300 newest, numbered); `GET /api/feed?limit=` lists them, the
   roster carries `feed` (the newest id) so the bell shows a dot when it is
   past pref `feed.seen`. `features/activity/Activity.tsx` is the panel behind
@@ -884,7 +905,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   last; a flat `recent` order; herdr's own; `radar.test.ts`),
   `features/roster/Sidebar.tsx` draws it (`rows.tsx` the rows,
   `HealthButton.tsx`, `MachineMenu.tsx`; its head is a + menu — a
-  workspace on a connected machine, a PC — and a ⋯ menu — message
+  workspace on a connected machine, an agent from a recipe, a PC — and a ⋯ menu — message
   several agents, the order, Sidebar settings; `RadarSettings.tsx` is
   `RadarFields`, the order, the row label, the idle tiers and the
   shells switch, shown by **Settings** (`features/settings/
@@ -918,7 +939,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `chat.Service` (`SessionVersion`, then `LastAnswer`) in one goroutine
   per machine, off the request path — a remote read is a script over
   ssh — and a file whose version is the one read last is not parsed
-  again. `FirstLine` strips the Markdown marks (headings, list and quote
+  again; `Tracker.OnAnswer`, set by the app, hears the whole text of
+  every new answer read after a finish (never a seed from a snapshot):
+  the review's ready mark rides on it. `FirstLine` strips the Markdown marks (headings, list and quote
   marks, emphasis, code, links, tags; fences and rules skipped) and cuts
   at a word by `Max` 120 characters; `features/chat/said.ts` is the same
   cut on the page, both tested. The same read notes **the pull request
@@ -977,10 +1000,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `chat.Service.Open` + `Turns()` (priced turns; a remote pane's through
   the Reader as the chat does, nothing new runs on a remote): `GET
   /api/recap?machine&pane[&session]` or `?machine&dir&session`
-  [`&since`] is one conversation's, `GET /api/standup?tz[&since]` is
+  [`&since`] is one conversation's, with the report as `markdown`
+  (`recap.Conversation`: a heading, the period, the lines `recap.Lines`
+  gives an agent's section of the standup, a note when a question is
+  open), `GET /api/standup?tz[&since]` is
   every agent pane on every connected machine (`Standup`, the machines
   read side by side) with the radar's state and alert, since local
-  midnight in `tz` unless `since` says, and the Markdown.
+  midnight in `tz` unless `since` says, and the Markdown. **When each
+  agent worked** (`spans.go`, tested): `Spans(turns, since, now)` lays a
+  conversation out in time as `Span{From, To, State, Turn}` — `working`
+  from a prompt for as long as its answer took (a turn after a
+  compaction, with no prompt before it, spans its own tool calls),
+  `waiting` from an `AskUserQuestion` for as long as its result took
+  (an open one until the next prompt, else now), cut out of the work it
+  interrupted, `idle` for every gap of `IdleGap` (2 min) or more,
+  everything clipped to [since, now], `Turn` the first record of the
+  prompt (else the answer) for the page's jump — set on `Recap.Spans`
+  by the `Service` (not by `Of`), so a standup item and one
+  conversation's recap both carry `spans`; the Markdown ignores them.
   `features/standup/`: `StandupPanel.tsx` is the panel (store panel
   `standup`; the sun button in the sidebar head beside Usage, the
   palette's "Standup"; a `Select` for since midnight / 24 h / 7 days,
@@ -992,14 +1029,58 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   conversation's (dialog kind `recap`: the Recap button in
   `chat/ChatTools.tsx` for the session shown, the palette for the pane
   and for a transcript open from the search), `RecapBody.tsx` the lines
-  both draw. **While you were away** (`useWelcomeBack.ts`, called from
+  both draw, under **the day strip** (`DayStrip.tsx` over `strip.ts`, pure
+  and tested: `window` — the period from `since` to now, the last 8
+  hours on a phone under 600 px, the last day for a recap without a
+  since — `layout` places the spans on a bar of `WIDTH` units, trimmed
+  at the edges, `hourMarks` one per whole hour of the clock, labelled
+  every 3 hours (6 on a phone), `spanWords` the tooltip "Working
+  14:02–14:48, 46 min"): one inline SVG, `viewBox` 1000 × 8 stretched
+  to the row, a `rect` per span — green working, red waiting, the dim
+  surface idle — with a `<title>`, the marks as non-scaling lines, the
+  hours as positioned labels under it, a click on a stretch of work or
+  waiting opening the chat jumped to its turn (`actions.jumpTo`; the
+  pane's chat from the standup, the pane's or the viewer's from the
+  recap dialog); drawn only when the recap carries spans. **While you
+  were away** (`useWelcomeBack.ts`, called from
   `app/Shell.tsx`): pref `page.lastSeen` is stamped when the page hides
   or is left and every minute while it is visible; a return after an
   hour or more fetches the standup since that stamp and puts one toast
   up — "Away 3 h: 2 agents answered, 1 waits for you, $4.20 spent", a
   Standup button opens the panel — store field `away`, nothing when
   nothing happened, once per return; `away.ts` the pure part, tested:
-  `awayGap`, `awayWords`, `awayCounts`, `awayLine`.
+  `awayGap`, `awayWords`, `awayCounts`, `awayLine`. `Lines(r)` is one
+  recap as the lines of a report — the figures, the tools, Ran / Edited
+  / Read, subagents and questions, the last answer — which `Markdown`
+  and the handover share; `Hint(part)` is what a call was about.
+- `internal/handover/` — **a conversation continued by another agent**:
+  Claude got stuck, the budget says a cheaper model, the person wants
+  Codex's take; a resume works only for the same agent, this works
+  across them. `Text(from, recap, turns, lastN)` (pure, tested) is the
+  new agent's first prompt: a heading naming who hands over, "What was
+  done so far" (`recap.Lines`), "The last N exchanges in full" — an
+  exchange (`Exchanges`, tested) is a prompt of the person's and the
+  agent's text as it came with every tool call as one line (`recap.Hint`,
+  "(failed)"), outputs left out — and "Carry on from here"; kept under
+  `MaxText` 60 KB by dropping the oldest exchanges first, then the
+  recap's lists, then a cut at a rune with a note; `MaxLastN` 10. `POST
+  /api/handover {machine, pane, session?, agent, model?, args?, turns?}`
+  (`internal/server/handover.go`; the model and arguments checked as the
+  create routes check them) reads the conversation through
+  `chat.Service.Open` + `Turns()`, makes a tab of the pane's workspace
+  named "<Agent> handover", starts the agent (`sessions.StartAgentWith`),
+  hands the text over in the background (`firstPrompt`, a push when it
+  is not delivered), notes it in the activity (kind `handover`, the new
+  pane to open) and answers `{id, pane, size, from}` with `agent_error`
+  as the tab route does; the pane handing over is untouched. The page:
+  `features/chat/HandoverDialog.tsx` (dialog kind `handover`: the agent,
+  its model as the start dialogs offer it, how much goes in full — the
+  recap only or the last 1–10 exchanges — extra arguments folded;
+  `handover.ts` the pure part, tested: `clampTurns`, `turnOptions`,
+  `handoverWords`, `nextAgent`, `handedOverWords`), opened by "Continue
+  with another agent…" in the chat's View menu (a pane's conversation
+  only, never the viewer's) and the palette; on success the new pane is
+  selected on its chat lens and a toast says what went over.
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥
@@ -1057,7 +1138,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the periods and words, `agent.ts` the scout's suggested prompt and an
   agent schedule's words, all tested, `ScheduleEditor.tsx` the form with
   the kind switch at its top: the agent kind takes the machine, the
-  folder — a known workspace or a path typed by hand — the agent, its
+  folder — a known workspace or a path typed by hand — a recipe that
+  fills the next four (`features/recipes`), the agent, its
   model and arguments, the prompt and the close switch).
 - `internal/search/` — **full-text search** over every transcript on every
   machine (`GET /api/search?q=&machine=&dir=&days=`; the 🔍 in the
@@ -1159,6 +1241,39 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   is never picked — one text goes to each in turn through `/api/submit`, and
   the dialog says how each went; a refusal is shown, never retried or queued
   (`broadcast.ts` the pure part, tested).
+- `internal/recipes/` — **recipes**, the saved ways to start an agent
+  (`recipes.json`, `GET/PUT /api/recipes`, the list replaced whole like
+  quick's): `Recipe{ID, Name, Agent, Model, Args, Prompt, Dir, Machine}`,
+  a folder and its machine only when the recipe belongs to one; `Check`
+  (tested) refuses what the create routes would — no name, an agent
+  herdr does not know (`sessions.KnownAgent`), arguments `SplitArgs`
+  cannot read, a model for a kind without a model flag (`StartArgs`),
+  extras on a plain shell, a machine without a folder. The page:
+  `features/recipes/` — `api.ts`, `recipes.ts` (pure, tested: `draftOf`
+  a recipe as the Options fold's `Draft`, `recipeOf` the way back with
+  only what says something, `startRequest` what the create route takes,
+  `recipeWords` "Claude Code · Opus · --permission-mode plan · Review
+  the diff… · only in app", `folderFor` / `machineFor` — the recipe's
+  own folder and machine, else the folder it was started in last (pref
+  `recipe.dir:<id>`), else the one at hand — `pickFirst` on the recipe
+  last used in a folder (pref `recipe.last:<machine>|<dir>`),
+  `firstWords`), `RecipeMark` (the agent's logo, the terminal for a
+  shell), `RecipesDialog.tsx` (dialog kind `recipes`: the list, a row's
+  form — name, agent, model, arguments, first prompt, an optional folder
+  and its machine — saved whole; opened on its own from the palette's
+  "Recipes…" or nested in a "make something" dialog with `initial`, a
+  new row to name) and `StartFromRecipeDialog.tsx` (dialog kind
+  `start-recipe`, the palette's "New agent from recipe…" and the sidebar
+  head's "Agent from recipe…": a recipe, the machine, the folder — a
+  known workspace or a path typed by hand — Start → `POST /api/sessions`
+  with the recipe's agent, model, args and prompt, the new pane
+  selected, both prefs written). `StartOptionsFields` in
+  `features/roster/dialogs.tsx` has a Recipe pick above the fold that
+  fills the agent and its options (`useStart.applyRecipe`) and, at the
+  fold's end, "Save as recipe…" (the manager with the fields as a new
+  row) and "Manage recipes…"; the schedule editor's agent kind has the
+  same pick, filling agent, model, arguments and prompt (shell recipes
+  left out: a schedule starts no shell).
 - `internal/prefs/` — **settings that follow the person between devices**:
   `prefs.json` in the state dir, `{"<key>": {"value", "at"}}`; `Store.All`,
   `Store.Put` merges a part by key, the newer stamp winning (an equal one
@@ -1188,8 +1303,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   tree: `parent_project_id`, archived, favorite, position), tasks (HTML
   description, done/done_at, due_date, priority 0–5, labels), labels.
   Dates are RFC 3339 UTC strings, "" when unset. `GET /api/tasks?view=
-  today|upcoming|open|project&project=&done=1&q=&page=&tz=` — the smart
-  views cut by the viewer's local day (`tz`), the search case-folds in Go
+  today|upcoming|open|proposed|project&project=&done=1&q=&page=&tz=` — the smart
+  views cut by the viewer's local day (`tz`), `proposed` the open tasks
+  sitting in an `on_agent` column, newest first, every project's or one's,
+  the search case-folds in Go
   (SQLite's `lower()` is ASCII only), 50 a page; `POST /api/tasks`,
   `GET/PATCH/DELETE /api/tasks/{id}` (PATCH is partial: nil keeps, `""`
   clears a date), `PUT /api/tasks/{id}/labels {label_id}`, `DELETE
@@ -1203,13 +1320,21 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   innerHTML) and edited as plain text that goes back as paragraphs. The
   top-bar `mode-switch` (Agents | Wall | Tasks | Code | Review) is a per-device pref.
   **Workflow**: every project has its columns (`statuses`: title, colour,
-  `kind` open|done, position, the flags `on_new` / `on_start` /
-  `on_finish` on at most one column each) — New / In progress / Testing /
-  Done by default (`DefaultStatuses`), a copy of the parent's for a
+  `kind` open|done, position, the flags `on_agent` / `on_new` / `on_start` /
+  `on_finish` on at most one column each) — Proposed / New / In progress /
+  Testing / Done by default (`DefaultStatuses`, `proposedColumn` the
+  first), a copy of the parent's for a
   sub-project (`CreateProject`); a store from before is seeded by
   `seedWorkflows` at every open (done → the done column, the old "in
   progress" label → on_start, else on_new; the label is read once and
-  never written again). A task is always in one column (`status_id`) and
+  never written again) and by `seedProposed` once per project
+  (`projects.proposed_seeded`, set by `CreateProject` too): a project with
+  no `on_agent` column gets "Proposed" right before where new tasks land,
+  and one the person strips of it never gets it back. **An agent's task
+  lands in the `on_agent` column** (`proposals`): `CreateFrom` with a
+  source and no `status_id` goes there, else where new tasks land; a
+  person's task is unchanged. `Project.Proposed` (`proposedCounts`, one
+  query) counts the open tasks waiting there, for the page's badges. A task is always in one column (`status_id`) and
   `done`/`done_at` **follow the column's kind**, so the smart lists and
   the checkbox stand: `Patch{Done}` moves to the done column or to where
   new tasks land, `Patch{StatusID}` sets done by kind, a move to another
@@ -1256,7 +1381,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `tasks.Source(auth.CallerName(ctx), body.source)`, the agent key's name
   (the machine it sits on) and what the caller said of itself (its pane),
   "GOG · w3:p1" — and no patch changes it; a key caller's comment is by
-  "agent". `POST /api/tasks` and `PATCH /api/tasks/{id}` take `markdown`
+  "agent". On the page the **Proposed** smart list (`Tasks.tsx`, `view=proposed`,
+  a `.badge` with the count on its nav row and `.badge quiet` per project
+  in the tree) is the triage: `Triage.tsx` — `ProposedBar` (how many,
+  Accept all, Decline all… behind a confirm), `ProposedActions` on each
+  row (`TaskRow`'s `actions` slot), `useTriage` (Accept = `PATCH
+  {status_id}` to `acceptColumn`'s — the on_new column, else the first
+  open one that is not the proposals' — the row gone at once, Decline =
+  DELETE behind `actions.ask`, "all" one request after another, stopping
+  at the first refusal); `proposed.ts` the pure part, tested
+  (`acceptColumn`, `proposedTotal`, `proposedWords`). The board shows the
+  column like any other with a `.board-col-mark` (the bot icon) on it;
+  `ProjectSettings` edits the flag as the first of the four marks. `POST /api/tasks` and `PATCH /api/tasks/{id}` take `markdown`
   beside `description` (`withMarkdown`: the HTML wins when both come):
   `tasks.MarkdownHTML` (markdown.go, tested) draws the allow-listed
   HTML the page renders — paragraphs with line breaks, `#`–`####`
@@ -1303,18 +1439,36 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   dependency — `initialize` answers the client's protocol version when
   it is a known one, else `Version`; `tools/list`, `tools/call`, `ping`;
   empty resources and prompts; an unknown method is -32601, a bad line
-  -32700, and a notification gets no answer). Its tools (`mcp.Tools`,
-  tested on a fake list: `tasks_list`, `task_get`, `task_create`,
-  `task_update`, `task_comment`, `projects_list`, `labels_list`, each
+  -32700, and a notification gets no answer). Its tools (`mcp.Tools`, tested on a fake list: `tasks_list`,
+  `task_get`, `task_create`, `task_update`, `task_comment`,
+  `projects_list`, `labels_list`, and the three read tools of `read.go`
+  — `agents_list`, every agent pane on every connected machine as a
+  table with its state and for how long (`agentState` from the roster's
+  `radar`), the first line of its last answer, its PR link and its
+  conversation's cost, shells left out, the caller's own pane marked
+  "(you)" by `HERDR_PANE_ID`, a machine away named under the count;
+  `agent_recap {machine, pane, since?}`, the pane found on the machine
+  named by id or label, the recap route's `markdown` under a line saying
+  where the agent is and how it stands; `standup {since?}`, the standup
+  route's `markdown` in the server's own zone; `since` is `midnight`,
+  `24h`, `7d`, a date or an RFC 3339 moment (`sinceOf`), nothing for the
+  tool's own default; `Tools.Now` is the clock for tests — each
   answering Markdown an agent reads; the `initialize` answer carries
-  `instructions` saying when to use which) name a project or a column
-  case-folded, read a due date `YYYY-MM-DD` as the end of that day here,
+  `instructions` saying when to use which, the read tools before filing
+  or taking a task, and that a task the agent creates lands in the
+  project's Proposed column until the person accepts it) name a project
+  or a column case-folded (`task_create` answers with the column the task
+  went to — `Made{Task, Column, Notes}`, `Created` — and that a proposal
+  is the person's to accept or decline), read a due date `YYYY-MM-DD` as the end of that day here,
   send a Markdown description as `markdown` with a paragraphs-only
   `description` beside it for a list without the renderer, mark a task
   with the agent's `HERDR_PANE_ID` as `source`, and make a label that is
   missing. They speak through `tasksapi.Client` (the tasks routes with
   `Authorization: Bearer <key>`, a refusal as `*tasksapi.Error`, tested
-  on `httptest`) found by `tasksapi.FindDoor()`: `REMUDA_AGENT_URL` /
+  on `httptest`; `read.go` is the read side — `Roster()` into
+  `tasksapi.Roster` with `Machine.AgentPanes()`, `Recap(machine, pane,
+  session, since)` and `Standup(since, tz)`, each the route's `markdown`)
+  found by `tasksapi.FindDoor()`: `REMUDA_AGENT_URL` /
   `REMUDA_AGENT_KEY`, else the state dir's `agent-url` and `agent-key`
   files the remuda holding the list leaves on every machine its agents
   run on (`http://127.0.0.1:7317` on the cockpit, its door forwarded
@@ -1355,9 +1509,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `<state>/agent-keys.json`, one per machine, named after it (`Mint(name)`
   replaces the machine's earlier key; only the sha256 is kept; `Check` in
   constant time, `last_used` bumped at most once a minute); a bearer that
-  reads `rk_…` is a key and `Key.Allows(path)` keeps it to `/api/tasks`
-  and `/api/tasks/…` — anything else is a 403 "this key is for tasks
-  only" at once, logged once an hour per key (`strayedKey`); the key's
+  reads `rk_…` is a key and `Key.Allows(method, path)` keeps it to
+  `/api/tasks` and `/api/tasks/…` with any method and to a GET of
+  `/api/roster`, `/api/recap` and `/api/standup` (`readRoutes`: what the
+  agents are doing, so a scout sees who is on what) — anything else is a
+  403 "this key is for tasks and reading only" at once, logged once an
+  hour per key (`strayedKey`); the key's
   name is `auth.CallerName(ctx)` in a handler (a task made through one
   carries it as its source). **The door** (`door.go`): `EnsureDoor(dir,
   keys, name, url)` keeps the cockpit's own `agent-key` / `agent-url`
@@ -1424,7 +1581,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   for the model last used) under the dialogs' folded **Options**
   (`StartOptionsFields` in `dialogs.tsx`: the model — Opus / Sonnet /
   Haiku or a typed id for Claude Code, an id for the others — extra
-  arguments, a first prompt).
+  arguments, a first prompt; a Recipe pick above the fold fills them
+  all with a saved recipe, and the fold ends with "Save as recipe…" and
+  "Manage recipes…", see `internal/recipes`).
 - `internal/chat/` — the conversation behind a pane: `Service.Open` (which
   file the chat lens shows: the pane's live one followed through
   compactions, a session of its folder by id, or a transcript on its own
@@ -1602,9 +1761,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   after 500 ms; `REMUDA_TOKEN` must be ≥ 32 characters. A browser's
   cookie holds a device secret of its own, never the token, so one
   device is revoked without rotating the token for every other
-  (`internal/auth`). An agent's key (`rk_…`) opens `/api/tasks…` and
-  nothing else — 403 at once past that, logged once an hour — and
-  travels to a remote machine on stdin over the ssh master, never on a
+  (`internal/auth`). An agent's key (`rk_…`) opens `/api/tasks…`, and a
+  GET of `/api/roster`, `/api/recap` and `/api/standup`, nothing else —
+  403 at once past that, logged once an hour — and travels to a remote machine on stdin over the ssh master, never on a
   command line. Session ids from
   herdr go through `text.SessionID` before naming a file or following
   `--resume` (the pane's own hooks report them: the agent chooses the

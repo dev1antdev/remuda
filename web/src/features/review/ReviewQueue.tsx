@@ -1,5 +1,6 @@
-// The Review mode: every workspace with uncommitted work in one list, the ones with changes since you looked first,
-// and the Changes lens of the picked one beside it — approve, reject, comment from here instead of visiting each pane.
+// The Review mode: every workspace with uncommitted work in one list — the ones rejected whose agent says it is ready
+// again first, then the ones with changes since you looked — and the Changes lens of the picked one beside it:
+// approve, reject, comment from here instead of visiting each pane.
 
 import { useEffect, useMemo, useState } from "react";
 import { actions, app } from "@/app/store";
@@ -24,12 +25,13 @@ export default function ReviewQueue() {
   }, [asked, queue]);
   const item = queue.find((candidate) => candidate.key === picked) ?? null;
   const fresh = queue.filter((candidate) => candidate.fresh > 0).length;
+  const ready = queue.filter((candidate) => candidate.ready).length;
   const manyMachines = new Set(queue.map((candidate) => candidate.machine.id)).size > 1;
   return (
     <main className={`queue${item ? " has-pick" : ""}`}>
       <aside className="queue-list" aria-label="Workspaces to review">
         <div className="queue-head">
-          <span className="queue-count">{queue.length === 0 ? "Nothing to review" : fresh ? `${plural(fresh, "workspace")} with new changes` : `${plural(queue.length, "workspace")} with changes`}</span>
+          <span className="queue-count">{queue.length === 0 ? "Nothing to review" : ready ? `${plural(ready, "workspace")} ready again` : fresh ? `${plural(fresh, "workspace")} with new changes` : `${plural(queue.length, "workspace")} with changes`}</span>
         </div>
         {queue.length === 0 && <p className="queue-empty">Every workspace is clean or reviewed.</p>}
         {queue.map((candidate) => (
@@ -62,16 +64,27 @@ export default function ReviewQueue() {
 }
 
 function QueueRow({ item, on, machine, onPick }: { item: QueueItem; on: boolean; machine: boolean; onPick: () => void }) {
+  const count = item.fresh || item.changed;
+  const countWords = item.fresh ? `${plural(item.fresh, "file")} changed since you looked` : item.changed ? `${plural(item.changed, "file")} changed, all seen` : "everything there is committed";
   return (
-    <button type="button" className={`queue-item${on ? " on" : ""}${item.fresh ? " fresh" : ""}`} onClick={onPick} title={item.dir}>
+    <button type="button" className={`queue-item${on ? " on" : ""}${item.fresh ? " fresh" : ""}${item.ready ? " ready" : ""}`} onClick={onPick} title={item.ready ? `${item.dir}\nRejected at the last look; the agent says it is ready for another` : item.dir}>
       {item.pane?.agent ? <Logo agent={item.pane.agent} /> : <Icon name="terminal" size={14} />}
       <span className="queue-name">
-        {item.session.name}
-        {machine && <span className="queue-where"> · {item.machine.label}</span>}
+        <span className="queue-title">
+          {item.session.name}
+          {machine && <span className="queue-where"> · {item.machine.label}</span>}
+        </span>
+        {item.ready && <span className="queue-sub">says it is ready again</span>}
       </span>
-      <span className={`badge${item.fresh ? "" : " quiet"}`} title={item.fresh ? `${plural(item.fresh, "file")} changed since you looked` : `${plural(item.changed, "file")} changed, all seen`}>
-        {item.fresh || item.changed}
-      </span>
+      {item.ready ? (
+        <span className="badge ready" title={countWords}>
+          ready again
+        </span>
+      ) : (
+        <span className={`badge${item.fresh ? "" : " quiet"}`} title={countWords}>
+          {count}
+        </span>
+      )}
     </button>
   );
 }
