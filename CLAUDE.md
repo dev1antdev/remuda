@@ -970,7 +970,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   open), `GET /api/standup?tz[&since]` is
   every agent pane on every connected machine (`Standup`, the machines
   read side by side) with the radar's state and alert, since local
-  midnight in `tz` unless `since` says, and the Markdown.
+  midnight in `tz` unless `since` says, and the Markdown. **When each
+  agent worked** (`spans.go`, tested): `Spans(turns, since, now)` lays a
+  conversation out in time as `Span{From, To, State, Turn}` — `working`
+  from a prompt for as long as its answer took (a turn after a
+  compaction, with no prompt before it, spans its own tool calls),
+  `waiting` from an `AskUserQuestion` for as long as its result took
+  (an open one until the next prompt, else now), cut out of the work it
+  interrupted, `idle` for every gap of `IdleGap` (2 min) or more,
+  everything clipped to [since, now], `Turn` the first record of the
+  prompt (else the answer) for the page's jump — set on `Recap.Spans`
+  by the `Service` (not by `Of`), so a standup item and one
+  conversation's recap both carry `spans`; the Markdown ignores them.
   `features/standup/`: `StandupPanel.tsx` is the panel (store panel
   `standup`; the sun button in the sidebar head beside Usage, the
   palette's "Standup"; a `Select` for since midnight / 24 h / 7 days,
@@ -982,7 +993,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   conversation's (dialog kind `recap`: the Recap button in
   `chat/ChatTools.tsx` for the session shown, the palette for the pane
   and for a transcript open from the search), `RecapBody.tsx` the lines
-  both draw. **While you were away** (`useWelcomeBack.ts`, called from
+  both draw, under **the day strip** (`DayStrip.tsx` over `strip.ts`, pure
+  and tested: `window` — the period from `since` to now, the last 8
+  hours on a phone under 600 px, the last day for a recap without a
+  since — `layout` places the spans on a bar of `WIDTH` units, trimmed
+  at the edges, `hourMarks` one per whole hour of the clock, labelled
+  every 3 hours (6 on a phone), `spanWords` the tooltip "Working
+  14:02–14:48, 46 min"): one inline SVG, `viewBox` 1000 × 8 stretched
+  to the row, a `rect` per span — green working, red waiting, the dim
+  surface idle — with a `<title>`, the marks as non-scaling lines, the
+  hours as positioned labels under it, a click on a stretch of work or
+  waiting opening the chat jumped to its turn (`actions.jumpTo`; the
+  pane's chat from the standup, the pane's or the viewer's from the
+  recap dialog); drawn only when the recap carries spans. **While you
+  were away** (`useWelcomeBack.ts`, called from
   `app/Shell.tsx`): pref `page.lastSeen` is stamped when the page hides
   or is left and every minute while it is visible; a return after an
   hour or more fetches the standup since that stamp and puts one toast
@@ -1623,7 +1647,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Branch/base names for a worktree go through `sessions.RefOK`. ssh control sockets
   live under `<state>/ssh` (`sshx.SocketDir`) while the path keeps
   within 86 bytes, a unix sockaddr's 104 less the 17-byte suffix
-  OpenSSH binds a master with, else in the temp dir, private on a Mac.
+  OpenSSH binds a master with, else in the temp dir, private on a Mac,
+  named by the state dir and the host there, so a scratch instance never
+  rides the real one's master (and never takes it down on exit).
   `TS_AUTHKEY` travels on stdin, never on a command line. Colours are six hex digits or nothing
   (`normColor`). A run of an update must send back the command shown.
   The installer installs nothing whose sha256 is not the release's; the
