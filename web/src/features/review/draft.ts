@@ -16,6 +16,9 @@ export const place = (dir: string, review: Review | null) => `${dir}${review?.br
 
 export const COMMIT_ASK = "Commit the reviewed work now, with a message that says what changed for the person, and say when it is committed.";
 
+// READY_MARKER is the line a rejected agent ends its answer with once the work is ready again; the server watches for it
+export const READY_MARKER = "READY FOR REVIEW";
+
 export const commentLines = (draft: DraftComment[]) =>
   draft.map((comment, index) => `${index + 1}. ${comment.file}:${comment.line}${comment.removed ? " (removed line)" : ""}\n   > ${comment.code}\n   ${comment.text.replace(/\n/g, "\n   ")}`);
 
@@ -31,7 +34,7 @@ export function verdictMessage(verdict: Verdict, note: string, draft: DraftComme
   parts.push(
     verdict === "approved"
       ? "The changes reviewed are approved: carry on with your flow, and if this is part of a task, it can move on. Any comments above are notes to take along, not blockers."
-      : "Work on what is asked above, then say when the changes are ready for another look. The work is not finished until it is approved.",
+      : `Work on what is asked above, then say when the changes are ready for another look, ending that answer with a line reading ${READY_MARKER}. The work is not finished until it is approved.`,
   );
   if (verdict === "approved" && commit) parts.push(COMMIT_ASK);
   return parts.join("\n\n");

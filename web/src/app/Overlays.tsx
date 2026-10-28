@@ -8,6 +8,7 @@ import { AddMachineDialog, NewTabDialog, NewWorkspaceDialog, NewWorktreeDialog, 
 import WorkspaceMenu from "@/features/roster/WorkspaceMenu";
 import Activity from "@/features/activity/Activity";
 import BroadcastDialog from "@/features/agents/BroadcastDialog";
+import PinsDialog from "@/features/chat/PinsDialog";
 import KeysDialog from "@/features/help/KeysDialog";
 import SettingsDialog from "@/features/settings/SettingsDialog";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
@@ -16,7 +17,11 @@ import FileViewer from "@/features/files/FileViewer";
 import Schedules from "@/features/schedules/Schedules";
 import Search from "@/features/search/Search";
 import RecapDialog from "@/features/standup/RecapDialog";
+import HandoverDialog from "@/features/chat/HandoverDialog";
+import { handedOverWords } from "@/features/chat/handover";
 import ImportIssueDialog from "@/features/tasks/ImportIssueDialog";
+import RecipesDialog from "@/features/recipes/RecipesDialog";
+import StartFromRecipeDialog from "@/features/recipes/StartFromRecipeDialog";
 import Standup from "@/features/standup/StandupPanel";
 import UpdatesDialog from "@/features/updates/Updates";
 import BudgetDialog from "@/features/usage/BudgetDialog";
@@ -147,7 +152,32 @@ export default function Overlays() {
         />
       )}
       {dialog?.kind === "recap" && <RecapDialog machineId={dialog.machineId} paneId={dialog.paneId} session={dialog.session} dir={dialog.dir} title={dialog.title} onClose={actions.closeDialog} />}
+      {dialog?.kind === "handover" && (
+        <HandoverDialog
+          machineId={dialog.machineId}
+          paneId={dialog.paneId}
+          session={dialog.session}
+          agent={dialog.agent}
+          workspace={dialog.workspace}
+          agents={agents}
+          onClose={actions.closeDialog}
+          onDone={async (kind, made) => {
+            actions.closeDialog();
+            refresh();
+            actions.selectPane(dialog.machineId, made.pane);
+            actions.setLens("chat");
+            const label = agents.find((a) => a.id === kind)?.label ?? kind;
+            if (made.agent_error) actions.notify(`The tab is there, but ${label} failed to start: ${made.agent_error}`, { error: true });
+            else actions.notify(handedOverWords(label, made.size), { brief: true });
+          }}
+        />
+      )}
       {dialog?.kind === "budget" && <BudgetDialog machines={machines} budget={dialog.budget} onClose={actions.closeDialog} onSaved={done} ask={actions.ask} />}
+      {dialog?.kind === "recipes" && <RecipesDialog onClose={actions.closeDialog} />}
+      {dialog?.kind === "start-recipe" && (
+        <StartFromRecipeDialog machineId={dialog.machineId} dir={dialog.dir} onClose={actions.closeDialog} onStart={async (req) => landOn(req.machine, await createSession(req))} />
+      )}
+      {dialog?.kind === "pins" && <PinsDialog machineId={dialog.machineId} paneId={dialog.paneId} dir={dialog.dir} shown={dialog.shown} title={dialog.title} onClose={actions.closeDialog} />}
       {dialog?.kind === "machine" && (
         <AddMachineDialog
           onClose={actions.closeDialog}

@@ -26,6 +26,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/quick"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/recap"
+	"github.com/dev1antdev/remuda/internal/recipes"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
@@ -140,6 +141,24 @@ func Run(ctx context.Context, o Options) error {
 		return mc, true
 	})
 	reviews := review.New(o.Dir)
+	// a rejected folder whose agent answers that it is ready again: the review notes it, the person is told
+	sayings.OnAnswer = func(machineID, paneID, text string) {
+		snap, _ := watcher.Snapshot(machineID)
+		if snap == nil {
+			return
+		}
+		pane := snap.Pane(paneID)
+		if pane == nil {
+			return
+		}
+		ws := snap.Workspace(pane.WorkspaceID)
+		if ws == nil {
+			return
+		}
+		if dir := snap.WorkspaceDir(ws); dir != "" && reviews.OnAnswer(machineID, dir, text, time.Now()) {
+			pushSvc.Notify(review.ReadyNotice(machineID, paneID, ws.Label, text))
+		}
+	}
 	meter := usage.NewTracker()
 	budgets := budget.New(o.Dir, func() []shell.Host {
 		var hosts []shell.Host
@@ -152,7 +171,7 @@ func Run(ctx context.Context, o Options) error {
 	}, pushSvc.Notify)
 	input := sessions.NewInput(fleet, watcher)
 	health.PinnedCode = setup.CodeVersion
-	vitals := health.New(fleet, o.Version, o.VersionCheck)
+	vitals := health.New(o.Dir, fleet, o.Version, o.VersionCheck)
 	runner := jobs.New(bus)
 	restarter := restart.New(fleet)
 	restarter.Later = func(mc *machines.Machine, title string, fn func(say func(string)) error) {
@@ -245,7 +264,15 @@ func Run(ctx context.Context, o Options) error {
 			return display.State, time.UnixMilli(display.Since), true
 		},
 		LastAnswer: chats.LastAnswer,
-		Notify:     pushSvc.Notify,
+		Usage: func(machineID, paneID string) (float64, int64, string, bool) {
+			d, ok := meter.Display(machineID, paneID)
+			if !ok {
+				return 0, 0, "", false
+			}
+			tokens := d.Tokens
+			return d.Cost, tokens.Input + tokens.Output + tokens.CacheRead + tokens.CacheWrite5m + tokens.CacheWrite1h, d.Name, true
+		},
+		Notify: pushSvc.Notify,
 	}).Loop(15 * time.Second)
 	go schedules.Loop()
 	go hub.Run(ctx)
@@ -271,6 +298,7 @@ func Run(ctx context.Context, o Options) error {
 		Review:    reviews,
 		Schedules: schedules,
 		Quick:     quick.New(o.Dir),
+		Recipes:   recipes.New(o.Dir),
 		Prefs:     prefs.New(o.Dir),
 		Code:      code.New(o.CodePort),
 		Guard:     auth.NewGuard(o.Token, devices, keys),

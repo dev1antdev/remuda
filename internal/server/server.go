@@ -31,6 +31,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/quick"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/recap"
+	"github.com/dev1antdev/remuda/internal/recipes"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
@@ -64,6 +65,7 @@ type Server struct {
 	Review    *review.Store
 	Schedules *schedule.Store
 	Quick     *quick.Store
+	Recipes   *recipes.Store
 	Prefs     *prefs.Store
 	Code      *code.Service
 	Tailscale func() tsnetx.Status
@@ -88,6 +90,7 @@ func (s *Server) Handler() http.Handler {
 	s.usageRoutes(api)
 	s.budgetRoutes(api)
 	s.quickRoutes(api)
+	s.recipeRoutes(api)
 	s.prefsRoutes(api)
 	s.scheduleRoutes(api)
 	s.reviewRoutes(api)
@@ -99,6 +102,7 @@ func (s *Server) Handler() http.Handler {
 	s.questionRoutes(api)
 	s.feedRoutes(api)
 	s.recapRoutes(api)
+	s.handoverRoutes(api)
 	s.liveRoutes(api)
 	s.deviceRoutes(api)
 	s.agentKeyRoutes(api)

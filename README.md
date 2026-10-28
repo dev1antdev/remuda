@@ -135,7 +135,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   finish you have not looked at, each ringed on the wall — hide any
   tile, bring them back; **focus** one agent and it takes the whole wall
   while the others wait in a strip under it; a click on a tile's head opens that agent
-  in Agents. The tiles ask only for the last few turns, so a wall of a
+  in Agents. **Office** turns the wall into a show for a second screen or
+  a TV: one agent large — the one asking you something, else whoever
+  needs you, else each in turn every 20 s — the rest as cards in a column
+  beside it, in full screen; a card's click or the pin on any tile keeps
+  that agent featured, ← and → walk them by hand, Esc leaves. The tiles ask only for the last few turns, so a wall of a
   dozen agents stays light. **Screen** turns every tile into the pane's
   terminal as it is — the rows with their colours, scaled to the tile,
   the prompt and the status at the bottom — a wall of monitors, read
@@ -155,7 +159,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the tools it called and which failed, the longest call, the commands
   it ran, the files it edited and read, subagents started, questions
   asked — and the first line of its last answer, the agents that need
-  you first. Switch to the last 24 hours or 7 days; **Copy as Markdown**
+  you first. Under each agent a thin **day strip** shows *when*: green
+  while it worked, red while it waited on a question of its own, dim
+  while it sat idle, the hours marked under it; hover a stretch for its
+  times, click one to open the chat right there. Switch to the last 24
+  hours or 7 days; **Copy as Markdown**
   gives the report ready to paste into a channel. Come back to the page
   after an hour or more and a toast says what happened meanwhile —
   "Away 3 h: 2 agents answered, 1 waits for you, $4.20 spent" — with the
@@ -172,7 +180,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   Quiet hours hold it, and a period with nothing in it sends nothing.
   **A scout every few hours**: the third kind of schedule, "Start an
   agent", opens a fresh tab in a folder, starts the agent you name (with
-  a model and arguments if you like) and hands it your prompt once it is
+  a model and arguments if you like, or a saved recipe that fills the
+  four fields at once) and hands it your prompt once it is
   up — "look through this project for what could be better and create a
   task for each" is the one the form suggests; with "Close the tab when
   the agent has answered" on, the tab goes by itself once the agent is
@@ -209,6 +218,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   every answer the agent finishes comes back to the task as a comment
   with a push — and moves it on to *Testing*, unless you moved it first.
   A *Review* link beside the run opens its worktree in the Review mode.
+  The card says what the agents started on it have spent so far
+  ("$4.20", in the quiet colour), and the run in the task says the time
+  it took and the model — read off the same meter as the header's pill,
+  a measure at API prices, and kept once the agent's pane is gone.
   Which columns do what is the project's own setting. Mark it done from
   there. A task can also start as a **GitHub issue**: paste its address
   (the link button in the Tasks head, or "New task from a GitHub
@@ -381,7 +394,8 @@ there, or sign out every other device at once; the rest keep working and the
 token stays what it was.
 
 **Agents and your tasks.** The agents on every machine get a key of their
-own that opens this remuda's task list and nothing else: remuda places it,
+own that opens this remuda's task list, and a read of what the other agents
+are doing, nothing else: remuda places it,
 with the address to reach it at, in the machine's own state dir (on a remote,
 over the same SSH connection, with this remuda's port forwarded back to the
 machine's loopback), and `remuda mcp` / `remuda tasks` there read the two
@@ -471,12 +485,17 @@ with everything remuda can do; see SECURITY.md.
 
 Any coding agent remuda runs — Claude Code, Codex, Gemini CLI, Kimi Code —
 can read and write your task list through **MCP**: `remuda mcp` is a Model
-Context Protocol server over stdio with seven tools — `tasks_list`,
+Context Protocol server over stdio with ten tools — `tasks_list`,
 `task_get`, `task_create` (a Markdown description, a column, a due date, a
 priority, labels, the project's fields), `task_update` (move it to another
-column, mark it done, retitle, rewrite), `task_comment`, `projects_list` and
-`labels_list` — and it tells the agent when to use which. A task an agent
-makes remembers the pane that made it and lands in the project's
+column, mark it done, retitle, rewrite), `task_comment`, `projects_list`,
+`labels_list`, and three that only read what your agents are doing:
+`agents_list` (every agent on every machine, its state and for how long,
+its last answer, its pull request, its cost; the agent's own pane marked),
+`agent_recap` (what one conversation came to, as the Recap dialog shows it)
+and `standup` (the report over all of them) — and it tells the agent when
+to use which: look who is already on what before filing or taking a task.
+A task an agent makes remembers the pane that made it and lands in the project's
 **Proposed** column (unless the agent named a column), where the Tasks
 mode's Proposed list lets you accept or decline it — so a scout's dozen
 never mixes with your own New tasks. One command registers the server with
@@ -497,7 +516,8 @@ while you are away.
 
 How the agents get in: the remuda that holds the list leaves an `agent-key`
 and an `agent-url` in remuda's state dir on every machine its agents run on;
-the key opens the tasks routes and nothing else, on the cockpit itself or
+the key opens the tasks routes and a read of the roster, a recap and the
+standup, nothing else, on the cockpit itself or
 through its door forwarded over ssh (`REMUDA_AGENT_URL` and
 `REMUDA_AGENT_KEY` override them, for a script of your own). An agent whose
 CLI cannot register a server gets the lines by hand — Claude Code's
@@ -662,14 +682,16 @@ other.
 task it works on can move along) — tick *and ask the agent to commit* and
 it is **Approve & commit**: the agent commits the reviewed work and says
 so (remuda itself never writes into a repository); **Reject** tells it
-what to fix and to come back for another look; both take a note and carry
+what to fix and to end the answer that brings the work back with the line
+`READY FOR REVIEW` — when it does, the queue lists that workspace first,
+marked *ready again*, and a push says so; both take a note and carry
 your comments, and both start the next look from now. The comments can also go on their own,
 to this agent or any other. "Mark reviewed" just clears the counts — the
 agent hears nothing.
 
 **Activity** (the bell in the header) is what happened while you were
-away: every finish, question, watchdog note, failed schedule and task
-move, by day, newest first, from every machine — the same things the
+away: every finish, question, watchdog note, failed schedule, task
+move and workspace ready for another look, by day, newest first, from every machine — the same things the
 pushes carry, kept whether or not a device is subscribed. A row opens
 its pane; the bell wears a dot until you look. The alert settings sit at
 the panel's foot.
@@ -685,7 +707,7 @@ same dialog Tasks uses to send a task. **Message several agents** (✉ in
 the sidebar head, or the palette) sends one text to the agents you tick —
 everyone, the working ones, the resting ones, or by hand — each through
 the chat's own path in turn, and says how each went; an agent busy with a
-question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Quick prompts** (⚡ in the composer) are saved texts, for every folder or one, shared by all your devices; `{dir}`, `{branch}` and `{file}` in one become the pane's folder, its branch and the file you last opened. **↑**
+question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Continue with another agent** (View menu, or the palette) hands the conversation to a different agent — Codex's take, a cheaper model, a fresh Claude when this one is stuck: a new tab in the same workspace, the agent you pick started there with the recap of the conversation and its last exchanges in full as its first prompt (how many is yours to say; the whole stays under 60 KB), the old pane left as it is, the handover noted in the activity. **Quick prompts** (⚡ in the composer) are saved texts, for every folder or one, shared by all your devices; `{dir}`, `{branch}` and `{file}` in one become the pane's folder, its branch and the file you last opened. **↑**
 on an empty line brings back what you sent before from this device to
 that folder, newest first; ↓ walks forward and back to the line you were
 writing.
@@ -733,6 +755,19 @@ giving up with a note in Activity. The model last used for each agent is
 remembered on the device. A new tab and a new worktree take the same
 options.
 
+**Recipes** save a start you make again and again — the agent, its
+model, the extra arguments and the first prompt, under a name like
+"Planner" or "Scout", with a folder when the recipe belongs to one.
+Pick one in the Recipe field of the New workspace, tab or worktree
+dialog and every option fills in (each field stays yours to change);
+"Save as recipe…" under the options keeps what you typed; "New agent
+from recipe…" in the palette and "Agent from recipe…" in the sidebar's
++ menu start one straight away in a folder — the recipe's own, else the
+folder you last started it in, else the one you are looking at. A
+recipe also fills the "Start an agent" kind of schedule. Recipes are
+kept on this remuda and shared by every device that uses it;
+"Recipes…" in the palette edits the list.
+
 **Several remuda at once:** each machine may run its own (the phone on
 the studio Mac's, the desk on its own). herdr lets one client attach to a terminal
 at a time, so when a remote machine's own remuda is running (and
@@ -743,7 +778,11 @@ vitals probe finds it and reads its token over your SSH; without it the
 direct attach stays.
 
 **Machine vitals:** the ⓘ next to each machine shows which Claude Code,
-herdr and remuda run there, disk and load; it turns amber when an update
+herdr and remuda run there, disk and load — and the day they had: a small
+chart under each from the readings remuda already takes every fifteen
+minutes (kept in `vitals.json`, nothing new is probed), with the limits
+drawn as dashed lines, so a disk filling up or a load that never drops
+is visible as a trend, not a number. It turns amber when an update
 is out (with the right command for how it was installed), a remote
 remuda is behind this one, or the disk is nearly full.
 
@@ -796,7 +835,12 @@ scans its own `~/.claude/projects` on demand (remuda's scanner where the
 binary is deployed, grep otherwise). Every turn of a pane's conversation
 has a **Copy link** button of its own: the address opens remuda on that
 pane, in its chat, scrolled to that turn — for a note, a ticket or a
-teammate on the same tailnet.
+teammate on the same tailnet. Beside it a **pin** keeps the turn: a
+pinned turn wears a mark in the margin, and **Pins…** in the View menu
+(or the palette) lists every turn you pinned in that folder's
+conversations, newest first — a click opens the conversation there, an
+older session of the folder included, so a pin survives a compaction.
+Pins travel with your settings when sync is on.
 
 **Wall:** a mode for the big screen — every agent on every connected
 machine as a tile: its state and workspace, its context and cost, how
@@ -806,8 +850,10 @@ conversation, the question it asks with its choices as buttons,
 and a line to answer. Tiles keep the roster's order, so nothing jumps
 when an agent changes state; hide the idle ones, keep only the ones that
 need you, or hide any single tile, focus one agent with the rest in a
-strip under it, pick the tile size, click a head to open the agent in full, or switch the
-wall to **Screen** to see every terminal as it is instead of its chat. In Chrome, a tile
+strip under it, pick the tile size, click a head to open the agent in full, switch the
+wall to **Screen** to see every terminal as it is instead of its chat, or put it in
+**Office** mode for a TV — one agent large, whoever needs you first, else each in turn,
+the rest as cards, pinnable, full screen. In Chrome, a tile
 or the current agent **pops out** into a small always-on-top window
 (Document Picture-in-Picture), one at a time, closed from its own frame.
 

@@ -16,6 +16,7 @@ herdr=herdr 0.9.3
 herdr_path=/opt/homebrew/bin/herdr
 herdr_server=0.9.1
 arch=arm64
+cores=10
 codex=codex-cli 0.153.0
 codex_path=/opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js
 kimi=2.1.1
@@ -37,8 +38,8 @@ uptime=23:21  up 33 mins, 2 users, load averages: 6.52 3.32 3.43
 	if r.DiskUsedPct != 41 || r.DiskFreeGB < 259 || r.DiskFreeGB > 260 {
 		t.Fatalf("disk: %+v", r)
 	}
-	if r.Load1 != 6.52 || r.Uptime != "33 mins" {
-		t.Fatalf("load/uptime: %+v", r)
+	if r.Load1 != 6.52 || r.Uptime != "33 mins" || r.Cores != 10 {
+		t.Fatalf("load/uptime/cores: %+v", r)
 	}
 	if len(r.OutdatedHooks) != 2 || r.OutdatedHooks[0] != (Hook{"claude", "v10", "v11"}) || r.OutdatedHooks[1] != (Hook{"codex", "v8", "v10"}) {
 		t.Fatalf("hooks: %+v", r.OutdatedHooks)

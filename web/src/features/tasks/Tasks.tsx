@@ -43,7 +43,7 @@ const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 export default function Tasks() {
   const drawer = app.use((s) => s.drawer);
-  const { machines } = useRoster();
+  const { machines, budgets } = useRoster();
   const agents = useAgentTargets();
   const located = useCurrent();
   const currentPane = located ? { machineId: located.machine.id, paneId: located.pane.id } : null;
@@ -398,6 +398,7 @@ export default function Tasks() {
           onStart={() => setStartReq(open)}
           machineLabel={(id) => machineLabel(machines, id)}
           liveStatus={(r) => agents.find((a) => a.machineId === r.machine && a.paneId === r.pane)?.status ?? null}
+          budgets={budgets}
           onOpenPane={actions.selectPane}
         />
       )}
