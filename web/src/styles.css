@@ -8193,6 +8193,55 @@ body.popout {
   }
 }
 
+/* #5 Proposed column: the triage of what agents filed — the line over the list, a row's Accept / Decline, the column's mark */
+.proposed-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 20px 10px;
+  min-height: 38px;
+  color: var(--fg-dim);
+  font-size: var(--fs-13);
+}
+
+.proposed-bar > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.tasks-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.board-col-mark {
+  display: inline-grid;
+  place-items: center;
+  color: var(--fg-dim);
+}
+
+@media (max-width: 920px) {
+  .proposed-bar {
+    margin: 2px 12px 8px;
+    flex-wrap: wrap;
+  }
+
+  /* a phone's row wraps: the title keeps most of the first line, the chips and the two buttons follow on the next */
+  .tasks-row.with-actions {
+    flex-wrap: wrap;
+  }
+
+  .tasks-row.with-actions .tasks-row-title {
+    min-width: 60%;
+  }
+
+  .tasks-row-actions {
+    margin-left: auto;
+  }
+}
+
 /* #11 Ready again: a rejected workspace whose agent says it is ready for another look, in the review queue */
 .queue-item.ready .queue-name {
   display: flex;

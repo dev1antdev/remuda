@@ -185,12 +185,19 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   nothing closes while it waits. For the scout to create tasks, its
   agent needs remuda's tasks MCP set up (see Tasks below).
 - **Tasks** — the **Agents | Wall | Tasks | Code | Review** switch in the top bar opens remuda's
-  own task list: projects on the left, Today / Upcoming / All open, quick
-  add, done, due dates, priorities, labels, descriptions, search — and a
-  **board** per project: the columns a task moves through (New → In
-  progress → Testing → Done out of the box; yours to rename, recolour,
-  reorder and add to, in the project's ⚙), cards dragged between them on
-  a desk, swiped through a column at a time on a phone. Each project can
+  own task list: projects on the left, Today / Upcoming / All open /
+  Proposed, quick add, done, due dates, priorities, labels, descriptions,
+  search — and a **board** per project: the columns a task moves through
+  (Proposed → New → In progress → Testing → Done out of the box; yours to
+  rename, recolour, reorder and add to, in the project's ⚙), cards
+  dragged between them on a desk, swiped through a column at a time on a
+  phone. **Proposed** is where what an agent files lands (see "Agents and
+  your tasks" below), apart from your own New column: the Proposed list
+  shows every proposal with **Accept** (it goes to New) and **Decline**
+  (it is deleted), one by one or all at once. Which column takes the
+  proposals is one of the four marks in the project's ⚙; a project from
+  before gets a Proposed column once, and stays without one if you remove
+  it. Each project can
   carry its **own fields** (text, number, one choice, several, a date, a
   checkbox, a link), shown on the card and handed to the agent with the
   task. It lives in one SQLite file (`tasks.db`) in remuda's state dir —
@@ -477,7 +484,10 @@ its last answer, its pull request, its cost; the agent's own pane marked),
 `agent_recap` (what one conversation came to, as the Recap dialog shows it)
 and `standup` (the report over all of them) — and it tells the agent when
 to use which: look who is already on what before filing or taking a task.
-A task an agent makes remembers the pane that made it. One command registers the server with
+A task an agent makes remembers the pane that made it and lands in the project's
+**Proposed** column (unless the agent named a column), where the Tasks
+mode's Proposed list lets you accept or decline it — so a scout's dozen
+never mixes with your own New tasks. One command registers the server with
 every agent on a machine, through the agent's own CLI (`claude mcp add`,
 `codex mcp add`, `gemini mcp add`; Kimi when its CLI can):
 

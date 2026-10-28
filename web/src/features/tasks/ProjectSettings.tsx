@@ -11,8 +11,9 @@ import { Dialog, Notice, useDismiss, useSubmit } from "@/ui";
 export const PALETTE = ["e67e22", "2ecc71", "3498db", "9b59b6", "e74c3c", "1abc9c", "f1c40f", "95a5a6"];
 export const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)]!;
 
-type Flag = "on_new" | "on_start" | "on_finish";
+type Flag = "on_agent" | "on_new" | "on_start" | "on_finish";
 const FLAGS: { flag: Flag; icon: IconName; title: string }[] = [
+  { flag: "on_agent", icon: "bot", title: "Tasks agents propose land here, for you to accept or decline" },
   { flag: "on_new", icon: "inbox", title: "New tasks land here" },
   { flag: "on_start", icon: "play", title: "A task an agent is started on moves here" },
   { flag: "on_finish", icon: "circle-check", title: "A task whose agent finished moves here" },
@@ -50,7 +51,7 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
       return r.id === 0 ? rs.filter((x) => x.key !== key) : rs.map((x) => (x.key === key ? { ...x, removed: true } : x));
     });
   const add = () => {
-    setRows((rs) => [...rs, { id: 0, project_id: project.id, title: "", hex_color: randomColor(), kind: "open", position: 0, on_new: false, on_start: false, on_finish: false, key: nextKey }]);
+    setRows((rs) => [...rs, { id: 0, project_id: project.id, title: "", hex_color: randomColor(), kind: "open", position: 0, on_new: false, on_start: false, on_finish: false, on_agent: false, key: nextKey }]);
     setNextKey((k) => k + 1);
   };
 
@@ -130,8 +131,9 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
 
       <div className="tasks-field-name">Columns</div>
       <p className="modal-hint">
-        A task is always in one column, and a column that is <b>done</b> makes its tasks done. The three marks on a column say what the workflow does by itself: where new tasks
-        land, where a task goes when an agent is started on it, where it goes when that agent finishes — unless you moved it meanwhile.
+        A task is always in one column, and a column that is <b>done</b> makes its tasks done. The four marks on a column say what the workflow does by itself: where the tasks
+        agents propose land (for you to accept or decline), where your new tasks land, where a task goes when an agent is started on it, where it goes when that agent finishes
+        — unless you moved it meanwhile.
       </p>
       <div className="ps-rows">
         {rows.map((r, i) => (

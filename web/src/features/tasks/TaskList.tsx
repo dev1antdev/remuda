@@ -1,6 +1,6 @@
 // The list: a quick-add line above it, one row per task with its checkbox and chips.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Icon, Notice, useSubmit } from "@/ui";
 import type { Field, Project, Status, Task } from "./api";
 import { TaskChips } from "./pieces";
@@ -34,7 +34,7 @@ export function QuickAdd({ placeholder, disabled, onAdd }: { placeholder: string
   );
 }
 
-export function TaskRow({ task: t, project, status, fields, selected, onToggle, onOpen }: {
+export function TaskRow({ task: t, project, status, fields, selected, onToggle, onOpen, actions }: {
   task: Task;
   project?: Project;
   status?: Status;
@@ -42,10 +42,11 @@ export function TaskRow({ task: t, project, status, fields, selected, onToggle, 
   selected: boolean;
   onToggle: () => void;
   onOpen: () => void;
+  actions?: ReactNode; // the row's own controls, at its end (the triage of a proposal)
 }) {
   return (
     <div
-      className={`tasks-row${t.done ? " done" : ""}${selected ? " sel" : ""}`}
+      className={`tasks-row${t.done ? " done" : ""}${selected ? " sel" : ""}${actions ? " with-actions" : ""}`}
       role="button"
       tabIndex={0}
       aria-expanded={selected}
@@ -69,6 +70,7 @@ export function TaskRow({ task: t, project, status, fields, selected, onToggle, 
       />
       <span className="tasks-row-title">{t.title}</span>
       <TaskChips task={t} project={project} status={status} fields={fields} />
+      {actions}
     </div>
   );
 }
