@@ -13,6 +13,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
+	"github.com/dev1antdev/remuda/internal/away"
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
@@ -298,6 +299,20 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.LocalHerdrDown) { keeper.Revive(e.Err) })
 	events.Subscribe(bus, func(e events.Snapshot) { keepAwake.Observe(e.Machine, awake.Working(e.Snap)) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { keepAwake.Forget(e.Machine) })
+
+	// a remote that stays unreachable, and one that answers again: the machines publish every move, the tracker says when it matters
+	absent := away.New(away.AwayAfter, func(n away.Notice) {
+		title, body := away.Words(n)
+		pushSvc.Notify(push.Payload{Machine: n.Machine, Kind: "machine", Title: title, Body: body, Tag: "machine|" + n.Machine})
+	})
+	fleet.OnState(func(id, label, state, reason string) {
+		events.Publish(bus, events.MachineState{Machine: id, Label: label, State: state, Reason: reason})
+	})
+	events.Subscribe(bus, func(e events.MachineState) { absent.Observe(e.Machine, e.Label, e.State, e.Reason) })
+	events.Subscribe(bus, func(e events.MachineRemoved) { absent.Forget(e.Machine) })
+	absentDone := make(chan struct{})
+	defer close(absentDone)
+	go absent.Run(30*time.Second, absentDone)
 
 	// the loops
 	watcher.Start()

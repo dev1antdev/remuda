@@ -8,6 +8,7 @@ import { speak, useVoices, voiceSupported } from "@/features/alerts/useVoice";
 import { DEFAULT_VOICE, type VoicePrefs } from "@/features/alerts/voice";
 import WebhooksSection from "@/features/alerts/WebhooksSection";
 import Select from "@/ui/Select";
+import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, type OpenLens } from "@/app/openLens";
 import { Dialog, Notice, useTimedNotice } from "@/ui";
 import { t } from "@/lib/i18n";
 
@@ -57,6 +58,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
   };
 
   const [voice, setVoice] = usePref<VoicePrefs>("alerts.voice", DEFAULT_VOICE);
+  const [openLens, setOpenLens] = usePref<OpenLens>(OPEN_LENS_KEY, DEFAULT_OPEN_LENS);
   const voices = useVoices();
   const native = inShell(); // the Mac app is the device: its alerts come over its own socket, not Web Push
   const voiceOptions = [{ value: "", label: t("The browser's default voice") }, ...voices.map((v) => ({ value: v.name, label: v.name, hint: v.lang, group: v.lang }))];
@@ -93,6 +95,21 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
+      <label className="alerts-opt alerts-open">
+        <span>
+          <b>{t("A notification opens")}</b>
+          <small>{t("The pane a tapped notification, the Mac app's menu, an Activity row or Alt+N brings up shows this lens; the sidebar, the tabs and the Wall keep their own ways.")}</small>
+        </span>
+        <Select
+          value={openLens}
+          onChange={setOpenLens}
+          options={[
+            { value: "terminal", label: t("the terminal") },
+            { value: "chat", label: t("the chat") },
+            { value: "keep", label: t("the lens it was on") },
+          ]}
+        />
+      </label>
       <label className="alerts-opt">
         <input type="checkbox" checked={prefs.input} onChange={(e) => changePrefs({ ...prefs, input: e.target.checked })} />
         <span>
