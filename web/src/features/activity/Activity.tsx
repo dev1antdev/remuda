@@ -12,6 +12,8 @@ import { whenShort } from "@/lib/time";
 import { Dialog, Icon, Logo, Notice, type IconName } from "@/ui";
 import { fetchFeed, type Entry } from "./api";
 import { groupByDay } from "./group";
+import FilterBar from "./FilterBar";
+import { DEFAULT_FILTER, counts, filterEntries, isFiltering, type Filter } from "./filter";
 import { t } from "@/lib/i18n";
 
 const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", digest: "sun", task: "list", test: "bell", budget: "chart", review: "eye", handover: "arrow-right", recover: "play", machine: "monitor", sent: "send" };
@@ -21,6 +23,8 @@ export default function Activity({ onClose }: { onClose: () => void }) {
   const panes = useAllPanes();
   const { data: entries, error } = useQuery<Entry[]>(() => fetchFeed(), [], { every: 10_000 });
   const [, setSeen] = usePref<number>("feed.seen", 0);
+  const [filter, setFilter] = usePref<Filter>("activity.filter", DEFAULT_FILTER);
+  const shown = entries ? filterEntries(entries, filter) : [];
   useEffect(() => {
     if (feed) setSeen(feed);
   }, [feed, setSeen]);
@@ -38,8 +42,10 @@ export default function Activity({ onClose }: { onClose: () => void }) {
     <Dialog title={t("Activity")} icon="bell" size="md" className="activity-dialog" onClose={onClose}>
       {error && <Notice tone="error">{error}</Notice>}
       {entries && entries.length === 0 && <Notice tone="hint">{t("Nothing yet: a finish, a question, a watchdog note or a task's move lands here as it happens.")}</Notice>}
+      {entries && entries.length > 0 && <FilterBar filter={filter} counts={counts(entries, filter.machine)} machines={machines} onChange={setFilter} />}
+      {entries && entries.length > 0 && shown.length === 0 && isFiltering(filter) && <Notice tone="hint">{t("Nothing here with these filters.")}</Notice>}
       {entries &&
-        groupByDay(entries).map((day) => (
+        groupByDay(shown).map((day) => (
           <section key={day.label} className="activity-day">
             <h3 className="activity-day-head">{day.label}</h3>
             <ul className="activity-list">

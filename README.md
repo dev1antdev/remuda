@@ -787,8 +787,11 @@ agent hears nothing.
 away: every finish, question, watchdog note, failed schedule, task
 move and workspace ready for another look, by day, newest first, from every machine — the same things the
 pushes carry, kept whether or not a device is subscribed. A row opens
-its pane; the bell wears a dot until you look. The alert settings sit at
-the panel's foot. Everything typed into an agent through remuda is a
+its pane; the bell wears a dot until you look. Chips at the top narrow
+the list to a kind — questions, finishes, watchdog notes, tasks,
+schedules, budgets, review, machines, what was sent — and a select to
+one machine, each chip saying how many it holds; the bell's tooltip
+says when a filter is on. The alert settings sit at the panel's foot. Everything typed into an agent through remuda is a
 quiet row there as well — "iPhone sent «yes» to api · w3:p1" — so you
 can see afterwards what went where from which device; those rows light
 no dot.
