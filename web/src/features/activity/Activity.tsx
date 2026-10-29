@@ -25,9 +25,7 @@ export default function Activity({ onClose }: { onClose: () => void }) {
   }, [feed, setSeen]);
   const open = (entry: Entry) => {
     if (!entry.pane) return;
-    actions.selectPane(entry.machine, entry.pane);
-    actions.setMode("herdr");
-    actions.setLens("chat");
+    actions.openPane(entry.machine, entry.pane);
     onClose();
   };
   const where = (entry: Entry) => {

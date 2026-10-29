@@ -620,7 +620,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`langOf` of its info string) is coloured through `lib/highlight.ts`,
   tokenized once per fence (`useMemo`) and drawn by `ui/Tokens.tsx`
   (`tokenNodes`: a `.hl-<kind>` span per token, plain text as it is); a
-  fence without a language stays one plain string. `ui/ErrorBoundary.tsx` is the one class
+  fence without a language stays one plain string. **A table's cells carry
+  a copy button** (`ui/TableCell.tsx`: an `icon-btn` in the cell's corner,
+  shown on hover with a mouse and for a few seconds after a long press on
+  a phone — `ui/press.ts`, the tasks' long press moved here with a shim at
+  its old path — copying `cellText(source)` from `ui/cellText.ts`, tested:
+  the cell's words with the inline marks stripped, a link's text, a `<br>`
+  as a line break; `INLINE` lives there and `renderInline` imports it),
+  because the browser's own table selection turns into whole rows the
+  moment a drag leaves the cell and selects nothing past the table's edge
+  (a triple-click selects one cell; nobody knows). `ui/ErrorBoundary.tsx` is the one class
   component: React unmounts the whole tree on a render error, so every
   turn (`TurnView`) draws inside one — a turn the parser cannot draw is a
   note, the rest of the chat stands — and `App.tsx` wraps the page in one
@@ -1134,7 +1143,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the finishes), `toggleKind`.
 - `web/public/sw.js` shows every push (Safari revokes silent subscriptions),
   silent while a window is visible; click → `select-pane` message to an open
-  window or `openWindow(/?machine=&pane=)` — a push naming a `panel` (a
+  window or `openWindow(/?machine=&pane=)` — either way the pane opens in
+  the lens the pref `open.lens` names (`app/openLens.ts`, tested:
+  terminal by default, chat, or the lens the page was on; the choice in
+  the alerts panel and the palette, synced between devices), through
+  `actions.openPane`, which the Mac app's `select`, an Activity row and
+  Alt+N use too; the sidebar, the tabs and the Wall keep their own ways — a push naming a `panel` (a
   digest) → `open-panel` or `openWindow(/?panel=standup)` instead, which
   `Shell.tsx` and `url.ts` answer; `pushsubscriptionchange`
   re-subscribes. `web/src/features/alerts/push.ts` is single-flight and re-registers on every

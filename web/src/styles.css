@@ -9039,3 +9039,36 @@ body.popout {
     display: none;
   }
 }
+
+/* ---- a chat table's cells: a copy button in the corner, on hover with a mouse, after a long press on a phone ---- */
+.md-cell {
+  position: relative;
+}
+
+.md-cell-copy {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  opacity: 0;
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-sm);
+  user-select: none;
+  -webkit-user-select: none;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.md-cell:hover .md-cell-copy,
+.md-cell-copy:focus-visible,
+.md-cell.pressed .md-cell-copy {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  .md-cell:hover .md-cell-copy {
+    opacity: 0;
+  }
+
+  .md-cell.pressed .md-cell-copy {
+    opacity: 1;
+  }
+}
