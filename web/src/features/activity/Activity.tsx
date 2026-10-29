@@ -1,5 +1,6 @@
 // The activity panel behind the bell: what happened across the agents while nobody was looking — every alert the
-// pushes carry, by day, newest first — a row opens its pane; the alert settings wait at the foot.
+// pushes carry, by day, newest first — a row opens its pane; the alert settings wait at the foot. What a device sent
+// through remuda is a quiet row among them: no news, drawn in the quiet colour.
 
 import { useEffect } from "react";
 import { useAllPanes } from "@/app/current";
@@ -13,7 +14,7 @@ import { fetchFeed, type Entry } from "./api";
 import { groupByDay } from "./group";
 import { t } from "@/lib/i18n";
 
-const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", digest: "sun", task: "list", test: "bell", budget: "chart", review: "eye", handover: "arrow-right", recover: "play", machine: "monitor" };
+const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", digest: "sun", task: "list", test: "bell", budget: "chart", review: "eye", handover: "arrow-right", recover: "play", machine: "monitor", sent: "send" };
 
 export default function Activity({ onClose }: { onClose: () => void }) {
   const { machines, feed } = useRoster();
@@ -46,7 +47,7 @@ export default function Activity({ onClose }: { onClose: () => void }) {
                 const at = where(entry);
                 return (
                   <li key={entry.id}>
-                    <button type="button" className={`activity-row${at.gone ? " gone" : ""}`} disabled={!entry.pane} onClick={() => open(entry)} title={at.gone ? t("That pane is gone") : entry.pane ? t("Open the pane") : undefined}>
+                    <button type="button" className={`activity-row${at.gone ? " gone" : ""}${entry.quiet ? " quiet" : ""}`} disabled={!entry.pane} onClick={() => open(entry)} title={at.gone ? t("That pane is gone") : entry.pane ? t("Open the pane") : undefined}>
                       <span className="activity-when">{whenShort(entry.at)}</span>
                       {at.agent ? <Logo agent={at.agent} /> : <Icon name={KIND_ICONS[entry.kind] ?? "bell"} size={14} />}
                       <span className="activity-text">

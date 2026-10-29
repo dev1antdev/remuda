@@ -48,5 +48,6 @@ func (s *Server) handleAnswer(w http.ResponseWriter, r *http.Request) {
 		rpcErr(w, err)
 		return
 	}
+	s.noteSent(r.Context(), mc.ID(), req.Pane, req.Label, false)
 	writeJSON(w, map[string]any{"ok": true, "chosen": req.Label})
 }

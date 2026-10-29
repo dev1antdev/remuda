@@ -787,7 +787,10 @@ away: every finish, question, watchdog note, failed schedule, task
 move and workspace ready for another look, by day, newest first, from every machine — the same things the
 pushes carry, kept whether or not a device is subscribed. A row opens
 its pane; the bell wears a dot until you look. The alert settings sit at
-the panel's foot.
+the panel's foot. Everything typed into an agent through remuda is a
+quiet row there as well — "iPhone sent «yes» to api · w3:p1" — so you
+can see afterwards what went where from which device; those rows light
+no dot.
 
 **Code is coloured** in the chat's fenced blocks and in the Changes lens's
 diffs — Go, TypeScript, Python, shell, JSON, YAML, TOML, CSS, HTML, Rust,

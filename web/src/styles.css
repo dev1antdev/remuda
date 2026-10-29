@@ -9108,3 +9108,9 @@ body.popout {
 .tile-muted {
   margin-left: 6px;
 }
+
+/* ---- activity: what a device sent through remuda is a quiet row — no news, the quiet colour ---- */
+.activity-row.quiet .activity-title,
+.activity-row.quiet > svg {
+  color: var(--fg-faint);
+}
