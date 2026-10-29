@@ -792,6 +792,8 @@ machine's agent has it too.
 **Dictation** (🎤) uses the browser's own speech recognition — Safari on
 iPhone, Chrome on the desk; nothing passes through remuda.
 
+**Type `/` or `@`** in the composer and a list opens over it: `/` as the first character lists the slash commands the pane's agent knows — Claude Code's own, your commands and skills under `~/.claude`, the project's under its `.claude` — and `@` lists the folder's files as git sees them (Codex and Gemini panes get their own command lists); ↑ ↓ walk, ↵ or Tab picks, Esc closes, a tap picks on the phone. **Switch the model** (View menu, or the palette) tells a Claude Code pane `/model` with Opus, Sonnet, Haiku or an id you type: the terminal shows the switch, the next answer's foot line names the model, and Claude Code keeps the pick as its default for new sessions, as its own `/model` does.
+
 **Machines** carry the names herdr gave them, and every remote one a
 hue of its own — the edge of its block in the sidebar, of its tiles on
 the Wall, a dot in the palette — so three machines are told apart at a

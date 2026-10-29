@@ -130,10 +130,10 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
         <>
           <TileState words={words} said={said} />
           <Screen machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active onOpen={open} />
-          <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} active />
+          <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} agent={pane.agent} active />
         </>
       ) : (
-        <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} words={words} settled={settled} said={said} active />
+        <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} agent={pane.agent} words={words} settled={settled} said={said} active />
       )}
     </section>
   );

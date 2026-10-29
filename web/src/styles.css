@@ -8937,3 +8937,105 @@ body.popout {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* ---- the composer's completion: a slash's commands or an @'s files, listed over the field ---- */
+.composer {
+  position: relative;
+}
+
+.complete {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: calc(100% - 2px);
+  z-index: var(--z-menu);
+  display: flex;
+  flex-direction: column;
+  max-height: min(40dvh, 420px);
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-md);
+  animation: pop-in var(--fast) var(--ease);
+}
+
+.complete-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--ctl);
+  padding: 6px 10px 6px 8px;
+  border-radius: var(--r-sm);
+  color: var(--fg);
+  font-size: var(--fs-13);
+  cursor: pointer;
+  user-select: none;
+}
+
+.complete-item.is-active {
+  background: var(--bg-hover);
+}
+
+.complete-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  flex-shrink: 0;
+  color: var(--fg-dim);
+}
+
+.complete-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.3;
+}
+
+.complete-title {
+  font: var(--fs-12) var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.complete-text small {
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.complete-tag {
+  flex-shrink: 0;
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.complete-note,
+.complete-keys {
+  padding: 6px 10px 2px;
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.complete-note.is-error {
+  color: var(--red);
+}
+
+.complete-keys kbd {
+  font: var(--fs-11) var(--mono);
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+}
+
+@media (pointer: coarse) {
+  .complete-keys {
+    display: none;
+  }
+}
