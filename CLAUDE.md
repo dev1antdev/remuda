@@ -65,7 +65,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and prompt box of Claude Code vanish). A joiner gets a repaint instead —
   the PTY is resized by a row and back, herdr and the app redraw.
   `AttachManager.NewCommand` builds the attach process, so the same manager
-  serves a local herdr exec or an `ssh -tt` to a remote one.
+  serves a local herdr exec or an `ssh -tt` to a remote one. **Terminal
+  queries are answered at the server** (`queries.go`, tested): herdr asks
+  the client at attach for the pixel mouse mode (DECRQM 1016) and the
+  device attributes, and every viewer's xterm would answer — late, once per
+  viewer, the answers typed into the pane as `1016;2$y1;2c` — so the read
+  loop answers DA1, DA2 and DECRQM once as xterm.js would and strips them
+  from what the viewers get, a query cut by a chunk boundary held until it
+  completes; the cursor-position report (`CSI 6 n`) still passes, since
+  only xterm knows the cursor.
   **Never pass `--takeover`** — stealing herdr's attach slot is the user's
   call only. `Client.OnTransportError` fires for failures to *reach* herdr
   (not for herdr's own `*Error` refusals); a remote machine hooks it to
