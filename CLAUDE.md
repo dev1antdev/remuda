@@ -828,8 +828,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   {dir, verdict?}`; `GET /api/review?dir=` runs one shell (`shell.Text` on
   the machine: local `sh -c` or over ssh) for branch, HEAD, the commits
   `baseline..HEAD` along the first parent (a merge is one line, not the
-  history it brought), `git diff --numstat HEAD`, untracked files, the
-  current blob hashes and each listed commit's resulting blobs — a file
+  history it brought; the newest `maxCommits` 300 listed and the rest
+  counted as `commits_total`, the head saying "the newest 300 of 1,204
+  commits"), `git diff --numstat HEAD`, untracked files, the
+  current blob hashes and each listed commit's resulting blobs (one `git log --raw`, never a
+  process per commit: a repository pulled after weeks has hundreds, and
+  the loop outran the shell's minute; the uncommitted files' blobs come
+  from one `git hash-object --stdin-paths` too) — a file
   is *fresh* when its blob moved since the baseline (or there is none); a
   commit is *seen* when every blob it brought is the one reviewed (a
   commit of reviewed work, an amend, a rebase). A look records the blob

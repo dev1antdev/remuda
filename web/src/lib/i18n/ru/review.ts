@@ -94,4 +94,5 @@ export const review: Dictionary = {
   "comment": "комментарий",
   "open": "открыть",
   "split": "колонки",
+  "the newest {n} of {total} commits": "новейшие {n} из {total} коммитов",
 };

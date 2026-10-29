@@ -58,16 +58,20 @@ type File struct {
 }
 
 // Summary is the review of one folder.
+// maxCommits is how many commits since the baseline a summary lists; the rest are counted in CommitsTotal.
+const maxCommits = 300
+
 type Summary struct {
-	Repo     string    `json:"repo,omitempty"`
-	Branch   string    `json:"branch,omitempty"`
-	Head     string    `json:"head,omitempty"`
-	Baseline *Baseline `json:"baseline,omitempty"`
-	Commits  []Commit  `json:"commits"`
-	Files    []File    `json:"files"`
-	Fresh    int       `json:"fresh"`
-	Error    string    `json:"error,omitempty"`
-	At       time.Time `json:"at"`
+	Repo         string    `json:"repo,omitempty"`
+	Branch       string    `json:"branch,omitempty"`
+	Head         string    `json:"head,omitempty"`
+	Baseline     *Baseline `json:"baseline,omitempty"`
+	Commits      []Commit  `json:"commits"`
+	CommitsTotal int       `json:"commits_total,omitempty"` // every commit since the baseline, when more than the listed ones
+	Files        []File    `json:"files"`
+	Fresh        int       `json:"fresh"`
+	Error        string    `json:"error,omitempty"`
+	At           time.Time `json:"at"`
 }
 
 // Badge is the roster's count for one workspace.
@@ -123,23 +127,25 @@ func (store *Store) Badge(machineID, dir string) (Badge, bool) {
 }
 
 // summaryScript gathers everything Summary needs in one shell, sections separated by a line of \x1e and fields by \x1f:
-// repo/branch/HEAD, the first-parent commits since the baseline, the numstat against HEAD, the untracked files, every uncommitted file's blob, and per commit the blobs it left (none for a merge).
+// repo/branch/HEAD, the newest maxCommits first-parent commits since the baseline, the numstat against HEAD, the untracked files, every uncommitted file's blob, per commit the blobs it left (none for a merge) — one git log, never a process per commit: a repository pulled after weeks has hundreds — and how many commits there are in all.
 func summaryScript(dir, baselineHead string) string {
 	return script.InRepo(dir) +
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
 		`base=` + script.Quote(baselineHead) + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
-		`if [ "$base" != HEAD ]; then git log --first-parent --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
+		`if [ "$base" != HEAD ]; then git log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
 		`git -c core.quotepath=off diff --no-renames --relative --numstat HEAD 2>/dev/null; printf '\036\n'; ` +
 		`git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
 		blobsScript() + `; printf '\036\n'; ` +
-		`if [ "$base" != HEAD ]; then for c in $(git rev-list --first-parent "$base"..HEAD 2>/dev/null); do printf '%s\n' "$c"; git -c core.quotepath=off diff-tree --no-commit-id -r --relative --no-renames "$c" 2>/dev/null | while IFS= read -r l; do printf '\037%s\n' "$l"; done; done; fi`
+		`if [ "$base" != HEAD ]; then git -c core.quotepath=off log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --raw --no-renames --no-abbrev --relative --format='%H' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
+		`if [ "$base" != HEAD ]; then git rev-list --count --first-parent "$base"..HEAD 2>/dev/null; fi`
 }
 
 // blobsScript prints "<path>\x1f<blob hash>" per uncommitted file, one per line, "gone" for a deleted one.
 // Paths are relative to the folder; a rename is a deletion plus an addition.
 func blobsScript() string {
 	return `{ git -c core.quotepath=off diff --no-renames --relative --name-only HEAD 2>/dev/null; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; } | ` +
-		`while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\037%s\n' "$f" "$(git hash-object -- "$f" 2>/dev/null)"; else printf '%s\037gone\n' "$f"; fi; done`
+		`{ t=$(mktemp 2>/dev/null) || t=/tmp/remuda-blobs.$$; : > "$t"; while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\n' "$f" >> "$t"; else printf '%s\037gone\n' "$f"; fi; done; ` +
+		`if [ -s "$t" ]; then git -c core.quotepath=off hash-object --stdin-paths < "$t" 2>/dev/null | paste -d "$(printf '\037')" "$t" -; fi; rm -f "$t"; }`
 }
 
 // Summary reviews one folder against its baseline.
@@ -202,13 +208,13 @@ func (store *Store) Summary(host shell.Host, dir string) Summary {
 			if line == "" {
 				continue
 			}
-			if !strings.HasPrefix(line, "\x1f") {
+			if !strings.HasPrefix(line, ":") {
 				closeCommit()
 				commitSHA, allReviewed, anyFile = line, true, false
 				continue
 			}
-			// a diff-tree line: ":100644 100644 <old blob> <new blob> M\t<path>"
-			modes, path, ok := strings.Cut(line[1:], "\t")
+			// a raw line of git log: ":100644 100644 <old blob> <new blob> M\t<path>"
+			modes, path, ok := strings.Cut(line, "\t")
 			fields := strings.Fields(modes)
 			if !ok || len(fields) < 4 {
 				continue
@@ -219,6 +225,11 @@ func (store *Store) Summary(host shell.Host, dir string) Summary {
 			}
 		}
 		closeCommit()
+		if len(sections) > 6 {
+			if total, err := strconv.Atoi(strings.TrimSpace(sections[6])); err == nil && total > len(summary.Commits) {
+				summary.CommitsTotal = total
+			}
+		}
 		for i := range summary.Commits {
 			for fullSHA := range seenCommits {
 				if strings.HasPrefix(fullSHA, summary.Commits[i].SHA) {
