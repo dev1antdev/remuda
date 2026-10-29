@@ -4,6 +4,8 @@
 import { useEffect } from "react";
 import { usePref } from "@/lib/prefs";
 import { newer } from "@/lib/version";
+import { episodeKey, remember, stoppedWords } from "@/features/roster/stopped";
+import { resumeStopped } from "@/features/updates/recover";
 import { useRoster } from "@/features/roster/useRoster";
 import type { ToastItem } from "@/ui";
 import { actions, app } from "./store";
@@ -14,6 +16,7 @@ export function useToasts(): ToastItem[] {
   const notice = app.use((s) => s.notice);
   const away = app.use((s) => s.away);
   const [releaseSeen, setReleaseSeen] = usePref("release.seen", "");
+  const [recoverSeen, setRecoverSeen] = usePref<string[]>("recover.seen", []);
   useEffect(() => {
     if (!notice || notice.error) return;
     const t = setTimeout(actions.clearNotice, notice.brief ? 2000 : 6000);
@@ -47,6 +50,31 @@ export function useToasts(): ToastItem[] {
       ),
       onDismiss: () => setReleaseSeen(release),
     });
+  // the chats a reboot stopped: one toast per machine and episode, the same Resume as the ⓘ's
+  for (const m of machines) {
+    const stopped = m.stopped ?? [];
+    if (!stopped.length) continue;
+    const key = episodeKey(m.id, stopped);
+    if (recoverSeen.includes(key)) continue;
+    toasts.push({
+      id: `recover-${m.id}`,
+      tone: "warn",
+      text: `${m.label}: ${stoppedWords(stopped.length)}`,
+      action: (
+        <button
+          type="button"
+          className="btn sm primary"
+          onClick={() => {
+            setRecoverSeen(remember(recoverSeen, key));
+            void resumeStopped(m.id, stopped.length);
+          }}
+        >
+          {t("Resume")}
+        </button>
+      ),
+      onDismiss: () => setRecoverSeen(remember(recoverSeen, key)),
+    });
+  }
   if (away)
     toasts.push({
       id: "away",

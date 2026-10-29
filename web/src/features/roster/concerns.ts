@@ -2,14 +2,16 @@
 
 import { newer } from "@/lib/version";
 import { VENDOR_NAME } from "@/ui/brand";
-import type { Health, Latest } from "./api";
+import type { Health, Latest, StoppedChat } from "./api";
+import { stoppedNames, stoppedWords } from "./stopped";
 import { t } from "@/lib/i18n";
 
 export type Concern = { key: string; text: string; bad?: boolean; update?: string };
 
-export function concerns(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean): Concern[] {
-  if (!h) return [];
+export function concerns(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean, stopped: StoppedChat[] = []): Concern[] {
   const out: Concern[] = [];
+  if (stopped.length) out.push({ key: "stopped", text: `${stoppedWords(stopped.length)}: ${stoppedNames(stopped)}`, update: "recover" });
+  if (!h) return out;
   if (h.claude && latest?.claude && newer(h.claude, latest.claude)) out.push({ key: "claude", text: `Claude Code ${latest.claude} is out (${h.claude} here)`, update: "claude" });
   if (h.codex && latest?.codex && newer(h.codex, latest.codex)) out.push({ key: "codex", text: `Codex ${latest.codex} is out (${h.codex} here)`, update: "codex" });
   if (h.gemini && latest?.gemini && newer(h.gemini, latest.gemini)) out.push({ key: "gemini", text: `Gemini CLI ${latest.gemini} is out (${h.gemini} here)`, update: "gemini" });
@@ -35,4 +37,4 @@ function hookNames(hooks: { agent: string }[]): string {
 }
 
 // updateLabel is the button's word for what an update does
-export const updateLabel = (what: string) => (what === "remuda" ? "Deploy" : what === "remuda-release" ? "Download & install" : what.startsWith("restart-") ? "Restart" : "Update");
+export const updateLabel = (what: string) => (what === "remuda" ? "Deploy" : what === "remuda-release" ? "Download & install" : what === "recover" ? t("Resume") : what.startsWith("restart-") ? "Restart" : "Update");

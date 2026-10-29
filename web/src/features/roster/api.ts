@@ -117,7 +117,11 @@ export type Machine = {
   sessions: Session[];
   health?: Health;
   awake?: Awake;
+  stopped?: StoppedChat[]; // the chats a reboot stopped there: their panes are bare shells again, one Resume brings them back
 };
+
+// StoppedChat is a chat whose pane came back from a reboot as a bare shell: the agent it ran and the pane's title
+export type StoppedChat = { pane: string; agent: string; title: string };
 
 export type AgentKind = { id: string; label: string };
 

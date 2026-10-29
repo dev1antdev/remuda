@@ -134,11 +134,14 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 // a machine's first snapshot only seeds state, so a reconnect replays no alerts.
 func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 	now := time.Now()
-	events.Publish(w.bus, events.Snapshot{Machine: machineID, Snap: snap, At: now})
+	w.mu.Lock()
+	st := w.stateFor(machineID)
+	first := st.snap == nil || st.err != nil
+	w.mu.Unlock()
+	events.Publish(w.bus, events.Snapshot{Machine: machineID, Snap: snap, At: now, First: first})
 
 	var changes []events.PaneStatus
 	w.mu.Lock()
-	st := w.stateFor(machineID)
 	seed := st.snap == nil
 	back := st.err != nil // the first good poll after an outage: the gap is not a turn
 	st.snap, st.at, st.err = snap, now, nil

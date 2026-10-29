@@ -15,3 +15,5 @@ export const listJobs = (machineId: string): Promise<{ jobs: Job[]; pending: num
 export const fetchJob = (id: string): Promise<Job> => getJSON(`/api/jobs/${encodeURIComponent(id)}`);
 // one chat started again on its session, by hand: a job, or the refusal (a shell, no session, a question open, still working)
 export const restartPane = (machineId: string, paneId: string): Promise<{ job: string }> => sendJSON("POST", "/api/panes/restart", { machine: machineId, pane: paneId });
+// every chat a reboot stopped on the machine started again on its session: a job, or the refusal when none is stopped
+export const recoverChats = (machineId: string): Promise<{ job: string }> => sendJSON("POST", "/api/panes/recover", { machine: machineId });

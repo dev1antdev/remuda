@@ -13,6 +13,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/radar"
+	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -81,15 +82,16 @@ type rosterSession struct {
 }
 
 type rosterMachine struct {
-	ID       string          `json:"id"`
-	Label    string          `json:"label"`
-	Host     string          `json:"host,omitempty"`
-	Source   string          `json:"source,omitempty"`
-	State    string          `json:"state"` // connected | connecting | error
-	Error    string          `json:"error,omitempty"`
-	Sessions []rosterSession `json:"sessions"`
-	Health   *health.Report  `json:"health,omitempty"`
-	Awake    *awake.Status   `json:"awake,omitempty"` // the keep-awake switch and whether the hold stands
+	ID       string            `json:"id"`
+	Label    string            `json:"label"`
+	Host     string            `json:"host,omitempty"`
+	Source   string            `json:"source,omitempty"`
+	State    string            `json:"state"` // connected | connecting | error
+	Error    string            `json:"error,omitempty"`
+	Sessions []rosterSession   `json:"sessions"`
+	Health   *health.Report    `json:"health,omitempty"`
+	Awake    *awake.Status     `json:"awake,omitempty"`   // the keep-awake switch and whether the hold stands
+	Stopped  []restart.Stopped `json:"stopped,omitempty"` // the chats a reboot stopped: their panes are bare shells again, a Resume brings them back
 }
 
 // sessionsFromSnapshot keeps herdr's own hierarchy, workspace → tabs → panes, in herdr's order.
@@ -220,6 +222,9 @@ func (s *Server) rosterBody() ([]byte, string) {
 		if s.Awake != nil {
 			status := s.Awake.Status(mc.ID())
 			entry.Awake = &status
+		}
+		if s.Updates != nil && s.Updates.Restart != nil {
+			entry.Stopped = s.Updates.Restart.Stopped(mc.ID())
 		}
 		out = append(out, entry)
 	}

@@ -561,6 +561,35 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   it has settled, or sends Esc) — run on the watcher's snapshot before
   the job starts (a 400 with the reason) and on a fresh look inside it;
   a pane restarted within the last two minutes is refused too.
+  **The chats a reboot stops** (restart/recover.go, tested): herdr
+  restores the workspaces and panes after a reboot, every pane a bare
+  shell. `restart.Memory` (`Restarter.Memory`, `OpenMemory(dir)`) hears
+  every `events.Snapshot` (`Restarter.Observe`) and keeps, per
+  machine|pane, the agent kind, session id, folder and title of every
+  agent pane with a session in `<state>/chats.json` (written on change);
+  a remembered pane that is a bare shell in the same folder counts as
+  *stopped* only when the change was not watched happening — the
+  snapshot's `First` flag, set by the watcher on a machine's first
+  snapshot and on the first after its polls failed — and is forgotten
+  when the person left the agent themselves, moved the shell elsewhere
+  or closed the pane; `Restarter.Server` pauses the memory for its
+  machine while it restarts herdr itself. The roster carries
+  `machine.stopped [{pane, agent, title}]`: the ⓘ's first concern
+  ("2 chats stopped with the reboot: Claude Code in api, Codex in web",
+  `features/roster/stopped.ts`, tested) with a **Resume** button, and one
+  toast per machine and episode (`episodeKey`, pref `recover.seen`, the
+  last eight dismissed) with the same button. Resume is
+  `POST /api/panes/recover {machine}` → `updates.Service.RecoverChats` →
+  a job (`features/updates/recover.ts` follows it with toasts; the log
+  under the machine's recent jobs) running `Restarter.Recover`: each
+  pane under its lock, a fresh look — gone, another agent, the shell in
+  another folder, the agent back already by hand — then the folder
+  (`Machine.ResolvePath`) and, for Claude Code, the session file
+  (`Transcripts.ResolveSession`) checked, then `agent.start` with the
+  kind's resume arguments under a name of the pane's own; a start that
+  fails leaves the pane on the list, a pane that will not come back is
+  forgotten; a feed row (kind `recover`) says what came back. Nothing
+  starts by itself.
 - `internal/tsnetx` — `-tailscale` joins the tailnet as a tsnet node
   (userspace, no tailscaled) named `-tailscale-hostname`, serves the same
   handler over HTTPS on :443 with the tailnet's certificate (:80

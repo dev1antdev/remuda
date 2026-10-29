@@ -153,6 +153,8 @@ type Restarter struct {
 	Later func(mc *machines.Machine, title string, fn func(say func(string)) error)
 	// Lock is the per-pane typing lock; a restart holds it from the exit to the resumed agent.
 	Lock func(machineID, paneID string) sync.Locker
+	// Memory remembers every chat for a come-back after a reboot (recover.go); nil remembers none.
+	Memory *Memory
 
 	mu      sync.Mutex
 	pending map[string]*booking  // machine|pane

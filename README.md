@@ -365,6 +365,19 @@ the server is restarted — herdr restores the workspaces and panes, and
 remuda starts every chat again with its session resumed ("Restart
 herdr's server" is offered whenever the server lags the binary).
 
+**After a reboot the chats come back too.** herdr restores the
+workspaces and panes, but every pane is a bare shell again. remuda
+remembers which agent and which session each pane ran, so when a
+machine's herdr comes back with those panes empty, the machine's ⓘ
+turns amber — "3 chats stopped with the reboot: Claude Code in api,
+Codex in web, …" — with a **Resume** button, and a toast in the corner
+says the same once. Resume starts each chat again in its own pane on
+its session (`claude --resume`, `codex resume`, …), one job whose log
+sits under the machine's recent jobs; a pane whose folder or session
+file is gone, or that runs something else by then, is skipped with the
+reason. Nothing starts until you press the button, and a chat you left
+yourself is never offered back.
+
 remuda watches its own releases on GitHub too (one request every six
 hours, none with `-no-version-check`). When a newer one is out, the ⓘ of
 every machine behind it says so with a **Download & install** button, the

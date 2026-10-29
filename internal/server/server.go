@@ -101,6 +101,7 @@ func (s *Server) Handler() http.Handler {
 	s.reviewRoutes(api)
 	s.codeRoutes(api)
 	s.updateRoutes(api)
+	s.recoverRoutes(api)
 	s.tasksRoutes(api)
 	s.terminalRoutes(api)
 	s.screenRoutes(api)

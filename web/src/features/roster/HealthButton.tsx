@@ -9,6 +9,7 @@ import { newer } from "@/lib/version";
 import { Icon, useDismiss } from "@/ui";
 import { refreshHealth, type Health, type Latest, type Machine } from "./api";
 import { awakeBad, awakeWords } from "./awake";
+import { resumeStopped } from "@/features/updates/recover";
 import { concerns, updateLabel } from "./concerns";
 import { Sparkline } from "./Sparkline";
 import { DISK_THRESHOLDS, loadThresholds, rangeOf, sparkTitle, spanWords } from "./spark";
@@ -25,7 +26,7 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
   useEffect(() => setFresh(null), [m.health?.at]);
   const h = fresh?.health ?? m.health;
   const l = fresh?.latest ?? latest;
-  const list = concerns(h, l, serverVersion, m.id !== "local");
+  const list = concerns(h, l, serverVersion, m.id !== "local", m.stopped);
   const worst = list.some((c) => c.bad) ? "bad" : list.length ? "warn" : "";
   if (!h && m.state !== "connected") return null;
   const refresh = async () => {
@@ -46,6 +47,10 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
   const loadRange = rangeOf(loads, 0, h?.cores ?? 0);
   const update = (what: string) => {
     setOpen(null);
+    if (what === "recover") {
+      void resumeStopped(m.id, m.stopped?.length ?? 0); // the chats a reboot stopped: a job followed by toasts, no dialog
+      return;
+    }
     setUpdateWhat(what);
   };
   return (

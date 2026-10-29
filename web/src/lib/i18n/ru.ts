@@ -6,6 +6,7 @@ import { agents } from "./ru/agents";
 import { chat } from "./ru/chat";
 import { panels } from "./ru/panels";
 import { pieces } from "./ru/pieces";
+import { recover } from "./ru/recover";
 import { review } from "./ru/review";
 import { settings } from "./ru/settings";
 import { shell } from "./ru/shell";
@@ -16,4 +17,4 @@ import { awake } from "./ru/awake";
 import { pr } from "./ru/pr";
 import { complete } from "./ru/complete";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover };

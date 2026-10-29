@@ -207,6 +207,12 @@ func Run(ctx context.Context, o Options) error {
 		runner.Run(mc, title, "", fn)
 	}
 	restarter.Lock = input.Lock
+	// the chats a reboot stops: remembered here, offered back as one Resume, noted in the activity when they return
+	restarter.Memory = restart.OpenMemory(o.Dir)
+	restarter.Memory.Note = func(machineID, title, body string) {
+		activity.Add(feed.Entry{Kind: "recover", Machine: machineID, Title: title, Body: body})
+		hub.RosterChanged()
+	}
 	keeper := &herdr.Keeper{Bin: bin, Socket: o.Socket}
 	// the machines kept awake while their agents work: the hold is let go before the fleet's masters close
 	hostname, _ := os.Hostname()
@@ -250,12 +256,14 @@ func Run(ctx context.Context, o Options) error {
 		}
 	})
 	events.Subscribe(bus, func(e events.Snapshot) { sayings.Observe(e.Machine, e.Snap) })
+	events.Subscribe(bus, restarter.Observe)
 	events.Subscribe(bus, func(e events.Snapshot) { hub.RosterChanged() })
 	events.Subscribe(bus, func(e events.MachineRemoved) {
 		tracker.Forget(e.Machine)
 		sayings.Forget(e.Machine)
 		hub.RosterChanged()
 		requests.Forget(e.Machine)
+		restarter.Memory.Forget(e.Machine)
 	})
 	events.Subscribe(bus, pushSvc.OnStatus)
 	events.Subscribe(bus, sayings.OnStatus)
