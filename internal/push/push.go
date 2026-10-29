@@ -84,6 +84,8 @@ type Service struct {
 
 	// OnAlert hears every alert as it goes out, or would have — the activity feed, whether or not a device is subscribed.
 	OnAlert func(p Payload)
+	// Webhooks hear the same alerts, each the kinds the person gave it.
+	Webhooks *Webhooks
 }
 
 // Delays are variables so tests can shrink them.
@@ -99,6 +101,7 @@ func New(dir string) (*Service, error) {
 	s := &Service{dir: dir, subs: map[string]*Subscription{}, timers: map[events.PaneRef][]*time.Timer{},
 		subject: "https://github.com/dev1antdev/remuda"}
 	s.send = s.Send
+	s.Webhooks = loadWebhooks(dir)
 	if err := s.loadKeys(); err != nil {
 		return nil, err
 	}
@@ -292,11 +295,18 @@ func (s *Service) deliver(targets []*Subscription, p Payload) {
 	}
 }
 
-// record hands an alert to the feed, when there is one.
+// record hands an alert to the feed, when there is one, and to the webhooks: what the devices would have
+// heard, whether or not one is subscribed.
 func (s *Service) record(p Payload) {
 	if s.OnAlert != nil {
 		s.OnAlert(p)
 	}
+	s.Webhooks.Deliver(p)
+}
+
+// anyoneListens says whether an alert would reach something beside the devices: the feed or a webhook.
+func (s *Service) anyoneListens(kind string) bool {
+	return s.OnAlert != nil || s.Webhooks.Wants(kind)
 }
 
 // SendTest proves the whole path for one device.
@@ -326,7 +336,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 	for _, sub := range s.subs {
 		subs = append(subs, sub)
 	}
-	if len(subs) == 0 && s.OnAlert == nil {
+	if len(subs) == 0 && s.OnAlert == nil && !s.Webhooks.Any() {
 		return
 	}
 
@@ -342,7 +352,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 	var pending []*time.Timer
 	// note: the feed hears this alert when it fires, so a finish or a question answered at the desk is no news either
 	schedule := func(delay time.Duration, targets []*Subscription, p Payload, note bool) {
-		if len(targets) == 0 && !(note && s.OnAlert != nil) {
+		if len(targets) == 0 && !(note && s.anyoneListens(p.Kind)) {
 			return
 		}
 		var t *time.Timer

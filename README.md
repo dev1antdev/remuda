@@ -671,6 +671,19 @@ one is waiting for you, or a watchdog note — while the page is open and
 in front, in the voice you pick, a Russian one for a Russian answer.
 Nothing passes through remuda; a reload says nothing.
 
+**Webhooks** are the same panel's last section, for a phone without Web
+Push or a channel the team reads: a Telegram bot (its token and your chat
+id), a Slack incoming webhook, an ntfy topic, or any address that takes
+JSON. Each one hears the kinds you tick — a question, a finish, a
+watchdog note, the digest, a schedule, a task, a budget, a review — with
+the title, the body and a link back to the pane, built from the address
+you set at the top of the section (your tailnet's is offered when there
+is one). A Test button on each sends one; the row says when the last one
+was delivered or why it failed. Quiet hours apply per webhook. The
+secrets stay on the server in `webhooks.json`: the page sees a masked
+address and whether a token is set, and nothing is sent anywhere you did
+not name here.
+
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
 since you last looked marked, and the commits made since. A merge or a

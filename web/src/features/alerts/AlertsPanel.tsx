@@ -5,6 +5,7 @@ import { usePref, writePref } from "@/lib/prefs";
 import { disablePush, enablePush, getPushState, sendTestPush, updatePrefs, type Prefs, type PushState, type Quiet } from "@/features/alerts/push";
 import { speak, useVoices, voiceSupported } from "@/features/alerts/useVoice";
 import { DEFAULT_VOICE, type VoicePrefs } from "@/features/alerts/voice";
+import WebhooksSection from "@/features/alerts/WebhooksSection";
 import Select from "@/ui/Select";
 import { Dialog, Notice, useTimedNotice } from "@/ui";
 import { t } from "@/lib/i18n";
@@ -161,6 +162,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
       )}
       {err && <Notice tone="error" onDismiss={() => setErr("")}>{err}</Notice>}
       {done && <Notice tone="success">{done}</Notice>}
+      <WebhooksSection />
     </Dialog>
   );
 }

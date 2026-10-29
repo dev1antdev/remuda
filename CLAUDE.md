@@ -911,7 +911,39 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   changes seen while the page is open and in front, each once by a key
   per episode (`linesToSay`; the first roster only seeds), in the voice
   picked in the panel, else a Russian voice for Cyrillic text when the
-  browser has one.
+  browser has one. **Webhooks** (`webhooks.go`, tested): the places the
+  person named beside their devices — a Telegram bot (token and chat id,
+  the Bot API's `sendMessage`), a Slack incoming webhook (`{text}`), an
+  ntfy topic (the body, `Title` RFC 2047 encoded when not ASCII, `Click`
+  the link, `Priority: high` for a question) or any address taking JSON
+  (`Message`: kind, title, body, machine, pane, panel, link, at) — in
+  `webhooks.json` (0600, with `base`, the page's address the links are
+  built from: `Link` → `?machine=&pane=`, `?panel=` for a digest). Every
+  alert `record` hands to the feed goes to each enabled webhook whose
+  `Kinds` include its `HookKind` (input → question, done → finish, the
+  watchdog's three → watchdog, the rest by name: digest, schedule, task,
+  budget, review) outside its own quiet hours — a question 10 s after
+  the block, called off when answered at the desk, every finish 10 s
+  after, as the feed hears them — in a goroutine each, one try and one
+  more on a network error or a 5xx, a 10 s timeout; the outcome
+  (`last_ok`, `last_error`) is kept in memory for the panel and a
+  failure logged once an hour per webhook, never with the address
+  (`plainError` drops the URL a transport error names, since Telegram's
+  holds the token). `Views` masks every secret (`has_token`, a URL cut
+  to `scheme://host/…`) and `Replace` takes the list whole, keeping a
+  stored token when none comes and the URL when the masked one comes
+  back, so the page never holds a secret it did not type. Routes
+  (`internal/server/webhooks.go`): `GET /api/webhooks`, `PUT
+  /api/webhooks {base, hooks}`, `POST /api/webhooks/{id}/test` (sent
+  whatever the kinds or the hours). The page: `features/alerts/
+  WebhooksSection.tsx` at the foot of the alerts panel — the links'
+  address with the tailnet's and this page's offered (`baseChoices`),
+  the list with Test, Edit and Remove behind a confirm, the form (kind,
+  name, token and chat or the address, the kinds as checkboxes with
+  what each means, quiet hours by this device's zone, on/off);
+  `webhooks.ts` the pure part, tested: `hookWords`, `outcomeWords`,
+  `draftOf` / `hookOf` / `checkDraft`, `DEFAULT_KINDS` (everything but
+  the finishes), `toggleKind`.
 - `web/public/sw.js` shows every push (Safari revokes silent subscriptions),
   silent while a window is visible; click → `select-pane` message to an open
   window or `openWindow(/?machine=&pane=)` — a push naming a `panel` (a
