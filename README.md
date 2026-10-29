@@ -58,6 +58,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   per pane (all viewers share one attach; replay buffer for late joiners).
 - **Chat lens** — the transcript herdr names via `agent_session`, parsed
   into turns (text, thinking, tool calls with outputs), polled with ETags.
+  Claude Code's session files, Codex's rollouts and Gemini CLI's chats
+  all read into the same turns, so a Codex or Gemini pane has its chat,
+  recap, standup line, meter and search like a Claude Code one (Gemini's
+  reader is written from the CLI's own types and has not been seen live).
 - **One socket for the news** — the page keeps one WebSocket to its
   remuda, which says when the roster moved or a transcript grew, so the
   sidebar, the wall and the chat redraw within about a second instead of
@@ -330,15 +334,18 @@ update of herdr installs them again by itself, and "Update herdr plugins"
 is `herdr plugin update` for the plugins installed from GitHub (herdr
 0.9.4 and up). After an
 agent update, the chats running that agent are restarted onto the new
-version: each is asked to leave (its own `/exit`) and started again in the
-same pane with its session resumed (`claude --resume`, `codex resume`,
-`gemini --resume`, `kimi --session`); a busy chat is restarted a little after it finishes,
-and a message half-typed in a chat's box is lost. The same restart is
+version: Claude Code is told its own `/restart` and comes back on the
+installed version with the conversation kept, in place; the others — and
+a Claude Code that does not have the command yet — are asked to leave
+(their own `/exit`) and started again in the same pane with the session
+resumed (`claude --resume`, `codex resume`, `gemini --resume`, `kimi
+--session`); a busy chat is restarted a little after it finishes, and a
+message half-typed in a chat's box is lost. The same restart is
 offered on its own ("Restart Claude Code chats") for an agent that
 updated itself, and for one chat at a time from the workspace's ⋯ menu
 or the palette ("Restart Claude Code on its session…"): for an agent
-that got stuck, the same exit and resume in its pane, refused while it
-has a question open or is still working. An update of herdr ends with its server on the new
+that got stuck, the same restart in its pane, refused while it has a
+question open or is still working. An update of herdr ends with its server on the new
 version: herdr's own live handoff when the installer did one, otherwise
 the server is restarted — herdr restores the workspaces and panes, and
 remuda starts every chat again with its session resumed ("Restart
@@ -660,6 +667,12 @@ VAPID keys — the only third party is your browser vendor's push service.
 remuda watches every machine's agents itself, so alerts arrive with the
 app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 a minute after a long turn. Answer at the desk first and nothing is sent.
+**A question is answered from the notification itself**: its push names
+what is asked ("Bash command · rm -rf build") and carries the first two
+choices as buttons in the dialog's own words — *Yes*, *No, and tell
+Claude…* — so a permission is granted from the lock screen; before the
+keys go, remuda reads the screen again, and a dialog that changed or
+closed meanwhile is left alone and the page opens on the pane instead.
 **Quiet hours** keep a device silent between two times of its own clock
 (22:00 to 07:00, say); the Activity panel still keeps what happened, so the
 morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
@@ -670,6 +683,19 @@ says what an agent answered when it finishes ("api: Tests pass."), that
 one is waiting for you, or a watchdog note — while the page is open and
 in front, in the voice you pick, a Russian one for a Russian answer.
 Nothing passes through remuda; a reload says nothing.
+
+**Webhooks** are the same panel's last section, for a phone without Web
+Push or a channel the team reads: a Telegram bot (its token and your chat
+id), a Slack incoming webhook, an ntfy topic, or any address that takes
+JSON. Each one hears the kinds you tick — a question, a finish, a
+watchdog note, the digest, a schedule, a task, a budget, a review — with
+the title, the body and a link back to the pane, built from the address
+you set at the top of the section (your tailnet's is offered when there
+is one). A Test button on each sends one; the row says when the last one
+was delivered or why it failed. Quiet hours apply per webhook. The
+secrets stay on the server in `webhooks.json`: the page sees a masked
+address and whether a token is set, and nothing is sent anywhere you did
+not name here.
 
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
@@ -857,7 +883,7 @@ amber for a watchdog note, green for a finish — so another tab or the
 dock tells you before you switch.
 
 **Search** (🔍, or the palette's last row): full text over every conversation on every
-machine — what you or an agent said, never tool output — filtered by
+machine, Claude Code's and Codex's — what you or an agent said, never tool output — filtered by
 machine, folder and period. A hit jumps to the turn in the running pane, or
 opens the old transcript read-only. No index, no database: each machine
 scans its own `~/.claude/projects` on demand (remuda's scanner where the

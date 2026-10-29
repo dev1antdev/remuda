@@ -133,6 +133,30 @@ func Run(ctx context.Context, o Options) error {
 		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body})
 		hub.RosterChanged() // the bell's dot rides on the roster
 	}
+	// a question push carries the dialog's choices as buttons, read off the pane's screen as the push goes out
+	pushSvc.Question = func(machineID, paneID string) (push.Asked, bool) {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return push.Asked{}, false
+		}
+		client, _, err := mc.Ready()
+		if err != nil {
+			return push.Asked{}, false
+		}
+		screen, err := client.PaneRead(paneID)
+		if err != nil {
+			return push.Asked{}, false
+		}
+		q, ok := chat.ParseQuestion(screen)
+		if !ok {
+			return push.Asked{}, false
+		}
+		asked := push.Asked{Text: q.Text}
+		for _, o := range q.Options {
+			asked.Choices = append(asked.Choices, o.Label)
+		}
+		return asked, true
+	}
 	tracker := radar.New(o.Dir, chats.LastWriteOf)
 	defer tracker.Flush()
 	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer, Link: chats.PullRequest}, bus)

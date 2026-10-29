@@ -5,6 +5,8 @@ import type { Part, Turn } from "./api";
 
 export const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 export const READ_TOOLS = new Set(["Read"]);
+// the tools that ask the person something and wait: Claude Code's and Codex's
+export const isQuestion = (toolName?: string) => toolName === "AskUserQuestion" || toolName === "request_user_input";
 
 export type Touch = {
   path: string;
@@ -84,7 +86,8 @@ export function toolLabel(part: Part): { name: string; hint: string; file: strin
   const input = part.input as Record<string, unknown> | undefined | string;
   if (input && typeof input === "object") {
     const obj = input as Record<string, unknown>;
-    const hint = obj["command"] ?? obj["pattern"] ?? obj["url"] ?? obj["description"] ?? obj["query"];
+    // command is Claude Code's Bash, cmd Codex's exec_command, input a Codex custom tool's text (a patch, a script)
+    const hint = obj["command"] ?? obj["cmd"] ?? obj["pattern"] ?? obj["url"] ?? obj["description"] ?? obj["query"] ?? obj["input"];
     if (typeof hint === "string") {
       return { name, hint: hint.length > 60 ? hint.slice(0, 60) + "…" : hint, file: null };
     }

@@ -131,3 +131,27 @@ func TestParseQuestionTakesTheDialogAtTheBottom(t *testing.T) {
 		t.Fatalf("a bare prompt under the dialog hid it: %+v", q)
 	}
 }
+
+func TestAnswerWalksToTheChoiceStillOnTheScreen(t *testing.T) {
+	keys, err := Answer(bashPrompt, 2, "No, and tell Claude what to do differently (esc)")
+	if err != nil || strings.Join(keys, " ") != "down down enter" {
+		t.Fatalf("third choice: %v %v", keys, err)
+	}
+	keys, err = Answer(askUser, 0, "A JSON file Simple, 300 entries, rewritten whole")
+	if err != nil || strings.Join(keys, " ") != "up enter" {
+		t.Fatalf("a choice above the cursor: %v %v", keys, err)
+	}
+	keys, err = Answer(bashPrompt, 0, "Yes")
+	if err != nil || strings.Join(keys, " ") != "enter" {
+		t.Fatalf("the picked choice: %v %v", keys, err)
+	}
+	if _, err := Answer(bashPrompt, 0, "Yes, and don't ask again"); err == nil || !strings.Contains(err.Error(), "now reads") {
+		t.Errorf("a choice that reads differently: %v", err)
+	}
+	if _, err := Answer(bashPrompt, 7, "Yes"); err == nil || !strings.Contains(err.Error(), "3 choices") {
+		t.Errorf("an index past the list: %v", err)
+	}
+	if _, err := Answer("● I'll remove the build folder.\n\n❯ \n", 0, "Yes"); err == nil || !strings.Contains(err.Error(), "no question") {
+		t.Errorf("no dialog: %v", err)
+	}
+}

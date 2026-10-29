@@ -1,6 +1,7 @@
-// Package search finds what was said across every Claude transcript on every machine.
-// There is no index: each machine scans its own ~/.claude/projects on demand, in-process
-// here and through the remuda deployed on a remote (`remuda search`), else a plain grep.
+// Package search finds what was said across every transcript on every machine: Claude Code's
+// and Codex's. There is no index: each machine scans its own ~/.claude/projects and ~/.codex/sessions
+// on demand, in-process here and through the remuda deployed on a remote (`remuda search`), else a
+// plain grep over Claude Code's files.
 package search
 
 import (
@@ -23,8 +24,9 @@ import (
 
 type Hit struct {
 	Machine string    `json:"machine"`
-	Project string    `json:"project"` // the project directory's name: EncodePath of the folder Claude was started in
-	Dir     string    `json:"dir"`     // the folder at that moment (a cd moves it)
+	Agent   string    `json:"agent,omitempty"` // codex for a rollout's record; "" for Claude Code's
+	Project string    `json:"project"`         // the project directory's name: EncodePath of the folder the agent was started in
+	Dir     string    `json:"dir"`             // the folder at that moment (a cd moves it)
 	Session string    `json:"session"`
 	UUID    string    `json:"uuid"`
 	Ts      time.Time `json:"ts"`
@@ -80,7 +82,7 @@ func one(host shell.Host, q, dir string, since time.Time) ([]Hit, error) {
 	var out string
 	if host.Local() {
 		var b strings.Builder
-		if err := Scan(host.Home()+"/.claude/projects", q, dir, since, perMachine, &b); err != nil {
+		if err := ScanHome(host.Home(), q, dir, since, perMachine, &b); err != nil {
 			return nil, err
 		}
 		out = b.String()
@@ -96,12 +98,19 @@ func one(host shell.Host, q, dir string, since time.Time) ([]Hit, error) {
 	sc.Buffer(make([]byte, 64*1024), 2*lineCap)
 	for sc.Scan() {
 		line := sc.Bytes()
-		// ./<project>/<session>.jsonl:<record>
+		// ./<project>/<session>.jsonl:<record>, or codex:<cwd>␟<thread id>␟<record>
 		i := bytes.IndexByte(line, ':')
 		if i <= 0 {
 			continue
 		}
 		path, rec := string(line[:i]), line[i+1:]
+		if path == "codex" {
+			if hit, ok := codexHit(host.ID(), rec, q, dir, since); ok && !seen[hit.Session+hit.UUID] {
+				seen[hit.Session+hit.UUID] = true
+				hits = append(hits, hit)
+			}
+			continue
+		}
 		project := projectOf(path)
 		if project == "" || strings.Contains(path, "/subagents/") || (dir != "" && project != transcript.EncodePath(dir)) {
 			continue
@@ -124,7 +133,25 @@ func one(host shell.Host, q, dir string, since time.Time) ([]Hit, error) {
 	return hits, sc.Err()
 }
 
-// remoteScript runs the scan on a remote machine: remuda's own scanner where `make deploy` put it, else grep.
+// codexHit reads one line the Codex scan printed: the folder, the thread id and the record, US-separated.
+func codexHit(machine string, rec []byte, q, dir string, since time.Time) (Hit, bool) {
+	fields := bytes.SplitN(rec, []byte(script.US), 3)
+	if len(fields) != 3 {
+		return Hit{}, false
+	}
+	cwd, id := string(fields[0]), string(fields[1])
+	if dir != "" && cwd != dir {
+		return Hit{}, false
+	}
+	m, ok := transcript.MatchCodexLine(fields[2], q)
+	if !ok || (!since.IsZero() && m.Ts.Before(since)) {
+		return Hit{}, false
+	}
+	return Hit{Machine: machine, Agent: "codex", Project: transcript.EncodePath(cwd), Dir: cwd, Session: id, UUID: m.UUID, Ts: m.Ts, Role: m.Role, Snippet: m.Snippet}, true
+}
+
+// remoteScript runs the scan on a remote machine: remuda's own scanner where `make deploy` put it (Claude Code's
+// files and Codex's), else grep over Claude Code's alone.
 // The grep takes the four spellings as they sit in the JSON (grep -i folds ASCII only); BSD grep is seconds per hundred MB.
 func remoteScript(home, q, dir string, since time.Time) string {
 	seen := map[string]bool{}
