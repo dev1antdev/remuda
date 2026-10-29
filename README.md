@@ -703,10 +703,16 @@ choices as buttons in the dialog's own words — *Yes*, *No, and tell
 Claude…* — so a permission is granted from the lock screen; before the
 keys go, remuda reads the screen again, and a dialog that changed or
 closed meanwhile is left alone and the page opens on the pane instead.
+A tapped notification opens the pane in its terminal; the alerts panel
+can make that the chat, or the lens the page was on, and the Mac app's
+menu, an Activity row and Alt+N follow the same choice.
 **Quiet hours** keep a device silent between two times of its own clock
 (22:00 to 07:00, say); the Activity panel still keeps what happened, so the
 morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
-on iPhone, the home-screen app.
+on iPhone, the home-screen app. **A machine that drops off** gets a word
+too: "GOG is away" with the reason once a remote has been unreachable
+for two minutes, "GOG is back" with how long it was gone when it answers
+again; a blip says nothing, and Activity keeps both.
 
 **The Mac app** (`make mac` → `bin/remuda.app`, see `macos/README.md`)
 is the same page in a window of its own, with what a browser tab cannot
@@ -793,6 +799,10 @@ writing.
 **Export** (View › Export as Markdown on the chat lens, or the palette) saves
 the conversation as a Markdown file — the text as it is, thinking and
 tool calls folded — to share with someone who is not in remuda.
+**A table's cells copy themselves**: hover a cell (or press it for a
+moment on a phone) and a copy button appears in its corner, taking the
+cell's words as they read — the sure way, since the browser's own table
+selection turns into whole rows the moment a drag leaves the cell.
 **Find** (⌘F / Ctrl+F on the chat lens, or 🔍 in the tab strip) marks
 every place a word occurs in the conversation shown and says "3 of 12";
 Enter and Shift+Enter walk them, the current one brought into view, Esc

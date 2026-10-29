@@ -41,6 +41,8 @@ type Machine struct {
 	fwds map[int]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda)
 	peer *Peer
 
+	onState func(id, label, state, reason string) // the manager's ear for connected / error, nil for the local one
+
 	door    *Door  // the way its agents reach the tasks here, opened after every connect
 	doorKey string // the key placed there, kept so a reconnect places the same one
 
@@ -93,13 +95,18 @@ func (mc *Machine) Removed() bool {
 // fail tears the connection down and records why.
 func (mc *Machine) fail(err error) {
 	mc.mu.Lock()
+	was := mc.state
 	mc.state = StateError
 	mc.errMsg = err.Error()
 	conn := mc.conn
 	mc.conn, mc.client, mc.attach = nil, nil, nil
+	hook := mc.onState
 	mc.mu.Unlock()
 	if conn != nil {
 		conn.Close()
+	}
+	if hook != nil && was != StateError {
+		hook(mc.ID(), mc.Label(), StateError, err.Error())
 	}
 }
 
@@ -181,8 +188,12 @@ func (mc *Machine) connect() {
 	})
 	mc.state = StateConnected
 	mc.errMsg = ""
+	hook := mc.onState
 	mc.mu.Unlock()
 	go mc.openDoor(conn)
+	if hook != nil {
+		hook(mc.ID(), mc.Label(), StateConnected, "")
+	}
 }
 
 // rpcClient picks the RPC transport: a forwarded unix socket, else one `nc -U` exec per request over the master
