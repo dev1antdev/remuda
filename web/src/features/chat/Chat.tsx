@@ -259,7 +259,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           That turn is older than the loaded part of this transcript (the last 16 MB).
         </Notice>
       )}
-      {!readOnly && <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} agent={agent} />}
+      {!readOnly && <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} agent={agent} onScreen={active} />}
       {forwarded && (
         <Notice tone="success" icon="check" className="chat-notice" onDismiss={clearForwarded}>
           {forwarded}

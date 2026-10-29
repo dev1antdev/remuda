@@ -17,6 +17,12 @@ import { awake } from "./ru/awake";
 import { pr } from "./ru/pr";
 import { complete } from "./ru/complete";
 import { macshell } from "./ru/macshell";
+import { tablecopy } from "./ru/tablecopy";
+import { machineaway } from "./ru/machineaway";
+import { modechip } from "./ru/modechip";
+import { mute } from "./ru/mute";
+import { bulkstart } from "./ru/bulkstart";
+import { wake } from "./ru/wake";
 import { activity } from "./ru/activity";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...activity };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...activity };

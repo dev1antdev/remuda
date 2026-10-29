@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/health"
@@ -78,6 +79,7 @@ type rosterSession struct {
 	Worktree    *rosterWorktree `json:"worktree,omitempty"`
 	Dir         string          `json:"dir,omitempty"`
 	Review      *rosterReview   `json:"review,omitempty"`
+	MutedUntil  *time.Time      `json:"muted_until,omitempty"` // the folder is silenced until then: no push, no webhook, no feed row
 	Tabs        []rosterTab     `json:"tabs"`
 }
 
@@ -92,6 +94,7 @@ type rosterMachine struct {
 	Health   *health.Report    `json:"health,omitempty"`
 	Awake    *awake.Status     `json:"awake,omitempty"`   // the keep-awake switch and whether the hold stands
 	Stopped  []restart.Stopped `json:"stopped,omitempty"` // the chats a reboot stopped: their panes are bare shells again, a Resume brings them back
+	MAC      string            `json:"mac,omitempty"`     // the address a wake-up packet names, when the person set one
 }
 
 // sessionsFromSnapshot keeps herdr's own hierarchy, workspace → tabs → panes, in herdr's order.
@@ -166,6 +169,11 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			}
 		}
 		session.Dir = snap.WorkspaceDir(&ws)
+		if session.Dir != "" && s.Push != nil {
+			if until, muted := s.Push.Mutes.Until(machineID, session.Dir); muted {
+				session.MutedUntil = &until
+			}
+		}
 		if session.Dir != "" {
 			badge, ok := s.Review.Badge(machineID, session.Dir)
 			ready := s.Review.Ready(machineID, session.Dir)
@@ -226,6 +234,7 @@ func (s *Server) rosterBody() ([]byte, string) {
 		if s.Updates != nil && s.Updates.Restart != nil {
 			entry.Stopped = s.Updates.Restart.Stopped(mc.ID())
 		}
+		entry.MAC = s.Machines.MAC(mc.ID())
 		out = append(out, entry)
 	}
 	roster := map[string]any{"machines": out, "agents": sessions.Agents, "version": buildversion.Build, "latest": s.Health.Latest()}

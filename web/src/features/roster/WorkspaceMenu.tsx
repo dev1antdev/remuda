@@ -7,7 +7,8 @@ import { act } from "@/app/act";
 import { actions, type RowMenu } from "@/app/store";
 import { agentTitle, askRestart } from "@/features/updates/restartPane";
 import { openUrl } from "@/lib/host";
-import { killSession, type Machine, type Session } from "./api";
+import { killSession, muteWorkspace, unmuteWorkspace, type Machine, type Session } from "./api";
+import { leftWords, muteChoices, mutedUntil } from "./mute";
 import { actionLabel, actionsFor, canRemoveWorktree } from "./prActions";
 import { askRemoveWorktree, handPR } from "./prMenu";
 import { prWords } from "./prStatus";
@@ -33,6 +34,7 @@ export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) 
   const tab = session.tabs.find((x) => x.id === session.active_tab_id) ?? session.tabs[0];
   const chat = tab?.panes.find((p) => p.agent);
   const pr = chat?.pr;
+  const muted = mutedUntil(session);
   const item = (label: string, run: () => void, className?: string) => (
     <button
       type="button"
@@ -56,6 +58,8 @@ export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) 
       {pr && chat && actionsFor(pr).map((action) => <Fragment key={action}>{item(actionLabel(action, pr.label), () => void handPR(action, machine.id, chat.id, pr.label))}</Fragment>)}
       {pr && canRemoveWorktree(session, pr) && item(t("Remove the worktree and its branch…"), () => askRemoveWorktree(machine, session), "danger")}
       {chat && item(t("Restart {agent} on its session…", { agent: agentTitle(chat.agent) }), () => askRestart(machine.id, chat.id, chat.agent))}
+      {session.dir && muted && item(t("Unmute · {left}", { left: leftWords(muted) }), () => void act(unmuteWorkspace(machine.id, session.dir ?? "")))}
+      {session.dir && !muted && muteChoices().map((choice) => <Fragment key={choice.key}>{item(choice.label, () => void act(muteWorkspace(machine.id, session.dir ?? "", choice.until)))}</Fragment>)}
       {item("Close workspace", () => closeWorkspace(machine, session), "danger")}
     </div>
   );

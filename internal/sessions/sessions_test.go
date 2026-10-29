@@ -101,9 +101,20 @@ func TestKeysAndAgents(t *testing.T) {
 	if err := StartAgent(client, "w1:p1", "claude"); err != nil || client.starts != 3 {
 		t.Fatalf("start retried %d times: %v", client.starts, err)
 	}
-	refused := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_name_taken"}}}
-	if err := StartAgent(refused, "w1:p1", "claude"); !herdr.IsCode(err, "agent_name_taken") || refused.starts != 1 {
+	taken := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_name_taken"}}}
+	if err := StartAgent(taken, "w1:p1", "claude"); err != nil || taken.starts != 2 || strings.Join(taken.withArgs, " ") != "claude claude-w1-p1" {
+		t.Fatalf("a taken name is tried once more with the pane's id: %v, starts %d, %v", err, taken.starts, taken.withArgs)
+	}
+	stillTaken := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_name_taken"}, {Code: "agent_name_taken"}}}
+	if err := StartAgent(stillTaken, "w1:p1", "claude"); !herdr.IsCode(err, "agent_name_taken") || stillTaken.starts != 2 {
+		t.Fatalf("a name taken twice is final: %v", err)
+	}
+	refused := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_kind_unknown"}}}
+	if err := StartAgent(refused, "w1:p1", "claude"); !herdr.IsCode(err, "agent_kind_unknown") || refused.starts != 1 {
 		t.Fatalf("another refusal is final: %v", err)
+	}
+	if got := UniqueName("codex", "w1Y:p1"); got != "codex-w1y-p1" {
+		t.Fatalf("UniqueName = %q", got)
 	}
 }
 

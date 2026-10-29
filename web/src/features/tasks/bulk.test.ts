@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Label, Status, Task } from "./api";
-import { columnChoices, deleteWords, labelChoices, outcomeWords, plan, runInSequence, type Request } from "./bulk";
+import { columnChoices, deleteWords, labelChoices, outcomeWords, plan, runInSequence, startPlan, startWords, type Request } from "./bulk";
 
 const status = (id: number, title: string, project_id = 1): Status => ({ id, project_id, title, hex_color: "", kind: title === "Done" ? "done" : "open", position: id, on_new: false, on_start: false, on_finish: false, on_agent: false });
 const label = (id: number, title: string): Label => ({ id, title, hex_color: "" });
@@ -100,5 +100,17 @@ describe("runInSequence", () => {
     expect(outcomeWords({ kind: "move", statusId: 1 }, { done: 3, failed: 0, error: "" }, 1)).toBe("3 moved, 1 skipped");
     expect(outcomeWords({ kind: "label", labelId: 1 }, { done: 1, failed: 0, error: "" }, 0)).toBe("1 labelled");
     expect(deleteWords(2)).toBe("Delete 2 tasks? They are gone for good.");
+  });
+});
+
+describe("startPlan", () => {
+  const running = (id: number, state: "starting" | "running" | "finished" | "gone" | "failed") =>
+    task(id, 1, 10, { run: { id, task_id: id, machine: "local", workspace: "w1", pane: "w1:p1", dir: "/x", branch: "b", agent: "claude", state, started: "" } as Task["run"] });
+  it("skips the tasks an agent is still on and names them", () => {
+    const { starts, skipped } = startPlan([task(1, 1, 10), running(2, "running"), running(3, "finished"), running(4, "starting")]);
+    expect(starts.map((t) => t.id)).toEqual([1, 3]);
+    expect(skipped.map((t) => t.id)).toEqual([2, 4]);
+    expect(startWords({ done: 2, failed: 0, error: "" }, skipped)).toBe("Started 2 agents, 2 skipped: #2, #4 already run");
+    expect(startWords({ done: 1, failed: 1, error: "no such branch" }, [])).toBe("Started 1 agent, 1 refused: no such branch");
   });
 });

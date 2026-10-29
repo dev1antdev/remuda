@@ -22,6 +22,8 @@ import ProjectSettings from "./ProjectSettings";
 import { NewProjectDialog, ProjectTree } from "./ProjectTree";
 import { endOfToday, taskPrompt } from "./prompt";
 import { StartAgentDialog } from "./StartAgentDialog";
+import { StartAgentsDialog } from "./StartAgentsDialog";
+import { startWords } from "./bulk";
 import { TaskDetail } from "./TaskDetail";
 import { ProposedActions, ProposedBar, useTriage } from "./Triage";
 import { acceptColumn, proposedTotal } from "./proposed";
@@ -45,7 +47,7 @@ const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 export default function Tasks() {
   const drawer = app.use((s) => s.drawer);
-  const { machines, budgets } = useRoster();
+  const { machines, budgets, agents: rosterAgents } = useRoster();
   const prOf = (r: Run | null | undefined) => runPR(r, r ? paneOf(machines, r.machine, r.pane) : null);
   const agents = useAgentTargets();
   const located = useCurrent();
@@ -61,6 +63,7 @@ export default function Tasks() {
   const [newProject, setNewProject] = useState(false);
   const [sendReq, setSendReq] = useState<{ task: Task; groom: boolean } | null>(null);
   const [startReq, setStartReq] = useState<Task | null>(null);
+  const [bulkStart, setBulkStart] = useState<Task[] | null>(null); // the selected tasks a bulk start is being asked for
   const [notice, showNotice, clearNotice] = useTimedNotice(12000);
   const [noticeAt, setNoticeAt] = useState<{ machineId: string; paneId: string } | null>(null);
   const announce = (text: string, at: { machineId: string; paneId: string }) => {
@@ -365,7 +368,7 @@ export default function Tasks() {
           </div>
         )}
         {selection.count > 0 && (
-          <BulkBar count={selection.count} busy={selection.busy} columns={selection.columnChoices} labels={selection.labelChoices} onAct={selection.act} onClear={selection.clear} />
+          <BulkBar count={selection.count} busy={selection.busy} columns={selection.columnChoices} labels={selection.labelChoices} onAct={selection.act} onStart={() => setBulkStart(selection.chosen)} onClear={selection.clear} />
         )}
         {!board && pages > 1 && (
           <div className="tasks-pager">
@@ -422,6 +425,25 @@ export default function Tasks() {
               machineId: t.run?.machine ?? "",
               paneId: t.run?.pane ?? "",
             });
+          }}
+        />
+      )}
+      {bulkStart && (
+        <StartAgentsDialog
+          tasks={bulkStart}
+          projects={byId}
+          agents={rosterAgents}
+          machines={machines}
+          currentPane={currentPane}
+          onClose={() => setBulkStart(null)}
+          onDone={(started, outcome, skipped) => {
+            setBulkStart(null);
+            started.forEach(replace);
+            selection.release(started.map((t) => t.id));
+            actions.notify(startWords(outcome, skipped), { error: outcome.failed > 0 });
+            const first = started[0];
+            if (first?.run?.machine && first.run.pane) actions.selectPane(first.run.machine, first.run.pane);
+            refresh();
           }}
         />
       )}
