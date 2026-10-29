@@ -224,10 +224,21 @@ func (m *AttachManager) start(termID string, cols, rows int) (*attach, error) {
 func (a *attach) readLoop(m *AttachManager) {
 	defer close(a.exited)
 	buf := make([]byte, 32*1024)
+	var queries queryScanner
 	for {
 		n, err := a.pty.Read(buf)
 		if n > 0 {
 			data := append([]byte(nil), buf[:n]...)
+			if hasQuery(data) || len(queries.carry) > 0 {
+				var replies []byte
+				data, replies = queries.scan(data)
+				if len(replies) > 0 {
+					_, _ = a.pty.Write(replies)
+				}
+			}
+			if len(data) == 0 {
+				continue
+			}
 			if a.watch.Load() {
 				select {
 				case a.early <- data:
