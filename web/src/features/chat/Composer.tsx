@@ -14,9 +14,10 @@ import { expandPrompt, QuickPromptsDialog, QuickPromptsMenu } from "./QuickPromp
 import { useHistory } from "./useHistory";
 import { applyPick, tokenAt, type Item } from "./complete";
 import { CompletionList, useCompletion } from "./Completion";
+import { ModeChip } from "./ModeChip";
 import { t } from "@/lib/i18n";
 
-export default function Composer({ machineId, paneId, working, dir, agent = "", compact = false }: { machineId: string; paneId: string; working: boolean; dir: string; agent?: string; compact?: boolean }) {
+export default function Composer({ machineId, paneId, working, dir, agent = "", compact = false, onScreen = true }: { machineId: string; paneId: string; working: boolean; dir: string; agent?: string; compact?: boolean; onScreen?: boolean }) {
   // the insertions read the draft through a ref: a state updater must stay free of side effects
   const [draft, setDraftState] = useState("");
   const draftRef = useRef("");
@@ -184,6 +185,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
         />
         {!compact && (
           <>
+            {agent === "claude" && <ModeChip machineId={machineId} paneId={paneId} active={onScreen} />}
             <Tip text={`Attach files (up to ${MAX_ATTACHMENTS}): they are uploaded into the pane's folder`}>
               <button type="button" className="icon-btn lg composer-attach" aria-label={t("Attach files")} disabled={att.items.length >= MAX_ATTACHMENTS} onClick={() => picker.current?.click()}>
                 <Icon name="paperclip" size={16} />

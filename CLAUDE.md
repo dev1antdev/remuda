@@ -2017,6 +2017,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   place by double-click, or from the workspace's ⋯ menu (touch). The roster carries an ETag (304 when unchanged) and
   the agent list. Local files stream through `http.ServeContent` (Range for
   video); the WS uses per-message compression and coalesces queued chunks.
+  **The permission mode** (`mode.go`, pure, tested): `ParseMode` reads
+  Claude Code's mode off the footer under the input box — "⏵⏵ accept
+  edits on (shift+tab to cycle)", "⏸ plan mode on", "⏵⏵ auto mode on",
+  "⏸ manual mode on" (the default), "⏵⏵ bypass permissions on", the
+  words read off a 2.1.312 pane — in the screen's last `modeRows` rows and
+  only on a row that starts with the mode glyph, so a quote in the
+  conversation never counts and a dialog over the footer reads nothing;
+  `GET /api/question` carries it as `mode` on the same screen read, and
+  `features/chat/ModeChip.tsx` (over `mode.ts`, tested) draws it beside
+  the composer's tools for a Claude Code pane in the lens — a quiet `btn`
+  with the mode's words, amber for bypass, polled every 10 s while the
+  lens is on (15 s with the socket up) — and a tap sends `shift+tab`
+  through `/api/keys`, the key a phone cannot send; nothing is drawn for
+  another agent or while no footer is on screen.
 - `web/src/styles.css` — one design system in **Catppuccin's colours:
   Latte by day, Frappé, Macchiato or Mocha by night, one of the fourteen
   named colours as the accent** (`lib/theme.ts` holds the swatches,

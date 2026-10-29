@@ -9072,3 +9072,18 @@ body.popout {
     opacity: 1;
   }
 }
+
+/* ---- the permission mode chip beside the composer tools: Claude Code's footer word, a tap cycles it ---- */
+.mode-chip {
+  align-self: center;
+  gap: 4px;
+  font-size: var(--fs-11);
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.mode-chip.is-bypass {
+  color: var(--amber);
+  border-color: var(--amber-ring);
+  background: var(--amber-soft);
+}

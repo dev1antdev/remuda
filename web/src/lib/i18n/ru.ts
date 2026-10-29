@@ -19,5 +19,6 @@ import { complete } from "./ru/complete";
 import { macshell } from "./ru/macshell";
 import { tablecopy } from "./ru/tablecopy";
 import { machineaway } from "./ru/machineaway";
+import { modechip } from "./ru/modechip";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip };
