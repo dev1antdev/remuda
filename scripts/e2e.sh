@@ -50,12 +50,18 @@ stop() {
   [ -n "${cpid:-}" ] && kill "$cpid" 2>/dev/null
   HOME=$home HERDR_SOCKET_PATH=$sock "$herdr" server stop >/dev/null 2>&1 || true
   wait 2>/dev/null || true
+  chrome_gone
   if [ "$status" -ne 0 ]; then
     say "logs in $tmp (herdr.log, remuda.log, chrome.log), screenshots in $out"
   elif [ -z "${E2E_KEEP:-}" ]; then
-    rm -rf "$tmp"
+    rm -rf "$tmp" 2>/dev/null || rm -rf "$tmp" 2>/dev/null || say "left $tmp behind"
   fi
   exit "$status"
+}
+# Chrome's helpers outlive the pid that was killed and keep writing the profile for a moment; the rm raced them once.
+chrome_gone() {
+  i=0
+  while [ "$i" -lt 40 ] && pgrep -f -- "--user-data-dir=$tmp/chrome" >/dev/null 2>&1; do sleep 0.25; i=$((i+1)); done
 }
 trap stop EXIT INT TERM
 
