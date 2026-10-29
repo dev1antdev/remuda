@@ -17,6 +17,7 @@ func (s *Server) pushRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/push/test", s.handlePushTest)
 	s.webhookRoutes(api)
 	s.alertRoutes(api)
+	s.muteRoutes(api)
 }
 
 func (s *Server) handlePushInfo(w http.ResponseWriter, r *http.Request) {

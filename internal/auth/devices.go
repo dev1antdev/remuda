@@ -126,6 +126,17 @@ func (d *Devices) Check(cookie string) (Device, bool) {
 }
 
 // List is every signed-in device, the most recently seen first.
+// Name is the device's name, for a row that says who did something; false for an id it does not know.
+func (d *Devices) Name(id string) (string, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	device, ok := d.list[id]
+	if !ok {
+		return "", false
+	}
+	return device.Name, true
+}
+
 func (d *Devices) List() []Device {
 	d.mu.Lock()
 	defer d.mu.Unlock()

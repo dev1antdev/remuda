@@ -113,8 +113,7 @@ export default function Shell() {
       handShell({
         select: (machine, pane) => {
           if (!machine || !pane) return;
-          actions.selectPane(machine, pane);
-          actions.setLens("chat");
+          actions.openPane(machine, pane);
         },
         openPanel: (name) => {
           const panel = panelOf(name);
@@ -130,7 +129,7 @@ export default function Shell() {
     if (!("serviceWorker" in navigator)) return;
     const onMsg = (e: MessageEvent) => {
       const d = e.data as { type?: string; machine?: string; pane?: string; panel?: string };
-      if (d?.type === "select-pane" && d.machine && d.pane) actions.selectPane(d.machine, d.pane);
+      if (d?.type === "select-pane" && d.machine && d.pane) actions.openPane(d.machine, d.pane);
       if (d?.type === "open-panel" && panelOf(d.panel)) actions.openPanel(panelOf(d.panel));
     };
     navigator.serviceWorker.addEventListener("message", onMsg);

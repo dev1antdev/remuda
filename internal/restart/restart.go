@@ -155,10 +155,21 @@ type Restarter struct {
 	Lock func(machineID, paneID string) sync.Locker
 	// Memory remembers every chat for a come-back after a reboot (recover.go); nil remembers none.
 	Memory *Memory
+	// Typed hears every command this restarter types into a pane (an agent's exit or restart), for the activity; nil hears none.
+	Typed func(machineID, paneID, text string)
 
 	mu      sync.Mutex
 	pending map[string]*booking  // machine|pane
 	last    map[string]time.Time // machine|pane → when it was last restarted
+}
+
+// typed tells the activity what was just typed into the pane the key names.
+func (r *Restarter) typed(key, paneID, text string) {
+	if r.Typed == nil {
+		return
+	}
+	machineID, _, _ := strings.Cut(key, "|")
+	r.Typed(machineID, paneID, text)
 }
 
 func New(m *machines.Manager) *Restarter {
@@ -334,7 +345,7 @@ func (r *Restarter) swap(key string, client *herdr.Client, p herdr.PaneInfo, a a
 	r.last[key] = time.Now()
 	r.mu.Unlock()
 	if a.restart != "" {
-		if settled, err := r.inPlace(client, p, a, session, say); settled {
+		if settled, err := r.inPlace(key, client, p, a, session, say); settled {
 			return err
 		}
 	}
@@ -342,6 +353,7 @@ func (r *Restarter) swap(key string, client *herdr.Client, p herdr.PaneInfo, a a
 	if err := client.AgentPrompt(paneID, a.exit); err != nil {
 		return fmt.Errorf("%s: %s: %v", title, a.exit, err)
 	}
+	r.typed(key, paneID, a.exit)
 	state := r.waitShell(client, paneID, a.Kind, 12*time.Second)
 	if state == stillThere {
 		say("  still there — Ctrl-C twice")
