@@ -46,21 +46,30 @@ func TestStoppedWaitsOutHerdrsOwnRelaunch(t *testing.T) {
 	snap := func(first bool, when time.Duration, panes ...herdr.PaneInfo) {
 		m.Observe(events.Snapshot{Machine: "local", Snap: snapshot(panes...), At: at.Add(when), First: first})
 	}
-	snap(true, 0, agentPane("w1:p1", "claude", "/work/api"), agentPane("w2:p1", "codex", "/work/web"))
-	// the first snapshot after the reboot: both panes bare shells
-	snap(true, time.Minute, shellPane("w1:p1", "/work/api"), shellPane("w2:p1", "/work/web"))
+	snap(true, 0, agentPane("w1:p1", "claude", "/work/api"), agentPane("w2:p1", "codex", "/work/web"), agentPane("w3:p1", "claude", "/work/cli"), agentPane("w4:p1", "kimi", "/work/old"))
+	// the first snapshot after the reboot: every pane a bare shell, the last two still reading the server's folder as their own
+	snap(true, time.Minute, shellPane("w1:p1", "/work/api"), shellPane("w2:p1", "/work/web"), shellPane("w3:p1", "/home/me"), shellPane("w4:p1", "/home/me"))
 	if n := len(m.Stopped("local")); n != 0 {
 		t.Fatalf("listed before the grace: %d", n)
 	}
-	// herdr relaunched Codex itself; Claude Code is still a shell
-	snap(false, time.Minute+2*time.Second, shellPane("w1:p1", "/work/api"), agentPane("w2:p1", "codex", "/work/web"))
-	snap(false, time.Minute+stoppedGrace, shellPane("w1:p1", "/work/api"), agentPane("w2:p1", "codex", "/work/web"))
+	// herdr relaunched Codex itself; the third shell now reads its folder; the fourth really is somewhere else
+	later := func(when time.Duration) {
+		snap(false, when, shellPane("w1:p1", "/work/api"), agentPane("w2:p1", "codex", "/work/web"), shellPane("w3:p1", "/work/cli"), shellPane("w4:p1", "/home/me"))
+	}
+	later(time.Minute + 2*time.Second)
+	if n := len(m.Stopped("local")); n != 0 || len(m.chats) != 4 {
+		t.Fatalf("within the grace nothing is listed or forgotten: %d stopped, %d chats", n, len(m.chats))
+	}
+	later(time.Minute + stoppedGrace)
 	stopped := m.Stopped("local")
-	if len(stopped) != 1 || stopped[0].Pane != "w1:p1" {
+	if len(stopped) != 2 || stopped[0].Pane != "w1:p1" || stopped[1].Pane != "w3:p1" {
 		t.Fatalf("after the grace: %+v", stopped)
 	}
 	if _, ok := m.shells["local|w2:p1"]; ok {
 		t.Fatal("a pane whose agent came back is no shell on its way to the list")
+	}
+	if _, ok := m.chats["local|w4:p1"]; ok {
+		t.Fatal("a shell still elsewhere after the grace is not the chat's: forgotten")
 	}
 }
 

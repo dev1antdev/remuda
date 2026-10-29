@@ -108,13 +108,20 @@ func (m *Memory) Observe(e events.Snapshot) {
 			continue
 		}
 		since, unwatched := m.shells[key]
-		if p.Agent == "" && p.Dir() == c.Dir && (unwatched || e.First) {
+		if p.Agent == "" && (unwatched || e.First) {
 			if !unwatched {
 				since = e.At
 				m.shells[key] = since
 			}
-			if e.At.Sub(since) >= stoppedGrace {
+			// a restored pane reads the server's folder as its own for a moment: the folder is judged after the grace
+			switch {
+			case e.At.Sub(since) < stoppedGrace:
+			case p.Dir() == c.Dir:
 				stopped = append(stopped, Stopped{Pane: p.PaneID, Agent: c.Kind, Title: firstNonEmpty(c.Title, p.DisplayTitle()), chat: c})
+			default:
+				delete(m.chats, key)
+				delete(m.shells, key)
+				changed = true
 			}
 			continue
 		}
