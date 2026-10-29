@@ -3,6 +3,7 @@ import { errMsg } from "@/lib/text";
 import { deviceZone, readAlertPrefs, readQuietWindow } from "@/features/alerts/prefs";
 import { usePref, writePref } from "@/lib/prefs";
 import { disablePush, enablePush, getPushState, sendTestPush, updatePrefs, type Prefs, type PushState, type Quiet } from "@/features/alerts/push";
+import { inShell } from "@/lib/shell";
 import { speak, useVoices, voiceSupported } from "@/features/alerts/useVoice";
 import { DEFAULT_VOICE, type VoicePrefs } from "@/features/alerts/voice";
 import WebhooksSection from "@/features/alerts/WebhooksSection";
@@ -57,18 +58,20 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
 
   const [voice, setVoice] = usePref<VoicePrefs>("alerts.voice", DEFAULT_VOICE);
   const voices = useVoices();
+  const native = inShell(); // the Mac app is the device: its alerts come over its own socket, not Web Push
   const voiceOptions = [{ value: "", label: t("The browser's default voice") }, ...voices.map((v) => ({ value: v.name, label: v.name, hint: v.lang, group: v.lang }))];
   const sayOne = () => speak(/[\u0400-\u04ff]/.test(voice.voice ?? "") ? "api: Все тесты прошли, ветка запушена." : t("api: The tests pass and the branch is pushed."), "", voice.voice);
 
   return (
     <Dialog title={t("Alerts on this device")} icon="bell" onClose={onClose} className="alerts-dialog">
-      {!state && <Notice tone="hint">{t("Checking…")}</Notice>}
-      {state && !state.supported && <Notice tone="warn">{state.reason}</Notice>}
-      {state?.supported && state.permission === "denied" && (
+      {native && <Notice tone="hint">{t("Notifications come through the Mac app")}</Notice>}
+      {!native && !state && <Notice tone="hint">{t("Checking…")}</Notice>}
+      {!native && state && !state.supported && <Notice tone="warn">{state.reason}</Notice>}
+      {!native && state?.supported && state.permission === "denied" && (
         <Notice tone="warn">{t("Notifications are blocked for this site — allow them in the browser's site settings.")}</Notice>
       )}
 
-      {state?.supported && (
+      {!native && state?.supported && (
         <div className="alerts-row">
           <span>
             {state.subscribed ? t("Push alerts are on") : t("Push alerts are off")}

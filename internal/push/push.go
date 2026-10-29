@@ -89,6 +89,8 @@ type Service struct {
 	Question func(machine, pane string) (Asked, bool)
 	// Webhooks hear the same alerts, each the kinds the person gave it.
 	Webhooks *Webhooks
+	// Sockets are the live connections of the socket devices, the Mac app among them.
+	Sockets *Sockets
 }
 
 // Delays are variables so tests can shrink them.
@@ -105,6 +107,7 @@ func New(dir string) (*Service, error) {
 		subject: "https://github.com/dev1antdev/remuda"}
 	s.send = s.Send
 	s.Webhooks = loadWebhooks(dir)
+	s.Sockets = newSockets()
 	if err := s.loadKeys(); err != nil {
 		return nil, err
 	}
@@ -220,6 +223,10 @@ func (s *Service) Subscriptions() []Subscription {
 
 // Send pushes one payload to one subscription; a 404/410 from the push service means the browser dropped it.
 func (s *Service) Send(sub *Subscription, p Payload) error {
+	if IsSocket(sub.Endpoint) {
+		s.Sockets.Deliver(sub.Endpoint, p)
+		return nil
+	}
 	body, _ := json.Marshal(p)
 	urgency := webpush.UrgencyNormal
 	if p.Kind == "input" {

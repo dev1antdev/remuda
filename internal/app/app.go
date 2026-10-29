@@ -130,6 +130,7 @@ func Run(ctx context.Context, o Options) error {
 		Remote:      func(id string) bool { mc, err := fleet.Get(id); return err == nil && !mc.Local() },
 	})
 	defer hub.Close()
+	defer pushSvc.Sockets.Close() // the Mac app's alert stream ends with "remuda is stopping", as the page's events do
 	pushSvc.OnAlert = func(p push.Payload) {
 		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body})
 		hub.RosterChanged() // the bell's dot rides on the roster
