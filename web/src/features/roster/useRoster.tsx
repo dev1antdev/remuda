@@ -19,20 +19,23 @@ export type RosterState = {
   budgets?: BudgetStatus[]; // the spending limits with what their periods have cost so far
   offline: boolean;
   stale: string | null; // the server's version when this page is older
+  viewOnly: boolean; // a viewer link signed this page in: it draws, and hides every control that would type or change
   refresh: () => void;
 };
 
-const empty: RosterState = { machines: [], agents: [], offline: false, stale: null, refresh: () => {} };
+const empty: RosterState = { machines: [], agents: [], offline: false, stale: null, viewOnly: false, refresh: () => {} };
 const RosterContext = createContext<RosterState>(empty);
 
 export function RosterProvider({ children }: { children: ReactNode }) {
   const etag = useRef<string | null>(null);
   const [stale, setStale] = useState<string | null>(null);
+  const [viewOnly, setViewOnly] = useState(false);
   const connected = useLiveConnected();
   const { data, error, reload } = useQuery<Roster>(
     async () => {
       const res = await fetchRoster(etag.current);
       if (res.version && res.version !== __REMUDA_VERSION__ && __REMUDA_VERSION__ !== "dev") setStale(res.version);
+      if (res.viewOnly) setViewOnly(true);
       if (!res.roster) return undefined; // unchanged
       etag.current = res.etag;
       return res.roster;
@@ -56,9 +59,10 @@ export function RosterProvider({ children }: { children: ReactNode }) {
       budgets: data?.budgets,
       offline: !!error,
       stale,
+      viewOnly,
       refresh: reload,
     }),
-    [data, error, stale, reload],
+    [data, error, stale, viewOnly, reload],
   );
   return <RosterContext.Provider value={value}>{children}</RosterContext.Provider>;
 }

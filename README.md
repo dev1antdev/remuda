@@ -80,7 +80,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   its "trust this folder", an AskUserQuestion) with a button per choice;
   a tap walks the cursor there and presses Enter, Esc closes. From the
   phone, the wall and the pop-out too. A dialog remuda cannot read leaves
-  the blind ↑ ↓ Enter Esc.
+  the blind ↑ ↓ Enter Esc. Beside the composer's tools a small chip says
+  Claude Code's permission mode as its footer does — accept edits, plan,
+  auto, manual, bypass in amber — and a tap cycles it with shift+tab, the
+  key a phone has no way to send.
 - **New workspace / close** — `workspace.create` + `agent.start` (any agent
   herdr has a manifest for, with the model, extra arguments and first
   prompt you chose under Options), `workspace.close`.
@@ -219,7 +222,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   before gets a Proposed column once, and stays without one if you remove
   it. Select several — ⌘-click, ⇧-click a range, a long press on a phone
   — and the bar under the list moves, labels, finishes or deletes them at
-  once. Each project can
+  once, or starts an agent on each of them through one dialog: a worktree
+  per task, one after another, the first new pane opened. Each project can
   carry its **own fields** (text, number, one choice, several, a date, a
   checkbox, a link), shown on the card and handed to the agent with the
   task. It lives in one SQLite file (`tasks.db`) in remuda's state dir —
@@ -442,6 +446,17 @@ with the address to reach it at, in the machine's own state dir (on a remote,
 over the same SSH connection, with this remuda's port forwarded back to the
 machine's loopback), and `remuda mcp` / `remuda tasks` there read the two
 files. Settings › Devices lists the keys, one per machine, with a Revoke each.
+
+**Viewer links** sign a screen in to look only. Make one in Settings ›
+Devices under a name — "the office TV", a colleague's — and open it where
+the viewing happens: that browser gets the Wall, the sidebar, the chats,
+the screens, the standup, the usage and Activity, and nothing that types or
+changes — no composer, no keys, no question buttons, no Changes lens, no
+tasks; the terminal lens shows the pane's screen as the Wall does, without
+attaching. Every call past that is refused with "this link is for viewing
+only", a viewer's look marks nothing as seen, and the header says *Viewing
+only*. The link is shown once; revoking it signs every screen it opened
+out at once.
 
 ## As a background service on a Mac or Linux box
 
@@ -707,10 +722,16 @@ choices as buttons in the dialog's own words — *Yes*, *No, and tell
 Claude…* — so a permission is granted from the lock screen; before the
 keys go, remuda reads the screen again, and a dialog that changed or
 closed meanwhile is left alone and the page opens on the pane instead.
+A tapped notification opens the pane in its terminal; the alerts panel
+can make that the chat, or the lens the page was on, and the Mac app's
+menu, an Activity row and Alt+N follow the same choice.
 **Quiet hours** keep a device silent between two times of its own clock
 (22:00 to 07:00, say); the Activity panel still keeps what happened, so the
 morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
-on iPhone, the home-screen app.
+on iPhone, the home-screen app. **A machine that drops off** gets a word
+too: "GOG is away" with the reason once a remote has been unreachable
+for two minutes, "GOG is back" with how long it was gone when it answers
+again; a blip says nothing, and Activity keeps both.
 
 **The Mac app** (`make mac` → `bin/remuda.app`, see `macos/README.md`)
 is the same page in a window of its own, with what a browser tab cannot
@@ -742,6 +763,14 @@ was delivered or why it failed. Quiet hours apply per webhook. The
 secrets stay on the server in `webhooks.json`: the page sees a masked
 address and whether a token is set, and nothing is sent anywhere you did
 not name here.
+
+**Mute a workspace** when one folder keeps pinging while you work on
+another: the workspace's ⋯ menu offers *Mute for an hour* and *Mute until
+tomorrow 09:00*. Until then its panes send no push, no webhook and add no
+Activity row — a bell-off on the sidebar row and the Wall tile says so,
+with the time left in its tooltip — and the menu row reads *Unmute · 42
+min left*. The mute ends by itself; the page's badge and read-aloud go on
+as before, since they read the roster rather than the alerts.
 
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
@@ -776,8 +805,14 @@ agent hears nothing.
 away: every finish, question, watchdog note, failed schedule, task
 move and workspace ready for another look, by day, newest first, from every machine — the same things the
 pushes carry, kept whether or not a device is subscribed. A row opens
-its pane; the bell wears a dot until you look. The alert settings sit at
-the panel's foot.
+its pane; the bell wears a dot until you look. Chips at the top narrow
+the list to a kind — questions, finishes, watchdog notes, tasks,
+schedules, budgets, review, machines, what was sent — and a select to
+one machine, each chip saying how many it holds; the bell's tooltip
+says when a filter is on. The alert settings sit at the panel's foot. Everything typed into an agent through remuda is a
+quiet row there as well — "iPhone sent «yes» to api · w3:p1" — so you
+can see afterwards what went where from which device; those rows light
+no dot.
 
 **Code is coloured** in the chat's fenced blocks and in the Changes lens's
 diffs — Go, TypeScript, Python, shell, JSON, YAML, TOML, CSS, HTML, Rust,
@@ -797,6 +832,10 @@ writing.
 **Export** (View › Export as Markdown on the chat lens, or the palette) saves
 the conversation as a Markdown file — the text as it is, thinking and
 tool calls folded — to share with someone who is not in remuda.
+**A table's cells copy themselves**: hover a cell (or press it for a
+moment on a phone) and a copy button appears in its corner, taking the
+cell's words as they read — the sure way, since the browser's own table
+selection turns into whole rows the moment a drag leaves the cell.
 **Find** (⌘F / Ctrl+F on the chat lens, or 🔍 in the tab strip) marks
 every place a word occurs in the conversation shown and says "3 of 12";
 Enter and Shift+Enter walk them, the current one brought into view, Esc
@@ -888,6 +927,15 @@ awake · 2 agents working"), and why it could not hold on a system with
 neither tool. The hold's pid is kept in remuda's state dir on the
 machine, so a reconnect or a restart finds the one still running
 instead of starting another.
+
+**Wake a sleeping machine:** a desktop at home sleeps while the cockpit
+runs on a box in the same network and you are away with the phone. Give
+the machine its MAC address once (⋯ › MAC address…) and the menu offers
+*Wake up* whenever the machine is away: remuda sends the magic packet on
+every network it is on itself — never through another machine — and the
+usual reconnect, every 15 s, picks the machine up once it answers. The
+machine's firmware must allow Wake-on-LAN, and the cockpit must sit on
+the same network, since the packet does not route.
 
 **Cost and context:** every agent pane shows how full its context is (a
 pill in the header and on the sidebar row from 50% up, red near the edge,

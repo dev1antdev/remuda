@@ -25,10 +25,11 @@ type deviceView struct {
 	LastSeen time.Time `json:"last_seen"`
 	IP       string    `json:"ip,omitempty"`
 	This     bool      `json:"this"`
+	Viewer   bool      `json:"viewer,omitempty"` // signed in by a viewer link: it reads and types nothing
 }
 
 func viewOf(device auth.Device, caller string) deviceView {
-	return deviceView{ID: device.ID, Name: device.Name, Kind: device.Kind(), Created: device.Created, LastSeen: device.LastSeen, IP: device.IP, This: device.ID == caller && caller != ""}
+	return deviceView{ID: device.ID, Name: device.Name, Kind: device.Kind(), Created: device.Created, LastSeen: device.LastSeen, IP: device.IP, This: device.ID == caller && caller != "", Viewer: device.Viewer}
 }
 
 // devices is the store behind the guard, or a 503 when this remuda keeps none.

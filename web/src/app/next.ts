@@ -34,8 +34,7 @@ export function useNextNeedingMe(): () => void {
       setFocus(next.key);
       return;
     }
-    actions.selectPane(next.machine.id, next.pane.id);
-    actions.setLens("chat");
+    actions.openPane(next.machine.id, next.pane.id);
   }, [machines, mode, current, radar, focus, setFocus]);
 }
 

@@ -62,7 +62,7 @@ func TestStartInUsesTheFoldersWorkspaceElseMakesOne(t *testing.T) {
 }
 
 func TestStartInKeepsThePlaceWhenTheAgentRefuses(t *testing.T) {
-	client := &fakePlacer{fakeClient: fakeClient{startErrs: []*herdr.Error{{Code: "agent_name_taken"}}}}
+	client := &fakePlacer{fakeClient: fakeClient{startErrs: []*herdr.Error{{Code: "agent_kind_unknown"}}}}
 	place, err := StartIn(client, nil, "/x", "", "claude", Start{})
 	if err == nil || place.Pane != "w9:p1" || !place.MadeWorkspace {
 		t.Fatalf("err %v place %+v", err, place)

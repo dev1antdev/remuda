@@ -18,11 +18,13 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/wake"
 )
 
 const (
 	LocalID     = "local"
 	labelsFile  = "labels.json" // the user's own names for machines, by id
+	macsFile    = "macs.json"   // the MAC address of a machine the person may want to wake, by id
 	SourceHerdr = "herdr"       // mirrored from `herdr machine list`
 
 	StateConnected  = "connected"
@@ -46,9 +48,66 @@ type Manager struct {
 	path     string // machines.json
 	dir      string // the state dir, where labels.json lives
 	names    map[string]string
+	macs     map[string]string // the MAC addresses, for the magic packet that wakes a sleeping machine
 	herdrBin string
-	door     *Door      // how every remote's agents reach the tasks here; nil opens none
-	saveMu   sync.Mutex // writes of machines.json, one at a time
+	door     *Door                                 // how every remote's agents reach the tasks here; nil opens none
+	saveMu   sync.Mutex                            // writes of machines.json, one at a time
+	onState  func(id, label, state, reason string) // hears every remote's connection move, set by OnState
+}
+
+// OnState sets who hears a remote machine's connection move: connected, or error with the reason.
+func (m *Manager) OnState(fn func(id, label, state, reason string)) {
+	m.mu.Lock()
+	m.onState = fn
+	m.mu.Unlock()
+}
+
+// stateMoved hands a machine's move to whoever OnState named, once there is one.
+func (m *Manager) stateMoved(id, label, state, reason string) {
+	m.mu.Lock()
+	fn := m.onState
+	m.mu.Unlock()
+	if fn != nil {
+		fn(id, label, state, reason)
+	}
+}
+
+// SetMAC keeps the machine's MAC address, the one a wake-up packet names, in macs.json; an empty address forgets it.
+func (m *Manager) SetMAC(id, mac string) (*Machine, error) {
+	mac = strings.TrimSpace(mac)
+	if mac != "" {
+		canonical, err := wake.ParseMAC(mac)
+		if err != nil {
+			return nil, err
+		}
+		mac = canonical
+	}
+	mc, err := m.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	if mac == "" {
+		delete(m.macs, id)
+	} else {
+		m.macs[id] = mac
+	}
+	macs := map[string]string{}
+	for k, v := range m.macs {
+		macs[k] = v
+	}
+	m.mu.Unlock()
+	if err := state.SaveJSON(m.dir, macsFile, macs); err != nil {
+		return mc, fmt.Errorf("the address could not be kept: %w", err)
+	}
+	return mc, nil
+}
+
+// MAC is the machine's kept MAC address, "" when none.
+func (m *Manager) MAC(id string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.macs[id]
 }
 
 // Rename gives the machine a name of the user's own, kept in labels.json; an empty name goes back to the registry's.
@@ -106,6 +165,10 @@ func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 	if m.names == nil {
 		m.names = map[string]string{}
 	}
+	_ = state.LoadJSON(m.dir, macsFile, &m.macs)
+	if m.macs == nil {
+		m.macs = map[string]string{}
+	}
 	local.setLabel(m.names[LocalID])
 	for _, cfg := range m.load() {
 		m.add(cfg)
@@ -144,6 +207,7 @@ func (m *Manager) save() error {
 func (m *Manager) add(cfg Config) *Machine {
 	mc := newRemote(cfg)
 	mc.door = m.door
+	mc.onState = m.stateMoved
 	m.mu.Lock()
 	mc.setLabel(m.names[cfg.ID])
 	m.machines[cfg.ID] = mc

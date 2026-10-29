@@ -7,6 +7,7 @@ import { basename } from "@/lib/text";
 import { Icon, Logo, StatusDot } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import type { Machine, Session } from "./api";
+import { muteWords, mutedUntil } from "./mute";
 import { prWords } from "./prStatus";
 import { agentRows, displayOf, groups, markOf, recentRows, rowLabel, stateWords, type AgentRow, type Display, type Group, type RadarPrefs } from "./radar";
 import { t, tn } from "@/lib/i18n";
@@ -20,7 +21,7 @@ export type RowProps = {
   step: number; // the spinner's frame
   now: number;
   onSelect: (machineId: string, paneId: string) => void;
-  onMenu: (m: Machine, s: Session, x: number, y: number) => void;
+  onMenu?: (m: Machine, s: Session, x: number, y: number) => void; // none for a viewer: no workspace actions
   folded: Record<string, boolean>; // workspaces folded shut, by "machine|workspace"
   onFold: (key: string) => void;
 };
@@ -149,6 +150,7 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
               {s.review.fresh}
             </span>
           ) : null}
+          <MutedMark session={s} />
         </span>
         {rows.length === 0 && (
           <span className="ws-sub">
@@ -168,7 +170,7 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
           )}
         </span>
       )}
-      <button
+      {onMenu && <button
         type="button"
         className="icon-btn ws-menu-btn"
         title={t("Workspace actions")}
@@ -180,8 +182,19 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
         }}
       >
         <Icon name="more" size={14} />
-      </button>
+      </button>}
     </div>
+  );
+}
+
+// MutedMark is the small bell-off a muted workspace wears, with how long the silence holds in its tooltip
+export function MutedMark({ session }: { session: Session }) {
+  const until = mutedUntil(session);
+  if (!until) return null;
+  return (
+    <span className="radar-muted" title={muteWords(until)} aria-label={muteWords(until)}>
+      <Icon name="bell-off" size={12} />
+    </span>
   );
 }
 
@@ -238,7 +251,8 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
       {showWorkspace && (
         <>
           <span className="radar-ws">{r.session.name}</span>
-          <button
+          <MutedMark session={r.session} />
+          {onMenu && <button
             type="button"
             className="icon-btn ws-menu-btn"
             title={t("Workspace actions")}
@@ -250,7 +264,7 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
             }}
           >
             <Icon name="more" size={14} />
-          </button>
+          </button>}
         </>
       )}
     </div>

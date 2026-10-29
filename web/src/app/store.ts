@@ -10,6 +10,7 @@ import type { FileTarget } from "@/features/files/target";
 import type { SearchHit } from "@/features/search/api";
 import type { BudgetStatus } from "@/features/usage/api";
 import { readURL } from "./url";
+import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, lensToOpen, openLensOf } from "./openLens";
 
 export type Lens = "chat" | "terminal" | "changes";
 export type Mode = "herdr" | "wall" | "tasks" | "code" | "review";
@@ -85,7 +86,7 @@ const linked = fromURL.turn ? { machineId: fromURL.turn.machineId, paneId: fromU
 
 export const app = createStore<AppState>({
   requested: fromURL.requested,
-  lens: linked ? "chat" : (fromURL.lens ?? (isTouch ? "chat" : "terminal")),
+  lens: linked ? "chat" : (fromURL.lens ?? (fromURL.requested ? lensToOpen(openLensOf(readPref(OPEN_LENS_KEY, DEFAULT_OPEN_LENS)), isTouch ? "chat" : "terminal") : isTouch ? "chat" : "terminal")),
   mode,
   drawer: false,
   dialog: null,
@@ -121,6 +122,12 @@ export const actions = {
   selectPane(machineId: string, paneId: string) {
     app.set({ requested: { machineId, paneId }, viewer: null, drawer: false, mode: "herdr" });
     writePref("mode", "herdr");
+  },
+  // a pane brought up by a notification, the Mac app's menu, an Activity row or Alt+N: the lens the person chose for that
+  openPane(machineId: string, paneId: string) {
+    actions.selectPane(machineId, paneId);
+    const pref = openLensOf(readPref(OPEN_LENS_KEY, DEFAULT_OPEN_LENS));
+    if (pref !== "keep") app.set({ lens: pref });
   },
   setLens(lens: Lens) {
     app.set({ lens });

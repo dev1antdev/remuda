@@ -7,6 +7,7 @@ import { actions } from "@/app/store";
 import { useQuery } from "@/lib/query";
 import { errMsg, plural } from "@/lib/text";
 import AgentKeys from "./AgentKeys";
+import ViewerKeys from "./ViewerKeys";
 import { fetchDevices, renameDevice, revokeDevice, revokeOtherDevices, type Device } from "./api";
 import { deviceLine, revokeQuestion } from "./devices";
 import { t } from "@/lib/i18n";
@@ -66,6 +67,7 @@ export default function DevicesSection() {
                 </button>
               )}
               {device.this && <span className="badge quiet">{t("this device")}</span>}
+              {device.viewer && <span className="badge quiet">{t("viewer")}</span>}
             </span>
             <small>{deviceLine(device, now)}</small>
           </span>
@@ -85,6 +87,7 @@ export default function DevicesSection() {
         </div>
       )}
       <AgentKeys />
+      <ViewerKeys />
     </section>
   );
 }

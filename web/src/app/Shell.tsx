@@ -44,12 +44,12 @@ export default function Shell() {
   const codeOpened = app.use((s) => s.codeOpened);
   const full = app.use((s) => s.full);
   const current = useCurrent();
-  const { machines } = useRoster();
+  const { machines, viewOnly } = useRoster();
   const toasts = useToasts();
   useFullKeys();
   useNextKey(useNextNeedingMe());
   useVoice();
-  useSyncPrefs();
+  useSyncPrefs(!viewOnly);
   useWelcomeBack();
   useBadge();
   useShellFeed();
@@ -108,13 +108,12 @@ export default function Shell() {
   // a tapped notification in an already open tab arrives as a "select-pane" message from the service worker, a digest's as "open-panel";
   // inside the Mac app the same arrives as a call on window.remudaShell, which the page's functions answer
   useEffect(() => {
-    void resyncPush(readAlertPrefs());
+    if (!viewOnly) void resyncPush(readAlertPrefs());
     if (inShell()) {
       handShell({
         select: (machine, pane) => {
           if (!machine || !pane) return;
-          actions.selectPane(machine, pane);
-          actions.setLens("chat");
+          actions.openPane(machine, pane);
         },
         openPanel: (name) => {
           const panel = panelOf(name);
@@ -130,7 +129,7 @@ export default function Shell() {
     if (!("serviceWorker" in navigator)) return;
     const onMsg = (e: MessageEvent) => {
       const d = e.data as { type?: string; machine?: string; pane?: string; panel?: string };
-      if (d?.type === "select-pane" && d.machine && d.pane) actions.selectPane(d.machine, d.pane);
+      if (d?.type === "select-pane" && d.machine && d.pane) actions.openPane(d.machine, d.pane);
       if (d?.type === "open-panel" && panelOf(d.panel)) actions.openPanel(panelOf(d.panel));
     };
     navigator.serviceWorker.addEventListener("message", onMsg);

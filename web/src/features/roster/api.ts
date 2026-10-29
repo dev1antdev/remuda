@@ -63,6 +63,7 @@ export type Session = {
   worktree?: { repo_key: string; repo_name: string; linked: boolean; checkout_path: string };
   dir?: string;
   review?: { changed: number; fresh: number; ready?: boolean }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another
+  muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row
   tabs: Tab[];
 };
 
@@ -118,6 +119,7 @@ export type Machine = {
   health?: Health;
   awake?: Awake;
   stopped?: StoppedChat[]; // the chats a reboot stopped there: their panes are bare shells again, one Resume brings them back
+  mac?: string; // the address a wake-up packet names, when the person set one
 };
 
 // StoppedChat is a chat whose pane came back from a reboot as a bare shell: the agent it ran and the pane's title
@@ -127,13 +129,14 @@ export type AgentKind = { id: string; label: string };
 
 export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[] }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far
 
-// fetchRoster returns null when the roster is unchanged (304 via ETag).
-export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null }> {
+// fetchRoster returns null when the roster is unchanged (304 via ETag); viewOnly says a viewer link signed this page in.
+export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null; viewOnly: boolean }> {
   const res = await fetch("/api/roster", { headers: etag ? { "If-None-Match": etag } : {} });
   const version = res.headers.get("X-Remuda-Version");
-  if (res.status === 304) return { roster: null, etag, version };
+  const viewOnly = res.headers.get("X-Remuda-Viewer") === "1";
+  if (res.status === 304) return { roster: null, etag, version, viewOnly };
   await check(res);
-  return { roster: (await res.json()) as Roster, etag: res.headers.get("ETag"), version };
+  return { roster: (await res.json()) as Roster, etag: res.headers.get("ETag"), version, viewOnly };
 }
 
 export const refreshHealth = (machineId: string): Promise<{ health: Health | null; latest: Latest }> =>
@@ -182,7 +185,18 @@ export const renameMachine = (id: string, label: string): Promise<void> => sendJ
 
 export const removeMachine = (id: string): Promise<void> => sendJSON("DELETE", `/api/machines/${encodeURIComponent(id)}`);
 
+// a workspace folder silenced until a moment: no push, no webhook, no feed row from its panes until then
+export const muteWorkspace = (machine: string, dir: string, until: Date): Promise<{ muted_until: string }> => sendJSON("PUT", "/api/mutes", { machine, dir, until: until.toISOString() });
+
+export const unmuteWorkspace = (machine: string, dir: string): Promise<void> => sendJSON("DELETE", "/api/mutes", { machine, dir }).then(() => undefined);
+
 export const setAwake = (id: string, on: boolean): Promise<Awake> => sendJSON("PATCH", `/api/machines/${encodeURIComponent(id)}/awake`, { on });
+
+// setMachineMAC keeps the address a wake-up packet names; an empty one forgets it
+export const setMachineMAC = (id: string, mac: string): Promise<{ mac: string }> => sendJSON("PATCH", `/api/machines/${encodeURIComponent(id)}`, { mac });
+
+// wakeMachine sends the magic packet from this remuda's own network; the answer says on how many addresses
+export const wakeMachine = (id: string): Promise<{ sent: number; mac: string }> => sendJSON("POST", `/api/machines/${encodeURIComponent(id)}/wake`, {});
 
 // Handed is what a hand-off to the agent answers: the request's label and how long the message was
 export type Handed = { ok: boolean; label: string; chars: number };

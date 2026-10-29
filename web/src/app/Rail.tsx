@@ -3,7 +3,10 @@
 // four modes a thumb reaches and the rest behind More.
 
 import { unread } from "@/features/activity/group";
+import { DEFAULT_FILTER, filterWords, type Filter } from "@/features/activity/filter";
+import { machineLabel } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
+import { viewerPlaces } from "./viewOnly";
 import { usePref } from "@/lib/prefs";
 import { Icon, Menu, Tip, type IconName, type MenuItem } from "@/ui";
 import { actions, app, type Mode, type Panel } from "./store";
@@ -29,20 +32,25 @@ export default function Rail() {
   const mode = app.use((s) => s.mode);
   const panel = app.use((s) => s.panel);
   const dialog = app.use((s) => s.dialog);
-  const { feed } = useRoster();
+  const { feed, machines, viewOnly } = useRoster();
+  const modes = viewerPlaces(MODES, viewOnly);
+  const panels = viewerPlaces(PANELS, viewOnly);
   const [seen] = usePref<number>("feed.seen", 0);
   const news = unread(feed, seen);
+  const [filter] = usePref<Filter>("activity.filter", DEFAULT_FILTER);
+  const filtered = filterWords(filter, (family) => t(family.label), machineLabel(machines, filter.machine));
+  // the bell's tooltip says when the panel is filtered, so a quiet panel is not mistaken for a quiet day
+  const placeOf = (p: Place & { panel: Panel }): Place => (p.panel === "activity" && filtered ? { ...p, about: `${p.about} · ${t("filtered: {words}", { words: filtered })}` } : p);
   const more: MenuItem[] = [
-    ...MODES.filter((m) => m.desk).map((m) => ({ label: m.label, icon: m.icon, hint: m.about, checked: mode === m.mode, onSelect: () => actions.setMode(m.mode) })),
+    ...modes.filter((m) => m.desk).map((m) => ({ label: m.label, icon: m.icon, hint: m.about, checked: mode === m.mode, onSelect: () => actions.setMode(m.mode) })),
     { sep: true },
-    ...PANELS.map((p) => ({ label: p.label, icon: p.icon, hint: p.about, checked: panel === p.panel, onSelect: () => actions.togglePanel(p.panel) })),
-    { sep: true },
-    { label: SETTINGS.label, icon: SETTINGS.icon, hint: SETTINGS.about, onSelect: () => actions.openDialog({ kind: "settings" }) },
+    ...panels.map((p) => ({ label: p.label, icon: p.icon, hint: p.about, checked: panel === p.panel, onSelect: () => actions.togglePanel(p.panel) })),
+    ...(viewOnly ? [] : [{ sep: true } as MenuItem, { label: SETTINGS.label, icon: SETTINGS.icon, hint: SETTINGS.about, onSelect: () => actions.openDialog({ kind: "settings" }) } as MenuItem]),
   ];
   return (
     <nav className="rail" aria-label={t("Places")}>
       <div className="rail-group">
-        {MODES.map((m) => (
+        {modes.map((m) => (
           <RailButton key={m.mode} place={m} on={mode === m.mode} desk={m.desk} onClick={() => actions.setMode(m.mode)} />
         ))}
         <Menu
@@ -58,10 +66,10 @@ export default function Rail() {
         />
       </div>
       <div className="rail-group rail-foot">
-        {PANELS.map((p) => (
-          <RailButton key={p.panel} place={p} on={panel === p.panel} dot={p.panel === "activity" && news} onClick={() => actions.togglePanel(p.panel)} />
+        {panels.map((p) => (
+          <RailButton key={p.panel} place={placeOf(p)} on={panel === p.panel} dot={p.panel === "activity" && news} onClick={() => actions.togglePanel(p.panel)} />
         ))}
-        <RailButton place={SETTINGS} on={dialog?.kind === "settings"} onClick={() => actions.openDialog({ kind: "settings" })} />
+        {!viewOnly && <RailButton place={SETTINGS} on={dialog?.kind === "settings"} onClick={() => actions.openDialog({ kind: "settings" })} />}
       </div>
     </nav>
   );

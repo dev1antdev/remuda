@@ -114,6 +114,7 @@ func (s *Server) Handler() http.Handler {
 	s.liveRoutes(api)
 	s.deviceRoutes(api)
 	s.agentKeyRoutes(api)
+	s.viewerKeyRoutes(api)
 	s.completeRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 

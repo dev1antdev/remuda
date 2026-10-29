@@ -43,6 +43,14 @@ type Snapshot struct {
 // MachineRemoved says a machine left the registry and its watcher loop ended.
 type MachineRemoved struct{ Machine string }
 
+// MachineState says a remote machine's connection moved: State is "connected" or "error", Reason the error's words.
+type MachineState struct {
+	Machine string
+	Label   string
+	State   string
+	Reason  string
+}
+
 // JobDone is a job that ended on a machine.
 type JobDone struct {
 	Machine string

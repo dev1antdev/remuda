@@ -41,6 +41,9 @@ func (s *Server) handleAgentKeys(w http.ResponseWriter, r *http.Request) {
 	list := store.List()
 	out := make([]keyView, 0, len(list))
 	for _, key := range list {
+		if key.Scope == auth.ScopeViewer { // the viewer links have a list of their own
+			continue
+		}
 		out = append(out, keyView{ID: key.ID, Name: key.Name, Scope: key.Scope, Created: key.Created, LastUsed: key.LastUsed})
 	}
 	w.Header().Set("Cache-Control", "no-store")

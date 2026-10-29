@@ -13,7 +13,8 @@ import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
 import { DEFAULT_WALL, tileKey, type WallPrefs } from "@/features/roster/wall";
 import { agentTitle, askRestart } from "@/features/updates/restartPane";
-import { isMac, usePref } from "@/lib/prefs";
+import { isMac, usePref, writePref } from "@/lib/prefs";
+import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, openLensOf, type OpenLens } from "./openLens";
 import { basename, errMsg } from "@/lib/text";
 import { resetPanels } from "@/ui";
 import type { IconName } from "@/ui/icons";
@@ -63,6 +64,7 @@ function useCommands(): (query: string) => Entry[] {
   const split = app.use((s) => s.split);
   const full = app.use((s) => s.full);
   const themePref = useThemePref();
+  const openLens = openLensOf(usePref<OpenLens>(OPEN_LENS_KEY, DEFAULT_OPEN_LENS)[0]);
   const darkFlavor = useDarkFlavorPref();
   const textSize = useTextSize();
   const current = useCurrent();
@@ -170,6 +172,9 @@ function useCommands(): (query: string) => Entry[] {
       command("schedules", t("Schedules"), () => actions.openPanel("schedules"), { hint: t("prompts sent to agents on a timetable"), icon: "calendar", keywords: ["cron", "timer", "prompt"] });
       command("usage", t("Usage report"), () => actions.openPanel("usage"), { hint: t("what the agents cost, by day, project and session"), icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
       command("standup", t("Standup: what every agent did today"), () => actions.openPanel("standup"), { hint: t("one report over every machine, ready to paste as Markdown"), icon: "sun", keywords: ["standup", "report", "today", "summary", "recap", "daily", "digest", "morning"] });
+      command("open-lens-terminal", t("Notifications open: the terminal"), () => writePref(OPEN_LENS_KEY, "terminal"), { hint: `${openLens === "terminal" ? t("now · ") : ""}${t("a tapped notification, the Mac app's menu, an Activity row or Alt+N shows the pane's terminal")}`, icon: "terminal", keywords: ["notification", "alert", "open", "terminal", "lens"] });
+      command("open-lens-chat", t("Notifications open: the chat"), () => writePref(OPEN_LENS_KEY, "chat"), { hint: `${openLens === "chat" ? t("now · ") : ""}${t("the same openings show the pane's chat")}`, icon: "message", keywords: ["notification", "alert", "open", "chat", "lens"] });
+      command("open-lens-keep", t("Notifications open: the lens it was on"), () => writePref(OPEN_LENS_KEY, "keep"), { hint: `${openLens === "keep" ? t("now · ") : ""}${t("the same openings keep whichever lens the page was on")}`, icon: "columns", keywords: ["notification", "alert", "open", "keep", "lens"] });
       command("theme-system", t("Theme: follow the system"), () => setThemePref("system"), { hint: `${themePref === "system" ? t("now · ") : ""}${t("your dark flavour when the system is dark, Latte when it is light")}`, icon: "monitor", keywords: ["theme", "dark", "light", "catppuccin", "system", "auto"] });
       command("theme-dark", t("Theme: {flavor} (dark)", { flavor: FLAVOR_NAMES[darkFlavor] }), () => setThemePref("dark"), { hint: `${themePref === "dark" ? t("now · ") : ""}${t("Catppuccin {flavor}, whatever the system says", { flavor: FLAVOR_NAMES[darkFlavor] })}`, icon: "moon", keywords: ["theme", "dark", "catppuccin", "frappe", "macchiato", "mocha"] });
       command("theme-light", t("Theme: Latte (light)"), () => setThemePref("light"), { hint: `${themePref === "light" ? t("now · ") : ""}${t("Catppuccin Latte, whatever the system says")}`, icon: "sun", keywords: ["theme", "light", "catppuccin", "latte"] });

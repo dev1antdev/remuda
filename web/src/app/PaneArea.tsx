@@ -17,6 +17,7 @@ import Chat from "@/features/chat/Chat";
 import FilesRail from "@/features/chat/FilesRail";
 import Review from "@/features/review/Review";
 import { TerminalLens, TerminalTools, useTerminalViewItems } from "@/features/terminal/TerminalLens";
+import { Screen } from "@/features/terminal/Screen";
 import { Notice, PANELS, Resizer } from "@/ui";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
@@ -34,7 +35,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
   const splitAsked = app.use((s) => s.split);
   const wide = useMedia(SPLIT_QUERY);
   const split = splitOn(splitAsked, wide, isTouch, lens); // the chat beside the terminal; lens is then the focused side
-  const { refresh } = useRoster();
+  const { refresh, viewOnly } = useRoster();
   const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
   const [seenLenses, setSeenLenses] = useState<{ pane: string; lenses: Partial<Record<Lens, true>> }>({ pane: "", lenses: {} });
   useEffect(() => {
@@ -124,12 +125,13 @@ export default function PaneArea({ current }: { current: Located | null }) {
         session={session}
         tab={tab}
         pane={pane}
+        readOnly={viewOnly}
         tools={
           <>
-            {lens === "terminal" && <FindTool what={tr("in the scrollback")} shortcut={isMac ? "⌘F" : "Ctrl+Shift+F"} />}
-            {lens === "terminal" && <TerminalTools />}
+            {lens === "terminal" && !viewOnly && <FindTool what={tr("in the scrollback")} shortcut={isMac ? "⌘F" : "Ctrl+Shift+F"} />}
+            {lens === "terminal" && !viewOnly && <TerminalTools />}
             {lens === "chat" && <ChatTools />}
-            <ViewMenu items={lens === "terminal" ? terminalItems : lens === "chat" ? chatItems : []} shell={!pane.agent} />
+            <ViewMenu items={lens === "terminal" && !viewOnly ? terminalItems : lens === "chat" ? chatItems : []} shell={!pane.agent} />
           </>
         }
         onSelect={(paneId) => actions.selectPane(machine.id, paneId)}
@@ -161,11 +163,17 @@ export default function PaneArea({ current }: { current: Located | null }) {
               agent={pane.agent}
               active={shown("chat")}
               focused={lens === "chat"}
+              viewOnly={viewOnly}
             />
           </div>
         )}
         {split && <Resizer spec={PANELS.split} edge="right" label={tr("Chat width in the split")} />}
-        {seen("terminal") && (
+        {seen("terminal") && viewOnly && (
+          <div className={`lens-pane screen-lens${split ? " split-terminal" : ""}`} hidden={!shown("terminal")} onFocusCapture={() => focusSide("terminal")} onPointerDownCapture={() => focusSide("terminal")}>
+            <Screen key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active={shown("terminal")} onOpen={() => {}} />
+          </div>
+        )}
+        {seen("terminal") && !viewOnly && (
           <div className={`lens-pane${split ? " split-terminal" : ""}`} hidden={!shown("terminal")} onFocusCapture={() => focusSide("terminal")} onPointerDownCapture={() => focusSide("terminal")}>
             <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={shown("terminal")} focused={lens === "terminal"} />
           </div>

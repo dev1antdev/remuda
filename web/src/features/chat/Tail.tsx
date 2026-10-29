@@ -12,6 +12,7 @@ import { took } from "@/lib/time";
 import { Notice } from "@/ui";
 import type { Subagent } from "./api";
 import Composer from "./Composer";
+import { useRoster } from "@/features/roster/useRoster";
 import { doing, type Doing } from "./doing";
 import { counts, progressWords } from "./plan";
 import { QuestionCard } from "./QuestionCard";
@@ -119,8 +120,16 @@ function Running({ since }: { since: string }) {
 // TailAnswer is the foot of a tile whatever it shows above: the keys for a question the agent asks, an error, the one-line composer.
 export function TailAnswer({ machineId, paneId, status, dir, agent = "", active = true, error: shown = null }: { machineId: string; paneId: string; status: string; dir: string; agent?: string; active?: boolean; error?: string | null }) {
   const [actionError, setActionError] = useState<string | null>(null);
+  const { viewOnly } = useRoster();
   const keys = (ks: string[]) => sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
   const error = actionError ?? shown;
+  if (viewOnly) {
+    return error ? (
+      <Notice tone="error" className="chat-notice">
+        {error}
+      </Notice>
+    ) : null;
+  }
   return (
     <>
       {status === "input" && (

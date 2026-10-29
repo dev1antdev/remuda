@@ -14,7 +14,7 @@ import { actions, app, type Lens } from "./store";
 import { t } from "@/lib/i18n";
 
 export default function Header({ current }: { current: Located | null }) {
-  const { machines, budgets } = useRoster();
+  const { machines, budgets, viewOnly } = useRoster();
   const mode = app.use((s) => s.mode);
   const lens = app.use((s) => s.lens);
   const drawer = app.use((s) => s.drawer);
@@ -42,11 +42,12 @@ export default function Header({ current }: { current: Located | null }) {
         ) : (
           "remuda"
         )}
+        {viewOnly && <span className="badge quiet viewonly-badge">{t("Viewing only")}</span>}
       </span>
       {mode === "herdr" && current && !viewer && (
         <div className="lenses">
           {current.pane.usage && current.pane.usage.window > 0 && <UsagePill usage={current.pane.usage} budget={tightest(budgetsFor(budgets, current.machine.id, current.session.dir || current.pane.cwd))} />}
-          <LensSwitch lens={lens} current={current} />
+          <LensSwitch lens={lens} current={current} viewOnly={viewOnly} />
         </div>
       )}
       {popOutSupported && (
@@ -56,11 +57,11 @@ export default function Header({ current }: { current: Located | null }) {
           </button>
         </Tip>
       )}
-      <Tip text="Search every conversation on every machine (⌘K / Ctrl+K has it too)">
+      {!viewOnly && <Tip text="Search every conversation on every machine (⌘K / Ctrl+K has it too)">
         <button type="button" className="icon-btn bell" aria-label={t("Search")} onClick={() => actions.openSearch()}>
           <Icon name="search" size={18} />
         </button>
-      </Tip>
+      </Tip>}
     </header>
   );
 }
@@ -88,7 +89,7 @@ function UsagePill({ usage, budget }: { usage: NonNullable<Located["pane"]["usag
   );
 }
 
-function LensSwitch({ lens, current }: { lens: Lens; current: Located }) {
+function LensSwitch({ lens, current, viewOnly }: { lens: Lens; current: Located; viewOnly: boolean }) {
   const tab = (id: Lens, label: string, extra?: { disabled?: boolean; title?: string; badge?: number }) => (
     <button role="tab" aria-selected={lens === id} className={lens === id ? "on" : ""} disabled={extra?.disabled} title={extra?.title} onClick={() => actions.setLens(id)}>
       {label}
@@ -100,8 +101,8 @@ function LensSwitch({ lens, current }: { lens: Lens; current: Located }) {
       {tab("chat", t("Chat"))}
       {tab("terminal", t("Terminal"))}
       {tab("changes", t("Changes"), {
-        disabled: !(current.session.dir || current.pane.cwd),
-        title: t("What changed in this workspace's folder since you last looked"),
+        disabled: viewOnly || !(current.session.dir || current.pane.cwd),
+        title: viewOnly ? t("Viewing only") : t("What changed in this workspace's folder since you last looked"),
         badge: current.session.review?.fresh,
       })}
     </nav>
