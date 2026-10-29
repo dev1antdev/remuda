@@ -1,12 +1,15 @@
-// The workspace's ⋯ menu: a tab, a worktree, a rename, the pull request the agent named, the active tab's agent restarted on
+// The workspace's ⋯ menu: a tab, a worktree, a rename, the pull request the agent named with what its state allows —
+// its failed checks or its review handed to the agent, a merged worktree removed — the active tab's agent restarted on
 // its session, close.
 
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { act } from "@/app/act";
 import { actions, type RowMenu } from "@/app/store";
 import { agentTitle, askRestart } from "@/features/updates/restartPane";
 import { openUrl } from "@/lib/host";
 import { killSession, type Machine, type Session } from "./api";
+import { actionLabel, actionsFor, canRemoveWorktree } from "./prActions";
+import { askRemoveWorktree, handPR } from "./prMenu";
 import { prWords } from "./prStatus";
 import { t, tn } from "@/lib/i18n";
 
@@ -50,6 +53,8 @@ export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) 
       {item("Rename workspace…", () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }))}
       {tab && item(`Rename tab ${tab.named ? `“${tab.label}”` : tab.number}…`, () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }))}
       {pr && item(`Open ${pr.label}${pr.status ? ` · ${prWords(pr.status)}` : ""}`, () => openUrl(pr.url))}
+      {pr && chat && actionsFor(pr).map((action) => <Fragment key={action}>{item(actionLabel(action, pr.label), () => void handPR(action, machine.id, chat.id, pr.label))}</Fragment>)}
+      {pr && canRemoveWorktree(session, pr) && item(t("Remove the worktree and its branch…"), () => askRemoveWorktree(machine, session), "danger")}
       {chat && item(t("Restart {agent} on its session…", { agent: agentTitle(chat.agent) }), () => askRestart(machine.id, chat.id, chat.agent))}
       {item("Close workspace", () => closeWorkspace(machine, session), "danger")}
     </div>

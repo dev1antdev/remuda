@@ -20,7 +20,10 @@ type RunWatch struct {
 	// Usage is the meter's reading of a pane: what its agent spent so far; ok is false before anything was read.
 	Usage  func(machine, pane string) (cost float64, tokens int64, model string, ok bool)
 	Notify func(push.Payload)
-	Now    func() time.Time
+	// PRTouch asks for the pull request a pane's run names to be read again when its last read is old enough, so a merge
+	// moves the task with no page open.
+	PRTouch func(machine, pane string)
+	Now     func() time.Time
 
 	missing map[int64]time.Time
 }
@@ -60,6 +63,9 @@ func (w *RunWatch) Sweep() {
 			continue
 		}
 		delete(w.missing, r.ID)
+		if r.PRURL != "" && w.PRTouch != nil {
+			w.PRTouch(r.Machine, r.Pane)
+		}
 		if r.State == RunStarting {
 			if now().Sub(started) > startWindow {
 				_ = w.Store.SetRun(r.ID, RunFailed, "the prompt was never delivered")

@@ -179,3 +179,16 @@ export const renameMachine = (id: string, label: string): Promise<void> => sendJ
 export const removeMachine = (id: string): Promise<void> => sendJSON("DELETE", `/api/machines/${encodeURIComponent(id)}`);
 
 export const setAwake = (id: string, on: boolean): Promise<Awake> => sendJSON("PATCH", `/api/machines/${encodeURIComponent(id)}/awake`, { on });
+
+// Handed is what a hand-off to the agent answers: the request's label and how long the message was
+export type Handed = { ok: boolean; label: string; chars: number };
+
+// the failed checks' log of the pane's pull request, read with gh on the machine, sent to the pane's agent
+export const handFailure = (machine: string, pane: string): Promise<Handed> => sendJSON("POST", "/api/pr/failure", { machine, pane });
+
+// the reviews and line comments of the pane's pull request, sent to the pane's agent
+export const sendReview = (machine: string, pane: string): Promise<Handed> => sendJSON("POST", "/api/pr/review", { machine, pane });
+
+// a linked worktree's workspace closed, the worktree removed and its branch deleted on the machine
+export const removeWorktree = (machineId: string, id: string): Promise<{ ok: boolean; branch: string; repo: string }> =>
+  sendJSON("DELETE", withMachine(`/api/worktrees/${encodeURIComponent(id)}`, machineId));

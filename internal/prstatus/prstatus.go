@@ -58,7 +58,9 @@ type entry struct {
 
 // Tracker holds one request per pane and reads one at a time per machine.
 type Tracker struct {
-	hosts      Hosts
+	hosts Hosts
+	// OnState hears a request's state on its first read and every move after it; the app puts it on the bus.
+	OnState    func(events.PullRequestState)
 	now        func() time.Time
 	mu         sync.Mutex
 	entries    map[events.PaneRef]*entry
@@ -146,6 +148,22 @@ func (t *Tracker) Touch() {
 	}
 }
 
+// TouchPane reads one pane's request again when its last read is Every old: the task watch asks it for the request a
+// live run names, so a merge moves the task with no page open.
+func (t *Tracker) TouchPane(machineID, paneID string) {
+	if t == nil {
+		return
+	}
+	ref := events.PaneRef{Machine: machineID, Pane: paneID}
+	t.mu.Lock()
+	e := t.entries[ref]
+	due := e != nil && !e.reading && t.now().Sub(e.readAt) >= Every
+	t.mu.Unlock()
+	if due {
+		t.start(ref)
+	}
+}
+
 // start reads one request in the background when its machine has no read under way.
 func (t *Tracker) start(ref events.PaneRef) {
 	t.mu.Lock()
@@ -163,23 +181,39 @@ func (t *Tracker) start(ref events.PaneRef) {
 
 func (t *Tracker) read(ref events.PaneRef, url string) {
 	status, reason := t.fetch(ref.Machine, url)
+	if moved, ok := t.note(ref, url, status, reason); ok && t.OnState != nil {
+		t.OnState(moved)
+	}
+}
+
+// note keeps what a read came to and says whether the request's state is news: its first read, or a move since.
+func (t *Tracker) note(ref events.PaneRef, url string, status *Status, reason string) (events.PullRequestState, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.inflight, ref.Machine)
 	e := t.entries[ref]
 	if e == nil || e.url != url {
-		return
+		return events.PullRequestState{}, false
 	}
 	e.reading = false
 	e.readAt = t.now()
 	e.reason = reason
-	if status != nil {
-		e.status = status
-	}
 	if reason != "" && t.now().Sub(t.complained[ref.Machine]) >= ComplainEvery {
 		t.complained[ref.Machine] = t.now()
 		log.Printf("prstatus: %s: %s cannot be read: %s", ref.Machine, url, reason)
 	}
+	if status == nil {
+		return events.PullRequestState{}, false
+	}
+	was := ""
+	if e.status != nil {
+		was = e.status.State
+	}
+	e.status = status
+	if status.State == was {
+		return events.PullRequestState{}, false
+	}
+	return events.PullRequestState{Pane: ref, URL: url, State: status.State, Was: was}, true
 }
 
 // fetch runs gh on the machine and parses its answer.

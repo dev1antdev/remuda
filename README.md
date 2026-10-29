@@ -136,7 +136,14 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   approved", red when a check failed, the branch conflicts or the
   review asks for changes, amber while checks run — read with `gh` on
   that machine as you, every two minutes while the page is open, so
-  remuda itself asks GitHub nothing;
+  remuda itself asks GitHub nothing. The chips open a menu: when a check
+  failed, *Hand the failed checks to the agent* reads the failed steps'
+  log with `gh run view --log-failed` on that machine and sends its end
+  to the agent as a message, the way you would paste it; *Send the
+  review comments to the agent* does the same with the reviewers'
+  verdicts and their comments on the lines, numbered as the Changes
+  lens numbers yours. Nothing is sent unless you choose the row, and an
+  agent waiting on a question refuses, as the chat does;
   the last turns of its conversation and a line to answer it,
   in a grid that fits the window (S / M / L). Hide the idle ones, or
   keep only the agents that need you — a question, a watchdog note, a
@@ -228,7 +235,14 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   When the agent opens a pull request and names it (the Review mode's
   *Approve & open PR* asks for exactly that), the task notes the link, moves
   on the same way, and shows the request with its checks on the card and in
-  the task while the agent's pane is still there.
+  the task while the agent's pane is still there. Once that request is
+  merged on GitHub — checked with `gh` every two minutes while the run
+  is live, page or no page — the task moves to *Done* with the comment
+  "PR #15 merged" and a push, unless you moved it elsewhere first; the
+  workspace's ⋯ menu then offers *Remove the worktree and its branch…*,
+  which closes the workspace and runs `git worktree remove` and `git
+  branch -D` on the machine, refusing a worktree with uncommitted
+  changes before anything closes.
   A *Review* link beside the run opens its worktree in the Review mode.
   The card says what the agents started on it have spent so far
   ("$4.20", in the quiet colour), and the run in the task says the time

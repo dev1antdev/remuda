@@ -1152,7 +1152,54 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   under 920 px), in the sidebar row's tooltip and in the workspace
   menu's "Open PR #15" row. gh runs as the person on their own machine, like
   git does for the Changes lens: remuda itself still makes no request
-  but the version checks.
+  but the version checks. **The request is followed to its end.** Every
+  read whose state is news — the first, or a move to MERGED / CLOSED —
+  goes out as `Tracker.OnState` (`events.PullRequestState {Pane, URL,
+  State, Was}`, published by the app), and `TouchPane(machine, pane)`
+  reads one pane's request again when its last read is `Every` old: the
+  task watch calls it every sweep for a live run that names a request,
+  so a merge moves the task with no page open (`internal/tasks`, "the
+  run follows the pull request"). **The reviewers' word and a red CI go
+  to the agent** (`failure.go`, `comments.go`, `handoff.go`, tested on
+  `shell.Fake`): `Failure(host, label, url)` runs `gh pr checks --json`
+  on the machine, then `gh run view <id> --log-failed` for each run a
+  failed check points into (`FailedRuns`, at most `MaxRuns`), and
+  composes `FailureMessage` — the failed checks named with their links,
+  each run's log `Tail` (the last `LogTail` 8 KB at a line, escapes
+  stripped), and the ask to fix and push; `ReviewComments(host, label,
+  url)` runs `gh pr view --json reviews` and `gh api
+  repos/{o}/{r}/pulls/{n}/comments` in one script (two `script.RS`
+  sections, `URLParts` off the address) and composes `ReviewMessage` —
+  each review's verdict and text, the line comments numbered as the
+  Changes lens numbers its own (`file:line (author)`, the hunk's last
+  row quoted, the text), at most `MaxComments`, and the ask to work on
+  them; `ErrNothingFailed` / `ErrNoReview` when there is nothing to
+  send. `POST /api/pr/failure` and `POST /api/pr/review` `{machine,
+  pane}` (`internal/server/pr.go`, `prHandoff`) take the pane's link
+  from `said.Tracker.Link`, compose on the pane's machine and send the
+  text through `sessions.Input.Submit` as the chat does — 409 for an
+  agent waiting on a question or nothing to send, 502 with gh's line.
+  **A merged worktree goes** (`internal/worktrees`, tested on
+  `shell.Fake`): `DELETE /api/worktrees/{id}` for a workspace herdr
+  marks a linked worktree — `Inspect` (the branch, the repository's main
+  worktree, the first line of `git status`; uncommitted changes are a
+  409 before anything closes), herdr `workspace.close`, then `Remove`:
+  `git worktree remove` (never `--force`) and `git branch -d`, or `-D`
+  only when an agent pane of the workspace named a request gh read as
+  merged (`mergedIn`), since a squash leaves git unsure; a branch it
+  refuses is reported with the worktree already gone. The one thing
+  remuda deletes from a repository, and only when asked. The page:
+  `features/roster/prActions.ts` (tested: `canHandFailure` an open
+  request with a failed check, `canSendReview` an open request,
+  `canRemoveWorktree` a linked worktree whose request is merged,
+  `actionsFor`, the rows' and toasts' words, `removeAsk`,
+  `removedWords`), `prMenu.tsx` (`prMenuItems`, `handPR` with its two
+  toasts, `askRemoveWorktree` behind the confirm, then `act` so the
+  roster drops the workspace): in a wall tile the two chips are one
+  `.pr-chips` button that opens a `Menu` — Open with the state as its
+  hint, then the hand-offs the state allows — and the workspace's ⋯
+  menu carries the same rows after "Open PR #15", with "Remove the
+  worktree and its branch…" for a merged linked worktree.
 - `internal/recap/` — what a conversation came to, and the **standup**
   over every agent. `Of(turns, since)` (pure, tested) counts the turns
   from `since` on: prompts, answers (turns that ended in text), the
@@ -1653,7 +1700,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   page (`runPR.ts`, tested: `paneOf`, `runPR`) draws the link in the
   detail's run block and as a chip on list rows and board cards, with
   the `.pr-state` checks and review chips of the Wall tile while the
-  run's pane is still on the roster naming that link. `comments` are
+  run's pane is still on the roster naming that link. **And to its
+  merge** (pr.go, `merged_test.go`): every sweep asks `RunWatch.PRTouch`
+  (`prstatus.Tracker.TouchPane`) to read the request a live run names
+  again when its last read is old, and every `events.PullRequestState`
+  goes to `RunWatch.OnPullRequestState` → `Store.OnPullRequestMerged`,
+  which, for MERGED and a live run naming that very address, adds the
+  comment "PR #15 merged" by "remuda" (once: a read after a restart
+  finds the comment and stops), moves the task to the done column while
+  it still sits in the start or finish column (`onMerged`; a card the
+  person moved stays) and pushes "Task #N: PR #15 merged → Done", the
+  feed row riding on the push. The worktree and branch stay until the
+  person asks (the workspace menu, `internal/worktrees`). `comments` are
   markdown, a path in one opening on the run's machine relative to its
   worktree; the UI re-reads an open task every 10 s while a run is live.
 - `internal/mcp/` + `internal/tasksapi/` — **the agents and the tasks**.

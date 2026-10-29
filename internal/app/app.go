@@ -167,6 +167,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 		return mc, true
 	})
+	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
 	reviews := review.New(o.Dir)
 	// a rejected folder whose agent answers that it is ready again: the review notes it, the person is told
 	sayings.OnAnswer = func(machineID, paneID, text string) {
@@ -311,10 +312,14 @@ func Run(ctx context.Context, o Options) error {
 			tokens := d.Tokens
 			return d.Cost, tokens.Input + tokens.Output + tokens.CacheRead + tokens.CacheWrite5m + tokens.CacheWrite1h, d.Name, true
 		},
-		Notify: pushSvc.Notify,
+		Notify:  pushSvc.Notify,
+		PRTouch: requests.TouchPane,
 	}
 	go runWatch.Loop(15 * time.Second)
 	events.Subscribe(bus, func(e events.PullRequestNamed) { runWatch.OnPullRequest(e.Pane.Machine, e.Pane.Pane, e.URL, e.Label) })
+	events.Subscribe(bus, func(e events.PullRequestState) {
+		runWatch.OnPullRequestState(e.Pane.Machine, e.Pane.Pane, e.URL, e.State)
+	})
 	go schedules.Loop()
 	go hub.Run(ctx)
 	go budgets.Loop(5 * time.Minute)

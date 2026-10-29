@@ -8914,3 +8914,26 @@ body.popout {
 .health-rows dd.health-awake-bad {
   color: var(--amber);
 }
+
+/* ---- the pull request's chips as the trigger of its menu: Open, the failed checks or the review handed to the agent (features/roster/prMenu.tsx) ---- */
+.pr-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.pr-chips:hover .pr-state,
+.pr-chips[data-state="open"] .pr-state {
+  filter: brightness(1.15);
+}
+
+.pr-chips:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
