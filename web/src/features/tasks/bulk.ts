@@ -86,12 +86,12 @@ export function labelChoices(tasks: Task[], labels: Label[]): { label: Label; la
 
 export type Outcome = { done: number; failed: number; error: string };
 
-// runInSequence sends the requests one after another, going on past a refusal and keeping the first one's words
-export async function runInSequence(requests: Request[], send: (r: Request) => Promise<unknown>): Promise<Outcome> {
+// runInSequence sends one item after another, going on past a refusal and keeping the first one's words
+export async function runInSequence<T>(items: T[], send: (item: T) => Promise<unknown>): Promise<Outcome> {
   const out: Outcome = { done: 0, failed: 0, error: "" };
-  for (const r of requests) {
+  for (const item of items) {
     try {
-      await send(r);
+      await send(item);
       out.done++;
     } catch (e) {
       out.failed++;
@@ -99,6 +99,24 @@ export async function runInSequence(requests: Request[], send: (r: Request) => P
     }
   }
   return out;
+}
+
+// liveRun says whether an agent is still on the task: starting or running
+export const liveRun = (t: Task): boolean => t.run?.state === "starting" || t.run?.state === "running";
+
+export type StartPlan = { starts: Task[]; skipped: Task[] }; // skipped: the tasks an agent already runs on
+
+// startPlan lays a bulk start out: every selected task but the ones an agent is still on
+export function startPlan(tasks: Task[]): StartPlan {
+  return { starts: tasks.filter((t) => !liveRun(t)), skipped: tasks.filter(liveRun) };
+}
+
+// startWords: "Started 7 agents", "Started 6 agents, 1 refused: no such branch", "Started 2 agents, 1 skipped: #5 already runs"
+export function startWords(outcome: Outcome, skipped: Task[]): string {
+  const parts = [t("Started {agents}", { agents: plural(outcome.done, "agent") })];
+  if (outcome.failed) parts.push(t("{n} refused", { n: outcome.failed }) + (outcome.error ? `: ${outcome.error}` : ""));
+  if (skipped.length) parts.push(t("{n} skipped", { n: skipped.length }) + ": " + t("{tasks} already run", { tasks: skipped.map((x) => x.identifier).join(", ") }));
+  return parts.join(", ");
 }
 
 const VERBS: Record<Action["kind"], string> = { move: "moved", "move-named": "moved", label: "labelled", done: "marked done", delete: "deleted" };

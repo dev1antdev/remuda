@@ -9039,3 +9039,31 @@ body.popout {
     display: none;
   }
 }
+
+/* ---- bulk start: the tasks named in the dialog that starts an agent on each ---- */
+.tasks-start-list {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-12);
+  max-height: 9em;
+  overflow-y: auto;
+}
+
+.tasks-start-list li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tasks-start-list li code {
+  color: var(--fg-faint);
+  margin-right: 4px;
+}
+
+.tasks-start-list li.quiet {
+  color: var(--fg-faint);
+}
