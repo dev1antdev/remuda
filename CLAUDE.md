@@ -1136,7 +1136,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   knows, `openMode(name)` a mode (`agents` is the first), `alert` is
   reserved. Inside the app the alerts panel says notifications come
   through the Mac app instead of the Web Push block; `popOutSupported`
-  is already false in WebKit.
+  is already false in WebKit. Inside the app the page counts as visible always (`pageVisible` in `lib/visibility.ts`, tested): the menu bar and the Dock badge are drawn from its roster while the window is hidden, where WebKit would otherwise stop the polls. The app names itself in its user agent (`remuda-mac/<version>`), so its device reads "remuda on macOS" (`auth.DeviceName`).
 - `internal/feed/` — the **activity**: what happened across the agents while
   nobody was looking. `push.Service.OnAlert` hears every alert the pushes
   carry, or would have carried without a subscribed device — a question
