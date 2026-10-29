@@ -667,6 +667,12 @@ VAPID keys — the only third party is your browser vendor's push service.
 remuda watches every machine's agents itself, so alerts arrive with the
 app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 a minute after a long turn. Answer at the desk first and nothing is sent.
+**A question is answered from the notification itself**: its push names
+what is asked ("Bash command · rm -rf build") and carries the first two
+choices as buttons in the dialog's own words — *Yes*, *No, and tell
+Claude…* — so a permission is granted from the lock screen; before the
+keys go, remuda reads the screen again, and a dialog that changed or
+closed meanwhile is left alone and the page opens on the pane instead.
 **Quiet hours** keep a device silent between two times of its own clock
 (22:00 to 07:00, say); the Activity panel still keeps what happened, so the
 morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
