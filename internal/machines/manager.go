@@ -47,8 +47,26 @@ type Manager struct {
 	dir      string // the state dir, where labels.json lives
 	names    map[string]string
 	herdrBin string
-	door     *Door      // how every remote's agents reach the tasks here; nil opens none
-	saveMu   sync.Mutex // writes of machines.json, one at a time
+	door     *Door                                 // how every remote's agents reach the tasks here; nil opens none
+	saveMu   sync.Mutex                            // writes of machines.json, one at a time
+	onState  func(id, label, state, reason string) // hears every remote's connection move, set by OnState
+}
+
+// OnState sets who hears a remote machine's connection move: connected, or error with the reason.
+func (m *Manager) OnState(fn func(id, label, state, reason string)) {
+	m.mu.Lock()
+	m.onState = fn
+	m.mu.Unlock()
+}
+
+// stateMoved hands a machine's move to whoever OnState named, once there is one.
+func (m *Manager) stateMoved(id, label, state, reason string) {
+	m.mu.Lock()
+	fn := m.onState
+	m.mu.Unlock()
+	if fn != nil {
+		fn(id, label, state, reason)
+	}
 }
 
 // Rename gives the machine a name of the user's own, kept in labels.json; an empty name goes back to the registry's.
@@ -144,6 +162,7 @@ func (m *Manager) save() error {
 func (m *Manager) add(cfg Config) *Machine {
 	mc := newRemote(cfg)
 	mc.door = m.door
+	mc.onState = m.stateMoved
 	m.mu.Lock()
 	mc.setLabel(m.names[cfg.ID])
 	m.machines[cfg.ID] = mc

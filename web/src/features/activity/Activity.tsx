@@ -14,7 +14,7 @@ import { fetchFeed, type Entry } from "./api";
 import { groupByDay } from "./group";
 import { t } from "@/lib/i18n";
 
-const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", digest: "sun", task: "list", test: "bell", budget: "chart", review: "eye", handover: "arrow-right", recover: "play", sent: "send" };
+const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", digest: "sun", task: "list", test: "bell", budget: "chart", review: "eye", handover: "arrow-right", recover: "play", machine: "monitor", sent: "send" };
 
 export default function Activity({ onClose }: { onClose: () => void }) {
   const { machines, feed } = useRoster();
@@ -26,9 +26,7 @@ export default function Activity({ onClose }: { onClose: () => void }) {
   }, [feed, setSeen]);
   const open = (entry: Entry) => {
     if (!entry.pane) return;
-    actions.selectPane(entry.machine, entry.pane);
-    actions.setMode("herdr");
-    actions.setLens("chat");
+    actions.openPane(entry.machine, entry.pane);
     onClose();
   };
   const where = (entry: Entry) => {

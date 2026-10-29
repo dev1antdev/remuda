@@ -91,6 +91,9 @@ export type QuestionOption = { n: number; label: string; picked: boolean };
 export type Question = { text: string; options: QuestionOption[] };
 export const fetchQuestion = (machineId: string, paneId: string): Promise<Question | null> =>
   getJSON<{ question: Question | null }>(`/api/question?${new URLSearchParams({ machine: machineId, pane: paneId })}`).then((r) => r.question);
+// fetchMode is the permission mode Claude Code's footer names on the same screen read, null when no footer is on screen
+export const fetchMode = (machineId: string, paneId: string): Promise<string | null> =>
+  getJSON<{ mode?: string }>(`/api/question?${new URLSearchParams({ machine: machineId, pane: paneId })}`).then((r) => r.mode ?? null);
 
 export type QuickPrompt = { id?: string; label: string; text: string; dir?: string };
 export const fetchQuick = (): Promise<QuickPrompt[]> => getJSON("/api/quick");

@@ -5,6 +5,7 @@
 import Tail, { TailAnswer, TileState } from "@/features/chat/Tail";
 import { displayOf, markOf, rowLabel, stateWords, type RadarPrefs } from "@/features/roster/radar";
 import { hueStyle } from "@/features/roster/hue";
+import { muteWords, mutedUntil } from "@/features/roster/mute";
 import { prMenuItems } from "@/features/roster/prMenu";
 import { checksTone, checksWords, prWords, reviewTone, reviewWords } from "@/features/roster/prStatus";
 import type { Tile, WallView } from "@/features/roster/wall";
@@ -46,6 +47,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
     window.focus();
   };
   const dir = folderOf(tile);
+  const muted = mutedUntil(session);
   const words = alert ?? stateWords(d, pane.radar?.last_active, now, pane.radar?.since);
   const settled = !alert && (d === "done" || d.startsWith("idle"));
   const said = settled ? pane.said : undefined;
@@ -57,7 +59,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           type="button"
           className="linkish tile-open"
           aria-pressed={onPick ? pinned : undefined}
-          title={`${words}\n${pane.cwd}\n${onPick ? t("Click to feature this agent and keep it there (pin)") : screen ? t("Open the terminal in Agents") : t("Open the chat in Agents")}`}
+          title={`${words}\n${pane.cwd}${muted ? `\n${muteWords(muted)}` : ""}\n${onPick ? t("Click to feature this agent and keep it there (pin)") : screen ? t("Open the terminal in Agents") : t("Open the chat in Agents")}`}
           onClick={onPick ?? open}
         >
           <span className="radar-mark" style={markStyle}>
@@ -66,6 +68,11 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           <Logo agent={pane.agent} />
           <span className="tile-label">{rowLabel(pane, tab, session.name, radar)}</span>
           <span className="tile-where">{where}</span>
+          {muted && (
+            <span className="tile-muted" aria-label={muteWords(muted)}>
+              <Icon name="bell-off" size={12} />
+            </span>
+          )}
         </button>
         {pr && (
           <span className="tile-pr-group">
