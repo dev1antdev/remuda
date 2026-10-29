@@ -9039,3 +9039,39 @@ body.popout {
     display: none;
   }
 }
+
+/* ---- activity filters: the chip row and the machine select at the panel's top ---- */
+.activity-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.activity-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.activity-chip {
+  gap: 5px;
+}
+
+.activity-chip.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+
+.activity-chip .badge.quiet {
+  margin-left: 2px;
+}
+
+.activity-filter-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

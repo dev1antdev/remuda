@@ -1162,6 +1162,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   past pref `feed.seen`. `features/activity/Activity.tsx` is the panel behind
   the bell (store panel `activity`): by day (`group.ts`, tested), a row
   opens its pane, the alert settings at its foot; the palette has it too.
+  **Filters** (`filter.ts`, tested; `FilterBar.tsx`): a chip per family
+  of kinds — questions, finished, watchdog, tasks, schedules, budgets,
+  review, machines, sent, other for a handover, a recovery, a test or a
+  kind the page does not know — with its count for the machine chosen,
+  a Select for the machine, Show everything; the pref `activity.filter`
+  (per device, not synced), and the bell's tooltip says what is on.
 - `internal/radar/` — the sidebar's reading of every agent, after
   hhdebb/herdr-radar's design and written here (`radar_test.go` covers the
   rules). The watcher feeds every snapshot into the `Tracker`; the roster
