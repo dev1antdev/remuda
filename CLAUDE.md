@@ -1978,7 +1978,38 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   403 "this key is for tasks and reading only" at once, logged once an
   hour per key (`strayedKey`); the key's
   name is `auth.CallerName(ctx)` in a handler (a task made through one
-  carries it as its source). **The door** (`door.go`): `EnsureDoor(dir,
+  carries it as its source). **Viewer links** (the same `Keys` store,
+  scope `viewer`, prefix `rv_…`, `MintViewer(name)` — several side by
+  side, named for whose screen it is): a read-only sign-in for the TV in
+  the office or a colleague watching a run. `ViewerAllows(method, path)`
+  is a GET of `viewerRoutes` — the roster, the chat, the screen, the
+  scrollback, a recap, the standup, the feed, a file and its stat, the
+  health, the push public key, the question, the usage, and the upgrade
+  of `/ws/events` — or of the page itself and its files (anything outside
+  `/api/`, `/ws/` and the code-server proxy `/code/`); never `/ws/pane`,
+  a submit, a key, the tasks or any change: 403 "this link is for
+  viewing only". A page opened with
+  `?viewer=rv_…` (`Guard.viewerLink`) mints a **viewer device**
+  (`Device.Viewer`, `Device.Key` the link's id; `Kind()` "viewer · Chrome
+  on macOS"; a browser already signed in keeps its device) whose cookie
+  passes the same routes; a revoked link takes its screens with it
+  (`Devices.RevokeByKey`, and `authenticate` reads a viewer device whose
+  key is gone as stale). `auth.IsViewer(ctx)` is the flag in a handler:
+  the roster answer carries the header `X-Remuda-Viewer: 1` (a header,
+  so the shared body and its ETag stand), and `GET /api/chat` marks
+  nothing seen for a viewer. `internal/server/viewerkeys.go`: `GET /api/
+  viewer-keys`, `POST /api/viewer-keys {name}` → the link, shown this
+  once, `DELETE /api/viewer-keys/{id}` (the screens signed out counted);
+  `GET /api/agent-keys` leaves the viewer links out. The page: `useRoster().
+  viewOnly` from that header, `app/viewOnly.ts` (`viewerPlaces`, tested)
+  keeps the rail to Agents, Wall, Standup, Usage and Activity, the header
+  wears "Viewing only" and no search, Changes is shut, the terminal lens
+  is the Wall's screen view (`features/terminal/Screen.tsx`, no attach),
+  the chat and the tiles have no composer, keys or question buttons, the
+  tab strip no + or ×, the sidebar no menus; `Shell` registers no push and
+  syncs no prefs for a viewer. Settings › Devices ends with **Viewer
+  links** (`features/settings/ViewerKeys.tsx`, `viewerLinks.ts` tested):
+  make one under a name, Copy the link shown once, Revoke. **The door** (`door.go`): `EnsureDoor(dir,
   keys, name, url)` keeps the cockpit's own `agent-key` / `agent-url`
   files (a key of the local machine's label, minted when the file is
   missing or its key no longer passes; the url `LoopbackURL(-addr)`), the

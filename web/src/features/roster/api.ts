@@ -129,13 +129,14 @@ export type AgentKind = { id: string; label: string };
 
 export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[] }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far
 
-// fetchRoster returns null when the roster is unchanged (304 via ETag).
-export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null }> {
+// fetchRoster returns null when the roster is unchanged (304 via ETag); viewOnly says a viewer link signed this page in.
+export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null; viewOnly: boolean }> {
   const res = await fetch("/api/roster", { headers: etag ? { "If-None-Match": etag } : {} });
   const version = res.headers.get("X-Remuda-Version");
-  if (res.status === 304) return { roster: null, etag, version };
+  const viewOnly = res.headers.get("X-Remuda-Viewer") === "1";
+  if (res.status === 304) return { roster: null, etag, version, viewOnly };
   await check(res);
-  return { roster: (await res.json()) as Roster, etag: res.headers.get("ETag"), version };
+  return { roster: (await res.json()) as Roster, etag: res.headers.get("ETag"), version, viewOnly };
 }
 
 export const refreshHealth = (machineId: string): Promise<{ health: Health | null; latest: Latest }> =>

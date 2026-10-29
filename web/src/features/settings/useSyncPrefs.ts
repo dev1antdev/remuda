@@ -13,10 +13,10 @@ export const SYNC_PREF = "prefs.sync";
 const POLL = 60_000;
 const DEBOUNCE = 500;
 
-export function useSyncPrefs(): void {
+export function useSyncPrefs(enabled = true): void {
   const [on] = usePref<boolean>(SYNC_PREF, false);
   useEffect(() => {
-    if (!on) return;
+    if (!on || !enabled) return;
     let stopped = false;
     let etag = "";
     let pending: Record<string, Stamped> = {};
@@ -82,5 +82,5 @@ export function useSyncPrefs(): void {
       clearInterval(poll);
       if (timer) clearTimeout(timer);
     };
-  }, [on]);
+  }, [on, enabled]);
 }

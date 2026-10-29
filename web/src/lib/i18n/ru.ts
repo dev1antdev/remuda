@@ -24,5 +24,6 @@ import { mute } from "./ru/mute";
 import { bulkstart } from "./ru/bulkstart";
 import { wake } from "./ru/wake";
 import { activity } from "./ru/activity";
+import { viewonly } from "./ru/viewonly";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...activity };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...activity, ...viewonly };

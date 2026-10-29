@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
@@ -191,6 +192,9 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 	s.PRs.Touch() // somebody is looking: the pull requests named are worth reading again
 	body, etag := s.rosterBody()
 	w.Header().Set("X-Remuda-Version", buildversion.Build) // a page older than the server offers a reload
+	if auth.IsViewer(r.Context()) {
+		w.Header().Set("X-Remuda-Viewer", "1") // a viewer link signed this page in: it draws, and hides every control that would type or change
+	}
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return

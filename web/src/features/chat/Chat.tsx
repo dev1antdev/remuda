@@ -28,7 +28,7 @@ import { useFind } from "./useFind";
 import { useFollowBottom } from "./useFollowBottom";
 import { t } from "@/lib/i18n";
 
-export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session }: {
+export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session, viewOnly = false }: {
   machineId: string;
   paneId: string; // "" shows a transcript on its own (a search jump), read-only
   status: string;
@@ -40,6 +40,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   active?: boolean; // the lens on screen; a hidden one keeps its state and waits
   subagent?: string; // with no pane: one subagent's own conversation, read-only
   session?: string; // with no pane: the session to show when no jump names it (the viewer)
+  viewOnly?: boolean; // a viewer link signed the page in: the conversation shows, nothing is typed
 }) {
   const readOnly = !paneId;
   const agents = useAgentTargets();
@@ -228,7 +229,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           />
         ))}
       </div>
-      {!readOnly && status === "input" && (
+      {!readOnly && !viewOnly && status === "input" && (
         <Notice tone="warn" icon="alert-triangle" className="chat-notice">
           <QuestionCard machineId={machineId} paneId={paneId} active={active} onKeys={keys}>
             {t("The agent is waiting for an answer — check the terminal, or:")}
@@ -240,7 +241,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           {error}
         </Notice>
       )}
-      {!readOnly && context >= 0.8 && status !== "run" && (
+      {!readOnly && !viewOnly && context >= 0.8 && status !== "run" && (
         <Notice
           tone="warn"
           icon="chart"
@@ -259,7 +260,8 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           That turn is older than the loaded part of this transcript (the last 16 MB).
         </Notice>
       )}
-      {!readOnly && <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} agent={agent} onScreen={active} />}
+      {!readOnly && !viewOnly && <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} agent={agent} onScreen={active} />}
+      {!readOnly && viewOnly && <div className="chat-viewonly">{t("Viewing only")}</div>}
       {forwarded && (
         <Notice tone="success" icon="check" className="chat-notice" onDismiss={clearForwarded}>
           {forwarded}

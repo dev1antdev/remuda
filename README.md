@@ -447,6 +447,17 @@ over the same SSH connection, with this remuda's port forwarded back to the
 machine's loopback), and `remuda mcp` / `remuda tasks` there read the two
 files. Settings › Devices lists the keys, one per machine, with a Revoke each.
 
+**Viewer links** sign a screen in to look only. Make one in Settings ›
+Devices under a name — "the office TV", a colleague's — and open it where
+the viewing happens: that browser gets the Wall, the sidebar, the chats,
+the screens, the standup, the usage and Activity, and nothing that types or
+changes — no composer, no keys, no question buttons, no Changes lens, no
+tasks; the terminal lens shows the pane's screen as the Wall does, without
+attaching. Every call past that is refused with "this link is for viewing
+only", a viewer's look marks nothing as seen, and the header says *Viewing
+only*. The link is shown once; revoking it signs every screen it opened
+out at once.
+
 ## As a background service on a Mac or Linux box
 
 ```bash

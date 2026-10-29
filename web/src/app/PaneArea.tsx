@@ -16,6 +16,7 @@ import Chat from "@/features/chat/Chat";
 import FilesRail from "@/features/chat/FilesRail";
 import Review from "@/features/review/Review";
 import { TerminalLens, TerminalTools, useTerminalViewItems } from "@/features/terminal/TerminalLens";
+import { Screen } from "@/features/terminal/Screen";
 import { Notice, PANELS, Resizer } from "@/ui";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
@@ -29,7 +30,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
   const footprint = app.use((s) => s.footprint);
   const chatSession = app.use((s) => s.chatSession);
   const narrow = useMedia("(max-width: 920px)"); // the stylesheet hides the rail there: it must not poll unseen
-  const { refresh } = useRoster();
+  const { refresh, viewOnly } = useRoster();
   const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
   const [seenLenses, setSeenLenses] = useState<{ pane: string; lenses: Partial<Record<Lens, true>> }>({ pane: "", lenses: {} });
   useEffect(() => {
@@ -104,12 +105,13 @@ export default function PaneArea({ current }: { current: Located | null }) {
         session={session}
         tab={tab}
         pane={pane}
+        readOnly={viewOnly}
         tools={
           <>
-            {lens === "terminal" && <FindTool what={tr("in the scrollback")} shortcut={isMac ? "⌘F" : "Ctrl+Shift+F"} />}
-            {lens === "terminal" && <TerminalTools />}
+            {lens === "terminal" && !viewOnly && <FindTool what={tr("in the scrollback")} shortcut={isMac ? "⌘F" : "Ctrl+Shift+F"} />}
+            {lens === "terminal" && !viewOnly && <TerminalTools />}
             {lens === "chat" && <ChatTools />}
-            <ViewMenu items={lens === "terminal" ? terminalItems : lens === "chat" ? chatItems : []} shell={!pane.agent} />
+            <ViewMenu items={lens === "terminal" && !viewOnly ? terminalItems : lens === "chat" ? chatItems : []} shell={!pane.agent} />
           </>
         }
         onSelect={(paneId) => actions.selectPane(machine.id, paneId)}
@@ -140,10 +142,16 @@ export default function PaneArea({ current }: { current: Located | null }) {
               workspaceId={session.id}
               agent={pane.agent}
               active={lens === "chat"}
+              viewOnly={viewOnly}
             />
           </div>
         )}
-        {seen("terminal") && (
+        {seen("terminal") && viewOnly && (
+          <div className="lens-pane screen-lens" hidden={lens !== "terminal"}>
+            <Screen key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active={lens === "terminal"} onOpen={() => {}} />
+          </div>
+        )}
+        {seen("terminal") && !viewOnly && (
           <div className="lens-pane" hidden={lens !== "terminal"}>
             <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={lens === "terminal"} />
           </div>
