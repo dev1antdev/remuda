@@ -1131,7 +1131,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the finishes), `toggleKind`.
 - `web/public/sw.js` shows every push (Safari revokes silent subscriptions),
   silent while a window is visible; click → `select-pane` message to an open
-  window or `openWindow(/?machine=&pane=)` — a push naming a `panel` (a
+  window or `openWindow(/?machine=&pane=)` — either way the pane opens in
+  the lens the pref `open.lens` names (`app/openLens.ts`, tested:
+  terminal by default, chat, or the lens the page was on; the choice in
+  the alerts panel and the palette, synced between devices), through
+  `actions.openPane`, which the Mac app's `select`, an Activity row and
+  Alt+N use too; the sidebar, the tabs and the Wall keep their own ways — a push naming a `panel` (a
   digest) → `open-panel` or `openWindow(/?panel=standup)` instead, which
   `Shell.tsx` and `url.ts` answer; `pushsubscriptionchange`
   re-subscribes. `web/src/features/alerts/push.ts` is single-flight and re-registers on every
