@@ -1020,6 +1020,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and `{"sub": [keys]}` frames in, pings every 30 s, and closes with
   "remuda is stopping" when the hub does (`live_test.go` covers the
   debounce, the cadences, the watchers, the slow page, the close).
+- `internal/away/` — **a machine away or back** (tested): the machines manager
+  tells `OnState` every remote's connection move (`fail` from a connected or
+  connecting state, a connect that succeeded; never the local one), the
+  app puts it on the bus as `events.MachineState`, and the `Tracker`
+  reports through `push.Notify` (kind `machine`, so the feed, the devices
+  by their watchdog pref, quiet hours and the webhooks hear it) "GOG is
+  away" with the reason once a remote has been unreachable for
+  `AwayAfter` 2 min (a `Sweep` every 30 s), and "GOG is back" with how long
+  it was gone when it answers again after a reported away; a blip under
+  the threshold says nothing, the first state of a machine only seeds
+  (remuda's own start reports nothing), a removed machine is forgotten;
+  `Words` is the push's text.
 - `internal/push/` — Web Push (RFC 8291/8292 via webpush-go); `OnAlert` hands
   every alert to the activity feed as it fires. VAPID keys at
   `<config>/remuda/vapid.json` (a damaged file is an error, never a silent
