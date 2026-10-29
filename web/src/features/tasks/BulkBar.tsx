@@ -1,4 +1,4 @@
-// The bar under the list or the board while tasks are selected: the count, Move to…, Add label…, Mark done, Delete…, ×.
+// The bar under the list or the board while tasks are selected: the count, Move to…, Add label…, Start agents…, Mark done, Delete…, ×.
 
 import { Icon, Menu, Tip, type MenuItem } from "@/ui";
 import type { Label } from "./api";
@@ -6,12 +6,13 @@ import type { Action, ColumnChoice } from "./bulk";
 import { selectionWords } from "./selection";
 import { t } from "@/lib/i18n";
 
-export function BulkBar({ count, busy, columns, labels, onAct, onClear }: {
+export function BulkBar({ count, busy, columns, labels, onAct, onStart, onClear }: {
   count: number;
   busy: boolean;
   columns: ColumnChoice[];
   labels: { label: Label; lacking: number }[];
   onAct: (action: Action) => void;
+  onStart: () => void; // an agent on every selected task, through one dialog
   onClear: () => void;
 }) {
   const partial = (n: number) => (n < count ? t("{n} of {count}", { n, count }) : undefined);
@@ -48,6 +49,9 @@ export function BulkBar({ count, busy, columns, labels, onAct, onClear }: {
           </button>
         }
       />
+      <button type="button" className="btn sm" disabled={busy} onClick={onStart}>
+        <Icon name="git-branch" size={14} /> {t("Start agents…")}
+      </button>
       <button type="button" className="btn sm" disabled={busy} onClick={() => onAct({ kind: "done" })}>
         <Icon name="check" size={14} /> {t("Mark done")}
       </button>

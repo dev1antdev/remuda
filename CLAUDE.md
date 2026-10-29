@@ -1767,7 +1767,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   DELETE per task in sequence (`plan` → `runInSequence`, going on past a
   refusal), a toast with the count and the first refusal, Esc or × clears,
   and the rows that left the list are dropped from the selection
-  (`prune`).
+  (`prune`). **Start agents…** in the bar is the start dialog once for
+  every selected task (`StartAgentsDialog.tsx`: machine, repository,
+  agent, groom; the branch and the prompt from each task) — `startPlan`
+  leaves out a task an agent still runs on (`liveRun`), the starts go one
+  after another through `runInSequence` (a worktree is made in turn), the
+  started rows are replaced and released from the selection, the first
+  new pane is selected, `startWords` is the toast ("Started 7 agents, 1
+  refused: …, 2 skipped: #5, #8 already run").
   **A task from a GitHub issue** (`issue.go`, tested on a `shell.Fake`):
   `IssueURL` takes only `https://github.com/<owner>/<repo>/issues/<n>`
   (a trailing slash, query or fragment allowed; never a pull request),
@@ -1987,7 +1994,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `renameHandler` — herdr's `tab.rename` / `workspace.rename`.
 - `internal/sessions/` — the input side of herdr: `Agents` / `KnownAgent`,
   `StartAgent` (retries `agent_pane_busy` for a few seconds), `StartAgentResumed` (the same, with the kind's resume arguments after a session id — `ResumeArgs`, the one table of them: `claude --resume`, `codex resume`, `gemini --resume`, `kimi --session`; the restarts use it too), both thin over
-  `StartAgentWith(client, pane, kind, Start{Resume, Model, Args})` —
+  `StartAgentWith(client, pane, kind, Start{Resume, Model, Args})` — herdr
+  names an agent by its kind and refuses a second of that name, so a
+  `agent_name_taken` is tried once more under `UniqueName(kind, pane)`,
+  "codex-w1-p3", the restarts' own scheme: two Claude Codes, or an agent
+  on each of ten tasks, run side by side —
   `StartArgs` lays the command line out as resume, then the model
   (`ModelArgs`, the one table of model flags: `--model` for claude, codex,
   gemini and kimi; a kind without one refuses a model), then the person's

@@ -5,6 +5,7 @@ package sessions
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -76,15 +77,39 @@ func StartAgentResumed(client Starter, paneID, kind, session string) error {
 }
 
 // StartAgentWith starts an agent with the person's choices: the resume arguments first, then the model's, then their own.
+// herdr names an agent by its kind and refuses a second of that name, so a taken name is tried once more as the kind
+// with the pane's id, the way the restarts name theirs: a second Claude Code, or an agent on each of ten tasks, can run.
 func StartAgentWith(client Starter, paneID, kind string, start Start) error {
 	args, err := StartArgs(kind, start)
 	if err != nil {
 		return err
 	}
-	if args == nil {
-		return startAgent(func() error { return client.AgentStart(paneID, kind) })
+	try := func(name string) error {
+		if args == nil && name == kind {
+			return client.AgentStart(paneID, kind)
+		}
+		list := args
+		if list == nil {
+			list = []string{}
+		}
+		return client.AgentStartWith(paneID, kind, name, list, 30*time.Second)
 	}
-	return startAgent(func() error { return client.AgentStartWith(paneID, kind, kind, args, 30*time.Second) })
+	err = startAgent(func() error { return try(kind) })
+	if herdr.IsCode(err, "agent_name_taken") {
+		err = startAgent(func() error { return try(UniqueName(kind, paneID)) })
+	}
+	return err
+}
+
+var nameRe = regexp.MustCompile(`[^a-z0-9_-]+`)
+
+// UniqueName is an agent's name when its kind's is taken: the kind and the pane's id, "codex-w1-p3", at most 32 characters.
+func UniqueName(kind, paneID string) string {
+	n := kind + "-" + nameRe.ReplaceAllString(strings.ToLower(paneID), "-")
+	if len(n) > 32 {
+		n = n[:32]
+	}
+	return strings.TrimRight(n, "-")
 }
 
 // StartArgs is the command line a Start comes to for a kind, nil when it asks for nothing beyond the agent's defaults.

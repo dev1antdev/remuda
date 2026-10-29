@@ -222,7 +222,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   before gets a Proposed column once, and stays without one if you remove
   it. Select several — ⌘-click, ⇧-click a range, a long press on a phone
   — and the bar under the list moves, labels, finishes or deletes them at
-  once. Each project can
+  once, or starts an agent on each of them through one dialog: a worktree
+  per task, one after another, the first new pane opened. Each project can
   carry its **own fields** (text, number, one choice, several, a date, a
   checkbox, a link), shown on the card and handed to the agent with the
   task. It lives in one SQLite file (`tasks.db`) in remuda's state dir —

@@ -36,6 +36,8 @@ export function useSelection({ tasks, labels, columns, drop, refresh }: {
 
   const pick = useCallback((id: number, how: Pick) => setSel((s) => (how === "range" ? range(s, listed, id) : toggle(s, id))), [listed]);
   const clear = useCallback(() => setSel(NONE), []);
+  // the tasks given ids leave the selection: the ones a bulk start got agents on
+  const release = useCallback((ids: number[]) => setSel((s) => prune(s, s.ids.filter((id) => !ids.includes(id)))), []);
   const chosen = useMemo(() => tasks.filter((t) => sel.ids.includes(t.id)), [tasks, sel]);
 
   const run = async (action: Action) => {
@@ -60,7 +62,9 @@ export function useSelection({ tasks, labels, columns, drop, refresh }: {
     picked: (id: number) => isSelected(sel, id),
     pick,
     clear,
+    release,
     act,
+    chosen,
     columnChoices: columnChoices(chosen, columns),
     labelChoices: labelChoices(chosen, labels),
   };
