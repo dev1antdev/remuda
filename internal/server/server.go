@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
@@ -72,7 +73,8 @@ type Server struct {
 	Guard     *auth.Guard
 	Keys      *auth.Keys // the agents' tasks-only keys, listed and revoked in Settings
 	UI        fs.FS
-	Live      *live.Hub // the page's event stream, nil without one
+	Live      *live.Hub      // the page's event stream, nil without one
+	Awake     *awake.Service // the machines kept awake while their agents work
 
 	streams termStreams
 }
@@ -82,6 +84,7 @@ func (s *Server) Handler() http.Handler {
 	api := http.NewServeMux()
 	s.rosterRoutes(api)
 	s.machineRoutes(api)
+	s.awakeRoutes(api)
 	s.sessionRoutes(api)
 	s.chatRoutes(api)
 	s.fileRoutes(api)
@@ -100,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	s.terminalRoutes(api)
 	s.screenRoutes(api)
 	s.questionRoutes(api)
+	s.answerRoutes(api)
 	s.feedRoutes(api)
 	s.recapRoutes(api)
 	s.handoverRoutes(api)

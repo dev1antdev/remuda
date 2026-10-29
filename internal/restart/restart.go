@@ -1,6 +1,8 @@
-// Package restart brings chats onto a freshly updated agent: a pane is asked
-// to leave with the agent's own /exit and started again with its session
-// resumed, through herdr and under the pane's lock.
+// Package restart brings chats onto a freshly updated agent: Claude Code is
+// asked to restart in place with its own /restart, the session kept; another
+// agent, or a Claude Code without the command, is asked to leave with its own
+// /exit and started again with its session resumed — through herdr and under
+// the pane's lock.
 package restart
 
 import (
@@ -28,18 +30,20 @@ const (
 	again = 2 * time.Minute
 )
 
-// agent is how to leave for one kind; how to come back is sessions.ResumeArgs, the one table of resume flags.
+// agent is how to leave for one kind, and the command that restarts it in place with the session kept, for a kind
+// that has one; how to come back after leaving is sessions.ResumeArgs, the one table of resume flags.
 type agent struct {
-	Kind  string
-	Title string
-	exit  string
+	Kind    string
+	Title   string
+	exit    string
+	restart string
 }
 
 var agents = map[string]agent{
-	"claude": {"claude", "Claude Code", "/exit"},
-	"codex":  {"codex", "Codex", "/quit"},
-	"gemini": {"gemini", "Gemini CLI", "/quit"},
-	"kimi":   {"kimi", "Kimi Code", "/exit"},
+	"claude": {"claude", "Claude Code", "/exit", "/restart"},
+	"codex":  {"codex", "Codex", "/quit", ""},
+	"gemini": {"gemini", "Gemini CLI", "/quit", ""},
+	"kimi":   {"kimi", "Kimi Code", "/exit", ""},
 }
 
 // resume is the kind's arguments for coming back to a session.
@@ -320,12 +324,18 @@ func (r *Restarter) one(mc *machines.Machine, paneID, kind, session string, say 
 	return r.swap(key, client, p, a, session, say)
 }
 
-// swap is the restart itself: the agent's own exit, a wait for the shell under it, the start with the session resumed.
+// swap is the restart itself: the agent's own in-place restart when it has one, else — or when it has no such
+// command here — its own exit, a wait for the shell under it, and the start with the session resumed.
 func (r *Restarter) swap(key string, client *herdr.Client, p herdr.PaneInfo, a agent, session string, say func(string)) error {
 	paneID, title := p.PaneID, p.DisplayTitle()
 	r.mu.Lock()
 	r.last[key] = time.Now()
 	r.mu.Unlock()
+	if a.restart != "" {
+		if settled, err := r.inPlace(client, p, a, session, say); settled {
+			return err
+		}
+	}
 	say(fmt.Sprintf("· %s (%s): %s %s", title, paneID, a.Title, a.exit))
 	if err := client.AgentPrompt(paneID, a.exit); err != nil {
 		return fmt.Errorf("%s: %s: %v", title, a.exit, err)

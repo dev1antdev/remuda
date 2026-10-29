@@ -76,7 +76,7 @@ self.addEventListener("push", (event) => {
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
         actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
-        data: { machine: data.machine, pane: data.pane, panel: data.panel },
+        data: { machine: data.machine, pane: data.pane, panel: data.panel, choices: Array.isArray(data.choices) ? data.choices : [] },
       });
     })(),
   );
@@ -84,7 +84,7 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const { machine, pane, panel } = event.notification.data || {};
+  const { machine, pane, panel, choices } = event.notification.data || {};
   event.waitUntil(
     (async () => {
       // a button on a watchdog notification: Esc goes straight to the pane
@@ -95,6 +95,20 @@ self.addEventListener("notificationclick", (event) => {
           body: JSON.stringify({ machine, pane, keys: ["esc"] }),
         }).catch(() => {});
         return;
+      }
+      // a choice on a question notification: the server checks the dialog still shows it, then picks it;
+      // a dialog that changed or closed is a refusal, and the page opens on the pane instead
+      if (/^choice-\d$/.test(event.action) && machine && pane) {
+        const index = Number(event.action.slice("choice-".length));
+        const label = Array.isArray(choices) ? choices[index] : undefined;
+        if (label) {
+          const res = await fetch("/api/question/answer", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ machine, pane, index, label }),
+          }).catch(() => null);
+          if (res && res.ok) return;
+        }
       }
       const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       const win = wins.find((w) => w.visibilityState === "visible") || wins[0];
