@@ -35,7 +35,7 @@ func Spans(turns []transcript.Turn, since, now time.Time) []Span {
 		}
 		working = append(working, Span{From: from, To: to, State: "working", Turn: turn})
 		for _, p := range t.Parts {
-			if p.Type != "tool" || p.ToolName != "AskUserQuestion" || p.IsError {
+			if p.Type != "tool" || !transcript.IsQuestion(p.ToolName) || p.IsError {
 				continue
 			}
 			asked, err := time.Parse(time.RFC3339Nano, p.At)

@@ -37,7 +37,7 @@ type Files interface {
 // Source is a machine's transcripts as the meter reads them: the bytes, and which files a pane's conversation lives in.
 type Source interface {
 	Files
-	ResolveSession(cwd, kind, value string) (string, error)
+	ResolveSession(agent, cwd, kind, value string) (string, error)
 	Lineage(path string) []string
 }
 
@@ -56,6 +56,7 @@ type fileState struct {
 	version transcript.Version
 	offset  int64
 	acc     Accumulator
+	scanner transcript.UsageScanner // the file's reader, carrying what a format's earlier lines said (Codex's model)
 	checked time.Time
 	partial bool // only the tail was read: the cost is a floor, the context exact
 }
@@ -84,7 +85,7 @@ func (t *Tracker) ObserveSnapshot(machineID string, source Source, snap *herdr.S
 			if pane.Agent == "" || pane.AgentSession == nil {
 				continue
 			}
-			first, err := source.ResolveSession(pane.Dir(), pane.AgentSession.Kind, pane.AgentSession.Value)
+			first, err := source.ResolveSession(pane.AgentSession.Agent, pane.Dir(), pane.AgentSession.Kind, pane.AgentSession.Value)
 			if err != nil {
 				continue
 			}
@@ -173,6 +174,7 @@ func (t *Tracker) read(machineID string, files Files, path string, v transcript.
 	}
 	have := st.version
 	offset := st.offset
+	scanner := st.scanner
 	t.mu.Unlock()
 	if v == have {
 		return
@@ -202,13 +204,13 @@ func (t *Tracker) read(machineID string, files Files, path string, v transcript.
 		return
 	}
 	data = data[:cut+1]
+	if reset || scanner == nil {
+		scanner = transcript.NewUsageScanner(path)
+	}
 	// parsed outside the lock: a big first read must not hold the roster
 	var recs []transcript.UsageRecord
 	_ = transcript.Lines(bytes.NewReader(data), 64*1024*1024, func(line []byte) {
-		if !bytes.Contains(line, []byte(`"usage"`)) {
-			return
-		}
-		if r, ok := transcript.UsageOf(line); ok { // sidechains spend too
+		if r, ok := scanner.Scan(line); ok { // sidechains spend too
 			recs = append(recs, r)
 		}
 	})
@@ -218,6 +220,7 @@ func (t *Tracker) read(machineID string, files Files, path string, v transcript.
 		st.acc = Accumulator{}
 		st.partial = partial
 	}
+	st.scanner = scanner
 	for _, r := range recs {
 		st.acc.Add(r)
 	}
@@ -245,8 +248,9 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 	d.Context = tokensOf(last).Context()
 	if m, ok := Lookup(last.Model); ok {
 		d.Model, d.Name, d.Window = m.ID, m.Name, m.Window
-	} else {
+	} else { // a model with no price here: named as the file names it, its window when the file says it (Codex does)
 		d.Unknown = true
+		d.Name, d.Window = last.Model, last.Window
 	}
 	more := t.subs[key(machineID, path)]
 	for p, n := t.pred[key(machineID, path)], 0; p != "" && n < 8; p, n = t.pred[key(machineID, p)], n+1 {

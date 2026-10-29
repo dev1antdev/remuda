@@ -93,3 +93,52 @@ func TestSessionOfRefusesWhatIsNotAnID(t *testing.T) {
 		t.Error("a path is not an id")
 	}
 }
+
+func TestInPlaceIsClaudeCodesAlone(t *testing.T) {
+	if got := InPlace("claude"); got != "/restart" {
+		t.Fatalf("claude: %q", got)
+	}
+	for _, kind := range []string{"codex", "gemini", "kimi", "shell"} {
+		if got := InPlace(kind); got != "" {
+			t.Fatalf("%s: %q", kind, got)
+		}
+	}
+}
+
+func TestOutcomeReadsTheScreenPastTheNewestEcho(t *testing.T) {
+	resumed := " ▐▛███▛█   Claude Code v2.1.312\n▝▜██████▀  Fable 5.1 · Claude Max\n❯ Reply with PROBE-OK.\n⏺ PROBE-OK\n❯ /restart\n  ⎿  Session resumed\n───\n❯\n───\n  Model: Fable 5.1 | Context: 46k/1.0M (5%)"
+	unknown := "⏺ PROBE-OK\n❯ /restart\n⏺ Unknown command: /restart\n❯"
+	away := "⏺ PROBE-OK\n❯ /restart\n  ⎿  /restart isn't available over Remote Control.\n❯"
+	refused := "⏺ PROBE-OK\n❯ /restart\n  ⎿  Can't restart this session. It isn't saved to disk, so a restart would lose it. Nothing was changed.\n❯"
+	typing := "⏺ PROBE-OK\n───\n❯ /restart\n───"
+	cases := []struct {
+		name   string
+		screen string
+		before int
+		want   Verdict
+		line   string
+	}{
+		{"resumed", resumed, 0, Resumed, ""},
+		{"unknown command", unknown, 0, Unknown, "Unknown command: /restart"},
+		{"not available here", away, 0, Unknown, "/restart isn't available over Remote Control."},
+		{"refused", refused, 0, Refused, "Can't restart this session. It isn't saved to disk, so a restart would lose it. Nothing was changed."},
+		{"still typing", typing, 0, Pending, ""},
+		{"an older echo does not count", resumed, 1, Pending, ""},
+		{"no echo yet", "⏺ PROBE-OK\n❯", 0, Pending, ""},
+	}
+	for _, c := range cases {
+		got, line := Outcome(c.screen, c.before)
+		if got != c.want || line != c.line {
+			t.Errorf("%s: got %v %q, want %v %q", c.name, got, line, c.want, c.line)
+		}
+	}
+	if n := Echoes(resumed); n != 1 {
+		t.Errorf("echoes: %d", n)
+	}
+	if v := Version(resumed); v != "2.1.312" {
+		t.Errorf("version: %q", v)
+	}
+	if v := Version(unknown); v != "" {
+		t.Errorf("version without a banner: %q", v)
+	}
+}

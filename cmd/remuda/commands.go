@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -51,7 +50,7 @@ func searchCmd(args []string) {
 		}
 	}
 	home, _ := os.UserHomeDir()
-	if err := search.Scan(filepath.Join(home, ".claude", "projects"), *q, *dir, since, *limit, os.Stdout); err != nil {
+	if err := search.ScanHome(home, *q, *dir, since, *limit, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -78,7 +77,7 @@ func usageCmd(args []string) {
 		}
 	}
 	home, _ := os.UserHomeDir()
-	rep, err := usage.Scan(filepath.Join(home, ".claude", "projects"), since, loc)
+	rep, err := usage.ScanHome(home, since, loc)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

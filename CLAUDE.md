@@ -123,6 +123,43 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `internal/transcript/` — read-only parser for Claude Code JSONL session
   files. Never write to `~/.claude`. Session resolution: herdr's
   `agent_session` (exact UUID) first, cwd-encoded dir scan as fallback.
+  **Codex and Gemini sessions read into the same `Turn`** (`format.go`:
+  a `Format` by the file's place — `~/.claude/projects`, `~/.codex/sessions`,
+  `~/.gemini/tmp` — and `FormatOfAgent` by herdr's `agent` field;
+  `Parse` / `ParseBytesOf` dispatch on it). `codex.go` (tested on an
+  anonymized rollout): Codex's `rollout-<time>-<thread id>.jsonl` is one
+  record a line, `{"timestamp","type","payload"}` — `session_meta` the
+  cwd, `turn_context` the model, `response_item` the API items (a user or
+  assistant `message`, `reasoning` with its summary as a thinking part,
+  `function_call` + `function_call_output`, `custom_tool_call` +
+  `custom_tool_call_output` — the `exec` tool's JSON chunks unwrapped,
+  a non-zero `exit_code` or "Process exited with code N" marking the
+  call failed — `local_shell_call`, `web_search_call`),
+  `token_usage_record` one API response's tokens (`UsageRecord` with the
+  model and the `model_context_window` the lines before it named, so the
+  meter shows the window of a model the catalog does not price), and
+  `compacted` with the history replaced in place (the file goes on: no
+  continuation chain, no subagents); the harness envelopes in the user's
+  slot (`<environment_context>`, `<user_instructions>`, …) are skipped;
+  the thread id is what `codex resume` takes and what herdr's codex hook
+  reports; `update_plan` feeds `Plan`, `request_user_input` is a question
+  (`IsQuestion`, with Claude Code's `AskUserQuestion`; the recap, the
+  spans and the page's timeline ask it), `ShellCommand` reads Bash's
+  `command` or `exec_command`'s `cmd`; `Sessions(Codex, cwd)` lists the
+  newest rollouts whose head names the folder, titled from
+  `~/.codex/session_index.jsonl`. `gemini.go` (written from the CLI's
+  `chatRecordingTypes.ts`, tested on a sample from it, not seen live):
+  `~/.gemini/tmp/<sha256 of the project root>/chats/session-<time>-<id's
+  first 8>.jsonl`, a metadata line then one message a line (`user` /
+  `gemini` with `thoughts`, `toolCalls`, `tokens`, `model`) and the
+  amendments `$patch` (a tool's result landing later, messages removed or
+  reordered), `$rewindTo`, `$set`; the legacy one-object `.json` too.
+  `Reader.ResolveSession(agent, cwd, kind, value)` finds the file by the
+  pane's agent (`""` tries every format, for a transcript opened by id),
+  locally and by `findScript` over ssh; `NewUsageScanner(path)` is the
+  per-line usage reader of each format (the tracker keeps one per file
+  across its delta reads); `InputField` is the input-key reader the recap
+  and `ShellCommand` share.
   **Compaction moves the conversation to a new file** (its first message's
   `parentUuid` is a record `uuid` in the old one) while herdr keeps naming
   the old id, so the chat follows `Reader.Live(path)` —
@@ -421,7 +458,19 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the user through the shell remuda already has on the machine.
 - **Chats follow an agent update** (`internal/restart`). When an update
   job changed an agent's version (the vitals re-read right after), every
-  pane running that agent is restarted onto it: `agent.prompt` with the
+  pane running that agent is restarted onto it. **Claude Code restarts in
+  place**: `agent.prompt` with its own `/restart` (2.1.312, behind a flag
+  of Claude Code's own, so not every build has it), which starts the
+  installed version on the same session in the same process slot — herdr
+  sees no change at all, the status and the session id stand — so the
+  outcome is read off the pane's screen (`inplace.go`, tested): `Outcome`
+  looks past the command's newest echo (`Echoes` counted before it was
+  sent, so an older one does not count) for "Session resumed", for
+  "Unknown slash command" or "isn't available" (no such command here →
+  the exit and resume below), or for a "Can't restart…" line (reported,
+  the pane left as it is), `Version` the banner's version for the log;
+  nothing within `inPlaceWait` is reported too. The others, and a Claude
+  Code without the command, leave and come back: `agent.prompt` with the
   agent's own `/exit` (Ctrl-C twice if it lingers), a wait for the shell
   prompt, then `agent.start` with `--resume <session id>` (`codex resume`,
   `gemini --resume`, `kimi --session`) from the snapshot's `agent_session`. Idle/done chats
@@ -1209,11 +1258,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   model and arguments, the prompt and the close switch).
 - `internal/search/` — **full-text search** over every transcript on every
   machine (`GET /api/search?q=&machine=&dir=&days=`; the 🔍 in the
-  header, or the last row of the ⌘K palette with what was typed there). No index: `Scan` walks `~/.claude/projects` newest-first,
+  header, or the last row of the ⌘K palette with what was typed there). No index: `ScanHome` walks `~/.claude/projects` and `~/.codex/sessions` newest-first,
   sieves lines by four spellings of the query (as typed, lower, UPPER,
   Capitalized — a byte search folds nothing), then `transcript.MatchLine`
-  parses the candidates: only user/assistant texts count, never tool
-  output, thinking or sidechains. Locally Scan runs in-process; on a
+  (`MatchCodexLine` for a rollout) parses the candidates: only user/assistant texts count, never tool
+  output, thinking or sidechains; a Codex hit is printed as
+  `codex:<cwd>␟<thread id>␟<record>`, since the rollout's name carries
+  neither, and comes back with `agent: "codex"` (the search panel draws
+  Codex's mark on it). Locally the scan runs in-process; on a
   remote the script runs `~/.local/bin/remuda search …` (the same Scan,
   a hidden subcommand — `make deploy` puts the binary there; 400 MB scan
   in well under a second) and falls back to a four-pattern grep when the
@@ -1233,7 +1285,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   cache tier, fast mode (`usage.speed`) from its own table, ×1.1 when
   `inference_geo` is "us" — not on web search); `transcript.UsageOf` reads
   an assistant record's `message.usage` (`<synthetic>` records and
-  `isApiErrorMessage` ones are skipped: no API call behind them). One API response is written as
+  `isApiErrorMessage` ones are skipped: no API call behind them), and
+  `transcript.NewUsageScanner(path)` is the same for every format — a
+  Codex rollout's `token_usage_record`s count too, tokens alone (no
+  OpenAI price in the catalog: `unknown`, the model named as the file
+  names it, the window from the file), in the meter, the report
+  (`ScanHome`: Claude Code's project files and Codex's rollouts, a
+  rollout's project the encoded folder its head names, so a folder's
+  budget covers both agents) and `remuda usage` on a remote. One API response is written as
   several records sharing `message.id` with the same usage — `Accumulator`
   counts an id once (the records sit together; the last wins), holding the
   pending one until the next id; `PriceTurns` (turns.go) prices a

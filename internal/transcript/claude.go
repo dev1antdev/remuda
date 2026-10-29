@@ -56,10 +56,18 @@ type SessionInfo struct {
 	ModTime time.Time `json:"mod_time"`
 	Size    int64     `json:"-"`
 	Title   string    `json:"title,omitempty"`
+	Agent   string    `json:"agent,omitempty"` // codex or gemini; "" for Claude Code
 }
 
-// SessionID is the session uuid a transcript path names.
+// SessionID is the session id a transcript path names: the file's stem for Claude Code, the thread id in a
+// rollout's name for Codex, the id a Gemini chat's metadata carries.
 func SessionID(path string) string {
+	switch FormatOf(path) {
+	case Codex:
+		return CodexSessionID(path)
+	case Gemini:
+		return GeminiSessionID(path)
+	}
 	return strings.TrimSuffix(filepath.Base(path), ".jsonl")
 }
 
@@ -87,8 +95,14 @@ func projectsDir() string {
 	return filepath.Join(home, ".claude", "projects")
 }
 
-// Sessions lists the session files for a working directory, newest first.
-func Sessions(cwd string) ([]SessionInfo, error) {
+// Sessions lists the session files of one format for a working directory, newest first.
+func Sessions(format Format, cwd string) ([]SessionInfo, error) {
+	switch format {
+	case Codex:
+		return codexSessions(homeDir(), cwd), nil
+	case Gemini:
+		return geminiSessions(homeDir(), cwd), nil
+	}
 	dir := filepath.Join(projectsDir(), EncodePath(cwd))
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -187,6 +201,31 @@ func scanTitle(path string) (title string, final bool) {
 		return title, true
 	}
 	return first, n >= titleScanLines
+}
+
+// FindSession locates a session file by id in one format, or in every format when none is named: Claude Code's
+// project dirs, Codex's date tree, Gemini's chats.
+func FindSession(format Format, cwd, id string) (string, error) {
+	formats := []Format{format}
+	if format == "" {
+		formats = []Format{Claude, Codex, Gemini}
+	}
+	for _, f := range formats {
+		var path string
+		var err error
+		switch f {
+		case Codex:
+			path, err = findCodexSession(homeDir(), id)
+		case Gemini:
+			path, err = findGeminiSession(homeDir(), cwd, id)
+		default:
+			path, err = FindSessionByID(cwd, id)
+		}
+		if err == nil {
+			return path, nil
+		}
+	}
+	return "", os.ErrNotExist
 }
 
 // FindSessionByID locates <uuid>.jsonl: the project dir encoded from cwd first, then every project dir.
@@ -308,15 +347,36 @@ type contentBlock struct {
 
 const tailWindow = 16 * 1024 * 1024
 
-// Parse reads the tail of a session file into turns; a torn last line (Claude mid-append) is skipped, never fatal.
-// A subagent's records (sidechain ones) are left out: they are its own conversation (Reader.SubagentTurns).
+// Parse reads the tail of a session file into turns, by the format its path says; a torn last line (the agent
+// mid-append) is skipped, never fatal. A subagent's records (sidechain ones) are left out: they are its own
+// conversation (Reader.SubagentTurns).
 func Parse(path string) ([]Turn, error) {
+	switch FormatOf(path) {
+	case Codex:
+		return parseCodexFile(path)
+	case Gemini:
+		return parseGeminiFile(path)
+	}
 	return parseFile(path, false)
 }
 
-// ParseBytes parses transcript content already in memory.
+// ParseBytes parses Claude Code transcript content already in memory.
 func ParseBytes(data []byte) ([]Turn, error) {
 	return parseBytes(data, false)
+}
+
+// ParseBytesOf parses transcript content already in memory, in the given format.
+func ParseBytesOf(format Format, data []byte) ([]Turn, error) {
+	if len(data) > tailWindow {
+		data = data[len(data)-tailWindow:]
+	}
+	switch format {
+	case Codex:
+		return parseCodex(bytes.NewReader(data))
+	case Gemini:
+		return parseGemini(data)
+	}
+	return parseRecords(bytes.NewReader(data), false)
 }
 
 func parseBytes(data []byte, keepSidechain bool) ([]Turn, error) {

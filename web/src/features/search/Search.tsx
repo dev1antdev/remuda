@@ -100,7 +100,7 @@ export default function Search({ machines, initial = "", onClose, onOpen }: { ma
         {res && res.hits.length === 0 && <div className="empty">{t("Nothing matches.")}</div>}
         {res?.hits.map((h) => (
           <button key={`${h.machine}|${h.session}|${h.uuid}`} type="button" className="search-hit" title={h.dir} data-project={h.project} onClick={() => onOpen(h)}>
-            <span className="search-hit-who">{h.role === "assistant" ? <Logo agent="claude" /> : <Icon name="user" size={14} />}</span>
+            <span className="search-hit-who">{h.role === "assistant" ? <Logo agent={h.agent || "claude"} /> : <Icon name="user" size={14} />}</span>
             <span className="search-hit-body">
               <span className="search-hit-meta">
                 <b>{basename(h.dir)}</b>
