@@ -1,9 +1,11 @@
-// The machine's own ⋯ menu: rename, updates, the SSH host to copy, and — for one added here — remove.
+// The machine's own ⋯ menu: rename, updates, the keep-awake switch, the SSH host to copy, and — for one added
+// here — remove.
 
 import { useCallback, useState } from "react";
+import { act } from "@/app/act";
 import UpdatesDialog from "@/features/updates/Updates";
 import { Icon, Tip, useDismiss } from "@/ui";
-import type { Machine } from "./api";
+import { setAwake, type Machine } from "./api";
 import { t } from "@/lib/i18n";
 
 export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machine; onRename: () => void; onRemove?: () => void }) {
@@ -41,6 +43,16 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
           </button>
           <button type="button" role="menuitem" onClick={pick(() => setUpdates(true))} disabled={m.state !== "connected"}>
             <Icon name="refresh-cw" size={14} /> {t("Updates…")}
+          </button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={!!m.awake?.on}
+            className={m.awake?.on ? "on" : undefined}
+            onClick={pick(() => void act(setAwake(m.id, !m.awake?.on)))}
+            disabled={m.state !== "connected"}
+          >
+            <Icon name={m.awake?.on ? "check" : "sun"} size={14} /> {t("Keep awake while agents work")}
           </button>
           {m.host && (
             <button type="button" role="menuitem" onClick={pick(() => void navigator.clipboard?.writeText(m.host!))}>

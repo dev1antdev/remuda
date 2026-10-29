@@ -8774,6 +8774,170 @@ body.popout {
   gap: 4px;
 }
 
+/* ---- webhooks: the section at the foot of the alerts panel — the links' address, the list, the form ---- */
+.webhooks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.webhooks h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.webhooks h3 .btn {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.webhooks > small {
+  margin-top: -6px;
+}
+
+.webhooks .empty {
+  padding: 6px 10px;
+  font-size: var(--fs-12);
+}
+
+.webhooks-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-weight: 400;
+}
+
+.webhook-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto var(--ctl-sm) var(--ctl-sm);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-13);
+}
+
+.webhook-row:nth-child(even of .webhook-row) {
+  background: var(--bg-hover);
+}
+
+.webhook-row.is-off .webhook-name {
+  color: var(--fg-dim);
+}
+
+.webhook-name {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.webhook-name > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.webhook-outcome.is-ok {
+  color: var(--green);
+}
+
+.webhook-outcome.is-bad {
+  color: var(--red);
+}
+
+.webhook-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.webhook-fields {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.webhook-fields label {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.webhook-fields label.grow {
+  flex: 1 1 200px;
+}
+
+.webhook-kinds {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.webhook-kinds legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: var(--fs-13);
+  font-weight: 500;
+  color: var(--fg-dim);
+}
+
+.webhook-kinds .alerts-opt,
+.webhook-form .alerts-opt {
+  cursor: pointer;
+}
+
+.webhook-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---- the keep-awake switch: the ⓘ row when the hold could not be taken ---- */
+
+.health-rows dd.health-awake-bad {
+  color: var(--amber);
+}
+
+/* ---- the pull request's chips as the trigger of its menu: Open, the failed checks or the review handed to the agent (features/roster/prMenu.tsx) ---- */
+.pr-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.pr-chips:hover .pr-state,
+.pr-chips[data-state="open"] .pr-state {
+  filter: brightness(1.15);
+}
+
+.pr-chips:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ---- the composer's completion: a slash's commands or an @'s files, listed over the field ---- */
 .composer {
   position: relative;

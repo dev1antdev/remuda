@@ -58,6 +58,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   per pane (all viewers share one attach; replay buffer for late joiners).
 - **Chat lens** — the transcript herdr names via `agent_session`, parsed
   into turns (text, thinking, tool calls with outputs), polled with ETags.
+  Claude Code's session files, Codex's rollouts and Gemini CLI's chats
+  all read into the same turns, so a Codex or Gemini pane has its chat,
+  recap, standup line, meter and search like a Claude Code one (Gemini's
+  reader is written from the CLI's own types and has not been seen live).
 - **One socket for the news** — the page keeps one WebSocket to its
   remuda, which says when the roster moved or a transcript grew, so the
   sidebar, the wall and the chat redraw within about a second instead of
@@ -132,7 +136,14 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   approved", red when a check failed, the branch conflicts or the
   review asks for changes, amber while checks run — read with `gh` on
   that machine as you, every two minutes while the page is open, so
-  remuda itself asks GitHub nothing;
+  remuda itself asks GitHub nothing. The chips open a menu: when a check
+  failed, *Hand the failed checks to the agent* reads the failed steps'
+  log with `gh run view --log-failed` on that machine and sends its end
+  to the agent as a message, the way you would paste it; *Send the
+  review comments to the agent* does the same with the reviewers'
+  verdicts and their comments on the lines, numbered as the Changes
+  lens numbers yours. Nothing is sent unless you choose the row, and an
+  agent waiting on a question refuses, as the chat does;
   the last turns of its conversation and a line to answer it,
   in a grid that fits the window (S / M / L). Hide the idle ones, or
   keep only the agents that need you — a question, a watchdog note, a
@@ -224,7 +235,14 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   When the agent opens a pull request and names it (the Review mode's
   *Approve & open PR* asks for exactly that), the task notes the link, moves
   on the same way, and shows the request with its checks on the card and in
-  the task while the agent's pane is still there.
+  the task while the agent's pane is still there. Once that request is
+  merged on GitHub — checked with `gh` every two minutes while the run
+  is live, page or no page — the task moves to *Done* with the comment
+  "PR #15 merged" and a push, unless you moved it elsewhere first; the
+  workspace's ⋯ menu then offers *Remove the worktree and its branch…*,
+  which closes the workspace and runs `git worktree remove` and `git
+  branch -D` on the machine, refusing a worktree with uncommitted
+  changes before anything closes.
   A *Review* link beside the run opens its worktree in the Review mode.
   The card says what the agents started on it have spent so far
   ("$4.20", in the quiet colour), and the run in the task says the time
@@ -330,15 +348,18 @@ update of herdr installs them again by itself, and "Update herdr plugins"
 is `herdr plugin update` for the plugins installed from GitHub (herdr
 0.9.4 and up). After an
 agent update, the chats running that agent are restarted onto the new
-version: each is asked to leave (its own `/exit`) and started again in the
-same pane with its session resumed (`claude --resume`, `codex resume`,
-`gemini --resume`, `kimi --session`); a busy chat is restarted a little after it finishes,
-and a message half-typed in a chat's box is lost. The same restart is
+version: Claude Code is told its own `/restart` and comes back on the
+installed version with the conversation kept, in place; the others — and
+a Claude Code that does not have the command yet — are asked to leave
+(their own `/exit`) and started again in the same pane with the session
+resumed (`claude --resume`, `codex resume`, `gemini --resume`, `kimi
+--session`); a busy chat is restarted a little after it finishes, and a
+message half-typed in a chat's box is lost. The same restart is
 offered on its own ("Restart Claude Code chats") for an agent that
 updated itself, and for one chat at a time from the workspace's ⋯ menu
 or the palette ("Restart Claude Code on its session…"): for an agent
-that got stuck, the same exit and resume in its pane, refused while it
-has a question open or is still working. An update of herdr ends with its server on the new
+that got stuck, the same restart in its pane, refused while it has a
+question open or is still working. An update of herdr ends with its server on the new
 version: herdr's own live handoff when the installer did one, otherwise
 the server is restarted — herdr restores the workspaces and panes, and
 remuda starts every chat again with its session resumed ("Restart
@@ -660,6 +681,12 @@ VAPID keys — the only third party is your browser vendor's push service.
 remuda watches every machine's agents itself, so alerts arrive with the
 app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 a minute after a long turn. Answer at the desk first and nothing is sent.
+**A question is answered from the notification itself**: its push names
+what is asked ("Bash command · rm -rf build") and carries the first two
+choices as buttons in the dialog's own words — *Yes*, *No, and tell
+Claude…* — so a permission is granted from the lock screen; before the
+keys go, remuda reads the screen again, and a dialog that changed or
+closed meanwhile is left alone and the page opens on the pane instead.
 **Quiet hours** keep a device silent between two times of its own clock
 (22:00 to 07:00, say); the Activity panel still keeps what happened, so the
 morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
@@ -670,6 +697,19 @@ says what an agent answered when it finishes ("api: Tests pass."), that
 one is waiting for you, or a watchdog note — while the page is open and
 in front, in the voice you pick, a Russian one for a Russian answer.
 Nothing passes through remuda; a reload says nothing.
+
+**Webhooks** are the same panel's last section, for a phone without Web
+Push or a channel the team reads: a Telegram bot (its token and your chat
+id), a Slack incoming webhook, an ntfy topic, or any address that takes
+JSON. Each one hears the kinds you tick — a question, a finish, a
+watchdog note, the digest, a schedule, a task, a budget, a review — with
+the title, the body and a link back to the pane, built from the address
+you set at the top of the section (your tailnet's is offered when there
+is one). A Test button on each sends one; the row says when the last one
+was delivered or why it failed. Quiet hours apply per webhook. The
+secrets stay on the server in `webhooks.json`: the page sees a masked
+address and whether a token is set, and nothing is sent anywhere you did
+not name here.
 
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
@@ -805,6 +845,18 @@ is visible as a trend, not a number. It turns amber when an update
 is out (with the right command for how it was installed), a remote
 remuda is behind this one, or the disk is nearly full.
 
+**Keep awake while agents work:** a laptop that falls asleep in the
+middle of a task leaves a dead chat for the morning. The row of that
+name in a machine's ⋯ menu (off by default) has remuda hold the machine
+awake — `caffeinate -i` on a Mac, `systemd-inhibit` on Linux, started
+as you, no sudo — for as long as any agent on it is working, and let it
+go two minutes after the last one settled, or when remuda stops. The
+display may still sleep. The ⓘ's Awake row says how it stands ("Kept
+awake · 2 agents working"), and why it could not hold on a system with
+neither tool. The hold's pid is kept in remuda's state dir on the
+machine, so a reconnect or a restart finds the one still running
+instead of starting another.
+
 **Cost and context:** every agent pane shows how full its context is (a
 pill in the header and on the sidebar row from 50% up, red near the edge,
 with "Compact now" in the chat from 80%) and what the session has cost so
@@ -847,7 +899,7 @@ amber for a watchdog note, green for a finish — so another tab or the
 dock tells you before you switch.
 
 **Search** (🔍, or the palette's last row): full text over every conversation on every
-machine — what you or an agent said, never tool output — filtered by
+machine, Claude Code's and Codex's — what you or an agent said, never tool output — filtered by
 machine, folder and period. A hit jumps to the turn in the running pane, or
 opens the old transcript read-only. No index, no database: each machine
 scans its own `~/.claude/projects` on demand (remuda's scanner where the

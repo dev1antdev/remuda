@@ -123,6 +123,43 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `internal/transcript/` — read-only parser for Claude Code JSONL session
   files. Never write to `~/.claude`. Session resolution: herdr's
   `agent_session` (exact UUID) first, cwd-encoded dir scan as fallback.
+  **Codex and Gemini sessions read into the same `Turn`** (`format.go`:
+  a `Format` by the file's place — `~/.claude/projects`, `~/.codex/sessions`,
+  `~/.gemini/tmp` — and `FormatOfAgent` by herdr's `agent` field;
+  `Parse` / `ParseBytesOf` dispatch on it). `codex.go` (tested on an
+  anonymized rollout): Codex's `rollout-<time>-<thread id>.jsonl` is one
+  record a line, `{"timestamp","type","payload"}` — `session_meta` the
+  cwd, `turn_context` the model, `response_item` the API items (a user or
+  assistant `message`, `reasoning` with its summary as a thinking part,
+  `function_call` + `function_call_output`, `custom_tool_call` +
+  `custom_tool_call_output` — the `exec` tool's JSON chunks unwrapped,
+  a non-zero `exit_code` or "Process exited with code N" marking the
+  call failed — `local_shell_call`, `web_search_call`),
+  `token_usage_record` one API response's tokens (`UsageRecord` with the
+  model and the `model_context_window` the lines before it named, so the
+  meter shows the window of a model the catalog does not price), and
+  `compacted` with the history replaced in place (the file goes on: no
+  continuation chain, no subagents); the harness envelopes in the user's
+  slot (`<environment_context>`, `<user_instructions>`, …) are skipped;
+  the thread id is what `codex resume` takes and what herdr's codex hook
+  reports; `update_plan` feeds `Plan`, `request_user_input` is a question
+  (`IsQuestion`, with Claude Code's `AskUserQuestion`; the recap, the
+  spans and the page's timeline ask it), `ShellCommand` reads Bash's
+  `command` or `exec_command`'s `cmd`; `Sessions(Codex, cwd)` lists the
+  newest rollouts whose head names the folder, titled from
+  `~/.codex/session_index.jsonl`. `gemini.go` (written from the CLI's
+  `chatRecordingTypes.ts`, tested on a sample from it, not seen live):
+  `~/.gemini/tmp/<sha256 of the project root>/chats/session-<time>-<id's
+  first 8>.jsonl`, a metadata line then one message a line (`user` /
+  `gemini` with `thoughts`, `toolCalls`, `tokens`, `model`) and the
+  amendments `$patch` (a tool's result landing later, messages removed or
+  reordered), `$rewindTo`, `$set`; the legacy one-object `.json` too.
+  `Reader.ResolveSession(agent, cwd, kind, value)` finds the file by the
+  pane's agent (`""` tries every format, for a transcript opened by id),
+  locally and by `findScript` over ssh; `NewUsageScanner(path)` is the
+  per-line usage reader of each format (the tracker keeps one per file
+  across its delta reads); `InputField` is the input-key reader the recap
+  and `ShellCommand` share.
   **Compaction moves the conversation to a new file** (its first message's
   `parentUuid` is a record `uuid` in the old one) while herdr keeps naming
   the old id, so the chat follows `Reader.Live(path)` —
@@ -352,6 +389,34 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
   (`features/roster/HealthButton.tsx`; the rules in `concerns.ts`) turns amber on an update, a lagging
   remote remuda, or a nearly full disk.
+- **The machine stays awake while its agents work** (`internal/awake`,
+  tested): a switch per machine, off by default, kept in `awake.json` in
+  the state dir (`PATCH /api/machines/{id}/awake {on}`, the row "Keep
+  awake while agents work" in the machine's ⋯ menu); with it on,
+  `Service.Observe` — every `events.Snapshot`, the count of agent panes
+  herdr reports working (`awake.Working`) — takes a hold on the machine
+  while any works and lets it go `Grace` (2 min) after the last one
+  settled, when the switch goes off, when the machine is removed and
+  when remuda stops (`Close`, deferred before the fleet closes so the
+  script still has the master). The hold is `ShellHolder`: `HoldScript`
+  over the machine's shell starts `caffeinate -i` on macOS (the display
+  may sleep) or `systemd-inhibit --what=idle:sleep … sleep infinity` on
+  Linux with `nohup`, detached, its pid in a file under remuda's state
+  dir there — this instance's own here (`awake.pid`), the remote's
+  `awake-<this host>.pid` so two cockpits holding one machine keep
+  apart — and keeps the one the file names when `ps -o args=` says it
+  still is an inhibitor (a reconnect or a restart reuses it, a pid
+  taken since by something else is not trusted); `ReleaseScript` ends
+  it the same way. A hold that stands is taken again every `Reassert`
+  (5 min) while agents work, so one that died with a reboot comes back;
+  a failed hold (a system with neither tool: "none <os>") is the
+  roster's `awake.error`, logged once, tried again after `Reassert`.
+  The roster's machine entry carries `awake {on, held, working, error}`
+  and the ⓘ shows an Awake row while the switch is on
+  (`features/roster/awake.ts`, tested: `awakeWords`, `awakeBad`). The
+  scripts are tested on stand-ins — `caffeinate`, `systemd-inhibit` and
+  a `uname` answering `AWAKE_TEST_OS` — first on PATH in a temp HOME,
+  so nothing real is held. No sudo.
 - **Peers** (`internal/server/peer.go`): herdr allows one attached client
   per terminal ("already has an attached client; retry with --takeover"),
   so two remuda reaching the same pane — the machine's own and this one
@@ -448,7 +513,19 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the user through the shell remuda already has on the machine.
 - **Chats follow an agent update** (`internal/restart`). When an update
   job changed an agent's version (the vitals re-read right after), every
-  pane running that agent is restarted onto it: `agent.prompt` with the
+  pane running that agent is restarted onto it. **Claude Code restarts in
+  place**: `agent.prompt` with its own `/restart` (2.1.312, behind a flag
+  of Claude Code's own, so not every build has it), which starts the
+  installed version on the same session in the same process slot — herdr
+  sees no change at all, the status and the session id stand — so the
+  outcome is read off the pane's screen (`inplace.go`, tested): `Outcome`
+  looks past the command's newest echo (`Echoes` counted before it was
+  sent, so an older one does not count) for "Session resumed", for
+  "Unknown slash command" or "isn't available" (no such command here →
+  the exit and resume below), or for a "Can't restart…" line (reported,
+  the pane left as it is), `Version` the banner's version for the log;
+  nothing within `inPlaceWait` is reported too. The others, and a Claude
+  Code without the command, leave and come back: `agent.prompt` with the
   agent's own `/exit` (Ctrl-C twice if it lingers), a wait for the shell
   prompt, then `agent.start` with `--resume <session id>` (`codex resume`,
   `gemini --resume`, `kimi --session`) from the snapshot's `agent_session`. Idle/done chats
@@ -929,7 +1006,22 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   name a `Panel` of the page (`standup`) for its tap to open instead of a
   pane.
   Routes: `GET /api/push` (public key), `POST/DELETE /api/push/subscribe`,
-  `POST /api/push/test`. **Read aloud** (`features/alerts/voice.ts`,
+  `POST /api/push/test`. **A question is answered from the notification**
+  (`asked.go`, tested): when the `input` push fires, `Service.Question`
+  (wired in `internal/app`: the pane's screen through the machine's herdr
+  client and `chat.ParseQuestion`) reads the dialog, and the payload goes
+  out with the dialog's first line and its detail's first line as the
+  body ("Bash command · rm -rf build"), the first two choices as
+  `actions` `choice-0` / `choice-1` with their words cut to 24 runes as
+  the titles, and every choice in full as `choices`; one choice or none
+  leaves the plain push. A tap on a choice has the service worker post
+  `POST /api/question/answer {machine, pane, index, label}`
+  (`internal/server/answer.go`): the screen is read again and
+  `chat.Answer` (answer.go, tested) refuses with a 409 when no dialog is
+  there or the choice at `index` no longer reads `label` — the worker
+  then opens the page on the pane — else `chat.KeysTo` walks the cursor
+  (`up` / `down` × n, `enter`) through `sessions.Input.SendKeys` in one
+  request; the card's own click path is unchanged. **Read aloud** (`features/alerts/voice.ts`,
   tested; `useVoice.ts`, called from Shell): with the switch in the
   alerts panel on (pref `alerts.voice` {on, voice}), this device speaks
   through the browser's own `speechSynthesis` — nothing passes through
@@ -938,7 +1030,39 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   changes seen while the page is open and in front, each once by a key
   per episode (`linesToSay`; the first roster only seeds), in the voice
   picked in the panel, else a Russian voice for Cyrillic text when the
-  browser has one.
+  browser has one. **Webhooks** (`webhooks.go`, tested): the places the
+  person named beside their devices — a Telegram bot (token and chat id,
+  the Bot API's `sendMessage`), a Slack incoming webhook (`{text}`), an
+  ntfy topic (the body, `Title` RFC 2047 encoded when not ASCII, `Click`
+  the link, `Priority: high` for a question) or any address taking JSON
+  (`Message`: kind, title, body, machine, pane, panel, link, at) — in
+  `webhooks.json` (0600, with `base`, the page's address the links are
+  built from: `Link` → `?machine=&pane=`, `?panel=` for a digest). Every
+  alert `record` hands to the feed goes to each enabled webhook whose
+  `Kinds` include its `HookKind` (input → question, done → finish, the
+  watchdog's three → watchdog, the rest by name: digest, schedule, task,
+  budget, review) outside its own quiet hours — a question 10 s after
+  the block, called off when answered at the desk, every finish 10 s
+  after, as the feed hears them — in a goroutine each, one try and one
+  more on a network error or a 5xx, a 10 s timeout; the outcome
+  (`last_ok`, `last_error`) is kept in memory for the panel and a
+  failure logged once an hour per webhook, never with the address
+  (`plainError` drops the URL a transport error names, since Telegram's
+  holds the token). `Views` masks every secret (`has_token`, a URL cut
+  to `scheme://host/…`) and `Replace` takes the list whole, keeping a
+  stored token when none comes and the URL when the masked one comes
+  back, so the page never holds a secret it did not type. Routes
+  (`internal/server/webhooks.go`): `GET /api/webhooks`, `PUT
+  /api/webhooks {base, hooks}`, `POST /api/webhooks/{id}/test` (sent
+  whatever the kinds or the hours). The page: `features/alerts/
+  WebhooksSection.tsx` at the foot of the alerts panel — the links'
+  address with the tailnet's and this page's offered (`baseChoices`),
+  the list with Test, Edit and Remove behind a confirm, the form (kind,
+  name, token and chat or the address, the kinds as checkboxes with
+  what each means, quiet hours by this device's zone, on/off);
+  `webhooks.ts` the pure part, tested: `hookWords`, `outcomeWords`,
+  `draftOf` / `hookOf` / `checkDraft`, `DEFAULT_KINDS` (everything but
+  the finishes), `toggleKind`.
 - `web/public/sw.js` shows every push (Safari revokes silent subscriptions),
   silent while a window is visible; click → `select-pane` message to an open
   window or `openWindow(/?machine=&pane=)` — a push naming a `panel` (a
@@ -1055,7 +1179,54 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   under 920 px), in the sidebar row's tooltip and in the workspace
   menu's "Open PR #15" row. gh runs as the person on their own machine, like
   git does for the Changes lens: remuda itself still makes no request
-  but the version checks.
+  but the version checks. **The request is followed to its end.** Every
+  read whose state is news — the first, or a move to MERGED / CLOSED —
+  goes out as `Tracker.OnState` (`events.PullRequestState {Pane, URL,
+  State, Was}`, published by the app), and `TouchPane(machine, pane)`
+  reads one pane's request again when its last read is `Every` old: the
+  task watch calls it every sweep for a live run that names a request,
+  so a merge moves the task with no page open (`internal/tasks`, "the
+  run follows the pull request"). **The reviewers' word and a red CI go
+  to the agent** (`failure.go`, `comments.go`, `handoff.go`, tested on
+  `shell.Fake`): `Failure(host, label, url)` runs `gh pr checks --json`
+  on the machine, then `gh run view <id> --log-failed` for each run a
+  failed check points into (`FailedRuns`, at most `MaxRuns`), and
+  composes `FailureMessage` — the failed checks named with their links,
+  each run's log `Tail` (the last `LogTail` 8 KB at a line, escapes
+  stripped), and the ask to fix and push; `ReviewComments(host, label,
+  url)` runs `gh pr view --json reviews` and `gh api
+  repos/{o}/{r}/pulls/{n}/comments` in one script (two `script.RS`
+  sections, `URLParts` off the address) and composes `ReviewMessage` —
+  each review's verdict and text, the line comments numbered as the
+  Changes lens numbers its own (`file:line (author)`, the hunk's last
+  row quoted, the text), at most `MaxComments`, and the ask to work on
+  them; `ErrNothingFailed` / `ErrNoReview` when there is nothing to
+  send. `POST /api/pr/failure` and `POST /api/pr/review` `{machine,
+  pane}` (`internal/server/pr.go`, `prHandoff`) take the pane's link
+  from `said.Tracker.Link`, compose on the pane's machine and send the
+  text through `sessions.Input.Submit` as the chat does — 409 for an
+  agent waiting on a question or nothing to send, 502 with gh's line.
+  **A merged worktree goes** (`internal/worktrees`, tested on
+  `shell.Fake`): `DELETE /api/worktrees/{id}` for a workspace herdr
+  marks a linked worktree — `Inspect` (the branch, the repository's main
+  worktree, the first line of `git status`; uncommitted changes are a
+  409 before anything closes), herdr `workspace.close`, then `Remove`:
+  `git worktree remove` (never `--force`) and `git branch -d`, or `-D`
+  only when an agent pane of the workspace named a request gh read as
+  merged (`mergedIn`), since a squash leaves git unsure; a branch it
+  refuses is reported with the worktree already gone. The one thing
+  remuda deletes from a repository, and only when asked. The page:
+  `features/roster/prActions.ts` (tested: `canHandFailure` an open
+  request with a failed check, `canSendReview` an open request,
+  `canRemoveWorktree` a linked worktree whose request is merged,
+  `actionsFor`, the rows' and toasts' words, `removeAsk`,
+  `removedWords`), `prMenu.tsx` (`prMenuItems`, `handPR` with its two
+  toasts, `askRemoveWorktree` behind the confirm, then `act` so the
+  roster drops the workspace): in a wall tile the two chips are one
+  `.pr-chips` button that opens a `Menu` — Open with the state as its
+  hint, then the hand-offs the state allows — and the workspace's ⋯
+  menu carries the same rows after "Open PR #15", with "Remove the
+  worktree and its branch…" for a merged linked worktree.
 - `internal/recap/` — what a conversation came to, and the **standup**
   over every agent. `Of(turns, since)` (pure, tested) counts the turns
   from `since` on: prompts, answers (turns that ended in text), the
@@ -1169,7 +1340,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   sidebar, cleared when the state moves on) and one push per episode
   (`push.Notify`, pref `watchdog`, default on) with a reminder every 30
   min; the notification carries `actions` — Open, and **Send Esc**, which
-  the service worker posts to `/api/keys` itself.
+  the service worker posts to `/api/keys` itself (a question's push
+  carries its choices the same way, see `internal/push`).
 - `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — things on a timetable, three **kinds**
   (`Kind`, `prompt` for a record from before the field). A **prompt**
   schedule names a machine and a **folder** (panes come and go; the
@@ -1220,11 +1392,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   model and arguments, the prompt and the close switch).
 - `internal/search/` — **full-text search** over every transcript on every
   machine (`GET /api/search?q=&machine=&dir=&days=`; the 🔍 in the
-  header, or the last row of the ⌘K palette with what was typed there). No index: `Scan` walks `~/.claude/projects` newest-first,
+  header, or the last row of the ⌘K palette with what was typed there). No index: `ScanHome` walks `~/.claude/projects` and `~/.codex/sessions` newest-first,
   sieves lines by four spellings of the query (as typed, lower, UPPER,
   Capitalized — a byte search folds nothing), then `transcript.MatchLine`
-  parses the candidates: only user/assistant texts count, never tool
-  output, thinking or sidechains. Locally Scan runs in-process; on a
+  (`MatchCodexLine` for a rollout) parses the candidates: only user/assistant texts count, never tool
+  output, thinking or sidechains; a Codex hit is printed as
+  `codex:<cwd>␟<thread id>␟<record>`, since the rollout's name carries
+  neither, and comes back with `agent: "codex"` (the search panel draws
+  Codex's mark on it). Locally the scan runs in-process; on a
   remote the script runs `~/.local/bin/remuda search …` (the same Scan,
   a hidden subcommand — `make deploy` puts the binary there; 400 MB scan
   in well under a second) and falls back to a four-pattern grep when the
@@ -1244,7 +1419,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   cache tier, fast mode (`usage.speed`) from its own table, ×1.1 when
   `inference_geo` is "us" — not on web search); `transcript.UsageOf` reads
   an assistant record's `message.usage` (`<synthetic>` records and
-  `isApiErrorMessage` ones are skipped: no API call behind them). One API response is written as
+  `isApiErrorMessage` ones are skipped: no API call behind them), and
+  `transcript.NewUsageScanner(path)` is the same for every format — a
+  Codex rollout's `token_usage_record`s count too, tokens alone (no
+  OpenAI price in the catalog: `unknown`, the model named as the file
+  names it, the window from the file), in the meter, the report
+  (`ScanHome`: Claude Code's project files and Codex's rollouts, a
+  rollout's project the encoded folder its head names, so a folder's
+  budget covers both agents) and `remuda usage` on a remote. One API response is written as
   several records sharing `message.id` with the same usage — `Accumulator`
   counts an id once (the records sit together; the last wins), holding the
   pending one until the next id; `PriceTurns` (turns.go) prices a
@@ -1545,7 +1727,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   page (`runPR.ts`, tested: `paneOf`, `runPR`) draws the link in the
   detail's run block and as a chip on list rows and board cards, with
   the `.pr-state` checks and review chips of the Wall tile while the
-  run's pane is still on the roster naming that link. `comments` are
+  run's pane is still on the roster naming that link. **And to its
+  merge** (pr.go, `merged_test.go`): every sweep asks `RunWatch.PRTouch`
+  (`prstatus.Tracker.TouchPane`) to read the request a live run names
+  again when its last read is old, and every `events.PullRequestState`
+  goes to `RunWatch.OnPullRequestState` → `Store.OnPullRequestMerged`,
+  which, for MERGED and a live run naming that very address, adds the
+  comment "PR #15 merged" by "remuda" (once: a read after a restart
+  finds the comment and stops), moves the task to the done column while
+  it still sits in the start or finish column (`onMerged`; a card the
+  person moved stays) and pushes "Task #N: PR #15 merged → Done", the
+  feed row riding on the push. The worktree and branch stay until the
+  person asks (the workspace menu, `internal/worktrees`). `comments` are
   markdown, a path in one opening on the run's machine relative to its
   worktree; the UI re-reads an open task every 10 s while a run is live.
 - `internal/mcp/` + `internal/tasksapi/` — **the agents and the tasks**.

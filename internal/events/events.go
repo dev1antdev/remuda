@@ -59,6 +59,15 @@ type PullRequestNamed struct {
 	Label string
 }
 
+// PullRequestState says what gh read of a pull request an agent named: its state on the first read, and every move
+// after it (OPEN → MERGED or CLOSED). Was is the state read before, "" on the first read.
+type PullRequestState struct {
+	Pane  PaneRef
+	URL   string
+	State string
+	Was   string
+}
+
 // Bus delivers each event to every subscriber of its type, in subscription order, on the publisher's goroutine.
 type Bus struct {
 	mu   sync.RWMutex

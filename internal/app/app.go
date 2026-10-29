@@ -7,9 +7,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
@@ -131,6 +134,30 @@ func Run(ctx context.Context, o Options) error {
 		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body})
 		hub.RosterChanged() // the bell's dot rides on the roster
 	}
+	// a question push carries the dialog's choices as buttons, read off the pane's screen as the push goes out
+	pushSvc.Question = func(machineID, paneID string) (push.Asked, bool) {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return push.Asked{}, false
+		}
+		client, _, err := mc.Ready()
+		if err != nil {
+			return push.Asked{}, false
+		}
+		screen, err := client.PaneRead(paneID)
+		if err != nil {
+			return push.Asked{}, false
+		}
+		q, ok := chat.ParseQuestion(screen)
+		if !ok {
+			return push.Asked{}, false
+		}
+		asked := push.Asked{Text: q.Text}
+		for _, o := range q.Options {
+			asked.Choices = append(asked.Choices, o.Label)
+		}
+		return asked, true
+	}
 	tracker := radar.New(o.Dir, chats.LastWriteOf)
 	defer tracker.Flush()
 	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer, Link: chats.PullRequest}, bus)
@@ -141,6 +168,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 		return mc, true
 	})
+	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
 	reviews := review.New(o.Dir)
 	// a rejected folder whose agent answers that it is ready again: the review notes it, the person is told
 	sayings.OnAnswer = func(machineID, paneID, text string) {
@@ -180,6 +208,16 @@ func Run(ctx context.Context, o Options) error {
 	}
 	restarter.Lock = input.Lock
 	keeper := &herdr.Keeper{Bin: bin, Socket: o.Socket}
+	// the machines kept awake while their agents work: the hold is let go before the fleet's masters close
+	hostname, _ := os.Hostname()
+	keepAwake := awake.New(o.Dir, func(id string) (shell.Host, bool) {
+		mc, err := fleet.Get(id)
+		if err != nil {
+			return nil, false
+		}
+		return mc, true
+	}, awake.ShellHolder{Dir: o.Dir, Name: strings.TrimSuffix(hostname, ".local")})
+	defer keepAwake.Close()
 	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker}
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
@@ -233,6 +271,8 @@ func Run(ctx context.Context, o Options) error {
 		hub.RosterChanged()
 	})
 	events.Subscribe(bus, func(e events.LocalHerdrDown) { keeper.Revive(e.Err) })
+	events.Subscribe(bus, func(e events.Snapshot) { keepAwake.Observe(e.Machine, awake.Working(e.Snap)) })
+	events.Subscribe(bus, func(e events.MachineRemoved) { keepAwake.Forget(e.Machine) })
 
 	// the loops
 	watcher.Start()
@@ -273,10 +313,14 @@ func Run(ctx context.Context, o Options) error {
 			tokens := d.Tokens
 			return d.Cost, tokens.Input + tokens.Output + tokens.CacheRead + tokens.CacheWrite5m + tokens.CacheWrite1h, d.Name, true
 		},
-		Notify: pushSvc.Notify,
+		Notify:  pushSvc.Notify,
+		PRTouch: requests.TouchPane,
 	}
 	go runWatch.Loop(15 * time.Second)
 	events.Subscribe(bus, func(e events.PullRequestNamed) { runWatch.OnPullRequest(e.Pane.Machine, e.Pane.Pane, e.URL, e.Label) })
+	events.Subscribe(bus, func(e events.PullRequestState) {
+		runWatch.OnPullRequestState(e.Pane.Machine, e.Pane.Pane, e.URL, e.State)
+	})
 	go schedules.Loop()
 	go hub.Run(ctx)
 	go budgets.Loop(5 * time.Minute)
@@ -309,6 +353,7 @@ func Run(ctx context.Context, o Options) error {
 		Keys:      keys,
 		UI:        ui,
 		Live:      hub,
+		Awake:     keepAwake,
 	}
 	if o.Tailscale {
 		var node *tsnetx.Node
