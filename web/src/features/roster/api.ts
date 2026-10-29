@@ -63,6 +63,7 @@ export type Session = {
   worktree?: { repo_key: string; repo_name: string; linked: boolean; checkout_path: string };
   dir?: string;
   review?: { changed: number; fresh: number; ready?: boolean }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another
+  muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row
   tabs: Tab[];
 };
 
@@ -182,6 +183,11 @@ export const addMachine = (req: { label: string; host: string }): Promise<void> 
 export const renameMachine = (id: string, label: string): Promise<void> => sendJSON("PATCH", `/api/machines/${encodeURIComponent(id)}`, { label }).then(() => undefined);
 
 export const removeMachine = (id: string): Promise<void> => sendJSON("DELETE", `/api/machines/${encodeURIComponent(id)}`);
+
+// a workspace folder silenced until a moment: no push, no webhook, no feed row from its panes until then
+export const muteWorkspace = (machine: string, dir: string, until: Date): Promise<{ muted_until: string }> => sendJSON("PUT", "/api/mutes", { machine, dir, until: until.toISOString() });
+
+export const unmuteWorkspace = (machine: string, dir: string): Promise<void> => sendJSON("DELETE", "/api/mutes", { machine, dir }).then(() => undefined);
 
 export const setAwake = (id: string, on: boolean): Promise<Awake> => sendJSON("PATCH", `/api/machines/${encodeURIComponent(id)}/awake`, { on });
 

@@ -632,7 +632,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`langOf` of its info string) is coloured through `lib/highlight.ts`,
   tokenized once per fence (`useMemo`) and drawn by `ui/Tokens.tsx`
   (`tokenNodes`: a `.hl-<kind>` span per token, plain text as it is); a
-  fence without a language stays one plain string. `ui/ErrorBoundary.tsx` is the one class
+  fence without a language stays one plain string. **A table's cells carry
+  a copy button** (`ui/TableCell.tsx`: an `icon-btn` in the cell's corner,
+  shown on hover with a mouse and for a few seconds after a long press on
+  a phone — `ui/press.ts`, the tasks' long press moved here with a shim at
+  its old path — copying `cellText(source)` from `ui/cellText.ts`, tested:
+  the cell's words with the inline marks stripped, a link's text, a `<br>`
+  as a line break; `INLINE` lives there and `renderInline` imports it),
+  because the browser's own table selection turns into whole rows the
+  moment a drag leaves the cell and selects nothing past the table's edge
+  (a triple-click selects one cell; nobody knows). `ui/ErrorBoundary.tsx` is the one class
   component: React unmounts the whole tree on a render error, so every
   turn (`TurnView`) draws inside one — a turn the parser cannot draw is a
   note, the rest of the chat stands — and `App.tsx` wraps the page in one
@@ -1032,6 +1041,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and `{"sub": [keys]}` frames in, pings every 30 s, and closes with
   "remuda is stopping" when the hub does (`live_test.go` covers the
   debounce, the cadences, the watchers, the slow page, the close).
+- `internal/away/` — **a machine away or back** (tested): the machines manager
+  tells `OnState` every remote's connection move (`fail` from a connected or
+  connecting state, a connect that succeeded; never the local one), the
+  app puts it on the bus as `events.MachineState`, and the `Tracker`
+  reports through `push.Notify` (kind `machine`, so the feed, the devices
+  by their watchdog pref, quiet hours and the webhooks hear it) "GOG is
+  away" with the reason once a remote has been unreachable for
+  `AwayAfter` 2 min (a `Sweep` every 30 s), and "GOG is back" with how long
+  it was gone when it answers again after a reported away; a blip under
+  the threshold says nothing, the first state of a machine only seeds
+  (remuda's own start reports nothing), a removed machine is forgotten;
+  `Words` is the push's text.
 - `internal/push/` — Web Push (RFC 8291/8292 via webpush-go); `OnAlert` hands
   every alert to the activity feed as it fires. VAPID keys at
   `<config>/remuda/vapid.json` (a damaged file is an error, never a silent
@@ -1131,10 +1152,31 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   what each means, quiet hours by this device's zone, on/off);
   `webhooks.ts` the pure part, tested: `hookWords`, `outcomeWords`,
   `draftOf` / `hookOf` / `checkDraft`, `DEFAULT_KINDS` (everything but
-  the finishes), `toggleKind`.
+  the finishes), `toggleKind`. **Muted workspaces** (`mutes.go`, tested):
+  a folder on a machine silenced until a moment — `mutes.json` in the
+  state dir, `Mutes.Mute` / `Unmute` / `Until` / `All`, an expired one
+  dropped on read — and `Service.silenced(p)` asks `Service.Folder` (the
+  app wires it to the watcher's snapshot: the pane's workspace folder)
+  before a scheduled alert fires, before `Notify` and before `Broadcast`:
+  a muted folder's panes send no push, no webhook and add no feed row,
+  while the voice and the badge on the page go on reading the roster.
+  Routes `GET/PUT/DELETE /api/mutes` (`internal/server/mutes.go`, tested:
+  `{machine, dir, until}` RFC 3339, a past time or a machine the fleet
+  does not know refused); the roster's `session.muted_until`; the page:
+  `features/roster/mute.ts` (tested: `muteChoices` an hour and the next
+  09:00 at least an hour away, `mutedUntil`, `leftWords`, `muteWords`),
+  the workspace ⋯ menu's "Mute for an hour" / "Mute until tomorrow
+  09:00" / "Unmute · 42 min left", and `MutedMark` (`rows.tsx`), the
+  bell-off on the sidebar row and the wall tile's head with the time
+  left in its tooltip.
 - `web/public/sw.js` shows every push (Safari revokes silent subscriptions),
   silent while a window is visible; click → `select-pane` message to an open
-  window or `openWindow(/?machine=&pane=)` — a push naming a `panel` (a
+  window or `openWindow(/?machine=&pane=)` — either way the pane opens in
+  the lens the pref `open.lens` names (`app/openLens.ts`, tested:
+  terminal by default, chat, or the lens the page was on; the choice in
+  the alerts panel and the palette, synced between devices), through
+  `actions.openPane`, which the Mac app's `select`, an Activity row and
+  Alt+N use too; the sidebar, the tabs and the Wall keep their own ways — a push naming a `panel` (a
   digest) → `open-panel` or `openWindow(/?panel=standup)` instead, which
   `Shell.tsx` and `url.ts` answer; `pushsubscriptionchange`
   re-subscribes. `web/src/features/alerts/push.ts` is single-flight and re-registers on every
@@ -1171,7 +1213,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   it is ready again — and `feed.Service.Add` keeps it in
   `feed.json` (300 newest, numbered); `GET /api/feed?limit=` lists them, the
   roster carries `feed` (the newest id) so the bell shows a dot when it is
-  past pref `feed.seen`. `features/activity/Activity.tsx` is the panel behind
+  past pref `feed.seen`. **What a device sent is a row too** (`internal/sent`,
+  tested): every `/api/submit`, `/api/keys` and `/api/question/answer`
+  (`Server.noteSent`) and the restart's own exit and `/restart`
+  (`Restarter.Typed`, wired in app.go) add a `quiet` entry — "iPhone sent
+  «yes» to api · w3:p1", the device's name from `auth.Devices.Name`, an
+  agent key's name, else "an API client"; the text one line cut at 80
+  runes, keys by their names — that `feed.LastID` skips, so the bell stays
+  dark and `feed.seen` does not move for it; the panel draws it in the quiet
+  colour. `features/activity/Activity.tsx` is the panel behind
   the bell (store panel `activity`): by day (`group.ts`, tested), a row
   opens its pane, the alert settings at its foot; the palette has it too.
 - `internal/radar/` — the sidebar's reading of every agent, after
@@ -1729,7 +1779,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   DELETE per task in sequence (`plan` → `runInSequence`, going on past a
   refusal), a toast with the count and the first refusal, Esc or × clears,
   and the rows that left the list are dropped from the selection
-  (`prune`).
+  (`prune`). **Start agents…** in the bar is the start dialog once for
+  every selected task (`StartAgentsDialog.tsx`: machine, repository,
+  agent, groom; the branch and the prompt from each task) — `startPlan`
+  leaves out a task an agent still runs on (`liveRun`), the starts go one
+  after another through `runInSequence` (a worktree is made in turn), the
+  started rows are replaced and released from the selection, the first
+  new pane is selected, `startWords` is the toast ("Started 7 agents, 1
+  refused: …, 2 skipped: #5, #8 already run").
   **A task from a GitHub issue** (`issue.go`, tested on a `shell.Fake`):
   `IssueURL` takes only `https://github.com/<owner>/<repo>/issues/<n>`
   (a trailing slash, query or fragment allowed; never a pull request),
@@ -1949,7 +2006,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `renameHandler` — herdr's `tab.rename` / `workspace.rename`.
 - `internal/sessions/` — the input side of herdr: `Agents` / `KnownAgent`,
   `StartAgent` (retries `agent_pane_busy` for a few seconds), `StartAgentResumed` (the same, with the kind's resume arguments after a session id — `ResumeArgs`, the one table of them: `claude --resume`, `codex resume`, `gemini --resume`, `kimi --session`; the restarts use it too), both thin over
-  `StartAgentWith(client, pane, kind, Start{Resume, Model, Args})` —
+  `StartAgentWith(client, pane, kind, Start{Resume, Model, Args})` — herdr
+  names an agent by its kind and refuses a second of that name, so a
+  `agent_name_taken` is tried once more under `UniqueName(kind, pane)`,
+  "codex-w1-p3", the restarts' own scheme: two Claude Codes, or an agent
+  on each of ten tasks, run side by side —
   `StartArgs` lays the command line out as resume, then the model
   (`ModelArgs`, the one table of model flags: `--model` for claude, codex,
   gemini and kimi; a kind without one refuses a model), then the person's
@@ -2003,6 +2064,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   place by double-click, or from the workspace's ⋯ menu (touch). The roster carries an ETag (304 when unchanged) and
   the agent list. Local files stream through `http.ServeContent` (Range for
   video); the WS uses per-message compression and coalesces queued chunks.
+  **The permission mode** (`mode.go`, pure, tested): `ParseMode` reads
+  Claude Code's mode off the footer under the input box — "⏵⏵ accept
+  edits on (shift+tab to cycle)", "⏸ plan mode on", "⏵⏵ auto mode on",
+  "⏸ manual mode on" (the default), "⏵⏵ bypass permissions on", the
+  words read off a 2.1.312 pane — in the screen's last `modeRows` rows and
+  only on a row that starts with the mode glyph, so a quote in the
+  conversation never counts and a dialog over the footer reads nothing;
+  `GET /api/question` carries it as `mode` on the same screen read, and
+  `features/chat/ModeChip.tsx` (over `mode.ts`, tested) draws it beside
+  the composer's tools for a Claude Code pane in the lens — a quiet `btn`
+  with the mode's words, amber for bypass, polled every 10 s while the
+  lens is on (15 s with the socket up) — and a tap sends `shift+tab`
+  through `/api/keys`, the key a phone cannot send; nothing is drawn for
+  another agent or while no footer is on screen.
 - `web/src/styles.css` — one design system in **Catppuccin's colours:
   Latte by day, Frappé, Macchiato or Mocha by night, one of the fourteen
   named colours as the accent** (`lib/theme.ts` holds the swatches,

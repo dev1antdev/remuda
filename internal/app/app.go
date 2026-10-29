@@ -13,6 +13,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
+	"github.com/dev1antdev/remuda/internal/away"
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
@@ -35,6 +36,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
+	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/server"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/setup"
@@ -135,6 +137,22 @@ func Run(ctx context.Context, o Options) error {
 		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body})
 		hub.RosterChanged() // the bell's dot rides on the roster
 	}
+	// a muted workspace: the pane's folder from the watcher's last snapshot, for the push service's silence check
+	pushSvc.Folder = func(machineID, paneID string) string {
+		snap, _ := watcher.Snapshot(machineID)
+		if snap == nil {
+			return ""
+		}
+		pane := snap.Pane(paneID)
+		if pane == nil {
+			return ""
+		}
+		ws := snap.Workspace(pane.WorkspaceID)
+		if ws == nil {
+			return ""
+		}
+		return snap.WorkspaceDir(ws)
+	}
 	// a question push carries the dialog's choices as buttons, read off the pane's screen as the push goes out
 	pushSvc.Question = func(machineID, paneID string) (push.Asked, bool) {
 		mc, err := fleet.Get(machineID)
@@ -214,6 +232,16 @@ func Run(ctx context.Context, o Options) error {
 		activity.Add(feed.Entry{Kind: "recover", Machine: machineID, Title: title, Body: body})
 		hub.RosterChanged()
 	}
+	// what the restarts type by themselves is a quiet activity row too, like anything a device sends
+	restarter.Typed = func(machineID, paneID, text string) {
+		workspace := ""
+		if snap, err := watcher.Snapshot(machineID); err == nil && snap != nil {
+			if pane := snap.Pane(paneID); pane != nil {
+				workspace = snap.WorkspaceLabel(pane.WorkspaceID)
+			}
+		}
+		activity.Add(sent.Entry(sent.Remuda, text, false, machineID, paneID, workspace))
+	}
 	keeper := &herdr.Keeper{Bin: bin, Socket: o.Socket}
 	// the machines kept awake while their agents work: the hold is let go before the fleet's masters close
 	hostname, _ := os.Hostname()
@@ -282,6 +310,20 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.LocalHerdrDown) { keeper.Revive(e.Err) })
 	events.Subscribe(bus, func(e events.Snapshot) { keepAwake.Observe(e.Machine, awake.Working(e.Snap)) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { keepAwake.Forget(e.Machine) })
+
+	// a remote that stays unreachable, and one that answers again: the machines publish every move, the tracker says when it matters
+	absent := away.New(away.AwayAfter, func(n away.Notice) {
+		title, body := away.Words(n)
+		pushSvc.Notify(push.Payload{Machine: n.Machine, Kind: "machine", Title: title, Body: body, Tag: "machine|" + n.Machine})
+	})
+	fleet.OnState(func(id, label, state, reason string) {
+		events.Publish(bus, events.MachineState{Machine: id, Label: label, State: state, Reason: reason})
+	})
+	events.Subscribe(bus, func(e events.MachineState) { absent.Observe(e.Machine, e.Label, e.State, e.Reason) })
+	events.Subscribe(bus, func(e events.MachineRemoved) { absent.Forget(e.Machine) })
+	absentDone := make(chan struct{})
+	defer close(absentDone)
+	go absent.Run(30*time.Second, absentDone)
 
 	// the loops
 	watcher.Start()
