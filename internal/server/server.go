@@ -100,6 +100,7 @@ func (s *Server) Handler() http.Handler {
 	s.terminalRoutes(api)
 	s.screenRoutes(api)
 	s.questionRoutes(api)
+	s.answerRoutes(api)
 	s.feedRoutes(api)
 	s.recapRoutes(api)
 	s.handoverRoutes(api)

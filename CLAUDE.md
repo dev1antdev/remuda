@@ -902,7 +902,22 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   name a `Panel` of the page (`standup`) for its tap to open instead of a
   pane.
   Routes: `GET /api/push` (public key), `POST/DELETE /api/push/subscribe`,
-  `POST /api/push/test`. **Read aloud** (`features/alerts/voice.ts`,
+  `POST /api/push/test`. **A question is answered from the notification**
+  (`asked.go`, tested): when the `input` push fires, `Service.Question`
+  (wired in `internal/app`: the pane's screen through the machine's herdr
+  client and `chat.ParseQuestion`) reads the dialog, and the payload goes
+  out with the dialog's first line and its detail's first line as the
+  body ("Bash command · rm -rf build"), the first two choices as
+  `actions` `choice-0` / `choice-1` with their words cut to 24 runes as
+  the titles, and every choice in full as `choices`; one choice or none
+  leaves the plain push. A tap on a choice has the service worker post
+  `POST /api/question/answer {machine, pane, index, label}`
+  (`internal/server/answer.go`): the screen is read again and
+  `chat.Answer` (answer.go, tested) refuses with a 409 when no dialog is
+  there or the choice at `index` no longer reads `label` — the worker
+  then opens the page on the pane — else `chat.KeysTo` walks the cursor
+  (`up` / `down` × n, `enter`) through `sessions.Input.SendKeys` in one
+  request; the card's own click path is unchanged. **Read aloud** (`features/alerts/voice.ts`,
   tested; `useVoice.ts`, called from Shell): with the switch in the
   alerts panel on (pref `alerts.voice` {on, voice}), this device speaks
   through the browser's own `speechSynthesis` — nothing passes through
@@ -1142,7 +1157,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   sidebar, cleared when the state moves on) and one push per episode
   (`push.Notify`, pref `watchdog`, default on) with a reminder every 30
   min; the notification carries `actions` — Open, and **Send Esc**, which
-  the service worker posts to `/api/keys` itself.
+  the service worker posts to `/api/keys` itself (a question's push
+  carries its choices the same way, see `internal/push`).
 - `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — things on a timetable, three **kinds**
   (`Kind`, `prompt` for a record from before the field). A **prompt**
   schedule names a machine and a **folder** (panes come and go; the
