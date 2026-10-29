@@ -9142,3 +9142,12 @@ body.popout {
 .tasks-start-list li.quiet {
   color: var(--fg-faint);
 }
+
+/* ---- wake: the machine menu names the kept MAC address beside its row ---- */
+.machine-menu .menu-hint {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+  font-family: var(--mono);
+}
