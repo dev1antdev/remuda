@@ -35,6 +35,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
+	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/server"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/setup"
@@ -213,6 +214,16 @@ func Run(ctx context.Context, o Options) error {
 	restarter.Memory.Note = func(machineID, title, body string) {
 		activity.Add(feed.Entry{Kind: "recover", Machine: machineID, Title: title, Body: body})
 		hub.RosterChanged()
+	}
+	// what the restarts type by themselves is a quiet activity row too, like anything a device sends
+	restarter.Typed = func(machineID, paneID, text string) {
+		workspace := ""
+		if snap, err := watcher.Snapshot(machineID); err == nil && snap != nil {
+			if pane := snap.Pane(paneID); pane != nil {
+				workspace = snap.WorkspaceLabel(pane.WorkspaceID)
+			}
+		}
+		activity.Add(sent.Entry(sent.Remuda, text, false, machineID, paneID, workspace))
 	}
 	keeper := &herdr.Keeper{Bin: bin, Socket: o.Socket}
 	// the machines kept awake while their agents work: the hold is let go before the fleet's masters close

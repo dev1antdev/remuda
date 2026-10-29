@@ -21,11 +21,12 @@ const (
 type Entry struct {
 	ID      int64     `json:"id"`
 	At      time.Time `json:"at"`
-	Kind    string    `json:"kind"` // input | done | stuck | waiting | loop | schedule | task | test | budget | review
+	Kind    string    `json:"kind"` // input | done | stuck | waiting | loop | schedule | task | test | budget | review | sent
 	Machine string    `json:"machine"`
 	Pane    string    `json:"pane,omitempty"`
 	Title   string    `json:"title"`
 	Body    string    `json:"body,omitempty"`
+	Quiet   bool      `json:"quiet,omitempty"` // no news: what a device sent through remuda; the bell's dot skips it
 }
 
 // Service is the list, loaded once and saved on every addition.
@@ -73,12 +74,15 @@ func (s *Service) List(limit int) []Entry {
 	return append(make([]Entry, 0, limit), s.all[:limit]...)
 }
 
-// LastID is the newest entry's number, 0 when there is none: the roster carries it so a page knows there is news.
+// LastID is the newest news entry's number, 0 when there is none: the roster carries it so a page knows there is
+// news; a quiet entry is skipped, since the person's own sending is nothing to be told about.
 func (s *Service) LastID() int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.all) == 0 {
-		return 0
+	for _, e := range s.all {
+		if !e.Quiet {
+			return e.ID
+		}
 	}
-	return s.all[0].ID
+	return 0
 }

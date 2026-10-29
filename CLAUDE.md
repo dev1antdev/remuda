@@ -1159,7 +1159,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   it is ready again — and `feed.Service.Add` keeps it in
   `feed.json` (300 newest, numbered); `GET /api/feed?limit=` lists them, the
   roster carries `feed` (the newest id) so the bell shows a dot when it is
-  past pref `feed.seen`. `features/activity/Activity.tsx` is the panel behind
+  past pref `feed.seen`. **What a device sent is a row too** (`internal/sent`,
+  tested): every `/api/submit`, `/api/keys` and `/api/question/answer`
+  (`Server.noteSent`) and the restart's own exit and `/restart`
+  (`Restarter.Typed`, wired in app.go) add a `quiet` entry — "iPhone sent
+  «yes» to api · w3:p1", the device's name from `auth.Devices.Name`, an
+  agent key's name, else "an API client"; the text one line cut at 80
+  runes, keys by their names — that `feed.LastID` skips, so the bell stays
+  dark and `feed.seen` does not move for it; the panel draws it in the quiet
+  colour. `features/activity/Activity.tsx` is the panel behind
   the bell (store panel `activity`): by day (`group.ts`, tested), a row
   opens its pane, the alert settings at its foot; the palette has it too.
 - `internal/radar/` — the sidebar's reading of every agent, after
