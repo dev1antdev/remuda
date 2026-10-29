@@ -705,6 +705,18 @@ closed meanwhile is left alone and the page opens on the pane instead.
 morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
 on iPhone, the home-screen app.
 
+**The Mac app** (`make mac` → `bin/remuda.app`, see `macos/README.md`)
+is the same page in a window of its own, with what a browser tab cannot
+be: a Dock icon with the Needs-me count as its badge, a menu bar item
+that says who needs you — the dot in the colour of the most pressing
+agent, the list with the first line of what each said, a click opening
+its chat — native notifications with the phone's buttons (Open, Send
+Esc, the question's own two choices), and ⌥⌘R to show or hide the
+window from anywhere. It signs in by itself on the Mac that runs remuda
+and is one more device of the alerts above, so quiet hours and the alert
+settings apply to it; a remuda elsewhere is paired by its link in
+Settings…. Not in it: the pop-out and dictation, both browser APIs.
+
 **Read aloud** is the same panel's last switch: the browser's own voice
 says what an agent answered when it finishes ("api: Tests pass."), that
 one is waiting for you, or a watchdog note — while the page is open and

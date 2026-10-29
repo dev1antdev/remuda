@@ -2034,6 +2034,37 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   usual width back; none under 920 px or on a coarse pointer, where the
   panels are drawers; "Reset the panels' widths" in the palette
   (`resetPanels`).
+- `macos/` — **the Mac app**, a SwiftPM executable (`swift build`, no
+  Xcode, system frameworks only; `macos/build.sh` / `make mac` lays out
+  `bin/remuda.app`, the icon from `web/public/icons`, an ad-hoc
+  signature): `WebWindow` (the one NSWindow, a `WKWebView` on the page
+  with the persistent data store so the sign-in cookie stays; links to
+  other hosts go to the browser, a file the page saves goes to
+  Downloads through `WKDownloadDelegate`; closing hides), `Server` (the
+  address and the token: this Mac's own from `~/Library/Application
+  Support/remuda/token`, a paired one's from the login keychain under
+  "remuda"; the page is loaded as `/?token=…` once per launch, the app's
+  own calls carry the bearer), `Bridge` (the message types), `StatusItem`
+  (the menu bar item: the mark with a tone dot and the count, the menu
+  of agents that need the person, Open ⌥⌘R, Wall, Tasks, Standup,
+  Settings…, Quit), `Badge` (the Dock count), `AlertSocket` (the app as
+  a push device: `POST /api/push/socket` then `/ws/alerts`, reconnect
+  1 s → 30 s), `Notifier` (`UNUserNotificationCenter`: a category per
+  action set, Esc → `/api/keys`, a choice → `/api/question/answer`, else
+  the window on the pane; refused outside a bundle), `Hotkey` (Carbon
+  `RegisterEventHotKey`, `opt+cmd+r` by default), `Settings` (the
+  server or pairing link, the hotkey, launch at login through
+  `SMAppService`, the notification permission), `Probe` (`--probe`: the
+  page off screen, every bridge message and alert frame as a JSON line,
+  exit 0 once the page said ready), `MainMenu`, `AppDelegate` (the
+  wiring). **The bridge**: the app injects `window.remudaShell = {native,
+  version}` at document start and listens on the script message handler
+  `remuda`; the page posts `ready`, `badge {count, tone}` and `menu
+  {rows, working, idle}` as they change and defines
+  `remudaShell.select(machine, pane)`, `.openPanel(name)` and
+  `.openMode(mode)`, which the app calls. The user agent ends in
+  `remuda-mac/<version>`. Not in the app: the pop-out (Chrome's API)
+  and dictation (no `SpeechRecognition` in WebKit outside Safari).
 - `web/` — React + Vite + xterm.js SPA, embedded via `web/embed.go`
   (`go:embed all:dist`). Build with `make web` before `go build`; `npm
   test` runs Vitest on the pure modules (`*.test.ts` beside each; node,
