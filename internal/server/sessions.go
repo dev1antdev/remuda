@@ -11,6 +11,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/text"
 )
@@ -250,6 +251,7 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		rpcErr(w, err)
 		return
 	}
+	s.noteSent(r.Context(), mc.ID(), req.Pane, req.Text, false)
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -279,6 +281,7 @@ func (s *Server) handleKeys(w http.ResponseWriter, r *http.Request) {
 		rpcErr(w, err)
 		return
 	}
+	s.noteSent(r.Context(), mc.ID(), req.Pane, sent.KeyWords(keys), true)
 	writeJSON(w, map[string]any{"ok": true})
 }
 
