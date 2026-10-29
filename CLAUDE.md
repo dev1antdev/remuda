@@ -127,7 +127,19 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   per-session byte cache (`transcript.Reader.Turns` hides local vs remote);
   `Reader.ResolveSession` finds `<uuid>.jsonl` and caches the hit on both sides.
   `Machine.Ready()` reconnects a dead remote at most every 15s; a removed
-  machine never reconnects and its watcher loop exits.
+  machine never reconnects and its watcher loop exits. **A sleeping
+  machine is woken** with the magic packet (`internal/wake`, tested:
+  `ParseMAC` in the three spellings, `Packet` 6 × 0xFF + the address 16
+  times, `Broadcast` of a network, `Send` to every up, broadcast-capable,
+  non-loopback interface's broadcast address and the limited broadcast,
+  UDP port 9, from this remuda only — a remote never relays it): the
+  address lives in `macs.json` by machine id (`Manager.SetMAC` / `MAC`,
+  `PATCH /api/machines/{id} {mac}` beside `label`, the body partial now),
+  rides on the roster as `mac`, and `POST /api/machines/{id}/wake`
+  (`internal/server/wake.go`) sends it — 400 without an address, 409 for
+  a connected machine — answering how many went out; the machine's ⋯
+  menu has "Wake up" for an away machine with an address and "MAC
+  address…" (`features/roster/MacDialog.tsx`, `wake.ts` tested).
 - `internal/transcript/` — read-only parser for Claude Code JSONL session
   files. Never write to `~/.claude`. Session resolution: herdr's
   `agent_session` (exact UUID) first, cwd-encoded dir scan as fallback.

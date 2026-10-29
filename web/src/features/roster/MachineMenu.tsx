@@ -1,16 +1,21 @@
-// The machine's own ⋯ menu: rename, updates, the keep-awake switch, the SSH host to copy, and — for one added
-// here — remove.
+// The machine's own ⋯ menu: rename, updates, the keep-awake switch, a wake-up for a sleeping machine with a known
+// MAC address, the SSH host to copy, and — for one added here — remove.
 
 import { useCallback, useState } from "react";
 import { act } from "@/app/act";
+import { actions } from "@/app/store";
 import UpdatesDialog from "@/features/updates/Updates";
 import { Icon, Tip, useDismiss } from "@/ui";
-import { setAwake, type Machine } from "./api";
+import { setAwake, wakeMachine, type Machine } from "./api";
+import { MacDialog } from "./MacDialog";
+import { canWake, wokeWords } from "./wake";
 import { t } from "@/lib/i18n";
 
 export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machine; onRename: () => void; onRemove?: () => void }) {
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
   const [updates, setUpdates] = useState(false);
+  const [mac, setMac] = useState(false);
+  const wake = () => void act(wakeMachine(m.id).then(({ sent }) => actions.notify(t(wokeWords(m.label, sent), { machine: m.label }))));
   const close = useCallback(() => setOpen(null), []);
   useDismiss(!!open, close, [".machine-menu", `[data-machine-menu="${CSS.escape(m.id)}"]`]);
   const pick = (fn: () => void) => () => {
@@ -19,12 +24,12 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
   };
   return (
     <>
-      <Tip text={t("Rename, copy the SSH host, remove")}>
+      <Tip text={t("Rename, wake, copy the SSH host, remove")}>
       <button
         type="button"
         className={`icon-btn${open ? " on" : ""}`}
         data-machine-menu={m.id}
-        aria-label={t("{machine}: rename, copy the SSH host, remove", { machine: m.label })}
+        aria-label={t("{machine}: rename, wake, copy the SSH host, remove", { machine: m.label })}
         aria-haspopup="menu"
         aria-expanded={!!open}
         onClick={(e) => {
@@ -54,6 +59,15 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
           >
             <Icon name={m.awake?.on ? "check" : "sun"} size={14} /> {t("Keep awake while agents work")}
           </button>
+          {canWake(m) && (
+            <button type="button" role="menuitem" onClick={pick(wake)}>
+              <Icon name="zap" size={14} /> {t("Wake up")}
+            </button>
+          )}
+          <button type="button" role="menuitem" onClick={pick(() => setMac(true))}>
+            <Icon name="plug" size={14} /> {t("MAC address…")}
+            {m.mac && <small className="menu-hint">{m.mac}</small>}
+          </button>
           {m.host && (
             <button type="button" role="menuitem" onClick={pick(() => void navigator.clipboard?.writeText(m.host!))}>
               <Icon name="copy" size={14} /> {t("Copy SSH host")}
@@ -67,6 +81,7 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
         </div>
       )}
       {updates && <UpdatesDialog machine={m} onClose={() => setUpdates(false)} />}
+      {mac && <MacDialog machine={m} onClose={() => setMac(false)} />}
     </>
   );
 }

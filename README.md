@@ -882,6 +882,15 @@ neither tool. The hold's pid is kept in remuda's state dir on the
 machine, so a reconnect or a restart finds the one still running
 instead of starting another.
 
+**Wake a sleeping machine:** a desktop at home sleeps while the cockpit
+runs on a box in the same network and you are away with the phone. Give
+the machine its MAC address once (⋯ › MAC address…) and the menu offers
+*Wake up* whenever the machine is away: remuda sends the magic packet on
+every network it is on itself — never through another machine — and the
+usual reconnect, every 15 s, picks the machine up once it answers. The
+machine's firmware must allow Wake-on-LAN, and the cockpit must sit on
+the same network, since the packet does not route.
+
 **Cost and context:** every agent pane shows how full its context is (a
 pill in the header and on the sidebar row from 50% up, red near the edge,
 with "Compact now" in the chat from 80%) and what the session has cost so

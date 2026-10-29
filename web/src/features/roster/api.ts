@@ -118,6 +118,7 @@ export type Machine = {
   health?: Health;
   awake?: Awake;
   stopped?: StoppedChat[]; // the chats a reboot stopped there: their panes are bare shells again, one Resume brings them back
+  mac?: string; // the address a wake-up packet names, when the person set one
 };
 
 // StoppedChat is a chat whose pane came back from a reboot as a bare shell: the agent it ran and the pane's title
@@ -183,6 +184,12 @@ export const renameMachine = (id: string, label: string): Promise<void> => sendJ
 export const removeMachine = (id: string): Promise<void> => sendJSON("DELETE", `/api/machines/${encodeURIComponent(id)}`);
 
 export const setAwake = (id: string, on: boolean): Promise<Awake> => sendJSON("PATCH", `/api/machines/${encodeURIComponent(id)}/awake`, { on });
+
+// setMachineMAC keeps the address a wake-up packet names; an empty one forgets it
+export const setMachineMAC = (id: string, mac: string): Promise<{ mac: string }> => sendJSON("PATCH", `/api/machines/${encodeURIComponent(id)}`, { mac });
+
+// wakeMachine sends the magic packet from this remuda's own network; the answer says on how many addresses
+export const wakeMachine = (id: string): Promise<{ sent: number; mac: string }> => sendJSON("POST", `/api/machines/${encodeURIComponent(id)}/wake`, {});
 
 // Handed is what a hand-off to the agent answers: the request's label and how long the message was
 export type Handed = { ok: boolean; label: string; chars: number };

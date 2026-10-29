@@ -92,6 +92,7 @@ type rosterMachine struct {
 	Health   *health.Report    `json:"health,omitempty"`
 	Awake    *awake.Status     `json:"awake,omitempty"`   // the keep-awake switch and whether the hold stands
 	Stopped  []restart.Stopped `json:"stopped,omitempty"` // the chats a reboot stopped: their panes are bare shells again, a Resume brings them back
+	MAC      string            `json:"mac,omitempty"`     // the address a wake-up packet names, when the person set one
 }
 
 // sessionsFromSnapshot keeps herdr's own hierarchy, workspace → tabs → panes, in herdr's order.
@@ -226,6 +227,7 @@ func (s *Server) rosterBody() ([]byte, string) {
 		if s.Updates != nil && s.Updates.Restart != nil {
 			entry.Stopped = s.Updates.Restart.Stopped(mc.ID())
 		}
+		entry.MAC = s.Machines.MAC(mc.ID())
 		out = append(out, entry)
 	}
 	roster := map[string]any{"machines": out, "agents": sessions.Agents, "version": buildversion.Build, "latest": s.Health.Latest()}
