@@ -9246,3 +9246,14 @@ body.popout {
   flex: 1;
   min-width: 0;
 }
+
+/* ---- the split view: the chat beside the terminal on a wide screen, the chat's width a panel (app/PaneArea.tsx, app/split.ts) ---- */
+.pane-body.is-split > .lens-pane.split-chat {
+  flex: 0 0 var(--split-w, 520px);
+  width: var(--split-w, 520px);
+}
+
+.pane-body.is-split > .lens-pane.split-terminal {
+  flex: 1 1 0;
+  border-left: 1px solid var(--line);
+}

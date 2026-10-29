@@ -344,7 +344,17 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   — a lens never mounts hidden, since a terminal opened unseen would
   attach at 80×24 and resize the shared pane): the terminal keeps its
   attach, the chat its scroll and no refetch, Changes its draft; a lens
-  gets `active` and polls or refits only when on screen.
+  gets `active` and polls or refits only when on screen. **The split
+  view** (`app/split.ts`, tested: `canSplit`, `splitOn`, `shownLenses`):
+  the pref `split` — the View menu row "Chat beside the terminal" and a
+  palette command, per device — shows the chat on the left and the
+  terminal on the right on a screen of `SPLIT_MIN_WIDTH` 1180 px with a
+  mouse, the chat's width a panel (`PANELS.split`, `--split-w`) with a
+  `Resizer` between; both are `active`, the store's `lens` is the focused
+  side — the lens switch, a click or a focus in either side set it — and
+  only the focused one runs its find and gets the tab strip's tools
+  (`focused` on `Chat` and `TerminalLens`); the Changes lens replaces
+  both; the terminal is the same mounted lens, so it attaches once.
 - `internal/health` — each machine's vitals (Claude Code / herdr /
   remuda versions, how Claude Code was installed, herdr's agent hooks
   that lag the installed herdr (`OutdatedHooks`, the shell behind

@@ -76,6 +76,7 @@ export type AppState = {
   find: Find | null; // the find bar over the chat lens or the transcript viewer, null while closed
   away: string | null; // what the agents did while the page was away, one toast line until it is dismissed or followed
   taskAsked: { projectId: number; taskId: number; start: boolean; n: number } | null; // a task the Tasks mode is asked to open, once (one just made from an issue); start = the agent dialog on it too
+  split: boolean; // the chat beside the terminal, asked for by a per-device pref; shown only on a wide screen with a mouse (app/split.ts)
 };
 
 const fromURL = readURL();
@@ -109,6 +110,7 @@ export const app = createStore<AppState>({
   find: null,
   away: null,
   taskAsked: null,
+  split: readPref("split", false),
 });
 
 let jumps = linked ? 1 : 0;
@@ -265,5 +267,11 @@ export const actions = {
   },
   taskOpened() {
     app.set({ taskAsked: null });
+  },
+  // the chat beside the terminal, on or off; a pref per device, since a width suits a screen
+  toggleSplit() {
+    const split = !app.get().split;
+    app.set({ split });
+    writePref("split", split);
   },
 };

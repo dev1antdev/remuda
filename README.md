@@ -698,6 +698,13 @@ terminal on the whole monitor, a chat on the whole phone. The tab strip
 stays with its tools; Esc outside the terminal, or the same button,
 brings the page back.
 
+**Chat beside the terminal** (View › Chat beside the terminal, or the
+palette): on a screen at least 1180 px wide with a mouse, the chat sits
+on the left and the terminal on the right with a draggable edge between
+them, so the conversation and the screen are read together. The lens
+switch, or a click in either side, picks which one the tools, the find
+and the keys serve; Changes still takes the whole area.
+
 **Attachments:** the paperclip, a pasted screenshot (Ctrl/Cmd+V) or a drop
 uploads into the pane's folder (`.remuda/uploads/`) and mentions the file
 as `@path` in the message — Claude reads the image from there. In the

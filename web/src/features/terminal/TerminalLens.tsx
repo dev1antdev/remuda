@@ -18,7 +18,8 @@ import { t, tn } from "@/lib/i18n";
 // minimum terminal widths on offer, in columns (0 = fit the screen)
 const MIN_WIDTHS = [0, 120, 160, 200, 240, 320];
 
-export function TerminalLens({ machineId, paneId, cols, rows, agent, active }: { machineId: string; paneId: string; cols: number; rows: number; agent: boolean; active: boolean }) {
+// focused: in the split view, whether this side has the find bar; the chat beside it has it otherwise
+export function TerminalLens({ machineId, paneId, cols, rows, agent, active, focused = true }: { machineId: string; paneId: string; cols: number; rows: number; agent: boolean; active: boolean; focused?: boolean }) {
   const [keybar] = usePref("keybar", isTouch);
   // a phone keeps the pane's own grid: resizing the shared pane to it would squeeze the desktop's view too
   const [sizeMode] = usePref<SizeMode>("sizeMode", isTouch ? "keep" : "fit");
@@ -27,7 +28,7 @@ export function TerminalLens({ machineId, paneId, cols, rows, agent, active }: {
   const modifier = terminal.use((s) => s.modifier);
   const selectMode = terminal.use((s) => s.selectMode);
   const api = terminal.use((s) => s.api);
-  useTerminalFind(api, active, machineId, paneId);
+  useTerminalFind(api, active && focused, machineId, paneId);
   const flavor = useFlavor();
   const mono = useMono();
   const onOpenFile = useCallback((target: { path: string; line?: number; prefer?: "file" | "changes" }) => actions.openFile(machineId, paneId, target), [machineId, paneId]);

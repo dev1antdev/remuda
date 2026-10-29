@@ -1,11 +1,12 @@
 // The pane area: the tab strip (its tools slot the lens's one control and the View menu), the three lenses of the pane on
 // screen with the files rail beside them, or a transcript on its own.
 // A lens stays mounted once seen, scoped to the pane: it never mounts hidden, since a terminal opened
-// unseen would attach at 80×24 and resize the shared pane.
+// unseen would attach at 80×24 and resize the shared pane. The split view (app/split.ts) shows the chat and the
+// terminal side by side, the store's lens naming the focused side; the terminal is the same mounted lens either way.
 
 import { useEffect, useState } from "react";
 import { useMedia } from "@/lib/media";
-import { isMac } from "@/lib/prefs";
+import { isMac, isTouch } from "@/lib/prefs";
 import { basename } from "@/lib/text";
 import { closeTab, renameTab } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
@@ -21,6 +22,7 @@ import { Notice, PANELS, Resizer } from "@/ui";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
 import { actions, app, type Lens } from "./store";
+import { SPLIT_QUERY, shownLenses, splitOn } from "./split";
 import ViewMenu from "./ViewMenu";
 import { tn, t as tr } from "@/lib/i18n";
 
@@ -30,14 +32,32 @@ export default function PaneArea({ current }: { current: Located | null }) {
   const footprint = app.use((s) => s.footprint);
   const chatSession = app.use((s) => s.chatSession);
   const narrow = useMedia("(max-width: 920px)"); // the stylesheet hides the rail there: it must not poll unseen
+  const splitAsked = app.use((s) => s.split);
+  const wide = useMedia(SPLIT_QUERY);
+  const split = splitOn(splitAsked, wide, isTouch, lens); // the chat beside the terminal; lens is then the focused side
   const { refresh, viewOnly } = useRoster();
   const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
   const [seenLenses, setSeenLenses] = useState<{ pane: string; lenses: Partial<Record<Lens, true>> }>({ pane: "", lenses: {} });
   useEffect(() => {
     if (!paneKey) return;
-    setSeenLenses((m) => (m.pane === paneKey && m.lenses[lens] ? m : { pane: paneKey, lenses: { ...(m.pane === paneKey ? m.lenses : {}), [lens]: true } }));
-  }, [paneKey, lens]);
-  const seen = (l: Lens) => lens === l || (seenLenses.pane === paneKey && !!seenLenses.lenses[l]);
+    setSeenLenses((m) => {
+      const lenses = m.pane === paneKey ? { ...m.lenses } : {};
+      let moved = m.pane !== paneKey;
+      for (const l of shownLenses(lens, split)) {
+        if (!lenses[l]) {
+          lenses[l] = true;
+          moved = true;
+        }
+      }
+      return moved ? { pane: paneKey, lenses } : m;
+    });
+  }, [paneKey, lens, split]);
+  const shown = (l: Lens) => shownLenses(lens, split).includes(l);
+  const seen = (l: Lens) => shown(l) || (seenLenses.pane === paneKey && !!seenLenses.lenses[l]);
+  // in the split a click or a focus in either side makes it the focused one, so the tools, the find and the keys follow
+  const focusSide = (l: Lens) => {
+    if (split && app.get().lens !== l) actions.setLens(l);
+  };
   const place = viewer
     ? { machineId: viewer.machine, paneId: "", session: viewer.session, dir: viewer.dir, agent: viewer.subagent ? "" : "claude", workspace: basename(viewer.dir), machine: "" }
     : current
@@ -123,14 +143,14 @@ export default function PaneArea({ current }: { current: Located | null }) {
           actions.ask(msg, tr("Close tab"), () => void act(closeTab(machine.id, t.id)));
         }}
       />
-      <div className="pane-body">
+      <div className={`pane-body${split ? " is-split" : ""}`}>
         {seen("changes") && (
-          <div className="lens-pane" hidden={lens !== "changes"}>
-            <Review key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} paneId={pane.id} dir={folder} agent={pane.agent} onSeen={refresh} active={lens === "changes"} />
+          <div className="lens-pane" hidden={!shown("changes")}>
+            <Review key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} paneId={pane.id} dir={folder} agent={pane.agent} onSeen={refresh} active={shown("changes")} />
           </div>
         )}
         {seen("chat") && (
-          <div className="lens-pane" hidden={lens !== "chat"}>
+          <div className={`lens-pane${split ? " split-chat" : ""}`} hidden={!shown("chat")} onFocusCapture={() => focusSide("chat")} onPointerDownCapture={() => focusSide("chat")}>
             <Chat
               key={`${machine.id}|${pane.id}`}
               machineId={machine.id}
@@ -141,19 +161,21 @@ export default function PaneArea({ current }: { current: Located | null }) {
               usage={pane.usage}
               workspaceId={session.id}
               agent={pane.agent}
-              active={lens === "chat"}
+              active={shown("chat")}
+              focused={lens === "chat"}
               viewOnly={viewOnly}
             />
           </div>
         )}
+        {split && <Resizer spec={PANELS.split} edge="right" label={tr("Chat width in the split")} />}
         {seen("terminal") && viewOnly && (
-          <div className="lens-pane screen-lens" hidden={lens !== "terminal"}>
-            <Screen key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active={lens === "terminal"} onOpen={() => {}} />
+          <div className={`lens-pane screen-lens${split ? " split-terminal" : ""}`} hidden={!shown("terminal")} onFocusCapture={() => focusSide("terminal")} onPointerDownCapture={() => focusSide("terminal")}>
+            <Screen key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active={shown("terminal")} onOpen={() => {}} />
           </div>
         )}
         {seen("terminal") && !viewOnly && (
-          <div className="lens-pane" hidden={lens !== "terminal"}>
-            <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={lens === "terminal"} />
+          <div className={`lens-pane${split ? " split-terminal" : ""}`} hidden={!shown("terminal")} onFocusCapture={() => focusSide("terminal")} onPointerDownCapture={() => focusSide("terminal")}>
+            <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={shown("terminal")} focused={lens === "terminal"} />
           </div>
         )}
         {footprint && pane.agent && <Resizer spec={PANELS.rail} edge="left" label={tr("Files rail width")} />}
