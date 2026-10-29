@@ -790,6 +790,10 @@ writing.
 **Export** (View › Export as Markdown on the chat lens, or the palette) saves
 the conversation as a Markdown file — the text as it is, thinking and
 tool calls folded — to share with someone who is not in remuda.
+**A table's cells copy themselves**: hover a cell (or press it for a
+moment on a phone) and a copy button appears in its corner, taking the
+cell's words as they read — the sure way, since the browser's own table
+selection turns into whole rows the moment a drag leaves the cell.
 **Find** (⌘F / Ctrl+F on the chat lens, or 🔍 in the tab strip) marks
 every place a word occurs in the conversation shown and says "3 of 12";
 Enter and Shift+Enter walk them, the current one brought into view, Esc

@@ -6,6 +6,8 @@ import Icon from "@/ui/icons";
 import { tokenNodes } from "@/ui/Tokens";
 import { copyText, openUrl } from "@/lib/host";
 import { t } from "@/lib/i18n";
+import TableCell from "@/ui/TableCell";
+import { INLINE } from "@/ui/cellText";
 
 // links open in a new tab — never by navigating this page
 const link = (url: string) => (e: MouseEvent) => {
@@ -172,19 +174,6 @@ function cells(line: string): string[] {
 
 // ---- inline ----
 
-const INLINE = new RegExp(
-  [
-    "(`+)([\\s\\S]*?[^`])\\1(?!`)", // 1,2 code span
-    "\\[([^\\]\\n]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)", // 3,4 link
-    "\\*\\*([^*\\n]+?)\\*\\*", // 5 bold
-    "__([^_\\n]+?)__", // 6 bold
-    "(?<![\\w*])\\*([^*\\n]+?)\\*(?![\\w*])", // 7 italic
-    "(?<!\\w)_([^_\\n]+?)_(?!\\w)", // 8 italic
-    "~~([^~\\n]+?)~~", // 9 strike
-    "(https?:\\/\\/[^\\s<>\"'\\)\\]]+)", // 10 bare url
-  ].join("|"),
-  "g",
-);
 
 // renderInline; inside a link's text nothing else is clickable (onOpenFile null): an interactive element inside another is invalid markup
 function renderInline(text: string, onOpenFile: OpenFile | null, key = "i"): ReactNode[] {
@@ -274,7 +263,9 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string): React
               <thead>
                 <tr>
                   {b.head.map((c, j) => (
-                    <th key={j}>{renderInline(c, onOpenFile, `${k}h${j}`)}</th>
+                    <TableCell key={j} as="th" source={c}>
+                      {renderInline(c, onOpenFile, `${k}h${j}`)}
+                    </TableCell>
                   ))}
                 </tr>
               </thead>
@@ -282,7 +273,9 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string): React
                 {b.rows.map((r, ri) => (
                   <tr key={ri}>
                     {b.head.map((_, j) => (
-                      <td key={j}>{renderInline(r[j] ?? "", onOpenFile, `${k}r${ri}c${j}`)}</td>
+                      <TableCell key={j} as="td" source={r[j] ?? ""}>
+                        {renderInline(r[j] ?? "", onOpenFile, `${k}r${ri}c${j}`)}
+                      </TableCell>
                     ))}
                   </tr>
                 ))}
