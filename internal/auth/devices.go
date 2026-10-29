@@ -203,6 +203,9 @@ func trimAgent(agent string) string {
 
 // DeviceName reads the browser and the system off a user agent, "Safari on iPhone", "Chrome on macOS", "a browser" when it says neither.
 func DeviceName(agent string) string {
+	if strings.Contains(agent, "remuda-mac/") {
+		return "remuda on macOS"
+	}
 	browser := ""
 	switch {
 	case strings.Contains(agent, "Edg/"):

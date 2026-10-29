@@ -27,8 +27,11 @@ import Wall from "./Wall";
 import { folderOf, useCurrent } from "./current";
 import { useFullKeys } from "./full";
 import { useNextKey, useNextNeedingMe } from "./next";
+import { handShell, inShell } from "@/lib/shell";
+import { modeOf } from "./shellFeed";
 import { actions, app } from "./store";
 import { useBadge } from "./useBadge";
+import { useShellFeed } from "./useShellFeed";
 import { useToasts } from "./toasts";
 import { panelOf, writeURL } from "./url";
 import { t } from "@/lib/i18n";
@@ -49,6 +52,7 @@ export default function Shell() {
   useSyncPrefs();
   useWelcomeBack();
   useBadge();
+  useShellFeed();
 
   useEffect(() => {
     if (!current && machines.length === 0) return; // the roster has not answered yet: the address keeps the pane it asked for
@@ -101,9 +105,28 @@ export default function Shell() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
-  // a tapped notification in an already open tab arrives as a "select-pane" message from the service worker, a digest's as "open-panel"
+  // a tapped notification in an already open tab arrives as a "select-pane" message from the service worker, a digest's as "open-panel";
+  // inside the Mac app the same arrives as a call on window.remudaShell, which the page's functions answer
   useEffect(() => {
     void resyncPush(readAlertPrefs());
+    if (inShell()) {
+      handShell({
+        select: (machine, pane) => {
+          if (!machine || !pane) return;
+          actions.selectPane(machine, pane);
+          actions.setLens("chat");
+        },
+        openPanel: (name) => {
+          const panel = panelOf(name);
+          if (panel) actions.openPanel(panel);
+        },
+        openMode: (name) => {
+          const mode = modeOf(name);
+          if (mode) actions.setMode(mode);
+        },
+        alert: () => {},
+      });
+    }
     if (!("serviceWorker" in navigator)) return;
     const onMsg = (e: MessageEvent) => {
       const d = e.data as { type?: string; machine?: string; pane?: string; panel?: string };

@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { useRoster } from "@/features/roster/useRoster";
 import { usePref } from "@/lib/prefs";
+import { inShell, tellShell } from "@/lib/shell";
 import { badgeOf, titleFor, type BadgeTone } from "./badge";
 import { useTheme } from "./theme";
 
@@ -71,6 +72,11 @@ export function useBadge(): void {
   useEffect(() => {
     document.title = titleFor(count);
   }, [count]);
+
+  // inside the Mac app the same reading goes to the Dock badge and the menu bar's icon
+  useEffect(() => {
+    if (inShell()) tellShell({ type: "badge", count, tone });
+  }, [count, tone]);
 
   useEffect(() => {
     if (!tone) {

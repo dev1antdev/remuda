@@ -1035,7 +1035,22 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   name a `Panel` of the page (`standup`) for its tap to open instead of a
   pane.
   Routes: `GET /api/push` (public key), `POST/DELETE /api/push/subscribe`,
-  `POST /api/push/test`. **A question is answered from the notification**
+  `POST /api/push/test`. **Socket devices** (`socket.go`, tested): the
+  Mac app is a device whose endpoint reads `socket:<32 hex>` and carries
+  no keys; its prefs, label, quiet hours, test and listing are any
+  device's, and `Send` hands its payloads to the `Sockets` hub instead of
+  webpush — one live connection per endpoint (`Attach`, a second Attach
+  replaces the first), `Deliver` without waiting into a buffer of 16, a
+  device away or behind loses the alert (logged once an hour per
+  endpoint; the activity feed is its catch-up, nothing is queued),
+  `Close` on shutdown. `POST /api/push/socket {endpoint?, prefs?, label}`
+  → `{endpoint}` mints one (default prefs input on, done long) or updates
+  the one named (404 for an unknown), `GET /ws/alerts?endpoint=` streams
+  its payloads as JSON text frames (`internal/server/alerts.go`: 404
+  before the upgrade for an unknown device, 426 without one, pings every
+  30 s, "remuda is stopping" on close, "another connection took this
+  device" when replaced), `DELETE /api/push/subscribe` removes it.
+  **A question is answered from the notification**
   (`asked.go`, tested): when the `input` push fires, `Service.Question`
   (wired in `internal/app`: the pane's screen through the machine's herdr
   client and `chat.ParseQuestion`) reads the dialog, and the payload goes
@@ -1100,6 +1115,28 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   re-subscribes. `web/src/features/alerts/push.ts` is single-flight and re-registers on every
   load with permission granted. Push needs a secure context: localhost or
   `tailscale serve` HTTPS; iPhone needs the home-screen app.
+- `web/src/lib/shell.ts` — **the Mac app's bridge** (tested). The app
+  announces itself as `window.remudaShell = {native: true, version}`
+  before the page loads; `inShell()` reads that flag, `tellShell(message)`
+  posts to `window.webkit.messageHandlers.remuda` and never throws,
+  `handShell(handlers)` hangs the page's functions on the same object.
+  Messages out: `{type: "ready", version, machine}` once the first roster
+  is in (the server's version, the local machine's label); `{type:
+  "badge", count, tone}` from `useBadge` whenever its reading changes
+  (red | amber | green | null); `{type: "menu", rows, working, idle}`
+  from `app/useShellFeed.ts` whenever it changes — `app/shellFeed.ts`
+  (`shellRows`, `sameFeed`, `modeOf`, tested) lists every agent that
+  `needsMe` on a connected machine in the sidebar's order, at most
+  `MAX_ROWS` 12, as `{machine, machineLabel, pane, workspace, title,
+  said, tone, state}` (`said` is "waiting for an answer" for a question,
+  the watchdog's note for an amber one, else the first line of the last
+  answer) and counts the rest as working or idle. Functions in, defined
+  by Shell.tsx beside the service worker's messages: `select(machine,
+  pane)` opens the pane on its chat, `openPanel(name)` a panel `panelOf`
+  knows, `openMode(name)` a mode (`agents` is the first), `alert` is
+  reserved. Inside the app the alerts panel says notifications come
+  through the Mac app instead of the Web Push block; `popOutSupported`
+  is already false in WebKit. Inside the app the page counts as visible always (`pageVisible` in `lib/visibility.ts`, tested): the menu bar and the Dock badge are drawn from its roster while the window is hidden, where WebKit would otherwise stop the polls. The app names itself in its user agent (`remuda-mac/<version>`), so its device reads "remuda on macOS" (`auth.DeviceName`).
 - `internal/feed/` — the **activity**: what happened across the agents while
   nobody was looking. `push.Service.OnAlert` hears every alert the pushes
   carry, or would have carried without a subscribed device — a question
