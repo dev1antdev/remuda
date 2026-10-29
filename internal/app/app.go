@@ -13,6 +13,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
+	"github.com/dev1antdev/remuda/internal/complete"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
@@ -303,6 +304,7 @@ func Run(ctx context.Context, o Options) error {
 		Recipes:   recipes.New(o.Dir),
 		Prefs:     prefs.New(o.Dir),
 		Code:      code.New(o.CodePort),
+		Complete:  complete.New(),
 		Guard:     auth.NewGuard(o.Token, devices, keys),
 		Keys:      keys,
 		UI:        ui,

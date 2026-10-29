@@ -11,5 +11,6 @@ import { settings } from "./ru/settings";
 import { shell } from "./ru/shell";
 import { tasks } from "./ru/tasks";
 import { terminal } from "./ru/terminal";
+import { complete } from "./ru/complete";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...complete };

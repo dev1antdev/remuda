@@ -95,3 +95,10 @@ export const fetchQuestion = (machineId: string, paneId: string): Promise<Questi
 export type QuickPrompt = { id?: string; label: string; text: string; dir?: string };
 export const fetchQuick = (): Promise<QuickPrompt[]> => getJSON("/api/quick");
 export const saveQuick = (list: QuickPrompt[]): Promise<QuickPrompt[]> => sendJSON("PUT", "/api/quick", list);
+
+// ---- the composer's completion: what a slash or an @ offers in the pane's folder, read on the machine ----
+export type CompleteCommand = { name: string; description?: string; source: "builtin" | "user" | "project" };
+export const fetchCommands = (machineId: string, dir: string, agent: string): Promise<CompleteCommand[]> =>
+  getJSON<{ commands: CompleteCommand[] | null }>(`/api/complete?${new URLSearchParams({ machine: machineId, dir, kind: "commands", agent })}`).then((r) => r.commands ?? []);
+export const fetchPaths = (machineId: string, dir: string): Promise<{ paths: string[]; cut?: boolean }> =>
+  getJSON<{ paths: string[] | null; cut?: boolean }>(`/api/complete?${new URLSearchParams({ machine: machineId, dir, kind: "paths" })}`).then((r) => ({ paths: r.paths ?? [], cut: r.cut }));

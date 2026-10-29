@@ -2,7 +2,7 @@
 // quick prompts, dictation, Enter to send (Shift+Enter a new line; on a phone the button sends), ↑ in an empty
 // line to bring back what was sent before. The compact one, in a wall tile, is the line and its buttons alone.
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { sendKeys, submitPrompt } from "@/features/roster/api";
 import { isTouch } from "@/lib/prefs";
 import { errMsg } from "@/lib/text";
@@ -12,9 +12,11 @@ import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments"
 import { useDictation } from "./dictation";
 import { expandPrompt, QuickPromptsDialog, QuickPromptsMenu } from "./QuickPrompts";
 import { useHistory } from "./useHistory";
+import { applyPick, tokenAt, type Item } from "./complete";
+import { CompletionList, useCompletion } from "./Completion";
 import { t } from "@/lib/i18n";
 
-export default function Composer({ machineId, paneId, working, dir, compact = false }: { machineId: string; paneId: string; working: boolean; dir: string; compact?: boolean }) {
+export default function Composer({ machineId, paneId, working, dir, agent = "", compact = false }: { machineId: string; paneId: string; working: boolean; dir: string; agent?: string; compact?: boolean }) {
   // the insertions read the draft through a ref: a state updater must stay free of side effects
   const [draft, setDraftState] = useState("");
   const draftRef = useRef("");
@@ -32,6 +34,17 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
   const picker = useRef<HTMLInputElement>(null);
   const att = useAttachments(machineId, paneId);
   const history = useHistory(machineId, dir);
+
+  // the completion: the token under the caret, its list from the machine, the row the keys are on, the token Esc closed
+  const [caretPos, setCaretPos] = useState(0);
+  const [active, setActive] = useState(0);
+  const [dismissed, setDismissed] = useState<{ kind: string; start: number } | null>(null);
+  const token = useMemo(() => tokenAt(draft, caretPos), [draft, caretPos]);
+  const open = token && !(dismissed && dismissed.kind === token.kind && dismissed.start === token.start) ? token : null;
+  const completion = useCompletion(machineId, dir, agent, open);
+  const shown = completion.items;
+  const at = Math.min(active, Math.max(0, shown.length - 1));
+  useEffect(() => setActive(0), [open?.kind, open?.query]);
 
   const mention = (rel: string) => `@${rel}`;
 
@@ -62,6 +75,18 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
     moveCaret.current = null;
     area.current?.setSelectionRange(at, at);
   }, [draft]);
+
+  // pick puts the row's text in place of the token and leaves the caret after it, the field still focused
+  const pick = (item: Item) => {
+    if (!open) return;
+    const next = applyPick(draftRef.current, open, item.insert);
+    caret.current = next.caret;
+    moveCaret.current = next.caret;
+    setCaretPos(next.caret);
+    setDraft(next.draft);
+    setActive(0);
+    area.current?.focus();
+  };
 
   const attach = async (files: File[]) => {
     setError(null);
@@ -145,6 +170,7 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
           void attach(files);
         }}
       >
+        {open && <CompletionList kind={open.kind} items={shown} active={at} cut={completion.cut} error={completion.error} onPick={pick} onHover={setActive} />}
         <input
           ref={picker}
           type="file"
@@ -218,10 +244,14 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
           rows={Math.min(compact ? 3 : 6, Math.max(1, draft.split("\n").length))}
           onChange={(e) => {
             history.reset();
+            setCaretPos(e.target.selectionStart);
             setDraft(e.target.value);
           }}
           onBlur={(e) => (caret.current = e.target.selectionStart)}
-          onSelect={(e) => (caret.current = e.currentTarget.selectionStart)}
+          onSelect={(e) => {
+            caret.current = e.currentTarget.selectionStart;
+            setCaretPos(e.currentTarget.selectionStart);
+          }}
           onPaste={(e) => {
             const files = filesFrom(e.clipboardData);
             if (files.length === 0) return;
@@ -229,6 +259,24 @@ export default function Composer({ machineId, paneId, working, dir, compact = fa
             void attach(files);
           }}
           onKeyDown={(e) => {
+            // the completion takes the keys while it is open: ↑ ↓ walk its rows, ↵ or Tab picks, Esc closes it for this token
+            if (open && shown.length > 0) {
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                setActive((i) => (i + (e.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length);
+                return;
+              }
+              if ((e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) || e.key === "Tab") {
+                e.preventDefault();
+                pick(shown[at]!);
+                return;
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setDismissed({ kind: open.kind, start: open.start });
+                return;
+              }
+            }
             // phone keyboards have no Shift+Enter: there Enter breaks the line and the button sends
             if (isTouch) return;
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

@@ -205,6 +205,33 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   at the caret and strips it when the chip is removed; the terminal lens
   (`terminal/engine/paste.ts`) types the absolute paths shell-quoted.
   Nothing is sent until the user sends.
+- `web/src/features/chat/Completion.tsx` — **what the composer offers at
+  the caret**: a `/` as the message's first character lists the slash
+  commands the pane's agent knows, an `@` after a space lists the
+  folder's files, both ranked by what is typed (`complete.ts` the pure
+  part, tested: `tokenAt`, `applyPick`, `commandItems` / `pathItems` over
+  the palette's `rank`, `MAX_SHOWN` 12, `modelCommand`); ↑ ↓ walk the
+  rows, ↵ or Tab picks, Esc closes the list for that token, a click
+  picks; the lists come from `GET /api/complete?machine&dir&kind=commands
+  |paths&agent` (`internal/server/complete.go` → `internal/complete`,
+  tested on `shell.Fake`): the agent's built-ins (`builtins.go` — Claude
+  Code's, Codex's and Gemini CLI's own commands as their binaries and
+  reference name them; Kimi none, a shell none) and, for Claude Code,
+  the commands and skills under `~/.claude` and the folder's (and its
+  repository's) `.claude` — the name from the file or the skill's folder,
+  the description from the frontmatter or the first line — and the
+  folder's files as `git ls-files` lists them (tracked and untracked, the
+  ignored left out; `find` outside git), at most `MaxPaths` 5000, each
+  answer kept a minute on the server and on the page; a Codex or Gemini
+  pane gets its own list, never Claude Code's. **Switch the model**
+  (`ModelDialog.tsx`, dialog kind `model`: a row of the chat's View menu
+  and a palette command, for a Claude Code pane) sends `/model <id>` —
+  Opus, Sonnet, Haiku or a typed id — through `/api/submit`, so the
+  terminal shows the switch and the next answer's foot line names the
+  model; the pane's current model from the meter in its hint. Claude
+  Code 2.1.312 also saves the pick as the default for new sessions
+  (`model` in `~/.claude/settings.json`, its own doing), which the hint
+  says; a probe of it must put the person's default back the same way.
 - Terminal size modes (`web/src/features/terminal/engine/geometry.ts`): **fit** resizes the shared
   pane to this screen (herdr follows the smallest attached client — a phone
   would squeeze the desktop's view), **keep** attaches at the pane's own

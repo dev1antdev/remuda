@@ -20,6 +20,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
+	"github.com/dev1antdev/remuda/internal/complete"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
@@ -68,6 +69,7 @@ type Server struct {
 	Recipes   *recipes.Store
 	Prefs     *prefs.Store
 	Code      *code.Service
+	Complete  *complete.Service // what the composer offers at a slash or an @
 	Tailscale func() tsnetx.Status
 	Guard     *auth.Guard
 	Keys      *auth.Keys // the agents' tasks-only keys, listed and revoked in Settings
@@ -106,6 +108,7 @@ func (s *Server) Handler() http.Handler {
 	s.liveRoutes(api)
 	s.deviceRoutes(api)
 	s.agentKeyRoutes(api)
+	s.completeRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

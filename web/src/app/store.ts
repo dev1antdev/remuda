@@ -33,6 +33,7 @@ export type AppDialog =
   | { kind: "recipes" } // the saved ways to start an agent, edited as a list
   | { kind: "start-recipe"; machineId?: string; dir?: string } // an agent started from a recipe, in the folder at hand unless the recipe has its own
   | { kind: "pins"; machineId: string; paneId: string; dir: string; shown: string | null; title: string } // the turns pinned in a folder's conversations; shown = the session on screen, whose pins name no session
+  | { kind: "model"; machineId: string; paneId: string; current?: string } // a Claude Code pane's model switched through its own /model; current = what the meter last saw it answer with
   | null;
 
 export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
