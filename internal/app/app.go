@@ -7,9 +7,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
@@ -179,6 +182,16 @@ func Run(ctx context.Context, o Options) error {
 	}
 	restarter.Lock = input.Lock
 	keeper := &herdr.Keeper{Bin: bin, Socket: o.Socket}
+	// the machines kept awake while their agents work: the hold is let go before the fleet's masters close
+	hostname, _ := os.Hostname()
+	keepAwake := awake.New(o.Dir, func(id string) (shell.Host, bool) {
+		mc, err := fleet.Get(id)
+		if err != nil {
+			return nil, false
+		}
+		return mc, true
+	}, awake.ShellHolder{Dir: o.Dir, Name: strings.TrimSuffix(hostname, ".local")})
+	defer keepAwake.Close()
 	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker}
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
@@ -232,6 +245,8 @@ func Run(ctx context.Context, o Options) error {
 		hub.RosterChanged()
 	})
 	events.Subscribe(bus, func(e events.LocalHerdrDown) { keeper.Revive(e.Err) })
+	events.Subscribe(bus, func(e events.Snapshot) { keepAwake.Observe(e.Machine, awake.Working(e.Snap)) })
+	events.Subscribe(bus, func(e events.MachineRemoved) { keepAwake.Forget(e.Machine) })
 
 	// the loops
 	watcher.Start()
@@ -307,6 +322,7 @@ func Run(ctx context.Context, o Options) error {
 		Keys:      keys,
 		UI:        ui,
 		Live:      hub,
+		Awake:     keepAwake,
 	}
 	if o.Tailscale {
 		var node *tsnetx.Node

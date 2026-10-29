@@ -8773,3 +8773,9 @@ body.popout {
 .tasks-pr .pr-state {
   gap: 4px;
 }
+
+/* ---- the keep-awake switch: the ⓘ row when the hold could not be taken ---- */
+
+.health-rows dd.health-awake-bad {
+  color: var(--amber);
+}

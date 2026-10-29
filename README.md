@@ -803,6 +803,18 @@ is visible as a trend, not a number. It turns amber when an update
 is out (with the right command for how it was installed), a remote
 remuda is behind this one, or the disk is nearly full.
 
+**Keep awake while agents work:** a laptop that falls asleep in the
+middle of a task leaves a dead chat for the morning. The row of that
+name in a machine's ⋯ menu (off by default) has remuda hold the machine
+awake — `caffeinate -i` on a Mac, `systemd-inhibit` on Linux, started
+as you, no sudo — for as long as any agent on it is working, and let it
+go two minutes after the last one settled, or when remuda stops. The
+display may still sleep. The ⓘ's Awake row says how it stands ("Kept
+awake · 2 agents working"), and why it could not hold on a system with
+neither tool. The hold's pid is kept in remuda's state dir on the
+machine, so a reconnect or a restart finds the one still running
+instead of starting another.
+
 **Cost and context:** every agent pane shows how full its context is (a
 pill in the header and on the sidebar row from 50% up, red near the edge,
 with "Compact now" in the chat from 80%) and what the session has cost so
