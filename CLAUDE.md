@@ -362,6 +362,34 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
   (`features/roster/HealthButton.tsx`; the rules in `concerns.ts`) turns amber on an update, a lagging
   remote remuda, or a nearly full disk.
+- **The machine stays awake while its agents work** (`internal/awake`,
+  tested): a switch per machine, off by default, kept in `awake.json` in
+  the state dir (`PATCH /api/machines/{id}/awake {on}`, the row "Keep
+  awake while agents work" in the machine's ⋯ menu); with it on,
+  `Service.Observe` — every `events.Snapshot`, the count of agent panes
+  herdr reports working (`awake.Working`) — takes a hold on the machine
+  while any works and lets it go `Grace` (2 min) after the last one
+  settled, when the switch goes off, when the machine is removed and
+  when remuda stops (`Close`, deferred before the fleet closes so the
+  script still has the master). The hold is `ShellHolder`: `HoldScript`
+  over the machine's shell starts `caffeinate -i` on macOS (the display
+  may sleep) or `systemd-inhibit --what=idle:sleep … sleep infinity` on
+  Linux with `nohup`, detached, its pid in a file under remuda's state
+  dir there — this instance's own here (`awake.pid`), the remote's
+  `awake-<this host>.pid` so two cockpits holding one machine keep
+  apart — and keeps the one the file names when `ps -o args=` says it
+  still is an inhibitor (a reconnect or a restart reuses it, a pid
+  taken since by something else is not trusted); `ReleaseScript` ends
+  it the same way. A hold that stands is taken again every `Reassert`
+  (5 min) while agents work, so one that died with a reboot comes back;
+  a failed hold (a system with neither tool: "none <os>") is the
+  roster's `awake.error`, logged once, tried again after `Reassert`.
+  The roster's machine entry carries `awake {on, held, working, error}`
+  and the ⓘ shows an Awake row while the switch is on
+  (`features/roster/awake.ts`, tested: `awakeWords`, `awakeBad`). The
+  scripts are tested on stand-ins — `caffeinate`, `systemd-inhibit` and
+  a `uname` answering `AWAKE_TEST_OS` — first on PATH in a temp HOME,
+  so nothing real is held. No sudo.
 - **Peers** (`internal/server/peer.go`): herdr allows one attached client
   per terminal ("already has an attached client; retry with --takeover"),
   so two remuda reaching the same pane — the machine's own and this one

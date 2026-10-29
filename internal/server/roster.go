@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
@@ -88,6 +89,7 @@ type rosterMachine struct {
 	Error    string          `json:"error,omitempty"`
 	Sessions []rosterSession `json:"sessions"`
 	Health   *health.Report  `json:"health,omitempty"`
+	Awake    *awake.Status   `json:"awake,omitempty"` // the keep-awake switch and whether the hold stands
 }
 
 // sessionsFromSnapshot keeps herdr's own hierarchy, workspace → tabs → panes, in herdr's order.
@@ -215,6 +217,10 @@ func (s *Server) rosterBody() ([]byte, string) {
 			}
 		}
 		entry.Health = s.Health.Report(mc.ID())
+		if s.Awake != nil {
+			status := s.Awake.Status(mc.ID())
+			entry.Awake = &status
+		}
 		out = append(out, entry)
 	}
 	roster := map[string]any{"machines": out, "agents": sessions.Agents, "version": buildversion.Build, "latest": s.Health.Latest()}

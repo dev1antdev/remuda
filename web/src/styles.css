@@ -8908,3 +8908,9 @@ body.popout {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ---- the keep-awake switch: the ⓘ row when the hold could not be taken ---- */
+
+.health-rows dd.health-awake-bad {
+  color: var(--amber);
+}
