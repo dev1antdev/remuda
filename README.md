@@ -58,6 +58,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   per pane (all viewers share one attach; replay buffer for late joiners).
 - **Chat lens** — the transcript herdr names via `agent_session`, parsed
   into turns (text, thinking, tool calls with outputs), polled with ETags.
+  Claude Code's session files, Codex's rollouts and Gemini CLI's chats
+  all read into the same turns, so a Codex or Gemini pane has its chat,
+  recap, standup line, meter and search like a Claude Code one (Gemini's
+  reader is written from the CLI's own types and has not been seen live).
 - **One socket for the news** — the page keeps one WebSocket to its
   remuda, which says when the roster moved or a transcript grew, so the
   sidebar, the wall and the chat redraw within about a second instead of
@@ -845,7 +849,7 @@ amber for a watchdog note, green for a finish — so another tab or the
 dock tells you before you switch.
 
 **Search** (🔍, or the palette's last row): full text over every conversation on every
-machine — what you or an agent said, never tool output — filtered by
+machine, Claude Code's and Codex's — what you or an agent said, never tool output — filtered by
 machine, folder and period. A hit jumps to the turn in the running pane, or
 opens the old transcript read-only. No index, no database: each machine
 scans its own `~/.claude/projects` on demand (remuda's scanner where the
