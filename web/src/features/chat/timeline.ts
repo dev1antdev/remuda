@@ -4,7 +4,7 @@
 
 import { spent } from "@/lib/time";
 import type { Part, Turn } from "./api";
-import { toolLabel } from "./footprint";
+import { isQuestion, toolLabel } from "./footprint";
 import { t, tn } from "@/lib/i18n";
 
 export const SQUEEZE_MS = 10 * 60 * 1000; // a gap longer than this is drawn this long: one lunch break must not flatten the day
@@ -97,7 +97,7 @@ export function timeline(turns: Turn[]): Timeline {
         if (!firstError) firstError = { kind: "error", id, at, label: t("First error"), detail: callWords(part), count: 1 };
       }
       if (part.took && (!longest || part.took > longest.took)) longest = { kind: "longest", id, at, label: t("Longest call {time}", { time: spent(part.took) }), detail: callWords(part), count: 1, took: part.took };
-      if (part.tool_name === "AskUserQuestion") marks.push({ kind: "question", id, at, label: t("Question"), detail: callWords(part), count: 1 });
+      if (isQuestion(part.tool_name)) marks.push({ kind: "question", id, at, label: t("Question"), detail: callWords(part), count: 1 });
       const key = callKey(part);
       if (run && run.key === key) run.count++;
       else {
