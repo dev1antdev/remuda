@@ -80,7 +80,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   its "trust this folder", an AskUserQuestion) with a button per choice;
   a tap walks the cursor there and presses Enter, Esc closes. From the
   phone, the wall and the pop-out too. A dialog remuda cannot read leaves
-  the blind ↑ ↓ Enter Esc.
+  the blind ↑ ↓ Enter Esc. Beside the composer's tools a small chip says
+  Claude Code's permission mode as its footer does — accept edits, plan,
+  auto, manual, bypass in amber — and a tap cycles it with shift+tab, the
+  key a phone has no way to send.
 - **New workspace / close** — `workspace.create` + `agent.start` (any agent
   herdr has a manifest for, with the model, extra arguments and first
   prompt you chose under Options), `workspace.close`.
