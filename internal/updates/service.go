@@ -80,7 +80,7 @@ func (s *Service) RestartPane(mc *machines.Machine, paneID string) (jobs.Job, er
 		return jobs.Job{}, err
 	}
 	title := "Restart " + restart.Title(kind) + " in " + p.DisplayTitle()
-	command := "# in " + paneID + " on " + mc.Label() + ", through herdr:\n" + restart.Resume(kind, session) + "   (after its own " + restart.Exit(kind) + ")"
+	command := "# in " + paneID + " on " + mc.Label() + ", through herdr:\n" + restartCommand(kind, session)
 	return s.Jobs.Run(mc, title, command, func(say func(string)) error { return s.Restart.Pane(mc, paneID, say) }), nil
 }
 
@@ -235,9 +235,29 @@ func restartPlan(kind string, snap *herdr.Snapshot) (Update, int) {
 	if len(busy) > 0 {
 		note += fmt.Sprintf(", %d of them busy (those restart once they have settled for a while)", len(busy))
 	}
-	note += fmt.Sprintf(". Each is asked to leave and %s is started again in the same pane with the conversation resumed — for a %s that updated itself, or after `%s update` run by hand. A message half-typed in a chat's box is lost.", title, title, kind)
-	cmd := "# in every " + title + " pane here (" + strings.Join(ids, ", ") + "), through herdr:\n" + restart.Resume(kind, "<session>") + "   (after its own " + restart.Exit(kind) + ")"
+	note += ". " + restartWords(kind) + fmt.Sprintf(" — for a %s that updated itself, or after `%s update` run by hand. A message half-typed in a chat's box is lost.", title, kind)
+	cmd := "# in every " + title + " pane here (" + strings.Join(ids, ", ") + "), through herdr:\n" + restartCommand(kind, "<session>")
 	return Update{What: "restart-" + kind, Title: "Restart " + title + " chats", Command: cmd, Note: note}, n
+}
+
+// restartCommand is what a restart types into a pane of the kind, for showing: the agent's own in-place restart
+// when it has one, with the exit and resume it falls back to, else the exit and resume alone.
+func restartCommand(kind, session string) string {
+	leave := restart.Resume(kind, session) + "   (after its own " + restart.Exit(kind) + ")"
+	if in := restart.InPlace(kind); in != "" {
+		return in + "   (restarts in place, the session kept; without the command: " + leave + ")"
+	}
+	return leave
+}
+
+// restartWords says how a chat of the kind is restarted.
+func restartWords(kind string) string {
+	title := restart.Title(kind)
+	leave := fmt.Sprintf("asked to leave and %s is started again in the same pane with the conversation resumed", title)
+	if in := restart.InPlace(kind); in != "" {
+		return fmt.Sprintf("Each is told `%s`, so %s restarts in place with the conversation kept; one without the command is %s", in, title, leave)
+	}
+	return "Each is " + leave
 }
 
 // restartHooks reads the agents' versions before and after an update's script and restarts the chats of every agent whose version changed.

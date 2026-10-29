@@ -334,15 +334,18 @@ update of herdr installs them again by itself, and "Update herdr plugins"
 is `herdr plugin update` for the plugins installed from GitHub (herdr
 0.9.4 and up). After an
 agent update, the chats running that agent are restarted onto the new
-version: each is asked to leave (its own `/exit`) and started again in the
-same pane with its session resumed (`claude --resume`, `codex resume`,
-`gemini --resume`, `kimi --session`); a busy chat is restarted a little after it finishes,
-and a message half-typed in a chat's box is lost. The same restart is
+version: Claude Code is told its own `/restart` and comes back on the
+installed version with the conversation kept, in place; the others — and
+a Claude Code that does not have the command yet — are asked to leave
+(their own `/exit`) and started again in the same pane with the session
+resumed (`claude --resume`, `codex resume`, `gemini --resume`, `kimi
+--session`); a busy chat is restarted a little after it finishes, and a
+message half-typed in a chat's box is lost. The same restart is
 offered on its own ("Restart Claude Code chats") for an agent that
 updated itself, and for one chat at a time from the workspace's ⋯ menu
 or the palette ("Restart Claude Code on its session…"): for an agent
-that got stuck, the same exit and resume in its pane, refused while it
-has a question open or is still working. An update of herdr ends with its server on the new
+that got stuck, the same restart in its pane, refused while it has a
+question open or is still working. An update of herdr ends with its server on the new
 version: herdr's own live handoff when the installer did one, otherwise
 the server is restarted — herdr restores the workspaces and panes, and
 remuda starts every chat again with its session resumed ("Restart
