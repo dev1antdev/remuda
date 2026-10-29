@@ -745,6 +745,14 @@ secrets stay on the server in `webhooks.json`: the page sees a masked
 address and whether a token is set, and nothing is sent anywhere you did
 not name here.
 
+**Mute a workspace** when one folder keeps pinging while you work on
+another: the workspace's ⋯ menu offers *Mute for an hour* and *Mute until
+tomorrow 09:00*. Until then its panes send no push, no webhook and add no
+Activity row — a bell-off on the sidebar row and the Wall tile says so,
+with the time left in its tooltip — and the menu row reads *Unmute · 42
+min left*. The mute ends by itself; the page's badge and read-aloud go on
+as before, since they read the roster rather than the alerts.
+
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
 since you last looked marked, and the commits made since. A merge or a

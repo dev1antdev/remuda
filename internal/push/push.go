@@ -91,6 +91,9 @@ type Service struct {
 	Webhooks *Webhooks
 	// Sockets are the live connections of the socket devices, the Mac app among them.
 	Sockets *Sockets
+	// Mutes are the workspace folders the person silenced for a while; Folder names a pane's folder for the check.
+	Mutes  *Mutes
+	Folder func(machine, pane string) string
 }
 
 // Delays are variables so tests can shrink them.
@@ -108,6 +111,7 @@ func New(dir string) (*Service, error) {
 	s.send = s.Send
 	s.Webhooks = loadWebhooks(dir)
 	s.Sockets = newSockets()
+	s.Mutes = loadMutes(dir)
 	if err := s.loadKeys(); err != nil {
 		return nil, err
 	}
@@ -275,6 +279,9 @@ func topic(tag string) string {
 
 // Notify sends one payload now to every device that wants the watchdog's word (the pref defaults to on).
 func (s *Service) Notify(p Payload) {
+	if s.silenced(p) {
+		return
+	}
 	s.record(p)
 	var targets []*Subscription
 	for _, sub := range s.list() {
@@ -288,6 +295,9 @@ func (s *Service) Notify(p Payload) {
 
 // Broadcast sends one payload now to every device, whatever its watchdog pref: a schedule's word is the person's own.
 func (s *Service) Broadcast(p Payload) {
+	if s.silenced(p) {
+		return
+	}
 	s.record(p)
 	s.deliver(s.list(), p)
 }
@@ -385,6 +395,9 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 				s.timers[key] = rest
 			}
 			s.mu.Unlock()
+			if s.silenced(p) {
+				return
+			}
 			if note {
 				s.record(p)
 			}

@@ -1140,7 +1140,23 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   what each means, quiet hours by this device's zone, on/off);
   `webhooks.ts` the pure part, tested: `hookWords`, `outcomeWords`,
   `draftOf` / `hookOf` / `checkDraft`, `DEFAULT_KINDS` (everything but
-  the finishes), `toggleKind`.
+  the finishes), `toggleKind`. **Muted workspaces** (`mutes.go`, tested):
+  a folder on a machine silenced until a moment — `mutes.json` in the
+  state dir, `Mutes.Mute` / `Unmute` / `Until` / `All`, an expired one
+  dropped on read — and `Service.silenced(p)` asks `Service.Folder` (the
+  app wires it to the watcher's snapshot: the pane's workspace folder)
+  before a scheduled alert fires, before `Notify` and before `Broadcast`:
+  a muted folder's panes send no push, no webhook and add no feed row,
+  while the voice and the badge on the page go on reading the roster.
+  Routes `GET/PUT/DELETE /api/mutes` (`internal/server/mutes.go`, tested:
+  `{machine, dir, until}` RFC 3339, a past time or a machine the fleet
+  does not know refused); the roster's `session.muted_until`; the page:
+  `features/roster/mute.ts` (tested: `muteChoices` an hour and the next
+  09:00 at least an hour away, `mutedUntil`, `leftWords`, `muteWords`),
+  the workspace ⋯ menu's "Mute for an hour" / "Mute until tomorrow
+  09:00" / "Unmute · 42 min left", and `MutedMark` (`rows.tsx`), the
+  bell-off on the sidebar row and the wall tile's head with the time
+  left in its tooltip.
 - `web/public/sw.js` shows every push (Safari revokes silent subscriptions),
   silent while a window is visible; click → `select-pane` message to an open
   window or `openWindow(/?machine=&pane=)` — either way the pane opens in
