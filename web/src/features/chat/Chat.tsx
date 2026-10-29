@@ -28,7 +28,7 @@ import { useFind } from "./useFind";
 import { useFollowBottom } from "./useFollowBottom";
 import { t } from "@/lib/i18n";
 
-export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session }: {
+export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, focused = true, subagent, session }: {
   machineId: string;
   paneId: string; // "" shows a transcript on its own (a search jump), read-only
   status: string;
@@ -38,6 +38,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   workspaceId?: string; // with agent: an older session picked here can be resumed in a new tab of this workspace
   agent?: string;
   active?: boolean; // the lens on screen; a hidden one keeps its state and waits
+  focused?: boolean; // in the split view, the side the find bar serves; the terminal beside it has the bar otherwise
   subagent?: string; // with no pane: one subagent's own conversation, read-only
   session?: string; // with no pane: the session to show when no jump names it (the viewer)
 }) {
@@ -100,7 +101,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   useEffect(() => {
     if (finding && hidden > 0) revealAll();
   }, [finding, hidden, revealAll]);
-  useFind(logRef, { active, chat, mounted: hidden === 0 });
+  useFind(logRef, { active: active && focused, chat, mounted: hidden === 0 });
   const follow = useFollowBottom(logRef, { active, chat, startAtBottom: !jump?.turn, mounted: hidden });
 
   // a search hit: scroll to its turn once that session is on screen, or say it is older than the loaded tail

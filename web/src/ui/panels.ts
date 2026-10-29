@@ -9,6 +9,7 @@ export const PANELS = {
   rail: { key: "panel.rail", cssVar: "--rail-w", width: 300, min: 220, max: 600 },
   queue: { key: "panel.queue", cssVar: "--queue-w", width: 300, min: 220, max: 560 },
   taskDetail: { key: "panel.tasks.detail", cssVar: "--task-detail-w", width: 380, min: 300, max: 720 },
+  split: { key: "panel.split", cssVar: "--split-w", width: 520, min: 320, max: 1200 },
 } satisfies Record<string, PanelSpec>;
 
 export const STEP = 16; // one arrow key; Shift makes it four

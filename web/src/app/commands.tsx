@@ -60,6 +60,7 @@ function useCommands(): (query: string) => Entry[] {
   const chatSession = app.use((s) => s.chatSession);
   const chatLive = app.use((s) => s.chatLive);
   const footprint = app.use((s) => s.footprint);
+  const split = app.use((s) => s.split);
   const full = app.use((s) => s.full);
   const themePref = useThemePref();
   const darkFlavor = useDarkFlavorPref();
@@ -186,11 +187,12 @@ function useCommands(): (query: string) => Entry[] {
       for (const language of LANGS) {
         command(`lang-${language}`, language === "ru" ? "Язык: Русский" : t("Language: English"), () => setLangPref(language), { hint: `${currentLang() === language ? t("now · ") : ""}${t("the page's own words; a change reloads the page")}`, icon: "monitor", keywords: ["language", "язык", "russian", "english", "русский", language] });
       }
+      if (current && !viewer && mode === "herdr") command("split", split ? t("Chat and terminal: one at a time") : t("Chat beside the terminal"), actions.toggleSplit, { hint: split ? t("the lens switch shows one lens again") : t("the chat on the left, the terminal on the right, on a screen at least 1180 px wide with a mouse"), icon: "columns", keywords: ["split", "side", "beside", "chat", "terminal", "columns", "both"] });
       const typed = query.trim();
       command("import-issue", t("New task from a GitHub issue…"), () => actions.openDialog({ kind: "import-issue" }), { hint: t("read with gh on the machine, as you; an agent can start on it at once"), icon: "link", keywords: ["github", "issue", "import", "task", "new", "gh"] });
       command("search", typed ? t("Search every conversation for “{typed}”", { typed }) : t("Search every conversation…"), () => actions.openSearch(typed), { hint: t("what you or an agent said, on every machine"), icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...commands];
     },
-    [machines, mode, lens, viewer, chatSession, footprint, full, themePref, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
+    [machines, mode, lens, viewer, chatSession, footprint, split, full, themePref, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
   );
 }
