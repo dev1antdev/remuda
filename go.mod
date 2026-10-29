@@ -7,7 +7,7 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/creack/pty v1.1.24
 	modernc.org/sqlite v1.60.1
-	tailscale.com v1.104.1
+	tailscale.com v1.104.2
 )
 
 require (
