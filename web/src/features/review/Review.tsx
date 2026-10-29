@@ -157,7 +157,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           </span>
           <span className="review-sub">
             {lastLookText}
-            {commits.length > 0 && ` · ${plural(commits.length, "commit")}`}
+            {commits.length > 0 && ` · ${review?.commits_total ? t("the newest {n} of {total} commits", { n: commits.length, total: review.commits_total }) : plural(commits.length, "commit")}`}
             {files.length > 0 && ` · ${t("{files} uncommitted +{added} −{removed}", { files: plural(files.length, "file"), added, removed })}`}
           </span>
         </div>

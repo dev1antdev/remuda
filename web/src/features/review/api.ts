@@ -11,6 +11,7 @@ export type Review = {
   head?: string;
   baseline?: { head: string; at: string; verdict?: Verdict; ready?: string }; // ready: when the agent said the rejected work is ready for another look
   commits: ReviewCommit[];
+  commits_total?: number; // every commit since the last look, when more than the ones listed
   files: ReviewFile[];
   fresh: number;
   error?: string;
