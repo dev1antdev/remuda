@@ -135,6 +135,22 @@ func Run(ctx context.Context, o Options) error {
 		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body})
 		hub.RosterChanged() // the bell's dot rides on the roster
 	}
+	// a muted workspace: the pane's folder from the watcher's last snapshot, for the push service's silence check
+	pushSvc.Folder = func(machineID, paneID string) string {
+		snap, _ := watcher.Snapshot(machineID)
+		if snap == nil {
+			return ""
+		}
+		pane := snap.Pane(paneID)
+		if pane == nil {
+			return ""
+		}
+		ws := snap.Workspace(pane.WorkspaceID)
+		if ws == nil {
+			return ""
+		}
+		return snap.WorkspaceDir(ws)
+	}
 	// a question push carries the dialog's choices as buttons, read off the pane's screen as the push goes out
 	pushSvc.Question = func(machineID, paneID string) (push.Asked, bool) {
 		mc, err := fleet.Get(machineID)

@@ -9039,3 +9039,24 @@ body.popout {
     display: none;
   }
 }
+
+/* ---- muted workspaces: the bell-off a silenced workspace wears in the sidebar and on a wall tile's head ---- */
+.radar-muted,
+.tile-muted {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--fg-faint);
+}
+
+.radar-muted {
+  margin-left: 4px;
+}
+
+.ws-label .radar-muted {
+  vertical-align: -1px;
+}
+
+.tile-muted {
+  margin-left: 6px;
+}

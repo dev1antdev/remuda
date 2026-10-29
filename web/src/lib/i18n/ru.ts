@@ -17,5 +17,6 @@ import { awake } from "./ru/awake";
 import { pr } from "./ru/pr";
 import { complete } from "./ru/complete";
 import { macshell } from "./ru/macshell";
+import { mute } from "./ru/mute";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...mute };

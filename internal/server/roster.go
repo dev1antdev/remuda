@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/health"
@@ -78,6 +79,7 @@ type rosterSession struct {
 	Worktree    *rosterWorktree `json:"worktree,omitempty"`
 	Dir         string          `json:"dir,omitempty"`
 	Review      *rosterReview   `json:"review,omitempty"`
+	MutedUntil  *time.Time      `json:"muted_until,omitempty"` // the folder is silenced until then: no push, no webhook, no feed row
 	Tabs        []rosterTab     `json:"tabs"`
 }
 
@@ -166,6 +168,11 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			}
 		}
 		session.Dir = snap.WorkspaceDir(&ws)
+		if session.Dir != "" && s.Push != nil {
+			if until, muted := s.Push.Mutes.Until(machineID, session.Dir); muted {
+				session.MutedUntil = &until
+			}
+		}
 		if session.Dir != "" {
 			badge, ok := s.Review.Badge(machineID, session.Dir)
 			ready := s.Review.Ready(machineID, session.Dir)
