@@ -176,6 +176,7 @@ function useCommands(): (query: string) => Entry[] {
       command("keys", t("Keyboard shortcuts"), () => actions.openDialog({ kind: "keys" }), { hint: t("? · every key the page answers"), icon: "keyboard", keywords: ["keys", "shortcuts", "help", "hotkeys", "bindings", "keyboard"] });
       command("machine", t("Add a PC…"), () => actions.openDialog({ kind: "machine" }), { hint: t("a remote machine over SSH"), icon: "monitor", keywords: ["machine", "remote", "ssh", "host"] });
       command("budgets", t("Budgets…"), () => actions.openPanel("usage"), { hint: t("a spending limit per day, week or month, with a push when it is near"), icon: "chart", keywords: ["budget", "limit", "cost", "spend", "money"] });
+      if (current && !viewer && current.pane.agent === "claude") command("model", t("Switch this agent's model…"), () => actions.openDialog({ kind: "model", machineId: current.machine.id, paneId: current.pane.id, current: current.pane.usage?.name }), { hint: t("Opus, Sonnet, Haiku or an id, through Claude Code's own /model"), icon: "sparkles", keywords: ["model", "opus", "sonnet", "haiku", "switch", "cheaper", "faster"] });
       for (const flavor of DARK_FLAVORS) {
         command(`flavor-${flavor}`, t("Dark flavour: {flavor}", { flavor: FLAVOR_NAMES[flavor] }), () => setDarkFlavorPref(flavor), { hint: `${darkFlavor === flavor ? t("now · ") : ""}${t("Catppuccin {flavor} whenever the theme is dark", { flavor: FLAVOR_NAMES[flavor] })}`, icon: "moon", keywords: ["theme", "dark", "flavour", "flavor", "catppuccin", flavor] });
       }

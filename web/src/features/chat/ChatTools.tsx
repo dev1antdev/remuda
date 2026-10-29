@@ -12,7 +12,7 @@ import { pinKey, type Pin } from "./pins";
 import { useTimelineShown } from "./TimelineBar";
 import { t } from "@/lib/i18n";
 
-export type ChatPlace = { machineId: string; paneId: string; session: string | null; dir: string; agent: string; workspace: string; machine: string };
+export type ChatPlace = { machineId: string; paneId: string; session: string | null; dir: string; agent: string; workspace: string; machine: string; model?: string };
 
 export function ChatTools() {
   return <FindTool />;
@@ -21,7 +21,7 @@ export function ChatTools() {
 // useChatViewItems is the chat's part of the View menu; a shell pane has no conversation, so its rows are disabled
 export function useChatViewItems(place: ChatPlace): MenuItem[] {
   const [timeline, setTimeline] = useTimelineShown();
-  const { machineId, paneId, session, dir, agent, workspace, machine } = place;
+  const { machineId, paneId, session, dir, agent, workspace, machine, model } = place;
   const chatLive = app.use((s) => s.chatLive);
   const [pins] = usePref<Pin[]>(pinKey(machineId, dir), []);
   const title = machineId !== "local" && machine ? t("{workspace} on {machine}", { workspace, machine }) : workspace;
@@ -35,5 +35,7 @@ export function useChatViewItems(place: ChatPlace): MenuItem[] {
     { label: t("Continue with another agent…"), icon: "arrow-right", hint: t("a new tab here, the gist of this conversation as its first prompt"), disabled: !agent || !paneId, onSelect: () => actions.openDialog({ kind: "handover", machineId, paneId, session, agent, workspace: title }) },
     { sep: true },
     { label: t("Pins…"), icon: "pin", hint: pins.length ? plural(pins.length, "pinned turn") : t("the turns you pin, each a jump back to it"), disabled: !agent || !paneId, onSelect: () => actions.openDialog({ kind: "pins", machineId, paneId, dir, shown: session ?? chatLive, title }) },
+    { sep: true },
+    { label: t("Switch the model…"), icon: "sparkles", hint: t("Opus, Sonnet, Haiku or an id, through Claude Code's own /model"), disabled: agent !== "claude" || !paneId, onSelect: () => actions.openDialog({ kind: "model", machineId, paneId, current: model }) },
   ];
 }

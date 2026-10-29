@@ -18,6 +18,7 @@ import Schedules from "@/features/schedules/Schedules";
 import Search from "@/features/search/Search";
 import RecapDialog from "@/features/standup/RecapDialog";
 import HandoverDialog from "@/features/chat/HandoverDialog";
+import ModelDialog from "@/features/chat/ModelDialog";
 import { handedOverWords } from "@/features/chat/handover";
 import ImportIssueDialog from "@/features/tasks/ImportIssueDialog";
 import RecipesDialog from "@/features/recipes/RecipesDialog";
@@ -170,6 +171,18 @@ export default function Overlays() {
             const label = agents.find((a) => a.id === kind)?.label ?? kind;
             if (made.agent_error) actions.notify(t("The tab is there, but {agent} failed to start: {error}", { agent: label, error: made.agent_error }), { error: true });
             else actions.notify(handedOverWords(label, made.size), { brief: true });
+          }}
+        />
+      )}
+      {dialog?.kind === "model" && (
+        <ModelDialog
+          machineId={dialog.machineId}
+          paneId={dialog.paneId}
+          current={dialog.current}
+          onClose={actions.closeDialog}
+          onDone={(id) => {
+            actions.closeDialog();
+            actions.notify(t("Told Claude Code /model {model}", { model: id }), { brief: true });
           }}
         />
       )}

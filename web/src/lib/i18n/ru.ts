@@ -12,5 +12,9 @@ import { settings } from "./ru/settings";
 import { shell } from "./ru/shell";
 import { tasks } from "./ru/tasks";
 import { terminal } from "./ru/terminal";
+import { webhooks } from "./ru/webhooks";
+import { awake } from "./ru/awake";
+import { pr } from "./ru/pr";
+import { complete } from "./ru/complete";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...recover };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover };

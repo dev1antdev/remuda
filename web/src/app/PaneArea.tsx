@@ -40,7 +40,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
   const place = viewer
     ? { machineId: viewer.machine, paneId: "", session: viewer.session, dir: viewer.dir, agent: viewer.subagent ? "" : "claude", workspace: basename(viewer.dir), machine: "" }
     : current
-      ? { machineId: current.machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), agent: current.pane.agent, workspace: current.session.name, machine: current.machine.label }
+      ? { machineId: current.machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), agent: current.pane.agent, workspace: current.session.name, machine: current.machine.label, model: current.pane.usage?.name }
       : { machineId: "", paneId: "", session: null, dir: "", agent: "", workspace: "", machine: "" };
   const chatItems = useChatViewItems(place);
   const terminalItems = useTerminalViewItems(current?.pane ?? { cols: 0, rows: 0 } as Located["pane"]);

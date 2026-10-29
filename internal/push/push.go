@@ -61,12 +61,13 @@ type Payload struct {
 	Tag     string   `json:"tag"`
 	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop | schedule | digest | task | budget | review
 	Actions []Action `json:"actions,omitempty"`
-	Panel   string   `json:"panel,omitempty"` // a panel of the page a tap opens instead of a pane (standup)
+	Panel   string   `json:"panel,omitempty"`   // a panel of the page a tap opens instead of a pane (standup)
+	Choices []string `json:"choices,omitempty"` // a question's choices in full, the words behind its choice-N actions
 }
 
 // Action is a button on the notification; the service worker performs it.
 type Action struct {
-	Action string `json:"action"` // open | esc
+	Action string `json:"action"` // open | esc | choice-0 | choice-1
 	Title  string `json:"title"`
 }
 
@@ -84,6 +85,10 @@ type Service struct {
 
 	// OnAlert hears every alert as it goes out, or would have — the activity feed, whether or not a device is subscribed.
 	OnAlert func(p Payload)
+	// Question reads the dialog off a pane's screen when a question push goes out, so its choices ride as buttons.
+	Question func(machine, pane string) (Asked, bool)
+	// Webhooks hear the same alerts, each the kinds the person gave it.
+	Webhooks *Webhooks
 }
 
 // Delays are variables so tests can shrink them.
@@ -99,6 +104,7 @@ func New(dir string) (*Service, error) {
 	s := &Service{dir: dir, subs: map[string]*Subscription{}, timers: map[events.PaneRef][]*time.Timer{},
 		subject: "https://github.com/dev1antdev/remuda"}
 	s.send = s.Send
+	s.Webhooks = loadWebhooks(dir)
 	if err := s.loadKeys(); err != nil {
 		return nil, err
 	}
@@ -292,11 +298,18 @@ func (s *Service) deliver(targets []*Subscription, p Payload) {
 	}
 }
 
-// record hands an alert to the feed, when there is one.
+// record hands an alert to the feed, when there is one, and to the webhooks: what the devices would have
+// heard, whether or not one is subscribed.
 func (s *Service) record(p Payload) {
 	if s.OnAlert != nil {
 		s.OnAlert(p)
 	}
+	s.Webhooks.Deliver(p)
+}
+
+// anyoneListens says whether an alert would reach something beside the devices: the feed or a webhook.
+func (s *Service) anyoneListens(kind string) bool {
+	return s.OnAlert != nil || s.Webhooks.Wants(kind)
 }
 
 // SendTest proves the whole path for one device.
@@ -326,7 +339,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 	for _, sub := range s.subs {
 		subs = append(subs, sub)
 	}
-	if len(subs) == 0 && s.OnAlert == nil {
+	if len(subs) == 0 && s.OnAlert == nil && !s.Webhooks.Any() {
 		return
 	}
 
@@ -340,13 +353,17 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 	}
 
 	var pending []*time.Timer
-	// note: the feed hears this alert when it fires, so a finish or a question answered at the desk is no news either
-	schedule := func(delay time.Duration, targets []*Subscription, p Payload, note bool) {
-		if len(targets) == 0 && !(note && s.OnAlert != nil) {
+	// note: the feed hears this alert when it fires, so a finish or a question answered at the desk is no news either;
+	// dress reads what the pane shows at that moment into the payload (nil: sent as built)
+	schedule := func(delay time.Duration, targets []*Subscription, p Payload, note bool, dress func(Payload) Payload) {
+		if len(targets) == 0 && !(note && s.anyoneListens(p.Kind)) {
 			return
 		}
 		var t *time.Timer
 		t = time.AfterFunc(delay, func() {
+			if dress != nil {
+				p = dress(p)
+			}
 			// drop only this timer: a sibling (the other device group's delay) must stay cancellable by a later status change
 			s.mu.Lock()
 			rest := s.timers[key][:0]
@@ -382,7 +399,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 			Title: label + " needs you",
 			Body:  agent + " is waiting for an answer" + paneLine(ev),
 			Tag:   key.String(),
-		}, true)
+		}, true, s.asked)
 	case herdr.StatusDone:
 		if ev.From != herdr.StatusWorking {
 			return
@@ -404,8 +421,8 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 			Body:  agent + " is done after " + ev.Worked.Round(time.Second).String() + paneLine(ev),
 			Tag:   key.String(),
 		}
-		schedule(doneDelay, long, p, false)
-		schedule(doneDelayFast, always, p, true)
+		schedule(doneDelay, long, p, false, nil)
+		schedule(doneDelayFast, always, p, true, nil)
 	default:
 		return
 	}

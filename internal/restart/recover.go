@@ -300,7 +300,7 @@ func sessionFileExists(mc *machines.Machine, c Chat) bool {
 	if info, err := mc.ResolvePath("", own); err == nil && info.Kind != "missing" && info.Kind != "dir" {
 		return true
 	}
-	_, err := mc.Transcripts.ResolveSession(c.Dir, "id", c.Session)
+	_, err := mc.Transcripts.ResolveSession(c.Kind, c.Dir, "id", c.Session)
 	return err == nil
 }
 

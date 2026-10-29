@@ -24,11 +24,12 @@ import { t } from "@/lib/i18n";
 
 export const TAIL_TURNS = 12;
 
-const Tail = memo(function Tail({ machineId, paneId, status, dir, words, settled = false, said: fallback, active }: {
+const Tail = memo(function Tail({ machineId, paneId, status, dir, agent = "", words, settled = false, said: fallback, active }: {
   machineId: string;
   paneId: string;
   status: string;
   dir: string;
+  agent?: string; // the pane's agent kind, for the composer's completion
   words: string;
   settled?: boolean; // the agent finished or sits idle: the state line says what it answered
   said?: string; // the roster's line, until the tail has the turns
@@ -57,7 +58,7 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, words, settled
           <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} />
         ))}
       </div>
-      <TailAnswer machineId={machineId} paneId={paneId} status={status} dir={dir} active={active} error={fetchError || null} />
+      <TailAnswer machineId={machineId} paneId={paneId} status={status} dir={dir} agent={agent} active={active} error={fetchError || null} />
     </div>
   );
 });
@@ -116,7 +117,7 @@ function Running({ since }: { since: string }) {
 }
 
 // TailAnswer is the foot of a tile whatever it shows above: the keys for a question the agent asks, an error, the one-line composer.
-export function TailAnswer({ machineId, paneId, status, dir, active = true, error: shown = null }: { machineId: string; paneId: string; status: string; dir: string; active?: boolean; error?: string | null }) {
+export function TailAnswer({ machineId, paneId, status, dir, agent = "", active = true, error: shown = null }: { machineId: string; paneId: string; status: string; dir: string; agent?: string; active?: boolean; error?: string | null }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const keys = (ks: string[]) => sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
   const error = actionError ?? shown;
@@ -134,7 +135,7 @@ export function TailAnswer({ machineId, paneId, status, dir, active = true, erro
           {error}
         </Notice>
       )}
-      <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} compact />
+      <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} agent={agent} compact />
     </>
   );
 }

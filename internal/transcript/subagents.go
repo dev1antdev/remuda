@@ -93,6 +93,9 @@ func SubagentID(id string) bool {
 // moves whenever one of them does, for the chat's ETag. The folder is stat'ed in one round trip; only a transcript or
 // meta file that changed is read again. No folder is no subagents.
 func (r *Reader) Subagents(sessionPath string, now time.Time) ([]Subagent, string, error) {
+	if FormatOf(sessionPath) != Claude { // only Claude Code keeps a session's subagents beside it
+		return nil, "", nil
+	}
 	dir := SubagentsDir(sessionPath)
 	versions, err := r.subagentFiles(dir, now)
 	if err != nil {
@@ -270,6 +273,9 @@ func (s *Subagent) settle(finished, answered bool, lastWrite, now time.Time) {
 
 // SubagentsStamp is the folder's stamp alone, no file read: "" without a subagent.
 func (r *Reader) SubagentsStamp(sessionPath string, now time.Time) string {
+	if FormatOf(sessionPath) != Claude {
+		return ""
+	}
 	versions, err := r.subagentFiles(SubagentsDir(sessionPath), now)
 	if err != nil || len(versions) == 0 {
 		return ""

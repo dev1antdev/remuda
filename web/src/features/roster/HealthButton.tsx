@@ -8,6 +8,7 @@ import { ago } from "@/lib/time";
 import { newer } from "@/lib/version";
 import { Icon, useDismiss } from "@/ui";
 import { refreshHealth, type Health, type Latest, type Machine } from "./api";
+import { awakeBad, awakeWords } from "./awake";
 import { resumeStopped } from "@/features/updates/recover";
 import { concerns, updateLabel } from "./concerns";
 import { Sparkline } from "./Sparkline";
@@ -157,6 +158,12 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
                 {h.uptime ? ` · ${t("up {time}", { time: h.uptime })}` : ""}
                 {history && <Sparkline values={loads} min={loadRange.min} max={loadRange.max} color="var(--ctp-blue)" thresholds={loadThresholds(h.cores)} title={sparkTitle("Load", loads, (v) => v.toFixed(2), span)} />}
               </dd>
+              {m.awake?.on && (
+                <>
+                  <dt>{t("Awake")}</dt>
+                  <dd className={awakeBad(m.awake) ? "health-awake-bad" : undefined}>{awakeWords(m.awake)}</dd>
+                </>
+              )}
               <dt>{t("Read")}</dt>
               <dd>
                 {ago(h.at)}

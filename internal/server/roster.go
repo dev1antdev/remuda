@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
@@ -89,6 +90,7 @@ type rosterMachine struct {
 	Error    string            `json:"error,omitempty"`
 	Sessions []rosterSession   `json:"sessions"`
 	Health   *health.Report    `json:"health,omitempty"`
+	Awake    *awake.Status     `json:"awake,omitempty"`   // the keep-awake switch and whether the hold stands
 	Stopped  []restart.Stopped `json:"stopped,omitempty"` // the chats a reboot stopped: their panes are bare shells again, a Resume brings them back
 }
 
@@ -217,6 +219,10 @@ func (s *Server) rosterBody() ([]byte, string) {
 			}
 		}
 		entry.Health = s.Health.Report(mc.ID())
+		if s.Awake != nil {
+			status := s.Awake.Status(mc.ID())
+			entry.Awake = &status
+		}
 		if s.Updates != nil && s.Updates.Restart != nil {
 			entry.Stopped = s.Updates.Restart.Stopped(mc.ID())
 		}

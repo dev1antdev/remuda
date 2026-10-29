@@ -5,12 +5,13 @@
 import Tail, { TailAnswer, TileState } from "@/features/chat/Tail";
 import { displayOf, markOf, rowLabel, stateWords, type RadarPrefs } from "@/features/roster/radar";
 import { hueStyle } from "@/features/roster/hue";
+import { prMenuItems } from "@/features/roster/prMenu";
 import { checksTone, checksWords, prWords, reviewTone, reviewWords } from "@/features/roster/prStatus";
 import type { Tile, WallView } from "@/features/roster/wall";
 import { Screen } from "@/features/terminal/Screen";
 import { fillClass, usd } from "@/features/usage/format";
 import { openUrl } from "@/lib/host";
-import { Icon, Logo, Tip } from "@/ui";
+import { Icon, Logo, Menu, Tip } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import { folderOf } from "./current";
 import { actions } from "./store";
@@ -72,12 +73,21 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
               <Icon name="external-link" size={12} /> {pr.label}
             </button>
             {pr.status && (
-              <span className={`pr-state is-${checksTone(pr.status)}`} title={t("{pr}: {status} · read with gh on the machine", { pr: pr.label, status: prWords(pr.status) })}>
-                <span className="pr-dot" />
-                {checksWords(pr.status)}
-              </span>
+              <Menu
+                tip={t("{pr}: {status} · read with gh on the machine", { pr: pr.label, status: prWords(pr.status) })}
+                label={t("{pr} actions", { pr: pr.label })}
+                items={prMenuItems(machine.id, pane.id, pr)}
+                trigger={
+                  <button type="button" className="linkish pr-chips" aria-label={t("{pr}: {status}. Open it, or hand its checks or review to the agent", { pr: pr.label, status: prWords(pr.status) })}>
+                    <span className={`pr-state is-${checksTone(pr.status)}`}>
+                      <span className="pr-dot" />
+                      {checksWords(pr.status)}
+                    </span>
+                    {reviewWords(pr.status) && <span className={`pr-state pr-review is-${reviewTone(pr.status)}`}>{reviewWords(pr.status)}</span>}
+                  </button>
+                }
+              />
             )}
-            {pr.status && reviewWords(pr.status) && <span className={`pr-state pr-review is-${reviewTone(pr.status)}`}>{reviewWords(pr.status)}</span>}
           </span>
         )}
         {usage && usage.window > 0 && (
@@ -120,10 +130,10 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
         <>
           <TileState words={words} said={said} />
           <Screen machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active onOpen={open} />
-          <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} active />
+          <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} agent={pane.agent} active />
         </>
       ) : (
-        <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} words={words} settled={settled} said={said} active />
+        <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} agent={pane.agent} words={words} settled={settled} said={said} active />
       )}
     </section>
   );
