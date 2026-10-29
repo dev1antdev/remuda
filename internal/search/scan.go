@@ -11,21 +11,48 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
-// Scan writes the records under projects that match q, newest file first and up to limit, as grep -r prints them: "./<rel path>:<raw line>".
-// A line is sieved by the four spellings (a byte search) before transcript.MatchLine parses it.
-func Scan(projects, q, dir string, since time.Time, limit int, w io.Writer) error {
-	type file struct {
-		rel string
-		mod time.Time
+// scanFile is one session file to sieve: Claude Code's printed as grep prints them, Codex's with the folder and
+// thread id its name does not carry.
+type scanFile struct {
+	path   string
+	mod    time.Time
+	format transcript.Format
+	rel    string // Claude: "./<project>/<session>.jsonl"
+	cwd    string // Codex: the folder the rollout was recorded in
+	id     string // Codex: the thread id
+}
+
+// ScanHome writes the records under a home that match q, newest file first and up to limit: Claude Code's as
+// grep -r prints them ("./<rel path>:<raw line>"), Codex's as "codex:<cwd>␟<thread id>␟<raw line>".
+func ScanHome(home, q, dir string, since time.Time, limit int, w io.Writer) error {
+	roots := transcript.SessionRoots(home)
+	files, err := claudeFiles(roots[transcript.Claude], dir, since)
+	if err != nil {
+		return err
 	}
+	files = append(files, codexFiles(roots[transcript.Codex], dir, since)...)
+	return scan(files, q, since, limit, w)
+}
+
+// Scan is ScanHome over Claude Code's project files alone.
+func Scan(projects, q, dir string, since time.Time, limit int, w io.Writer) error {
+	files, err := claudeFiles(projects, dir, since)
+	if err != nil {
+		return err
+	}
+	return scan(files, q, since, limit, w)
+}
+
+func claudeFiles(projects, dir string, since time.Time) ([]scanFile, error) {
 	projects = filepath.Clean(projects)
 	if real, err := filepath.EvalSymlinks(projects); err == nil {
 		projects = real // WalkDir does not follow a symlinked root
 	}
-	var files []file
+	var files []scanFile
 	project := ""
 	if dir != "" {
 		project = transcript.EncodePath(dir)
@@ -48,14 +75,30 @@ func Scan(projects, q, dir string, since time.Time, limit int, w io.Writer) erro
 			return nil
 		}
 		rel, _ := filepath.Rel(projects, p)
-		files = append(files, file{rel: "./" + filepath.ToSlash(rel), mod: info.ModTime()})
+		files = append(files, scanFile{path: p, mod: info.ModTime(), format: transcript.Claude, rel: "./" + filepath.ToSlash(rel)})
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	sort.Slice(files, func(i, j int) bool { return files[i].mod.After(files[j].mod) })
+	return files, err
+}
 
+func codexFiles(sessions, dir string, since time.Time) []scanFile {
+	var files []scanFile
+	for _, s := range transcript.CodexFiles(sessions) {
+		if !since.IsZero() && s.ModTime.Before(since) {
+			continue
+		}
+		cwd := transcript.CodexCwd(s.Path)
+		if dir != "" && cwd != dir {
+			continue
+		}
+		files = append(files, scanFile{path: s.Path, mod: s.ModTime, format: transcript.Codex, cwd: cwd, id: s.ID})
+	}
+	return files
+}
+
+// scan sieves each file's lines by the four spellings (a byte search) before the format's MatchLine parses them.
+func scan(files []scanFile, q string, since time.Time, limit int, w io.Writer) error {
+	sort.Slice(files, func(i, j int) bool { return files[i].mod.After(files[j].mod) })
 	var pats [][]byte
 	seen := map[string]bool{}
 	for _, v := range spellings(q) {
@@ -68,7 +111,7 @@ func Scan(projects, q, dir string, since time.Time, limit int, w io.Writer) erro
 	defer out.Flush()
 	n := 0
 	for _, f := range files {
-		fh, err := os.Open(filepath.Join(projects, filepath.FromSlash(f.rel)))
+		fh, err := os.Open(f.path)
 		if err != nil {
 			continue
 		}
@@ -77,12 +120,15 @@ func Scan(projects, q, dir string, since time.Time, limit int, w io.Writer) erro
 			if done || !anyOf(line, pats) {
 				return
 			}
-			m, ok := transcript.MatchLine(line, q)
+			m, ok := matchLine(f.format, line, q)
 			if !ok || (!since.IsZero() && m.Ts.Before(since)) {
 				return
 			}
-			out.WriteString(f.rel)
-			out.WriteByte(':')
+			if f.format == transcript.Codex {
+				out.WriteString("codex:" + f.cwd + script.US + f.id + script.US)
+			} else {
+				out.WriteString(f.rel + ":")
+			}
 			out.Write(line)
 			out.WriteByte('\n')
 			if n++; n >= limit {
@@ -95,6 +141,13 @@ func Scan(projects, q, dir string, since time.Time, limit int, w io.Writer) erro
 		}
 	}
 	return nil
+}
+
+func matchLine(format transcript.Format, line []byte, q string) (transcript.Match, bool) {
+	if format == transcript.Codex {
+		return transcript.MatchCodexLine(line, q)
+	}
+	return transcript.MatchLine(line, q)
 }
 
 func anyOf(line []byte, pats [][]byte) bool {
