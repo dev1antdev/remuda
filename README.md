@@ -700,6 +700,9 @@ choices as buttons in the dialog's own words — *Yes*, *No, and tell
 Claude…* — so a permission is granted from the lock screen; before the
 keys go, remuda reads the screen again, and a dialog that changed or
 closed meanwhile is left alone and the page opens on the pane instead.
+A tapped notification opens the pane in its terminal; the alerts panel
+can make that the chat, or the lens the page was on, and the Mac app's
+menu, an Activity row and Alt+N follow the same choice.
 **Quiet hours** keep a device silent between two times of its own clock
 (22:00 to 07:00, say); the Activity panel still keeps what happened, so the
 morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
