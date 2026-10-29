@@ -706,7 +706,10 @@ menu, an Activity row and Alt+N follow the same choice.
 **Quiet hours** keep a device silent between two times of its own clock
 (22:00 to 07:00, say); the Activity panel still keeps what happened, so the
 morning starts with the list. Needs HTTPS (tailscale serve) or localhost;
-on iPhone, the home-screen app.
+on iPhone, the home-screen app. **A machine that drops off** gets a word
+too: "GOG is away" with the reason once a remote has been unreachable
+for two minutes, "GOG is back" with how long it was gone when it answers
+again; a blip says nothing, and Activity keeps both.
 
 **The Mac app** (`make mac` → `bin/remuda.app`, see `macos/README.md`)
 is the same page in a window of its own, with what a browser tab cannot
