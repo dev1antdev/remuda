@@ -20,7 +20,7 @@ export type RowProps = {
   step: number; // the spinner's frame
   now: number;
   onSelect: (machineId: string, paneId: string) => void;
-  onMenu: (m: Machine, s: Session, x: number, y: number) => void;
+  onMenu?: (m: Machine, s: Session, x: number, y: number) => void; // none for a viewer: no workspace actions
   folded: Record<string, boolean>; // workspaces folded shut, by "machine|workspace"
   onFold: (key: string) => void;
 };
@@ -168,7 +168,7 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
           )}
         </span>
       )}
-      <button
+      {onMenu && <button
         type="button"
         className="icon-btn ws-menu-btn"
         title={t("Workspace actions")}
@@ -180,7 +180,7 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
         }}
       >
         <Icon name="more" size={14} />
-      </button>
+      </button>}
     </div>
   );
 }
@@ -238,7 +238,7 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
       {showWorkspace && (
         <>
           <span className="radar-ws">{r.session.name}</span>
-          <button
+          {onMenu && <button
             type="button"
             className="icon-btn ws-menu-btn"
             title={t("Workspace actions")}
@@ -250,7 +250,7 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
             }}
           >
             <Icon name="more" size={14} />
-          </button>
+          </button>}
         </>
       )}
     </div>

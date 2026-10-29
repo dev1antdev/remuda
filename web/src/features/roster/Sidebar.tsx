@@ -19,7 +19,7 @@ import { t } from "@/lib/i18n";
 export type { Current } from "./rows";
 
 export default function Sidebar() {
-  const { machines, latest } = useRoster();
+  const { machines, latest, viewOnly } = useRoster();
   const serverVersion = __REMUDA_VERSION__ === "dev" ? undefined : __REMUDA_VERSION__;
   const located = useCurrent();
   const current: Current = located ? { machineId: located.machine.id, sessionId: located.session.id, paneId: located.pane.id } : null;
@@ -38,7 +38,7 @@ export default function Sidebar() {
     <>
       <div className="sidebar-head">
         <span>{t("Machines")}</span>
-        <span className="sidebar-head-actions">
+        {!viewOnly && <span className="sidebar-head-actions">
           <Menu
             label={t("New")}
             align="end"
@@ -75,7 +75,7 @@ export default function Sidebar() {
               { label: t("Sidebar settings…"), icon: "sliders", hint: t("labels, idle tiers, shells"), onSelect: () => actions.openDialog({ kind: "settings" }) },
             ]}
           />
-        </span>
+        </span>}
       </div>
       {machines.map((m) => {
         const folded = !!collapsed[m.id];
@@ -104,12 +104,12 @@ export default function Sidebar() {
                 </span>
               )}
               <HealthButton machine={m} latest={latest} serverVersion={serverVersion} />
-              <Tip text={t("New workspace on {machine}", { machine: m.label })}>
+              {!viewOnly && <Tip text={t("New workspace on {machine}", { machine: m.label })}>
                 <button type="button" className="icon-btn" aria-label={t("New workspace on {machine}", { machine: m.label })} disabled={m.state !== "connected"} onClick={() => actions.openDialog({ kind: "workspace", machineId: m.id })}>
                   <Icon name="plus" size={14} />
                 </button>
-              </Tip>
-              <MachineMenu machine={m} onRename={() => actions.openDialog({ kind: "renameMachine", machine: m })} onRemove={m.id !== "local" && m.source !== "herdr" ? () => onRemoveMachine(m) : undefined} />
+              </Tip>}
+              {!viewOnly && <MachineMenu machine={m} onRename={() => actions.openDialog({ kind: "renameMachine", machine: m })} onRemove={m.id !== "local" && m.source !== "herdr" ? () => onRemoveMachine(m) : undefined} />}
             </div>
             {m.state === "error" && (
               <Notice tone="error" className="machine-error">
@@ -121,7 +121,7 @@ export default function Sidebar() {
                 {t("connecting…")}
               </Notice>
             )}
-            {!folded && <Rows machine={m} current={current} prefs={prefs} step={step} now={now} onSelect={actions.selectPane} onMenu={onMenu} folded={wsFolded} onFold={onFold} />}
+            {!folded && <Rows machine={m} current={current} prefs={prefs} step={step} now={now} onSelect={actions.selectPane} onMenu={viewOnly ? undefined : onMenu} folded={wsFolded} onFold={onFold} />}
           </div>
         );
       })}

@@ -30,10 +30,17 @@ type Device struct {
 	LastSeen time.Time `json:"last_seen"`
 	IP       string    `json:"ip,omitempty"`
 	Agent    string    `json:"agent,omitempty"`
+	Viewer   bool      `json:"viewer,omitempty"` // signed in by a viewer link: it reads the page and types nothing
+	Key      string    `json:"key,omitempty"`    // the viewer key it was made with; the device goes with the key
 }
 
-// Kind is the browser and the system the device's user agent names, "Chrome on macOS".
-func (d Device) Kind() string { return DeviceName(d.Agent) }
+// Kind is the browser and the system the device's user agent names, "Chrome on macOS" — "viewer · Chrome on macOS" for one a viewer link signed in.
+func (d Device) Kind() string {
+	if d.Viewer {
+		return "viewer · " + DeviceName(d.Agent)
+	}
+	return DeviceName(d.Agent)
+}
 
 // Devices is the store of signed-in devices, <state dir>/devices.json.
 type Devices struct {
@@ -62,13 +69,23 @@ func OpenDevices(dir string) (*Devices, error) {
 
 // Mint signs a browser in: a random secret whose hash is kept, a name read off the user agent; the cookie value carries the id and the secret.
 func (d *Devices) Mint(ip, agent string) (cookie string, device Device, err error) {
+	return d.mint(ip, agent, "")
+}
+
+// MintViewer signs a browser in through a viewer link: a device like any other, marked as a viewer and tied to the key.
+func (d *Devices) MintViewer(ip, agent, keyID string) (cookie string, device Device, err error) {
+	return d.mint(ip, agent, keyID)
+}
+
+func (d *Devices) mint(ip, agent, viewerKey string) (cookie string, device Device, err error) {
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
 		return "", Device{}, err
 	}
 	raw := hex.EncodeToString(secret)
 	now := d.now()
-	device = Device{ID: state.NewID(), Hash: hashOf(raw), Name: DeviceName(agent), Created: now, LastSeen: now, IP: ip, Agent: trimAgent(agent)}
+	device = Device{ID: state.NewID(), Hash: hashOf(raw), Created: now, LastSeen: now, IP: ip, Agent: trimAgent(agent), Viewer: viewerKey != "", Key: viewerKey}
+	device.Name = device.Kind()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.list[device.ID] = &device
@@ -149,6 +166,25 @@ func (d *Devices) Revoke(id string) bool {
 		log.Printf("devices: %v", err)
 	}
 	return true
+}
+
+// RevokeByKey forgets every device a viewer key signed in and says how many went: a revoked link takes its screens with it.
+func (d *Devices) RevokeByKey(keyID string) int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	gone := 0
+	for id, device := range d.list {
+		if device.Viewer && device.Key == keyID {
+			delete(d.list, id)
+			gone++
+		}
+	}
+	if gone > 0 {
+		if err := d.saveLocked(); err != nil {
+			log.Printf("devices: %v", err)
+		}
+	}
+	return gone
 }
 
 // RevokeOthers forgets every device but the one to keep and says how many went.

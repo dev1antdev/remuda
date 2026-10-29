@@ -12,6 +12,7 @@ export type Device = {
   last_seen: string;
   ip?: string;
   this: boolean; // the device this page runs on
+  viewer?: boolean; // signed in by a viewer link: it reads and types nothing
 };
 
 export const fetchDevices = (): Promise<Device[]> => getJSON("/api/devices");
@@ -30,6 +31,18 @@ export type AgentKey = {
 
 export const fetchKeys = (): Promise<AgentKey[]> => getJSON("/api/agent-keys");
 export const revokeKey = (id: string): Promise<{ revoked: string }> => sendJSON("DELETE", `/api/agent-keys/${encodeURIComponent(id)}`);
+
+// ViewerKey is a viewer link as the page sees it: never the key itself, which the mint answers once
+export type ViewerKey = {
+  id: string;
+  name: string; // whose screen it is, in the person's words
+  created: string;
+  last_used: string;
+};
+
+export const fetchViewerKeys = (): Promise<ViewerKey[]> => getJSON("/api/viewer-keys");
+export const makeViewerKey = (name: string): Promise<{ id: string; name: string; created: string; link: string }> => sendJSON("POST", "/api/viewer-keys", { name });
+export const revokeViewerKey = (id: string): Promise<{ revoked: string; screens: number }> => sendJSON("DELETE", `/api/viewer-keys/${encodeURIComponent(id)}`);
 
 
 export type SharedPrefs = Record<string, Stamped>;

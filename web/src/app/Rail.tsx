@@ -4,6 +4,7 @@
 
 import { unread } from "@/features/activity/group";
 import { useRoster } from "@/features/roster/useRoster";
+import { viewerPlaces } from "./viewOnly";
 import { usePref } from "@/lib/prefs";
 import { Icon, Menu, Tip, type IconName, type MenuItem } from "@/ui";
 import { actions, app, type Mode, type Panel } from "./store";
@@ -29,20 +30,21 @@ export default function Rail() {
   const mode = app.use((s) => s.mode);
   const panel = app.use((s) => s.panel);
   const dialog = app.use((s) => s.dialog);
-  const { feed } = useRoster();
+  const { feed, viewOnly } = useRoster();
+  const modes = viewerPlaces(MODES, viewOnly);
+  const panels = viewerPlaces(PANELS, viewOnly);
   const [seen] = usePref<number>("feed.seen", 0);
   const news = unread(feed, seen);
   const more: MenuItem[] = [
-    ...MODES.filter((m) => m.desk).map((m) => ({ label: m.label, icon: m.icon, hint: m.about, checked: mode === m.mode, onSelect: () => actions.setMode(m.mode) })),
+    ...modes.filter((m) => m.desk).map((m) => ({ label: m.label, icon: m.icon, hint: m.about, checked: mode === m.mode, onSelect: () => actions.setMode(m.mode) })),
     { sep: true },
-    ...PANELS.map((p) => ({ label: p.label, icon: p.icon, hint: p.about, checked: panel === p.panel, onSelect: () => actions.togglePanel(p.panel) })),
-    { sep: true },
-    { label: SETTINGS.label, icon: SETTINGS.icon, hint: SETTINGS.about, onSelect: () => actions.openDialog({ kind: "settings" }) },
+    ...panels.map((p) => ({ label: p.label, icon: p.icon, hint: p.about, checked: panel === p.panel, onSelect: () => actions.togglePanel(p.panel) })),
+    ...(viewOnly ? [] : [{ sep: true } as MenuItem, { label: SETTINGS.label, icon: SETTINGS.icon, hint: SETTINGS.about, onSelect: () => actions.openDialog({ kind: "settings" }) } as MenuItem]),
   ];
   return (
     <nav className="rail" aria-label={t("Places")}>
       <div className="rail-group">
-        {MODES.map((m) => (
+        {modes.map((m) => (
           <RailButton key={m.mode} place={m} on={mode === m.mode} desk={m.desk} onClick={() => actions.setMode(m.mode)} />
         ))}
         <Menu
@@ -58,10 +60,10 @@ export default function Rail() {
         />
       </div>
       <div className="rail-group rail-foot">
-        {PANELS.map((p) => (
+        {panels.map((p) => (
           <RailButton key={p.panel} place={p} on={panel === p.panel} dot={p.panel === "activity" && news} onClick={() => actions.togglePanel(p.panel)} />
         ))}
-        <RailButton place={SETTINGS} on={dialog?.kind === "settings"} onClick={() => actions.openDialog({ kind: "settings" })} />
+        {!viewOnly && <RailButton place={SETTINGS} on={dialog?.kind === "settings"} onClick={() => actions.openDialog({ kind: "settings" })} />}
       </div>
     </nav>
   );

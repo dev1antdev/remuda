@@ -15,7 +15,8 @@ const STATUS_LABEL: Record<Status, string> = {
   shell: "shell",
 };
 
-export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onCloseTab, onRename, tools }: {
+export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onCloseTab, onRename, tools, readOnly = false }: {
+  readOnly?: boolean; // a viewer's page: no new tab, no close, no rename
   session: Session;
   tab: Tab;
   pane: Pane;
@@ -74,19 +75,19 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onClo
                   {t.named && <span>{t.label}</span>}
                   {t.panes.length > 1 && <span className="tab-count">{t.panes.length}</span>}
                 </button>
-                <Tip text={tr("Close this tab")}>
+                {!readOnly && <Tip text={tr("Close this tab")}>
                   <button type="button" className="icon-btn tab-close" aria-label={tr("Close tab {tab}", { tab: t.named ? t.label : t.number })} onClick={() => onCloseTab(t)}>
                     <Icon name="x" size={12} />
                   </button>
-                </Tip>
+                </Tip>}
               </div>
             );
           })}
-          <Tip text={tr("New tab in this workspace")}>
+          {!readOnly && <Tip text={tr("New tab in this workspace")}>
             <button type="button" className="icon-btn tab-add" aria-label={tr("New tab")} onClick={onNewTab}>
               <Icon name="plus" size={14} />
             </button>
-          </Tip>
+          </Tip>}
         </div>
         {tools && <div className="tabs-tools">{tools}</div>}
       </div>

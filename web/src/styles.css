@@ -9039,3 +9039,62 @@ body.popout {
     display: none;
   }
 }
+
+/* ---- viewing only: a page a viewer link signed in — the word in the header, the chat's foot, the screen as the terminal lens ---- */
+.viewonly-badge {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.chat-viewonly {
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+  text-align: center;
+}
+
+.screen-lens {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+.screen-lens .screen {
+  flex: 1;
+  cursor: default;
+}
+
+.viewer-link-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.viewer-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.viewer-link code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-12);
+}
+
+.viewer-link-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.viewer-link-form input {
+  flex: 1;
+  min-width: 0;
+}
