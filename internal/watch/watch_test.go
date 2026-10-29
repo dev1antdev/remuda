@@ -10,8 +10,9 @@ import (
 func TestApplySeedsThenReportsTransitions(t *testing.T) {
 	bus := events.NewBus()
 	var snapshots int
+	var firsts []bool
 	var changes []events.PaneStatus
-	events.Subscribe(bus, func(events.Snapshot) { snapshots++ })
+	events.Subscribe(bus, func(e events.Snapshot) { snapshots++; firsts = append(firsts, e.First) })
 	events.Subscribe(bus, func(e events.PaneStatus) { changes = append(changes, e) })
 	w := New(nil, bus)
 
@@ -30,6 +31,14 @@ func TestApplySeedsThenReportsTransitions(t *testing.T) {
 	w.apply("local", &herdr.Snapshot{Workspaces: workspaces})
 	if len(changes) != 2 || changes[1].To != events.Gone || changes[1].Pane.Pane != "w1:p1" {
 		t.Fatalf("a closed pane is gone: %+v", changes)
+	}
+	// the first snapshot, and the first after a failed poll, say so: what changed in between was not watched happening
+	w.mu.Lock()
+	w.stateFor("local").err = errNotWatched
+	w.mu.Unlock()
+	w.apply("local", &herdr.Snapshot{Workspaces: workspaces})
+	if want := []bool{true, false, false, true}; len(firsts) != len(want) || firsts[0] != want[0] || firsts[1] != want[1] || firsts[2] != want[2] || firsts[3] != want[3] {
+		t.Fatalf("First flags: %v, want %v", firsts, want)
 	}
 	if snap, err := w.Snapshot("local"); err != nil || snap == nil || len(snap.Panes) != 0 {
 		t.Fatalf("snapshot: %v %v", snap, err)

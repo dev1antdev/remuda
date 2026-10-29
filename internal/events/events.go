@@ -37,6 +37,7 @@ type Snapshot struct {
 	Machine string
 	Snap    *herdr.Snapshot
 	At      time.Time
+	First   bool // the machine's first snapshot, or the first after its polls failed: what changed in between was not watched happening
 }
 
 // MachineRemoved says a machine left the registry and its watcher loop ended.

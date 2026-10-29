@@ -28,7 +28,8 @@ async function restartOnSession(machineId: string, paneId: string, name: string)
   }
 }
 
-async function untilDone(id: string) {
+// untilDone polls the job until it ended
+export async function untilDone(id: string) {
   for (;;) {
     const job = await fetchJob(id);
     if (job.done) return job;
