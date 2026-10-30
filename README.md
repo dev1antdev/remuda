@@ -418,7 +418,7 @@ Flags: `-addr`, `-socket` (herdr socket path), `-herdr-bin`.
 ### Remote machines
 
 Every machine saved in herdr (`herdr machine list`) appears automatically —
-add a PC in herdr and remuda picks it up within 30s, tagged *herdr*. **+ PC**
+add a PC in herdr and remuda picks it up within 30s. **+ PC**
 in the sidebar adds an extra one by any ssh destination your OpenSSH reaches
 with keys. Either way remuda brings up one `ControlMaster` to it, autodetects
 the remote herdr binary (incl. `~/.local/bin/herdr`) and socket, reaches its

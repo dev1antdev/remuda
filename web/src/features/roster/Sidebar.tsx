@@ -98,11 +98,6 @@ export default function Sidebar() {
                   <Icon name="chevron-right" size={12} />
                 </span>
               </button>
-              {m.source === "herdr" && (
-                <span className="machine-tag" title={t("Mirrored from `herdr machine list`")}>
-                  herdr
-                </span>
-              )}
               <HealthButton machine={m} latest={latest} serverVersion={serverVersion} />
               {!viewOnly && <Tip text={t("New workspace on {machine}", { machine: m.label })}>
                 <button type="button" className="icon-btn" aria-label={t("New workspace on {machine}", { machine: m.label })} disabled={m.state !== "connected"} onClick={() => actions.openDialog({ kind: "workspace", machineId: m.id })}>
