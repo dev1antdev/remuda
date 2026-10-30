@@ -57,7 +57,6 @@ export const agents: Dictionary = {
   "Message several agents": "Написать нескольким агентам",
   "Message several agents, the order, the sidebar settings": "Написать нескольким агентам, порядок, настройки боковой панели",
   "Message several agents…": "Написать нескольким агентам…",
-  "Mirrored from `herdr machine list`": "Отражение `herdr machine list`",
   Model: "Модель",
   "Model id": "Идентификатор модели",
   More: "Ещё",
