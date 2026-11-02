@@ -21,7 +21,7 @@ export function awayGap(lastSeen: string | null | undefined, now: number): numbe
 // awayWords says how long: hours under a day, days from there on
 export function awayWords(gap: number): string {
   const hours = Math.floor(gap / 3600_000);
-  if (hours < 24) return `${hours} h`;
+  if (hours < 24) return t("{n} h", { n: hours });
   return plural(Math.round(hours / 24), "day");
 }
 

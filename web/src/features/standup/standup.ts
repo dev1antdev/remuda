@@ -35,16 +35,16 @@ export function order(items: Item[]): Item[] {
 
 // stateLabel is the item's state in a word or two
 export function stateLabel(item: Item): string {
-  if (item.alert) return "needs you";
+  if (item.alert) return t("needs you");
   switch (item.state) {
     case "blocked":
-      return "needs you";
+      return t("needs you");
     case "done":
-      return "finished";
+      return t("finished");
     case "working":
-      return "working";
+      return t("working");
     case "idle":
-      return "idle";
+      return t("idle");
   }
   return "";
 }

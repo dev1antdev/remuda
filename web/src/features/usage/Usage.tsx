@@ -120,8 +120,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
       }
     >
       <Notice tone="hint">
-        What the agents' transcripts say they cost, at Claude Code's own API prices — on a subscription a measure of where the work went, not a bill. Each
-        machine reads its own history.
+        {t("What the agents' transcripts say they cost, at Claude Code's own API prices — on a subscription a measure of where the work went, not a bill. Each machine reads its own history.")}
       </Notice>
       {error && <Notice tone="error">{error}</Notice>}
       <Budgets budgets={budgets ?? []} machines={machines} />
@@ -135,11 +134,11 @@ export default function Usage({ machines, onClose, onOpenSession }: {
       <div className="usage-cards">
         <div className="usage-card">
           <span className="usage-card-n">{usd(sum.total.cost)}</span>
-          <span className="usage-card-l">API-equivalent</span>
+          <span className="usage-card-l">{t("API-equivalent")}</span>
         </div>
         <div className="usage-card">
           <span className="usage-card-n">{sum.total.turns.toLocaleString()}</span>
-          <span className="usage-card-l">responses</span>
+          <span className="usage-card-l">{t("responses")}</span>
         </div>
         <div className="usage-card">
           <span className="usage-card-n">{tok(sum.total.output)}</span>
@@ -180,7 +179,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
             <div key={m.model} className="usage-row">
               <span className="usage-row-name">{m.name}</span>
               <span className="usage-row-meta">
-                {tok(m.output)} out · {tok(m.input + m.cache_read + m.cache_write)} in
+                {t("{out} out · {in} in", { out: tok(m.output), in: tok(m.input + m.cache_read + m.cache_write) })}
               </span>
               <span className="usage-row-cost">{usd(m.cost)}</span>
             </div>

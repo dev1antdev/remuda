@@ -67,7 +67,7 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
           </button>
         </Tip>
         {onCode && (
-          <Tip text="Open the file in Code (VS Code on this machine)">
+          <Tip text={t("Open the file in Code (VS Code on this machine)")}>
             <button type="button" className="icon-btn sm" aria-label={t("Open in Code")} onClick={onCode}>
               <Icon name="code" size={12} />
             </button>
