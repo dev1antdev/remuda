@@ -157,7 +157,8 @@ func (g *Guard) Middleware(next http.Handler) http.Handler {
 			if !g.ok(qt) {
 				g.refused(r)
 			} else {
-				if who := g.authenticate(r); who.device == "" { // a browser already signed in keeps its device
+				// a browser already signed in keeps its device; a viewer's screen, shown the token, becomes a device of the person's own
+				if who := g.authenticate(r); who.device == "" || who.viewer {
 					if !g.signIn(w, r) {
 						return
 					}

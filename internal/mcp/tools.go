@@ -657,10 +657,15 @@ func day(s string) string {
 }
 
 // dueOf is a due date as the list stores it: a date means the end of that day here, a moment is kept.
-func dueOf(s string) (string, error) {
+func dueOf(s string) (string, error) { return dueIn(s, time.Local) }
+
+// dueIn is dueOf by the clock of loc: a date is its last second there, the day the clock springs forward or falls back
+// included (24 hours from midnight would be the next day's first hour, or an hour short).
+func dueIn(s string, loc *time.Location) (string, error) {
 	s = strings.TrimSpace(s)
-	if d, err := time.ParseInLocation("2006-01-02", s, time.Local); err == nil {
-		return d.Add(24*time.Hour - time.Second).UTC().Format(time.RFC3339), nil
+	if d, err := time.ParseInLocation("2006-01-02", s, loc); err == nil {
+		year, month, day := d.Date()
+		return time.Date(year, month, day+1, 0, 0, 0, 0, loc).Add(-time.Second).UTC().Format(time.RFC3339), nil
 	}
 	if t, err := time.Parse(time.RFC3339, s); err == nil {
 		return t.UTC().Format(time.RFC3339), nil

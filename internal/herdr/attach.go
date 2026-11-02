@@ -74,6 +74,10 @@ func refusal(first []byte) (string, bool) {
 // firstWait is how long a fresh attach that prints nothing is watched for herdr's refusal.
 const firstWait = 1500 * time.Millisecond
 
+// refusalExitWait is how long a refusal printed into the PTY is given to end the process: herdr exits right after
+// printing one, while a pane whose screen merely shows the words stays up.
+var refusalExitWait = 2 * time.Second
+
 // watchStart reads the attach's first output for herdr's verdict: a refusal comes in a chunk
 // or two and the process exits right after; a real attach paints the screen and stays.
 func (a *attach) watchStart() error {
@@ -88,9 +92,10 @@ func (a *attach) watchStart() error {
 			if msg, refused := refusal(acc); refused {
 				select {
 				case <-a.exited:
-				case <-time.After(2 * time.Second):
+					return &RefusedError{Msg: msg}
+				case <-time.After(refusalExitWait):
+					return nil // the words are the screen's own: the attach stands
 				}
-				return &RefusedError{Msg: msg}
 			}
 			if len(acc) > 512 {
 				return nil

@@ -85,6 +85,7 @@ type Service struct {
 	mu     sync.Mutex
 	all    []Budget
 	spends map[string]*spend // by period
+	queued int               // the background readings asked for and not done yet: a stale status asks for one at a time
 
 	reading  sync.Mutex     // one reading at a time; a caller waits for the one under way rather than skipping
 	readings sync.WaitGroup // the background readings Refresh started, for Wait
@@ -124,24 +125,33 @@ func copyOf(list []Budget) []Budget {
 // Replace keeps the whole list as given, checked and trimmed. A budget whose scope, limit and period did not change
 // keeps its alert state; one that did starts the period afresh, so a raised limit can be crossed again.
 func (s *Service) Replace(list []Budget) ([]Status, error) {
+	if err := s.keep(list); err != nil {
+		return nil, err
+	}
+	s.Refresh()
+	return s.Status(), nil
+}
+
+// keep checks the list and swaps it in under one lock, so an alert a reading notes meanwhile is carried over, not lost.
+func (s *Service) keep(list []Budget) error {
 	out := make([]Budget, 0, len(list))
 	seen := map[string]bool{}
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	before := map[string]Budget{}
 	for _, b := range s.all {
 		before[b.ID] = b
 	}
-	s.mu.Unlock()
 	for _, b := range list {
 		b.Machine, b.Dir, b.Note, b.Period = strings.TrimSpace(b.Machine), strings.TrimSpace(b.Dir), strings.TrimSpace(b.Note), strings.TrimSpace(b.Period)
 		if !validPeriod(b.Period) {
-			return nil, fmt.Errorf("a budget's period must be day, week or month, not %q", b.Period)
+			return fmt.Errorf("a budget's period must be day, week or month, not %q", b.Period)
 		}
 		if !(b.Limit > 0) || math.IsInf(b.Limit, 0) {
-			return nil, errors.New("a budget's limit must be above zero")
+			return errors.New("a budget's limit must be above zero")
 		}
 		if b.Dir != "" && b.Machine == "" {
-			return nil, errors.New("a budget on a folder names its machine too")
+			return errors.New("a budget on a folder names its machine too")
 		}
 		for b.ID == "" || seen[b.ID] {
 			b.ID = state.NewID()
@@ -153,15 +163,11 @@ func (s *Service) Replace(list []Budget) ([]Status, error) {
 		}
 		out = append(out, b)
 	}
-	s.mu.Lock()
 	if err := state.SaveJSON(s.dir, file, out); err != nil {
-		s.mu.Unlock()
-		return nil, err
+		return err
 	}
 	s.all = out
-	s.mu.Unlock()
-	s.Refresh()
-	return s.Status(), nil
+	return nil
 }
 
 func validPeriod(p string) bool {
@@ -174,7 +180,8 @@ func validPeriod(p string) bool {
 }
 
 // Status is every budget with what its period has cost so far, from the cache; a period not read yet, or read for
-// an earlier start, asks for a reading in the background and answers without a figure.
+// an earlier start, asks for a reading in the background — unless one is already queued, since the roster is built
+// every few seconds — and answers without a figure.
 func (s *Service) Status() []Status {
 	now := s.now()
 	s.mu.Lock()
@@ -193,9 +200,13 @@ func (s *Service) Status() []Status {
 		}
 		out = append(out, st)
 	}
+	ask := stale && s.queued == 0
+	if ask {
+		s.queued++
+	}
 	s.mu.Unlock()
-	if stale {
-		s.Refresh()
+	if ask {
+		s.startReading()
 	}
 	return out
 }
@@ -236,10 +247,21 @@ func missingOf(sp *spend, b Budget) []string {
 
 // Refresh reads the spend of every period in use in the background, after any reading under way.
 func (s *Service) Refresh() {
+	s.mu.Lock()
+	s.queued++
+	s.mu.Unlock()
+	s.startReading()
+}
+
+// startReading runs one reading in the background, counted in queued until it is done.
+func (s *Service) startReading() {
 	s.readings.Add(1)
 	go func() {
 		defer s.readings.Done()
 		s.refresh()
+		s.mu.Lock()
+		s.queued--
+		s.mu.Unlock()
 	}()
 }
 
@@ -316,10 +338,10 @@ func (s *Service) alert(hosts []shell.Host, now time.Time) {
 			changed = true
 		}
 		spent := spentOf(sp, *b)
-		pct := 100 * spent / b.Limit
+		pct := percentOf(spent, b.Limit)
 		crossed := 0
 		for _, th := range Thresholds {
-			if pct >= float64(th) && !contains(b.Alerted[key], th) {
+			if pct >= th && !contains(b.Alerted[key], th) {
 				crossed = th
 			}
 		}
@@ -353,6 +375,12 @@ func (s *Service) alert(hosts []shell.Host, now time.Time) {
 	}
 }
 
+// percentOf is the spend as the whole percent the page's words show, a hair of float rounding forgiven: three $0.70
+// against $2.10 is 100, not 99.99999999999999.
+func percentOf(spent, limit float64) int {
+	return int(math.Floor(100*spent/limit + 1e-9))
+}
+
 func contains(list []int, n int) bool {
 	for _, x := range list {
 		if x == n {
@@ -367,7 +395,7 @@ func alertTitle(threshold int, spent float64, b Budget) string {
 	if threshold >= 100 {
 		return fmt.Sprintf("Budget crossed: %s of %s %s", USD(spent), USD(b.Limit), PeriodWords(b.Period))
 	}
-	return fmt.Sprintf("Budget at %d %%: %s of %s %s", int(math.Floor(100*spent/b.Limit+1e-9)), USD(spent), USD(b.Limit), PeriodWords(b.Period))
+	return fmt.Sprintf("Budget at %d %%: %s of %s %s", percentOf(spent, b.Limit), USD(spent), USD(b.Limit), PeriodWords(b.Period))
 }
 
 // alertBody is the budget's note, else its scope in words.

@@ -18,13 +18,16 @@ import (
 
 const file = "prefs.json"
 
-// MaxValue bounds one value's JSON, MaxFile the whole file.
+// MaxKey bounds a key, MaxValue one value's JSON, MaxFile the whole file.
 const (
+	MaxKey   = 512
 	MaxValue = 16 << 10
 	MaxFile  = 1 << 20
 )
 
-var keyShape = regexp.MustCompile(`^[a-zA-Z0-9_.:-]{1,80}$`)
+// keyShape is any printable text up to MaxKey characters: a pref's name, or a prefix with a machine and a folder behind
+// it (`pins:<machine>|<dir>`), which carries whatever the folder is called.
+var keyShape = regexp.MustCompile(`^[^\p{Cc}]{1,512}$`)
 
 // Entry is one shared setting: its JSON value and when it was set.
 type Entry struct {
@@ -71,7 +74,7 @@ func (st *Store) Put(in map[string]Entry) (map[string]Entry, error) {
 	now := st.now()
 	for key, e := range in {
 		if !keyShape.MatchString(key) {
-			return nil, fmt.Errorf("key %q: letters, digits, . _ : - only, up to 80", key)
+			return nil, fmt.Errorf("key %q: printable characters only, up to %d", key, MaxKey)
 		}
 		if len(e.Value) > MaxValue {
 			return nil, fmt.Errorf("key %q: the value is over %d bytes", key, MaxValue)
