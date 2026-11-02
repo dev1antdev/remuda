@@ -1784,7 +1784,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   row the marker is drawn above) and the board re-reads itself every 15 s while
   on screen — the List | Board switch is the `tasks.view` pref, ⚙ opens
   `ProjectSettings.tsx` (name, colour, columns with their marks, fields;
-  saved whole, a removed column asked where its tasks go), `fields.tsx`
+  saved whole, a removed column asked where its tasks go — never to a
+  column removed in the same edit, `workflow.ts` tested: `moveTarget`, `movesOf`), `fields.tsx`
   holds `FieldChip` / `FieldInput` / `valueText`. **Several at once**
   (`selection.ts`, `bulk.ts`, `press.ts` — pure, tested — `useSelection.ts`
   the hook, `BulkBar.tsx` the bar): ⌘-click toggles a row or a card,

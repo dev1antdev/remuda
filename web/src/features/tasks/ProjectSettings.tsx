@@ -8,6 +8,7 @@ import Icon, { type IconName } from "@/ui/icons";
 import Select from "@/ui/Select";
 import { Dialog, Notice, useDismiss, useSubmit } from "@/ui";
 import { t } from "@/lib/i18n";
+import { moveTarget, movesOf } from "./workflow";
 
 export const PALETTE = ["e67e22", "2ecc71", "3498db", "9b59b6", "e74c3c", "1abc9c", "f1c40f", "95a5a6"];
 export const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)]!;
@@ -81,12 +82,10 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
     frows.every((r) => r.title.trim());
   const { busy, err, run } = useSubmit(async () => {
     if (title.trim() !== project.title || color !== project.hex_color) await patchProject(project.id, { title: title.trim(), hex_color: color });
-    const moves: Record<number, number> = {};
-    for (const r of rows) if (r.removed) moves[r.id] = r.to ?? survivors[0]?.id ?? 0;
     let saved = await putStatuses(
       project.id,
       kept.map(({ key: _key, removed: _removed, to: _to, ...s }) => s),
-      moves,
+      movesOf(rows),
     );
     if (fieldsChanged()) {
       saved = await putFields(
@@ -176,7 +175,7 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
               <span className="ps-moves">
                 <Select
                   className="sm"
-                  value={r.to ?? survivors[0]?.id ?? 0}
+                  value={moveTarget(r, rows)}
                   onChange={(to) => update(r.key, { to })}
                   options={survivors.map((s) => ({ value: s.id, label: t("its tasks → {column}", { column: s.title }) }))}
                 />
