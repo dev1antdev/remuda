@@ -1993,15 +1993,22 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   side, named for whose screen it is): a read-only sign-in for the TV in
   the office or a colleague watching a run. `ViewerAllows(method, path)`
   is a GET of `viewerRoutes` — the roster, the chat, the screen, the
-  scrollback, a recap, the standup, the feed, a file and its stat, the
-  health, the push public key, the question, the usage, and the upgrade
-  of `/ws/events` — or of the page itself and its files (anything outside
+  scrollback, a recap, the standup, the feed, a file and its stat (kept
+  by `files.go` to the machine's workspace folders, the watcher's
+  `WorkspaceDirs`, symlinks followed on this machine — `withinFolders`,
+  tested: the token file, a key or an ssh key read through the file
+  viewer would open what the link must not; 403 "the file is outside the
+  workspaces", and a stat's `dir` and candidates are kept the same way),
+  the health, the push public key, the question, the usage, and the
+  upgrade of `/ws/events` — or of the page itself and its files (anything outside
   `/api/`, `/ws/` and the code-server proxy `/code/`); never `/ws/pane`,
   a submit, a key, the tasks or any change: 403 "this link is for
   viewing only". A page opened with
   `?viewer=rv_…` (`Guard.viewerLink`) mints a **viewer device**
   (`Device.Viewer`, `Device.Key` the link's id; `Kind()` "viewer · Chrome
-  on macOS"; a browser already signed in keeps its device) whose cookie
+  on macOS"; a browser already signed in keeps its device, and the
+  pairing link `?token=` opened on a viewer's screen signs it in as a
+  device of the person's own) whose cookie
   passes the same routes; a revoked link takes its screens with it
   (`Devices.RevokeByKey`, and `authenticate` reads a viewer device whose
   key is gone as stale). `auth.IsViewer(ctx)` is the flag in a handler:

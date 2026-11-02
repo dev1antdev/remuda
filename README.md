@@ -453,10 +453,12 @@ the viewing happens: that browser gets the Wall, the sidebar, the chats,
 the screens, the standup, the usage and Activity, and nothing that types or
 changes — no composer, no keys, no question buttons, no Changes lens, no
 tasks; the terminal lens shows the pane's screen as the Wall does, without
-attaching. Every call past that is refused with "this link is for viewing
-only", a viewer's look marks nothing as seen, and the header says *Viewing
-only*. The link is shown once; revoking it signs every screen it opened
-out at once.
+attaching, and the file viewer opens only files inside the machines'
+workspace folders. Every call past that is refused with "this link is for
+viewing only", a viewer's look marks nothing as seen, and the header says
+*Viewing only*. The link is shown once; revoking it signs every screen it
+opened out at once, and the pairing link opened on such a screen makes it
+a device of your own.
 
 ## As a background service on a Mac or Linux box
 
