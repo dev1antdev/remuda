@@ -127,6 +127,10 @@ func (st *Store) OnStatus(e events.PaneStatus) {
 				changed = true
 			}
 		case answered(e.To, e.From, run.Worked):
+			// the close is on its way: a further change of the pane before it lands (herdr reads idle once the finished
+			// pane is focused) must not close and push a second time
+			s.LastPane = nil
+			changed = true
 			closing = append(closing, due{s.ID, s.Label, *run})
 		}
 	}

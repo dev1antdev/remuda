@@ -148,8 +148,8 @@ Description=code-server — VS Code in the browser, for remuda
 After=default.target
 
 [Service]
-ExecStart=$LINK/bin/code-server --config $CONF_DIR/config.yaml
-Environment=PATH=$PATH_FOR_SERVICE
+ExecStart="$LINK/bin/code-server" --config "$CONF_DIR/config.yaml"
+Environment="PATH=$PATH_FOR_SERVICE"
 Restart=always
 RestartSec=3
 

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/state"
@@ -113,7 +114,7 @@ func (m *Manager) MAC(id string) string {
 // Rename gives the machine a name of the user's own, kept in labels.json; an empty name goes back to the registry's.
 func (m *Manager) Rename(id, label string) (*Machine, error) {
 	label = strings.TrimSpace(label)
-	if len(label) > 60 {
+	if utf8.RuneCountInString(label) > 60 {
 		return nil, fmt.Errorf("a name has 60 characters at most")
 	}
 	mc, err := m.Get(id)

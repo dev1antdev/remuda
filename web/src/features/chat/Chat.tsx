@@ -15,7 +15,7 @@ import { whenShort } from "@/lib/time";
 import { Icon, Notice, Select, useTimedNotice } from "@/ui";
 import type { Subagent, Turn } from "./api";
 import Composer from "./Composer";
-import { anchorsItself, hiddenCount, idle, nextReveal } from "./mount";
+import { ALL_REVEALED, anchorsItself, hiddenCount, idle, nextReveal } from "./mount";
 import { isPinned, pinKey, pinOf, togglePin, type Pin } from "./pins";
 import { PlanBar } from "./PlanBar";
 import { QuestionCard } from "./QuestionCard";
@@ -81,7 +81,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   const [reveal, setReveal] = useState<{ session?: string; n: number }>({ n: 0 });
   const revealed = reveal.session === loaded ? reveal.n : 0;
   const hidden = hiddenCount(turns.length, revealed);
-  const revealAll = useCallback(() => setReveal({ session: loaded, n: turns.length }), [loaded, turns.length]);
+  const revealAll = useCallback(() => setReveal({ session: loaded, n: ALL_REVEALED }), [loaded]);
   const anchor = useRef<{ height: number; top: number } | null>(null); // the log's measure before a slice, for a browser without scroll anchoring
   useEffect(() => {
     const log = logRef.current;

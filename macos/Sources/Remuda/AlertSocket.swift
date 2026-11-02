@@ -1,13 +1,14 @@
 import Foundation
 
 // AlertSocket is the app as a device of remuda's push service: registered with /api/push/socket, then every alert
-// the phone would get arrives over /ws/alerts; the socket comes back by itself with a growing pause.
+// the phone would get arrives over /ws/alerts; the socket comes back by itself with a growing pause. Every callback
+// of the session lands on the main queue, so the task, the backoff and the stop flag are only ever touched there.
 final class AlertSocket {
     private static let endpointKey = "alerts.endpoint"
     private let server: Server
     private let label: String
     private let remember: Bool
-    private let session = URLSession(configuration: .default)
+    private let session = URLSession(configuration: .default, delegate: nil, delegateQueue: .main)
     private var task: URLSessionWebSocketTask?
     private var backoff: TimeInterval = 1
     private var stopped = false
@@ -22,17 +23,24 @@ final class AlertSocket {
         self.remember = remember
     }
 
-    // endpoint is the device's name on the server.
+    // endpoint is the device's name on the server, kept per server so going back to one finds its device and prefs again;
+    // the single key of before is the fallback until the server's own is written (empty once a 404 cleared it).
     var endpoint: String? {
-        get { remember ? UserDefaults.standard.string(forKey: AlertSocket.endpointKey) : minted }
+        get {
+            guard remember else { return minted }
+            if let own = UserDefaults.standard.string(forKey: serverEndpointKey) { return own.isEmpty ? nil : own }
+            return UserDefaults.standard.string(forKey: AlertSocket.endpointKey)
+        }
         set {
             if remember {
-                UserDefaults.standard.set(newValue, forKey: AlertSocket.endpointKey)
+                UserDefaults.standard.set(newValue ?? "", forKey: serverEndpointKey)
             } else {
                 minted = newValue
             }
         }
     }
+
+    private var serverEndpointKey: String { AlertSocket.endpointKey + "." + server.base.absoluteString }
 
     func start() {
         stopped = false

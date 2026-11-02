@@ -15,4 +15,6 @@ export const wake: Dictionary = {
   "Nothing could carry the packet to {machine}": "Пакет для {machine} отправить было некуда",
   "Rename, wake, copy the SSH host, remove": "Переименовать, разбудить, скопировать SSH-хост, удалить",
   "{machine}: rename, wake, copy the SSH host, remove": "{machine}: переименовать, разбудить, скопировать SSH-хост, удалить",
+  "SSH host copied": "SSH-хост скопирован",
+  "The SSH host could not be copied": "SSH-хост не удалось скопировать",
 };

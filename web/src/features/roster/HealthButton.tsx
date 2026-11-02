@@ -15,7 +15,8 @@ import { Sparkline } from "./Sparkline";
 import { DISK_THRESHOLDS, loadThresholds, rangeOf, sparkTitle, spanWords } from "./spark";
 import { t, tn } from "@/lib/i18n";
 
-export function HealthButton({ machine: m, latest, serverVersion }: { machine: Machine; latest?: Latest; serverVersion?: string }) {
+// viewOnly: a viewer link signed the page in — the vitals read, nothing to run, refresh or update
+export function HealthButton({ machine: m, latest, serverVersion, viewOnly = false }: { machine: Machine; latest?: Latest; serverVersion?: string; viewOnly?: boolean }) {
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [fresh, setFresh] = useState<{ health: Health | null; latest: Latest } | null>(null);
@@ -26,7 +27,7 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
   useEffect(() => setFresh(null), [m.health?.at]);
   const h = fresh?.health ?? m.health;
   const l = fresh?.latest ?? latest;
-  const list = concerns(h, l, serverVersion, m.id !== "local", m.stopped);
+  const list = concerns(h, l, serverVersion, m.id !== "local", m.stopped, viewOnly);
   const worst = list.some((c) => c.bad) ? "bad" : list.length ? "warn" : "";
   if (!h && m.state !== "connected") return null;
   const refresh = async () => {
@@ -76,9 +77,11 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
           <div className="health-head">
             <b>{m.label}</b>
             <span className="dim">{h?.os}</span>
-            <button type="button" className="icon-btn sm" title={t("Read again now")} disabled={busy} onClick={() => void refresh()}>
-              <Icon name="refresh-cw" size={12} className={busy ? "spin" : undefined} />
-            </button>
+            {!viewOnly && (
+              <button type="button" className="icon-btn sm" title={t("Read again now")} disabled={busy} onClick={() => void refresh()}>
+                <Icon name="refresh-cw" size={12} className={busy ? "spin" : undefined} />
+              </button>
+            )}
           </div>
           {h ? (
             <dl className="health-rows">
@@ -187,11 +190,13 @@ export function HealthButton({ machine: m, latest, serverVersion }: { machine: M
               ))}
             </ul>
           )}
-          <div className="health-foot">
-            <button type="button" className="linkish" onClick={() => update("")}>
-              <Icon name="refresh-cw" size={12} /> {t("All updates…")}
-            </button>
-          </div>
+          {!viewOnly && (
+            <div className="health-foot">
+              <button type="button" className="linkish" onClick={() => update("")}>
+                <Icon name="refresh-cw" size={12} /> {t("All updates…")}
+              </button>
+            </div>
+          )}
           {h?.error && h.claude && <div className="dim">{h.error}</div>}
         </div>
       )}

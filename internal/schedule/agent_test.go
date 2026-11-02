@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/push"
@@ -128,6 +129,40 @@ func TestAgentScheduleNotesTheAnswerWhenTheCloseIsHeardFirst(t *testing.T) {
 	st.Wait()
 	if after := st.List()[0]; after.LastResult != "answered: Made three tasks." || after.LastPane != nil {
 		t.Fatalf("after a close heard first: %+v", after)
+	}
+}
+
+// The answer is read and the tab closed off the watcher's goroutine: a second status change of the pane before that lands
+// — herdr reading idle once the person focused the finished pane — must not close and push a second time.
+func TestASecondFinishBeforeTheCloseLandsClosesOnce(t *testing.T) {
+	st, door := scoutStore(t, t.TempDir())
+	s, _ := st.Put(scout)
+	_, _ = st.Run(s.ID)
+	closing := make(chan struct{}, 2)
+	release := make(chan struct{})
+	agents := door.agents()
+	inner := agents.Close
+	agents.Close = func(run Started) error {
+		closing <- struct{}{}
+		<-release
+		return inner(run)
+	}
+	st.Agents = agents
+	st.OnStatus(status("w5:p2", "idle", "working"))
+	st.OnStatus(status("w5:p2", "working", "done"))
+	select {
+	case <-closing:
+	case <-time.After(time.Second):
+		t.Fatal("the finish did not start the close")
+	}
+	st.OnStatus(status("w5:p2", "done", "idle"))
+	close(release)
+	st.Wait()
+	if len(door.closed) != 1 || len(door.pushed) != 1 {
+		t.Fatalf("closed %d times, pushed %d times", len(door.closed), len(door.pushed))
+	}
+	if after := st.List()[0]; after.LastResult != "answered: Made three tasks." || after.LastPane != nil {
+		t.Fatalf("after the answer: %+v", after)
 	}
 }
 

@@ -14,11 +14,13 @@ struct Server {
     enum ServerError: LocalizedError {
         case noTokenFile(String)
         case badLink
+        case pairedUnusable(notice: String, local: Error)
 
         var errorDescription: String? {
             switch self {
             case .noTokenFile(let path): return "no remuda on this Mac: \(path) is missing (install remuda, or paste a pairing link in Settings)"
             case .badLink: return "a pairing link looks like http://host:7317/?token=…"
+            case .pairedUnusable(let notice, let local): return notice + ", and " + local.localizedDescription
             }
         }
     }
@@ -39,15 +41,26 @@ struct Server {
         return Server(base: defaultBase, token: token)
     }
 
-    // load is the server chosen last: a remote one paired in Settings, else this Mac's own.
-    static func load() throws -> Server {
-        if let base = UserDefaults.standard.string(forKey: baseKey), let url = URL(string: base), let token = Keychain.read(account: base) {
-            return Server(base: url, token: token)
+    // load is the server chosen last: a remote one paired in Settings, else this Mac's own. When the paired one's token
+    // cannot be read, this Mac's own is used for this launch and the notice says so; the pairing stays for the next.
+    static func load() throws -> (server: Server, notice: String?) {
+        guard let base = UserDefaults.standard.string(forKey: baseKey), let url = URL(string: base) else { return (try local(), nil) }
+        let trouble: String
+        do {
+            if let token = try Keychain.read(account: base) { return (Server(base: url, token: token), nil) }
+            trouble = "its token is not in the login keychain"
+        } catch {
+            trouble = error.localizedDescription
         }
-        return try local()
+        let notice = "the remuda paired at \(base) could not be used: \(trouble)"
+        do {
+            return (try local(), notice + "; this Mac's own remuda is used instead (paste the pairing link again in Settings)")
+        } catch {
+            throw ServerError.pairedUnusable(notice: notice, local: error)
+        }
     }
 
-    // pair reads a pairing link, keeps the address and its token, and answers the server.
+    // pair reads a pairing link, keeps the address and its token in place of the pairing before, and answers the server.
     static func pair(link: String) throws -> Server {
         guard let parts = URLComponents(string: link.trimmingCharacters(in: .whitespacesAndNewlines)),
               let token = parts.queryItems?.first(where: { $0.name == "token" })?.value, !token.isEmpty,
@@ -59,7 +72,10 @@ struct Server {
         baseParts.host = host
         baseParts.port = parts.port
         let base = baseParts.string!
-        Keychain.write(account: base, secret: token)
+        try Keychain.write(account: base, secret: token)
+        if let before = UserDefaults.standard.string(forKey: baseKey), before != base {
+            Keychain.delete(account: before)
+        }
         UserDefaults.standard.set(base, forKey: baseKey)
         return Server(base: URL(string: base)!, token: token)
     }
@@ -111,27 +127,53 @@ struct Server {
 
 // Keychain keeps a paired server's token under the service "remuda", one item per address.
 enum Keychain {
+    // KeychainError is a status the keychain answered, in the system's own words.
+    struct KeychainError: LocalizedError {
+        let doing: String
+        let status: OSStatus
+
+        var errorDescription: String? {
+            let words = SecCopyErrorMessageString(status, nil) as String? ?? "status \(status)"
+            return "the login keychain could not \(doing): \(words)"
+        }
+    }
+
     private static func query(_ account: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Server.keychainService, kSecAttrAccount as String: account]
     }
 
-    static func read(account: String) -> String? {
+    // read is the token kept for the address, nil when there is none; any other answer of the keychain is an error.
+    static func read(account: String) throws -> String? {
         var q = query(account)
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var out: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let data = out as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        let status = SecItemCopyMatching(q as CFDictionary, &out)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw KeychainError(doing: "read the token", status: status) }
+        guard let data = out as? Data, let token = String(data: data, encoding: .utf8), !token.isEmpty else {
+            throw KeychainError(doing: "read the token", status: errSecDecode)
+        }
+        return token
     }
 
-    static func write(account: String, secret: String) {
-        delete(account: account)
-        var q = query(account)
-        q[kSecValueData as String] = Data(secret.utf8)
-        SecItemAdd(q as CFDictionary, nil)
+    // write keeps the token for the address, replacing one kept before.
+    static func write(account: String, secret: String) throws {
+        let data = Data(secret.utf8)
+        var status = SecItemUpdate(query(account) as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecItemNotFound {
+            var q = query(account)
+            q[kSecValueData as String] = data
+            status = SecItemAdd(q as CFDictionary, nil)
+        }
+        guard status == errSecSuccess else { throw KeychainError(doing: "keep the token", status: status) }
     }
 
+    // delete removes the address's token; a failure is logged, since the pairing is let go either way.
     static func delete(account: String) {
-        SecItemDelete(query(account) as CFDictionary)
+        let status = SecItemDelete(query(account) as CFDictionary)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            NSLog("remuda: %@", KeychainError(doing: "remove the token of \(account)", status: status).localizedDescription)
+        }
     }
 }

@@ -1214,17 +1214,6 @@ body.is-resizing iframe {
   transform: rotate(90deg);
 }
 
-.machine-tag {
-  font-size: var(--fs-11);
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: var(--fg-faint);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
-  padding: 1px 5px;
-  margin-right: 2px;
-}
-
 .machine-state {
   width: 8px;
   height: 8px;
@@ -1305,7 +1294,7 @@ body.is-resizing iframe {
   background-color: var(--bg-hover);
 }
 
-.ws-row.sel {
+.ws-row.on {
   background-color: var(--bg-input);
   box-shadow: inset 0 0 0 1px var(--line);
 }
@@ -1366,9 +1355,9 @@ body.is-resizing iframe {
 }
 
 .ws-row:hover .ws-menu-btn,
-.ws-row.sel .ws-menu-btn,
+.ws-row.on .ws-menu-btn,
 .radar-row:hover .ws-menu-btn,
-.radar-row.sel .ws-menu-btn {
+.radar-row.on .ws-menu-btn {
   opacity: 1;
 }
 
@@ -1395,11 +1384,11 @@ body.is-resizing iframe {
 }
 
 .ws-row.radar-head:not(.quiet):hover .ws-label,
-.ws-row.radar-head:not(.quiet).sel .ws-label {
+.ws-row.radar-head:not(.quiet).on .ws-label {
   color: var(--fg);
 }
 
-.ws-row.radar-head:not(.quiet).sel {
+.ws-row.radar-head:not(.quiet).on {
   background: none;
   box-shadow: none;
 }
@@ -1438,7 +1427,7 @@ body.is-resizing iframe {
   background-color: var(--bg-hover);
 }
 
-.ws-row.radar-head.is-folded.sel {
+.ws-row.radar-head.is-folded.on {
   background-color: var(--bg-input);
   box-shadow: inset 0 0 0 1px var(--line);
 }
@@ -1509,7 +1498,7 @@ body.is-resizing iframe {
   background-color: var(--bg-hover);
 }
 
-.radar-row.sel {
+.radar-row.on {
   background-color: var(--bg-input);
   box-shadow: inset 0 0 0 1px var(--line);
 }
@@ -1911,7 +1900,7 @@ body.is-resizing iframe {
   background: var(--bg-hover);
 }
 
-.tab.sel {
+.tab.on {
   color: var(--fg);
   background: var(--bg-input);
   box-shadow: inset 0 0 0 1px var(--line-strong);
@@ -1944,7 +1933,7 @@ body.is-resizing iframe {
 }
 
 .tab:hover .tab-close,
-.tab.sel .tab-close {
+.tab.on .tab-close {
   opacity: 1;
 }
 
@@ -2035,7 +2024,7 @@ body.is-resizing iframe {
   color: var(--fg);
 }
 
-.split-pane.sel {
+.split-pane.on {
   background: var(--bg-input);
   color: var(--fg);
 }

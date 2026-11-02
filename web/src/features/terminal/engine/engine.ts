@@ -10,7 +10,7 @@ import { uploadFiles } from "@/features/files/api";
 import type { OpenFile } from "@/features/files/target";
 import { installCopy } from "./copy";
 import { applyGeometry, keepFollower, type Geometry } from "./geometry";
-import { applyModifier, isFindKey, MAC } from "./keys";
+import { applyModifier } from "./keys";
 import { createLayer } from "./layer";
 import { provideLinks } from "./links";
 import { interceptModes, splitTracking } from "./modes";
@@ -56,7 +56,6 @@ export function createEngine(mount: HTMLElement, machineId: string, paneId: stri
   term.open(mount);
   let forgetSelection = () => {};
   const search = installSearch(term, () => flavorNow, () => forgetSelection());
-  term.attachCustomKeyEventHandler((e) => !isFindKey(e, MAC)); // the find bar's key is the page's
 
   let lastSize = "";
   let transport: Transport | null = null;

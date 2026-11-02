@@ -1,11 +1,12 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/dev1antdev/remuda/internal/chat"
-	"github.com/dev1antdev/remuda/internal/events"
 )
 
 // A question answered from a notification: the choice is checked against the dialog on the screen now, then picked.
@@ -34,20 +35,39 @@ func (s *Server) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	screen, err := client.PaneRead(req.Pane)
-	if err != nil {
-		rpcErr(w, err)
+	err := answerOnScreen(s.Input.Lock(mc.ID(), req.Pane),
+		func() (string, error) { return client.PaneRead(req.Pane) },
+		*req.Index, req.Label,
+		func(keys []string) error { return client.PaneSendKeys(req.Pane, keys) })
+	var stale staleDialog
+	switch {
+	case errors.As(err, &stale):
+		httpErr(w, http.StatusConflict, stale.error)
 		return
-	}
-	keys, err := chat.Answer(screen, *req.Index, req.Label)
-	if err != nil {
-		httpErr(w, 409, err)
-		return
-	}
-	if err := s.Input.SendKeys(client, events.PaneRef{Machine: mc.ID(), Pane: req.Pane}, keys); err != nil {
+	case err != nil:
 		rpcErr(w, err)
 		return
 	}
 	s.noteSent(r.Context(), mc.ID(), req.Pane, req.Label, false)
 	writeJSON(w, map[string]any{"ok": true, "chosen": req.Label})
+}
+
+// staleDialog says the screen shows no dialog, or not the one the choice was offered on: the caller's 409.
+type staleDialog struct{ error }
+
+// answerOnScreen reads the screen, checks the choice and presses the keys under the pane's typing lock, held across
+// all three: two answers to one notification — two devices, a tap repeated — would otherwise both read the dialog,
+// and the second's keys would land in whatever the agent shows next.
+func answerOnScreen(lock sync.Locker, read func() (string, error), index int, label string, send func([]string) error) error {
+	lock.Lock()
+	defer lock.Unlock()
+	screen, err := read()
+	if err != nil {
+		return err
+	}
+	keys, err := chat.Answer(screen, index, label)
+	if err != nil {
+		return staleDialog{err}
+	}
+	return send(keys)
 }

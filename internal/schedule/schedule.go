@@ -76,11 +76,12 @@ type Store struct {
 
 	mu       sync.Mutex
 	items    map[string]*Schedule
+	firing   map[string]time.Time // the minute each schedule was last dispatched for, until its run has noted LastRun
 	inflight sync.WaitGroup
 }
 
 func New(dir string, submit Submit, notify func(push.Payload), digest Digest) *Store {
-	st := &Store{dir: dir, submit: submit, notify: notify, digest: digest, now: time.Now, items: map[string]*Schedule{}}
+	st := &Store{dir: dir, submit: submit, notify: notify, digest: digest, now: time.Now, items: map[string]*Schedule{}, firing: map[string]time.Time{}}
 	var list []*Schedule
 	if err := state.LoadJSON(dir, file, &list); err != nil {
 		log.Printf("%s is unreadable (%v): no schedules until it is fixed", file, err)
@@ -192,6 +193,7 @@ func (st *Store) Delete(id string) error {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	delete(st.items, id)
+	delete(st.firing, id)
 	return st.saveLocked()
 }
 
@@ -311,17 +313,19 @@ func sinceKnown(mode string) bool {
 	return false
 }
 
-// Tick runs every enabled schedule whose cron matches this minute and has not run this minute yet; call it about every half minute.
+// Tick runs every enabled schedule whose cron matches this minute and was neither run nor started this minute yet — a
+// delivery may outlast the half minute to the next tick; call it about every half minute.
 func (st *Store) Tick() {
 	now := st.now()
 	minute := now.Truncate(time.Minute)
 	st.mu.Lock()
 	var due []*Schedule
 	for _, s := range st.items {
-		if !s.Enabled || s.LastRun.Truncate(time.Minute).Equal(minute) {
+		if !s.Enabled || s.LastRun.Truncate(time.Minute).Equal(minute) || st.firing[s.ID].Equal(minute) {
 			continue
 		}
 		if c, err := Parse(s.Cron); err == nil && c.Matches(now) {
+			st.firing[s.ID] = minute
 			due = append(due, s)
 		}
 	}

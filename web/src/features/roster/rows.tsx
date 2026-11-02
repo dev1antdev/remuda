@@ -119,7 +119,7 @@ function WorkspaceHead({ machine: m, session: s, nested, rows, summary, foldable
   const isFolded = !!summary;
   return (
     <div
-      className={`ws-row radar-head${selected ? " sel" : ""}${nested ? " nested" : ""}${rows.length === 0 ? " quiet" : ""}${isFolded ? " is-folded" : ""}`}
+      className={`ws-row radar-head${selected ? " on" : ""}${nested ? " nested" : ""}${rows.length === 0 ? " quiet" : ""}${isFolded ? " is-folded" : ""}`}
       role="button"
       tabIndex={0}
       onClick={() => rep && onSelect(m.id, rep.id)}
@@ -228,7 +228,7 @@ function AgentRowView({ machine: m, row: r, workspace, showWorkspace, current, p
   const said = !alert && (d === "done" || d.startsWith("idle")) ? p.said : undefined;
   return (
     <div
-      className={`radar-row is-${d}${selected ? " sel" : ""}${p.agent ? "" : " shell"}${alert ? " is-alert" : ""}`}
+      className={`radar-row is-${d}${selected ? " on" : ""}${p.agent ? "" : " shell"}${alert ? " is-alert" : ""}`}
       role="button"
       tabIndex={0}
       onClick={() => onSelect(m.id, p.id)}
