@@ -17,7 +17,7 @@ import { escapeIsFree, overlayOpen } from "./escape";
 import { actions, app } from "./store";
 import { TileView } from "./Tile";
 import { useOffice } from "./useOffice";
-import { t } from "@/lib/i18n";
+import { t, tn } from "@/lib/i18n";
 
 const VIEWS: { view: WallView; label: string; title: string }[] = [
   { view: "chat", label: t("Chat"), title: t("Each tile the last turns of its conversation") },
@@ -81,9 +81,7 @@ export default function Wall() {
   return (
     <main className="wall">
       <div className="wall-bar">
-        <span className="wall-count">
-          {n} agent{n === 1 ? "" : "s"}
-        </span>
+        <span className="wall-count">{tn(n, "{n} agent", "{n} agents")}</span>
         <button
           type="button"
           className={`btn sm${prefs.needsMe ? " on" : ""}`}
@@ -104,7 +102,7 @@ export default function Wall() {
         </button>
         {list.hidden > 0 && (
           <button type="button" className="btn sm" title={t("Bring back the tiles hidden by hand")} onClick={() => setHidden([])}>
-            Show {list.hidden} hidden
+            {t("Show {n} hidden", { n: list.hidden })}
           </button>
         )}
         <span className="wall-spacer" />
@@ -126,7 +124,7 @@ export default function Wall() {
           type="button"
           className={`btn sm wall-office-btn${office ? " on" : ""}`}
           aria-pressed={office}
-          title={office ? "Leave office mode (Esc)" : t("Office mode for a second screen: one agent large — the one that needs you, else each in turn every 20 s — the rest as cards; a card pins its agent; full screen")}
+          title={office ? t("Leave office mode (Esc)") : t("Office mode for a second screen: one agent large — the one that needs you, else each in turn every 20 s — the rest as cards; a card pins its agent; full screen")}
           onClick={toggleOffice}
         >
           <Icon name="monitor" size={12} /> {t("Office")}

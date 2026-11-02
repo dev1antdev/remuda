@@ -317,7 +317,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
   return (
     <div className="md-pre">
       <div className="md-pre-bar">
-        <span>{lang || "code"}</span>
+        <span>{lang || t("code")}</span>
         <button
           type="button"
           className="linkish"
@@ -330,7 +330,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
             });
           }}
         >
-          <Icon name={copied ? "check" : "copy"} size={12} /> {copied ? "copied" : "copy"}
+          <Icon name={copied ? "check" : "copy"} size={12} /> {copied ? t("copied") : t("copy")}
         </button>
       </div>
       <pre>

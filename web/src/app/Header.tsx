@@ -2,7 +2,7 @@
 // Nothing in it moves when state changes: the lens group is anchored right and the pill grows into the title's slack;
 // the pop-out button is there whenever the browser can do it, disabled without a pane.
 
-import { basename } from "@/lib/text";
+import { basename, plural } from "@/lib/text";
 import { machineLabel } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
 import { budgetTone, budgetWords, budgetsFor, graver, ratio, tightest, toneClass, type BudgetTone } from "@/features/usage/budgets";
@@ -57,7 +57,7 @@ export default function Header({ current }: { current: Located | null }) {
           </button>
         </Tip>
       )}
-      {!viewOnly && <Tip text="Search every conversation on every machine (⌘K / Ctrl+K has it too)">
+      {!viewOnly && <Tip text={t("Search every conversation on every machine (⌘K / Ctrl+K has it too)")}>
         <button type="button" className="icon-btn bell" aria-label={t("Search")} onClick={() => actions.openSearch()}>
           <Icon name="search" size={18} />
         </button>
@@ -74,11 +74,12 @@ function UsagePill({ usage, budget }: { usage: NonNullable<Located["pane"]["usag
   const contextTone: BudgetTone = fill >= 0.9 ? "red" : fill >= 0.7 ? "amber" : "";
   const tone = budget ? graver(contextTone, budgetTone(ratio(budget))) : contextTone;
   const cls = budget ? toneClass(tone) : fillClass(fill);
+  const told = t("{model}: context {used} of {window} ({pct}%) · {responses} · {cost} API-equivalent so far.", { model: usage.name, used: tok(usage.context), window: tok(usage.window), pct: percent, responses: plural(usage.turns, "response"), cost: usd(usage.cost) });
   return (
     <button
       type="button"
       className={`usage-pill${cls}`}
-      title={`${usage.name}: context ${tok(usage.context)} of ${tok(usage.window)} (${percent}%) · ${usage.turns} responses · ${usd(usage.cost)} API-equivalent so far.${budget ? ` Budget: ${budgetWords(budget)}.` : ""} Click for the usage report.`}
+      title={`${told}${budget ? ` ${t("Budget: {words}.", { words: budgetWords(budget) })}` : ""} ${t("Click for the usage report.")}`}
       onClick={() => actions.openPanel("usage")}
     >
       <span className="usage-pill-bar">

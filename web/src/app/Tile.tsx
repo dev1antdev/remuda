@@ -76,7 +76,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
         </button>
         {pr && (
           <span className="tile-pr-group">
-            <button type="button" className="linkish tile-pr" title={`${pr.url}${pr.status ? `\n${prWords(pr.status)}` : ""}\nOpen in a new tab`} onClick={() => openUrl(pr.url)}>
+            <button type="button" className="linkish tile-pr" title={`${pr.url}${pr.status ? `\n${prWords(pr.status)}` : ""}\n${t("Open in a new tab")}`} onClick={() => openUrl(pr.url)}>
               <Icon name="external-link" size={12} /> {pr.label}
             </button>
             {pr.status && (
@@ -110,7 +110,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           </Tip>
         )}
         {onFocus && (
-          <Tip text={focused ? "Back to the grid (Esc)" : t("Focus: this agent takes the wall, the others wait in a strip")}>
+          <Tip text={focused ? t("Back to the grid (Esc)") : t("Focus: this agent takes the wall, the others wait in a strip")}>
             <button type="button" className={`icon-btn sm tile-focus${focused ? " on" : ""}`} aria-label={focused ? t("Back to the grid") : t("Focus this agent")} aria-pressed={focused} onClick={onFocus}>
               <Icon name={focused ? "minimize" : "maximize"} size={14} />
             </button>

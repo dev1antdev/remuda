@@ -84,11 +84,11 @@ export default function PaneArea({ current }: { current: Located | null }) {
         >
           {sub ? (
             <>
-              A subagent of <b>{basename(viewer.dir)}</b>: {sub.description} — its own conversation, read-only.
+              {tr("A subagent of")} <b>{basename(viewer.dir)}</b>: {sub.description} {tr("— its own conversation, read-only.")}
             </>
           ) : (
             <>
-              A transcript from <b>{basename(viewer.dir)}</b> {tr("— no agent runs there now, so it reads only")}
+              {tr("A transcript from")} <b>{basename(viewer.dir)}</b> {tr("— no agent runs there now, so it reads only")}
             </>
           )}
         </Notice>
