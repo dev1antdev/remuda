@@ -86,12 +86,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Status*`/`UI*` constants with `UIStatus(status, hasAgent)` as the one
   mapping.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
-  never prompt), with socket and port forwarding (`-O forward -L`), the
-  reverse forward of this remuda's port (`ForwardBack`: `-O forward -R
-  127.0.0.1:<remote>:127.0.0.1:<ours>`, a forward of that port left on a
-  reused master cancelled first), remote exec (`RunWithInput` for a secret
-  that must not travel on a command line), and the `ssh -tt … herdr
-  terminal attach` command builder. remuda implements no SSH itself.
+  never prompt), with socket and port forwarding (`-O forward -L`; a
+  socket forward the master already holds is cancelled first, since
+  asked for the same one again the master keeps its listener and binds
+  nothing, so the file unlinked before the ask would be gone for good),
+  the reverse forward of this remuda's port (`ForwardBack`: `-O forward
+  -R 127.0.0.1:<remote>:127.0.0.1:<ours>`, a forward of that port left
+  on a reused master cancelled first), remote exec (`RunWithInput` for a
+  secret that must not travel on a command line), and the `ssh -tt … sh
+  -c 'HERDR_SOCKET_PATH=<the machine's socket> exec herdr terminal
+  attach …'` command builder (`AttachCmd`: the socket as the local attach
+  gets it, through sh since the login shell there may be anything).
+  remuda implements no SSH itself.
 - `internal/machines/` — the multi-PC registry: `manager.go` (the
   registry), `machine.go` (one machine: its state, the ssh master, the
   herdr client and attach manager, the peer, port forwards), `herdr.go`
@@ -393,8 +399,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `checksums.txt` when there is one (a mismatch keeps the old binary;
   none → installed with a "not verified" line), `InstallScript` (chmod,
   `-version`, mv) and `RestartScript` (launchctl kickstart / systemctl
-  restart) — the machine serving the page restarts detached two seconds
-  after the job instead, so the job ends first and the stale-page pill
+  restart, a line saying so where neither exists) — the machine serving
+  the page restarts detached two seconds after the job instead, so the
+  job ends first and the stale-page pill
   does the rest. `updates.Service` (`Available`, `Start`, `Recent`, `Job`)
   is what the four update routes call: `Start` refuses a command that is
   not the one shown with a `StaleError` (409), deploys this very binary
@@ -459,7 +466,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   request forwarded), over `Machine.ForwardAddr(port)` — the same port
   forward as code-server. herdr prints its refusal *into the PTY* and
   exits, so `attach.go` watches a fresh attach's first chunks
-  (`watchStart`: a refusal, or 300 ms / 512 bytes of real output) and
+  (`watchStart`: a refusal followed by the exit within `refusalExitWait`
+  — the words alone on a screen, an agent reading this very file, are
+  the pane's own and the attach stands — or 300 ms / 512 bytes of real
+  output) and
   `Subscribe` returns a `*RefusedError` (`herdr.Refused(err)`) instead
   of painting it; a refusal triggers one more probe (`peerAfterRefusal`,
   at most every 30 s); still no peer → the refusal is the WebSocket close
@@ -1148,7 +1158,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   alert `record` hands to the feed goes to each enabled webhook whose
   `Kinds` include its `HookKind` (input → question, done → finish, the
   watchdog's three → watchdog, the rest by name: digest, schedule, task,
-  budget, review) outside its own quiet hours — a question 10 s after
+  budget, review, machine — `HookKinds` is the one list, the page's
+  picker must match it) outside its own quiet hours — a question 10 s after
   the block, called off when answered at the desk, every finish 10 s
   after, as the feed hears them — in a goroutine each, one try and one
   more on a network error or a 5xx, a 10 s timeout; the outcome
@@ -1534,13 +1545,17 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `schedules.json` so a restart still watches it) and `Store.OnStatus`
   hears every `events.PaneStatus`: `done`, or `idle` after the pane was
   seen `working`, takes the tab down — the workspace when it was made
-  for the run — through `Close`, off the watcher's goroutine, and notes
+  for the run — through `Close`, off the watcher's goroutine (the place
+  is let go of as the close is dispatched, so a further change of the
+  pane before it lands closes and pushes nothing twice), and notes
   "answered: <first line of the last answer>" plus a push "Scout “…”
   answered" (the session file stays, so the conversation is still found
   by the search); `blocked` never closes (the person decides); a pane
   gone on its own is forgotten; a finish that happened while remuda was
   down is caught at the pane's next status change. `Tick` every 30s fires what
-  matches the minute and has not run this minute. The schedules' pushes
+  matches the minute and was neither run nor started this minute (`firing`
+  notes the dispatch, since a delivery waiting on a pane's lock or a slow
+  remote can outlast the half minute). The schedules' pushes
   — a digest, a failed prompt run (`Kind: "schedule"`) — go through
   `push.Service.Broadcast`, every device whatever its watchdog pref: a
   schedule is the person's own word. `schedules.json` in the state dir;
@@ -1629,15 +1644,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   period in use through `usage.Collect` over the connected hosts — in
   the background, every 5 minutes (`Loop`) and after an edit, one
   reading at a time — and `Status()` answers from that cache (`spent`,
-  `start`, `collected`; a period not read yet asks for a reading and
+  `start`, `collected`; a period not read yet asks for a reading — one,
+  `queued`: a roster built while it runs queues no scan of its own — and
   answers without a figure), so the roster, which carries `budgets`,
   never waits on a scan. A folder's spend is the projects the report
   keys by that folder or by `transcript.EncodePath` of it. `alert` fires
   `push.Notify` (`Kind: "budget"`, "Budget at 82 %: $16.4 of $20.0 this
   week" / "Budget crossed: …", the note or the scope as the body) once
   per threshold (80, 100; the higher alone when both are crossed in one
-  reading) per period, noted in `alerted` on the budget; an edit of the
-  scope, limit or period starts the period afresh. UI:
+  reading; judged on `percentOf`, the whole percent the page's words
+  show, so three $0.70 against $2.10 is crossed, not 99.99… %) per
+  period, noted in `alerted` on the budget; an edit of the
+  scope, limit or period starts the period afresh, any other keeps the
+  notes (`keep` checks and swaps the list under one lock, so a note a
+  reading makes meanwhile is carried, not lost). UI:
   `features/usage/budgets.ts` (pure, tested: `budgetsFor` the budgets
   covering a pane, `tightest`, `budgetTone` none / dim 50% / amber 80% /
   red at the limit, `graver`, `budgetWords`, `scopeWords`), the Budgets
@@ -1701,8 +1721,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `prefs.json` in the state dir, `{"<key>": {"value", "at"}}`; `Store.All`,
   `Store.Put` merges a part by key, the newer stamp winning (an equal one
   takes the incoming, a `null` value deletes, a missing stamp reads as
-  now), keys `^[a-zA-Z0-9_.:-]{1,80}$`, a value at most 16 KB, the file
-  1 MB; tested. Routes `GET /api/prefs` (an ETag, 304 when unchanged) and
+  now), a key any printable text up to `MaxKey` 512 characters (a
+  folder's pins travel under `pins:<machine>|<dir>`, whatever the folder
+  is called), a value at most 16 KB, the file 1 MB; tested. Routes `GET /api/prefs` (an ETag, 304 when unchanged) and
   `PUT /api/prefs` (the part, the merged whole back). The page decides
   what travels: `lib/syncKeys.ts` (tested) is the allow-list — `theme`,
   `theme.dark`, `theme.accent`, `density`, `font.mono`, `lang` (not `text.size`:

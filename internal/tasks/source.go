@@ -1,6 +1,9 @@
 package tasks
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // MaxSource bounds what a task says about its maker.
 const MaxSource = 120
@@ -16,8 +19,16 @@ func Source(caller, said string) string {
 	if said = strings.TrimSpace(said); said != "" {
 		out += " · " + said
 	}
-	if len(out) > MaxSource {
-		out = out[:MaxSource]
+	return cutBytes(out, MaxSource)
+}
+
+// cutBytes keeps at most max bytes of s, ending between characters rather than inside one.
+func cutBytes(s string, max int) string {
+	if len(s) <= max {
+		return s
 	}
-	return out
+	for max > 0 && !utf8.RuneStart(s[max]) {
+		max--
+	}
+	return s[:max]
 }

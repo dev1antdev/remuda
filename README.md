@@ -757,7 +757,8 @@ Nothing passes through remuda; a reload says nothing.
 Push or a channel the team reads: a Telegram bot (its token and your chat
 id), a Slack incoming webhook, an ntfy topic, or any address that takes
 JSON. Each one hears the kinds you tick — a question, a finish, a
-watchdog note, the digest, a schedule, a task, a budget, a review — with
+watchdog note, the digest, a schedule, a task, a budget, a review, a
+machine away or back — with
 the title, the body and a link back to the pane, built from the address
 you set at the top of the section (your tailnet's is offered when there
 is one). A Test button on each sends one; the row says when the last one
