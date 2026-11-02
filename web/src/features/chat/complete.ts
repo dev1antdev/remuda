@@ -33,9 +33,11 @@ export function stillDismissed(dismissed: Dismissed | null, token: Token | null)
   return token.kind === dismissed.kind && token.start === dismissed.start ? dismissed : null;
 }
 
-// applyPick replaces the token with the pick and a space (the one already there kept), the caret landing after it
+// applyPick replaces the token and the rest of its word past the caret with the pick and a space (the one already there
+// kept), the caret landing after it
 export function applyPick(draft: string, token: Token, insert: string): { draft: string; caret: number } {
-  const after = draft.slice(token.end);
+  const rest = /^\S*/.exec(draft.slice(token.end))![0];
+  const after = draft.slice(token.end + rest.length);
   const text = after.startsWith(" ") ? insert : `${insert} `;
   return { draft: draft.slice(0, token.start) + text + after, caret: token.start + insert.length + 1 };
 }

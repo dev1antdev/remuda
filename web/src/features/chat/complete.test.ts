@@ -49,6 +49,13 @@ describe("applyPick", () => {
     expect(applyPick("/comp", { kind: "command", start: 0, end: 5, query: "comp" }, "/compact")).toEqual({ draft: "/compact ", caret: 9 });
     expect(applyPick("see @web and more", { kind: "path", start: 4, end: 8, query: "web" }, "@web/src/x.ts")).toEqual({ draft: "see @web/src/x.ts and more", caret: 18 });
   });
+
+  it("replaces the whole word under the caret, not only the part before it", () => {
+    // the caret after "@we" in "@web/old.ts": the pick takes the word's rest with it
+    expect(applyPick("see @web/old.ts and more", { kind: "path", start: 4, end: 7, query: "we" }, "@web/src/x.ts")).toEqual({ draft: "see @web/src/x.ts and more", caret: 18 });
+    expect(applyPick("/comXYZ", { kind: "command", start: 0, end: 4, query: "com" }, "/compact")).toEqual({ draft: "/compact ", caret: 9 });
+    expect(applyPick("@a.ts\nnext", { kind: "path", start: 0, end: 2, query: "a" }, "@a.go")).toEqual({ draft: "@a.go \nnext", caret: 6 });
+  });
 });
 
 const commands: Command[] = [
