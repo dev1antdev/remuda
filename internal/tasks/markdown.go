@@ -14,9 +14,7 @@ const MaxMarkdown = 64 << 10
 // paragraphs, headings, lists one level deep with task items as checkboxes, fenced and inline code, bold, italic,
 // http links, rules and quotes; everything else stays text.
 func MarkdownHTML(md string) string {
-	if len(md) > MaxMarkdown {
-		md = md[:MaxMarkdown]
-	}
+	md = cutBytes(md, MaxMarkdown)
 	lines := strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n")
 	var out strings.Builder
 	var para, quote []string
