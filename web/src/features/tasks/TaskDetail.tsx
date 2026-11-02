@@ -1,6 +1,6 @@
 // The open task on the right: every field in place, the ways to hand it to an agent, the run on it, the description, the comments.
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { actions } from "@/app/store";
 import { useNow } from "@/lib/clock";
 import { checksTone, checksWords, prWords, reviewTone, reviewWords } from "@/features/roster/prStatus";
@@ -52,6 +52,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
   const pr = run ? prOf(run) : null;
   const runLabel = !run ? "" : run.state === "starting" ? tr("starting…") : run.state === "failed" ? "failed" : run.state === "gone" ? "closed" : paneStatus === "run" ? "working" : paneStatus === "input" ? tr("waiting for you") : paneStatus === null ? "closed" : run.state === "finished" ? "finished" : "running";
   const [title, setTitle] = useState(t.title);
+  useEffect(() => setTitle(t.title), [t.title]);
   const [sendMenu, setSendMenu] = useState(false);
   const closeSendMenu = useCallback(() => setSendMenu(false), []);
   useDismiss(sendMenu, closeSendMenu, [".split"]);
