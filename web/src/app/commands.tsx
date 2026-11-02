@@ -200,6 +200,6 @@ function useCommands(): (query: string) => Entry[] {
       command("search", typed ? t("Search every conversation for “{typed}”", { typed }) : t("Search every conversation…"), () => actions.openSearch(typed), { hint: t("what you or an agent said, on every machine"), icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...(viewOnly ? commands.filter((entry) => viewerCommand(entry.id)) : commands)];
     },
-    [machines, viewOnly, mode, lens, viewer, chatSession, footprint, split, full, themePref, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
+    [machines, viewOnly, mode, lens, viewer, chatSession, chatLive, footprint, split, full, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
   );
 }
