@@ -1141,7 +1141,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   alert `record` hands to the feed goes to each enabled webhook whose
   `Kinds` include its `HookKind` (input → question, done → finish, the
   watchdog's three → watchdog, the rest by name: digest, schedule, task,
-  budget, review) outside its own quiet hours — a question 10 s after
+  budget, review, machine — `HookKinds` is the one list, the page's
+  picker must match it) outside its own quiet hours — a question 10 s after
   the block, called off when answered at the desk, every finish 10 s
   after, as the feed hears them — in a goroutine each, one try and one
   more on a network error or a 5xx, a 10 s timeout; the outcome
