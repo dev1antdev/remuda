@@ -209,6 +209,35 @@ func TestStatusAndAlerts(t *testing.T) {
 	}
 }
 
+// A spend summed from cents is a hair off in floats — three $0.70 make $2.0999999999999996 — and the page reads it as the
+// whole percent its words show: the push must cross at the same percent the page paints red.
+func TestThresholdsReadTheWholePercentTheWordsShow(t *testing.T) {
+	folder := func(cost float64) usage.ProjectTotals {
+		return usage.ProjectTotals{Project: "-Users-me-remuda", Dir: "/Users/me/remuda", Totals: usage.Totals{Cost: cost}}
+	}
+	s, n, _ := fakeSpend(t, map[string]*usage.Report{
+		"local": report(2.1, folder(0.7), folder(0.7), folder(0.7)),
+		"gog":   report(2.4),
+	})
+	if _, err := s.Replace([]Budget{
+		{ID: "crossed", Limit: 2.1, Period: "day", Machine: "local", Dir: "/Users/me/remuda"},
+		{ID: "eighty", Limit: 3, Period: "day", Machine: "gog"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s.Wait()
+	titles := map[string]string{}
+	for _, p := range n.all() {
+		titles[p.Tag] = p.Title
+	}
+	if titles["budget|crossed"] != "Budget crossed: $2.10 of $2.10 today" {
+		t.Errorf("three $0.70 of $2.10: %q", titles["budget|crossed"])
+	}
+	if titles["budget|eighty"] != "Budget at 80 %: $2.40 of $3.00 today" {
+		t.Errorf("$2.40 of $3: %q", titles["budget|eighty"])
+	}
+}
+
 func TestEditResetsAlerts(t *testing.T) {
 	s, n, _ := fakeSpend(t, map[string]*usage.Report{"local": report(9)})
 	if _, err := s.Replace([]Budget{{ID: "a", Limit: 10, Period: "day"}}); err != nil {

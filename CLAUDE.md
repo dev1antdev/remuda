@@ -1635,7 +1635,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `push.Notify` (`Kind: "budget"`, "Budget at 82 %: $16.4 of $20.0 this
   week" / "Budget crossed: …", the note or the scope as the body) once
   per threshold (80, 100; the higher alone when both are crossed in one
-  reading) per period, noted in `alerted` on the budget; an edit of the
+  reading; judged on `percentOf`, the whole percent the page's words
+  show, so three $0.70 against $2.10 is crossed, not 99.99… %) per
+  period, noted in `alerted` on the budget; an edit of the
   scope, limit or period starts the period afresh. UI:
   `features/usage/budgets.ts` (pure, tested: `budgetsFor` the budgets
   covering a pane, `tightest`, `budgetTone` none / dim 50% / amber 80% /

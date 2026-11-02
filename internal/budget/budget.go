@@ -333,10 +333,10 @@ func (s *Service) alert(hosts []shell.Host, now time.Time) {
 			changed = true
 		}
 		spent := spentOf(sp, *b)
-		pct := 100 * spent / b.Limit
+		pct := percentOf(spent, b.Limit)
 		crossed := 0
 		for _, th := range Thresholds {
-			if pct >= float64(th) && !contains(b.Alerted[key], th) {
+			if pct >= th && !contains(b.Alerted[key], th) {
 				crossed = th
 			}
 		}
@@ -370,6 +370,12 @@ func (s *Service) alert(hosts []shell.Host, now time.Time) {
 	}
 }
 
+// percentOf is the spend as the whole percent the page's words show, a hair of float rounding forgiven: three $0.70
+// against $2.10 is 100, not 99.99999999999999.
+func percentOf(spent, limit float64) int {
+	return int(math.Floor(100*spent/limit + 1e-9))
+}
+
 func contains(list []int, n int) bool {
 	for _, x := range list {
 		if x == n {
@@ -384,7 +390,7 @@ func alertTitle(threshold int, spent float64, b Budget) string {
 	if threshold >= 100 {
 		return fmt.Sprintf("Budget crossed: %s of %s %s", USD(spent), USD(b.Limit), PeriodWords(b.Period))
 	}
-	return fmt.Sprintf("Budget at %d %%: %s of %s %s", int(math.Floor(100*spent/b.Limit+1e-9)), USD(spent), USD(b.Limit), PeriodWords(b.Period))
+	return fmt.Sprintf("Budget at %d %%: %s of %s %s", percentOf(spent, b.Limit), USD(spent), USD(b.Limit), PeriodWords(b.Period))
 }
 
 // alertBody is the budget's note, else its scope in words.
