@@ -393,8 +393,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `checksums.txt` when there is one (a mismatch keeps the old binary;
   none → installed with a "not verified" line), `InstallScript` (chmod,
   `-version`, mv) and `RestartScript` (launchctl kickstart / systemctl
-  restart) — the machine serving the page restarts detached two seconds
-  after the job instead, so the job ends first and the stale-page pill
+  restart, a line saying so where neither exists) — the machine serving
+  the page restarts detached two seconds after the job instead, so the
+  job ends first and the stale-page pill
   does the rest. `updates.Service` (`Available`, `Start`, `Recent`, `Job`)
   is what the four update routes call: `Start` refuses a command that is
   not the one shown with a `StaleError` (409), deploys this very binary
