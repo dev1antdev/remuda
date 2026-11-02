@@ -147,7 +147,7 @@ export default function FileViewer({
               </button>
             </nav>
           )}
-          <Tip text="Open in Code (VS Code on this machine), at this line">
+          <Tip text={t("Open in Code (VS Code on this machine), at this line")}>
             <button
               type="button"
               className="icon-btn"
@@ -160,9 +160,11 @@ export default function FileViewer({
               <Icon name="code" size={16} />
             </button>
           </Tip>
-          <button type="button" className="icon-btn" onClick={close} title="Close (Esc)" aria-label={t("Close")}>
-            <Icon name="x" size={16} />
-          </button>
+          <Tip text={t("Close (Esc)")}>
+            <button type="button" className="icon-btn" onClick={close} aria-label={t("Close")}>
+              <Icon name="x" size={16} />
+            </button>
+          </Tip>
         </header>
 
         <div className="fv-body">

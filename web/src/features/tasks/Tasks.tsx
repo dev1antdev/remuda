@@ -205,7 +205,7 @@ export default function Tasks() {
     });
   };
   const remove = (t: Task) =>
-    actions.ask(`Delete “${t.title}”?`, tr("Delete"), () => {
+    actions.ask(tr("Delete “{title}”?", { title: t.title }), tr("Delete"), () => {
       void deleteTask(t.id).then(() => {
         setOpenId(null);
         refresh();
@@ -297,9 +297,11 @@ export default function Tasks() {
             </button>
           </Tip>
           {project && (
-            <button type="button" className="icon-btn" title={tr("Project settings: name, colour, columns")} aria-label={tr("Project settings")} onClick={() => setSettings(true)}>
-              <Icon name="settings" size={16} />
-            </button>
+            <Tip text={tr("Project settings: name, colour, columns")}>
+              <button type="button" className="icon-btn" aria-label={tr("Project settings")} onClick={() => setSettings(true)}>
+                <Icon name="settings" size={16} />
+              </button>
+            </Tip>
           )}
         </div>
         {proposedView ? (
@@ -372,15 +374,19 @@ export default function Tasks() {
         )}
         {!board && pages > 1 && (
           <div className="tasks-pager">
-            <button type="button" className="btn sm" disabled={page <= 1} onClick={() => setPage(page - 1)} title={tr("Previous page")} aria-label={tr("Previous page")}>
-              <Icon name="chevron-left" size={14} />
-            </button>
+            <Tip text={tr("Previous page")}>
+              <button type="button" className="btn sm" disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label={tr("Previous page")}>
+                <Icon name="chevron-left" size={14} />
+              </button>
+            </Tip>
             <span>
               {page} / {pages}
             </span>
-            <button type="button" className="btn sm" disabled={page >= pages} onClick={() => setPage(page + 1)} title={tr("Next page")} aria-label={tr("Next page")}>
-              <Icon name="chevron-right" size={14} />
-            </button>
+            <Tip text={tr("Next page")}>
+              <button type="button" className="btn sm" disabled={page >= pages} onClick={() => setPage(page + 1)} aria-label={tr("Next page")}>
+                <Icon name="chevron-right" size={14} />
+              </button>
+            </Tip>
           </div>
         )}
       </main>
@@ -458,7 +464,8 @@ export default function Tasks() {
           onSend={async (target, text) => {
             await submitPrompt(target.machineId, target.paneId, text);
             setSendReq(null);
-            announce(`Sent “${sendReq.task.title}” to ${target.agent} in ${target.sessionName}${target.machineId !== "local" ? ` on ${target.machineLabel}` : ""}.`, target);
+            const words = { task: sendReq.task.title, agent: target.agent, workspace: target.sessionName, machine: target.machineLabel };
+            announce(target.machineId !== "local" ? tr("Sent “{task}” to {agent} in {workspace} on {machine}.", words) : tr("Sent “{task}” to {agent} in {workspace}.", words), target);
           }}
         />
       )}

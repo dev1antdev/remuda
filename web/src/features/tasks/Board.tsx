@@ -96,9 +96,11 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
                 </Tip>
               )}
               <span className="badge quiet">{list.length}</span>
-              <button type="button" className="icon-btn sm" title={tr("Add a task to {column}", { column: s.title })} aria-label={tr("Add a task to {column}", { column: s.title })} onClick={() => setAdding(s.id)}>
-                <Icon name="plus" size={14} />
-              </button>
+              <Tip text={tr("Add a task to {column}", { column: s.title })}>
+                <button type="button" className="icon-btn sm" aria-label={tr("Add a task to {column}", { column: s.title })} onClick={() => setAdding(s.id)}>
+                  <Icon name="plus" size={14} />
+                </button>
+              </Tip>
             </header>
             <div className="board-col-body">
               {adding === s.id && <ColumnAdd onAdd={(title) => onAdd(title, s.id)} onClose={() => setAdding(null)} />}
@@ -187,21 +189,22 @@ function Card({ task: t, statuses, selected, picked, selecting, dragging, before
       <div className="board-card-head">
         <span className="board-card-title">{t.title}</span>
         <span className="board-card-menu">
-          <button
-            type="button"
-            className="icon-btn sm"
-            title={tr("Move to…")}
-            aria-label={tr("Move to another column")}
-            aria-haspopup="menu"
-            aria-expanded={menu}
-            disabled={elsewhere.length === 0}
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenu((m) => !m);
-            }}
-          >
-            <Icon name="more" size={14} />
-          </button>
+          <Tip text={tr("Move to…")}>
+            <button
+              type="button"
+              className="icon-btn sm"
+              aria-label={tr("Move to another column")}
+              aria-haspopup="menu"
+              aria-expanded={menu}
+              disabled={elsewhere.length === 0}
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenu((m) => !m);
+              }}
+            >
+              <Icon name="more" size={14} />
+            </button>
+          </Tip>
           {menu && (
             <span className="row-menu" role="menu">
               {elsewhere.map((s) => (

@@ -3495,13 +3495,14 @@ body.is-resizing iframe {
   display: inline-flex;
 }
 
-.split-main {
+.split > .split-main {
   border-radius: var(--r-md) 0 0 var(--r-md);
   padding: 0 12px;
   font-size: var(--fs-13);
 }
 
-.split-arrow {
+.split > .split-arrow,
+.split > .split-arrow:hover:not(:disabled) {
   border-radius: 0 var(--r-md) var(--r-md) 0;
   padding: 0 8px;
   border-left: 1px solid color-mix(in srgb, var(--on-accent) 25%, transparent);

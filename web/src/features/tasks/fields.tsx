@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { Field, FieldValue } from "@/features/tasks/api";
 import Select from "@/ui/Select";
 import Icon from "@/ui/icons";
+import Tip from "@/ui/Tip";
 import { openUrl } from "@/lib/host";
 import { t } from "@/lib/i18n";
 
@@ -121,9 +122,11 @@ function TextField({ field, value, onCommit }: { field: Field; value: FieldValue
     <span className="field-link">
       {input}
       {/^https?:\/\//.test(shown) && (
-        <button type="button" className="icon-btn sm" title={t("Open")} aria-label={t("Open {url}", { url: shown })} onClick={() => openUrl(shown)}>
-          <Icon name="external-link" size={14} />
-        </button>
+        <Tip text={t("Open {url}", { url: shown })}>
+          <button type="button" className="icon-btn sm" aria-label={t("Open {url}", { url: shown })} onClick={() => openUrl(shown)}>
+            <Icon name="external-link" size={14} />
+          </button>
+        </Tip>
       )}
     </span>
   );
@@ -148,7 +151,7 @@ function DateField({ value, onCommit }: { value: string; onCommit: (ymd: string)
       />
       {value && (
         <button type="button" className="linkish" onClick={() => onCommit("")}>
-          clear
+          {t("clear")}
         </button>
       )}
     </>
