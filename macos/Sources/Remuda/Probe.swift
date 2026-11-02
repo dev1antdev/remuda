@@ -1,7 +1,8 @@
 import AppKit
 
 // Probe is the headless check: the page loaded off screen with the bridge, the alerts socket open, everything heard
-// printed as JSON lines; no window, no menu bar item, no notification is asked for or shown.
+// printed as JSON lines; no window, no menu bar item, no notification is asked for or shown, and the two devices it
+// made on the server — the one the page signed in as, the one the socket minted — are removed on its way out.
 struct Probe {
     var server: URL?
     var tokenFile: String?
@@ -54,12 +55,24 @@ struct Probe {
         web.load()
         alerts.start()
         DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(seconds)) {
-            say(["done": ready ? "ready" : "the page never said ready"])
-            exit(ready ? 0 : 1)
+            let outcome = ready
+            say(["done": outcome ? "ready" : "the page never said ready"])
+            alerts.stop()
+            let device = alerts.endpoint
+            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(leaveWithin)) { exit(outcome ? 0 : 1) }
+            web.signOut {
+                Task {
+                    if let device { _ = try? await server.request("/api/push/subscribe", method: "DELETE", json: ["endpoint": device]) }
+                    exit(outcome ? 0 : 1)
+                }
+            }
         }
         app.run()
         return 0
     }
+
+    // leaveWithin is how long the probe gives the server to take its devices back before it exits regardless.
+    private let leaveWithin = 5
 }
 
 // say prints one JSON line.

@@ -73,6 +73,17 @@ final class WebWindow: NSObject {
         webView.evaluateJavaScript(source) { _, _ in }
     }
 
+    // signOut revokes the device the page signed in as, through the page itself so its cookie carries: a probe leaves none behind.
+    func signOut(then done: @escaping () -> Void) {
+        let source = """
+        const list = await (await fetch('/api/devices')).json();
+        const me = Array.isArray(list) ? list.find((d) => d.this) : null;
+        if (me) await fetch('/api/devices/' + encodeURIComponent(me.id), {method: 'DELETE'});
+        return Boolean(me);
+        """
+        webView.callAsyncJavaScript(source, arguments: [:], in: nil, in: .page) { _ in done() }
+    }
+
     fileprivate func received(_ body: Any) {
         guard let message = Bridge(body) else { return }
         onBridge?(message, body)

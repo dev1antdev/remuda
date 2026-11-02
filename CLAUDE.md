@@ -2240,7 +2240,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   server or pairing link, the hotkey, launch at login through
   `SMAppService`, the notification permission), `Probe` (`--probe`: the
   page off screen, every bridge message and alert frame as a JSON line,
-  exit 0 once the page said ready), `MainMenu`, `AppDelegate` (the
+  exit 0 once the page said ready; on its way out it revokes the device
+  the page signed in as, through the page's own `DELETE
+  /api/devices/{id}`, and removes the socket's alert device),
+  `MainMenu`, `AppDelegate` (the
   wiring). **The bridge**: the app injects `window.remudaShell = {native,
   version}` at document start and listens on the script message handler
   `remuda`; the page posts `ready`, `badge {count, tone}` and `menu

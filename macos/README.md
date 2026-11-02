@@ -75,8 +75,11 @@ bin/remuda.app/Contents/MacOS/remuda --probe [--server http://127.0.0.1:7526] [-
 No window, no menu bar item, no notification: the page is loaded off
 screen and every message it posts over the bridge, every alert frame and
 every change of the socket's state is printed as one JSON line. Exit 0
-when the page said `ready` within the time, 1 otherwise. The check behind
-`make mac` in a pull request.
+when the page said `ready` within the time, 1 otherwise. On its way out
+it removes the two devices it made on the server — the one the page
+signed in as and the socket's alert device — so a run leaves nothing
+behind in Settings › Devices. The check behind `make mac` in a pull
+request.
 
 ## How the page and the app talk
 
