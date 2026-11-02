@@ -8,11 +8,11 @@ import type { Pane, Session, Status, Tab } from "./api";
 import { t as tr } from "@/lib/i18n";
 
 const STATUS_LABEL: Record<Status, string> = {
-  run: "working",
+  run: tr("working"),
   input: tr("needs you"),
-  idle: "ready",
-  done: "done",
-  shell: "shell",
+  idle: tr("ready"),
+  done: tr("done"),
+  shell: tr("shell"),
 };
 
 export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onCloseTab, onRename, tools, readOnly = false }: {
