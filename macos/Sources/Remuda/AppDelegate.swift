@@ -89,13 +89,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openSettings() { showSettings(message: "") }
 
     private func showSettings(message: String) {
-        settings.show(server: server, hotkey: hotkeySpec, permission: "", message: message)
+        settings.show(server: server, hotkey: hotkeySpec, permission: "…", message: message)
         refreshSettings()
     }
 
+    // refreshSettings words the notification permission in the open Settings, touching nothing else there.
     private func refreshSettings() {
-        guard let notifier else { return settings.say("notifications need the app bundle (make mac)") }
-        notifier.status { [weak self] words in self?.settings.show(server: self?.server, hotkey: self?.hotkeySpec ?? "", permission: words, message: "") }
+        guard let notifier else {
+            return settings.setPermission(Notifier.available ? "asked once remuda is connected" : "need the app bundle (make mac)")
+        }
+        notifier.status { [weak self] words in self?.settings.setPermission(words) }
     }
 
     // apply takes the Settings form: a pairing link pairs, an empty field goes back to this Mac's own remuda.
