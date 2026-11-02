@@ -7,6 +7,8 @@ final class WebWindow: NSObject {
     let webView: WKWebView
     private(set) var server: Server
     var onBridge: ((Bridge, Any) -> Void)?
+    private var reloadDelay: TimeInterval = 1
+    private var pendingReload: DispatchWorkItem?
 
     // init makes the window; the cookie jar is the app's own and persists, or a throwaway one for a probe.
     init(server: Server, persistent: Bool = true) {
@@ -37,12 +39,25 @@ final class WebWindow: NSObject {
     // use points the window at another remuda and loads it.
     func use(server: Server) {
         self.server = server
+        reloadDelay = 1
         load()
     }
 
     // load opens the page signed in: the pairing token goes once and the server strips it after setting the cookie.
     func load() {
+        pendingReload?.cancel()
+        pendingReload = nil
         webView.load(URLRequest(url: server.signInURL))
+    }
+
+    // reloadLater loads the page again after a pause that grows while it keeps failing: remuda not up yet at login, the web process gone.
+    private func reloadLater() {
+        guard pendingReload == nil else { return }
+        let delay = reloadDelay
+        reloadDelay = min(reloadDelay * 2, 30)
+        let reload = DispatchWorkItem { [weak self] in self?.load() }
+        pendingReload = reload
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: reload)
     }
 
     func show() {
@@ -137,6 +152,22 @@ extension WebWindow: WKNavigationDelegate, WKDownloadDelegate {
 
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
         decisionHandler(response.canShowMIMEType ? .allow : .download)
+    }
+
+    // didFailProvisionalNavigation tries the page again when the server could not be reached; a cancelled load is left alone.
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        let failure = error as NSError
+        guard failure.domain == NSURLErrorDomain, failure.code != NSURLErrorCancelled else { return }
+        reloadLater()
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        reloadDelay = 1
+    }
+
+    // webViewWebContentProcessDidTerminate brings the page back: the view would stay blank, and this window has no reload.
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        reloadLater()
     }
 
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {

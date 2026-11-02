@@ -34,6 +34,11 @@ the cookie between launches. A remuda elsewhere — a tailnet address, say
 token to the login keychain under "remuda", in place of the remuda
 paired before.
 
+When remuda cannot be reached yet — the app launched at login before
+remuda's service was up — the window tries the page again by itself,
+1 s and then up to 30 s apart, and does the same when its web process
+dies.
+
 macOS asks once whether the app may notify you; Settings… shows the
 answer and asks again when it was never answered.
 
