@@ -250,6 +250,48 @@ func TestStatusWithoutReading(t *testing.T) {
 	s.Wait()
 }
 
+// The roster is built every few seconds while a reading runs — at a period's turn every build finds the cache stale —
+// and each build must not queue a scan of its own behind the one under way.
+func TestStatusAsksForOneReadingWhileItRuns(t *testing.T) {
+	s, _, _ := fakeSpend(t, nil)
+	var mu sync.Mutex
+	calls := 0
+	started := make(chan struct{}, 8)
+	release := make(chan struct{})
+	s.collect = func([]shell.Host, time.Time, *time.Location, string) []usage.MachineReport {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		started <- struct{}{}
+		<-release
+		return []usage.MachineReport{{ID: "local", Label: "local", Report: report(1)}}
+	}
+	s.mu.Lock()
+	s.all = []Budget{{ID: "a", Limit: 10, Period: "day"}}
+	s.mu.Unlock()
+	s.Status()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("a stale status asked for no reading")
+	}
+	for i := 0; i < 4; i++ {
+		s.Status()
+	}
+	close(release)
+	s.Wait()
+	mu.Lock()
+	n := calls
+	mu.Unlock()
+	if n != 1 {
+		t.Fatalf("the spend was read %d times for one stale period", n)
+	}
+	if st := s.Status(); st[0].Collected == "" || st[0].Spent != 1 {
+		t.Fatalf("the one reading did not serve the status: %+v", st[0])
+	}
+	s.Wait()
+}
+
 func TestWords(t *testing.T) {
 	if USD(0.5) != "$0.50" || USD(16.4) != "$16.4" || USD(123.4) != "$123" {
 		t.Errorf("USD: %s %s %s", USD(0.5), USD(16.4), USD(123.4))

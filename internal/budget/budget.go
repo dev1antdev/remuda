@@ -85,6 +85,7 @@ type Service struct {
 	mu     sync.Mutex
 	all    []Budget
 	spends map[string]*spend // by period
+	queued int               // the background readings asked for and not done yet: a stale status asks for one at a time
 
 	reading  sync.Mutex     // one reading at a time; a caller waits for the one under way rather than skipping
 	readings sync.WaitGroup // the background readings Refresh started, for Wait
@@ -174,7 +175,8 @@ func validPeriod(p string) bool {
 }
 
 // Status is every budget with what its period has cost so far, from the cache; a period not read yet, or read for
-// an earlier start, asks for a reading in the background and answers without a figure.
+// an earlier start, asks for a reading in the background — unless one is already queued, since the roster is built
+// every few seconds — and answers without a figure.
 func (s *Service) Status() []Status {
 	now := s.now()
 	s.mu.Lock()
@@ -193,9 +195,13 @@ func (s *Service) Status() []Status {
 		}
 		out = append(out, st)
 	}
+	ask := stale && s.queued == 0
+	if ask {
+		s.queued++
+	}
 	s.mu.Unlock()
-	if stale {
-		s.Refresh()
+	if ask {
+		s.startReading()
 	}
 	return out
 }
@@ -236,10 +242,21 @@ func missingOf(sp *spend, b Budget) []string {
 
 // Refresh reads the spend of every period in use in the background, after any reading under way.
 func (s *Service) Refresh() {
+	s.mu.Lock()
+	s.queued++
+	s.mu.Unlock()
+	s.startReading()
+}
+
+// startReading runs one reading in the background, counted in queued until it is done.
+func (s *Service) startReading() {
 	s.readings.Add(1)
 	go func() {
 		defer s.readings.Done()
 		s.refresh()
+		s.mu.Lock()
+		s.queued--
+		s.mu.Unlock()
 	}()
 }
 

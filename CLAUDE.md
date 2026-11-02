@@ -1627,7 +1627,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   period in use through `usage.Collect` over the connected hosts — in
   the background, every 5 minutes (`Loop`) and after an edit, one
   reading at a time — and `Status()` answers from that cache (`spent`,
-  `start`, `collected`; a period not read yet asks for a reading and
+  `start`, `collected`; a period not read yet asks for a reading — one,
+  `queued`: a roster built while it runs queues no scan of its own — and
   answers without a figure), so the roster, which carries `budgets`,
   never waits on a scan. A folder's spend is the projects the report
   keys by that folder or by `transcript.EncodePath` of it. `alert` fires
