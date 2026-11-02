@@ -1214,17 +1214,6 @@ body.is-resizing iframe {
   transform: rotate(90deg);
 }
 
-.machine-tag {
-  font-size: var(--fs-11);
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: var(--fg-faint);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
-  padding: 1px 5px;
-  margin-right: 2px;
-}
-
 .machine-state {
   width: 8px;
   height: 8px;
