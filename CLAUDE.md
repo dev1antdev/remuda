@@ -459,7 +459,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   request forwarded), over `Machine.ForwardAddr(port)` — the same port
   forward as code-server. herdr prints its refusal *into the PTY* and
   exits, so `attach.go` watches a fresh attach's first chunks
-  (`watchStart`: a refusal, or 300 ms / 512 bytes of real output) and
+  (`watchStart`: a refusal followed by the exit within `refusalExitWait`
+  — the words alone on a screen, an agent reading this very file, are
+  the pane's own and the attach stands — or 300 ms / 512 bytes of real
+  output) and
   `Subscribe` returns a `*RefusedError` (`herdr.Refused(err)`) instead
   of painting it; a refusal triggers one more probe (`peerAfterRefusal`,
   at most every 30 s); still no peer → the refusal is the WebSocket close
