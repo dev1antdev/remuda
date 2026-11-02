@@ -82,6 +82,7 @@ type builder struct {
 	modelsT      map[string]*Totals
 	sessions     map[string]*SessionTotals
 	sessModels   map[string]map[string]int
+	seen         map[string]bool // the message ids summed so far: a continuation file repeats its predecessor's tail
 }
 
 func newBuilder(since time.Time, loc *time.Location) *builder {
@@ -97,15 +98,25 @@ func newBuilder(since time.Time, loc *time.Location) *builder {
 		modelsT:      map[string]*Totals{},
 		sessions:     map[string]*SessionTotals{},
 		sessModels:   map[string]map[string]int{},
+		seen:         map[string]bool{},
 	}
 }
 
+// claudeFile is one session or subagent file to sum, with when it was last written.
+type claudeFile struct {
+	path, project, session string
+	mod                    time.Time
+}
+
+// walkClaude sums the files oldest first, so a response a continuation file copied from its predecessor is credited
+// to the session that made it.
 func (b *builder) walkClaude(projects string) error {
 	projects = filepath.Clean(projects)
 	if real, err := filepath.EvalSymlinks(projects); err == nil {
 		projects = real
 	}
-	return filepath.WalkDir(projects, func(p string, d fs.DirEntry, err error) error {
+	var files []claudeFile
+	err := filepath.WalkDir(projects, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".jsonl") {
 			return nil
 		}
@@ -125,9 +136,14 @@ func (b *builder) walkClaude(projects string) error {
 		} else if len(parts) != 2 {
 			return nil
 		}
-		b.file(p, project, session)
+		files = append(files, claudeFile{path: p, project: project, session: session, mod: info.ModTime()})
 		return nil
 	})
+	sort.SliceStable(files, func(i, j int) bool { return files[i].mod.Before(files[j].mod) })
+	for _, f := range files {
+		b.file(f.path, f.project, f.session)
+	}
+	return err
 }
 
 // walkCodex sums the rollouts under ~/.codex/sessions: a session is the thread id its name carries, its project the
@@ -180,14 +196,21 @@ func (b *builder) file(p, project, session string) {
 		}
 	}}
 	scanner := transcript.NewUsageScanner(p)
+	own := map[string]bool{} // this file's ids, kept apart so a response's later records still win within it
 	_ = transcript.Lines(f, 64*1024*1024, func(line []byte) {
 		r, ok := scanner.Scan(line)
-		if !ok || (!b.since.IsZero() && r.At.Before(b.since)) {
+		if !ok || (!b.since.IsZero() && r.At.Before(b.since)) || b.seen[r.MessageID] {
 			return
+		}
+		if r.MessageID != "" {
+			own[r.MessageID] = true
 		}
 		acc.Add(r)
 	})
 	acc.Flush()
+	for id := range own {
+		b.seen[id] = true
+	}
 	if acc.Turns == 0 {
 		return
 	}

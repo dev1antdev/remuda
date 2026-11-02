@@ -1598,7 +1598,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   lines only; `Tracker.ObserveSnapshot` takes every `events.Snapshot`
   (every agent pane's session file, and the files it continues after a
   compaction, read once and summed in — the reader's whole `Lineage`, so a
-  second compaction loses no file; it runs off the poll's path with one
+  second compaction loses no file; the file moved to opens with a copy of
+  the old one's tail, the same responses, so each file keeps the message
+  ids it counted, the earlier files are read first and a later one leaves
+  out an id another counts (`elsewhere`), and a file holding only copies
+  takes its context from its predecessor's last response; it runs off the poll's path with one
   in-flight read per machine, and a first read over 64 MB takes the tail
   only, `partial`);
   the roster pane carries `usage{model,name,context,window,cost,turns,
@@ -1607,7 +1611,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   trip, `Reader.DirVersions`) and sidechain records count toward the pane
   too — the number should agree with Claude Code's own. **Report**: `Scan` (`GET /api/usage?days=&machine=
   &tz=`, since = a local midnight) walks `~/.claude/projects` for files
-  written since, subagent files count toward their session, per day in
+  written since, oldest first, each message id once across the files (a
+  continuation's copied tail is credited to the session that made it),
+  subagent files count toward their session, per day in
   the viewer's zone, per project/model/session; `usage.Collect` asks every
   connected host at once, and remotely the deployed binary runs `remuda
   usage -since -tz` (gated on the version, like search). UI: `features/usage/Usage.tsx` (📊 in the sidebar head, or the header pill),

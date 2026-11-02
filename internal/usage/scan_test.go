@@ -79,6 +79,35 @@ func TestScanAttributesAndDedupes(t *testing.T) {
 	}
 }
 
+func TestScanCountsAResponseCopiedIntoAContinuationOnce(t *testing.T) {
+	projects := t.TempDir()
+	write := func(rel, body string, mod time.Time) {
+		p := filepath.Join(projects, rel)
+		_ = os.MkdirAll(filepath.Dir(p), 0o755)
+		_ = os.WriteFile(p, []byte(body), 0o644)
+		_ = os.Chtimes(p, mod, mod)
+	}
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	// the continuation (newer, and first in directory order) opens with a copy of the old file's last response
+	write("-p-a/old.jsonl", rec("m1", "claude-fable-5-1", "2026-10-07T10:00:00Z", 10)+rec("m2", "claude-fable-5-1", "2026-10-07T10:01:00Z", 20), now.Add(-time.Hour))
+	write("-p-a/new.jsonl", rec("m2", "claude-fable-5-1", "2026-10-07T10:01:00Z", 20)+rec("m3", "claude-fable-5-1", "2026-10-07T10:02:00Z", 30), now)
+
+	rep, err := Scan(projects, now.AddDate(0, 0, -1), time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Total.Turns != 3 || rep.Total.Output != 60 {
+		t.Fatalf("turns %d output %d, want the three responses once", rep.Total.Turns, rep.Total.Output)
+	}
+	turns := map[string]int{}
+	for _, s := range rep.Sessions {
+		turns[s.Session] = s.Turns
+	}
+	if turns["old"] != 2 || turns["new"] != 1 {
+		t.Fatalf("sessions %v, want the copied response credited to the session that made it", turns)
+	}
+}
+
 func TestTrackerReadsOnlyTheGrowth(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "s.jsonl")
