@@ -515,7 +515,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `setup.sh` installs herdr with brew or its installer, starts the
   server, installs `herdr integration` hooks for the agents present and
   installs again every integration herdr reports outdated;
-  `install-service.sh` is the launchd / systemd service) is the
+  `install-service.sh` is the launchd / systemd service — the unit's
+  `ExecStart` and `Environment` quoted, as `install-code.sh`'s are, so a
+  HOME with a space in it runs, tested on a `uname` stand-in answering
+  Linux) is the
   one-command install, locally or over ssh. `internal/jobs` runs a shell script on a `shell.Host` in the background
   with its output streamed (`Host.Stream`: `sh -c` here, the master for a
   remote) for the page to poll (`GET /api/jobs/{id}`) and publishes
@@ -1120,8 +1123,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `chat.Answer` (answer.go, tested) refuses with a 409 when no dialog is
   there or the choice at `index` no longer reads `label` — the worker
   then opens the page on the pane — else `chat.KeysTo` walks the cursor
-  (`up` / `down` × n, `enter`) through `sessions.Input.SendKeys` in one
-  request; the card's own click path is unchanged. **Read aloud** (`features/alerts/voice.ts`,
+  (`up` / `down` × n, `enter`) in one request, the pane's typing lock
+  (`sessions.Input.Lock`) held from the screen read to the keys
+  (`answerOnScreen`, tested), so two answers to one notification — two
+  devices, a tap repeated — cannot both pass the check and the second's
+  keys never land in the agent's next prompt; the card's own click path
+  is unchanged. **Read aloud** (`features/alerts/voice.ts`,
   tested; `useVoice.ts`, called from Shell): with the switch in the
   alerts panel on (pref `alerts.voice` {on, voice}), this device speaks
   through the browser's own `speechSynthesis` — nothing passes through
