@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { findPaths } from "@/lib/paths";
-import { highlightLines, langOf } from "@/lib/highlight";
+import { closesFence, highlightLines, langOf } from "@/lib/highlight";
 import type { OpenFile } from "@/features/files/target";
 import Icon from "@/ui/icons";
 import { tokenNodes } from "@/ui/Tokens";
@@ -75,7 +75,7 @@ export function parseBlocks(src: string, depth = 0): Block[] {
       const lang = fence[2] ?? "";
       const code: string[] = [];
       i++;
-      while (i < lines.length && !lines[i]!.trim().startsWith(marker)) code.push(lines[i++]!);
+      while (i < lines.length && !closesFence(lines[i]!, marker)) code.push(lines[i++]!);
       i++; // closing fence (or EOF)
       out.push({ t: "code", lang, code: code.join("\n") });
       continue;

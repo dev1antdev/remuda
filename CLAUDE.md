@@ -642,7 +642,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   run under the cap costs its length (tried at every length, four
   thousand backticks took six seconds), and a backtick fence's info
   string holds no backtick, so "```ls```" on a line of its own is a
-  code span and not a fence that swallows the rest of the answer;
+  code span and not a fence that swallows the rest of the answer, and a
+  fence closes only on a bare run of its own mark at least as long as
+  the one that opened it (`closesFence` in `lib/highlight.ts`, which its
+  markdown scanner shares), so a "```js" line inside a ``` fence is code;
   `markdown.test.ts` covers it. A fence with a known language
   (`langOf` of its info string) is coloured through `lib/highlight.ts`,
   tokenized once per fence (`useMemo`) and drawn by `ui/Tokens.tsx`

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { highlightLines, langOf, makeTarget, MAX_HIGHLIGHT, splitTokens, tokenize, yamlKeyAt, type Token, type TokenKind } from "./highlight";
+import { closesFence, highlightLines, langOf, makeTarget, MAX_HIGHLIGHT, splitTokens, tokenize, yamlKeyAt, type Token, type TokenKind } from "./highlight";
 
 // kinds lists the kind of every token whose text holds the given piece, so a test reads "this word is a keyword"
 const kindOf = (tokens: Token[], text: string): TokenKind | undefined =>
@@ -239,6 +239,13 @@ describe("tokenize", () => {
     expect(kindOf(t, "var")).toBe("keyword");
     expect(kindOf(t, "1")).toBe("number");
     expect(joined(t)).toBe(code);
+    // a fence closes on a bare run of its mark at least as long as the opening, never on a line with an info string
+    const nested = tokenize("````md\n```go\nvar y = 2\n```\n````\n# After", "markdown");
+    expect(kindOf(nested, "# After")).toBe("keyword");
+    expect(closesFence("```js", "```")).toBe(false);
+    expect(closesFence("```", "````")).toBe(false);
+    expect(closesFence("  `````  ", "```")).toBe(true);
+    expect(closesFence("~~~", "```")).toBe(false);
     // a line of triple backticks around words is inline code, not a fence that takes the rest of the text
     const inline = tokenize("```npm test``` first\n# Later", "markdown");
     expect(kindOf(inline, "```npm test```")).toBe("string");

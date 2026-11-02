@@ -1041,6 +1041,15 @@ function lines(t: string): string[] {
 // ---- markdown: headings, fences (their code in its own language), quotes, list marks, inline code, links ----
 
 const FENCE_OPEN = /^\s*(`{3,}|~{3,})\s*(\S*)/;
+
+// closesFence says whether a line closes the fence its marker opened: a bare run of the same mark, at least as long, with
+// nothing after it — as CommonMark has it, so "```js" inside a ``` fence is a line of the code, not its end
+export function closesFence(line: string, marker: string): boolean {
+  const bare = line.trim();
+  let run = 0;
+  while (bare[run] === marker[0]) run++;
+  return run >= marker.length && run === bare.length;
+}
 const HEADING = /^\s{0,3}#{1,6}\s/;
 const LIST_MARK = /^\s*([-*+]|\d+\.)\s/;
 const RULE = /^\s*(---+|\*\*\*+|___+)\s*$/;
@@ -1052,7 +1061,7 @@ function scanMarkdown(t: string, out: Token[]) {
   };
   for (const line of lines(t)) {
     if (fence) {
-      if (line !== "\n" && line.trim().startsWith(fence.marker)) {
+      if (line !== "\n" && closesFence(line, fence.marker)) {
         flushFence();
         push(out, "punct", line);
         fence = null;

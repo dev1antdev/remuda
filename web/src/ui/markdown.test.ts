@@ -20,6 +20,11 @@ describe("parseBlocks", () => {
   it("keeps CRLF text whole", () => {
     expect(parseBlocks("one\r\ntwo\r\n")).toMatchObject([{ t: "p", lines: ["one", "two"] }]);
   });
+  it("closes a fence only on a bare run of its own mark at least as long as the opening one, as CommonMark does", () => {
+    expect(parseBlocks("```\nExample:\n```js\nx()\n````\nafter\n")).toMatchObject([{ t: "code", lang: "", code: "Example:\n```js\nx()" }, { t: "p", lines: ["after"] }]);
+    expect(parseBlocks("````md\n```js\ninner\n```\n````\n")).toMatchObject([{ t: "code", lang: "md", code: "```js\ninner\n```" }]);
+    expect(parseBlocks("~~~\na\n```\nb\n~~~  \n")).toMatchObject([{ t: "code", code: "a\n```\nb" }]);
+  });
   it("keeps a heading's own # and drops only a closing run after a space, as CommonMark reads it", () => {
     expect(parseBlocks("## Rewriting in C#\n### F# notes ##\n# Done ###\n# Issue #42")).toMatchObject([
       { t: "h", level: 2, text: "Rewriting in C#" },
