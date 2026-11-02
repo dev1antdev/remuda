@@ -20,6 +20,14 @@ describe("parseBlocks", () => {
   it("keeps CRLF text whole", () => {
     expect(parseBlocks("one\r\ntwo\r\n")).toMatchObject([{ t: "p", lines: ["one", "two"] }]);
   });
+  it("keeps a heading's own # and drops only a closing run after a space, as CommonMark reads it", () => {
+    expect(parseBlocks("## Rewriting in C#\n### F# notes ##\n# Done ###\n# Issue #42")).toMatchObject([
+      { t: "h", level: 2, text: "Rewriting in C#" },
+      { t: "h", level: 3, text: "F# notes" },
+      { t: "h", level: 1, text: "Done" },
+      { t: "h", level: 1, text: "Issue #42" },
+    ]);
+  });
   it("reads a line of triple backticks around words as a code span, not as a fence that swallows the rest", () => {
     expect(parseBlocks("Run ```ls``` first.\n```ls```\nthen look\n\n```js\nx()\n```\n")).toMatchObject([
       { t: "p", lines: ["Run ```ls``` first.", "```ls```", "then look"] },

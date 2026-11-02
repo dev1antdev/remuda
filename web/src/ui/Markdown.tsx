@@ -34,7 +34,8 @@ type Block =
   | { t: "hr" };
 
 const FENCE = /^\s{0,3}(`{3,}|~{3,})\s*(\S*)\s*$/;
-const HEADING = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/;
+// a closing run of # counts only after a space: "## Rewriting in C#" keeps its C#
+const HEADING = /^\s{0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/;
 const HR = /^\s{0,3}([-*_])(\s*\1){2,}\s*$/;
 const LIST = /^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/;
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
