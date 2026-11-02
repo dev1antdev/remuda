@@ -93,8 +93,13 @@ bin/remuda.app/Contents/MacOS/remuda --probe [--server http://127.0.0.1:7526] [-
 
 No window, no menu bar item, no notification: the page is loaded off
 screen and every message it posts over the bridge, every alert frame and
-every change of the socket's state is printed as one JSON line. Exit 0
-when the page said `ready` within the time, 1 otherwise. On its way out
+every change of the socket's state is printed as one JSON line. It stops
+as soon as it has heard what a working app hears — the page's `ready`,
+`badge` and `menu` and the socket `open` — and exits 0; otherwise it
+stops when `--seconds` run out, 0 when the page said `ready` by then and
+1 when it did not. The last line, `done`, lists what was heard. An alert
+frame is printed when one arrives before the stop; none is waited for,
+since an alert comes only when an agent needs you. On its way out
 it removes the two devices it made on the server — the one the page
 signed in as and the socket's alert device — so a run leaves nothing
 behind in Settings › Devices. The check behind `make mac` in a pull

@@ -2252,7 +2252,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   server or pairing link, the hotkey, launch at login through
   `SMAppService`, the notification permission), `Probe` (`--probe`: the
   page off screen, every bridge message and alert frame as a JSON line,
-  exit 0 once the page said ready; on its way out it revokes the device
+  stopping with exit 0 as soon as the page's ready, badge and menu and
+  the socket's open are all heard, else when `--seconds` run out, 0 if
+  the page said ready by then and 1 if not, an alert frame printed when
+  one comes but never waited for; on its way out it revokes the device
   the page signed in as, through the page's own `DELETE
   /api/devices/{id}`, and removes the socket's alert device),
   `MainMenu`, `AppDelegate` (the
