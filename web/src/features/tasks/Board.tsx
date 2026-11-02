@@ -5,6 +5,7 @@ import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode 
 import type { Project, Status, Task } from "@/features/tasks/api";
 import Icon from "@/ui/icons";
 import { Notice, Tip, useDismiss, useSubmit } from "@/ui";
+import { dropAfter, markerSlot } from "./drop";
 import { longPress } from "./press";
 import { pickHow, type Pick } from "./selection";
 import { t as tr } from "@/lib/i18n";
@@ -55,12 +56,8 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
     const t = tasks.find((x) => x.id === drag);
     clear();
     if (!t) return;
-    const column = byStatus.get(statusId) ?? [];
-    const was = column.findIndex((x) => x.id === t.id);
-    if (was >= 0 && (was === index || was === index - 1)) return; // the same place
-    const others = column.filter((x) => x.id !== t.id);
-    const after = index <= 0 ? 0 : others[Math.min(index, others.length) - 1]!.id;
-    onMove(t, statusId, after);
+    const target = dropAfter((byStatus.get(statusId) ?? []).map((x) => x.id), t.id, index);
+    if (target) onMove(t, statusId, target.after);
   };
 
   return (
@@ -68,6 +65,7 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
       {project.statuses.map((s) => {
         const list = byStatus.get(s.id) ?? [];
         const here = over?.status === s.id;
+        const slot = here ? markerSlot(list.map((x) => x.id), drag ?? -1, over!.index) : -1;
         return (
           <section
             key={s.id}
@@ -113,7 +111,7 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
                   picked={!!picked?.(t.id)}
                   selecting={!!selecting}
                   dragging={t.id === drag}
-                  before={here && over!.index === i}
+                  before={slot === i}
                   draggable={draggable}
                   onOpen={() => onOpen(t.id)}
                   onPick={onPick && ((how) => onPick(t, how))}
@@ -127,7 +125,7 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
                   chips={chips}
                 />
               ))}
-              {here && over!.index >= list.length && <div className="board-drop-end" />}
+              {here && slot >= list.length && <div className="board-drop-end" />}
             </div>
           </section>
         );

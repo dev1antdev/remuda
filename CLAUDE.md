@@ -1777,7 +1777,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   mouse, a ⋯ "Move to…" menu on touch, swipe-snapped columns a screen
   wide on a phone, quick add per column; the order shown is the array's
   (a drop reorders it at once, `patchTask({status_id, after})` confirms,
-  a refusal puts it back) and the board re-reads itself every 15 s while
+  a refusal puts it back; `drop.ts` the pure part, tested: the pointer's
+  place counts the column's other cards, `dropAfter` turns it into the
+  card to sit behind or nothing for the same place, `markerSlot` into the
+  row the marker is drawn above) and the board re-reads itself every 15 s while
   on screen — the List | Board switch is the `tasks.view` pref, ⚙ opens
   `ProjectSettings.tsx` (name, colour, columns with their marks, fields;
   saved whole, a removed column asked where its tasks go), `fields.tsx`
