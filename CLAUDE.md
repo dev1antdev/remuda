@@ -2225,8 +2225,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   DropdownMenu and Tooltip in the design system's clothes (`.menu`,
   `.menu-item` with an icon slot, a hint and a shortcut, `.tip`) — the
   keyboard walks a menu, Esc closes, both open where there is room, a tooltip never opens on a touch — every icon-only button of the
-  header, the sidebar, the tab strip, the composer and a wall tile
-  carries one, with an `aria-label` for the reader, and a `Menu` takes a
+  header, the sidebar, the tab strip, the composer and a wall tile —
+  and a dialog's Close, a toast's and a notice's Dismiss
+  (`ui/iconButtons.test.ts`) — carries one, with an `aria-label` for the
+  reader and no `title`, and a `Menu` takes a
   `tip` for its trigger; `radix-ui` is the one dependency
   beside react and xterm (with its search addon, the find over the
   scrollback), for the primitives whose keyboard and focus
