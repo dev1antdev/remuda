@@ -2148,7 +2148,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `useDarkFlavorPref`, `setThemePref` / `setDarkFlavorPref` /
   `setAccentPref`; the "Theme: …" and "Dark flavour: …" rows of the
   palette, the Look section of Settings with the accent swatches; the
-  pop-out's document and `<meta name="theme-color">` follow); the
+  pop-out's document — `dressAlso` in `app/theme.ts`, tested: every later
+  change of the look reaches it too, not only the one it opened in — and
+  `<meta name="theme-color">` follow); the
   terminal lens takes `terminalTheme(flavor)` and the wall's screens
   `ansiPalette(flavor)`, Catppuccin's own terminal mapping, so a tile
   shows the lens's colours. Four surface
