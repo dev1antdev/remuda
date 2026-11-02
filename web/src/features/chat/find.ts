@@ -35,6 +35,16 @@ export function clamp(at: number, total: number): number {
   return total <= 0 ? 0 : Math.min(Math.max(at, 0), total - 1);
 }
 
+// FindView is what the current match's place hangs on: the query, the match chosen, and whether the log has all its turns
+export type FindView = { query: string; at: number; mounted: boolean };
+
+// revealDue says whether to bring the current match into view: the find just opened, a new query or step, or the log
+// just finished mounting its earlier turns, which numbers the matches afresh from the start; a poll moves nothing
+export function revealDue(was: FindView | null, now: FindView): boolean {
+  if (!was) return true;
+  return was.query !== now.query || was.at !== now.at || (!was.mounted && now.mounted);
+}
+
 // countWords says "3 of 12", "0 of 0" while nothing matches, and "2000+" past the bound.
 export function countWords(at: number, total: number): string {
   if (total <= 0) return "0 of 0";
