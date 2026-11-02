@@ -30,7 +30,7 @@ export function useReviewKeys({ active, root, files, openFile, setOpenFile, onOp
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable]") || document.querySelector(".modal-scrim, .fv, .sel-pop")) return;
+      if (target?.closest("input, textarea, select, [contenteditable], [role=menu], [role=menuitem], [role=listbox], [role=dialog]") || document.querySelector(".modal-scrim, .fv, .sel-pop")) return;
       const box = root.current;
       if (!box) return;
       const { files, openFile, setOpenFile, onOpen, toggleSplit } = live.current;

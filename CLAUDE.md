@@ -918,7 +918,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   with or without an agent to comment to, and are collected only for a
   key that needs them; the legend in the head, hidden under
   1180 px and on touch; the hook listens only while the lens is on screen
-  (`active`) and never over a field, a dialog or the file viewer;
+  (`active`) and never over a field, an open menu, a dialog or the file
+  viewer;
   `VerdictDialog.tsx`, `draft.ts` the comments and the messages they
   become): commits, files (fresh first), hunks with a comment box whose
   text goes to the pane's agent through `/api/submit` as
