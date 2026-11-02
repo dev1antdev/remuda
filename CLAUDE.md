@@ -186,7 +186,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   followed by the new file's first `parentUuid`, a record `uuid` in the old
   one — read in its first 64 KB, which a big snapshot record can fill)
   while herdr keeps naming the old id, so the chat follows `Reader.Live(path)` —
-  `transcript.Continuation` locally, `ContinuationScript` over ssh —
+  `transcript.Continuation` locally, `ContinuationScript` over ssh (its
+  listing, like Gemini's find, read a line at a time with `while read`,
+  never split by `$(ls …)`, so a home with a space stays whole) —
   re-checked a minute at a time per file. `transcript.Reader` (reader.go)
   is the session files of one machine: `Version`, `DirVersions`,
   `ReadFrom`, `Turns`, `ResolveSession`, `Live` / `Chain` / `Lineage`

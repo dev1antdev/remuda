@@ -871,15 +871,16 @@ func PredecessorScript(quotedPath string) string {
 		`for f in "$dir"/*.jsonl; do [ "$f" = "$new" ] && continue; if grep -q "\"uuid\":\"$p\"" "$f" 2>/dev/null; then printf %s "$f"; exit 0; fi; done`
 }
 
-// ContinuationScript is Continuation as a POSIX shell one-liner for a remote machine: prints the continuing file, or nothing.
+// ContinuationScript is Continuation as a POSIX shell one-liner for a remote machine: prints the continuing file, or
+// nothing. The listing is read a line at a time, so a path with a space stays whole.
 func ContinuationScript(quotedPath string) string {
 	return `old=` + quotedPath + `; dir=$(dirname "$old"); ` +
 		`id=$(tail -c 65536 "$old" 2>/dev/null | grep -o '"continuedInSessionId":"[0-9a-f-]*"' | tail -1 | cut -d'"' -f4); ` +
 		`if [ -n "$id" ] && [ "$dir/$id.jsonl" != "$old" ] && [ -f "$dir/$id.jsonl" ]; then printf %s "$dir/$id.jsonl"; exit 0; fi; ` +
-		`for f in $(ls -t "$dir"/*.jsonl 2>/dev/null); do ` +
+		`ls -t "$dir"/*.jsonl 2>/dev/null | while IFS= read -r f; do ` +
 		`[ "$f" = "$old" ] && break; [ "$f" -nt "$old" ] || continue; ` +
 		`p=$(head -c 65536 "$f" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$p" ] || continue; ` +
-		`if grep -q "\"uuid\":\"$p\"" "$old"; then printf %s "$f"; exit 0; fi; done`
+		`if grep -q "\"uuid\":\"$p\"" "$old"; then printf %s "$f"; break; fi; done`
 }
 
 // ---- what a turn ended with ----
