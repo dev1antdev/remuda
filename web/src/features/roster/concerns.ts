@@ -8,7 +8,14 @@ import { t } from "@/lib/i18n";
 
 export type Concern = { key: string; text: string; bad?: boolean; update?: string };
 
-export function concerns(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean, stopped: StoppedChat[] = []): Concern[] {
+// concerns lists what wants a look, each with the update that answers it; a viewer link's page reads the same words with
+// no update, since every one of them is a change the server refuses it
+export function concerns(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean, stopped: StoppedChat[] = [], viewOnly = false): Concern[] {
+  const out = found(h, latest, serverVersion, remote, stopped);
+  return viewOnly ? out.map(({ update: _offered, ...words }) => words) : out;
+}
+
+function found(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean, stopped: StoppedChat[]): Concern[] {
   const out: Concern[] = [];
   if (stopped.length) out.push({ key: "stopped", text: `${stoppedWords(stopped.length)}: ${stoppedNames(stopped)}`, update: "recover" });
   if (!h) return out;

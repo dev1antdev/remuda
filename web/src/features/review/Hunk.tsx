@@ -239,9 +239,11 @@ export function Note({ comment, where, onRemove }: { comment: DraftComment; wher
         )}
         {comment.text}
       </span>
-      <button type="button" className="icon-btn sm" title={t("Remove this comment")} onClick={() => onRemove(comment.id)}>
-        <Icon name="x" size={12} />
-      </button>
+      <Tip text={t("Remove this comment")}>
+        <button type="button" className="icon-btn sm" aria-label={t("Remove this comment")} onClick={() => onRemove(comment.id)}>
+          <Icon name="x" size={12} />
+        </button>
+      </Tip>
     </div>
   );
 }

@@ -50,10 +50,12 @@ const ticks = (text: string) => "`".repeat(Math.max(3, (text.match(/`+/g) ?? [])
 
 const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-// exportFileName is "<workspace>-<yyyy-mm-dd>-<session's first 8>.md", the workspace cut to a file-safe stem
+// exportFileName is "<workspace>-<yyyy-mm-dd>-<session's first 8>.md", the workspace cut to a file-safe stem and the day
+// the person's own, not Greenwich's
 export function exportFileName(meta: ExportMeta): string {
   const stem = meta.workspace.replace(/[^\p{L}\p{N}._-]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "conversation";
-  const day = meta.when.toISOString().slice(0, 10);
+  const two = (n: number) => String(n).padStart(2, "0");
+  const day = `${meta.when.getFullYear()}-${two(meta.when.getMonth() + 1)}-${two(meta.when.getDate())}`;
   return `${stem}-${day}${meta.sessionId ? `-${meta.sessionId.slice(0, 8)}` : ""}.md`;
 }
 

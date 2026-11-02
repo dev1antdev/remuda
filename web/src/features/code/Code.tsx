@@ -215,9 +215,11 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
           </Tip>
         )}
         {status?.available && (
-          <button type="button" className="icon-btn" title={t("Open the editor in its own tab")} onClick={() => frame && openUrl(frame.src)}>
-            <Icon name="external-link" size={14} />
-          </button>
+          <Tip text={t("Open the editor in its own tab")}>
+            <button type="button" className="icon-btn" aria-label={t("Open the editor in its own tab")} onClick={() => frame && openUrl(frame.src)}>
+              <Icon name="external-link" size={14} />
+            </button>
+          </Tip>
         )}
       </div>
       {!machine ? (

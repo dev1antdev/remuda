@@ -1,6 +1,6 @@
 // The open task on the right: every field in place, the ways to hand it to an agent, the run on it, the description, the comments.
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { actions } from "@/app/store";
 import { useNow } from "@/lib/clock";
 import { checksTone, checksWords, prWords, reviewTone, reviewWords } from "@/features/roster/prStatus";
@@ -9,7 +9,7 @@ import { errMsg } from "@/lib/text";
 import { fmtDate } from "@/lib/time";
 import type { BudgetStatus } from "@/features/usage/api";
 import { budgetsFor, budgetTone, ratio, tightest, toneClass } from "@/features/usage/budgets";
-import { Icon, Logo, Select, useDismiss } from "@/ui";
+import { Icon, Logo, Select, Tip, useDismiss } from "@/ui";
 import { patchTask, PRIORITIES, type Field, type Label, type Project, type Run, type Status, type Task } from "./api";
 import { CommentsField } from "./Comments";
 import { FieldInput } from "./fields";
@@ -50,8 +50,9 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
   const issue = issueLink(t.description);
   const paneStatus = run ? liveStatus(run) : null;
   const pr = run ? prOf(run) : null;
-  const runLabel = !run ? "" : run.state === "starting" ? tr("starting…") : run.state === "failed" ? "failed" : run.state === "gone" ? "closed" : paneStatus === "run" ? "working" : paneStatus === "input" ? tr("waiting for you") : paneStatus === null ? "closed" : run.state === "finished" ? "finished" : "running";
+  const runLabel = !run ? "" : run.state === "starting" ? tr("starting…") : run.state === "failed" ? tr("failed") : run.state === "gone" ? tr("closed") : paneStatus === "run" ? tr("working") : paneStatus === "input" ? tr("waiting for you") : paneStatus === null ? tr("closed") : run.state === "finished" ? tr("finished") : tr("running");
   const [title, setTitle] = useState(t.title);
+  useEffect(() => setTitle(t.title), [t.title]);
   const [sendMenu, setSendMenu] = useState(false);
   const closeSendMenu = useCallback(() => setSendMenu(false), []);
   useDismiss(sendMenu, closeSendMenu, [".split"]);
@@ -89,7 +90,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
         <span className="tasks-ident">{t.identifier}</span>
         {t.source && (
           <span className="tasks-source" title={tr("Made by an agent on {source}", { source: t.source })}>
-            <Icon name="bot" size={12} /> by {t.source}
+            <Icon name="bot" size={12} /> {tr("by {source}", { source: t.source })}
           </span>
         )}
         {issue && (
@@ -97,9 +98,11 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
             {issueLabel(issue)} <Icon name="external-link" size={12} />
           </button>
         )}
-        <button type="button" className="icon-btn tasks-close" onClick={onClose} title={tr("Close")} aria-label={tr("Close")}>
-          <Icon name="x" size={16} />
-        </button>
+        <Tip text={tr("Close")}>
+          <button type="button" className="icon-btn tasks-close" onClick={onClose} aria-label={tr("Close")}>
+            <Icon name="x" size={16} />
+          </button>
+        </Tip>
       </div>
       <input
         className="tasks-title"
@@ -129,7 +132,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
         <DueInput value={t.due_date} onCommit={(iso) => void patch({ due_date: iso })} />
         {t.due_date && (
           <button type="button" className="linkish" onClick={() => void patch({ due_date: "" })}>
-            clear
+            {tr("clear")}
           </button>
         )}
       </div>
@@ -153,12 +156,14 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
 
       <div className="tasks-send">
         <span className={`split${canSend ? "" : " off"}`} title={canSend ? "" : tr("No agent is running in herdr")}>
-          <button type="button" className="split-main" disabled={!canSend} onClick={() => onSend(false)}>
+          <button type="button" className="btn primary split-main" disabled={!canSend} onClick={() => onSend(false)}>
             {tr("Send to agent")}
           </button>
-          <button type="button" className="split-arrow" disabled={!canSend} onClick={() => setSendMenu((m) => !m)} title={tr("More ways to send")} aria-haspopup="menu" aria-expanded={sendMenu}>
-            <Icon name="chevron-down" size={14} />
-          </button>
+          <Tip text={tr("More ways to send")}>
+            <button type="button" className="btn primary split-arrow" disabled={!canSend} onClick={() => setSendMenu((m) => !m)} aria-label={tr("More ways to send")} aria-haspopup="menu" aria-expanded={sendMenu}>
+              <Icon name="chevron-down" size={14} />
+            </button>
+          </Tip>
           {sendMenu && (
             <span className="row-menu split-menu" role="menu">
               <button type="button" role="menuitem" onClick={pickSend(() => onSend(false))}>
@@ -197,7 +202,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
             </span>
             {spent && (
               <span className={`tasks-run-spent${toneClass(spentTone)}`} title={tr("What this run spent at API prices, how long it took, the model")}>
-                Agent run: {spent}
+                {tr("Agent run: {spent}", { spent })}
               </span>
             )}
             {pr && (

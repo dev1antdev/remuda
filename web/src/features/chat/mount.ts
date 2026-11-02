@@ -5,14 +5,19 @@
 export const FIRST_TURNS = 200;
 export const MOUNT_STEP = 120;
 
+// ALL_REVEALED is the revealed count once every turn is mounted: it stays so as turns arrive, else each new turn at the
+// end would push the first one out of the log until the next idle slice put it back
+export const ALL_REVEALED = Number.POSITIVE_INFINITY;
+
 // hiddenCount is how many turns from the start still wait: all but the last `first`, less what was revealed since
 export function hiddenCount(total: number, revealed: number, first = FIRST_TURNS): number {
   return Math.max(0, total - first - revealed);
 }
 
-// nextReveal is the revealed count after one more slice, never past what is hidden
+// nextReveal is the revealed count after one more slice; the slice that reaches the start reveals everything for good
 export function nextReveal(total: number, revealed: number, step = MOUNT_STEP, first = FIRST_TURNS): number {
-  return Math.min(revealed + step, Math.max(0, total - first));
+  const next = revealed + step;
+  return next >= total - first ? ALL_REVEALED : next;
 }
 
 // idle runs fn when the window has a moment, within a third of a second at the latest; the return cancels it

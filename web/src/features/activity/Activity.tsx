@@ -19,7 +19,7 @@ import { t } from "@/lib/i18n";
 const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", digest: "sun", task: "list", test: "bell", budget: "chart", review: "eye", handover: "arrow-right", recover: "play", machine: "monitor", sent: "send" };
 
 export default function Activity({ onClose }: { onClose: () => void }) {
-  const { machines, feed } = useRoster();
+  const { machines, feed, viewOnly } = useRoster();
   const panes = useAllPanes();
   const { data: entries, error } = useQuery<Entry[]>(() => fetchFeed(), [], { every: 10_000 });
   const [, setSeen] = usePref<number>("feed.seen", 0);
@@ -70,11 +70,13 @@ export default function Activity({ onClose }: { onClose: () => void }) {
             </ul>
           </section>
         ))}
-      <div className="modal-actions activity-foot">
-        <button type="button" className="btn" onClick={() => actions.openPanel("alerts")}>
-          <Icon name="settings" size={14} /> {t("Alerts on this device")}
-        </button>
-      </div>
+      {!viewOnly && (
+        <div className="modal-actions activity-foot">
+          <button type="button" className="btn" onClick={() => actions.openPanel("alerts")}>
+            <Icon name="settings" size={14} /> {t("Alerts on this device")}
+          </button>
+        </div>
+      )}
     </Dialog>
   );
 }

@@ -17,11 +17,15 @@ export const PERIODS: { value: Period; label: string }[] = [
 // ratio is how far along a budget is: spent over its limit, 0 while the spend is not known yet
 export const ratio = (b: BudgetStatus): number => (b.collected && b.limit > 0 ? b.spent / b.limit : 0);
 
-// budgetTone: nothing under half, dim from half, amber from 80 %, red at the limit
+// percentOf is a ratio as the whole percent the words show, a hair of rounding forgiven so 2.4 of 3 reads 80
+const percentOf = (r: number): number => Math.floor(100 * r + 1e-9);
+
+// budgetTone: nothing under half, dim from half, amber from 80 %, red at the limit — by the percent the words say
 export function budgetTone(r: number): BudgetTone {
-  if (r >= 1) return "red";
-  if (r >= 0.8) return "amber";
-  if (r >= 0.5) return "dim";
+  const pct = percentOf(r);
+  if (pct >= 100) return "red";
+  if (pct >= 80) return "amber";
+  if (pct >= 50) return "dim";
   return "";
 }
 
@@ -52,7 +56,7 @@ export const periodWords = (p: Period): string => (p === "week" ? "this week" : 
 // times the limit says so instead of a number nobody reads
 export function budgetWords(b: BudgetStatus): string {
   if (!b.collected) return t("{limit} {period} · reading…", { limit: usd(b.limit), period: periodWords(b.period) });
-  const pct = Math.floor(100 * ratio(b) + 1e-9);
+  const pct = percentOf(ratio(b));
   return t("{spent} of {limit} {period} · {pct}", { spent: usd(b.spent), limit: usd(b.limit), period: periodWords(b.period), pct: pct > 999 ? t("far past the limit") : `${pct} %` });
 }
 

@@ -58,7 +58,8 @@ type fileState struct {
 	acc     Accumulator
 	scanner transcript.UsageScanner // the file's reader, carrying what a format's earlier lines said (Codex's model)
 	checked time.Time
-	partial bool // only the tail was read: the cost is a floor, the context exact
+	partial bool            // only the tail was read: the cost is a floor, the context exact
+	ids     map[string]bool // the message ids counted here: a continuation copies its predecessor's tail, so a lineage counts each once
 }
 
 const (
@@ -94,7 +95,8 @@ func (t *Tracker) ObserveSnapshot(machineID string, source Source, snap *herdr.S
 	}()
 }
 
-// Observe keeps a pane's files current: the chain is oldest first, the last one live, each earlier one read once.
+// Observe keeps a pane's files current: the chain is oldest first, the last one live, each earlier one read once and
+// before the live one, which leaves out the responses it copied from them.
 func (t *Tracker) Observe(machineID string, files Files, paneID string, chain []string) {
 	if len(chain) == 0 {
 		return
@@ -106,12 +108,31 @@ func (t *Tracker) Observe(machineID string, files Files, paneID string, chain []
 		t.pred[key(machineID, chain[i])] = chain[i-1]
 	}
 	t.mu.Unlock()
-	t.refresh(machineID, files, live, false)
 	for _, p := range chain[:len(chain)-1] {
-		t.refresh(machineID, files, p, true)
+		t.refresh(machineID, files, p, true, chain)
 	}
+	t.refresh(machineID, files, live, false, chain)
 	// Claude Code's own counter includes <session>/subagents/*.jsonl
 	t.observeSubagents(machineID, files, live)
+}
+
+// elsewhere is the message ids the other files of a lineage already count: a continuation file opens with a copy of
+// its predecessor's tail since the last compaction, the same responses record for record.
+func (t *Tracker) elsewhere(machineID string, chain []string, path string) map[string]bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	counted := map[string]bool{}
+	for _, p := range chain {
+		if p == path {
+			continue
+		}
+		if st := t.files[key(machineID, p)]; st != nil {
+			for id := range st.ids {
+				counted[id] = true
+			}
+		}
+	}
+	return counted
 }
 
 func (t *Tracker) observeSubagents(machineID string, files Files, live string) {
@@ -133,7 +154,7 @@ func (t *Tracker) observeSubagents(machineID string, files Files, live string) {
 	paths := make([]string, 0, len(vers))
 	for p, v := range vers {
 		paths = append(paths, p)
-		t.read(machineID, files, p, v)
+		t.read(machineID, files, p, v, nil)
 	}
 	sort.Strings(paths)
 	t.mu.Lock()
@@ -141,7 +162,7 @@ func (t *Tracker) observeSubagents(machineID string, files Files, live string) {
 	t.mu.Unlock()
 }
 
-func (t *Tracker) refresh(machineID string, files Files, path string, once bool) {
+func (t *Tracker) refresh(machineID string, files Files, path string, once bool, chain []string) {
 	k := key(machineID, path)
 	t.mu.Lock()
 	st := t.files[k]
@@ -160,11 +181,12 @@ func (t *Tracker) refresh(machineID string, files Files, path string, once bool)
 	if err != nil {
 		return
 	}
-	t.read(machineID, files, path, v)
+	t.read(machineID, files, path, v, t.elsewhere(machineID, chain, path))
 }
 
-// read brings a file's sum up to version v, reading only what was added since the last look.
-func (t *Tracker) read(machineID string, files Files, path string, v transcript.Version) {
+// read brings a file's sum up to version v, reading only what was added since the last look; a response whose id is
+// in skip is another file's and left out.
+func (t *Tracker) read(machineID string, files Files, path string, v transcript.Version, skip map[string]bool) {
 	k := key(machineID, path)
 	t.mu.Lock()
 	st := t.files[k]
@@ -210,7 +232,7 @@ func (t *Tracker) read(machineID string, files Files, path string, v transcript.
 	// parsed outside the lock: a big first read must not hold the roster
 	var recs []transcript.UsageRecord
 	_ = transcript.Lines(bytes.NewReader(data), 64*1024*1024, func(line []byte) {
-		if r, ok := scanner.Scan(line); ok { // sidechains spend too
+		if r, ok := scanner.Scan(line); ok && !skip[r.MessageID] { // sidechains spend too
 			recs = append(recs, r)
 		}
 	})
@@ -219,10 +241,17 @@ func (t *Tracker) read(machineID string, files Files, path string, v transcript.
 	if reset {
 		st.acc = Accumulator{}
 		st.partial = partial
+		st.ids = nil
 	}
 	st.scanner = scanner
 	for _, r := range recs {
 		st.acc.Add(r)
+		if r.MessageID != "" {
+			if st.ids == nil {
+				st.ids = map[string]bool{}
+			}
+			st.ids[r.MessageID] = true
+		}
 	}
 	st.offset = offset + int64(len(data))
 	st.version = v // a partial last line changes the file when it completes
@@ -241,22 +270,22 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 		return Display{}, false
 	}
 	sum, last := st.acc.Sum()
-	if sum.Turns == 0 {
-		return Display{}, false
-	}
-	d := Display{Model: last.Model, Cost: sum.Cost, Turns: sum.Turns, Tokens: sum.Tokens, Updated: last.At.UnixMilli(), Partial: st.partial}
-	d.Context = tokensOf(last).Context()
-	if m, ok := Lookup(last.Model); ok {
-		d.Model, d.Name, d.Window = m.ID, m.Name, m.Window
-	} else { // a model with no price here: named as the file names it, its window when the file says it (Codex does)
-		d.Unknown = true
-		d.Name, d.Window = last.Model, last.Window
-	}
-	more := t.subs[key(machineID, path)]
+	d := Display{Cost: sum.Cost, Turns: sum.Turns, Tokens: sum.Tokens, Partial: st.partial}
+	var predecessors []string
 	for p, n := t.pred[key(machineID, path)], 0; p != "" && n < 8; p, n = t.pred[key(machineID, p)], n+1 {
-		more = append(more, p)
+		predecessors = append(predecessors, p)
 	}
-	for _, p := range more {
+	if sum.Turns == 0 { // a file just moved to holds only what it copied: its last response is its predecessor's
+		for _, p := range predecessors {
+			if ps := t.files[key(machineID, p)]; ps != nil {
+				if a, l := ps.acc.Sum(); a.Turns > 0 {
+					last = l
+					break
+				}
+			}
+		}
+	}
+	for _, p := range append(append([]string(nil), t.subs[key(machineID, path)]...), predecessors...) {
 		if ps := t.files[key(machineID, p)]; ps != nil {
 			a, _ := ps.acc.Sum()
 			d.Cost += a.Cost
@@ -264,6 +293,16 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 			d.Tokens.Add(a.Tokens)
 			d.Partial = d.Partial || ps.partial
 		}
+	}
+	if d.Turns == 0 || last.At.IsZero() && last.MessageID == "" {
+		return Display{}, false
+	}
+	d.Model, d.Updated, d.Context = last.Model, last.At.UnixMilli(), tokensOf(last).Context()
+	if m, ok := Lookup(last.Model); ok {
+		d.Model, d.Name, d.Window = m.ID, m.Name, m.Window
+	} else { // a model with no price here: named as the file names it, its window when the file says it (Codex does)
+		d.Unknown = true
+		d.Name, d.Window = last.Model, last.Window
 	}
 	return d, true
 }

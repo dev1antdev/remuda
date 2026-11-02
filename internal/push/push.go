@@ -381,11 +381,15 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 			if dress != nil {
 				p = dress(p)
 			}
-			// drop only this timer: a sibling (the other device group's delay) must stay cancellable by a later status change
+			// drop only this timer: a sibling (the other device group's delay) must stay cancellable by a later status change;
+			// one no longer listed was called off by a status change while the screen was read, after it had fired
 			s.mu.Lock()
+			standing := false
 			rest := s.timers[key][:0]
 			for _, o := range s.timers[key] {
-				if o != t {
+				if o == t {
+					standing = true
+				} else {
 					rest = append(rest, o)
 				}
 			}
@@ -395,7 +399,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 				s.timers[key] = rest
 			}
 			s.mu.Unlock()
-			if s.silenced(p) {
+			if !standing || s.silenced(p) {
 				return
 			}
 			if note {

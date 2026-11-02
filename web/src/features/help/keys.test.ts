@@ -14,6 +14,13 @@ describe("keyGroups", () => {
     }
   });
 
+  it("lists the keys of the composer's completion, the find bar's steps and the review's comment box", () => {
+    const rows = keyGroups(true).flatMap((g) => g.rows.map((r) => `${g.title}: ${r.keys.join(" ")}`));
+    expect(rows).toContain("Chat: ↑ ↓ ↵ Tab Esc");
+    expect(rows).toContain("Chat: ↵ ⇧ ↵ Esc");
+    expect(rows).toContain("Changes: ⌘ ↵");
+  });
+
   it("says ⌘ on a Mac and Ctrl elsewhere", () => {
     const flat = (mac: boolean) => keyGroups(mac).flatMap((g) => g.rows.flatMap((r) => r.keys));
     expect(flat(true)).toContain("⌘ K");

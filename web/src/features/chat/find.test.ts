@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clamp, countWords, findRanges, MAX_MATCHES, step } from "./find";
+import { clamp, countWords, findRanges, MAX_MATCHES, revealDue, step } from "./find";
 
 describe("findRanges", () => {
   it("finds every occurrence, case-folded, left to right", () => {
@@ -50,5 +50,25 @@ describe("countWords", () => {
     expect(countWords(0, 0)).toBe("0 of 0");
     expect(countWords(2, 12)).toBe("3 of 12");
     expect(countWords(0, MAX_MATCHES)).toBe(`1 of ${MAX_MATCHES}+`);
+  });
+});
+
+describe("revealDue", () => {
+  const view = { query: "error", at: 0, mounted: true };
+
+  it("brings the match into view when the find opens, the query changes or a step moves it", () => {
+    expect(revealDue(null, view)).toBe(true);
+    expect(revealDue(view, { ...view, query: "errors" })).toBe(true);
+    expect(revealDue(view, { ...view, at: 1 })).toBe(true);
+  });
+
+  it("brings it into view again once the earlier turns have mounted, a find opened before they had", () => {
+    // reopened on a long conversation with the last query: the first match counted was the first of the last 200 turns
+    expect(revealDue({ ...view, mounted: false }, view)).toBe(true);
+  });
+
+  it("leaves the view alone on a poll that changed nothing it hangs on, and while the log is still mounting", () => {
+    expect(revealDue(view, { ...view })).toBe(false);
+    expect(revealDue(view, { ...view, mounted: false })).toBe(false);
   });
 });

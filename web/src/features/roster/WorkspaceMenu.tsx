@@ -50,17 +50,17 @@ export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) 
   );
   return (
     <div className="row-menu" role="menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
-      {item("New tab…", () => actions.openDialog({ kind: "tab", machineId: machine.id, session }))}
-      {item("New worktree…", () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }))}
-      {item("Rename workspace…", () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }))}
-      {tab && item(`Rename tab ${tab.named ? `“${tab.label}”` : tab.number}…`, () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }))}
-      {pr && item(`Open ${pr.label}${pr.status ? ` · ${prWords(pr.status)}` : ""}`, () => openUrl(pr.url))}
+      {item(t("New tab…"), () => actions.openDialog({ kind: "tab", machineId: machine.id, session }))}
+      {item(t("New worktree…"), () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }))}
+      {item(t("Rename workspace…"), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }))}
+      {tab && item(t("Rename tab {tab}…", { tab: tab.named ? `“${tab.label}”` : tab.number }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }))}
+      {pr && item(`${t("Open {pr}", { pr: pr.label })}${pr.status ? ` · ${prWords(pr.status)}` : ""}`, () => openUrl(pr.url))}
       {pr && chat && actionsFor(pr).map((action) => <Fragment key={action}>{item(actionLabel(action, pr.label), () => void handPR(action, machine.id, chat.id, pr.label))}</Fragment>)}
       {pr && canRemoveWorktree(session, pr) && item(t("Remove the worktree and its branch…"), () => askRemoveWorktree(machine, session), "danger")}
       {chat && item(t("Restart {agent} on its session…", { agent: agentTitle(chat.agent) }), () => askRestart(machine.id, chat.id, chat.agent))}
       {session.dir && muted && item(t("Unmute · {left}", { left: leftWords(muted) }), () => void act(unmuteWorkspace(machine.id, session.dir ?? "")))}
       {session.dir && !muted && muteChoices().map((choice) => <Fragment key={choice.key}>{item(choice.label, () => void act(muteWorkspace(machine.id, session.dir ?? "", choice.until)))}</Fragment>)}
-      {item("Close workspace", () => closeWorkspace(machine, session), "danger")}
+      {item(t("Close workspace"), () => closeWorkspace(machine, session), "danger")}
     </div>
   );
 }

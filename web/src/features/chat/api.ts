@@ -87,8 +87,8 @@ export const handOver = (req: { machine: string; pane: string; session: string |
 
 // ---- quick prompts: saved texts for the composer ----
 export type QuestionOption = { n: number; label: string; picked: boolean };
-// Question is the dialog on the pane's screen: its words, and its choices with the cursor on one.
-export type Question = { text: string; options: QuestionOption[] };
+// Question is the dialog on the pane's screen: its words, and its choices with the cursor on one; multi when it takes several.
+export type Question = { text: string; options: QuestionOption[]; multi?: boolean };
 export const fetchQuestion = (machineId: string, paneId: string): Promise<Question | null> =>
   getJSON<{ question: Question | null }>(`/api/question?${new URLSearchParams({ machine: machineId, pane: paneId })}`).then((r) => r.question);
 // fetchMode is the permission mode Claude Code's footer names on the same screen read, null when no footer is on screen

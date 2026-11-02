@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
 import type { Part, PlanItem } from "./api";
 import { counts, current, planCallWords, planLine, progressWords, taskNumber } from "./plan";
 
@@ -35,6 +36,15 @@ describe("plan", () => {
     expect(planCallWords({ type: "tool", tool_name: "TaskUpdate", input: { taskId: "2", subject: "New name" } })).toEqual({ words: "Task #2 edited", mark: "pending" });
     expect(planCallWords({ type: "tool", tool_name: "TodoWrite", input: { todos: [{ content: "a", status: "completed" }, { content: "b", status: "pending" }] } })).toEqual({ words: "Plan: 2 items, 1 done", mark: "list" });
     expect(planCallWords({ type: "tool", tool_name: "TodoWrite", input: "a list the server cut" })).toEqual({ words: "Plan", mark: "list" });
+  });
+
+  it("names a plan it cannot count in the page's language", () => {
+    setLang("ru");
+    try {
+      expect(planCallWords({ type: "tool", tool_name: "TodoWrite", input: "a list the server cut" })).toEqual({ words: "План", mark: "list" });
+    } finally {
+      setLang("en");
+    }
   });
 
   it("reads the task number off the tool's answer", () => {

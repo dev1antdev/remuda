@@ -11,6 +11,9 @@ func TestResultTextReadsAPictureAsAnswered(t *testing.T) {
 		{`[{"type":"text","text":"a"},{"type":"text","text":"b"}]`, "a\nb"},
 		{`[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}}]`, "[image]"},
 		{`[{"type":"text","text":"a"},{"type":"image","source":{}}]`, "a"},
+		{`[{"type":"tool_reference","tool_name":"Read"},{"type":"tool_reference","tool_name":"Grep"}]`, "Read, Grep"},
+		{`[{"type":"tool_reference"}]`, "[tool]"},
+		{`[{"type":"text","text":"a"},{"type":"tool_reference","tool_name":"Read"}]`, "a"},
 		{`[]`, ""},
 	}
 	for _, c := range cases {

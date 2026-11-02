@@ -12,7 +12,7 @@ import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments"
 import { useDictation } from "./dictation";
 import { expandPrompt, QuickPromptsDialog, QuickPromptsMenu } from "./QuickPrompts";
 import { useHistory } from "./useHistory";
-import { applyPick, tokenAt, type Item } from "./complete";
+import { applyPick, stillDismissed, tokenAt, type Dismissed, type Item } from "./complete";
 import { CompletionList, useCompletion } from "./Completion";
 import { ModeChip } from "./ModeChip";
 import { t } from "@/lib/i18n";
@@ -37,11 +37,13 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
   const history = useHistory(machineId, dir);
 
   // the completion: the token under the caret, its list from the machine, the row the keys are on, the token Esc closed
+  // (forgotten once the caret has left it, so the next slash or @ at the same place gets its list again)
   const [caretPos, setCaretPos] = useState(0);
   const [active, setActive] = useState(0);
-  const [dismissed, setDismissed] = useState<{ kind: string; start: number } | null>(null);
+  const [dismissed, setDismissed] = useState<Dismissed | null>(null);
   const token = useMemo(() => tokenAt(draft, caretPos), [draft, caretPos]);
-  const open = token && !(dismissed && dismissed.kind === token.kind && dismissed.start === token.start) ? token : null;
+  const open = stillDismissed(dismissed, token) ? null : token;
+  useEffect(() => setDismissed((was) => stillDismissed(was, token)), [token]);
   const completion = useCompletion(machineId, dir, agent, open);
   const shown = completion.items;
   const at = Math.min(active, Math.max(0, shown.length - 1));
