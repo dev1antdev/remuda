@@ -2187,7 +2187,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `prefers-reduced-motion`). **Every `<button>` carries one family class**:
   `btn` (quiet), `btn primary` (the one filled button of a surface), `btn
   danger`, `btn ghost`, `icon-btn` (+ `sm`/`lg`), or `linkish`; `.on` marks a
-  toggled one. Fields have one base rule (every input, textarea and `.sel`;
+  toggled one, and the selected sidebar row, tab and split pane too — never
+  `.sel`, the Select's own class, whose height, border, padding and type
+  would follow it (`features/roster/selected.test.ts`). Fields have one base rule (every input, textarea and `.sel`;
   `.sm`, `.bare`), one placeholder, one focus ring. Rows share a radius,
   hover and focus ring; cards are `.card`; counts are `.badge` (`.quiet`);
   state dots are `.dot.dot-<status>` / `.dot.machine-state.is-<state>`. On

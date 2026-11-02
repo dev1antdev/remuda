@@ -42,7 +42,7 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onClo
             const first = t.panes.find((p) => p.focused) ?? t.panes[0];
             if (editing?.id === t.id) {
               return (
-                <div key={t.id} className="tab sel editing">
+                <div key={t.id} className="tab on editing">
                   <input
                     className="tab-edit"
                     autoFocus
@@ -59,7 +59,7 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onClo
               );
             }
             return (
-              <div key={t.id} className={`tab${t.id === tab.id ? " sel" : ""}`}>
+              <div key={t.id} className={`tab${t.id === tab.id ? " on" : ""}`}>
                 <button
                   type="button"
                   role="tab"
@@ -94,7 +94,7 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onClo
       {tab.panes.length > 1 && (
         <div className="split-panes">
           {tab.panes.map((p, i) => (
-            <button key={p.id} type="button" className={`split-pane${p.id === pane.id ? " sel" : ""}`} aria-pressed={p.id === pane.id} onClick={() => onSelect(p.id)} title={p.cwd}>
+            <button key={p.id} type="button" className={`split-pane${p.id === pane.id ? " on" : ""}`} aria-pressed={p.id === pane.id} onClick={() => onSelect(p.id)} title={p.cwd}>
               <span className="tree-glyph">{i === tab.panes.length - 1 ? "└" : "├"}</span>
               <StatusDot status={p.status} title={STATUS_LABEL[p.status]} />
               <span>{p.title}</span>
