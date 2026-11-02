@@ -108,7 +108,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   through `Machine.Label()` everywhere (`Cfg.Label` stays what the
   registry said); `PATCH /api/machines/{id} {label}` sets it, empty goes
   back. The sidebar's per-machine ⋯ menu (`MachineMenu`) has Rename, Copy
-  SSH host and, for a manually added one, Remove. Each remote connects in the
+  SSH host (through `copyText`, so a plain-http address copies too, and a
+  toast) and, for a manually added one, Remove. Each remote connects in the
   background: dial master → one script reads `$HOME` and finds the herdr
   bin (incl. `~/.local/bin`) → RPC transport → `Ping` → **the door**
   (`door.go`, in a goroutine, once per connection): this remuda's port
