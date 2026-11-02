@@ -1021,7 +1021,8 @@ function scanMarkdown(t: string, out: Token[]) {
       continue;
     }
     const open = line.match(FENCE_OPEN);
-    if (open) {
+    // a backtick fence's info string holds no backtick: a line of triple backticks around words is inline code
+    if (open && !(open[1]!.startsWith("`") && line.slice(line.indexOf(open[1]!) + open[1]!.length).includes("`"))) {
       push(out, "punct", line);
       fence = { marker: open[1]!, lang: langOf(open[2] ?? ""), code: [] };
       continue;

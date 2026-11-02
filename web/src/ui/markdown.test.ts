@@ -20,6 +20,13 @@ describe("parseBlocks", () => {
   it("keeps CRLF text whole", () => {
     expect(parseBlocks("one\r\ntwo\r\n")).toMatchObject([{ t: "p", lines: ["one", "two"] }]);
   });
+  it("reads a line of triple backticks around words as a code span, not as a fence that swallows the rest", () => {
+    expect(parseBlocks("Run ```ls``` first.\n```ls```\nthen look\n\n```js\nx()\n```\n")).toMatchObject([
+      { t: "p", lines: ["Run ```ls``` first.", "```ls```", "then look"] },
+      { t: "code", lang: "js", code: "x()" },
+    ]);
+    expect(parseBlocks("~~~a`b\ncode\n~~~\n")).toMatchObject([{ t: "code", lang: "a`b", code: "code" }]);
+  });
   it("stops nesting quotes and lists at a depth, so a line of thousands of marks is text, not a stack overflow", () => {
     const quotes = parseBlocks(">".repeat(5000) + "x");
     let block = quotes[0]!;
@@ -48,5 +55,14 @@ describe("Markdown", () => {
     expect(html).not.toContain("<strong>");
     expect(html).not.toContain("path-link");
     expect(performance.now() - started).toBeLessThan(500);
+  });
+  it("draws a run of backticks under the long-line cap in milliseconds, and still reads code spans as CommonMark does", () => {
+    const started = performance.now();
+    const html = draw("`".repeat(9_999) + "\n\n" + "`".repeat(5_000) + "a".repeat(4_999));
+    expect(html).not.toContain("md-code");
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(draw("see `x`, ``a`b`` and `` ` ``")).toContain('<code class="md-code">a`b</code>');
+    expect(draw("``a` is no span")).not.toContain("md-code");
+    expect(draw("```ls``` on its own")).toContain('<code class="md-code">ls</code>');
   });
 });

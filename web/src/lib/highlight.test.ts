@@ -239,6 +239,10 @@ describe("tokenize", () => {
     expect(kindOf(t, "var")).toBe("keyword");
     expect(kindOf(t, "1")).toBe("number");
     expect(joined(t)).toBe(code);
+    // a line of triple backticks around words is inline code, not a fence that takes the rest of the text
+    const inline = tokenize("```npm test``` first\n# Later", "markdown");
+    expect(kindOf(inline, "```npm test```")).toBe("string");
+    expect(kindOf(inline, "# Later")).toBe("keyword");
   });
   it("finishes a 200 KB single-line token in linear time", () => {
     const line = "x".repeat(199_000) + " = 1";

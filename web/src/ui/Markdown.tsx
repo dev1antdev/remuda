@@ -67,7 +67,8 @@ export function parseBlocks(src: string, depth = 0): Block[] {
     }
 
     const fence = line.match(FENCE);
-    if (fence) {
+    // a backtick fence's info string holds no backtick: "```code```" on a line of its own is a code span, not a fence that swallows the rest
+    if (fence && !(fence[1]!.startsWith("`") && fence[2]!.includes("`"))) {
       flushPara();
       const marker = fence[1]!;
       const lang = fence[2] ?? "";

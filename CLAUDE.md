@@ -637,7 +637,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and lists nest at most `MAX_NESTING` (16) deep and then read as text (a
   line of three thousand `>` recursed past the stack), and a line over
   `LONG_LINE` (10 000 characters) is drawn plain, with no marks or links
-  (the inline regex costs its square on a run of one character);
+  (the inline regex costs its square on a run of one character); a code
+  span opens on a whole run of backticks, as CommonMark reads it, so a
+  run under the cap costs its length (tried at every length, four
+  thousand backticks took six seconds), and a backtick fence's info
+  string holds no backtick, so "```ls```" on a line of its own is a
+  code span and not a fence that swallows the rest of the answer;
   `markdown.test.ts` covers it. A fence with a known language
   (`langOf` of its info string) is coloured through `lib/highlight.ts`,
   tokenized once per fence (`useMemo`) and drawn by `ui/Tokens.tsx`
