@@ -669,7 +669,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and lists nest at most `MAX_NESTING` (16) deep and then read as text (a
   line of three thousand `>` recursed past the stack), and a line over
   `LONG_LINE` (10 000 characters) is drawn plain, with no marks or links
-  (the inline regex costs its square on a run of one character);
+  (the inline regex costs its square on a run of one character); a code
+  span opens on a whole run of backticks, as CommonMark reads it, so a
+  run under the cap costs its length (tried at every length, four
+  thousand backticks took six seconds), and a backtick fence's info
+  string holds no backtick, so "```ls```" on a line of its own is a
+  code span and not a fence that swallows the rest of the answer, and a
+  fence closes only on a bare run of its own mark at least as long as
+  the one that opened it (`closesFence` in `lib/highlight.ts`, which its
+  markdown scanner shares), so a "```js" line inside a ``` fence is code;
   `markdown.test.ts` covers it. A fence with a known language
   (`langOf` of its info string) is coloured through `lib/highlight.ts`,
   tokenized once per fence (`useMemo`) and drawn by `ui/Tokens.tsx`
@@ -686,14 +694,19 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (a triple-click selects one cell; nobody knows). `ui/ErrorBoundary.tsx` is the one class
   component: React unmounts the whole tree on a render error, so every
   turn (`TurnView`) draws inside one — a turn the parser cannot draw is a
-  note, the rest of the chat stands — and `App.tsx` wraps the page in one
+  note, the rest of the chat stands, and its `resetKey` is the turn, so
+  the next reading of a changed turn is drawn again rather than staying a
+  note (`errorBoundary.test.ts`) — and `App.tsx` wraps the page in one
   with a Reload button, never a blank page.
 - `web/src/lib/` — what every screen uses and no screen owns, React-free
   but for the hooks: `http.ts` (`check` / `getJSON` / `sendJSON`, every
   request), `query.ts` (`useQuery(fn, deps, {every, enabled, keep})` —
   the one way a screen reads the server: a fetch that follows its inputs,
   polls while enabled and the page is visible — `visibility.ts`:
-  this document or the pop-out's, `watchVisibility` for a change — drops an answer that
+  this document or the pop-out's, `watchVisibility` for a change — and
+  reads at once when enabled again (`resumes`, tested: a question card
+  back on screen once kept a closed dialog's choices up to ten seconds;
+  `useChat` leaves coming on screen to it), drops an answer that
   arrives after the inputs changed; `undefined` from the fetcher means
   unchanged (an ETag 304) and the data stays; `reload`, `fetching`, and
   `mutate` for what the screen already shows ahead of the server — a
@@ -746,7 +759,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   entry, so a string nobody translated shows no gap; `{name}` slots
   filled from `vars`, `tn(n, one, many)` the counted pair in English and
   the form table under the plural key elsewhere (`text.ts`'s `plural`
-  goes through it), `pluralIndex` the one / few / many rule, `setLang` /
+  goes through it), `pluralIndex` the one / few / many rule by CLDR — a
+  fraction is CLDR's other, the few form in Russian ("1,5 файла") and
+  the plural in English, tested against `Intl.PluralRules` — `setLang` /
   `currentLang` module state read at every call so a pure module's words
   follow too, `locale()` for the Intl formats in `time.ts`, `languageOf`
   resolving the pref `lang` — system / en / ru, on the sync allow-list —
@@ -775,7 +790,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   stay plain; `highlightLines` cuts the tokens at newlines so a block
   comment keeps its kind on every line; `splitTokens` cuts a line's
   tokens at two offsets for a mark laid over them; linear in the text's
-  length — no regex runs from inside a token — and a text past
+  length — no regex runs from inside a token or over the rest of a line
+  at every scalar: a yaml key (`yamlKeyAt`) and a make target
+  (`makeTarget`) are one pass each, fuzzed against the regexes they
+  replaced, and the markdown line's searches ahead for `](` and a run of
+  backticks remember what they found (a 150 KB yaml flow sequence took
+  five seconds) — and a text past
   `MAX_HIGHLIGHT` (200 KB) comes back plain; the colours are
   `.hl-<kind>` at the end of styles.css over the flavour's `--ctp-*`,
   Catppuccin's own mapping: keywords mauve, strings green, numbers and
@@ -790,7 +810,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   only writes. `current.ts` derives the shown pane from the requested
   one, falling back to the first agent pane — nothing fixes selection up
   in effects. `url.ts`: the address bar follows the store once the roster has answered (before that a link's pane stays in the address rather than being dropped for a moment)
-  (`?machine=&pane=&mode=&lens=`, `history.replaceState`) and is read
+  (`?machine=&pane=&mode=&lens=`, `history.replaceState`; `addressFor`, tested, reads the query as text, since Safari 16's URLSearchParams has no `size` and every address there once came out as `/`) and is read
   once at load, so a link or a reload lands on the same pane in the same
   lens; `?panel=` (one of `panelOf`'s, a digest's tap) opens that panel
   once and is never written back; `&session=&turn=` (a turn's link,
@@ -810,7 +830,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (the lenses, mounted once seen, and the files rail beside them in
   `.pane-body` — store field `footprint` from the pref of that name,
   default on with a mouse, a row of the View menu whatever the lens,
-  disabled for a shell pane, hidden with the rail under 920 px and not polling there; **full screen** is the View menu's last row, `app/full.tsx` — store field `full`: the header, the sidebar and the rail go, the tab strip stays with its tools, the browser's own full screen is asked for where it exists; Esc outside a field or the terminal leaves, so does the browser's exit, and a mode change clears it; the palette has it), `Wall.tsx` (the **Wall mode**: every
+  disabled for a shell pane, hidden with the rail under 920 px and not polling there; **full screen** is the View menu's last row, `app/full.tsx` — store field `full`: the header, the sidebar and the rail go, the tab strip stays with its tools, the browser's own full screen is asked for where it exists; an Esc nothing else took leaves — not a field's or the terminal's, nor the one that closes a menu (Radix marks it with preventDefault), a dialog, the confirm or the file viewer (`app/escape.ts`, tested; the Wall's Esc that gives a focused tile back follows the same rule) — so does the browser's exit, and a mode change clears it; the palette has it), `Wall.tsx` (the **Wall mode**: every
   agent pane on a connected machine as a tile — the sidebar row's head
   (mark, logo, label, workspace · machine, the pull request the agent named as a link with its checks and review beside it (`internal/prstatus`), context % · cost), the last 12
   turns through `features/chat/Tail`, a compact composer; a click on the
@@ -818,7 +838,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   says which panes make a tile and in what order — the roster's, stable, so
   no tile jumps on a status change — and leaves out the ones hidden by hand
   (pref `wall.hidden`, the eye on a tile, "Show N hidden" resets) and, with
-  "Hide idle", the idle ones past the radar's fresh tier, and with **Needs me** (pref `needsMe`, `needsMe` in wall.ts) everyone but the agents waiting for the person — a question open, a watchdog note, a finish not looked at — "Nobody needs you right now" when that leaves none; a tile that needs one wears a pulsing ring (red for a question, amber for a note), a finished one a green edge; the two filters and the view are palette commands too, and **Alt+N** (`app/next.ts`, by key code; the palette row "Go to the next agent that needs you") walks the agents that need the person in the roster's order, round and round (`nextNeedingMe` in wall.ts, tested): on the Wall the tile takes the wall, elsewhere the pane opens on its chat, a toast when nobody needs one; pref `wall` holds
+  "Hide idle", the idle ones past the radar's fresh tier, and with **Needs me** (pref `needsMe`, `needsMe` in wall.ts) everyone but the agents waiting for the person — a question open, a watchdog note, a finish not looked at — "Nobody needs you right now" when that leaves none; a tile that needs one wears a pulsing ring (red for a question, amber for a note), a finished one a green edge; the two filters and the view are palette commands too, and **Alt+N** (`app/next.ts`, by key code — never over the terminal, nor over a field on a Mac, where Option+N is the tilde's dead key: `nextKey.ts`, tested; the palette row "Go to the next agent that needs you") walks the agents that need the person in the roster's order, round and round (`nextNeedingMe` in wall.ts, tested): on the Wall the tile takes the wall, elsewhere the pane opens on its chat, a toast when nobody needs one; pref `wall` holds
   the size S/M/L (`TILE_MIN` 360/460/600 px, an auto-fill grid) and the idle
   switch; no sidebar in the mode, "+ Agent" opens the New workspace
   dialog; the tile itself is `Tile.tsx`, `TileView`; a tile shows the chat or, in the **Screen** view (`view` in pref `wall`: the Chat | Screen pair in the wall's bar, "Wall of screens" in the palette, the pop-out follows it), the pane's terminal as it is — `features/terminal/Screen.tsx` reads `GET /api/screen?machine&pane` (`internal/server/screen.go` → `herdr.Client.PaneScreen`, `pane.read` with `format: ansi`, read from herdr on demand at the tiles' pace, 3 s / 15 s, an ETag over the text so an unchanged screen is a 304; no attach, so no slot is taken and the shared pane is never resized) and draws the rows through `features/terminal/ansi.ts` (`parseAnsi`, tested: SGR colours in xterm's palette, 256 and true colour, bold / dim / italic / underline / inverse, every other escape dropped) at the font that fits the pane's columns in the tile's width (`thumbFont`, `engine/geometry.ts`), the bottom rows kept when the height runs out; a click opens the terminal lens, the head the lens of the view; `TailAnswer` (chat/Tail.tsx) is the foot under either view — the keys for a question and the compact composer; under the head a **state line** that is always there, `TileState` in `chat/Tail.tsx` — `stateWords` with how long the state has lasted (`radar.since`, `elapsed` in `lib/time.ts`) and, while the agent works in the chat view, what it does this second from the end of its tail (`features/chat/doing.ts`, tested: the tool call still without a result through `toolLabel`, now in `footprint.ts`, and how long it has run — `Running` in `Tail.tsx`, a second at a time through `useNow` in `lib/clock.ts`, amber past `LONG_CALL` 60 s — else thinking or writing; an Agent call without its result reads as waiting on its subagents, and the line says how many of the conversation's still work, "2 subagents working", from the answer's `subagents`), while its plan has open items how far it is, "3/7" (`progressWords` in `chat/plan.ts`, from the tail's `plan`), and once it has finished or sits idle, **what it answered**: the first line of the text its last turn ended with, in the quiet colour — the chat view reads it from the tail (`features/chat/said.ts`, tested: marks stripped, cut at a word by 120 characters), the screen view and the strip from the roster's `pane.said` (`internal/said`, the same cut)), **the pop-out**
@@ -833,7 +853,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and mouse-up.
   `PopOut.tsx` draws the popped pane through a `createPortal` into that
   window's body — the same `TileView` as the wall, the roster, the store
-  and every handler shared, "That pane is gone" once the roster lost it.
+  and every handler shared, "That pane is gone" once the roster lost it;
+  `PortalHost` (`ui/portal.ts`) names that window's body, so the tile's
+  `Menu` and `Tip` open there and not in the page behind it.
   Store field `popout`, buttons on every wall tile and in the header,
   disabled there without a pane; **office mode** for a second screen or
   a TV — the Office button in the wall's bar, hidden under 920 px, and
@@ -1543,7 +1565,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   sidebar, cleared when the state moves on) and one push per episode
   (`push.Notify`, pref `watchdog`, default on) with a reminder every 30
   min; the notification carries `actions` — Open, and **Send Esc**, which
-  the service worker posts to `/api/keys` itself (a question's push
+  the service worker posts to `/api/keys` itself — refused or unreachable,
+  it opens the page on the pane instead, as a choice does
+  (`app/serviceWorker.test.ts` runs `sw.js` on stand-ins) — (a question's push
   carries its choices the same way, see `internal/push`).
 - `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — things on a timetable, three **kinds**
   (`Kind`, `prompt` for a record from before the field). A **prompt**
@@ -2095,8 +2119,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   tab or Code button, the Usage panel no budget to add or edit (the budget
   dialog says so if reached), Activity no way to the alert settings, the
   alerts panel only the voice and the lens a row opens
-  (`features/alerts/sections.ts`, tested); `Shell` registers no push and
-  syncs no prefs for a viewer. Settings › Devices ends with **Viewer
+  (`features/alerts/sections.ts`, tested); `Shell` registers no push,
+  syncs no prefs and sends no seen mark for a viewer; the palette keeps
+  moving about, the lenses' views, the reports and the look
+  (`viewerCommand`), the corner's toasts offer no Resume, no install and
+  no Tailscale login (`viewerToasts`), a wall tile's PR menu keeps its
+  Open (`viewerMenu`), the files rail's code button opens the file
+  viewer, and an empty pane area offers no Start (all tested in
+  `app/viewOnly.test.ts`). Settings › Devices ends with **Viewer
   links** (`features/settings/ViewerKeys.tsx`, `viewerLinks.ts` tested):
   make one under a name, Copy the link shown once, Revoke. **The door** (`door.go`): `EnsureDoor(dir,
   keys, name, url)` keeps the cockpit's own `agent-key` / `agent-url`
@@ -2222,7 +2252,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `useDarkFlavorPref`, `setThemePref` / `setDarkFlavorPref` /
   `setAccentPref`; the "Theme: …" and "Dark flavour: …" rows of the
   palette, the Look section of Settings with the accent swatches; the
-  pop-out's document and `<meta name="theme-color">` follow); the
+  pop-out's document — `dressAlso` in `app/theme.ts`, tested: every later
+  change of the look reaches it too, not only the one it opened in — and
+  `<meta name="theme-color">` follow); the
   terminal lens takes `terminalTheme(flavor)` and the wall's screens
   `ansiPalette(flavor)`, Catppuccin's own terminal mapping, so a tile
   shows the lens's colours. Four surface
@@ -2263,7 +2295,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `.fv-tabs`), menus (`.row-menu`), the key bar (`.keybar .key`). Reuse
   these before writing new rules.
 - `web/src/ui/` — the shared pieces, `index.ts` the barrel: `Dialog` (one
-  scrim over the drawer, a head with icon/title/controls/X, Escape, focus
+  scrim over the drawer, a head with icon/title/controls/X, Escape — but
+  not the Esc a tooltip or a menu inside it used to close itself, which
+  Radix marks with preventDefault (`dialogEscape.ts`, tested) — focus
   in and back out — the opener is read before the first render, since an
   autoFocus field has the focus by the time an effect runs — `#root` inert while open, `as="form"` + `onSubmit`,
   sizes sm/md/lg), `FormDialog`, `ConfirmDialog`, `Notice` (tones
@@ -2281,8 +2315,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   DropdownMenu and Tooltip in the design system's clothes (`.menu`,
   `.menu-item` with an icon slot, a hint and a shortcut, `.tip`) — the
   keyboard walks a menu, Esc closes, both open where there is room, a tooltip never opens on a touch — every icon-only button of the
-  header, the sidebar, the tab strip, the composer and a wall tile
-  carries one, with an `aria-label` for the reader, and a `Menu` takes a
+  header, the sidebar, the tab strip, the composer and a wall tile —
+  and a dialog's Close, a toast's and a notice's Dismiss
+  (`ui/iconButtons.test.ts`) — carries one, with an `aria-label` for the
+  reader and no `title`, and a `Menu` takes a
   `tip` for its trigger; `radix-ui` is the one dependency
   beside react and xterm (with its search addon, the find over the
   scrollback), for the primitives whose keyboard and focus

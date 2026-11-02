@@ -5,6 +5,7 @@
 import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
 import Icon, { type IconName } from "./icons";
+import { usePortalHost } from "./portal";
 import Tip from "./Tip";
 
 export type MenuItem =
@@ -14,10 +15,11 @@ export type MenuItem =
 
 export default function Menu({ trigger, tip, items, align = "end", side = "bottom", label }: { trigger: ReactNode; tip?: ReactNode; items: MenuItem[]; align?: "start" | "center" | "end"; side?: "top" | "bottom" | "left" | "right"; label?: string }) {
   const opener = <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>;
+  const host = usePortalHost();
   return (
     <DropdownMenu.Root modal={false}>
       {tip ? <Tip text={tip}>{opener}</Tip> : opener}
-      <DropdownMenu.Portal>
+      <DropdownMenu.Portal container={host}>
         <DropdownMenu.Content className="menu" align={align} side={side} sideOffset={6} collisionPadding={8} aria-label={label}>
           {items.map((item, i) =>
             "sep" in item ? (

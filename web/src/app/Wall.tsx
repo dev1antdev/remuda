@@ -13,10 +13,11 @@ import { usePref } from "@/lib/prefs";
 import { Icon } from "@/ui";
 import { enterFull, leaveFull } from "./full";
 import { popOut, popOutSupported } from "./pip";
-import { actions } from "./store";
+import { escapeIsFree, overlayOpen } from "./escape";
+import { actions, app } from "./store";
 import { TileView } from "./Tile";
 import { useOffice } from "./useOffice";
-import { t } from "@/lib/i18n";
+import { t, tn } from "@/lib/i18n";
 
 const VIEWS: { view: WallView; label: string; title: string }[] = [
   { view: "chat", label: t("Chat"), title: t("Each tile the last turns of its conversation") },
@@ -45,7 +46,7 @@ export default function Wall() {
     if (!big && !office) return;
     const onKey = (event: KeyboardEvent) => {
       if ((event.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]") || document.querySelector(".modal-scrim, .sel-pop")) return;
-      if (event.key === "Escape" && big && !office) setFocus("");
+      if (big && !office && escapeIsFree({ key: event.key, defaultPrevented: event.defaultPrevented, target: event.target as Element | null }, overlayOpen(app.get()))) setFocus("");
       if (office && (event.code === "ArrowRight" || event.code === "ArrowLeft")) show.step(event.code === "ArrowRight" ? 1 : -1);
     };
     document.addEventListener("keydown", onKey);
@@ -80,9 +81,7 @@ export default function Wall() {
   return (
     <main className="wall">
       <div className="wall-bar">
-        <span className="wall-count">
-          {n} agent{n === 1 ? "" : "s"}
-        </span>
+        <span className="wall-count">{tn(n, "{n} agent", "{n} agents")}</span>
         <button
           type="button"
           className={`btn sm${prefs.needsMe ? " on" : ""}`}
@@ -103,7 +102,7 @@ export default function Wall() {
         </button>
         {list.hidden > 0 && (
           <button type="button" className="btn sm" title={t("Bring back the tiles hidden by hand")} onClick={() => setHidden([])}>
-            Show {list.hidden} hidden
+            {t("Show {n} hidden", { n: list.hidden })}
           </button>
         )}
         <span className="wall-spacer" />
@@ -125,7 +124,7 @@ export default function Wall() {
           type="button"
           className={`btn sm wall-office-btn${office ? " on" : ""}`}
           aria-pressed={office}
-          title={office ? "Leave office mode (Esc)" : t("Office mode for a second screen: one agent large — the one that needs you, else each in turn every 20 s — the rest as cards; a card pins its agent; full screen")}
+          title={office ? t("Leave office mode (Esc)") : t("Office mode for a second screen: one agent large — the one that needs you, else each in turn every 20 s — the rest as cards; a card pins its agent; full screen")}
           onClick={toggleOffice}
         >
           <Icon name="monitor" size={12} /> {t("Office")}

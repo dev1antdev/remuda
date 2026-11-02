@@ -58,9 +58,11 @@ export function fill(text: string, vars: Vars): string {
   return text.replace(/\{(\w+)\}/g, (slot, name: string) => (name in vars ? String(vars[name] ?? "") : slot));
 }
 
-// pluralIndex is the form a count takes: English one / other; Russian one (1, 21, 31…), few (2–4, 22–24…), many (0, 5–20, 25–30…)
+// pluralIndex is the form a count takes, by CLDR: English one / other; Russian one (1, 21, 31…), few (2–4, 22–24…), many
+// (0, 5–20, 25–30…), and for a fraction CLDR's other, which a three-form table writes as the few form ("1,5 файла")
 export function pluralIndex(n: number, language: Lang = lang): number {
-  const a = Math.abs(Math.trunc(n));
+  if (!Number.isInteger(n)) return 1;
+  const a = Math.abs(n);
   if (language === "ru") {
     const m10 = a % 10;
     const m100 = a % 100;

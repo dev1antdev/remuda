@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { findPaths } from "@/lib/paths";
-import { highlightLines, langOf } from "@/lib/highlight";
+import { closesFence, highlightLines, langOf } from "@/lib/highlight";
 import type { OpenFile } from "@/features/files/target";
 import Icon from "@/ui/icons";
 import { tokenNodes } from "@/ui/Tokens";
@@ -34,7 +34,8 @@ type Block =
   | { t: "hr" };
 
 const FENCE = /^\s{0,3}(`{3,}|~{3,})\s*(\S*)\s*$/;
-const HEADING = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/;
+// a closing run of # counts only after a space: "## Rewriting in C#" keeps its C#
+const HEADING = /^\s{0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/;
 const HR = /^\s{0,3}([-*_])(\s*\1){2,}\s*$/;
 const LIST = /^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/;
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
@@ -67,13 +68,14 @@ export function parseBlocks(src: string, depth = 0): Block[] {
     }
 
     const fence = line.match(FENCE);
-    if (fence) {
+    // a backtick fence's info string holds no backtick: "```code```" on a line of its own is a code span, not a fence that swallows the rest
+    if (fence && !(fence[1]!.startsWith("`") && fence[2]!.includes("`"))) {
       flushPara();
       const marker = fence[1]!;
       const lang = fence[2] ?? "";
       const code: string[] = [];
       i++;
-      while (i < lines.length && !lines[i]!.trim().startsWith(marker)) code.push(lines[i++]!);
+      while (i < lines.length && !closesFence(lines[i]!, marker)) code.push(lines[i++]!);
       i++; // closing fence (or EOF)
       out.push({ t: "code", lang, code: code.join("\n") });
       continue;
@@ -316,7 +318,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
   return (
     <div className="md-pre">
       <div className="md-pre-bar">
-        <span>{lang || "code"}</span>
+        <span>{lang || t("code")}</span>
         <button
           type="button"
           className="linkish"
@@ -329,7 +331,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
             });
           }}
         >
-          <Icon name={copied ? "check" : "copy"} size={12} /> {copied ? "copied" : "copy"}
+          <Icon name={copied ? "check" : "copy"} size={12} /> {copied ? t("copied") : t("copy")}
         </button>
       </div>
       <pre>

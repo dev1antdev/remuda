@@ -136,17 +136,18 @@ export default function Shell() {
     return () => navigator.serviceWorker.removeEventListener("message", onMsg);
   }, []);
 
-  // a finish while the pane is already open is only seen here (the server marks a terminal or chat open once); not while the tab is hidden
+  // a finish while the pane is already open is only seen here (the server marks a terminal or chat open once); not while the tab
+  // is hidden, and never from a viewer's screen, which looks without the person and whose mark the server refuses
   const seenState = current?.pane.radar?.state;
   useEffect(() => {
-    if (mode !== "herdr" || viewer || !current || seenState !== "done") return;
+    if (viewOnly || mode !== "herdr" || viewer || !current || seenState !== "done") return;
     const look = () => {
       if (document.visibilityState === "visible") void markSeen(current.machine.id, current.pane.id).catch(() => {});
     };
     look();
     document.addEventListener("visibilitychange", look);
     return () => document.removeEventListener("visibilitychange", look);
-  }, [mode, !!viewer, current?.machine.id, current?.pane.id, seenState]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [viewOnly, mode, !!viewer, current?.machine.id, current?.pane.id, seenState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className={full && (mode === "herdr" || mode === "wall") ? "app is-full" : "app"}>

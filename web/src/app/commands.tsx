@@ -27,6 +27,7 @@ import { setDarkFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, us
 import { TEXT_SIZE_NAMES, TEXT_SIZES } from "@/lib/look";
 import { currentLang, LANGS, t } from "@/lib/i18n";
 import { setLangPref } from "./lang";
+import { viewerCommand } from "./viewOnly";
 import { DARK_FLAVORS, FLAVOR_NAMES } from "@/lib/theme";
 
 const FIND_KEY = isMac ? "⌘F" : "Ctrl+F";
@@ -54,7 +55,7 @@ const toastError = (e: unknown) => actions.notify(errMsg(e), { error: true });
 
 // useCommands is the list for what was typed: the panes first, then the commands that apply right now.
 function useCommands(): (query: string) => Entry[] {
-  const { machines } = useRoster();
+  const { machines, viewOnly } = useRoster();
   const mode = app.use((s) => s.mode);
   const lens = app.use((s) => s.lens);
   const viewer = app.use((s) => s.viewer);
@@ -106,17 +107,18 @@ function useCommands(): (query: string) => Entry[] {
       if (current && !viewer) {
         const { machine, session, tab } = current;
         const named = `“${session.name}”`;
+        const titled = machine.id !== "local" ? t("{workspace} on {machine}", { workspace: session.name, machine: machine.label }) : session.name;
         command("tab", t("New tab in {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "tab", machineId: machine.id, session }), { hint: t("another agent in the same folder"), icon: "plus", keywords: ["agent", "create"] });
         command("worktree", t("New worktree of {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }), { hint: t("a branch checked out beside it, an agent in it"), icon: "plus", keywords: ["branch", "create"] });
         command("rename-workspace", t("Rename workspace {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }), { icon: "tag" });
-        command("rename-tab", `Rename tab ${tab.named ? `“${tab.label}”` : tab.number}…`, () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }), { icon: "tag" });
+        command("rename-tab", t("Rename tab {tab}…", { tab: tab.named ? `“${tab.label}”` : tab.number }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }), { icon: "tag" });
         if (current.pane.agent) command("restart-pane", t("Restart {agent} on its session…", { agent: agentTitle(current.pane.agent) }), () => askRestart(machine.id, current.pane.id, current.pane.agent), { hint: t("its own exit, then started again on the same conversation"), icon: "refresh-cw", keywords: ["restart", "resume", "stuck", "hung", "reload", "again"] });
         command("close-workspace", t("Close workspace {workspace}", { workspace: named }), () => closeWorkspace(machine, session), { hint: t("its panes close and the agents in them stop"), icon: "x", danger: true, keywords: ["kill", "stop", "quit"] });
         if (popOutSupported) command("popout", t("Pop out this agent"), () => void popOut(selection!), { hint: t("a small window above every other app"), icon: "pip", keywords: ["picture", "window", "float"] });
         if (current.pane.agent) command("export", t("Export this conversation as Markdown"), () => void exportConversation(machine.id, current.pane.id, chatSession, folderOf(current), { agent: current.pane.agent, workspace: session.name, machine: machine.label }).catch(toastError), { hint: t("the session shown, as a file"), icon: "download", keywords: ["save", "download", "markdown", "transcript", "share", "file"] });
-        if (current.pane.agent) command("recap", t("Recap this conversation"), () => actions.openDialog({ kind: "recap", machineId: machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), title: machine.id !== "local" ? `${session.name} on ${machine.label}` : session.name }), { hint: t("prompts, answers, tools, files, cost — Copy as Markdown"), icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest", "what happened"] });
-        if (current.pane.agent) command("handover", t("Continue this conversation with another agent"), () => actions.openDialog({ kind: "handover", machineId: machine.id, paneId: current.pane.id, session: chatSession, agent: current.pane.agent, workspace: machine.id !== "local" ? `${session.name} on ${machine.label}` : session.name }), { hint: t("a new tab here with Codex, Gemini or a fresh Claude, the gist of this conversation as its first prompt"), icon: "arrow-right", keywords: ["handover", "hand over", "continue", "switch", "codex", "gemini", "kimi", "another agent", "model", "cheaper", "stuck"] });
-        if (current.pane.agent) command("pins", t("Pins in this conversation…"), () => actions.openDialog({ kind: "pins", machineId: machine.id, paneId: current.pane.id, dir: folderOf(current), shown: chatSession ?? chatLive, title: machine.id !== "local" ? `${session.name} on ${machine.label}` : session.name }), { hint: t("the turns you pinned in this folder's conversations, a click opens each"), icon: "pin", keywords: ["pin", "pins", "pinned", "bookmark", "bookmarks", "saved", "mark"] });
+        if (current.pane.agent) command("recap", t("Recap this conversation"), () => actions.openDialog({ kind: "recap", machineId: machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), title: titled }), { hint: t("prompts, answers, tools, files, cost — Copy as Markdown"), icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest", "what happened"] });
+        if (current.pane.agent) command("handover", t("Continue this conversation with another agent"), () => actions.openDialog({ kind: "handover", machineId: machine.id, paneId: current.pane.id, session: chatSession, agent: current.pane.agent, workspace: titled }), { hint: t("a new tab here with Codex, Gemini or a fresh Claude, the gist of this conversation as its first prompt"), icon: "arrow-right", keywords: ["handover", "hand over", "continue", "switch", "codex", "gemini", "kimi", "another agent", "model", "cheaper", "stuck"] });
+        if (current.pane.agent) command("pins", t("Pins in this conversation…"), () => actions.openDialog({ kind: "pins", machineId: machine.id, paneId: current.pane.id, dir: folderOf(current), shown: chatSession ?? chatLive, title: titled }), { hint: t("the turns you pinned in this folder's conversations, a click opens each"), icon: "pin", keywords: ["pin", "pins", "pinned", "bookmark", "bookmarks", "saved", "mark"] });
         if (current.pane.agent) command("find", t("Find in this conversation"), () => {
           actions.setMode("herdr");
           actions.setLens("chat");
@@ -196,8 +198,8 @@ function useCommands(): (query: string) => Entry[] {
       const typed = query.trim();
       command("import-issue", t("New task from a GitHub issue…"), () => actions.openDialog({ kind: "import-issue" }), { hint: t("read with gh on the machine, as you; an agent can start on it at once"), icon: "link", keywords: ["github", "issue", "import", "task", "new", "gh"] });
       command("search", typed ? t("Search every conversation for “{typed}”", { typed }) : t("Search every conversation…"), () => actions.openSearch(typed), { hint: t("what you or an agent said, on every machine"), icon: "search", keywords: ["find", "transcript"], always: true });
-      return [...panes, ...commands];
+      return [...panes, ...(viewOnly ? commands.filter((entry) => viewerCommand(entry.id)) : commands)];
     },
-    [machines, mode, lens, viewer, chatSession, footprint, split, full, themePref, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
+    [machines, viewOnly, mode, lens, viewer, chatSession, chatLive, footprint, split, full, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
   );
 }

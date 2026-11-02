@@ -14,4 +14,11 @@ describe("cellText", () => {
   it("leaves nested marks readable", () => {
     expect(cellText("**[bold link](https://a.b)** _it `c`_")).toBe("bold link it c");
   });
+  it("opens a code span on a whole run of backticks, in linear time", () => {
+    expect(cellText("``a`b`` and `` ` ``")).toBe("a`b and  `");
+    expect(cellText("``a` stays")).toBe("``a` stays");
+    const started = performance.now();
+    expect(cellText("`".repeat(9_999))).toBe("`".repeat(9_999));
+    expect(performance.now() - started).toBeLessThan(200);
+  });
 });

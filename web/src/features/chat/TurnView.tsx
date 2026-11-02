@@ -48,7 +48,7 @@ export const TurnView = memo(
             <Icon name="pin" size={12} />
           </span>
         )}
-        <ErrorBoundary fallback={(message) => <Notice tone="error">{t("This turn could not be drawn: {message}", { message })}</Notice>}>
+        <ErrorBoundary resetKey={turn} fallback={(message) => <Notice tone="error">{t("This turn could not be drawn: {message}", { message })}</Notice>}>
           {turn.parts.map((p, i) => (
             <PartView key={i} part={p} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} diffs={diffs} />
           ))}

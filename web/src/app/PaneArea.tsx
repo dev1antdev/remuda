@@ -84,11 +84,11 @@ export default function PaneArea({ current }: { current: Located | null }) {
         >
           {sub ? (
             <>
-              A subagent of <b>{basename(viewer.dir)}</b>: {sub.description} — its own conversation, read-only.
+              {tr("A subagent of")} <b>{basename(viewer.dir)}</b>: {sub.description} {tr("— its own conversation, read-only.")}
             </>
           ) : (
             <>
-              A transcript from <b>{basename(viewer.dir)}</b> {tr("— no agent runs there now, so it reads only")}
+              {tr("A transcript from")} <b>{basename(viewer.dir)}</b> {tr("— no agent runs there now, so it reads only")}
             </>
           )}
         </Notice>
@@ -110,9 +110,11 @@ export default function PaneArea({ current }: { current: Located | null }) {
       <main className="pane-area">
         <div className="placeholder">
           <p>{tr("No pane selected.")}</p>
-          <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
-            {tr("Start an agent")}
-          </button>
+          {!viewOnly && (
+            <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
+              {tr("Start an agent")}
+            </button>
+          )}
         </div>
       </main>
     );
@@ -188,7 +190,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
             dir={folder}
             active={!narrow}
             onOpenFile={(target) => actions.openFile(machine.id, pane.id, target, folder)}
-            onOpenInCode={(path) => actions.openInCode(machine.id, folder, path)}
+            onOpenInCode={(path) => (viewOnly ? actions.openFile(machine.id, pane.id, { path }, folder) : actions.openInCode(machine.id, folder, path))} // a viewer has no Code mode: the file viewer reads it
           />
         )}
       </div>

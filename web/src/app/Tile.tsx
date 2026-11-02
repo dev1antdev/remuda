@@ -14,8 +14,10 @@ import { fillClass, usd } from "@/features/usage/format";
 import { openUrl } from "@/lib/host";
 import { Icon, Logo, Menu, Tip } from "@/ui";
 import { brandColor } from "@/ui/brand";
+import { useRoster } from "@/features/roster/useRoster";
 import { folderOf } from "./current";
 import { actions } from "./store";
+import { viewerMenu } from "./viewOnly";
 import { t } from "@/lib/i18n";
 
 export function TileView({ tile, view = "chat", radar, step, now, brief = false, focused = false, pinned = false, onFocus, onPin, onPick, onHide, onPopOut }: {
@@ -34,6 +36,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
   onPopOut?: () => void; // the wall's pop-out, when the browser can
 }) {
   const { machine, session, tab, pane } = tile;
+  const { viewOnly } = useRoster();
   const d = displayOf(pane, radar, now);
   const alert = pane.radar?.alert;
   const markStyle = d === "working" && !alert ? { color: brandColor(pane.agent) } : undefined;
@@ -76,14 +79,14 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
         </button>
         {pr && (
           <span className="tile-pr-group">
-            <button type="button" className="linkish tile-pr" title={`${pr.url}${pr.status ? `\n${prWords(pr.status)}` : ""}\nOpen in a new tab`} onClick={() => openUrl(pr.url)}>
+            <button type="button" className="linkish tile-pr" title={`${pr.url}${pr.status ? `\n${prWords(pr.status)}` : ""}\n${t("Open in a new tab")}`} onClick={() => openUrl(pr.url)}>
               <Icon name="external-link" size={12} /> {pr.label}
             </button>
             {pr.status && (
               <Menu
                 tip={t("{pr}: {status} · read with gh on the machine", { pr: pr.label, status: prWords(pr.status) })}
                 label={t("{pr} actions", { pr: pr.label })}
-                items={prMenuItems(machine.id, pane.id, pr)}
+                items={viewOnly ? viewerMenu(prMenuItems(machine.id, pane.id, pr)) : prMenuItems(machine.id, pane.id, pr)}
                 trigger={
                   <button type="button" className="linkish pr-chips" aria-label={t("{pr}: {status}. Open it, or hand its checks or review to the agent", { pr: pr.label, status: prWords(pr.status) })}>
                     <span className={`pr-state is-${checksTone(pr.status)}`}>
@@ -110,7 +113,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           </Tip>
         )}
         {onFocus && (
-          <Tip text={focused ? "Back to the grid (Esc)" : t("Focus: this agent takes the wall, the others wait in a strip")}>
+          <Tip text={focused ? t("Back to the grid (Esc)") : t("Focus: this agent takes the wall, the others wait in a strip")}>
             <button type="button" className={`icon-btn sm tile-focus${focused ? " on" : ""}`} aria-label={focused ? t("Back to the grid") : t("Focus this agent")} aria-pressed={focused} onClick={onFocus}>
               <Icon name={focused ? "minimize" : "maximize"} size={14} />
             </button>

@@ -87,14 +87,15 @@ self.addEventListener("notificationclick", (event) => {
   const { machine, pane, panel, choices } = event.notification.data || {};
   event.waitUntil(
     (async () => {
-      // a button on a watchdog notification: Esc goes straight to the pane
+      // a button on a watchdog notification: Esc goes straight to the pane; refused or unreachable, the page opens
+      // on the pane instead, as for a choice, so the person sees it did not land
       if (event.action === "esc" && machine && pane) {
-        await fetch("/api/keys", {
+        const res = await fetch("/api/keys", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ machine, pane, keys: ["esc"] }),
-        }).catch(() => {});
-        return;
+        }).catch(() => null);
+        if (res && res.ok) return;
       }
       // a choice on a question notification: the server checks the dialog still shows it, then picks it;
       // a dialog that changed or closed is a refusal, and the page opens on the pane instead

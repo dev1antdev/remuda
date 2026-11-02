@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Icon, { type IconName } from "@/ui/icons";
+import Tip from "@/ui/Tip";
+import { dialogTakesEscape } from "./dialogEscape";
 import { t } from "@/lib/i18n";
 
 // openDialogs counts the open dialogs: the page behind them is inert until the last one closes.
@@ -64,9 +66,11 @@ export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit
               </h2>
             )}
             {controls && <div className="modal-head-controls">{controls}</div>}
-            <button type="button" className="icon-btn" onClick={onClose} title={t("Close")} aria-label={t("Close")}>
-              <Icon name="x" size={16} />
-            </button>
+            <Tip text={t("Close")}>
+              <button type="button" className="icon-btn" onClick={onClose} aria-label={t("Close")}>
+                <Icon name="x" size={16} />
+              </button>
+            </Tip>
           </div>
         )}
         {children}
@@ -77,11 +81,12 @@ export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit
 }
 
 // useEscape closes the topmost thing on Escape: not while a Select's list is open (its own listener
-// runs first and stops the event), nor when `when` says another layer is above this one.
+// runs first and stops the event), not when `when` says another layer is above this one, and not for the
+// Esc a tooltip or a menu inside it already used to close itself (dialogEscape.ts).
 export function useEscape(onClose: () => void, when?: () => boolean) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || document.querySelector(".sel-pop") || (when && !when())) return;
+      if (!dialogTakesEscape({ key: e.key, defaultPrevented: e.defaultPrevented }, !!document.querySelector(".sel-pop"), !when || when())) return;
       e.stopPropagation();
       onClose();
     };
