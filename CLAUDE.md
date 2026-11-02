@@ -180,9 +180,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   per-line usage reader of each format (the tracker keeps one per file
   across its delta reads); `InputField` is the input-key reader the recap
   and `ShellCommand` share.
-  **Compaction moves the conversation to a new file** (its first message's
-  `parentUuid` is a record `uuid` in the old one) while herdr keeps naming
-  the old id, so the chat follows `Reader.Live(path)` —
+  **Compaction moves the conversation to a new file** (the old one ends
+  with a `continued-in` record naming the new session, `continuedIn` reads
+  the old file's last 64 KB for it; a Claude Code that writes none is
+  followed by the new file's first `parentUuid`, a record `uuid` in the old
+  one — read in its first 64 KB, which a big snapshot record can fill)
+  while herdr keeps naming the old id, so the chat follows `Reader.Live(path)` —
   `transcript.Continuation` locally, `ContinuationScript` over ssh —
   re-checked a minute at a time per file. `transcript.Reader` (reader.go)
   is the session files of one machine: `Version`, `DirVersions`,
