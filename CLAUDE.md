@@ -816,7 +816,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and mouse-up.
   `PopOut.tsx` draws the popped pane through a `createPortal` into that
   window's body — the same `TileView` as the wall, the roster, the store
-  and every handler shared, "That pane is gone" once the roster lost it.
+  and every handler shared, "That pane is gone" once the roster lost it;
+  `PortalHost` (`ui/portal.ts`) names that window's body, so the tile's
+  `Menu` and `Tip` open there and not in the page behind it.
   Store field `popout`, buttons on every wall tile and in the header,
   disabled there without a pane; **office mode** for a second screen or
   a TV — the Office button in the wall's bar, hidden under 920 px, and

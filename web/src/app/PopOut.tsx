@@ -6,6 +6,7 @@ import { usePref } from "@/lib/prefs";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
+import { PortalHost } from "@/ui";
 import { DEFAULT_WALL, tileKey, type WallPrefs } from "@/features/roster/wall";
 import { useAllPanes } from "./current";
 import { popOutWindow } from "./pip";
@@ -17,7 +18,13 @@ export default function PopOut() {
   const popout = app.use((s) => s.popout);
   const win = popOutWindow();
   if (!popout || !win) return null;
-  return createPortal(<Popped popout={popout} />, win.document.body);
+  // the tile's menus and tooltips open in this window too, not in the page behind it
+  return createPortal(
+    <PortalHost.Provider value={win.document.body}>
+      <Popped popout={popout} />
+    </PortalHost.Provider>,
+    win.document.body,
+  );
 }
 
 // Popped is the window's content; its clocks tick only while a window is open

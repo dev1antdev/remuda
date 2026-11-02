@@ -12,3 +12,4 @@ export { default as Resizer, resetPanels } from "./Resizer";
 export { default as Menu, type MenuItem } from "./Menu";
 export { default as Tip, TipProvider } from "./Tip";
 export { PANELS } from "./panels";
+export { PortalHost } from "./portal";
