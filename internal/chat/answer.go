@@ -6,11 +6,15 @@ import (
 )
 
 // Answer is the keys that pick the choice at index of the dialog on the screen now, after checking that it still
-// reads label: a dialog that changed or closed since the choices were offered is not answered.
+// reads label: a dialog that changed or closed since the choices were offered is not answered, nor is a multi-select,
+// where one press only ticks a box.
 func Answer(screen string, index int, label string) ([]string, error) {
 	q, ok := ParseQuestion(screen)
 	if !ok {
 		return nil, fmt.Errorf("no question on the screen now")
+	}
+	if q.Multi {
+		return nil, fmt.Errorf("the dialog takes several choices: tick them and submit at the terminal")
 	}
 	if index < 0 || index >= len(q.Options) {
 		return nil, fmt.Errorf("the dialog changed: it has %d choices now", len(q.Options))
