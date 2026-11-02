@@ -229,7 +229,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   conversation renders lightly**: the log mounts from its end — the last
   `FIRST_TURNS` (200) at once, the earlier ones prepended `MOUNT_STEP` (120)
   at a time in idle moments (`mount.ts`, tested: `hiddenCount`, `nextReveal`;
-  the find bar and a jump to an earlier turn mount them all), the view held
+  the find bar and a jump to an earlier turn mount them all; once mounted to
+  the start the log stays so, `ALL_REVEALED`, so a new turn at the end never
+  pushes the first one out until the next idle slice), the view held
   still by the browser's scroll anchoring or, where there is none, by the
   log's own correction (`anchorsItself`) — and a turn off screen is skipped
   (`content-visibility: auto`, `contain-intrinsic-size: auto 300px` on
