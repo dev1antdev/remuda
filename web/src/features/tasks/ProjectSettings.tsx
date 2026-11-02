@@ -6,8 +6,9 @@ import { useCallback, useState } from "react";
 import { FIELD_KINDS, patchProject, putFields, putStatuses, type Field, type FieldKind, type Project, type Status } from "@/features/tasks/api";
 import Icon, { type IconName } from "@/ui/icons";
 import Select from "@/ui/Select";
-import { Dialog, Notice, useDismiss, useSubmit } from "@/ui";
+import { Dialog, Notice, Tip, useDismiss, useSubmit } from "@/ui";
 import { t } from "@/lib/i18n";
+import { moveTarget, movesOf } from "./workflow";
 
 export const PALETTE = ["e67e22", "2ecc71", "3498db", "9b59b6", "e74c3c", "1abc9c", "f1c40f", "95a5a6"];
 export const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)]!;
@@ -81,12 +82,10 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
     frows.every((r) => r.title.trim());
   const { busy, err, run } = useSubmit(async () => {
     if (title.trim() !== project.title || color !== project.hex_color) await patchProject(project.id, { title: title.trim(), hex_color: color });
-    const moves: Record<number, number> = {};
-    for (const r of rows) if (r.removed) moves[r.id] = r.to ?? survivors[0]?.id ?? 0;
     let saved = await putStatuses(
       project.id,
       kept.map(({ key: _key, removed: _removed, to: _to, ...s }) => s),
-      moves,
+      movesOf(rows),
     );
     if (fieldsChanged()) {
       saved = await putFields(
@@ -152,42 +151,48 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
             />
             <span className="ps-flags">
               {FLAGS.map((f) => (
-                <button
-                  key={f.flag}
-                  type="button"
-                  className={`icon-btn sm${r[f.flag] ? " on" : ""}`}
-                  title={f.title}
-                  aria-label={f.title}
-                  aria-pressed={r[f.flag]}
-                  disabled={r.removed}
-                  onClick={() => flag(r.key, f.flag, !r[f.flag])}
-                >
-                  <Icon name={f.icon} size={14} />
-                </button>
+                <Tip key={f.flag} text={f.title}>
+                  <button
+                    type="button"
+                    className={`icon-btn sm${r[f.flag] ? " on" : ""}`}
+                    aria-label={f.title}
+                    aria-pressed={r[f.flag]}
+                    disabled={r.removed}
+                    onClick={() => flag(r.key, f.flag, !r[f.flag])}
+                  >
+                    <Icon name={f.icon} size={14} />
+                  </button>
+                </Tip>
               ))}
             </span>
-            <button type="button" className="icon-btn sm" title={t("Move up")} aria-label={t("Move up")} disabled={i === 0} onClick={() => shift(r.key, -1)}>
-              <Icon name="chevron-up" size={14} />
-            </button>
-            <button type="button" className="icon-btn sm" title={t("Move down")} aria-label={t("Move down")} disabled={i === rows.length - 1} onClick={() => shift(r.key, 1)}>
-              <Icon name="chevron-down" size={14} />
-            </button>
+            <Tip text={t("Move up")}>
+              <button type="button" className="icon-btn sm" aria-label={t("Move up")} disabled={i === 0} onClick={() => shift(r.key, -1)}>
+                <Icon name="chevron-up" size={14} />
+              </button>
+            </Tip>
+            <Tip text={t("Move down")}>
+              <button type="button" className="icon-btn sm" aria-label={t("Move down")} disabled={i === rows.length - 1} onClick={() => shift(r.key, 1)}>
+                <Icon name="chevron-down" size={14} />
+              </button>
+            </Tip>
             {r.removed ? (
               <span className="ps-moves">
                 <Select
                   className="sm"
-                  value={r.to ?? survivors[0]?.id ?? 0}
+                  value={moveTarget(r, rows)}
                   onChange={(to) => update(r.key, { to })}
                   options={survivors.map((s) => ({ value: s.id, label: t("its tasks → {column}", { column: s.title }) }))}
                 />
                 <button type="button" className="linkish" onClick={() => update(r.key, { removed: false })}>
-                  undo
+                  {t("undo")}
                 </button>
               </span>
             ) : (
-              <button type="button" className="icon-btn sm" title={t("Remove column")} aria-label={t("Remove column")} disabled={kept.length <= 1} onClick={() => remove(r.key)}>
-                <Icon name="x" size={14} />
-              </button>
+              <Tip text={t("Remove column")}>
+                <button type="button" className="icon-btn sm" aria-label={t("Remove column")} disabled={kept.length <= 1} onClick={() => remove(r.key)}>
+                  <Icon name="x" size={14} />
+                </button>
+              </Tip>
             )}
           </div>
         ))}
@@ -215,36 +220,32 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
               <input className="ps-options" value={r.optionsText} placeholder={t("options, comma-separated")} onChange={(e) => fupdate(r.key, { optionsText: e.target.value })} />
             )}
             <span className="ps-flags">
-              <button
-                type="button"
-                className={`icon-btn sm${r.on_card ? " on" : ""}`}
-                title={t("Show on the card and the list row")}
-                aria-label={t("Show on the card")}
-                aria-pressed={r.on_card}
-                onClick={() => fupdate(r.key, { on_card: !r.on_card })}
-              >
-                <Icon name="eye" size={14} />
-              </button>
-              <button
-                type="button"
-                className={`icon-btn sm${r.in_prompt ? " on" : ""}`}
-                title={t("Send to the agent with the task")}
-                aria-label={t("Send to the agent")}
-                aria-pressed={r.in_prompt}
-                onClick={() => fupdate(r.key, { in_prompt: !r.in_prompt })}
-              >
-                <Icon name="send" size={14} />
-              </button>
+              <Tip text={t("Show on the card and the list row")}>
+                <button type="button" className={`icon-btn sm${r.on_card ? " on" : ""}`} aria-label={t("Show on the card")} aria-pressed={r.on_card} onClick={() => fupdate(r.key, { on_card: !r.on_card })}>
+                  <Icon name="eye" size={14} />
+                </button>
+              </Tip>
+              <Tip text={t("Send to the agent with the task")}>
+                <button type="button" className={`icon-btn sm${r.in_prompt ? " on" : ""}`} aria-label={t("Send to the agent")} aria-pressed={r.in_prompt} onClick={() => fupdate(r.key, { in_prompt: !r.in_prompt })}>
+                  <Icon name="send" size={14} />
+                </button>
+              </Tip>
             </span>
-            <button type="button" className="icon-btn sm" title={t("Move up")} aria-label={t("Move up")} disabled={i === 0} onClick={() => setFrows((rs) => shifted(rs, r.key, -1))}>
-              <Icon name="chevron-up" size={14} />
-            </button>
-            <button type="button" className="icon-btn sm" title={t("Move down")} aria-label={t("Move down")} disabled={i === frows.length - 1} onClick={() => setFrows((rs) => shifted(rs, r.key, 1))}>
-              <Icon name="chevron-down" size={14} />
-            </button>
-            <button type="button" className="icon-btn sm" title={t("Remove field")} aria-label={t("Remove field")} onClick={() => setFrows((rs) => rs.filter((x) => x.key !== r.key))}>
-              <Icon name="x" size={14} />
-            </button>
+            <Tip text={t("Move up")}>
+              <button type="button" className="icon-btn sm" aria-label={t("Move up")} disabled={i === 0} onClick={() => setFrows((rs) => shifted(rs, r.key, -1))}>
+                <Icon name="chevron-up" size={14} />
+              </button>
+            </Tip>
+            <Tip text={t("Move down")}>
+              <button type="button" className="icon-btn sm" aria-label={t("Move down")} disabled={i === frows.length - 1} onClick={() => setFrows((rs) => shifted(rs, r.key, 1))}>
+                <Icon name="chevron-down" size={14} />
+              </button>
+            </Tip>
+            <Tip text={t("Remove field")}>
+              <button type="button" className="icon-btn sm" aria-label={t("Remove field")} onClick={() => setFrows((rs) => rs.filter((x) => x.key !== r.key))}>
+                <Icon name="x" size={14} />
+              </button>
+            </Tip>
           </div>
         ))}
       </div>
@@ -273,9 +274,11 @@ export function ColorPick({ value, onChange }: { value: string; onChange: (hex: 
   useDismiss(open, close, [".color-pick"]);
   return (
     <span className="color-pick">
-      <button type="button" className="icon-btn sm" title={t("Colour")} aria-label={t("Colour")} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <span className="tasks-dot lg" style={{ background: value ? `#${value}` : "var(--line-strong)" }} />
-      </button>
+      <Tip text={t("Colour")}>
+        <button type="button" className="icon-btn sm" aria-label={t("Colour")} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          <span className="tasks-dot lg" style={{ background: value ? `#${value}` : "var(--line-strong)" }} />
+        </button>
+      </Tip>
       {open && (
         <span className="row-menu color-menu" role="menu">
           {PALETTE.map((c) => (

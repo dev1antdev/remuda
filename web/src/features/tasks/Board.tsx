@@ -5,6 +5,7 @@ import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode 
 import type { Project, Status, Task } from "@/features/tasks/api";
 import Icon from "@/ui/icons";
 import { Notice, Tip, useDismiss, useSubmit } from "@/ui";
+import { dropAfter, markerSlot } from "./drop";
 import { longPress } from "./press";
 import { pickHow, type Pick } from "./selection";
 import { t as tr } from "@/lib/i18n";
@@ -55,12 +56,8 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
     const t = tasks.find((x) => x.id === drag);
     clear();
     if (!t) return;
-    const column = byStatus.get(statusId) ?? [];
-    const was = column.findIndex((x) => x.id === t.id);
-    if (was >= 0 && (was === index || was === index - 1)) return; // the same place
-    const others = column.filter((x) => x.id !== t.id);
-    const after = index <= 0 ? 0 : others[Math.min(index, others.length) - 1]!.id;
-    onMove(t, statusId, after);
+    const target = dropAfter((byStatus.get(statusId) ?? []).map((x) => x.id), t.id, index);
+    if (target) onMove(t, statusId, target.after);
   };
 
   return (
@@ -68,6 +65,7 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
       {project.statuses.map((s) => {
         const list = byStatus.get(s.id) ?? [];
         const here = over?.status === s.id;
+        const slot = here ? markerSlot(list.map((x) => x.id), drag ?? -1, over!.index) : -1;
         return (
           <section
             key={s.id}
@@ -98,9 +96,11 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
                 </Tip>
               )}
               <span className="badge quiet">{list.length}</span>
-              <button type="button" className="icon-btn sm" title={tr("Add a task to {column}", { column: s.title })} aria-label={tr("Add a task to {column}", { column: s.title })} onClick={() => setAdding(s.id)}>
-                <Icon name="plus" size={14} />
-              </button>
+              <Tip text={tr("Add a task to {column}", { column: s.title })}>
+                <button type="button" className="icon-btn sm" aria-label={tr("Add a task to {column}", { column: s.title })} onClick={() => setAdding(s.id)}>
+                  <Icon name="plus" size={14} />
+                </button>
+              </Tip>
             </header>
             <div className="board-col-body">
               {adding === s.id && <ColumnAdd onAdd={(title) => onAdd(title, s.id)} onClose={() => setAdding(null)} />}
@@ -113,7 +113,7 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
                   picked={!!picked?.(t.id)}
                   selecting={!!selecting}
                   dragging={t.id === drag}
-                  before={here && over!.index === i}
+                  before={slot === i}
                   draggable={draggable}
                   onOpen={() => onOpen(t.id)}
                   onPick={onPick && ((how) => onPick(t, how))}
@@ -127,7 +127,7 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
                   chips={chips}
                 />
               ))}
-              {here && over!.index >= list.length && <div className="board-drop-end" />}
+              {here && slot >= list.length && <div className="board-drop-end" />}
             </div>
           </section>
         );
@@ -161,7 +161,7 @@ function Card({ task: t, statuses, selected, picked, selecting, dragging, before
   const press = useMemo(() => longPress(() => pickRef.current?.("toggle")), []);
   return (
     <article
-      className={`board-card${selected ? " sel" : ""}${picked ? " picked" : ""}${dragging ? " dragging" : ""}${before ? " drop-before" : ""}${t.done ? " done" : ""}`}
+      className={`board-card${selected ? " is-open" : ""}${picked ? " picked" : ""}${dragging ? " dragging" : ""}${before ? " drop-before" : ""}${t.done ? " done" : ""}`}
       data-id={t.id}
       draggable={draggable}
       role="button"
@@ -189,21 +189,22 @@ function Card({ task: t, statuses, selected, picked, selecting, dragging, before
       <div className="board-card-head">
         <span className="board-card-title">{t.title}</span>
         <span className="board-card-menu">
-          <button
-            type="button"
-            className="icon-btn sm"
-            title={tr("Move to…")}
-            aria-label={tr("Move to another column")}
-            aria-haspopup="menu"
-            aria-expanded={menu}
-            disabled={elsewhere.length === 0}
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenu((m) => !m);
-            }}
-          >
-            <Icon name="more" size={14} />
-          </button>
+          <Tip text={tr("Move to…")}>
+            <button
+              type="button"
+              className="icon-btn sm"
+              aria-label={tr("Move to another column")}
+              aria-haspopup="menu"
+              aria-expanded={menu}
+              disabled={elsewhere.length === 0}
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenu((m) => !m);
+              }}
+            >
+              <Icon name="more" size={14} />
+            </button>
+          </Tip>
           {menu && (
             <span className="row-menu" role="menu">
               {elsewhere.map((s) => (

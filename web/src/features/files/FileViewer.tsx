@@ -6,6 +6,7 @@ import Icon from "@/ui/icons";
 
 import type { FileTarget } from "./target";
 import { actions } from "@/app/store";
+import { useRoster } from "@/features/roster/useRoster";
 import { t } from "@/lib/i18n";
 
 type Tab = "file" | "changes";
@@ -31,6 +32,7 @@ export default function FileViewer({
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [tab, setTab] = useState<Tab>(target.prefer ?? "file");
   const [error, setError] = useState<string | null>(null);
+  const { viewOnly } = useRoster(); // a viewer link's screen reads the file only: no diff, no editor
   const lineRef = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
 
@@ -79,7 +81,7 @@ export default function FileViewer({
         if (stop) return;
         setInfo(i);
         if (i.kind === "text") {
-          const [t, d] = await Promise.all([fsText(machineId, i.path), fsDiff(machineId, i.path).catch(() => null)]);
+          const [t, d] = await Promise.all([fsText(machineId, i.path), viewOnly ? null : fsDiff(machineId, i.path).catch(() => null)]);
           if (stop) return;
           setText(t);
           setDiff(d);
@@ -92,7 +94,7 @@ export default function FileViewer({
     return () => {
       stop = true;
     };
-  }, [machineId, paneId, dir, target.path, target.prefer]);
+  }, [machineId, paneId, dir, target.path, target.prefer, viewOnly]);
 
   useEffect(() => {
     if (tab === "file" && text && target.line) {
@@ -130,7 +132,7 @@ export default function FileViewer({
               </bdi>
             </span>
           </div>
-          {info?.kind === "text" && (
+          {info?.kind === "text" && !viewOnly && (
             <nav className="fv-tabs" aria-label={t("View")}>
               <button type="button" className={tab === "file" ? "on" : ""} aria-pressed={tab === "file"} onClick={() => setTab("file")}>
                 {t("File")}
@@ -147,22 +149,26 @@ export default function FileViewer({
               </button>
             </nav>
           )}
-          <Tip text="Open in Code (VS Code on this machine), at this line">
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label={t("Open in Code")}
-              onClick={() => {
-                close();
-                actions.openInCode(machineId, dir, info?.path ?? target.path, target.line);
-              }}
-            >
-              <Icon name="code" size={16} />
+          {!viewOnly && (
+            <Tip text={t("Open in Code (VS Code on this machine), at this line")}>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={t("Open in Code")}
+                onClick={() => {
+                  close();
+                  actions.openInCode(machineId, dir, info?.path ?? target.path, target.line);
+                }}
+              >
+                <Icon name="code" size={16} />
+              </button>
+            </Tip>
+          )}
+          <Tip text={t("Close (Esc)")}>
+            <button type="button" className="icon-btn" onClick={close} aria-label={t("Close")}>
+              <Icon name="x" size={16} />
             </button>
           </Tip>
-          <button type="button" className="icon-btn" onClick={close} title="Close (Esc)" aria-label={t("Close")}>
-            <Icon name="x" size={16} />
-          </button>
         </header>
 
         <div className="fv-body">

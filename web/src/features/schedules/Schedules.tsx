@@ -8,7 +8,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { useQuery } from "@/lib/query";
 import { basename, errMsg } from "@/lib/text";
 import { ago, whenShort } from "@/lib/time";
-import { Dialog, Icon, Logo, Notice } from "@/ui";
+import { Dialog, Icon, Logo, Notice, Tip } from "@/ui";
 import { agentWords, watchedWords } from "./agent";
 import { deleteSchedule, fetchSchedules, putSchedule, runSchedule, type Schedule } from "./api";
 import { NEVER } from "./cron";
@@ -95,20 +95,26 @@ export default function Schedules({ machines, onClose, ask }: {
                 )}
               </div>
             </div>
-            <button type="button" className="icon-btn" title={t("Run now")} onClick={() => void runSchedule(s.id ?? "").then(reload, fail)}>
-              <Icon name="zap" size={14} />
-            </button>
-            <button type="button" className="icon-btn" title={t("Edit")} onClick={() => setEditing(s)}>
-              <Icon name="sliders" size={14} />
-            </button>
-            <button
-              type="button"
-              className="icon-btn danger"
-              title={t("Delete")}
-              onClick={() => ask(`Delete the schedule “${s.label}”?`, t("Delete"), () => void deleteSchedule(s.id ?? "").then(reload, fail))}
-            >
-              <Icon name="trash" size={14} />
-            </button>
+            <Tip text={t("Run now")}>
+              <button type="button" className="icon-btn" aria-label={t("Run now")} onClick={() => void runSchedule(s.id ?? "").then(reload, fail)}>
+                <Icon name="zap" size={14} />
+              </button>
+            </Tip>
+            <Tip text={t("Edit")}>
+              <button type="button" className="icon-btn" aria-label={t("Edit")} onClick={() => setEditing(s)}>
+                <Icon name="sliders" size={14} />
+              </button>
+            </Tip>
+            <Tip text={t("Delete")}>
+              <button
+                type="button"
+                className="icon-btn danger"
+                aria-label={t("Delete")}
+                onClick={() => ask(t("Delete the schedule “{label}”?", { label: s.label }), t("Delete"), () => void deleteSchedule(s.id ?? "").then(reload, fail))}
+              >
+                <Icon name="trash" size={14} />
+              </button>
+            </Tip>
           </div>
         ))}
       </div>

@@ -12,7 +12,7 @@ import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { basename, errMsg, plural } from "@/lib/text";
 import { ago } from "@/lib/time";
-import { Icon, Notice, useTimedNotice } from "@/ui";
+import { Icon, Notice, Tip, useTimedNotice } from "@/ui";
 import { fetchReview, fetchReviewDiff, markReviewed, type Review as ReviewData, type ReviewFile, type Verdict } from "./api";
 import { FileRow, type NewComment } from "./Diff";
 import { Note } from "./Hunk";
@@ -169,12 +169,16 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
             </span>
           ))}
         </span>
-        <button type="button" className={`icon-btn${split ? " on" : ""}`} aria-pressed={split} title={split ? "Two columns, the old file on the left (s)" : "One column (s)"} onClick={() => setSplit((on) => !on)}>
-          <Icon name="columns" size={14} />
-        </button>
-        <button type="button" className="icon-btn" title={t("Look again")} onClick={lookAgain}>
-          <Icon name="refresh-cw" size={14} />
-        </button>
+        <Tip text={split ? t("Two columns, the old file on the left (s)") : t("One column (s)")}>
+          <button type="button" className={`icon-btn${split ? " on" : ""}`} aria-pressed={split} aria-label={t("One column or two")} onClick={() => setSplit((on) => !on)}>
+            <Icon name="columns" size={14} />
+          </button>
+        </Tip>
+        <Tip text={t("Look again")}>
+          <button type="button" className="icon-btn" aria-label={t("Look again")} onClick={lookAgain}>
+            <Icon name="refresh-cw" size={14} />
+          </button>
+        </Tip>
         <button
           type="button"
           className="btn review-seen"
@@ -243,9 +247,11 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
                     <Icon name="send" size={12} /> {t("Send")}
                   </button>
                   {agents.length > 1 && (
-                    <button type="button" className="icon-btn" title={t("Send the comments to another agent")} disabled={sending} onClick={() => setPickingAgent(true)}>
-                      <Icon name="chevron-down" size={14} />
-                    </button>
+                    <Tip text={t("Send the comments to another agent")}>
+                      <button type="button" className="icon-btn" aria-label={t("Send the comments to another agent")} disabled={sending} onClick={() => setPickingAgent(true)}>
+                        <Icon name="chevron-down" size={14} />
+                      </button>
+                    </Tip>
                   )}
                 </>
               ) : (

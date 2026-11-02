@@ -39,7 +39,7 @@ export function parseCron(cron: string): { preset: Preset; hh: number; mm: numbe
   const mm = Number(f[0]);
   const hh = Number(f[1]);
   if (f.length === 5 && Number.isInteger(mm) && f[2] === "*" && f[3] === "*") {
-    if (f[1] === "*") return { preset: "hourly", hh: 9, mm };
+    if (f[1] === "*" && f[4] === "*") return { preset: "hourly", hh: 9, mm };
     if (f[1] === "*/3" && f[4] === "*") return { preset: "every3h", hh: 9, mm };
     if (Number.isInteger(hh) && f[4] === "*") return { preset: "daily", hh, mm };
     if (Number.isInteger(hh) && f[4] === "1-5") return { preset: "weekdays", hh, mm };

@@ -1,5 +1,6 @@
 // What a task says outside its own screen: the prompt an agent gets, the branch it works on, its due date in words.
 
+import { locale, t as tr } from "@/lib/i18n";
 import type { Project, Task } from "./api";
 import { valueText } from "./fields";
 import { htmlToText } from "./html";
@@ -40,13 +41,13 @@ export function dueLabel(t: Pick<Task, "due_date">, now = new Date()): { text: s
   const d = new Date(t.due_date);
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const days = Math.round((day(d) - day(now)) / 86400000);
-  const time = d.getHours() || d.getMinutes() ? ` ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "";
+  const time = d.getHours() || d.getMinutes() ? d.toLocaleTimeString(locale() ?? [], { hour: "2-digit", minute: "2-digit" }) : "";
   let text: string;
-  if (days === 0) text = `Today${time}`;
-  else if (days === 1) text = `Tomorrow${time}`;
-  else if (days === -1) text = "Yesterday";
-  else if (days > 1 && days < 7) text = d.toLocaleDateString([], { weekday: "short" });
-  else text = d.toLocaleDateString([], { day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" });
+  if (days === 0) text = time ? tr("Today {time}", { time }) : tr("Today");
+  else if (days === 1) text = time ? tr("Tomorrow {time}", { time }) : tr("Tomorrow");
+  else if (days === -1) text = tr("Yesterday");
+  else if (days > 1 && days < 7) text = d.toLocaleDateString(locale() ?? [], { weekday: "short" });
+  else text = d.toLocaleDateString(locale() ?? [], { day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" });
   return { text, over: d.getTime() < now.getTime() };
 }
 

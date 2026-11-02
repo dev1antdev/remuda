@@ -950,7 +950,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   with or without an agent to comment to, and are collected only for a
   key that needs them; the legend in the head, hidden under
   1180 px and on touch; the hook listens only while the lens is on screen
-  (`active`) and never over a field, a dialog or the file viewer;
+  (`active`) and never over a field, an open menu, a dialog or the file
+  viewer;
   `VerdictDialog.tsx`, `draft.ts` the comments and the messages they
   become): commits, files (fresh first), hunks with a comment box whose
   text goes to the pane's agent through `/api/submit` as
@@ -1026,7 +1027,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   read off `data-settings` by the probe: "remote" since 4.9x, the host
   before; the page's host when the probe found none), or the editor
   answers "Unable to resolve resource"; the frame's address is settled once per request, so
-  coming back to the folder later does not open the file again; a path that is the folder itself opens no file (the rail can name it after a Read of the directory). **Follow** (the Code bar's button, pref `code.follow`): while the pane on screen in Agents runs an agent on this machine, its tail is polled at a tile's pace (`useChat`, `last=4`) and every edit it finishes — `newestEdit` in `code/follow.ts`, tested: the last Edit / Write / MultiEdit / NotebookEdit with a result and no error, by `tool_id` — opens in the editor the same way; what was already there when Follow began is not news. The flag `-code-port`
+  coming back to the folder later does not open the file again; a path that is the folder itself opens no file (the rail can name it after a Read of the directory). **Follow** (the Code bar's button, pref `code.follow`): while the pane on screen in Agents runs an agent on this machine, its tail is polled at a tile's pace (`useChat`, `last=4`) and every edit it finishes — `newestEdit` in `code/follow.ts`, tested: the Edit / Write / MultiEdit / NotebookEdit with no error whose result came last (its call's `at` plus `took`, since calls made side by side finish out of order; the order made where a time is missing), named by `tool_id` — opens in the editor the same way; what was already there when Follow began is not news. The flag `-code-port`
   changes the port on every machine at once.
 - `web/src/lib/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
   provider (`terminal/engine/links.ts`, which reads its row cell by cell, so
@@ -1838,10 +1839,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   mouse, a ⋯ "Move to…" menu on touch, swipe-snapped columns a screen
   wide on a phone, quick add per column; the order shown is the array's
   (a drop reorders it at once, `patchTask({status_id, after})` confirms,
-  a refusal puts it back) and the board re-reads itself every 15 s while
+  a refusal puts it back; `drop.ts` the pure part, tested: the pointer's
+  place counts the column's other cards, `dropAfter` turns it into the
+  card to sit behind or nothing for the same place, `markerSlot` into the
+  row the marker is drawn above) and the board re-reads itself every 15 s while
   on screen — the List | Board switch is the `tasks.view` pref, ⚙ opens
   `ProjectSettings.tsx` (name, colour, columns with their marks, fields;
-  saved whole, a removed column asked where its tasks go), `fields.tsx`
+  saved whole, a removed column asked where its tasks go — never to a
+  column removed in the same edit, `workflow.ts` tested: `moveTarget`, `movesOf`), `fields.tsx`
   holds `FieldChip` / `FieldInput` / `valueText`. **Several at once**
   (`selection.ts`, `bulk.ts`, `press.ts` — pure, tested — `useSelection.ts`
   the hook, `BulkBar.tsx` the bar): ⌘-click toggles a row or a card,
@@ -2086,7 +2091,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the chat and the tiles have no composer, keys or question buttons, the
   tab strip no + or ×, the sidebar no menus and its ⓘ the vitals alone —
   no update, Resume, read-again or All updates, `concerns(…, viewOnly)`
-  leaves the updates off; `Shell` registers no push and
+  leaves the updates off — the file viewer no Changes
+  tab or Code button, the Usage panel no budget to add or edit (the budget
+  dialog says so if reached), Activity no way to the alert settings, the
+  alerts panel only the voice and the lens a row opens
+  (`features/alerts/sections.ts`, tested); `Shell` registers no push and
   syncs no prefs for a viewer. Settings › Devices ends with **Viewer
   links** (`features/settings/ViewerKeys.tsx`, `viewerLinks.ts` tested):
   make one under a name, Copy the link shown once, Revoke. **The door** (`door.go`): `EnsureDoor(dir,

@@ -25,6 +25,14 @@ describe("ratio and tone", () => {
     expect(budgetTone(1)).toBe("red");
     expect(budgetTone(3)).toBe("red");
   });
+  it("turns amber at the very spend the words call 80 % and the server pushes for", () => {
+    const at80 = budget({ spent: 2.4, limit: 3, period: "day" }); // 2.4 / 3 is 0.7999999999999999 in floating point
+    expect(budgetWords(at80)).toContain("80 %");
+    expect(budgetTone(ratio(at80))).toBe("amber");
+    const atLimit = budget({ spent: 0.7 * 3, limit: 2.1, period: "day" }); // three runs at $0.70 against $2.10: 0.9999999999999998
+    expect(budgetWords(atLimit)).toContain("100 %");
+    expect(budgetTone(ratio(atLimit))).toBe("red");
+  });
   it("picks the graver tone and the pill's class", () => {
     expect(graver("amber", "red")).toBe("red");
     expect(graver("dim", "")).toBe("dim");
