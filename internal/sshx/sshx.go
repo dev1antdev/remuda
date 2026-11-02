@@ -226,11 +226,16 @@ func forwardBackSpec(remotePort, localPort int) string {
 	return fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", remotePort, localPort)
 }
 
-// ForwardSocket forwards a local unix socket to a remote one over the master and returns the local path.
+// ForwardSocket forwards a local unix socket to a remote one over the master and returns the local path. A forward
+// of that socket the master already holds — from an earlier connect over it, or an earlier remuda whose master lives
+// on — is cancelled first: asked for the same forward again, the master answers "found existing forwarding" and
+// binds nothing, so unlinking the old listener's file would leave no socket at all.
 func (c *Conn) ForwardSocket(remoteSock string) (string, error) {
 	local := tmpPath("remuda-fw-", c.Host+"\x00"+remoteSock, ".sock")
+	spec := local + ":" + remoteSock
+	c.cmd("-O", "cancel", "-L", spec, c.Host).Run()
 	os.Remove(local)
-	cmd := c.cmd("-O", "forward", "-L", local+":"+remoteSock, c.Host)
+	cmd := c.cmd("-O", "forward", "-L", spec, c.Host)
 	var errb bytes.Buffer
 	cmd.Stderr = &errb
 	if err := cmd.Run(); err != nil {
@@ -259,9 +264,13 @@ func (c *Conn) ForwardTCP(remotePort int) (string, error) {
 // DialExec runs a remote command over the master and exposes its stdin/stdout as a net.Conn:
 // the RPC transport for an sshd that refuses unix-socket forwarding (`nc -U <socket>` bridges to herdr).
 func (c *Conn) DialExec(command string, timeout time.Duration) (net.Conn, error) {
-	cmd := c.cmd(c.Host, command)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	return newCmdConn(c.cmd(c.Host, command), timeout)
+}
+
+// newCmdConn starts the command and wraps its stdin and stdout as a net.Conn that the deadline ends.
+func newCmdConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
+	stderr := &lockedBuffer{}
+	cmd.Stderr = stderr
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -273,7 +282,7 @@ func (c *Conn) DialExec(command string, timeout time.Duration) (net.Conn, error)
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	cc := &cmdConn{cmd: cmd, stdin: stdin, stdout: stdout, stderr: &stderr}
+	cc := &cmdConn{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr}
 	cc.SetDeadline(time.Now().Add(timeout))
 	return cc, nil
 }
@@ -282,11 +291,30 @@ type cmdConn struct {
 	cmd      *exec.Cmd
 	stdin    io.WriteCloser
 	stdout   io.ReadCloser
-	stderr   *bytes.Buffer
+	stderr   *lockedBuffer
 	mu       sync.Mutex
 	timer    *time.Timer
 	closed   bool
 	timedOut bool
+}
+
+// lockedBuffer holds the command's stderr: exec copies into it on a goroutine of its own while a failing Read or
+// Write reads it for its words.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 // wrap turns a failure after the deadline into os.ErrDeadlineExceeded, else adds what ssh said.
@@ -360,8 +388,14 @@ func (a sshAddr) Network() string { return "ssh" }
 func (a sshAddr) String() string  { return string(a) }
 
 // AttachCmd builds the remote `herdr terminal attach` to run under a local PTY; ssh -tt carries window-size changes.
-func (c *Conn) AttachCmd(herdrBin, terminalID string) *exec.Cmd {
-	cmd := c.cmd("-tt", c.Host, script.Quote(herdrBin)+" terminal attach "+script.Quote(terminalID))
+// The machine's herdr socket travels as HERDR_SOCKET_PATH, as the local attach's does, so a herdr listening off its
+// default path is reached; through sh, since the remote login shell may be anything.
+func (c *Conn) AttachCmd(herdrBin, socket, terminalID string) *exec.Cmd {
+	remote := "exec " + script.Quote(herdrBin) + " terminal attach " + script.Quote(terminalID)
+	if socket != "" {
+		remote = "HERDR_SOCKET=" + script.Quote(socket) + " HERDR_SOCKET_PATH=" + script.Quote(socket) + " " + remote
+	}
+	cmd := c.cmd("-tt", c.Host, "sh -c "+script.Quote(remote))
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 	return cmd
 }

@@ -86,12 +86,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Status*`/`UI*` constants with `UIStatus(status, hasAgent)` as the one
   mapping.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
-  never prompt), with socket and port forwarding (`-O forward -L`), the
-  reverse forward of this remuda's port (`ForwardBack`: `-O forward -R
-  127.0.0.1:<remote>:127.0.0.1:<ours>`, a forward of that port left on a
-  reused master cancelled first), remote exec (`RunWithInput` for a secret
-  that must not travel on a command line), and the `ssh -tt … herdr
-  terminal attach` command builder. remuda implements no SSH itself.
+  never prompt), with socket and port forwarding (`-O forward -L`; a
+  socket forward the master already holds is cancelled first, since
+  asked for the same one again the master keeps its listener and binds
+  nothing, so the file unlinked before the ask would be gone for good),
+  the reverse forward of this remuda's port (`ForwardBack`: `-O forward
+  -R 127.0.0.1:<remote>:127.0.0.1:<ours>`, a forward of that port left
+  on a reused master cancelled first), remote exec (`RunWithInput` for a
+  secret that must not travel on a command line), and the `ssh -tt … sh
+  -c 'HERDR_SOCKET_PATH=<the machine's socket> exec herdr terminal
+  attach …'` command builder (`AttachCmd`: the socket as the local attach
+  gets it, through sh since the login shell there may be anything).
+  remuda implements no SSH itself.
 - `internal/machines/` — the multi-PC registry: `manager.go` (the
   registry), `machine.go` (one machine: its state, the ssh master, the
   herdr client and attach manager, the peer, port forwards), `herdr.go`
