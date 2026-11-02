@@ -2234,7 +2234,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Settings…, Quit), `Badge` (the Dock count), `AlertSocket` (the app as
   a push device: `POST /api/push/socket` then `/ws/alerts`, reconnect
   1 s → 30 s), `Notifier` (`UNUserNotificationCenter`: a category per
-  action set, Esc → `/api/keys`, a choice → `/api/question/answer`, else
+  set of buttons and their words, so a question's buttons read its own
+  choices, the newest 32 kept, Esc → `/api/keys`, a choice → `/api/question/answer`, else
   the window on the pane; refused outside a bundle), `Hotkey` (Carbon
   `RegisterEventHotKey`, `opt+cmd+r` by default; the one before is let
   go before the next registers, a refusal said in Settings), `Settings` (the
