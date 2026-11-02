@@ -2025,7 +2025,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   wears "Viewing only" and no search, Changes is shut, the terminal lens
   is the Wall's screen view (`features/terminal/Screen.tsx`, no attach),
   the chat and the tiles have no composer, keys or question buttons, the
-  tab strip no + or ×, the sidebar no menus; `Shell` registers no push and
+  tab strip no + or ×, the sidebar no menus and its ⓘ the vitals alone —
+  no update, Resume, read-again or All updates, `concerns(…, viewOnly)`
+  leaves the updates off; `Shell` registers no push and
   syncs no prefs for a viewer. Settings › Devices ends with **Viewer
   links** (`features/settings/ViewerKeys.tsx`, `viewerLinks.ts` tested):
   make one under a name, Copy the link shown once, Revoke. **The door** (`door.go`): `EnsureDoor(dir,
