@@ -1528,7 +1528,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `schedules.json` so a restart still watches it) and `Store.OnStatus`
   hears every `events.PaneStatus`: `done`, or `idle` after the pane was
   seen `working`, takes the tab down — the workspace when it was made
-  for the run — through `Close`, off the watcher's goroutine, and notes
+  for the run — through `Close`, off the watcher's goroutine (the place
+  is let go of as the close is dispatched, so a further change of the
+  pane before it lands closes and pushes nothing twice), and notes
   "answered: <first line of the last answer>" plus a push "Scout “…”
   answered" (the session file stays, so the conversation is still found
   by the search); `blocked` never closes (the person decides); a pane
