@@ -464,15 +464,15 @@ function scanCode(t: string, lang: Lang, out: Token[]) {
     if (wasLineStart && lang.makeTargets && t[i] !== "\t") {
       const line = t.slice(i, lineEnd(i));
       const variable = line.match(/^([A-Za-z0-9_.-]+)\s*(:=|::=|\?=|\+=|!=|=)/);
-      const target = line.match(/^([A-Za-z0-9_./%$()@<^*-][A-Za-z0-9_./%$()@<^* -]*?)\s*:(?![=])/);
+      const target = makeTarget(line);
       if (variable) {
         emit("key", variable[1]!);
         i += variable[1]!.length;
         continue;
       }
       if (target) {
-        emit("function", target[1]!);
-        i += target[1]!.length;
+        emit("function", target);
+        i += target.length;
         continue;
       }
     }
@@ -748,6 +748,20 @@ function scanCode(t: string, lang: Lang, out: Token[]) {
   }
 }
 
+const MAKE_TARGET_FIRST = /^[A-Za-z0-9_./%$()@<^*-]/;
+const MAKE_TARGET_REST = /^[A-Za-z0-9_./%$()@<^* -]*$/;
+
+// makeTarget is the target a make line opens with — the words before its first colon, unless that colon is := — or ""
+// for none. One pass: the lazy regex it replaced cost a long run of spaces its square.
+export function makeTarget(line: string): string {
+  const colon = line.indexOf(":");
+  if (colon < 1 || line[colon + 1] === "=") return "";
+  let end = colon;
+  while (end > 1 && /\s/.test(line[end - 1]!)) end--;
+  const name = line.slice(0, end);
+  return MAKE_TARGET_FIRST.test(name) && MAKE_TARGET_REST.test(name.slice(1)) ? name : "";
+}
+
 // regexMayStart says whether a / here opens a regex rather than divides: after an operator, an opening bracket, a keyword or nothing
 function regexMayStart(lastKind: TokenKind | "start", lastText: string): boolean {
   if (lastKind === "start" || lastKind === "operator" || lastKind === "keyword") return true;
@@ -759,7 +773,36 @@ function regexMayStart(lastKind: TokenKind | "start", lastText: string): boolean
 // ---- yaml ----
 
 const YAML_CONSTANTS = new Set(["true", "false", "null", "yes", "no", "on", "off", "~", "True", "False", "Null", "Yes", "No", "On", "Off", "TRUE", "FALSE", "NULL"]);
-const YAML_KEY = /^("(?:[^"\\]|\\.)*"|'[^']*'|[^\s#"'{}[\],&*!|>%@`-][^#:]*?) *:(?= |$)/;
+const YAML_PLAIN_NOT_FIRST = "#\"'{}[],&*!|>%@`-";
+
+// yamlKeyAt is the length of the mapping key at k — a quoted string, or a plain scalar to its first colon — when spaces and
+// a colon follow it and then a space or the line's end, the key ending by upTo; 0 when there is none. One pass bounded by
+// upTo and the spaces after it: the regex it replaced, run on the rest of the line at every scalar of a long flow
+// sequence, cost the line's square (five seconds for a 150 KB one).
+export function yamlKeyAt(line: string, k: number, upTo = line.length): number {
+  const n = line.length;
+  const first = line[k];
+  if (first === undefined) return 0;
+  let end: number;
+  if (first === '"' || first === "'") {
+    let j = k + 1;
+    while (j < upTo && line[j] !== first) j += first === '"' && line[j] === "\\" ? 2 : 1;
+    if (j >= upTo) return 0;
+    end = j + 1;
+  } else {
+    if (/\s/.test(first) || YAML_PLAIN_NOT_FIRST.includes(first)) return 0;
+    let colon = k + 1;
+    while (colon < n && line[colon] !== ":" && line[colon] !== "#" && (colon < upTo || line[colon] === " ")) colon++;
+    if (line[colon] !== ":") return 0;
+    end = colon;
+    while (end > k + 1 && line[end - 1] === " ") end--;
+  }
+  if (end > upTo) return 0;
+  let colon = end;
+  while (line[colon] === " ") colon++;
+  if (line[colon] !== ":") return 0;
+  return colon + 1 === n || line[colon + 1] === " " ? end - k : 0;
+}
 const YAML_NUMBER = /^[-+]?(\d[\d_]*(\.\d+)?([eE][-+]?\d+)?|0x[\da-fA-F]+|\.inf|\.nan)$/;
 
 function scanYaml(t: string, out: Token[]) {
@@ -791,10 +834,10 @@ function scanYaml(t: string, out: Token[]) {
       push(out, "punct", line.slice(k, k + 3));
       k += 3;
     }
-    const key = line.slice(k).match(YAML_KEY);
-    if (key) {
-      push(out, "key", key[1]!);
-      k += key[1]!.length;
+    const keyLength = yamlKeyAt(line, k);
+    if (keyLength) {
+      push(out, "key", line.slice(k, k + keyLength));
+      k += keyLength;
       const colon = line.indexOf(":", k);
       push(out, "plain", line.slice(k, colon));
       push(out, "punct", ":");
@@ -841,10 +884,10 @@ function scanYaml(t: string, out: Token[]) {
       let m = k;
       while (m < line.length && !" ,[]{}".includes(line[m]!) && !(line[m] === "#" && line[m - 1] === " ")) m++;
       const scalar = line.slice(k, m);
-      const inner = line.slice(k).match(YAML_KEY); // a key inside a flow mapping, {a: 1}
-      if (inner && inner[1]!.length < scalar.length + 1 && line[k + inner[1]!.length] !== undefined && line.slice(k + inner[1]!.length).trimStart().startsWith(":")) {
-        push(out, "key", inner[1]!);
-        k += inner[1]!.length;
+      const inner = yamlKeyAt(line, k, m); // a key inside a flow mapping, {a: 1}, no longer than the scalar
+      if (inner) {
+        push(out, "key", line.slice(k, k + inner));
+        k += inner;
         continue;
       }
       push(out, YAML_CONSTANTS.has(scalar) ? "constant" : YAML_NUMBER.test(scalar) ? "number" : "plain", scalar);
@@ -1050,14 +1093,21 @@ function scanMarkdown(t: string, out: Token[]) {
   flushFence();
 }
 
+// scanInline reads a line's code spans and links. Each search ahead remembers what it found, so a line of ten thousand
+// unclosed "[" or of long runs of backticks reads in one pass rather than once from every one of them.
 function scanInline(line: string, out: Token[]) {
   const n = line.length;
   let i = 0;
+  let noRunFrom = Infinity; // no run of this many backticks or more lies ahead
+  let link = -2; // the "](" the last search found, -1 when none lies ahead, -2 before any search
+  let parenFrom = -1; // the "](" the last search for ")" started at, and what it found
+  let paren = -1;
   while (i < n) {
     if (line[i] === "`") {
       let ticks = 0;
       while (line[i + ticks] === "`") ticks++;
-      const close = line.indexOf("`".repeat(ticks), i + ticks);
+      const close = ticks >= noRunFrom ? -1 : line.indexOf("`".repeat(ticks), i + ticks);
+      if (close < 0) noRunFrom = Math.min(noRunFrom, ticks);
       if (close > 0) {
         push(out, "string", line.slice(i, close + ticks));
         i = close + ticks;
@@ -1068,8 +1118,13 @@ function scanInline(line: string, out: Token[]) {
       continue;
     }
     if (line[i] === "[") {
-      const close = line.indexOf("](", i);
-      const end = close > 0 ? line.indexOf(")", close) : -1;
+      if (link === -2 || (link >= 0 && link < i)) link = line.indexOf("](", i);
+      const close = link;
+      if (close > 0 && parenFrom !== close) {
+        parenFrom = close;
+        paren = line.indexOf(")", close);
+      }
+      const end = close > 0 ? paren : -1;
       if (close > 0 && end > 0) {
         push(out, "plain", line.slice(i, close + 2));
         push(out, "attr", line.slice(close + 2, end));

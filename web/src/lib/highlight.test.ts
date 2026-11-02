@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { highlightLines, langOf, MAX_HIGHLIGHT, splitTokens, tokenize, type Token, type TokenKind } from "./highlight";
+import { highlightLines, langOf, makeTarget, MAX_HIGHLIGHT, splitTokens, tokenize, yamlKeyAt, type Token, type TokenKind } from "./highlight";
 
 // kinds lists the kind of every token whose text holds the given piece, so a test reads "this word is a keyword"
 const kindOf = (tokens: Token[], text: string): TokenKind | undefined =>
@@ -243,6 +243,40 @@ describe("tokenize", () => {
     const inline = tokenize("```npm test``` first\n# Later", "markdown");
     expect(kindOf(inline, "```npm test```")).toBe("string");
     expect(kindOf(inline, "# Later")).toBe("keyword");
+  });
+  it("reads a yaml key and a make target as the regexes they replaced did, on every short line and every start", () => {
+    const OLD_YAML_KEY = /^("(?:[^"\\]|\\.)*"|'[^']*'|[^\s#"'{}[\],&*!|>%@`-][^#:]*?) *:(?= |$)/;
+    const OLD_MAKE_TARGET = /^([A-Za-z0-9_./%$()@<^*-][A-Za-z0-9_./%$()@<^* -]*?)\s*:(?![=])/;
+    const alphabet = ["a", "b", " ", ":", "#", '"', "'", "\\", ",", "[", "{", "-", "\t", "="];
+    let seed = 7;
+    const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    for (let round = 0; round < 20000; round++) {
+      const length = 1 + Math.floor(random() * 10);
+      const line = Array.from({ length }, () => alphabet[Math.floor(random() * alphabet.length)]).join("");
+      expect(makeTarget(line), JSON.stringify(line)).toBe(line.match(OLD_MAKE_TARGET)?.[1] ?? "");
+      for (let k = 0; k < line.length; k++) {
+        const whole = line.slice(k).match(OLD_YAML_KEY)?.[1]?.length ?? 0;
+        expect(yamlKeyAt(line, k), `${JSON.stringify(line)} at ${k}`).toBe(whole);
+        const upTo = k + 1 + Math.floor(random() * (line.length - k));
+        expect(yamlKeyAt(line, k, upTo), `${JSON.stringify(line)} at ${k} up to ${upTo}`).toBe(whole <= upTo - k ? whole : 0);
+      }
+    }
+  });
+  it("reads a long yaml flow sequence, a make line of spaces and a markdown line of brackets in linear time", () => {
+    const cases = [
+      ["key: [" + "a, ".repeat(50_000) + "]", "yaml"],
+      ["key: " + "word ".repeat(30_000), "yaml"],
+      ["a" + " ".repeat(100_000) + "b: c\n", "make"],
+      ["[".repeat(190_000), "markdown"],
+      ["[a](" + "[".repeat(190_000), "markdown"],
+    ] as const;
+    for (const [text, lang] of cases) {
+      const started = performance.now();
+      expect(joined(tokenize(text, lang))).toBe(text);
+      expect(performance.now() - started, `${lang} ${text.slice(0, 12)}…`).toBeLessThan(300);
+    }
+    expect(kindOf(tokenize("key: {a : 1, 'b': 2}", "yaml"), "a")).toBe("key");
+    expect(kindOf(tokenize("[x](https://a.b) and [y](https://c.d)", "markdown"), "https://c.d")).toBe("attr");
   });
   it("finishes a 200 KB single-line token in linear time", () => {
     const line = "x".repeat(199_000) + " = 1";

@@ -748,7 +748,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   stay plain; `highlightLines` cuts the tokens at newlines so a block
   comment keeps its kind on every line; `splitTokens` cuts a line's
   tokens at two offsets for a mark laid over them; linear in the text's
-  length — no regex runs from inside a token — and a text past
+  length — no regex runs from inside a token or over the rest of a line
+  at every scalar: a yaml key (`yamlKeyAt`) and a make target
+  (`makeTarget`) are one pass each, fuzzed against the regexes they
+  replaced, and the markdown line's searches ahead for `](` and a run of
+  backticks remember what they found (a 150 KB yaml flow sequence took
+  five seconds) — and a text past
   `MAX_HIGHLIGHT` (200 KB) comes back plain; the colours are
   `.hl-<kind>` at the end of styles.css over the flavour's `--ctp-*`,
   Catppuccin's own mapping: keywords mauve, strings green, numbers and
