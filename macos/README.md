@@ -60,7 +60,9 @@ answer and asks again when it was never answered.
 - **Closing the window** hides it; the app stays in the menu bar. Quit is
   in the menu.
 - A file the page saves (Export as Markdown) lands in `~/Downloads`.
-  Links to other sites open in your browser.
+  Links to other sites open in your browser, and so does a tab the page
+  opens on anything of remuda's but the page itself — Code's "Open the
+  editor in its own tab" — since the window has no way back from it.
 
 ## Not here
 

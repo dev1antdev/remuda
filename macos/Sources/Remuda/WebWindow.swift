@@ -89,8 +89,14 @@ final class WebWindow: NSObject {
         onBridge?(message, body)
     }
 
+    // isOurs says whether the address is the server's; WebKit hands the host over lowercased, the pairing link may not be.
     private func isOurs(_ url: URL) -> Bool {
-        url.host == server.base.host && (url.port ?? defaultPort(url.scheme)) == (server.base.port ?? defaultPort(server.base.scheme))
+        url.host?.lowercased() == server.base.host?.lowercased() && (url.port ?? defaultPort(url.scheme)) == (server.base.port ?? defaultPort(server.base.scheme))
+    }
+
+    // isPage says whether the address is the page itself rather than another of the server's routes (the editor, a file).
+    private func isPage(_ url: URL) -> Bool {
+        isOurs(url) && (url.path.isEmpty || url.path == "/")
     }
 
     private func defaultPort(_ scheme: String?) -> Int { scheme == "https" ? 443 : 80 }
@@ -166,10 +172,11 @@ extension WebWindow: WKNavigationDelegate, WKDownloadDelegate {
 }
 
 extension WebWindow: WKUIDelegate {
-    // createWebViewWith handles window.open: the page's own address stays here, anything else goes to the browser.
+    // createWebViewWith handles window.open: the page itself stays here, anything else — the editor's own tab too — goes to
+    // the browser, since this window has no way back from a page that is not remuda's.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let url = action.request.url else { return nil }
-        if isOurs(url) {
+        if isPage(url) {
             webView.load(action.request)
         } else {
             NSWorkspace.shared.open(url)

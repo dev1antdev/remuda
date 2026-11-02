@@ -2223,7 +2223,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `bin/remuda.app`, the icon from `web/public/icons`, an ad-hoc
   signature): `WebWindow` (the one NSWindow, a `WKWebView` on the page
   with the persistent data store so the sign-in cookie stays; links to
-  other hosts go to the browser, a file the page saves goes to
+  other hosts go to the browser — the host compared case-blind, WebKit
+  lowercases it — and so does a `window.open` of any of the server's
+  routes but the page itself (the editor's own tab), a file the page saves goes to
   Downloads through `WKDownloadDelegate`; closing hides), `Server` (the
   address and the token: this Mac's own from `~/Library/Application
   Support/remuda/token`, a paired one's from the login keychain under
