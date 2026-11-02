@@ -2226,7 +2226,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   other hosts go to the browser — the host compared case-blind, WebKit
   lowercases it — and so does a `window.open` of any of the server's
   routes but the page itself (the editor's own tab), a file the page saves goes to
-  Downloads through `WKDownloadDelegate`; the page loaded again 1 s →
+  Downloads through `WKDownloadDelegate`, a file input gets an
+  `NSOpenPanel` (`runOpenPanelWith`); the page loaded again 1 s →
   30 s apart while the server cannot be reached or after the web
   process died, the window having no reload of its own; closing hides), `Server` (the
   address and the token: this Mac's own from `~/Library/Application

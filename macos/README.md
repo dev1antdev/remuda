@@ -64,6 +64,7 @@ answer and asks again when it was never answered.
   says so when the system refuses it because another app holds it.
 - **Closing the window** hides it; the app stays in the menu bar. Quit is
   in the menu.
+- The composer's attach button opens the system's file panel.
 - A file the page saves (Export as Markdown) lands in `~/Downloads`.
   Links to other sites open in your browser, and so does a tab the page
   opens on anything of remuda's but the page itself — Code's "Open the
