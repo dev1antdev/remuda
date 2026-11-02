@@ -207,7 +207,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Parse` drops from the parent file (`parseRecords(r, keepSidechain)`). `Turn.Answer`,
   `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with; a tool
   result that is a picture alone reads `[image]` (`resultText`), so the
-  call counts as answered and the chat draws the picture under it; a
+  call counts as answered and the chat draws the picture under it, and
+  one of `tool_reference` blocks alone (a ToolSearch's) reads as the
+  tools' names, else the call would read as running for good; a
   tool part carries `tool_id` (the tool_use id), `at` (when it was
   called) and `took`, the seconds to its result (`secondsBetween`), 0
   while it runs. `Plan(turns)` (plan.go, tested) is **the agent's plan**,

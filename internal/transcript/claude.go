@@ -343,6 +343,7 @@ type contentBlock struct {
 	ToolUseID string          `json:"tool_use_id"`
 	Content   json.RawMessage `json:"content"` // tool_result payload
 	IsError   bool            `json:"is_error"`
+	ToolName  string          `json:"tool_name"` // a tool_reference block's: the tool a ToolSearch result points to
 }
 
 const tailWindow = 16 * 1024 * 1024
@@ -640,13 +641,13 @@ func plainUserText(raw json.RawMessage) string {
 	return ""
 }
 
-// resultText flattens a tool_result content (string or blocks) to text; a picture alone reads "[image]", so the call
-// still counts as answered.
+// resultText flattens a tool_result content (string or blocks) to text; a picture alone reads "[image]" and a
+// ToolSearch result, tool_reference blocks alone, reads as the tools' names, so the call still counts as answered.
 func resultText(raw json.RawMessage) string {
 	if s := stringContent(raw); s != "" {
 		return s
 	}
-	var parts []string
+	var parts, tools []string
 	pictures := 0
 	for _, b := range blocks(raw) {
 		switch {
@@ -654,10 +655,20 @@ func resultText(raw json.RawMessage) string {
 			parts = append(parts, b.Text)
 		case b.Type == "image":
 			pictures++
+		case b.Type == "tool_reference":
+			if b.ToolName == "" {
+				b.ToolName = "[tool]"
+			}
+			tools = append(tools, b.ToolName)
 		}
 	}
-	if len(parts) == 0 && pictures > 0 {
-		return "[image]"
+	if len(parts) == 0 {
+		switch {
+		case len(tools) > 0:
+			return strings.Join(tools, ", ")
+		case pictures > 0:
+			return "[image]"
+		}
 	}
 	return strings.Join(parts, "\n")
 }
