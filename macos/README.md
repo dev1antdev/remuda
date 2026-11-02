@@ -43,7 +43,8 @@ answer and asks again when it was never answered.
   for a finish nobody looked at — and the count beside it. The menu lists
   those agents with the first line of what they said; a click opens the
   pane's chat in the window. Then "N working · M idle", Open remuda
-  (⌥⌘R), Wall, Tasks, Standup, Settings…, Quit.
+  (with the hotkey beside it, ⌥⌘R unless Settings says otherwise), Wall,
+  Tasks, Standup, Settings…, Quit.
 - **The Dock badge** carries the same count.
 - **Notifications** are the alerts the phone would get — a question after
   10 s, a finish after a minute, a watchdog note, a digest, a budget — with
@@ -52,7 +53,8 @@ answer and asks again when it was never answered.
   then `/ws/alerts`), so the alert settings and quiet hours in the page's
   alerts panel apply to it like to a phone.
 - **The hotkey** ⌥⌘R shows and hides the window from any app; another
-  combination goes into Settings… as `ctrl+opt+r` or `⌃⌥R`.
+  combination goes into Settings… as `ctrl+opt+r` or `⌃⌥R`, and Settings
+  says so when the system refuses it because another app holds it.
 - **Closing the window** hides it; the app stays in the menu bar. Quit is
   in the menu.
 - A file the page saves (Export as Markdown) lands in `~/Downloads`.

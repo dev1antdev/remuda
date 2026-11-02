@@ -2230,13 +2230,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   "remuda"; the page is loaded as `/?token=…` once per launch, the app's
   own calls carry the bearer), `Bridge` (the message types), `StatusItem`
   (the menu bar item: the mark with a tone dot and the count, the menu
-  of agents that need the person, Open ⌥⌘R, Wall, Tasks, Standup,
+  of agents that need the person, Open with the hotkey set, Wall, Tasks, Standup,
   Settings…, Quit), `Badge` (the Dock count), `AlertSocket` (the app as
   a push device: `POST /api/push/socket` then `/ws/alerts`, reconnect
   1 s → 30 s), `Notifier` (`UNUserNotificationCenter`: a category per
   action set, Esc → `/api/keys`, a choice → `/api/question/answer`, else
   the window on the pane; refused outside a bundle), `Hotkey` (Carbon
-  `RegisterEventHotKey`, `opt+cmd+r` by default), `Settings` (the
+  `RegisterEventHotKey`, `opt+cmd+r` by default; the one before is let
+  go before the next registers, a refusal said in Settings), `Settings` (the
   server or pairing link, the hotkey, launch at login through
   `SMAppService`, the notification permission), `Probe` (`--probe`: the
   page off screen, every bridge message and alert frame as a JSON line,

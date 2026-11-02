@@ -8,7 +8,8 @@ final class StatusItem: NSObject {
     private var working = 0
     private var idle = 0
     private var heard = false
-    var hotkeyLabel = "⌥⌘R"
+    // hotkey is the combination that shows the window, written beside "Open remuda" as the menu's own key equivalent.
+    var hotkey: (key: String, mask: NSEvent.ModifierFlags) = ("r", [.option, .command]) { didSet { rebuild() } }
     var onSelect: ((MenuRow) -> Void)?
     var onOpen: (() -> Void)?
     var onMode: ((String) -> Void)?
@@ -55,8 +56,8 @@ final class StatusItem: NSObject {
             menu.addItem(disabled("\(working) working · \(idle) idle"))
         }
         menu.addItem(.separator())
-        let open = NSMenuItem(title: "Open remuda", action: #selector(openPage), keyEquivalent: "r")
-        open.keyEquivalentModifierMask = [.option, .command]
+        let open = NSMenuItem(title: "Open remuda", action: #selector(openPage), keyEquivalent: hotkey.key)
+        open.keyEquivalentModifierMask = hotkey.mask
         open.target = self
         menu.addItem(open)
         for (title, selector) in [("Wall", #selector(wall)), ("Tasks", #selector(tasks)), ("Standup", #selector(standup))] {
