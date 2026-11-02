@@ -1638,7 +1638,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   reading; judged on `percentOf`, the whole percent the page's words
   show, so three $0.70 against $2.10 is crossed, not 99.99… %) per
   period, noted in `alerted` on the budget; an edit of the
-  scope, limit or period starts the period afresh. UI:
+  scope, limit or period starts the period afresh, any other keeps the
+  notes (`keep` checks and swaps the list under one lock, so a note a
+  reading makes meanwhile is carried, not lost). UI:
   `features/usage/budgets.ts` (pure, tested: `budgetsFor` the budgets
   covering a pane, `tightest`, `budgetTone` none / dim 50% / amber 80% /
   red at the limit, `graver`, `budgetWords`, `scopeWords`), the Budgets

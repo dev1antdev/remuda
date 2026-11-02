@@ -1,6 +1,7 @@
 package budget
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -235,6 +236,37 @@ func TestThresholdsReadTheWholePercentTheWordsShow(t *testing.T) {
 	}
 	if titles["budget|eighty"] != "Budget at 80 %: $2.40 of $3.00 today" {
 		t.Errorf("$2.40 of $3: %q", titles["budget|eighty"])
+	}
+}
+
+// A reading's alert can land while Replace checks the list it was given: the threshold it noted must survive the swap,
+// or it pushes again at the next reading. The long list widens the moment the check takes; each round races the two.
+func TestAnAlertNotedDuringReplaceIsKept(t *testing.T) {
+	reports := map[string]*usage.Report{"local": report(9)}
+	eighty := Budget{ID: "a", Limit: 10, Period: "day"}
+	list := []Budget{eighty}
+	for i := 0; i < 2000; i++ {
+		list = append(list, Budget{ID: fmt.Sprintf("filler-%d", i), Limit: 1e9, Period: "day"})
+	}
+	for round := 0; round < 10; round++ {
+		s, n, now := fakeSpend(t, reports)
+		s.mu.Lock()
+		s.all = []Budget{eighty}
+		s.spends["day"] = &spend{start: PeriodStart("day", *now, s.Loc), at: *now, reports: reports, errors: map[string]string{}}
+		s.mu.Unlock()
+		alerted := make(chan struct{})
+		go func() {
+			defer close(alerted)
+			s.alert(nil, *now)
+		}()
+		if _, err := s.Replace(list); err != nil {
+			t.Fatal(err)
+		}
+		<-alerted
+		s.Wait()
+		if got := len(n.all()); got != 1 {
+			t.Fatalf("round %d: the 80 %% alert went %d times", round, got)
+		}
 	}
 }
 

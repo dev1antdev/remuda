@@ -125,24 +125,33 @@ func copyOf(list []Budget) []Budget {
 // Replace keeps the whole list as given, checked and trimmed. A budget whose scope, limit and period did not change
 // keeps its alert state; one that did starts the period afresh, so a raised limit can be crossed again.
 func (s *Service) Replace(list []Budget) ([]Status, error) {
+	if err := s.keep(list); err != nil {
+		return nil, err
+	}
+	s.Refresh()
+	return s.Status(), nil
+}
+
+// keep checks the list and swaps it in under one lock, so an alert a reading notes meanwhile is carried over, not lost.
+func (s *Service) keep(list []Budget) error {
 	out := make([]Budget, 0, len(list))
 	seen := map[string]bool{}
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	before := map[string]Budget{}
 	for _, b := range s.all {
 		before[b.ID] = b
 	}
-	s.mu.Unlock()
 	for _, b := range list {
 		b.Machine, b.Dir, b.Note, b.Period = strings.TrimSpace(b.Machine), strings.TrimSpace(b.Dir), strings.TrimSpace(b.Note), strings.TrimSpace(b.Period)
 		if !validPeriod(b.Period) {
-			return nil, fmt.Errorf("a budget's period must be day, week or month, not %q", b.Period)
+			return fmt.Errorf("a budget's period must be day, week or month, not %q", b.Period)
 		}
 		if !(b.Limit > 0) || math.IsInf(b.Limit, 0) {
-			return nil, errors.New("a budget's limit must be above zero")
+			return errors.New("a budget's limit must be above zero")
 		}
 		if b.Dir != "" && b.Machine == "" {
-			return nil, errors.New("a budget on a folder names its machine too")
+			return errors.New("a budget on a folder names its machine too")
 		}
 		for b.ID == "" || seen[b.ID] {
 			b.ID = state.NewID()
@@ -154,15 +163,11 @@ func (s *Service) Replace(list []Budget) ([]Status, error) {
 		}
 		out = append(out, b)
 	}
-	s.mu.Lock()
 	if err := state.SaveJSON(s.dir, file, out); err != nil {
-		s.mu.Unlock()
-		return nil, err
+		return err
 	}
 	s.all = out
-	s.mu.Unlock()
-	s.Refresh()
-	return s.Status(), nil
+	return nil
 }
 
 func validPeriod(p string) bool {
