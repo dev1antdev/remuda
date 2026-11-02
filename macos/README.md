@@ -52,7 +52,8 @@ answer and asks again when it was never answered.
   their buttons: *Open*, *Send Esc*, the question's own two choices. The
   app is one more device of remuda's push service (`POST /api/push/socket`,
   then `/ws/alerts`), so the alert settings and quiet hours in the page's
-  alerts panel apply to it like to a phone.
+  alerts panel apply to it like to a phone; it is one device per remuda,
+  found again with its settings when you switch back to that one.
 - **The hotkey** ⌥⌘R shows and hides the window from any app; another
   combination goes into Settings… as `ctrl+opt+r` or `⌃⌥R`, and Settings
   says so when the system refuses it because another app holds it.

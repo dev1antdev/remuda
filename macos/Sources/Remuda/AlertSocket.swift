@@ -23,17 +23,24 @@ final class AlertSocket {
         self.remember = remember
     }
 
-    // endpoint is the device's name on the server.
+    // endpoint is the device's name on the server, kept per server so going back to one finds its device and prefs again;
+    // the single key of before is the fallback until the server's own is written (empty once a 404 cleared it).
     var endpoint: String? {
-        get { remember ? UserDefaults.standard.string(forKey: AlertSocket.endpointKey) : minted }
+        get {
+            guard remember else { return minted }
+            if let own = UserDefaults.standard.string(forKey: serverEndpointKey) { return own.isEmpty ? nil : own }
+            return UserDefaults.standard.string(forKey: AlertSocket.endpointKey)
+        }
         set {
             if remember {
-                UserDefaults.standard.set(newValue, forKey: AlertSocket.endpointKey)
+                UserDefaults.standard.set(newValue ?? "", forKey: serverEndpointKey)
             } else {
                 minted = newValue
             }
         }
     }
+
+    private var serverEndpointKey: String { AlertSocket.endpointKey + "." + server.base.absoluteString }
 
     func start() {
         stopped = false
