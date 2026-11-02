@@ -21,4 +21,15 @@ describe("cron presets", () => {
     expect(parseCron("*/5 * * * *")).toEqual({ preset: "custom", hh: 9, mm: 0 });
     expect(parseCron("0 22 * * 0,6")).toEqual({ preset: "custom", hh: 22, mm: 0 });
   });
+  it("keep a weekday restriction an hourly cron carries, instead of reading it as every hour of every day", () => {
+    expect(parseCron("5 * * * 1-5").preset).toBe("custom");
+    expect(parseCron("0 */3 * * 1-5").preset).toBe("custom");
+  });
+  it("round-trip every preset through its own cron", () => {
+    for (const preset of ["daily", "weekdays", "hourly", "every3h"] as const) {
+      const cron = cronFor(preset, 14, 45)!;
+      expect(parseCron(cron).preset).toBe(preset);
+      expect(cronFor(parseCron(cron).preset, parseCron(cron).hh, parseCron(cron).mm)).toBe(cron);
+    }
+  });
 });
