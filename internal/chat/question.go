@@ -7,9 +7,37 @@ import (
 )
 
 // Question is what an agent asks on its screen while it waits: the dialog's words and the choices it offers, the cursor on one.
+// A multi-select takes several: Enter ticks the row under the cursor and a Submit row under the choices sends them.
 type Question struct {
 	Text    string   `json:"text"`
 	Options []Option `json:"options"`
+	Multi   bool     `json:"multi,omitempty"`
+}
+
+// Choices are the words of the choices one press answers the dialog with: none for a multi-select.
+func (q Question) Choices() []string {
+	if q.Multi {
+		return nil
+	}
+	out := make([]string, len(q.Options))
+	for i, o := range q.Options {
+		out[i] = o.Label
+	}
+	return out
+}
+
+// tickBox is the box Claude Code draws at the head of a multi-select's every row, "[✔]" once ticked ("[√]" or "[×]" where
+// the terminal's font lacks the tick).
+var tickBox = regexp.MustCompile(`^\[[ ✔√×]\]`)
+
+// takesSeveral says every choice carries a multi-select's box.
+func takesSeveral(options []Option) bool {
+	for _, o := range options {
+		if !tickBox.MatchString(o.Label) {
+			return false
+		}
+	}
+	return len(options) > 0
 }
 
 // Option is one choice of a dialog: its number when the dialog shows one, else its place in the list.
@@ -103,7 +131,7 @@ func ParseQuestion(screen string) (Question, bool) {
 	if len(options) < 2 || !consecutive(options) {
 		return Question{}, false
 	}
-	return Question{Text: wordsAbove(lines, top, frame), Options: options}, true
+	return Question{Text: wordsAbove(lines, top, frame), Options: options, Multi: takesSeveral(options)}, true
 }
 
 // frameTop is the row of the rule a dialog drawn with its top border alone sits under, as Claude Code 2.1 draws its
