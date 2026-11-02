@@ -55,6 +55,18 @@ describe("pluralIndex", () => {
     expect([0, 5, 11, 12, 14, 19, 20, 25, 111].map((n) => pluralIndex(n, "ru"))).toEqual([2, 2, 2, 2, 2, 2, 2, 2, 2]);
     expect(pluralIndex(-3, "ru")).toBe(1);
   });
+  it("follows CLDR for every count, a fraction too: Russian's other is written as the few form (1,5 файла), English's as the plural", () => {
+    const forms = { ru: { one: 0, few: 1, many: 2, other: 1 }, en: { one: 0, other: 1 } } as const;
+    const counts = [...Array.from({ length: 230 }, (_, i) => i), 0.5, 1.5, 2.5, 5.25, 11.1, 21.5, 101.5, 0.1, -1.5, -21];
+    for (const language of ["ru", "en"] as const) {
+      const rules = new Intl.PluralRules(language);
+      for (const n of counts) expect(pluralIndex(n, language), `${language} ${n}`).toBe((forms[language] as Record<string, number>)[rules.select(n)]);
+    }
+    setLang("ru");
+    expect(tn(1.5, "{n} file", "{n} files")).toBe("1.5 файла");
+    setLang("en");
+    expect(tn(1.5, "{n} file", "{n} files")).toBe("1.5 files");
+  });
 });
 
 describe("the language", () => {

@@ -727,7 +727,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   entry, so a string nobody translated shows no gap; `{name}` slots
   filled from `vars`, `tn(n, one, many)` the counted pair in English and
   the form table under the plural key elsewhere (`text.ts`'s `plural`
-  goes through it), `pluralIndex` the one / few / many rule, `setLang` /
+  goes through it), `pluralIndex` the one / few / many rule by CLDR — a
+  fraction is CLDR's other, the few form in Russian ("1,5 файла") and
+  the plural in English, tested against `Intl.PluralRules` — `setLang` /
   `currentLang` module state read at every call so a pure module's words
   follow too, `locale()` for the Intl formats in `time.ts`, `languageOf`
   resolving the pref `lang` — system / en / ru, on the sync allow-list —
