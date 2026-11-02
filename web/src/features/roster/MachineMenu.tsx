@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { act } from "@/app/act";
 import { actions } from "@/app/store";
 import UpdatesDialog from "@/features/updates/Updates";
+import { copyText } from "@/lib/host";
 import { Icon, Tip, useDismiss } from "@/ui";
 import { setAwake, wakeMachine, type Machine } from "./api";
 import { MacDialog } from "./MacDialog";
@@ -15,7 +16,9 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
   const [updates, setUpdates] = useState(false);
   const [mac, setMac] = useState(false);
-  const wake = () => void act(wakeMachine(m.id).then(({ sent }) => actions.notify(t(wokeWords(m.label, sent), { machine: m.label }))));
+  const wake = () => void act(wakeMachine(m.id).then(({ sent }) => actions.notify(wokeWords(m.label, sent))));
+  // the clipboard the way the rest of the page reaches it: the Clipboard API where the origin is secure, else the fallback
+  const copyHost = (host: string) => void copyText(host).then((ok) => actions.notify(ok ? t("SSH host copied") : t("The SSH host could not be copied"), { brief: true, error: !ok }));
   const close = useCallback(() => setOpen(null), []);
   useDismiss(!!open, close, [".machine-menu", `[data-machine-menu="${CSS.escape(m.id)}"]`]);
   const pick = (fn: () => void) => () => {
@@ -69,7 +72,7 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
             {m.mac && <small className="menu-hint">{m.mac}</small>}
           </button>
           {m.host && (
-            <button type="button" role="menuitem" onClick={pick(() => void navigator.clipboard?.writeText(m.host!))}>
+            <button type="button" role="menuitem" onClick={pick(() => copyHost(m.host!))}>
               <Icon name="copy" size={14} /> {t("Copy SSH host")}
             </button>
           )}

@@ -98,7 +98,7 @@ export default function Sidebar() {
                   <Icon name="chevron-right" size={12} />
                 </span>
               </button>
-              <HealthButton machine={m} latest={latest} serverVersion={serverVersion} />
+              <HealthButton machine={m} latest={latest} serverVersion={serverVersion} viewOnly={viewOnly} />
               {!viewOnly && <Tip text={t("New workspace on {machine}", { machine: m.label })}>
                 <button type="button" className="icon-btn" aria-label={t("New workspace on {machine}", { machine: m.label })} disabled={m.state !== "connected"} onClick={() => actions.openDialog({ kind: "workspace", machineId: m.id })}>
                   <Icon name="plus" size={14} />

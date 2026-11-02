@@ -20,10 +20,11 @@ export const modifierBits = (e: MouseEvent) => (e.shiftKey ? 4 : 0) + (e.altKey 
 export type WheelAcc = { x: number; y: number };
 
 // wheelTicks turns wheel movement into ticks as a native terminal does: the pixels add up in acc, one tick per
-// unit (a cell's height, or two cells' width sideways); a turn the other way starts the count over.
+// unit (a cell's height, or two cells' width sideways); a turn the other way starts the count over, an event that does
+// not move the axis keeps it.
 export function wheelTicks(acc: WheelAcc, delta: number, sideways: boolean, unit: number): number {
   const axis = sideways ? "x" : "y";
-  if (Math.sign(delta) !== Math.sign(acc[axis])) acc[axis] = 0;
+  if (delta !== 0 && Math.sign(delta) !== Math.sign(acc[axis])) acc[axis] = 0;
   acc[axis] += delta;
   const ticks = Math.trunc(acc[axis] / unit);
   acc[axis] -= ticks * unit;

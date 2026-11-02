@@ -52,7 +52,7 @@ export function planCallWords(part: Part): PlanCall {
   switch (part.tool_name) {
     case "TodoWrite": {
       const todos = Array.isArray(input["todos"]) ? (input["todos"] as { status?: string }[]) : [];
-      if (!todos.length) return { words: "Plan", mark: "list" };
+      if (!todos.length) return { words: t("Plan"), mark: "list" };
       const done = todos.filter((todo) => todo.status === "completed").length;
       return { words: tn(todos.length, "Plan: {n} item, {done} done", "Plan: {n} items, {done} done", { done }), mark: "list" };
     }
