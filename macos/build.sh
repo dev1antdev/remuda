@@ -4,12 +4,26 @@
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
-version=$(git -C "$root" describe --tags --always --dirty 2>/dev/null | sed 's/^v//' || echo dev)
+version=$(git -C "$root" describe --tags --always --dirty 2>/dev/null | sed 's/^v//')
+[ -n "$version" ] || version=dev
 build=$(git -C "$root" rev-list --count HEAD 2>/dev/null || echo 1)
 app=$root/bin/remuda.app
+source=$root/web/public/icons/icon-512.png
+if [ ! -f "$source" ]; then
+  echo "the icon is missing: $source (the page's own icon); nothing was built or removed"
+  exit 1
+fi
 
 cd "$here"
-swift build -c release 2>&1 | grep -v '^\[' || true
+log=$(mktemp)
+if ! swift build -c release >"$log" 2>&1; then
+  grep -v '^\[' "$log"
+  rm -f "$log"
+  echo "swift build failed"
+  exit 1
+fi
+grep -v '^\[' "$log" || true
+rm -f "$log"
 test -x .build/release/Remuda || { echo "swift build failed"; exit 1; }
 
 rm -rf "$app"
@@ -20,7 +34,6 @@ printf 'APPL????' > "$app/Contents/PkgInfo"
 
 iconset=$(mktemp -d)/remuda.iconset
 mkdir -p "$iconset"
-source=$root/web/public/icons/icon-512.png
 for size in 16 32 128 256 512; do
   sips -z "$size" "$size" "$source" --out "$iconset/icon_${size}x${size}.png" >/dev/null
 done
@@ -31,6 +44,12 @@ done
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/remuda.icns"
 rm -rf "$(dirname "$iconset")"
 
-codesign --force --sign - "$app" 2>&1 | grep -v 'replacing existing signature' || true
+if ! signed=$(codesign --force --sign - "$app" 2>&1); then
+  printf '%s\n' "$signed"
+  rm -rf "$app"
+  echo "codesign failed; the unsigned bundle was removed"
+  exit 1
+fi
+printf '%s\n' "$signed" | grep -v 'replacing existing signature' || true
 plutil -lint "$app/Contents/Info.plist" >/dev/null
 echo "$app ($version)"

@@ -2275,26 +2275,44 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `macos/` — **the Mac app**, a SwiftPM executable (`swift build`, no
   Xcode, system frameworks only; `macos/build.sh` / `make mac` lays out
   `bin/remuda.app`, the icon from `web/public/icons`, an ad-hoc
-  signature): `WebWindow` (the one NSWindow, a `WKWebView` on the page
+  signature; a failed build, a missing icon or a refused signature
+  stop it with exit 1 and no half-made bundle): `WebWindow` (the one NSWindow, a `WKWebView` on the page
   with the persistent data store so the sign-in cookie stays; links to
-  other hosts go to the browser, a file the page saves goes to
-  Downloads through `WKDownloadDelegate`; closing hides), `Server` (the
+  other hosts go to the browser — the host compared case-blind, WebKit
+  lowercases it — and so does a `window.open` of any of the server's
+  routes but the page itself (the editor's own tab), a file the page saves goes to
+  Downloads through `WKDownloadDelegate`, a file input gets an
+  `NSOpenPanel` (`runOpenPanelWith`); the page loaded again 1 s →
+  30 s apart while the server cannot be reached or after the web
+  process died, the window having no reload of its own; closing hides), `Server` (the
   address and the token: this Mac's own from `~/Library/Application
   Support/remuda/token`, a paired one's from the login keychain under
-  "remuda"; the page is loaded as `/?token=…` once per launch, the app's
+  "remuda", one pairing at a time, every keychain status checked — a
+  write the keychain refuses fails the pairing in Settings, a token it
+  cannot hand back at launch puts this Mac's own remuda in its place for
+  that launch, said in Settings and the log; the page is loaded as `/?token=…` once per launch, the app's
   own calls carry the bearer), `Bridge` (the message types), `StatusItem`
   (the menu bar item: the mark with a tone dot and the count, the menu
-  of agents that need the person, Open ⌥⌘R, Wall, Tasks, Standup,
+  of agents that need the person, Open with the hotkey set, Wall, Tasks, Standup,
   Settings…, Quit), `Badge` (the Dock count), `AlertSocket` (the app as
   a push device: `POST /api/push/socket` then `/ws/alerts`, reconnect
-  1 s → 30 s), `Notifier` (`UNUserNotificationCenter`: a category per
-  action set, Esc → `/api/keys`, a choice → `/api/question/answer`, else
+  1 s → 30 s, the endpoint kept per server address so going back to a
+  remuda finds its device and prefs again), `Notifier` (`UNUserNotificationCenter`: a category per
+  set of buttons and their words, so a question's buttons read its own
+  choices, the newest 32 kept, Esc → `/api/keys`, a choice → `/api/question/answer`, else
   the window on the pane; refused outside a bundle), `Hotkey` (Carbon
-  `RegisterEventHotKey`, `opt+cmd+r` by default), `Settings` (the
+  `RegisterEventHotKey`, `opt+cmd+r` by default; the one before is let
+  go before the next registers, a refusal said in Settings), `Settings` (the
   server or pairing link, the hotkey, launch at login through
   `SMAppService`, the notification permission), `Probe` (`--probe`: the
   page off screen, every bridge message and alert frame as a JSON line,
-  exit 0 once the page said ready), `MainMenu`, `AppDelegate` (the
+  stopping with exit 0 as soon as the page's ready, badge and menu and
+  the socket's open are all heard, else when `--seconds` run out, 0 if
+  the page said ready by then and 1 if not, an alert frame printed when
+  one comes but never waited for; on its way out it revokes the device
+  the page signed in as, through the page's own `DELETE
+  /api/devices/{id}`, and removes the socket's alert device),
+  `MainMenu`, `AppDelegate` (the
   wiring). **The bridge**: the app injects `window.remudaShell = {native,
   version}` at document start and listens on the script message handler
   `remuda`; the page posts `ready`, `badge {count, tone}` and `menu
