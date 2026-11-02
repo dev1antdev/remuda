@@ -2,6 +2,7 @@ package push
 
 import (
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -57,6 +58,43 @@ func TestQuestionPushWithoutADialogStaysPlain(t *testing.T) {
 	s, _ := newTestService(t)
 	if p := s.asked(Payload{Body: "as built"}); p.Body != "as built" || p.Actions != nil {
 		t.Errorf("without a reader: %+v", p)
+	}
+}
+
+// The screen is read once the delay has passed, over ssh for a remote pane: an answer at the desk during that read must
+// still call the push off, since the timer it stopped had already fired.
+func TestAnAnswerWhileTheScreenIsReadCallsThePushOff(t *testing.T) {
+	shrinkDelays(t)
+	s, sent := newTestService(t)
+	reading := make(chan struct{}, 1)
+	release := make(chan struct{})
+	s.Question = func(machine, pane string) (Asked, bool) {
+		reading <- struct{}{}
+		<-release
+		return Asked{Text: bashDialog, Choices: []string{"Yes", "No"}}, true
+	}
+	var mu sync.Mutex
+	var recorded []string
+	s.OnAlert = func(p Payload) {
+		mu.Lock()
+		recorded = append(recorded, p.Title)
+		mu.Unlock()
+	}
+	s.OnStatus(blockedEvent())
+	select {
+	case <-reading:
+	case <-time.After(time.Second):
+		t.Fatal("the screen was never read")
+	}
+	answered := blockedEvent()
+	answered.From, answered.To = "blocked", "working"
+	s.OnStatus(answered)
+	close(release)
+	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(sent.get()) != 0 || len(recorded) != 0 {
+		t.Fatalf("answered at the desk while the screen was read: sent %+v, recorded %v", sent.get(), recorded)
 	}
 }
 
