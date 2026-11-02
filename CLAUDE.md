@@ -1009,7 +1009,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   coming back to the folder later does not open the file again; a path that is the folder itself opens no file (the rail can name it after a Read of the directory). **Follow** (the Code bar's button, pref `code.follow`): while the pane on screen in Agents runs an agent on this machine, its tail is polled at a tile's pace (`useChat`, `last=4`) and every edit it finishes — `newestEdit` in `code/follow.ts`, tested: the last Edit / Write / MultiEdit / NotebookEdit with a result and no error, by `tool_id` — opens in the editor the same way; what was already there when Follow began is not news. The flag `-code-port`
   changes the port on every machine at once.
 - `web/src/lib/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
-  provider (`terminal/engine/links.ts`) and the chat linkifier; keeps a
+  provider (`terminal/engine/links.ts`, which reads its row cell by cell, so
+  a wide character or a surrogate pair before or inside a link leaves the
+  underline on the link's own cells; tested) and the chat linkifier; keeps a
   `:line` suffix, drops trailing punctuation, never a path inside a URL.
   A link needs a name a file would have — a dotfile (`.env`, `.gitignore`;
   the dot kept on `.mcp.json`) or a name with an extension, in any
