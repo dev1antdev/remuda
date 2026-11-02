@@ -659,7 +659,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (a triple-click selects one cell; nobody knows). `ui/ErrorBoundary.tsx` is the one class
   component: React unmounts the whole tree on a render error, so every
   turn (`TurnView`) draws inside one — a turn the parser cannot draw is a
-  note, the rest of the chat stands — and `App.tsx` wraps the page in one
+  note, the rest of the chat stands, and its `resetKey` is the turn, so
+  the next reading of a changed turn is drawn again rather than staying a
+  note (`errorBoundary.test.ts`) — and `App.tsx` wraps the page in one
   with a Reload button, never a blank page.
 - `web/src/lib/` — what every screen uses and no screen owns, React-free
   but for the hooks: `http.ts` (`check` / `getJSON` / `sendJSON`, every
