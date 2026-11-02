@@ -1534,7 +1534,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   by the search); `blocked` never closes (the person decides); a pane
   gone on its own is forgotten; a finish that happened while remuda was
   down is caught at the pane's next status change. `Tick` every 30s fires what
-  matches the minute and has not run this minute. The schedules' pushes
+  matches the minute and was neither run nor started this minute (`firing`
+  notes the dispatch, since a delivery waiting on a pane's lock or a slow
+  remote can outlast the half minute). The schedules' pushes
   — a digest, a failed prompt run (`Kind: "schedule"`) — go through
   `push.Service.Broadcast`, every device whatever its watchdog pref: a
   schedule is the person's own word. `schedules.json` in the state dir;
