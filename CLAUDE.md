@@ -525,7 +525,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `setup.sh` installs herdr with brew or its installer, starts the
   server, installs `herdr integration` hooks for the agents present and
   installs again every integration herdr reports outdated;
-  `install-service.sh` is the launchd / systemd service) is the
+  `install-service.sh` is the launchd / systemd service — the unit's
+  `ExecStart` and `Environment` quoted, as `install-code.sh`'s are, so a
+  HOME with a space in it runs, tested on a `uname` stand-in answering
+  Linux) is the
   one-command install, locally or over ssh. `internal/jobs` runs a shell script on a `shell.Host` in the background
   with its output streamed (`Host.Stream`: `sh -c` here, the master for a
   remote) for the page to poll (`GET /api/jobs/{id}`) and publishes
@@ -1130,8 +1133,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `chat.Answer` (answer.go, tested) refuses with a 409 when no dialog is
   there or the choice at `index` no longer reads `label` — the worker
   then opens the page on the pane — else `chat.KeysTo` walks the cursor
-  (`up` / `down` × n, `enter`) through `sessions.Input.SendKeys` in one
-  request; the card's own click path is unchanged. **Read aloud** (`features/alerts/voice.ts`,
+  (`up` / `down` × n, `enter`) in one request, the pane's typing lock
+  (`sessions.Input.Lock`) held from the screen read to the keys
+  (`answerOnScreen`, tested), so two answers to one notification — two
+  devices, a tap repeated — cannot both pass the check and the second's
+  keys never land in the agent's next prompt; the card's own click path
+  is unchanged. **Read aloud** (`features/alerts/voice.ts`,
   tested; `useVoice.ts`, called from Shell): with the switch in the
   alerts panel on (pref `alerts.voice` {on, voice}), this device speaks
   through the browser's own `speechSynthesis` — nothing passes through
@@ -2014,15 +2021,22 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   side, named for whose screen it is): a read-only sign-in for the TV in
   the office or a colleague watching a run. `ViewerAllows(method, path)`
   is a GET of `viewerRoutes` — the roster, the chat, the screen, the
-  scrollback, a recap, the standup, the feed, a file and its stat, the
-  health, the push public key, the question, the usage, and the upgrade
-  of `/ws/events` — or of the page itself and its files (anything outside
+  scrollback, a recap, the standup, the feed, a file and its stat (kept
+  by `files.go` to the machine's workspace folders, the watcher's
+  `WorkspaceDirs`, symlinks followed on this machine — `withinFolders`,
+  tested: the token file, a key or an ssh key read through the file
+  viewer would open what the link must not; 403 "the file is outside the
+  workspaces", and a stat's `dir` and candidates are kept the same way),
+  the health, the push public key, the question, the usage, and the
+  upgrade of `/ws/events` — or of the page itself and its files (anything outside
   `/api/`, `/ws/` and the code-server proxy `/code/`); never `/ws/pane`,
   a submit, a key, the tasks or any change: 403 "this link is for
   viewing only". A page opened with
   `?viewer=rv_…` (`Guard.viewerLink`) mints a **viewer device**
   (`Device.Viewer`, `Device.Key` the link's id; `Kind()` "viewer · Chrome
-  on macOS"; a browser already signed in keeps its device) whose cookie
+  on macOS"; a browser already signed in keeps its device, and the
+  pairing link `?token=` opened on a viewer's screen signs it in as a
+  device of the person's own) whose cookie
   passes the same routes; a revoked link takes its screens with it
   (`Devices.RevokeByKey`, and `authenticate` reads a viewer device whose
   key is gone as stale). `auth.IsViewer(ctx)` is the flag in a handler:

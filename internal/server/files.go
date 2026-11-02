@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,10 +12,58 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
 // Files the agent wrote: resolved, served, diffed, uploaded.
+
+// errViewerOutside refuses a viewer a file beyond the machine's workspace folders: the token file, a key or an ssh
+// key read through the file viewer would open what the link must not.
+var errViewerOutside = errors.New("this link is for viewing only: the file is outside the workspaces")
+
+// viewerFolders is where a viewer may read files on a machine — the folders herdr has a workspace in there, by the
+// watcher's last snapshot — and whether the request is a viewer's at all.
+func (s *Server) viewerFolders(ctx context.Context, mc *machines.Machine) ([]string, bool) {
+	if !auth.IsViewer(ctx) {
+		return nil, false
+	}
+	var folders []string
+	if s.Watch != nil {
+		if snap, _ := s.Watch.Snapshot(mc.ID()); snap != nil {
+			folders = snap.WorkspaceDirs()
+		}
+	}
+	return folders, true
+}
+
+// withinFolders says whether a path lies in one of the folders; on this machine symlinks are followed on both sides,
+// so a link out of a workspace reaches nothing and /tmp and /private/tmp are one folder.
+func withinFolders(path string, folders []string, local bool) bool {
+	path = realPath(path, local)
+	for _, folder := range folders {
+		folder = strings.TrimSuffix(realPath(folder, local), "/")
+		if path == folder || strings.HasPrefix(path, folder+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// realPath is the path with its symlinks resolved on this machine, the name kept when the file is not there yet.
+func realPath(path string, local bool) string {
+	path = filepath.Clean(path)
+	if !local {
+		return path
+	}
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		return real
+	}
+	if dir, err := filepath.EvalSymlinks(filepath.Dir(path)); err == nil {
+		return filepath.Join(dir, filepath.Base(path))
+	}
+	return path
+}
 
 func (s *Server) fileRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/fs/stat", s.handleFsStat)
@@ -39,12 +89,35 @@ func (s *Server) handleFsStat(w http.ResponseWriter, r *http.Request) {
 	if cwd == "" {
 		cwd = r.URL.Query().Get("dir")
 	}
+	folders, viewer := s.viewerFolders(r.Context(), mc)
+	if viewer && cwd != "" && !withinFolders(cwd, folders, mc.Local()) {
+		httpErr(w, http.StatusForbidden, errViewerOutside)
+		return
+	}
 	info, err := mc.ResolvePath(cwd, r.URL.Query().Get("path"))
 	if err != nil {
 		httpErr(w, 400, err)
 		return
 	}
+	if viewer {
+		if !withinFolders(info.Path, folders, mc.Local()) {
+			httpErr(w, http.StatusForbidden, errViewerOutside)
+			return
+		}
+		info.Candidates = withinAll(info.Candidates, folders, mc.Local())
+	}
 	writeJSON(w, info)
+}
+
+// withinAll keeps the paths that lie in the folders.
+func withinAll(paths, folders []string, local bool) []string {
+	var kept []string
+	for _, p := range paths {
+		if withinFolders(p, folders, local) {
+			kept = append(kept, p)
+		}
+	}
+	return kept
 }
 
 // handleFsDirs is GET /api/fs/dirs?machine&path&hidden: a folder's subfolders on the machine, for the folder picker.
@@ -72,6 +145,10 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if !strings.HasPrefix(path, "/") {
 		httpErr(w, 400, fmt.Errorf("absolute path required (resolve it with /api/fs/stat first)"))
+		return
+	}
+	if folders, viewer := s.viewerFolders(r.Context(), mc); viewer && !withinFolders(path, folders, mc.Local()) {
+		httpErr(w, http.StatusForbidden, errViewerOutside)
 		return
 	}
 	info, err := mc.ResolvePath("", path)
