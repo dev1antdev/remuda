@@ -4,12 +4,21 @@
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
-version=$(git -C "$root" describe --tags --always --dirty 2>/dev/null | sed 's/^v//' || echo dev)
+version=$(git -C "$root" describe --tags --always --dirty 2>/dev/null | sed 's/^v//')
+[ -n "$version" ] || version=dev
 build=$(git -C "$root" rev-list --count HEAD 2>/dev/null || echo 1)
 app=$root/bin/remuda.app
 
 cd "$here"
-swift build -c release 2>&1 | grep -v '^\[' || true
+log=$(mktemp)
+if ! swift build -c release >"$log" 2>&1; then
+  grep -v '^\[' "$log"
+  rm -f "$log"
+  echo "swift build failed"
+  exit 1
+fi
+grep -v '^\[' "$log" || true
+rm -f "$log"
 test -x .build/release/Remuda || { echo "swift build failed"; exit 1; }
 
 rm -rf "$app"
