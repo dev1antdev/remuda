@@ -2233,7 +2233,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   process died, the window having no reload of its own; closing hides), `Server` (the
   address and the token: this Mac's own from `~/Library/Application
   Support/remuda/token`, a paired one's from the login keychain under
-  "remuda", one pairing at a time; the page is loaded as `/?token=…` once per launch, the app's
+  "remuda", one pairing at a time, every keychain status checked — a
+  write the keychain refuses fails the pairing in Settings, a token it
+  cannot hand back at launch puts this Mac's own remuda in its place for
+  that launch, said in Settings and the log; the page is loaded as `/?token=…` once per launch, the app's
   own calls carry the bearer), `Bridge` (the message types), `StatusItem`
   (the menu bar item: the mark with a tone dot and the count, the menu
   of agents that need the person, Open with the hotkey set, Wall, Tasks, Standup,

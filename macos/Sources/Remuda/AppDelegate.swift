@@ -23,8 +23,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.onAskNotifications = { [weak self] in self?.notifier?.askPermission { _ in self?.refreshSettings() } }
         if !bindHotkey() { NSLog("remuda: the hotkey %@ could not be registered", hotkeySpec) }
         do {
-            try connect(Server.load())
+            let (loaded, notice) = try Server.load()
+            try connect(loaded)
+            if let notice {
+                NSLog("remuda: %@", notice)
+                showSettings(message: notice)
+            }
         } catch {
+            NSLog("remuda: %@", error.localizedDescription)
             showSettings(message: error.localizedDescription)
         }
     }

@@ -35,7 +35,11 @@ the cookie between launches. A remuda elsewhere — a tailnet address, say
 — is paired in Settings… by pasting its pairing link
 (`https://host/?token=…`); the address goes to the app's defaults, the
 token to the login keychain under "remuda", in place of the remuda
-paired before.
+paired before. A pairing the keychain refuses to keep is said in
+Settings and not applied. When the paired remuda's token cannot be read
+at launch — the keychain locked, the item gone — the app uses this Mac's
+own remuda for that launch and says so in Settings and in the log; the
+pairing stays for the next launch.
 
 When remuda cannot be reached yet — the app launched at login before
 remuda's service was up — the window tries the page again by itself,
