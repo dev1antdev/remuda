@@ -13,7 +13,8 @@ import { usePref } from "@/lib/prefs";
 import { Icon } from "@/ui";
 import { enterFull, leaveFull } from "./full";
 import { popOut, popOutSupported } from "./pip";
-import { actions } from "./store";
+import { escapeIsFree, overlayOpen } from "./escape";
+import { actions, app } from "./store";
 import { TileView } from "./Tile";
 import { useOffice } from "./useOffice";
 import { t } from "@/lib/i18n";
@@ -45,7 +46,7 @@ export default function Wall() {
     if (!big && !office) return;
     const onKey = (event: KeyboardEvent) => {
       if ((event.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]") || document.querySelector(".modal-scrim, .sel-pop")) return;
-      if (event.key === "Escape" && big && !office) setFocus("");
+      if (big && !office && escapeIsFree({ key: event.key, defaultPrevented: event.defaultPrevented, target: event.target as Element | null }, overlayOpen(app.get()))) setFocus("");
       if (office && (event.code === "ArrowRight" || event.code === "ArrowLeft")) show.step(event.code === "ArrowRight" ? 1 : -1);
     };
     document.addEventListener("keydown", onKey);

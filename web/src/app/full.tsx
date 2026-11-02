@@ -4,6 +4,7 @@
 
 import { useEffect } from "react";
 import { Icon } from "@/ui";
+import { escapeIsFree, overlayOpen } from "./escape";
 import { actions, app } from "./store";
 
 export function enterFull(): void {
@@ -18,14 +19,14 @@ export function leaveFull(): void {
 }
 
 
-// useFullKeys leaves full screen on Esc outside a field or the terminal (where Esc belongs to the app), and when the
-// browser's own full screen ends
+// useFullKeys leaves full screen on an Esc nothing else took — not a field's, the terminal's (where Esc belongs to the
+// app), a menu's, a dialog's, the confirm's or the file viewer's (escape.ts) — and when the browser's own full screen ends
 export function useFullKeys(): void {
   const full = app.use((s) => s.full);
   useEffect(() => {
     if (!full) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || (e.target as Element | null)?.closest?.("input, textarea, select, [contenteditable], .xterm") || app.get().dialog || app.get().panel) return;
+      if (!escapeIsFree({ key: e.key, defaultPrevented: e.defaultPrevented, target: e.target as Element | null }, overlayOpen(app.get()))) return;
       leaveFull();
     };
     const onChange = () => {

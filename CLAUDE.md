@@ -783,7 +783,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (the lenses, mounted once seen, and the files rail beside them in
   `.pane-body` — store field `footprint` from the pref of that name,
   default on with a mouse, a row of the View menu whatever the lens,
-  disabled for a shell pane, hidden with the rail under 920 px and not polling there; **full screen** is the View menu's last row, `app/full.tsx` — store field `full`: the header, the sidebar and the rail go, the tab strip stays with its tools, the browser's own full screen is asked for where it exists; Esc outside a field or the terminal leaves, so does the browser's exit, and a mode change clears it; the palette has it), `Wall.tsx` (the **Wall mode**: every
+  disabled for a shell pane, hidden with the rail under 920 px and not polling there; **full screen** is the View menu's last row, `app/full.tsx` — store field `full`: the header, the sidebar and the rail go, the tab strip stays with its tools, the browser's own full screen is asked for where it exists; an Esc nothing else took leaves — not a field's or the terminal's, nor the one that closes a menu (Radix marks it with preventDefault), a dialog, the confirm or the file viewer (`app/escape.ts`, tested; the Wall's Esc that gives a focused tile back follows the same rule) — so does the browser's exit, and a mode change clears it; the palette has it), `Wall.tsx` (the **Wall mode**: every
   agent pane on a connected machine as a tile — the sidebar row's head
   (mark, logo, label, workspace · machine, the pull request the agent named as a link with its checks and review beside it (`internal/prstatus`), context % · cost), the last 12
   turns through `features/chat/Tail`, a compact composer; a click on the
