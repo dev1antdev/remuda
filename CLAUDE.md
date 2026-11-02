@@ -1517,7 +1517,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   sidebar, cleared when the state moves on) and one push per episode
   (`push.Notify`, pref `watchdog`, default on) with a reminder every 30
   min; the notification carries `actions` — Open, and **Send Esc**, which
-  the service worker posts to `/api/keys` itself (a question's push
+  the service worker posts to `/api/keys` itself — refused or unreachable,
+  it opens the page on the pane instead, as a choice does
+  (`app/serviceWorker.test.ts` runs `sw.js` on stand-ins) — (a question's push
   carries its choices the same way, see `internal/push`).
 - `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — things on a timetable, three **kinds**
   (`Kind`, `prompt` for a record from before the field). A **prompt**
