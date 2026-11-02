@@ -5,8 +5,9 @@ import { useCallback, useEffect } from "react";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { useRoster } from "@/features/roster/useRoster";
 import { nextNeedingMe, tileKey } from "@/features/roster/wall";
-import { usePref } from "@/lib/prefs";
+import { isMac, usePref } from "@/lib/prefs";
 import { useCurrent } from "./current";
+import { nextKeyAsked, type KeyPress } from "./nextKey";
 import { actions, app } from "./store";
 import { t } from "@/lib/i18n";
 
@@ -38,12 +39,13 @@ export function useNextNeedingMe(): () => void {
   }, [machines, mode, current, radar, focus, setFocus]);
 }
 
-// useNextKey binds Alt+N by key code, whatever the layout; a terminal keeps its own keys and a dialog keeps the focus
+// useNextKey binds Alt+N by key code, whatever the layout; a terminal keeps its own keys, a dialog keeps the focus, and
+// a field on a Mac keeps Option+N (nextKey.ts)
 export function useNextKey(go: () => void): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "KeyN" || !e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
-      if ((e.target as Element | null)?.closest?.(".xterm") || app.get().dialog) return;
+      const press: KeyPress = { code: e.code, altKey: e.altKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, target: e.target as Element | null };
+      if (!nextKeyAsked(press, !!app.get().dialog, isMac)) return;
       e.preventDefault();
       go();
     };
