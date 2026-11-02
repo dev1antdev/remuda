@@ -110,9 +110,11 @@ export default function PaneArea({ current }: { current: Located | null }) {
       <main className="pane-area">
         <div className="placeholder">
           <p>{tr("No pane selected.")}</p>
-          <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
-            {tr("Start an agent")}
-          </button>
+          {!viewOnly && (
+            <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
+              {tr("Start an agent")}
+            </button>
+          )}
         </div>
       </main>
     );
@@ -188,7 +190,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
             dir={folder}
             active={!narrow}
             onOpenFile={(target) => actions.openFile(machine.id, pane.id, target, folder)}
-            onOpenInCode={(path) => actions.openInCode(machine.id, folder, path)}
+            onOpenInCode={(path) => (viewOnly ? actions.openFile(machine.id, pane.id, { path }, folder) : actions.openInCode(machine.id, folder, path))} // a viewer has no Code mode: the file viewer reads it
           />
         )}
       </div>

@@ -2031,8 +2031,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   wears "Viewing only" and no search, Changes is shut, the terminal lens
   is the Wall's screen view (`features/terminal/Screen.tsx`, no attach),
   the chat and the tiles have no composer, keys or question buttons, the
-  tab strip no + or ×, the sidebar no menus; `Shell` registers no push and
-  syncs no prefs for a viewer. Settings › Devices ends with **Viewer
+  tab strip no + or ×, the sidebar no menus; `Shell` registers no push,
+  syncs no prefs and sends no seen mark for a viewer; the palette keeps
+  moving about, the lenses' views, the reports and the look
+  (`viewerCommand`), the corner's toasts offer no Resume, no install and
+  no Tailscale login (`viewerToasts`), a wall tile's PR menu keeps its
+  Open (`viewerMenu`), the files rail's code button opens the file
+  viewer, and an empty pane area offers no Start (all tested in
+  `app/viewOnly.test.ts`). Settings › Devices ends with **Viewer
   links** (`features/settings/ViewerKeys.tsx`, `viewerLinks.ts` tested):
   make one under a name, Copy the link shown once, Revoke. **The door** (`door.go`): `EnsureDoor(dir,
   keys, name, url)` keeps the cockpit's own `agent-key` / `agent-url`

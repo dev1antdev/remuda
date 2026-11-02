@@ -12,3 +12,28 @@ export function viewerPlaces<T extends { mode?: string; panel?: string | null }>
   if (!viewOnly) return places;
   return places.filter((place) => (place.mode ? VIEWER_MODES.has(place.mode) : place.panel ? VIEWER_PANELS.has(place.panel) : false));
 }
+
+// VIEWER_COMMANDS are the palette's commands a viewer keeps: moving about, what a lens shows, the reports, the keys; the
+// look's rows go by their prefixes. Every other one types, starts, closes, renames or saves something on the server.
+const VIEWER_COMMANDS = new Set(["next-needs", "mode:herdr", "mode:wall", "lens:chat", "lens:terminal", "find", "timeline", "export", "recap", "pins", "popout", "find-viewer", "timeline-viewer", "export-viewer", "recap-viewer", "wall-needs", "wall-idle", "wall-unfocus", "wall-focus", "wall-office", "wall-view", "full", "rail", "panels", "split", "activity", "usage", "standup", "budgets", "keys"]);
+const VIEWER_COMMAND_PREFIXES = ["theme-", "flavor-", "text-", "lang-", "open-lens-"];
+
+// viewerCommand says whether a viewer's palette lists the command with this id
+export function viewerCommand(id: string): boolean {
+  return VIEWER_COMMANDS.has(id) || VIEWER_COMMAND_PREFIXES.some((prefix) => id.startsWith(prefix));
+}
+
+// ViewerToast is as much of a toast as the rule needs: its id and its button
+export type ViewerToast = { id: string; action?: unknown };
+
+// viewerToasts is what a viewer's corner shows: no Resume of stopped chats and no install of a release (the server would
+// refuse them), and no Tailscale login, whose link would put this cockpit on the tailnet of whoever follows it
+export function viewerToasts<T extends ViewerToast>(toasts: T[]): T[] {
+  return toasts.filter((toast) => toast.id !== "tailscale").map((toast) => (toast.id === "release" || toast.id.startsWith("recover-") ? { ...toast, action: undefined } : toast));
+}
+
+// viewerMenu is the first group of a menu, up to its first separator: a pull request's Open, without the hand-offs to the agent
+export function viewerMenu<T extends object>(items: T[]): T[] {
+  const sep = items.findIndex((item) => "sep" in item);
+  return sep < 0 ? items : items.slice(0, sep);
+}

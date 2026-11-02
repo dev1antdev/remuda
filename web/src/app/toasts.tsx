@@ -9,10 +9,11 @@ import { resumeStopped } from "@/features/updates/recover";
 import { useRoster } from "@/features/roster/useRoster";
 import type { ToastItem } from "@/ui";
 import { actions, app } from "./store";
+import { viewerToasts } from "./viewOnly";
 import { t } from "@/lib/i18n";
 
 export function useToasts(): ToastItem[] {
-  const { machines, latest, tailscale, version, offline, stale } = useRoster();
+  const { machines, latest, tailscale, version, offline, stale, viewOnly } = useRoster();
   const notice = app.use((s) => s.notice);
   const away = app.use((s) => s.away);
   const [releaseSeen, setReleaseSeen] = usePref("release.seen", "");
@@ -107,5 +108,5 @@ export function useToasts(): ToastItem[] {
       ),
     });
   if (tailscale?.state === "error") toasts.push({ id: "tailscale", tone: "error", text: `Tailscale: ${tailscale.error}` }); // the error is the daemon's own words
-  return toasts;
+  return viewOnly ? viewerToasts(toasts) : toasts;
 }

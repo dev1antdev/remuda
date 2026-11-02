@@ -27,6 +27,7 @@ import { setDarkFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, us
 import { TEXT_SIZE_NAMES, TEXT_SIZES } from "@/lib/look";
 import { currentLang, LANGS, t } from "@/lib/i18n";
 import { setLangPref } from "./lang";
+import { viewerCommand } from "./viewOnly";
 import { DARK_FLAVORS, FLAVOR_NAMES } from "@/lib/theme";
 
 const FIND_KEY = isMac ? "⌘F" : "Ctrl+F";
@@ -54,7 +55,7 @@ const toastError = (e: unknown) => actions.notify(errMsg(e), { error: true });
 
 // useCommands is the list for what was typed: the panes first, then the commands that apply right now.
 function useCommands(): (query: string) => Entry[] {
-  const { machines } = useRoster();
+  const { machines, viewOnly } = useRoster();
   const mode = app.use((s) => s.mode);
   const lens = app.use((s) => s.lens);
   const viewer = app.use((s) => s.viewer);
@@ -197,8 +198,8 @@ function useCommands(): (query: string) => Entry[] {
       const typed = query.trim();
       command("import-issue", t("New task from a GitHub issue…"), () => actions.openDialog({ kind: "import-issue" }), { hint: t("read with gh on the machine, as you; an agent can start on it at once"), icon: "link", keywords: ["github", "issue", "import", "task", "new", "gh"] });
       command("search", typed ? t("Search every conversation for “{typed}”", { typed }) : t("Search every conversation…"), () => actions.openSearch(typed), { hint: t("what you or an agent said, on every machine"), icon: "search", keywords: ["find", "transcript"], always: true });
-      return [...panes, ...commands];
+      return [...panes, ...(viewOnly ? commands.filter((entry) => viewerCommand(entry.id)) : commands)];
     },
-    [machines, mode, lens, viewer, chatSession, footprint, split, full, themePref, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
+    [machines, viewOnly, mode, lens, viewer, chatSession, footprint, split, full, themePref, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
   );
 }
