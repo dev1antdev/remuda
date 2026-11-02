@@ -36,6 +36,7 @@ type Tracker struct {
 	bus     *events.Bus
 	mu      sync.Mutex
 	lines   map[string]entry
+	gen     map[string]uint64 // a pane's starts of work and close so far: a read begun before the latest one writes no line
 	queue   map[string][]request
 	running map[string]bool
 
@@ -51,7 +52,7 @@ type request struct {
 }
 
 func New(in Inputs, bus *events.Bus) *Tracker {
-	return &Tracker{in: in, bus: bus, lines: map[string]entry{}, queue: map[string][]request{}, running: map[string]bool{}}
+	return &Tracker{in: in, bus: bus, lines: map[string]entry{}, gen: map[string]uint64{}, queue: map[string][]request{}, running: map[string]bool{}}
 }
 
 func key(machineID, paneID string) string { return machineID + "|" + paneID }
@@ -78,7 +79,8 @@ func (t *Tracker) Link(machineID, paneID string) (transcript.Link, bool) {
 }
 
 // OnStatus hears every transition: a finish is read, a start of work clears the line (the link stays: the request is
-// still there), a closed pane is forgotten.
+// still there), a closed pane is forgotten. The two that take the line away move the pane's generation, so a read still
+// in flight writes no line; a finish leaves it, a line read for one finish being as good as for the next.
 func (t *Tracker) OnStatus(ev events.PaneStatus) {
 	if ev.Kind == "" {
 		return
@@ -89,12 +91,14 @@ func (t *Tracker) OnStatus(ev events.PaneStatus) {
 		t.ask(ev.Pane.Machine, ev.Pane.Pane, true)
 	case herdr.StatusWorking:
 		t.mu.Lock()
+		t.gen[k]++
 		if e, ok := t.lines[k]; ok {
 			t.lines[k] = entry{link: e.link, hasLink: e.hasLink}
 		}
 		t.mu.Unlock()
 	case events.Gone:
 		t.mu.Lock()
+		t.gen[k]++
 		delete(t.lines, k)
 		t.mu.Unlock()
 	}
@@ -126,6 +130,11 @@ func (t *Tracker) Forget(machineID string) {
 	for k := range t.lines {
 		if strings.HasPrefix(k, machineID+"|") {
 			delete(t.lines, k)
+		}
+	}
+	for k := range t.gen {
+		if strings.HasPrefix(k, machineID+"|") {
+			delete(t.gen, k)
 		}
 	}
 }
@@ -165,13 +174,17 @@ func (t *Tracker) drain(machineID string) {
 }
 
 // read brings the pane's line up to its file: an unchanged file is not parsed again; a new answer after a finish
-// is handed whole to OnAnswer.
+// is handed whole to OnAnswer. A status change while it reads takes the line out of what is kept: an agent at work
+// again keeps only the request it named, a closed pane nothing.
 func (t *Tracker) read(machineID, paneID string, finish bool) {
 	k := key(machineID, paneID)
+	t.mu.Lock()
+	generation := t.gen[k]
+	t.mu.Unlock()
 	version, ok := t.in.Version(machineID, paneID)
 	if !ok {
 		t.mu.Lock()
-		if _, known := t.lines[k]; !known {
+		if _, known := t.lines[k]; !known && t.gen[k] == generation {
 			t.lines[k] = entry{}
 		}
 		t.mu.Unlock()
@@ -189,7 +202,16 @@ func (t *Tracker) read(machineID, paneID string, finish bool) {
 		e.link, e.hasLink = t.in.Link(machineID, paneID)
 	}
 	t.mu.Lock()
-	t.lines[k] = e
+	_, still := t.lines[k]
+	switch {
+	case t.gen[k] == generation:
+		t.lines[k] = e
+	case still:
+		e = entry{link: e.link, hasLink: e.hasLink}
+		t.lines[k] = e
+	default:
+		e = entry{}
+	}
 	t.mu.Unlock()
 	if e.hasLink && (!have.hasLink || have.link.URL != e.link.URL) {
 		events.Publish(t.bus, events.PullRequestNamed{Pane: events.PaneRef{Machine: machineID, Pane: paneID}, URL: e.link.URL, Label: e.link.Label})

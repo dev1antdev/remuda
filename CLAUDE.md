@@ -1302,7 +1302,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   for the roster (`pane.said`) and so for the sidebar row and the wall
   tile. `Tracker` hears `events.PaneStatus` (a finish — done or idle —
   queues a read, a start of work clears the line, a closed pane is
-  forgotten) and `Observe` seeds from every snapshot the agent panes
+  forgotten; those two move the pane's generation, `gen`, and a read
+  begun before the move writes no line: an agent at work again keeps
+  only the request it named, a closed pane nothing, `OnAnswer` still
+  hears the answer) and `Observe` seeds from every snapshot the agent panes
   already finished when first seen, once; the reads go through
   `chat.Service` (`SessionVersion`, then `LastAnswer`) in one goroutine
   per machine, off the request path — a remote read is a script over
