@@ -31,7 +31,8 @@ opens the page with it once; the server turns that into a device cookie
 the cookie between launches. A remuda elsewhere — a tailnet address, say
 — is paired in Settings… by pasting its pairing link
 (`https://host/?token=…`); the address goes to the app's defaults, the
-token to the login keychain under "remuda".
+token to the login keychain under "remuda", in place of the remuda
+paired before.
 
 macOS asks once whether the app may notify you; Settings… shows the
 answer and asks again when it was never answered.

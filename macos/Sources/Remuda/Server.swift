@@ -47,7 +47,7 @@ struct Server {
         return try local()
     }
 
-    // pair reads a pairing link, keeps the address and its token, and answers the server.
+    // pair reads a pairing link, keeps the address and its token in place of the pairing before, and answers the server.
     static func pair(link: String) throws -> Server {
         guard let parts = URLComponents(string: link.trimmingCharacters(in: .whitespacesAndNewlines)),
               let token = parts.queryItems?.first(where: { $0.name == "token" })?.value, !token.isEmpty,
@@ -59,6 +59,7 @@ struct Server {
         baseParts.host = host
         baseParts.port = parts.port
         let base = baseParts.string!
+        forgetPairing()
         Keychain.write(account: base, secret: token)
         UserDefaults.standard.set(base, forKey: baseKey)
         return Server(base: URL(string: base)!, token: token)
