@@ -29,6 +29,15 @@ describe("wheelTicks", () => {
     expect(wheelTicks(acc, 40, true, 20)).toBe(2);
     expect(acc).toEqual({ x: 0, y: -5 });
   });
+  it("keeps the carried pixels through an event that moves that axis not at all", () => {
+    // a trackpad's stream: 15 px, then an event with nothing on this axis, then 10 more — one tick in all
+    const acc: WheelAcc = { x: 0, y: 0 };
+    expect(wheelTicks(acc, 15, false, 20)).toBe(0);
+    expect(wheelTicks(acc, 0, false, 20)).toBe(0);
+    expect(acc.y).toBe(15);
+    expect(wheelTicks(acc, 10, false, 20)).toBe(1);
+    expect(acc.y).toBe(5);
+  });
 });
 
 describe("modifierBits", () => {

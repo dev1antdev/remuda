@@ -313,7 +313,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   mode keeps its own scrollback and tracks the mouse; its DECSETs are
   intercepted so xterm never tracks (a drag selects), and the wheel / a
   finger on a phone become mouse reports — the pixels add up, one report
-  per cell height, as a native terminal does. Because the app repaints the
+  per cell height, as a native terminal does (`wheelTicks`: a turn the
+  other way starts over, an event that leaves the axis still keeps what was
+  carried). Because the app repaints the
   screen on every scroll, the **selection is kept in content rows** and
   every row seen while it exists is remembered by text: each settled
   repaint is located in that memory (the offset most unique rows agree on,
