@@ -163,7 +163,7 @@ func consecutive(options []Option) bool {
 }
 
 // wordsAbove is the dialog's text over its choices: the rows of the same box, the rows under the frame's top rule, or
-// up to the blank row above a list in neither.
+// for a list in neither the paragraph above it, past the blank rows that set the choices off.
 func wordsAbove(lines []screenLine, top, frame int) string {
 	var rows []string
 	for i := top - 1; i >= 0 && top-i <= questionLines; i-- {
@@ -177,7 +177,10 @@ func wordsAbove(lines []screenLine, top, frame int) string {
 				break
 			}
 		} else if l.col < 0 {
-			break
+			if len(rows) > 0 {
+				break
+			}
+			continue
 		}
 		rows = append(rows, l.text)
 	}
