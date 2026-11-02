@@ -666,7 +666,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   request), `query.ts` (`useQuery(fn, deps, {every, enabled, keep})` —
   the one way a screen reads the server: a fetch that follows its inputs,
   polls while enabled and the page is visible — `visibility.ts`:
-  this document or the pop-out's, `watchVisibility` for a change — drops an answer that
+  this document or the pop-out's, `watchVisibility` for a change — and
+  reads at once when enabled again (`resumes`, tested: a question card
+  back on screen once kept a closed dialog's choices up to ten seconds;
+  `useChat` leaves coming on screen to it), drops an answer that
   arrives after the inputs changed; `undefined` from the fetcher means
   unchanged (an ETag 304) and the data stays; `reload`, `fetching`, and
   `mutate` for what the screen already shows ahead of the server — a
