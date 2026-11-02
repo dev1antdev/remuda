@@ -99,6 +99,46 @@ func TestTickFiresOncePerMatchingMinute(t *testing.T) {
 	}
 }
 
+// A delivery can outlast the half minute between ticks — the pane's lock held by a restart, a remote slow to answer —
+// and the next tick, finding no run noted yet, must not start the same schedule again.
+func TestASlowRunIsNotStartedAgainWithinItsMinute(t *testing.T) {
+	var mu sync.Mutex
+	calls := 0
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
+	st := New(t.TempDir(), func(machine, dir, text string) (string, error) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		started <- struct{}{}
+		<-release
+		return "pane", nil
+	}, nil, nil)
+	now := at("2026-10-07 09:00")
+	st.now = func() time.Time { return now }
+	if _, err := st.Put(Schedule{Machine: "local", Dir: "/tmp/x", Cron: "0 9 * * *", Prompt: "status", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	st.Tick()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("the first tick did not fire")
+	}
+	now = now.Add(30 * time.Second)
+	st.Tick()
+	close(release)
+	st.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("the prompt went %d times within one minute", calls)
+	}
+	if got := st.List()[0]; !got.LastOK || got.LastResult != "sent to pane" {
+		t.Fatalf("result %+v", got)
+	}
+}
+
 func TestFailureIsNotedAndPushed(t *testing.T) {
 	var pushed []push.Payload
 	st := New(t.TempDir(), func(string, string, string) (string, error) { return "", errors.New("no agent in the folder") }, func(p push.Payload) { pushed = append(pushed, p) }, nil)
