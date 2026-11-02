@@ -239,7 +239,7 @@ export default function Tasks() {
           </button>
         </div>
         {SMART.map((s) => (
-          <button key={s.id} type="button" className={`tasks-nav${sel.kind === "smart" && sel.id === s.id ? " sel" : ""}`} onClick={() => select({ kind: "smart", id: s.id })}>
+          <button key={s.id} type="button" className={`tasks-nav${sel.kind === "smart" && sel.id === s.id ? " on" : ""}`} onClick={() => select({ kind: "smart", id: s.id })}>
             <span className="tasks-nav-glyph">
               <Icon name={s.icon} size={14} />
             </span>

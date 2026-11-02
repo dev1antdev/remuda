@@ -57,7 +57,7 @@ export function TaskRow({ task: t, project, status, fields, pr, selected, picked
   const press = useMemo(() => longPress(() => pickRef.current?.("toggle")), []);
   return (
     <div
-      className={`tasks-row${t.done ? " done" : ""}${selected ? " sel" : ""}${picked ? " picked" : ""}${actions ? " with-actions" : ""}`}
+      className={`tasks-row${t.done ? " done" : ""}${selected ? " is-open" : ""}${picked ? " picked" : ""}${actions ? " with-actions" : ""}`}
       role="button"
       tabIndex={0}
       aria-expanded={selected}

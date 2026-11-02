@@ -27,7 +27,7 @@ export function ProjectTree({ projects, selected, onSelect }: { projects: Projec
       <div key={p.id}>
         <button
           type="button"
-          className={`tasks-nav project${p.id === selected ? " sel" : ""}`}
+          className={`tasks-nav project${p.id === selected ? " on" : ""}`}
           style={{ paddingLeft: 12 + depth * 14 }}
           onClick={() => onSelect(p.id)}
           title={p.description || p.title}

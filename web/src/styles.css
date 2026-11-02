@@ -3156,7 +3156,7 @@ body.is-resizing iframe {
   background: var(--bg-hover);
 }
 
-.tasks-nav.sel {
+.tasks-nav.on {
   background: var(--bg-input);
   box-shadow: inset 0 0 0 1px var(--line);
 }
@@ -3168,7 +3168,7 @@ body.is-resizing iframe {
   color: var(--fg-dim);
 }
 
-.tasks-nav.sel .tasks-nav-glyph {
+.tasks-nav.on .tasks-nav-glyph {
   color: var(--accent);
 }
 
@@ -3291,7 +3291,7 @@ body.is-resizing iframe {
   background: var(--bg-hover);
 }
 
-.tasks-row.sel {
+.tasks-row.is-open {
   background: var(--bg-input);
   box-shadow: inset 0 0 0 1px var(--line);
 }
@@ -4396,7 +4396,7 @@ button.usage-row:hover {
   border-color: var(--line-hover);
 }
 
-.board-card.sel {
+.board-card.is-open {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }

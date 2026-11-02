@@ -159,7 +159,7 @@ function Card({ task: t, statuses, selected, picked, selecting, dragging, before
   const press = useMemo(() => longPress(() => pickRef.current?.("toggle")), []);
   return (
     <article
-      className={`board-card${selected ? " sel" : ""}${picked ? " picked" : ""}${dragging ? " dragging" : ""}${before ? " drop-before" : ""}${t.done ? " done" : ""}`}
+      className={`board-card${selected ? " is-open" : ""}${picked ? " picked" : ""}${dragging ? " dragging" : ""}${before ? " drop-before" : ""}${t.done ? " done" : ""}`}
       data-id={t.id}
       draggable={draggable}
       role="button"
