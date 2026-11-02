@@ -1,13 +1,14 @@
 import Foundation
 
 // AlertSocket is the app as a device of remuda's push service: registered with /api/push/socket, then every alert
-// the phone would get arrives over /ws/alerts; the socket comes back by itself with a growing pause.
+// the phone would get arrives over /ws/alerts; the socket comes back by itself with a growing pause. Every callback
+// of the session lands on the main queue, so the task, the backoff and the stop flag are only ever touched there.
 final class AlertSocket {
     private static let endpointKey = "alerts.endpoint"
     private let server: Server
     private let label: String
     private let remember: Bool
-    private let session = URLSession(configuration: .default)
+    private let session = URLSession(configuration: .default, delegate: nil, delegateQueue: .main)
     private var task: URLSessionWebSocketTask?
     private var backoff: TimeInterval = 1
     private var stopped = false
