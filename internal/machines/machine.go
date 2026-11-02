@@ -184,7 +184,7 @@ func (mc *Machine) connect() {
 	mc.home = home
 	mc.herdrBin, mc.socket = bin, sock
 	mc.attach = herdr.NewAttachManager(func(termID string) *exec.Cmd {
-		return conn.AttachCmd(bin, termID)
+		return conn.AttachCmd(bin, sock, termID)
 	})
 	mc.state = StateConnected
 	mc.errMsg = ""

@@ -7,6 +7,8 @@ final class WebWindow: NSObject {
     let webView: WKWebView
     private(set) var server: Server
     var onBridge: ((Bridge, Any) -> Void)?
+    private var reloadDelay: TimeInterval = 1
+    private var pendingReload: DispatchWorkItem?
 
     // init makes the window; the cookie jar is the app's own and persists, or a throwaway one for a probe.
     init(server: Server, persistent: Bool = true) {
@@ -37,12 +39,25 @@ final class WebWindow: NSObject {
     // use points the window at another remuda and loads it.
     func use(server: Server) {
         self.server = server
+        reloadDelay = 1
         load()
     }
 
     // load opens the page signed in: the pairing token goes once and the server strips it after setting the cookie.
     func load() {
+        pendingReload?.cancel()
+        pendingReload = nil
         webView.load(URLRequest(url: server.signInURL))
+    }
+
+    // reloadLater loads the page again after a pause that grows while it keeps failing: remuda not up yet at login, the web process gone.
+    private func reloadLater() {
+        guard pendingReload == nil else { return }
+        let delay = reloadDelay
+        reloadDelay = min(reloadDelay * 2, 30)
+        let reload = DispatchWorkItem { [weak self] in self?.load() }
+        pendingReload = reload
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: reload)
     }
 
     func show() {
@@ -73,13 +88,30 @@ final class WebWindow: NSObject {
         webView.evaluateJavaScript(source) { _, _ in }
     }
 
+    // signOut revokes the device the page signed in as, through the page itself so its cookie carries: a probe leaves none behind.
+    func signOut(then done: @escaping () -> Void) {
+        let source = """
+        const list = await (await fetch('/api/devices')).json();
+        const me = Array.isArray(list) ? list.find((d) => d.this) : null;
+        if (me) await fetch('/api/devices/' + encodeURIComponent(me.id), {method: 'DELETE'});
+        return Boolean(me);
+        """
+        webView.callAsyncJavaScript(source, arguments: [:], in: nil, in: .page) { _ in done() }
+    }
+
     fileprivate func received(_ body: Any) {
         guard let message = Bridge(body) else { return }
         onBridge?(message, body)
     }
 
+    // isOurs says whether the address is the server's; WebKit hands the host over lowercased, the pairing link may not be.
     private func isOurs(_ url: URL) -> Bool {
-        url.host == server.base.host && (url.port ?? defaultPort(url.scheme)) == (server.base.port ?? defaultPort(server.base.scheme))
+        url.host?.lowercased() == server.base.host?.lowercased() && (url.port ?? defaultPort(url.scheme)) == (server.base.port ?? defaultPort(server.base.scheme))
+    }
+
+    // isPage says whether the address is the page itself rather than another of the server's routes (the editor, a file).
+    private func isPage(_ url: URL) -> Bool {
+        isOurs(url) && (url.path.isEmpty || url.path == "/")
     }
 
     private func defaultPort(_ scheme: String?) -> Int { scheme == "https" ? 443 : 80 }
@@ -122,6 +154,22 @@ extension WebWindow: WKNavigationDelegate, WKDownloadDelegate {
         decisionHandler(response.canShowMIMEType ? .allow : .download)
     }
 
+    // didFailProvisionalNavigation tries the page again when the server could not be reached; a cancelled load is left alone.
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        let failure = error as NSError
+        guard failure.domain == NSURLErrorDomain, failure.code != NSURLErrorCancelled else { return }
+        reloadLater()
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        reloadDelay = 1
+    }
+
+    // webViewWebContentProcessDidTerminate brings the page back: the view would stay blank, and this window has no reload.
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        reloadLater()
+    }
+
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
         download.delegate = self
     }
@@ -155,15 +203,25 @@ extension WebWindow: WKNavigationDelegate, WKDownloadDelegate {
 }
 
 extension WebWindow: WKUIDelegate {
-    // createWebViewWith handles window.open: the page's own address stays here, anything else goes to the browser.
+    // createWebViewWith handles window.open: the page itself stays here, anything else — the editor's own tab too — goes to
+    // the browser, since this window has no way back from a page that is not remuda's.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let url = action.request.url else { return nil }
-        if isOurs(url) {
+        if isPage(url) {
             webView.load(action.request)
         } else {
             NSWorkspace.shared.open(url)
         }
         return nil
+    }
+
+    // runOpenPanelWith answers a file input, the composer's attach button: without it WebKit acts as if the person cancelled.
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+        panel.canChooseDirectories = parameters.allowsDirectories
+        panel.canChooseFiles = true
+        panel.beginSheetModal(for: window) { response in completionHandler(response == .OK ? panel.urls : nil) }
     }
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {

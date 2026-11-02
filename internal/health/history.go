@@ -65,7 +65,8 @@ func sample(r Report) (Sample, bool) {
 	return Sample{At: r.At, Load: r.Load1, DiskFree: float64(100 - r.DiskUsedPct)}, true
 }
 
-// remember keeps the report's sample for the machine and writes the history out; the file is written outside the lock.
+// remember keeps the report's sample for the machine and writes the history out; the file is written outside the lock,
+// from a copy, since the next probe may replace a sample in place meanwhile.
 func (c *Collector) remember(id string, r Report) {
 	s, ok := sample(r)
 	if !ok {
@@ -75,7 +76,7 @@ func (c *Collector) remember(id string, r Report) {
 	c.history[id] = note(c.history[id], s)
 	snapshot := make(history, len(c.history))
 	for k, v := range c.history {
-		snapshot[k] = v
+		snapshot[k] = append([]Sample(nil), v...)
 	}
 	c.mu.Unlock()
 	if c.dir == "" {

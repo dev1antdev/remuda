@@ -1,6 +1,11 @@
 // The pure part of the question card: the keys that walk the cursor to a choice, and how the dialog's words split.
 
-import type { QuestionOption } from "./api";
+import type { Question, QuestionOption } from "./api";
+
+// choosable says one press answers the dialog: not a multi-select, where Enter ticks a box and a Submit row sends them.
+export function choosable(question: Question): boolean {
+  return !question.multi && question.options.length > 0;
+}
 
 // keysTo walks the cursor from the picked choice to the one at index and confirms it.
 export function keysTo(options: QuestionOption[], index: number): string[] {

@@ -171,11 +171,7 @@ func Run(ctx context.Context, o Options) error {
 		if !ok {
 			return push.Asked{}, false
 		}
-		asked := push.Asked{Text: q.Text}
-		for _, o := range q.Options {
-			asked.Choices = append(asked.Choices, o.Label)
-		}
-		return asked, true
+		return push.Asked{Text: q.Text, Choices: q.Choices()}, true
 	}
 	tracker := radar.New(o.Dir, chats.LastWriteOf)
 	defer tracker.Flush()
