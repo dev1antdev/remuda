@@ -296,7 +296,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   grid (`cols`/`rows` from the snapshot layouts, in the roster) and shrinks
   the font to fit the width, scrolling when it can't. Touch defaults to
   keep. Agent status lines (ccstatusline etc.) only fit in keep mode on a
-  phone.
+  phone. A grid wider than the screen (keep, or fit with a minimum width),
+  or a keep-mode one taller than it, scrolls under the wheel and under a
+  finger alike (`gridScrolls` / `panOf` in `engine/pointer.ts`, tested): a
+  finger's first move picks the way for the gesture and the mount is
+  panned by hand, since the grid's `touch-action` is none while the app
+  tracks the mouse; any other drag is the app's scroll.
 - Terminal mouse and selection (`features/terminal/engine/`: `modes.ts`
   intercepts, `mouse.ts` encodes the reports, `pointer.ts` listens,
   `selection.ts` keeps the selection, `layer.ts` is the ⬚ layer, `copy.ts`
