@@ -18,7 +18,10 @@ open bin/remuda.app
 
 `macos/build.sh` runs `swift build -c release`, lays the bundle out, makes
 the icon from `web/public/icons/icon-512.png` and signs the app with the
-ad-hoc identity, so Gatekeeper runs it from here. An app downloaded from
+ad-hoc identity, so Gatekeeper runs it from here. It stops with exit 1
+and no half-made bundle when a step fails: a failed build or a missing
+icon leaves `bin/remuda.app` as it was, a refused signature removes the
+unsigned one. An app downloaded from
 somewhere else is unsigned in Gatekeeper's eyes: right-click → Open the
 first time, or build it yourself.
 

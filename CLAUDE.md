@@ -2221,7 +2221,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `macos/` — **the Mac app**, a SwiftPM executable (`swift build`, no
   Xcode, system frameworks only; `macos/build.sh` / `make mac` lays out
   `bin/remuda.app`, the icon from `web/public/icons`, an ad-hoc
-  signature): `WebWindow` (the one NSWindow, a `WKWebView` on the page
+  signature; a failed build, a missing icon or a refused signature
+  stop it with exit 1 and no half-made bundle): `WebWindow` (the one NSWindow, a `WKWebView` on the page
   with the persistent data store so the sign-in cookie stays; links to
   other hosts go to the browser — the host compared case-blind, WebKit
   lowercases it — and so does a `window.open` of any of the server's
