@@ -33,7 +33,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
 }) {
   const [days, setDays] = useState("7");
   const [machine, setMachine] = useState("all");
-  const { budgets } = useRoster();
+  const { budgets, viewOnly } = useRoster();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { data, error, loading } = useQuery(() => fetchUsage(Number(days), machine === "all" ? "" : machine, tz), [days, machine, tz], { keep: true });
   const several = connected(machines).length > 1;
@@ -123,7 +123,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
         {t("What the agents' transcripts say they cost, at Claude Code's own API prices — on a subscription a measure of where the work went, not a bill. Each machine reads its own history.")}
       </Notice>
       {error && <Notice tone="error">{error}</Notice>}
-      <Budgets budgets={budgets ?? []} machines={machines} />
+      <Budgets budgets={budgets ?? []} machines={machines} editable={!viewOnly} />
       {sum.perMachine
         .filter((m) => m.error)
         .map((m) => (
@@ -221,16 +221,20 @@ export default function Usage({ machines, onClose, onOpenSession }: {
   );
 }
 
-// Budgets is the panel's first section: every limit with a thin bar of its period's spend, and the way to add one.
-function Budgets({ budgets, machines }: { budgets: BudgetStatus[]; machines: Machine[] }) {
+// Budgets is the panel's first section: every limit with a thin bar of its period's spend, and the way to add or edit one
+// where the screen may change them (a viewer link's screen sees the limits only, and nothing when there are none)
+function Budgets({ budgets, machines, editable }: { budgets: BudgetStatus[]; machines: Machine[]; editable: boolean }) {
   const label = (id: string) => machineLabel(machines, id);
+  if (!editable && budgets.length === 0) return null;
   return (
     <section className="budgets">
       <h3>
         {t("Budgets")}
-        <button type="button" className="btn sm" onClick={() => actions.openDialog({ kind: "budget", budget: null })}>
-          <Icon name="plus" size={12} /> {t("Add a budget")}
-        </button>
+        {editable && (
+          <button type="button" className="btn sm" onClick={() => actions.openDialog({ kind: "budget", budget: null })}>
+            <Icon name="plus" size={12} /> {t("Add a budget")}
+          </button>
+        )}
       </h3>
       {budgets.length === 0 && <div className="empty">{t("No budgets yet: a limit per day, week or month, on everything or one machine or folder. The usage pill turns amber at 80 %, a push comes at 80 % and at the limit.")}</div>}
       {budgets.map((b) => {
@@ -248,11 +252,13 @@ function Budgets({ budgets, machines }: { budgets: BudgetStatus[]; machines: Mac
               <span style={{ width: `${Math.min(100, 100 * r)}%` }} />
             </span>
             <span className="budget-words">{budgetWords(b)}</span>
-            <Tip text={t("Edit this budget")}>
-              <button type="button" className="icon-btn sm" aria-label={t("Edit this budget")} onClick={() => actions.openDialog({ kind: "budget", budget: b })}>
-                <Icon name="edit" size={14} />
-              </button>
-            </Tip>
+            {editable && (
+              <Tip text={t("Edit this budget")}>
+                <button type="button" className="icon-btn sm" aria-label={t("Edit this budget")} onClick={() => actions.openDialog({ kind: "budget", budget: b })}>
+                  <Icon name="edit" size={14} />
+                </button>
+              </Tip>
+            )}
           </div>
         );
       })}

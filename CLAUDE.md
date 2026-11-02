@@ -2021,7 +2021,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   wears "Viewing only" and no search, Changes is shut, the terminal lens
   is the Wall's screen view (`features/terminal/Screen.tsx`, no attach),
   the chat and the tiles have no composer, keys or question buttons, the
-  tab strip no + or ×, the sidebar no menus; `Shell` registers no push and
+  tab strip no + or ×, the sidebar no menus, the file viewer no Changes
+  tab or Code button, the Usage panel no budget to add or edit (the budget
+  dialog says so if reached), Activity no way to the alert settings, the
+  alerts panel only the voice and the lens a row opens
+  (`features/alerts/sections.ts`, tested); `Shell` registers no push and
   syncs no prefs for a viewer. Settings › Devices ends with **Viewer
   links** (`features/settings/ViewerKeys.tsx`, `viewerLinks.ts` tested):
   make one under a name, Copy the link shown once, Revoke. **The door** (`door.go`): `EnsureDoor(dir,

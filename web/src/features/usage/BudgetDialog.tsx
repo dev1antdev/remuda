@@ -6,7 +6,7 @@ import type { Machine } from "@/features/roster/api";
 import { folderOptions, machineOptions } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
 import { errMsg } from "@/lib/text";
-import { FormDialog, Icon, Notice, Select, useSubmit } from "@/ui";
+import { Dialog, FormDialog, Icon, Notice, Select, useSubmit } from "@/ui";
 import { putBudgets, type BudgetStatus, type Period } from "./api";
 import { PERIODS } from "./budgets";
 import { t } from "@/lib/i18n";
@@ -20,7 +20,7 @@ export default function BudgetDialog({ machines, budget, onClose, onSaved, ask }
   onSaved: () => void;
   ask: (text: string, label: string, run: () => void) => void;
 }) {
-  const { budgets } = useRoster();
+  const { budgets, viewOnly } = useRoster();
   const [machine, setMachine] = useState(budget?.machine || EVERY);
   const [dir, setDir] = useState(budget?.dir || EVERY);
   const [limit, setLimit] = useState(budget ? String(budget.limit) : "");
@@ -45,6 +45,13 @@ export default function BudgetDialog({ machines, budget, onClose, onSaved, ask }
     });
   const folderIcon = <Icon name="folder" size={14} />;
 
+  if (viewOnly) {
+    return (
+      <Dialog title={t("Budgets")} icon="chart" onClose={onClose}>
+        <Notice tone="hint">{t("This screen is for viewing: budgets are set from a signed-in device.")}</Notice>
+      </Dialog>
+    );
+  }
   return (
     <FormDialog
       title={budget ? t("Edit the budget") : t("Add a budget")}

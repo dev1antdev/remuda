@@ -197,4 +197,7 @@ export const panels: Dictionary = {
   "close a dialog, a menu, the file viewer; leave full screen": "закрыть диалог, меню, просмотрщик файлов; выйти из полноэкранного режима",
   "the next or previous match in the find bar, close it": "следующее или предыдущее совпадение в строке поиска, закрыть её",
   "walk the / commands or @ files offered at the caret, pick one, close the list": "пройти по командам / или файлам @ у курсора, выбрать одну, закрыть список",
+  "This screen is for viewing: no push reaches it, and the webhooks are set from a signed-in device. It can read the agents aloud.":
+    "Этот экран только для просмотра: пуши сюда не приходят, а вебхуки настраиваются с устройства, где вы вошли. Читать агентов вслух он может.",
+  "This screen is for viewing: budgets are set from a signed-in device.": "Этот экран только для просмотра: бюджеты задаются с устройства, где вы вошли.",
 };

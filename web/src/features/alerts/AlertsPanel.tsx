@@ -7,6 +7,8 @@ import { inShell } from "@/lib/shell";
 import { speak, useVoices, voiceSupported } from "@/features/alerts/useVoice";
 import { DEFAULT_VOICE, type VoicePrefs } from "@/features/alerts/voice";
 import WebhooksSection from "@/features/alerts/WebhooksSection";
+import { alertSections } from "@/features/alerts/sections";
+import { useRoster } from "@/features/roster/useRoster";
 import Select from "@/ui/Select";
 import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, type OpenLens } from "@/app/openLens";
 import { Dialog, Notice, useTimedNotice } from "@/ui";
@@ -61,19 +63,22 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
   const [openLens, setOpenLens] = usePref<OpenLens>(OPEN_LENS_KEY, DEFAULT_OPEN_LENS);
   const voices = useVoices();
   const native = inShell(); // the Mac app is the device: its alerts come over its own socket, not Web Push
+  const { viewOnly, machines } = useRoster();
+  const shown = alertSections({ native, viewOnly, rosterKnown: machines.length > 0 }); // the local machine is always there once the roster answered
   const voiceOptions = [{ value: "", label: t("The browser's default voice") }, ...voices.map((v) => ({ value: v.name, label: v.name, hint: v.lang, group: v.lang }))];
   const sayOne = () => speak(/[\u0400-\u04ff]/.test(voice.voice ?? "") ? "api: Все тесты прошли, ветка запушена." : t("api: The tests pass and the branch is pushed."), "", voice.voice);
 
   return (
     <Dialog title={t("Alerts on this device")} icon="bell" onClose={onClose} className="alerts-dialog">
-      {native && <Notice tone="hint">{t("Notifications come through the Mac app")}</Notice>}
-      {!native && !state && <Notice tone="hint">{t("Checking…")}</Notice>}
-      {!native && state && !state.supported && <Notice tone="warn">{state.reason}</Notice>}
-      {!native && state?.supported && state.permission === "denied" && (
+      {viewOnly && <Notice tone="hint">{t("This screen is for viewing: no push reaches it, and the webhooks are set from a signed-in device. It can read the agents aloud.")}</Notice>}
+      {native && !viewOnly && <Notice tone="hint">{t("Notifications come through the Mac app")}</Notice>}
+      {shown.push && !state && <Notice tone="hint">{t("Checking…")}</Notice>}
+      {shown.push && state && !state.supported && <Notice tone="warn">{state.reason}</Notice>}
+      {shown.push && state?.supported && state.permission === "denied" && (
         <Notice tone="warn">{t("Notifications are blocked for this site — allow them in the browser's site settings.")}</Notice>
       )}
 
-      {!native && state?.supported && (
+      {shown.push && state?.supported && (
         <div className="alerts-row">
           <span>
             {state.subscribed ? t("Push alerts are on") : t("Push alerts are off")}
@@ -110,47 +115,51 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
           ]}
         />
       </label>
-      <label className="alerts-opt">
-        <input type="checkbox" checked={prefs.input} onChange={(e) => changePrefs({ ...prefs, input: e.target.checked })} />
-        <span>
-          When an agent <b>{t("needs you")}</b>
-          <small>{t("A question or approval still open after 10 s — answered at the desk, it's never sent.")}</small>
-        </span>
-      </label>
-      <label className="alerts-opt">
-        <input type="checkbox" checked={prefs.watchdog ?? true} onChange={(e) => changePrefs({ ...prefs, watchdog: e.target.checked })} />
-        <span>
-          When an agent <b>{t("looks stuck")}</b>
-          <small>{t("Working 20 min with nothing written, waiting for an answer 15 min, or looping on one tool call — with an Esc button on the notification.")}</small>
-        </span>
-      </label>
-      <label className="alerts-opt">
-        <span>
-          When an agent <b>finishes</b>
-          <small>Turns ≥ 1 min, a minute after; "always" means every turn, after 10 s.</small>
-        </span>
-        <Select
-          value={prefs.done}
-          onChange={(done) => changePrefs({ ...prefs, done })}
-          options={[
-            { value: "off", label: "never" },
-            { value: "long", label: t("long turns") },
-            { value: "always", label: "always" },
-          ]}
-        />
-      </label>
-      <label className="alerts-opt">
-        <input type="checkbox" checked={!!prefs.quiet} onChange={(e) => changeQuiet(e.target.checked)} />
-        <span>
-          <b>{t("Quiet hours")}</b>
-          <small>{t("Nothing is sent to this device between the two times, by its own clock ({zone}). Activity keeps what happened meanwhile.", { zone })}</small>
-        </span>
-      </label>
-      <div className="alerts-quiet">
-        <input type="time" className="sm" value={quietWindow.from} disabled={!prefs.quiet} aria-label={t("Quiet from")} onChange={(e) => changeWindow({ ...quietWindow, from: e.target.value })} />
-        <span>to</span>
-        <input type="time" className="sm" value={quietWindow.to} disabled={!prefs.quiet} aria-label={t("Quiet until")} onChange={(e) => changeWindow({ ...quietWindow, to: e.target.value })} />
-      </div>
+      {shown.kinds && (
+        <>
+          <label className="alerts-opt">
+            <input type="checkbox" checked={prefs.input} onChange={(e) => changePrefs({ ...prefs, input: e.target.checked })} />
+            <span>
+              When an agent <b>{t("needs you")}</b>
+              <small>{t("A question or approval still open after 10 s — answered at the desk, it's never sent.")}</small>
+            </span>
+          </label>
+          <label className="alerts-opt">
+            <input type="checkbox" checked={prefs.watchdog ?? true} onChange={(e) => changePrefs({ ...prefs, watchdog: e.target.checked })} />
+            <span>
+              When an agent <b>{t("looks stuck")}</b>
+              <small>{t("Working 20 min with nothing written, waiting for an answer 15 min, or looping on one tool call — with an Esc button on the notification.")}</small>
+            </span>
+          </label>
+          <label className="alerts-opt">
+            <span>
+              When an agent <b>finishes</b>
+              <small>Turns ≥ 1 min, a minute after; "always" means every turn, after 10 s.</small>
+            </span>
+            <Select
+              value={prefs.done}
+              onChange={(done) => changePrefs({ ...prefs, done })}
+              options={[
+                { value: "off", label: "never" },
+                { value: "long", label: t("long turns") },
+                { value: "always", label: "always" },
+              ]}
+            />
+          </label>
+          <label className="alerts-opt">
+            <input type="checkbox" checked={!!prefs.quiet} onChange={(e) => changeQuiet(e.target.checked)} />
+            <span>
+              <b>{t("Quiet hours")}</b>
+              <small>{t("Nothing is sent to this device between the two times, by its own clock ({zone}). Activity keeps what happened meanwhile.", { zone })}</small>
+            </span>
+          </label>
+          <div className="alerts-quiet">
+            <input type="time" className="sm" value={quietWindow.from} disabled={!prefs.quiet} aria-label={t("Quiet from")} onChange={(e) => changeWindow({ ...quietWindow, from: e.target.value })} />
+            <span>to</span>
+            <input type="time" className="sm" value={quietWindow.to} disabled={!prefs.quiet} aria-label={t("Quiet until")} onChange={(e) => changeWindow({ ...quietWindow, to: e.target.value })} />
+          </div>
+        </>
+      )}
 
       <label className="alerts-opt">
         <input type="checkbox" checked={voice.on} disabled={!voiceSupported} onChange={(e) => setVoice({ ...voice, on: e.target.checked })} />
@@ -170,7 +179,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      {state?.subscribed && state.endpoint && (
+      {shown.push && state?.subscribed && state.endpoint && (
         <button
           type="button"
           className="btn sm alerts-test"
@@ -182,7 +191,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
       )}
       {err && <Notice tone="error" onDismiss={() => setErr("")}>{err}</Notice>}
       {done && <Notice tone="success">{done}</Notice>}
-      <WebhooksSection />
+      {shown.webhooks && <WebhooksSection />}
     </Dialog>
   );
 }
