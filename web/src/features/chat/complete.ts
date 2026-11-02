@@ -23,6 +23,16 @@ export function tokenAt(draft: string, caret: number): Token | null {
   return null;
 }
 
+// Dismissed is the token Esc closed the list for: its kind and where it starts
+export type Dismissed = { kind: Token["kind"]; start: number };
+
+// stillDismissed keeps a dismissal while the caret is in the very token Esc closed; once that token is gone — sent,
+// deleted, left behind — or another stands at the caret, the list may open again
+export function stillDismissed(dismissed: Dismissed | null, token: Token | null): Dismissed | null {
+  if (!dismissed || !token) return null;
+  return token.kind === dismissed.kind && token.start === dismissed.start ? dismissed : null;
+}
+
 // applyPick replaces the token with the pick and a space (the one already there kept), the caret landing after it
 export function applyPick(draft: string, token: Token, insert: string): { draft: string; caret: number } {
   const after = draft.slice(token.end);

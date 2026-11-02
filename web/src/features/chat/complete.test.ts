@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyPick, commandItems, MAX_SHOWN, modelCommand, pathItems, tokenAt, type Command } from "./complete";
+import { applyPick, commandItems, MAX_SHOWN, modelCommand, pathItems, stillDismissed, tokenAt, type Command, type Token } from "./complete";
 
 describe("tokenAt", () => {
   it("sees a slash command only at the very start, up to the first space", () => {
@@ -23,6 +23,24 @@ describe("tokenAt", () => {
   it("stays inside the draft whatever the caret says", () => {
     expect(tokenAt("/x", 99)).toEqual({ kind: "command", start: 0, end: 2, query: "x" });
     expect(tokenAt("", 0)).toBeNull();
+  });
+});
+
+describe("stillDismissed", () => {
+  const slash: Token = { kind: "command", start: 0, end: 3, query: "co" };
+  const closed = { kind: "command" as const, start: 0 };
+
+  it("holds while the caret stays in the token Esc closed, however it grows", () => {
+    expect(stillDismissed(closed, slash)).toBe(closed);
+    expect(stillDismissed(closed, { ...slash, end: 5, query: "comp" })).toBe(closed);
+  });
+
+  it("lets go once the token is gone or another stands at the caret, so a later slash gets its list again", () => {
+    expect(stillDismissed(closed, null)).toBeNull();
+    expect(stillDismissed(closed, { kind: "path", start: 0, end: 2, query: "a" })).toBeNull();
+    expect(stillDismissed(closed, { kind: "command", start: 0, end: 1, query: "" })).toBe(closed);
+    expect(stillDismissed({ kind: "path", start: 4 }, { kind: "path", start: 9, end: 10, query: "" })).toBeNull();
+    expect(stillDismissed(null, slash)).toBeNull();
   });
 });
 

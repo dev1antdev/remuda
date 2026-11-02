@@ -268,8 +268,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   folder's files, both ranked by what is typed (`complete.ts` the pure
   part, tested: `tokenAt`, `applyPick`, `commandItems` / `pathItems` over
   the palette's `rank`, `MAX_SHOWN` 12, `modelCommand`); ↑ ↓ walk the
-  rows, ↵ or Tab picks, Esc closes the list for that token, a click
-  picks; the lists come from `GET /api/complete?machine&dir&kind=commands
+  rows, ↵ or Tab picks, Esc closes the list for that token until the
+  caret leaves it (`stillDismissed`: a later slash or @ at the same place
+  gets its list again), a click picks; the lists come from `GET /api/complete?machine&dir&kind=commands
   |paths&agent` (`internal/server/complete.go` → `internal/complete`,
   tested on `shell.Fake`): the agent's built-ins (`builtins.go` — Claude
   Code's, Codex's and Gemini CLI's own commands as their binaries and
