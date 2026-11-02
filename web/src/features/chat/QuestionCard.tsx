@@ -1,12 +1,13 @@
 // QuestionCard is what the agent asks, read off its screen while it waits: the dialog's words and a button per choice —
-// a click walks the cursor there and presses Enter — or, when the screen shows nothing to read, the blind keys.
+// a click walks the cursor there and presses Enter — or the blind keys: when the screen shows nothing to read, and under
+// a multi-select's words, where Enter ticks a box and the person goes down to Submit.
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useLive, useLiveConnected, watchPane } from "@/lib/live";
 import { useQuery } from "@/lib/query";
 import { fetchQuestion } from "./api";
 import { PromptKeys } from "./PromptKeys";
-import { keysTo, questionLines } from "./question";
+import { choosable, keysTo, questionLines } from "./question";
 import { t } from "@/lib/i18n";
 
 export function QuestionCard({ machineId, paneId, active, compact = false, onKeys, children }: {
@@ -36,6 +37,18 @@ export function QuestionCard({ machineId, paneId, active, compact = false, onKey
     );
   }
   const { head, detail, ask } = questionLines(asked.text);
+  if (!choosable(asked)) {
+    return (
+      <>
+        <div className="question" title={asked.text}>
+          {head && <div className="question-head">{head}</div>}
+          {ask && ask !== head && <div className="question-ask">{ask}</div>}
+          <div className="question-ask">{t("Several choices: Enter ticks one, then go down to Submit")}</div>
+        </div>
+        <PromptKeys onKeys={onKeys} />
+      </>
+    );
+  }
   const choose = async (index: number) => {
     setSending(true);
     try {

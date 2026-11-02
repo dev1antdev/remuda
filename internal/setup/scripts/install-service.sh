@@ -97,9 +97,9 @@ Description=remuda — browser/phone client for herdr
 After=default.target
 
 [Service]
-ExecStart=$BIN -addr $ADDR $TS_ARGS
+ExecStart="$BIN" -addr "$ADDR" $TS_ARGS
 KillMode=process
-Environment=PATH=$PATH_FOR_SERVICE$([ -n "$TS_AUTHKEY" ] && printf '\nEnvironment=TS_AUTHKEY=%s' "$TS_AUTHKEY")
+Environment="PATH=$PATH_FOR_SERVICE"$([ -n "$TS_AUTHKEY" ] && printf '\nEnvironment=TS_AUTHKEY=%s' "$TS_AUTHKEY")
 Restart=always
 RestartSec=3
 

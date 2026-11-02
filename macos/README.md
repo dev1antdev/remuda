@@ -18,7 +18,10 @@ open bin/remuda.app
 
 `macos/build.sh` runs `swift build -c release`, lays the bundle out, makes
 the icon from `web/public/icons/icon-512.png` and signs the app with the
-ad-hoc identity, so Gatekeeper runs it from here. An app downloaded from
+ad-hoc identity, so Gatekeeper runs it from here. It stops with exit 1
+and no half-made bundle when a step fails: a failed build or a missing
+icon leaves `bin/remuda.app` as it was, a refused signature removes the
+unsigned one. An app downloaded from
 somewhere else is unsigned in Gatekeeper's eyes: right-click → Open the
 first time, or build it yourself.
 
@@ -31,7 +34,17 @@ opens the page with it once; the server turns that into a device cookie
 the cookie between launches. A remuda elsewhere — a tailnet address, say
 — is paired in Settings… by pasting its pairing link
 (`https://host/?token=…`); the address goes to the app's defaults, the
-token to the login keychain under "remuda".
+token to the login keychain under "remuda", in place of the remuda
+paired before. A pairing the keychain refuses to keep is said in
+Settings and not applied. When the paired remuda's token cannot be read
+at launch — the keychain locked, the item gone — the app uses this Mac's
+own remuda for that launch and says so in Settings and in the log; the
+pairing stays for the next launch.
+
+When remuda cannot be reached yet — the app launched at login before
+remuda's service was up — the window tries the page again by itself,
+1 s and then up to 30 s apart, and does the same when its web process
+dies.
 
 macOS asks once whether the app may notify you; Settings… shows the
 answer and asks again when it was never answered.
@@ -43,20 +56,26 @@ answer and asks again when it was never answered.
   for a finish nobody looked at — and the count beside it. The menu lists
   those agents with the first line of what they said; a click opens the
   pane's chat in the window. Then "N working · M idle", Open remuda
-  (⌥⌘R), Wall, Tasks, Standup, Settings…, Quit.
+  (with the hotkey beside it, ⌥⌘R unless Settings says otherwise), Wall,
+  Tasks, Standup, Settings…, Quit.
 - **The Dock badge** carries the same count.
 - **Notifications** are the alerts the phone would get — a question after
   10 s, a finish after a minute, a watchdog note, a digest, a budget — with
   their buttons: *Open*, *Send Esc*, the question's own two choices. The
   app is one more device of remuda's push service (`POST /api/push/socket`,
   then `/ws/alerts`), so the alert settings and quiet hours in the page's
-  alerts panel apply to it like to a phone.
+  alerts panel apply to it like to a phone; it is one device per remuda,
+  found again with its settings when you switch back to that one.
 - **The hotkey** ⌥⌘R shows and hides the window from any app; another
-  combination goes into Settings… as `ctrl+opt+r` or `⌃⌥R`.
+  combination goes into Settings… as `ctrl+opt+r` or `⌃⌥R`, and Settings
+  says so when the system refuses it because another app holds it.
 - **Closing the window** hides it; the app stays in the menu bar. Quit is
   in the menu.
+- The composer's attach button opens the system's file panel.
 - A file the page saves (Export as Markdown) lands in `~/Downloads`.
-  Links to other sites open in your browser.
+  Links to other sites open in your browser, and so does a tab the page
+  opens on anything of remuda's but the page itself — Code's "Open the
+  editor in its own tab" — since the window has no way back from it.
 
 ## Not here
 
@@ -74,9 +93,17 @@ bin/remuda.app/Contents/MacOS/remuda --probe [--server http://127.0.0.1:7526] [-
 
 No window, no menu bar item, no notification: the page is loaded off
 screen and every message it posts over the bridge, every alert frame and
-every change of the socket's state is printed as one JSON line. Exit 0
-when the page said `ready` within the time, 1 otherwise. The check behind
-`make mac` in a pull request.
+every change of the socket's state is printed as one JSON line. It stops
+as soon as it has heard what a working app hears — the page's `ready`,
+`badge` and `menu` and the socket `open` — and exits 0; otherwise it
+stops when `--seconds` run out, 0 when the page said `ready` by then and
+1 when it did not. The last line, `done`, lists what was heard. An alert
+frame is printed when one arrives before the stop; none is waited for,
+since an alert comes only when an agent needs you. On its way out
+it removes the two devices it made on the server — the one the page
+signed in as and the socket's alert device — so a run leaves nothing
+behind in Settings › Devices. The check behind `make mac` in a pull
+request.
 
 ## How the page and the app talk
 

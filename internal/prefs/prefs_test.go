@@ -67,15 +67,16 @@ func TestNullDeletesAndMissingStampIsNow(t *testing.T) {
 
 func TestRefusesBadKeysAndBigValues(t *testing.T) {
 	st := New(t.TempDir())
-	for _, key := range []string{"", "has space", "slash/key", strings.Repeat("k", 81), "quote\"s"} {
+	for _, key := range []string{"", "tab\tkey", "line\nbreak", "bell\x07", strings.Repeat("k", MaxKey+1)} {
 		if _, err := st.Put(map[string]Entry{key: {Value: json.RawMessage(`1`)}}); err == nil {
 			t.Fatalf("key %q was accepted", key)
 		}
 	}
-	if _, err := st.Put(map[string]Entry{"panel.sidebar": {Value: json.RawMessage(`268`)}, "prompt.history:local|/x": {Value: json.RawMessage(`[]`)}}); err == nil {
-		t.Fatal("a key with | and / was accepted")
+	// a folder's pins live under a key made of the machine and the folder: whatever the folder is called travels with it
+	if _, err := st.Put(map[string]Entry{"panel.sidebar": {Value: json.RawMessage(`268`)}, "pins:local|/Users/me/My Project (2026)": {Value: json.RawMessage(`[]`)}}); err != nil {
+		t.Fatalf("a pins key with a folder was refused: %v", err)
 	}
-	if _, err := st.Put(map[string]Entry{"panel.sidebar": {Value: json.RawMessage(`268`)}, "theme.dark": {Value: json.RawMessage(`"mocha"`)}}); err != nil {
+	if _, err := st.Put(map[string]Entry{"theme.dark": {Value: json.RawMessage(`"mocha"`)}}); err != nil {
 		t.Fatalf("good keys refused: %v", err)
 	}
 	big := json.RawMessage(`"` + strings.Repeat("x", MaxValue) + `"`)
@@ -85,7 +86,7 @@ func TestRefusesBadKeysAndBigValues(t *testing.T) {
 	if _, err := st.Put(map[string]Entry{"wall": {Value: json.RawMessage(`{not json`)}}); err == nil {
 		t.Fatal("a value that is not JSON was accepted")
 	}
-	if len(st.All()) != 2 {
+	if len(st.All()) != 3 {
 		t.Fatalf("a refused put changed the store: %+v", st.All())
 	}
 }

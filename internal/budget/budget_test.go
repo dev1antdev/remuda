@@ -1,6 +1,7 @@
 package budget
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -209,6 +210,66 @@ func TestStatusAndAlerts(t *testing.T) {
 	}
 }
 
+// A spend summed from cents is a hair off in floats — three $0.70 make $2.0999999999999996 — and the page reads it as the
+// whole percent its words show: the push must cross at the same percent the page paints red.
+func TestThresholdsReadTheWholePercentTheWordsShow(t *testing.T) {
+	folder := func(cost float64) usage.ProjectTotals {
+		return usage.ProjectTotals{Project: "-Users-me-remuda", Dir: "/Users/me/remuda", Totals: usage.Totals{Cost: cost}}
+	}
+	s, n, _ := fakeSpend(t, map[string]*usage.Report{
+		"local": report(2.1, folder(0.7), folder(0.7), folder(0.7)),
+		"gog":   report(2.4),
+	})
+	if _, err := s.Replace([]Budget{
+		{ID: "crossed", Limit: 2.1, Period: "day", Machine: "local", Dir: "/Users/me/remuda"},
+		{ID: "eighty", Limit: 3, Period: "day", Machine: "gog"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s.Wait()
+	titles := map[string]string{}
+	for _, p := range n.all() {
+		titles[p.Tag] = p.Title
+	}
+	if titles["budget|crossed"] != "Budget crossed: $2.10 of $2.10 today" {
+		t.Errorf("three $0.70 of $2.10: %q", titles["budget|crossed"])
+	}
+	if titles["budget|eighty"] != "Budget at 80 %: $2.40 of $3.00 today" {
+		t.Errorf("$2.40 of $3: %q", titles["budget|eighty"])
+	}
+}
+
+// A reading's alert can land while Replace checks the list it was given: the threshold it noted must survive the swap,
+// or it pushes again at the next reading. The long list widens the moment the check takes; each round races the two.
+func TestAnAlertNotedDuringReplaceIsKept(t *testing.T) {
+	reports := map[string]*usage.Report{"local": report(9)}
+	eighty := Budget{ID: "a", Limit: 10, Period: "day"}
+	list := []Budget{eighty}
+	for i := 0; i < 2000; i++ {
+		list = append(list, Budget{ID: fmt.Sprintf("filler-%d", i), Limit: 1e9, Period: "day"})
+	}
+	for round := 0; round < 10; round++ {
+		s, n, now := fakeSpend(t, reports)
+		s.mu.Lock()
+		s.all = []Budget{eighty}
+		s.spends["day"] = &spend{start: PeriodStart("day", *now, s.Loc), at: *now, reports: reports, errors: map[string]string{}}
+		s.mu.Unlock()
+		alerted := make(chan struct{})
+		go func() {
+			defer close(alerted)
+			s.alert(nil, *now)
+		}()
+		if _, err := s.Replace(list); err != nil {
+			t.Fatal(err)
+		}
+		<-alerted
+		s.Wait()
+		if got := len(n.all()); got != 1 {
+			t.Fatalf("round %d: the 80 %% alert went %d times", round, got)
+		}
+	}
+}
+
 func TestEditResetsAlerts(t *testing.T) {
 	s, n, _ := fakeSpend(t, map[string]*usage.Report{"local": report(9)})
 	if _, err := s.Replace([]Budget{{ID: "a", Limit: 10, Period: "day"}}); err != nil {
@@ -246,6 +307,48 @@ func TestStatusWithoutReading(t *testing.T) {
 	st := s.Status()
 	if len(st) != 1 || st[0].Collected != "" || st[0].Spent != 0 {
 		t.Errorf("an unread period must answer without a figure: %+v", st)
+	}
+	s.Wait()
+}
+
+// The roster is built every few seconds while a reading runs — at a period's turn every build finds the cache stale —
+// and each build must not queue a scan of its own behind the one under way.
+func TestStatusAsksForOneReadingWhileItRuns(t *testing.T) {
+	s, _, _ := fakeSpend(t, nil)
+	var mu sync.Mutex
+	calls := 0
+	started := make(chan struct{}, 8)
+	release := make(chan struct{})
+	s.collect = func([]shell.Host, time.Time, *time.Location, string) []usage.MachineReport {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		started <- struct{}{}
+		<-release
+		return []usage.MachineReport{{ID: "local", Label: "local", Report: report(1)}}
+	}
+	s.mu.Lock()
+	s.all = []Budget{{ID: "a", Limit: 10, Period: "day"}}
+	s.mu.Unlock()
+	s.Status()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("a stale status asked for no reading")
+	}
+	for i := 0; i < 4; i++ {
+		s.Status()
+	}
+	close(release)
+	s.Wait()
+	mu.Lock()
+	n := calls
+	mu.Unlock()
+	if n != 1 {
+		t.Fatalf("the spend was read %d times for one stale period", n)
+	}
+	if st := s.Status(); st[0].Collected == "" || st[0].Spent != 1 {
+		t.Fatalf("the one reading did not serve the status: %+v", st[0])
 	}
 	s.Wait()
 }

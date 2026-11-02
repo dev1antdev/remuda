@@ -346,3 +346,22 @@ func TestWebhooksHearTheScheduledAlerts(t *testing.T) {
 		t.Fatalf("a finish goes once, as the feed hears it: %d requests", len(got))
 	}
 }
+
+// The panel offers "a machine away" among the kinds and ticks it for a new webhook: the store must keep it and send it.
+func TestAMachineAwayReachesAWebhookThatTakesIt(t *testing.T) {
+	w, rec, srv := newWebhooks(t)
+	if err := w.Replace("", []Webhook{{Kind: "generic", Name: "ops", URL: srv.URL + "/ops", Kinds: []string{"machine"}, Enabled: true}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, views := w.Views(); strings.Join(views[0].Kinds, ",") != "machine" {
+		t.Fatalf("the kind was dropped on save: %v", views[0].Kinds)
+	}
+	if !w.Wants("machine") {
+		t.Fatal("a webhook that takes machine kinds is not counted as listening")
+	}
+	w.Deliver(Payload{Kind: "machine", Machine: "gog", Title: "GOG is away", Body: "unreachable since 14:02: dial tcp: timeout"})
+	w.Wait()
+	if got := rec.list(); len(got) != 1 || !strings.Contains(got[0].body, `"kind":"machine"`) {
+		t.Fatalf("want the away once, got %+v", got)
+	}
+}

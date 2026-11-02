@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { keysTo, questionLines } from "./question";
+import { choosable, keysTo, questionLines } from "./question";
 
 const options = [
   { n: 1, label: "Yes", picked: false },
@@ -16,6 +16,14 @@ describe("keysTo", () => {
   it("starts at the first choice when none is picked", () => {
     const none = options.map((o) => ({ ...o, picked: false }));
     expect(keysTo(none, 2)).toEqual(["down", "down", "enter"]);
+  });
+});
+
+describe("choosable", () => {
+  it("takes one press for a single choice, never for a multi-select", () => {
+    expect(choosable({ text: "Proceed?", options })).toBe(true);
+    expect(choosable({ text: "Which features?", options, multi: true })).toBe(false);
+    expect(choosable({ text: "Nothing to pick", options: [] })).toBe(false);
   });
 });
 

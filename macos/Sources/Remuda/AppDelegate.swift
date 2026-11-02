@@ -21,10 +21,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status.onSettings = { [weak self] in self?.openSettings() }
         settings.onApply = { [weak self] text, spec in self?.apply(serverText: text, hotkey: spec) }
         settings.onAskNotifications = { [weak self] in self?.notifier?.askPermission { _ in self?.refreshSettings() } }
-        bindHotkey()
+        if !bindHotkey() { NSLog("remuda: the hotkey %@ could not be registered", hotkeySpec) }
         do {
-            try connect(Server.load())
+            let (loaded, notice) = try Server.load()
+            try connect(loaded)
+            if let notice {
+                NSLog("remuda: %@", notice)
+                showSettings(message: notice)
+            }
         } catch {
+            NSLog("remuda: %@", error.localizedDescription)
             showSettings(message: error.localizedDescription)
         }
     }
@@ -81,21 +87,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func bindHotkey() {
+    // bindHotkey registers the combination in place of the one before, false when the system refused it.
+    private func bindHotkey() -> Bool {
+        hotkey = nil
         hotkey = Hotkey(spec: hotkeySpec) { [weak self] in self?.web?.toggle() }
-        status.hotkeyLabel = Hotkey.label(hotkeySpec)
+        if let equivalent = Hotkey.menuEquivalent(hotkeySpec) { status.hotkey = equivalent }
+        return hotkey != nil
     }
 
     @objc private func openSettings() { showSettings(message: "") }
 
     private func showSettings(message: String) {
-        settings.show(server: server, hotkey: hotkeySpec, permission: "", message: message)
+        settings.show(server: server, hotkey: hotkeySpec, permission: "…", message: message)
         refreshSettings()
     }
 
+    // refreshSettings words the notification permission in the open Settings, touching nothing else there.
     private func refreshSettings() {
-        guard let notifier else { return settings.say("notifications need the app bundle (make mac)") }
-        notifier.status { [weak self] words in self?.settings.show(server: self?.server, hotkey: self?.hotkeySpec ?? "", permission: words, message: "") }
+        guard let notifier else {
+            return settings.setPermission(Notifier.available ? "asked once remuda is connected" : "need the app bundle (make mac)")
+        }
+        notifier.status { [weak self] words in self?.settings.setPermission(words) }
     }
 
     // apply takes the Settings form: a pairing link pairs, an empty field goes back to this Mac's own remuda.
@@ -103,10 +115,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if Hotkey.parse(spec) == nil {
             return settings.say("the hotkey needs a modifier and one key, like opt+cmd+r")
         }
+        var hotkeyRefused = false
         if spec != hotkeySpec {
             hotkeySpec = spec
             UserDefaults.standard.set(spec, forKey: AppDelegate.hotkeyKey)
-            bindHotkey()
+            hotkeyRefused = !bindHotkey()
         }
         do {
             let text = serverText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -124,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if next.base != server?.base || next.token != server?.token {
                 try connect(next)
             }
-            settings.say("applied")
+            settings.say(hotkeyRefused ? "applied, but the system refused that hotkey; another app may hold it" : "applied")
         } catch {
             settings.say(error.localizedDescription)
         }

@@ -6,15 +6,25 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     // available says whether the process has a bundle: the notification centre refuses a bare binary.
     static var available: Bool { Bundle.main.bundleIdentifier != nil }
 
+    // keep is how many sets of buttons stay registered: a question's buttons wear its own choices, so each wording is one.
+    private static let keep = 32
     private let center = UNUserNotificationCenter.current()
-    private var categories: Set<String> = []
+    private var categories: [UNNotificationCategory] = []
     var server: Server
     var onOpen: ((_ machine: String, _ pane: String, _ panel: String) -> Void)?
 
+    // init takes over the button sets registered before, so a notification still in the list keeps its buttons.
     init(server: Server) {
         self.server = server
         super.init()
         center.delegate = self
+        center.getNotificationCategories { existing in
+            DispatchQueue.main.async {
+                let ours = Set(self.categories.map(\.identifier))
+                self.categories = existing.filter { !ours.contains($0.identifier) } + self.categories
+                self.register()
+            }
+        }
     }
 
     // askPermission puts the system's question up when it has not been answered yet.
@@ -38,37 +48,35 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    // post shows one alert; its buttons are a category registered once per distinct set of actions.
+    // post shows one alert; its buttons are a category registered once per distinct set of actions and their titles.
     func post(_ alert: Alert) {
-        let category = alert.actions.isEmpty ? "plain" : "acts:" + alert.actions.map { $0.action }.joined(separator: "+")
-        ensure(category: category, actions: alert.actions) {
-            let content = UNMutableNotificationContent()
-            content.title = alert.title
-            content.body = alert.body
-            content.threadIdentifier = alert.tag.isEmpty ? alert.kind : alert.tag
-            content.categoryIdentifier = category
-            content.sound = .default
-            content.userInfo = ["machine": alert.machine, "pane": alert.pane, "panel": alert.panel, "choices": alert.choices, "kind": alert.kind]
-            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-            self.center.add(request) { error in
-                if let error { NSLog("remuda: notification: %@", error.localizedDescription) }
-            }
+        let category = alert.actions.isEmpty ? "plain" : "acts:" + alert.actions.map { "\($0.action)=\($0.title)" }.joined(separator: "+")
+        ensure(category: category, actions: alert.actions)
+        let content = UNMutableNotificationContent()
+        content.title = alert.title
+        content.body = alert.body
+        content.threadIdentifier = alert.tag.isEmpty ? alert.kind : alert.tag
+        content.categoryIdentifier = category
+        content.sound = .default
+        content.userInfo = ["machine": alert.machine, "pane": alert.pane, "panel": alert.panel, "choices": alert.choices, "kind": alert.kind]
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        center.add(request) { error in
+            if let error { NSLog("remuda: notification: %@", error.localizedDescription) }
         }
     }
 
-    private func ensure(category id: String, actions: [(action: String, title: String)], then: @escaping () -> Void) {
-        if categories.contains(id) { return then() }
-        center.getNotificationCategories { existing in
-            let buttons = actions.map { UNNotificationAction(identifier: $0.action, title: $0.title, options: $0.action == "open" ? [.foreground] : []) }
-            let category = UNNotificationCategory(identifier: id, actions: buttons, intentIdentifiers: [], options: [])
-            var all = existing.filter { $0.identifier != id }
-            all.insert(category)
-            self.center.setNotificationCategories(all)
-            DispatchQueue.main.async {
-                self.categories.insert(id)
-                then()
-            }
-        }
+    // ensure registers the category before its notification goes out, from the app's own list so two alerts in a row
+    // cannot drop each other's buttons; the oldest sets past `keep` let go.
+    private func ensure(category id: String, actions: [(action: String, title: String)]) {
+        guard !categories.contains(where: { $0.identifier == id }) else { return }
+        let buttons = actions.map { UNNotificationAction(identifier: $0.action, title: $0.title, options: $0.action == "open" ? [.foreground] : []) }
+        categories.append(UNNotificationCategory(identifier: id, actions: buttons, intentIdentifiers: [], options: []))
+        register()
+    }
+
+    private func register() {
+        if categories.count > Notifier.keep { categories.removeFirst(categories.count - Notifier.keep) }
+        center.setNotificationCategories(Set(categories))
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler handler: @escaping (UNNotificationPresentationOptions) -> Void) {
@@ -76,6 +84,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     // didReceive answers a button: Esc and a choice go to the pane through remuda, anything else opens the window on it.
+    // The centre calls it on a queue of its own, so the window is only ever opened from the main queue.
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler handler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
         let machine = info["machine"] as? String ?? ""
@@ -83,7 +92,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let panel = info["panel"] as? String ?? ""
         let choices = info["choices"] as? [String] ?? []
         let action = response.actionIdentifier
-        let open: () -> Void = { [weak self] in self?.onOpen?(machine, pane, panel) }
+        let open: () -> Void = { [weak self] in DispatchQueue.main.async { self?.onOpen?(machine, pane, panel) } }
         if action == "esc" {
             send("/api/keys", ["machine": machine, "pane": pane, "keys": ["esc"]], else: open, then: handler)
         } else if action.hasPrefix("choice-"), let index = Int(action.dropFirst("choice-".count)), index < choices.count {
