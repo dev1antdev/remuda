@@ -1694,8 +1694,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `prefs.json` in the state dir, `{"<key>": {"value", "at"}}`; `Store.All`,
   `Store.Put` merges a part by key, the newer stamp winning (an equal one
   takes the incoming, a `null` value deletes, a missing stamp reads as
-  now), keys `^[a-zA-Z0-9_.:-]{1,80}$`, a value at most 16 KB, the file
-  1 MB; tested. Routes `GET /api/prefs` (an ETag, 304 when unchanged) and
+  now), a key any printable text up to `MaxKey` 512 characters (a
+  folder's pins travel under `pins:<machine>|<dir>`, whatever the folder
+  is called), a value at most 16 KB, the file 1 MB; tested. Routes `GET /api/prefs` (an ETag, 304 when unchanged) and
   `PUT /api/prefs` (the part, the merged whole back). The page decides
   what travels: `lib/syncKeys.ts` (tested) is the allow-list — `theme`,
   `theme.dark`, `theme.accent`, `density`, `font.mono`, `lang` (not `text.size`:
