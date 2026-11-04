@@ -8,7 +8,7 @@ import RecipesDialog from "@/features/recipes/RecipesDialog";
 import { readPref, writePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { dirname } from "@/lib/text";
-import { FormDialog, Icon, Logo, Select, useSubmit } from "@/ui";
+import { FormDialog, Icon, Logo, Select, Tip, useSubmit } from "@/ui";
 import type { AgentKind, Machine, Session, StartExtras } from "./api";
 import FolderPicker from "./FolderPicker";
 import { machineOptions } from "./options";
@@ -156,20 +156,21 @@ export function RenameDialog({ what, label, onClose, onRename }: { what: "tab" |
   );
 }
 
-export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate, onClose }: {
+export function NewWorkspaceDialog({ machines, agents, defaultMachine, defaultDir = "", onCreate, onClose }: {
   machines: Machine[];
   agents: AgentKind[];
   defaultMachine: string;
+  defaultDir?: string; // the folder a folder's own menu opened it on
   onCreate: (machine: string, dir: string, name: string, agent: string, extras: StartExtras) => Promise<void>;
   onClose: () => void;
 }) {
   const [machine, setMachine] = useState(defaultMachine);
-  const [dir, setDir] = useState("");
+  const [dir, setDir] = useState(defaultDir);
   const [name, setName] = useState("");
   const { agent, pickAgent, draft, setDraft, options: extras, applyRecipe } = useStart(defaultAgent(agents, "claude"));
   const [picking, setPicking] = useState(false);
   const submit = useSubmit(async () => {
-    if (!dir.trim()) throw new Error("Project folder is required");
+    if (!dir.trim()) throw new Error(t("Project folder is required"));
     await onCreate(machine, dir.trim(), name.trim(), agent, extras());
   });
   const target = machines.find((m) => m.id === machine);
@@ -189,10 +190,12 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate,
         {t("Project folder")}
         {target && target.id !== "local" ? ` ${t("on {machine}", { machine: target.label })}` : ""}
         <span className="field-row">
-          <input autoFocus value={dir} placeholder="/Users/you/Projects/app" onChange={(e) => setDir(e.target.value)} />
-          <button type="button" className="icon-btn lg" title={t("Browse the folders on the machine")} disabled={!target || target.state !== "connected"} onClick={() => setPicking(true)}>
-            <Icon name="folder" size={16} />
-          </button>
+          <input autoFocus={!defaultDir} value={dir} placeholder="/Users/you/Projects/app" onChange={(e) => setDir(e.target.value)} />
+          <Tip text={t("Browse the folders on the machine")}>
+            <button type="button" className="icon-btn lg" aria-label={t("Browse the folders on the machine")} disabled={!target || target.state !== "connected"} onClick={() => setPicking(true)}>
+              <Icon name="folder" size={16} />
+            </button>
+          </Tip>
         </span>
       </label>
       {picking && target && (
@@ -209,7 +212,7 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate,
       )}
       <label>
         {t("Name (optional)")}
-        <input value={name} placeholder="checkout-api" onChange={(e) => setName(e.target.value)} />
+        <input autoFocus={!!defaultDir} value={name} placeholder="checkout-api" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
       <StartOptionsFields kind={agent} draft={draft} agents={agents} onChange={setDraft} onRecipe={applyRecipe} />

@@ -1,18 +1,23 @@
 #!/bin/sh
 # make e2e — the end-to-end smoke: a throwaway herdr server on a socket of
 # its own, a remuda of its own on top of it and headless Chrome, driven by
-# e2e/smoke.mjs over the DevTools protocol. Nothing of the person's is
-# touched: herdr and remuda get a HOME, a socket and a state dir under one
-# temp folder, which goes when the run passes (E2E_KEEP=1 keeps it).
+# e2e/smoke.mjs over the DevTools protocol, then e2e/display.mjs, every
+# screen at two widths in two languages, checked for its place on the
+# screen. Nothing of the person's is touched: herdr and remuda get a HOME,
+# a socket and a state dir under one temp folder, which goes when the run
+# passes (E2E_KEEP=1 keeps it).
 #
-# Env: E2E_PORT (7431), E2E_CDP_PORT (9361), E2E_BIN (built when unset),
+# Env: E2E_PORT (7431), E2E_CDP_PORT (9361), E2E_CODE_PORT (7439: a code-server
+# port nothing answers on, so the Code mode never reaches the person's own),
+# E2E_BIN (built when unset),
 # E2E_HERDR (herdr), CHROME_BIN (found when unset), E2E_OUT (screenshots,
-# <tmp>/shots when unset), E2E_KEEP.
+# <tmp>/shots when unset), E2E_KEEP, E2E_SMOKE_ONLY (the smoke alone).
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 port=${E2E_PORT:-7431}
 cdp=${E2E_CDP_PORT:-9361}
+codeport=${E2E_CODE_PORT:-7439}
 bin=${E2E_BIN:-$root/bin/remuda}
 herdr=${E2E_HERDR:-herdr}
 
@@ -77,7 +82,7 @@ while ! up; do
 done
 
 say "starting remuda on 127.0.0.1:$port"
-HOME=$home REMUDA_STATE_DIR=$tmp/state "$bin" -addr "127.0.0.1:$port" -socket "$sock" -herdr-bin "$herdr" -no-version-check >"$tmp/remuda.log" 2>&1 &
+HOME=$home REMUDA_STATE_DIR=$tmp/state "$bin" -addr "127.0.0.1:$port" -socket "$sock" -herdr-bin "$herdr" -code-port "$codeport" -no-version-check >"$tmp/remuda.log" 2>&1 &
 rpid=$!
 i=0
 while ! curl -sf "http://127.0.0.1:$port/api/health" >/dev/null 2>&1; do
@@ -102,4 +107,9 @@ done
 
 E2E_URL="http://127.0.0.1:$port" E2E_CDP="http://127.0.0.1:$cdp" E2E_TOKEN=$token E2E_OUT=$out E2E_WS_DIR=$tmp/ws \
   node "$root/e2e/smoke.mjs"
+if [ -z "${E2E_SMOKE_ONLY:-}" ]; then
+  say "the display checks: every screen at a desk's width and a phone's, in English and Russian"
+  E2E_URL="http://127.0.0.1:$port" E2E_CDP="http://127.0.0.1:$cdp" E2E_TOKEN=$token E2E_OUT=$out E2E_TMP=$tmp \
+    node "$root/e2e/display.mjs"
+fi
 say "ok"

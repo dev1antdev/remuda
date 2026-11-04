@@ -12,7 +12,7 @@ import { filesFrom } from "@/lib/transfer";
 import { Icon, Notice, Tip } from "@/ui";
 import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
 import { useDictation } from "./dictation";
-import { expandPrompt, QuickPromptsDialog, QuickPromptsMenu } from "./QuickPrompts";
+import { expandPrompt, QuickPromptsButton, QuickPromptsDialog } from "./QuickPrompts";
 import { useHistory } from "./useHistory";
 import { applyPick, stillDismissed, tokenAt, type Dismissed, type Item } from "./complete";
 import { CompletionList, useCompletion } from "./Completion";
@@ -43,7 +43,6 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
     draftRef.current = v;
     setDraftState(v);
   };
-  const [quick, setQuick] = useState<{ x: number; y: number } | null>(null);
   const [manage, setManage] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +110,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
   // the queue: the draft kept as a note for later; a send through the chat's own path takes notes away only once it went
   const queueDraft = () => {
     const text = draftRef.current;
-    if (!text.trim()) return;
+    if (!text.trim() || att.uploading) return; // a file still uploading would land its @mention in the next draft
     setNotes((list) => addNote(list, text, noteId(), Date.now()));
     setDraft("");
     att.clear();
@@ -186,13 +185,6 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
     }
   };
 
-  useEffect(() => {
-    if (!quick) return;
-    const close = () => setQuick(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [quick]);
-
   return (
     <>
       {error && (
@@ -253,28 +245,23 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
         {!compact && (
           <>
             {agent === "claude" && <ModeChip machineId={machineId} paneId={paneId} active={onScreen} />}
-            <Tip text={`Attach files (up to ${MAX_ATTACHMENTS}): they are uploaded into the pane's folder`}>
+            <Tip text={t("Attach files (up to {n}): they are uploaded into the pane's folder", { n: MAX_ATTACHMENTS })}>
               <button type="button" className="icon-btn lg composer-attach" aria-label={t("Attach files")} disabled={att.items.length >= MAX_ATTACHMENTS} onClick={() => picker.current?.click()}>
                 <Icon name="paperclip" size={16} />
               </button>
             </Tip>
-            <Tip text={t("Quick prompts: saved texts, with {dir}, {branch} and {file} filled in")}>
-              <button
-                type="button"
-                className={`icon-btn lg composer-attach${quick ? " on" : ""}`}
-                aria-label={t("Quick prompts")}
-                aria-expanded={!!quick}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const r = e.currentTarget.getBoundingClientRect();
-                  setQuick(quick ? null : { x: r.left, y: r.top - 6 });
-                }}
-              >
-                <Icon name="zap" size={16} />
-              </button>
-            </Tip>
+            <QuickPromptsButton
+              dir={dir}
+              onPick={(text) =>
+                void expandPrompt(text, machineId, dir).then((filled) => {
+                  insertAt(filled);
+                  area.current?.focus();
+                })
+              }
+              onManage={() => setManage(true)}
+            />
             <Tip text={t("Queue it as a note for the agent (Alt+↵): sent only when you press Send on it")}>
-              <button type="button" className="icon-btn lg composer-attach composer-queue" aria-label={t("Add to the queue")} disabled={!draft.trim()} onClick={queueDraft}>
+              <button type="button" className="icon-btn lg composer-attach composer-queue" aria-label={t("Add to the queue")} disabled={!draft.trim() || att.uploading} onClick={queueDraft}>
                 <Icon name="inbox" size={16} />
               </button>
             </Tip>
@@ -292,23 +279,6 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
               </Tip>
             )}
           </>
-        )}
-        {quick && (
-          <QuickPromptsMenu
-            at={quick}
-            dir={dir}
-            onPick={(text) => {
-              setQuick(null);
-              void expandPrompt(text, machineId, dir).then((filled) => {
-                insertAt(filled);
-                area.current?.focus();
-              });
-            }}
-            onManage={() => {
-              setQuick(null);
-              setManage(true);
-            }}
-          />
         )}
         {manage && <QuickPromptsDialog dir={dir} onClose={() => setManage(false)} />}
         <textarea
@@ -375,11 +345,11 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
             }
           }}
         />
-        <button type="button" className="btn primary composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title={isTouch ? t("Send") : "Send (Enter)"}>
+        <button type="button" className="btn primary composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title={isTouch ? t("Send") : t("Send (Enter)")}>
           {sending ? (
             "…"
           ) : att.uploading ? (
-            "Uploading…"
+            t("Uploading…")
           ) : (
             <>
               <span>{t("Send")}</span>

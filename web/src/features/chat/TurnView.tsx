@@ -180,9 +180,9 @@ function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent, diff
                     e.preventDefault();
                     onOpenFile({ path: file, prefer: EDIT_TOOLS.has(name) ? "changes" : "file" });
                   }}
-                  title={EDIT_TOOLS.has(name) ? t("Open the file with its changes") : t("Open the file")}
+                  title={`${file}\n${EDIT_TOOLS.has(name) ? t("Open the file with its changes") : t("Open the file")}`}
                 >
-                  {hint}
+                  <bdi dir="ltr">{hint}</bdi>
                 </button>
               ) : (
                 <span className="part-hint">{hint}</span>

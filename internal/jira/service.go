@@ -141,12 +141,13 @@ func (s *Service) Touch() {
 }
 
 // dueLocked is the wanted keys whose last read is Every old, or never happened, oldest wish first; a key not wanted
-// for WantedFor is dropped.
+// for WantedFor is dropped, and what was read of it with it, so a long day of branches does not pile up.
 func (s *Service) dueLocked(now time.Time) []string {
 	var due []string
 	for key, at := range s.wanted {
 		if now.Sub(at) > WantedFor {
 			delete(s.wanted, key)
+			delete(s.issues, key)
 			continue
 		}
 		if s.projects != nil && !s.projects[Project(key)] {

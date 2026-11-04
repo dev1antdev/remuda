@@ -24,8 +24,6 @@ export const auditpanels: Dictionary = {
   "Turns ≥ 1 min, a minute after; “always” means every turn, after 10 s.": "Ходы от 1 мин — через минуту; «всегда» — каждый ход, через 10 с.",
   never: "никогда",
   always: "всегда",
-  "Context {percent}% full — Claude Code compacts on its own near the edge; compacting now keeps the summary yours to steer.":
-    "Контекст заполнен на {percent}% — у самого края Claude Code сожмёт его сам; если сжать сейчас, итог останется под вашим контролем.",
   "Offered under": "Предлагаются под",
   and: "и",
   "in the composer; one tap puts the text in. Shared by every device that uses this remuda.":
@@ -39,7 +37,6 @@ export const auditpanels: Dictionary = {
   "…in a terminal on the machine that serves this page (": "…в терминале машины, которая отдаёт эту страницу (",
   " when it is not on your PATH). It downloads a pinned release of code-server and verifies its checksum.":
     ", если его нет в PATH). Скачивается закреплённый релиз code-server, его контрольная сумма проверяется.",
-  "… cut at {shown} of {size}": "… обрезано: {shown} из {size}",
   reviewed: "просмотрен",
   repo: "репо",
   Options: "Параметры",

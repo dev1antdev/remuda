@@ -1,4 +1,4 @@
-// Everything that opens over the page: the "make something" dialogs, the workspace menu, the confirm, the
+// Everything that opens over the page: the "make something" dialogs, the confirm, the
 // panels (the palette, search, alerts, schedules, usage, the release install) and the file viewer. Each reads what it
 // needs from the store and closes itself through the actions.
 
@@ -9,7 +9,6 @@ import ArenaDialog from "@/features/arena/ArenaDialog";
 import ArenaPanel from "@/features/arena/ArenaPanel";
 import { useRoster } from "@/features/roster/useRoster";
 import { AddMachineDialog, NewTabDialog, NewWorkspaceDialog, NewWorktreeDialog, RenameDialog, RenameMachineDialog } from "@/features/roster/dialogs";
-import WorkspaceMenu from "@/features/roster/WorkspaceMenu";
 import Activity from "@/features/activity/Activity";
 import BroadcastDialog from "@/features/agents/BroadcastDialog";
 import PinsDialog from "@/features/chat/PinsDialog";
@@ -43,7 +42,6 @@ import { t } from "@/lib/i18n";
 export default function Overlays() {
   const dialog = app.use((s) => s.dialog);
   const targets = useAgentTargets();
-  const menu = app.use((s) => s.menu);
   const panel = app.use((s) => s.panel);
   const search = app.use((s) => s.search);
   const confirm = app.use((s) => s.confirm);
@@ -88,7 +86,6 @@ export default function Overlays() {
         <Usage machines={machines} onClose={actions.closePanel} onOpenSession={(machine, project, session, dir) => openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" })} />
       )}
       {file && <FileViewer machineId={file.machineId} paneId={file.paneId} dir={file.dir} target={file.target} onClose={actions.closeFile} onRetarget={actions.retargetFile} />}
-      {menu && <WorkspaceMenu menu={menu} />}
       {confirm && (
         <ConfirmDialog
           text={confirm.text}
@@ -119,6 +116,7 @@ export default function Overlays() {
           machines={machines}
           agents={agents}
           defaultMachine={dialog.machineId}
+          defaultDir={dialog.dir}
           onClose={actions.closeDialog}
           onCreate={async (machine, dir, name, agent, extras) => landOn(machine, await createSession({ machine, name, dir, agent, ...extras }))}
         />

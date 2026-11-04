@@ -266,7 +266,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
             </button>
           }
         >
-          {t("Context {percent}% full — Claude Code compacts on its own near the edge; compacting now keeps the summary yours to steer.", { percent: Math.round(100 * context) })}
+          {t("Context {pct}% full — Claude Code compacts on its own near the edge; compacting now keeps the summary yours to steer.", { pct: Math.round(100 * context) })}
         </Notice>
       )}
       {jumpMiss && (
@@ -278,7 +278,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
         <button
           type="button"
           className="btn sm quote-pop"
-          style={{ left: Math.max(8, quotePop.x - 72), top: Math.max(8, quotePop.y - 34) }}
+          style={{ right: Math.max(8, document.documentElement.clientWidth - quotePop.x), top: Math.max(8, quotePop.y - 34) }}
           title={t("Quote it in your reply (Q)")}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onQuote(quotePop.text)}

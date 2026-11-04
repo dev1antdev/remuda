@@ -37,6 +37,16 @@ func TestOriginOf(t *testing.T) {
 	}
 }
 
+func TestGitHubOverPort443IsGitHub(t *testing.T) {
+	host, _, ok := originOf("ssh://git@ssh.github.com:443/acme/web.git")
+	if !ok || !isGitHub(host) {
+		t.Fatalf("%q is not taken for GitHub, so no avatar is fetched", host)
+	}
+	if isGitHub("gitlab.com") || isGitHub("github.com.evil.example") {
+		t.Fatal("another host taken for GitHub")
+	}
+}
+
 // githubServing answers /acme.png with a picture and anything else with 404, as GitHub's avatar address does.
 func githubServing(t *testing.T) {
 	t.Helper()

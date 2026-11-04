@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/script"
@@ -16,6 +17,13 @@ import (
 
 // LogTail is how much of a failed run's log goes to the agent: its end, where the failure is.
 const LogTail = 8 * 1024
+
+// LogRead is how much of a log the machine sends at all, its end: a CI log runs to tens of megabytes, and LogTail is cut
+// from what arrives.
+const LogRead = 8 * LogTail
+
+// lastOfLog keeps a log's command to the end it needs, on the machine.
+var lastOfLog = " | tail -c " + strconv.Itoa(LogRead)
 
 // MaxRuns is how many failed runs' (or jobs') logs one message carries.
 const MaxRuns = 3
@@ -83,7 +91,7 @@ func FailedRuns(checks []Check) []string {
 
 // LogScript prints the log of a run's failed steps.
 func LogScript(runID string) string {
-	return script.PATH + "\ngh run view " + script.Quote(runID) + " --log-failed 2>&1"
+	return script.PATH + "\ngh run view " + script.Quote(runID) + " --log-failed 2>&1" + lastOfLog
 }
 
 var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)

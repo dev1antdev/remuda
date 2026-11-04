@@ -30,11 +30,34 @@ type Shell struct {
 	Made      bool   `json:"made"`
 }
 
-// Store keeps the scratch workspace's id per machine in the state dir.
+// Store keeps the scratch workspace's id per machine in the state dir. A machine's shell is made or ended under that
+// machine's own lock, so herdr's answer is never waited on under the one the roster reads through.
 type Store struct {
-	dir string
-	mu  sync.Mutex
-	ids map[string]string // machine id → workspace id
+	dir      string
+	mu       sync.Mutex
+	ids      map[string]string      // machine id → workspace id
+	machines map[string]*sync.Mutex // machine id → the lock its shell is made and ended under
+}
+
+// machineLock is the lock one machine's shell is made and ended under.
+func (s *Store) machineLock(machine string) *sync.Mutex {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.machines == nil {
+		s.machines = map[string]*sync.Mutex{}
+	}
+	lock, ok := s.machines[machine]
+	if !ok {
+		lock = &sync.Mutex{}
+		s.machines[machine] = lock
+	}
+	return lock
+}
+
+func (s *Store) idOf(machine string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ids[machine]
 }
 
 // Open reads the ids kept in dir; a damaged file reads as none, so the next use makes a fresh shell.
@@ -54,11 +77,20 @@ func (s *Store) Is(machine, workspace string) bool {
 	return workspace != "" && s.ids[machine] == workspace
 }
 
-// Ensure is the machine's scratch shell: the kept workspace while the snapshot still has it, else a new one in home.
-func (s *Store) Ensure(machine string, client Herdr, snap *herdr.Snapshot, home string) (Shell, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if id := s.ids[machine]; id != "" && snap != nil {
+// Ensure is the machine's scratch shell: the kept workspace while a fresh snapshot still has it, else a new one in
+// home. The snapshot is read under the machine's lock, so a second ask that waited on the first sees the shell it made.
+func (s *Store) Ensure(machine string, client Herdr, snapshot func() (*herdr.Snapshot, error), home string) (Shell, error) {
+	lock := s.machineLock(machine)
+	lock.Lock()
+	defer lock.Unlock()
+	snap, err := snapshot()
+	if snap == nil {
+		if err == nil {
+			err = errors.New("herdr sent no snapshot")
+		}
+		return Shell{}, err
+	}
+	if id := s.idOf(machine); id != "" {
 		if pane := paneOf(snap, id); pane != "" {
 			return Shell{Workspace: id, Pane: pane}, nil
 		}
@@ -67,8 +99,11 @@ func (s *Store) Ensure(machine string, client Herdr, snap *herdr.Snapshot, home 
 	if err != nil {
 		return Shell{}, err
 	}
+	s.mu.Lock()
 	s.ids[machine] = made.Workspace.WorkspaceID
-	if err := s.save(); err != nil {
+	err = s.save()
+	s.mu.Unlock()
+	if err != nil {
 		log.Printf("the floating terminal's shell on %s was made but not kept: %v", machine, err)
 	}
 	return Shell{Workspace: made.Workspace.WorkspaceID, Pane: made.RootPane.PaneID, Made: true}, nil
@@ -79,9 +114,10 @@ var ErrNone = errors.New("no floating terminal is open on that machine")
 
 // Close ends the machine's scratch shell and forgets it; a workspace herdr no longer has is only forgotten.
 func (s *Store) Close(machine string, client Herdr, snap *herdr.Snapshot) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	id := s.ids[machine]
+	lock := s.machineLock(machine)
+	lock.Lock()
+	defer lock.Unlock()
+	id := s.idOf(machine)
 	if id == "" {
 		return ErrNone
 	}
@@ -90,7 +126,11 @@ func (s *Store) Close(machine string, client Herdr, snap *herdr.Snapshot) error 
 			return err
 		}
 	}
-	delete(s.ids, machine)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ids[machine] == id {
+		delete(s.ids, machine)
+	}
 	return s.save()
 }
 

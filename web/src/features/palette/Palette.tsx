@@ -92,7 +92,7 @@ function Row({ entry, id, selected, head, onHover, onPick }: { entry: Entry; id:
   return (
     <>
       {head}
-      <div id={id} role="option" aria-selected={selected} className={`palette-row${entry.danger ? " danger" : ""}`} onMouseMove={onHover} onClick={onPick}>
+      <div id={id} role="option" aria-selected={selected} data-entry={entry.id} className={`palette-row${entry.danger ? " danger" : ""}`} onMouseMove={onHover} onClick={onPick}>
         {pane ? (
           <>
             <span className={`radar-mark ${pane.alert ? "alert" : pane.display}`} style={markStyle}>

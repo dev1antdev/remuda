@@ -13,6 +13,6 @@ export function escapeIsFree(press: EscapePress, overlayOpen: boolean): boolean 
 }
 
 // OverlayState is what the page's store says is open over it
-export type OverlayState = { dialog: unknown; panel: unknown; confirm: unknown; file: unknown; menu: unknown };
+export type OverlayState = { dialog: unknown; panel: unknown; confirm: unknown; file: unknown };
 
-export const overlayOpen = (s: OverlayState): boolean => !!(s.dialog || s.panel || s.confirm || s.file || s.menu);
+export const overlayOpen = (s: OverlayState): boolean => !!(s.dialog || s.panel || s.confirm || s.file);
