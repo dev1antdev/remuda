@@ -270,7 +270,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `file` ×≤4, 25MB each → `<pane dir>/.remuda/uploads/<time>-<tag>-<name>`,
   stem and extension sanitized separately, remote via `sshx.Conn.Put`).
   `.remuda/.gitignore` (`*`) is written alongside so uploads never reach
-  a commit. Uploads are the only thing remuda writes into a project.
+  a commit. Uploads are one of the two things remuda writes into a project;
+  the other is a new worktree's `.worktreeinclude` files (`internal/worktrees`).
 - `web/src/features/chat/attachments.ts` — `useAttachments` (upload at
   once, chips with thumbnails); `lib/transfer.ts` has `filesFrom`
   (drop/paste → files; a pasted screenshot gets a name), `lib/text.ts`
@@ -1494,7 +1495,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   only when an agent pane of the workspace named a request gh read as
   merged (`mergedIn`), since a squash leaves git unsure; a branch it
   refuses is reported with the worktree already gone. The one thing
-  remuda deletes from a repository, and only when asked. The page:
+  remuda deletes from a repository, and only when asked. **A new worktree
+  comes ready to run** (`include.go`, tested on a real repository and on
+  `shell.Fake`): wherever remuda makes one — a task's start, so bulk start
+  too, and `POST /api/worktrees` — `Include` runs one script on the
+  worktree's machine after `worktree.create` and before the agent starts:
+  in the repository's main checkout (`git worktree list`'s first entry)
+  the files `.worktreeinclude` names — gitignore patterns, Claude Code's
+  own file, `git ls-files --others --ignored --exclude-from` — that git
+  itself ignores (`git check-ignore --stdin`) are copied with `cp -pP`;
+  never a tracked file, never over one the worktree has, a link only when
+  it resolves inside the repository, nothing through a worktree folder
+  that leads out of it, nothing at all past `MaxInclude` 1000 matches
+  (half a node_modules is worse than none). `Included` is the answer —
+  copied, skipped with the reason, too many — `Words` the task's comment
+  by remuda, `included` / `include_error` on the worktree route's answer,
+  which the page turns into a toast (`features/roster/included.ts`,
+  tested: `includedWords`); a failure is a note, never a failed start.
+  The page:
   `features/roster/prActions.ts` (tested: `canHandFailure` an open
   request with a failed check, `canSendReview` an open request,
   `canRemoveWorktree` a linked worktree whose request is merged,
@@ -2029,6 +2047,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   agent pane from the roster, remembering the last target per project.
   **Start an agent on it** (`POST /api/tasks/{id}/start`): a worktree off
   a workspace's repo (`WorktreeCreate`, branch `task-<id>-<slug>`), the
+  files its `.worktreeinclude` lists copied in (`worktrees.Include`, a
+  comment by remuda says what came), the
   agent in it (`sessions.StartAgent` retries herdr's `agent_pane_busy`
   while the new pane's shell comes up — the generic create path uses it
   too), a `task_runs` row and the task moved to its project's `on_start`
