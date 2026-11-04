@@ -14,6 +14,7 @@ export function keyGroups(mac: boolean): KeyGroup[] {
         { keys: [`${mod} K`], what: t("the command palette: any agent, any command") },
         { keys: ["?"], what: t("this sheet") },
         { keys: ["Alt N"], what: t("the next agent that needs you") },
+        { keys: ["Alt Z"], what: t("reopen an agent whose tab or workspace closed") },
         { keys: ["Esc"], what: t("close a dialog, a menu, the file viewer; leave full screen") },
         { keys: ["←", "→"], what: t("a panel's edge once Tab lands on it; ⇧ by more, ↵ its usual width") },
       ],

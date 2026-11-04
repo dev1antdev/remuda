@@ -654,6 +654,33 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   fails leaves the pane on the list, a pane that will not come back is
   forgotten; a feed row (kind `recover`) says what came back. Nothing
   starts by itself.
+  **The agents whose panes went away** (restart/closed.go, tested): the
+  same memory notes, when a remembered agent pane is gone from its
+  machine's snapshot — its tab or workspace closed, through remuda or
+  anywhere — a `Closed` entry (agent, session, folder, the pane's title,
+  its workspace's name and its tab's own name, read off the last
+  snapshot that showed it, `paneFace`), newest first, once per session,
+  the last `ClosedKeep` (20) per machine in `<state>/closed.json`; never
+  while the memory is paused for remuda's own restart of herdr, never a
+  pane that came back as a shell (that is the reboot's list), dropped
+  with its machine. `GET /api/closed` lists every machine's, less the
+  ones whose session a pane runs again; `POST /api/closed/reopen
+  {machine, id}` → `Restarter.Reopen`: the folder and, for Claude Code,
+  the session file checked, a pane already running that session answered
+  as `open_already` (and the entry dropped), else `sessions.StartIn` with
+  the kind's resume arguments — a tab of the workspace on that folder
+  (named as the closed tab was), or a new workspace on it — the entry
+  dropped once the agent is back. The page (`features/reopen/`:
+  `closed.ts` tested — `closedTitle`, `closedWhere`, `justClosed`,
+  `offerWords`, `reopenKeyAsked`; `offer.ts`, `ReopenDialog.tsx`,
+  `useReopenKey.ts`): after a tab or workspace closed through the page,
+  `offerReopen` finds its agents on the list (the watcher notes them
+  within a snapshot or two) and a toast "Closed … · Reopen" stands for
+  ten seconds (store field `closedOffer`); the palette's "Reopen a closed
+  agent…" and **Alt+Z** (by key code: ⌘⇧T is the browser's own; never
+  over the terminal or a dialog, nor a field on a Mac) open the dialog
+  kind `reopen`, the list newest first, ↑ ↓ and Enter or a click to
+  reopen, the new pane selected; never for a viewer.
 - `internal/tsnetx` — `-tailscale` joins the tailnet as a tsnet node
   (userspace, no tailscaled) named `-tailscale-hostname`, serves the same
   handler over HTTPS on :443 with the tailnet's certificate (:80

@@ -5,6 +5,7 @@
 import { Fragment, useEffect } from "react";
 import { act } from "@/app/act";
 import { actions, type RowMenu } from "@/app/store";
+import { offerReopen } from "@/features/reopen/offer";
 import { agentTitle, askRestart } from "@/features/updates/restartPane";
 import { openUrl } from "@/lib/host";
 import { killSession, muteWorkspace, unmuteWorkspace, type Machine, type Session } from "./api";
@@ -18,7 +19,8 @@ import { t, tn } from "@/lib/i18n";
 
 export function closeWorkspace(m: Machine, s: Session) {
   const n = s.tabs.reduce((a, t) => a + t.panes.length, 0);
-  actions.ask(tn(n, "Close “{name}”? {n} pane closes and the agent in it stops.", "Close “{name}”? {n} panes close and the agents in them stop.", { name: s.name }), t("Close workspace"), () => void act(killSession(m.id, s.id)));
+  const agents = s.tabs.flatMap((tab) => tab.panes.filter((p) => p.agent).map((p) => p.id));
+  actions.ask(tn(n, "Close “{name}”? {n} pane closes and the agent in it stops.", "Close “{name}”? {n} panes close and the agents in them stop.", { name: s.name }), t("Close workspace"), () => void act(killSession(m.id, s.id)).then(() => offerReopen(m.id, agents)));
 }
 
 export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) {

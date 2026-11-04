@@ -4,6 +4,7 @@
 
 import { addMachine, createSession, createTab, createWorktree, renameMachine, renameSession, renameTab, type Created } from "@/features/roster/api";
 import IconDialog from "@/features/icons/IconDialog";
+import ReopenDialog from "@/features/reopen/ReopenDialog";
 import { useRoster } from "@/features/roster/useRoster";
 import { AddMachineDialog, NewTabDialog, NewWorkspaceDialog, NewWorktreeDialog, RenameDialog, RenameMachineDialog } from "@/features/roster/dialogs";
 import WorkspaceMenu from "@/features/roster/WorkspaceMenu";
@@ -105,6 +106,7 @@ export default function Overlays() {
         />
       )}
       {dialog?.kind === "folder-icon" && <IconDialog machineId={dialog.machineId} folder={dialog.folder} name={dialog.name} icon={dialog.icon} onClose={actions.closeDialog} />}
+      {dialog?.kind === "reopen" && <ReopenDialog onClose={actions.closeDialog} />}
       {dialog?.kind === "workspace" && (
         <NewWorkspaceDialog
           machines={machines}
