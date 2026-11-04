@@ -1,7 +1,7 @@
-// Package prstatus keeps the state of every pull request an agent named — its checks, its review, whether it merges —
-// read with gh on the pane's own machine, as the person, so remuda itself asks GitHub nothing. A request is read when
-// the agent names it and then at most every Every while the page keeps reading the roster; a GitLab request is left
-// alone (no gh for it).
+// Package prstatus keeps the state of every pull or merge request an agent named — its checks, its review, whether it
+// merges — read on the pane's own machine as the person, a GitHub pull request with gh and a GitLab merge request with
+// glab (gitlab.go), so remuda itself asks neither anything. A request is read when the agent names it and then at most
+// every Every while the page keeps reading the roster.
 package prstatus
 
 import (
@@ -20,9 +20,9 @@ import (
 var (
 	// Every is the least time between two reads of one request.
 	Every = 2 * time.Minute
-	// Timeout is how long one gh call may take.
+	// Timeout is how long one gh or glab call may take.
 	Timeout = 20 * time.Second
-	// ComplainEvery spaces the log lines about a machine whose gh cannot answer.
+	// ComplainEvery spaces the log lines about a machine whose gh or glab cannot answer.
 	ComplainEvery = time.Hour
 )
 
@@ -35,12 +35,13 @@ type Checks struct {
 	Skipped int `json:"skipped"`
 }
 
-// Status is a pull request as gh reports it.
+// Status is a pull request as gh reports it, or a merge request as glab does, in the same words.
 type Status struct {
 	State     string    `json:"state"` // OPEN, MERGED, CLOSED
 	Draft     bool      `json:"draft"`
-	Mergeable string    `json:"mergeable"` // MERGEABLE, CONFLICTING, UNKNOWN
-	Review    string    `json:"review"`    // APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, ""
+	Mergeable string    `json:"mergeable"`         // MERGEABLE, CONFLICTING, UNKNOWN
+	Review    string    `json:"review"`            // APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, ""
+	Threads   int       `json:"threads,omitempty"` // a merge request's discussion threads still open
 	Checks    Checks    `json:"checks"`
 	At        time.Time `json:"at"`
 }
@@ -51,7 +52,7 @@ type Hosts func(machineID string) (shell.Shell, bool)
 type entry struct {
 	url     string
 	status  *Status
-	reason  string // why there is no status: gh missing, not signed in, the machine away
+	reason  string // why there is no status: gh or glab missing, not signed in, the machine away
 	readAt  time.Time
 	reading bool
 }
@@ -79,7 +80,7 @@ func GitHub(url string) bool {
 
 // OnNamed hears a request named: a new or changed one is read now.
 func (t *Tracker) OnNamed(ev events.PullRequestNamed) {
-	if !GitHub(ev.URL) {
+	if !Readable(ev.URL) {
 		return
 	}
 	t.mu.Lock()
@@ -216,11 +217,14 @@ func (t *Tracker) note(ref events.PaneRef, url string, status *Status, reason st
 	return events.PullRequestState{Pane: ref, URL: url, State: status.State, Was: was}, true
 }
 
-// fetch runs gh on the machine and parses its answer.
+// fetch runs gh, or glab for a merge request, on the machine and parses its answer.
 func (t *Tracker) fetch(machineID, url string) (*Status, string) {
 	host, ok := t.hosts(machineID)
 	if !ok {
 		return nil, "the machine is not connected"
+	}
+	if GitLab(url) {
+		return fetchMerge(host, url, t.now())
 	}
 	out, err := shell.Text(host, Script(url), Timeout)
 	status, perr := Parse(out, t.now())

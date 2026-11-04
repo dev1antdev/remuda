@@ -40,6 +40,11 @@ describe("reviewWords", () => {
     expect(reviewWords(status({ review: "REVIEW_REQUIRED" }))).toBe("review pending");
     expect(reviewWords(status())).toBe("");
   });
+  it("adds a merge request's open threads", () => {
+    expect(reviewWords(status({ review: "APPROVED", threads: 2 }))).toBe("approved · 2 open threads");
+    expect(reviewWords(status({ threads: 1 }))).toBe("1 open thread");
+    expect(reviewWords(status({ state: "MERGED", threads: 3 }))).toBe("merged");
+  });
 });
 
 describe("checksTone", () => {
@@ -62,6 +67,12 @@ describe("reviewTone", () => {
     expect(reviewTone(status({ draft: true, review: "APPROVED" }))).toBe("dim");
     expect(reviewTone(status({ state: "CLOSED", review: "APPROVED" }))).toBe("dim");
     expect(reviewTone(status())).toBe("none");
+  });
+  it("is amber while a merge request's threads are open, red still beats it", () => {
+    expect(reviewTone(status({ review: "APPROVED", threads: 2 }))).toBe("amber");
+    expect(reviewTone(status({ review: "CHANGES_REQUESTED", threads: 2 }))).toBe("red");
+    expect(reviewTone(status({ state: "MERGED", threads: 2 }))).toBe("dim");
+    expect(statusTone(status({ threads: 1, checks: { total: 2, pass: 2 } }))).toBe("amber");
   });
 });
 

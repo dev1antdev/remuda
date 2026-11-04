@@ -9,6 +9,7 @@ import { useMedia } from "@/lib/media";
 import { isMac, isTouch } from "@/lib/prefs";
 import { basename } from "@/lib/text";
 import { closeTab, createTab, renameTab } from "@/features/roster/api";
+import { offerReopen } from "@/features/reopen/offer";
 import { useRoster } from "@/features/roster/useRoster";
 import { ChatTools, useChatViewItems } from "@/features/chat/ChatTools";
 import { FindTool } from "@/features/chat/FindBar";
@@ -153,7 +154,8 @@ export default function PaneArea({ current }: { current: Located | null }) {
         onCloseTab={(t) => {
           const last = session.tabs.length === 1;
           const msg = last ? tr("Close the last tab? Workspace “{workspace}” closes with it.", { workspace: session.name }) : tn(t.panes.length, "Close tab “{tab}”? Its {n} pane and agent stop.", "Close tab “{tab}”? Its {n} panes and agents stop.", { tab: t.label });
-          actions.ask(msg, tr("Close tab"), () => void act(closeTab(machine.id, t.id)));
+          const agents = t.panes.filter((p) => p.agent).map((p) => p.id);
+          actions.ask(msg, tr("Close tab"), () => void act(closeTab(machine.id, t.id)).then(() => offerReopen(machine.id, agents)));
         }}
       />
       <div className={`pane-body${split ? " is-split" : ""}`}>

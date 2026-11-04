@@ -1,8 +1,9 @@
 // What a pull request's state says on the page: its checks in a few words, its review in a word, and the tone that
-// colours the chip beside the link — from `pane.pr.status`, read with gh on the agent's machine.
+// colours the chip beside the link — from `pane.pr.status`, read on the agent's machine with gh, or with glab for a
+// GitLab merge request, whose pipeline jobs are its checks and whose open discussion threads join its review.
 
 import type { PRStatus } from "./api";
-import { t } from "@/lib/i18n";
+import { t, tn } from "@/lib/i18n";
 
 export type Tone = "green" | "red" | "amber" | "dim" | "none";
 
@@ -17,12 +18,18 @@ export function checksWords(s: PRStatus): string {
 }
 
 // reviewWords is the request's standing beyond its checks: merged or closed, a draft, conflicts, the review's verdict
+// and, for a merge request, the discussion threads still open
 export function reviewWords(s: PRStatus): string {
   if (s.state === "MERGED") return "merged";
   if (s.state === "CLOSED") return "closed";
   if (s.draft) return "draft";
   if (s.mergeable === "CONFLICTING") return "conflicts";
-  switch (s.review) {
+  const threads = s.threads ? tn(s.threads, "{n} open thread", "{n} open threads") : "";
+  return [verdictWords(s.review), threads].filter(Boolean).join(" · ");
+}
+
+function verdictWords(review: string): string {
+  switch (review) {
     case "APPROVED":
       return "approved";
     case "CHANGES_REQUESTED":
@@ -43,11 +50,12 @@ export function checksTone(s: PRStatus): Tone {
   return "none";
 }
 
-// reviewTone colours the review chip by what reviewWords says: red for conflicts or changes requested, green for an
-// approval, dim for a draft, a merge, a close or a review still pending
+// reviewTone colours the review chip by what reviewWords says: red for conflicts or changes requested, amber while
+// threads are open, green for an approval, dim for a draft, a merge, a close or a review still pending
 export function reviewTone(s: PRStatus): Tone {
   if (s.state === "MERGED" || s.state === "CLOSED" || s.draft) return "dim";
   if (s.mergeable === "CONFLICTING" || s.review === "CHANGES_REQUESTED") return "red";
+  if (s.threads) return "amber";
   if (s.review === "APPROVED") return "green";
   return s.review === "REVIEW_REQUIRED" ? "dim" : "none";
 }
