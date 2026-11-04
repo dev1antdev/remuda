@@ -1722,8 +1722,33 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `git worktree remove` (never `--force`) and `git branch -d`, or `-D`
   only when an agent pane of the workspace named a request gh or glab read
   as merged (`mergedIn`), since a squash leaves git unsure; a branch it
-  refuses is reported with the worktree already gone. The one thing
-  remuda deletes from a repository, and only when asked; `Discard`
+  refuses is reported with the worktree already gone. **A workspace's
+  close takes its worktree with it** (`tidy.go`, tested on real
+  repositories in a temp home; `DELETE /api/sessions/{id}` →
+  `handleWorkspaceClose`): when herdr marks the workspace a linked
+  worktree under the machine's `~/.herdr/worktrees/<repository>/<name>`
+  (`Made`; a worktree made anywhere else, a plain folder, the main
+  checkout are never touched) and no other workspace stands on it or has
+  a pane in it (`usedElsewhere`, read off the snapshot before the
+  close), `Tidy` runs after the close — the folder removed when `git
+  status` is clean (never `--force`: an uncommitted change keeps it, said
+  in the answer's `worktree.kept`), its branch by git's `-d`, or `-D` when
+  its request was read as merged, else kept (`branch_kept`) — and the
+  page's confirm says so (`closeAsk`, `madeWorktree` in
+  `features/roster/tidy.ts`, tested) and its toast what became of it
+  (`tidyWords`). **Leftover worktrees** (the machine's ⋯ menu and the
+  palette, dialog kind `leftovers` → `LeftoversDialog.tsx`): `GET
+  /api/machines/{id}/leftovers` lists, in one script (`LeftoversScript`:
+  du for the size), every folder two levels under the root that no
+  workspace's folder or pane's cwd is in (`Leftovers`), with its branch,
+  its first uncommitted change, or why git cannot read it (a folder with
+  no linked worktree's `.git` file is only named); `POST
+  …/leftovers/remove {paths}` takes each one still a leftover down with
+  `Tidy`, the rest left alone and said so; the clean ones come ticked,
+  the button says how much goes (`removedWords`, `leftoverWords`,
+  `sizeWords`). The deletions remuda makes in a repository are these,
+  each at the person's word — a close, the menu row, the dialog's button;
+  `Discard`
   (`git worktree remove --force` and `git branch -D`) is kept for an
   arena's lanes the person did not keep, their work saved as a patch
   first (`internal/arena`). **A new worktree
@@ -2742,8 +2767,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   whether the kind takes the model; container made, agent started by
   `sessions.StartAgentWith`, watcher refreshed, and a `prompt` handed to
   `Input.FirstPrompt` in a goroutine, a failure a note in the activity
-  with the pane to open, `firstPrompt`); the two
-  close routes share `closeHandler`, the two renames (`PATCH
+  with the pane to open, `firstPrompt`); a tab's close is
+  `closeHandler`, a workspace's `handleWorkspaceClose` (its worktree
+  after it, see `internal/worktrees`), the two renames (`PATCH
   /api/tabs/{id}`, `PATCH /api/sessions/{id}`, body `{label}`) share
   `renameHandler` — herdr's `tab.rename` / `workspace.rename`.
 - `internal/sessions/` — the input side of herdr: `Agents` / `KnownAgent`,

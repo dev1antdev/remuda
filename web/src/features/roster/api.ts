@@ -4,6 +4,7 @@ import type { BudgetStatus } from "@/features/usage/api";
 import { check, getJSON, sendJSON, withMachine } from "@/lib/http";
 import { t } from "@/lib/i18n";
 import { includedWords, type Included } from "./included";
+import type { Leftover, Outcome } from "./tidy";
 
 export type Status = "run" | "input" | "idle" | "done" | "shell";
 
@@ -197,7 +198,11 @@ export const createTab = (req: { machine: string; workspace: string; name: strin
 
 export const createWorktree = (req: { machine: string; workspace: string; branch: string; base: string; name: string; agent: string } & StartExtras) => create("/api/worktrees", req);
 
-export const killSession = (machineId: string, id: string): Promise<void> => sendJSON("DELETE", withMachine(`/api/sessions/${encodeURIComponent(id)}`, machineId));
+// a workspace closed; the worktree it stood on, when herdr or remuda made it, taken down after it as far as nothing is lost
+export const killSession = (machineId: string, id: string): Promise<{ worktree?: Outcome }> => sendJSON("DELETE", withMachine(`/api/sessions/${encodeURIComponent(id)}`, machineId));
+// the worktrees under the machine's ~/.herdr/worktrees no workspace has open, and the clean ones of them removed
+export const listLeftovers = (machineId: string): Promise<{ root: string; leftovers: Leftover[] }> => getJSON(`/api/machines/${encodeURIComponent(machineId)}/leftovers`);
+export const removeLeftovers = (machineId: string, paths: string[]): Promise<{ outcomes: Outcome[] }> => sendJSON("POST", `/api/machines/${encodeURIComponent(machineId)}/leftovers/remove`, { paths });
 
 export const closeTab = (machineId: string, id: string): Promise<void> => sendJSON("DELETE", withMachine(`/api/tabs/${encodeURIComponent(id)}`, machineId));
 

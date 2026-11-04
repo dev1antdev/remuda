@@ -16,6 +16,7 @@ import { leftWords, muteChoices, mutedUntil } from "./mute";
 import { actionLabel, actionsFor, canRemoveWorktree } from "./prActions";
 import { askRemoveWorktree, handPR } from "./prMenu";
 import { prWords } from "./prStatus";
+import { closeAsk, madeWorktree, tidyWords } from "./tidy";
 import { folderOf, repositoryOf, type Folder } from "./workspaces";
 import { markedFolder, sharingOf, SHARING_KEY, DEFAULT_SHARING } from "./sharing";
 import { toggleSharingFolder } from "./useSharing";
@@ -26,7 +27,15 @@ import { t, tn } from "@/lib/i18n";
 export function closeWorkspace(m: Machine, s: Session) {
   const n = s.tabs.reduce((a, t) => a + t.panes.length, 0);
   const agents = s.tabs.flatMap((tab) => tab.panes.filter((p) => p.agent).map((p) => p.id));
-  actions.ask(tn(n, "Close “{name}”? {n} pane closes and the agent in it stops.", "Close “{name}”? {n} panes close and the agents in them stop.", { name: s.name }), t("Close workspace"), () => void act(killSession(m.id, s.id)).then(() => offerReopen(m.id, agents)));
+  const panes = tn(n, "Close “{name}”? {n} pane closes and the agent in it stops.", "Close “{name}”? {n} panes close and the agents in them stop.", { name: s.name });
+  const close = async () => {
+    const answer = await killSession(m.id, s.id);
+    if (answer?.worktree) {
+      const said = tidyWords(answer.worktree);
+      actions.notify(said.text, { error: said.error });
+    }
+  };
+  actions.ask(closeAsk(panes, madeWorktree(s.worktree)), t("Close workspace"), () => void act(close()).then(() => offerReopen(m.id, agents)));
 }
 
 // Shown is how the row on screen names its folder: under the screen-sharing mode (masked) by its neutral name, and the

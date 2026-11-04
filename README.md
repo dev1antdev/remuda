@@ -326,6 +326,12 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   which closes the workspace and runs `git worktree remove` and `git
   branch -D` on the machine, refusing a worktree with uncommitted
   changes before anything closes.
+  Closing any workspace that stands on a worktree herdr or remuda made
+  (under `~/.herdr/worktrees`) takes the worktree with it: the folder
+  goes when nothing in it is uncommitted, the branch once it is merged,
+  and a toast says what stayed and why. *Leftover worktrees…* in a
+  machine's ⋯ menu finds the ones left from workspaces closed elsewhere
+  and removes the clean ones.
   A *Review* link beside the run opens its worktree in the Review mode.
   The card says what the agents started on it have spent so far
   ("$4.20", in the quiet colour), and the run in the task says the time
