@@ -76,4 +76,11 @@ describe("paneEntries", () => {
     expect(rank(entries, "deploy").map((e) => e.id)).toEqual(["pane:local|p3"]);
     expect(rank(entries, "site").map((e) => e.id)).toEqual(["pane:gog|p4", "pane:local|p2"]);
   });
+  it("names a masked pane by its agent and the neutral names alone, and finds it by them only", () => {
+    const entries = paneEntries(machines, DEFAULT_RADAR, now, 0, null, () => {}, (machine) => (machine.id === "gog" ? { folder: "Project A", machine: "Machine 2" } : null));
+    const gog = entries.find((e) => e.id === "pane:gog|p4")!;
+    expect([gog.title, gog.hint, gog.pane!.folder]).toEqual(["Claude Code", "Project A · Machine 2", { name: "Project A" }]);
+    expect(rank(entries, "gog").map((e) => e.id)).toEqual([]);
+    expect(rank(entries, "project").map((e) => e.id)).toEqual(["pane:gog|p4"]);
+  });
 });

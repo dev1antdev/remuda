@@ -38,5 +38,6 @@ import { teleport } from "./ru/teleport";
 import { arena } from "./ru/arena";
 import { limits } from "./ru/limits";
 import { floatterm } from "./ru/floatterm";
+import { screenshare } from "./ru/screenshare";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...wake, ...activity, ...viewonly, ...splitview, ...shellwords, ...sidebar, ...worktreeinclude, ...quote, ...reopen, ...forkchat, ...autoicon, ...gitlab, ...teleport, ...arena, ...limits, ...floatterm };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...wake, ...activity, ...viewonly, ...splitview, ...shellwords, ...sidebar, ...worktreeinclude, ...quote, ...reopen, ...forkchat, ...autoicon, ...gitlab, ...teleport, ...arena, ...limits, ...floatterm, ...screenshare };

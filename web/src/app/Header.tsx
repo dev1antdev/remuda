@@ -6,12 +6,14 @@ import { basename, plural } from "@/lib/text";
 import { machineLabel } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
 import { folderOf } from "@/features/roster/workspaces";
+import { useSharing } from "@/features/roster/useSharing";
 import { budgetTone, budgetWords, budgetsFor, graver, ratio, tightest, toneClass, type BudgetTone } from "@/features/usage/budgets";
 import { fillClass, tok, usd } from "@/features/usage/format";
 import { accountWindows, gravest, limitWords, type AccountWindow } from "@/features/usage/limits";
 import { FolderIcon, Icon, Tip } from "@/ui";
 import type { Located } from "./current";
 import { popOut, popOutSupported } from "./pip";
+import { SharingChip } from "./SharingChip";
 import { actions, app, type Lens } from "./store";
 import { t } from "@/lib/i18n";
 
@@ -20,6 +22,7 @@ export default function Header({ current }: { current: Located | null }) {
   const mode = app.use((s) => s.mode);
   const lens = app.use((s) => s.lens);
   const drawer = app.use((s) => s.drawer);
+  const share = useSharing();
   const viewer = app.use((s) => s.viewer);
   return (
     <header className="topbar">
@@ -31,15 +34,24 @@ export default function Header({ current }: { current: Located | null }) {
       <span className="title">
         {mode !== "herdr" ? null : viewer ? (
           <>
-            {viewer.machine !== "local" && <span className="title-machine">{machineLabel(machines, viewer.machine)} ›</span>}
-            {basename(viewer.dir)}
+            {viewer.machine !== "local" && <span className="title-machine">{share.redact(machineLabel(machines, viewer.machine))} ›</span>}
+            {share.redact(basename(viewer.dir))}
             <span className="title-agent"> {t("· transcript")}</span>
           </>
         ) : current ? (
           <>
-            {current.machine.id !== "local" && <span className="title-machine">{current.machine.label} ›</span>}
-            <FolderIcon icon={current.session.icon} name={basename(folderOf(current.session)) || current.session.name} />
-            {current.session.name}
+            {current.machine.id !== "local" && <span className="title-machine">{share.machineLabel(current.machine)} ›</span>}
+            {share.sessionHidden(current.machine.id, current.session) ? (
+              <>
+                <FolderIcon name={share.folderName(current.machine.id, folderOf(current.session), current.session.name)} />
+                {share.folderName(current.machine.id, folderOf(current.session), current.session.name)}
+              </>
+            ) : (
+              <>
+                <FolderIcon icon={current.session.icon} name={basename(folderOf(current.session)) || current.session.name} />
+                {current.session.name}
+              </>
+            )}
             <span className="title-agent"> · {current.pane.agent || "shell"}</span>
           </>
         ) : (
@@ -47,6 +59,7 @@ export default function Header({ current }: { current: Located | null }) {
         )}
         {viewOnly && <span className="badge quiet viewonly-badge">{t("Viewing only")}</span>}
       </span>
+      <SharingChip />
       {mode === "herdr" && current && !viewer && (
         <div className="lenses">
           {current.pane.usage && current.pane.usage.window > 0 && <UsagePill usage={current.pane.usage} budget={tightest(budgetsFor(budgets, current.machine.id, current.session.dir || current.pane.cwd))} limits={accountWindows(machines, Date.now())} />}

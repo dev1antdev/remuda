@@ -1470,6 +1470,37 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   head carries its agents' states (working / ? / ✓ counts).
   `web/marks/*.svg` are the vendor logos (MIT packaging, see NOTICE.md),
   `npm run marks` regenerates `src/ui/marks.ts`; drawn inline in currentColor.
+- **Screen-sharing mode** (page only, per device; tested pure part
+  `features/roster/sharing.ts`: the pref `sharing` {on, all, folders as
+  `machine|folder`, machines} — not on the sync allow-list —
+  `hidesFolder` / `hidesMachine`, `switched` (on with nothing marked hides
+  everything), the neutral names `projectName` ("Project A", spreadsheet
+  letters) / `machineName` ("Machine 2") handed out by `extendNames` so a
+  folder keeps its letter while the mode is on, `redact` the hidden names
+  swapped out of free text, longest first, none under `MIN_REDACTED`;
+  `useSharing.ts` the one hook every screen reads — `machineHidden`,
+  `folderHidden`, `sessionHidden` (by `folderOf`), `machineLabel`,
+  `folderName`, `redact` — and `toggleSharing` / `setSharingAll` /
+  `toggleSharingFolder` / `toggleSharingMachine`): Alt+H (`app/sharingKey.ts`,
+  tested, the Alt+N rule — never over the terminal, a dialog, or a Mac's
+  field), the View menu's last row, palette commands (`sharing*`, kept for
+  a viewer), "Hide when sharing the screen" in the workspace's and the
+  machine's ⋯ menus, and the header's amber chip (`app/SharingChip.tsx`)
+  with its menu — hide everything or only the marked, turn it off. While
+  on: the sidebar's machine heads, folders and cards wear the neutral
+  names, a plain tile for the icon, no branch, "hidden while sharing" for
+  the agent's words, tooltips without paths; the header the same; the tab
+  strip leaves out the person's tab names and pane titles (`tabFaces(tabs,
+  masked)`); `PaneArea` covers a hidden folder's lenses and files rail with
+  `SharingVeil` (the lenses `inert` underneath, the focus taken out) until
+  "Show this pane", which holds until another pane is on screen — a
+  transcript on its own the same; a wall tile shows its state line over a
+  cover, no PR, no tail, no composer; the palette's pane rows go by agent
+  and neutral names (`paneEntries(…, masked)`), every command's words
+  through `redact`; toasts, Activity rows (a hidden folder's body replaced)
+  and the Mac app's menu (`maskFeed` in `app/shellFeed.ts`, tested) say the
+  neutral names. Nothing sent to or kept by the server changes; pushes,
+  webhooks, standup and usage reports are not masked.
 - `internal/said/` — the first line of every finished agent's last answer,
   for the roster (`pane.said`) and so for the sidebar row and the wall
   tile. `Tracker` hears `events.PaneStatus` (a finish — done or idle —

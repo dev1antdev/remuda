@@ -71,6 +71,19 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   small square. Without one a folder wears its initial on a tile in a
   colour of its name. The icon is the server's, so every device and the
   Wall, the palette and the header show it.
+- **Screen-sharing mode** — sharing your screen at work and the sidebar
+  names a client's projects? Alt+H (or "Screen-sharing mode" in the View
+  menu or the palette) turns it on: the folders and machines you marked
+  with "Hide when sharing the screen" in their ⋯ menus — or everything,
+  the mode's own pick when nothing is marked — read as "Project A",
+  "Machine 2", their icons a plain tile, their branches gone, the agents'
+  titles and answers hidden; a hidden folder's chat, terminal and files
+  are covered until you click "Show this pane", its wall tiles show their
+  state only, and the palette, the toasts, Activity and the Mac app's
+  menu say the neutral names too. An amber "Sharing" chip in the header
+  says it is on and holds its menu. It lives on this device only; nothing
+  the server keeps or sends changes, so a notification on your phone still
+  names the folder.
 - **Roster** — workspaces, tabs and panes from `session.snapshot`, with
   herdr's own agent statuses: `RUN` (working), `NEEDS YOU` (blocked),
   `READY` (idle), `DONE`.

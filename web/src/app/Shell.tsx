@@ -31,6 +31,7 @@ import { folderOf, useCurrent } from "./current";
 import { useFullKeys } from "./full";
 import { useNextKey, useNextNeedingMe } from "./next";
 import { useReopenKey } from "@/features/reopen/useReopenKey";
+import { useSharingKey } from "./SharingChip";
 import { handShell, inShell } from "@/lib/shell";
 import { modeOf } from "./shellFeed";
 import { actions, app } from "./store";
@@ -53,6 +54,7 @@ export default function Shell() {
   useFullKeys();
   useNextKey(useNextNeedingMe());
   useReopenKey(!viewOnly);
+  useSharingKey();
   useVoice();
   useSyncPrefs(!viewOnly);
   useWelcomeBack();

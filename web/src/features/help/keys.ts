@@ -16,6 +16,7 @@ export function keyGroups(mac: boolean): KeyGroup[] {
         { keys: ["Alt N"], what: t("the next agent that needs you") },
         { keys: ["Alt Z"], what: t("reopen an agent whose tab or workspace closed") },
         { keys: [mac ? "⌃ `" : "Ctrl `"], what: t("the floating terminal: a shell of its own over any screen, shown or hidden; from a terminal too") },
+        { keys: ["Alt H"], what: t("screen-sharing mode: the folders and machines you marked read as neutral names") },
         { keys: ["Esc"], what: t("close a dialog, a menu, the file viewer; leave full screen") },
         { keys: ["←", "→"], what: t("a panel's edge once Tab lands on it; ⇧ by more, ↵ its usual width") },
       ],

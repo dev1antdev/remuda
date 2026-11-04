@@ -8,6 +8,7 @@ import { episodeKey, remember, stoppedWords } from "@/features/roster/stopped";
 import { resumeStopped } from "@/features/updates/recover";
 import { reopen } from "@/features/reopen/offer";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import type { ToastItem } from "@/ui";
 import { actions, app } from "./store";
 import { viewerToasts } from "./viewOnly";
@@ -21,6 +22,7 @@ export function useToasts(): ToastItem[] {
   const notice = app.use((s) => s.notice);
   const away = app.use((s) => s.away);
   const closedOffer = app.use((s) => s.closedOffer);
+  const share = useSharing();
   const [releaseSeen, setReleaseSeen] = usePref("release.seen", "");
   const [recoverSeen, setRecoverSeen] = usePref<string[]>("recover.seen", []);
   useEffect(() => {
@@ -138,5 +140,7 @@ export function useToasts(): ToastItem[] {
       ),
     });
   if (tailscale?.state === "error") toasts.push({ id: "tailscale", tone: "error", text: `Tailscale: ${tailscale.error}` }); // the error is the daemon's own words
-  return viewOnly ? viewerToasts(toasts) : toasts;
+  // the screen-sharing mode swaps the hidden names out of every toast that names them
+  const shown = share.on ? toasts.map((toast) => (typeof toast.text === "string" ? { ...toast, text: share.redact(toast.text) } : toast)) : toasts;
+  return viewOnly ? viewerToasts(shown) : shown;
 }

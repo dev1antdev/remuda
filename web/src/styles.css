@@ -9776,3 +9776,57 @@ body.popout {
   margin-top: auto;
   padding-top: 4px;
 }
+
+/* ---- screen-sharing mode: the header's chip, the veil over a hidden folder's pane, a hidden tile's cover ---- */
+.sharing-chip.btn {
+  flex-shrink: 0;
+  gap: 5px;
+  border-color: var(--amber-ring);
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.sharing-chip.btn:hover {
+  background: var(--amber-soft);
+  color: var(--fg);
+}
+
+.pane-body.is-covered {
+  position: relative;
+}
+
+.sharing-veil {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  background: var(--bg);
+  color: var(--fg-faint);
+  text-align: center;
+}
+
+.pane-body > .sharing-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+}
+
+.sharing-veil p {
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: var(--fs-15);
+}
+
+.sharing-cover {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 80px;
+  color: var(--fg-faint);
+  font-size: var(--fs-13);
+}
