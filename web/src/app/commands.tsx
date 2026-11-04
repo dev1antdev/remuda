@@ -17,11 +17,14 @@ import { isMac, usePref, writePref } from "@/lib/prefs";
 import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, openLensOf, type OpenLens } from "./openLens";
 import { basename, errMsg } from "@/lib/text";
 import { folderOf as sessionFolder } from "@/features/roster/workspaces";
+import { canFork, forkLabel } from "@/features/chat/fork";
+import { forkPane } from "@/features/chat/forkPane";
 import { resetPanels } from "@/ui";
 import type { IconName } from "@/ui/icons";
 import { folderOf, useCurrent } from "./current";
 import { enterFull, leaveFull } from "./full";
 import { NEXT_KEY, useNextNeedingMe } from "./next";
+import { REOPEN_KEY } from "@/features/reopen/closed";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
 import { setDarkFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, useTextSize, useThemePref } from "./theme";
@@ -87,6 +90,7 @@ function useCommands(): (query: string) => Entry[] {
 
       command("next-needs", t("Go to the next agent that needs you"), goNext, { hint: `${NEXT_KEY} · ${t("a question open, a watchdog note, a finish not looked at")}`, icon: "arrow-right", keywords: ["next", "needs", "attention", "waiting", "blocked", "question", "done", "jump"] });
       for (const m of MODES) if (m.mode !== mode) command(`mode:${m.mode}`, m.title, () => actions.setMode(m.mode), { hint: m.hint, icon: m.icon, keywords: ["mode", m.mode] });
+      command("reopen", t("Reopen a closed agent…"), () => actions.openDialog({ kind: "reopen" }), { hint: `${REOPEN_KEY} · ${t("an agent whose tab or workspace closed, back on its own session")}`, icon: "refresh-cw", keywords: ["reopen", "undo", "closed", "restore", "tab", "back", "resume"] });
       if (current && !viewer) {
         const folder = folderOf(current);
         for (const l of LENSES) {
@@ -120,6 +124,7 @@ function useCommands(): (query: string) => Entry[] {
         if (popOutSupported) command("popout", t("Pop out this agent"), () => void popOut(selection!), { hint: t("a small window above every other app"), icon: "pip", keywords: ["picture", "window", "float"] });
         if (current.pane.agent) command("export", t("Export this conversation as Markdown"), () => void exportConversation(machine.id, current.pane.id, chatSession, folderOf(current), { agent: current.pane.agent, workspace: session.name, machine: machine.label }).catch(toastError), { hint: t("the session shown, as a file"), icon: "download", keywords: ["save", "download", "markdown", "transcript", "share", "file"] });
         if (current.pane.agent) command("recap", t("Recap this conversation"), () => actions.openDialog({ kind: "recap", machineId: machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), title: titled }), { hint: t("prompts, answers, tools, files, cost — Copy as Markdown"), icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest", "what happened"] });
+        if (canFork(current.pane.agent)) command("fork", forkLabel(current.pane.agent), () => void forkPane(machine.id, current.pane.id, current.pane.agent, chatSession), { hint: t("the same history in a new tab, a second path; this one goes on as it is"), icon: "columns", keywords: ["fork", "copy", "branch", "try", "another way", "duplicate", "conversation"] });
         if (current.pane.agent) command("handover", t("Continue this conversation with another agent"), () => actions.openDialog({ kind: "handover", machineId: machine.id, paneId: current.pane.id, session: chatSession, agent: current.pane.agent, workspace: titled }), { hint: t("a new tab here with Codex, Gemini or a fresh Claude, the gist of this conversation as its first prompt"), icon: "arrow-right", keywords: ["handover", "hand over", "continue", "switch", "codex", "gemini", "kimi", "another agent", "model", "cheaper", "stuck"] });
         if (current.pane.agent) command("pins", t("Pins in this conversation…"), () => actions.openDialog({ kind: "pins", machineId: machine.id, paneId: current.pane.id, dir: folderOf(current), shown: chatSession ?? chatLive, title: titled }), { hint: t("the turns you pinned in this folder's conversations, a click opens each"), icon: "pin", keywords: ["pin", "pins", "pinned", "bookmark", "bookmarks", "saved", "mark"] });
         if (current.pane.agent) command("find", t("Find in this conversation"), () => {

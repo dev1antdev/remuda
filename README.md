@@ -61,7 +61,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the agent by its logo and name, a shell as "terminal" — and + opens a
   terminal in the workspace's folder at once, or an agent.
 - **Folder icons** — click a folder's icon (or "Folder icon…" in a
-  workspace's ⋯ menu, or the palette) to give it a face: any emoji by
+  workspace's ⋯ menu, or the palette) to give it a face: first the ones
+  the project already has — its favicon, logo or app icon, found in the
+  checkout on its own machine, and its owner's avatar on GitHub (or on
+  GitLab, through `glab` when the machine has it) — then any emoji by
   group or by its English name, a site's icon — type `gog.com`, remuda
   reads its favicon once, right then, and keeps a copy; nothing is fetched
   later — or a picture from your computer, a company's logo made into a
@@ -404,6 +407,14 @@ sits under the machine's recent jobs; a pane whose folder or session
 file is gone, or that runs something else by then, is skipped with the
 reason. Nothing starts until you press the button, and a chat you left
 yourself is never offered back.
+
+**A tab closed by mistake comes back.** When a tab or a workspace with
+an agent in it closes — from remuda or anywhere else — remuda keeps the
+agent's session for a while (the last 20 per machine). Right after a
+close made here a toast offers **Reopen**; later, **Alt+Z** or "Reopen a
+closed agent…" in the palette lists them, newest first, and one click
+starts the agent again on its own conversation, in a tab of its
+folder's workspace or a new workspace when that one is gone.
 
 remuda watches its own releases on GitHub too (one request every six
 hours, none with `-no-version-check`). When a newer one is out, the ⓘ of
@@ -851,10 +862,19 @@ same dialog Tasks uses to send a task. **Message several agents** (✉ in
 the sidebar head, or the palette) sends one text to the agents you tick —
 everyone, the working ones, the resting ones, or by hand — each through
 the chat's own path in turn, and says how each went; an agent busy with a
-question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Continue with another agent** (View menu, or the palette) hands the conversation to a different agent — Codex's take, a cheaper model, a fresh Claude when this one is stuck: a new tab in the same workspace, the agent you pick started there with the recap of the conversation and its last exchanges in full as its first prompt (how many is yours to say; the whole stays under 60 KB), the old pane left as it is, the handover noted in the activity. **Quick prompts** (⚡ in the composer) are saved texts, for every folder or one, shared by all your devices; `{dir}`, `{branch}` and `{file}` in one become the pane's folder, its branch and the file you last opened. **↑**
+question refuses and is shown so, never queued. **Resume** an older conversation of a workspace: the chat lens's session picker lists them, and an older one picked there gets *Resume in a new tab* — a new tab in the same workspace with the agent started on that conversation (`claude --resume`, and the same for Codex, Gemini and Kimi). **Continue with another agent** (View menu, or the palette) hands the conversation to a different agent — Codex's take, a cheaper model, a fresh Claude when this one is stuck: a new tab in the same workspace, the agent you pick started there with the recap of the conversation and its last exchanges in full as its first prompt (how many is yours to say; the whole stays under 60 KB), the old pane left as it is, the handover noted in the activity. **Fork** a conversation (the View menu, the workspace's ⋯ menu, or the palette): Claude Code or Codex goes on from a copy of it in a new tab — the same history, a second path to try — while this one goes on as it is (`claude --resume … --fork-session`, `codex fork`). **Quick prompts** (⚡ in the composer) are saved texts, for every folder or one, shared by all your devices; `{dir}`, `{branch}` and `{file}` in one become the pane's folder, its branch and the file you last opened. **↑**
 on an empty line brings back what you sent before from this device to
 that folder, newest first; ↓ walks forward and back to the line you were
 writing.
+**Quote**: select a piece of an agent's answer and a *Quote* button
+appears beside it (or press Q) — the piece goes into your reply as a
+Markdown quote, after whatever you had typed, so you answer one point of a
+long answer without retyping it.
+**The queue**: an idea for the agent while it is still working? Alt+↵ (or
+the inbox button) keeps the text as a note above the box instead of
+sending it. Each note has its own *Send*, *Send all as one message* sends
+them numbered, a click on one puts it back in the box, × drops it. Nothing
+in the queue ever goes by itself; the notes stay on this device, per pane.
 **Export** (View › Export as Markdown on the chat lens, or the palette) saves
 the conversation as a Markdown file — the text as it is, thinking and
 tool calls folded — to share with someone who is not in remuda.
@@ -910,6 +930,26 @@ is yours to answer first, and the prompt waits two minutes for it before
 giving up with a note in Activity. The model last used for each agent is
 remembered on the device. A new tab and a new worktree take the same
 options.
+
+**A new worktree comes ready to run.** A worktree has none of the files
+git ignores — no `.env`, no local config — so an agent started in one
+often cannot run the project. List them in a `.worktreeinclude` at the
+repository's root, in `.gitignore`'s syntax (the same file Claude Code
+reads):
+
+```gitignore
+.env
+.env.*
+!.env.example
+config/local/
+```
+
+Every worktree remuda makes — from the New worktree dialog, or a task's
+*Start an agent on it* — gets them copied from the main checkout before
+its agent starts, and a toast (or the task's comment) says which. Only
+files git ignores are copied, never one the worktree already has, never
+anything outside the repository, and nothing at all when the patterns
+match more than a thousand files.
 
 **Recipes** save a start you make again and again — the agent, its
 model, the extra arguments and the first prompt, under a name like
