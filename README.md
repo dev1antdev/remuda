@@ -849,6 +849,15 @@ question refuses and is shown so, never queued. **Resume** an older conversation
 on an empty line brings back what you sent before from this device to
 that folder, newest first; ↓ walks forward and back to the line you were
 writing.
+**Quote**: select a piece of an agent's answer and a *Quote* button
+appears beside it (or press Q) — the piece goes into your reply as a
+Markdown quote, after whatever you had typed, so you answer one point of a
+long answer without retyping it.
+**The queue**: an idea for the agent while it is still working? Alt+↵ (or
+the inbox button) keeps the text as a note above the box instead of
+sending it. Each note has its own *Send*, *Send all as one message* sends
+them numbered, a click on one puts it back in the box, × drops it. Nothing
+in the queue ever goes by itself; the notes stay on this device, per pane.
 **Export** (View › Export as Markdown on the chat lens, or the palette) saves
 the conversation as a Markdown file — the text as it is, thinking and
 tool calls folded — to share with someone who is not in remuda.
