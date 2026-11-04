@@ -79,7 +79,7 @@ func JobsScript(m Merge, pipeline int64) string {
 
 // TraceScript prints a job's log.
 func TraceScript(m Merge, job int64) string {
-	return script.PATH + "\n" + glabAPI(m.Host, "projects/"+url.PathEscape(m.Project)+"/jobs/"+strconv.FormatInt(job, 10)+"/trace")
+	return script.PATH + "\n" + glabAPI(m.Host, "projects/"+url.PathEscape(m.Project)+"/jobs/"+strconv.FormatInt(job, 10)+"/trace") + lastOfLog
 }
 
 type glabMerge struct {

@@ -188,3 +188,59 @@ func TestTheWrapperNeverFails(t *testing.T) {
 		t.Fatal("a slow status line held the wrapper")
 	}
 }
+
+func TestASettingsFileKeptAsALinkStaysALink(t *testing.T) {
+	home, stateDir := homes(t, "")
+	dotfiles := t.TempDir()
+	real := filepath.Join(dotfiles, "claude-settings.json")
+	must(t, os.WriteFile(real, []byte(personsSettings), 0o644))
+	must(t, os.MkdirAll(filepath.Join(home, ".claude"), 0o700))
+	must(t, os.Symlink(real, SettingsPath(home)))
+
+	_, err := InstallStatusline(home, stateDir, "/opt/remuda")
+	must(t, err)
+	if info, err := os.Lstat(SettingsPath(home)); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("the link was replaced by a file: %v %v", info, err)
+	}
+	data, err := os.ReadFile(real)
+	must(t, err)
+	if !strings.Contains(string(data), "/opt/remuda") {
+		t.Fatalf("the linked file was not the one rewritten: %s", data)
+	}
+	_, err = UninstallStatusline(home, stateDir)
+	must(t, err)
+	if info, _ := os.Lstat(SettingsPath(home)); info == nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("the uninstall replaced the link")
+	}
+	var line map[string]any
+	must(t, json.Unmarshal(settingsOf(t, home)["statusLine"], &line))
+	if line["command"] != "ccstatusline" {
+		t.Fatalf("not put back: %v", line)
+	}
+}
+
+func TestUninstallWithoutTheRecordFallsBackOnTheBackupElseChangesNothing(t *testing.T) {
+	home, stateDir := homes(t, personsSettings)
+	_, err := InstallStatusline(home, stateDir, "/opt/remuda")
+	must(t, err)
+	must(t, os.Remove(filepath.Join(stateDir, wrapFile)))
+	_, err = UninstallStatusline(home, stateDir)
+	must(t, err)
+	var line map[string]any
+	must(t, json.Unmarshal(settingsOf(t, home)["statusLine"], &line))
+	if line["command"] != "ccstatusline" {
+		t.Fatalf("the backup's status line was not put back: %v", line)
+	}
+
+	home, stateDir = homes(t, personsSettings)
+	_, err = InstallStatusline(home, stateDir, "/opt/remuda")
+	must(t, err)
+	must(t, os.Remove(filepath.Join(stateDir, wrapFile)))
+	must(t, os.Remove(filepath.Join(stateDir, backupFile)))
+	words, err := UninstallStatusline(home, stateDir)
+	must(t, err)
+	current, ok := settingsOf(t, home)["statusLine"]
+	if !ok || !isWrapper(current) || !strings.Contains(words, "nothing changed") {
+		t.Fatalf("with nothing to go by the status line was removed: %s %q", current, words)
+	}
+}

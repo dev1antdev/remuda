@@ -39,6 +39,11 @@ func TestTheConfigurationKeepsItsTokenAndNeverShowsIt(t *testing.T) {
 	if err := s.Replace("https://acme.atlassian.net", "ann@acme.io", ""); err != nil || s.Config().Token != token {
 		t.Fatalf("an empty token did not keep the one kept: %v %q", err, s.Config().Token)
 	}
+	for _, other := range []string{"https://evil.example", "https://acme.atlassian.net.evil.example", "acme2.atlassian.net"} {
+		if err := s.Replace(other, "ann@acme.io", ""); err == nil || s.Config().Site != "https://acme.atlassian.net" {
+			t.Fatalf("the token kept for acme.atlassian.net went with %s: %v %+v", other, err, s.View())
+		}
+	}
 	info, err := os.Stat(filepath.Join(dir, configFile))
 	if err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("file %v %v", info, err)
@@ -55,6 +60,12 @@ func TestTheConfigurationKeepsItsTokenAndNeverShowsIt(t *testing.T) {
 	}
 	if err := s.Replace("https://jira.acme.local/jira/", "", "pat"); err != nil || s.View().Site != "https://jira.acme.local/jira" || s.View().Cloud {
 		t.Fatalf("a server under a path: %v %+v", err, s.View())
+	}
+	if err := s.Replace("http://jira.acme.local/jira", "", ""); err == nil || s.View().Site != "https://jira.acme.local/jira" {
+		t.Fatalf("the token kept for https went over plain http: %v", err)
+	}
+	if err := s.Replace("https://JIRA.acme.local/", "", ""); err != nil || s.Config().Token != "pat" {
+		t.Fatalf("the same host under another path lost its token: %v", err)
 	}
 	if err := s.Clear(); err != nil || s.Configured() {
 		t.Fatalf("clear: %v", err)
@@ -373,6 +384,12 @@ func TestTheServiceReadsOnlyWhatALookedAtRosterNamesAndOnlyWhenDue(t *testing.T)
 		if strings.Contains(path, "/issue/") {
 			t.Fatal("read a key no roster named for WantedFor")
 		}
+	}
+	s.mu.Lock()
+	kept := len(s.issues)
+	s.mu.Unlock()
+	if kept != 0 {
+		t.Fatalf("%d issues no roster named for WantedFor are still kept", kept)
 	}
 
 	if err := s.Clear(); err != nil || s.Issues([]string{"CRMOPS-6279"}) != nil || s.Site() != "" {

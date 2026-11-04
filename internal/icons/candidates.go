@@ -171,7 +171,9 @@ func originOf(remote string) (host, path string, ok bool) {
 	return strings.ToLower(host), path, true
 }
 
-func isGitHub(host string) bool { return host == "github.com" || host == "www.github.com" }
+func isGitHub(host string) bool {
+	return host == "github.com" || host == "www.github.com" || host == "ssh.github.com"
+}
 
 // gitHubAvatar reads the owner's avatar from GitHub, 128 pixels.
 func gitHubAvatar(ctx context.Context, client *http.Client, owner string) ([]byte, error) {
