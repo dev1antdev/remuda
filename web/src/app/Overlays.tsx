@@ -54,6 +54,7 @@ export default function Overlays() {
     refresh();
     actions.selectPane(machineId, made.pane);
     if (made.warning) actions.notify(made.warning);
+    if (made.note) actions.notify(made.note);
   };
   const done = async () => {
     actions.closeDialog();

@@ -25,6 +25,8 @@ export function keyGroups(mac: boolean): KeyGroup[] {
         { keys: ["↵"], what: t("send") },
         { keys: ["⇧ ↵"], what: t("a new line") },
         { keys: ["↑", "↓"], what: t("what you sent before, on an empty line") },
+        { keys: ["Alt ↵"], what: t("keep the text as a note in the agent's queue, sent only when you press Send on it") },
+        { keys: ["Q"], what: t("quote the text selected in an answer into your reply") },
         { keys: [`${mod} F`], what: t("find in this conversation") },
         { keys: ["↵", "⇧ ↵", "Esc"], what: t("the next or previous match in the find bar, close it") },
         { keys: ["↑", "↓", "↵", "Tab", "Esc"], what: t("walk the / commands or @ files offered at the caret, pick one, close the list") },

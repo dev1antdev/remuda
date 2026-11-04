@@ -1,10 +1,12 @@
 // The composer owns the draft, so typing never re-renders the transcript: attachments uploaded at once,
 // quick prompts, dictation, Enter to send (Shift+Enter a new line; on a phone the button sends), ↑ in an empty
-// line to bring back what was sent before. The compact one, in a wall tile, is the line and its buttons alone.
+// line to bring back what was sent before; a quote of the answer put after what is typed; Alt+Enter keeps the text as a
+// note in the agent's queue, sent only from the queue's own buttons. The compact one, in a wall tile, is the line and
+// its buttons alone.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { sendKeys, submitPrompt } from "@/features/roster/api";
-import { isTouch } from "@/lib/prefs";
+import { isTouch, usePref } from "@/lib/prefs";
 import { errMsg } from "@/lib/text";
 import { filesFrom } from "@/lib/transfer";
 import { Icon, Notice, Tip } from "@/ui";
@@ -15,9 +17,24 @@ import { useHistory } from "./useHistory";
 import { applyPick, stillDismissed, tokenAt, type Dismissed, type Item } from "./complete";
 import { CompletionList, useCompletion } from "./Completion";
 import { ModeChip } from "./ModeChip";
+import { addNote, numbered, queueKey, removeNote, sentAway, type QueuedNote } from "./queue";
+import { QueueList } from "./QueueList";
+import { withQuote } from "./quote";
 import { t } from "@/lib/i18n";
 
-export default function Composer({ machineId, paneId, working, dir, agent = "", compact = false, onScreen = true }: { machineId: string; paneId: string; working: boolean; dir: string; agent?: string; compact?: boolean; onScreen?: boolean }) {
+const NO_NOTES: QueuedNote[] = [];
+const noteId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+export default function Composer({ machineId, paneId, working, dir, agent = "", compact = false, onScreen = true, quote }: {
+  machineId: string;
+  paneId: string;
+  working: boolean;
+  dir: string;
+  agent?: string;
+  compact?: boolean;
+  onScreen?: boolean;
+  quote?: { text: string; n: number }; // a quote of the answer to put in the box; n moves with every new one
+}) {
   // the insertions read the draft through a ref: a state updater must stay free of side effects
   const [draft, setDraftState] = useState("");
   const draftRef = useRef("");
@@ -35,6 +52,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
   const picker = useRef<HTMLInputElement>(null);
   const att = useAttachments(machineId, paneId);
   const history = useHistory(machineId, dir);
+  const [notes, setNotes] = usePref<QueuedNote[]>(queueKey(machineId, dir, paneId), NO_NOTES);
 
   // the completion: the token under the caret, its list from the machine, the row the keys are on, the token Esc closed
   // (forgotten once the caret has left it, so the next slash or @ at the same place gets its list again)
@@ -78,6 +96,52 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
     moveCaret.current = null;
     area.current?.setSelectionRange(at, at);
   }, [draft]);
+
+  // a quote of the answer goes after what is typed, the caret under it, the box focused to write the reply
+  const quoteN = quote?.n;
+  useEffect(() => {
+    if (!quote?.text) return;
+    const next = withQuote(draftRef.current, quote.text);
+    caret.current = next.caret;
+    moveCaret.current = next.caret;
+    setDraft(next.draft);
+    area.current?.focus();
+  }, [quoteN]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the queue: the draft kept as a note for later; a send through the chat's own path takes notes away only once it went
+  const queueDraft = () => {
+    const text = draftRef.current;
+    if (!text.trim()) return;
+    setNotes((list) => addNote(list, text, noteId(), Date.now()));
+    setDraft("");
+    att.clear();
+    history.reset();
+    area.current?.focus();
+  };
+  const sendNotes = async (list: QueuedNote[]) => {
+    if (!list.length || sending) return;
+    const text = numbered(list);
+    setSending(true);
+    try {
+      await submitPrompt(machineId, paneId, text);
+      history.add(text);
+      setNotes((all) => sentAway(all, list));
+      setError(null);
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setSending(false);
+    }
+  };
+  const editNote = (note: QueuedNote) => {
+    setNotes((list) => removeNote(list, note.id));
+    const before = draftRef.current.replace(/\s+$/, "");
+    const next = before ? `${before}\n\n${note.text}` : note.text;
+    caret.current = next.length;
+    moveCaret.current = next.length;
+    setDraft(next);
+    area.current?.focus();
+  };
 
   // pick puts the row's text in place of the token and leaves the caret after it, the field still focused
   const pick = (item: Item) => {
@@ -136,6 +200,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
           {error}
         </Notice>
       )}
+      {!compact && notes.length > 0 && <QueueList notes={notes} busy={sending} onSend={(list) => void sendNotes(list)} onEdit={editNote} onRemove={(note) => setNotes((list) => removeNote(list, note.id))} />}
       {att.items.length > 0 && (
         <div className="attachments">
           {att.items.map((a) => (
@@ -206,6 +271,11 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
                 }}
               >
                 <Icon name="zap" size={16} />
+              </button>
+            </Tip>
+            <Tip text={t("Queue it as a note for the agent (Alt+↵): sent only when you press Send on it")}>
+              <button type="button" className="icon-btn lg composer-attach composer-queue" aria-label={t("Add to the queue")} disabled={!draft.trim()} onClick={queueDraft}>
+                <Icon name="inbox" size={16} />
               </button>
             </Tip>
             {dictation.supported && (
@@ -280,6 +350,12 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
                 setDismissed({ kind: open.kind, start: open.start });
                 return;
               }
+            }
+            // Alt+Enter keeps the text as a note in the queue, in the lens
+            if (!compact && e.key === "Enter" && e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              queueDraft();
+              return;
             }
             // phone keyboards have no Shift+Enter: there Enter breaks the line and the button sends
             if (isTouch) return;

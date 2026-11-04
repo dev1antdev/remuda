@@ -11,6 +11,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/watch"
+	"github.com/dev1antdev/remuda/internal/worktrees"
 )
 
 // ErrAgentStart is a worktree that is there without the agent in it.
@@ -62,6 +63,7 @@ func (l *Launcher) Start(mc *machines.Machine, client *herdr.Client, task Task, 
 	if err != nil {
 		return Task{}, err
 	}
+	included, includeErr := worktrees.Include(mc, res.Worktree.Path)
 	pane := res.RootPane.PaneID
 	if err := sessions.StartAgent(client, pane, req.Agent); err != nil {
 		l.Watch.Refresh(mc)
@@ -72,6 +74,9 @@ func (l *Launcher) Start(mc *machines.Machine, client *herdr.Client, task Task, 
 	if err != nil {
 		return Task{}, err
 	}
+	if note := includeNote(included, includeErr); note != "" {
+		_, _ = l.Store.AddComment(task.ID, "remuda", note)
+	}
 	prompt := strings.TrimSpace(req.Prompt)
 	if prompt == "" {
 		project, _ := l.Store.Project(task.ProjectID)
@@ -81,6 +86,14 @@ func (l *Launcher) Start(mc *machines.Machine, client *herdr.Client, task Task, 
 	}
 	go l.deliver(mc, client, run, task, prompt)
 	return l.Store.Get(task.ID)
+}
+
+// includeNote is the task's comment on the files the new worktree got from .worktreeinclude, or why it got none
+func includeNote(included worktrees.Included, err error) string {
+	if err != nil {
+		return "The files the repository's .worktreeinclude names were not copied into the new worktree: " + err.Error()
+	}
+	return included.Words()
 }
 
 // deliver waits for the fresh agent and hands it the task; Claude Code's "trust this folder"
