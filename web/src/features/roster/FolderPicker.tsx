@@ -8,7 +8,7 @@ import type { Machine } from "@/features/roster/api";
 import Icon from "@/ui/icons";
 import { folderOptions } from "@/features/roster/options";
 import { basename } from "@/lib/text";
-import { Dialog, Notice } from "@/ui";
+import { Dialog, Notice, Tip } from "@/ui";
 import { useQuery } from "@/lib/query";
 import { t } from "@/lib/i18n";
 
@@ -39,12 +39,16 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
           go(typed.trim());
         }}
       >
-        <button type="button" className="icon-btn" title={t("Up one folder")} disabled={!data?.parent} onClick={() => data?.parent && go(data.parent)}>
-          <Icon name="arrow-left" size={14} />
-        </button>
-        <button type="button" className="icon-btn" title={t("Home")} onClick={() => go("")}>
-          <Icon name="user" size={14} />
-        </button>
+        <Tip text={t("Up one folder")}>
+          <button type="button" className="icon-btn" aria-label={t("Up one folder")} disabled={!data?.parent} onClick={() => data?.parent && go(data.parent)}>
+            <Icon name="arrow-left" size={14} />
+          </button>
+        </Tip>
+        <Tip text={t("Home")}>
+          <button type="button" className="icon-btn" aria-label={t("Home")} onClick={() => go("")}>
+            <Icon name="user" size={14} />
+          </button>
+        </Tip>
         <input className="sm" value={typed} spellCheck={false} onChange={(e) => setTyped(e.target.value)} placeholder="/path/to/folder" aria-label={t("Path")} />
         <button type="submit" className="btn sm" title={t("Go to the typed path")}>
           {t("Go")}
@@ -74,9 +78,11 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
                 <span className="picker-name">{d.name}</span>
                 {d.git && <span className="picker-tag">repo</span>}
               </button>
-              <button type="button" className="icon-btn sm" title={t("Choose {name}", { name: d.name })} aria-label={t("Choose {name}", { name: d.name })} onClick={() => onPick(full)}>
-                <Icon name="check" size={12} />
-              </button>
+              <Tip text={t("Choose {name}", { name: d.name })}>
+                <button type="button" className="icon-btn sm" aria-label={t("Choose {name}", { name: d.name })} onClick={() => onPick(full)}>
+                  <Icon name="check" size={12} />
+                </button>
+              </Tip>
             </div>
           );
         })}

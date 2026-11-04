@@ -60,6 +60,13 @@ export function entries(m: Machine, prefs: RadarPrefs): Entry[] {
   return list.map((folder) => ({ kind: "folder", folder }));
 }
 
+// repositoryOf is the workspace a folder's new worktree branches off: its main checkout, else any of its workspaces in
+// the repository; none outside git
+export function repositoryOf(folder: Folder): Session | null {
+  const inGit = folder.items.map((item) => item.session).filter((s) => s.worktree || s.branch);
+  return inGit.find((s) => !s.worktree?.linked && (s.dir || "") === folder.path) ?? inGit[0] ?? null;
+}
+
 // folderCounts is what a folder's line says of its agents: how many work, ask and finished, and how many there are
 export function folderCounts(folder: Folder): { working: number; blocked: number; done: number; agents: number; fresh: number } {
   const n = { working: 0, blocked: 0, done: 0, agents: 0, fresh: 0 };

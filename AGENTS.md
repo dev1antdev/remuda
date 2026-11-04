@@ -129,7 +129,7 @@ not style.
   search addon (`@xterm/addon-search`, the find over the terminal's
   scrollback: the same project as xterm, not worth writing twice) and
   radix-ui (menus, tooltips, popovers: the primitives whose keyboard and
-  focus behaviour is not worth writing twice; `ui/Menu.tsx` and
+  focus behaviour is not worth writing twice; `ui/Menu.tsx`, `ui/Popover.tsx` and
   `ui/Tip.tsx` are the only places that import it) and mermaid (the
   flowcharts and sequence diagrams agents draw in their answers and
   files, too big to write ourselves; loaded only when a diagram is on

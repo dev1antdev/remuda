@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session, Tab } from "./api";
 import { DEFAULT_RADAR } from "./radar";
-import { agentWords, branchShown, entries, folderCounts, itemTitle, limited, itemWords, leadOf, representative, shortAge, since, type WorkspaceItem } from "./workspaces";
+import { agentWords, branchShown, entries, folderCounts, itemTitle, limited, itemWords, leadOf, repositoryOf, representative, shortAge, since, type WorkspaceItem } from "./workspaces";
 
 const now = 1_000_000_000_000;
 const ago = (minutes: number) => now - minutes * 60_000;
@@ -51,6 +51,31 @@ describe("entries", () => {
     const tree = session("small-improvements", [tab([pane({ radar: { state: "working" } })])], { folder: "/p/user-profiles", worktree: repo("user-profiles", true) });
     const games = session("games-db", [tab([pane({ radar: { state: "done", last_active: ago(5) } })])]);
     expect(fold(entries(machine([main, tree, games]), { ...DEFAULT_RADAR, order: "recent" }))).toEqual(["small-improvements", "games-db", "user-profiles"]);
+  });
+});
+
+describe("repositoryOf", () => {
+  const folderOfAll = (sessions: Session[]) => {
+    const [entry] = entries(machine(sessions), DEFAULT_RADAR);
+    if (entry?.kind !== "folder") throw new Error("no folder");
+    return entry.folder;
+  };
+
+  it("branches a folder's worktree off its main checkout, even when a worktree is livelier", () => {
+    const main = session("user-profiles", [tab([pane()])], { folder: "/p/user-profiles", dir: "/p/user-profiles", worktree: repo("user-profiles", false) });
+    const tree = session("small", [tab([pane({ radar: { state: "working" } })])], { folder: "/p/user-profiles", dir: "/w/small", worktree: repo("user-profiles", true) });
+    expect(repositoryOf(folderOfAll([tree, main]))?.name).toBe("user-profiles");
+  });
+
+  it("takes a linked worktree when the main checkout has no workspace, and a branch alone counts as git", () => {
+    const tree = session("small", [tab([pane()])], { folder: "/p/user-profiles", dir: "/w/small", worktree: repo("user-profiles", true) });
+    expect(repositoryOf(folderOfAll([tree]))?.name).toBe("small");
+    const branched = session("api", [tab([pane()])], { folder: "/p/api", dir: "/p/api", branch: "main" });
+    expect(repositoryOf(folderOfAll([branched]))?.name).toBe("api");
+  });
+
+  it("has none outside git", () => {
+    expect(repositoryOf(folderOfAll([session("notes", [tab([pane()])], { folder: "/p/notes", dir: "/p/notes" })]))).toBeNull();
   });
 });
 

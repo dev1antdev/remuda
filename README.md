@@ -43,7 +43,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
 - **Radar sidebar** — every repository a folder, laid out after
   [Orca](https://onorca.dev)'s: its icon, its name and how its agents
   stand; a click folds it shut or opens it, and the sidebar's ⋯ folds or
-  opens them all. Open, a folder holds a card per workspace — the main
+  opens them all. A folder's own ⋯ starts a new workspace in it, a new
+  worktree of its repository, sets its icon or opens it in the editor.
+  Open, a folder holds a card per workspace — the main
   checkout and its worktrees — a click away from its agent. The agents read
   after [herdr-radar](https://github.com/hhdebb/herdr-radar)'s design,
   reimplemented here: a braille spinner while it works, a pulsing `?`

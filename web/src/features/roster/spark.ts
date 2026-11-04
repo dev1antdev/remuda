@@ -71,5 +71,6 @@ export function sparkTitle(label: string, values: number[], fmt: (v: number) => 
   if (values.length === 0) return label;
   const min = values.reduce((m, v) => Math.min(m, v), Infinity);
   const max = values.reduce((m, v) => Math.max(m, v), -Infinity);
-  return `${label}: min ${fmt(min)}, max ${fmt(max)}, now ${fmt(values[values.length - 1]!)}${span ? ` · ${span}` : ""}`;
+  const words = t("{label}: min {min}, max {max}, now {now}", { label, min: fmt(min), max: fmt(max), now: fmt(values[values.length - 1]!) });
+  return span ? `${words} · ${span}` : words;
 }
