@@ -676,7 +676,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   as `open_already` (and the entry dropped), else `sessions.StartIn` with
   the kind's resume arguments — a tab of the workspace on that folder
   (named as the closed tab was), or a new workspace on it — the entry
-  dropped once the agent is back. The page (`features/reopen/`:
+  dropped once the agent is back; one reopen of an entry at a time
+  (`ErrReopening`, a 409: a double click starts one agent), the entry
+  looked up again once claimed. The page (`features/reopen/`:
   `closed.ts` tested — `closedTitle`, `closedWhere`, `justClosed`,
   `offerWords`, `reopenKeyAsked`; `offer.ts`, `ReopenDialog.tsx`,
   `useReopenKey.ts`): after a tab or workspace closed through the page,
@@ -999,10 +1001,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Snapshot.WorkspaceDirs()` that also reads each folder's branch
   (`git symbolic-ref`, a short hash when detached; `Store.Branch`, set
   by a summary too, dropped for a folder that stopped being a
-  repository) and its repository's main folder (`Store.Root`: the
-  parent of `git rev-parse --git-common-dir`, so a worktree made outside
-  herdr still joins its repository's folder in the sidebar; git names a
-  linked worktree's repository by its real path), and the roster carries `session.dir`, `session.branch`
+  repository) and its repository's main folder (`Store.Root`: for a
+  linked worktree the parent of `git rev-parse --git-common-dir`, so a
+  worktree made outside herdr still joins its repository's folder in the
+  sidebar — git names a linked worktree's repository by its real path —
+  else the checkout's own top folder, since a submodule's git dir sits
+  under its parent's `.git/modules`), and the roster carries `session.dir`, `session.branch`
   and `session.review {changed, fresh}` for the sidebar's card, beside
   `session.folder` and `session.icon` (`internal/icons`).
   `features/review/Review.tsx` draws it (`Diff.tsx` the file rows,
@@ -1151,7 +1155,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `<state>/scratch.json`, the id of one plain-shell workspace labelled
   "scratch" that remuda made in the machine's home folder — `Ensure`
   finds it again in a fresh snapshot (the active tab's focused pane, else
-  its first) or makes it (`workspace.create`), `Close` ends it, `Forget`
+  its first) or makes it (`workspace.create`), under that machine's own
+  lock with the snapshot read inside it, so two asks at once make one
+  shell and the roster's `Is` never waits on herdr, `Close` ends it, `Forget`
   drops a removed machine's — so it is never a workspace the person made.
   `POST /api/scratch {machine}` → `{workspace, pane, made}`, `DELETE
   /api/scratch {machine}`; viewers and agent keys get neither. The roster
@@ -1611,7 +1617,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   failed check points into (`FailedRuns`, at most `MaxRuns`), and
   composes `FailureMessage` — the failed checks named with their links,
   each run's log `Tail` (the last `LogTail` 8 KB at a line, escapes
-  stripped), and the ask to fix and push; `ReviewComments(host, label,
+  stripped, out of the last `LogRead` 64 KB the machine sends: a CI log
+  runs to megabytes), and the ask to fix and push; `ReviewComments(host, label,
   url)` runs `gh pr view --json reviews` and `gh api
   repos/{o}/{r}/pulls/{n}/comments` in one script (two `script.RS`
   sections, `URLParts` off the address) and composes `ReviewMessage` —
@@ -1809,7 +1816,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   not ignore as a tar; at most `MaxPack` 256 MB; nothing in the checkout
   changes), the archive put on the target through `Host.PutFile`
   (`Machine.PutFile`: written here, or `cat` over the ssh master), `Land`
-  (the bundle verified, the target's remotes fetched when it lacks the
+  (the archive removed on its way out whatever happened, its path held in
+  a variable so a temp folder with a space in it is no trouble; the bundle verified, the target's remotes fetched when it lacks the
   base, `needFull` when it still does — then the whole branch is sent
   again; the branch under its own name or `<branch>-from-<source>` when
   the target has one so named; a worktree under
@@ -2031,12 +2039,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `statusline=wrapped` line is absent, `Report.Statusline`): the file is
   copied to `claude-settings.backup.json` and the replaced setting kept
   in `statusline.json` in remuda's state dir first, the other settings
-  keep their order (the top level read token by token), uninstall puts
-  the person's own back and leaves a status line changed since alone;
+  keep their order (the top level read token by token), a settings
+  file kept as a link (a dotfiles folder) stays one — the file it names
+  is rewritten — uninstall puts the person's own back (from
+  `statusline.json`, else the backup's, else nothing changes and it says
+  so) and leaves a status line changed since alone;
   tested in a temp HOME only. `Service` (`internal/app` wires it): every
   `events.Snapshot` asks `Refresh` (at most every `Every` 2 min per
   machine, never two at once), the roster carries `machine.limits
-  {windows, wrapped}`; `warn` pushes through `push.Notify` (kind
+  {windows, wrapped}` less the windows reset since (a machine away keeps
+  its reading); `warn` pushes through `push.Notify` (kind
   `limits`, a tap opens the Usage panel, the webhooks' kind `limits`) at
   80 % and at the limit once per window — keyed by agent, window and
   reset minute, so one account read on three machines warns once, kept
@@ -2052,8 +2064,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   at}`, `DELETE` calls it off; at most `MaxAhead` 8 days ahead; kept in
   `limits.json`): `Loop` says "continue" when due through
   `sessions.Input.Submit` — only to the conversation booked for, at rest
-  and asking nothing (working again: dropped quietly; a question or
-  another conversation: dropped with a push saying so) — a quiet "sent"
+  and asking nothing (working again: dropped quietly; a question,
+  another conversation or a pane its agent left: dropped with a push
+  saying so, never typed into a shell) — a quiet "sent"
   row in the activity and a push with what it did; never sent by
   itself. The page: `features/usage/limits.ts` (pure, tested:
   `accountWindows` the freshest reading of each window across machines,
@@ -2141,9 +2154,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   others: each one's whole work saved by `PatchScript` (a binary patch
   `git apply` takes back on the base) to
   `<state>/arenas/arena-<id>-lane-<n>-<agent>.patch`, 0600, then its
-  workspace closed and its worktree and branch removed with
-  `worktrees.Discard`; a lane whose work could not be saved, or whose
-  machine is away, stays as it is with the reason in its note; a task's
+  workspace closed and its worktree and the lane's own branch removed
+  with `worktrees.Discard` (`ownBranch`: never a branch the lane's agent
+  checked out there since); a lane whose work could not be saved, or whose
+  machine is away, stays as it is with the reason in its note, and
+  keeping the same lane again tries it once more, while another lane is
+  refused once one was kept; the arena's own lock (`arenaLock`) makes a
+  lane and a Keep one at a time, so a lane being made is waited for and
+  one not made yet never is (`stillStarting`); the throwaway index's
+  folder is removed only when `mktemp` made one; a task's
   arena gets a comment saying what was kept and where the patches are.
   Routes (`internal/server/arena.go`): `GET /api/arenas` (the newest
   five with each lane's `stats`), `POST /api/arenas`, `POST
@@ -2189,8 +2208,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `<link rel="…icon">` tags (mask-icon skipped, a `data:` href taken as
   it is), ranked apple-touch first, then a declared size of 32 or more,
   then an SVG, then the rest, `/favicon.ico` last (and alone when the
-  page does not answer), the first that answers a picture `ParseImage`
-  takes returned as a data URL; 400 for an address that is no web page,
+  page does not answer), the best `MaxIconLinks` 6 of the page's links
+  tried, the whole search within `FaviconTimeout` 30 s, the first that
+  answers a picture `ParseImage` takes returned as a data URL; 400 for an address that is no web page,
   502 with why, naming the host alone. Nothing is remembered from the
   fetch and nothing is fetched again: the person keeps the picture by
   saving it as the icon. **The icons a project already has**
@@ -2216,7 +2236,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `httptest` with recorded Cloud and server answers): the person's site,
   account and token in `jira.json` in the state dir (0600; `Store`,
   `View` masks the token as `has_token`, `Replace` keeps the stored token
-  when none comes, a Cloud site — `*.atlassian.net` — needs https and the
+  when none comes — only for the same scheme and host, so it never goes to
+  another site or over plain http (`sameOrigin`) — a Cloud site — `*.atlassian.net` — needs https and the
   account's e-mail; a damaged file reads as none). `Client`: REST v3 on
   Cloud, v2 on a server; Basic with the account and the token, else
   Bearer (a personal access token); `Timeout` 10 s, an answer capped at
@@ -2237,7 +2258,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   requests': only while a page reads) starts one background sweep at a
   time: the projects when `ProjectsEvery` (1 h) old, then every wanted key
   read `Every` (3 min) ago or never, at most `MaxReads` 30, a key no
-  roster named for `WantedFor` (10 min) dropped; a failing site holds the
+  roster named for `WantedFor` (10 min) dropped with what was read of it;
+  a failing site holds the
   sweeps off for `Every` and is logged once an hour; `OnChange` (the live
   hub's `RosterChanged`) when anything moved; `Replace` / `Clear` forget
   everything read. The roster carries `session.jira` (`server.issuesOf`)
@@ -2962,7 +2984,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`normColor`). A folder icon's picture is stored only once `ParseImage`
   took it and is served with a sandbox CSP of its own; the favicon fetch
   runs only at the person's word in the icon dialog, http and https only,
-  ten seconds, five redirects, a megabyte of page and 256 KB of picture;
+  ten seconds, five redirects, a megabyte of page, six of its links,
+  thirty seconds in all and 256 KB of picture;
   the Automatic tab's search reads the checkout's picture files on their
   machine (links skipped, 256 KB each) and fetches a GitHub owner's
   avatar under the same limits, only while the person has the tab open.

@@ -204,9 +204,10 @@ func TestABookingStandsDownForAnotherConversationAQuestionOrWork(t *testing.T) {
 		gone   bool
 		pushed string
 	}{
-		{"working again", Place{Session: "s1", Status: herdr.StatusWorking, Workspace: "api"}, false, ""},
-		{"a question", Place{Session: "s1", Status: herdr.StatusBlocked, Workspace: "api"}, false, "Nothing continued in api"},
-		{"another conversation", Place{Session: "s2", Status: herdr.StatusIdle, Workspace: "api"}, false, "Nothing continued in api"},
+		{"working again", Place{Agent: "claude", Session: "s1", Status: herdr.StatusWorking, Workspace: "api"}, false, ""},
+		{"a question", Place{Agent: "claude", Session: "s1", Status: herdr.StatusBlocked, Workspace: "api"}, false, "Nothing continued in api"},
+		{"another conversation", Place{Agent: "claude", Session: "s2", Status: herdr.StatusIdle, Workspace: "api"}, false, "Nothing continued in api"},
+		{"the agent left", Place{Workspace: "api"}, false, "Nothing continued in api"},
 		{"closed", Place{}, true, "Nothing continued after the limit reset"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -275,5 +276,37 @@ func TestResetWords(t *testing.T) {
 		if got := Left(d); got != want {
 			t.Fatalf("Left(%v) = %q, want %q", d, got, want)
 		}
+	}
+}
+
+func TestABookingMadeBeforeASessionIdIsNeverTypedIntoAShell(t *testing.T) {
+	now := time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC)
+	var got pushes
+	submitted := false
+	s := New(t.TempDir())
+	s.now = func() time.Time { return now }
+	s.Notify = got.notify
+	s.Submit = func(string, string, string) error { submitted = true; return nil }
+	s.Pane = func(string, string) (Place, bool) { return Place{Status: herdr.StatusIdle, Workspace: "api"}, true }
+	s.kept.Bookings["gog|p1"] = Booking{Machine: "gog", Pane: "p1", At: now, Text: "rm -rf build"}
+	s.Tick()
+	if submitted {
+		t.Fatal("the booking's text went to a bare shell")
+	}
+	if titles := got.titles(); len(titles) != 1 || titles[0] != "Nothing continued in api" || !strings.Contains(got.sent[0].Body, "left the pane") {
+		t.Fatalf("pushes: %+v", got.sent)
+	}
+}
+
+func TestAReadingLeavesOutTheWindowsResetSince(t *testing.T) {
+	now := time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC)
+	s := New(t.TempDir())
+	s.now = func() time.Time { return now }
+	s.readings["gog"] = Reading{Windows: []Window{
+		{Agent: "claude", Name: "5h", Used: 100, ResetsAt: now.Add(-time.Minute)},
+		{Agent: "claude", Name: "week", Used: 40, ResetsAt: now.Add(48 * time.Hour)},
+	}}
+	if r := s.Of("gog"); len(r.Windows) != 1 || r.Windows[0].Name != "week" {
+		t.Fatalf("a machine away still shows a window that reset: %+v", r.Windows)
 	}
 }

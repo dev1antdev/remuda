@@ -68,7 +68,8 @@ func (s *Store) View() View {
 	return View{Site: cfg.Site, Account: cfg.Account, HasToken: cfg.Token != "", Cloud: cfg.Site != "" && cloud(cfg.Site)}
 }
 
-// Replace sets the configuration: a token left empty keeps the one kept, so the page never holds it.
+// Replace sets the configuration: a token left empty keeps the one kept, so the page never holds it — only for the
+// site it was given for, since another host, or plain http where it was https, must never be sent it.
 func (s *Store) Replace(site, account, token string) error {
 	site, err := cleanSite(site)
 	if err != nil {
@@ -78,7 +79,10 @@ func (s *Store) Replace(site, account, token string) error {
 	token = strings.TrimSpace(token)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if token == "" {
+	if token == "" && s.cfg.Token != "" {
+		if !sameOrigin(s.cfg.Site, site) {
+			return errors.New("type the token again for a new site: the one kept was given for " + hostOf(s.cfg.Site))
+		}
 		token = s.cfg.Token
 	}
 	if token == "" {
@@ -121,6 +125,21 @@ func cleanSite(raw string) (string, error) {
 		return "", errors.New("Jira Cloud is reached over https")
 	}
 	return strings.TrimRight(u.Scheme+"://"+u.Host+u.Path, "/"), nil
+}
+
+// sameOrigin says whether two sites are one scheme and one host, the place a token kept for the one may go.
+func sameOrigin(a, b string) bool {
+	ua, errA := url.Parse(a)
+	ub, errB := url.Parse(b)
+	return errA == nil && errB == nil && ua.Scheme == ub.Scheme && strings.EqualFold(ua.Host, ub.Host)
+}
+
+// hostOf is a site's host alone, what an error may name.
+func hostOf(site string) string {
+	if u, err := url.Parse(site); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return "the site before"
 }
 
 // cloud says whether the site is Atlassian's own, which speaks REST v3 and signs in with an e-mail and an API token.
