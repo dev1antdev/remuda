@@ -125,7 +125,8 @@ const CMD = mac ? 4 : 2;
 
 // palette runs one of the palette's rows by its entry id, so a pass in any language finds it
 async function palette(id) {
-  await evaluate(`document.activeElement instanceof HTMLIFrameElement && document.activeElement.blur()`); // a frame with the focus hears the keys itself
+  // a frame with the focus hears the keys itself, and off a Mac Ctrl+K in the terminal is the shell's
+  await evaluate(`(() => { const el = document.activeElement; if (el instanceof HTMLIFrameElement || el?.closest?.(".xterm")) el.blur(); })()`);
   await key("k", "KeyK", CMD);
   if (!(await until(() => present(".palette-row"), 4))) throw new Error("the palette did not open");
   const ran = await evaluate(`(() => { const row = document.querySelector('.palette-row[data-entry=${JSON.stringify(id)}]'); if (!row) return false; row.scrollIntoView({ block: "nearest" }); row.click(); return true; })()`);
