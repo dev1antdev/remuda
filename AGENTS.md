@@ -22,7 +22,7 @@ once after cloning and after every change under `web/`.
 | TypeScript check | `make typecheck` (`tsc --noEmit` + `go vet`) |
 | The page's unit tests (Vitest on the pure modules) | `make webtest` (`npm test` in `web/`; `make test` runs it too) |
 | Everything, as CI does (`.github/workflows/ci.yml`) | `make test && make typecheck`, or `docker build --target test .` |
-| The end-to-end smoke: a throwaway herdr, a remuda of its own, headless Chrome (`scripts/e2e.sh`, `e2e/smoke.mjs`) | `make e2e` (needs herdr, node and Chrome; nothing of yours is touched) |
+| The end-to-end smoke and the display checks: a throwaway herdr, a remuda of its own, headless Chrome, every screen at a desk's and a phone's width in English and Russian (`scripts/e2e.sh`, `e2e/smoke.mjs`, `e2e/display.mjs`) | `make e2e` (needs herdr, node and Chrome; nothing of yours is touched; `E2E_DISPLAY_PASSES=desk-en` for one pass, `E2E_SMOKE_ONLY=1` for the smoke alone) |
 | A pull request | against `release`: `gh pr create --base release` |
 | A release | `git checkout main && git merge --ff-only release && git tag -a vX.Y.Z -m 'remuda X.Y.Z' && make publish` — the Release workflow builds and publishes it |
 | Binaries for every host | `make release`; `make deploy HOST=<ssh host>` |

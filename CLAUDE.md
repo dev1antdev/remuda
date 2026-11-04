@@ -446,8 +446,32 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   DevTools protocol with no dependency: sign in, a scratch shell
   workspace through the API, a command typed into the terminal lens and
   read back through `/api/screen`, the chat, the Wall, Review, Activity,
-  the palette, the workspace closed, no console errors; the temp folder
-  stays on a failure, with the screenshots (an artifact in CI). Pull
+  the palette, the workspace closed, no console errors — then
+  `e2e/display.mjs`, **the display checks**: a repository with two tabs
+  and a linked worktree and a plain folder made through the API, a task,
+  a Jira site nobody answers at, and the browser's copy of the roster
+  dressed with agents (CDP's `Fetch` on `/api/roster`: a Claude Code at
+  work with a PR, a Codex asking, a finished one, plan limits, a folder
+  icon — nothing changes on the server); four passes, 1440×900 and
+  390×844 (touch), in English and Russian (`E2E_DISPLAY_PASSES` picks
+  some), each opening every screen the way a person does — the sidebar,
+  a folded folder, the card's, the machine's and the vitals' menus, the
+  tab strip and its + menu, the View menu, the chat lens, the split
+  view, the floating terminal, the screen-sharing chip, the icon
+  dialog's four tabs, the Wall's chat, screen, zoo and office views,
+  the Tasks board, list and detail, Review, Code, every panel, each
+  section of Settings, the palette, the keys sheet and the dialogs (new
+  workspace, the two imports, arena, teleport, reopen, recipes, budget,
+  broadcast) — the palette by its rows' `data-entry` ids, so either
+  language finds them; every screen checked for a sideways scroll, a
+  menu, popover, dialog, toast or drawer past the screen's edge, text
+  squeezed to nothing, content under the rail or the header, its
+  landmarks and no console error, screenshotted, a line each with its
+  time; every failure named by pass, screen and element, any one fails
+  the run. The e2e remuda gets `-code-port` 7439, so the Code mode
+  never reaches the person's own code-server; `E2E_SMOKE_ONLY` runs the
+  smoke alone. The temp folder stays on a failure, with the screenshots
+  (an artifact in CI, kept after a green run too). Pull
   requests target `release`; `main` is what is out (AGENTS.md, "Build and
   check").
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
