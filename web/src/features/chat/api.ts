@@ -105,3 +105,8 @@ export const fetchCommands = (machineId: string, dir: string, agent: string): Pr
   getJSON<{ commands: CompleteCommand[] | null }>(`/api/complete?${new URLSearchParams({ machine: machineId, dir, kind: "commands", agent })}`).then((r) => r.commands ?? []);
 export const fetchPaths = (machineId: string, dir: string): Promise<{ paths: string[]; cut?: boolean }> =>
   getJSON<{ paths: string[] | null; cut?: boolean }>(`/api/complete?${new URLSearchParams({ machine: machineId, dir, kind: "paths" })}`).then((r) => ({ paths: r.paths ?? [], cut: r.cut }));
+
+// forkConversation starts the pane's agent on a copy of its conversation — the session given, else the live one — in a
+// new tab of its workspace; agent_error says why the tab came up without the agent
+export const forkConversation = (machine: string, pane: string, session?: string): Promise<{ id: string; pane: string; agent_error?: string }> =>
+  sendJSON("POST", "/api/fork", { machine, pane, ...(session ? { session } : {}) });

@@ -21,6 +21,7 @@ type Inputs struct {
 	Version func(machineID, paneID string) (string, bool) // the session file's version; false when the pane has none
 	Answer  func(machineID, paneID string) (text, id string)
 	Link    func(machineID, paneID string) (transcript.Link, bool) // the last pull request the agent named; nil reads none
+	Keys    func(machineID, paneID string) []string                // the issue keys the conversation names, newest first; nil reads none
 }
 
 type entry struct {
@@ -28,6 +29,7 @@ type entry struct {
 	line    string
 	link    transcript.Link
 	hasLink bool
+	keys    []string
 }
 
 // Tracker holds one line per pane and reads one pane at a time per machine; a pull request first named goes on the bus.
@@ -78,8 +80,18 @@ func (t *Tracker) Link(machineID, paneID string) (transcript.Link, bool) {
 	return e.link, e.hasLink
 }
 
-// OnStatus hears every transition: a finish is read, a start of work clears the line (the link stays: the request is
-// still there), a closed pane is forgotten. The two that take the line away move the pane's generation, so a read still
+// Keys is the issue keys the pane's conversation named, newest first, kept while the agent works on; nil when none.
+func (t *Tracker) Keys(machineID, paneID string) []string {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.lines[key(machineID, paneID)].keys
+}
+
+// OnStatus hears every transition: a finish is read, a start of work clears the line (the link and the keys stay: the
+// work is still about them), a closed pane is forgotten. The two that take the line away move the pane's generation, so a read still
 // in flight writes no line; a finish leaves it, a line read for one finish being as good as for the next.
 func (t *Tracker) OnStatus(ev events.PaneStatus) {
 	if ev.Kind == "" {
@@ -93,7 +105,7 @@ func (t *Tracker) OnStatus(ev events.PaneStatus) {
 		t.mu.Lock()
 		t.gen[k]++
 		if e, ok := t.lines[k]; ok {
-			t.lines[k] = entry{link: e.link, hasLink: e.hasLink}
+			t.lines[k] = entry{link: e.link, hasLink: e.hasLink, keys: e.keys}
 		}
 		t.mu.Unlock()
 	case events.Gone:
@@ -201,13 +213,16 @@ func (t *Tracker) read(machineID, paneID string, finish bool) {
 	if t.in.Link != nil {
 		e.link, e.hasLink = t.in.Link(machineID, paneID)
 	}
+	if t.in.Keys != nil {
+		e.keys = t.in.Keys(machineID, paneID)
+	}
 	t.mu.Lock()
 	_, still := t.lines[k]
 	switch {
 	case t.gen[k] == generation:
 		t.lines[k] = e
 	case still:
-		e = entry{link: e.link, hasLink: e.hasLink}
+		e = entry{link: e.link, hasLink: e.hasLink, keys: e.keys}
 		t.lines[k] = e
 	default:
 		e = entry{}

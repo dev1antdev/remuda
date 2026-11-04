@@ -1,5 +1,5 @@
 // The machine's own ⋯ menu: rename, updates, the keep-awake switch, a wake-up for a sleeping machine with a known
-// MAC address, the SSH host to copy, and — for one added here — remove.
+// MAC address, the SSH host to copy, whether the screen-sharing mode hides it, and — for one added here — remove.
 
 import { useCallback, useState } from "react";
 import { act } from "@/app/act";
@@ -10,12 +10,15 @@ import { Icon, Tip, useDismiss } from "@/ui";
 import { setAwake, wakeMachine, type Machine } from "./api";
 import { MacDialog } from "./MacDialog";
 import { canWake, wokeWords } from "./wake";
+import { markedMachine } from "./sharing";
+import { toggleSharingMachine, useSharing } from "./useSharing";
 import { t } from "@/lib/i18n";
 
 export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machine; onRename: () => void; onRemove?: () => void }) {
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
   const [updates, setUpdates] = useState(false);
   const [mac, setMac] = useState(false);
+  const hiddenWhenSharing = markedMachine(useSharing().pref, m.id);
   const wake = () => void act(wakeMachine(m.id).then(({ sent }) => actions.notify(wokeWords(m.label, sent))));
   // the clipboard the way the rest of the page reaches it: the Clipboard API where the origin is secure, else the fallback
   const copyHost = (host: string) => void copyText(host).then((ok) => actions.notify(ok ? t("SSH host copied") : t("The SSH host could not be copied"), { brief: true, error: !ok }));
@@ -70,6 +73,9 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
           <button type="button" role="menuitem" onClick={pick(() => setMac(true))}>
             <Icon name="plug" size={14} /> {t("MAC address…")}
             {m.mac && <small className="menu-hint">{m.mac}</small>}
+          </button>
+          <button type="button" role="menuitemcheckbox" aria-checked={hiddenWhenSharing} className={hiddenWhenSharing ? "on" : undefined} onClick={pick(() => toggleSharingMachine(m.id))}>
+            <Icon name={hiddenWhenSharing ? "check" : "eye-off"} size={14} /> {t("Hide when sharing the screen")}
           </button>
           {m.host && (
             <button type="button" role="menuitem" onClick={pick(() => copyHost(m.host!))}>

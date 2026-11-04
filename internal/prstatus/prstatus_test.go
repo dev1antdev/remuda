@@ -48,6 +48,9 @@ func TestScriptQuotesTheURL(t *testing.T) {
 	if GitHub("https://gitlab.com/o/r/-/merge_requests/3") || !GitHub("https://github.com/o/r/pull/7") {
 		t.Fatal("GitHub")
 	}
+	if !Readable("https://gitlab.com/o/r/-/merge_requests/3") || Readable("https://example.com/o/r/issues/3") {
+		t.Fatal("Readable")
+	}
 }
 
 func waitFor(t *testing.T, what string, ok func() bool) {
@@ -69,7 +72,7 @@ func TestTrackerReadsOnceAndAgainOnlyWhenDue(t *testing.T) {
 	tr.now = func() time.Time { return clock }
 	ref := events.PaneRef{Machine: "box", Pane: "w1:p1"}
 
-	tr.OnNamed(events.PullRequestNamed{Pane: ref, URL: "https://gitlab.com/o/r/-/merge_requests/3", Label: "MR !3"})
+	tr.OnNamed(events.PullRequestNamed{Pane: ref, URL: "https://example.com/o/r/issues/3", Label: "#3"})
 	tr.OnNamed(events.PullRequestNamed{Pane: ref, URL: "https://github.com/o/r/pull/7", Label: "PR #7"})
 	waitFor(t, "the first read", func() bool { _, ok := tr.Status("box", "w1:p1"); return ok })
 	if status, _ := tr.Status("box", "w1:p1"); status.Checks.Fail != 1 || status.Review != "APPROVED" {

@@ -30,4 +30,9 @@ describe("tabFaces", () => {
     const twins = tabFaces([tab("t1", 1, [pane()]), tab("t2", 2, [pane({ agent: "" })]), tab("t5", 5, [pane()]), tab("t6", 6, [pane({ agent: "" })])]);
     expect([...twins.values()].map((f) => f.label)).toEqual(["Claude Code 1", "terminal 2", "Claude Code 5", "terminal 6"]);
   });
+
+  it("leaves out the names the person gave while masked, telling the twins apart again", () => {
+    const masked = tabFaces([tab("t1", 1, [pane()], { named: true, label: "acme-billing" }), tab("t3", 3, [pane({ agent: "" })], { named: true, label: "kubectl prod" }), tab("t4", 4, [pane()])], true);
+    expect([...masked.values()].map((f) => f.label)).toEqual(["Claude Code 1", "terminal", "Claude Code 4"]);
+  });
 });

@@ -11,3 +11,10 @@ export const clearFolderIcon = (machine: string, folder: string): Promise<unknow
 
 // fetchFavicon has remuda read a site's icon once, now, at the person's word; nothing is kept until they use it
 export const fetchFavicon = (url: string): Promise<{ data: string; from: string }> => sendJSON("POST", "/api/folder-icons/favicon", { url });
+
+// IconCandidate is a picture that could be the folder's icon: the project's own file, or its owner's avatar
+export type IconCandidate = { data: string; from: string; kind: "file" | "github" | "gitlab" };
+export type FoundIcons = { candidates: IconCandidate[]; looked: string[]; notes?: string[] };
+
+// findIconCandidates has the folder's machine look for the pictures its project keeps, and its owner's avatar
+export const findIconCandidates = (machine: string, folder: string): Promise<FoundIcons> => sendJSON("POST", "/api/folder-icons/candidates", { machine, folder });

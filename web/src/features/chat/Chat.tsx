@@ -1,7 +1,7 @@
 // Chat is the chat lens: the transcript from Claude Code's own session file, read server-side and polled
-// at the pane's pace; sending types into the live pane.
+// at the pane's pace; sending types into the live pane; text selected in an answer can be quoted into the reply.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { actions, app } from "@/app/store";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import SendToAgent from "@/features/agents/SendToAgent";
@@ -19,6 +19,7 @@ import { ALL_REVEALED, anchorsItself, hiddenCount, idle, nextReveal } from "./mo
 import { isPinned, pinKey, pinOf, togglePin, type Pin } from "./pins";
 import { PlanBar } from "./PlanBar";
 import { QuestionCard } from "./QuestionCard";
+import { quoteText } from "./quote";
 import { revealTurn } from "./reveal";
 import { TimelineBar } from "./TimelineBar";
 import { turnLink } from "./turnLink";
@@ -26,9 +27,10 @@ import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFind } from "./useFind";
 import { useFollowBottom } from "./useFollowBottom";
+import { useQuote } from "./useQuote";
 import { t } from "@/lib/i18n";
 
-export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session, viewOnly = false, focused = true }: {
+export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session, viewOnly = false, focused = true, notice }: {
   machineId: string;
   paneId: string; // "" shows a transcript on its own (a search jump), read-only
   status: string;
@@ -42,6 +44,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   subagent?: string; // with no pane: one subagent's own conversation, read-only
   session?: string; // with no pane: the session to show when no jump names it (the viewer)
   viewOnly?: boolean; // a viewer link signed the page in: the conversation shows, nothing is typed
+  notice?: ReactNode; // a word over the composer from elsewhere on the page: a plan limit the agent stopped on
 }) {
   const readOnly = !paneId;
   const agents = useAgentTargets();
@@ -104,6 +107,15 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   }, [finding, hidden, revealAll]);
   useFind(logRef, { active: active && focused, chat, mounted: hidden === 0 });
   const follow = useFollowBottom(logRef, { active, chat, startAtBottom: !jump?.turn, mounted: hidden });
+  // a quote of a selected piece of an answer, handed to the composer; the selection let go once it is there
+  const [quote, setQuote] = useState<{ text: string; n: number } | undefined>(undefined);
+  const onQuote = useCallback((selected: string) => {
+    const text = quoteText(selected);
+    if (!text) return;
+    setQuote((was) => ({ text, n: (was?.n ?? 0) + 1 }));
+    logRef.current?.ownerDocument.getSelection()?.removeAllRanges();
+  }, []);
+  const quotePop = useQuote(logRef, !readOnly && !viewOnly && active && focused, onQuote);
 
   // a search hit: scroll to its turn once that session is on screen, or say it is older than the loaded tail
   const pendingTurn = useRef<string | null>(jump?.turn ?? null);
@@ -237,6 +249,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           </QuestionCard>
         </Notice>
       )}
+      {!readOnly && notice}
       {error && (
         <Notice tone="error" className="chat-notice" onDismiss={() => setActionError(null)}>
           {error}
@@ -261,7 +274,19 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           That turn is older than the loaded part of this transcript (the last 16 MB).
         </Notice>
       )}
-      {!readOnly && !viewOnly && <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} agent={agent} onScreen={active} />}
+      {quotePop && (
+        <button
+          type="button"
+          className="btn sm quote-pop"
+          style={{ left: Math.max(8, quotePop.x - 72), top: Math.max(8, quotePop.y - 34) }}
+          title={t("Quote it in your reply (Q)")}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onQuote(quotePop.text)}
+        >
+          <Icon name="message" size={12} /> {t("Quote")}
+        </button>
+      )}
+      {!readOnly && !viewOnly && <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} agent={agent} onScreen={active} quote={quote} />}
       {!readOnly && viewOnly && <div className="chat-viewonly">{t("Viewing only")}</div>}
       {forwarded && (
         <Notice tone="success" icon="check" className="chat-notice" onDismiss={clearForwarded}>

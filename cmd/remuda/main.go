@@ -99,6 +99,7 @@ func help() {
   remuda code          code-server for the Code mode, here or -host H
   remuda mcp           your task list for the coding agents, over MCP; mcp install registers it with each agent, here or -host H
   remuda tasks         your tasks from a shell: list, show, add, move, comment
+  remuda statusline    Claude Code's plan limits for remuda; statusline install puts it before your status line, here or -host H
   remuda uninstall     take remuda off this machine again (-all: herdr and your data too)
 
 Each command lists its own flags with -h. The server's:
