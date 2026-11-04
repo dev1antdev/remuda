@@ -2687,7 +2687,11 @@ body.is-resizing iframe {
 }
 
 .mermaid-error {
+  max-height: 12em;
+  overflow: auto;
   border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  white-space: pre-wrap; /* mermaid points at the fault with a caret under the line */
   word-break: break-word;
 }
 
@@ -2889,6 +2893,24 @@ body.is-resizing iframe {
   max-height: 40dvh;
   border-radius: var(--r-lg);
   resize: none;
+}
+
+/* on a phone the tools — the mode chip, attach, quick prompts, the queue, the mic — would squeeze the field to a
+   sliver: the field takes the whole first row and the tools and Send the row under it */
+@media (max-width: 600px) {
+  .composer:not(.compact) {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .composer:not(.compact) textarea {
+    order: -1;
+    flex: 1 0 100%;
+  }
+
+  .composer:not(.compact) .composer-send {
+    margin-left: auto;
+  }
 }
 
 .composer-send,
@@ -3142,6 +3164,8 @@ body.is-resizing iframe {
 
 .part-tool summary .path-link {
   color: var(--fg-dim);
+  direction: rtl; /* a path too long for the line loses its start, never the file's name */
+  text-align: left;
 }
 
 .part-tool summary .path-link:hover {
@@ -9599,6 +9623,9 @@ body.popout {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex-shrink: 0;
+  max-height: 32dvh; /* a long queue scrolls rather than pushing the conversation off the screen */
+  overflow-y: auto;
   margin: 0 12px 6px;
   padding: 6px 8px;
   border: 1px solid var(--line);
@@ -9606,17 +9633,23 @@ body.popout {
   background: var(--bg-raised);
 }
 
+/* the box scrolls instead of squeezing its head and rows into each other */
+.chat-queue > * {
+  flex-shrink: 0;
+}
+
 .chat-queue-head {
   display: flex;
+  flex-wrap: wrap; /* on a narrow screen "Send all as one message" goes under the words */
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   min-height: var(--ctl-sm);
   color: var(--fg-dim);
   font-size: var(--fs-12);
 }
 
 .chat-queue-count {
-  flex: 1;
+  flex: 1 1 14em;
   min-width: 0;
 }
 

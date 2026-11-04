@@ -100,12 +100,19 @@ func New(dir string) *Service {
 	return s
 }
 
-// Of is a machine's last reading.
+// Of is a machine's last reading, less the windows that have reset since: a machine away keeps its reading for good.
 func (s *Service) Of(machine string) Reading {
+	now := s.now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r := s.readings[machine]
-	r.Windows = append([]Window(nil), r.Windows...)
+	var open []Window
+	for _, w := range r.Windows {
+		if w.ResetsAt.After(now) {
+			open = append(open, w)
+		}
+	}
+	r.Windows = open
 	return r
 }
 
@@ -392,6 +399,9 @@ func (s *Service) say(b Booking) {
 	switch {
 	case !ok:
 		s.notify(push.Payload{Machine: b.Machine, Kind: "limits", Title: "Nothing continued after the limit reset", Body: "The pane closed before its booking came due."})
+		return
+	case place.Agent == "":
+		s.notify(push.Payload{Machine: b.Machine, Pane: b.Pane, Kind: "limits", Title: "Nothing continued in " + place.Workspace, Body: "The agent left the pane; the booking's word would be typed into a shell."})
 		return
 	case b.Session != "" && place.Session != b.Session:
 		s.notify(push.Payload{Machine: b.Machine, Pane: b.Pane, Kind: "limits", Title: "Nothing continued in " + place.Workspace, Body: "Another conversation runs there now than the one the booking was for."})

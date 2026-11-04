@@ -5,8 +5,10 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // site serves a page with the given head and the pictures at their paths; every request is counted by path.
@@ -110,5 +112,49 @@ func TestFaviconWantsAWebAddress(t *testing.T) {
 	}
 	if site, err := SiteURL("gog.com"); err != nil || site.String() != "https://gog.com" {
 		t.Fatalf("a bare host: %v %v", site, err)
+	}
+}
+
+func TestFaviconTriesAFewOfThePagesLinksOnly(t *testing.T) {
+	var head strings.Builder
+	for i := 0; i < 200; i++ {
+		head.WriteString(`<link rel="icon" href="/icon-` + strconv.Itoa(i) + `.png">`)
+	}
+	srv, hits := site(t, head.String(), nil)
+	if _, _, err := fetched(t, srv); err == nil {
+		t.Fatal("a page with no picture gave an icon")
+	}
+	tried := 0
+	for path, n := range hits {
+		if strings.HasPrefix(path, "/icon-") {
+			tried += n
+		}
+	}
+	if tried != MaxIconLinks || hits["/favicon.ico"] != 1 {
+		t.Fatalf("fetched %d of the page's links and /favicon.ico %d times", tried, hits["/favicon.ico"])
+	}
+}
+
+func TestFaviconGivesUpAtItsDeadline(t *testing.T) {
+	was := FaviconTimeout
+	FaviconTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { FaviconTimeout = was })
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			_, _ = w.Write([]byte(`<html><head><link rel="icon" href="/a.png"><link rel="icon" href="/b.png"></head></html>`))
+			return
+		}
+		select { // every icon hangs, as a slow site's would
+		case <-r.Context().Done():
+		case <-time.After(5 * time.Second):
+		}
+	}))
+	t.Cleanup(srv.Close)
+	start := time.Now()
+	if _, _, err := Favicon(context.Background(), Client(), srv.URL); err == nil {
+		t.Fatal("an icon from a site that never answered")
+	}
+	if took := time.Since(start); took > 2*time.Second {
+		t.Fatalf("the search ran %v past its deadline", took)
 	}
 }

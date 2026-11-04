@@ -40,7 +40,34 @@ type Service struct {
 	Now      func() time.Time
 
 	mu    sync.Mutex
-	stats map[int]statsRead // by arena
+	stats map[int]statsRead   // by arena
+	locks map[int]*sync.Mutex // by arena: a lane made, or the arena decided, one at a time
+}
+
+// arenaLock is the arena's own lock, held while one of its lanes is made and while the person's Keep closes the rest,
+// so a lane is never made after the arena was decided nor closed half made.
+func (s *Service) arenaLock(id int) *sync.Mutex {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.locks == nil {
+		s.locks = map[int]*sync.Mutex{}
+	}
+	lock, ok := s.locks[id]
+	if !ok {
+		lock = &sync.Mutex{}
+		s.locks[id] = lock
+	}
+	return lock
+}
+
+// stillStarting says whether a lane is still to be made: the arena there and undecided, the lane not closed meanwhile.
+func (s *Service) stillStarting(arenaID, laneID int) bool {
+	a, ok := s.Store.Get(arenaID)
+	if !ok || a.Kept != 0 {
+		return false
+	}
+	lane := a.Lane(laneID)
+	return lane != nil && lane.State == LaneStarting
 }
 
 type statsRead struct {
@@ -101,10 +128,15 @@ func (s *Service) Start(req Request) (Arena, error) {
 // startLanes makes each lane's worktree and starts its agent, one at a time so one repository's worktrees are not
 // made side by side; a lane refused on the way says why and the others go on.
 func (s *Service) startLanes(a Arena) {
+	lock := s.arenaLock(a.ID)
 	for _, lane := range a.Lanes {
-		if err := s.startLane(a, lane); err != nil {
-			s.settle(a.ID, lane.ID, LaneFailed, err.Error())
+		lock.Lock()
+		if s.stillStarting(a.ID, lane.ID) {
+			if err := s.startLane(a, lane); err != nil {
+				s.settle(a.ID, lane.ID, LaneFailed, err.Error())
+			}
 		}
+		lock.Unlock()
 	}
 	if a.TaskID != 0 {
 		_, _ = s.Tasks.AddComment(a.TaskID, "remuda", fmt.Sprintf("Arena #%d: the task went to %d agents side by side, each in a worktree of its own.", a.ID, len(a.Lanes)))
@@ -256,14 +288,23 @@ var ErrNotFound = errors.New("not found")
 
 // Keep keeps one lane and closes every other: its work saved as a patch under the state dir, its workspace closed, its
 // worktree and branch removed. A lane whose work could not be saved, or whose machine is away, stays as it is, said in
-// its note; the answer is the arena as it now stands.
+// its note, and keeping the same lane again tries it once more; a lane still being made is waited for, and the ones
+// not made yet never are. The answer is the arena as it now stands.
 func (s *Service) Keep(id, laneID int) (Arena, error) {
+	lock := s.arenaLock(id)
+	lock.Lock()
+	defer lock.Unlock()
 	a, ok := s.Store.Get(id)
 	if !ok || a.Lane(laneID) == nil {
 		return Arena{}, ErrNotFound
 	}
-	if a.Lane(laneID).State == LaneDiscarded {
+	switch kept := a.Lane(laneID); {
+	case a.Kept != 0 && a.Kept != laneID:
+		return Arena{}, invalid(fmt.Sprintf("lane %d was kept already", a.Kept))
+	case kept.State == LaneDiscarded:
 		return Arena{}, invalid("that lane is closed already")
+	case kept.Dir == "":
+		return Arena{}, invalid("that lane has no worktree to keep")
 	}
 	var saved []string
 	for _, lane := range a.Lanes {
@@ -291,7 +332,7 @@ func (s *Service) Keep(id, laneID int) (Arena, error) {
 			l.State = LaneKept
 		}
 	})
-	if a.TaskID != 0 {
+	if a.TaskID != 0 && a.Kept == 0 {
 		kept := a.Lane(laneID)
 		msg := fmt.Sprintf("Arena #%d: kept %s%s in `%s`.", a.ID, kept.Agent, modelWords(kept.Model), kept.Dir)
 		if len(saved) > 0 {
@@ -345,10 +386,17 @@ func (s *Service) discard(a Arena, lane Lane) (patch, note string) {
 	if err != nil {
 		return patch, "its workspace is closed; the worktree stays: " + err.Error()
 	}
-	if err := worktrees.Discard(mc, info); err != nil {
+	if err := worktrees.Discard(mc, ownBranch(info, lane)); err != nil {
 		return patch, "its workspace is closed; git kept the worktree: " + err.Error()
 	}
 	return patch, ""
+}
+
+// ownBranch is the worktree as it is to be discarded: the branch the arena made for the lane deleted, never the one
+// the lane's agent may have checked out there since, which is the person's.
+func ownBranch(info worktrees.Info, lane Lane) worktrees.Info {
+	info.Branch = lane.Branch
+	return info
 }
 
 // savePatch writes a lane's work to <state>/arenas/arena-<id>-lane-<n>-<agent>.patch, 0600; an empty work is no file.

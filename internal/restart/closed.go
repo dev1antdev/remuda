@@ -160,8 +160,40 @@ func (r *Restarter) Reopen(mc *machines.Machine, id string) (sessions.Place, err
 	return r.reopenWith(client, mc.ID(), c)
 }
 
-// reopenWith is Reopen past the checks of the machine's files: the session not open already, then the start.
+// ErrReopening is a reopen asked while the same one is under way: a double click, or two devices at once.
+var ErrReopening = errors.New("this agent is being reopened already")
+
+// claimReopen takes the one reopen of a closed agent at a time; false while another holds it.
+func (m *Memory) claimReopen(machineID, id string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.reopening == nil {
+		m.reopening = map[string]bool{}
+	}
+	key := machineID + "|" + id
+	if m.reopening[key] {
+		return false
+	}
+	m.reopening[key] = true
+	return true
+}
+
+func (m *Memory) releaseReopen(machineID, id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.reopening, machineID+"|"+id)
+}
+
+// reopenWith is Reopen past the checks of the machine's files, one at a time per entry: the entry still listed (a
+// reopen that came first may have taken it), the session not open already, then the start.
 func (r *Restarter) reopenWith(client placer, machineID string, c Closed) (sessions.Place, error) {
+	if !r.Memory.claimReopen(machineID, c.ID) {
+		return sessions.Place{}, ErrReopening
+	}
+	defer r.Memory.releaseReopen(machineID, c.ID)
+	if _, ok := r.Memory.closedEntry(machineID, c.ID); !ok {
+		return sessions.Place{}, ErrNoSuchClosed
+	}
 	snap, err := client.SessionSnapshot()
 	if err != nil {
 		return sessions.Place{}, err

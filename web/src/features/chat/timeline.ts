@@ -10,6 +10,7 @@ import { t, tn } from "@/lib/i18n";
 export const SQUEEZE_MS = 10 * 60 * 1000; // a gap longer than this is drawn this long: one lunch break must not flatten the day
 export const LONG_WAIT_MS = 30 * 60 * 1000; // a gap from an answer to the next prompt that counts as the person away
 export const LOOP_FROM = 3; // identical consecutive calls that make a loop
+export const LONGEST_FROM = 5; // seconds a call must take for the longest one to be a moment: "Longest call 0 s" says nothing
 export const COMPACTION_PREFIX = "This session is being continued from a previous conversation";
 
 export type Segment = {
@@ -112,7 +113,7 @@ export function timeline(turns: Turn[]): Timeline {
     if (failed > 1) firstError.detail = t("{detail} · {n} failed calls in all", { detail: firstError.detail, n: failed });
     marks.push(firstError);
   }
-  if (longest) marks.push({ kind: "longest", id: longest.id, at: longest.at, label: longest.label, detail: longest.detail, count: 1 });
+  if (longest && longest.took >= LONGEST_FROM) marks.push({ kind: "longest", id: longest.id, at: longest.at, label: longest.label, detail: longest.detail, count: 1 });
   marks.sort((a, b) => a.at - b.at);
 
   let waits = 0;
