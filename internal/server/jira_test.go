@@ -12,7 +12,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/tasks"
 )
 
-const jiraToken = "pat-0123456789abcdef"
+var jiraToken = strings.Repeat("fake-token-", 3) // plainly fake: a secret scanner reads a hex run as a key
 
 // jiraSite is a Jira server answering a personal access token: one project, one issue.
 func jiraSite(t *testing.T) *httptest.Server {
