@@ -1439,15 +1439,30 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   read when the link appears, then at most every `Every` (2 min) on
   `Touch`, which the roster handler calls, so a page nobody reads asks
   GitHub nothing; one read in flight per machine; a pane gone
-  (`events.PaneStatus` to `Gone`) or a machine removed is forgotten; a
-  GitLab merge request is left alone. No gh, not signed in or a machine
-  away leaves the status absent with its reason, logged once an hour per
-  machine. The roster's `pane.pr.status {state, draft, mergeable,
-  review, checks {total, pass, fail, pending, skipped}, at}`
+  (`events.PaneStatus` to `Gone`) or a machine removed is forgotten.
+  **A GitLab merge request is read the same way through glab**
+  (`gitlab.go`, tested on `shell.Fake` with GitLab's own answers):
+  `MergeParts` takes the instance, the project path and the number off
+  `/-/merge_requests/N` (gitlab.com's or a company's own, subgroups too),
+  and `MergeScript` asks GitLab's API with `glab api --hostname <host>`
+  — the request, its approvals and its discussions in three sections —
+  then `JobsScript` lists its head pipeline's jobs; `ParseMerge` /
+  `ParseJobs` put the answers in gh's words: opened/merged/closed as
+  OPEN/MERGED/CLOSED, draft, conflicts as CONFLICTING, approved (someone
+  approved and none are left) / REVIEW_REQUIRED (approvals left) /
+  CHANGES_REQUESTED (GitLab's own "requested changes"), the threads still
+  open as `threads`, the jobs as the checks (a failure allowed to fail
+  and a manual job skipped, a cancel failed, as GitHub counts them);
+  `Readable` / `Tool` say which command reads a link. No gh or glab, not
+  signed in or a machine away leaves the status absent with its reason,
+  logged once an hour per machine. The roster's `pane.pr.status {state,
+  draft, mergeable, review, threads, checks {total, pass, fail, pending,
+  skipped}, at}`
   (`rosterPR`, so the ETag moves with it); `features/roster/prStatus.ts`
   (tested: `checksWords` "2/2 checks" / "1 failed" / "3 running",
   `reviewWords` merged / closed / draft / conflicts / approved / changes
-  requested / review pending, `checksTone` and `reviewTone` — red /
+  requested / review pending, then "2 open threads" for a merge request,
+  `checksTone` and `reviewTone` — open threads amber — red /
   amber / green / dim / none, each chip its own — and `statusTone`, the
   graver of the two, `prWords`) draws it as two `.pr-state` chips in the
   `.tile-pr-group` beside the link in a wall tile's head (the review
@@ -1476,20 +1491,27 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   each review's verdict and text, the line comments numbered as the
   Changes lens numbers its own (`file:line (author)`, the hunk's last
   row quoted, the text), at most `MaxComments`, and the ask to work on
-  them; `ErrNothingFailed` / `ErrNoReview` when there is nothing to
+  them; for a merge request `Failure` reads the head pipeline's jobs and
+  each failed one's log (`TraceScript`, at most `MaxRuns`, under "Job
+  unit (stage test)") and `ReviewComments` the discussions
+  (`ParseDiscussions`: a thread still open on a line as numbered line
+  comments, its replies marked, a comment outside a thread as a note by
+  its author, a resolved thread and GitLab's own system notes left out);
+  `ErrNothingFailed` / `ErrNoReview` when there is nothing to
   send. `POST /api/pr/failure` and `POST /api/pr/review` `{machine,
   pane}` (`internal/server/pr.go`, `prHandoff`) take the pane's link
   from `said.Tracker.Link`, compose on the pane's machine and send the
   text through `sessions.Input.Submit` as the chat does — 409 for an
-  agent waiting on a question or nothing to send, 502 with gh's line.
+  agent waiting on a question or nothing to send, 502 with gh's (or
+  glab's) line, 400 for a link that is neither.
   **A merged worktree goes** (`internal/worktrees`, tested on
   `shell.Fake`): `DELETE /api/worktrees/{id}` for a workspace herdr
   marks a linked worktree — `Inspect` (the branch, the repository's main
   worktree, the first line of `git status`; uncommitted changes are a
   409 before anything closes), herdr `workspace.close`, then `Remove`:
   `git worktree remove` (never `--force`) and `git branch -d`, or `-D`
-  only when an agent pane of the workspace named a request gh read as
-  merged (`mergedIn`), since a squash leaves git unsure; a branch it
+  only when an agent pane of the workspace named a request gh or glab read
+  as merged (`mergedIn`), since a squash leaves git unsure; a branch it
   refuses is reported with the worktree already gone. The one thing
   remuda deletes from a repository, and only when asked. The page:
   `features/roster/prActions.ts` (tested: `canHandFailure` an open

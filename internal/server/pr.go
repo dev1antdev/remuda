@@ -22,7 +22,7 @@ func (s *Server) prRoutes(api *http.ServeMux) {
 	api.HandleFunc("DELETE /api/worktrees/{id}", s.handleWorktreeRemove)
 }
 
-// prHandoff is POST {machine, pane}: what gh reads of the pane's request, composed by compose, sent to the pane's agent
+// prHandoff is POST {machine, pane}: what gh (glab for a merge request) reads of the pane's request, composed by compose, sent to the pane's agent
 // as the chat sends a message. 409 when there is nothing to send or the agent waits for an answer.
 func (s *Server) prHandoff(compose func(host shell.Shell, label, url string) (string, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -46,8 +46,8 @@ func (s *Server) prHandoff(compose func(host shell.Shell, label, url string) (st
 			httpErr(w, 404, fmt.Errorf("the agent has named no pull request"))
 			return
 		}
-		if !prstatus.GitHub(link.URL) {
-			httpErr(w, 400, fmt.Errorf("%s is not a GitHub pull request; gh cannot read it", link.Label))
+		if !prstatus.Readable(link.URL) {
+			httpErr(w, 400, fmt.Errorf("%s is neither a GitHub pull request nor a GitLab merge request; gh and glab cannot read it", link.Label))
 			return
 		}
 		text, err := compose(mc, link.Label, link.URL)
@@ -56,7 +56,7 @@ func (s *Server) prHandoff(compose func(host shell.Shell, label, url string) (st
 			return
 		}
 		if err != nil {
-			httpErr(w, http.StatusBadGateway, fmt.Errorf("gh on %s: %w", mc.Label(), err))
+			httpErr(w, http.StatusBadGateway, fmt.Errorf("%s on %s: %w", prstatus.Tool(link.URL), mc.Label(), err))
 			return
 		}
 		if err := s.Input.Submit(client, events.PaneRef{Machine: mc.ID(), Pane: req.Pane}, text); err != nil {
@@ -116,7 +116,7 @@ func (s *Server) handleWorktreeRemove(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "branch": info.Branch, "repo": info.Repo})
 }
 
-// mergedIn says whether an agent of the workspace named a pull request gh read as merged.
+// mergedIn says whether an agent of the workspace named a pull or merge request gh or glab read as merged.
 func (s *Server) mergedIn(mc *machines.Machine, workspaceID string) bool {
 	snap, _ := s.Watch.Snapshot(mc.ID())
 	if snap == nil {

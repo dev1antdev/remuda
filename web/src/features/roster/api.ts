@@ -30,6 +30,7 @@ export type PRStatus = {
   draft: boolean;
   mergeable: string; // MERGEABLE | CONFLICTING | UNKNOWN
   review: string; // APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | ""
+  threads?: number; // a GitLab merge request's discussion threads still open
   checks: { total: number; pass: number; fail: number; pending: number; skipped: number };
   at: string;
 };
