@@ -34,7 +34,7 @@ import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
 import { setDarkFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, useTextSize, useThemePref } from "./theme";
 import { TEXT_SIZE_NAMES, TEXT_SIZES } from "@/lib/look";
-import { currentLang, LANGS, t } from "@/lib/i18n";
+import { currentLang, english, LANGS, t } from "@/lib/i18n";
 import { setLangPref } from "./lang";
 import { viewerCommand } from "./viewOnly";
 import { DARK_FLAVORS, FLAVOR_NAMES } from "@/lib/theme";
@@ -95,7 +95,10 @@ function useCommands(): (query: string) => Entry[] {
         share.sessionHidden(machine.id, session) ? { folder: share.folderName(machine.id, sessionFolder(session), session.name), machine: share.machineLabel(machine) } : null;
       const panes = paneEntries(machines, radar, now, step, selection, actions.selectPane, masked);
       const commands: Entry[] = [];
-      const command = (id: string, title: string, run: () => void, more: Partial<Entry> = {}) => commands.push({ id, kind: "command", title, keywords: [], run, ...more });
+      const command = (id: string, title: string, run: () => void, more: Partial<Entry> = {}) => {
+        const original = english(title);
+        commands.push({ id, kind: "command", title, run, ...more, keywords: [...(more.keywords ?? []), ...(original === title ? [] : [original])] });
+      };
 
       command("next-needs", t("Go to the next agent that needs you"), goNext, { hint: `${NEXT_KEY} · ${t("a question open, a watchdog note, a finish not looked at")}`, icon: "arrow-right", keywords: ["next", "needs", "attention", "waiting", "blocked", "question", "done", "jump"] });
       for (const m of MODES) if (m.mode !== mode) command(`mode:${m.mode}`, m.title, () => actions.setMode(m.mode), { hint: m.hint, icon: m.icon, keywords: ["mode", m.mode] });

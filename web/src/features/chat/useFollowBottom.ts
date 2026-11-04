@@ -12,6 +12,7 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
   const dragging = useRef(false);
   const released = useRef(false); // the reader let go: an upward wheel or finger
   const savedTop = useRef<number | null>(null); // a hidden element forgets its scroll
+  const pinning = useRef(false); // toBottom's frames are running and see every growth themselves
 
   // back on screen, the place is put back; this runs before a jump's own scroll, so a search hit wins
   // the log's own window: in the pop-out that is the small window, whose frames and selection are its own
@@ -23,12 +24,14 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
   const toBottom = (log: HTMLElement) => {
     const win = windowOf(log);
     ownScroll.current = true;
+    pinning.current = true;
     const pin = (left: number) => {
       log.scrollTop = log.scrollHeight;
       win.requestAnimationFrame(() => {
         const away = log.scrollHeight - log.scrollTop - log.clientHeight;
-        if (stick.current && away > 1 && left > 0) pin(left - 1);
-        else ownScroll.current = false;
+        if (stick.current && away > 1 && left > 0) return pin(left - 1);
+        ownScroll.current = false;
+        pinning.current = false;
       });
     };
     pin(SETTLE_FRAMES);
@@ -46,13 +49,39 @@ export function useFollowBottom(logRef: RefObject<HTMLDivElement | null>, { acti
     windowOf(log).requestAnimationFrame(() => (ownScroll.current = false));
   }, [active, logRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const follows = (log: HTMLElement) => {
+    if (!stick.current || dragging.current) return false;
+    const sel = windowOf(log).getSelection();
+    return !(sel && !sel.isCollapsed && sel.anchorNode && log.contains(sel.anchorNode));
+  };
+
   useEffect(() => {
     const log = logRef.current;
-    if (!log || !stick.current || dragging.current) return;
-    const sel = windowOf(log).getSelection();
-    if (sel && !sel.isCollapsed && sel.anchorNode && log.contains(sel.anchorNode)) return;
-    toBottom(log);
+    if (log && follows(log)) toBottom(log);
   }, [chat, mounted, logRef]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // a turn that grows with no new turn — a diagram drawn, a picture loaded, a font come in — pins the end again, else
+  // the reader who was at the bottom is left that much above it
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  useEffect(() => {
+    const log = logRef.current;
+    const win = log && windowOf(log);
+    if (!log || !win?.ResizeObserver || !win.MutationObserver) return;
+    const resized = new win.ResizeObserver(() => {
+      if (activeRef.current && !pinning.current && follows(log)) toBottom(log);
+    });
+    const watchTurns = () => {
+      for (const turn of log.children) resized.observe(turn);
+    };
+    const added = new win.MutationObserver(watchTurns);
+    watchTurns();
+    added.observe(log, { childList: true });
+    return () => {
+      resized.disconnect();
+      added.disconnect();
+    };
+  }, [logRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onScroll = () => {
     const log = logRef.current;

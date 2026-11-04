@@ -5,6 +5,8 @@ import type { Dictionary } from "../../i18n";
 export const shell: Dictionary = {
   "? · every key the page answers": "? · все клавиши, на которые отвечает страница",
   Activity: "Активность",
+  "rail|Activity": "События",
+  "rail|Schedules": "График",
   "Add a PC…": "Добавить компьютер…",
   Agents: "Агенты",
   "Alerts on this device": "Уведомления на этом устройстве",

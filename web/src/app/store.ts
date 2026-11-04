@@ -19,7 +19,7 @@ export type Selection = { machineId: string; paneId: string };
 // Every "make something" dialog, keyed so only one is open at a time.
 export type AppDialog =
   | { kind: "rename"; machineId: string; what: "tab" | "workspace"; id: string; label: string }
-  | { kind: "workspace"; machineId: string }
+  | { kind: "workspace"; machineId: string; dir?: string } // dir: the folder it opens on, from a folder's own menu
   | { kind: "tab"; machineId: string; session: Session }
   | { kind: "worktree"; machineId: string; session: Session }
   | { kind: "machine" }
@@ -42,7 +42,6 @@ export type AppDialog =
   | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string } } // one prompt to several agents, each in a worktree of its own
   | null;
 
-export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
 export type NoticeMsg = { text: string; error?: boolean; brief?: boolean };
 export type Confirm = { text: string; label: string; run: () => void };
 // a jump names its pane ("" = the transcript viewer): a Chat gets it only when it is that pane's
@@ -61,7 +60,6 @@ export type AppState = {
   mode: Mode;
   drawer: boolean;
   dialog: AppDialog;
-  menu: RowMenu;
   panel: Panel; // the one overlay panel open, if any
   search: string; // what the search panel opens with: the palette hands over what was typed in it
   notice: NoticeMsg | null;
@@ -97,7 +95,6 @@ export const app = createStore<AppState>({
   mode,
   drawer: false,
   dialog: null,
-  menu: null,
   panel: fromURL.panel,
   search: "",
   notice: null,
@@ -170,16 +167,10 @@ export const actions = {
     app.set({ float: null });
   },
   openDialog(dialog: AppDialog) {
-    app.set({ dialog, menu: null });
+    app.set({ dialog });
   },
   closeDialog() {
     app.set({ dialog: null });
-  },
-  openMenu(menu: RowMenu) {
-    app.set((s) => ({ menu: menu && s.menu?.session.id === menu.session.id ? null : menu }));
-  },
-  closeMenu() {
-    app.set({ menu: null });
   },
   openPanel(panel: Panel) {
     app.set({ panel });

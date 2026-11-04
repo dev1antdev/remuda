@@ -43,8 +43,8 @@ export default function ImportIssueDialog({ projectId, onClose, onCreated }: {
       }}
     >
       <p className="modal-hint">
-        The issue is read with <code>gh</code> on {where && where.id !== "local" ? where.label : t("this machine")}, as you; its title, text and labels become a task
-        that names it, so an agent started on the task knows where it came from. Nothing is written to GitHub.
+        {t("The issue is read with")} <code>gh</code> {where && where.id !== "local" ? t("on {machine}", { machine: where.label }) : t("on this machine")}
+        {t(", as you; its title, text and labels become a task that names it, so an agent started on the task knows where it came from. Nothing is written to GitHub.")}
       </p>
       <label>
         {t("Issue")}

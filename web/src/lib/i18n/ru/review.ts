@@ -95,4 +95,11 @@ export const review: Dictionary = {
   "open": "открыть",
   "split": "колонки",
   "the newest {n} of {total} commits": "новейшие {n} из {total} коммитов",
+  "Reviewed — the next look starts from here.": "Просмотрено — следующий просмотр начнётся отсюда.",
+  "Sent {comments} to {agent}.": "Отправлено агенту {agent}: {comments}.",
+  "Sent {comments} to {agent} in {workspace}.": "Отправлено агенту {agent} в {workspace}: {comments}.",
+  "{verdict} — {agent} has been told": "{verdict} — агенту {agent} сообщили",
+  "{verdict} — {agent} in {workspace} has been told": "{verdict} — агенту {agent} в {workspace} сообщили",
+  "{files} unchanged since you looked": "{files} без изменений с прошлого просмотра",
+  detached: "без ветки",
 };

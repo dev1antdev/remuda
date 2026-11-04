@@ -57,6 +57,8 @@ type Memory struct {
 	paused  map[string]bool      // machines whose herdr remuda restarts itself: the shells are its own to bring back
 	faces   map[string]paneFace  // machine|pane → its names when last seen, for the closed list
 	closed  map[string][]Closed  // per machine, newest first: the agents whose panes went away
+
+	reopening map[string]bool // machine|closed id: a reopen under way
 }
 
 // OpenMemory reads the chats remembered in dir and the agents closed there; "" keeps them in memory alone.

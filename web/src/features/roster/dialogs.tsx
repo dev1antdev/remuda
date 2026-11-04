@@ -8,7 +8,7 @@ import RecipesDialog from "@/features/recipes/RecipesDialog";
 import { readPref, writePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { dirname } from "@/lib/text";
-import { FormDialog, Icon, Logo, Select, useSubmit } from "@/ui";
+import { FormDialog, Icon, Logo, Select, Tip, useSubmit } from "@/ui";
 import type { AgentKind, Machine, Session, StartExtras } from "./api";
 import FolderPicker from "./FolderPicker";
 import { machineOptions } from "./options";
@@ -103,7 +103,8 @@ function StartOptionsFields({ kind, draft, agents, onChange, onRecipe }: { kind:
       {recipePick}
       <button type="button" className="linkish start-options-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
         <Icon name={open ? "chevron-down" : "chevron-right"} size={12} />
-        Options{!open && hasOptions(kind, draft) ? t(" · set") : ""}
+        {t("Options")}
+        {!open && hasOptions(kind, draft) ? t(" · set") : ""}
       </button>
       {open && (
         <>
@@ -155,20 +156,21 @@ export function RenameDialog({ what, label, onClose, onRename }: { what: "tab" |
   );
 }
 
-export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate, onClose }: {
+export function NewWorkspaceDialog({ machines, agents, defaultMachine, defaultDir = "", onCreate, onClose }: {
   machines: Machine[];
   agents: AgentKind[];
   defaultMachine: string;
+  defaultDir?: string; // the folder a folder's own menu opened it on
   onCreate: (machine: string, dir: string, name: string, agent: string, extras: StartExtras) => Promise<void>;
   onClose: () => void;
 }) {
   const [machine, setMachine] = useState(defaultMachine);
-  const [dir, setDir] = useState("");
+  const [dir, setDir] = useState(defaultDir);
   const [name, setName] = useState("");
   const { agent, pickAgent, draft, setDraft, options: extras, applyRecipe } = useStart(defaultAgent(agents, "claude"));
   const [picking, setPicking] = useState(false);
   const submit = useSubmit(async () => {
-    if (!dir.trim()) throw new Error("Project folder is required");
+    if (!dir.trim()) throw new Error(t("Project folder is required"));
     await onCreate(machine, dir.trim(), name.trim(), agent, extras());
   });
   const target = machines.find((m) => m.id === machine);
@@ -188,10 +190,12 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate,
         {t("Project folder")}
         {target && target.id !== "local" ? ` ${t("on {machine}", { machine: target.label })}` : ""}
         <span className="field-row">
-          <input autoFocus value={dir} placeholder="/Users/you/Projects/app" onChange={(e) => setDir(e.target.value)} />
-          <button type="button" className="icon-btn lg" title={t("Browse the folders on the machine")} disabled={!target || target.state !== "connected"} onClick={() => setPicking(true)}>
-            <Icon name="folder" size={16} />
-          </button>
+          <input autoFocus={!defaultDir} value={dir} placeholder="/Users/you/Projects/app" onChange={(e) => setDir(e.target.value)} />
+          <Tip text={t("Browse the folders on the machine")}>
+            <button type="button" className="icon-btn lg" aria-label={t("Browse the folders on the machine")} disabled={!target || target.state !== "connected"} onClick={() => setPicking(true)}>
+              <Icon name="folder" size={16} />
+            </button>
+          </Tip>
         </span>
       </label>
       {picking && target && (
@@ -207,8 +211,8 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate,
         />
       )}
       <label>
-        Name (optional)
-        <input value={name} placeholder="checkout-api" onChange={(e) => setName(e.target.value)} />
+        {t("Name (optional)")}
+        <input autoFocus={!!defaultDir} value={name} placeholder="checkout-api" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
       <StartOptionsFields kind={agent} draft={draft} agents={agents} onChange={setDraft} onRecipe={applyRecipe} />
@@ -228,7 +232,7 @@ export function NewTabDialog({ session, agents, onCreate, onClose }: {
   return (
     <FormDialog title={t("New tab in {workspace}", { workspace: session.name })} icon="plus" hint={t("Opens in the workspace's folder, like herdr's prefix+c.")} onClose={onClose} submit={submit} submitLabel={t("Create tab")}>
       <label>
-        Name (optional)
+        {t("Name (optional)")}
         <input autoFocus value={name} placeholder="tests" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
@@ -274,7 +278,7 @@ export function NewWorktreeDialog({ session, agents, onCreate, onClose }: {
         <input value={base} placeholder="main" onChange={(e) => setBase(e.target.value)} />
       </label>
       <label>
-        Workspace name (optional)
+        {t("Workspace name (optional)")}
         <input value={name} placeholder={t("defaults to the branch")} onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
@@ -310,7 +314,8 @@ export function AddMachineDialog({ onAdd, onClose }: { onAdd: (label: string, ho
       icon="monitor"
       hint={
         <>
-          Machines saved in herdr appear on their own. This adds another: any host your <code>ssh</code> reaches with keys, with herdr running there.
+          {t("Machines saved in herdr appear on their own. This adds another: any host your")} <code>ssh</code>{" "}
+          {t("reaches with keys, with herdr running there.")}
         </>
       }
       onClose={onClose}
@@ -322,7 +327,7 @@ export function AddMachineDialog({ onAdd, onClose }: { onAdd: (label: string, ho
         <input autoFocus value={host} placeholder="build-box" onChange={(e) => setHost(e.target.value)} />
       </label>
       <label>
-        Label (optional)
+        {t("Label (optional)")}
         <input value={label} placeholder={t("Build box")} onChange={(e) => setLabel(e.target.value)} />
       </label>
     </FormDialog>

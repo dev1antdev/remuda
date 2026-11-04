@@ -64,13 +64,13 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
       }}
     >
       <p className="modal-hint">
-        A worktree branches off the workspace's repository, Claude starts in it and gets the task once it is up.{" "}
+        {tr("A worktree branches off the workspace's repository, Claude starts in it and gets the task once it is up.")}{" "}
         {moveTo ? (
           <>
-            The task moves to <b>{moveTo}</b>;
+            {tr("The task moves to")} <b>{moveTo}</b>;
           </>
         ) : (
-          "The task stays where it is;"
+          tr("The task stays where it is;")
         )}{" "}
         {tr("every answer the agent finishes comes back here as a comment.")}
       </p>
@@ -97,7 +97,7 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
         </label>
       </div>
       <label className="tasks-toggle">
-        <input type="checkbox" checked={groom} onChange={(e) => toggleGroom(e.target.checked)} /> groom first (<code>/grill-me</code>)
+        <input type="checkbox" checked={groom} onChange={(e) => toggleGroom(e.target.checked)} /> {tr("groom first")} (<code>/grill-me</code>)
       </label>
       <label>
         {tr("Prompt")}

@@ -6,7 +6,7 @@ import { useCurrent } from "@/app/current";
 import { actions } from "@/app/store";
 import { usePref } from "@/lib/prefs";
 import { Icon, Menu, Notice, Tip } from "@/ui";
-import { removeMachine, type Machine, type Session } from "./api";
+import { removeMachine, type Machine } from "./api";
 import { HealthButton } from "./HealthButton";
 import { MachineMenu } from "./MachineMenu";
 import { DEFAULT_RADAR, summary, type RadarPrefs } from "./radar";
@@ -30,7 +30,6 @@ export default function Sidebar() {
   const [wsFolded, setWsFolded] = usePref<Record<string, boolean>>("wsFolded", {});
   const onToggle = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
   const onFold = (key: string) => setWsFolded((f) => ({ ...f, [key]: !f[key] }));
-  const onMenu = (m: Machine, s: Session, x: number, y: number) => actions.openMenu({ machine: m, session: s, x, y });
   const onIcon = (m: Machine, f: Folder) => actions.openDialog({ kind: "folder-icon", machineId: m.id, folder: f.path, name: f.name, icon: f.icon });
   // every folder of every machine shut, or all open again
   const foldAll = (shut: boolean) =>
@@ -39,11 +38,12 @@ export default function Sidebar() {
       for (const m of machines) for (const e of entries(m, prefs)) if (e.kind === "folder") next[`${m.id}|folder:${e.folder.key}`] = shut;
       return next;
     });
-  const onRemoveMachine = (m: Machine) => actions.ask(t("Remove machine “{machine}”? Nothing on the PC is touched.", { machine: m.label }), t("Remove"), () => void act(removeMachine(m.id)));
   const share = useSharing();
+  const onRemoveMachine = (m: Machine) => actions.ask(t("Remove machine “{machine}”? Nothing on the PC is touched.", { machine: share.machineLabel(m) }), t("Remove"), () => void act(removeMachine(m.id)));
+  // the state dot's tooltip: the reason a machine cannot be reached, its own names masked while sharing the screen
+  const stateTitle = (m: Machine) => (m.state === "error" ? share.redact(m.error || t("unreachable")) : m.state === "connecting" ? t("connecting…") : t("connected"));
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
-
 
   return (
     <>
@@ -94,18 +94,19 @@ export default function Sidebar() {
       {machines.map((m) => {
         const folded = !!collapsed[m.id];
         const n = summary(m);
+        const workspaces = m.sessions.filter((s) => !s.scratch).length; // the floating terminal's shell is the drawer's
         return (
           <div key={m.id} className={`machine${folded ? " folded" : ""}${m.id !== "local" ? " has-hue" : ""}`} style={hueStyle(m.id)}>
             <div className="machine-head">
-              <button type="button" className="machine-toggle" title={folded ? t("Show workspaces") : t("Hide workspaces")} aria-expanded={!folded} onClick={() => onToggle(m.id)}>
-                <span className={`machine-state is-${m.state}`} title={m.error || m.state} />
+              <button type="button" className={`machine-toggle${folded && current?.machineId === m.id ? " on" : ""}`} title={folded ? t("Show workspaces") : t("Hide workspaces")} aria-expanded={!folded} onClick={() => onToggle(m.id)}>
+                <span className={`machine-state is-${m.state}`} title={stateTitle(m)} />
                 <span className="machine-label" title={share.machineHidden(m.id) ? undefined : m.host}>
                   {share.machineLabel(m)}
                 </span>
                 {folded && (
                   <span className="machine-summary">
                     <StateMarks working={n.working} blocked={n.blocked} done={n.done} step={step} />
-                    {!n.working && !n.blocked && !n.done && m.sessions.length > 0 && <span className="machine-count">{m.sessions.length}</span>}
+                    {!n.working && !n.blocked && !n.done && workspaces > 0 && <span className="machine-count">{workspaces}</span>}
                   </span>
                 )}
                 <span className={`chevron${folded ? "" : " open"}`} aria-hidden="true">
@@ -138,12 +139,22 @@ export default function Sidebar() {
                 step={step}
                 now={now}
                 onSelect={actions.selectPane}
-                onMenu={viewOnly ? undefined : onMenu}
+                editable={!viewOnly}
                 onIcon={viewOnly ? undefined : onIcon}
                 share={share}
                 folded={wsFolded}
                 onFold={onFold}
               />
+            )}
+            {!folded && m.state === "connected" && workspaces === 0 && (
+              <p className="ws-empty">
+                {t("No workspaces here yet.")}{" "}
+                {!viewOnly && (
+                  <button type="button" className="linkish" onClick={() => actions.openDialog({ kind: "workspace", machineId: m.id })}>
+                    {t("New workspace…")}
+                  </button>
+                )}
+              </p>
             )}
           </div>
         );

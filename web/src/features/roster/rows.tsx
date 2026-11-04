@@ -4,7 +4,7 @@
 
 import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
 import { fillClass } from "@/features/usage/format";
-import { FolderIcon, Icon, Logo, Tip } from "@/ui";
+import { FolderIcon, Icon, Logo, Menu, Tip, type MenuItem } from "@/ui";
 import { VENDOR_NAME, brandColor } from "@/ui/brand";
 import type { Machine, Session } from "./api";
 import { branchNamesIssue } from "@/features/jira/jira";
@@ -15,6 +15,7 @@ import { displayOf, markOf, rowLabel, stateWords, type AgentRow, type Display, t
 import { hiddenWords } from "./sharing";
 import type { Sharing } from "./useSharing";
 import { agentWords, branchShown, entries, folderCounts, folderOf, itemTitle, itemWords, limited, representative, shortAge, since, type Folder, type WorkspaceItem } from "./workspaces";
+import { folderMenuItems, workspaceMenuItems } from "./WorkspaceMenu";
 import { t, tn } from "@/lib/i18n";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
@@ -26,7 +27,7 @@ export type RowProps = {
   step: number; // the spinner's frame
   now: number;
   onSelect: (machineId: string, paneId: string) => void;
-  onMenu?: (m: Machine, s: Session, x: number, y: number) => void; // none for a viewer: no workspace actions
+  editable?: boolean; // the folders' and the workspaces' menus: none for a viewer
   folded: Record<string, boolean>; // folders folded shut, by "machine|folder:<path>"
   onFold: (key: string) => void;
   onIcon?: (m: Machine, folder: Folder) => void; // none for a viewer: the icon is the person's to change
@@ -76,7 +77,7 @@ function FolderView({ machine: m, folder, ...rest }: RowProps & { folder: Folder
         <span className={`chevron${isFolded ? "" : " open"}`} aria-hidden="true">
           <Icon name="chevron-right" size={12} />
         </span>
-        {rest.onIcon && folder.path ? (
+        {rest.onIcon && folder.path && !hidden ? (
           <Tip text={t("Change the folder's icon")}>
             <button
               type="button"
@@ -103,6 +104,9 @@ function FolderView({ machine: m, folder, ...rest }: RowProps & { folder: Folder
           <StateMarks working={n.working} blocked={n.blocked} done={n.done} step={rest.step} />
           {quiet && isFolded && n.agents > 0 && <span className="machine-count">{n.agents}</span>}
         </span>
+        {rest.editable && folder.path && (
+          <RowMenu className="ws-folder-menu" what={t("Folder actions")} items={() => folderMenuItems(m, folder, { name, masked: hidden })} />
+        )}
       </div>
       {!isFolded && (
         <div className="ws-folder-items">
@@ -116,7 +120,7 @@ function FolderView({ machine: m, folder, ...rest }: RowProps & { folder: Folder
 }
 
 // WorkspaceView is one workspace: the two-line card that opens its agent, and the agents' own lines when it runs several
-function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onSelect, onMenu, share }: RowProps & { item: WorkspaceItem; group?: string }) {
+function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onSelect, editable, share }: RowProps & { item: WorkspaceItem; group?: string }) {
   const s = item.session;
   const lead = item.lead;
   const pane = lead?.pane;
@@ -167,7 +171,7 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
             </span>
           )}
           <span className="ws-age">{shortAge(since(lead), now)}</span>
-          {onMenu && <MenuButton machine={m} session={s} onMenu={onMenu} />}
+          {editable && <RowMenu className="ws-menu-btn" what={t("Workspace actions")} items={() => workspaceMenuItems(m, s, { name: hidden ? share.folderName(m.id, folderOf(s), s.name) : "", masked: hidden })} />}
         </span>
         <span className="ws-sub">
           {branch && !branchNamesIssue(branch, s.jira?.[0]) && (
@@ -219,16 +223,20 @@ function AgentLine({ machine: m, row: r, selected, prefs, step, now, onSelect, h
   );
 }
 
-function MenuButton({ machine, session, onMenu }: { machine: Machine; session: Session; onMenu: NonNullable<RowProps["onMenu"]> }) {
-  const open = (e: MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    const r = e.currentTarget.getBoundingClientRect();
-    onMenu(machine, session, r.right, r.bottom);
-  };
+// RowMenu is a folder's or a workspace's ⋯: a menu that opens inside the window, its button's click kept from the row
+function RowMenu({ className, what, items }: { className: string; what: string; items: () => MenuItem[] }) {
+  const keep = (e: MouseEvent<HTMLButtonElement>) => e.stopPropagation();
   return (
-    <button type="button" className="icon-btn ws-menu-btn" title={t("Workspace actions")} aria-label={t("Workspace actions")} aria-haspopup="menu" onClick={open}>
-      <Icon name="more" size={14} />
-    </button>
+    <Menu
+      label={what}
+      tip={what}
+      items={items}
+      trigger={
+        <button type="button" className={`icon-btn ${className}`} aria-label={what} onClick={keep}>
+          <Icon name="more" size={14} />
+        </button>
+      }
+    />
   );
 }
 

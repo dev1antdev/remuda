@@ -111,7 +111,11 @@ function LensSwitch({ lens, current, viewOnly }: { lens: Lens; current: Located;
   const tab = (id: Lens, label: string, extra?: { disabled?: boolean; title?: string; badge?: number }) => (
     <button role="tab" aria-selected={lens === id} className={lens === id ? "on" : ""} disabled={extra?.disabled} title={extra?.title} onClick={() => actions.setLens(id)}>
       {label}
-      {extra?.badge ? <span className="lens-badge">{extra.badge}</span> : null}
+      {extra && "badge" in extra && (
+        <span className={`lens-badge${extra.badge ? "" : " empty"}`} aria-hidden={extra.badge ? undefined : true}>
+          {extra.badge || 0}
+        </span>
+      )}
     </button>
   );
   return (

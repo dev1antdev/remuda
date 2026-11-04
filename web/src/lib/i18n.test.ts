@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { currentLang, fill, hasTranslation, languageOf, langPrefOf, locale, pluralIndex, setLang, t, tn } from "./i18n";
+import { currentLang, english, fill, hasTranslation, languageOf, langPrefOf, locale, pluralIndex, setLang, t, tc, tn } from "./i18n";
 
 afterEach(() => setLang("en"));
 
@@ -22,6 +22,27 @@ describe("t", () => {
     expect(t("{n} tabs", { n: 1 })).toBe("1 вкладка");
     expect(t("{n} tabs", { n: 3 })).toBe("3 вкладки");
     expect(t("{n} tabs", { n: 5 })).toBe("5 вкладок");
+  });
+});
+
+describe("tc", () => {
+  it("takes the language's word for the narrow place, else the usual one, else the English", () => {
+    setLang("ru");
+    expect(tc("rail", "Activity")).toBe("События");
+    expect(t("Activity")).toBe("Активность");
+    expect(tc("rail", "Usage")).toBe(t("Usage"));
+    setLang("en");
+    expect(tc("rail", "Activity")).toBe("Activity");
+  });
+});
+
+describe("english", () => {
+  it("answers the English a translated string came from, and a string it does not hold as it is", () => {
+    setLang("ru");
+    expect(english(t("Activity"))).toBe("Activity");
+    expect(english("не из словаря")).toBe("не из словаря");
+    setLang("en");
+    expect(english("Activity")).toBe("Activity");
   });
 });
 

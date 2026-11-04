@@ -58,7 +58,7 @@ export const TurnView = memo(
           <div className="turn-actions">
             {onForward && text && turn.role === "assistant" && (
               <button type="button" className="linkish turn-forward" title={t("Forward this to another agent")} onClick={() => onForward(text)}>
-                <Icon name="send" size={12} /> forward
+                <Icon name="send" size={12} /> {t("forward")}
               </button>
             )}
             {onLink && !!turn.ids?.length && (
@@ -180,9 +180,9 @@ function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent, diff
                     e.preventDefault();
                     onOpenFile({ path: file, prefer: EDIT_TOOLS.has(name) ? "changes" : "file" });
                   }}
-                  title={EDIT_TOOLS.has(name) ? t("Open the file with its changes") : t("Open the file")}
+                  title={`${file}\n${EDIT_TOOLS.has(name) ? t("Open the file with its changes") : t("Open the file")}`}
                 >
-                  {hint}
+                  <bdi dir="ltr">{hint}</bdi>
                 </button>
               ) : (
                 <span className="part-hint">{hint}</span>

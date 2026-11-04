@@ -3,7 +3,7 @@ import { escapeIsFree, overlayOpen, type EscapePress } from "./escape";
 
 const press = (over: Partial<EscapePress> = {}): EscapePress => ({ key: "Escape", defaultPrevented: false, target: { closest: () => null }, ...over });
 const inside = (...parts: string[]) => ({ closest: (selector: string) => (parts.some((part) => selector.includes(part)) ? {} : null) });
-const closed = { dialog: null, panel: null, confirm: null, file: null, menu: null };
+const closed = { dialog: null, panel: null, confirm: null, file: null };
 
 describe("escapeIsFree", () => {
   it("is an Escape on the page itself with nothing open over it", () => {
@@ -22,8 +22,8 @@ describe("escapeIsFree", () => {
 });
 
 describe("overlayOpen", () => {
-  it("counts the confirm, the file viewer and the workspace menu, not only a dialog or a panel", () => {
+  it("counts the confirm and the file viewer, not only a dialog or a panel; a menu takes its own Esc", () => {
     expect(overlayOpen(closed)).toBe(false);
-    for (const key of ["dialog", "panel", "confirm", "file", "menu"] as const) expect(overlayOpen({ ...closed, [key]: {} }), key).toBe(true);
+    for (const key of ["dialog", "panel", "confirm", "file"] as const) expect(overlayOpen({ ...closed, [key]: {} }), key).toBe(true);
   });
 });

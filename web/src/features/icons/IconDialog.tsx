@@ -168,6 +168,7 @@ function SiteIcon({ busy, onUse }: { busy: boolean; onUse: (image: string) => vo
 function PictureIcon({ busy, onUse }: { busy: boolean; onUse: (image: string) => void }) {
   const [picture, setPicture] = useState("");
   const [err, setErr] = useState("");
+  const chooser = useRef<HTMLInputElement>(null);
   const pick = async (file: File) => {
     setErr("");
     setPicture("");
@@ -182,19 +183,20 @@ function PictureIcon({ busy, onUse }: { busy: boolean; onUse: (image: string) =>
   return (
     <div className="icon-source">
       <p className="modal-hint">{t("A PNG, JPEG, GIF, WebP, ICO or SVG: a company's logo, say. It is made into a small square icon.")}</p>
-      <label className="btn">
+      <button type="button" className="btn" onClick={() => chooser.current?.click()}>
         {t("Choose a picture…")}
-        <input
-          type="file"
-          hidden
-          accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/x-icon,.ico"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void pick(file);
-            e.target.value = "";
-          }}
-        />
-      </label>
+      </button>
+      <input
+        ref={chooser}
+        type="file"
+        hidden
+        accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/x-icon,.ico"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void pick(file);
+          e.target.value = "";
+        }}
+      />
       {err && <Notice tone="error">{err}</Notice>}
       {picture && (
         <div className="icon-found">

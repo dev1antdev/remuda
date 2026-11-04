@@ -75,7 +75,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       setOpenFile(null);
       lookAgain();
       onSeen?.();
-      showNotice("Reviewed — the next look starts from here.");
+      showNotice(t("Reviewed — the next look starts from here."));
     } catch (failure) {
       setActionError(errMsg(failure));
     } finally {
@@ -89,7 +89,8 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       await submitPrompt(target.machineId, target.paneId, text);
       setDraft([]);
       setPickingAgent(false);
-      showNotice(`Sent ${plural(draft.length, "comment")} to ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""}.`);
+      const comments = plural(draft.length, "comment");
+      showNotice(target.sessionName ? t("Sent {comments} to {agent} in {workspace}.", { comments, agent: target.agent, workspace: target.sessionName }) : t("Sent {comments} to {agent}.", { comments, agent: target.agent }));
     } finally {
       setSending(false);
     }
@@ -103,7 +104,9 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
     setOpenFile(null);
     lookAgain();
     onSeen?.();
-    showNotice(`${verdict === "approved" ? t("Approved") : t("Rejected")} — ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""} has been told${ask === "pr" ? t(" and asked to open a pull request") : ask === "commit" ? t(" and asked to commit") : ""}.`);
+    const said = verdict === "approved" ? t("Approved") : t("Rejected");
+    const told = target.sessionName ? t("{verdict} — {agent} in {workspace} has been told", { verdict: said, agent: target.agent, workspace: target.sessionName }) : t("{verdict} — {agent} has been told", { verdict: said, agent: target.agent });
+    showNotice(`${told}${ask === "pr" ? t(" and asked to open a pull request") : ask === "commit" ? t(" and asked to commit") : ""}.`);
   };
 
   const files = review?.files ?? [];
@@ -153,7 +156,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       <div className="review-head">
         <div className="review-title">
           <span className="review-branch">
-            <Icon name="git-branch" size={12} /> {review?.branch || "detached"}
+            <Icon name="git-branch" size={12} /> {review?.branch || t("detached")}
           </span>
           <span className="review-sub">
             {lastLookText}
@@ -202,7 +205,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
               <div key={commit.sha} className={`review-commit${commit.seen ? " seen" : ""}`} title={commit.seen ? t("A commit of work you already reviewed") : undefined}>
                 <code>{commit.sha}</code>
                 <span className="review-commit-subject">{commit.subject}</span>
-                {commit.seen && <span className="review-tag">reviewed</span>}
+                {commit.seen && <span className="review-tag">{t("reviewed")}</span>}
                 <span className="review-commit-when">{ago(commit.when * 1000)}</span>
               </div>
             ))}
@@ -213,7 +216,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
         {unchangedFiles.length > 0 && (
           <div className="review-fold">
             <button type="button" className="linkish" aria-expanded={showUnchanged} onClick={() => setShowUnchanged((shown) => !shown)}>
-              <Icon name={showUnchanged ? "chevron-down" : "chevron-right"} size={12} /> {plural(unchangedFiles.length, "file")} unchanged since you looked
+              <Icon name={showUnchanged ? "chevron-down" : "chevron-right"} size={12} /> {t("{files} unchanged since you looked", { files: plural(unchangedFiles.length, "file") })}
             </button>
             {showUnchanged && unchangedFiles.map((file) => fileRow(file))}
           </div>

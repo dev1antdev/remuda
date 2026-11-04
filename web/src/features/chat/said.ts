@@ -19,6 +19,17 @@ export function said(turns: Turn[]): string {
 
 const LEAD_MARKS = /^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+)/;
 const RULE = /^(?:-{3,}|\*{3,}|_{3,})$/;
+const TABLE_RULE = /^\|?[\s:|-]*-[\s:|-]*$/;
+
+// cells reads a table row as its cells joined by " · ", any other line as it is
+const cells = (line: string) =>
+  line.startsWith("|")
+    ? line
+        .split("|")
+        .map((cell) => cell.trim())
+        .filter(Boolean)
+        .join(" · ")
+    : line;
 
 // firstLine is the first line that says something, its marks stripped and cut to SAID_MAX characters.
 export function firstLine(text: string): string {
@@ -29,8 +40,8 @@ export function firstLine(text: string): string {
       inFence = !inFence;
       continue;
     }
-    if (inFence || RULE.test(line)) continue;
-    const said = plain(line);
+    if (inFence || RULE.test(line) || (line.startsWith("|") && TABLE_RULE.test(line))) continue;
+    const said = plain(cells(line));
     if (said) return cut(said, SAID_MAX);
   }
   return "";

@@ -120,29 +120,29 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
           <label className="alerts-opt">
             <input type="checkbox" checked={prefs.input} onChange={(e) => changePrefs({ ...prefs, input: e.target.checked })} />
             <span>
-              When an agent <b>{t("needs you")}</b>
+              {t("When an agent")} <b>{t("needs you")}</b>
               <small>{t("A question or approval still open after 10 s — answered at the desk, it's never sent.")}</small>
             </span>
           </label>
           <label className="alerts-opt">
             <input type="checkbox" checked={prefs.watchdog ?? true} onChange={(e) => changePrefs({ ...prefs, watchdog: e.target.checked })} />
             <span>
-              When an agent <b>{t("looks stuck")}</b>
+              {t("When an agent")} <b>{t("looks stuck")}</b>
               <small>{t("Working 20 min with nothing written, waiting for an answer 15 min, or looping on one tool call — with an Esc button on the notification.")}</small>
             </span>
           </label>
           <label className="alerts-opt">
             <span>
-              When an agent <b>finishes</b>
-              <small>Turns ≥ 1 min, a minute after; "always" means every turn, after 10 s.</small>
+              {t("When an agent")} <b>{t("finishes")}</b>
+              <small>{t("Turns ≥ 1 min, a minute after; “always” means every turn, after 10 s.")}</small>
             </span>
             <Select
               value={prefs.done}
               onChange={(done) => changePrefs({ ...prefs, done })}
               options={[
-                { value: "off", label: "never" },
+                { value: "off", label: t("never") },
                 { value: "long", label: t("long turns") },
-                { value: "always", label: "always" },
+                { value: "always", label: t("always") },
               ]}
             />
           </label>
@@ -155,7 +155,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
           </label>
           <div className="alerts-quiet">
             <input type="time" className="sm" value={quietWindow.from} disabled={!prefs.quiet} aria-label={t("Quiet from")} onChange={(e) => changeWindow({ ...quietWindow, from: e.target.value })} />
-            <span>to</span>
+            <span>{t("to")}</span>
             <input type="time" className="sm" value={quietWindow.to} disabled={!prefs.quiet} aria-label={t("Quiet until")} onChange={(e) => changeWindow({ ...quietWindow, to: e.target.value })} />
           </div>
         </>

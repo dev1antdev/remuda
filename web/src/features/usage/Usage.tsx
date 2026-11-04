@@ -125,7 +125,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
         {t("What the agents' transcripts say they cost, at Claude Code's own API prices — on a subscription a measure of where the work went, not a bill. Each machine reads its own history.")}
       </Notice>
       {error && <Notice tone="error">{error}</Notice>}
-      <PlanLimits machines={machines} />
+      <PlanLimits machines={machines} viewOnly={viewOnly} />
       <Budgets budgets={budgets ?? []} machines={machines} editable={!viewOnly} />
       {sum.perMachine
         .filter((m) => m.error)
@@ -225,11 +225,11 @@ export default function Usage({ machines, onClose, onOpenSession }: {
 }
 
 // PlanLimits is the panel's first section: each agent's subscription windows, as full as their latest reading says, and
-// where Claude Code runs with nobody reading its limits, the way to have them read
-function PlanLimits({ machines }: { machines: Machine[] }) {
+// where Claude Code runs with nobody reading its limits, the way to have them read (not for a viewer, who cannot)
+function PlanLimits({ machines, viewOnly }: { machines: Machine[]; viewOnly: boolean }) {
   const now = useNow(30_000);
   const windows = accountWindows(machines, now);
-  const unread = machines.filter(claudeUnread);
+  const unread = viewOnly ? [] : machines.filter(claudeUnread);
   if (windows.length === 0 && unread.length === 0) return null;
   return (
     <section className="budgets plan-limits">
@@ -252,7 +252,7 @@ function PlanLimits({ machines }: { machines: Machine[] }) {
       })}
       {unread.length > 0 && (
         <div className="empty">
-          {t("Claude Code hands its plan limits to its status line only. On {machines}, Updates in the machine's ⓘ offers “Show Claude Code's plan limits”: remuda then reads them before your status line runs.", { machines: unread.map((m) => m.label).join(", ") })}
+          {t("Claude Code shows its plan limits to its status line alone, and remuda reads them there once you let it. Not set up yet on {machines}: the machine's ⓘ → Updates → “Show Claude Code's plan limits”.", { machines: unread.map((m) => m.label).join(", ") })}
         </div>
       )}
     </section>

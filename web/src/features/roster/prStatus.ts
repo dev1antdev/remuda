@@ -13,17 +13,17 @@ export function checksWords(s: PRStatus): string {
   const counted = c.total - c.skipped;
   if (c.fail > 0) return t("{n} failed", { n: c.fail });
   if (c.pending > 0) return t("{n} running", { n: c.pending });
-  if (counted <= 0) return "no checks";
+  if (counted <= 0) return t("no checks");
   return t("{pass}/{total} checks", { pass: c.pass, total: counted });
 }
 
 // reviewWords is the request's standing beyond its checks: merged or closed, a draft, conflicts, the review's verdict
 // and, for a merge request, the discussion threads still open
 export function reviewWords(s: PRStatus): string {
-  if (s.state === "MERGED") return "merged";
-  if (s.state === "CLOSED") return "closed";
-  if (s.draft) return "draft";
-  if (s.mergeable === "CONFLICTING") return "conflicts";
+  if (s.state === "MERGED") return t("merged");
+  if (s.state === "CLOSED") return t("closed");
+  if (s.draft) return t("draft");
+  if (s.mergeable === "CONFLICTING") return t("conflicts");
   const threads = s.threads ? tn(s.threads, "{n} open thread", "{n} open threads") : "";
   return [verdictWords(s.review), threads].filter(Boolean).join(" · ");
 }
@@ -31,11 +31,11 @@ export function reviewWords(s: PRStatus): string {
 function verdictWords(review: string): string {
   switch (review) {
     case "APPROVED":
-      return "approved";
+      return t("approved");
     case "CHANGES_REQUESTED":
-      return "changes requested";
+      return t("changes requested");
     case "REVIEW_REQUIRED":
-      return "review pending";
+      return t("review pending");
   }
   return "";
 }
