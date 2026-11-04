@@ -155,9 +155,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   (3/7) or, once it has finished,
   the first line of what it answered, its pull request as a link when
   it named one (GitHub or GitLab; the workspace's ⋯ menu has it too)
-  and, for a GitHub one, how it stands beside the link — "2/2 checks ·
-  approved", red when a check failed, the branch conflicts or the
-  review asks for changes, amber while checks run — read with `gh` on
+  and how it stands beside the link — "2/2 checks · approved", red when
+  a check failed, the branch conflicts or the review asks for changes,
+  amber while checks run or a merge request's threads are open ("2 open
+  threads") — read with `gh` (`glab` for a GitLab merge request) on
   that machine as you, every two minutes while the page is open, so
   remuda itself asks GitHub nothing. The chips open a menu: when a check
   failed, *Hand the failed checks to the agent* reads the failed steps'
@@ -262,8 +263,13 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the task while the agent's pane is still there. Once that request is
   merged on GitHub — checked with `gh` every two minutes while the run
   is live, page or no page — the task moves to *Done* with the comment
-  "PR #15 merged" and a push, unless you moved it elsewhere first; the
-  workspace's ⋯ menu then offers *Remove the worktree and its branch…*,
+  "PR #15 merged" and a push, unless you moved it elsewhere first. A
+  GitLab merge request (`MR !613`, gitlab.com or your company's own
+  instance) is followed the same way through `glab` on that machine: its
+  pipeline's jobs as the checks, its approvals, its threads still open,
+  the failed job's log and the open threads handed to the agent from the
+  same menu, and the merge moving the task to *Done*. Once merged, the
+  workspace's ⋯ menu offers *Remove the worktree and its branch…*,
   which closes the workspace and runs `git worktree remove` and `git
   branch -D` on the machine, refusing a worktree with uncommitted
   changes before anything closes.
