@@ -40,17 +40,24 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
                                              └─ `ssh host tail -c …` of the transcript
 ```
 
-- **Radar sidebar** — one row per agent, read the way a person would (after
-  [herdr-radar](https://github.com/hhdebb/herdr-radar)'s design, reimplemented
-  here): a braille spinner while it works, a pulsing `?` while it waits on
-  you, a green `✓` that **stays until you have looked at the pane**, a ring
-  that cools with the time since the last turn — fresh, plain, then the
-  whole row dims after two hours. A finished agent's row says, in grey
-  after its name, the first line of what it answered, so the sidebar
-  reads like a list of results. Each agent wears its vendor's logo and
-  hue (27 vendors), workspaces are headers with worktrees as a tree, the
-  busiest project sorts first; `⇅` flips to a flat list by activity or
-  herdr's own order, `⚙` holds the thresholds and the row label.
+- **Radar sidebar** — one card per workspace, a click away from its agent
+  (laid out after [Orca](https://onorca.dev)'s, the agents read after
+  [herdr-radar](https://github.com/hhdebb/herdr-radar)'s design,
+  reimplemented here): a braille spinner while it works, a pulsing `?`
+  while it waits on you, a green `✓` that **stays until you have looked at
+  the pane**, a ring that cools with the time since the last turn — fresh,
+  plain, then the whole card dims after two hours — and how long it has
+  been so ("12m", "3h"). Under the name, the branch the folder has checked
+  out and what the agent is doing, or, once it finished, the first line of
+  what it answered, so the sidebar reads like a list of results. A
+  workspace running several agents lists them in small lines under its
+  card, each a click to open; a repository's worktrees gather under its
+  name. Each agent wears its vendor's logo and hue (27 vendors), the
+  busiest project sorts first; the sidebar's ⋯ flips to a flat list by
+  activity or herdr's own order, its settings hold the thresholds and the
+  label. Above the pane each tab says what it runs — the agent by its
+  logo and name, a shell as "terminal" — and + opens a terminal in the
+  workspace's folder at once, or an agent.
 - **Roster** — workspaces, tabs and panes from `session.snapshot`, with
   herdr's own agent statuses: `RUN` (working), `NEEDS YOU` (blocked),
   `READY` (idle), `DONE`.

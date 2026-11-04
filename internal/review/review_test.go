@@ -150,3 +150,34 @@ func TestAMergeBringsNoFilesOfItsOwn(t *testing.T) {
 		t.Fatal("an unknown verdict was taken")
 	}
 }
+
+func TestBadgesReadTheBranch(t *testing.T) {
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	git("checkout", "-qb", "feature/sidebar")
+	plain := t.TempDir()
+
+	machine := shell.Local{Name: "local"}
+	store := New(t.TempDir())
+	store.Badges(machine, []string{dir, plain})
+	if branch := store.Branch("local", dir); branch != "feature/sidebar" {
+		t.Fatalf("branch = %q, want feature/sidebar", branch)
+	}
+	if branch := store.Branch("local", plain); branch != "" {
+		t.Fatalf("a folder outside git has branch %q", branch)
+	}
+
+	git("checkout", "-q", "--detach")
+	store.Badges(machine, []string{dir})
+	if branch, short := store.Branch("local", dir), git("rev-parse", "--short", "HEAD"); branch != short {
+		t.Fatalf("detached: branch = %q, want the short hash %q", branch, short)
+	}
+
+	_ = os.RemoveAll(filepath.Join(dir, ".git"))
+	store.Badges(machine, []string{dir})
+	if branch := store.Branch("local", dir); branch != "" {
+		t.Fatalf("a folder that stopped being a repository keeps branch %q", branch)
+	}
+}

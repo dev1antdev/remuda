@@ -934,8 +934,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   unchanged since you looked"; seen commits are dimmed. Every
   `events.Snapshot` goes to `review.RefreshBadges`, which runs `Badges` a
   minute apart and never two at once per machine, one shell over
-  `Snapshot.WorkspaceDirs()`, and the roster carries `session.dir` and
-  `session.review {changed, fresh}` for the sidebar badge.
+  `Snapshot.WorkspaceDirs()` that also reads each folder's branch
+  (`git symbolic-ref`, a short hash when detached; `Store.Branch`, set
+  by a summary too, dropped for a folder that stopped being a
+  repository), and the roster carries `session.dir`, `session.branch`
+  and `session.review {changed, fresh}` for the sidebar's card.
   `features/review/Review.tsx` draws it (`Diff.tsx` the file rows,
   `Hunk.tsx` a hunk's rows in one column or two with a comment box under
   the tapped row, `hunks.ts` the parsing — `splitHunks`, `rowsOf`,
@@ -1326,8 +1329,32 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   hues, tiers, marks, row labels, ordering: families by their liveliest
   agent, parent before worktrees, tabs by their liveliest pane, no-stamp
   last; a flat `recent` order; herdr's own; `radar.test.ts`),
-  `features/roster/Sidebar.tsx` draws it (`rows.tsx` the rows,
-  `HealthButton.tsx`, `MachineMenu.tsx`; its head is a + menu — a
+  `features/roster/Sidebar.tsx` draws it — **a line per workspace, after
+  Orca** (`workspaces.ts`, pure and tested: `entries` lays a machine out
+  from `groups` — a repository with linked worktrees open becomes a
+  group under its name, foldable (pref `wsFolded`, `machine|repo:<key>`),
+  its checkouts under it, the main one first and named by its branch
+  when it carries the repository's name (`itemTitle`); every other
+  workspace a line of its own; the flat order drops the groups and
+  sorts by each workspace's own activity — `leadOf` the agent a line
+  speaks for and a click opens: a question, a watchdog note, work, a
+  finish, the rest; `itemWords` / `agentWords` / `branchShown` /
+  `since` / `shortAge` the words and the age): `rows.tsx` draws each
+  workspace as a two-line card — the lead agent's mark and logo, the
+  name, the review badge, the mute, the context from 50 %, the age
+  ("12m", "3h") that the ⋯ menu takes the place of under the pointer;
+  under it the branch (`session.branch`, read with the review badges)
+  and what the agent does — its note, "waiting for your answer", the
+  first line of what it answered, else its title — or "2 agents" with
+  a small line per agent under the card, each its own click; a workspace
+  of shells alone shows `$` and its tabs. The tab strip
+  (`TabStrip.tsx`, `tabs.ts` tested: `tabAgent`, `tabFaces`) names a tab
+  by what it runs — the agent's logo and name, "terminal" for a shell,
+  a name of the person's own over either, twins told apart by herdr's
+  number — and its + is a menu: Terminal makes a shell tab in the
+  workspace's folder at once and shows it on the terminal lens, Agent…
+  the New tab dialog; a click on a shell's tab turns the terminal lens
+  on. (`HealthButton.tsx`, `MachineMenu.tsx`; its head is a + menu — a
   workspace on a connected machine, an agent from a recipe, a PC — and a ⋯ menu — message
   several agents, the order, Sidebar settings; `RadarSettings.tsx` is
   `RadarFields`, the order, the row label, the idle tiers and the
@@ -1340,17 +1367,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   them, the agents' tasks-only keys with a Revoke each);
   one spinner clock for
   the braille frames and the pulsing question). A finished or
-  idle row says what the agent answered after its title, in the quiet
-  colour and in its tooltip (`pane.said` from the roster, `.radar-said`:
-  the title keeps up to 62% of its line, the answer the rest, each
-  clipped with an ellipsis); the row's height and its other parts stay
-  where they are.
+  idle workspace's second line says what the agent answered
+  (`pane.said` from the roster), in the quiet colour and in its
+  tooltip; the card's height and its other parts stay where they are.
   Every remote machine has a hue of its own (`features/roster/hue.ts`,
   tested: from the id, never red or green, which mean blocked and done):
   the sidebar block's left edge, a wall tile's left edge, a dot before
   the machine in a palette row; the local machine has none.
-  Machines and workspace groups fold (prefs `collapsed` / `wsFolded`); a
-  folded group's head carries its agents' states (working / ? / ✓ counts).
+  Machines and repository groups fold (prefs `collapsed` / `wsFolded`); a
+  folded head carries its agents' states (working / ? / ✓ counts).
   `web/marks/*.svg` are the vendor logos (MIT packaging, see NOTICE.md),
   `npm run marks` regenerates `src/ui/marks.ts`; drawn inline in currentColor.
 - `internal/said/` — the first line of every finished agent's last answer,
@@ -2429,8 +2454,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`TermApi.input`), so ⏎ = `ESC CR` (Alt+Enter → newline in Claude Code,
   verified), arrows follow DECCKM, and Ctrl/Alt are one-shot modifiers.
 - Roster keeps herdr's hierarchy: workspace → tabs → panes, plus `worktree`
-  (linked worktrees nest under their repo workspace in the sidebar by
-  `repo_key`). Tabs render in the strip above the pane, never in the sidebar.
+  (linked worktrees gather with their repository's main checkout under the
+  repository's name in the sidebar, by `repo_key`). Tabs render in the strip
+  above the pane, never in the sidebar; only a workspace running several
+  agents lists them, a small line each, under its card.
 - `xterm` keeps a small local scrollback but its viewport scrollbar is hidden
   in CSS: an overlay scrollbar paints over the last column. `color-scheme:
   dark` + thin custom scrollbars everywhere else.

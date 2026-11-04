@@ -79,6 +79,7 @@ type rosterSession struct {
 	ActiveTabID string          `json:"active_tab_id"`
 	Worktree    *rosterWorktree `json:"worktree,omitempty"`
 	Dir         string          `json:"dir,omitempty"`
+	Branch      string          `json:"branch,omitempty"` // the branch the folder has checked out, read with the review badges
 	Review      *rosterReview   `json:"review,omitempty"`
 	MutedUntil  *time.Time      `json:"muted_until,omitempty"` // the folder is silenced until then: no push, no webhook, no feed row
 	Tabs        []rosterTab     `json:"tabs"`
@@ -176,6 +177,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			}
 		}
 		if session.Dir != "" {
+			session.Branch = s.Review.Branch(machineID, session.Dir)
 			badge, ok := s.Review.Badge(machineID, session.Dir)
 			ready := s.Review.Ready(machineID, session.Dir)
 			if (ok && badge.Changed > 0) || ready {

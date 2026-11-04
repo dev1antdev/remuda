@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { useMedia } from "@/lib/media";
 import { isMac, isTouch } from "@/lib/prefs";
 import { basename } from "@/lib/text";
-import { closeTab, renameTab } from "@/features/roster/api";
+import { closeTab, createTab, renameTab } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
 import { ChatTools, useChatViewItems } from "@/features/chat/ChatTools";
 import { FindTool } from "@/features/chat/FindBar";
@@ -136,8 +136,19 @@ export default function PaneArea({ current }: { current: Located | null }) {
             <ViewMenu items={lens === "terminal" && !viewOnly ? terminalItems : lens === "chat" ? chatItems : []} shell={!pane.agent} />
           </>
         }
-        onSelect={(paneId) => actions.selectPane(machine.id, paneId)}
+        onSelect={(paneId) => {
+          actions.selectPane(machine.id, paneId);
+          if (session.tabs.some((t) => t.panes.some((p) => p.id === paneId && !p.agent))) actions.setLens("terminal"); // a shell has only its terminal
+        }}
         onNewTab={() => actions.openDialog({ kind: "tab", machineId: machine.id, session })}
+        onNewTerminal={() =>
+          void act(
+            createTab({ machine: machine.id, workspace: session.id, name: "", agent: "" }).then((made) => {
+              actions.selectPane(machine.id, made.pane);
+              actions.setLens("terminal");
+            }),
+          )
+        }
         onRename={(t, label) => void act(renameTab(machine.id, t.id, label))}
         onCloseTab={(t) => {
           const last = session.tabs.length === 1;

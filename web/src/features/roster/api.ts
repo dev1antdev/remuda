@@ -62,6 +62,7 @@ export type Session = {
   active_tab_id: string;
   worktree?: { repo_key: string; repo_name: string; linked: boolean; checkout_path: string };
   dir?: string;
+  branch?: string; // the branch the folder has checked out, a short hash when detached; none outside git
   review?: { changed: number; fresh: number; ready?: boolean }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another
   muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row
   tabs: Tab[];
