@@ -39,6 +39,13 @@ describe("entries", () => {
     expect(entry?.kind === "folder" && entry.folder.icon).toEqual({ emoji: "🦊" });
   });
 
+  it("leaves the floating terminal's own shell out", () => {
+    const games = session("games-db", [tab([pane()])], { folder: "/p/games-db", dir: "/p/games-db" });
+    const scratch = session("scratch", [tab([pane({ agent: "" })])], { folder: "/home/me", dir: "/home/me", scratch: true });
+    expect(fold(entries(machine([scratch, games]), { ...DEFAULT_RADAR, shells: true }))).toEqual(["games-db: games-db"]);
+    expect(fold(entries(machine([scratch, games]), { ...DEFAULT_RADAR, order: "recent" }))).toEqual(["games-db"]);
+  });
+
   it("lists every workspace by activity in the flat order", () => {
     const main = session("user-profiles", [tab([pane({ radar: { state: "idle", last_active: ago(60) } })])], { folder: "/p/user-profiles", worktree: repo("user-profiles", false) });
     const tree = session("small-improvements", [tab([pane({ radar: { state: "working" } })])], { folder: "/p/user-profiles", worktree: repo("user-profiles", true) });

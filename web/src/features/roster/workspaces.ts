@@ -29,7 +29,7 @@ function itemOf(s: Session, prefs: RadarPrefs): WorkspaceItem {
 // activity, the folders by their liveliest agent (herdr's order for the ones with none, or with that order picked);
 // the flat order lists the workspaces alone by activity
 export function entries(m: Machine, prefs: RadarPrefs): Entry[] {
-  const items = m.sessions.map((s) => itemOf(s, prefs));
+  const items = m.sessions.filter((s) => !s.scratch).map((s) => itemOf(s, prefs)); // the floating terminal's shell is the drawer's
   if (prefs.order === "recent") {
     const order = new Map(items.map((item, i) => [item, i]));
     return [...items].sort((a, b) => b.best - a.best || order.get(a)! - order.get(b)!).map((item) => ({ kind: "workspace", item }));

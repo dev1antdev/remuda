@@ -41,6 +41,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
+	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
@@ -84,6 +85,7 @@ type Server struct {
 	Icons     *icons.Store    // the icon the person gave each folder of the sidebar
 	Arena     *arena.Service  // one prompt to several agents side by side
 	Limits    *limits.Service // the agents' subscription windows, the hits and the bookings to continue after a reset
+	Scratch   *scratch.Store  // the floating terminal's shell on each machine
 
 	streams   termStreams
 	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
@@ -130,6 +132,7 @@ func (s *Server) Handler() http.Handler {
 	s.teleportRoutes(api)
 	s.arenaRoutes(api)
 	s.limitRoutes(api)
+	s.scratchRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

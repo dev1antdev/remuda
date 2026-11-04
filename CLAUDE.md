@@ -1115,6 +1115,33 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   release within 4px) as a press+release report at its cell, sent after
   xterm's mouseup so a click that opened a link is not also an app click.
   Drags never reach the app.
+- **The floating terminal** (`internal/scratch`, tested;
+  `internal/server/scratch.go`; `web/src/features/terminal/float/`): a
+  shell on a key over every mode. `scratch.Store` keeps, per machine in
+  `<state>/scratch.json`, the id of one plain-shell workspace labelled
+  "scratch" that remuda made in the machine's home folder — `Ensure`
+  finds it again in a fresh snapshot (the active tab's focused pane, else
+  its first) or makes it (`workspace.create`), `Close` ends it, `Forget`
+  drops a removed machine's — so it is never a workspace the person made.
+  `POST /api/scratch {machine}` → `{workspace, pane, made}`, `DELETE
+  /api/scratch {machine}`; viewers and agent keys get neither. The roster
+  marks it `session.scratch`, and the sidebar's folders, the palette's
+  rows, the folder pickers (`folderOptions`), the Code mode's workspace
+  file (`editorFolders`) and `useCurrent`'s fallback leave it out: it is
+  the drawer's. The page: Ctrl+` by key code (`isFloatKey` in
+  `float.ts`, tested; heard on `window` in the capture phase and stopped
+  there, so a terminal with the focus — the drawer's own too — hides it
+  instead of typing a NUL; ⌘` is the browser's window switch), the
+  rail's Shell (More on a phone) and a palette row toggle store field
+  `float {machineId}` (`actions.openFloat` / `closeFloat`; the machine by
+  `floatMachine`: the pane on screen's while connected, else this one,
+  else the first connected); `FloatTerminal.tsx` is a drawer over
+  `.app-main`, a header (the machine's Select, the key's hint, End the
+  shell behind a confirm, Hide) and `TerminalView` in fit mode on that
+  pane — mounted only once shown (unseen it would attach at 80×24), kept
+  mounted while hidden so the attach and the shell's output stand, never
+  touching the store's pane or lens; Esc stays the shell's; "The shell
+  ended" with Open a new one when its pane leaves the roster.
 - `internal/watch/` — **the only poller**: every machine's
   `session.snapshot` (2s local, 4s remote) whether or not a browser is
   open. Handlers read its cache (`Snapshot` returns the last good snapshot
@@ -2684,7 +2711,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   focused handle step it, ⇧ by more, ↵ and a double-click bring the
   usual width back; none under 920 px or on a coarse pointer, where the
   panels are drawers; "Reset the panels' widths" in the palette
-  (`resetPanels`).
+  (`resetPanels`). An edge `top` is the floating terminal drawer's
+  height (`PANELS.float`, `--float-h`): the pointer's y moves it, ↑ ↓
+  step it.
 - `macos/` — **the Mac app**, a SwiftPM executable (`swift build`, no
   Xcode, system frameworks only; `macos/build.sh` / `make mac` lays out
   `bin/remuda.app`, the icon from `web/public/icons`, an ad-hoc

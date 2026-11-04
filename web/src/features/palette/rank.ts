@@ -27,11 +27,13 @@ export type Entry = {
   run: () => void;
 };
 
-// paneEntries is every pane on every machine, each machine's liveliest first, shells at its end.
+// paneEntries is every pane on every machine, each machine's liveliest first, shells at its end; the floating terminal's
+// own shell is the drawer's, not a row.
 export function paneEntries(machines: Machine[], prefs: RadarPrefs, now: number, step: number, current: Selection | null, open: (machineId: string, paneId: string) => void): Entry[] {
   const out: Entry[] = [];
   for (const machine of machines) {
     for (const { pane, tab, session } of recentRows(machine, { ...prefs, shells: true })) {
+      if (session.scratch) continue;
       const display: Display = pane.agent ? displayOf(pane, prefs, now) : "idle";
       const alert = pane.radar?.alert;
       out.push({

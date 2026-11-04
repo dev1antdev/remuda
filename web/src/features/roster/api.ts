@@ -82,6 +82,7 @@ export type Session = {
   icon?: FolderIconRef; // the folder's icon, the person's own
   review?: { changed: number; fresh: number; ready?: boolean }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another
   muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row
+  scratch?: boolean; // the floating terminal's own shell: the drawer shows it, the sidebar and the palette leave it out
   tabs: Tab[];
 };
 

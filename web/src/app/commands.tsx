@@ -19,6 +19,8 @@ import { basename, errMsg } from "@/lib/text";
 import { folderOf as sessionFolder } from "@/features/roster/workspaces";
 import { canFork, forkLabel } from "@/features/chat/fork";
 import { forkPane } from "@/features/chat/forkPane";
+import { keyWords } from "@/features/terminal/float/float";
+import { toggleFloat } from "@/features/terminal/float/useFloatKey";
 import { resetPanels } from "@/ui";
 import type { IconName } from "@/ui/icons";
 import { folderOf, useCurrent } from "./current";
@@ -68,6 +70,7 @@ function useCommands(): (query: string) => Entry[] {
   const footprint = app.use((s) => s.footprint);
   const split = app.use((s) => s.split);
   const full = app.use((s) => s.full);
+  const float = app.use((s) => !!s.float);
   const themePref = useThemePref();
   const openLens = openLensOf(usePref<OpenLens>(OPEN_LENS_KEY, DEFAULT_OPEN_LENS)[0]);
   const darkFlavor = useDarkFlavorPref();
@@ -193,6 +196,11 @@ function useCommands(): (query: string) => Entry[] {
       command("theme-light", t("Theme: Latte (light)"), () => setThemePref("light"), { hint: `${themePref === "light" ? t("now · ") : ""}${t("Catppuccin Latte, whatever the system says")}`, icon: "sun", keywords: ["theme", "light", "catppuccin", "latte"] });
       command("settings", t("Settings"), () => actions.openDialog({ kind: "settings" }), { hint: t("the theme, the sidebar, the panels, the alerts, the keys"), icon: "sliders", keywords: ["settings", "preferences", "theme", "options"] });
       command("keys", t("Keyboard shortcuts"), () => actions.openDialog({ kind: "keys" }), { hint: t("? · every key the page answers"), icon: "keyboard", keywords: ["keys", "shortcuts", "help", "hotkeys", "bindings", "keyboard"] });
+      command("float-terminal", float ? t("Hide the floating terminal") : t("Floating terminal"), () => toggleFloat(machines, current?.machine.id ?? null), {
+        hint: float ? t("the shell keeps running · {key}", { key: keyWords(isMac) }) : t("a shell of its own over any screen, on this pane's machine · {key}", { key: keyWords(isMac) }),
+        icon: "square-terminal",
+        keywords: ["terminal", "shell", "float", "scratch", "console", "quake", "drawer"],
+      });
       command("machine", t("Add a PC…"), () => actions.openDialog({ kind: "machine" }), { hint: t("a remote machine over SSH"), icon: "monitor", keywords: ["machine", "remote", "ssh", "host"] });
       command("budgets", t("Budgets…"), () => actions.openPanel("usage"), { hint: t("a spending limit per day, week or month, with a push when it is near"), icon: "chart", keywords: ["budget", "limit", "cost", "spend", "money"] });
       if (current && !viewer && current.pane.agent === "claude") command("model", t("Switch this agent's model…"), () => actions.openDialog({ kind: "model", machineId: current.machine.id, paneId: current.pane.id, current: current.pane.usage?.name }), { hint: t("Opus, Sonnet, Haiku or an id, through Claude Code's own /model"), icon: "sparkles", keywords: ["model", "opus", "sonnet", "haiku", "switch", "cheaper", "faster"] });
@@ -211,6 +219,6 @@ function useCommands(): (query: string) => Entry[] {
       command("search", typed ? t("Search every conversation for “{typed}”", { typed }) : t("Search every conversation…"), () => actions.openSearch(typed), { hint: t("what you or an agent said, on every machine"), icon: "search", keywords: ["find", "transcript"], always: true });
       return [...panes, ...(viewOnly ? commands.filter((entry) => viewerCommand(entry.id)) : commands)];
     },
-    [machines, viewOnly, mode, lens, viewer, chatSession, chatLive, footprint, split, full, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
+    [machines, viewOnly, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
   );
 }
