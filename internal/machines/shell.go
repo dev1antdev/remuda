@@ -50,6 +50,18 @@ func (mc *Machine) Stream(script string, timeout time.Duration, sink func([]byte
 	return sh.Stream(script, timeout, sink)
 }
 
+// PutFile writes data whole to a file on the machine, readable by its user alone: here directly, over the ssh master on a remote.
+func (mc *Machine) PutFile(path string, data []byte, timeout time.Duration) error {
+	if mc.local {
+		return os.WriteFile(path, data, 0o600)
+	}
+	conn, err := mc.remoteConn()
+	if err != nil {
+		return err
+	}
+	return conn.Put(path, data, timeout)
+}
+
 // text is Run with the output as text.
 func (mc *Machine) text(script string, timeout time.Duration) (string, error) {
 	return shell.Text(mc, script, timeout)

@@ -20,6 +20,7 @@ import Schedules from "@/features/schedules/Schedules";
 import Search from "@/features/search/Search";
 import RecapDialog from "@/features/standup/RecapDialog";
 import HandoverDialog from "@/features/chat/HandoverDialog";
+import TeleportDialog from "@/features/teleport/TeleportDialog";
 import ModelDialog from "@/features/chat/ModelDialog";
 import { handedOverWords } from "@/features/chat/handover";
 import ImportIssueDialog from "@/features/tasks/ImportIssueDialog";
@@ -178,6 +179,9 @@ export default function Overlays() {
             else actions.notify(handedOverWords(label, made.size), { brief: true });
           }}
         />
+      )}
+      {dialog?.kind === "teleport" && (
+        <TeleportDialog machineId={dialog.machineId} paneId={dialog.paneId} tabId={dialog.tabId} workspace={dialog.workspace} agent={dialog.agent} agents={agents} onClose={actions.closeDialog} />
       )}
       {dialog?.kind === "model" && (
         <ModelDialog

@@ -103,7 +103,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   herdr client and attach manager, the peer, port forwards), `herdr.go`
   (herdr's binary and server on the machine), `files.go` (the file
   viewer's reads and the one write), `shell.go` (a `Machine` is a
-  `shell.Host`: `Run` / `Stream` here through `sh -c` or over the master);
+  `shell.Host`: `Run` / `Stream` here through `sh -c` or over the master,
+  and `PutFile` writes a file whole there, the way a teleport's archive arrives);
   `Machine.Transcripts` is a `transcript.Reader`. `local` is always present.
   **Remotes come from herdr itself**: `SyncHerdr` reads `herdr machine list
   --json` (the watcher calls it every 30s, with a 5s timeout) and adds
@@ -1695,6 +1696,53 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   viewer's or a viewer link's), the workspace's ⋯ menu and the palette,
   absent for an agent that cannot fork; the new pane is selected and a
   toast says so.
+- `internal/teleport/` — **the work moved to another machine** (tested on
+  real temp repos through `shell.Local` and on `shell.Fake`): the
+  laptop closes, GOG carries on. `Inspect(host, dir)` reads the checkout
+  in one script (`Source`: root, branch, HEAD, origin's address, a root
+  commit, commits on no remote-tracking branch, staged / unstaged / new
+  file counts) and refuses what cannot travel — outside git, a detached
+  HEAD, a merge, rebase or cherry-pick in progress, conflicts.
+  `Checkouts(host, dirs, src)` lists a machine's checkouts among its
+  workspaces' folders, the same repository's first (`SameRepository`
+  over `RemoteKey`: the ssh and https spellings of one remote agree).
+  `Move{Source, SourceDir, Target, TargetDir, Start}.Run(say)` is the
+  whole way, every step told to the job's log: `Fits` (the target folder
+  holds the same remote, or, where either has none, the source's root
+  commit), `Pack` (one tar on the source's stdout — `meta`, a git bundle
+  of the branch's commits on no remote-tracking branch, none when all
+  are on a remote, the whole branch when there is no remote; the staged
+  and the unstaged changes as two binary patches; the new files git does
+  not ignore as a tar; at most `MaxPack` 256 MB; nothing in the checkout
+  changes), the archive put on the target through `Host.PutFile`
+  (`Machine.PutFile`: written here, or `cat` over the ssh master), `Land`
+  (the bundle verified, the target's remotes fetched when it lacks the
+  base, `needFull` when it still does — then the whole branch is sent
+  again; the branch under its own name or `<branch>-from-<source>` when
+  the target has one so named; a worktree under
+  `~/.herdr/worktrees/<repo>/`; the staged patch applied with `--index`,
+  the unstaged one to the files, the new files unpacked; a failure after
+  the worktree was made names it and leaves it for the person), then
+  `Start` with the worktree. Nothing goes through a remote — no push, so
+  no CI and no branch on a shared server — and `~/.claude` is never
+  written on either machine: the conversation travels as the handover's
+  text. Routes (`internal/server/teleport.go`): `GET
+  /api/teleport/targets?machine&pane` (the source's words and every
+  connected machine's checkouts), `POST /api/teleport {machine, pane,
+  target, folder, agent, model?, args?, turns?}` → a job on the target
+  (`jobs.Runner.Run`, followed through `GET /api/jobs/{id}`) whose
+  `Start` is `sessions.StartIn` in the new worktree and the first prompt
+  `Preamble` (where the work came from, how it arrived) plus
+  `handover.Text`; `GET /api/teleport/{job}` is where the agent carrying
+  on is; a feed row (kind `teleport`). The source pane, its agent and its
+  checkout are left as they are. The page:
+  `features/teleport/TeleportDialog.tsx` (dialog kind `teleport`: "Move
+  the work to another machine…" in the workspace's ⋯ menu and the
+  palette, never for a viewer — the machine, a clone of the repository
+  there or a folder typed, the agent, how much of the conversation in
+  full; then the job's log, Open it there and Close the agent here…;
+  `teleport.ts` the pure part, tested: `firstTarget`, `folderChoices`,
+  `firstFolder`, `folderOf`, `whyNot`, `targetHint`).
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥
