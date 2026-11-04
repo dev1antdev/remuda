@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/arena"
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/away"
@@ -453,6 +454,7 @@ func Run(ctx context.Context, o Options) error {
 		Live:      hub,
 		Awake:     keepAwake,
 		Icons:     icons.New(o.Dir),
+		Arena:     &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir},
 		Limits:    planLimits,
 	}
 	if o.Tailscale {

@@ -3,6 +3,7 @@
 import type { BudgetStatus } from "@/features/usage/api";
 import { check, getJSON, sendJSON, withMachine } from "@/lib/http";
 import { t } from "@/lib/i18n";
+import { includedWords, type Included } from "./included";
 
 export type Status = "run" | "input" | "idle" | "done" | "shell";
 
@@ -40,6 +41,7 @@ export type PRStatus = {
   draft: boolean;
   mergeable: string; // MERGEABLE | CONFLICTING | UNKNOWN
   review: string; // APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | ""
+  threads?: number; // a GitLab merge request's discussion threads still open
   checks: { total: number; pass: number; fail: number; pending: number; skipped: number };
   at: string;
 };
@@ -167,14 +169,16 @@ export const submitPrompt = (machine: string, pane: string, text: string): Promi
 
 export const sendKeys = (machine: string, pane: string, keys: string[]): Promise<void> => sendJSON("POST", "/api/keys", { machine, pane, keys });
 
-// Created is what the create calls return: the container exists either way, a warning says the agent in it failed to start
-export type Created = { pane: string; warning?: string };
+// Created is what the create calls return: the container exists either way, a warning says the agent in it failed to
+// start, a note what a new worktree got from .worktreeinclude
+export type Created = { pane: string; warning?: string; note?: string };
 
 async function create(url: string, req: unknown): Promise<Created> {
-  const body = await sendJSON<{ pane: string; agent_error?: string }>("POST", url, req);
+  const body = await sendJSON<{ pane: string; agent_error?: string; included?: Included; include_error?: string }>("POST", url, req);
   return {
     pane: body.pane,
     warning: body.agent_error ? t("Created, but the agent failed to start: {error}", { error: body.agent_error }) : undefined,
+    note: includedWords(body.included, body.include_error) || undefined,
   };
 }
 

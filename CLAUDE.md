@@ -103,7 +103,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   herdr client and attach manager, the peer, port forwards), `herdr.go`
   (herdr's binary and server on the machine), `files.go` (the file
   viewer's reads and the one write), `shell.go` (a `Machine` is a
-  `shell.Host`: `Run` / `Stream` here through `sh -c` or over the master);
+  `shell.Host`: `Run` / `Stream` here through `sh -c` or over the master,
+  and `PutFile` writes a file whole there, the way a teleport's archive arrives);
   `Machine.Transcripts` is a `transcript.Reader`. `local` is always present.
   **Remotes come from herdr itself**: `SyncHerdr` reads `herdr machine list
   --json` (the watcher calls it every 30s, with a 5s timeout) and adds
@@ -235,7 +236,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   parse (so the tail cache holds priced turns) to set `Cost` at API
   prices and `Model`; `TurnView` draws them as a quiet foot line, "4 min
   12 s · 38k tokens · $0.42" (`spent` in `lib/time.ts`, `tok` / `usd`),
-  the model and what the numbers mean in its title. The chat lens (`features/chat/Chat.tsx`: the transcript through `useChat.ts`, the one fetch hook — every 2 s while the agent works or asks, 10 s otherwise, and with the event socket up the pane is watched there (`watchPane`), a `chat` event reloads at once and the poll slows to 10 s / 30 s as the safety net, a 304 = unchanged, `last=N` for a wall tile; the question card follows the same rule (2 s, or 10 s and the pane's `chat` events); `Composer.tsx` (`compact` in a tile; ↑ on an empty line brings back what was sent from this device to that folder, newest first, ↓ walks forward and back to the line being written — pref `prompt.history:<machine>|<dir>`, the 50 newest, a repeat moved up; `history.ts` the pure part, tested, `useHistory.ts` the hook), `export.ts` (**Export as Markdown**: the conversation shown — the pane's live session or the older one picked in the lens, store field `chatSession` set by Chat — fetched whole and saved as `<workspace>-<day>-<session>.md` through `saveText` in `lib/host.ts`; text as it is, thinking and tool calls folded in `<details>`, outputs fenced past any backticks; `conversationMarkdown` / `exportFileName` tested; Export as Markdown is a row of the View menu (`useChatViewItems` in `ChatTools.tsx`) while the chat lens is on screen, and the palette has it for the pane and for a transcript open from the search; the row beside it is **Recap**, dialog kind `recap` — `features/standup/RecapDialog.tsx` over `GET /api/recap`, Copy as Markdown — in the palette too, for the pane and for the viewer); `FindBar.tsx` (**Find in this conversation**: ⌘F / Ctrl+F by key code while the chat lens or the transcript viewer is on screen and no overlay is open — from the composer too, since no field there has a find of its own — the 🔍 toggle in the tab strip's tools slot (`ChatTools.tsx`; the viewer bar's action for a transcript on its own), whose bar — the field, "3 of 12", ↑ ↓, × — opens to its left so nothing else in the strip moves, and a palette command; Enter / Shift+Enter step, Esc closes; store field `find` — the query, the current match, the count, the ⌘F presses so each puts the focus back in the field — written by the bar and by `useFind.ts` in Chat, which walks the log's text nodes (a folded turn renders none, so only what is on screen counts) and marks every match through the CSS Custom Highlight API, `::highlight(remuda-find)` and `remuda-find-current` — no node changes, so a selection and the memoised turns stay — brings the current one into the middle when it is chosen, not on every poll, and outlines its turn with `.turn-hit` where the API is missing; `find.ts` the pure part, tested: `findRanges` case-folded on the text's own offsets, `step` / `clamp` / `countWords`, at most `MAX_MATCHES` 2000; **the terminal lens shares the bar** — `FindTool` takes `what` / `shortcut` and `PaneArea` places it for either lens — over **herdr's scrollback**, since the attach stream repaints the visible screen and xterm never holds the rows: `features/terminal/useTerminalFind.ts` sends the query, once it settles, to `GET /api/scrollback?machine&pane&q&lines` (`internal/server/screen.go` → `herdr.Client.PaneRecent`, `pane.read` with source `recent`, the last `SCROLLBACK_ROWS` 5000 rows; `internal/scrollback.Find`, tested: case-folded, columns in characters, at most `MaxMatches` 2000; the answer carries the rows read, whether earlier ones were cut, and where the viewport stands, `PaneInfo.Scroll` off the watcher's snapshot), counts for the bar through `foundMatches(total, at)`, and brings the match asked for — the first for a new query, the one the bar stepped to (`Find.steps` / `Find.by`; the rows read again on every step, so a growing log keeps its places) — on screen: `features/terminal/scrollback.ts` (tested: `blankTail`, `fromBottom`, `viewportRow`, `onScreen`, `offsetFor` a third of the screen above the bottom, `nearest`, `clampAt`) says which screen row it sits on, and when it is off the screen `POST /api/scroll {machine, pane, offset }` → `herdr.Client.PaneScroll` (`pane.scroll`: the pane's own viewport, every viewer's, as the wheel does) moves it there; then `engine/search.ts` (`installSearch` behind `TermApi.search` / `TermApi.focus`: xterm's search addon marks every match on the screen in the flavour's yellow — `searchDecorations` / `hexAlpha` — and selects the one at that row once the repaint lands, `occurrences` / `pickNear` a row either side / `cellSpan` past wide characters, tested, telling the engine's selection tracker to forget that selection, since it is not the person's; painted again on a flavour change; the marks cleared and the terminal focused again when the bar closes on screen); ⌘F on a Mac, Ctrl+Shift+F elsewhere since Ctrl+F is the shell's (`isFindKey` in `engine/keys.ts`, tested, keeps both from xterm through `attachCustomKeyEventHandler`), the key bar's search key on a phone); `TimelineBar.tsx` (**the session's timeline**: a thin bar over the log of the chat lens and of the transcript viewer — one block per prompt and its answer laid out in time, a gap over 10 minutes drawn as 10 so a break does not flatten the day — with the moments worth a look marked, the first failed call, the longest call, a loop of three or more identical calls in a row, every question the agent asked, a compaction, a `linkish` chip for each kind under the bar, and every block, mark and chip a jump to its turn through the search's own `jumpTo`; pref `chat.timeline`, on with a mouse, a checked row of the View menu in the pane and in the viewer, a palette command; `timeline.ts` the pure part, tested: `timeline`, `squeezer`, `chips`, `summary`); an older session picked in the lens's session picker gets **Resume in a new tab** beside it — `POST /api/tabs` with `resume`, the agent of the pane started on that conversation in the same workspace, the new pane selected, `PlanBar.tsx` (**the agent's plan** over the log — "Plan 3/7 · Building the page", the agent's own active form, unfolding to its list with a mark per item, nothing when it keeps none; from the answer's `plan`, so the viewer has it too; `plan.ts` the pure part, tested: `counts`, `current`, `progressWords`, `planLine`, `planCallWords`), `TurnView.tsx` (a tool call's summary ends with how long it took — `took` in `lib/time.ts`, a tenth under ten seconds — a failed one in red, and the answer's foot counts its failed and repeated calls, `calls.ts` tested; an Edit or MultiEdit call shows its change under the summary in the lens, not in a tile (`diffs` prop) — `EditChange.tsx`: the old and new lines from the call's own `old_string` / `new_string`, a removed run paired with the added run after it and the words that differ marked through the review's `changedSpan`, a trailing newline only one side has noted as git does, `replace_all` said as "every occurrence", the rows past 24 folded behind "N more lines", the code coloured in the file's language through `lib/highlight.ts` with the marks laid over the tokens (`rowTokens`, each side one text so a string spanning lines keeps its kind); `editDiff.ts` the pure part, tested: `editsOf` (none for an input the server cut to a string), `editRows` (its own LCS over lines, a whole replacement past 400k cells), `foldRows`; a picture a finished Read or Write was about — `imagePath` in `footprint.ts`, tested — is drawn under the call as a thumbnail from the machine's own file through `/api/fs/file`, a click opens the file viewer; a file gone since draws nothing; under an Agent call, a `SubagentRow.tsx` per agent it spawned — a state dot, the description, the call it is on or the first line of its report, its tool calls, Open → the transcript viewer on that agent's own conversation (store `viewer.subagent`, `GET /api/chat?…&subagent=<id>`); `subagents.ts` the pure part, tested: `subagentsOf`, `sameSubagents` so a poll redraws no row that stands, `subagentLine`, `subagentWords`; a TodoWrite / TaskCreate / TaskUpdate call is one line, the item it added or moved (`planCallWords`), never its JSON; **Copy link to this turn** — an `icon-btn` beside forward on every turn of a pane's conversation, never in the viewer: the page's address with `machine`, `pane`, `lens=chat`, `session` (the one shown) and `turn` (the turn's first record uuid), through `copyText`, a "Link copied" toast; `turnLink.ts` the pure part, tested: `turnLink`, `readTurnLink`; `app/url.ts` reads `turn` and `session` once at load into the store's `jump` with the lens set to chat, so the link opens the conversation scrolled to that turn, and the first `writeURL` drops them so a reload lands at the bottom as usual; **Pins** — the `icon-btn` beside the link pins the turn (`.on` and an accent mark in the log's gutter while pinned), a bookmark kept on the page in the pref `pins:<machine>|<dir>` — per workspace folder, so it outlives a compaction's new session file and lists every session of the folder — the turn's first record uuid, its first line (`pinLine`, the text it ended with, else any text, else its tools), the session, when, prompt or answer, newest first, at most `MAX_PINS` 200; the pref prefix `pins:` is on the sync allow-list, so pins follow the person between devices; `pins.ts` the pure part, tested: `pinKey`, `isPinned`, `togglePin`, `pinOf`, `pinLine`, `pinWords`; "Pins…" is a row of the View menu with the count as its hint and a palette row, dialog kind `pins` → `PinsDialog.tsx`: the list, a click `actions.jumpTo` into the pin's session — the one shown, or an older one of the folder through the lens's own session switch — × unpins, Remove all behind a confirm; a session's short id is shown for a pin outside the session on screen, which Chat notes in the store as `chatLive` (`setChatLive`); a jump into a session the lens cannot open any more is one error toast and the conversation shown stays), `QuestionCard.tsx` (**the question itself** while the agent waits: `GET /api/question?machine&pane` — `internal/server/question.go` → `chat.ParseQuestion`, tested — reads the dialog off the pane's visible screen every 2 s: Claude Code's permission prompts, its trust prompt and an AskUserQuestion, the cursor ❯ on one line of a list, numbered, or aligned inside a box or under a dialog's top rule (Claude Code 2.1.316 draws its permission and trust dialogs with a top border alone, `frameTop`: a solid rule above with the dialog's words between, padded off the edge where the conversation's rows start, and none under the choices, which the input box, ruled on both sides, never is), the dialog's words above it — the box's rows, the rows under the frame's rule with a diff's dashed rules as breaks, else the paragraph above the list, past the blank rows that set the choices off (an AskUserQuestion's question sits a blank row above them) — a wrapped choice or the line describing one glued to it; the card shows the first line, the last line and, in the lens, the detail between clamped to three lines, the whole in the title, and a `btn` per choice — a click walks the cursor there with ↑ ↓ and presses Enter, one key a request, Esc beside them; `question.ts` the pure part, tested; a screen with no dialog on it leaves `PromptKeys.tsx`, the blind ↑ ↓ Enter Esc, and a multi-select (`multi`, `choosable` in `question.ts`) shows its words over those keys with a line saying Enter ticks a choice and Submit sits below), `Tail.tsx` (a tile's chat: the last 12 turns, 3 s / 15 s, the state line's "3/7" from the tail's `plan`; `TailAnswer` carries the question card in both views of a tile and in the pop-out), `FilesRail.tsx` (the **files rail** beside the lenses: every file the agent edited or read in this conversation since its last compaction, from its own tool calls — `footprint.ts` is the pure part, tested: `toolPath` reads `file_path` / `notebook_path` from an object input or from one the server cut to a string at 8 KB, so `TurnView` links a big Write too (a link only for a tool that read or wrote the file: Grep's or Glob's path is a folder, named only); edited files first by their last touch, the ones only read folded; its own `useChat` poll at a tile's pace, only while on screen; a row opens the file viewer on its changes, the code button `actions.openInCode`; a change made through a shell command is the Changes lens's to show, not the rail's), `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
+  the model and what the numbers mean in its title. The chat lens (`features/chat/Chat.tsx`: the transcript through `useChat.ts`, the one fetch hook — every 2 s while the agent works or asks, 10 s otherwise, and with the event socket up the pane is watched there (`watchPane`), a `chat` event reloads at once and the poll slows to 10 s / 30 s as the safety net, a 304 = unchanged, `last=N` for a wall tile; the question card follows the same rule (2 s, or 10 s and the pane's `chat` events); `Composer.tsx` (`compact` in a tile; ↑ on an empty line brings back what was sent from this device to that folder, newest first, ↓ walks forward and back to the line being written — pref `prompt.history:<machine>|<dir>`, the 50 newest, a repeat moved up; `history.ts` the pure part, tested, `useHistory.ts` the hook; **the queue** — Alt+Enter or the inbox `icon-btn` keeps the draft as a note in the pane's queue instead of sending it, `QueueList.tsx` above the box lists the notes (pref `queue:<machine>|<dir>|<pane>`, per device, at most `MAX_NOTES` 50, oldest first): each has its own Send, "Send all as one message" sends them numbered, a click on one puts it back in the box, × drops it; a send goes through `submitPrompt` and takes the notes away only once it went, nothing in the queue is ever sent by itself; `queue.ts` the pure part, tested: `addNote`, `removeNote`, `numbered`, `sentAway`; the box takes a **quote** of an answer — `useQuote.ts` watches the log's selection and, while it lies inside one agent turn (`.turn-assistant`) of the lens with a composer, puts a floating `btn` "Quote" beside it, and Q does the same (`quoteKeyAsked`, by key code, never over a field); the text goes after what is typed as a Markdown quote, the caret under it (`quote.ts`, tested: `quoteText` cut at `QUOTE_MAX` 4000 at a line, `withQuote`), the selection let go), `export.ts` (**Export as Markdown**: the conversation shown — the pane's live session or the older one picked in the lens, store field `chatSession` set by Chat — fetched whole and saved as `<workspace>-<day>-<session>.md` through `saveText` in `lib/host.ts`; text as it is, thinking and tool calls folded in `<details>`, outputs fenced past any backticks; `conversationMarkdown` / `exportFileName` tested; Export as Markdown is a row of the View menu (`useChatViewItems` in `ChatTools.tsx`) while the chat lens is on screen, and the palette has it for the pane and for a transcript open from the search; the row beside it is **Recap**, dialog kind `recap` — `features/standup/RecapDialog.tsx` over `GET /api/recap`, Copy as Markdown — in the palette too, for the pane and for the viewer); `FindBar.tsx` (**Find in this conversation**: ⌘F / Ctrl+F by key code while the chat lens or the transcript viewer is on screen and no overlay is open — from the composer too, since no field there has a find of its own — the 🔍 toggle in the tab strip's tools slot (`ChatTools.tsx`; the viewer bar's action for a transcript on its own), whose bar — the field, "3 of 12", ↑ ↓, × — opens to its left so nothing else in the strip moves, and a palette command; Enter / Shift+Enter step, Esc closes; store field `find` — the query, the current match, the count, the ⌘F presses so each puts the focus back in the field — written by the bar and by `useFind.ts` in Chat, which walks the log's text nodes (a folded turn renders none, so only what is on screen counts) and marks every match through the CSS Custom Highlight API, `::highlight(remuda-find)` and `remuda-find-current` — no node changes, so a selection and the memoised turns stay — brings the current one into the middle when it is chosen, not on every poll, and outlines its turn with `.turn-hit` where the API is missing; `find.ts` the pure part, tested: `findRanges` case-folded on the text's own offsets, `step` / `clamp` / `countWords`, at most `MAX_MATCHES` 2000; **the terminal lens shares the bar** — `FindTool` takes `what` / `shortcut` and `PaneArea` places it for either lens — over **herdr's scrollback**, since the attach stream repaints the visible screen and xterm never holds the rows: `features/terminal/useTerminalFind.ts` sends the query, once it settles, to `GET /api/scrollback?machine&pane&q&lines` (`internal/server/screen.go` → `herdr.Client.PaneRecent`, `pane.read` with source `recent`, the last `SCROLLBACK_ROWS` 5000 rows; `internal/scrollback.Find`, tested: case-folded, columns in characters, at most `MaxMatches` 2000; the answer carries the rows read, whether earlier ones were cut, and where the viewport stands, `PaneInfo.Scroll` off the watcher's snapshot), counts for the bar through `foundMatches(total, at)`, and brings the match asked for — the first for a new query, the one the bar stepped to (`Find.steps` / `Find.by`; the rows read again on every step, so a growing log keeps its places) — on screen: `features/terminal/scrollback.ts` (tested: `blankTail`, `fromBottom`, `viewportRow`, `onScreen`, `offsetFor` a third of the screen above the bottom, `nearest`, `clampAt`) says which screen row it sits on, and when it is off the screen `POST /api/scroll {machine, pane, offset }` → `herdr.Client.PaneScroll` (`pane.scroll`: the pane's own viewport, every viewer's, as the wheel does) moves it there; then `engine/search.ts` (`installSearch` behind `TermApi.search` / `TermApi.focus`: xterm's search addon marks every match on the screen in the flavour's yellow — `searchDecorations` / `hexAlpha` — and selects the one at that row once the repaint lands, `occurrences` / `pickNear` a row either side / `cellSpan` past wide characters, tested, telling the engine's selection tracker to forget that selection, since it is not the person's; painted again on a flavour change; the marks cleared and the terminal focused again when the bar closes on screen); ⌘F on a Mac, Ctrl+Shift+F elsewhere since Ctrl+F is the shell's (`isFindKey` in `engine/keys.ts`, tested, keeps both from xterm through `attachCustomKeyEventHandler`), the key bar's search key on a phone); `TimelineBar.tsx` (**the session's timeline**: a thin bar over the log of the chat lens and of the transcript viewer — one block per prompt and its answer laid out in time, a gap over 10 minutes drawn as 10 so a break does not flatten the day — with the moments worth a look marked, the first failed call, the longest call, a loop of three or more identical calls in a row, every question the agent asked, a compaction, a `linkish` chip for each kind under the bar, and every block, mark and chip a jump to its turn through the search's own `jumpTo`; pref `chat.timeline`, on with a mouse, a checked row of the View menu in the pane and in the viewer, a palette command; `timeline.ts` the pure part, tested: `timeline`, `squeezer`, `chips`, `summary`); an older session picked in the lens's session picker gets **Resume in a new tab** beside it — `POST /api/tabs` with `resume`, the agent of the pane started on that conversation in the same workspace, the new pane selected, `PlanBar.tsx` (**the agent's plan** over the log — "Plan 3/7 · Building the page", the agent's own active form, unfolding to its list with a mark per item, nothing when it keeps none; from the answer's `plan`, so the viewer has it too; `plan.ts` the pure part, tested: `counts`, `current`, `progressWords`, `planLine`, `planCallWords`), `TurnView.tsx` (a tool call's summary ends with how long it took — `took` in `lib/time.ts`, a tenth under ten seconds — a failed one in red, and the answer's foot counts its failed and repeated calls, `calls.ts` tested; an Edit or MultiEdit call shows its change under the summary in the lens, not in a tile (`diffs` prop) — `EditChange.tsx`: the old and new lines from the call's own `old_string` / `new_string`, a removed run paired with the added run after it and the words that differ marked through the review's `changedSpan`, a trailing newline only one side has noted as git does, `replace_all` said as "every occurrence", the rows past 24 folded behind "N more lines", the code coloured in the file's language through `lib/highlight.ts` with the marks laid over the tokens (`rowTokens`, each side one text so a string spanning lines keeps its kind); `editDiff.ts` the pure part, tested: `editsOf` (none for an input the server cut to a string), `editRows` (its own LCS over lines, a whole replacement past 400k cells), `foldRows`; a picture a finished Read or Write was about — `imagePath` in `footprint.ts`, tested — is drawn under the call as a thumbnail from the machine's own file through `/api/fs/file`, a click opens the file viewer; a file gone since draws nothing; under an Agent call, a `SubagentRow.tsx` per agent it spawned — a state dot, the description, the call it is on or the first line of its report, its tool calls, Open → the transcript viewer on that agent's own conversation (store `viewer.subagent`, `GET /api/chat?…&subagent=<id>`); `subagents.ts` the pure part, tested: `subagentsOf`, `sameSubagents` so a poll redraws no row that stands, `subagentLine`, `subagentWords`; a TodoWrite / TaskCreate / TaskUpdate call is one line, the item it added or moved (`planCallWords`), never its JSON; **Copy link to this turn** — an `icon-btn` beside forward on every turn of a pane's conversation, never in the viewer: the page's address with `machine`, `pane`, `lens=chat`, `session` (the one shown) and `turn` (the turn's first record uuid), through `copyText`, a "Link copied" toast; `turnLink.ts` the pure part, tested: `turnLink`, `readTurnLink`; `app/url.ts` reads `turn` and `session` once at load into the store's `jump` with the lens set to chat, so the link opens the conversation scrolled to that turn, and the first `writeURL` drops them so a reload lands at the bottom as usual; **Pins** — the `icon-btn` beside the link pins the turn (`.on` and an accent mark in the log's gutter while pinned), a bookmark kept on the page in the pref `pins:<machine>|<dir>` — per workspace folder, so it outlives a compaction's new session file and lists every session of the folder — the turn's first record uuid, its first line (`pinLine`, the text it ended with, else any text, else its tools), the session, when, prompt or answer, newest first, at most `MAX_PINS` 200; the pref prefix `pins:` is on the sync allow-list, so pins follow the person between devices; `pins.ts` the pure part, tested: `pinKey`, `isPinned`, `togglePin`, `pinOf`, `pinLine`, `pinWords`; "Pins…" is a row of the View menu with the count as its hint and a palette row, dialog kind `pins` → `PinsDialog.tsx`: the list, a click `actions.jumpTo` into the pin's session — the one shown, or an older one of the folder through the lens's own session switch — × unpins, Remove all behind a confirm; a session's short id is shown for a pin outside the session on screen, which Chat notes in the store as `chatLive` (`setChatLive`); a jump into a session the lens cannot open any more is one error toast and the conversation shown stays), `QuestionCard.tsx` (**the question itself** while the agent waits: `GET /api/question?machine&pane` — `internal/server/question.go` → `chat.ParseQuestion`, tested — reads the dialog off the pane's visible screen every 2 s: Claude Code's permission prompts, its trust prompt and an AskUserQuestion, the cursor ❯ on one line of a list, numbered, or aligned inside a box or under a dialog's top rule (Claude Code 2.1.316 draws its permission and trust dialogs with a top border alone, `frameTop`: a solid rule above with the dialog's words between, padded off the edge where the conversation's rows start, and none under the choices, which the input box, ruled on both sides, never is), the dialog's words above it — the box's rows, the rows under the frame's rule with a diff's dashed rules as breaks, else the paragraph above the list, past the blank rows that set the choices off (an AskUserQuestion's question sits a blank row above them) — a wrapped choice or the line describing one glued to it; the card shows the first line, the last line and, in the lens, the detail between clamped to three lines, the whole in the title, and a `btn` per choice — a click walks the cursor there with ↑ ↓ and presses Enter, one key a request, Esc beside them; `question.ts` the pure part, tested; a screen with no dialog on it leaves `PromptKeys.tsx`, the blind ↑ ↓ Enter Esc, and a multi-select (`multi`, `choosable` in `question.ts`) shows its words over those keys with a line saying Enter ticks a choice and Submit sits below), `Tail.tsx` (a tile's chat: the last 12 turns, 3 s / 15 s, the state line's "3/7" from the tail's `plan`; `TailAnswer` carries the question card in both views of a tile and in the pop-out), `FilesRail.tsx` (the **files rail** beside the lenses: every file the agent edited or read in this conversation since its last compaction, from its own tool calls — `footprint.ts` is the pure part, tested: `toolPath` reads `file_path` / `notebook_path` from an object input or from one the server cut to a string at 8 KB, so `TurnView` links a big Write too (a link only for a tool that read or wrote the file: Grep's or Glob's path is a folder, named only); edited files first by their last touch, the ones only read folded; its own `useChat` poll at a tile's pace, only while on screen; a row opens the file viewer on its changes, the code button `actions.openInCode`; a change made through a shell command is the Changes lens's to show, not the rail's), `QuickPrompts.tsx`, `dictation.ts`) follows the bottom (`useFollowBottom.ts`)
   only when the reader is there and not selecting or dragging; an upward
   wheel or finger lets go at once, and `TurnView` (`sameTurn`) re-renders only when a
   turn's content changed, so a selection survives the polls. **A long
@@ -270,7 +271,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `file` ×≤4, 25MB each → `<pane dir>/.remuda/uploads/<time>-<tag>-<name>`,
   stem and extension sanitized separately, remote via `sshx.Conn.Put`).
   `.remuda/.gitignore` (`*`) is written alongside so uploads never reach
-  a commit. Uploads are the only thing remuda writes into a project.
+  a commit. Uploads are one of the two things remuda writes into a project;
+  the other is a new worktree's `.worktreeinclude` files (`internal/worktrees`).
 - `web/src/features/chat/attachments.ts` — `useAttachments` (upload at
   once, chips with thumbnails); `lib/transfer.ts` has `filesFrom`
   (drop/paste → files; a pasted screenshot gets a name), `lib/text.ts`
@@ -404,8 +406,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   itself** (GitHub releases) every 6 hours unless `-no-version-check` —
   the only outbound requests remuda makes by itself (a read on demand
   asks again when the last look is over 5 minutes old, `RefreshLatest`);
-  the one other is a site's favicon, fetched only when the person asks
-  for it in the icon dialog (`internal/icons`).
+  the others are a site's favicon and a GitHub owner's avatar, fetched
+  only when the person asks for them in the icon dialog (`internal/icons`).
   `release.go`: the newest release with its assets (`Collector.Release`).
   **`internal/updates`** turns all of that into what the page offers:
   `Plan(what, report)` / `Offered(report, latest)` are the commands for
@@ -655,6 +657,33 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   fails leaves the pane on the list, a pane that will not come back is
   forgotten; a feed row (kind `recover`) says what came back. Nothing
   starts by itself.
+  **The agents whose panes went away** (restart/closed.go, tested): the
+  same memory notes, when a remembered agent pane is gone from its
+  machine's snapshot — its tab or workspace closed, through remuda or
+  anywhere — a `Closed` entry (agent, session, folder, the pane's title,
+  its workspace's name and its tab's own name, read off the last
+  snapshot that showed it, `paneFace`), newest first, once per session,
+  the last `ClosedKeep` (20) per machine in `<state>/closed.json`; never
+  while the memory is paused for remuda's own restart of herdr, never a
+  pane that came back as a shell (that is the reboot's list), dropped
+  with its machine. `GET /api/closed` lists every machine's, less the
+  ones whose session a pane runs again; `POST /api/closed/reopen
+  {machine, id}` → `Restarter.Reopen`: the folder and, for Claude Code,
+  the session file checked, a pane already running that session answered
+  as `open_already` (and the entry dropped), else `sessions.StartIn` with
+  the kind's resume arguments — a tab of the workspace on that folder
+  (named as the closed tab was), or a new workspace on it — the entry
+  dropped once the agent is back. The page (`features/reopen/`:
+  `closed.ts` tested — `closedTitle`, `closedWhere`, `justClosed`,
+  `offerWords`, `reopenKeyAsked`; `offer.ts`, `ReopenDialog.tsx`,
+  `useReopenKey.ts`): after a tab or workspace closed through the page,
+  `offerReopen` finds its agents on the list (the watcher notes them
+  within a snapshot or two) and a toast "Closed … · Reopen" stands for
+  ten seconds (store field `closedOffer`); the palette's "Reopen a closed
+  agent…" and **Alt+Z** (by key code: ⌘⇧T is the browser's own; never
+  over the terminal or a dialog, nor a field on a Mac) open the dialog
+  kind `reopen`, the list newest first, ↑ ↓ and Enter or a click to
+  reopen, the new pane selected; never for a viewer.
 - `internal/tsnetx` — `-tailscale` joins the tailnet as a tsnet node
   (userspace, no tailscaled) named `-tailscale-hostname`, serves the same
   handler over HTTPS on :443 with the tailnet's certificate (:80
@@ -940,7 +969,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Snapshot.WorkspaceDirs()` that also reads each folder's branch
   (`git symbolic-ref`, a short hash when detached; `Store.Branch`, set
   by a summary too, dropped for a folder that stopped being a
-  repository), and the roster carries `session.dir`, `session.branch`
+  repository) and its repository's main folder (`Store.Root`: the
+  parent of `git rev-parse --git-common-dir`, so a worktree made outside
+  herdr still joins its repository's folder in the sidebar; git names a
+  linked worktree's repository by its real path), and the roster carries `session.dir`, `session.branch`
   and `session.review {changed, fresh}` for the sidebar's card, beside
   `session.folder` and `session.icon` (`internal/icons`).
   `features/review/Review.tsx` draws it (`Diff.tsx` the file rows,
@@ -1362,7 +1394,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   its own click; a workspace of shells alone shows `$` and its tabs.
   **The icon dialog** (`features/icons/IconDialog.tsx`, dialog kind
   `folder-icon`: the folder's icon button, "Folder icon…" in the
-  workspace's ⋯ menu, a palette command; never for a viewer): an emoji
+  workspace's ⋯ menu, a palette command; never for a viewer): first,
+  and open by default, **Automatic** (`AutoIcons.tsx`, `autoicon.ts`
+  tested: `fromWords`, `noteWords`, `lookedWords`) — the pictures the
+  project keeps and its owner's avatar, asked for from
+  `POST /api/folder-icons/candidates` when the tab opens, a `btn` tile
+  each with where it came from, a click using it; none found says where
+  it looked and why no avatar came — then an emoji
   from the system's set — `emojiData.ts`, generated by
   `web/scripts/emoji.swift` on macOS from the Swift standard library's
   Unicode names and emoji properties and what Apple Color Emoji draws, in
@@ -1440,15 +1478,30 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   read when the link appears, then at most every `Every` (2 min) on
   `Touch`, which the roster handler calls, so a page nobody reads asks
   GitHub nothing; one read in flight per machine; a pane gone
-  (`events.PaneStatus` to `Gone`) or a machine removed is forgotten; a
-  GitLab merge request is left alone. No gh, not signed in or a machine
-  away leaves the status absent with its reason, logged once an hour per
-  machine. The roster's `pane.pr.status {state, draft, mergeable,
-  review, checks {total, pass, fail, pending, skipped}, at}`
+  (`events.PaneStatus` to `Gone`) or a machine removed is forgotten.
+  **A GitLab merge request is read the same way through glab**
+  (`gitlab.go`, tested on `shell.Fake` with GitLab's own answers):
+  `MergeParts` takes the instance, the project path and the number off
+  `/-/merge_requests/N` (gitlab.com's or a company's own, subgroups too),
+  and `MergeScript` asks GitLab's API with `glab api --hostname <host>`
+  — the request, its approvals and its discussions in three sections —
+  then `JobsScript` lists its head pipeline's jobs; `ParseMerge` /
+  `ParseJobs` put the answers in gh's words: opened/merged/closed as
+  OPEN/MERGED/CLOSED, draft, conflicts as CONFLICTING, approved (someone
+  approved and none are left) / REVIEW_REQUIRED (approvals left) /
+  CHANGES_REQUESTED (GitLab's own "requested changes"), the threads still
+  open as `threads`, the jobs as the checks (a failure allowed to fail
+  and a manual job skipped, a cancel failed, as GitHub counts them);
+  `Readable` / `Tool` say which command reads a link. No gh or glab, not
+  signed in or a machine away leaves the status absent with its reason,
+  logged once an hour per machine. The roster's `pane.pr.status {state,
+  draft, mergeable, review, threads, checks {total, pass, fail, pending,
+  skipped}, at}`
   (`rosterPR`, so the ETag moves with it); `features/roster/prStatus.ts`
   (tested: `checksWords` "2/2 checks" / "1 failed" / "3 running",
   `reviewWords` merged / closed / draft / conflicts / approved / changes
-  requested / review pending, `checksTone` and `reviewTone` — red /
+  requested / review pending, then "2 open threads" for a merge request,
+  `checksTone` and `reviewTone` — open threads amber — red /
   amber / green / dim / none, each chip its own — and `statusTone`, the
   graver of the two, `prWords`) draws it as two `.pr-state` chips in the
   `.tile-pr-group` beside the link in a wall tile's head (the review
@@ -1477,22 +1530,49 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   each review's verdict and text, the line comments numbered as the
   Changes lens numbers its own (`file:line (author)`, the hunk's last
   row quoted, the text), at most `MaxComments`, and the ask to work on
-  them; `ErrNothingFailed` / `ErrNoReview` when there is nothing to
+  them; for a merge request `Failure` reads the head pipeline's jobs and
+  each failed one's log (`TraceScript`, at most `MaxRuns`, under "Job
+  unit (stage test)") and `ReviewComments` the discussions
+  (`ParseDiscussions`: a thread still open on a line as numbered line
+  comments, its replies marked, a comment outside a thread as a note by
+  its author, a resolved thread and GitLab's own system notes left out);
+  `ErrNothingFailed` / `ErrNoReview` when there is nothing to
   send. `POST /api/pr/failure` and `POST /api/pr/review` `{machine,
   pane}` (`internal/server/pr.go`, `prHandoff`) take the pane's link
   from `said.Tracker.Link`, compose on the pane's machine and send the
   text through `sessions.Input.Submit` as the chat does — 409 for an
-  agent waiting on a question or nothing to send, 502 with gh's line.
+  agent waiting on a question or nothing to send, 502 with gh's (or
+  glab's) line, 400 for a link that is neither.
   **A merged worktree goes** (`internal/worktrees`, tested on
   `shell.Fake`): `DELETE /api/worktrees/{id}` for a workspace herdr
   marks a linked worktree — `Inspect` (the branch, the repository's main
   worktree, the first line of `git status`; uncommitted changes are a
   409 before anything closes), herdr `workspace.close`, then `Remove`:
   `git worktree remove` (never `--force`) and `git branch -d`, or `-D`
-  only when an agent pane of the workspace named a request gh read as
-  merged (`mergedIn`), since a squash leaves git unsure; a branch it
+  only when an agent pane of the workspace named a request gh or glab read
+  as merged (`mergedIn`), since a squash leaves git unsure; a branch it
   refuses is reported with the worktree already gone. The one thing
-  remuda deletes from a repository, and only when asked. The page:
+  remuda deletes from a repository, and only when asked; `Discard`
+  (`git worktree remove --force` and `git branch -D`) is kept for an
+  arena's lanes the person did not keep, their work saved as a patch
+  first (`internal/arena`). **A new worktree
+  comes ready to run** (`include.go`, tested on a real repository and on
+  `shell.Fake`): wherever remuda makes one — a task's start, so bulk start
+  too, and `POST /api/worktrees` — `Include` runs one script on the
+  worktree's machine after `worktree.create` and before the agent starts:
+  in the repository's main checkout (`git worktree list`'s first entry)
+  the files `.worktreeinclude` names — gitignore patterns, Claude Code's
+  own file, `git ls-files --others --ignored --exclude-from` — that git
+  itself ignores (`git check-ignore --stdin`) are copied with `cp -pP`;
+  never a tracked file, never over one the worktree has, a link only when
+  it resolves inside the repository, nothing through a worktree folder
+  that leads out of it, nothing at all past `MaxInclude` 1000 matches
+  (half a node_modules is worse than none). `Included` is the answer —
+  copied, skipped with the reason, too many — `Words` the task's comment
+  by remuda, `included` / `include_error` on the worktree route's answer,
+  which the page turns into a toast (`features/roster/included.ts`,
+  tested: `includedWords`); a failure is a note, never a failed start.
+  The page:
   `features/roster/prActions.ts` (tested: `canHandFailure` an open
   request with a failed check, `canSendReview` an open request,
   `canRemoveWorktree` a linked worktree whose request is merged,
@@ -1606,6 +1686,67 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   with another agent…" in the chat's View menu (a pane's conversation
   only, never the viewer's) and the palette; on success the new pane is
   selected on its chat lens and a toast says what went over.
+  **A fork** is the other second path: the same agent on a copy of the
+  conversation. `POST /api/fork {machine, pane, session?}`
+  (`internal/server/fork.go`) starts the pane's agent with
+  `sessions.ForkArgs` — `claude --resume <id> --fork-session`, `codex fork
+  <id>`; Gemini CLI and Kimi Code document no fork — on the session shown
+  in the lens or the pane's live one, in a new tab "<Agent> fork" of its
+  workspace, the original going on as it is; `forkSession` (tested)
+  refuses a shell, an agent that cannot, a pane with no session id yet.
+  The page: `features/chat/fork.ts` (tested: `FORKABLE`, `canFork`,
+  `forkLabel`, `forkedWords`) and `forkPane.ts`; "Fork <Agent> into a new
+  tab" is a row of the chat's View menu (a pane's conversation, never the
+  viewer's or a viewer link's), the workspace's ⋯ menu and the palette,
+  absent for an agent that cannot fork; the new pane is selected and a
+  toast says so.
+- `internal/teleport/` — **the work moved to another machine** (tested on
+  real temp repos through `shell.Local` and on `shell.Fake`): the
+  laptop closes, GOG carries on. `Inspect(host, dir)` reads the checkout
+  in one script (`Source`: root, branch, HEAD, origin's address, a root
+  commit, commits on no remote-tracking branch, staged / unstaged / new
+  file counts) and refuses what cannot travel — outside git, a detached
+  HEAD, a merge, rebase or cherry-pick in progress, conflicts.
+  `Checkouts(host, dirs, src)` lists a machine's checkouts among its
+  workspaces' folders, the same repository's first (`SameRepository`
+  over `RemoteKey`: the ssh and https spellings of one remote agree).
+  `Move{Source, SourceDir, Target, TargetDir, Start}.Run(say)` is the
+  whole way, every step told to the job's log: `Fits` (the target folder
+  holds the same remote, or, where either has none, the source's root
+  commit), `Pack` (one tar on the source's stdout — `meta`, a git bundle
+  of the branch's commits on no remote-tracking branch, none when all
+  are on a remote, the whole branch when there is no remote; the staged
+  and the unstaged changes as two binary patches; the new files git does
+  not ignore as a tar; at most `MaxPack` 256 MB; nothing in the checkout
+  changes), the archive put on the target through `Host.PutFile`
+  (`Machine.PutFile`: written here, or `cat` over the ssh master), `Land`
+  (the bundle verified, the target's remotes fetched when it lacks the
+  base, `needFull` when it still does — then the whole branch is sent
+  again; the branch under its own name or `<branch>-from-<source>` when
+  the target has one so named; a worktree under
+  `~/.herdr/worktrees/<repo>/`; the staged patch applied with `--index`,
+  the unstaged one to the files, the new files unpacked; a failure after
+  the worktree was made names it and leaves it for the person), then
+  `Start` with the worktree. Nothing goes through a remote — no push, so
+  no CI and no branch on a shared server — and `~/.claude` is never
+  written on either machine: the conversation travels as the handover's
+  text. Routes (`internal/server/teleport.go`): `GET
+  /api/teleport/targets?machine&pane` (the source's words and every
+  connected machine's checkouts), `POST /api/teleport {machine, pane,
+  target, folder, agent, model?, args?, turns?}` → a job on the target
+  (`jobs.Runner.Run`, followed through `GET /api/jobs/{id}`) whose
+  `Start` is `sessions.StartIn` in the new worktree and the first prompt
+  `Preamble` (where the work came from, how it arrived) plus
+  `handover.Text`; `GET /api/teleport/{job}` is where the agent carrying
+  on is; a feed row (kind `teleport`). The source pane, its agent and its
+  checkout are left as they are. The page:
+  `features/teleport/TeleportDialog.tsx` (dialog kind `teleport`: "Move
+  the work to another machine…" in the workspace's ⋯ menu and the
+  palette, never for a viewer — the machine, a clone of the repository
+  there or a folder typed, the agent, how much of the conversation in
+  full; then the job's log, Open it there and Close the agent here…;
+  `teleport.ts` the pure part, tested: `firstTarget`, `folderChoices`,
+  `firstFolder`, `folderOf`, `whyNot`, `targetHint`).
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥
@@ -1888,6 +2029,49 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   row) and "Manage recipes…"; the schedule editor's agent kind has the
   same pick, filling agent, model, arguments and prompt (shell recipes
   left out: a schedule starts no shell).
+- `internal/arena/` — **one prompt to several agents side by side**
+  (tested): an arena is a prompt — written, or a task's through
+  `tasks.Prompt` — and 2–6 lanes, each an agent kind and its model on a
+  repository workspace of a machine (`Check` refuses a shell, an unknown
+  agent, a model the kind takes no flag for); `arenas.json` in the
+  state dir, the newest `Keep` 30. `Service.Start` answers at once with
+  every lane starting and makes them one after another in the
+  background: herdr's `worktree.create` off the lane's workspace on
+  branch `arena-<arena>-<lane>`, the commit it stands on noted as the
+  lane's `Base`, the agent through `sessions.StartAgentWith` with the
+  model, a task's run through `tasks.StartRun` when it is a task's
+  arena, then the prompt handed over the way a task's start does it
+  (Claude Code's trust question for that very worktree answered yes
+  through `tasks.TrustPrompt`, any other question pushed once); a lane
+  refused on the way keeps its reason. `Service.Stats` reads each lane's
+  work against its base — commits, staged, unstaged and new files,
+  `.gitignore` kept — through a throwaway index (`GIT_INDEX_FILE`, so
+  the lane's own index never moves), one script per machine, at most
+  every 15 s. `Service.Keep(arena, lane)` keeps one and closes the
+  others: each one's whole work saved by `PatchScript` (a binary patch
+  `git apply` takes back on the base) to
+  `<state>/arenas/arena-<id>-lane-<n>-<agent>.patch`, 0600, then its
+  workspace closed and its worktree and branch removed with
+  `worktrees.Discard`; a lane whose work could not be saved, or whose
+  machine is away, stays as it is with the reason in its note; a task's
+  arena gets a comment saying what was kept and where the patches are.
+  Routes (`internal/server/arena.go`): `GET /api/arenas` (the newest
+  five with each lane's `stats`), `POST /api/arenas`, `POST
+  /api/arenas/{id}/keep {lane}`, `DELETE /api/arenas/{id}` (forgets the
+  arena, the lanes stay). The page: `features/arena/` — `ArenaDialog.tsx`
+  (dialog kind `arena`: the prompt, the lanes — agent, model as the
+  start dialogs offer it, machine, repository — two to six; "Arena…" in
+  a task's Start dialog with the task's prompt, the palette's "Arena:
+  one prompt to several agents…"), `ArenaPanel.tsx` (panel `arena`, the
+  palette's "Arenas", opened after a start: a card per lane — the agent
+  and its model, the machine, its state off the roster's radar, the
+  first line of what it answered or the lane's note, +ins −del · files,
+  how long it ran, its cost off the meter, its branch, Open and "Keep
+  this one" behind a confirm that says what happens to the rest; Forget
+  once decided; polled every 5 s while open), `arena.ts` the pure part,
+  tested: `repositories`, `defaultLanes` (two different agents on the
+  repository on screen), `whyNot`, `requestOf`, `statWords`, `paneOf`,
+  `runSeconds`, `keepWords`.
 - `internal/icons/` — **the icon the person gave a folder of the
   sidebar** (tested): an emoji or a small picture, kept in `icons.json`
   in the state dir (0600; a damaged file is logged once and read as
@@ -1919,7 +2103,25 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   takes returned as a data URL; 400 for an address that is no web page,
   502 with why, naming the host alone. Nothing is remembered from the
   fetch and nothing is fetched again: the person keeps the picture by
-  saving it as the icon.
+  saving it as the icon. **The icons a project already has**
+  (`candidates.go`, tested on `shell.Local` in a temp repo, `shell.Fake`
+  and `httptest`): `POST /api/folder-icons/candidates {machine, folder}`
+  → `Candidates` runs one script on the folder's machine — the `origin`
+  remote, then, in `./`, `public/`, `static/`, `assets/`, `app/`,
+  `src/`, `web/public/` and `docs/`, the `favicon`, `apple-touch-icon`,
+  `logo` and `icon` files of a picture's extension, then the two largest
+  app icons that fit (`AppIcon.appiconset/*.png`, `ic_launcher*`, found
+  past `node_modules`, `.git`, `Pods`, `build`, `dist` and `vendor`),
+  each in base64 — links and anything over `MaxImage` skipped, at most
+  `MaxCandidates` 8 kept, each through `kindOf` and `ParseImage`, the
+  same picture once; then the owner's avatar from the remote
+  (`originOf`: scp-like or a URL): GitHub's
+  `<GitHubBase>/<owner>.png?size=128` fetched by this server, anything
+  else asked of `glab api --hostname <host>` on the machine — the
+  project's `/avatar`, else its group's — when glab is there. The answer
+  `{candidates: [{data, from, kind: file|github|gitlab}], looked,
+  notes}` says where it looked and why no avatar came; nothing is kept
+  until the person picks one, which `PUT /api/folder-icons` saves.
 - `internal/prefs/` — **settings that follow the person between devices**:
   `prefs.json` in the state dir, `{"<key>": {"value", "at"}}`; `Store.All`,
   `Store.Put` merges a part by key, the newer stamp winning (an equal one
@@ -2088,6 +2290,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   agent pane from the roster, remembering the last target per project.
   **Start an agent on it** (`POST /api/tasks/{id}/start`): a worktree off
   a workspace's repo (`WorktreeCreate`, branch `task-<id>-<slug>`), the
+  files its `.worktreeinclude` lists copied in (`worktrees.Include`, a
+  comment by remuda says what came), the
   agent in it (`sessions.StartAgent` retries herdr's `agent_pane_busy`
   while the new pane's shell comes up — the generic create path uses it
   too), a `task_runs` row and the task moved to its project's `on_start`
@@ -2307,7 +2511,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   /api/tabs/{id}`, `PATCH /api/sessions/{id}`, body `{label}`) share
   `renameHandler` — herdr's `tab.rename` / `workspace.rename`.
 - `internal/sessions/` — the input side of herdr: `Agents` / `KnownAgent`,
-  `StartAgent` (retries `agent_pane_busy` for a few seconds), `StartAgentResumed` (the same, with the kind's resume arguments after a session id — `ResumeArgs`, the one table of them: `claude --resume`, `codex resume`, `gemini --resume`, `kimi --session`; the restarts use it too), both thin over
+  `StartAgent` (retries `agent_pane_busy` for a few seconds), `StartAgentResumed` (the same, with the kind's resume arguments after a session id — `ResumeArgs`, the one table of them: `claude --resume`, `codex resume`, `gemini --resume`, `kimi --session`; the restarts use it too — and beside it `ForkArgs` / `CanFork`, the agents that start on a copy of a session, `Start.Fork`), both thin over
   `StartAgentWith(client, pane, kind, Start{Resume, Model, Args})` — herdr
   names an agent by its kind and refuses a second of that name, so a
   `agent_name_taken` is tried once more under `UniqueName(kind, pane)`,
@@ -2618,7 +2822,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`normColor`). A folder icon's picture is stored only once `ParseImage`
   took it and is served with a sandbox CSP of its own; the favicon fetch
   runs only at the person's word in the icon dialog, http and https only,
-  ten seconds, five redirects, a megabyte of page and 256 KB of picture.
+  ten seconds, five redirects, a megabyte of page and 256 KB of picture;
+  the Automatic tab's search reads the checkout's picture files on their
+  machine (links skipped, 256 KB each) and fetches a GitHub owner's
+  avatar under the same limits, only while the person has the tab open.
   A run of an update must send back the command shown.
   The installer installs nothing whose sha256 is not the release's; the
   sign-in address reaches the browser through `osascript`'s stdin, never

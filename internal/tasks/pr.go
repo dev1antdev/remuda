@@ -139,7 +139,7 @@ func (st *Store) onMerged(taskID int64) (*Status, error) {
 	return to, tx.Commit()
 }
 
-// OnPullRequestState hears what gh read of a request a pane's agent named: a merge closes the task's loop with a push.
+// OnPullRequestState hears what gh or glab read of a request a pane's agent named: a merge closes the task's loop with a push.
 func (w *RunWatch) OnPullRequestState(machine, pane, url, state string) {
 	if state != "MERGED" {
 		return

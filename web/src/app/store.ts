@@ -35,7 +35,10 @@ export type AppDialog =
   | { kind: "start-recipe"; machineId?: string; dir?: string } // an agent started from a recipe, in the folder at hand unless the recipe has its own
   | { kind: "pins"; machineId: string; paneId: string; dir: string; shown: string | null; title: string } // the turns pinned in a folder's conversations; shown = the session on screen, whose pins name no session
   | { kind: "model"; machineId: string; paneId: string; current?: string } // a Claude Code pane's model switched through its own /model; current = what the meter last saw it answer with
+  | { kind: "teleport"; machineId: string; paneId: string; tabId: string; workspace: string; agent: string } // the pane's work moved to another machine, an agent carrying on there
   | { kind: "folder-icon"; machineId: string; folder: string; name: string; icon?: FolderIconRef } // a folder's icon: an emoji, a site's favicon or a picture
+  | { kind: "reopen" } // the agents whose panes went away, each to be started again on its session
+  | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string } } // one prompt to several agents, each in a worktree of its own
   | null;
 
 export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
@@ -43,7 +46,7 @@ export type NoticeMsg = { text: string; error?: boolean; brief?: boolean };
 export type Confirm = { text: string; label: string; run: () => void };
 // a jump names its pane ("" = the transcript viewer): a Chat gets it only when it is that pane's
 export type Jump = { machineId: string; paneId: string; session: string; turn: string; n: number };
-export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | null;
+export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | "arena" | null;
 // what the transcript viewer shows, read-only: a session by folder and id, or one of its subagents
 export type Viewer = Pick<SearchHit, "machine" | "dir" | "session"> & { subagent?: { id: string; description: string } };
 // the find bar over the conversation shown: the bar writes the query and the step, the chat writes the count;
@@ -76,6 +79,7 @@ export type AppState = {
   full: boolean; // the lens takes the whole screen: no header, no sidebar, no rail (app/full.tsx)
   find: Find | null; // the find bar over the chat lens or the transcript viewer, null while closed
   away: string | null; // what the agents did while the page was away, one toast line until it is dismissed or followed
+  closedOffer: { machineId: string; ids: string[]; text: string } | null; // a close just made through the page: a toast offers its agents back
   taskAsked: { projectId: number; taskId: number; start: boolean; n: number } | null; // a task the Tasks mode is asked to open, once (one just made from an issue); start = the agent dialog on it too
   split: boolean; // the chat beside the terminal, asked for by a per-device pref; shown only on a wide screen with a mouse (app/split.ts)
 };
@@ -110,6 +114,7 @@ export const app = createStore<AppState>({
   full: false,
   find: null,
   away: null,
+  closedOffer: null,
   taskAsked: null,
   split: readPref("split", false),
 });
@@ -260,6 +265,10 @@ export const actions = {
   // what happened while the page was away, as one toast line; null takes the toast down
   setAway(away: string | null) {
     app.set({ away });
+  },
+  // the toast that offers back the agents a close just stopped; null takes it down
+  setClosedOffer(closedOffer: AppState["closedOffer"]) {
+    app.set({ closedOffer });
   },
   // openTask takes the person to a task in the Tasks mode, with the start-an-agent dialog on it when asked
   openTask(projectId: number, taskId: number, start = false) {

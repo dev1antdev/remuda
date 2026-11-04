@@ -14,8 +14,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/arena"
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/budget"
@@ -80,9 +82,11 @@ type Server struct {
 	Live      *live.Hub       // the page's event stream, nil without one
 	Awake     *awake.Service  // the machines kept awake while their agents work
 	Icons     *icons.Store    // the icon the person gave each folder of the sidebar
+	Arena     *arena.Service  // one prompt to several agents side by side
 	Limits    *limits.Service // the agents' subscription windows, the hits and the bookings to continue after a reset
 
-	streams termStreams
+	streams   termStreams
+	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
 }
 
 // Handler mounts every route: each context registers its own, the static page comes last, and the guard wraps all but two.
@@ -106,6 +110,7 @@ func (s *Server) Handler() http.Handler {
 	s.codeRoutes(api)
 	s.updateRoutes(api)
 	s.recoverRoutes(api)
+	s.closedRoutes(api)
 	s.tasksRoutes(api)
 	s.terminalRoutes(api)
 	s.screenRoutes(api)
@@ -114,6 +119,7 @@ func (s *Server) Handler() http.Handler {
 	s.feedRoutes(api)
 	s.recapRoutes(api)
 	s.handoverRoutes(api)
+	s.forkRoutes(api)
 	s.prRoutes(api)
 	s.liveRoutes(api)
 	s.deviceRoutes(api)
@@ -121,6 +127,8 @@ func (s *Server) Handler() http.Handler {
 	s.viewerKeyRoutes(api)
 	s.completeRoutes(api)
 	s.iconRoutes(api)
+	s.teleportRoutes(api)
+	s.arenaRoutes(api)
 	s.limitRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
