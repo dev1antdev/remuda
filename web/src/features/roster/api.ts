@@ -55,6 +55,9 @@ export type Tab = {
   panes: Pane[];
 };
 
+// FolderIconRef is a folder's icon as the roster carries it: an emoji, or a picture served at /api/icons/<image>
+export type FolderIconRef = { emoji?: string; image?: string };
+
 export type Session = {
   id: string;
   name: string;
@@ -63,6 +66,8 @@ export type Session = {
   worktree?: { repo_key: string; repo_name: string; linked: boolean; checkout_path: string };
   dir?: string;
   branch?: string; // the branch the folder has checked out, a short hash when detached; none outside git
+  folder?: string; // the folder the sidebar groups by: the repository's main folder for a checkout, else the workspace's
+  icon?: FolderIconRef; // the folder's icon, the person's own
   review?: { changed: number; fresh: number; ready?: boolean }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another
   muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row
   tabs: Tab[];

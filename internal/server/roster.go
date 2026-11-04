@@ -5,13 +5,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/icons"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/radar"
@@ -80,6 +83,8 @@ type rosterSession struct {
 	Worktree    *rosterWorktree `json:"worktree,omitempty"`
 	Dir         string          `json:"dir,omitempty"`
 	Branch      string          `json:"branch,omitempty"` // the branch the folder has checked out, read with the review badges
+	Folder      string          `json:"folder,omitempty"` // the folder the sidebar groups by: the repository's main checkout, else the workspace's own
+	Icon        *icons.Icon     `json:"icon,omitempty"`   // the folder's icon, an emoji or a stored picture's hash
 	Review      *rosterReview   `json:"review,omitempty"`
 	MutedUntil  *time.Time      `json:"muted_until,omitempty"` // the folder is silenced until then: no push, no webhook, no feed row
 	Tabs        []rosterTab     `json:"tabs"`
@@ -97,6 +102,20 @@ type rosterMachine struct {
 	Awake    *awake.Status     `json:"awake,omitempty"`   // the keep-awake switch and whether the hold stands
 	Stopped  []restart.Stopped `json:"stopped,omitempty"` // the chats a reboot stopped: their panes are bare shells again, a Resume brings them back
 	MAC      string            `json:"mac,omitempty"`     // the address a wake-up packet names, when the person set one
+}
+
+// folderOf is the folder a workspace belongs to in the sidebar: its repository's main checkout — herdr's repo_root, else
+// the folder holding the shared .git — or, outside a repository herdr knows, the workspace's own folder.
+func folderOf(worktree *herdr.WorktreeInfo, dir string) string {
+	if worktree != nil {
+		if worktree.RepoRoot != "" {
+			return worktree.RepoRoot
+		}
+		if strings.HasSuffix(worktree.RepoKey, "/.git") {
+			return path.Dir(worktree.RepoKey)
+		}
+	}
+	return dir
 }
 
 // sessionsFromSnapshot keeps herdr's own hierarchy, workspace → tabs → panes, in herdr's order.
@@ -171,6 +190,12 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			}
 		}
 		session.Dir = snap.WorkspaceDir(&ws)
+		session.Folder = folderOf(ws.Worktree, session.Dir)
+		if s.Icons != nil {
+			if icon, ok := s.Icons.Of(machineID, session.Folder); ok {
+				session.Icon = &icon
+			}
+		}
 		if session.Dir != "" && s.Push != nil {
 			if until, muted := s.Push.Mutes.Until(machineID, session.Dir); muted {
 				session.MutedUntil = &until

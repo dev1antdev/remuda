@@ -1,37 +1,78 @@
-// The sidebar's list for one machine, after Orca: a line per workspace that opens its agent in one click, the
-// worktrees of one repository gathered under the repository's name, and a small line per agent only when a
-// workspace runs more than one. Pure functions over the roster; rows.tsx draws them.
+// The sidebar's list for one machine, after Orca: every repository a folder that folds shut, its workspaces under it
+// as cards that open their agent in one click, and a small line per agent only when a workspace runs more than one.
+// Pure functions over the roster; rows.tsx draws them.
 
 import { basename } from "@/lib/text";
 import { t, tn } from "@/lib/i18n";
-import type { Machine, Session } from "./api";
-import { groups, rowLabel, type AgentRow, type Group, type RadarPrefs } from "./radar";
+import type { FolderIconRef, Machine, Session } from "./api";
+import { agentRows, orderRows, rowLabel, type AgentRow, type RadarPrefs } from "./radar";
 
-// WorkspaceItem is one workspace's line: its agents in the radar's order, the one its line speaks for, and how lively it is
+// WorkspaceItem is one workspace's card: its agents in the radar's order, the one its card speaks for, and how lively it is
 export type WorkspaceItem = { session: Session; rows: AgentRow[]; lead: AgentRow | null; best: number };
 
-export type Entry =
-  | { kind: "workspace"; item: WorkspaceItem }
-  | { kind: "repo"; key: string; name: string; items: WorkspaceItem[] };
+// Folder is a repository — or a folder outside git — with every workspace open on it: the main checkout's and its
+// worktrees', as Orca shows a project
+export type Folder = { key: string; path: string; name: string; icon?: FolderIconRef; items: WorkspaceItem[]; best: number };
 
-// itemOf is a workspace's line; its liveliness is its own agents', not its worktrees'
-const itemOf = (g: Group): WorkspaceItem => ({ session: g.session, rows: g.rows, lead: leadOf(g.rows), best: g.rows.reduce((best, r) => Math.max(best, r.last), 0) });
+export type Entry = { kind: "workspace"; item: WorkspaceItem } | { kind: "folder"; folder: Folder };
 
-// entries lays out a machine: by the radar's grouping, a repository with linked worktrees open becomes a group of its
-// checkouts (the main one first), every other workspace a line of its own; the flat order drops the groups
+// folderOf is the folder a workspace belongs to: the server's word (the repository's main folder), else its own
+export const folderOf = (s: Session): string => s.folder || s.dir || s.worktree?.checkout_path || "";
+
+// itemOf is a workspace's card; its liveliness is its own agents'
+function itemOf(s: Session, prefs: RadarPrefs): WorkspaceItem {
+  const rows = prefs.order === "active" ? orderRows(agentRows(s, prefs)) : agentRows(s, prefs);
+  return { session: s, rows, lead: leadOf(rows), best: rows.reduce((best, r) => Math.max(best, r.last), 0) };
+}
+
+// entries lays out a machine: every folder with its workspaces under it, the main checkout first and the rest by
+// activity, the folders by their liveliest agent (herdr's order for the ones with none, or with that order picked);
+// the flat order lists the workspaces alone by activity
 export function entries(m: Machine, prefs: RadarPrefs): Entry[] {
-  const families = groups(m, prefs);
+  const items = m.sessions.map((s) => itemOf(s, prefs));
   if (prefs.order === "recent") {
-    const items = families.flatMap((g) => [g, ...g.children]).map(itemOf);
     const order = new Map(items.map((item, i) => [item, i]));
-    items.sort((a, b) => b.best - a.best || order.get(a)! - order.get(b)!);
-    return items.map((item) => ({ kind: "workspace", item }));
+    return [...items].sort((a, b) => b.best - a.best || order.get(a)! - order.get(b)!).map((item) => ({ kind: "workspace", item }));
   }
-  return families.map((g): Entry => {
-    if (g.children.length === 0) return { kind: "workspace", item: itemOf(g) };
-    const name = g.session.worktree?.repo_name || basename(g.session.dir || g.session.worktree?.checkout_path || "") || g.session.name;
-    return { kind: "repo", key: `repo:${g.session.worktree?.repo_key ?? g.session.id}`, name, items: [g, ...g.children].map(itemOf) };
-  });
+  const folders = new Map<string, Folder>();
+  for (const item of items) {
+    const path = folderOf(item.session);
+    const key = path || `workspace:${item.session.id}`;
+    let folder = folders.get(key);
+    if (!folder) {
+      folder = { key, path, name: basename(path) || item.session.worktree?.repo_name || item.session.name, items: [], best: 0 };
+      folders.set(key, folder);
+    }
+    folder.icon ??= item.session.icon;
+    folder.items.push(item);
+    folder.best = Math.max(folder.best, item.best);
+  }
+  const list = [...folders.values()];
+  const main = (item: WorkspaceItem, folder: Folder) => !item.session.worktree?.linked && (item.session.dir || "") === folder.path;
+  for (const folder of list) {
+    const order = new Map(folder.items.map((item, i) => [item, i]));
+    folder.items.sort((a, b) => Number(main(b, folder)) - Number(main(a, folder)) || (prefs.order === "active" ? b.best - a.best : 0) || order.get(a)! - order.get(b)!);
+  }
+  if (prefs.order === "active") {
+    const order = new Map(list.map((folder, i) => [folder, i]));
+    list.sort((a, b) => (a.best && b.best ? b.best - a.best : a.best ? -1 : b.best ? 1 : order.get(a)! - order.get(b)!));
+  }
+  return list.map((folder) => ({ kind: "folder", folder }));
+}
+
+// folderCounts is what a folder's line says of its agents: how many work, ask and finished, and how many there are
+export function folderCounts(folder: Folder): { working: number; blocked: number; done: number; agents: number; fresh: number } {
+  const n = { working: 0, blocked: 0, done: 0, agents: 0, fresh: 0 };
+  for (const item of folder.items) {
+    n.fresh += item.session.review?.fresh ?? 0;
+    for (const r of item.rows) {
+      if (!r.pane.agent) continue;
+      n.agents++;
+      const state = r.pane.radar?.state;
+      if (state === "working" || state === "blocked" || state === "done") n[state]++;
+    }
+  }
+  return n;
 }
 
 // pressing is the order a workspace's line picks its agent in: a question, a watchdog note, work, a finish, the rest
@@ -52,11 +93,10 @@ export function leadOf(rows: AgentRow[]): AgentRow | null {
   return lead && lead.pane.agent ? lead : (rows[0] ?? null);
 }
 
-// itemTitle names the line: the workspace's name, or inside its repository's group, a checkout named as the
-// repository goes by its branch
-export function itemTitle(item: WorkspaceItem, group?: string): string {
+// itemTitle names a card: the workspace's name, or inside its folder, a workspace named as the folder goes by its branch
+export function itemTitle(item: WorkspaceItem, folder?: string): string {
   const name = item.session.name;
-  if (group && name === group) return item.session.branch || t("main checkout");
+  if (folder && name === folder) return item.session.branch || name;
   return name;
 }
 

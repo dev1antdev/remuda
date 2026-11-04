@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session, Tab } from "./api";
 import { DEFAULT_RADAR } from "./radar";
-import { agentWords, branchShown, entries, itemTitle, itemWords, leadOf, representative, shortAge, since, type WorkspaceItem } from "./workspaces";
+import { agentWords, branchShown, entries, folderCounts, itemTitle, itemWords, leadOf, representative, shortAge, since, type WorkspaceItem } from "./workspaces";
 
 const now = 1_000_000_000_000;
 const ago = (minutes: number) => now - minutes * 60_000;
@@ -14,23 +14,45 @@ const machine = (sessions: Session[]): Machine => ({ id: "gog", label: "GOG", st
 const repo = (name: string, linked: boolean) => ({ repo_key: `/p/${name}/.git`, repo_name: name, linked, checkout_path: `/p/${name}` });
 
 describe("entries", () => {
-  it("gives every workspace one line and gathers a repository's worktrees under its name", () => {
-    const main = session("user-profiles", [tab([pane({ radar: { state: "idle", last_active: ago(60) } })])], { worktree: repo("user-profiles", false), branch: "main" });
-    const tree = session("small-improvements", [tab([pane({ radar: { state: "working", since: ago(3) } })])], { worktree: repo("user-profiles", true) });
-    const games = session("games-db", [tab([pane({ radar: { state: "done", last_active: ago(5) } })])]);
-    const list = entries(machine([games, main, tree]), DEFAULT_RADAR);
-    expect(list.map((e) => (e.kind === "repo" ? `repo ${e.name}: ${e.items.map((i) => i.session.name).join(", ")}` : e.item.session.name))).toEqual([
-      "repo user-profiles: user-profiles, small-improvements",
-      "games-db",
-    ]);
+  const fold = (list: ReturnType<typeof entries>) => list.map((e) => (e.kind === "folder" ? `${e.folder.name}: ${e.folder.items.map((i) => i.session.name).join(", ")}` : e.item.session.name));
+
+  it("makes every repository a folder with its workspaces, the main checkout first, the liveliest folder first", () => {
+    const main = session("user-profiles", [tab([pane({ radar: { state: "idle", last_active: ago(60) } })])], { folder: "/p/user-profiles", dir: "/p/user-profiles", worktree: repo("user-profiles", false), branch: "main" });
+    const tree = session("small-improvements", [tab([pane({ radar: { state: "working", since: ago(3) } })])], { folder: "/p/user-profiles", dir: "/w/small-improvements", worktree: repo("user-profiles", true) });
+    const games = session("games-db", [tab([pane({ radar: { state: "done", last_active: ago(5) } })])], { folder: "/p/games-db", dir: "/p/games-db" });
+    const quiet = session("notes", [tab([pane({ agent: "" })])], { folder: "/p/notes", dir: "/p/notes" });
+    expect(fold(entries(machine([quiet, games, tree, main]), DEFAULT_RADAR))).toEqual(["user-profiles: user-profiles, small-improvements", "games-db: games-db", "notes: notes"]);
+  });
+
+  it("gathers two workspaces on one folder, and keeps herdr's order when asked", () => {
+    const a = session("api", [tab([pane({ radar: { state: "idle", last_active: ago(30) } })])], { folder: "/p/backend", dir: "/p/backend" });
+    const b = session("backend", [tab([pane({ radar: { state: "working" } })])], { folder: "/p/backend", dir: "/p/backend" });
+    const c = session("web", [tab([pane({ radar: { state: "working" } })])], { folder: "/p/web", dir: "/p/web" });
+    expect(fold(entries(machine([a, c, b]), DEFAULT_RADAR))).toEqual(["backend: backend, api", "web: web"]);
+    expect(fold(entries(machine([a, c, b]), { ...DEFAULT_RADAR, order: "herdr" }))).toEqual(["backend: api, backend", "web: web"]);
+  });
+
+  it("takes the folder's icon from any of its workspaces", () => {
+    const a = session("api", [tab([pane()])], { folder: "/p/backend", dir: "/p/backend" });
+    const b = session("backend", [tab([pane()])], { folder: "/p/backend", dir: "/p/backend", icon: { emoji: "🦊" } });
+    const [entry] = entries(machine([a, b]), DEFAULT_RADAR);
+    expect(entry?.kind === "folder" && entry.folder.icon).toEqual({ emoji: "🦊" });
   });
 
   it("lists every workspace by activity in the flat order", () => {
-    const main = session("user-profiles", [tab([pane({ radar: { state: "idle", last_active: ago(60) } })])], { worktree: repo("user-profiles", false) });
-    const tree = session("small-improvements", [tab([pane({ radar: { state: "working" } })])], { worktree: repo("user-profiles", true) });
+    const main = session("user-profiles", [tab([pane({ radar: { state: "idle", last_active: ago(60) } })])], { folder: "/p/user-profiles", worktree: repo("user-profiles", false) });
+    const tree = session("small-improvements", [tab([pane({ radar: { state: "working" } })])], { folder: "/p/user-profiles", worktree: repo("user-profiles", true) });
     const games = session("games-db", [tab([pane({ radar: { state: "done", last_active: ago(5) } })])]);
-    const list = entries(machine([main, tree, games]), { ...DEFAULT_RADAR, order: "recent" });
-    expect(list.map((e) => (e.kind === "workspace" ? e.item.session.name : "repo"))).toEqual(["small-improvements", "games-db", "user-profiles"]);
+    expect(fold(entries(machine([main, tree, games]), { ...DEFAULT_RADAR, order: "recent" }))).toEqual(["small-improvements", "games-db", "user-profiles"]);
+  });
+});
+
+describe("folderCounts", () => {
+  it("counts a folder's agents by state and its fresh files", () => {
+    const a = session("a", [tab([pane({ radar: { state: "working" } }), pane({ agent: "" })])], { folder: "/p/x", review: { changed: 3, fresh: 2 } });
+    const b = session("b", [tab([pane({ radar: { state: "done" } })]), tab([pane({ radar: { state: "blocked" } })])], { folder: "/p/x", review: { changed: 1, fresh: 1 } });
+    const [entry] = entries(machine([a, b]), { ...DEFAULT_RADAR, shells: true });
+    expect(entry?.kind === "folder" && folderCounts(entry.folder)).toEqual({ working: 1, blocked: 1, done: 1, agents: 3, fresh: 3 });
   });
 });
 
@@ -52,13 +74,14 @@ describe("leadOf", () => {
 });
 
 describe("the line's words", () => {
-  const item = (s: Session, prefs = { ...DEFAULT_RADAR, shells: true }): WorkspaceItem => entries(machine([s]), prefs).flatMap((e) => (e.kind === "workspace" ? [e.item] : e.items))[0]!;
+  const item = (s: Session, prefs = { ...DEFAULT_RADAR, shells: true }): WorkspaceItem => entries(machine([s]), prefs).flatMap((e) => (e.kind === "workspace" ? [e.item] : e.folder.items))[0]!;
 
-  it("names a checkout called as its repository by its branch inside the group", () => {
+  it("names a workspace called as its folder by its branch inside the folder", () => {
     const main = item(session("user-profiles", [tab([pane()])], { branch: "msn-2448" }));
     expect(itemTitle(main)).toBe("user-profiles");
     expect(itemTitle(main, "user-profiles")).toBe("msn-2448");
-    expect(itemTitle(item(session("user-profiles", [tab([pane()])])), "user-profiles")).toBe("main checkout");
+    expect(itemTitle(main, "elsewhere")).toBe("user-profiles");
+    expect(itemTitle(item(session("notes", [tab([pane()])])), "notes")).toBe("notes");
   });
 
   it("shows the branch unless the title already says it", () => {

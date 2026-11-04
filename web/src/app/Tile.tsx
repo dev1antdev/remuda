@@ -12,9 +12,11 @@ import type { Tile, WallView } from "@/features/roster/wall";
 import { Screen } from "@/features/terminal/Screen";
 import { fillClass, usd } from "@/features/usage/format";
 import { openUrl } from "@/lib/host";
-import { Icon, Logo, Menu, Tip } from "@/ui";
+import { FolderIcon, Icon, Logo, Menu, Tip } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import { useRoster } from "@/features/roster/useRoster";
+import { folderOf as sessionFolder } from "@/features/roster/workspaces";
+import { basename } from "@/lib/text";
 import { folderOf } from "./current";
 import { actions } from "./store";
 import { viewerMenu } from "./viewOnly";
@@ -70,7 +72,10 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           </span>
           <Logo agent={pane.agent} />
           <span className="tile-label">{rowLabel(pane, tab, session.name, radar)}</span>
-          <span className="tile-where">{where}</span>
+          <span className="tile-where">
+            <FolderIcon icon={session.icon} name={basename(sessionFolder(session)) || session.name} size={12} />
+            {where}
+          </span>
           {muted && (
             <span className="tile-muted" aria-label={muteWords(muted)}>
               <Icon name="bell-off" size={12} />

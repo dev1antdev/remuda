@@ -403,7 +403,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Claude Code, Codex, Gemini CLI and Kimi Code (npm registry), herdr and **remuda
   itself** (GitHub releases) every 6 hours unless `-no-version-check` —
   the only outbound requests remuda makes by itself (a read on demand
-  asks again when the last look is over 5 minutes old, `RefreshLatest`).
+  asks again when the last look is over 5 minutes old, `RefreshLatest`);
+  the one other is a site's favicon, fetched only when the person asks
+  for it in the icon dialog (`internal/icons`).
   `release.go`: the newest release with its assets (`Collector.Release`).
   **`internal/updates`** turns all of that into what the page offers:
   `Plan(what, report)` / `Offered(report, latest)` are the commands for
@@ -938,7 +940,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`git symbolic-ref`, a short hash when detached; `Store.Branch`, set
   by a summary too, dropped for a folder that stopped being a
   repository), and the roster carries `session.dir`, `session.branch`
-  and `session.review {changed, fresh}` for the sidebar's card.
+  and `session.review {changed, fresh}` for the sidebar's card, beside
+  `session.folder` and `session.icon` (`internal/icons`).
   `features/review/Review.tsx` draws it (`Diff.tsx` the file rows,
   `Hunk.tsx` a hunk's rows in one column or two with a comment box under
   the tapped row, `hunks.ts` the parsing — `splitHunks`, `rowsOf`,
@@ -1329,25 +1332,48 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   hues, tiers, marks, row labels, ordering: families by their liveliest
   agent, parent before worktrees, tabs by their liveliest pane, no-stamp
   last; a flat `recent` order; herdr's own; `radar.test.ts`),
-  `features/roster/Sidebar.tsx` draws it — **a line per workspace, after
+  `features/roster/Sidebar.tsx` draws it — **folders and cards, after
   Orca** (`workspaces.ts`, pure and tested: `entries` lays a machine out
-  from `groups` — a repository with linked worktrees open becomes a
-  group under its name, foldable (pref `wsFolded`, `machine|repo:<key>`),
-  its checkouts under it, the main one first and named by its branch
-  when it carries the repository's name (`itemTitle`); every other
-  workspace a line of its own; the flat order drops the groups and
-  sorts by each workspace's own activity — `leadOf` the agent a line
-  speaks for and a click opens: a question, a watchdog note, work, a
-  finish, the rest; `itemWords` / `agentWords` / `branchShown` /
-  `since` / `shortAge` the words and the age): `rows.tsx` draws each
-  workspace as a two-line card — the lead agent's mark and logo, the
-  name, the review badge, the mute, the context from 50 %, the age
+  as folders — every repository, by the roster's `session.folder` (its
+  main folder, so a worktree joins its repository), or a folder outside
+  git — each with its workspaces, the main checkout first and the rest by
+  activity, the folders by their liveliest agent (herdr's order when
+  asked); the flat order drops the folders and sorts the workspaces by
+  their own activity; `folderCounts` what a folder's line says;
+  `leadOf` the agent a card speaks for and a click opens: a question, a
+  watchdog note, work, a finish, the rest; `itemTitle` — a workspace
+  named as its folder goes by its branch — `itemWords` / `agentWords` /
+  `branchShown` / `since` / `shortAge` the words and the age): a folder's
+  line (`rows.tsx`, `FolderView`) is its chevron, its icon
+  (`ui/FolderIcon.tsx`, `ui/folderFace.ts` tested: the emoji or picture of
+  `session.icon`, else its initial on a tile in one of the fourteen
+  accents, the colour from its name), its name, how its agents stand and,
+  folded, its fresh files; a click folds it (pref `wsFolded`,
+  `machine|folder:<path>`), the sidebar's ⋯ folds or opens every folder,
+  and a click on the icon opens the icon dialog. Open, it holds a
+  two-line card per workspace — the lead agent's mark and logo, the name
+  or branch, the review badge, the mute, the context from 50 %, the age
   ("12m", "3h") that the ⋯ menu takes the place of under the pointer;
   under it the branch (`session.branch`, read with the review badges)
-  and what the agent does — its note, "waiting for your answer", the
-  first line of what it answered, else its title — or "2 agents" with
-  a small line per agent under the card, each its own click; a workspace
-  of shells alone shows `$` and its tabs. The tab strip
+  when the title does not say it, and what the agent does — its note,
+  "waiting for your answer", the first line of what it answered, else its
+  title — or "2 agents" with a small line per agent under the card, each
+  its own click; a workspace of shells alone shows `$` and its tabs.
+  **The icon dialog** (`features/icons/IconDialog.tsx`, dialog kind
+  `folder-icon`: the folder's icon button, "Folder icon…" in the
+  workspace's ⋯ menu, a palette command; never for a viewer): an emoji
+  from the system's set — `emojiData.ts`, generated by
+  `web/scripts/emoji.swift` on macOS from the Swift standard library's
+  Unicode names and emoji properties and what Apple Color Emoji draws, in
+  nine groups, loaded only when the dialog opens; `emoji.ts` tested:
+  `searchEmoji` by English name, `pushRecent` for pref `icons.recent` —
+  a site's icon (`POST /api/folder-icons/favicon`, read by the server
+  once at the person's word, shown, then used), or a picture from the
+  computer (`picture.ts` tested: `pictureKind`, `fitInside`, `siteOf`; an
+  SVG up to 64 KB kept as it is, anything else drawn into 128 px), saved
+  through `PUT /api/folder-icons`, Remove through `DELETE`; the icon shows
+  on the folder's line, in the header before the workspace's name, in a
+  wall tile's head and in a palette row. The tab strip
   (`TabStrip.tsx`, `tabs.ts` tested: `tabAgent`, `tabFaces`) names a tab
   by what it runs — the agent's logo and name, "terminal" for a shell,
   a name of the person's own over either, twins told apart by herdr's
@@ -1374,8 +1400,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   tested: from the id, never red or green, which mean blocked and done):
   the sidebar block's left edge, a wall tile's left edge, a dot before
   the machine in a palette row; the local machine has none.
-  Machines and repository groups fold (prefs `collapsed` / `wsFolded`); a
-  folded head carries its agents' states (working / ? / ✓ counts).
+  Machines and folders fold (prefs `collapsed` / `wsFolded`); a folded
+  head carries its agents' states (working / ? / ✓ counts).
   `web/marks/*.svg` are the vendor logos (MIT packaging, see NOTICE.md),
   `npm run marks` regenerates `src/ui/marks.ts`; drawn inline in currentColor.
 - `internal/said/` — the first line of every finished agent's last answer,
@@ -1800,6 +1826,38 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   row) and "Manage recipes…"; the schedule editor's agent kind has the
   same pick, filling agent, model, arguments and prompt (shell recipes
   left out: a schedule starts no shell).
+- `internal/icons/` — **the icon the person gave a folder of the
+  sidebar** (tested): an emoji or a small picture, kept in `icons.json`
+  in the state dir (0600; a damaged file is logged once and read as
+  none) by `machine|folder` — the folder the sidebar groups by, which
+  the roster names as `session.folder`: the repository's main checkout
+  (herdr's `repo_root`, else the folder holding the shared `.git` of
+  `repo_key`), else the workspace's own folder; `server.folderOf`.
+  `Store.Of` / `SetEmoji` / `SetImage` / `Clear` / `Image`; an emoji is
+  checked by `CheckEmoji` (at most 32 bytes, no letters, digits but a
+  keycap's, no control characters), a picture by `ParseImage` (a
+  `data:image/…;base64,` URL of PNG, JPEG, GIF, WebP, SVG or ICO, at
+  most `MaxImage` 256 KB, the bytes sniffing as what the URL says; an
+  SVG text holding `<svg`), stored by its sha256 and dropped once no
+  icon names it. The roster carries `session.icon` — `{emoji}` or
+  `{image: <hash>}` — so the ETag moves with it. Routes
+  (`internal/server/icons.go`): `GET /api/icons/{hash}` (the bytes,
+  `Cache-Control: private, max-age=31536000, immutable`, a sandbox CSP
+  of their own; a viewer link may read them), `PUT /api/folder-icons
+  {machine, folder, emoji | image}` and `DELETE /api/folder-icons
+  {machine, folder}` (a machine the fleet knows, an absolute folder;
+  `rosterMoved` after), `POST /api/folder-icons/favicon {url}` →
+  `{data, from}`: `Favicon` fetches the site once at the person's word
+  — a bare host read as https, http and https only, `Client` ten
+  seconds and five redirects, the page's first megabyte read for its
+  `<link rel="…icon">` tags (mask-icon skipped, a `data:` href taken as
+  it is), ranked apple-touch first, then a declared size of 32 or more,
+  then an SVG, then the rest, `/favicon.ico` last (and alone when the
+  page does not answer), the first that answers a picture `ParseImage`
+  takes returned as a data URL; 400 for an address that is no web page,
+  502 with why, naming the host alone. Nothing is remembered from the
+  fetch and nothing is fetched again: the person keeps the picture by
+  saving it as the icon.
 - `internal/prefs/` — **settings that follow the person between devices**:
   `prefs.json` in the state dir, `{"<key>": {"value", "at"}}`; `Store.All`,
   `Store.Put` merges a part by key, the newer stamp winning (an equal one
@@ -2114,7 +2172,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   tested: the token file, a key or an ssh key read through the file
   viewer would open what the link must not; 403 "the file is outside the
   workspaces", and a stat's `dir` and candidates are kept the same way),
-  the health, the push public key, the question, the usage, and the
+  the health, the push public key, the question, the usage, the folders'
+  icon pictures (`/api/icons/…`, `viewerPrefixes`), and the
   upgrade of `/ws/events` — or of the page itself and its files (anything outside
   `/api/`, `/ws/` and the code-server proxy `/code/`); never `/ws/pane`,
   a submit, a key, the tasks or any change: 403 "this link is for
@@ -2454,8 +2513,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`TermApi.input`), so ⏎ = `ESC CR` (Alt+Enter → newline in Claude Code,
   verified), arrows follow DECCKM, and Ctrl/Alt are one-shot modifiers.
 - Roster keeps herdr's hierarchy: workspace → tabs → panes, plus `worktree`
-  (linked worktrees gather with their repository's main checkout under the
-  repository's name in the sidebar, by `repo_key`). Tabs render in the strip
+  (linked worktrees gather with their repository's main checkout in the
+  repository's folder in the sidebar, by `session.folder`). Tabs render in the strip
   above the pane, never in the sidebar; only a workspace running several
   agents lists them, a small line each, under its card.
 - `xterm` keeps a small local scrollback but its viewport scrollbar is hidden
@@ -2494,7 +2553,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   named by the state dir and the host there, so a scratch instance never
   rides the real one's master (and never takes it down on exit).
   `TS_AUTHKEY` travels on stdin, never on a command line. Colours are six hex digits or nothing
-  (`normColor`). A run of an update must send back the command shown.
+  (`normColor`). A folder icon's picture is stored only once `ParseImage`
+  took it and is served with a sandbox CSP of its own; the favicon fetch
+  runs only at the person's word in the icon dialog, http and https only,
+  ten seconds, five redirects, a megabyte of page and 256 KB of picture.
+  A run of an update must send back the command shown.
   The installer installs nothing whose sha256 is not the release's; the
   sign-in address reaches the browser through `osascript`'s stdin, never
   an argument; `uninstall.sh` asks before anything goes and deletes a

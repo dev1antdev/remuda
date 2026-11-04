@@ -1,16 +1,16 @@
-// The rows under a machine, after Orca: one line per workspace — its agent's mark and logo, its name, its age, and under
-// it the branch and what the agent does — that opens the agent in one click; a small line per agent when it runs
-// more than one; the worktrees of a repository gathered under the repository's name.
+// The rows under a machine, after Orca: every repository a folder — its icon, its name, how its agents stand — that a
+// click folds shut or open, and under it a card per workspace — its agent's mark and logo, its name or branch, its age,
+// and what the agent does — that opens the agent in one click, with a small line per agent when it runs more than one.
 
 import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
 import { fillClass } from "@/features/usage/format";
-import { Icon, Logo } from "@/ui";
+import { FolderIcon, Icon, Logo, Tip } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import type { Machine, Session } from "./api";
 import { muteWords, mutedUntil } from "./mute";
 import { prWords } from "./prStatus";
 import { displayOf, markOf, rowLabel, stateWords, type AgentRow, type Display, type RadarPrefs } from "./radar";
-import { agentWords, branchShown, entries, itemTitle, itemWords, representative, shortAge, since, type Entry, type WorkspaceItem } from "./workspaces";
+import { agentWords, branchShown, entries, folderCounts, itemTitle, itemWords, representative, shortAge, since, type Folder, type WorkspaceItem } from "./workspaces";
 import { t, tn } from "@/lib/i18n";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
@@ -23,8 +23,9 @@ export type RowProps = {
   now: number;
   onSelect: (machineId: string, paneId: string) => void;
   onMenu?: (m: Machine, s: Session, x: number, y: number) => void; // none for a viewer: no workspace actions
-  folded: Record<string, boolean>; // repositories folded shut, by "machine|repo:<key>"
+  folded: Record<string, boolean>; // folders folded shut, by "machine|folder:<path>"
   onFold: (key: string) => void;
+  onIcon?: (m: Machine, folder: Folder) => void; // none for a viewer: the icon is the person's to change
 };
 
 // rowKey makes a div row a button: Enter or Space on the row itself picks it, on a button inside it they are that button's
@@ -38,51 +39,67 @@ export function Rows({ machine, ...rest }: RowProps) {
   return (
     <div className="ws-tree">
       {entries(machine, rest.prefs).map((entry) =>
-        entry.kind === "repo" ? <RepoView key={entry.key} machine={machine} entry={entry} {...rest} /> : <WorkspaceView key={entry.item.session.id} machine={machine} item={entry.item} {...rest} />,
+        entry.kind === "folder" ? <FolderView key={entry.folder.key} machine={machine} folder={entry.folder} {...rest} /> : <WorkspaceView key={entry.item.session.id} machine={machine} item={entry.item} {...rest} />,
       )}
     </div>
   );
 }
 
-// RepoView is a repository with worktrees open: its name, and its checkouts under it unless folded shut
-function RepoView({ machine: m, entry, ...rest }: RowProps & { entry: Extract<Entry, { kind: "repo" }> }) {
-  const foldKey = `${m.id}|${entry.key}`;
+// FolderView is a repository or a folder as Orca shows a project: its icon, its name and how its agents stand; a click
+// folds it shut or open, and open it lists its workspaces' cards
+function FolderView({ machine: m, folder, ...rest }: RowProps & { folder: Folder }) {
+  const foldKey = `${m.id}|folder:${folder.key}`;
   const isFolded = !!rest.folded[foldKey];
-  const counts = { working: 0, blocked: 0, done: 0 };
-  for (const item of entry.items)
-    for (const r of item.rows) {
-      const state = r.pane.agent ? r.pane.radar?.state : undefined;
-      if (state === "working" || state === "blocked" || state === "done") counts[state]++;
-    }
-  const inside = rest.current?.machineId === m.id && entry.items.some((item) => item.session.id === rest.current?.sessionId);
+  const n = folderCounts(folder);
+  const inside = rest.current?.machineId === m.id && folder.items.some((item) => item.session.id === rest.current?.sessionId);
+  const toggle = () => rest.onFold(foldKey);
+  const quiet = !n.working && !n.blocked && !n.done;
   return (
-    <div className={`ws-repo${isFolded ? " folded" : ""}`}>
+    <div className={`ws-folder${isFolded ? " folded" : ""}`}>
       <div
-        className={`ws-repo-head${isFolded && inside ? " on" : ""}`}
+        className={`ws-folder-head${isFolded && inside ? " on" : ""}`}
         role="button"
         tabIndex={0}
         aria-expanded={!isFolded}
-        title={isFolded ? t("Show its worktrees") : t("Hide its worktrees")}
-        onClick={() => rest.onFold(foldKey)}
-        onKeyDown={(e) => rowKey(e, () => rest.onFold(foldKey))}
+        title={`${folder.path || folder.name}\n${isFolded ? t("Click to show its agents") : t("Click to fold it shut")}`}
+        onClick={toggle}
+        onKeyDown={(e) => rowKey(e, toggle)}
       >
         <span className={`chevron${isFolded ? "" : " open"}`} aria-hidden="true">
           <Icon name="chevron-right" size={12} />
         </span>
-        <Icon name="git-branch" size={12} />
-        <span className="ws-repo-name">{entry.name}</span>
-        {isFolded ? (
-          <span className="machine-summary">
-            <StateMarks working={counts.working} blocked={counts.blocked} done={counts.done} step={rest.step} />
-          </span>
+        {rest.onIcon && folder.path ? (
+          <Tip text={t("Change the folder's icon")}>
+            <button
+              type="button"
+              className="icon-btn sm folder-icon-btn"
+              aria-label={t("Change the folder's icon")}
+              onClick={(e) => {
+                e.stopPropagation();
+                rest.onIcon?.(m, folder);
+              }}
+            >
+              <FolderIcon icon={folder.icon} name={folder.name} />
+            </button>
+          </Tip>
         ) : (
-          <span className="machine-count">{tn(entry.items.length, "{n} checkout", "{n} checkouts")}</span>
+          <FolderIcon icon={folder.icon} name={folder.name} />
         )}
+        <span className="ws-folder-name">{folder.name}</span>
+        {isFolded && n.fresh > 0 && (
+          <span className="ws-badge" title={tn(n.fresh, "{n} file changed since you last reviewed", "{n} files changed since you last reviewed")}>
+            {n.fresh}
+          </span>
+        )}
+        <span className="machine-summary">
+          <StateMarks working={n.working} blocked={n.blocked} done={n.done} step={rest.step} />
+          {quiet && isFolded && n.agents > 0 && <span className="machine-count">{n.agents}</span>}
+        </span>
       </div>
       {!isFolded && (
-        <div className="ws-repo-items">
-          {entry.items.map((item) => (
-            <WorkspaceView key={item.session.id} machine={m} item={item} group={entry.name} {...rest} />
+        <div className="ws-folder-items">
+          {folder.items.map((item) => (
+            <WorkspaceView key={item.session.id} machine={m} item={item} group={folder.name} {...rest} />
           ))}
         </div>
       )}
@@ -212,7 +229,7 @@ export function MutedMark({ session }: { session: Session }) {
   );
 }
 
-// StateMarks are a folded machine's or repository's counts: how many work, ask, finished
+// StateMarks are a machine's or a folder's counts: how many work, ask, finished
 export function StateMarks({ working, blocked, done, step }: { working: number; blocked: number; done: number; step: number }) {
   return (
     <>

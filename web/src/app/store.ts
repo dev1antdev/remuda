@@ -5,7 +5,7 @@
 import { createStore } from "@/lib/store";
 import { isTouch, readPref, writePref } from "@/lib/prefs";
 import { clamp, step } from "@/features/chat/find";
-import type { Machine, Session } from "@/features/roster/api";
+import type { FolderIconRef, Machine, Session } from "@/features/roster/api";
 import type { FileTarget } from "@/features/files/target";
 import type { SearchHit } from "@/features/search/api";
 import type { BudgetStatus } from "@/features/usage/api";
@@ -35,6 +35,7 @@ export type AppDialog =
   | { kind: "start-recipe"; machineId?: string; dir?: string } // an agent started from a recipe, in the folder at hand unless the recipe has its own
   | { kind: "pins"; machineId: string; paneId: string; dir: string; shown: string | null; title: string } // the turns pinned in a folder's conversations; shown = the session on screen, whose pins name no session
   | { kind: "model"; machineId: string; paneId: string; current?: string } // a Claude Code pane's model switched through its own /model; current = what the meter last saw it answer with
+  | { kind: "folder-icon"; machineId: string; folder: string; name: string; icon?: FolderIconRef } // a folder's icon: an emoji, a site's favicon or a picture
   | null;
 
 export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;

@@ -25,6 +25,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/icons"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/prefs"
@@ -77,6 +78,7 @@ type Server struct {
 	UI        fs.FS
 	Live      *live.Hub      // the page's event stream, nil without one
 	Awake     *awake.Service // the machines kept awake while their agents work
+	Icons     *icons.Store   // the icon the person gave each folder of the sidebar
 
 	streams termStreams
 }
@@ -116,6 +118,7 @@ func (s *Server) Handler() http.Handler {
 	s.agentKeyRoutes(api)
 	s.viewerKeyRoutes(api)
 	s.completeRoutes(api)
+	s.iconRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard
@@ -141,7 +144,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 const appCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; " +
 	"font-src 'self' data:; connect-src 'self' ws: wss:; worker-src 'self'; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'none'; form-action 'self'"
 
-// secureHeaders puts nosniff, Referrer-Policy, X-Frame-Options, HSTS over TLS and the page's CSP on every response but the code-server proxy's and the file viewer's bytes.
+// secureHeaders puts nosniff, Referrer-Policy, X-Frame-Options, HSTS over TLS and the page's CSP on every response but the code-server proxy's and the file viewer's bytes; a folder icon's picture sets a sandbox of its own over it.
 func secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()

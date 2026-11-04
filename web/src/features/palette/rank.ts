@@ -1,15 +1,16 @@
 // The palette's list: every pane as a row to jump to, every command the page offers, and their order by
 // what was typed. Pure: the rows are built from the roster, the ranking from words.
 
-import type { Machine } from "@/features/roster/api";
+import type { FolderIconRef, Machine } from "@/features/roster/api";
 import { machineHue } from "@/features/roster/hue";
 import { displayOf, markOf, recentRows, rowLabel, stateWords, type Display, type RadarPrefs } from "@/features/roster/radar";
 import { basename } from "@/lib/text";
+import { folderOf } from "@/features/roster/workspaces";
 import type { IconName } from "@/ui/icons";
 
 export type Selection = { machineId: string; paneId: string };
 
-export type PaneRow = { machineId: string; paneId: string; agent: string; display: Display; alert?: string; mark: string; current: boolean };
+export type PaneRow = { machineId: string; paneId: string; agent: string; display: Display; alert?: string; mark: string; current: boolean; folder: { name: string; icon?: FolderIconRef } };
 
 export type Entry = {
   id: string;
@@ -49,6 +50,7 @@ export function paneEntries(machines: Machine[], prefs: RadarPrefs, now: number,
           alert,
           mark: alert ? "!" : pane.agent ? markOf(display, step) : "$",
           current: current?.machineId === machine.id && current.paneId === pane.id,
+          folder: { name: basename(folderOf(session)) || session.name, icon: session.icon },
         },
         run: () => open(machine.id, pane.id),
       });
