@@ -22,11 +22,26 @@ export function quoteText(selected: string): string {
       cut = true;
       break;
     }
+    if (size > QUOTE_MAX) {
+      kept.push(cutLine(line, QUOTE_MAX));
+      cut = true;
+      break;
+    }
     kept.push(line);
   }
   const quoted = kept.map((line) => (line ? `> ${line}` : ">"));
   if (cut) quoted.push("> …");
   return quoted.join("\n");
+}
+
+// cutLine is a first line too long to quote whole, cut at the last space before max, else at max itself, never between
+// the halves of a surrogate pair
+function cutLine(line: string, max: number): string {
+  const space = line.lastIndexOf(" ", max);
+  let end = space > max / 2 ? space : max;
+  const code = line.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return line.slice(0, end).replace(/\s+$/, "");
 }
 
 // withQuote puts the quote after what is already typed, a blank line on each side, and the caret where the reply goes

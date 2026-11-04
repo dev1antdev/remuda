@@ -11,7 +11,15 @@ import { lookOf, mermaidConfig } from "./mermaidLook";
 type MermaidAPI = (typeof import("mermaid"))["default"];
 
 let library: Promise<MermaidAPI> | null = null;
-const loadMermaid = () => (library ??= import("mermaid").then((m) => m.default));
+// a chunk that failed to load (the network, or a page older than its server's new build) is asked for again next time
+const loadMermaid = () =>
+  (library ??= import("mermaid").then(
+    (m) => m.default,
+    () => {
+      library = null;
+      throw new Error(t("its library did not load — reload the page"));
+    },
+  ));
 
 let configured = "";
 let drawn = 0;

@@ -37,9 +37,11 @@ describe("the words and tones", () => {
 });
 
 describe("resetForHit", () => {
-  it("is the earliest reset of the agent's windows at the limit, else near it, else none", () => {
+  it("is when every window of the agent at the limit has reset, else the ones near it, else none", () => {
     const windows = [win({ used: 100, resets_at: "2026-11-08T00:00:00Z", name: "week" }), win({ used: 100, resets_at: "2026-11-04T14:00:00Z" }), win({ agent: "codex", used: 100, resets_at: "2026-11-04T11:00:00Z" })];
-    expect(resetForHit(windows, "claude")).toBe("2026-11-04T14:00:00Z");
+    expect(resetForHit(windows, "claude")).toBe("2026-11-08T00:00:00Z");
+    expect(resetForHit([win({ used: 100, resets_at: "2026-11-04T14:00:00Z" }), win({ used: 40, name: "week", resets_at: "2026-11-08T00:00:00Z" })], "claude")).toBe("2026-11-04T14:00:00Z");
+    expect(resetForHit(windows, "codex")).toBe("2026-11-04T11:00:00Z");
     expect(resetForHit([win({ used: 96, resets_at: "2026-11-05T00:00:00Z" })], "claude")).toBe("2026-11-05T00:00:00Z");
     expect(resetForHit([win({ used: 50 })], "claude")).toBeUndefined();
   });

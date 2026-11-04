@@ -64,9 +64,10 @@ const needFull = "remuda-teleport: need the whole branch"
 func landScript(dir, pack, worktrees, suffix string) string {
 	fail := func(what string) string { return `{ echo ` + script.Quote("error: "+what) + `; exit 1; }` }
 	named := `"$branch-"` + script.Quote(suffix)
-	return `cd ` + script.Quote(dir) + ` 2>/dev/null && root=$(git rev-parse --show-toplevel 2>/dev/null) || ` + fail("the folder is not a git checkout") + `; cd "$root" || exit 1; ` +
-		`t=$(mktemp -d "${TMPDIR:-/tmp}/remuda-teleport.XXXXXX") || exit 1; trap 'rm -rf "$t"; rm -f ` + script.Quote(pack) + `' EXIT; ` +
-		`tar -xf ` + script.Quote(pack) + ` -C "$t" || ` + fail("the work did not unpack") + `; ` +
+	return `pk=` + script.Quote(pack) + `; trap 'rm -f "$pk"' EXIT; ` +
+		`cd ` + script.Quote(dir) + ` 2>/dev/null && root=$(git rev-parse --show-toplevel 2>/dev/null) || ` + fail("the folder is not a git checkout") + `; cd "$root" || exit 1; ` +
+		`t=$(mktemp -d "${TMPDIR:-/tmp}/remuda-teleport.XXXXXX") || exit 1; trap 'rm -rf "$t"; rm -f "$pk"' EXIT; ` +
+		`tar -xf "$pk" -C "$t" || ` + fail("the work did not unpack") + `; ` +
 		`branch=$(sed -n 1p "$t/meta"); head=$(sed -n 2p "$t/meta"); ` +
 		`if [ -f "$t/commits.bundle" ]; then ` +
 		`git bundle verify -q "$t/commits.bundle" > /dev/null 2>&1 || { echo "fetching what this checkout lacks from its remotes"; git fetch -q --all 2>&1 | tail -n 3; }; ` +

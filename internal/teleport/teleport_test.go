@@ -350,7 +350,7 @@ func TestLandReadsTheRemoteScriptsLines(t *testing.T) {
 	}
 	scripts := host.Scripts()
 	last := scripts[len(scripts)-1]
-	for _, want := range []string{"cd '/w/app'", "rm -f '/tmp/p'", "'/h/w'/", `"$branch-"'from-mac'`, "git apply --index --binary"} {
+	for _, want := range []string{"cd '/w/app'", "pk='/tmp/p'; trap 'rm -f \"$pk\"' EXIT", "'/h/w'/", `"$branch-"'from-mac'`, "git apply --index --binary"} {
 		if !strings.Contains(last, want) {
 			t.Errorf("the landing script lacks %q", want)
 		}

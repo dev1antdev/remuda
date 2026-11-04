@@ -18,8 +18,17 @@ describe("quoteText", () => {
     const quoted = quoteText(Array.from({ length: 100 }, () => line).join("\n"));
     expect(quoted.endsWith("> …")).toBe(true);
     expect(quoted.length).toBeLessThan(QUOTE_MAX + 200);
-    const huge = quoteText("y".repeat(QUOTE_MAX * 2));
-    expect(huge).toBe(`> ${"y".repeat(QUOTE_MAX * 2)}`); // one line is kept whole: nothing to cut it at
+  });
+
+  it("cuts one line too long to quote whole, at a space where there is one", () => {
+    expect(quoteText("y".repeat(QUOTE_MAX * 2))).toBe(`> ${"y".repeat(QUOTE_MAX)}\n> …`);
+    const words = quoteText("word ".repeat(QUOTE_MAX));
+    expect(words.endsWith(" word\n> …")).toBe(true);
+    expect(words.length).toBeLessThanOrEqual(QUOTE_MAX + 6);
+    const emoji = quoteText("a" + "😀".repeat(QUOTE_MAX));
+    const kept = emoji.split("\n")[0]!.slice(2);
+    expect(kept.length).toBeLessThanOrEqual(QUOTE_MAX);
+    expect([...kept].every((ch) => ch === "a" || ch === "😀")).toBe(true); // no lone half of a pair
   });
 });
 
