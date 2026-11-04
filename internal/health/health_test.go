@@ -156,6 +156,15 @@ func TestParseRelease(t *testing.T) {
 	}
 }
 
+func TestParseReadsTheStatusLineWrapper(t *testing.T) {
+	if r, _ := Parse("os=macOS 26\nstatusline=wrapped\n"); !r.Statusline {
+		t.Fatal("the wrapper was not read")
+	}
+	if r, _ := Parse("os=macOS 26\n"); r.Statusline {
+		t.Fatal("a wrapper read from nothing")
+	}
+}
+
 func TestParseReadsCodeServer(t *testing.T) {
 	r, _ := Parse("os=macOS 26\ncode_server=4.140.0\n")
 	if r.CodeServer != "4.140.0" {

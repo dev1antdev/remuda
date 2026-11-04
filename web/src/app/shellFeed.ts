@@ -3,6 +3,9 @@
 
 import type { Machine } from "@/features/roster/api";
 import { displayOf, groups, rowLabel, type Group, type RadarPrefs } from "@/features/roster/radar";
+import { hiddenWords } from "@/features/roster/sharing";
+import type { Sharing } from "@/features/roster/useSharing";
+import { folderOf } from "@/features/roster/workspaces";
 import { t } from "@/lib/i18n";
 import type { ShellRow } from "@/lib/shell";
 import type { Mode } from "./store";
@@ -80,4 +83,19 @@ const MODE_NAMES: Record<string, Mode> = { agents: "herdr", herdr: "herdr", wall
 // modeOf reads a mode's name as the app says it, "agents" for the first mode; nothing for a name the page has no mode for
 export function modeOf(name: unknown): Mode | null {
   return typeof name === "string" ? (MODE_NAMES[name] ?? null) : null;
+}
+
+// maskFeed is the menu as the screen-sharing mode lets it show: every machine by its neutral name when hidden, and a
+// hidden folder's rows by the folder's neutral name with no words of the agent's
+export function maskFeed(feed: ShellFeed, machines: Machine[], share: Pick<Sharing, "on" | "sessionHidden" | "machineLabel" | "folderName">): ShellFeed {
+  if (!share.on) return feed;
+  const rows = feed.rows.map((row) => {
+    const machine = machines.find((m) => m.id === row.machine);
+    const session = machine?.sessions.find((s) => s.tabs.some((tab) => tab.panes.some((p) => p.id === row.pane)));
+    if (!machine) return row;
+    if (!session || !share.sessionHidden(machine.id, session)) return { ...row, machineLabel: share.machineLabel(machine) };
+    const folder = share.folderName(machine.id, folderOf(session), session.name);
+    return { ...row, machineLabel: share.machineLabel(machine), workspace: folder, title: folder, said: hiddenWords() };
+  });
+  return { ...feed, rows };
 }

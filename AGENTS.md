@@ -64,12 +64,17 @@ not style.
 - **herdr owns every process and status.** remuda keeps no session state
   and must keep working across its own restart while agents run. Never
   spawn, kill or track an agent yourself; ask herdr over its RPC.
-- **`~/.claude` is read-only.** Transcripts are parsed, never written.
+- **`~/.claude` is read-only.** Transcripts are parsed, never written; the
+  one write is `remuda statusline install`, which puts the wrapper before
+  the status line in `settings.json` only when the person runs it or
+  presses Run on its Updates row (a backup kept in remuda's state dir,
+  `internal/limits`), and a test of it runs in a temp HOME only.
   Input reaches an agent only through herdr — `agent.prompt`, else
   `pane.send_text` + `pane.send_keys` — serialized per pane by
-  `sessions.Input`. Never queue, retry or auto-send what a person typed. The one
-  exception is the restart after an update the person ran (CLAUDE.md,
-  `internal/restart`).
+  `sessions.Input`. Never queue, retry or auto-send what a person typed. The
+  exceptions are the restart after an update the person ran (CLAUDE.md,
+  `internal/restart`) and the "continue" a person booked for after a plan
+  limit's reset (`internal/limits`).
 - **Never `--takeover`.** herdr allows one attached client per terminal;
   stealing the slot is the person's call only. A refusal is surfaced
   (`RefusedError`, 409 on HTTP, the WebSocket close reason), never retried
@@ -95,11 +100,16 @@ not style.
   `/api/login`. A new route goes on the guarded mux and resolves its
   machine through `machineFor` / `ready()`, never by trusting the body.
 - **Nothing phones home** but the version checks (npm registry, GitHub
-  releases; off with `-no-version-check`), and a site's favicon, fetched
-  once only when the person asks for it in the icon dialog
-  (`internal/icons`). No sudo anywhere. The uploads
-  folder `<pane dir>/.remuda/uploads` is the only thing remuda writes into
-  a project.
+  releases; off with `-no-version-check`), a site's favicon or a
+  GitHub owner's avatar, each fetched once only when the person asks for
+  it in the icon dialog (`internal/icons`), and the person's own Jira site
+  once they set it in Settings (`internal/jira`: the issues their work
+  names, read only while a page is open). No sudo anywhere. remuda writes two things into a
+  project: the uploads folder `<pane dir>/.remuda/uploads`, and into a
+  worktree remuda itself just made, the ignored files the repository's own
+  `.worktreeinclude` lists, copied from its main checkout — never a tracked
+  file, never over one already there, nothing outside the repository
+  (`internal/worktrees/include.go`).
 - **One design system** (`web/src/styles.css`): every `<button>` carries a
   family class, radii and type sizes come from the scales, icons are
   `icons.tsx` (never an emoji), an icon-only button says what it does

@@ -37,6 +37,24 @@ describe("keyWidth", () => {
   });
 });
 
+describe("a drawer's top edge", () => {
+  const drawer = PANELS.float; // 320, 160..900
+
+  it("grows when dragged up and shrinks when dragged down", () => {
+    expect(dragWidth(drawer, 320, -40, "top")).toBe(360);
+    expect(dragWidth(drawer, 320, 40, "top")).toBe(280);
+    expect(dragWidth(drawer, 320, 2000, "top")).toBe(160);
+  });
+
+  it("steps with ↑ and ↓, and leaves ← → alone", () => {
+    expect(keyWidth(drawer, 320, "ArrowUp", false, "top")).toBe(320 + STEP);
+    expect(keyWidth(drawer, 320, "ArrowDown", true, "top")).toBe(320 - STEP * 4);
+    expect(keyWidth(drawer, 320, "ArrowLeft", false, "top")).toBeNull();
+    expect(keyWidth(spec, 268, "ArrowUp", false, "right")).toBeNull();
+    expect(keyWidth(drawer, 500, "Enter", false, "top")).toBe(320);
+  });
+});
+
 describe("PANELS", () => {
   it("has a pref key, a CSS variable and a sane range each", () => {
     for (const p of Object.values(PANELS)) {

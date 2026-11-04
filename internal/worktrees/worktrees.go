@@ -1,7 +1,10 @@
 // Package worktrees takes a linked git worktree down with its branch, on the machine, as the person — the one thing
-// remuda ever deletes from a repository, and only when asked once the work's pull request is merged. A look first
-// (Inspect) refuses a worktree with uncommitted changes before anything is closed; the removal (Remove) never passes
-// --force to git, and deletes a branch that git does not see as merged only when the caller says the request was.
+// remuda ever deletes from a repository, and only when asked: once the work's pull request is merged, or for an arena's
+// lanes the person did not keep. A look first (Inspect) refuses a worktree with uncommitted changes before anything is
+// closed; the removal (Remove) never passes --force to git, and deletes a branch that git does not see as merged only
+// when the caller says the request was. Discard is the one exception, an arena's losing lane: its work saved as a
+// patch by the caller first, after a confirm that says so, then git's --force and -D.
+// A worktree remuda makes gets the ignored files its repository's .worktreeinclude lists (Include, include.go).
 package worktrees
 
 import (
@@ -79,6 +82,29 @@ func RemoveScript(info Info, merged bool) string {
 // Remove takes the worktree down on the machine; the error is git's own line.
 func Remove(host shell.Shell, info Info, merged bool) error {
 	out, err := shell.Text(host, RemoveScript(info, merged), Timeout)
+	if err == nil {
+		return nil
+	}
+	var exit *shell.ExitError
+	if errors.As(err, &exit) && exit.Code == 5 {
+		return errors.New("the worktree is removed; the branch stays: " + lastLine(out, err.Error()))
+	}
+	return errors.New(lastLine(out, err.Error()))
+}
+
+// DiscardScript removes a worktree whose work the caller has saved, uncommitted changes and all, and deletes its branch.
+func DiscardScript(info Info) string {
+	s := script.PATH + "\ncd " + script.Quote(info.Repo) + " 2>/dev/null || { echo 'the repository is not there'; exit 3; }\n" +
+		"git worktree remove --force " + script.Quote(info.Path) + " 2>&1 || exit 4\n"
+	if info.Branch != "" {
+		s += "git branch -D " + script.Quote(info.Branch) + " 2>&1 || exit 5\n"
+	}
+	return s
+}
+
+// Discard takes down a worktree whose work the caller saved first (an arena's lane the person did not keep); git's line on a refusal.
+func Discard(host shell.Shell, info Info) error {
+	out, err := shell.Text(host, DiscardScript(info), Timeout)
 	if err == nil {
 		return nil
 	}

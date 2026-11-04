@@ -6,8 +6,11 @@ import { unread } from "@/features/activity/group";
 import { DEFAULT_FILTER, filterWords, type Filter } from "@/features/activity/filter";
 import { machineLabel } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
+import { keyWords } from "@/features/terminal/float/float";
+import { toggleFloat } from "@/features/terminal/float/useFloatKey";
+import { useCurrent } from "./current";
 import { viewerPlaces } from "./viewOnly";
-import { usePref } from "@/lib/prefs";
+import { isMac, usePref } from "@/lib/prefs";
 import { Icon, Menu, Tip, type IconName, type MenuItem } from "@/ui";
 import { actions, app, type Mode, type Panel } from "./store";
 import { t } from "@/lib/i18n";
@@ -27,12 +30,16 @@ const PANELS: (Place & { panel: Panel })[] = [
   { panel: "activity", label: t("Activity"), icon: "bell", about: t("What happened across the agents while you were away; the alert settings are inside") },
 ];
 const SETTINGS: Place = { label: t("Settings"), icon: "sliders", about: t("The theme, the sidebar, the panels, the alerts, the keys") };
+const FLOAT: Place = { label: t("Shell"), icon: "square-terminal", about: t("A floating terminal over any screen, on a shell of its own · {key}", { key: keyWords(isMac) }) };
 
 export default function Rail() {
   const mode = app.use((s) => s.mode);
   const panel = app.use((s) => s.panel);
   const dialog = app.use((s) => s.dialog);
+  const float = app.use((s) => s.float);
   const { feed, machines, viewOnly } = useRoster();
+  const current = useCurrent();
+  const onFloat = () => toggleFloat(machines, current?.machine.id ?? null);
   const modes = viewerPlaces(MODES, viewOnly);
   const panels = viewerPlaces(PANELS, viewOnly);
   const [seen] = usePref<number>("feed.seen", 0);
@@ -45,7 +52,13 @@ export default function Rail() {
     ...modes.filter((m) => m.desk).map((m) => ({ label: m.label, icon: m.icon, hint: m.about, checked: mode === m.mode, onSelect: () => actions.setMode(m.mode) })),
     { sep: true },
     ...panels.map((p) => ({ label: p.label, icon: p.icon, hint: p.about, checked: panel === p.panel, onSelect: () => actions.togglePanel(p.panel) })),
-    ...(viewOnly ? [] : [{ sep: true } as MenuItem, { label: SETTINGS.label, icon: SETTINGS.icon, hint: SETTINGS.about, onSelect: () => actions.openDialog({ kind: "settings" }) } as MenuItem]),
+    ...(viewOnly
+      ? []
+      : [
+          { label: FLOAT.label, icon: FLOAT.icon, hint: FLOAT.about, checked: !!float, onSelect: onFloat } as MenuItem,
+          { sep: true } as MenuItem,
+          { label: SETTINGS.label, icon: SETTINGS.icon, hint: SETTINGS.about, onSelect: () => actions.openDialog({ kind: "settings" }) } as MenuItem,
+        ]),
   ];
   return (
     <nav className="rail" aria-label={t("Places")}>
@@ -69,6 +82,7 @@ export default function Rail() {
         {panels.map((p) => (
           <RailButton key={p.panel} place={placeOf(p)} on={panel === p.panel} dot={p.panel === "activity" && news} onClick={() => actions.togglePanel(p.panel)} />
         ))}
+        {!viewOnly && <RailButton place={FLOAT} on={!!float} onClick={onFloat} />}
         {!viewOnly && <RailButton place={SETTINGS} on={dialog?.kind === "settings"} onClick={() => actions.openDialog({ kind: "settings" })} />}
       </div>
     </nav>

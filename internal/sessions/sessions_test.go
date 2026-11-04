@@ -118,6 +118,31 @@ func TestKeysAndAgents(t *testing.T) {
 	}
 }
 
+func TestForkArgs(t *testing.T) {
+	cases := map[string]string{"claude": "--resume s1 --fork-session", "codex": "fork s1"}
+	for kind, want := range cases {
+		args, ok := ForkArgs(kind, "s1")
+		if !ok || strings.Join(args, " ") != want || !CanFork(kind) {
+			t.Errorf("%s: %q %v, want %q", kind, args, ok, want)
+		}
+	}
+	for _, kind := range []string{"gemini", "kimi", "shell", "pi"} {
+		if _, ok := ForkArgs(kind, "s1"); ok || CanFork(kind) {
+			t.Errorf("%s forks nothing", kind)
+		}
+	}
+	args, err := StartArgs("claude", Start{Resume: "0123-abcd", Fork: true, Model: "opus"})
+	if err != nil || strings.Join(args, " ") != "--resume 0123-abcd --fork-session --model opus" {
+		t.Fatalf("claude fork with a model: %q %v", args, err)
+	}
+	if _, err := StartArgs("gemini", Start{Resume: "0123-abcd", Fork: true}); err == nil {
+		t.Errorf("gemini cannot fork")
+	}
+	if _, err := StartArgs("claude", Start{Fork: true}); err == nil {
+		t.Errorf("a fork without a session is refused")
+	}
+}
+
 func TestResumeArgs(t *testing.T) {
 	cases := map[string]string{"claude": "--resume s1", "codex": "resume s1", "gemini": "--resume s1", "kimi": "--session s1"}
 	for kind, want := range cases {

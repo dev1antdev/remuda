@@ -12,6 +12,8 @@ export default function Resizer({ spec, edge, label }: { spec: PanelSpec; edge: 
   const width = clampWidth(spec, stored);
   const handle = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; start: number; width: number } | null>(null);
+  const vertical = edge === "top"; // a drawer's top edge: the pointer's y moves it, ↑ ↓ step it
+  const along = (e: PointerEvent<HTMLDivElement>) => (vertical ? e.clientY : e.clientX);
   const paint = (w: number) => handle.current?.parentElement?.style.setProperty(spec.cssVar, `${w}px`);
 
   useLayoutEffect(() => {
@@ -21,21 +23,22 @@ export default function Resizer({ spec, edge, label }: { spec: PanelSpec; edge: 
   const begin = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    drag.current = { x: e.clientX, start: width, width };
+    drag.current = { x: along(e), start: width, width };
     e.currentTarget.setPointerCapture(e.pointerId);
     document.body.classList.add("is-resizing");
+    if (vertical) document.body.classList.add("is-resizing-rows");
   };
   const move = (e: PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d) return;
-    d.width = dragWidth(spec, d.start, e.clientX - d.x, edge);
+    d.width = dragWidth(spec, d.start, along(e) - d.x, edge);
     paint(d.width);
   };
   const end = (e: PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d) return;
     drag.current = null;
-    document.body.classList.remove("is-resizing");
+    document.body.classList.remove("is-resizing", "is-resizing-rows");
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     if (d.width !== width) setStored(d.width);
     else paint(width);
@@ -46,13 +49,17 @@ export default function Resizer({ spec, edge, label }: { spec: PanelSpec; edge: 
       ref={handle}
       className={`resizer resizer-${edge}`}
       role="separator"
-      aria-orientation="vertical"
+      aria-orientation={vertical ? "horizontal" : "vertical"}
       aria-label={label}
       aria-valuenow={width}
       aria-valuemin={spec.min}
       aria-valuemax={spec.max}
       tabIndex={0}
-      title={t("{label}: drag it, or ← → once it has the focus; double-click for the usual {px} px", { label, px: spec.width })}
+      title={
+        vertical
+          ? t("{label}: drag it, or ↑ ↓ once it has the focus; double-click for the usual {px} px", { label, px: spec.width })
+          : t("{label}: drag it, or ← → once it has the focus; double-click for the usual {px} px", { label, px: spec.width })
+      }
       onPointerDown={begin}
       onPointerMove={move}
       onPointerUp={end}

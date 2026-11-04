@@ -1,6 +1,7 @@
 // Start an agent on a task: a worktree off a workspace's repository, Claude in it, the task's prompt once it is up.
 
 import { useEffect, useMemo, useState } from "react";
+import { actions } from "@/app/store";
 import type { Machine } from "@/features/roster/api";
 import { machineOptions } from "@/features/roster/options";
 import { usePref } from "@/lib/prefs";
@@ -111,6 +112,18 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
       </label>
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
+        <button
+          type="button"
+          className="btn ghost arena-from-task"
+          title={tr("The same prompt to several agents at once, each in a worktree of its own, to keep the best")}
+          disabled={!prompt.trim()}
+          onClick={() => {
+            onClose();
+            actions.openDialog({ kind: "arena", taskId: t.id, title: `${t.identifier} ${t.title}`, prompt, at: machine && workspace ? { machineId: machine, workspaceId: workspace } : undefined });
+          }}
+        >
+          <Icon name="columns" size={14} /> {tr("Arena…")}
+        </button>
         <button type="button" className="btn" onClick={onClose}>
           {tr("Cancel")}
         </button>
