@@ -37,6 +37,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
+	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/server"
 	"github.com/dev1antdev/remuda/internal/sessions"
@@ -307,6 +308,8 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.LocalHerdrDown) { keeper.Revive(e.Err) })
 	events.Subscribe(bus, func(e events.Snapshot) { keepAwake.Observe(e.Machine, awake.Working(e.Snap)) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { keepAwake.Forget(e.Machine) })
+	shells := scratch.Open(o.Dir) // the floating terminal's shell on each machine
+	events.Subscribe(bus, func(e events.MachineRemoved) { shells.Forget(e.Machine) })
 
 	// a remote that stays unreachable, and one that answers again: the machines publish every move, the tracker says when it matters
 	absent := away.New(away.AwayAfter, func(n away.Notice) {
@@ -403,6 +406,7 @@ func Run(ctx context.Context, o Options) error {
 		Live:      hub,
 		Awake:     keepAwake,
 		Icons:     icons.New(o.Dir),
+		Scratch:   shells,
 	}
 	if o.Tailscale {
 		var node *tsnetx.Node

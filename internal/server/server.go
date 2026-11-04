@@ -38,6 +38,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
+	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
@@ -79,6 +80,7 @@ type Server struct {
 	Live      *live.Hub      // the page's event stream, nil without one
 	Awake     *awake.Service // the machines kept awake while their agents work
 	Icons     *icons.Store   // the icon the person gave each folder of the sidebar
+	Scratch   *scratch.Store // the floating terminal's shell on each machine
 
 	streams termStreams
 }
@@ -119,6 +121,7 @@ func (s *Server) Handler() http.Handler {
 	s.viewerKeyRoutes(api)
 	s.completeRoutes(api)
 	s.iconRoutes(api)
+	s.scratchRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

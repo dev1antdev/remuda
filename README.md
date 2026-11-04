@@ -135,6 +135,14 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   like and it stays that way on this device; Tab to the edge and use
   ← → (⇧ for bigger steps), ↵ or a double-click for the usual width;
   "Reset the panels' widths" in the palette puts them all back.
+- **A floating terminal** — Ctrl+` (from a terminal too), Shell on the
+  rail or "Floating terminal" in the palette opens a shell over whatever
+  is on screen, on the machine of the pane you are on (a Select switches
+  machines), without changing that pane. It is a shell of its own, made
+  once in the machine's home folder and kept out of the sidebar; Ctrl+`
+  or × hides it and the shell keeps running, so it comes back as you
+  left it; drag its top edge for its height, or End the shell for a
+  fresh one next time.
 - **Settings that follow you** — "Sync these settings between devices",
   the last row of Settings › Look, keeps the theme, its flavour and
   accent, the density, the code font, the sidebar's settings, the Wall's,

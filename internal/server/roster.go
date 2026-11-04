@@ -86,6 +86,7 @@ type rosterSession struct {
 	Icon        *icons.Icon     `json:"icon,omitempty"`   // the folder's icon, an emoji or a stored picture's hash
 	Review      *rosterReview   `json:"review,omitempty"`
 	MutedUntil  *time.Time      `json:"muted_until,omitempty"` // the folder is silenced until then: no push, no webhook, no feed row
+	Scratch     bool            `json:"scratch,omitempty"`     // the floating terminal's own shell: the drawer shows it, the sidebar does not
 	Tabs        []rosterTab     `json:"tabs"`
 }
 
@@ -181,6 +182,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			Status:      herdr.UIStatus(ws.AgentStatus, agentInWS[ws.WorkspaceID]),
 			ActiveTabID: ws.ActiveTabID,
 			Tabs:        tabs,
+			Scratch:     s.Scratch != nil && s.Scratch.Is(machineID, ws.WorkspaceID),
 		}
 		if ws.Worktree != nil {
 			session.Worktree = &rosterWorktree{

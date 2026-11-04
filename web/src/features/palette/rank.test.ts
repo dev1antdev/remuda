@@ -56,6 +56,13 @@ describe("paneEntries", () => {
     ]);
     expect(entries.map((e) => e.pane!.mark)).toEqual(["⣷", "◦", "$", "!"]);
   });
+  it("leaves the floating terminal's own shell out", () => {
+    const withScratch = [
+      ...machines,
+      { id: "roofr", label: "roofr", state: "connected", sessions: [{ id: "w9", name: "scratch", status: "idle", active_tab_id: "t9", scratch: true, tabs: [tab("t9", [pane("p9", "")])] }] },
+    ] as unknown as Machine[];
+    expect(paneEntries(withScratch, DEFAULT_RADAR, now, 0, null, () => {}).map((e) => e.id)).not.toContain("pane:roofr|p9");
+  });
   it("marks the current pane and runs the open with its ids", () => {
     const opened: string[] = [];
     const entries = paneEntries(machines, DEFAULT_RADAR, now, 0, { machineId: "gog", paneId: "p4" }, (m, p) => opened.push(`${m}/${p}`));

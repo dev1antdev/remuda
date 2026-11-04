@@ -78,6 +78,7 @@ export type AppState = {
   away: string | null; // what the agents did while the page was away, one toast line until it is dismissed or followed
   taskAsked: { projectId: number; taskId: number; start: boolean; n: number } | null; // a task the Tasks mode is asked to open, once (one just made from an issue); start = the agent dialog on it too
   split: boolean; // the chat beside the terminal, asked for by a per-device pref; shown only on a wide screen with a mouse (app/split.ts)
+  float: { machineId: string } | null; // the floating terminal's drawer, open on that machine's scratch shell; null while hidden
 };
 
 const fromURL = readURL();
@@ -112,6 +113,7 @@ export const app = createStore<AppState>({
   away: null,
   taskAsked: null,
   split: readPref("split", false),
+  float: null,
 });
 
 let jumps = linked ? 1 : 0;
@@ -153,6 +155,13 @@ export const actions = {
   },
   closeDrawer() {
     app.set({ drawer: false });
+  },
+  // the floating terminal on a machine's scratch shell; hiding it leaves the shell running
+  openFloat(machineId: string) {
+    app.set({ float: { machineId }, drawer: false });
+  },
+  closeFloat() {
+    app.set({ float: null });
   },
   openDialog(dialog: AppDialog) {
     app.set({ dialog, menu: null });
