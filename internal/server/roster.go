@@ -103,9 +103,10 @@ type rosterMachine struct {
 	MAC      string            `json:"mac,omitempty"`     // the address a wake-up packet names, when the person set one
 }
 
-// folderOf is the folder a workspace belongs to in the sidebar: its repository's main checkout — herdr's repo_root, else
-// the folder holding the shared .git — or, outside a repository herdr knows, the workspace's own folder.
-func folderOf(worktree *herdr.WorktreeInfo, dir string) string {
+// folderOf is the folder a workspace belongs to in the sidebar: its repository's main checkout — herdr's repo_root,
+// else the folder holding the shared .git, else the root the review sweep read with git (a worktree made outside
+// herdr) — or, outside a repository, the workspace's own folder.
+func folderOf(worktree *herdr.WorktreeInfo, root, dir string) string {
 	if worktree != nil {
 		if worktree.RepoRoot != "" {
 			return worktree.RepoRoot
@@ -113,6 +114,9 @@ func folderOf(worktree *herdr.WorktreeInfo, dir string) string {
 		if strings.HasSuffix(worktree.RepoKey, "/.git") {
 			return path.Dir(worktree.RepoKey)
 		}
+	}
+	if root != "" {
+		return root
 	}
 	return dir
 }
@@ -189,7 +193,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			}
 		}
 		session.Dir = snap.WorkspaceDir(&ws)
-		session.Folder = folderOf(ws.Worktree, session.Dir)
+		session.Folder = folderOf(ws.Worktree, s.Review.Root(machineID, session.Dir), session.Dir)
 		if s.Icons != nil {
 			if icon, ok := s.Icons.Of(machineID, session.Folder); ok {
 				session.Icon = &icon
