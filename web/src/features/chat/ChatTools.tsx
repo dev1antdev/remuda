@@ -35,12 +35,16 @@ export function useChatViewItems(place: ChatPlace): MenuItem[] {
     { sep: true },
     { label: t("Recap this conversation…"), icon: "sun", hint: t("prompts, answers, tools, files, cost"), disabled: !agent, onSelect: () => actions.openDialog({ kind: "recap", machineId, paneId, session, dir, title }) },
     { label: t("Export as Markdown"), icon: "download", hint: t("the conversation shown, as a file"), disabled: !agent, onSelect: save },
-    { sep: true },
-    { label: t("Continue with another agent…"), icon: "arrow-right", hint: t("a new tab here, the gist of this conversation as its first prompt"), disabled: !agent || !paneId, onSelect: () => actions.openDialog({ kind: "handover", machineId, paneId, session, agent, workspace: title }) },
-    ...(paneId && !viewOnly && canFork(agent) ? [{ label: forkLabel(agent), icon: "columns" as const, hint: t("the same history in a new tab, a second path; this one goes on as it is"), onSelect: () => void forkPane(machineId, paneId, agent, session) }] : []),
+    // a viewer link may read but not start anything: no handover, no fork, no model switch
+    ...(viewOnly
+      ? []
+      : [
+          { sep: true } as const,
+          { label: t("Continue with another agent…"), icon: "arrow-right" as const, hint: t("a new tab here, the gist of this conversation as its first prompt"), disabled: !agent || !paneId, onSelect: () => actions.openDialog({ kind: "handover", machineId, paneId, session, agent, workspace: title }) },
+          ...(paneId && canFork(agent) ? [{ label: forkLabel(agent), icon: "columns" as const, hint: t("the same history in a new tab, a second path; this one goes on as it is"), onSelect: () => void forkPane(machineId, paneId, agent, session) }] : []),
+        ]),
     { sep: true },
     { label: t("Pins…"), icon: "pin", hint: pins.length ? plural(pins.length, "pinned turn") : t("the turns you pin, each a jump back to it"), disabled: !agent || !paneId, onSelect: () => actions.openDialog({ kind: "pins", machineId, paneId, dir, shown: session ?? chatLive, title }) },
-    { sep: true },
-    { label: t("Switch the model…"), icon: "sparkles", hint: t("Opus, Sonnet, Haiku or an id, through Claude Code's own /model"), disabled: agent !== "claude" || !paneId, onSelect: () => actions.openDialog({ kind: "model", machineId, paneId, current: model }) },
+    ...(viewOnly ? [] : [{ sep: true } as const, { label: t("Switch the model…"), icon: "sparkles" as const, hint: t("Opus, Sonnet, Haiku or an id, through Claude Code's own /model"), disabled: agent !== "claude" || !paneId, onSelect: () => actions.openDialog({ kind: "model", machineId, paneId, current: model }) }]),
   ];
 }

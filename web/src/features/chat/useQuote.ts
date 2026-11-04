@@ -23,7 +23,7 @@ export function useQuote(logRef: RefObject<HTMLDivElement | null>, enabled: bool
     const win = doc.defaultView ?? window;
     let frame = 0;
     const read = () => {
-      cancelAnimationFrame(frame);
+      win.cancelAnimationFrame(frame);
       frame = win.requestAnimationFrame(() => setPop(selectionIn(log)));
     };
     const onKey = (e: KeyboardEvent) => {
@@ -35,12 +35,14 @@ export function useQuote(logRef: RefObject<HTMLDivElement | null>, enabled: bool
     };
     doc.addEventListener("selectionchange", read);
     log.addEventListener("scroll", read, { passive: true });
+    win.addEventListener("resize", read); // the text reflows under the selection, and the button must follow it
     doc.addEventListener("keydown", onKey);
     read();
     return () => {
       win.cancelAnimationFrame(frame);
       doc.removeEventListener("selectionchange", read);
       log.removeEventListener("scroll", read);
+      win.removeEventListener("resize", read);
       doc.removeEventListener("keydown", onKey);
     };
   }, [logRef, enabled]);

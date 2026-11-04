@@ -111,7 +111,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
   // the queue: the draft kept as a note for later; a send through the chat's own path takes notes away only once it went
   const queueDraft = () => {
     const text = draftRef.current;
-    if (!text.trim()) return;
+    if (!text.trim() || att.uploading) return; // a file still uploading would land its @mention in the next draft
     setNotes((list) => addNote(list, text, noteId(), Date.now()));
     setDraft("");
     att.clear();
@@ -253,7 +253,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
         {!compact && (
           <>
             {agent === "claude" && <ModeChip machineId={machineId} paneId={paneId} active={onScreen} />}
-            <Tip text={`Attach files (up to ${MAX_ATTACHMENTS}): they are uploaded into the pane's folder`}>
+            <Tip text={t("Attach files (up to {n}): they are uploaded into the pane's folder", { n: MAX_ATTACHMENTS })}>
               <button type="button" className="icon-btn lg composer-attach" aria-label={t("Attach files")} disabled={att.items.length >= MAX_ATTACHMENTS} onClick={() => picker.current?.click()}>
                 <Icon name="paperclip" size={16} />
               </button>
@@ -274,7 +274,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
               </button>
             </Tip>
             <Tip text={t("Queue it as a note for the agent (Alt+↵): sent only when you press Send on it")}>
-              <button type="button" className="icon-btn lg composer-attach composer-queue" aria-label={t("Add to the queue")} disabled={!draft.trim()} onClick={queueDraft}>
+              <button type="button" className="icon-btn lg composer-attach composer-queue" aria-label={t("Add to the queue")} disabled={!draft.trim() || att.uploading} onClick={queueDraft}>
                 <Icon name="inbox" size={16} />
               </button>
             </Tip>
@@ -375,11 +375,11 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
             }
           }}
         />
-        <button type="button" className="btn primary composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title={isTouch ? t("Send") : "Send (Enter)"}>
+        <button type="button" className="btn primary composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title={isTouch ? t("Send") : t("Send (Enter)")}>
           {sending ? (
             "…"
           ) : att.uploading ? (
-            "Uploading…"
+            t("Uploading…")
           ) : (
             <>
               <span>{t("Send")}</span>
