@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/arena"
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/budget"
@@ -80,6 +81,7 @@ type Server struct {
 	Live      *live.Hub      // the page's event stream, nil without one
 	Awake     *awake.Service // the machines kept awake while their agents work
 	Icons     *icons.Store   // the icon the person gave each folder of the sidebar
+	Arena     *arena.Service // one prompt to several agents side by side
 
 	streams   termStreams
 	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
@@ -124,6 +126,7 @@ func (s *Server) Handler() http.Handler {
 	s.completeRoutes(api)
 	s.iconRoutes(api)
 	s.teleportRoutes(api)
+	s.arenaRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

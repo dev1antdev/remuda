@@ -38,6 +38,7 @@ export type AppDialog =
   | { kind: "teleport"; machineId: string; paneId: string; tabId: string; workspace: string; agent: string } // the pane's work moved to another machine, an agent carrying on there
   | { kind: "folder-icon"; machineId: string; folder: string; name: string; icon?: FolderIconRef } // a folder's icon: an emoji, a site's favicon or a picture
   | { kind: "reopen" } // the agents whose panes went away, each to be started again on its session
+  | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string } } // one prompt to several agents, each in a worktree of its own
   | null;
 
 export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
@@ -45,7 +46,7 @@ export type NoticeMsg = { text: string; error?: boolean; brief?: boolean };
 export type Confirm = { text: string; label: string; run: () => void };
 // a jump names its pane ("" = the transcript viewer): a Chat gets it only when it is that pane's
 export type Jump = { machineId: string; paneId: string; session: string; turn: string; n: number };
-export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | null;
+export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | "arena" | null;
 // what the transcript viewer shows, read-only: a session by folder and id, or one of its subagents
 export type Viewer = Pick<SearchHit, "machine" | "dir" | "session"> & { subagent?: { id: string; description: string } };
 // the find bar over the conversation shown: the bar writes the query and the step, the chat writes the count;
