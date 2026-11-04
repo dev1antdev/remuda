@@ -14,6 +14,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
+	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/radar"
@@ -85,6 +86,7 @@ type rosterSession struct {
 	Folder      string          `json:"folder,omitempty"` // the folder the sidebar groups by: the repository's main checkout, else the workspace's own
 	Icon        *icons.Icon     `json:"icon,omitempty"`   // the folder's icon, an emoji or a stored picture's hash
 	Review      *rosterReview   `json:"review,omitempty"`
+	Jira        []jira.Issue    `json:"jira,omitempty"`        // the Jira issues its branch and its agents name, as last read from the person's site
 	MutedUntil  *time.Time      `json:"muted_until,omitempty"` // the folder is silenced until then: no push, no webhook, no feed row
 	Tabs        []rosterTab     `json:"tabs"`
 }
@@ -202,6 +204,9 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 		}
 		if session.Dir != "" {
 			session.Branch = s.Review.Branch(machineID, session.Dir)
+		}
+		session.Jira = s.issuesOf(machineID, session)
+		if session.Dir != "" {
 			badge, ok := s.Review.Badge(machineID, session.Dir)
 			ready := s.Review.Ready(machineID, session.Dir)
 			if (ok && badge.Changed > 0) || ready {
@@ -213,9 +218,27 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 	return out
 }
 
+// issuesOf is the Jira issues a workspace is about — its branch's keys first, then its agents' — as last read; none
+// until the person set a site.
+func (s *Server) issuesOf(machineID string, session rosterSession) []jira.Issue {
+	if !s.Jira.Configured() {
+		return nil
+	}
+	lists := [][]string{jira.BranchKeys(session.Branch)}
+	for _, tab := range session.Tabs {
+		for _, pane := range tab.Panes {
+			if pane.Agent != "" {
+				lists = append(lists, s.Said.Keys(machineID, pane.ID))
+			}
+		}
+	}
+	return s.Jira.Issues(jira.Merge(lists...))
+}
+
 // handleRoster serves every machine from the watcher's cache, with an ETag so an unchanged roster is a 304.
 func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
-	s.PRs.Touch() // somebody is looking: the pull requests named are worth reading again
+	s.PRs.Touch()  // somebody is looking: the pull requests named are worth reading again
+	s.Jira.Touch() // and the Jira issues the workspaces name
 	body, etag := s.rosterBody()
 	w.Header().Set("X-Remuda-Version", buildversion.Build) // a page older than the server offers a reload
 	if auth.IsViewer(r.Context()) {
@@ -276,6 +299,9 @@ func (s *Server) rosterBody() ([]byte, string) {
 	}
 	if s.Budgets != nil {
 		roster["budgets"] = s.Budgets.Status() // from the cache: the pill and the rows know the limits without another poll
+	}
+	if site := s.Jira.Site(); site != "" {
+		roster["jira"] = site // the page offers a task from a Jira issue only with a site set
 	}
 	body, _ := json.Marshal(roster)
 	sum := sha256.Sum256(body)

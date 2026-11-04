@@ -1858,6 +1858,52 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   502 with why, naming the host alone. Nothing is remembered from the
   fetch and nothing is fetched again: the person keeps the picture by
   saving it as the icon.
+- `internal/jira/` — **the Jira issues the agents' work names** (tested on
+  `httptest` with recorded Cloud and server answers): the person's site,
+  account and token in `jira.json` in the state dir (0600; `Store`,
+  `View` masks the token as `has_token`, `Replace` keeps the stored token
+  when none comes, a Cloud site — `*.atlassian.net` — needs https and the
+  account's e-mail; a damaged file reads as none). `Client`: REST v3 on
+  Cloud, v2 on a server; Basic with the account and the token, else
+  Bearer (a personal access token); `Timeout` 10 s, an answer capped at
+  4 MB, an error naming the host alone — never the token or the address
+  (`ErrNotFound`, `ErrRefused`); `Myself`, `Projects` (Cloud's search a
+  page at a time), `Issue` (summary, status and its category, assignee),
+  `Full` (with type, reporter, labels and the description made Markdown:
+  `ADFMarkdown` for Cloud's document format, `WikiMarkdown` for a
+  server's wiki markup). Keys (`keys.go`): `[A-Z][A-Z0-9_]+-N` in
+  capitals in the conversation's last forty texts (`chat.Service.Texts`,
+  prompts and answers, read by `said.Tracker` beside the link —
+  `Inputs.Keys`, kept while the agent works on, only once a site is set)
+  and in any case in the workspace's branch (`BranchKeys`); `Merge` the
+  branch's first, then the agents', at most `MaxKeys` 3; `KeyOf` a typed
+  key or an issue's address. `Service`: `Issues(keys)` answers from the
+  cache alone — keys of projects the site does not know left out — and
+  notes them wanted; `Touch` (from the roster handler, like the pull
+  requests': only while a page reads) starts one background sweep at a
+  time: the projects when `ProjectsEvery` (1 h) old, then every wanted key
+  read `Every` (3 min) ago or never, at most `MaxReads` 30, a key no
+  roster named for `WantedFor` (10 min) dropped; a failing site holds the
+  sweeps off for `Every` and is logged once an hour; `OnChange` (the live
+  hub's `RosterChanged`) when anything moved; `Replace` / `Clear` forget
+  everything read. The roster carries `session.jira` (`server.issuesOf`)
+  and `jira` (the site, so the page offers the import). Routes
+  (`internal/server/jira.go`, not an agent key's nor a viewer's): `GET /
+  PUT / DELETE /api/jira`, `POST /api/jira/test` (who the account is and
+  how many projects it sees), `POST /api/jira/import {project_id, key}`
+  → `tasks.ImportFrom` (title "KEY summary", the first line naming the
+  issue by its address with key, type, status and reporter, the
+  description through `MarkdownHTML`, labels by name; the same issue
+  twice in a project refused). The page: `features/roster/IssueChip.tsx`
+  on the sidebar card's second line — in place of the branch when the
+  branch is named after the issue (`branchNamesIssue`), else after it;
+  the key never cut, the status before it — and in a wall tile's head,
+  `features/jira/jira.ts` (tested: `issueTone`, `issueWords`,
+  `issueTitle`, `branchNamesIssue`, `keyOf`), `features/jira/JiraSection.tsx`
+  in Settings (site, account, token, Save that tests, Test, Remove),
+  `features/tasks/ImportJiraDialog.tsx` (dialog kind `import-jira`; the
+  Tasks head's link button is a menu of the two imports once a site is
+  set; a palette row).
 - `internal/prefs/` — **settings that follow the person between devices**:
   `prefs.json` in the state dir, `{"<key>": {"value", "at"}}`; `Store.All`,
   `Store.Put` merges a part by key, the newer stamp winning (an equal one

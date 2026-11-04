@@ -26,6 +26,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
+	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/prefs"
@@ -79,6 +80,7 @@ type Server struct {
 	Live      *live.Hub      // the page's event stream, nil without one
 	Awake     *awake.Service // the machines kept awake while their agents work
 	Icons     *icons.Store   // the icon the person gave each folder of the sidebar
+	Jira      *jira.Service  // the person's Jira site and the issues their agents' work names
 
 	streams termStreams
 }
@@ -119,6 +121,7 @@ func (s *Server) Handler() http.Handler {
 	s.viewerKeyRoutes(api)
 	s.completeRoutes(api)
 	s.iconRoutes(api)
+	s.jiraRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

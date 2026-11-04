@@ -97,7 +97,9 @@ not style.
 - **Nothing phones home** but the version checks (npm registry, GitHub
   releases; off with `-no-version-check`), and a site's favicon, fetched
   once only when the person asks for it in the icon dialog
-  (`internal/icons`). No sudo anywhere. The uploads
+  (`internal/icons`), and the person's own Jira site once they set it in
+  Settings (`internal/jira`: the issues their work names, read only while
+  a page is open). No sudo anywhere. The uploads
   folder `<pane dir>/.remuda/uploads` is the only thing remuda writes into
   a project.
 - **One design system** (`web/src/styles.css`): every `<button>` carries a

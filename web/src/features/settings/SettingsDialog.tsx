@@ -5,6 +5,8 @@
 import { setAccentPref, setDarkFlavorPref, setDensityPref, setMonoPref, setTextSizePref, setThemePref, useAccent, useDarkFlavorPref, useDensity, useFlavor, useMono, useTextSize, useThemePref } from "@/app/theme";
 import { actions } from "@/app/store";
 import DevicesSection from "./DevicesSection";
+import JiraSection from "@/features/jira/JiraSection";
+import { useRoster } from "@/features/roster/useRoster";
 import { RadarFields } from "@/features/roster/RadarSettings";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { DENSITY_NAMES, MONO_FONTS, monoName, monoStack, TEXT_SIZE_NAMES, TEXT_SIZES, type Density, type MonoFont } from "@/lib/look";
@@ -29,6 +31,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const palette = swatches(flavor);
   const [radar, setRadar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [sync, setSync] = usePref<boolean>(SYNC_PREF, false);
+  const { viewOnly } = useRoster();
   const after = (run: () => void) => () => {
     onClose();
     run();
@@ -176,6 +179,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
           </span>
         </div>
       </section>
+      {!viewOnly && <JiraSection />}
       <DevicesSection />
     </Dialog>
   );

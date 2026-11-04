@@ -23,6 +23,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
+	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/jobs"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
@@ -176,7 +177,16 @@ func Run(ctx context.Context, o Options) error {
 	}
 	tracker := radar.New(o.Dir, chats.LastWriteOf)
 	defer tracker.Flush()
-	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer, Link: chats.PullRequest}, bus)
+	issues := jira.New(o.Dir)
+	issues.OnChange = hub.RosterChanged // an issue read from the site moves the chips on the page
+	// the issue keys a conversation names, read only once the person set a Jira site
+	issueKeys := func(machineID, paneID string) []string {
+		if !issues.Configured() {
+			return nil
+		}
+		return jira.KeysIn(chats.Texts(machineID, paneID, 40))
+	}
+	sayings := said.New(said.Inputs{Version: chats.SessionVersion, Answer: chats.LastAnswer, Link: chats.PullRequest, Keys: issueKeys}, bus)
 	requests := prstatus.New(func(machineID string) (shell.Shell, bool) {
 		mc, err := fleet.Get(machineID)
 		if err != nil {
@@ -403,6 +413,7 @@ func Run(ctx context.Context, o Options) error {
 		Live:      hub,
 		Awake:     keepAwake,
 		Icons:     icons.New(o.Dir),
+		Jira:      issues,
 	}
 	if o.Tailscale {
 		var node *tsnetx.Node

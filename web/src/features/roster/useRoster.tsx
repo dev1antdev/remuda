@@ -17,6 +17,7 @@ export type RosterState = {
   version?: string; // the server's
   feed?: number; // the newest activity entry: past the one seen here, the bell has news
   budgets?: BudgetStatus[]; // the spending limits with what their periods have cost so far
+  jiraSite?: string; // the person's Jira site, when one is set: a task can then come from a Jira issue
   offline: boolean;
   stale: string | null; // the server's version when this page is older
   viewOnly: boolean; // a viewer link signed this page in: it draws, and hides every control that would type or change
@@ -57,6 +58,7 @@ export function RosterProvider({ children }: { children: ReactNode }) {
       version: data?.version,
       feed: data?.feed,
       budgets: data?.budgets,
+      jiraSite: data?.jira,
       offline: !!error,
       stale,
       viewOnly,

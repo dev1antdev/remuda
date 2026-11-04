@@ -13,7 +13,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
-import { Icon, Notice, PANELS, Resizer, Tip, type IconName, useDebounced, useTimedNotice } from "@/ui";
+import { Icon, Menu, Notice, PANELS, Resizer, Tip, type IconName, useDebounced, useTimedNotice } from "@/ui";
 import { createTask, deleteTask, getTask, listLabels, listProjects, listTasks, patchTask, type Run, type Task } from "./api";
 import Board from "./Board";
 import { BulkBar } from "./BulkBar";
@@ -47,7 +47,7 @@ const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 export default function Tasks() {
   const drawer = app.use((s) => s.drawer);
-  const { machines, budgets, agents: rosterAgents } = useRoster();
+  const { machines, budgets, agents: rosterAgents, jiraSite } = useRoster();
   const prOf = (r: Run | null | undefined) => runPR(r, r ? paneOf(machines, r.machine, r.pane) : null);
   const agents = useAgentTargets();
   const located = useCurrent();
@@ -291,11 +291,27 @@ export default function Tasks() {
               setPage(1);
             }}
           />
-          <Tip text={tr("New task from a GitHub issue")}>
-            <button type="button" className="icon-btn" aria-label={tr("New task from a GitHub issue")} onClick={() => actions.openDialog({ kind: "import-issue", projectId: sel.kind === "project" ? sel.id : undefined })}>
-              <Icon name="link" size={16} />
-            </button>
-          </Tip>
+          {jiraSite ? (
+            <Menu
+              label={tr("New task from an issue")}
+              tip={tr("New task from a GitHub or Jira issue")}
+              trigger={
+                <button type="button" className="icon-btn" aria-label={tr("New task from an issue")}>
+                  <Icon name="link" size={16} />
+                </button>
+              }
+              items={[
+                { label: tr("From a GitHub issue…"), icon: "link", hint: tr("read with gh on the machine"), onSelect: () => actions.openDialog({ kind: "import-issue", projectId: sel.kind === "project" ? sel.id : undefined }) },
+                { label: tr("From a Jira issue…"), icon: "link", hint: tr("read from your Jira site"), onSelect: () => actions.openDialog({ kind: "import-jira", projectId: sel.kind === "project" ? sel.id : undefined }) },
+              ]}
+            />
+          ) : (
+            <Tip text={tr("New task from a GitHub issue")}>
+              <button type="button" className="icon-btn" aria-label={tr("New task from a GitHub issue")} onClick={() => actions.openDialog({ kind: "import-issue", projectId: sel.kind === "project" ? sel.id : undefined })}>
+                <Icon name="link" size={16} />
+              </button>
+            </Tip>
+          )}
           {project && (
             <Tip text={tr("Project settings: name, colour, columns")}>
               <button type="button" className="icon-btn" aria-label={tr("Project settings")} onClick={() => setSettings(true)}>

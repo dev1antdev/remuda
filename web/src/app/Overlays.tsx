@@ -22,6 +22,7 @@ import HandoverDialog from "@/features/chat/HandoverDialog";
 import ModelDialog from "@/features/chat/ModelDialog";
 import { handedOverWords } from "@/features/chat/handover";
 import ImportIssueDialog from "@/features/tasks/ImportIssueDialog";
+import ImportJiraDialog from "@/features/tasks/ImportJiraDialog";
 import RecipesDialog from "@/features/recipes/RecipesDialog";
 import StartFromRecipeDialog from "@/features/recipes/StartFromRecipeDialog";
 import Standup from "@/features/standup/StandupPanel";
@@ -147,6 +148,16 @@ export default function Overlays() {
       {dialog?.kind === "settings" && <SettingsDialog onClose={actions.closeDialog} />}
       {dialog?.kind === "import-issue" && (
         <ImportIssueDialog
+          projectId={dialog.projectId}
+          onClose={actions.closeDialog}
+          onCreated={(task, start) => {
+            actions.closeDialog();
+            actions.openTask(task.project_id, task.id, start);
+          }}
+        />
+      )}
+      {dialog?.kind === "import-jira" && (
+        <ImportJiraDialog
           projectId={dialog.projectId}
           onClose={actions.closeDialog}
           onCreated={(task, start) => {
