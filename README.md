@@ -485,8 +485,10 @@ check, `govulncheck`, `npm audit` and a secret scan of the whole history
 on every push to `main` or `release` and every pull request, and on
 `release` the end-to-end smoke as well: a throwaway herdr, a remuda of
 its own and headless Chrome, a scratch workspace typed into and read
-back (`make e2e` runs the same thing on your machine, touching nothing
-of yours).
+back, then every screen drawn at a desk's width and a phone's in English
+and Russian and checked for its place on the screen — nothing past an
+edge, nothing sideways, no console error (`make e2e` runs the same thing
+on your machine, touching nothing of yours).
 
 The long way, piece by piece:
 
@@ -737,7 +739,7 @@ make server    # go run, API on :7317
 make dev       # vite dev server on :5173, proxies /api and /ws
 make typecheck # tsc + go vet
 make webtest   # vitest on the page's pure modules
-make e2e       # the end-to-end smoke: throwaway herdr + remuda + headless Chrome
+make e2e       # the end-to-end smoke and the display checks: throwaway herdr + remuda + headless Chrome
 ```
 
 When the page stalls — nothing clickable for a moment — the browser
