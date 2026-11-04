@@ -9367,3 +9367,57 @@ body.popout {
   flex: 1 1 0;
   border-left: 1px solid var(--line);
 }
+
+/* ---- quote a piece of an answer, and the notes queued for the agent ---- */
+.btn.quote-pop {
+  position: fixed;
+  z-index: var(--z-menu);
+  box-shadow: var(--shadow-md);
+  background: var(--bg-overlay);
+}
+
+.chat-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 12px 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.chat-queue-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--ctl-sm);
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.chat-queue-count {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-queue-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--ctl-sm);
+}
+
+.linkish.chat-queue-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+  text-align: left;
+}
+
+.chat-queue-more {
+  color: var(--fg-faint);
+}
