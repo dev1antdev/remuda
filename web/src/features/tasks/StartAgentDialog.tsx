@@ -6,7 +6,9 @@ import type { Machine } from "@/features/roster/api";
 import { machineOptions } from "@/features/roster/options";
 import { usePref } from "@/lib/prefs";
 import { Dialog, Icon, Notice, Select, useSubmit } from "@/ui";
+import { useRoster } from "@/features/roster/useRoster";
 import { startTask, type Project, type Task } from "./api";
+import { automationOf } from "./autonomy";
 import { branchFor, taskPrompt } from "./prompt";
 import { t as tr } from "@/lib/i18n";
 
@@ -22,13 +24,23 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
   const connected = machines.filter((m) => m.state === "connected" && m.sessions.some((s) => s.dir));
   const [remembered, setRemembered] = usePref<Record<string, { machine: string; workspace: string }>>("tasks.start", {});
   const last = remembered[String(t.project_id)];
-  const [machine, setMachine] = useState(() => (connected.find((m) => m.id === last?.machine) ?? connected.find((m) => m.id === currentPane?.machineId) ?? connected[0])?.id ?? "");
+  // the project's own settings first: where its agents work and which agent starts
+  const setUp = automationOf(project);
+  const { agents } = useRoster();
+  const agent = setUp.agent || "claude";
+  const [machine, setMachine] = useState(
+    () => (connected.find((m) => m.id === setUp.machine) ?? connected.find((m) => m.id === last?.machine) ?? connected.find((m) => m.id === currentPane?.machineId) ?? connected[0])?.id ?? "",
+  );
   const workspaces = useMemo(() => {
     const m = machines.find((x) => x.id === machine);
     // the repos themselves, not their worktrees: a worktree branches off its repo
     return (m?.sessions ?? []).filter((s) => s.dir && !s.worktree?.linked).map((s) => ({ value: s.id, label: s.name, hint: s.dir, icon: <Icon name="folder" size={14} /> }));
   }, [machines, machine]);
-  const [workspace, setWorkspace] = useState(() => (workspaces.find((w) => w.value === last?.workspace) ?? workspaces[0])?.value ?? "");
+  const [workspace, setWorkspace] = useState(() => {
+    const m = machines.find((x) => x.id === machine);
+    const onSetUp = machine === setUp.machine ? m?.sessions.find((s) => s.dir === setUp.dir && !s.worktree?.linked)?.id : undefined;
+    return (workspaces.find((w) => w.value === onSetUp) ?? workspaces.find((w) => w.value === last?.workspace) ?? workspaces[0])?.value ?? "";
+  });
   useEffect(() => {
     if (!workspaces.some((w) => w.value === workspace)) setWorkspace(workspaces[0]?.value ?? "");
   }, [workspaces, workspace]);
@@ -47,7 +59,7 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
   const ready = !!workspace && !!branch.trim() && !!prompt.trim();
   const { busy, err, run } = useSubmit(async () => {
     setRemembered({ ...remembered, [String(t.project_id)]: { machine, workspace } });
-    const task = await startTask(t.id, { machine, workspace, branch: branch.trim(), base: base.trim(), agent: "claude", groom, prompt });
+    const task = await startTask(t.id, { machine, workspace, branch: branch.trim(), base: base.trim(), agent, model: setUp.model, args: setUp.args, groom, prompt });
     onStarted(task, `${ws?.label ?? tr("the workspace")}${m && m.id !== "local" ? ` on ${m.label}` : ""}`);
   });
   return (
@@ -64,7 +76,11 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
       }}
     >
       <p className="modal-hint">
-        {tr("A worktree branches off the workspace's repository, Claude starts in it and gets the task once it is up.")}{" "}
+        {agent === "claude" && !setUp.model
+          ? tr("A worktree branches off the workspace's repository, Claude starts in it and gets the task once it is up.")
+          : tr("A worktree branches off the workspace's repository, {agent} starts in it, as the project's settings say, and gets the task once it is up.", {
+              agent: [agents.find((a) => a.id === agent)?.label ?? agent, setUp.model].filter(Boolean).join(" · "),
+            })}{" "}
         {moveTo ? (
           <>
             {tr("The task moves to")} <b>{moveTo}</b>;

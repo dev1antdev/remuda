@@ -301,6 +301,24 @@ async function seed() {
   const projects = await api("GET", "/api/tasks/projects");
   inbox = (projects.find?.((p) => /inbox/i.test(p.title)) ?? projects[0])?.id;
   await api("POST", "/api/tasks", { project_id: inbox, title: "Draw every screen", markdown: "Every **screen** at two widths.\n\n- [ ] the desk\n- [ ] the phone" });
+  // the Inbox's agents set up: a Queued column, kept empty so the queue (on) starts nothing, and a two-stage pipeline
+  const inboxProject = projects.find((p) => p.id === inbox);
+  const columns = inboxProject.statuses.flatMap((s) => (s.on_new ? [s, { id: 0, project_id: inbox, title: "Queued", hex_color: "f1c40f", kind: "open", position: 0, on_queue: true }] : [s]));
+  const withQueue = await api("PUT", `/api/tasks/projects/${inbox}/statuses`, { statuses: columns, moves: {} });
+  const testing = withQueue.statuses.find((s) => s.on_finish);
+  await api("PUT", `/api/tasks/projects/${inbox}/automation`, {
+    automation: {
+      machine: "local",
+      dir: appDir,
+      agent: "claude",
+      queue: true,
+      max: 2,
+      stages: [
+        { name: "Tests", agent: "codex", prompt: "Run the tests on {branch} and fix what fails.", status_id: testing?.id ?? 0 },
+        { name: "Pull request", agent: "claude", prompt: "", pr: true },
+      ],
+    },
+  }).catch((error) => failed(`the Inbox's agents: ${error.message}`));
   const ready = await until(async () => {
     const list = await sessions();
     const a = list.find((s) => s.id === app.id);
@@ -705,7 +723,17 @@ async function runPass() {
   await screen("wall-zoo", { open: async () => palette("wall-zoo"), expect: [".zoo-grid .zoo-creature"] });
   if (!pass.phone) await screen("wall-office", { open: async () => palette("wall-office"), expect: [".wall-office"], close: async () => palette("wall-office") });
 
-  await screen("tasks-board", { open: async () => palette("mode:tasks"), expect: [".board"] });
+  await screen("tasks-board", { open: async () => palette("mode:tasks"), expect: [".board", ".board-col-note"] });
+  await screen("project-settings", { open: async () => tap(".tasks-settings-btn"), expect: [".project-settings .ps-queue"], settle: 500, close: async () => {} });
+  await screen("project-settings-agents", {
+    open: async () => evaluate(`document.querySelector('.project-settings .ps-queue')?.scrollIntoView({ block: "center" })`),
+    expect: [".project-settings .ps-queue input[type=checkbox]:checked"],
+    close: async () => {},
+  });
+  await screen("project-settings-pipeline", {
+    open: async () => evaluate(`[...document.querySelectorAll('.project-settings .ps-stage')].pop()?.scrollIntoView({ block: "center" })`),
+    expect: [".project-settings .ps-stage textarea"],
+  });
   await screen("tasks-list", { open: async () => evaluate(`document.querySelector('.tasks-view button')?.click()`), expect: [".tasks-list .tasks-row"] });
   await screen("task-detail", { open: async () => tap(".tasks-row"), expect: [".tasks-detail"] });
   await screen("review", { open: async () => palette("mode:review"), expect: [".queue-head"] });

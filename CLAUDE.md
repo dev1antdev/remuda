@@ -2608,6 +2608,64 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   person asks (the workspace menu, `internal/worktrees`). `comments` are
   markdown, a path in one opening on the run's machine relative to its
   worktree; the UI re-reads an open task every 10 s while a run is live.
+  **A project's agents** (`automation.go`, tested): `Automation{Machine,
+  Dir, Agent, Model, Args, Queue, Max, Stages}`, one JSON column on the
+  project (`projects.automation`; a damaged or missing one reads as none),
+  replaced whole by `PUT /api/tasks/projects/{id}/automation`
+  (`SetAutomation`: a known agent and a model and arguments its command
+  line takes — `checkStart` over `sessions.StartArgs` / `SplitArgs` — an
+  absolute folder, both machine and folder or neither, at most
+  `MaxQueued` 10 at once, a queue only with a place and a Queued column,
+  at most `MaxStages` 8 stages, each with a prompt unless it is a PR
+  stage and a column of this project). `StartRequest` carries `model` and
+  `args` too (`sessions.StartAgentWith`), and the page's Start dialog
+  begins from the project's machine, repository, agent and model.
+  **The queue** (`queue.go`, tested with fakes): the column flag
+  `on_queue` ("Queued", one per project, like the other four); while the
+  project's switch is on, `Queue.Sweep` (every 30 s, wired in
+  `internal/app/queue.go` over the fleet, the watcher's snapshot, the
+  radar, the plan limits and the budgets) starts the top card of that
+  column — `nextQueued`: open, not refused since it last moved, no run
+  starting or running on it — through `Launcher.Start` with the
+  project's agent, `BranchFor` (the page's `branchFor` in Go) and
+  `Queued` (the run's `by_queue`), once the machine is connected, fewer
+  than `Max` of the project's tasks the queue started still work or ask
+  (`queueWorking`: a start under way, or a pane the radar reads working,
+  blocked or unknown; a pipeline's passed stage counts through the next),
+  the agent kind's plan window is not at its limit (`limits.Level`), no
+  budget over the machine and folder is spent, and a workspace is open on
+  the repository folder to branch off; one start per project per sweep.
+  A refused start notes `tasks.queue_refused` with a comment and a push
+  and is not tried again until the card moves (`Update` clears it). What
+  the queue does is `Project.queue` (`QueueNote{State idle | waiting |
+  started, Reason, Next, Working, Max}`, kept in the store's memory);
+  the board draws it under the Queued column's head (`QueueLine`,
+  `.board-col-note`, the clock mark), a refused card a warning chip.
+  **The pipeline** (`pipeline.go`, tested): `Stage{Name, Agent, Model,
+  Prompt, StatusID, PR}` after the first agent's work; a run started while
+  the project has stages is `pipeline: on`, and every prompt of it ends
+  with `StageAsk` — end with the line `STAGE DONE` (`StageMarker`,
+  `StageDone`: the last line outside a fence, the marks stripped). On a
+  finish `RunWatch.onStageAnswer` checks the card is where the pipeline
+  put it (`expect_status`) and the answer ends with the marker, then
+  `RunWatch.Advance` (`Launcher.StartStage`: `tab.create` in the run's
+  workspace, the stage's agent and model, `StartStageRun` — a new run on
+  the same worktree and branch with `stage` n, the previous one `passed`,
+  the card moved to the stage's column — and the prompt delivered as a
+  start's is) with `StagePrompt` (`{task}`, `{previous}` the answer less
+  the marker, `{branch}`, a PR stage's `PRAsk`); after the last stage
+  `FinishPipeline` (`done`, the card to `on_finish` while it sits where the
+  pipeline left it, so a merge moves it on as usual). A question
+  (`blocked`), an answer without the marker, a failed delivery or a card
+  the person moved is `stopped: <why>` with a comment by remuda; the
+  usual finish move stays out of an intermediate stage. The page:
+  `ProjectSettings.tsx` holds `AgentsSettings.tsx` (machine, repository —
+  `repositories`, the machine's own checkouts — agent, model, arguments,
+  a recipe's fill, the queue's switch with "At most N working at once",
+  "Add a Queued column") and `PipelineSettings.tsx` (the stages);
+  `autonomy.ts` the pure part, tested: `automationOf`, `queueWords`,
+  `stageWords` (the task's run block), `repositories`, `saveable`,
+  `sameAutomation`, `whyNotQueue`.
 - `internal/mcp/` + `internal/tasksapi/` — **the agents and the tasks**.
   `remuda mcp` is a Model Context Protocol server over stdio
   (`mcp.Server`: hand-written JSON-RPC 2.0, one message a line, no
@@ -3051,6 +3109,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   that as 409, never type into the menu), `pane.send_text` + 150ms +
   `pane.send_keys ["Enter"]` as the shell fallback. Everything per-pane is
   serialized by `sessions.Input`, one lock per pane. Never queue or auto-send user input.
+  A project's queue and pipeline (`internal/tasks`) send prompts only once
+  the person switched them on — the task's own prompt and the stages' the
+  person wrote, like an agent schedule's — and only for cards the person
+  put in the Queued column: an agent's key cannot queue a card, change a
+  project's columns or its agents (403, `queueKept` in the tasks routes).
 - **Terminal bytes go over WS binary frames**, control messages over JSON
   text frames. The attach PTY paints the screen on start; late joiners get
   a repaint (see attach.go), never a byte replay.

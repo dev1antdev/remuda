@@ -3,20 +3,27 @@
 // a removed column says where its tasks go.
 
 import { useCallback, useState } from "react";
-import { FIELD_KINDS, patchProject, putFields, putStatuses, type Field, type FieldKind, type Project, type Status } from "@/features/tasks/api";
+import { FIELD_KINDS, patchProject, putAutomation, putFields, putStatuses, type Field, type FieldKind, type Project, type Status } from "@/features/tasks/api";
+import { fetchRecipes } from "@/features/recipes/api";
+import { useRoster } from "@/features/roster/useRoster";
+import { useQuery } from "@/lib/query";
 import Icon, { type IconName } from "@/ui/icons";
 import Select from "@/ui/Select";
 import { Dialog, Notice, Tip, useDismiss, useSubmit } from "@/ui";
 import { t } from "@/lib/i18n";
+import { AgentsSettings } from "./AgentsSettings";
+import { automationOf, sameAutomation, saveable } from "./autonomy";
+import { PipelineSettings } from "./PipelineSettings";
 import { moveTarget, movesOf } from "./workflow";
 
 export const PALETTE = ["e67e22", "2ecc71", "3498db", "9b59b6", "e74c3c", "1abc9c", "f1c40f", "95a5a6"];
 export const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)]!;
 
-type Flag = "on_agent" | "on_new" | "on_start" | "on_finish";
+type Flag = "on_agent" | "on_new" | "on_queue" | "on_start" | "on_finish";
 const FLAGS: { flag: Flag; icon: IconName; title: string }[] = [
   { flag: "on_agent", icon: "bot", title: t("Tasks agents propose land here, for you to accept or decline") },
   { flag: "on_new", icon: "inbox", title: t("New tasks land here") },
+  { flag: "on_queue", icon: "clock", title: t("Queued: the queue starts the tasks you put here, top first, while its switch is on") },
   { flag: "on_start", icon: "play", title: t("A task an agent is started on moves here") },
   { flag: "on_finish", icon: "circle-check", title: t("A task whose agent finished moves here") },
 ];
@@ -53,9 +60,21 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
       return r.id === 0 ? rs.filter((x) => x.key !== key) : rs.map((x) => (x.key === key ? { ...x, removed: true } : x));
     });
   const add = () => {
-    setRows((rs) => [...rs, { id: 0, project_id: project.id, title: "", hex_color: randomColor(), kind: "open", position: 0, on_new: false, on_start: false, on_finish: false, on_agent: false, key: nextKey }]);
+    setRows((rs) => [...rs, { id: 0, project_id: project.id, title: "", hex_color: randomColor(), kind: "open", position: 0, on_new: false, on_start: false, on_finish: false, on_agent: false, on_queue: false, key: nextKey }]);
     setNextKey((k) => k + 1);
   };
+  // a Queued column right after where new tasks land, for the queue's switch to have one
+  const addQueued = () => {
+    setRows((rs) => {
+      const at = rs.findIndex((r) => r.on_new && !r.removed) + 1;
+      const row: Row = { id: 0, project_id: project.id, title: t("Queued"), hex_color: "f1c40f", kind: "open", position: 0, on_new: false, on_start: false, on_finish: false, on_agent: false, on_queue: true, key: nextKey };
+      return [...rs.slice(0, at).map((r) => ({ ...r, on_queue: false })), row, ...rs.slice(at).map((r) => ({ ...r, on_queue: false }))];
+    });
+    setNextKey((k) => k + 1);
+  };
+  const { machines, agents } = useRoster();
+  const { data: recipes } = useQuery(fetchRecipes, []);
+  const [automation, setAutomation] = useState(() => automationOf(project));
 
   const [frows, setFrows] = useState<FRow[]>(() => project.fields.map((f, i) => ({ ...f, key: i + 1, optionsText: f.options.join(", ") })));
   const [nextFKey, setNextFKey] = useState(project.fields.length + 1);
@@ -102,6 +121,8 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
         })),
       );
     }
+    const next = saveable(automation, saved.statuses);
+    if (!sameAutomation(next, automationOf(project))) saved = await putAutomation(project.id, next);
     onSaved(saved);
   });
 
@@ -133,7 +154,7 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
       <p className="modal-hint">
         {t("A task is always in one column, and a column that is")} <b>{t("Done")}</b>{" "}
         {t(
-          "makes its tasks done. The four marks on a column say what the workflow does by itself: where the tasks agents propose land (for you to accept or decline), where your new tasks land, where a task goes when an agent is started on it, where it goes when that agent finishes — unless you moved it meanwhile.",
+          "makes its tasks done. The five marks on a column say what the workflow does by itself: where the tasks agents propose land (for you to accept or decline), where your new tasks land, which column the queue starts by itself, where a task goes when an agent is started on it, where it goes when that agent finishes — unless you moved it meanwhile.",
         )}
       </p>
       <div className="ps-rows">
@@ -256,6 +277,9 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
           <Icon name="plus" size={12} /> {t("Field")}
         </button>
       </div>
+
+      <AgentsSettings value={automation} onChange={setAutomation} machines={machines} agents={agents} recipes={recipes ?? []} statuses={kept} onAddQueued={addQueued} />
+      <PipelineSettings stages={automation.stages} onChange={(stages) => setAutomation((a) => ({ ...a, stages }))} agents={agents} statuses={kept.filter((r) => r.id !== 0)} />
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>

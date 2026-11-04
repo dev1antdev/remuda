@@ -314,7 +314,7 @@ export default function Tasks() {
           )}
           {project && (
             <Tip text={tr("Project settings: name, colour, columns")}>
-              <button type="button" className="icon-btn" aria-label={tr("Project settings")} onClick={() => setSettings(true)}>
+              <button type="button" className="icon-btn tasks-settings-btn" aria-label={tr("Project settings")} onClick={() => setSettings(true)}>
                 <Icon name="settings" size={16} />
               </button>
             </Tip>

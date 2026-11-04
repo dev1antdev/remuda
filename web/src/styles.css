@@ -9096,6 +9096,72 @@ body.popout {
   color: var(--red);
 }
 
+/* ---- a project's agents on their own (internal/tasks: queue.go, pipeline.go): the Queued column's line, a card the
+   queue could not start, a run's place in its pipeline, and the settings' sections ---- */
+.board-col-note {
+  margin: -2px 10px 6px;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.board-col-note.is-amber {
+  color: var(--amber);
+}
+
+.board-col-note.is-green {
+  color: var(--green);
+}
+
+.tasks-refused {
+  padding: 0 4px;
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.tasks-run-stage {
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.tasks-run-stage.is-amber {
+  color: var(--amber);
+}
+
+.ps-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.ps-row .ps-model {
+  flex: 0 1 140px;
+  min-width: 90px;
+  height: var(--ctl-sm);
+}
+
+.ps-queue {
+  align-items: center;
+}
+
+.project-settings label.tasks-toggle,
+.project-settings label.ps-max {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  white-space: normal;
+}
+
+.ps-max input {
+  width: 64px;
+  height: var(--ctl-sm);
+}
+
 /* #11 Ready again: a rejected workspace whose agent says it is ready for another look, in the review queue */
 .queue-item.ready .queue-name {
   display: flex;

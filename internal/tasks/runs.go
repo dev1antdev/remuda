@@ -23,6 +23,9 @@ type RunWatch struct {
 	// PRTouch asks for the pull request a pane's run names to be read again when its last read is old enough, so a merge
 	// moves the task with no page open.
 	PRTouch func(machine, pane string)
+	// Advance starts a pipeline's next stage after the previous run's agent said it is done: the agent in a new tab of
+	// the worktree with the prompt, the run recorded (Launcher.StartStage).
+	Advance func(prev Run, index int, stage Stage, prompt string) error
 	Now     func() time.Time
 
 	missing map[int64]time.Time
@@ -70,10 +73,15 @@ func (w *RunWatch) Sweep() {
 			if now().Sub(started) > startWindow {
 				_ = w.Store.SetRun(r.ID, RunFailed, "the prompt was never delivered")
 				_, _ = w.Store.AddComment(r.TaskID, "remuda", "The task was never handed to the agent. The worktree is there; send it by hand.")
+				_ = w.Store.StopPipeline(r.ID, "the prompt never reached the agent")
 			}
 			continue
 		}
 		w.noteUsage(r, started, now())
+		if r.Pipeline == PipelineOn && state == "blocked" {
+			_ = w.Store.StopPipeline(r.ID, "the agent asked something")
+			w.notifyTask(r, "the pipeline stops: the agent asks something", "Answer it in the pane and carry on by hand.")
+		}
 		if state == "working" || state == "unknown" {
 			continue
 		}
@@ -90,10 +98,21 @@ func (w *RunWatch) Sweep() {
 		_ = w.Store.SetRun(r.ID, RunFinished, id)
 		r.State, r.Finished = RunFinished, now().UTC().Format(time.RFC3339)
 		w.noteUsage(r, started, now())
-		moved, _ := w.Store.OnFinish(r.TaskID)
+		var stage string
+		var moved *Status
+		handled := false
+		if r.Pipeline == PipelineOn {
+			stage, moved, handled = w.onStageAnswer(r, answer)
+		}
+		if !handled {
+			moved, _ = w.Store.OnFinish(r.TaskID)
+		}
 		if w.Notify != nil {
 			t, _ := w.Store.Get(r.TaskID)
 			title := fmt.Sprintf("Task %s: %s finished", t.Identifier, r.Agent)
+			if stage != "" {
+				title += ", " + stage
+			}
 			if moved != nil {
 				title += " → " + moved.Title
 			}
@@ -106,6 +125,21 @@ func (w *RunWatch) Sweep() {
 			})
 		}
 	}
+}
+
+// notifyTask pushes a word about a run's task.
+func (w *RunWatch) notifyTask(r Run, what, body string) {
+	if w.Notify == nil {
+		return
+	}
+	t, _ := w.Store.Get(r.TaskID)
+	w.Notify(push.Payload{
+		Machine: r.Machine, Pane: r.Pane, Kind: "task",
+		Title:   fmt.Sprintf("Task %s: %s", t.Identifier, what),
+		Body:    firstLine(t.Title) + " — " + body,
+		Tag:     fmt.Sprintf("task|%d", r.TaskID),
+		Actions: []push.Action{{Action: "open", Title: "Open"}},
+	})
 }
 
 // noteUsage writes the meter's figures on the run when they moved: every sweep while the pane is there, so they stay
