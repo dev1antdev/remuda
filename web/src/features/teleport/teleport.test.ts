@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
-import type { Target } from "./api";
-import { TYPED, firstFolder, firstTarget, folderChoices, folderOf, targetHint, whyNot } from "./teleport";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
+import type { Source, Target } from "./api";
+import { TYPED, firstFolder, firstTarget, folderChoices, folderOf, sourceWords, targetHint, whyNot } from "./teleport";
 
 const clone = (dir: string, same = true) => ({ dir, branch: "main", remote: "git@x:a/b", same });
 const mac: Target = { machine: "local", label: "This Mac", checkouts: [clone("/Users/me/b2")] };
@@ -38,5 +39,20 @@ describe("the folder", () => {
     expect(targetHint(gog)).toBe("1 clone of this repository");
     expect(targetHint(roofr)).toBe("no clone of this repository open");
     expect(targetHint({ ...roofr, error: "ssh: no route" })).toBe("ssh: no route");
+  });
+});
+
+describe("sourceWords", () => {
+  afterEach(() => setLang("en"));
+  const source = (counts: Partial<Source>): Source => ({ root: "/r", branch: "feature-x", head: "abc", remote: "", ahead: 0, staged: 0, unstaged: 0, untracked: 0, ...counts });
+
+  it("names the branch and every kind of work it carries, none that is empty", () => {
+    expect(sourceWords(source({ ahead: 3, staged: 1, untracked: 2 }))).toBe("feature-x · 3 commits on no remote · 1 staged file · 2 new files");
+    expect(sourceWords(source({}))).toBe("feature-x");
+  });
+
+  it("says it in the page's language with its counted forms", () => {
+    setLang("ru");
+    expect(sourceWords(source({ ahead: 1, unstaged: 5 }))).toBe("feature-x · 1 коммит не на удалённом · 5 изменённых файлов");
   });
 });

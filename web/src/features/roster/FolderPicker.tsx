@@ -76,7 +76,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
               <button type="button" className="picker-open" onClick={() => go(full)} title={full}>
                 <Icon name={d.git ? "git-branch" : "folder"} size={14} className={d.git ? "picker-git" : undefined} />
                 <span className="picker-name">{d.name}</span>
-                {d.git && <span className="picker-tag">repo</span>}
+                {d.git && <span className="picker-tag">{t("repo")}</span>}
               </button>
               <Tip text={t("Choose {name}", { name: d.name })}>
                 <button type="button" className="icon-btn sm" aria-label={t("Choose {name}", { name: d.name })} onClick={() => onPick(full)}>
@@ -106,7 +106,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
           {t("Cancel")}
         </button>
         <button type="button" className="btn primary" disabled={!here} onClick={() => onPick(here)}>
-          Choose {here ? basename(here) || "/" : "…"}
+          {t("Choose {name}", { name: here ? basename(here) || "/" : "…" })}
         </button>
       </div>
     </Dialog>

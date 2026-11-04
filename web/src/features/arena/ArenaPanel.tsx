@@ -2,6 +2,7 @@
 // stands, the first line of what it answered, +ins −del · files, how long it ran, what it cost — with Open, and
 // "Keep this one", which closes the other lanes once their work is saved as patches.
 
+import { useState } from "react";
 import { act } from "@/app/act";
 import { actions } from "@/app/store";
 import type { Machine } from "@/features/roster/api";
@@ -40,13 +41,13 @@ export default function ArenaPanel({ onClose }: { onClose: () => void }) {
         <p className="modal-hint">{t("No arena yet. An arena gives one prompt to several agents, each in a worktree of its own, so you can compare their work and keep the best.")}</p>
       )}
       {arenas.map((a) => (
-        <ArenaView key={a.id} arena={a} machines={machines} onChanged={reload} />
+        <ArenaView key={a.id} arena={a} machines={machines} onChanged={reload} onOpen={onClose} />
       ))}
     </Dialog>
   );
 }
 
-function ArenaView({ arena: a, machines, onChanged }: { arena: Arena; machines: Machine[]; onChanged: () => void }) {
+function ArenaView({ arena: a, machines, onChanged, onOpen }: { arena: Arena; machines: Machine[]; onChanged: () => void; onOpen: () => void }) {
   const decided = !!a.kept;
   const forget = () => void act(forgetArena(a.id)).then(onChanged);
   return (
@@ -66,14 +67,14 @@ function ArenaView({ arena: a, machines, onChanged }: { arena: Arena; machines: 
       </header>
       <div className="arena-cards">
         {a.lanes.map((lane) => (
-          <LaneCard key={lane.id} arena={a} lane={lane} machines={machines} onChanged={onChanged} />
+          <LaneCard key={lane.id} arena={a} lane={lane} machines={machines} onChanged={onChanged} onOpen={onOpen} />
         ))}
       </div>
     </section>
   );
 }
 
-function LaneCard({ arena: a, lane, machines, onChanged }: { arena: Arena; lane: Lane; machines: Machine[]; onChanged: () => void }) {
+function LaneCard({ arena: a, lane, machines, onChanged, onOpen }: { arena: Arena; lane: Lane; machines: Machine[]; onChanged: () => void; onOpen: () => void }) {
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const now = useNow(1000);
   const pane = paneOf(machines, lane);
@@ -87,10 +88,19 @@ function LaneCard({ arena: a, lane, machines, onChanged }: { arena: Arena; lane:
   const stat = statWords(a.stats?.[String(lane.id)]);
   const seconds = runSeconds(lane, pane, now);
   const cost = pane?.usage?.cost;
+  const [keeping, setKeeping] = useState(false);
   const keep = () =>
-    actions.ask(keepWords(a.lanes, lane.id), t("Keep this one"), () =>
-      void act(keepLane(a.id, lane.id)).then(onChanged),
-    );
+    actions.ask(keepWords(a.lanes, lane.id), t("Keep this one"), () => {
+      setKeeping(true);
+      void act(keepLane(a.id, lane.id))
+        .then(onChanged)
+        .finally(() => setKeeping(false));
+    });
+  const open = () => {
+    if (!pane) return;
+    onOpen();
+    actions.openPane(lane.machine, pane.id);
+  };
   return (
     <article className={`arena-card${tone ? ` is-${tone}` : ""}${display ? ` is-${display}` : ""}`}>
       <div className="arena-card-head">
@@ -120,13 +130,13 @@ function LaneCard({ arena: a, lane, machines, onChanged }: { arena: Arena; lane:
       )}
       <div className="arena-actions">
         {pane && (
-          <button type="button" className="btn sm" onClick={() => actions.openPane(lane.machine, pane.id)}>
+          <button type="button" className="btn sm" onClick={open}>
             {t("Open")}
           </button>
         )}
         {!a.kept && live && lane.dir && (
-          <button type="button" className="btn sm" onClick={keep}>
-            <Icon name="check" size={14} /> {t("Keep this one")}
+          <button type="button" className="btn sm" disabled={keeping} onClick={keep}>
+            <Icon name="check" size={14} /> {keeping ? t("Keeping…") : t("Keep this one")}
           </button>
         )}
       </div>

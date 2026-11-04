@@ -2,7 +2,7 @@
 // cannot go yet.
 
 import { t, tn } from "@/lib/i18n";
-import type { Target } from "./api";
+import type { Source, Target } from "./api";
 
 // TYPED is the folder choice that asks for a path instead of a listed checkout
 export const TYPED = "__typed";
@@ -42,4 +42,17 @@ export function targetHint(target: Target): string {
   if (target.error) return target.error;
   const clones = target.checkouts.filter((c) => c.same).length;
   return clones ? tn(clones, "{n} clone of this repository", "{n} clones of this repository") : t("no clone of this repository open");
+}
+
+// sourceWords is what the checkout holds, in the page's language: "feature-x · 3 commits on no remote · 2 staged files"
+export function sourceWords(source: Source): string {
+  const parts = [source.branch];
+  const add = (n: number, one: string, many: string) => {
+    if (n > 0) parts.push(tn(n, one, many));
+  };
+  add(source.ahead, "{n} commit on no remote", "{n} commits on no remote");
+  add(source.staged, "{n} staged file", "{n} staged files");
+  add(source.unstaged, "{n} changed file", "{n} changed files");
+  add(source.untracked, "{n} new file", "{n} new files");
+  return parts.join(" · ");
 }

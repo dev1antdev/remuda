@@ -202,7 +202,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
               <div key={commit.sha} className={`review-commit${commit.seen ? " seen" : ""}`} title={commit.seen ? t("A commit of work you already reviewed") : undefined}>
                 <code>{commit.sha}</code>
                 <span className="review-commit-subject">{commit.subject}</span>
-                {commit.seen && <span className="review-tag">reviewed</span>}
+                {commit.seen && <span className="review-tag">{t("reviewed")}</span>}
                 <span className="review-commit-when">{ago(commit.when * 1000)}</span>
               </div>
             ))}

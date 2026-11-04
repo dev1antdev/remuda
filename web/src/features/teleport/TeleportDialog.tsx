@@ -12,7 +12,7 @@ import { errMsg } from "@/lib/text";
 import { Dialog, Logo, Notice, Select } from "@/ui";
 import { t } from "@/lib/i18n";
 import { fetchMoved, fetchTargets, startMove, type Moved, type Targets } from "./api";
-import { TYPED, firstFolder, firstTarget, folderChoices, folderOf, targetHint, whyNot } from "./teleport";
+import { TYPED, firstFolder, firstTarget, folderChoices, folderOf, sourceWords, targetHint, whyNot } from "./teleport";
 
 const POLL = 1000;
 
@@ -34,6 +34,7 @@ export default function TeleportDialog({ machineId, paneId, tabId, workspace, ag
   const [turns, setTurns] = useState(DEFAULT_TURNS);
   const [job, setJob] = useState<Job | null>(null);
   const [moved, setMoved] = useState<Moved | null>(null);
+  const [starting, setStarting] = useState(false);
   const log = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
@@ -79,12 +80,16 @@ export default function TeleportDialog({ machineId, paneId, tabId, workspace, ag
     setChoice(firstFolder(found?.targets.find((x) => x.machine === next)));
   };
   const move = async () => {
+    if (starting) return;
     setError("");
+    setStarting(true);
     try {
       const { job: id } = await startMove({ machine: machineId, pane: paneId, target, folder, agent: kind, turns });
       setJob({ id, machine: target, title: "", command: "", started: new Date().toISOString(), done: false, ok: false, output: "" });
     } catch (e) {
       setError(errMsg(e));
+    } finally {
+      setStarting(false);
     }
   };
   const open = () => {
@@ -102,8 +107,8 @@ export default function TeleportDialog({ machineId, paneId, tabId, workspace, ag
       {found && (
         <p className="modal-hint">
           {agent
-            ? t("{words}: a new worktree of a clone there gets the branch, its commits and the uncommitted changes as they are; {agent} carries on with the gist of this conversation. Nothing here changes.", { words: found.words, agent: label })
-            : t("{words}: a new worktree of a clone there gets the branch, its commits and the uncommitted changes as they are; {agent} starts there, told where the work came from. Nothing here changes.", { words: found.words, agent: label })}
+            ? t("{words}: a new worktree of a clone there gets the branch, its commits and the uncommitted changes as they are; {agent} carries on with the gist of this conversation. Nothing here changes.", { words: sourceWords(found.source), agent: label })
+            : t("{words}: a new worktree of a clone there gets the branch, its commits and the uncommitted changes as they are; {agent} starts there, told where the work came from. Nothing here changes.", { words: sourceWords(found.source), agent: label })}
         </p>
       )}
       {found && !job && (
@@ -147,7 +152,7 @@ export default function TeleportDialog({ machineId, paneId, tabId, workspace, ag
           {job?.done || !job ? t("Close") : t("Hide")}
         </button>
         {!job && (
-          <button type="button" className="btn primary" disabled={!found || !!blocked} onClick={() => void move()}>
+          <button type="button" className="btn primary" disabled={!found || !!blocked || starting} onClick={() => void move()}>
             {t("Move to {machine}", { machine: chosen?.label ?? "…" })}
           </button>
         )}

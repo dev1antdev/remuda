@@ -166,7 +166,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         <div className="settings-row">
           <span>
             {t("Keyboard shortcuts")}
-            <small>Every key the page answers (also behind ?)</small>
+            <small>{t("Every key the page answers (also behind ?)")}</small>
           </span>
           <button type="button" className="btn sm" onClick={after(() => actions.openDialog({ kind: "keys" }))}>
             {t("Show")}

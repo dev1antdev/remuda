@@ -58,7 +58,7 @@ export const TurnView = memo(
           <div className="turn-actions">
             {onForward && text && turn.role === "assistant" && (
               <button type="button" className="linkish turn-forward" title={t("Forward this to another agent")} onClick={() => onForward(text)}>
-                <Icon name="send" size={12} /> forward
+                <Icon name="send" size={12} /> {t("forward")}
               </button>
             )}
             {onLink && !!turn.ids?.length && (
