@@ -43,8 +43,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
 - **Radar sidebar** — every repository a folder, laid out after
   [Orca](https://onorca.dev)'s: its icon, its name and how its agents
   stand; a click folds it shut or opens it, and the sidebar's ⋯ folds or
-  opens them all. A folder's own ⋯ starts a new workspace in it, a new
-  worktree of its repository, sets its icon or opens it in the editor.
+  opens them all. A folder's own ⋯ starts a new workspace in it — in a
+  repository a worktree of its own, a new folder and branch, so its agent
+  never touches another workspace's files (a second agent on the same
+  checkout is a tab) — sets its icon or opens it in the editor.
   Open, a folder holds a card per workspace — the main
   checkout and its worktrees — a click away from its agent. The agents read
   after [herdr-radar](https://github.com/hhdebb/herdr-radar)'s design,
@@ -1014,7 +1016,7 @@ reads):
 config/local/
 ```
 
-Every worktree remuda makes — from the New worktree dialog, or a task's
+Every worktree remuda makes — a repository folder's New workspace, or a task's
 *Start an agent on it* — gets them copied from the main checkout before
 its agent starts, and a toast (or the task's comment) says which. Only
 files git ignores are copied, never one the worktree already has, never

@@ -1502,11 +1502,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and a click on the icon opens the icon dialog. **The folder's own ⋯**
   (`folderMenuItems` in `WorkspaceMenu.tsx`; under the pointer, in the
   focus, while open and always on a touch screen; none for a viewer) is
-  New workspace in this folder… (the New workspace dialog on that machine
-  with the folder filled in: dialog kind `workspace` with `dir`), New
-  worktree… off its main checkout (`repositoryOf` in `workspaces.ts`,
+  New workspace… — in a repository a worktree of its own off its main
+  checkout (dialog kind `worktree`, `NewWorktreeDialog` with a branch
+  already suggested, "New workspace in <repo>": a second workspace on the
+  same checkout is what a tab is; `repositoryOf` in `workspaces.ts`,
   tested: a linked worktree when the main checkout has no workspace, none
-  outside git), Folder icon…, Hide when sharing the screen and Open in
+  outside git), outside git New workspace in this folder… (the New
+  workspace dialog on that machine with the folder filled in: dialog kind
+  `workspace` with `dir`) — Folder icon…, Hide when sharing the screen and Open in
   the editor; a card's ⋯ (`workspaceMenuItems`) has its own rows — a tab,
   the renames, the pull request, fork, restart, move, the mutes, close —
   and its folder's after them, so the flat order reaches them too. While

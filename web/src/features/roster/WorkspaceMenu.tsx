@@ -42,15 +42,18 @@ export function closeWorkspace(m: Machine, s: Session) {
 // menu then says no name of the person's own either
 export type Shown = { name: string; masked: boolean };
 
-// folderRows are what a folder itself offers: a workspace in it, a worktree of its repository, its icon (not while
-// the screen-sharing mode hides it: the icon is not on screen then, and its dialog names the folder), its
-// screen-sharing mark, the editor on it
+// folderRows are what a folder itself offers: a new workspace — in a repository a worktree of its own, a new folder and
+// branch, since a second workspace on the same checkout is what a tab already is; elsewhere one in the folder — its
+// icon (not while the screen-sharing mode hides it: the icon is not on screen then, and its dialog names the folder),
+// its screen-sharing mark, the editor on it
 function folderRows(m: Machine, folder: string, name: string, icon: Session["icon"], repository: Session | null, shown: Shown): MenuItem[] {
   const connected = m.state === "connected";
   const hidden = markedFolder(sharingOf(readPref(SHARING_KEY, DEFAULT_SHARING)), m.id, folder);
+  const newWorkspace: MenuItem = repository
+    ? { label: t("New workspace…"), icon: "git-branch", hint: t("a worktree of its own: a new folder and branch, an agent in it"), disabled: !connected, onSelect: () => actions.openDialog({ kind: "worktree", machineId: m.id, session: repository }) }
+    : { label: t("New workspace in this folder…"), icon: "plus", hint: shown.masked ? shown.name : name, disabled: !connected, onSelect: () => actions.openDialog({ kind: "workspace", machineId: m.id, dir: folder }) };
   return [
-    { label: t("New workspace in this folder…"), icon: "plus", hint: shown.masked ? shown.name : name, disabled: !connected, onSelect: () => actions.openDialog({ kind: "workspace", machineId: m.id, dir: folder }) },
-    ...(repository ? [{ label: t("New worktree…"), icon: "git-branch" as const, hint: t("a branch of its own beside the checkout, an agent in it"), disabled: !connected, onSelect: () => actions.openDialog({ kind: "worktree", machineId: m.id, session: repository }) }] : []),
+    newWorkspace,
     ...(shown.masked ? [] : [{ label: t("Folder icon…"), icon: "folder" as const, onSelect: () => actions.openDialog({ kind: "folder-icon", machineId: m.id, folder, name, icon }) }]),
     { label: t("Hide when sharing the screen"), icon: "eye-off", checked: hidden, onSelect: () => toggleSharingFolder(m.id, folder) },
     { label: t("Open in the editor"), icon: "code", hint: t("the Code mode on this folder"), disabled: !connected, onSelect: () => actions.openInCode(m.id, folder, folder) },
