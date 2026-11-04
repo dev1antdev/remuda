@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/scratch"
 )
 
@@ -29,12 +30,9 @@ func (s *Server) handleScratch(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	snap, err := s.Watch.Refresh(mc) // the kept workspace is looked for in a fresh snapshot, not one from before it was made
-	if snap == nil {
-		httpErr(w, 502, err)
-		return
-	}
-	shell, err := s.Scratch.Ensure(mc.ID(), client, snap, mc.Home())
+	// the kept workspace is looked for in a fresh snapshot, read once no other ask for this machine's shell is under way
+	fresh := func() (*herdr.Snapshot, error) { return s.Watch.Refresh(mc) }
+	shell, err := s.Scratch.Ensure(mc.ID(), client, fresh, mc.Home())
 	if err != nil {
 		rpcErr(w, err)
 		return

@@ -25,6 +25,12 @@ const MaxPage = 1 << 20
 // MaxRedirects is how many redirects one fetch follows.
 const MaxRedirects = 5
 
+// MaxIconLinks is how many of the page's own icon links are tried, the best ranked: a page may name thousands.
+const MaxIconLinks = 6
+
+// FaviconTimeout is how long the whole search may take, the page and every icon tried.
+var FaviconTimeout = 30 * time.Second
+
 // ErrNotWeb is an address that is not a web page.
 var ErrNotWeb = errors.New("the address must be an http or https web page")
 
@@ -63,12 +69,17 @@ func Favicon(ctx context.Context, client *http.Client, raw string) (string, stri
 	if err != nil {
 		return "", "", err
 	}
+	ctx, cancel := context.WithTimeout(ctx, FaviconTimeout)
+	defer cancel()
 	page := site
 	var candidates []iconLink
 	body, final, pageErr := fetch(ctx, client, site.String(), MaxPage)
 	if pageErr == nil {
 		page = final
 		candidates = rankLinks(linksIn(string(body), final))
+		if len(candidates) > MaxIconLinks {
+			candidates = candidates[:MaxIconLinks]
+		}
 	}
 	fallback := &url.URL{Scheme: page.Scheme, Host: page.Host, Path: "/favicon.ico"}
 	candidates = append(candidates, iconLink{href: fallback.String(), fallback: true})

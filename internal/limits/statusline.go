@@ -166,18 +166,45 @@ func UninstallStatusline(home, stateDir string) (string, error) {
 	if !has || !isWrapper(current) {
 		return "Claude Code's status line does not go through remuda; nothing changed.", nil
 	}
-	var w wrapped
-	_ = state.LoadJSON(stateDir, wrapFile, &w)
-	if len(w.Original) == 0 || string(w.Original) == "null" {
+	original, known := recordedOriginal(stateDir)
+	if !known {
+		return "remuda does not know which status line you had before the install (" + wrapFile + " is missing from " + stateDir + "): nothing changed — set statusLine in " + path + " by hand.", nil
+	}
+	if string(original) == "null" {
 		settings.remove("statusLine")
 	} else {
-		settings.set("statusLine", w.Original)
+		settings.set("statusLine", original)
 	}
 	if err := writeSettings(path, settings, mode); err != nil {
 		return "", err
 	}
 	_ = os.Remove(filepath.Join(stateDir, wrapFile))
 	return "Claude Code's status line is yours again, as it was before the install.", nil
+}
+
+// recordedOriginal is the statusLine setting the install replaced, null when there was none: as statusline.json kept it,
+// else as the backup of the whole settings file holds it; false when neither says, and then nothing may be put back.
+func recordedOriginal(stateDir string) (json.RawMessage, bool) {
+	var w wrapped
+	if state.LoadJSON(stateDir, wrapFile, &w) == nil && len(w.Original) > 0 {
+		return w.Original, true
+	}
+	backupPath := filepath.Join(stateDir, backupFile)
+	if _, err := os.Stat(backupPath); err != nil {
+		return nil, false
+	}
+	backup, _, err := readSettings(backupPath)
+	if err != nil {
+		return nil, false
+	}
+	line, has := backup.get("statusLine")
+	switch {
+	case !has:
+		return json.RawMessage("null"), true
+	case isWrapper(line):
+		return nil, false
+	}
+	return line, true
 }
 
 // StatuslineStatus says whether the wrapper is installed, what it runs after, and when the limits were last kept.
@@ -294,6 +321,9 @@ func writeSettings(path string, o object, mode os.FileMode) error {
 		return err
 	}
 	out.WriteByte('\n')
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real // a settings.json linked from a dotfiles folder stays a link: the file it names is the one rewritten
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
