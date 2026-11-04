@@ -3,7 +3,7 @@
 import type { Machine, Pane, Session, Tab } from "./api";
 import { displayOf, type RadarPrefs } from "./radar";
 
-export type WallView = "chat" | "screen"; // what a tile shows: the last turns of the conversation, or the terminal as it is
+export type WallView = "chat" | "screen" | "zoo"; // what a tile shows: the last turns of the conversation, the terminal as it is, or the agent as a creature (app/Zoo.tsx)
 export type WallPrefs = { size: "s" | "m" | "l"; hideIdle: boolean; needsMe: boolean; view: WallView };
 export const DEFAULT_WALL: WallPrefs = { size: "m", hideIdle: false, needsMe: false, view: "chat" };
 

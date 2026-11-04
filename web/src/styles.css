@@ -9367,3 +9367,610 @@ body.popout {
   flex: 1 1 0;
   border-left: 1px solid var(--line);
 }
+
+/* ---- the zoo: every agent on the Wall as a little creature (app/Zoo.tsx, app/Creature.tsx). Its palette is mixed from
+   the vendor's hue (--zoo-skin, set per creature) and the flavour's tokens; its state reads from the pose and the sign ---- */
+.zoo-creature {
+  --zoo-light: var(--ctp-text);
+  --zoo-dark: var(--ctp-crust);
+  --zoo-skin-dark: color-mix(in oklab, var(--zoo-skin) 72%, var(--zoo-dark));
+  --zoo-belly: color-mix(in oklab, var(--zoo-skin) 55%, var(--zoo-light));
+  --zoo-cheek: color-mix(in oklab, var(--ctp-pink) 75%, transparent);
+  --zoo-shadow: color-mix(in oklab, var(--ctp-crust) 55%, transparent);
+  --zoo-metal: var(--ctp-overlay1);
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+:root[data-flavor="latte"] .zoo-creature {
+  --zoo-light: var(--ctp-base);
+  --zoo-dark: var(--ctp-text);
+  --zoo-shadow: color-mix(in oklab, var(--ctp-overlay0) 45%, transparent);
+}
+
+.zoo-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--zoo-cell, 228px), 100%), 1fr));
+  align-content: start;
+  gap: 22px 14px;
+  padding: 16px 16px 28px;
+}
+
+.zoo-open.linkish {
+  position: relative;
+  display: block;
+  width: var(--zoo-size, 156px);
+  max-width: 100%;
+  padding: 0;
+  border-radius: var(--r-xl);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.zoo-open:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 2px;
+}
+
+.creature {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.creature * {
+  transform-box: view-box;
+}
+
+.cr-shadow {
+  fill: var(--zoo-shadow);
+}
+
+.cr-skin,
+.cr-tip,
+.cr-hand {
+  fill: var(--zoo-skin);
+}
+
+.cr-foot {
+  fill: var(--zoo-skin-dark);
+}
+
+.cr-antenna,
+.cr-arm {
+  fill: none;
+  stroke: var(--zoo-skin-dark);
+  stroke-linecap: round;
+}
+
+.cr-antenna {
+  stroke-width: 3.5;
+}
+
+.cr-arm {
+  stroke-width: 8;
+}
+
+.cr-belly {
+  fill: var(--zoo-belly);
+}
+
+.cr-white,
+.cr-glint {
+  fill: var(--zoo-light);
+}
+
+.cr-pupil,
+.cr-mouth {
+  fill: var(--zoo-dark);
+}
+
+.cr-line {
+  fill: none;
+  stroke: var(--zoo-dark);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cr-cheek {
+  fill: var(--zoo-cheek);
+}
+
+.cr-screen {
+  fill: var(--zoo-dark);
+}
+
+.cr-base {
+  fill: var(--zoo-metal);
+}
+
+.cr-code {
+  fill: var(--zoo-skin);
+}
+
+.cr-bit.is-yellow {
+  fill: var(--ctp-yellow);
+}
+
+.cr-bit.is-pink {
+  fill: var(--ctp-pink);
+}
+
+.cr-bit.is-sky {
+  fill: var(--ctp-sky);
+}
+
+.cr-bit.is-green {
+  fill: var(--ctp-green);
+}
+
+.cr-bit.is-mauve {
+  fill: var(--ctp-mauve);
+}
+
+/* the signs' sizes are the SVG's own attributes (viewBox units), not the page's type scale */
+.creature text {
+  font-family: var(--mono);
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.cr-sign.is-ask {
+  fill: var(--red);
+}
+
+.cr-board {
+  fill: var(--amber);
+}
+
+.cr-board-mark {
+  fill: var(--zoo-dark);
+}
+
+.cr-sign.is-puzzled {
+  fill: var(--violet);
+}
+
+.cr-z {
+  fill: var(--fg-faint);
+}
+
+/* the logo badge on the creature's side */
+.zoo-badge {
+  position: absolute;
+  left: 71%;
+  top: 56%;
+  display: grid;
+  place-items: center;
+  width: 20%;
+  aspect-ratio: 1;
+  border-radius: 99px;
+  background: var(--zoo-light);
+  box-shadow: 0 0 0 2px var(--zoo-skin-dark);
+  pointer-events: none;
+}
+
+.zoo-badge .radar-logo {
+  width: 62%;
+  height: 62%;
+}
+
+.zoo-creature figcaption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.zoo-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+  font-size: var(--fs-13);
+  font-weight: 600;
+}
+
+.zoo-where {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.zoo-where > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zoo-how {
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.zoo-creature.is-asking .zoo-how {
+  color: var(--red);
+}
+
+.zoo-creature.is-worried .zoo-how {
+  color: var(--amber);
+}
+
+.zoo-creature.is-dancing .zoo-how {
+  color: var(--green);
+}
+
+/* the speech bubble: a slot of its own in the grid, so creatures with and without one stand in a line */
+.zoo-bubble-slot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  min-height: calc(3 * 1.35em + 16px);
+  font-size: var(--fs-12);
+}
+
+.zoo-bubble {
+  position: relative;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--bg-raised);
+  color: var(--fg);
+  line-height: 1.35;
+  text-align: left;
+}
+
+.zoo-bubble > span {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.zoo-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+  translate: -50% 0;
+  rotate: 45deg;
+}
+
+.zoo-creature.dim .zoo-open,
+.zoo-creature.dim .zoo-bubble {
+  opacity: 0.45;
+}
+
+.zoo-creature.is-pinned .zoo-open {
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+/* office mode: one creature large, the rest small beside their captions */
+.zoo-featured {
+  align-items: center;
+  justify-content: center;
+}
+
+.zoo-as-big {
+  flex: 1;
+  justify-content: center;
+}
+
+.zoo-as-big .zoo-open.linkish {
+  width: min(52vh, 72%);
+}
+
+.zoo-as-big .zoo-name {
+  font-size: var(--fs-20);
+}
+
+.zoo-as-big .zoo-where,
+.zoo-as-big .zoo-bubble-slot {
+  font-size: var(--fs-15);
+}
+
+.zoo-as-big .zoo-how {
+  font-size: var(--fs-13);
+}
+
+.zoo-as-big .zoo-bubble {
+  max-width: min(640px, 90%);
+}
+
+.zoo-cards {
+  gap: 6px;
+}
+
+.zoo-as-small {
+  flex-direction: row;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 6px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg-raised);
+  text-align: left;
+}
+
+.zoo-as-small .zoo-open.linkish {
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.zoo-as-small figcaption {
+  align-items: flex-start;
+  flex: 1;
+}
+
+.zoo-as-small.is-pinned {
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.zoo-as-small.is-pinned .zoo-open {
+  box-shadow: none;
+}
+
+.zoo-popout {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  padding: 10px;
+}
+
+/* a phone: the wall's bar wraps rather than push the page wider than the screen, and the zoo stands two abreast */
+@media (max-width: 920px) {
+  .wall-bar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+}
+
+@media (max-width: 600px) {
+  .zoo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 8px;
+    padding: 12px 10px 20px;
+  }
+}
+
+/* the motion: each pose's own, at the radar spinner's rhythm where it works */
+.zoo-creature.is-busy .cr-body {
+  animation: zoo-bounce 0.6s ease-in-out infinite;
+}
+
+.zoo-creature.is-busy .cr-arm-l {
+  animation: zoo-type 0.3s steps(2, jump-none) infinite;
+}
+
+.zoo-creature.is-busy .cr-arm-r {
+  animation: zoo-type 0.3s steps(2, jump-none) 0.15s infinite;
+}
+
+.zoo-creature.is-busy .cr-code {
+  animation: zoo-code 1.2s steps(8, jump-none) infinite;
+}
+
+.zoo-creature.is-busy .cr-code-2 {
+  animation-delay: 0.6s;
+}
+
+.zoo-creature.is-asking .cr-arm-r {
+  transform-origin: 90px 74px;
+  animation: zoo-wave 0.75s ease-in-out infinite alternate;
+}
+
+.zoo-creature.is-asking .cr-sign,
+.zoo-creature.is-worried .cr-sign {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: zoo-pulse 1.5s ease-in-out infinite;
+}
+
+.zoo-creature.is-worried .cr-body {
+  animation: zoo-shiver 0.4s linear infinite;
+}
+
+.zoo-creature.is-dancing .cr-body {
+  transform-origin: 60px 116px;
+  animation: zoo-dance 0.9s ease-in-out infinite;
+}
+
+.zoo-creature.is-dancing .cr-bit {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: zoo-twinkle 1.2s ease-in-out infinite;
+}
+
+.zoo-creature.is-dancing .cr-bit:nth-child(2n) {
+  animation-delay: 0.4s;
+}
+
+.zoo-creature.is-dancing .cr-bit:nth-child(3n) {
+  animation-delay: 0.8s;
+}
+
+.zoo-creature.is-asleep .cr-body {
+  transform-origin: 60px 116px;
+  animation: zoo-breathe 3.2s ease-in-out infinite;
+}
+
+.zoo-creature.is-asleep .cr-z {
+  animation: zoo-float 2.4s ease-in infinite;
+}
+
+.zoo-creature.is-asleep .cr-z:nth-child(2) {
+  animation-delay: 0.8s;
+}
+
+.zoo-creature.is-asleep .cr-z:nth-child(3) {
+  animation-delay: 1.6s;
+}
+
+.zoo-creature.is-asleep.dim .cr-body {
+  animation-duration: 5s;
+}
+
+.zoo-creature.is-asleep.dim .cr-z {
+  animation-duration: 4s;
+}
+
+.zoo-creature.is-puzzled .cr-body {
+  transform-origin: 60px 116px;
+  animation: zoo-tilt 3s ease-in-out infinite;
+}
+
+@keyframes zoo-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2.5px);
+  }
+}
+
+@keyframes zoo-type {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-2.5px);
+  }
+}
+
+@keyframes zoo-code {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.25;
+  }
+}
+
+@keyframes zoo-wave {
+  from {
+    transform: rotate(-8deg);
+  }
+  to {
+    transform: rotate(12deg);
+  }
+}
+
+@keyframes zoo-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes zoo-shiver {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-0.8px);
+  }
+  75% {
+    transform: translateX(0.8px);
+  }
+}
+
+@keyframes zoo-dance {
+  0%,
+  100% {
+    transform: rotate(-7deg) translateY(0);
+  }
+  25% {
+    transform: rotate(0deg) translateY(-6px);
+  }
+  50% {
+    transform: rotate(7deg) translateY(0);
+  }
+  75% {
+    transform: rotate(0deg) translateY(-6px);
+  }
+}
+
+@keyframes zoo-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    opacity: 0.2;
+    transform: scale(0.6) rotate(45deg);
+  }
+}
+
+@keyframes zoo-breathe {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(1.025, 0.975);
+  }
+}
+
+@keyframes zoo-float {
+  0% {
+    opacity: 0;
+    transform: translate(0, 4px);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(5px, -7px);
+  }
+}
+
+@keyframes zoo-tilt {
+  0%,
+  100% {
+    transform: rotate(-7deg);
+  }
+  50% {
+    transform: rotate(-2deg);
+  }
+}
+
+/* reduced motion: every creature holds its pose; the sign and the pose still say the state */
+@media (prefers-reduced-motion: reduce) {
+  .zoo-creature,
+  .zoo-creature * {
+    animation: none !important;
+  }
+}

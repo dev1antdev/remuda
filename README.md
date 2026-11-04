@@ -179,7 +179,17 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   terminal as it is — the rows with their colours, scaled to the tile,
   the prompt and the status at the bottom — a wall of monitors, read
   from herdr without attaching, so nothing is resized and no attach slot
-  is taken; a click opens that terminal. In Chrome a tile — or the agent on screen,
+  is taken; a click opens that terminal. **Zoo** turns every agent into a
+  little creature in its vendor's colour, for the TV across the room: it
+  bounces at a laptop while it works, raises a hand under a "?" when it
+  asks you something, holds up an amber "!" for a watchdog note, dances
+  over a finish you have not looked at, sleeps with a "z" when idle (dim
+  when long idle), and tilts its head when its state is unknown — the
+  pose and the sign say it even without colour — with its name, its
+  folder and how long under it and the first line of what it answered
+  in a speech bubble; a click opens it, a hover or a long press tells its
+  state in words, office mode and the pop-out show it large, and reduced
+  motion keeps every creature still in its pose. In Chrome a tile — or the agent on screen,
   from the header — **pops out** into a small window that stays above
   every other app (Document Picture-in-Picture): the agent keeps you
   company over your editor, and the line to answer it is right there.
