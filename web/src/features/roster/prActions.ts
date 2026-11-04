@@ -12,7 +12,7 @@ export const canHandFailure = (s?: PRStatus): boolean => !!s && s.state === "OPE
 // canSendReview: the request is open, so a reviewer may have spoken (the server says when nobody has)
 export const canSendReview = (s?: PRStatus): boolean => !!s && s.state === "OPEN";
 
-// canRemoveWorktree: a linked worktree whose request gh read as merged
+// canRemoveWorktree: a linked worktree whose request gh or glab read as merged
 export const canRemoveWorktree = (session: Pick<Session, "worktree">, pr?: PullRequest): boolean => !!session.worktree?.linked && pr?.status?.state === "MERGED";
 
 // actionsFor lists the hand-offs the request's state allows, in the menu's order

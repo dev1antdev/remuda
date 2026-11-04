@@ -10,6 +10,7 @@ import { Icon, useDismiss } from "@/ui";
 import { refreshHealth, type Health, type Latest, type Machine } from "./api";
 import { awakeBad, awakeWords } from "./awake";
 import { resumeStopped } from "@/features/updates/recover";
+import { limitTone, limitWords } from "@/features/usage/limits";
 import { concerns, updateLabel } from "./concerns";
 import { Sparkline } from "./Sparkline";
 import { DISK_THRESHOLDS, loadThresholds, rangeOf, sparkTitle, spanWords } from "./spark";
@@ -165,6 +166,18 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
                 <>
                   <dt>{t("Awake")}</dt>
                   <dd className={awakeBad(m.awake) ? "health-awake-bad" : undefined}>{awakeWords(m.awake)}</dd>
+                </>
+              )}
+              {(m.limits?.windows ?? []).length > 0 && (
+                <>
+                  <dt>{t("Plan limits")}</dt>
+                  <dd>
+                    {m.limits!.windows!.map((w) => (
+                      <div key={`${w.agent}|${w.name}`} className={limitTone(w.used) ? `health-limit is-${limitTone(w.used)}` : "health-limit"}>
+                        {limitWords(w, Date.now())}
+                      </div>
+                    ))}
+                  </dd>
                 </>
               )}
               <dt>{t("Read")}</dt>

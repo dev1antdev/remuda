@@ -4,6 +4,9 @@
 
 import { addMachine, createSession, createTab, createWorktree, renameMachine, renameSession, renameTab, type Created } from "@/features/roster/api";
 import IconDialog from "@/features/icons/IconDialog";
+import ReopenDialog from "@/features/reopen/ReopenDialog";
+import ArenaDialog from "@/features/arena/ArenaDialog";
+import ArenaPanel from "@/features/arena/ArenaPanel";
 import { useRoster } from "@/features/roster/useRoster";
 import { AddMachineDialog, NewTabDialog, NewWorkspaceDialog, NewWorktreeDialog, RenameDialog, RenameMachineDialog } from "@/features/roster/dialogs";
 import WorkspaceMenu from "@/features/roster/WorkspaceMenu";
@@ -19,6 +22,7 @@ import Schedules from "@/features/schedules/Schedules";
 import Search from "@/features/search/Search";
 import RecapDialog from "@/features/standup/RecapDialog";
 import HandoverDialog from "@/features/chat/HandoverDialog";
+import TeleportDialog from "@/features/teleport/TeleportDialog";
 import ModelDialog from "@/features/chat/ModelDialog";
 import { handedOverWords } from "@/features/chat/handover";
 import ImportIssueDialog from "@/features/tasks/ImportIssueDialog";
@@ -53,6 +57,7 @@ export default function Overlays() {
     refresh();
     actions.selectPane(machineId, made.pane);
     if (made.warning) actions.notify(made.warning);
+    if (made.note) actions.notify(made.note);
   };
   const done = async () => {
     actions.closeDialog();
@@ -77,6 +82,7 @@ export default function Overlays() {
       {panel === "schedules" && <Schedules machines={machines} onClose={actions.closePanel} ask={actions.ask} />}
       {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} />}
       {panel === "standup" && <Standup onClose={actions.closePanel} />}
+      {panel === "arena" && <ArenaPanel onClose={actions.closePanel} />}
       {panel === "usage" && (
         <Usage machines={machines} onClose={actions.closePanel} onOpenSession={(machine, project, session, dir) => openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" })} />
       )}
@@ -105,6 +111,8 @@ export default function Overlays() {
         />
       )}
       {dialog?.kind === "folder-icon" && <IconDialog machineId={dialog.machineId} folder={dialog.folder} name={dialog.name} icon={dialog.icon} onClose={actions.closeDialog} />}
+      {dialog?.kind === "reopen" && <ReopenDialog onClose={actions.closeDialog} />}
+      {dialog?.kind === "arena" && <ArenaDialog taskId={dialog.taskId} title={dialog.title} prompt={dialog.prompt} at={dialog.at} onClose={actions.closeDialog} />}
       {dialog?.kind === "workspace" && (
         <NewWorkspaceDialog
           machines={machines}
@@ -175,6 +183,9 @@ export default function Overlays() {
             else actions.notify(handedOverWords(label, made.size), { brief: true });
           }}
         />
+      )}
+      {dialog?.kind === "teleport" && (
+        <TeleportDialog machineId={dialog.machineId} paneId={dialog.paneId} tabId={dialog.tabId} workspace={dialog.workspace} agent={dialog.agent} agents={agents} onClose={actions.closeDialog} />
       )}
       {dialog?.kind === "model" && (
         <ModelDialog
