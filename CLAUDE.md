@@ -105,7 +105,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   viewer's reads and the one write), `shell.go` (a `Machine` is a
   `shell.Host`: `Run` / `Stream` here through `sh -c` or over the master,
   and `PutFile` writes a file whole there, the way a teleport's archive arrives);
-  `Machine.Transcripts` is a `transcript.Reader`. `local` is always present.
+  `Machine.Transcripts` is a `transcript.Reader`. `local` is always present,
+  named "This Mac · <host>" on a Mac and "This machine · <host>" on
+  anything else (`localLabel`, tested) until the person renames it.
   **Remotes come from herdr itself**: `SyncHerdr` reads `herdr machine list
   --json` (the watcher calls it every 30s, with a 5s timeout) and adds
   enabled machines under **herdr's own id** with `Source: "herdr"` (not

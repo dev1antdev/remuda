@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -139,12 +140,22 @@ func (m *Manager) Rename(id, label string) (*Machine, error) {
 	return mc, nil
 }
 
+// localLabel is the name the machine remuda runs on goes by until the person gives it one: "This Mac · studio" on a
+// Mac, "This machine · rp-orange" on anything else (a cockpit on a Raspberry Pi said "This Mac" once)
+func localLabel(goos, host string) string {
+	host = strings.TrimSuffix(host, ".local")
+	if goos == "darwin" {
+		return "This Mac · " + host
+	}
+	return "This machine · " + host
+}
+
 // NewManager builds the registry: the local machine plus what machines.json lists; herdr's own come through SyncHerdr.
 // Every remote gets the door given once it connects (nil: none).
 func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 	host, _ := os.Hostname()
 	local := &Machine{
-		Cfg:      Config{ID: LocalID, Label: "This Mac · " + strings.TrimSuffix(host, ".local")},
+		Cfg:      Config{ID: LocalID, Label: localLabel(runtime.GOOS, host)},
 		local:    true,
 		state:    StateConnected,
 		herdrBin: localHerdrBin,
