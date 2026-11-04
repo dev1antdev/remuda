@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -163,7 +162,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 		}
 		tabsByWS[tab.WorkspaceID] = append(tabsByWS[tab.WorkspaceID], rosterTab{
 			ID: tab.TabID, Label: tab.Label, Number: tab.Number,
-			Named:  tab.Label != strconv.Itoa(tab.Number),
+			Named:  tabNamed(tab.Label),
 			Status: herdr.UIStatus(tab.AgentStatus, agentInTab[tab.TabID]), Panes: panes,
 		})
 		if agentInTab[tab.TabID] {
@@ -281,4 +280,19 @@ func (s *Server) rosterBody() ([]byte, string) {
 	body, _ := json.Marshal(roster)
 	sum := sha256.Sum256(body)
 	return body, `"` + hex.EncodeToString(sum[:12]) + `"`
+}
+
+// tabNamed says whether the person named a tab: herdr labels an unnamed one by a number, and after a close it may
+// label a tab by its place rather than its own number, so any label of digits alone is herdr's
+func tabNamed(label string) bool {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return false
+	}
+	for _, r := range label {
+		if r < '0' || r > '9' {
+			return true
+		}
+	}
+	return false
 }
