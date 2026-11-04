@@ -7,6 +7,8 @@ import { fillClass } from "@/features/usage/format";
 import { FolderIcon, Icon, Logo, Tip } from "@/ui";
 import { VENDOR_NAME, brandColor } from "@/ui/brand";
 import type { Machine, Session } from "./api";
+import { branchNamesIssue } from "@/features/jira/jira";
+import { IssueChip } from "./IssueChip";
 import { muteWords, mutedUntil } from "./mute";
 import { prWords } from "./prStatus";
 import { displayOf, markOf, rowLabel, stateWords, type AgentRow, type Display, type RadarPrefs } from "./radar";
@@ -168,12 +170,13 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
           {onMenu && <MenuButton machine={m} session={s} onMenu={onMenu} />}
         </span>
         <span className="ws-sub">
-          {branch && (
+          {branch && !branchNamesIssue(branch, s.jira?.[0]) && (
             <span className="ws-branch">
               <Icon name="git-branch" size={12} />
               <span>{branch}</span>
             </span>
           )}
+          {s.jira?.[0] && <IssueChip issue={s.jira[0]} />}
           <span className="ws-words">{words}</span>
         </span>
       </div>

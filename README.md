@@ -84,6 +84,16 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   says it is on and holds its menu. It lives on this device only; nothing
   the server keeps or sends changes, so a notification on your phone still
   names the folder.
+- **Jira** — set your site in Settings › Jira (Jira Cloud: the site, your
+  account's e-mail and an API token from id.atlassian.com; a server: its
+  address and a personal access token) and the issue keys a workspace's
+  branch or its agents name — `feature/CRMOPS-6279-…`, "fixed
+  CRMOPS-6279" — show as a chip on its sidebar card and wall tile,
+  "CRMOPS-6279 · In Review" in the status's colour, a click opening the
+  issue. "New task from a Jira issue…" (the Tasks head's link menu, the
+  palette) makes a task of one, its description and labels with it. The
+  token stays on the server and is never shown back; remuda asks the site
+  only while a page is open, and nothing until you set it.
 - **Roster** — workspaces, tabs and panes from `session.snapshot`, with
   herdr's own agent statuses: `RUN` (working), `NEEDS YOU` (blocked),
   `READY` (idle), `DONE`.

@@ -28,6 +28,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
+	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
@@ -86,6 +87,7 @@ type Server struct {
 	Arena     *arena.Service  // one prompt to several agents side by side
 	Limits    *limits.Service // the agents' subscription windows, the hits and the bookings to continue after a reset
 	Scratch   *scratch.Store  // the floating terminal's shell on each machine
+	Jira      *jira.Service   // the person's Jira site and the issues their agents' work names
 
 	streams   termStreams
 	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
@@ -133,6 +135,7 @@ func (s *Server) Handler() http.Handler {
 	s.arenaRoutes(api)
 	s.limitRoutes(api)
 	s.scratchRoutes(api)
+	s.jiraRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

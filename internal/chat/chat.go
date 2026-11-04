@@ -162,6 +162,25 @@ func (c *Service) PullRequest(machineID, paneID string) (transcript.Link, bool) 
 	return transcript.PullRequest(turns)
 }
 
+// Texts is the last n texts of the pane's conversation, the person's prompts and the agent's answers alike, newest
+// first: what an issue key the work is about is read from.
+func (c *Service) Texts(machineID, paneID string, n int) []string {
+	turns, ok := c.paneTurns(machineID, paneID)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for i := len(turns) - 1; i >= 0 && len(out) < n; i-- {
+		parts := turns[i].Parts
+		for j := len(parts) - 1; j >= 0 && len(out) < n; j-- {
+			if parts[j].Type == "text" && parts[j].Text != "" {
+				out = append(out, parts[j].Text)
+			}
+		}
+	}
+	return out
+}
+
 // LastToolCalls is the last n tool calls of the assistant's latest turn, for the loop check.
 func (c *Service) LastToolCalls(machineID, paneID string, n int) []string {
 	last, ok := c.LastTurn(machineID, paneID)

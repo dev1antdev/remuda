@@ -64,7 +64,7 @@ const toastError = (e: unknown) => actions.notify(errMsg(e), { error: true });
 
 // useCommands is the list for what was typed: the panes first, then the commands that apply right now.
 function useCommands(): (query: string) => Entry[] {
-  const { machines, viewOnly } = useRoster();
+  const { machines, viewOnly, jiraSite } = useRoster();
   const mode = app.use((s) => s.mode);
   const lens = app.use((s) => s.lens);
   const viewer = app.use((s) => s.viewer);
@@ -234,10 +234,11 @@ function useCommands(): (query: string) => Entry[] {
       }
       const typed = query.trim();
       command("import-issue", t("New task from a GitHub issue…"), () => actions.openDialog({ kind: "import-issue" }), { hint: t("read with gh on the machine, as you; an agent can start on it at once"), icon: "link", keywords: ["github", "issue", "import", "task", "new", "gh"] });
+      if (jiraSite) command("import-jira", t("New task from a Jira issue…"), () => actions.openDialog({ kind: "import-jira" }), { hint: t("read from your Jira site; an agent can start on it at once"), icon: "link", keywords: ["jira", "issue", "ticket", "import", "task", "new"] });
       command("search", typed ? t("Search every conversation for “{typed}”", { typed }) : t("Search every conversation…"), () => actions.openSearch(typed), { hint: t("what you or an agent said, on every machine"), icon: "search", keywords: ["find", "transcript"], always: true });
       const shown = share.on ? commands.map((entry) => ({ ...entry, title: share.redact(entry.title), hint: entry.hint && share.redact(entry.hint) })) : commands;
       return [...panes, ...(viewOnly ? shown.filter((entry) => viewerCommand(entry.id)) : shown)];
     },
-    [machines, viewOnly, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
+    [machines, viewOnly, jiraSite, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
   );
 }

@@ -100,9 +100,11 @@ not style.
   `/api/login`. A new route goes on the guarded mux and resolves its
   machine through `machineFor` / `ready()`, never by trusting the body.
 - **Nothing phones home** but the version checks (npm registry, GitHub
-  releases; off with `-no-version-check`), and a site's favicon or a
+  releases; off with `-no-version-check`), a site's favicon or a
   GitHub owner's avatar, each fetched once only when the person asks for
-  it in the icon dialog (`internal/icons`). No sudo anywhere. remuda writes two things into a
+  it in the icon dialog (`internal/icons`), and the person's own Jira site
+  once they set it in Settings (`internal/jira`: the issues their work
+  names, read only while a page is open). No sudo anywhere. remuda writes two things into a
   project: the uploads folder `<pane dir>/.remuda/uploads`, and into a
   worktree remuda itself just made, the ignored files the repository's own
   `.worktreeinclude` lists, copied from its main checkout — never a tracked

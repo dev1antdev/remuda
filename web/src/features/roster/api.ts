@@ -70,6 +70,9 @@ export type Tab = {
 // FolderIconRef is a folder's icon as the roster carries it: an emoji, or a picture served at /api/icons/<image>
 export type FolderIconRef = { emoji?: string; image?: string };
 
+// JiraIssue is an issue a workspace's branch or agents name, as last read from the person's Jira site
+export type JiraIssue = { key: string; summary: string; status: string; category: string; assignee?: string; url: string };
+
 export type Session = {
   id: string;
   name: string;
@@ -83,6 +86,7 @@ export type Session = {
   review?: { changed: number; fresh: number; ready?: boolean }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another
   muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row
   scratch?: boolean; // the floating terminal's own shell: the drawer shows it, the sidebar and the palette leave it out
+  jira?: JiraIssue[]; // the Jira issues its branch and its agents name, once the person set a site
   tabs: Tab[];
 };
 
@@ -148,7 +152,7 @@ export type StoppedChat = { pane: string; agent: string; title: string };
 
 export type AgentKind = { id: string; label: string };
 
-export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[] }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far
+export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[]; jira?: string }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far; jira: the Jira site, when set
 
 // fetchRoster returns null when the roster is unchanged (304 via ETag); viewOnly says a viewer link signed this page in.
 export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null; viewOnly: boolean }> {
