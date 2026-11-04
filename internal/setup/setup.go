@@ -164,6 +164,16 @@ func MCP(host, action string, out io.Writer) error {
 	return run(host, nil, mcpScript, []string{action}, out)
 }
 
+// statuslineScript runs the machine's own remuda for the status line wrapper; one too old to have it says so.
+const statuslineScript = `r="$HOME/.local/bin/remuda"
+if ! "$r" statusline status >/dev/null 2>&1; then echo "the remuda on this machine is older than the status line wrapper: update it first"; exit 1; fi
+exec "$r" statusline "$1"`
+
+// Statusline runs `remuda statusline install|status|uninstall` on host, with that machine's own remuda.
+func Statusline(host, action string, out io.Writer) error {
+	return run(host, nil, statuslineScript, []string{action}, out)
+}
+
 func where(host string) string {
 	if host == "" {
 		return " on this machine"

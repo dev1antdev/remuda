@@ -15,6 +15,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
+	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/radar"
@@ -45,6 +46,8 @@ type rosterPane struct {
 	Usage *usage.Display `json:"usage,omitempty"`
 	Said  string         `json:"said,omitempty"` // the first line of the last answer, once the agent finished
 	PR    *rosterPR      `json:"pr,omitempty"`   // the last pull or merge request the agent named
+	// a subscription limit the agent stopped on, and the person's booking to continue it after the reset
+	Limit *limits.PaneLimit `json:"limit,omitempty"`
 }
 
 // rosterPR is the request the agent named and, once gh on the machine read it, how it stands.
@@ -102,6 +105,7 @@ type rosterMachine struct {
 	Awake    *awake.Status     `json:"awake,omitempty"`   // the keep-awake switch and whether the hold stands
 	Stopped  []restart.Stopped `json:"stopped,omitempty"` // the chats a reboot stopped: their panes are bare shells again, a Resume brings them back
 	MAC      string            `json:"mac,omitempty"`     // the address a wake-up packet names, when the person set one
+	Limits   *limits.Reading   `json:"limits,omitempty"`  // the agents' subscription windows as the machine last reported them
 }
 
 // folderOf is the folder a workspace belongs to in the sidebar: its repository's main checkout — herdr's repo_root, else
@@ -147,6 +151,9 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			}
 			if meter, ok := s.Usage.Display(machineID, pane.PaneID); ok {
 				entry.Usage = &meter
+			}
+			if s.Limits != nil {
+				entry.Limit = s.Limits.PaneOf(machineID, pane.PaneID)
 			}
 		}
 		panesByTab[pane.TabID] = append(panesByTab[pane.TabID], entry)
@@ -266,6 +273,11 @@ func (s *Server) rosterBody() ([]byte, string) {
 			entry.Stopped = s.Updates.Restart.Stopped(mc.ID())
 		}
 		entry.MAC = s.Machines.MAC(mc.ID())
+		if s.Limits != nil {
+			if reading := s.Limits.Of(mc.ID()); len(reading.Windows) > 0 || reading.Wrapped {
+				entry.Limits = &reading
+			}
+		}
 		out = append(out, entry)
 	}
 	roster := map[string]any{"machines": out, "agents": sessions.Agents, "version": buildversion.Build, "latest": s.Health.Latest()}

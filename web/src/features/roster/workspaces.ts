@@ -106,12 +106,16 @@ export function branchShown(item: WorkspaceItem, title: string): string {
   return branch && branch !== title ? branch : "";
 }
 
-// agentWords is what one agent's line says after its mark: the watchdog's note, the question, the answer it finished
-// with, else its title
+// limited says whether the agent sits stopped on a plan limit: the hit stands until it works again
+export const limited = (r: AgentRow | null): boolean => !!r?.pane.limit?.hit_at && r.pane.radar?.state !== "working";
+
+// agentWords is what one agent's line says after its mark: the watchdog's note, the question, a plan limit it stopped
+// on, the answer it finished with, else its title
 export function agentWords(r: AgentRow, prefs: RadarPrefs): string {
   const radar = r.pane.radar;
   if (radar?.alert) return radar.alert;
   if (radar?.state === "blocked") return t("waiting for your answer");
+  if (limited(r)) return r.pane.limit?.continue_at ? t("stopped on its plan limit · continues after the reset") : t("stopped on its plan limit");
   if ((radar?.state === "done" || radar?.state === "idle") && r.pane.said) return r.pane.said;
   return rowLabel(r.pane, r.tab, r.session.name, prefs);
 }

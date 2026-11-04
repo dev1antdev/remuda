@@ -10,7 +10,7 @@ import type { Machine, Session } from "./api";
 import { muteWords, mutedUntil } from "./mute";
 import { prWords } from "./prStatus";
 import { displayOf, markOf, rowLabel, stateWords, type AgentRow, type Display, type RadarPrefs } from "./radar";
-import { agentWords, branchShown, entries, folderCounts, itemTitle, itemWords, representative, shortAge, since, type Folder, type WorkspaceItem } from "./workspaces";
+import { agentWords, branchShown, entries, folderCounts, itemTitle, itemWords, limited, representative, shortAge, since, type Folder, type WorkspaceItem } from "./workspaces";
 import { t, tn } from "@/lib/i18n";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
@@ -134,7 +134,7 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
     folder,
   ].filter(Boolean).join("\n");
   return (
-    <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${group ? " in-repo" : ""}`}>
+    <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${!several && limited(lead) ? " is-limit" : ""}${group ? " in-repo" : ""}`}>
       <div className="ws-main" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => rowKey(e, open)} title={tip}>
         <span className="ws-line">
           <span className="radar-mark" style={markStyle}>
@@ -188,7 +188,7 @@ function AgentLine({ machine: m, row: r, selected, prefs, step, now, onSelect }:
   const words = p.agent ? agentWords(r, prefs) : label;
   return (
     <div
-      className={`ws-agent-line is-${p.agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}`}
+      className={`ws-agent-line is-${p.agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${limited(r) ? " is-limit" : ""}`}
       role="button"
       tabIndex={0}
       onClick={open}

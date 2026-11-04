@@ -24,6 +24,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
 	"github.com/dev1antdev/remuda/internal/jobs"
+	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/prefs"
@@ -239,6 +240,46 @@ func Run(ctx context.Context, o Options) error {
 		}
 		activity.Add(sent.Entry(sent.Remuda, text, false, machineID, paneID, workspace))
 	}
+	// the agents' subscription windows: read off every machine, warned of at 80 % and the limit, the agents stopped on
+	// one noted, and the person's bookings to continue them said when due
+	planLimits := limits.New(o.Dir)
+	planLimits.Notify = pushSvc.Notify
+	planLimits.Changed = hub.RosterChanged
+	planLimits.Check = func(machineID, paneID string) (limits.Hit, bool) {
+		at, text, ok := chats.RateLimited(machineID, paneID)
+		return limits.Hit{At: at, Text: text}, ok
+	}
+	planLimits.Pane = func(machineID, paneID string) (limits.Place, bool) {
+		snap, _ := watcher.Snapshot(machineID)
+		if snap == nil {
+			return limits.Place{}, false
+		}
+		pane := snap.Pane(paneID)
+		if pane == nil {
+			return limits.Place{}, false
+		}
+		place := limits.Place{Agent: pane.Agent, Status: pane.AgentStatus, Workspace: snap.WorkspaceLabel(pane.WorkspaceID)}
+		if pane.AgentSession != nil {
+			place.Session = pane.AgentSession.Value
+		}
+		return place, true
+	}
+	planLimits.Submit = func(machineID, paneID, text string) error {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return err
+		}
+		client, _, err := mc.Ready()
+		if err != nil {
+			return err
+		}
+		if err := input.Submit(client, events.PaneRef{Machine: machineID, Pane: paneID}, text); err != nil {
+			return err
+		}
+		place, _ := planLimits.Pane(machineID, paneID)
+		activity.Add(sent.Entry(sent.Remuda, text, false, machineID, paneID, place.Workspace))
+		return nil
+	}
 	keeper := &herdr.Keeper{Bin: bin, Socket: o.Socket}
 	// the machines kept awake while their agents work: the hold is let go before the fleet's masters close
 	hostname, _ := os.Hostname()
@@ -282,6 +323,12 @@ func Run(ctx context.Context, o Options) error {
 		}
 	})
 	events.Subscribe(bus, func(e events.Snapshot) { sayings.Observe(e.Machine, e.Snap) })
+	events.Subscribe(bus, func(e events.Snapshot) {
+		planLimits.Observe(e.Machine, e.Snap)
+		if mc, err := fleet.Get(e.Machine); err == nil {
+			planLimits.Refresh(mc, mc.Label())
+		}
+	})
 	events.Subscribe(bus, restarter.Observe)
 	events.Subscribe(bus, func(e events.Snapshot) { hub.RosterChanged() })
 	events.Subscribe(bus, func(e events.MachineRemoved) {
@@ -290,9 +337,11 @@ func Run(ctx context.Context, o Options) error {
 		hub.RosterChanged()
 		requests.Forget(e.Machine)
 		restarter.Memory.Forget(e.Machine)
+		planLimits.Forget(e.Machine)
 	})
 	events.Subscribe(bus, pushSvc.OnStatus)
 	events.Subscribe(bus, sayings.OnStatus)
+	events.Subscribe(bus, planLimits.OnStatus)
 	events.Subscribe(bus, requests.OnNamed)
 	events.Subscribe(bus, requests.OnStatus)
 	events.Subscribe(bus, restarter.OnStatus)
@@ -372,6 +421,7 @@ func Run(ctx context.Context, o Options) error {
 	go schedules.Loop()
 	go hub.Run(ctx)
 	go budgets.Loop(5 * time.Minute)
+	go planLimits.Loop(30*time.Second, ctx.Done())
 
 	srv = &server.Server{
 		Machines:  fleet,
@@ -403,6 +453,7 @@ func Run(ctx context.Context, o Options) error {
 		Live:      hub,
 		Awake:     keepAwake,
 		Icons:     icons.New(o.Dir),
+		Limits:    planLimits,
 	}
 	if o.Tailscale {
 		var node *tsnetx.Node

@@ -39,3 +39,9 @@ export const fetchUsage = (days: number, machine: string, tz: string): Promise<{
   if (machine) p.set("machine", machine);
   return getJSON(`/api/usage?${p}`);
 };
+
+// bookContinue keeps the person's word to say "continue" to an agent a plan limit stopped, at the moment given
+export const bookContinue = (machine: string, pane: string, at: string): Promise<{ continue_at: string }> => sendJSON("POST", "/api/limits/continue", { machine, pane, at });
+
+// cancelContinue calls such a booking off
+export const cancelContinue = (machine: string, pane: string): Promise<unknown> => sendJSON("DELETE", "/api/limits/continue", { machine, pane });

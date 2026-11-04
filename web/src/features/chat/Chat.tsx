@@ -1,7 +1,7 @@
 // Chat is the chat lens: the transcript from Claude Code's own session file, read server-side and polled
 // at the pane's pace; sending types into the live pane.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { actions, app } from "@/app/store";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import SendToAgent from "@/features/agents/SendToAgent";
@@ -28,7 +28,7 @@ import { useFind } from "./useFind";
 import { useFollowBottom } from "./useFollowBottom";
 import { t } from "@/lib/i18n";
 
-export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session, viewOnly = false, focused = true }: {
+export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session, viewOnly = false, focused = true, notice }: {
   machineId: string;
   paneId: string; // "" shows a transcript on its own (a search jump), read-only
   status: string;
@@ -42,6 +42,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   subagent?: string; // with no pane: one subagent's own conversation, read-only
   session?: string; // with no pane: the session to show when no jump names it (the viewer)
   viewOnly?: boolean; // a viewer link signed the page in: the conversation shows, nothing is typed
+  notice?: ReactNode; // a word over the composer from elsewhere on the page: a plan limit the agent stopped on
 }) {
   const readOnly = !paneId;
   const agents = useAgentTargets();
@@ -237,6 +238,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           </QuestionCard>
         </Notice>
       )}
+      {!readOnly && notice}
       {error && (
         <Notice tone="error" className="chat-notice" onDismiss={() => setActionError(null)}>
           {error}
