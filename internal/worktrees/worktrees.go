@@ -4,6 +4,7 @@
 // closed; the removal (Remove) never passes --force to git, and deletes a branch that git does not see as merged only
 // when the caller says the request was. Discard is the one exception, an arena's losing lane: its work saved as a
 // patch by the caller first, after a confirm that says so, then git's --force and -D.
+// A worktree remuda makes gets the ignored files its repository's .worktreeinclude lists (Include, include.go).
 package worktrees
 
 import (

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/arena"
@@ -82,7 +83,8 @@ type Server struct {
 	Icons     *icons.Store   // the icon the person gave each folder of the sidebar
 	Arena     *arena.Service // one prompt to several agents side by side
 
-	streams termStreams
+	streams   termStreams
+	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
 }
 
 // Handler mounts every route: each context registers its own, the static page comes last, and the guard wraps all but two.
@@ -106,6 +108,7 @@ func (s *Server) Handler() http.Handler {
 	s.codeRoutes(api)
 	s.updateRoutes(api)
 	s.recoverRoutes(api)
+	s.closedRoutes(api)
 	s.tasksRoutes(api)
 	s.terminalRoutes(api)
 	s.screenRoutes(api)
@@ -114,6 +117,7 @@ func (s *Server) Handler() http.Handler {
 	s.feedRoutes(api)
 	s.recapRoutes(api)
 	s.handoverRoutes(api)
+	s.forkRoutes(api)
 	s.prRoutes(api)
 	s.liveRoutes(api)
 	s.deviceRoutes(api)
@@ -121,6 +125,7 @@ func (s *Server) Handler() http.Handler {
 	s.viewerKeyRoutes(api)
 	s.completeRoutes(api)
 	s.iconRoutes(api)
+	s.teleportRoutes(api)
 	s.arenaRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 

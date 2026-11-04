@@ -1,5 +1,6 @@
 // The pull request's menu, shared by a wall tile's chips and the workspace's ⋯ menu: Open, then the hand-offs its state
-// allows — the failed checks' log, the reviewers' comments — each a message the server composes with gh on the machine
+// allows — the failed checks' log, the reviewers' comments — each a message the server composes with gh (glab for a
+// GitLab merge request) on the machine
 // and sends to the pane's agent, a toast when it went, the server's word when it could not; and, for a merged worktree,
 // its removal behind a confirm.
 
@@ -13,7 +14,8 @@ import { actionLabel, actionsFor, handedWords, removeAsk, removedWords, type PRA
 import { prWords } from "./prStatus";
 import { t } from "@/lib/i18n";
 
-// handPR sends one hand-off: the server reads GitHub with gh on the machine and submits the message to the agent.
+// handPR sends one hand-off: the server reads GitHub with gh, or GitLab with glab, on the machine and submits the
+// message to the agent.
 export async function handPR(action: PRAction, machineId: string, paneId: string, label: string): Promise<void> {
   actions.notify(action === "failure" ? t("Reading the failed checks of {pr}…", { pr: label }) : t("Reading the reviews of {pr}…", { pr: label }), { brief: true });
   try {
