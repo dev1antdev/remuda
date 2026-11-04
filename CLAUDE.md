@@ -940,7 +940,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Snapshot.WorkspaceDirs()` that also reads each folder's branch
   (`git symbolic-ref`, a short hash when detached; `Store.Branch`, set
   by a summary too, dropped for a folder that stopped being a
-  repository), and the roster carries `session.dir`, `session.branch`
+  repository) and its repository's main folder (`Store.Root`: the
+  parent of `git rev-parse --git-common-dir`, so a worktree made outside
+  herdr still joins its repository's folder in the sidebar; git names a
+  linked worktree's repository by its real path), and the roster carries `session.dir`, `session.branch`
   and `session.review {changed, fresh}` for the sidebar's card, beside
   `session.folder` and `session.icon` (`internal/icons`).
   `features/review/Review.tsx` draws it (`Diff.tsx` the file rows,

@@ -88,6 +88,7 @@ type Store struct {
 	baselines map[string]Baseline // by machine|folder
 	badges    map[string]Badge
 	branches  map[string]string     // the branch each folder has checked out, a short hash when detached
+	roots     map[string]string     // the repository's main folder for each folder, a worktree's too
 	sweeps    map[string]badgeSweep // by machine
 }
 
@@ -101,7 +102,7 @@ func key(machineID, dir string) string { return machineID + "|" + dir }
 
 // New loads the baselines kept in dir.
 func New(dir string) *Store {
-	store := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}, branches: map[string]string{}, sweeps: map[string]badgeSweep{}}
+	store := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}, branches: map[string]string{}, roots: map[string]string{}, sweeps: map[string]badgeSweep{}}
 	if err := state.LoadJSON(dir, baselineFile, &store.baselines); err != nil {
 		log.Printf("%s is unreadable (%v): every folder counts as never reviewed", baselineFile, err)
 	}
@@ -132,6 +133,24 @@ func (store *Store) Branch(machineID, dir string) string {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	return store.branches[key(machineID, dir)]
+}
+
+// Root is the main folder of the repository the folder belongs to — for a linked worktree, its repository's — as the
+// last sweep read it; "" outside git or before the first sweep.
+func (store *Store) Root(machineID, dir string) string {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return store.roots[key(machineID, dir)]
+}
+
+func (store *Store) setRoot(storeKey, root string) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if root == "" {
+		delete(store.roots, storeKey)
+		return
+	}
+	store.roots[storeKey] = root
 }
 
 func (store *Store) setBranch(storeKey, branch string) {
@@ -376,8 +395,10 @@ func (store *Store) RefreshBadges(host shell.Host, dirs []string) {
 	}()
 }
 
-// branchScript prints the branch checked out, or the short hash of a detached HEAD.
-const branchScript = `{ git symbolic-ref --short -q HEAD || git rev-parse --short HEAD; } 2>/dev/null`
+// branchScript prints the branch checked out, or the short hash of a detached HEAD, then on a line of its own the
+// repository's main folder: the parent of the common git dir, which a linked worktree shares with its repository.
+const branchScript = `{ git symbolic-ref --short -q HEAD || git rev-parse --short HEAD; } 2>/dev/null; ` +
+	`common=$(git rev-parse --git-common-dir 2>/dev/null) && (cd "$common/.." 2>/dev/null && pwd)`
 
 // Badges refreshes the roster's counts and branches for many folders of one machine in
 // a single round trip: per folder, the folder, the branch and the uncommitted blobs.
@@ -412,7 +433,9 @@ func (store *Store) Badges(host shell.Host, dirs []string) {
 			continue
 		}
 		answered[dir] = true
-		store.setBranch(key(host.ID(), dir), strings.TrimSpace(branch))
+		branchLine, rootLine, _ := strings.Cut(strings.TrimRight(branch, "\n"), "\n")
+		store.setBranch(key(host.ID(), dir), strings.TrimSpace(branchLine))
+		store.setRoot(key(host.ID(), dir), strings.TrimSpace(rootLine))
 		hasBaseline := !baseline.At.IsZero()
 		badge := Badge{}
 		for _, line := range strings.Split(strings.TrimRight(blobLines, "\n"), "\n") {
@@ -430,6 +453,7 @@ func (store *Store) Badges(host shell.Host, dirs []string) {
 	for _, dir := range dirs {
 		if !answered[dir] {
 			store.setBranch(key(host.ID(), dir), "") // no longer a repository: no branch to show
+			store.setRoot(key(host.ID(), dir), "")
 		}
 	}
 }
