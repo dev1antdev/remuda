@@ -120,9 +120,13 @@ not style.
   scrollback: the same project as xterm, not worth writing twice) and
   radix-ui (menus, tooltips, popovers: the primitives whose keyboard and
   focus behaviour is not worth writing twice; `ui/Menu.tsx` and
-  `ui/Tip.tsx` are the only places that import it); add nothing without
-  a reason that survives review. Never `innerHTML`:
-  Markdown and task descriptions render to React nodes. Per-device state
+  `ui/Tip.tsx` are the only places that import it) and mermaid (the
+  flowcharts and sequence diagrams agents draw in their answers and
+  files, too big to write ourselves; loaded only when a diagram is on
+  screen, `ui/Mermaid.tsx` is the only place that imports it); add
+  nothing without a reason that survives review. Never `innerHTML`:
+  Markdown and task descriptions render to React nodes, and a diagram's
+  SVG is parsed as XML and its nodes adopted. Per-device state
   is `usePref` (`lib/prefs.ts`); every request goes through `lib/http.ts`
   (`check` / `getJSON` / `sendJSON`) from a feature's own `api.ts`; a
   screen reads the server through `useQuery` (`lib/query.ts`) and the

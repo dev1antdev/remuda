@@ -2487,6 +2487,47 @@ body.is-resizing iframe {
   font: calc(12.5px * var(--text-scale))/1.45 var(--mono);
 }
 
+/* a mermaid fence drawn: the Source/Diagram switch beside the copy, the diagram at the size it was drawn, scrolling
+   sideways when wider than the column */
+.md-pre-toggle {
+  margin-left: auto;
+}
+
+.mermaid-diagram {
+  position: relative;
+  overflow-x: auto;
+  padding: 12px;
+  background: var(--bg);
+}
+
+.mermaid-svg svg {
+  display: block;
+  margin: 0 auto;
+  max-width: none;
+}
+
+.mermaid-drawing,
+.mermaid-error {
+  padding: 8px 12px;
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+.mermaid-error {
+  border-bottom: 1px solid var(--line);
+  word-break: break-word;
+}
+
+.fv-drawn {
+  padding: 16px 20px 32px;
+  max-width: 920px;
+}
+
+.fv-drawn > .mermaid-diagram {
+  background: transparent;
+  padding: 0;
+}
+
 .md-table-wrap {
   overflow-x: auto;
   margin: 0 0 10px;

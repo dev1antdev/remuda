@@ -3,13 +3,19 @@ import { fileUrl, fsDiff, fsStat, fsText, type FileDiff, type FileInfo } from "@
 import { basename, errMsg } from "@/lib/text";
 import { Notice, Tip } from "@/ui";
 import Icon from "@/ui/icons";
+import { Markdown } from "@/ui/Markdown";
+import { Mermaid } from "@/ui/Mermaid";
+import { opensDrawn, previewOf } from "@/ui/mermaidLook";
 
 import type { FileTarget } from "./target";
 import { actions } from "@/app/store";
 import { useRoster } from "@/features/roster/useRoster";
 import { t } from "@/lib/i18n";
 
-type Tab = "file" | "changes";
+type Tab = "file" | "drawn" | "changes";
+
+// startTab is the view a file opens in: its changes when asked, drawn when it is Markdown or a diagram and no line was named
+const startTab = (target: FileTarget): Tab => (target.prefer === "changes" ? "changes" : opensDrawn(target.path, target.line, target.prefer) ? "drawn" : "file");
 
 // FileViewer opens what the agent wrote: the file itself and its uncommitted change in git, read from the machine the pane lives on
 export default function FileViewer({
@@ -30,7 +36,7 @@ export default function FileViewer({
   const [info, setInfo] = useState<FileInfo | null>(null);
   const [text, setText] = useState<{ text: string; truncated: boolean; max: number } | null>(null);
   const [diff, setDiff] = useState<FileDiff | null>(null);
-  const [tab, setTab] = useState<Tab>(target.prefer ?? "file");
+  const [tab, setTab] = useState<Tab>(() => startTab(target));
   const [error, setError] = useState<string | null>(null);
   const { viewOnly } = useRoster(); // a viewer link's screen reads the file only: no diff, no editor
   const lineRef = useRef<HTMLDivElement>(null);
@@ -74,7 +80,7 @@ export default function FileViewer({
     setText(null);
     setDiff(null);
     setError(null);
-    setTab(target.prefer ?? "file");
+    setTab(startTab(target));
     (async () => {
       try {
         const i = await fsStat(machineId, paneId, target.path, dir);
@@ -105,6 +111,8 @@ export default function FileViewer({
   const name = basename(info?.path ?? target.path);
   const counts = useMemo(() => countChanges(diff?.diff ?? ""), [diff]);
   const hasDiff = !!(diff && diff.diff);
+  const drawnAs = info?.kind === "text" ? previewOf(info.path) : null;
+  const shown: Tab = tab === "drawn" && !drawnAs ? "file" : tab;
 
   return (
     <div className="fv-scrim" onMouseDown={(e) => e.target === e.currentTarget && close()}>
@@ -132,21 +140,28 @@ export default function FileViewer({
               </bdi>
             </span>
           </div>
-          {info?.kind === "text" && !viewOnly && (
+          {info?.kind === "text" && (!viewOnly || drawnAs) && (
             <nav className="fv-tabs" aria-label={t("View")}>
-              <button type="button" className={tab === "file" ? "on" : ""} aria-pressed={tab === "file"} onClick={() => setTab("file")}>
+              <button type="button" className={shown === "file" ? "on" : ""} aria-pressed={shown === "file"} onClick={() => setTab("file")}>
                 {t("File")}
               </button>
-              <button
-                type="button"
-                className={tab === "changes" ? "on" : ""}
-                aria-pressed={tab === "changes"}
-                onClick={() => setTab("changes")}
-                title={diff?.untracked ? t("New file, not yet in git") : diff?.repo ? t("Uncommitted change against HEAD") : t("Not inside a git repository")}
-              >
-                {t("Changes")}
-                {hasDiff && <span className="fv-badge">{`+${counts.add} −${counts.del}`}</span>}
-              </button>
+              {drawnAs && (
+                <button type="button" className={shown === "drawn" ? "on" : ""} aria-pressed={shown === "drawn"} onClick={() => setTab("drawn")} title={drawnAs === "mermaid" ? t("The diagram, drawn") : t("The Markdown, drawn")}>
+                  {t("Preview")}
+                </button>
+              )}
+              {!viewOnly && (
+                <button
+                  type="button"
+                  className={shown === "changes" ? "on" : ""}
+                  aria-pressed={shown === "changes"}
+                  onClick={() => setTab("changes")}
+                  title={diff?.untracked ? t("New file, not yet in git") : diff?.repo ? t("Uncommitted change against HEAD") : t("Not inside a git repository")}
+                >
+                  {t("Changes")}
+                  {hasDiff && <span className="fv-badge">{`+${counts.add} −${counts.del}`}</span>}
+                </button>
+              )}
             </nav>
           )}
           {!viewOnly && (
@@ -203,17 +218,29 @@ export default function FileViewer({
             </div>
           )}
           {info?.kind === "pdf" && <iframe className="fv-pdf" src={fileUrl(machineId, info.path)} title={name} />}
-          {info?.kind === "text" && tab === "file" && text && <CodeView text={text.text} line={target.line} lineRef={lineRef} />}
-          {info?.kind === "text" && tab === "file" && text?.truncated && (
+          {info?.kind === "text" && shown === "file" && text && <CodeView text={text.text} line={target.line} lineRef={lineRef} />}
+          {info?.kind === "text" && shown === "drawn" && text && (
+            <div className="fv-drawn">
+              {drawnAs === "mermaid" ? <FileDiagram source={text.text} /> : <Markdown text={text.text} onOpenFile={onRetarget} diagrams />}
+            </div>
+          )}
+          {info?.kind === "text" && shown !== "changes" && text?.truncated && (
             <div className="empty">
               … cut at {fmtSize(text.max)} of {fmtSize(info.size)}
             </div>
           )}
-          {info?.kind === "text" && tab === "changes" && <DiffView diff={diff} />}
+          {info?.kind === "text" && shown === "changes" && <DiffView diff={diff} />}
         </div>
       </div>
     </div>
   );
+}
+
+// FileDiagram draws a .mmd file; one mermaid cannot read says why, the File tab keeping its text
+function FileDiagram({ source }: { source: string }) {
+  const [error, setError] = useState("");
+  useEffect(() => setError(""), [source]);
+  return error ? <Notice tone="error">{t("Mermaid could not read it: {error}", { error })}</Notice> : <Mermaid source={source} onError={setError} />;
 }
 
 // CodeView splits once per text, not per render: a 512KB file is 10k rows.
