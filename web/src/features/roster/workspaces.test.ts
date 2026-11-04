@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session, Tab } from "./api";
 import { DEFAULT_RADAR } from "./radar";
-import { agentWords, branchShown, entries, folderCounts, itemTitle, itemWords, leadOf, representative, shortAge, since, type WorkspaceItem } from "./workspaces";
+import { agentWords, branchShown, entries, folderCounts, itemTitle, limited, itemWords, leadOf, representative, shortAge, since, type WorkspaceItem } from "./workspaces";
 
 const now = 1_000_000_000_000;
 const ago = (minutes: number) => now - minutes * 60_000;
@@ -37,6 +37,13 @@ describe("entries", () => {
     const b = session("backend", [tab([pane()])], { folder: "/p/backend", dir: "/p/backend", icon: { emoji: "🦊" } });
     const [entry] = entries(machine([a, b]), DEFAULT_RADAR);
     expect(entry?.kind === "folder" && entry.folder.icon).toEqual({ emoji: "🦊" });
+  });
+
+  it("leaves the floating terminal's own shell out", () => {
+    const games = session("games-db", [tab([pane()])], { folder: "/p/games-db", dir: "/p/games-db" });
+    const scratch = session("scratch", [tab([pane({ agent: "" })])], { folder: "/home/me", dir: "/home/me", scratch: true });
+    expect(fold(entries(machine([scratch, games]), { ...DEFAULT_RADAR, shells: true }))).toEqual(["games-db: games-db"]);
+    expect(fold(entries(machine([scratch, games]), { ...DEFAULT_RADAR, order: "recent" }))).toEqual(["games-db"]);
   });
 
   it("lists every workspace by activity in the flat order", () => {
@@ -89,6 +96,17 @@ describe("the line's words", () => {
     expect(branchShown(tree, "small-improvements")).toBe("");
     const main = item(session("api", [tab([pane()])], { branch: "feature/x" }));
     expect(branchShown(main, "api")).toBe("feature/x");
+  });
+
+  it("says an agent stopped on its plan limit until it works again", () => {
+    const stopped = item(session("a", [tab([pane({ said: "You've reached your limit", radar: { state: "idle" }, limit: { hit_at: "2026-11-02T03:00:00Z" } })])]));
+    expect(itemWords(stopped, DEFAULT_RADAR)).toBe("stopped on its plan limit");
+    expect(limited(stopped.lead)).toBe(true);
+    const booked = item(session("b", [tab([pane({ radar: { state: "idle" }, limit: { hit_at: "2026-11-02T03:00:00Z", continue_at: "2026-11-02T08:00:00Z" } })])]));
+    expect(itemWords(booked, DEFAULT_RADAR)).toBe("stopped on its plan limit · continues after the reset");
+    const going = item(session("c", [tab([pane({ title: "Fix it", radar: { state: "working" }, limit: { hit_at: "2026-11-02T03:00:00Z" } })])]));
+    expect(itemWords(going, DEFAULT_RADAR)).toBe("Fix it");
+    expect(limited(null)).toBe(false);
   });
 
   it("says what the lead agent does, how many run, or the shells' tabs", () => {

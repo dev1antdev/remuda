@@ -12,6 +12,7 @@ import { MachineMenu } from "./MachineMenu";
 import { DEFAULT_RADAR, summary, type RadarPrefs } from "./radar";
 import { Rows, StateMarks, type Current } from "./rows";
 import { entries, type Folder } from "./workspaces";
+import { useSharing } from "./useSharing";
 import { hueStyle } from "./hue";
 import { moving, useClock, useSpinner } from "./useClocks";
 import { useRoster } from "./useRoster";
@@ -39,6 +40,7 @@ export default function Sidebar() {
       return next;
     });
   const onRemoveMachine = (m: Machine) => actions.ask(t("Remove machine “{machine}”? Nothing on the PC is touched.", { machine: m.label }), t("Remove"), () => void act(removeMachine(m.id)));
+  const share = useSharing();
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
 
@@ -97,8 +99,8 @@ export default function Sidebar() {
             <div className="machine-head">
               <button type="button" className="machine-toggle" title={folded ? t("Show workspaces") : t("Hide workspaces")} aria-expanded={!folded} onClick={() => onToggle(m.id)}>
                 <span className={`machine-state is-${m.state}`} title={m.error || m.state} />
-                <span className="machine-label" title={m.host}>
-                  {m.label}
+                <span className="machine-label" title={share.machineHidden(m.id) ? undefined : m.host}>
+                  {share.machineLabel(m)}
                 </span>
                 {folded && (
                   <span className="machine-summary">
@@ -120,7 +122,7 @@ export default function Sidebar() {
             </div>
             {m.state === "error" && (
               <Notice tone="error" className="machine-error">
-                {m.error}
+                {share.redact(m.error ?? "")}
               </Notice>
             )}
             {m.state === "connecting" && (
@@ -138,6 +140,7 @@ export default function Sidebar() {
                 onSelect={actions.selectPane}
                 onMenu={viewOnly ? undefined : onMenu}
                 onIcon={viewOnly ? undefined : onIcon}
+                share={share}
                 folded={wsFolded}
                 onFold={onFold}
               />

@@ -1,21 +1,28 @@
-// The toasts in the corner: offline, a newer server, a release out, what happened while the page was away, Tailscale's
-// state, the last notice.
+// The toasts in the corner: a close's agents offered back, offline, a newer server, a release out, what happened while
+// the page was away, Tailscale's state, the last notice.
 
 import { useEffect } from "react";
 import { usePref } from "@/lib/prefs";
 import { newer } from "@/lib/version";
 import { episodeKey, remember, stoppedWords } from "@/features/roster/stopped";
 import { resumeStopped } from "@/features/updates/recover";
+import { reopen } from "@/features/reopen/offer";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import type { ToastItem } from "@/ui";
 import { actions, app } from "./store";
 import { viewerToasts } from "./viewOnly";
 import { t } from "@/lib/i18n";
 
+// CLOSED_OFFER_MS is how long the toast after a close offers its agents back
+const CLOSED_OFFER_MS = 10_000;
+
 export function useToasts(): ToastItem[] {
   const { machines, latest, tailscale, version, offline, stale, viewOnly } = useRoster();
   const notice = app.use((s) => s.notice);
   const away = app.use((s) => s.away);
+  const closedOffer = app.use((s) => s.closedOffer);
+  const share = useSharing();
   const [releaseSeen, setReleaseSeen] = usePref("release.seen", "");
   const [recoverSeen, setRecoverSeen] = usePref<string[]>("recover.seen", []);
   useEffect(() => {
@@ -23,8 +30,33 @@ export function useToasts(): ToastItem[] {
     const t = setTimeout(actions.clearNotice, notice.brief ? 2000 : 6000);
     return () => clearTimeout(t);
   }, [notice]);
+  useEffect(() => {
+    if (!closedOffer) return;
+    const t = setTimeout(() => actions.setClosedOffer(null), CLOSED_OFFER_MS);
+    return () => clearTimeout(t);
+  }, [closedOffer]);
 
   const toasts: ToastItem[] = [];
+  // a close just made through the page: its agents offered back on their sessions for a few seconds
+  if (closedOffer)
+    toasts.push({
+      id: "closed",
+      tone: "info",
+      text: closedOffer.text,
+      action: (
+        <button
+          type="button"
+          className="btn sm primary"
+          onClick={() => {
+            actions.setClosedOffer(null);
+            void reopen(closedOffer.machineId, closedOffer.ids);
+          }}
+        >
+          {t("Reopen")}
+        </button>
+      ),
+      onDismiss: () => actions.setClosedOffer(null),
+    });
   if (offline) toasts.push({ id: "offline", tone: "warn", text: t("Reconnecting to remuda…"), busy: true });
   if (stale && !offline)
     toasts.push({
@@ -108,5 +140,7 @@ export function useToasts(): ToastItem[] {
       ),
     });
   if (tailscale?.state === "error") toasts.push({ id: "tailscale", tone: "error", text: `Tailscale: ${tailscale.error}` }); // the error is the daemon's own words
-  return viewOnly ? viewerToasts(toasts) : toasts;
+  // the screen-sharing mode swaps the hidden names out of every toast that names them
+  const shown = share.on ? toasts.map((toast) => (typeof toast.text === "string" ? { ...toast, text: share.redact(toast.text) } : toast)) : toasts;
+  return viewOnly ? viewerToasts(shown) : shown;
 }

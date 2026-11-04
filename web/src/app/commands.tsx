@@ -17,11 +17,19 @@ import { isMac, usePref, writePref } from "@/lib/prefs";
 import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, openLensOf, type OpenLens } from "./openLens";
 import { basename, errMsg } from "@/lib/text";
 import { folderOf as sessionFolder } from "@/features/roster/workspaces";
+import { canFork, forkLabel } from "@/features/chat/fork";
+import { forkPane } from "@/features/chat/forkPane";
+import { keyWords } from "@/features/terminal/float/float";
+import { toggleFloat } from "@/features/terminal/float/useFloatKey";
+import { setSharingAll, toggleSharing, toggleSharingFolder, toggleSharingMachine, useSharing } from "@/features/roster/useSharing";
+import { markedFolder, markedMachine } from "@/features/roster/sharing";
+import { SHARING_KEY_NAME } from "./sharingKey";
 import { resetPanels } from "@/ui";
 import type { IconName } from "@/ui/icons";
 import { folderOf, useCurrent } from "./current";
 import { enterFull, leaveFull } from "./full";
 import { NEXT_KEY, useNextNeedingMe } from "./next";
+import { REOPEN_KEY } from "@/features/reopen/closed";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
 import { setDarkFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, useTextSize, useThemePref } from "./theme";
@@ -65,6 +73,7 @@ function useCommands(): (query: string) => Entry[] {
   const footprint = app.use((s) => s.footprint);
   const split = app.use((s) => s.split);
   const full = app.use((s) => s.full);
+  const float = app.use((s) => !!s.float);
   const themePref = useThemePref();
   const openLens = openLensOf(usePref<OpenLens>(OPEN_LENS_KEY, DEFAULT_OPEN_LENS)[0]);
   const darkFlavor = useDarkFlavorPref();
@@ -78,15 +87,19 @@ function useCommands(): (query: string) => Entry[] {
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
   const goNext = useNextNeedingMe();
+  const share = useSharing();
   return useCallback(
     (query: string) => {
       const selection = current ? { machineId: current.machine.id, paneId: current.pane.id } : null;
-      const panes = paneEntries(machines, radar, now, step, selection, actions.selectPane);
+      const masked = (machine: (typeof machines)[number], session: Parameters<typeof share.sessionHidden>[1]) =>
+        share.sessionHidden(machine.id, session) ? { folder: share.folderName(machine.id, sessionFolder(session), session.name), machine: share.machineLabel(machine) } : null;
+      const panes = paneEntries(machines, radar, now, step, selection, actions.selectPane, masked);
       const commands: Entry[] = [];
       const command = (id: string, title: string, run: () => void, more: Partial<Entry> = {}) => commands.push({ id, kind: "command", title, keywords: [], run, ...more });
 
       command("next-needs", t("Go to the next agent that needs you"), goNext, { hint: `${NEXT_KEY} · ${t("a question open, a watchdog note, a finish not looked at")}`, icon: "arrow-right", keywords: ["next", "needs", "attention", "waiting", "blocked", "question", "done", "jump"] });
       for (const m of MODES) if (m.mode !== mode) command(`mode:${m.mode}`, m.title, () => actions.setMode(m.mode), { hint: m.hint, icon: m.icon, keywords: ["mode", m.mode] });
+      command("reopen", t("Reopen a closed agent…"), () => actions.openDialog({ kind: "reopen" }), { hint: `${REOPEN_KEY} · ${t("an agent whose tab or workspace closed, back on its own session")}`, icon: "refresh-cw", keywords: ["reopen", "undo", "closed", "restore", "tab", "back", "resume"] });
       if (current && !viewer) {
         const folder = folderOf(current);
         for (const l of LENSES) {
@@ -120,7 +133,9 @@ function useCommands(): (query: string) => Entry[] {
         if (popOutSupported) command("popout", t("Pop out this agent"), () => void popOut(selection!), { hint: t("a small window above every other app"), icon: "pip", keywords: ["picture", "window", "float"] });
         if (current.pane.agent) command("export", t("Export this conversation as Markdown"), () => void exportConversation(machine.id, current.pane.id, chatSession, folderOf(current), { agent: current.pane.agent, workspace: session.name, machine: machine.label }).catch(toastError), { hint: t("the session shown, as a file"), icon: "download", keywords: ["save", "download", "markdown", "transcript", "share", "file"] });
         if (current.pane.agent) command("recap", t("Recap this conversation"), () => actions.openDialog({ kind: "recap", machineId: machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), title: titled }), { hint: t("prompts, answers, tools, files, cost — Copy as Markdown"), icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest", "what happened"] });
+        if (canFork(current.pane.agent)) command("fork", forkLabel(current.pane.agent), () => void forkPane(machine.id, current.pane.id, current.pane.agent, chatSession), { hint: t("the same history in a new tab, a second path; this one goes on as it is"), icon: "columns", keywords: ["fork", "copy", "branch", "try", "another way", "duplicate", "conversation"] });
         if (current.pane.agent) command("handover", t("Continue this conversation with another agent"), () => actions.openDialog({ kind: "handover", machineId: machine.id, paneId: current.pane.id, session: chatSession, agent: current.pane.agent, workspace: titled }), { hint: t("a new tab here with Codex, Gemini or a fresh Claude, the gist of this conversation as its first prompt"), icon: "arrow-right", keywords: ["handover", "hand over", "continue", "switch", "codex", "gemini", "kimi", "another agent", "model", "cheaper", "stuck"] });
+        command("teleport", t("Move the work in {workspace} to another machine…", { workspace: named }), () => actions.openDialog({ kind: "teleport", machineId: machine.id, paneId: current.pane.id, tabId: tab.id, workspace: session.name, agent: current.pane.agent }), { hint: t("its branch, commits and uncommitted changes to a clone there, an agent carrying on"), icon: "send", keywords: ["teleport", "move", "machine", "transfer", "worktree", "laptop"] });
         if (current.pane.agent) command("pins", t("Pins in this conversation…"), () => actions.openDialog({ kind: "pins", machineId: machine.id, paneId: current.pane.id, dir: folderOf(current), shown: chatSession ?? chatLive, title: titled }), { hint: t("the turns you pinned in this folder's conversations, a click opens each"), icon: "pin", keywords: ["pin", "pins", "pinned", "bookmark", "bookmarks", "saved", "mark"] });
         if (current.pane.agent) command("find", t("Find in this conversation"), () => {
           actions.setMode("herdr");
@@ -177,6 +192,8 @@ function useCommands(): (query: string) => Entry[] {
       command("schedules", t("Schedules"), () => actions.openPanel("schedules"), { hint: t("prompts sent to agents on a timetable"), icon: "calendar", keywords: ["cron", "timer", "prompt"] });
       command("usage", t("Usage report"), () => actions.openPanel("usage"), { hint: t("what the agents cost, by day, project and session"), icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
       command("standup", t("Standup: what every agent did today"), () => actions.openPanel("standup"), { hint: t("one report over every machine, ready to paste as Markdown"), icon: "sun", keywords: ["standup", "report", "today", "summary", "recap", "daily", "digest", "morning"] });
+      command("arena-new", t("Arena: one prompt to several agents…"), () => actions.openDialog({ kind: "arena", at: current ? { machineId: current.machine.id, workspaceId: current.session.id } : undefined }), { hint: t("each in a worktree of its own, their work side by side, the best kept"), icon: "columns", keywords: ["arena", "compare", "best", "race", "parallel", "agents", "worktree", "versus"] });
+      command("arenas", t("Arenas"), () => actions.openPanel("arena"), { hint: t("the lanes of every arena: how each agent stands, its changes, keep the best"), icon: "columns", keywords: ["arena", "compare", "lanes", "keep"] });
       command("open-lens-terminal", t("Notifications open: the terminal"), () => writePref(OPEN_LENS_KEY, "terminal"), { hint: `${openLens === "terminal" ? t("now · ") : ""}${t("a tapped notification, the Mac app's menu, an Activity row or Alt+N shows the pane's terminal")}`, icon: "terminal", keywords: ["notification", "alert", "open", "terminal", "lens"] });
       command("open-lens-chat", t("Notifications open: the chat"), () => writePref(OPEN_LENS_KEY, "chat"), { hint: `${openLens === "chat" ? t("now · ") : ""}${t("the same openings show the pane's chat")}`, icon: "message", keywords: ["notification", "alert", "open", "chat", "lens"] });
       command("open-lens-keep", t("Notifications open: the lens it was on"), () => writePref(OPEN_LENS_KEY, "keep"), { hint: `${openLens === "keep" ? t("now · ") : ""}${t("the same openings keep whichever lens the page was on")}`, icon: "columns", keywords: ["notification", "alert", "open", "keep", "lens"] });
@@ -185,6 +202,11 @@ function useCommands(): (query: string) => Entry[] {
       command("theme-light", t("Theme: Latte (light)"), () => setThemePref("light"), { hint: `${themePref === "light" ? t("now · ") : ""}${t("Catppuccin Latte, whatever the system says")}`, icon: "sun", keywords: ["theme", "light", "catppuccin", "latte"] });
       command("settings", t("Settings"), () => actions.openDialog({ kind: "settings" }), { hint: t("the theme, the sidebar, the panels, the alerts, the keys"), icon: "sliders", keywords: ["settings", "preferences", "theme", "options"] });
       command("keys", t("Keyboard shortcuts"), () => actions.openDialog({ kind: "keys" }), { hint: t("? · every key the page answers"), icon: "keyboard", keywords: ["keys", "shortcuts", "help", "hotkeys", "bindings", "keyboard"] });
+      command("float-terminal", float ? t("Hide the floating terminal") : t("Floating terminal"), () => toggleFloat(machines, current?.machine.id ?? null), {
+        hint: float ? t("the shell keeps running · {key}", { key: keyWords(isMac) }) : t("a shell of its own over any screen, on this pane's machine · {key}", { key: keyWords(isMac) }),
+        icon: "square-terminal",
+        keywords: ["terminal", "shell", "float", "scratch", "console", "quake", "drawer"],
+      });
       command("machine", t("Add a PC…"), () => actions.openDialog({ kind: "machine" }), { hint: t("a remote machine over SSH"), icon: "monitor", keywords: ["machine", "remote", "ssh", "host"] });
       command("budgets", t("Budgets…"), () => actions.openPanel("usage"), { hint: t("a spending limit per day, week or month, with a push when it is near"), icon: "chart", keywords: ["budget", "limit", "cost", "spend", "money"] });
       if (current && !viewer && current.pane.agent === "claude") command("model", t("Switch this agent's model…"), () => actions.openDialog({ kind: "model", machineId: current.machine.id, paneId: current.pane.id, current: current.pane.usage?.name }), { hint: t("Opus, Sonnet, Haiku or an id, through Claude Code's own /model"), icon: "sparkles", keywords: ["model", "opus", "sonnet", "haiku", "switch", "cheaper", "faster"] });
@@ -198,12 +220,25 @@ function useCommands(): (query: string) => Entry[] {
         command(`lang-${language}`, language === "ru" ? "Язык: Русский" : t("Language: English"), () => setLangPref(language), { hint: `${currentLang() === language ? t("now · ") : ""}${t("the page's own words; a change reloads the page")}`, icon: "monitor", keywords: ["language", "язык", "russian", "english", "русский", language] });
       }
       if (current && !viewer && mode === "herdr") command("split", split ? t("Chat and terminal: one at a time") : t("Chat beside the terminal"), actions.toggleSplit, { hint: split ? t("the lens switch shows one lens again") : t("the chat on the left, the terminal on the right, on a screen at least 1180 px wide with a mouse"), icon: "columns", keywords: ["split", "side", "beside", "chat", "terminal", "columns", "both"] });
+      command("sharing", share.on ? t("Screen-sharing mode: off") : t("Screen-sharing mode: on"), toggleSharing, {
+        hint: `${SHARING_KEY_NAME} · ${share.on ? t("names and answers show again") : t("the folders and machines you marked, or everything, read as neutral names; their panes covered")}`,
+        icon: share.on ? "eye" : "eye-off",
+        keywords: ["sharing", "screen", "share", "privacy", "hide", "stream", "demo", "screenshot"],
+      });
+      if (share.on) command("sharing-all", share.pref.all ? t("While sharing: hide only what I marked") : t("While sharing: hide everything"), () => setSharingAll(!share.pref.all), { icon: "filter", keywords: ["sharing", "screen", "hide", "all", "marked"] });
+      if (current && !viewer) {
+        const folder = sessionFolder(current.session);
+        const where = share.folderName(current.machine.id, folder, basename(folder) || current.session.name);
+        if (folder) command("sharing-folder", markedFolder(share.pref, current.machine.id, folder) ? t("Show “{folder}” when sharing", { folder: where }) : t("Hide “{folder}” when sharing", { folder: where }), () => toggleSharingFolder(current.machine.id, folder), { hint: t("its name, branch, answers and panes, while the screen-sharing mode is on"), icon: "eye-off", keywords: ["sharing", "screen", "hide", "folder", "privacy"] });
+        command("sharing-machine", markedMachine(share.pref, current.machine.id) ? t("Show {machine} when sharing", { machine: share.machineLabel(current.machine) }) : t("Hide {machine} when sharing", { machine: share.machineLabel(current.machine) }), () => toggleSharingMachine(current.machine.id), { hint: t("the machine and every folder on it, while the screen-sharing mode is on"), icon: "eye-off", keywords: ["sharing", "screen", "hide", "machine", "privacy"] });
+      }
       const typed = query.trim();
       command("import-issue", t("New task from a GitHub issue…"), () => actions.openDialog({ kind: "import-issue" }), { hint: t("read with gh on the machine, as you; an agent can start on it at once"), icon: "link", keywords: ["github", "issue", "import", "task", "new", "gh"] });
       if (jiraSite) command("import-jira", t("New task from a Jira issue…"), () => actions.openDialog({ kind: "import-jira" }), { hint: t("read from your Jira site; an agent can start on it at once"), icon: "link", keywords: ["jira", "issue", "ticket", "import", "task", "new"] });
       command("search", typed ? t("Search every conversation for “{typed}”", { typed }) : t("Search every conversation…"), () => actions.openSearch(typed), { hint: t("what you or an agent said, on every machine"), icon: "search", keywords: ["find", "transcript"], always: true });
-      return [...panes, ...(viewOnly ? commands.filter((entry) => viewerCommand(entry.id)) : commands)];
+      const shown = share.on ? commands.map((entry) => ({ ...entry, title: share.redact(entry.title), hint: entry.hint && share.redact(entry.hint) })) : commands;
+      return [...panes, ...(viewOnly ? shown.filter((entry) => viewerCommand(entry.id)) : shown)];
     },
-    [machines, viewOnly, jiraSite, mode, lens, viewer, chatSession, chatLive, footprint, split, full, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
+    [machines, viewOnly, jiraSite, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
   );
 }

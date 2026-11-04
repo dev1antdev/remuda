@@ -128,3 +128,18 @@ func TestRosterCarriesTheFolderAndItsIcon(t *testing.T) {
 		t.Fatalf("folders and icons: %v", got)
 	}
 }
+
+func TestIconCandidatesRouteRefusesWithoutAFolder(t *testing.T) {
+	s := &Server{Icons: icons.New(t.TempDir())}
+	mux := http.NewServeMux()
+	s.iconRoutes(mux)
+	for body, want := range map[string]int{
+		`{"machine":"local"}`:                     400,
+		`{"machine":"local","folder":"relative"}`: 400,
+		`{"folder":"/p/web"}`:                     400,
+	} {
+		if code, out := taskCall(mux, "POST", "/api/folder-icons/candidates", "", body); code != want {
+			t.Errorf("%s: %d %v, want %d", body, code, out, want)
+		}
+	}
+}

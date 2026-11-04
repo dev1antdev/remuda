@@ -17,7 +17,8 @@ const STATUS_LABEL: Record<Status, string> = {
   shell: tr("shell"),
 };
 
-export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onNewTerminal, onCloseTab, onRename, tools, readOnly = false }: {
+export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onNewTerminal, onCloseTab, onRename, tools, readOnly = false, masked = false }: {
+  masked?: boolean; // screen-sharing mode over this workspace: no names of the person's own, no pane titles
   readOnly?: boolean; // a viewer's page: no new tab, no close, no rename
   session: Session;
   tab: Tab;
@@ -30,7 +31,7 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onNew
   onRename: (t: Tab, label: string) => void;
 }) {
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
-  const faces = tabFaces(session.tabs);
+  const faces = tabFaces(session.tabs, masked);
   const commit = () => {
     if (!editing) return;
     const t = session.tabs.find((x) => x.id === editing.id);
@@ -113,7 +114,7 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onNew
             <button key={p.id} type="button" className={`split-pane${p.id === pane.id ? " on" : ""}`} aria-pressed={p.id === pane.id} onClick={() => onSelect(p.id)} title={p.cwd}>
               <span className="tree-glyph">{i === tab.panes.length - 1 ? "└" : "├"}</span>
               <StatusDot status={p.status} title={STATUS_LABEL[p.status]} />
-              <span>{p.title}</span>
+              <span>{masked ? "" : p.title}</span>
               {p.agent && (
                 <span className="ws-agent" style={{ color: brandColor(p.agent) }}>
                   {p.agent}

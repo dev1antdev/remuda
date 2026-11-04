@@ -4,12 +4,14 @@
 // unseen would attach at 80×24 and resize the shared pane. The split view (app/split.ts) shows the chat and the
 // terminal side by side, the store's lens naming the focused side; the terminal is the same mounted lens either way.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMedia } from "@/lib/media";
 import { isMac, isTouch } from "@/lib/prefs";
 import { basename } from "@/lib/text";
 import { closeTab, createTab, renameTab } from "@/features/roster/api";
+import { offerReopen } from "@/features/reopen/offer";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import { ChatTools, useChatViewItems } from "@/features/chat/ChatTools";
 import { FindTool } from "@/features/chat/FindBar";
 import TabStrip from "@/features/roster/TabStrip";
@@ -18,7 +20,9 @@ import FilesRail from "@/features/chat/FilesRail";
 import Review from "@/features/review/Review";
 import { TerminalLens, TerminalTools, useTerminalViewItems } from "@/features/terminal/TerminalLens";
 import { Screen } from "@/features/terminal/Screen";
-import { Notice, PANELS, Resizer } from "@/ui";
+import { LimitNotice } from "@/features/usage/LimitNotice";
+import { accountWindows } from "@/features/usage/limits";
+import { Icon, Notice, PANELS, Resizer } from "@/ui";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
 import { actions, app, type Lens } from "./store";
@@ -35,8 +39,14 @@ export default function PaneArea({ current }: { current: Located | null }) {
   const splitAsked = app.use((s) => s.split);
   const wide = useMedia(SPLIT_QUERY);
   const split = splitOn(splitAsked, wide, isTouch, lens); // the chat beside the terminal; lens is then the focused side
-  const { refresh, viewOnly } = useRoster();
+  const { refresh, viewOnly, machines } = useRoster();
   const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
+  const share = useSharing();
+  const [revealed, setRevealed] = useState(""); // the pane shown anyway while sharing, until another is on screen
+  const body = useRef<HTMLDivElement>(null);
+  const viewerKey = viewer ? `viewer|${viewer.machine}|${viewer.session}` : "";
+  const viewerHidden = !!viewer && (share.machineHidden(viewer.machine) || share.folderHidden(viewer.machine, viewer.dir));
+  const covered = viewer ? viewerHidden && revealed !== viewerKey : !!current && share.sessionHidden(current.machine.id, current.session) && revealed !== paneKey;
   const [seenLenses, setSeenLenses] = useState<{ pane: string; lenses: Partial<Record<Lens, true>> }>({ pane: "", lenses: {} });
   useEffect(() => {
     if (!paneKey) return;
@@ -52,6 +62,13 @@ export default function PaneArea({ current }: { current: Located | null }) {
       return moved ? { pane: paneKey, lenses } : m;
     });
   }, [paneKey, lens, split]);
+  // a covered pane's lenses take no focus, click or key: the veil is the only thing there
+  useEffect(() => {
+    const el = body.current;
+    if (!el) return;
+    for (const child of Array.from(el.children)) if (!child.classList.contains("sharing-veil")) child.toggleAttribute("inert", covered);
+    if (covered && document.activeElement instanceof HTMLElement && el.contains(document.activeElement)) document.activeElement.blur();
+  }, [covered, paneKey, lens, split, seenLenses]);
   const shown = (l: Lens) => shownLenses(lens, split).includes(l);
   const seen = (l: Lens) => shown(l) || (seenLenses.pane === paneKey && !!seenLenses.lenses[l]);
   // in the split a click or a focus in either side makes it the focused one, so the tools, the find and the keys follow
@@ -84,16 +101,19 @@ export default function PaneArea({ current }: { current: Located | null }) {
         >
           {sub ? (
             <>
-              {tr("A subagent of")} <b>{basename(viewer.dir)}</b>: {sub.description} {tr("— its own conversation, read-only.")}
+              {tr("A subagent of")} <b>{share.redact(basename(viewer.dir))}</b>: {viewerHidden ? "" : sub.description} {tr("— its own conversation, read-only.")}
             </>
           ) : (
             <>
-              {tr("A transcript from")} <b>{basename(viewer.dir)}</b> {tr("— no agent runs there now, so it reads only")}
+              {tr("A transcript from")} <b>{share.redact(basename(viewer.dir))}</b> {tr("— no agent runs there now, so it reads only")}
             </>
           )}
         </Notice>
-        <Chat
-          key={`viewer|${viewer.machine}|${viewer.session}|${sub?.id ?? ""}`}
+        {covered ? (
+          <SharingVeil onShow={() => setRevealed(viewerKey)} />
+        ) : (
+          <Chat
+            key={`viewer|${viewer.machine}|${viewer.session}|${sub?.id ?? ""}`}
           machineId={viewer.machine}
           paneId=""
           status=""
@@ -101,7 +121,8 @@ export default function PaneArea({ current }: { current: Located | null }) {
           dir={viewer.dir}
           session={viewer.session}
           subagent={sub?.id}
-        />
+          />
+        )}
       </main>
     );
   }
@@ -128,6 +149,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
         tab={tab}
         pane={pane}
         readOnly={viewOnly}
+        masked={share.sessionHidden(machine.id, session)}
         tools={
           <>
             {lens === "terminal" && !viewOnly && <FindTool what={tr("in the scrollback")} shortcut={isMac ? "⌘F" : "Ctrl+Shift+F"} />}
@@ -152,11 +174,13 @@ export default function PaneArea({ current }: { current: Located | null }) {
         onRename={(t, label) => void act(renameTab(machine.id, t.id, label))}
         onCloseTab={(t) => {
           const last = session.tabs.length === 1;
-          const msg = last ? tr("Close the last tab? Workspace “{workspace}” closes with it.", { workspace: session.name }) : tn(t.panes.length, "Close tab “{tab}”? Its {n} pane and agent stop.", "Close tab “{tab}”? Its {n} panes and agents stop.", { tab: t.label });
-          actions.ask(msg, tr("Close tab"), () => void act(closeTab(machine.id, t.id)));
+          const msg = last ? tr("Close the last tab? Workspace “{workspace}” closes with it.", { workspace: share.redact(session.name) }) : tn(t.panes.length, "Close tab “{tab}”? Its {n} pane and agent stop.", "Close tab “{tab}”? Its {n} panes and agents stop.", { tab: t.label });
+          const agents = t.panes.filter((p) => p.agent).map((p) => p.id);
+          actions.ask(msg, tr("Close tab"), () => void act(closeTab(machine.id, t.id)).then(() => offerReopen(machine.id, agents)));
         }}
       />
-      <div className={`pane-body${split ? " is-split" : ""}`}>
+      <div className={`pane-body${split ? " is-split" : ""}${covered ? " is-covered" : ""}`} ref={body}>
+        {covered && <SharingVeil onShow={() => setRevealed(paneKey)} />}
         {seen("changes") && (
           <div className="lens-pane" hidden={!shown("changes")}>
             <Review key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} paneId={pane.id} dir={folder} agent={pane.agent} onSeen={refresh} active={shown("changes")} />
@@ -177,6 +201,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
               active={shown("chat")}
               focused={lens === "chat"}
               viewOnly={viewOnly}
+              notice={<LimitNotice machineId={machine.id} paneId={pane.id} agent={pane.agent} limit={pane.limit} windows={accountWindows(machines, Date.now())} viewOnly={viewOnly} />}
             />
           </div>
         )}
@@ -206,5 +231,18 @@ export default function PaneArea({ current }: { current: Located | null }) {
         )}
       </div>
     </main>
+  );
+}
+
+// SharingVeil covers a hidden folder's pane while the screen is shared, until the person asks to see it
+function SharingVeil({ onShow }: { onShow: () => void }) {
+  return (
+    <div className="sharing-veil">
+      <Icon name="eye-off" size={18} />
+      <p>{tr("Hidden while sharing")}</p>
+      <button type="button" className="btn" onClick={onShow}>
+        {tr("Show this pane")}
+      </button>
+    </div>
   );
 }

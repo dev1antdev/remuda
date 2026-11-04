@@ -1,4 +1,5 @@
-// The shell: the rail, the header, the sidebar and the pane area or the other modes (the wall, tasks, code), and the overlays. It also
+// The shell: the rail, the header, the sidebar and the pane area or the other modes (the wall, tasks, code), the
+// floating terminal's drawer over all of them (Ctrl+`), and the overlays. It also
 // keeps the address in step with the selection, hears the service worker, ⌘K (the palette), ⌘F (the find bar), ? (the keyboard
 // sheet) and Alt+N (the next agent that needs you), reads the roster aloud when asked, keeps the browser tab's title and
 // favicon counting the agents that need you, says what the agents did while the page was away, and tells the server when
@@ -17,6 +18,8 @@ import { useWelcomeBack } from "@/features/standup/useWelcomeBack";
 import ReviewQueue from "@/features/review/ReviewQueue";
 import Tasks from "@/features/tasks/Tasks";
 import Code from "@/features/code/Code";
+import FloatTerminal from "@/features/terminal/float/FloatTerminal";
+import { useFloatKey } from "@/features/terminal/float/useFloatKey";
 import { PANELS, Resizer, Toasts } from "@/ui";
 import Header from "./Header";
 import Overlays from "./Overlays";
@@ -27,6 +30,8 @@ import Wall from "./Wall";
 import { folderOf, useCurrent } from "./current";
 import { useFullKeys } from "./full";
 import { useNextKey, useNextNeedingMe } from "./next";
+import { useReopenKey } from "@/features/reopen/useReopenKey";
+import { useSharingKey } from "./SharingChip";
 import { handShell, inShell } from "@/lib/shell";
 import { modeOf } from "./shellFeed";
 import { actions, app } from "./store";
@@ -48,11 +53,14 @@ export default function Shell() {
   const toasts = useToasts();
   useFullKeys();
   useNextKey(useNextNeedingMe());
+  useReopenKey(!viewOnly);
+  useSharingKey();
   useVoice();
   useSyncPrefs(!viewOnly);
   useWelcomeBack();
   useBadge();
   useShellFeed();
+  useFloatKey(machines, current?.machine.id ?? null, !viewOnly);
 
   useEffect(() => {
     if (!current && machines.length === 0) return; // the roster has not answered yet: the address keeps the pane it asked for
@@ -180,6 +188,7 @@ export default function Shell() {
           </>
         )}
         </div>
+        <FloatTerminal />
       </div>
       <Toasts items={toasts} />
       <Overlays />

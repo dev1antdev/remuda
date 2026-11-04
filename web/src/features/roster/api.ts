@@ -3,6 +3,7 @@
 import type { BudgetStatus } from "@/features/usage/api";
 import { check, getJSON, sendJSON, withMachine } from "@/lib/http";
 import { t } from "@/lib/i18n";
+import { includedWords, type Included } from "./included";
 
 export type Status = "run" | "input" | "idle" | "done" | "shell";
 
@@ -20,7 +21,17 @@ export type Pane = {
   usage?: PaneUsage;
   said?: string; // the first line of the agent's last answer, once it finished
   pr?: PullRequest; // the last pull or merge request the agent named, "PR #15" / "MR !9"
+  limit?: PaneLimit; // a subscription limit the agent stopped on, and the person's booking to continue it after the reset
 };
+
+// PaneLimit is when the agent stopped on a plan limit and the harness's words, and the moment a booking continues it
+export type PaneLimit = { hit_at?: string; text?: string; continue_at?: string };
+
+// LimitWindow is one of an agent's subscription windows as it last reported it: claude | codex, 5h | week
+export type LimitWindow = { agent: string; name: string; used: number; resets_at: string; at: string };
+
+// MachineLimits is what a machine says of the plan limits: the windows read there, and whether Claude Code's status line is wrapped to report them
+export type MachineLimits = { windows?: LimitWindow[]; wrapped?: boolean };
 
 // PullRequest is the request the agent named and, for a GitHub one gh on the machine could read, how it stands
 export type PullRequest = { url: string; label: string; status?: PRStatus };
@@ -30,6 +41,7 @@ export type PRStatus = {
   draft: boolean;
   mergeable: string; // MERGEABLE | CONFLICTING | UNKNOWN
   review: string; // APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | ""
+  threads?: number; // a GitLab merge request's discussion threads still open
   checks: { total: number; pass: number; fail: number; pending: number; skipped: number };
   at: string;
 };
@@ -73,6 +85,7 @@ export type Session = {
   icon?: FolderIconRef; // the folder's icon, the person's own
   review?: { changed: number; fresh: number; ready?: boolean }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another
   muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row
+  scratch?: boolean; // the floating terminal's own shell: the drawer shows it, the sidebar and the palette leave it out
   jira?: JiraIssue[]; // the Jira issues its branch and its agents name, once the person set a site
   tabs: Tab[];
 };
@@ -108,6 +121,7 @@ export type Health = {
   plugins?: { id: string; source: string }[]; // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
   error?: string;
   code_server?: string; // the release linked under ~/.local/opt/code-server
+  statusline?: boolean; // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
 };
 
 // the newest versions out there; remuda is its own newest release on GitHub
@@ -130,6 +144,7 @@ export type Machine = {
   awake?: Awake;
   stopped?: StoppedChat[]; // the chats a reboot stopped there: their panes are bare shells again, one Resume brings them back
   mac?: string; // the address a wake-up packet names, when the person set one
+  limits?: MachineLimits; // the agents' plan limits as the machine last reported them
 };
 
 // StoppedChat is a chat whose pane came back from a reboot as a bare shell: the agent it ran and the pane's title
@@ -159,14 +174,16 @@ export const submitPrompt = (machine: string, pane: string, text: string): Promi
 
 export const sendKeys = (machine: string, pane: string, keys: string[]): Promise<void> => sendJSON("POST", "/api/keys", { machine, pane, keys });
 
-// Created is what the create calls return: the container exists either way, a warning says the agent in it failed to start
-export type Created = { pane: string; warning?: string };
+// Created is what the create calls return: the container exists either way, a warning says the agent in it failed to
+// start, a note what a new worktree got from .worktreeinclude
+export type Created = { pane: string; warning?: string; note?: string };
 
 async function create(url: string, req: unknown): Promise<Created> {
-  const body = await sendJSON<{ pane: string; agent_error?: string }>("POST", url, req);
+  const body = await sendJSON<{ pane: string; agent_error?: string; included?: Included; include_error?: string }>("POST", url, req);
   return {
     pane: body.pane,
     warning: body.agent_error ? t("Created, but the agent failed to start: {error}", { error: body.agent_error }) : undefined,
+    note: includedWords(body.included, body.include_error) || undefined,
   };
 }
 

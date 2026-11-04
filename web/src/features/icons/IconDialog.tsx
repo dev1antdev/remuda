@@ -1,5 +1,6 @@
-// IconDialog gives a folder its icon: an emoji from the system's set, by group or by name; a site's favicon, read once
-// by remuda at the person's word; or a picture from their computer. Remove goes back to the initial on a tile.
+// IconDialog gives a folder its icon: one the project already keeps or its owner's avatar (Automatic, the first tab);
+// an emoji from the system's set, by group or by name; a site's favicon, read once by remuda at the person's word; or a
+// picture from their computer. Remove goes back to the initial on a tile.
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { act } from "@/app/act";
@@ -11,14 +12,15 @@ import { clearFolderIcon, fetchFavicon, setFolderIcon, type IconChoice } from ".
 import { pushRecent, searchEmoji } from "./emoji";
 import type { EmojiGroup } from "./emojiData";
 import { ICON_SIZE, fitInside, pictureKind, siteOf } from "./picture";
+import { AutoIcons } from "./AutoIcons";
 
-type Source = "emoji" | "site" | "picture";
+type Source = "auto" | "emoji" | "site" | "picture";
 
 // GROUP_FACES is the emoji each group's button wears
 const GROUP_FACES: Record<string, string> = { smileys: "😀", people: "👋", animals: "🦊", food: "🍎", travel: "✈️", activities: "⚽", objects: "💡", symbols: "💠", flags: "🏁" };
 
 export default function IconDialog({ machineId, folder, name, icon, onClose }: { machineId: string; folder: string; name: string; icon?: FolderIconRef; onClose: () => void }) {
-  const [source, setSource] = useState<Source>("emoji");
+  const [source, setSource] = useState<Source>("auto");
   const [recent, setRecent] = usePref<string[]>("icons.recent", []);
   const save = useSubmit(async (choice: IconChoice) => {
     await setFolderIcon(machineId, folder, choice);
@@ -41,11 +43,13 @@ export default function IconDialog({ machineId, folder, name, icon, onClose }: {
       <div className="icon-head">
         <FolderIcon icon={icon} name={name} size={32} />
         <div className="fv-tabs" role="tablist" aria-label={t("Where the icon comes from")}>
+          {tab("auto", t("Automatic"))}
           {tab("emoji", t("Emoji"))}
           {tab("site", t("A site's icon"))}
           {tab("picture", t("A picture"))}
         </div>
       </div>
+      {source === "auto" && <AutoIcons machineId={machineId} folder={folder} busy={save.busy} onUse={(image) => void save.run({ image })} />}
       {source === "emoji" && <EmojiPicker recent={recent} busy={save.busy} onPick={(emoji) => void save.run({ emoji })} />}
       {source === "site" && <SiteIcon busy={save.busy} onUse={(image) => void save.run({ image })} />}
       {source === "picture" && <PictureIcon busy={save.busy} onUse={(image) => void save.run({ image })} />}

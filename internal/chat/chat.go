@@ -194,6 +194,28 @@ func (c *Service) LastToolCalls(machineID, paneID string, n int) []string {
 	return calls
 }
 
+// RateLimited says whether the pane's conversation ends in the harness's note that a subscription limit stopped the
+// agent, read off the last 64 KB of its live file, with when it was written and its words.
+func (c *Service) RateLimited(machineID, paneID string) (time.Time, string, bool) {
+	pane, _ := c.Pane(machineID, paneID)
+	if pane == nil {
+		return time.Time{}, "", false
+	}
+	mc, path, ok := c.SessionFile(machineID, pane)
+	if !ok {
+		return time.Time{}, "", false
+	}
+	version, err := mc.Transcripts.Version(path)
+	if err != nil {
+		return time.Time{}, "", false
+	}
+	tail, err := mc.Transcripts.ReadFrom(path, max(0, version.Size-64<<10))
+	if err != nil {
+		return time.Time{}, "", false
+	}
+	return transcript.RateLimited(tail)
+}
+
 // LastAnswer is the text the assistant's latest turn ended with and the id of its last record; "" when the turn ends in a tool call.
 func (c *Service) LastAnswer(machineID, paneID string) (string, string) {
 	last, ok := c.LastTurn(machineID, paneID)

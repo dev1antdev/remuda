@@ -25,7 +25,7 @@ export function folderOptions(machines: Machine[], machineId: string | "all"): O
   for (const m of machines) {
     if (machineId !== "all" && m.id !== machineId) continue;
     for (const s of m.sessions) {
-      if (!s.dir) continue;
+      if (!s.dir || s.scratch) continue;
       const cur = seen.get(s.dir);
       if (cur) cur.machines.push(m.label);
       else seen.set(s.dir, { name: s.name, machines: [m.label] });

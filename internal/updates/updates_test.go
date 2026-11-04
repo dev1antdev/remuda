@@ -200,3 +200,28 @@ func TestOfferedIncludesTheMCPRegistrationWhereRemudaIs(t *testing.T) {
 		t.Fatal("no remuda on the machine, nothing to register")
 	}
 }
+
+func TestOfferedIncludesTheStatusLineWrapperWhereClaudeAndRemudaAre(t *testing.T) {
+	find := func(r *health.Report) *Update {
+		for _, u := range Offered(r, health.Latest{}) {
+			if u.What == "statusline" {
+				u := u
+				return &u
+			}
+		}
+		return nil
+	}
+	u := find(&health.Report{Remuda: "v0.12.0", Claude: "2.1.318"})
+	if u == nil || !strings.HasSuffix(u.Command, `"$r" statusline install`) || !strings.Contains(u.Command, "statusline status") || !strings.Contains(u.Note, "statusline uninstall") {
+		t.Fatalf("statusline row = %+v", u)
+	}
+	if u := find(&health.Report{Remuda: "v0.12.0", Claude: "2.1.318", Statusline: true}); u != nil {
+		t.Fatal("offered where it is installed already")
+	}
+	if u := find(&health.Report{Remuda: "v0.12.0"}); u != nil {
+		t.Fatal("offered without Claude Code")
+	}
+	if u := find(&health.Report{Claude: "2.1.318"}); u != nil {
+		t.Fatal("offered without remuda")
+	}
+}
