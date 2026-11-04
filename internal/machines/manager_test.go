@@ -25,3 +25,15 @@ func TestRenameCountsCharactersNotBytes(t *testing.T) {
 		t.Fatalf("an empty name goes back to the registry's: %v %q", err, mc.Label())
 	}
 }
+
+func TestTheLocalMachineIsNamedForItsSystem(t *testing.T) {
+	for _, c := range []struct{ goos, host, want string }{
+		{"darwin", "Sergiis-MacBook-Pro.local", "This Mac · Sergiis-MacBook-Pro"},
+		{"linux", "rp-orange", "This machine · rp-orange"},
+		{"windows", "desktop-pevp5ap", "This machine · desktop-pevp5ap"},
+	} {
+		if got := localLabel(c.goos, c.host); got != c.want {
+			t.Errorf("localLabel(%q, %q) = %q, want %q", c.goos, c.host, got, c.want)
+		}
+	}
+}
