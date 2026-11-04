@@ -630,6 +630,18 @@ async function runPass() {
     },
     expect: ["[role=menu].menu"],
   });
+  await screen("folder-new-workspace", {
+    open: async () => {
+      await sidebarOpen();
+      await hover(await mark(folderHead("app"), "folder"));
+      await sleep(150);
+      await tap(await mark(folderHead("app") + "?.querySelector('.ws-folder-menu')", "folder-menu"));
+      if (!(await until(() => present("[role=menu] [role=menuitem]"), 3))) throw new Error("the folder's menu did not open");
+      await tap("[role=menu] [role=menuitem]");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".modal input")].some((i) => i.value.startsWith("worktree/"))`), 4))) failed("a repository folder's new workspace is not a worktree on a branch of its own");
+    },
+    expect: [".modal"],
+  });
   await screen("machine-menu", {
     open: async () => {
       await sidebarOpen();

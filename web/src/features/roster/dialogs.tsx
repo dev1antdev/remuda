@@ -252,29 +252,25 @@ export function NewWorktreeDialog({ session, agents, onCreate, onClose }: {
   const [name, setName] = useState("");
   const { agent, pickAgent, draft, setDraft, options, applyRecipe } = useStart(defaultAgent(agents, "claude"));
   const submit = useSubmit(async () => {
-    if (!branch.trim()) throw new Error("Branch name is required");
+    if (!branch.trim()) throw new Error(t("Branch name is required"));
     await onCreate(branch.trim(), base.trim(), name.trim(), agent, options());
   });
   const repo = session.worktree?.repo_name ?? session.name;
   return (
     <FormDialog
-      title={t("New worktree of {repo}", { repo })}
+      title={t("New workspace in {repo}", { repo })}
       icon="git-branch"
-      hint={
-        <>
-          <code>{t("git worktree add")}</code> creates the branch's own checkout; it opens as a workspace nested under {repo}, and the agent starts there beside the first one.
-        </>
-      }
+      hint={t("A worktree of its own: a folder with its own branch beside {repo}, so the agents of different workspaces never touch each other's files. Closing the workspace removes it again once nothing in it is uncommitted.", { repo })}
       onClose={onClose}
       submit={submit}
-      submitLabel={t("Create worktree")}
+      submitLabel={t("Create workspace")}
     >
       <label>
         {t("Branch")}
         <input autoFocus value={branch} onChange={(e) => setBranch(e.target.value)} />
       </label>
       <label>
-        Base (optional — branch, tag or commit; default: the current HEAD)
+        {t("Base (optional — a branch, tag or commit; the current HEAD by default)")}
         <input value={base} placeholder="main" onChange={(e) => setBase(e.target.value)} />
       </label>
       <label>
