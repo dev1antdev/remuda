@@ -65,12 +65,13 @@ export function limitWords(w: LimitWindow, now: number): string {
   return t("{agent} {window}: {used} %, resets {time}", { agent: agentName(w.agent), window: windowName(w.name), used: Math.floor(w.used), time: resetTime(w.resets_at, now) });
 }
 
-// resetForHit is the moment an agent stopped on a limit can carry on: the earliest reset of its windows at the limit,
-// else of any window at 95 % or more; none when no window says so
+// resetForHit is the moment an agent stopped on a limit can carry on: once every window of its at the limit has reset —
+// the latest of their resets, since a full week still blocks after the 5 hours come back — else the latest of the
+// windows at 95 % or more; none when no window says so
 export function resetForHit(windows: LimitWindow[], agent: string): string | undefined {
   const own = windows.filter((w) => w.agent === agent);
   for (const floor of [99.5, 95]) {
-    const full = own.filter((w) => w.used >= floor).sort((a, b) => Date.parse(a.resets_at) - Date.parse(b.resets_at));
+    const full = own.filter((w) => w.used >= floor).sort((a, b) => Date.parse(b.resets_at) - Date.parse(a.resets_at));
     if (full.length) return full[0]!.resets_at;
   }
   return undefined;
