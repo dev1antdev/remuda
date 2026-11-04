@@ -49,7 +49,7 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
                 </>
               ) : c.author === "you" ? (
                 <>
-                  <Icon name="user" size={12} /> you
+                  <Icon name="user" size={12} /> {tr("you")}
                 </>
               ) : (
                 <>

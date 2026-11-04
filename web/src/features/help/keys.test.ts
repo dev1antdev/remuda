@@ -27,4 +27,20 @@ describe("keyGroups", () => {
     expect(flat(false)).toContain("Ctrl K");
     expect(flat(false).some((k) => k.includes("⌘"))).toBe(false);
   });
+
+  it("leaves out for a viewer the keys of what a viewer has not got, and keeps finding and moving about", () => {
+    const rows = (viewOnly: boolean) => keyGroups(true, viewOnly).flatMap((g) => g.rows.map((r) => `${g.title}: ${r.keys.join(" ")}`));
+    const viewer = rows(true);
+    expect(viewer).toContain("Everywhere: ⌘ K");
+    expect(viewer).toContain("Everywhere: Alt N");
+    expect(viewer).toContain("Chat: ⌘ F");
+    expect(viewer).toContain("Wall: Esc");
+    expect(viewer).not.toContain("Everywhere: Alt Z");
+    expect(viewer).not.toContain("Everywhere: ⌃ `");
+    expect(viewer).not.toContain("Chat: ↵");
+    expect(viewer).not.toContain("Chat: Q");
+    expect(viewer.some((r) => r.startsWith("Changes:") || r.startsWith("Tasks:") || r.startsWith("Terminal:"))).toBe(false);
+    expect(rows(false).length).toBeGreaterThan(viewer.length);
+    expect(rows(false)).toContain("Everywhere: Alt Z");
+  });
 });

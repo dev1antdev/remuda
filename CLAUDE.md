@@ -937,7 +937,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `pinned` on `TileView`, the `pin` icon) pins it with the accent ring,
   the featured tile's pin button unpins, ← → pin the previous or next
   (`neighbour`), the featured tile's head keeps its usual click), `Overlays.tsx` (panels, dialogs, the
-  menu, the confirm, the file viewer; the keyboard sheet behind **?** — Shift and the slash key by position, never over a field or another dialog, the same key closes it — is `features/help/KeysDialog.tsx` over `help/keys.ts`, the one list of every key the page answers, tested; the palette has it as "Keyboard shortcuts"), `commands.tsx` (the **command
+  menu, the confirm, the file viewer; the keyboard sheet behind **?** — Shift and the slash key by position, never over a field or another dialog, the same key closes it — is `features/help/KeysDialog.tsx` over `help/keys.ts`, the one list of every key the page answers, tested — a viewer's sheet leaves out the rows and groups marked `viewer: false`, the keys of what a viewer has not got (the composer, Changes, Tasks, the live and the floating terminal, Alt+Z); the palette has it as "Keyboard shortcuts"), `commands.tsx` (the **command
   palette** on ⌘K / Ctrl+K, by key code so any layout works: every pane
   as a row to jump to — each machine's liveliest first, shells at its
   end, the current one marked — and every command the page has a button

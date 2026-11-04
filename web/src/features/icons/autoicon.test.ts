@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { fromWords, lookedWords, noteWords } from "./autoicon";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
+import { fromWords, lookedWords, noteText, noteWords } from "./autoicon";
 
 describe("fromWords", () => {
   it("names a file by its path and an avatar by its owner", () => {
@@ -15,5 +16,16 @@ describe("lookedWords", () => {
     expect(lookedWords({ candidates: [], looked: ["./"] })).toBe("Looked in ./.");
     expect(noteWords(["no glab on GOG to read the GitLab avatar"])).toBe("No glab on GOG to read the GitLab avatar.");
     expect(noteWords()).toBe("");
+  });
+});
+
+describe("noteText", () => {
+  afterEach(() => setLang("en"));
+
+  it("says the server's notes in the page's language, the name they carry kept", () => {
+    setLang("ru");
+    expect(noteText("no glab on GOG to read the GitLab avatar")).toBe("на GOG нет glab, чтобы прочитать аватар GitLab");
+    expect(noteText("GitHub has no avatar for acme")).toBe("у GitHub нет аватара для acme");
+    expect(noteText("something new the server says")).toBe("something new the server says");
   });
 });

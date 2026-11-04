@@ -2,10 +2,19 @@ import { t } from "@/lib/i18n";
 // Every key the page answers, in groups, for the sheet behind ?. The one list to read; each binding lives where it is
 // handled (the Shell, the composer, the review's keys.ts, the palette, the wall).
 
-export type KeyRow = { keys: string[]; what: string }; // a chord per key cap, "⌘ K"
-export type KeyGroup = { title: string; rows: KeyRow[] };
+// a chord per key cap, "⌘ K"; `viewer: false` marks a key a viewer link's page does not answer
+export type KeyRow = { keys: string[]; what: string; viewer?: false };
+export type KeyGroup = { title: string; rows: KeyRow[]; viewer?: false };
 
-export function keyGroups(mac: boolean): KeyGroup[] {
+// keyGroups is the sheet's list; for a viewer it leaves out the keys of what a viewer has not got — the composer, the
+// Changes lens, Tasks, the live terminal, the floating one, reopening a closed agent
+export function keyGroups(mac: boolean, viewOnly = false): KeyGroup[] {
+  const groups = allGroups(mac);
+  if (!viewOnly) return groups;
+  return groups.filter((g) => g.viewer !== false).map((g) => ({ ...g, rows: g.rows.filter((r) => r.viewer !== false) }));
+}
+
+function allGroups(mac: boolean): KeyGroup[] {
   const mod = mac ? "⌘" : "Ctrl";
   return [
     {
@@ -14,8 +23,8 @@ export function keyGroups(mac: boolean): KeyGroup[] {
         { keys: [`${mod} K`], what: t("the command palette: any agent, any command") },
         { keys: ["?"], what: t("this sheet") },
         { keys: ["Alt N"], what: t("the next agent that needs you") },
-        { keys: ["Alt Z"], what: t("reopen an agent whose tab or workspace closed") },
-        { keys: [mac ? "⌃ `" : "Ctrl `"], what: t("the floating terminal: a shell of its own over any screen, shown or hidden; from a terminal too") },
+        { keys: ["Alt Z"], what: t("reopen an agent whose tab or workspace closed"), viewer: false },
+        { keys: [mac ? "⌃ `" : "Ctrl `"], what: t("the floating terminal: a shell of its own over any screen, shown or hidden; from a terminal too"), viewer: false },
         { keys: ["Alt H"], what: t("screen-sharing mode: the folders and machines you marked read as neutral names") },
         { keys: ["Esc"], what: t("close a dialog, a menu, the file viewer; leave full screen") },
         { keys: ["←", "→"], what: t("a panel's edge once Tab lands on it; ⇧ by more, ↵ its usual width") },
@@ -24,19 +33,20 @@ export function keyGroups(mac: boolean): KeyGroup[] {
     {
       title: t("Chat"),
       rows: [
-        { keys: ["↵"], what: t("send") },
-        { keys: ["⇧ ↵"], what: t("a new line") },
-        { keys: ["↑", "↓"], what: t("what you sent before, on an empty line") },
-        { keys: ["Alt ↵"], what: t("keep the text as a note in the agent's queue, sent only when you press Send on it") },
-        { keys: ["Q"], what: t("quote the text selected in an answer into your reply") },
+        { keys: ["↵"], what: t("send"), viewer: false },
+        { keys: ["⇧ ↵"], what: t("a new line"), viewer: false },
+        { keys: ["↑", "↓"], what: t("what you sent before, on an empty line"), viewer: false },
+        { keys: ["Alt ↵"], what: t("keep the text as a note in the agent's queue, sent only when you press Send on it"), viewer: false },
+        { keys: ["Q"], what: t("quote the text selected in an answer into your reply"), viewer: false },
         { keys: [`${mod} F`], what: t("find in this conversation") },
         { keys: ["↵", "⇧ ↵", "Esc"], what: t("the next or previous match in the find bar, close it") },
-        { keys: ["↑", "↓", "↵", "Tab", "Esc"], what: t("walk the / commands or @ files offered at the caret, pick one, close the list") },
-        { keys: ["↑", "↓", "↵", "Esc"], what: t("answer the agent's question with the buttons under it") },
+        { keys: ["↑", "↓", "↵", "Tab", "Esc"], what: t("walk the / commands or @ files offered at the caret, pick one, close the list"), viewer: false },
+        { keys: ["↑", "↓", "↵", "Esc"], what: t("answer the agent's question with the buttons under it"), viewer: false },
       ],
     },
     {
       title: t("Changes"),
+      viewer: false,
       rows: [
         { keys: ["j", "k"], what: t("the next or previous file") },
         { keys: ["↑", "↓"], what: t("the lines of the open file") },
@@ -65,6 +75,7 @@ export function keyGroups(mac: boolean): KeyGroup[] {
     },
     {
       title: t("Tasks"),
+      viewer: false,
       rows: [
         { keys: [`${mod} ↵`], what: t("post a comment") },
         { keys: ["↵"], what: t("open the card under the focus") },
@@ -74,6 +85,7 @@ export function keyGroups(mac: boolean): KeyGroup[] {
     },
     {
       title: t("Terminal"),
+      viewer: false,
       rows: [
         { keys: [mac ? "⌘ F" : "Ctrl ⇧ F"], what: t("find in the scrollback") },
         { keys: ["any key"], what: t("goes to the app in the pane; the tab strip's key bar types ⏎, Esc, Tab, the arrows, and holds Ctrl or Alt for the next key") },

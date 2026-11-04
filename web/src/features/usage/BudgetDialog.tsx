@@ -96,7 +96,7 @@ export default function BudgetDialog({ machines, budget, onClose, onSaved, ask }
       </div>
       <label>
         <span>
-          {t("Note")} <span className="dim">(optional)</span>
+          {t("Note")} <span className="dim">{t("(optional)")}</span>
         </span>
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("What this budget is for")} />
       </label>

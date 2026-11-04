@@ -266,12 +266,12 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
             </button>
           }
         >
-          Context {Math.round(100 * context)}% full — Claude Code compacts on its own near the edge; compacting now keeps the summary yours to steer.
+          {t("Context {percent}% full — Claude Code compacts on its own near the edge; compacting now keeps the summary yours to steer.", { percent: Math.round(100 * context) })}
         </Notice>
       )}
       {jumpMiss && (
         <Notice tone="info" className="chat-notice" onDismiss={() => setJumpMiss(false)}>
-          That turn is older than the loaded part of this transcript (the last 16 MB).
+          {t("That turn is older than the loaded part of this transcript (the last 16 MB).")}
         </Notice>
       )}
       {quotePop && (

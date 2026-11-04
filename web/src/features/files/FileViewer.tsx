@@ -226,7 +226,7 @@ export default function FileViewer({
           )}
           {info?.kind === "text" && shown !== "changes" && text?.truncated && (
             <div className="empty">
-              … cut at {fmtSize(text.max)} of {fmtSize(info.size)}
+              {t("… cut at {shown} of {size}", { shown: fmtSize(text.max), size: fmtSize(info.size) })}
             </div>
           )}
           {info?.kind === "text" && shown === "changes" && <DiffView diff={diff} />}

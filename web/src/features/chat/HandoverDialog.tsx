@@ -70,7 +70,8 @@ export default function HandoverDialog({ machineId, paneId, session, agent, work
       <div className="start-options">
         <button type="button" className="linkish start-options-toggle" aria-expanded={more} onClick={() => setMore(!more)}>
           <Icon name={more ? "chevron-down" : "chevron-right"} size={12} />
-          Extra arguments{!more && draft.args.trim() ? t(" · set") : ""}
+          {t("Extra arguments")}
+          {!more && draft.args.trim() ? t(" · set") : ""}
         </button>
         {more && (
           <label>

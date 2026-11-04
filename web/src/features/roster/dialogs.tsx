@@ -103,7 +103,8 @@ function StartOptionsFields({ kind, draft, agents, onChange, onRecipe }: { kind:
       {recipePick}
       <button type="button" className="linkish start-options-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
         <Icon name={open ? "chevron-down" : "chevron-right"} size={12} />
-        Options{!open && hasOptions(kind, draft) ? t(" · set") : ""}
+        {t("Options")}
+        {!open && hasOptions(kind, draft) ? t(" · set") : ""}
       </button>
       {open && (
         <>
@@ -207,7 +208,7 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate,
         />
       )}
       <label>
-        Name (optional)
+        {t("Name (optional)")}
         <input value={name} placeholder="checkout-api" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
@@ -228,7 +229,7 @@ export function NewTabDialog({ session, agents, onCreate, onClose }: {
   return (
     <FormDialog title={t("New tab in {workspace}", { workspace: session.name })} icon="plus" hint={t("Opens in the workspace's folder, like herdr's prefix+c.")} onClose={onClose} submit={submit} submitLabel={t("Create tab")}>
       <label>
-        Name (optional)
+        {t("Name (optional)")}
         <input autoFocus value={name} placeholder="tests" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
@@ -274,7 +275,7 @@ export function NewWorktreeDialog({ session, agents, onCreate, onClose }: {
         <input value={base} placeholder="main" onChange={(e) => setBase(e.target.value)} />
       </label>
       <label>
-        Workspace name (optional)
+        {t("Workspace name (optional)")}
         <input value={name} placeholder={t("defaults to the branch")} onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
@@ -310,7 +311,8 @@ export function AddMachineDialog({ onAdd, onClose }: { onAdd: (label: string, ho
       icon="monitor"
       hint={
         <>
-          Machines saved in herdr appear on their own. This adds another: any host your <code>ssh</code> reaches with keys, with herdr running there.
+          {t("Machines saved in herdr appear on their own. This adds another: any host your")} <code>ssh</code>{" "}
+          {t("reaches with keys, with herdr running there.")}
         </>
       }
       onClose={onClose}
@@ -322,7 +324,7 @@ export function AddMachineDialog({ onAdd, onClose }: { onAdd: (label: string, ho
         <input autoFocus value={host} placeholder="build-box" onChange={(e) => setHost(e.target.value)} />
       </label>
       <label>
-        Label (optional)
+        {t("Label (optional)")}
         <input value={label} placeholder={t("Build box")} onChange={(e) => setLabel(e.target.value)} />
       </label>
     </FormDialog>

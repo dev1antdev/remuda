@@ -70,7 +70,7 @@ export const settings: Dictionary = {
   "api: The tests pass and the branch is pushed.": "api: Все тесты прошли, ветка запушена.",
   "from {ip}": "с {ip}",
   "long turns": "долгие ходы",
-  "looks stuck": "похоже, застрял",
+  "looks stuck": "застрял",
   "needs you": "ждёт вас",
   "never used": "не использовался",
   "seen {ago}": "был {ago}",

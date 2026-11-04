@@ -157,7 +157,7 @@ function Diff({ text, split, canComment, draft, file, loadSource, onComment, onR
     return keys;
   }, [hunks, unfolds]);
   const strayComments = draft.filter((comment) => !rowKeys.has(commentKey(comment)));
-  if (hunks.length === 0 && strayComments.length === 0) return <div className="empty">No textual diff (binary, or identical).</div>;
+  if (hunks.length === 0 && strayComments.length === 0) return <div className="empty">{t("No textual diff (binary, or identical).")}</div>;
   return (
     <div className={`fv-code fv-diff review-diff${split ? " columns" : ""}${canComment ? " can-comment" : ""}`}>
       {hunks.map((hunk, index) => (

@@ -11,8 +11,6 @@ export const limits: Dictionary = {
   "No plan limits read yet: Codex reports its own after its next answer.": "Лимиты плана ещё не прочитаны: Codex сообщит свои после следующего ответа.",
   "Read on {machine}, {ago}": "Прочитано на {machine}, {ago}",
   "resets {time}": "сброс {time}",
-  "Claude Code hands its plan limits to its status line only. On {machines}, Updates in the machine's ⓘ offers “Show Claude Code's plan limits”: remuda then reads them before your status line runs.":
-    "Claude Code отдаёт лимиты плана только своей строке состояния. На {machines} в обновлениях (ⓘ машины) есть «Show Claude Code's plan limits»: тогда remuda читает их перед вашей строкой состояния.",
   "Plan: {words}.": "План: {words}.",
   "Call it off": "Отменить",
   "Continue after the reset": "Продолжить после сброса",

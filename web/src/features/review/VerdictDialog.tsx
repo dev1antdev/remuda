@@ -78,7 +78,7 @@ export function VerdictDialog({ verdict, paneAgent, agents, currentPane, comment
         </label>
       )}
       <label>
-        {approving ? "A note for the agent (optional)" : t("What should change")}
+        {approving ? t("A note for the agent (optional)") : t("What should change")}
         <textarea
           autoFocus
           rows={5}

@@ -71,7 +71,8 @@ export function QuickPromptsDialog({ dir, onClose }: { dir: string; onClose: () 
       }}
     >
       <p className="modal-hint">
-        Offered under <Icon name="zap" size={12} /> in the composer; one tap puts the text in. Shared by every device that uses this remuda. <code>{"{dir}"}</code>, <code>{"{branch}"}</code> and <code>{"{file}"}</code> become the pane's folder, its branch and the file you last opened.
+        {t("Offered under")} <Icon name="zap" size={12} /> {t("in the composer; one tap puts the text in. Shared by every device that uses this remuda.")} <code>{"{dir}"}</code>,{" "}
+        <code>{"{branch}"}</code> {t("and")} <code>{"{file}"}</code> {t("become the pane's folder, its branch and the file you last opened.")}
       </p>
       {!list && !loaded.error && <Notice tone="hint">{t("Loading…")}</Notice>}
       <div className="quick-list">
@@ -80,7 +81,7 @@ export function QuickPromptsDialog({ dir, onClose }: { dir: string; onClose: () 
             <input value={q.label} placeholder={t("Label")} onChange={(e) => edit(i, { label: e.target.value })} />
             <textarea rows={2} value={q.text} placeholder={t("The prompt")} onChange={(e) => edit(i, { text: e.target.value })} />
             <label className="quick-scope">
-              <input type="checkbox" checked={!!q.dir} onChange={(e) => edit(i, { dir: e.target.checked ? dir : "" })} /> only {folder}
+              <input type="checkbox" checked={!!q.dir} onChange={(e) => edit(i, { dir: e.target.checked ? dir : "" })} /> {t("only {folder}", { folder })}
             </label>
             <button type="button" className="icon-btn danger" title={t("Remove")} aria-label={t("Remove")} onClick={() => setList((l) => (l ?? []).filter((_, j) => j !== i))}>
               <Icon name="trash" size={14} />

@@ -26,7 +26,11 @@ export default function AgentKeys() {
       <div className="settings-row device-row keys-head">
         <span>
           {t("Agent keys")}
-          <small>What the agents on each machine use to read and write your tasks through remuda mcp and remuda tasks, and to read who is doing what (the roster, a recap, the standup): never the rest. A revoked one is replaced when remuda next connects to that machine (this one at its next start).</small>
+          <small>
+            {t(
+              "What the agents on each machine use to read and write your tasks through remuda mcp and remuda tasks, and to read who is doing what (the roster, a recap, the standup): never the rest. A revoked one is replaced when remuda next connects to that machine (this one at its next start).",
+            )}
+          </small>
         </span>
       </div>
       {error && <div className="settings-row device-row"><span><small>{error}</small></span></div>}

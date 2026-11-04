@@ -131,9 +131,10 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
 
       <div className="tasks-field-name">{t("Columns")}</div>
       <p className="modal-hint">
-        A task is always in one column, and a column that is <b>done</b> makes its tasks done. The four marks on a column say what the workflow does by itself: where the tasks
-        agents propose land (for you to accept or decline), where your new tasks land, where a task goes when an agent is started on it, where it goes when that agent finishes
-        — unless you moved it meanwhile.
+        {t("A task is always in one column, and a column that is")} <b>{t("Done")}</b>{" "}
+        {t(
+          "makes its tasks done. The four marks on a column say what the workflow does by itself: where the tasks agents propose land (for you to accept or decline), where your new tasks land, where a task goes when an agent is started on it, where it goes when that agent finishes — unless you moved it meanwhile.",
+        )}
       </p>
       <div className="ps-rows">
         {rows.map((r, i) => (
@@ -145,7 +146,7 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
               value={r.kind}
               onChange={(kind) => update(r.key, { kind })}
               options={[
-                { value: "open", label: t("Open") },
+                { value: "open", label: t("Not done") },
                 { value: "done", label: t("Done") },
               ]}
             />
@@ -208,7 +209,8 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
 
       <div className="tasks-field-name">{t("Fields")}</div>
       <p className="modal-hint">
-        What this project's tasks carry besides a title, description, due date, priority and labels. A field <b>{t("on the card")}</b> shows beside the title; one <b>{t("in the prompt")}</b>{" "}
+        {t("What this project's tasks carry besides a title, description, due date, priority and labels. A field")} <b>{t("on the card")}</b>{" "}
+        {t("shows beside the title; one")} <b>{t("in the prompt")}</b>{" "}
         {t("goes to the agent with the task. A removed field takes its values with it, and so does a change of type.")}
       </p>
       <div className="ps-rows">

@@ -132,7 +132,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
             )
           ) : (
             <Notice tone="info">
-              <span className="spinner" aria-hidden="true" /> Running on {label}… (closing this keeps it running)
+              <span className="spinner" aria-hidden="true" /> {tr("Running on {machine}… (closing this keeps it running)", { machine: label })}
             </Notice>
           )}
           <div className="modal-actions">

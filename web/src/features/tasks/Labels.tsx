@@ -92,7 +92,7 @@ export function LabelsField({ task: t, labels, onChange, onLabelsChanged, onErro
               ))}
               {query.trim() && !exact && !attached && (
                 <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => void newLabel(query)}>
-                  <Icon name="plus" size={12} /> create “{query.trim()}”
+                  <Icon name="plus" size={12} /> {tr("create “{name}”", { name: query.trim() })}
                 </button>
               )}
             </span>

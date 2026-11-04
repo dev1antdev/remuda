@@ -53,8 +53,9 @@ export default function Schedules({ machines, onClose, ask }: {
       }
     >
       <Notice tone="hint">
-        A prompt sent to the agent running in a folder, the standup pushed to your devices as a digest, or a fresh agent started in a folder with a
-        prompt, on a timetable — in the remuda host's local time. A minute with no agent there, or an agent busy with a question, is skipped and noted.
+        {t(
+          "A prompt sent to the agent running in a folder, the standup pushed to your devices as a digest, or a fresh agent started in a folder with a prompt, on a timetable — in the remuda host's local time. A minute with no agent there, or an agent busy with a question, is skipped and noted.",
+        )}
       </Notice>
       {error && (
         <Notice tone="error" onDismiss={() => setActionError("")}>
@@ -89,7 +90,7 @@ export default function Schedules({ machines, onClose, ask }: {
                   <>
                     {" · "}
                     <span className={s.last_ok ? "ok" : "bad"}>
-                      last {ago(s.last_run)}: {s.last_result}
+                      {t("last {ago}: {result}", { ago: ago(s.last_run), result: s.last_result })}
                     </span>
                   </>
                 )}
