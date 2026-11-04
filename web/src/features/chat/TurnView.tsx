@@ -33,7 +33,7 @@ export const TurnView = memo(
     pinned?: boolean; // the turn is in the Pins list: a mark in its corner, the pin button on
     subagents?: Subagent[]; // the conversation's, drawn under the Agent calls that spawned them
     onOpenSubagent?: (s: Subagent) => void;
-    diffs?: boolean; // an Edit's change drawn under its call: the lens, not a tile
+    diffs?: boolean; // an Edit's change drawn under its call, a mermaid fence drawn as its diagram: the lens, not a tile
   }) {
     const cls = `turn ${turn.role === "user" ? "turn-user" : "turn-assistant"}${pinned ? " turn-pinned" : ""}`;
     const text = turn.parts
@@ -133,7 +133,7 @@ function Folded({ className, summary, children }: { className: string; summary: 
 
 function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent, diffs }: { part: Part; machineId?: string; onOpenFile: OpenFile; subagents?: Subagent[]; onOpenSubagent?: (s: Subagent) => void; diffs?: boolean }) {
   if (part.type === "text") {
-    return <Markdown text={part.text ?? ""} onOpenFile={onOpenFile} />;
+    return <Markdown text={part.text ?? ""} onOpenFile={onOpenFile} diagrams={diffs} />;
   }
   if (part.type === "thinking") {
     return (

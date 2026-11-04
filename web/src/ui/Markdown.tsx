@@ -8,6 +8,8 @@ import { copyText, openUrl } from "@/lib/host";
 import { t } from "@/lib/i18n";
 import TableCell from "@/ui/TableCell";
 import { INLINE } from "@/ui/cellText";
+import { Mermaid } from "@/ui/Mermaid";
+import { isMermaid } from "@/ui/mermaidLook";
 
 // links open in a new tab — never by navigating this page
 const link = (url: string) => (e: MouseEvent) => {
@@ -228,12 +230,13 @@ function plain(text: string, onOpenFile: OpenFile | null, key: string): ReactNod
 
 // ---- blocks → React ----
 
-export function Markdown({ text, onOpenFile }: { text: string; onOpenFile: OpenFile }) {
+// diagrams draws a mermaid fence as its diagram (the chat lens, the viewer, a task's comments); a wall tile leaves it code
+export function Markdown({ text, onOpenFile, diagrams = false }: { text: string; onOpenFile: OpenFile; diagrams?: boolean }) {
   const blocks = useMemo(() => parseBlocks(text), [text]);
-  return <div className="md">{renderBlocks(blocks, onOpenFile, "b")}</div>;
+  return <div className="md">{renderBlocks(blocks, onOpenFile, "b", diagrams)}</div>;
 }
 
-function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string): ReactNode[] {
+function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string, diagrams: boolean): ReactNode[] {
   return blocks.map((b, i) => {
     const k = `${key}${i}`;
     switch (b.t) {
@@ -253,9 +256,9 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string): React
         return <Tag key={k} className={`md-h md-h${b.level}`}>{renderInline(b.text, onOpenFile, k)}</Tag>;
       }
       case "code":
-        return <CodeBlock key={k} lang={b.lang} code={b.code} />;
+        return diagrams && isMermaid(b.lang) ? <MermaidBlock key={k} lang={b.lang} code={b.code} /> : <CodeBlock key={k} lang={b.lang} code={b.code} />;
       case "quote":
-        return <blockquote key={k}>{renderBlocks(b.blocks, onOpenFile, k)}</blockquote>;
+        return <blockquote key={k}>{renderBlocks(b.blocks, onOpenFile, k, diagrams)}</blockquote>;
       case "hr":
         return <hr key={k} />;
       case "table":
@@ -292,7 +295,7 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string): React
             {b.items.map(({ blocks, checked }, j) => (
               <li key={j} className={checked === null ? undefined : checked ? "task done" : "task"}>
                 {checked !== null && <input type="checkbox" checked={checked} disabled />}
-                {renderBlocks(blocks, onOpenFile, `${k}i${j}`)}
+                {renderBlocks(blocks, onOpenFile, `${k}i${j}`, diagrams)}
               </li>
             ))}
           </Tag>
@@ -302,9 +305,25 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string): React
   });
 }
 
+// MermaidBlock is a mermaid fence drawn as its diagram, its source a press away; a source mermaid cannot read stays
+// code, with the reason under the bar
+function MermaidBlock({ lang, code }: { lang: string; code: string }) {
+  const [source, setSource] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => setError(""), [code]);
+  const toggle = !error && (
+    <button type="button" className="linkish md-pre-toggle" onClick={() => setSource((shown) => !shown)}>
+      <Icon name={source ? "eye" : "code"} size={12} /> {source ? t("Diagram") : t("Source")}
+    </button>
+  );
+  const note = error ? <div className="mermaid-error">{t("Mermaid could not read it: {error}", { error })}</div> : null;
+  return <CodeBlock lang={lang} code={code} extra={toggle} note={note} body={source || error ? undefined : <Mermaid source={code} onError={setError} />} />;
+}
+
 // CodeBlock is a fence: its language in the bar, a copy button, the first 40 lines until unfolded, the code coloured
-// by lib/highlight when the language is known (a fence without one, or a dump past the cap, stays one plain string)
-function CodeBlock({ lang, code }: { lang: string; code: string }) {
+// by lib/highlight when the language is known (a fence without one, or a dump past the cap, stays one plain string);
+// a body in the code's place draws it otherwise (a diagram), extra sits in the bar and a note under it
+function CodeBlock({ lang, code, extra, note, body }: { lang: string; code: string; extra?: ReactNode; note?: ReactNode; body?: ReactNode }) {
   const lines = code.split("\n");
   const long = lines.length > 40;
   const [open, setOpen] = useState(!long);
@@ -316,9 +335,10 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const shown = open ? code : lines.slice(0, 40).join("\n");
   const shownLines = coloured && (open ? coloured : coloured.slice(0, 40));
   return (
-    <div className="md-pre">
+    <div className={body ? "md-pre md-diagram" : "md-pre"}>
       <div className="md-pre-bar">
         <span>{lang || t("code")}</span>
+        {extra}
         <button
           type="button"
           className="linkish"
@@ -334,19 +354,22 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
           <Icon name={copied ? "check" : "copy"} size={12} /> {copied ? t("copied") : t("copy")}
         </button>
       </div>
-      <pre>
-        <code>
-          {shownLines
-            ? shownLines.map((tokens, i) => (
-                <Fragment key={i}>
-                  {i > 0 && "\n"}
-                  {tokenNodes(tokens)}
-                </Fragment>
-              ))
-            : shown}
-        </code>
-      </pre>
-      {long && (
+      {note}
+      {body ?? (
+        <pre>
+          <code>
+            {shownLines
+              ? shownLines.map((tokens, i) => (
+                  <Fragment key={i}>
+                    {i > 0 && "\n"}
+                    {tokenNodes(tokens)}
+                  </Fragment>
+                ))
+              : shown}
+          </code>
+        </pre>
+      )}
+      {!body && long && (
         <button type="button" className="linkish md-more" onClick={() => setOpen((o) => !o)}>
           {open ? t("Show less") : t("Show all {n} lines", { n: lines.length })}
         </button>

@@ -897,6 +897,14 @@ diffs — Go, TypeScript, Python, shell, JSON, YAML, TOML, CSS, HTML, Rust,
 SQL, Makefiles, Dockerfiles — in Catppuccin's own hues for the flavour you
 wear, by a small highlighter of remuda's own, no library behind it.
 
+**Diagrams are drawn:** a ```` ```mermaid ```` block an agent writes — a
+flowchart, a sequence diagram, a state machine — shows as the diagram in
+the chat and in a task's comments, in your flavour's colours, with its
+source a click away (Source); the file viewer draws a Markdown file and a
+`.mmd` diagram too (Preview, beside File and Changes). Mermaid is loaded
+only when a diagram is on screen; a block it cannot read stays code with
+the reason; a wall tile keeps it as code.
+
 **Between agents:** every assistant turn has a *forward* link that sends its
 text, headed "From *workspace*:", to any other agent on any machine — the
 same dialog Tasks uses to send a task. **Message several agents** (✉ in

@@ -77,7 +77,7 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
             </Tip>
           </div>
           <div className="tasks-comment-body">
-            <Markdown text={c.body} onOpenFile={openFile} />
+            <Markdown text={c.body} onOpenFile={openFile} diagrams />
           </div>
         </div>
       ))}

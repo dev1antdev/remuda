@@ -714,7 +714,34 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`langOf` of its info string) is coloured through `lib/highlight.ts`,
   tokenized once per fence (`useMemo`) and drawn by `ui/Tokens.tsx`
   (`tokenNodes`: a `.hl-<kind>` span per token, plain text as it is); a
-  fence without a language stays one plain string. **A table's cells carry
+  fence without a language stays one plain string. **A mermaid fence is
+  drawn** where `Markdown` gets `diagrams` (the chat lens and the
+  transcript viewer through `TurnView`'s `diffs`, a task's comments, the
+  file viewer; never a wall tile, which stays light and shows the code):
+  `MermaidBlock` in the fence's bar with a Source / Diagram switch beside
+  copy, `ui/Mermaid.tsx` loading the `mermaid` dependency only when a
+  diagram is on screen (its own chunks; the main bundle grew by about
+  7 KB, 3 KB gzipped), one drawing at a time (mermaid keeps one
+  configuration), `securityLevel: "strict"`, labels as SVG text
+  (`htmlLabels: false`, so the answer parses as XML), the flavour and
+  accent read off the root's `data-flavor` / `data-accent` and drawn again
+  when they change; **never innerHTML**: the SVG string is parsed by
+  `DOMParser` as `image/svg+xml`, scripts, `on*` handlers and
+  `javascript:` links stripped, set at the size it was drawn (a diagram
+  wider than its column scrolls instead of shrinking) and its nodes
+  imported into a box React leaves empty; a source mermaid cannot read
+  stays code with the reason under the bar; the page's CSP needs nothing
+  new (no `unsafe-eval`, checked in headless Chrome). `ui/mermaidLook.ts`
+  is the pure part, tested: `isMermaid` (a fence's first word mermaid or
+  mmd), `isMermaidFile` / `isMarkdownFile` / `previewOf` / `opensDrawn`
+  for the file viewer, `lookOf`, `mermaidConfig` (Catppuccin's swatches as
+  mermaid's `base` theme variables, the accent on the shapes' edges).
+  **The file viewer draws** (`features/files/FileViewer.tsx`): a Markdown
+  file (`.md`, `.markdown`) and a diagram file (`.mmd`, `.mermaid`) get a
+  Preview tab between File and Changes — the Markdown through `Markdown`
+  with diagrams, the diagram through `Mermaid` — and open on it unless a
+  line or the changes were asked for; a viewer link gets File and
+  Preview. **A table's cells carry
   a copy button** (`ui/TableCell.tsx`: an `icon-btn` in the cell's corner,
   shown on hover with a mouse and for a few seconds after a long press on
   a phone — `ui/press.ts`, the tasks' long press moved here with a shim at
@@ -2775,7 +2802,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   reader and no `title`, and a `Menu` takes a
   `tip` for its trigger; `radix-ui` is the one dependency
   beside react and xterm (with its search addon, the find over the
-  scrollback), for the primitives whose keyboard and focus
+  scrollback) and mermaid (the agents' diagrams, loaded only when one is
+  on screen, `ui/Mermaid.tsx`), for the primitives whose keyboard and focus
   behaviour is not worth writing twice. `Resizer.tsx` (over `panels.ts`, tested:
   `PANELS`, `clampWidth`, `dragWidth`, `keyWidth`) is **a panel's
   draggable edge** — the sidebar of Agents and of Tasks, the files rail,
@@ -2841,7 +2869,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `remuda-mac/<version>`. Not in the app: the pop-out (Chrome's API)
   and dictation (no `SpeechRecognition` in WebKit outside Safari).
 - `web/` — React + Vite + xterm.js SPA, embedded via `web/embed.go`
-  (`go:embed all:dist`). Build with `make web` before `go build`; `npm
+  (`go:embed all:dist`; `mermaid` for the agents' diagrams, pinned exact
+  and split into chunks only a drawn diagram loads). Build with `make web` before `go build`; `npm
   test` runs Vitest on the pure modules (`*.test.ts` beside each; node,
   no DOM). Laid out by feature: `lib/` → `ui/` → `features/<name>/` (one
   folder per lens or panel, its server calls in its own `api.ts`) →
