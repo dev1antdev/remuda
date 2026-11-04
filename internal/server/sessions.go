@@ -21,7 +21,7 @@ import (
 
 func (s *Server) sessionRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/sessions", s.handleNewWorkspace)
-	api.HandleFunc("DELETE /api/sessions/{id}", s.closeHandler((*herdr.Client).WorkspaceClose))
+	api.HandleFunc("DELETE /api/sessions/{id}", s.handleWorkspaceClose)
 	api.HandleFunc("PATCH /api/sessions/{id}", s.renameHandler((*herdr.Client).WorkspaceRename))
 	api.HandleFunc("POST /api/tabs", s.handleNewTab)
 	api.HandleFunc("DELETE /api/tabs/{id}", s.closeHandler((*herdr.Client).TabClose))
@@ -187,6 +187,64 @@ func (s *Server) handleNewWorktree(w http.ResponseWriter, r *http.Request) {
 		}
 		return res.Workspace.WorkspaceID, &res.RootPane, extra, nil
 	})
+}
+
+// handleWorkspaceClose is DELETE /api/sessions/{id}: the workspace closed and, when it stood on a worktree herdr or
+// remuda made that no other workspace uses, the worktree taken down after it as far as nothing is lost
+// (worktrees.Tidy: the folder once clean, the branch once merged); the answer's worktree says what became of it.
+func (s *Server) handleWorkspaceClose(w http.ResponseWriter, r *http.Request) {
+	mc, client, _, ok := s.ready(w, r, "")
+	if !ok {
+		return
+	}
+	id := r.PathValue("id")
+	tree, merged := s.madeWorktree(mc, id)
+	if err := client.WorkspaceClose(id); err != nil {
+		rpcErr(w, err)
+		return
+	}
+	s.Watch.Refresh(mc)
+	answer := map[string]any{"ok": true}
+	if tree != "" {
+		answer["worktree"] = worktrees.Tidy(mc, tree, merged)
+	}
+	writeJSON(w, answer)
+}
+
+// madeWorktree is the worktree herdr or remuda made that the workspace alone stands on, "" for any other folder, and
+// whether a request its agents named was read as merged — from the snapshot before the close
+func (s *Server) madeWorktree(mc *machines.Machine, id string) (string, bool) {
+	snap, _ := s.Watch.Snapshot(mc.ID())
+	if snap == nil {
+		return "", false
+	}
+	ws := snap.Workspace(id)
+	if ws == nil || ws.Worktree == nil || !ws.Worktree.IsLinkedWorktree || !worktrees.Made(mc.Home(), ws.Worktree.CheckoutPath) {
+		return "", false
+	}
+	tree := ws.Worktree.CheckoutPath
+	if usedElsewhere(snap, id, tree) {
+		return "", false
+	}
+	return tree, s.mergedIn(mc, id)
+}
+
+// usedElsewhere says whether another workspace stands on the worktree or has a pane inside it.
+func usedElsewhere(snap *herdr.Snapshot, id, tree string) bool {
+	inside := func(dir string) bool { return dir == tree || strings.HasPrefix(dir, tree+"/") }
+	for i := range snap.Workspaces {
+		other := &snap.Workspaces[i]
+		if other.WorkspaceID != id && other.Worktree != nil && inside(other.Worktree.CheckoutPath) {
+			return true
+		}
+	}
+	for i := range snap.Panes {
+		pane := &snap.Panes[i]
+		if pane.WorkspaceID != id && (inside(pane.CWD) || inside(pane.ForegroundCWD)) {
+			return true
+		}
+	}
+	return false
 }
 
 // closeHandler closes a workspace or tab by path id and refreshes the roster.

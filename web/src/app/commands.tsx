@@ -121,6 +121,8 @@ function useCommands(): (query: string) => Entry[] {
         const where = m.id === here ? t("New workspace here…") : t("New workspace on {machine}…", { machine: m.label });
         command(`workspace:${m.id}`, where, () => actions.openDialog({ kind: "workspace", machineId: m.id }), { hint: t("an agent in a folder"), icon: "plus", keywords: ["start", "agent", "create", m.label] });
       }
+      for (const m of machines.filter((m) => m.state === "connected"))
+        command(`leftovers:${m.id}`, t("Leftover worktrees on {machine}…", { machine: m.label }), () => actions.openDialog({ kind: "leftovers", machineId: m.id }), { hint: t("worktrees no workspace has open"), icon: "git-branch", keywords: ["cleanup", "clean", "worktree", "garbage", "disk", m.label] });
       if (current && !viewer) {
         const { machine, session, tab } = current;
         const named = `“${session.name}”`;

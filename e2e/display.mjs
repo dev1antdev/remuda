@@ -7,7 +7,7 @@
 // drawer inside the screen, no text squeezed to nothing, the content clear of the rail and the header, its landmarks
 // there, no console error. Every failure is collected and named by pass, screen and element; any one fails the run.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 
 const base = process.env.E2E_URL;
 const cdp = process.env.E2E_CDP;
@@ -545,6 +545,49 @@ async function changesFlow() {
   say("changes flow: the queue, a look, an edit after it, a commit, a commit of reviewed work");
 }
 
+// worktreeFlow runs once, after the Changes flow: a clean worktree's workspace closed takes its folder and branch with
+// it, one with an uncommitted file keeps its folder, the leftovers dialog lists that one, and once clean removes it
+async function worktreeFlow() {
+  where = `${pass.name} › worktree-flow`;
+  const worktreeOf = async (id) => (await sessions()).find((s) => s.id === id)?.worktree?.checkout_path ?? "";
+  const branches = () => git(appDir, "branch", "--format=%(refname:short)").toString();
+  const clean = await worktreeOf(tree.id);
+  if (!clean || !existsSync(clean)) throw new Error(`the feature-x worktree is not on disk: ${clean}`);
+  const listed = await api("GET", "/api/machines/local/leftovers");
+  check(!listed.leftovers.some((left) => left.path === clean), "a worktree whose workspace is open is listed as left over");
+  const closed = await api("DELETE", `/api/sessions/${encodeURIComponent(tree.id)}?machine=local`);
+  made.splice(made.indexOf(tree.id), 1);
+  check(closed.worktree?.removed === true && closed.worktree?.branch_deleted === true, `the clean worktree's close answered ${JSON.stringify(closed.worktree)}`);
+  check(!existsSync(clean), "the clean worktree's folder stayed after its workspace closed");
+  check(!branches().includes("feature-x"), "the merged branch feature-x stayed");
+
+  const dirty = await api("POST", "/api/worktrees", { machine: "local", workspace: app.id, branch: "dirty-x", base: "main", name: "dirty-x", agent: "shell" });
+  made.push(dirty.id);
+  let folder = "";
+  if (!(await until(async () => (folder = await worktreeOf(dirty.id)), 20))) throw new Error("the dirty-x worktree did not reach the roster");
+  writeFileSync(`${folder}/draft.txt`, "not committed\n");
+  const kept = await api("DELETE", `/api/sessions/${encodeURIComponent(dirty.id)}?machine=local`);
+  made.splice(made.indexOf(dirty.id), 1);
+  check(kept.worktree?.removed === false && /uncommitted/.test(kept.worktree?.kept ?? ""), `the dirty worktree's close answered ${JSON.stringify(kept.worktree)}`);
+  check(existsSync(`${folder}/draft.txt`), "the uncommitted file went with the close");
+  await screen("leftovers", {
+    open: async () => {
+      await palette("leftovers:local");
+      if (!(await until(async () => (await count(".modal .pick-row")) === 1, 15))) failed(`the leftovers dialog lists ${await count(".modal .pick-row")} worktrees, not 1`);
+      check((await count(".modal .pick-row input:disabled")) === 1, "a worktree with an uncommitted file can be ticked for removal");
+    },
+    expect: [".modal .pick-row"],
+  });
+  rmSync(`${folder}/draft.txt`);
+  const listedAgain = await api("GET", "/api/machines/local/leftovers");
+  const left = listedAgain.leftovers.find((l) => l.path === folder);
+  check(left && !left.dirty && !left.broken, `the cleaned worktree is listed as ${JSON.stringify(left)}`);
+  const removed = await api("POST", "/api/machines/local/leftovers/remove", { paths: [folder, "/not/a/leftover"] });
+  check(removed.outcomes[0]?.removed === true && removed.outcomes[1]?.removed === false, `the removal answered ${JSON.stringify(removed.outcomes)}`);
+  check(!existsSync(folder), "the cleaned leftover's folder stayed");
+  say("worktree flow: a clean close takes its worktree, a dirty one keeps it, the leftover goes once clean");
+}
+
 async function runPass() {
   await send("Emulation.setDeviceMetricsOverride", { width: pass.width, height: pass.height, deviceScaleFactor: 1, mobile: pass.phone });
   await send("Emulation.setTouchEmulationEnabled", { enabled: pass.phone, maxTouchPoints: pass.phone ? 5 : 0 });
@@ -700,6 +743,7 @@ try {
   const started = Date.now();
   for (pass of PASSES) await runPass();
   await changesFlow().catch((error) => failed(`stopped: ${error.message}`));
+  await worktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
   say(`${shots} screens in ${Math.round((Date.now() - started) / 1000)} s, screenshots in ${out}/display`);
 } catch (error) {
   failed(`stopped: ${error.message}`);

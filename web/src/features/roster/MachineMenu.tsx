@@ -29,6 +29,7 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
     { label: t("Keep awake while agents work"), icon: "sun", checked: !!m.awake?.on, disabled: !connected, onSelect: () => void act(setAwake(m.id, !m.awake?.on)) },
     ...(canWake(m) ? [{ label: t("Wake up"), icon: "zap" as const, onSelect: wake }] : []),
     { label: t("MAC address…"), icon: "plug", hint: m.mac, onSelect: () => setMac(true) },
+    { label: t("Leftover worktrees…"), icon: "git-branch", hint: t("worktrees no workspace has open"), disabled: !connected, onSelect: () => actions.openDialog({ kind: "leftovers", machineId: m.id }) },
     { label: t("Hide when sharing the screen"), icon: "eye-off", checked: markedMachine(share.pref, m.id), onSelect: () => toggleSharingMachine(m.id) },
     ...(m.host ? [{ label: t("Copy SSH host"), icon: "copy" as const, onSelect: () => copyHost(m.host!) }] : []),
     ...(onRemove ? [{ sep: true } as const, { label: t("Remove machine"), icon: "trash" as const, danger: true, onSelect: onRemove }] : []),

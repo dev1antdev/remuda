@@ -136,6 +136,7 @@ func (s *Server) Handler() http.Handler {
 	s.limitRoutes(api)
 	s.scratchRoutes(api)
 	s.jiraRoutes(api)
+	s.leftoverRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard
