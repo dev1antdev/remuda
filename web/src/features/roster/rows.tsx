@@ -176,7 +176,7 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
               <span>{branch}</span>
             </span>
           )}
-          {s.jira?.[0] && <IssueChip issue={s.jira[0]} />}
+          {!hidden && s.jira?.[0] && <IssueChip issue={s.jira[0]} />}
           <span className="ws-words">{words}</span>
         </span>
       </div>

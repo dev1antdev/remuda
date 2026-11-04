@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Pane } from "./api";
-import { BUBBLE_MAX, CREATURE_SIZE, bubbleOf, cellMin, lookOf, poseWord, stateSince, type Pose } from "./zoo";
+import { BUBBLE_MAX, CREATURE_SIZE, bubbleOf, cellMin, lookOf, poseWord, stateSince, zooFace, type Pose } from "./zoo";
 
 const pane = (over: Partial<Pane> = {}): Pane => ({ id: "p", title: "", agent: "claude", cwd: "/x", focused: false, status: "idle", cols: 80, rows: 24, ...over }) as Pane;
 
@@ -66,5 +66,20 @@ describe("stateSince", () => {
     expect(stateSince(pane({ radar: { state: "done", since: 5, last_active: 9 } }))).toBe(9);
     expect(stateSince(pane({ radar: { state: "idle" } }))).toBeUndefined();
     expect(stateSince(pane())).toBeUndefined();
+  });
+});
+
+describe("zooFace", () => {
+  const face = { label: "api · fix the login", kind: "Claude Code", folder: "api", machine: "GOG", bubble: "Fixed the login form" };
+
+  it("says the label, the folder, the machine and the bubble", () => {
+    expect(zooFace(face, false)).toEqual({ name: "api · fix the login", where: "api · GOG", bubble: "Fixed the login form", icon: true });
+    expect(zooFace({ ...face, machine: null }, false).where).toBe("api");
+  });
+
+  it("keeps the agent's kind and the neutral names alone while the folder is hidden", () => {
+    const hidden = zooFace({ ...face, folder: "Project A", machine: "Machine 1" }, true);
+    expect(hidden).toEqual({ name: "Claude Code", where: "Project A · Machine 1", bubble: "", icon: false });
+    expect(JSON.stringify(hidden)).not.toMatch(/login|api|GOG/);
   });
 });

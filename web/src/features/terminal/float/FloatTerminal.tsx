@@ -2,11 +2,12 @@
 // home folder, made once — opened and hidden by Ctrl+`, the rail or the palette. Hiding it leaves the shell running and,
 // once it was on screen, its attach too, so it comes back as it was; it never changes the pane or lens on screen.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { act } from "@/app/act";
 import { actions, app } from "@/app/store";
 import { useFlavor, useMono } from "@/app/theme";
-import { machineLabel, machineOptions } from "@/features/roster/options";
+import { machineOptions } from "@/features/roster/options";
+import { useSharing } from "@/features/roster/useSharing";
 import { useRoster } from "@/features/roster/useRoster";
 import { monoStack } from "@/lib/look";
 import { isMac, isTouch, usePref } from "@/lib/prefs";
@@ -15,7 +16,7 @@ import { Icon, Notice, PANELS, Resizer, Select, Tip } from "@/ui";
 import type { TermApi } from "../engine/types";
 import TerminalView from "../Terminal";
 import { closeScratch, openScratch } from "./api";
-import { keyWords } from "./float";
+import { keyWords, shellView } from "./float";
 import { t, tn } from "@/lib/i18n";
 
 export default function FloatTerminal() {
@@ -40,7 +41,12 @@ function Drawer({ machineId, open }: { machineId: string; open: boolean }) {
   const flavor = useFlavor();
   const mono = useMono();
   const [fontSize] = usePref("termFont", isTouch ? 12 : 13);
-  const machine = machineLabel(machines, machineId);
+  const share = useSharing();
+  const named = machines.map((m) => ({ ...m, label: share.machineLabel(m) }));
+  const machine = named.find((m) => m.id === machineId)?.label ?? machineId;
+  const connected = machines.some((m) => m.id === machineId && m.state === "connected");
+  const section = useRef<HTMLElement>(null);
+  const back = useRef<Element | null>(null); // what had the focus before the drawer took it, given back when it hides
   const key = keyWords(isMac);
 
   useEffect(() => {
@@ -66,11 +72,26 @@ function Drawer({ machineId, open }: { machineId: string; open: boolean }) {
   useEffect(() => {
     if (listed) setSeen(true);
   }, [listed]);
-  const ended = seen && !listed;
+  const view = shellView(pane, listed, seen, connected);
 
   useEffect(() => {
-    if (open && pane && !ended) setMounted(true);
-  }, [open, pane, ended]);
+    if (open && view === "live") setMounted(true);
+  }, [open, view]);
+  useEffect(() => {
+    const doc = section.current?.ownerDocument ?? document;
+    const focused = doc.activeElement;
+    if (open) {
+      if (!section.current?.contains(focused)) back.current = focused;
+      return;
+    }
+    // hidden with the focus inside it, the page would type into nothing: the focus goes back where it was
+    if (!focused || focused === doc.body || section.current?.contains(focused)) {
+      const before = back.current;
+      if (!isTouch && before instanceof HTMLElement && before.isConnected && before !== doc.body) before.focus();
+      else if (focused instanceof HTMLElement) focused.blur();
+    }
+    back.current = null;
+  }, [open]);
   useEffect(() => {
     if (open && api && !isTouch) api.focus();
   }, [open, api]);
@@ -81,12 +102,12 @@ function Drawer({ machineId, open }: { machineId: string; open: boolean }) {
     );
 
   return (
-    <section className="float-term" hidden={!open} aria-label={t("Floating terminal")}>
+    <section className="float-term" ref={section} hidden={!open} aria-label={t("Floating terminal")}>
       <Resizer spec={PANELS.float} edge="top" label={t("Floating terminal height")} />
       <header className="float-term-head">
         <Icon name="square-terminal" size={14} />
         <span className="float-term-title">{t("Terminal")}</span>
-        <Select className="sm" value={machineId} options={machineOptions(machines)} onChange={(id) => actions.openFloat(id)} />
+        <Select className="sm" value={machineId} options={machineOptions(named)} onChange={(id) => actions.openFloat(id)} />
         <span className="float-term-hint">{t("{key} hides it; the shell keeps running", { key })}</span>
         <Tip text={t("End this shell")}>
           <button type="button" className="icon-btn sm float-term-end" aria-label={t("End this shell")} disabled={!pane} onClick={endShell}>
@@ -102,7 +123,9 @@ function Drawer({ machineId, open }: { machineId: string; open: boolean }) {
       <div className="float-term-body">
         {error ? (
           <Notice tone="error">{error}</Notice>
-        ) : ended ? (
+        ) : view === "away" ? (
+          <p className="float-term-note dim">{t("{machine} is not answering. The drawer picks its shell up again once it does.", { machine })}</p>
+        ) : view === "ended" ? (
           <div className="float-term-note">
             <p>{t("The shell ended.")}</p>
             <button type="button" className="btn" onClick={() => setAsked((n) => n + 1)}>

@@ -13,6 +13,7 @@ import { resumeStopped } from "@/features/updates/recover";
 import { limitTone, limitWords } from "@/features/usage/limits";
 import { concerns, updateLabel } from "./concerns";
 import { Sparkline } from "./Sparkline";
+import { useSharing } from "./useSharing";
 import { DISK_THRESHOLDS, loadThresholds, rangeOf, sparkTitle, spanWords } from "./spark";
 import { t, tn } from "@/lib/i18n";
 
@@ -28,7 +29,11 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
   useEffect(() => setFresh(null), [m.health?.at]);
   const h = fresh?.health ?? m.health;
   const l = fresh?.latest ?? latest;
-  const list = concerns(h, l, serverVersion, m.id !== "local", m.stopped, viewOnly);
+  const share = useSharing();
+  const label = share.machineLabel(m);
+  // while sharing, a stopped chat goes by its pane rather than its title, and the rest by the neutral names
+  const stopped = share.on ? m.stopped?.map((chat) => ({ ...chat, title: "" })) : m.stopped;
+  const list = concerns(h, l, serverVersion, m.id !== "local", stopped, viewOnly).map((c) => ({ ...c, text: share.redact(c.text) }));
   const worst = list.some((c) => c.bad) ? "bad" : list.length ? "warn" : "";
   if (!h && m.state !== "connected") return null;
   const refresh = async () => {
@@ -61,7 +66,7 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
         type="button"
         className={`icon-btn${worst ? ` health-${worst}` : ""}${open ? " on" : ""}`}
         data-health-btn={m.id}
-        title={list.length ? list.map((c) => c.text).join("\n") : h ? t("{machine}: all good — {os}", { machine: m.label, os: h.os ?? "" }) : t("Vitals not read yet")}
+        title={list.length ? list.map((c) => c.text).join("\n") : h ? t("{machine}: all good — {os}", { machine: label, os: h.os ?? "" }) : t("Vitals not read yet")}
         aria-expanded={!!open}
         onClick={(e) => {
           e.stopPropagation();
@@ -74,9 +79,9 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
       </button>
       {updateWhat !== null && <UpdatesDialog machine={m} what={updateWhat || undefined} onClose={() => setUpdateWhat(null)} onDone={() => void refresh()} />}
       {open && (
-        <div className="row-menu health-pop" role="dialog" aria-label={t("{machine} vitals", { machine: m.label })} style={{ left: open.x, top: open.y }} onClick={(e) => e.stopPropagation()}>
+        <div className="row-menu health-pop" role="dialog" aria-label={t("{machine} vitals", { machine: label })} style={{ left: open.x, top: open.y }} onClick={(e) => e.stopPropagation()}>
           <div className="health-head">
-            <b>{m.label}</b>
+            <b>{label}</b>
             <span className="dim">{h?.os}</span>
             {!viewOnly && (
               <button type="button" className="icon-btn sm" title={t("Read again now")} disabled={busy} onClick={() => void refresh()}>

@@ -8,6 +8,20 @@ export function isFloatKey(press: KeyPress): boolean {
   return press.code === "Backquote" && press.ctrlKey && !press.metaKey && !press.altKey && !press.shiftKey;
 }
 
+// floatKeyTakes says whether the key opens or hides the drawer now: not while a dialog, a panel such as the palette, the
+// confirm, the file viewer or a menu is open over the page, since the drawer would open under it
+export const floatKeyTakes = (press: KeyPress, overlayOpen: boolean): boolean => isFloatKey(press) && !overlayOpen;
+
+export type ShellView = "opening" | "live" | "ended" | "away";
+
+// shellView is what the drawer shows: its machine away (the roster then lists none of its panes, so the shell may well
+// still run), the shell being opened, the shell, or the shell ended — gone from the roster after it was listed there
+export function shellView(pane: string, listed: boolean, seen: boolean, connected: boolean): ShellView {
+  if (!connected) return "away";
+  if (!pane) return "opening";
+  return seen && !listed ? "ended" : "live";
+}
+
 export type MachineState = { id: string; state: string };
 
 // floatMachine is the machine the drawer opens on: the one asked while it is connected, else the pane's on screen, else

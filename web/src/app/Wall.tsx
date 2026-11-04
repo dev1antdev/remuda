@@ -50,7 +50,8 @@ export default function Wall() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]") || document.querySelector(".modal-scrim, .sel-pop")) return;
       if (big && !office && escapeIsFree({ key: event.key, defaultPrevented: event.defaultPrevented, target: event.target as Element | null }, overlayOpen(app.get()))) setFocus("");
-      if (office && (event.code === "ArrowRight" || event.code === "ArrowLeft")) show.step(event.code === "ArrowRight" ? 1 : -1);
+      const takenElsewhere = event.defaultPrevented || !!(event.target as HTMLElement | null)?.closest("[role=menu]") || overlayOpen(app.get());
+      if (office && !takenElsewhere && (event.code === "ArrowRight" || event.code === "ArrowLeft")) show.step(event.code === "ArrowRight" ? 1 : -1);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);

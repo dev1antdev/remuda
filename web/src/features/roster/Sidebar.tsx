@@ -60,7 +60,7 @@ export default function Sidebar() {
               </button>
             }
             items={[
-              ...machines.filter((m) => m.state === "connected").map((m) => ({ label: t("New workspace on {machine}…", { machine: m.label }), icon: "terminal" as const, onSelect: () => actions.openDialog({ kind: "workspace", machineId: m.id }) })),
+              ...machines.filter((m) => m.state === "connected").map((m) => ({ label: t("New workspace on {machine}…", { machine: share.machineLabel(m) }), icon: "terminal" as const, onSelect: () => actions.openDialog({ kind: "workspace", machineId: m.id }) })),
               { label: t("Agent from recipe…"), icon: "sparkles", hint: t("a saved agent, model, arguments and first prompt"), onSelect: () => actions.openDialog({ kind: "start-recipe" }) },
               { sep: true },
               { label: t("Add a PC…"), icon: "monitor", hint: t("a remote machine over SSH"), onSelect: () => actions.openDialog({ kind: "machine" }) },
@@ -113,8 +113,8 @@ export default function Sidebar() {
                 </span>
               </button>
               <HealthButton machine={m} latest={latest} serverVersion={serverVersion} viewOnly={viewOnly} />
-              {!viewOnly && <Tip text={t("New workspace on {machine}", { machine: m.label })}>
-                <button type="button" className="icon-btn" aria-label={t("New workspace on {machine}", { machine: m.label })} disabled={m.state !== "connected"} onClick={() => actions.openDialog({ kind: "workspace", machineId: m.id })}>
+              {!viewOnly && <Tip text={t("New workspace on {machine}", { machine: share.machineLabel(m) })}>
+                <button type="button" className="icon-btn" aria-label={t("New workspace on {machine}", { machine: share.machineLabel(m) })} disabled={m.state !== "connected"} onClick={() => actions.openDialog({ kind: "workspace", machineId: m.id })}>
                   <Icon name="plus" size={14} />
                 </button>
               </Tip>}

@@ -2,9 +2,10 @@
 // the page, so a terminal with the focus — the drawer's own included — passes it on instead of typing it.
 
 import { useEffect, useRef } from "react";
+import { overlayOpen } from "@/app/escape";
 import { actions, app } from "@/app/store";
 import type { Machine } from "@/features/roster/api";
-import { floatMachine, isFloatKey } from "./float";
+import { floatKeyTakes, floatMachine, isFloatKey } from "./float";
 import { t } from "@/lib/i18n";
 
 // toggleFloat hides the drawer when it is open, else opens it on the machine the rules pick
@@ -27,7 +28,7 @@ export function useFloatKey(machines: Machine[], current: string | null, enabled
       if (!isFloatKey(e)) return;
       e.preventDefault();
       e.stopPropagation();
-      toggleFloat(live.current.machines, live.current.current);
+      if (floatKeyTakes(e, overlayOpen(app.get()))) toggleFloat(live.current.machines, live.current.current);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

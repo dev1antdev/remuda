@@ -18,8 +18,9 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
   const [updates, setUpdates] = useState(false);
   const [mac, setMac] = useState(false);
-  const hiddenWhenSharing = markedMachine(useSharing().pref, m.id);
-  const wake = () => void act(wakeMachine(m.id).then(({ sent }) => actions.notify(wokeWords(m.label, sent))));
+  const share = useSharing();
+  const hiddenWhenSharing = markedMachine(share.pref, m.id);
+  const wake = () => void act(wakeMachine(m.id).then(({ sent }) => actions.notify(wokeWords(share.machineLabel(m), sent))));
   // the clipboard the way the rest of the page reaches it: the Clipboard API where the origin is secure, else the fallback
   const copyHost = (host: string) => void copyText(host).then((ok) => actions.notify(ok ? t("SSH host copied") : t("The SSH host could not be copied"), { brief: true, error: !ok }));
   const close = useCallback(() => setOpen(null), []);
@@ -35,7 +36,7 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
         type="button"
         className={`icon-btn${open ? " on" : ""}`}
         data-machine-menu={m.id}
-        aria-label={t("{machine}: rename, wake, copy the SSH host, remove", { machine: m.label })}
+        aria-label={t("{machine}: rename, wake, copy the SSH host, remove", { machine: share.machineLabel(m) })}
         aria-haspopup="menu"
         aria-expanded={!!open}
         onClick={(e) => {

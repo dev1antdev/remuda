@@ -936,7 +936,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   card's head click or any tile's pin button (`onPick` / `onPin` /
   `pinned` on `TileView`, the `pin` icon) pins it with the accent ring,
   the featured tile's pin button unpins, ← → pin the previous or next
-  (`neighbour`), the featured tile's head keeps its usual click), `Overlays.tsx` (panels, dialogs, the
+  (`neighbour`; not from a field, an open menu or an overlay, whose arrows
+  are their own), the featured tile's head keeps its usual click), `Overlays.tsx` (panels, dialogs, the
   menu, the confirm, the file viewer; the keyboard sheet behind **?** — Shift and the slash key by position, never over a field or another dialog, the same key closes it — is `features/help/KeysDialog.tsx` over `help/keys.ts`, the one list of every key the page answers, tested; the palette has it as "Keyboard shortcuts"), `commands.tsx` (the **command
   palette** on ⌘K / Ctrl+K, by key code so any layout works: every pane
   as a row to jump to — each machine's liveliest first, shells at its
@@ -1158,17 +1159,25 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the drawer's. The page: Ctrl+` by key code (`isFloatKey` in
   `float.ts`, tested; heard on `window` in the capture phase and stopped
   there, so a terminal with the focus — the drawer's own too — hides it
-  instead of typing a NUL; ⌘` is the browser's window switch), the
+  instead of typing a NUL; ⌘` is the browser's window switch; while a
+  dialog, a panel such as the palette, the confirm, the file viewer or a
+  menu is open the key does nothing, `floatKeyTakes`, since the drawer
+  would open under it), the
   rail's Shell (More on a phone) and a palette row toggle store field
   `float {machineId}` (`actions.openFloat` / `closeFloat`; the machine by
   `floatMachine`: the pane on screen's while connected, else this one,
   else the first connected); `FloatTerminal.tsx` is a drawer over
-  `.app-main`, a header (the machine's Select, the key's hint, End the
+  `.app-main`, a header (the machine's Select — the neutral names while
+  screen sharing hides a machine — the key's hint, End the
   shell behind a confirm, Hide) and `TerminalView` in fit mode on that
   pane — mounted only once shown (unseen it would attach at 80×24), kept
   mounted while hidden so the attach and the shell's output stand, never
-  touching the store's pane or lens; Esc stays the shell's; "The shell
-  ended" with Open a new one when its pane leaves the roster.
+  touching the store's pane or lens; the focus goes back on hiding to
+  whatever had it before the drawer took it (nothing on touch), else the
+  page would type into nothing; Esc stays the shell's; "The shell
+  ended" with Open a new one when its pane leaves the roster, and "…is
+  not answering" while its machine is away (the roster lists no pane of
+  a machine that is not connected; `shellView` in `float.ts`, tested).
 - `internal/watch/` — **the only poller**: every machine's
   `session.snapshot` (2s local, 4s remote) whether or not a browser is
   open. Handlers read its cache (`Snapshot` returns the last good snapshot
@@ -1522,7 +1531,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `SharingVeil` (the lenses `inert` underneath, the focus taken out) until
   "Show this pane", which holds until another pane is on screen — a
   transcript on its own the same; a wall tile shows its state line over a
-  cover, no PR, no tail, no composer; the palette's pane rows go by agent
+  cover, no PR, no Jira chip, no tail, no composer, and a creature of the
+  zoo goes by its agent's kind and the neutral names with no bubble and no
+  folder picture (`zooFace` in `features/roster/zoo.ts`, tested); the
+  sidebar card shows no Jira chip, the machine's ⓘ, ⋯ and + say its
+  neutral name and a stopped chat by its pane, the floating terminal's
+  machine picker the neutral names; the palette's pane rows go by agent
   and neutral names (`paneEntries(…, masked)`), every command's words
   through `redact`; toasts, Activity rows (a hidden folder's body replaced)
   and the Mac app's menu (`maskFeed` in `app/shellFeed.ts`, tested) say the
@@ -1591,7 +1605,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   graver of the two, `prWords`) draws it as two `.pr-state` chips in the
   `.tile-pr-group` beside the link in a wall tile's head (the review
   chip goes in a tile under 560 px — `.tile` is a size container — and
-  under 920 px), in the sidebar row's tooltip and in the workspace
+  under 920 px; a head with a PR or a Jira chip, in a tile under 800 px,
+  keeps the title and the tile's buttons on its first line and puts the
+  chip, the PR and the usage on a second, so the title is never squeezed
+  to nothing), in the sidebar row's tooltip and in the workspace
   menu's "Open PR #15" row. gh runs as the person on their own machine, like
   git does for the Changes lens: remuda itself still makes no request
   but the version checks. **The request is followed to its end.** Every
@@ -2246,7 +2263,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   twice in a project refused). The page: `features/roster/IssueChip.tsx`
   on the sidebar card's second line — in place of the branch when the
   branch is named after the issue (`branchNamesIssue`), else after it;
-  the key never cut, the status before it — and in a wall tile's head,
+  the key never cut, the status before it — and in a wall tile's head
+  (clipped rather than run over the PR beside it, its status words gone
+  in a tile under 560 px, the dot's colour and the tooltip kept),
   `features/jira/jira.ts` (tested: `issueTone`, `issueWords`,
   `issueTitle`, `branchNamesIssue`, `keyOf`), `features/jira/JiraSection.tsx`
   in Settings (site, account, token, Save that tests, Test, Remove),
@@ -2763,7 +2782,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `prefers-reduced-motion`). **Every `<button>` carries one family class**:
   `btn` (quiet), `btn primary` (the one filled button of a surface), `btn
   danger`, `btn ghost`, `icon-btn` (+ `sm`/`lg`), or `linkish`; `.on` marks a
-  toggled one, and the selected sidebar row, tab and split pane too — never
+  toggled one — the accent fill and ring on a quiet `btn`, kept under the
+  pointer (the Wall's views, sizes and filters, a picked choice) — and the
+  selected sidebar row, tab and split pane too — never
   `.sel`, the Select's own class, whose height, border, padding and type
   would follow it (`features/roster/selected.test.ts`). Fields have one base rule (every input, textarea and `.sel`;
   `.sm`, `.bare`), one placeholder, one focus ring. Rows share a radius,

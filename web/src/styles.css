@@ -441,6 +441,14 @@ button {
   color: var(--accent);
 }
 
+/* a quiet button toggled on (the Wall's views, sizes and filters, a picked choice): the accent fill, kept under the pointer */
+.btn.on:where(:not(.primary, .danger, .ghost)),
+.btn.on:where(:not(.primary, .danger, .ghost)):hover:not(:disabled) {
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 a.btn {
   text-decoration: none;
 }
@@ -8003,8 +8011,33 @@ body.popout {
 }
 
 @container (max-width: 560px) {
-  .pr-state.pr-review {
+  .pr-state.pr-review,
+  .tile-jira .jira-status {
     display: none;
+  }
+}
+
+/* a head with a Jira chip or a PR, in a tile too narrow for them beside the title: the title and the tile's buttons keep
+   the first line, the chip, the PR and the usage go to a line of their own */
+@container (max-width: 800px) {
+  .tile-head:has(> .tile-jira, > .tile-pr-group) {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+
+  .tile-head:has(> .tile-jira, > .tile-pr-group)::before {
+    content: "";
+    order: 2;
+    flex-basis: 100%;
+  }
+
+  .tile-head:has(> .tile-jira, > .tile-pr-group) > :is(.tile-jira, .tile-pr-group, .tile-usage) {
+    order: 3;
+    margin: 0 0 4px;
+  }
+
+  .tile-head > .tile-jira {
+    max-width: 60%;
   }
 }
 
@@ -9926,6 +9959,7 @@ body.popout {
 .tile-jira {
   flex-shrink: 1;
   max-width: 40%;
+  overflow: hidden; /* a crowded head clips the chip rather than letting its key run over the PR beside it */
   font-size: var(--fs-12);
 }
 
