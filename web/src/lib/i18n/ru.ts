@@ -31,5 +31,6 @@ import { sidebar } from "./ru/sidebar";
 import { worktreeinclude } from "./ru/worktreeinclude";
 import { quote } from "./ru/quote";
 import { reopen } from "./ru/reopen";
+import { forkchat } from "./ru/forkchat";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...wake, ...activity, ...viewonly, ...splitview, ...shellwords, ...sidebar, ...worktreeinclude, ...quote, ...reopen };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...wake, ...activity, ...viewonly, ...splitview, ...shellwords, ...sidebar, ...worktreeinclude, ...quote, ...reopen, ...forkchat };

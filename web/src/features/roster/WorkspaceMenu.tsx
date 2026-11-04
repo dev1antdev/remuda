@@ -7,6 +7,8 @@ import { act } from "@/app/act";
 import { actions, type RowMenu } from "@/app/store";
 import { offerReopen } from "@/features/reopen/offer";
 import { agentTitle, askRestart } from "@/features/updates/restartPane";
+import { canFork, forkLabel } from "@/features/chat/fork";
+import { forkPane } from "@/features/chat/forkPane";
 import { openUrl } from "@/lib/host";
 import { killSession, muteWorkspace, unmuteWorkspace, type Machine, type Session } from "./api";
 import { leftWords, muteChoices, mutedUntil } from "./mute";
@@ -63,6 +65,7 @@ export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) 
       {pr && item(`${t("Open {pr}", { pr: pr.label })}${pr.status ? ` · ${prWords(pr.status)}` : ""}`, () => openUrl(pr.url))}
       {pr && chat && actionsFor(pr).map((action) => <Fragment key={action}>{item(actionLabel(action, pr.label), () => void handPR(action, machine.id, chat.id, pr.label))}</Fragment>)}
       {pr && canRemoveWorktree(session, pr) && item(t("Remove the worktree and its branch…"), () => askRemoveWorktree(machine, session), "danger")}
+      {chat && canFork(chat.agent) && item(forkLabel(chat.agent), () => void forkPane(machine.id, chat.id, chat.agent))}
       {chat && item(t("Restart {agent} on its session…", { agent: agentTitle(chat.agent) }), () => askRestart(machine.id, chat.id, chat.agent))}
       {session.dir && muted && item(t("Unmute · {left}", { left: leftWords(muted) }), () => void act(unmuteWorkspace(machine.id, session.dir ?? "")))}
       {session.dir && !muted && muteChoices().map((choice) => <Fragment key={choice.key}>{item(choice.label, () => void act(muteWorkspace(machine.id, session.dir ?? "", choice.until)))}</Fragment>)}

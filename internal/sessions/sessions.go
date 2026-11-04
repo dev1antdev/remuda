@@ -62,6 +62,7 @@ type Starter interface {
 // Start is the person's choices for an agent about to start: an earlier conversation to come back to, a model, arguments of their own.
 type Start struct {
 	Resume string   // a session id of the folder's, "" for a fresh conversation
+	Fork   bool     // with Resume: start on a copy of that conversation, the original left as it is
 	Model  string   // the model as the agent's own CLI names it, "" for its default
 	Args   []string // extra arguments, as the person wrote them
 }
@@ -115,12 +116,21 @@ func UniqueName(kind, paneID string) string {
 // StartArgs is the command line a Start comes to for a kind, nil when it asks for nothing beyond the agent's defaults.
 func StartArgs(kind string, start Start) ([]string, error) {
 	var args []string
-	if start.Resume != "" {
+	switch {
+	case start.Resume != "" && start.Fork:
+		fork, ok := ForkArgs(kind, start.Resume)
+		if !ok {
+			return nil, fmt.Errorf("%s cannot fork a conversation", kind)
+		}
+		args = append(args, fork...)
+	case start.Resume != "":
 		resume, ok := ResumeArgs(kind, start.Resume)
 		if !ok {
 			return nil, fmt.Errorf("%s cannot resume a session", kind)
 		}
 		args = append(args, resume...)
+	case start.Fork:
+		return nil, fmt.Errorf("a fork needs the session to copy")
 	}
 	if start.Model != "" {
 		model, ok := ModelArgs(kind, start.Model)
@@ -159,6 +169,29 @@ func ResumeArgs(kind, session string) ([]string, bool) {
 		return nil, false
 	}
 	return append(append([]string(nil), flags...), session), true
+}
+
+// forkFlags is how each agent starts on a copy of a conversation, as its own CLI documents it: the arguments before
+// the session id and after it; a kind missing here cannot fork (Gemini CLI and Kimi Code document no fork).
+var forkFlags = map[string]struct{ before, after []string }{
+	"claude": {before: []string{"--resume"}, after: []string{"--fork-session"}},
+	"codex":  {before: []string{"fork"}},
+}
+
+// ForkArgs is the agent's command-line arguments that start it on a copy of a session, false for a kind that cannot.
+func ForkArgs(kind, session string) ([]string, bool) {
+	flags, ok := forkFlags[kind]
+	if !ok {
+		return nil, false
+	}
+	args := append(append([]string(nil), flags.before...), session)
+	return append(args, flags.after...), true
+}
+
+// CanFork says whether remuda knows how to start the kind on a copy of a conversation.
+func CanFork(kind string) bool {
+	_, ok := forkFlags[kind]
+	return ok
 }
 
 // modelFlags is how each agent is told which model to run; the name goes right after.
