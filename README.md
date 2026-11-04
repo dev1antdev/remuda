@@ -763,8 +763,9 @@ machines, token auth, PWA shell.
 Also: new tab / new worktree / close from a workspace's ⋯ menu, tabs in a
 strip above the pane, machines mirrored from `herdr machine list`, and a
 **file viewer** — click any path the agent prints in the terminal or chat to
-open the file where it lives (local or remote), with a **Changes** tab
-showing its uncommitted `git diff`. A path is a link when it names a file
+open the file where it lives (local or remote), its code coloured in its
+language, with a **Changes** tab showing its uncommitted `git diff`, coloured
+the same way. A path is a link when it names a file
 (`main.go`, `docs/plan.md`, `.env`), not a folder. A picture the agent
 read or wrote — a screenshot it looked at, an icon it drew — shows as a
 thumbnail under the call in the chat; a click opens it. **Subagents**: an

@@ -469,9 +469,20 @@ async function changesScreens() {
     expect: [".modal textarea"],
   });
   await screen("changes-file", {
-    open: async () => tap(await mark(`${fileHead("src/app.go")}?.parentElement.querySelector('.icon-btn')`, "open-file")),
+    open: async () => {
+      await tap(await mark(`${fileHead("src/app.go")}?.parentElement.querySelector('.icon-btn')`, "open-file"));
+      if (!(await until(async () => (await count(".fv .fv-code:not(.fv-diff) .hl-keyword")) > 0, 5))) failed("the file viewer does not colour the Go file");
+    },
     expect: [".fv .fv-head"],
     settle: 600,
+    close: async () => {},
+  });
+  await screen("changes-file-diff", {
+    open: async () => {
+      await tap(".fv .fv-tabs button:last-child");
+      if (!(await until(async () => (await count(".fv .fv-diff .fv-line.add .hl-string")) > 0, 5))) failed("the file viewer's Changes tab does not colour the added line");
+    },
+    expect: [".fv .fv-diff"],
     close: async () => {
       await key("Escape", "Escape");
       if (!(await until(async () => !(await present(".fv")), 3))) failed("Esc did not close the file viewer");

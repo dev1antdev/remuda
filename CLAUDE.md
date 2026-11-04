@@ -775,7 +775,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Preview tab between File and Changes — the Markdown through `Markdown`
   with diagrams, the diagram through `Mermaid` — and open on it unless a
   line or the changes were asked for; a viewer link gets File and
-  Preview. **A table's cells carry
+  Preview. The File tab colours the code in the file's language
+  (`langOf` of its name, `highlightLines` once per text, plain past
+  `MAX_HIGHLIGHT`) and so does the Changes tab: `features/files/
+  diffLines.ts`, tested — the header told from the hunks, so a removed
+  `-- comment` is a removed line, each hunk's old and new side tokenized
+  as one text as the review's `rowTokens` does, `changeCounts` for the
+  tab's badge. **A table's cells carry
   a copy button** (`ui/TableCell.tsx`: an `icon-btn` in the cell's corner,
   shown on hover with a mouse and for a few seconds after a long press on
   a phone — `ui/press.ts`, the tasks' long press moved here with a shim at

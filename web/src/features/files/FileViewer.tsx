@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fileUrl, fsDiff, fsStat, fsText, type FileDiff, type FileInfo } from "@/features/files/api";
+import { highlightLines, langOf } from "@/lib/highlight";
 import { basename, errMsg } from "@/lib/text";
 import { Notice, Tip } from "@/ui";
 import Icon from "@/ui/icons";
 import { Markdown } from "@/ui/Markdown";
 import { Mermaid } from "@/ui/Mermaid";
 import { opensDrawn, previewOf } from "@/ui/mermaidLook";
+import { tokenNodes } from "@/ui/Tokens";
+import { changeCounts, diffLines, type DiffLine } from "./diffLines";
 
 import type { FileTarget } from "./target";
 import { actions } from "@/app/store";
@@ -109,7 +112,9 @@ export default function FileViewer({
   }, [tab, text, target.line]);
 
   const name = basename(info?.path ?? target.path);
-  const counts = useMemo(() => countChanges(diff?.diff ?? ""), [diff]);
+  const lang = langOf(info?.path ?? target.path);
+  const changes = useMemo(() => diffLines(diff?.diff ?? "", lang), [diff, lang]);
+  const counts = useMemo(() => changeCounts(changes), [changes]);
   const hasDiff = !!(diff && diff.diff);
   const drawnAs = info?.kind === "text" ? previewOf(info.path) : null;
   const shown: Tab = tab === "drawn" && !drawnAs ? "file" : tab;
@@ -218,7 +223,7 @@ export default function FileViewer({
             </div>
           )}
           {info?.kind === "pdf" && <iframe className="fv-pdf" src={fileUrl(machineId, info.path)} title={name} />}
-          {info?.kind === "text" && shown === "file" && text && <CodeView text={text.text} line={target.line} lineRef={lineRef} />}
+          {info?.kind === "text" && shown === "file" && text && <CodeView text={text.text} lang={lang} line={target.line} lineRef={lineRef} />}
           {info?.kind === "text" && shown === "drawn" && text && (
             <div className="fv-drawn">
               {drawnAs === "mermaid" ? <FileDiagram source={text.text} /> : <Markdown text={text.text} onOpenFile={onRetarget} diagrams />}
@@ -229,7 +234,7 @@ export default function FileViewer({
               {t("… cut at {cut} of {size}", { cut: fmtSize(text.max), size: fmtSize(info.size) })}
             </div>
           )}
-          {info?.kind === "text" && shown === "changes" && <DiffView diff={diff} />}
+          {info?.kind === "text" && shown === "changes" && <DiffView diff={diff} lines={changes} />}
         </div>
       </div>
     </div>
@@ -243,18 +248,18 @@ function FileDiagram({ source }: { source: string }) {
   return error ? <Notice tone="error">{t("Mermaid could not read it: {error}", { error })}</Notice> : <Mermaid source={source} onError={setError} />;
 }
 
-// CodeView splits once per text, not per render: a 512KB file is 10k rows.
-function CodeView({ text, line, lineRef }: { text: string; line?: number; lineRef: React.RefObject<HTMLDivElement | null> }) {
-  const lines = useMemo(() => text.split("\n"), [text]);
+// CodeView splits and colours once per text, not per render: a 512KB file is 10k rows (past the highlighter's cap they stay plain)
+function CodeView({ text, lang, line, lineRef }: { text: string; lang: string; line?: number; lineRef: React.RefObject<HTMLDivElement | null> }) {
+  const lines = useMemo(() => (lang ? highlightLines(text, lang) : text.split("\n").map((l) => [{ kind: "plain" as const, text: l }])), [text, lang]);
   return (
     <div className="fv-code">
-      {lines.map((l, i) => {
+      {lines.map((tokens, i) => {
         const n = i + 1;
         const hit = n === line;
         return (
           <div key={n} className={hit ? "fv-line hit" : "fv-line"} ref={hit ? lineRef : undefined}>
             <span className="fv-ln">{n}</span>
-            <span className="fv-src">{l}</span>
+            <span className="fv-src">{tokenNodes(tokens)}</span>
           </div>
         );
       })}
@@ -262,41 +267,19 @@ function CodeView({ text, line, lineRef }: { text: string; line?: number; lineRe
   );
 }
 
-type DiffKind = "add" | "del" | "hunk" | "meta" | "";
+// the classes are the review's: a kept line has none, a note (no newline at the end) reads as the header does
+const LINE_CLASS: Record<DiffLine["kind"], string> = { add: "add", del: "del", hunk: "hunk", meta: "meta", note: "meta", context: "" };
 
-function diffLineKind(l: string): DiffKind {
-  if (l.startsWith("+++") || l.startsWith("---") || l.startsWith("diff ") || l.startsWith("index ")) return "meta";
-  if (l.startsWith("+")) return "add";
-  if (l.startsWith("-")) return "del";
-  if (l.startsWith("@@")) return "hunk";
-  return "";
-}
-
-// the lines added and removed, for the tab's badge
-function countChanges(diff: string): { add: number; del: number } {
-  let add = 0;
-  let del = 0;
-  if (diff) {
-    for (const l of diff.split("\n")) {
-      const k = diffLineKind(l);
-      if (k === "add") add++;
-      else if (k === "del") del++;
-    }
-  }
-  return { add, del };
-}
-
-function DiffView({ diff }: { diff: FileDiff | null }) {
-  const lines = useMemo(() => (diff?.diff ?? "").split("\n"), [diff]);
+function DiffView({ diff, lines }: { diff: FileDiff | null; lines: DiffLine[] }) {
   if (!diff) return <div className="empty">{t("Could not run git here.")}</div>;
   if (!diff.repo) return <div className="empty">{t("Not inside a git repository.")}</div>;
   if (diff.untracked) return <div className="empty">{t("New file — not yet added to git, so the whole file is the change.")}</div>;
   if (!diff.diff) return <div className="empty">{t("No uncommitted changes — the file matches HEAD.")}</div>;
   return (
     <div className="fv-code fv-diff">
-      {lines.map((l, i) => (
-        <div key={i} className={`fv-line ${diffLineKind(l)}`}>
-          <span className="fv-src">{l}</span>
+      {lines.map((line, i) => (
+        <div key={i} className={`fv-line ${LINE_CLASS[line.kind]}`}>
+          <span className="fv-src">{line.tokens ? [line.text.slice(0, 1), ...tokenNodes(line.tokens)] : line.text}</span>
         </div>
       ))}
     </div>
