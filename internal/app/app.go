@@ -22,6 +22,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/icons"
 	"github.com/dev1antdev/remuda/internal/jobs"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
@@ -401,6 +402,7 @@ func Run(ctx context.Context, o Options) error {
 		UI:        ui,
 		Live:      hub,
 		Awake:     keepAwake,
+		Icons:     icons.New(o.Dir),
 	}
 	if o.Tailscale {
 		var node *tsnetx.Node

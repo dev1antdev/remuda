@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { hueColor } from "@/features/roster/hue";
-import { Dialog, Icon, Logo } from "@/ui";
+import { Dialog, FolderIcon, Icon, Logo } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import { rank, type Entry } from "./rank";
 import { t } from "@/lib/i18n";
@@ -115,6 +115,7 @@ function Row({ entry, id, selected, head, onHover, onPick }: { entry: Entry; id:
         {entry.hint && (
           <span className="palette-hint">
             {entry.hue !== undefined && <i className="hue-dot" style={{ background: hueColor(entry.hue) }} />}
+            {pane && <FolderIcon icon={pane.folder.icon} name={pane.folder.name} size={12} />}
             {entry.hint}
           </span>
         )}

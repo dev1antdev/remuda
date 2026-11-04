@@ -7,7 +7,7 @@ import tabs from "./TabStrip.tsx?raw";
 const SELECT = /\.sel(?![\w-])/;
 const SELECT_OWN = new Set([".sel", ".open", ".sm"]);
 // the sidebar's rows, the tab strip's tabs and a split tab's panes: this folder's components
-const OURS = new Set([".ws-row", ".radar-row", ".tab", ".split-pane"]);
+const OURS = new Set([".ws-item", ".ws-main", ".ws-agent-line", ".ws-folder-head", ".tab", ".split-pane"]);
 
 // borrowers lists the selectors that put the Select's class on one of our components: a compound such as .tab.sel; a
 // pseudo-class's argument (:has(.sel), :not(.quiet)) is another element's or a condition, not the compound's own class
@@ -39,7 +39,7 @@ describe("the selected row, tab and pane", () => {
 
   it("still finds a borrower, so the rule above is not empty", () => {
     expect(borrowers(".tab.sel { color: red }\n.sel.open, .radar-settings .sel, .sel:hover, .x:has(.sel) { color: blue }")).toEqual([".tab.sel"]);
-    expect(borrowers(".ws-row.radar-head:not(.quiet).sel { color: red }")).toEqual([".ws-row.radar-head:not(.quiet).sel"]);
+    expect(borrowers(".ws-item.on:not(.quiet).sel { color: red }")).toEqual([".ws-item.on:not(.quiet).sel"]);
     expect(wearsSelect('className={`tab${on ? " sel" : ""}`}')).toBe(true);
   });
 });

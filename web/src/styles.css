@@ -1266,241 +1266,425 @@ body.is-resizing iframe {
   gap: 3px;
 }
 
-/* ---- workspace tree ---- */
+/* ---- workspaces: a two-line card per workspace that opens its agent, a small line per agent when it runs several ---- */
 .ws-tree {
   display: flex;
   flex-direction: column;
-  padding: 0 8px;
+  gap: 2px;
+  padding: 2px 8px 0;
 }
 
-.ws-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: var(--ctl);
-  padding: 4px 6px 4px 8px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: none;
-  color: var(--fg);
-  text-align: left;
-  position: relative;
-  cursor: pointer;
+.ws-item {
+  border-radius: var(--r-md);
   transition: background var(--fast) var(--ease);
 }
 
-.ws-row:hover {
-  background-color: var(--bg-hover);
-}
-
-.ws-row.on {
-  background-color: var(--bg-input);
+.ws-item.on {
+  background: var(--bg-input);
   box-shadow: inset 0 0 0 1px var(--line);
 }
 
-.ws-copy {
+.ws-main {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  flex: 1;
-  line-height: 1.25;
+  gap: 1px;
+  padding: var(--row-pad-y) 6px var(--row-pad-y) 8px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), opacity var(--base) var(--ease);
 }
 
-.ws-label {
+.ws-main:hover {
+  background: var(--bg-hover);
+}
+
+.ws-item.on > .ws-main:hover {
+  background: transparent;
+}
+
+.ws-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.ws-name {
+  flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--fg);
+  font-size: var(--fs-13);
   font-weight: 500;
 }
 
+.ws-age {
+  flex-shrink: 0;
+  min-width: 2ch;
+  text-align: right;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the second line sits under the name: past the mark, the logo and their gaps */
 .ws-sub {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  padding-left: 44px;
   color: var(--fg-faint);
   font-size: var(--fs-12);
+  line-height: 1.35;
   white-space: nowrap;
-  overflow: hidden;
 }
 
-.ws-sub > span:not(:last-child)::after {
-  content: "·";
-  margin-left: 6px;
+.ws-item.is-shell > .ws-main .ws-sub {
+  padding-left: 22px;
 }
 
-.ws-folder {
+.ws-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+}
+
+.ws-branch > span {
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
 }
 
-.ws-agent {
-  font-weight: 500;
+.ws-branch > svg {
+  flex-shrink: 0;
+}
+
+/* the words keep a third of the line however long the branch */
+.ws-words {
+  flex: 1 1 0;
+  min-width: 34%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-branch + .ws-words::before {
+  content: "·";
+  margin-right: 6px;
+  color: var(--fg-faint);
+}
+
+/* the workspace's menu takes the age's place under the pointer */
+.ws-main .ws-menu-btn {
+  display: none;
+  width: 20px;
+  height: 20px;
+  margin: -2px -2px -2px 0;
+}
+
+.ws-main:hover .ws-menu-btn,
+.ws-main:focus-within .ws-menu-btn {
+  display: inline-grid;
+}
+
+.ws-main:hover .ws-age,
+.ws-main:focus-within .ws-age {
+  display: none;
 }
 
 .ws-menu-btn {
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: none;
   color: var(--fg-faint);
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity var(--fast) var(--ease), background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 
-.ws-row:hover .ws-menu-btn,
-.ws-row.on .ws-menu-btn,
-.radar-row:hover .ws-menu-btn,
-.radar-row.on .ws-menu-btn {
-  opacity: 1;
-}
-
-.ws-menu-btn:hover {
-  background: var(--bg-active);
-  color: var(--fg);
-}
-
-.ws-row.radar-head:not(.quiet) {
-  min-height: 26px;
-  padding: 6px 6px 1px 8px;
-  cursor: default;
-}
-
-.ws-row.radar-head:not(.quiet):hover {
-  background: none;
-}
-
-.ws-row.radar-head:not(.quiet) .ws-label {
-  color: var(--fg-dim);
-  font-size: var(--fs-12);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.ws-row.radar-head:not(.quiet):hover .ws-label,
-.ws-row.radar-head:not(.quiet).on .ws-label {
-  color: var(--fg);
-}
-
-.ws-row.radar-head:not(.quiet).on {
-  background: none;
-  box-shadow: none;
-}
-
-.ws-fold {
-  display: inline-grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  margin-left: -4px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: none;
-  color: var(--fg-faint);
-  flex-shrink: 0;
-  transition: transform var(--base) var(--ease), background var(--fast) var(--ease), color var(--fast) var(--ease);
-}
-
-.ws-fold.open {
-  transform: rotate(90deg);
-}
-
-.ws-fold:hover {
-  background: var(--bg-active);
-  color: var(--fg);
-}
-
-.ws-row.radar-head.is-folded {
-  min-height: var(--ctl);
-  padding: 4px 6px 4px 8px;
-  cursor: pointer;
-}
-
-.ws-row.radar-head.is-folded:hover {
-  background-color: var(--bg-hover);
-}
-
-.ws-row.radar-head.is-folded.on {
-  background-color: var(--bg-input);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-
-.ws-summary {
-  margin-left: 0;
-  margin-right: 2px;
-}
-
-/* worktrees hang under their repository: a trunk down the left of each child group, stopping at the last child's tick */
-.ws-children {
-  margin-left: 18px;
-}
-
-.ws-children > .ws-group {
-  position: relative;
-  padding-left: 12px;
-}
-
-.ws-children > .ws-group::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--line-strong);
-}
-
-.ws-children > .ws-group:last-child::before {
-  bottom: auto;
-  height: 19px;
-}
-
-.ws-row.nested::after {
-  content: "";
-  position: absolute;
-  left: -12px;
-  top: 19px;
-  width: 9px;
-  height: 1px;
-  background: var(--line-strong);
-}
-
-/* ---- radar rows: mark · logo · title ---- */
-.radar-rows {
+/* an agent's own line, when its workspace runs several */
+.ws-agents {
   display: flex;
   flex-direction: column;
-  padding-bottom: 3px;
+  gap: 1px;
+  padding: 0 4px 4px 30px;
 }
 
-.radar-row {
+.ws-agent-line {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: var(--row-h);
-  padding: var(--row-pad-y) 6px var(--row-pad-y) 8px;
+  gap: 6px;
+  min-height: 22px;
+  padding: 1px 6px;
   border-radius: var(--r-sm);
-  color: var(--fg);
-  font-size: var(--fs-13);
-  line-height: 1.3;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
   cursor: pointer;
-  position: relative;
   transition: background var(--fast) var(--ease), opacity var(--base) var(--ease);
 }
 
-.radar-row:hover {
-  background-color: var(--bg-hover);
+.ws-agent-line:hover {
+  background: var(--bg-hover);
 }
 
-.radar-row.on {
-  background-color: var(--bg-input);
-  box-shadow: inset 0 0 0 1px var(--line);
+.ws-agent-line.on {
+  background: var(--bg-active);
+  color: var(--fg);
+}
+
+.ws-agent-line .radar-mark {
+  width: 12px;
+  font-size: var(--fs-11);
+}
+
+.ws-agent-line .radar-logo {
+  width: 12px;
+  height: 12px;
+}
+
+.ws-agent-words {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* a state wears its colour on the mark, and on the words where they say why it needs you */
+.ws-item.is-blocked > .ws-main .radar-mark,
+.ws-item.is-blocked > .ws-main .ws-words,
+.ws-agent-line.is-blocked .radar-mark,
+.ws-agent-line.is-blocked .ws-agent-words,
+.radar-mark.blocked {
+  color: var(--red);
+}
+
+.ws-item.is-done > .ws-main .radar-mark,
+.ws-agent-line.is-done .radar-mark,
+.radar-mark.done {
+  color: var(--green);
+}
+
+.ws-item.is-idle_fresh > .ws-main .radar-mark,
+.ws-agent-line.is-idle_fresh .radar-mark {
+  color: var(--green-dim);
+}
+
+.ws-item.is-unknown > .ws-main .radar-mark,
+.ws-agent-line.is-unknown .radar-mark {
+  color: var(--violet);
+}
+
+.ws-item.is-idle_stale > .ws-main,
+.ws-agent-line.is-idle_stale {
+  opacity: 0.55;
+}
+
+.ws-item.is-alert > .ws-main .radar-mark,
+.ws-item.is-alert > .ws-main .ws-words,
+.ws-agent-line.is-alert .radar-mark,
+.ws-agent-line.is-alert .ws-agent-words {
+  color: var(--amber);
+}
+
+.ws-item.is-alert > .ws-main .radar-mark,
+.ws-agent-line.is-alert .radar-mark {
+  font-weight: 700;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.radar-mark.working {
+  color: var(--accent);
+}
+
+/* a folder — a repository, or a folder outside git — as Orca shows a project: its icon, its name and how its agents
+   stand; a click folds it, and open it holds its workspaces' cards on a thin guide */
+.ws-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ws-folder + .ws-folder {
+  margin-top: 2px;
+}
+
+.ws-folder-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 6px 0 2px;
+  border-radius: var(--r-sm);
+  color: var(--fg);
+  font-size: var(--fs-13);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease);
+}
+
+.ws-folder-head:hover,
+.ws-folder-head.on {
+  background: var(--bg-hover);
+}
+
+.ws-folder-head .chevron {
+  flex-shrink: 0;
+}
+
+.ws-folder-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-folder-head .machine-summary {
+  margin-left: 0;
+}
+
+.ws-folder-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 9px;
+  padding-left: 5px;
+  border-left: 1px solid var(--line);
+}
+
+.folder-icon-btn.icon-btn {
+  width: 22px;
+  height: 22px;
+  margin: 0 -2px;
+}
+
+/* a folder's face: an emoji, a picture, or its initial on a tile in a colour of its name */
+.folder-icon {
+  display: inline-grid;
+  place-items: center;
+  width: var(--folder-icon, 16px);
+  height: var(--folder-icon, 16px);
+  flex-shrink: 0;
+  border-radius: var(--r-xs);
+  object-fit: contain;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.folder-icon.emoji {
+  font-size: calc(var(--folder-icon, 16px) * 0.88);
+}
+
+.folder-icon.letter {
+  color: var(--ctp-crust);
+  font-size: calc(var(--folder-icon, 16px) * 0.62);
+  font-weight: 700;
+}
+
+.title .folder-icon {
+  margin-right: 6px;
+}
+
+.tile-where .folder-icon,
+.palette-hint .folder-icon {
+  margin-right: 4px;
+}
+
+/* the icon dialog: where the icon comes from, then the emoji by group, a site, or a picture */
+.icon-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.emoji-search {
+  width: 100%;
+}
+
+.emoji-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0 4px;
+}
+
+.emoji-scroll {
+  height: min(340px, 50vh);
+  overflow-y: auto;
+  margin-top: 6px;
+  scrollbar-gutter: stable;
+}
+
+.emoji-scroll h4 {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 6px 2px 4px;
+  background: var(--bg-overlay);
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: 2px;
+  padding-bottom: 6px;
+}
+
+.emoji-cell.icon-btn {
+  width: 36px;
+  height: 36px;
+  font-size: var(--fs-20);
+  line-height: 1;
+}
+
+.icon-source {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.icon-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.icon-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.icon-found {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.icon-found img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.icon-from {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
 }
 
 /* the mark's glyphs come from whatever font has them, each with its own line metrics: a fixed box keeps the row from jumping */
@@ -1528,87 +1712,6 @@ body.is-resizing iframe {
   text-align: center;
   font-size: var(--fs-12);
   line-height: 14px;
-}
-
-.radar-title {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.radar-title.has-said {
-  display: flex;
-  align-items: baseline;
-}
-.radar-title.has-said .radar-label {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 62%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.radar-said {
-  flex: 1 1 0;
-  min-width: 0;
-  padding-left: 5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--fg-faint);
-  font-weight: normal;
-}
-
-.radar-ws {
-  color: var(--fg-faint);
-  font-size: var(--fs-11);
-  white-space: nowrap;
-  max-width: 40%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.radar-row.is-blocked .radar-mark,
-.radar-row.is-blocked .radar-title,
-.radar-mark.blocked {
-  color: var(--red);
-}
-
-.radar-row.is-done .radar-mark,
-.radar-row.is-done .radar-title,
-.radar-mark.done {
-  color: var(--green);
-}
-
-.radar-row.is-idle_fresh .radar-mark,
-.radar-row.is-idle_fresh .radar-title {
-  color: var(--green-dim);
-}
-
-.radar-row.is-unknown .radar-mark,
-.radar-row.is-unknown .radar-title {
-  color: var(--violet);
-}
-
-.radar-row.is-idle_stale {
-  opacity: 0.5;
-}
-
-.radar-row.shell {
-  color: var(--fg-dim);
-}
-
-.radar-mark.working {
-  color: var(--accent);
-}
-
-.radar-row.is-alert .radar-mark,
-.radar-row.is-alert .radar-title {
-  color: var(--amber);
-}
-
-.radar-row.is-alert .radar-mark {
-  font-weight: 700;
-  animation: pulse 1.6s ease-in-out infinite;
 }
 
 .radar-settings {
@@ -1978,10 +2081,23 @@ body.is-resizing iframe {
   outline: none;
 }
 
-.tab-num {
+.tab-main .radar-logo {
+  width: 12px;
+  height: 12px;
+}
+
+.tab-label {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab.is-shell .tab-main > svg {
   color: var(--fg-faint);
-  font-size: var(--fs-11);
-  font-family: var(--mono);
+}
+
+.tab.is-shell.on .tab-main > svg {
+  color: var(--fg-dim);
 }
 
 .tab-count {
@@ -5408,7 +5524,10 @@ button.usage-row:hover {
     z-index: 29;
   }
 
-  .ws-menu-btn,
+  .ws-main .ws-menu-btn {
+    display: inline-grid;
+  }
+
   .tab-close {
     opacity: 1;
   }
@@ -5463,11 +5582,15 @@ button.usage-row:hover {
     height: var(--ctl);
   }
 
-  .ws-row,
-  .radar-row,
+  .ws-main,
   .tasks-row,
   .usage-row {
     min-height: var(--ctl-lg);
+  }
+
+  .ws-agent-line,
+  .ws-folder-head {
+    min-height: var(--ctl);
   }
 
   input:not([type="checkbox"]):not([type="file"]):not([type="range"]),
@@ -5476,24 +5599,21 @@ button.usage-row:hover {
   }
 }
 
-.ws-row,
-.radar-row,
 .tasks-row,
 .usage-row,
 .search-hit {
   border-radius: var(--r-md);
 }
 
-.ws-row:hover,
-.radar-row:hover,
 .tasks-row:hover,
 .usage-row:hover,
 .search-hit:hover {
   background: var(--bg-hover);
 }
 
-.ws-row:focus-visible,
-.radar-row:focus-visible,
+.ws-main:focus-visible,
+.ws-agent-line:focus-visible,
+.ws-folder-head:focus-visible,
 .tasks-row:focus-visible,
 .usage-row:focus-visible,
 .search-hit:focus-visible,
@@ -9091,7 +9211,7 @@ body.popout {
   margin-left: 4px;
 }
 
-.ws-label .radar-muted {
+.ws-line .radar-muted {
   vertical-align: -1px;
 }
 

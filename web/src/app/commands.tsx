@@ -16,6 +16,7 @@ import { agentTitle, askRestart } from "@/features/updates/restartPane";
 import { isMac, usePref, writePref } from "@/lib/prefs";
 import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, openLensOf, type OpenLens } from "./openLens";
 import { basename, errMsg } from "@/lib/text";
+import { folderOf as sessionFolder } from "@/features/roster/workspaces";
 import { resetPanels } from "@/ui";
 import type { IconName } from "@/ui/icons";
 import { folderOf, useCurrent } from "./current";
@@ -111,6 +112,8 @@ function useCommands(): (query: string) => Entry[] {
         command("tab", t("New tab in {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "tab", machineId: machine.id, session }), { hint: t("another agent in the same folder"), icon: "plus", keywords: ["agent", "create"] });
         command("worktree", t("New worktree of {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }), { hint: t("a branch checked out beside it, an agent in it"), icon: "plus", keywords: ["branch", "create"] });
         command("rename-workspace", t("Rename workspace {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }), { icon: "tag" });
+        const folder = sessionFolder(session);
+        if (folder) command("folder-icon", t("Icon for the folder {folder}…", { folder: `“${basename(folder)}”` }), () => actions.openDialog({ kind: "folder-icon", machineId: machine.id, folder, name: basename(folder), icon: session.icon }), { hint: t("an emoji, a site's icon or a picture"), icon: "folder", keywords: ["emoji", "favicon", "logo", "picture"] });
         command("rename-tab", t("Rename tab {tab}…", { tab: tab.named ? `“${tab.label}”` : tab.number }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }), { icon: "tag" });
         if (current.pane.agent) command("restart-pane", t("Restart {agent} on its session…", { agent: agentTitle(current.pane.agent) }), () => askRestart(machine.id, current.pane.id, current.pane.agent), { hint: t("its own exit, then started again on the same conversation"), icon: "refresh-cw", keywords: ["restart", "resume", "stuck", "hung", "reload", "again"] });
         command("close-workspace", t("Close workspace {workspace}", { workspace: named }), () => closeWorkspace(machine, session), { hint: t("its panes close and the agents in them stop"), icon: "x", danger: true, keywords: ["kill", "stop", "quit"] });

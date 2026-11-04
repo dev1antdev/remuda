@@ -1,5 +1,5 @@
 // The machines sidebar, radar-style: its head with a + menu (a workspace, a PC) and a ⋯ menu (message several agents,
-// the order, the settings); then every machine with its vitals, its menu and its rows, the busiest first.
+// fold or open every folder, the order, the settings); then every machine with its vitals, its menu and its folders.
 
 import { act } from "@/app/act";
 import { useCurrent } from "@/app/current";
@@ -11,6 +11,7 @@ import { HealthButton } from "./HealthButton";
 import { MachineMenu } from "./MachineMenu";
 import { DEFAULT_RADAR, summary, type RadarPrefs } from "./radar";
 import { Rows, StateMarks, type Current } from "./rows";
+import { entries, type Folder } from "./workspaces";
 import { hueStyle } from "./hue";
 import { moving, useClock, useSpinner } from "./useClocks";
 import { useRoster } from "./useRoster";
@@ -29,6 +30,14 @@ export default function Sidebar() {
   const onToggle = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
   const onFold = (key: string) => setWsFolded((f) => ({ ...f, [key]: !f[key] }));
   const onMenu = (m: Machine, s: Session, x: number, y: number) => actions.openMenu({ machine: m, session: s, x, y });
+  const onIcon = (m: Machine, f: Folder) => actions.openDialog({ kind: "folder-icon", machineId: m.id, folder: f.path, name: f.name, icon: f.icon });
+  // every folder of every machine shut, or all open again
+  const foldAll = (shut: boolean) =>
+    setWsFolded((f) => {
+      const next = { ...f };
+      for (const m of machines) for (const e of entries(m, prefs)) if (e.kind === "folder") next[`${m.id}|folder:${e.folder.key}`] = shut;
+      return next;
+    });
   const onRemoveMachine = (m: Machine) => actions.ask(t("Remove machine “{machine}”? Nothing on the PC is touched.", { machine: m.label }), t("Remove"), () => void act(removeMachine(m.id)));
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
@@ -66,6 +75,9 @@ export default function Sidebar() {
             }
             items={[
               { label: t("Message several agents…"), icon: "send", hint: t("one text to the ones you tick, each in turn"), onSelect: () => actions.openDialog({ kind: "broadcast" }) },
+              { sep: true },
+              { label: t("Fold every folder"), icon: "chevron-right", hint: t("only the folders and how their agents stand"), onSelect: () => foldAll(true) },
+              { label: t("Open every folder"), icon: "chevron-down", onSelect: () => foldAll(false) },
               { sep: true },
               { heading: t("Order") },
               { label: t("Grouped by activity"), checked: prefs.order === "active", onSelect: () => onPrefs({ ...prefs, order: "active" }) },
@@ -116,7 +128,20 @@ export default function Sidebar() {
                 {t("connecting…")}
               </Notice>
             )}
-            {!folded && <Rows machine={m} current={current} prefs={prefs} step={step} now={now} onSelect={actions.selectPane} onMenu={viewOnly ? undefined : onMenu} folded={wsFolded} onFold={onFold} />}
+            {!folded && (
+              <Rows
+                machine={m}
+                current={current}
+                prefs={prefs}
+                step={step}
+                now={now}
+                onSelect={actions.selectPane}
+                onMenu={viewOnly ? undefined : onMenu}
+                onIcon={viewOnly ? undefined : onIcon}
+                folded={wsFolded}
+                onFold={onFold}
+              />
+            )}
           </div>
         );
       })}

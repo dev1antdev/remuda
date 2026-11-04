@@ -267,6 +267,7 @@ type WorktreeInfo struct {
 	IsLinkedWorktree bool   `json:"is_linked_worktree"`
 	RepoKey          string `json:"repo_key"`
 	RepoName         string `json:"repo_name"`
+	RepoRoot         string `json:"repo_root"` // the repository's main checkout, a linked worktree's too
 }
 
 type WorkspaceInfo struct {

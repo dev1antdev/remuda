@@ -5,9 +5,10 @@
 import { basename, plural } from "@/lib/text";
 import { machineLabel } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
+import { folderOf } from "@/features/roster/workspaces";
 import { budgetTone, budgetWords, budgetsFor, graver, ratio, tightest, toneClass, type BudgetTone } from "@/features/usage/budgets";
 import { fillClass, tok, usd } from "@/features/usage/format";
-import { Icon, Tip } from "@/ui";
+import { FolderIcon, Icon, Tip } from "@/ui";
 import type { Located } from "./current";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens } from "./store";
@@ -36,6 +37,7 @@ export default function Header({ current }: { current: Located | null }) {
         ) : current ? (
           <>
             {current.machine.id !== "local" && <span className="title-machine">{current.machine.label} ›</span>}
+            <FolderIcon icon={current.session.icon} name={basename(folderOf(current.session)) || current.session.name} />
             {current.session.name}
             <span className="title-agent"> · {current.pane.agent || "shell"}</span>
           </>
