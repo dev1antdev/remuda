@@ -168,6 +168,16 @@ func TestBadgesReadTheBranch(t *testing.T) {
 	if branch := store.Branch("local", plain); branch != "" {
 		t.Fatalf("a folder outside git has branch %q", branch)
 	}
+	if root := store.Root("local", dir); root != dir {
+		t.Fatalf("root = %q, want the checkout itself %q", root, dir)
+	}
+	linked := filepath.Join(t.TempDir(), "linked")
+	git("worktree", "add", "-q", "-b", "side", linked)
+	store.Badges(machine, []string{linked})
+	// git names a linked worktree's repository by its real path (the temp dir sits behind /var → /private/var here)
+	if root, want := store.Root("local", linked), realPath(t, dir); realPath(t, root) != want {
+		t.Fatalf("a linked worktree's root = %q, want its repository's folder %q", root, want)
+	}
 
 	git("checkout", "-q", "--detach")
 	store.Badges(machine, []string{dir})
@@ -180,4 +190,16 @@ func TestBadgesReadTheBranch(t *testing.T) {
 	if branch := store.Branch("local", dir); branch != "" {
 		t.Fatalf("a folder that stopped being a repository keeps branch %q", branch)
 	}
+	if root := store.Root("local", dir); root != "" {
+		t.Fatalf("a folder that stopped being a repository keeps root %q", root)
+	}
+}
+
+func realPath(t *testing.T, p string) string {
+	t.Helper()
+	real, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return real
 }

@@ -914,6 +914,26 @@ giving up with a note in Activity. The model last used for each agent is
 remembered on the device. A new tab and a new worktree take the same
 options.
 
+**A new worktree comes ready to run.** A worktree has none of the files
+git ignores — no `.env`, no local config — so an agent started in one
+often cannot run the project. List them in a `.worktreeinclude` at the
+repository's root, in `.gitignore`'s syntax (the same file Claude Code
+reads):
+
+```gitignore
+.env
+.env.*
+!.env.example
+config/local/
+```
+
+Every worktree remuda makes — from the New worktree dialog, or a task's
+*Start an agent on it* — gets them copied from the main checkout before
+its agent starts, and a toast (or the task's comment) says which. Only
+files git ignores are copied, never one the worktree already has, never
+anything outside the repository, and nothing at all when the patterns
+match more than a thousand files.
+
 **Recipes** save a start you make again and again — the agent, its
 model, the extra arguments and the first prompt, under a name like
 "Planner" or "Scout", with a folder when the recipe belongs to one.
