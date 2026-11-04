@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
@@ -80,7 +81,8 @@ type Server struct {
 	Awake     *awake.Service // the machines kept awake while their agents work
 	Icons     *icons.Store   // the icon the person gave each folder of the sidebar
 
-	streams termStreams
+	streams   termStreams
+	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
 }
 
 // Handler mounts every route: each context registers its own, the static page comes last, and the guard wraps all but two.
@@ -119,6 +121,7 @@ func (s *Server) Handler() http.Handler {
 	s.viewerKeyRoutes(api)
 	s.completeRoutes(api)
 	s.iconRoutes(api)
+	s.teleportRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

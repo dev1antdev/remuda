@@ -62,6 +62,7 @@ export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) 
       {pr && chat && actionsFor(pr).map((action) => <Fragment key={action}>{item(actionLabel(action, pr.label), () => void handPR(action, machine.id, chat.id, pr.label))}</Fragment>)}
       {pr && canRemoveWorktree(session, pr) && item(t("Remove the worktree and its branch…"), () => askRemoveWorktree(machine, session), "danger")}
       {chat && item(t("Restart {agent} on its session…", { agent: agentTitle(chat.agent) }), () => askRestart(machine.id, chat.id, chat.agent))}
+      {tab && (chat ?? tab.panes[0]) && item(t("Move the work to another machine…"), () => actions.openDialog({ kind: "teleport", machineId: machine.id, paneId: (chat ?? tab.panes[0])!.id, tabId: tab.id, workspace: session.name, agent: chat?.agent ?? "" }))}
       {session.dir && muted && item(t("Unmute · {left}", { left: leftWords(muted) }), () => void act(unmuteWorkspace(machine.id, session.dir ?? "")))}
       {session.dir && !muted && muteChoices().map((choice) => <Fragment key={choice.key}>{item(choice.label, () => void act(muteWorkspace(machine.id, session.dir ?? "", choice.until)))}</Fragment>)}
       {item(t("Close workspace"), () => closeWorkspace(machine, session), "danger")}
