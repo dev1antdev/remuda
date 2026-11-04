@@ -21,7 +21,17 @@ export type Pane = {
   usage?: PaneUsage;
   said?: string; // the first line of the agent's last answer, once it finished
   pr?: PullRequest; // the last pull or merge request the agent named, "PR #15" / "MR !9"
+  limit?: PaneLimit; // a subscription limit the agent stopped on, and the person's booking to continue it after the reset
 };
+
+// PaneLimit is when the agent stopped on a plan limit and the harness's words, and the moment a booking continues it
+export type PaneLimit = { hit_at?: string; text?: string; continue_at?: string };
+
+// LimitWindow is one of an agent's subscription windows as it last reported it: claude | codex, 5h | week
+export type LimitWindow = { agent: string; name: string; used: number; resets_at: string; at: string };
+
+// MachineLimits is what a machine says of the plan limits: the windows read there, and whether Claude Code's status line is wrapped to report them
+export type MachineLimits = { windows?: LimitWindow[]; wrapped?: boolean };
 
 // PullRequest is the request the agent named and, for a GitHub one gh on the machine could read, how it stands
 export type PullRequest = { url: string; label: string; status?: PRStatus };
@@ -106,6 +116,7 @@ export type Health = {
   plugins?: { id: string; source: string }[]; // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
   error?: string;
   code_server?: string; // the release linked under ~/.local/opt/code-server
+  statusline?: boolean; // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
 };
 
 // the newest versions out there; remuda is its own newest release on GitHub
@@ -128,6 +139,7 @@ export type Machine = {
   awake?: Awake;
   stopped?: StoppedChat[]; // the chats a reboot stopped there: their panes are bare shells again, one Resume brings them back
   mac?: string; // the address a wake-up packet names, when the person set one
+  limits?: MachineLimits; // the agents' plan limits as the machine last reported them
 };
 
 // StoppedChat is a chat whose pane came back from a reboot as a bare shell: the agent it ran and the pane's title

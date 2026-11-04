@@ -19,6 +19,8 @@ import FilesRail from "@/features/chat/FilesRail";
 import Review from "@/features/review/Review";
 import { TerminalLens, TerminalTools, useTerminalViewItems } from "@/features/terminal/TerminalLens";
 import { Screen } from "@/features/terminal/Screen";
+import { LimitNotice } from "@/features/usage/LimitNotice";
+import { accountWindows } from "@/features/usage/limits";
 import { Notice, PANELS, Resizer } from "@/ui";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
@@ -36,7 +38,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
   const splitAsked = app.use((s) => s.split);
   const wide = useMedia(SPLIT_QUERY);
   const split = splitOn(splitAsked, wide, isTouch, lens); // the chat beside the terminal; lens is then the focused side
-  const { refresh, viewOnly } = useRoster();
+  const { refresh, viewOnly, machines } = useRoster();
   const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
   const [seenLenses, setSeenLenses] = useState<{ pane: string; lenses: Partial<Record<Lens, true>> }>({ pane: "", lenses: {} });
   useEffect(() => {
@@ -179,6 +181,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
               active={shown("chat")}
               focused={lens === "chat"}
               viewOnly={viewOnly}
+              notice={<LimitNotice machineId={machine.id} paneId={pane.id} agent={pane.agent} limit={pane.limit} windows={accountWindows(machines, Date.now())} viewOnly={viewOnly} />}
             />
           </div>
         )}

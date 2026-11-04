@@ -1493,6 +1493,21 @@ body.is-resizing iframe {
   animation: pulse 1.6s ease-in-out infinite;
 }
 
+/* an agent stopped on its plan limit says so in amber until it works again */
+.ws-item.is-limit > .ws-main .ws-words,
+.ws-agent-line.is-limit .ws-agent-words {
+  color: var(--amber);
+}
+
+/* a plan window in the machine's ⓘ, in the tone its use earns */
+.health-limit.is-amber {
+  color: var(--amber);
+}
+
+.health-limit.is-red {
+  color: var(--red);
+}
+
 .radar-mark.working {
   color: var(--accent);
 }

@@ -1038,6 +1038,22 @@ the next period. The spend is read every five minutes from the same
 transcripts, at the same API-equivalent prices: on a subscription a
 measure, not a bill.
 
+**Plan limits:** what a subscription really runs out of — Claude's and
+Codex's 5-hour and weekly windows — at the very top of the report, in
+the usage pill's tooltip (its colour turns amber at 80 %) and in each
+machine's ⓘ: "Claude 5 h: 62 %, resets 14:00". A push comes at 80 % and
+when a window is used up, once per window. Codex writes its limits into
+its own files, so they show by themselves. Claude Code hands them only to
+its status line: Updates in a machine's ⓘ offers "Show Claude Code's
+plan limits", which puts remuda in front of your status line in
+`~/.claude/settings.json` (your file backed up first) — remuda notes the
+numbers and runs your own status line as before; `remuda statusline
+uninstall` puts it back. When an agent stops on a limit, its sidebar row
+says so and the chat offers "Continue after the reset": at the moment
+the window resets, remuda says "continue" to it — your booking, called
+off with one click, and never sent to an agent that is busy again,
+asking a question or on another conversation by then.
+
 **Command palette** (⌘K, Ctrl+K elsewhere): type a few letters and
 jump to any agent on any machine — by its name, workspace, folder,
 machine or tab — or run what the page has a button for: a mode, a lens,

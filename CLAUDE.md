@@ -413,7 +413,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Plan(what, report)` / `Offered(report, latest)` are the commands for
   herdr and the agents (and `what = mcp`, "Connect the agents to your
   tasks": `remuda mcp install` on every machine with a remuda, see
-  `internal/mcp`), `ReleaseUpdate(have, os, arch, rel, local)` offers
+  `internal/mcp`; `what = statusline`, "Show Claude Code's plan limits":
+  `remuda statusline install`, see `internal/limits`), `ReleaseUpdate(have, os, arch, rel, local)` offers
   `what = remuda-release` ("Download & install remuda vX") when the
   release's x.y.z is newer than the machine's (a build past a tag,
   `v0.4.0-24-g…`, is 0.4.0) and it has `remuda-<os>-<arch>` for the
@@ -1243,7 +1244,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   alert `record` hands to the feed goes to each enabled webhook whose
   `Kinds` include its `HookKind` (input → question, done → finish, the
   watchdog's three → watchdog, the rest by name: digest, schedule, task,
-  budget, review, machine — `HookKinds` is the one list, the page's
+  budget, limits, review, machine — `HookKinds` is the one list, the page's
   picker must match it) outside its own quiet hours — a question 10 s after
   the block, called off when answered at the desk, every finish 10 s
   after, as the feed hears them — in a goroutine each, one try and one
@@ -1915,6 +1916,67 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   bar, Edit, "Add a budget"), `BudgetDialog.tsx` (dialog kind `budget`:
   machine or Everything, a folder of the machine, the limit, the period,
   a note, Remove behind a confirm), the palette's "Budgets…".
+- `internal/limits/` — **the plan limits**: how much of each agent's
+  subscription is spent, before an agent stops on it (tested). `Script`
+  is one shell per machine (`shell.Text`, here or over ssh): the newest
+  `rate_limits` line of Codex's rollouts of the last 8 days (its
+  `primary` 5-hour and `secondary` weekly windows: `used_percent`,
+  `resets_at`), the snapshot `remuda statusline` keeps in remuda's state
+  dir there (`claude-limits.json`), and whether that wrapper is in
+  Claude Code's settings; `Parse` makes `Window{Agent, Name 5h|week,
+  Used %, ResetsAt, At}`, the ones already reset left out. **Claude
+  Code's limits come only through its status line** (`rate_limits.
+  five_hour` / `seven_day` in the JSON it hands the command, Pro, Max
+  and Ultra plans, after a session's first answer): `remuda statusline`
+  (`statusline.go`, `RunStatusline`) is that command once installed — it
+  keeps the limits (written only when they moved, at most a minute
+  stale), then runs the person's own status line on the same input with
+  `StatuslineTimeout` and prints what it prints; nothing it does fails
+  the status line. `remuda statusline install|status|uninstall [-host
+  H]` (`InstallStatusline` / `UninstallStatusline`, `setup.Statusline`
+  for a remote, refused by a remote remuda too old to have it) wraps
+  `statusLine` in `~/.claude/settings.json` — the one write remuda makes
+  under `~/.claude`, only when the person runs it or presses Run on the
+  Updates row `what = statusline` ("Show Claude Code's plan limits",
+  offered where Claude Code and remuda are and the vitals probe's
+  `statusline=wrapped` line is absent, `Report.Statusline`): the file is
+  copied to `claude-settings.backup.json` and the replaced setting kept
+  in `statusline.json` in remuda's state dir first, the other settings
+  keep their order (the top level read token by token), uninstall puts
+  the person's own back and leaves a status line changed since alone;
+  tested in a temp HOME only. `Service` (`internal/app` wires it): every
+  `events.Snapshot` asks `Refresh` (at most every `Every` 2 min per
+  machine, never two at once), the roster carries `machine.limits
+  {windows, wrapped}`; `warn` pushes through `push.Notify` (kind
+  `limits`, a tap opens the Usage panel, the webhooks' kind `limits`) at
+  80 % and at the limit once per window — keyed by agent, window and
+  reset minute, so one account read on three machines warns once, kept
+  in `limits.json` across restarts and dropped once the window resets.
+  **An agent stopped on a limit**: `chat.Service.RateLimited` reads the
+  last 64 KB of the pane's live file for `transcript.RateLimited` — the
+  conversation's last record an assistant one with `isApiErrorMessage`
+  and `error: "rate_limit"` — checked for a Claude Code pane at every
+  rest (`OnStatus`) and once for one first seen at rest (`Observe`),
+  cleared when it works again or closes; the roster's `pane.limit
+  {hit_at, text, continue_at}`. **Continue after the reset** is the
+  person's booking (`Book`, `POST /api/limits/continue {machine, pane,
+  at}`, `DELETE` calls it off; at most `MaxAhead` 8 days ahead; kept in
+  `limits.json`): `Loop` says "continue" when due through
+  `sessions.Input.Submit` — only to the conversation booked for, at rest
+  and asking nothing (working again: dropped quietly; a question or
+  another conversation: dropped with a push saying so) — a quiet "sent"
+  row in the activity and a push with what it did; never sent by
+  itself. The page: `features/usage/limits.ts` (pure, tested:
+  `accountWindows` the freshest reading of each window across machines,
+  `limitTone` amber from 80 % / red at the limit, `gravest`,
+  `limitWords` "Claude 5 h: 62 %, resets 14:00", `resetForHit` the reset
+  a stopped agent waits on, `claudeUnread`), the Plan limits section at
+  the top of the Usage panel (a bar per window, and on a machine whose
+  Claude Code nobody reads, where to switch it on), the usage pill's tone
+  and tooltip, the machine's ⓘ rows, `LimitNotice.tsx` over the chat's
+  composer (`Chat`'s `notice`, composed by `PaneArea`) with "Continue
+  after the reset" / "Call it off", and the sidebar card's amber
+  "stopped on its plan limit" (`limited` in `workspaces.ts`).
 - `internal/quick/` — saved prompts (`quick.json`, `GET/PUT /api/quick`,
   the list replaced whole), each for every folder or one `dir`; the chat
   composer offers them under ⚡ and edits them in a dialog; a text may

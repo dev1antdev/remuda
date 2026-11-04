@@ -28,6 +28,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
+	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/prefs"
@@ -78,10 +79,11 @@ type Server struct {
 	Guard     *auth.Guard
 	Keys      *auth.Keys // the agents' tasks-only keys, listed and revoked in Settings
 	UI        fs.FS
-	Live      *live.Hub      // the page's event stream, nil without one
-	Awake     *awake.Service // the machines kept awake while their agents work
-	Icons     *icons.Store   // the icon the person gave each folder of the sidebar
-	Arena     *arena.Service // one prompt to several agents side by side
+	Live      *live.Hub       // the page's event stream, nil without one
+	Awake     *awake.Service  // the machines kept awake while their agents work
+	Icons     *icons.Store    // the icon the person gave each folder of the sidebar
+	Arena     *arena.Service  // one prompt to several agents side by side
+	Limits    *limits.Service // the agents' subscription windows, the hits and the bookings to continue after a reset
 
 	streams   termStreams
 	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
@@ -127,6 +129,7 @@ func (s *Server) Handler() http.Handler {
 	s.iconRoutes(api)
 	s.teleportRoutes(api)
 	s.arenaRoutes(api)
+	s.limitRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard
