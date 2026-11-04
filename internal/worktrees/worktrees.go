@@ -2,6 +2,7 @@
 // remuda ever deletes from a repository, and only when asked once the work's pull request is merged. A look first
 // (Inspect) refuses a worktree with uncommitted changes before anything is closed; the removal (Remove) never passes
 // --force to git, and deletes a branch that git does not see as merged only when the caller says the request was.
+// A worktree remuda makes gets the ignored files its repository's .worktreeinclude lists (Include, include.go).
 package worktrees
 
 import (
