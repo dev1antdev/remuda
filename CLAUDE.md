@@ -1605,6 +1605,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   with another agent…" in the chat's View menu (a pane's conversation
   only, never the viewer's) and the palette; on success the new pane is
   selected on its chat lens and a toast says what went over.
+  **A fork** is the other second path: the same agent on a copy of the
+  conversation. `POST /api/fork {machine, pane, session?}`
+  (`internal/server/fork.go`) starts the pane's agent with
+  `sessions.ForkArgs` — `claude --resume <id> --fork-session`, `codex fork
+  <id>`; Gemini CLI and Kimi Code document no fork — on the session shown
+  in the lens or the pane's live one, in a new tab "<Agent> fork" of its
+  workspace, the original going on as it is; `forkSession` (tested)
+  refuses a shell, an agent that cannot, a pane with no session id yet.
+  The page: `features/chat/fork.ts` (tested: `FORKABLE`, `canFork`,
+  `forkLabel`, `forkedWords`) and `forkPane.ts`; "Fork <Agent> into a new
+  tab" is a row of the chat's View menu (a pane's conversation, never the
+  viewer's or a viewer link's), the workspace's ⋯ menu and the palette,
+  absent for an agent that cannot fork; the new pane is selected and a
+  toast says so.
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥
@@ -2245,7 +2259,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   /api/tabs/{id}`, `PATCH /api/sessions/{id}`, body `{label}`) share
   `renameHandler` — herdr's `tab.rename` / `workspace.rename`.
 - `internal/sessions/` — the input side of herdr: `Agents` / `KnownAgent`,
-  `StartAgent` (retries `agent_pane_busy` for a few seconds), `StartAgentResumed` (the same, with the kind's resume arguments after a session id — `ResumeArgs`, the one table of them: `claude --resume`, `codex resume`, `gemini --resume`, `kimi --session`; the restarts use it too), both thin over
+  `StartAgent` (retries `agent_pane_busy` for a few seconds), `StartAgentResumed` (the same, with the kind's resume arguments after a session id — `ResumeArgs`, the one table of them: `claude --resume`, `codex resume`, `gemini --resume`, `kimi --session`; the restarts use it too — and beside it `ForkArgs` / `CanFork`, the agents that start on a copy of a session, `Start.Fork`), both thin over
   `StartAgentWith(client, pane, kind, Start{Resume, Model, Args})` — herdr
   names an agent by its kind and refuses a second of that name, so a
   `agent_name_taken` is tried once more under `UniqueName(kind, pane)`,

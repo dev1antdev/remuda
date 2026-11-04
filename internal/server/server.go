@@ -112,6 +112,7 @@ func (s *Server) Handler() http.Handler {
 	s.feedRoutes(api)
 	s.recapRoutes(api)
 	s.handoverRoutes(api)
+	s.forkRoutes(api)
 	s.prRoutes(api)
 	s.liveRoutes(api)
 	s.deviceRoutes(api)
