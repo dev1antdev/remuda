@@ -1,5 +1,5 @@
-// PopOut draws the popped-out pane into the small window: the same tile as on the wall, through a portal, so it
-// shares the roster, the store and every handler of this page.
+// PopOut draws the popped-out pane into the small window: the same tile as on the wall — or its creature, large, when
+// the wall shows the zoo — through a portal, so it shares the roster, the store and every handler of this page.
 
 import { createPortal } from "react-dom";
 import { usePref } from "@/lib/prefs";
@@ -12,6 +12,7 @@ import { useAllPanes } from "./current";
 import { popOutWindow } from "./pip";
 import { app, type Selection } from "./store";
 import { TileView } from "./Tile";
+import { ZooCreature } from "./Zoo";
 import { t } from "@/lib/i18n";
 
 export default function PopOut() {
@@ -38,7 +39,11 @@ function Popped({ popout }: { popout: Selection }) {
   const located = panes.find((x) => x.machine.id === popout.machineId && x.pane.id === popout.paneId);
   return (
     <div className="popout-body">
-      {located ? (
+      {located && wall.view === "zoo" ? (
+        <div className="zoo-popout">
+          <ZooCreature tile={{ ...located, key: tileKey(located.machine.id, located.pane.id) }} radar={radar} now={now} mode="big" />
+        </div>
+      ) : located ? (
         <TileView tile={{ ...located, key: tileKey(located.machine.id, located.pane.id) }} view={wall.view} radar={radar} step={step} now={now} />
       ) : (
         <div className="placeholder">

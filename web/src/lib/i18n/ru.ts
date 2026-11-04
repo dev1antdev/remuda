@@ -41,5 +41,6 @@ import { floatterm } from "./ru/floatterm";
 import { screenshare } from "./ru/screenshare";
 import { jira } from "./ru/jira";
 import { mermaid } from "./ru/mermaid";
+import { zoo } from "./ru/zoo";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...wake, ...activity, ...viewonly, ...splitview, ...shellwords, ...sidebar, ...worktreeinclude, ...quote, ...reopen, ...forkchat, ...autoicon, ...gitlab, ...teleport, ...arena, ...limits, ...floatterm, ...screenshare, ...jira, ...mermaid };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...wake, ...activity, ...viewonly, ...splitview, ...shellwords, ...sidebar, ...worktreeinclude, ...quote, ...reopen, ...forkchat, ...autoicon, ...gitlab, ...teleport, ...arena, ...limits, ...floatterm, ...screenshare, ...jira, ...mermaid, ...zoo };

@@ -1,5 +1,6 @@
 // The Wall mode: every agent on one screen, a tile each — its state, its last turns or its terminal as it is, a
-// line to answer — in a grid that fits the window, or one of them given the whole wall with the rest in a strip under it,
+// line to answer — or, in the zoo view, a creature each (./Zoo) — in a grid that fits the window, or one of them given
+// the whole wall with the rest in a strip under it,
 // or, in office mode for a second screen, one of them large beside a column of cards, the one that needs the person or
 // the next in turn every 20 s unless a card is pinned. app composes: the tile is ./Tile over features/chat/Tail, which
 // panes make a tile, in what order and which one office mode features is features/roster/wall.
@@ -17,11 +18,13 @@ import { escapeIsFree, overlayOpen } from "./escape";
 import { actions, app } from "./store";
 import { TileView } from "./Tile";
 import { useOffice } from "./useOffice";
+import { Zoo } from "./Zoo";
 import { t, tn } from "@/lib/i18n";
 
 const VIEWS: { view: WallView; label: string; title: string }[] = [
   { view: "chat", label: t("Chat"), title: t("Each tile the last turns of its conversation") },
   { view: "screen", label: t("Screen"), title: t("Each tile its terminal as it is, scaled to fit") },
+  { view: "zoo", label: t("Zoo"), title: t("Each agent as a little creature whose pose says what it does: for a screen across the room") },
 ];
 
 const SIZES: { size: WallPrefs["size"]; title: string }[] = [
@@ -140,6 +143,8 @@ export default function Wall() {
             {t("Start an agent")}
           </button>}
         </div>
+      ) : prefs.view === "zoo" ? (
+        <Zoo shown={list.shown} size={prefs.size} radar={radar} now={now} office={office ? show : null} />
       ) : featuredTile ? (
         <div className="wall-office">
           <div className="wall-office-main">{tile(featuredTile)}</div>
