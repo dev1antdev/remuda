@@ -13,9 +13,10 @@ import { viewerPlaces } from "./viewOnly";
 import { isMac, usePref } from "@/lib/prefs";
 import { Icon, Menu, Tip, type IconName, type MenuItem } from "@/ui";
 import { actions, app, type Mode, type Panel } from "./store";
-import { t } from "@/lib/i18n";
+import { t, tc } from "@/lib/i18n";
 
-type Place = { label: string; icon: IconName; about: string };
+// short is the word under the icon when the language's full name does not fit there
+type Place = { label: string; short?: string; icon: IconName; about: string };
 const MODES: (Place & { mode: Mode; desk?: boolean })[] = [
   { mode: "herdr", label: t("Agents"), icon: "terminal", about: t("Your agents and terminals, from herdr") },
   { mode: "wall", label: t("Wall"), icon: "layers", about: t("Every agent on one screen, a tile each") },
@@ -26,8 +27,8 @@ const MODES: (Place & { mode: Mode; desk?: boolean })[] = [
 const PANELS: (Place & { panel: Panel })[] = [
   { panel: "standup", label: t("Standup"), icon: "sun", about: t("What every agent did today, in one report") },
   { panel: "usage", label: t("Usage"), icon: "chart", about: t("What the agents cost, by day, project and session") },
-  { panel: "schedules", label: t("Schedules"), icon: "calendar", about: t("Prompts sent to agents on a timetable") },
-  { panel: "activity", label: t("Activity"), icon: "bell", about: t("What happened across the agents while you were away; the alert settings are inside") },
+  { panel: "schedules", label: t("Schedules"), short: tc("rail", "Schedules"), icon: "calendar", about: t("Prompts sent to agents on a timetable") },
+  { panel: "activity", label: t("Activity"), short: tc("rail", "Activity"), icon: "bell", about: t("What happened across the agents while you were away; the alert settings are inside") },
 ];
 const SETTINGS: Place = { label: t("Settings"), icon: "sliders", about: t("The theme, the sidebar, the panels, the alerts, the keys") };
 const FLOAT: Place = { label: t("Shell"), icon: "square-terminal", about: t("A floating terminal over any screen, on a shell of its own · {key}", { key: keyWords(isMac) }) };
@@ -92,9 +93,9 @@ export default function Rail() {
 function RailButton({ place, on, dot = false, desk = false, onClick }: { place: Place; on: boolean; dot?: boolean; desk?: boolean; onClick: () => void }) {
   return (
     <Tip text={place.about} side="right">
-      <button type="button" className={`rail-btn${on ? " on" : ""}${dot ? " has-news" : ""}${desk ? " rail-desk" : ""}`} aria-pressed={on} onClick={onClick}>
+      <button type="button" className={`rail-btn${on ? " on" : ""}${dot ? " has-news" : ""}${desk ? " rail-desk" : ""}`} aria-pressed={on} aria-label={place.label} onClick={onClick}>
         <Icon name={place.icon} size={18} />
-        <span className="rail-label">{place.label}</span>
+        <span className="rail-label" aria-hidden="true">{place.short ?? place.label}</span>
       </button>
     </Tip>
   );

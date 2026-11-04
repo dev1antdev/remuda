@@ -87,7 +87,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
             </span>
           )}
         </button>
-        {session.jira?.[0] && <IssueChip issue={session.jira[0]} className="tile-jira" />}
+        {!hidden && session.jira?.[0] && <IssueChip issue={session.jira[0]} className="tile-jira" />}
         {pr && (
           <span className="tile-pr-group">
             <button type="button" className="linkish tile-pr" title={`${pr.url}${pr.status ? `\n${prWords(pr.status)}` : ""}\n${t("Open in a new tab")}`} onClick={() => openUrl(pr.url)}>

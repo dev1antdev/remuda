@@ -239,6 +239,7 @@ func (t *Tracker) read(machineID, paneID string, finish bool) {
 var (
 	leadMarks = regexp.MustCompile(`^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+)`)
 	rule      = regexp.MustCompile(`^(?:-{3,}|\*{3,}|_{3,})$`)
+	tableRule = regexp.MustCompile(`^\|?[\s:|-]*-[\s:|-]*$`)
 	image     = regexp.MustCompile(`!\[([^\]]*)\]\([^)]*\)`)
 	link      = regexp.MustCompile(`\[([^\]]+)\]\([^)]*\)`)
 	bold      = regexp.MustCompile(`\*\*(.+?)\*\*|__(.+?)__`)
@@ -258,14 +259,28 @@ func FirstLine(text string) string {
 			inFence = !inFence
 			continue
 		}
-		if inFence || rule.MatchString(line) {
+		if inFence || rule.MatchString(line) || strings.HasPrefix(line, "|") && tableRule.MatchString(line) {
 			continue
 		}
-		if line = Plain(line); line != "" {
+		if line = Plain(cells(line)); line != "" {
 			return cut(line, Max)
 		}
 	}
 	return ""
+}
+
+// cells reads a table row as its cells joined by " · ", any other line as it is
+func cells(line string) string {
+	if !strings.HasPrefix(line, "|") {
+		return line
+	}
+	var kept []string
+	for _, cell := range strings.Split(line, "|") {
+		if cell = strings.TrimSpace(cell); cell != "" {
+			kept = append(kept, cell)
+		}
+	}
+	return strings.Join(kept, " · ")
 }
 
 // Plain is one line with its Markdown marks stripped: list and quote marks, headings, emphasis, code, links, tags.

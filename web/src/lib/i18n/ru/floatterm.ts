@@ -10,6 +10,7 @@ export const floatterm: Dictionary = {
   "Hide ({key}); the shell keeps running": "Спрятать ({key}); shell продолжает работать",
   "Hide the floating terminal": "Спрятать плавающий терминал",
   "The shell ended.": "Shell завершился.",
+  "{machine} is not answering. The drawer picks its shell up again once it does.": "{machine} не отвечает. Терминал снова подхватит свой shell, когда машина ответит.",
   "Open a new one": "Открыть новый",
   "Opening a shell on {machine}…": "Открываю shell на {machine}…",
   "End the floating terminal's shell on {machine}? Whatever runs in it stops.": "Завершить shell плавающего терминала на {machine}? Всё, что в нём запущено, остановится.",

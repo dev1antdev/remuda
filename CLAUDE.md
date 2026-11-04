@@ -351,13 +351,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - **Nothing in a bar moves when state changes.** The page's places are
   **the rail** (`app/Rail.tsx`) down the left edge: the five modes, then
   Standup, Usage, Schedules, Activity (a dot for news) and Settings,
-  each an icon with its name under it and a tooltip; under 920 px it
+  each an icon with its name under it and a tooltip (the name whole: a
+  language whose word is too long there gives a shorter one through
+  `tc("rail", …)`, "События" for Activity, and the e2e display suite
+  fails a cut one); under 920 px it
   lies along the bottom with Agents, Wall, Tasks, Review and More (a
   menu with Code, the panels and Settings), and yields while the
   composer has the keyboard. The header is `[burger][title — takes the
   slack][usage pill][lens switch][pop-out][search]`: the lens group is
   anchored right, the pill grows leftwards into the title's slack, the
-  three lens buttons have equal widths so a badge widens nothing, and
+  three lens buttons keep the room of the Changes count while there is
+  none (`.lens-badge.empty`), so a count widens nothing — equal at a desk,
+  as wide as their words on a phone — and
   the Changes button is disabled (not removed) when there is no folder. The tab strip's right slot (`TabStrip tools=`) holds the lens's one
   control — Find for the chat, the key bar switch for the terminal — and
   **the View menu** (`app/ViewMenu.tsx`): the lens's own rows
@@ -847,7 +852,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   entry, so a string nobody translated shows no gap; `{name}` slots
   filled from `vars`, `tn(n, one, many)` the counted pair in English and
   the form table under the plural key elsewhere (`text.ts`'s `plural`
-  goes through it), `pluralIndex` the one / few / many rule by CLDR — a
+  goes through it), `tc(context, text)` the entry under `context|text`
+  when a narrow place needs a shorter word, else `t(text)`, `english`
+  the key a translated string came from,
+  `pluralIndex` the one / few / many rule by CLDR — a
   fraction is CLDR's other, the few form in Russian ("1,5 файла") and
   the plural in English, tested against `Intl.PluralRules` — `setLang` /
   `currentLang` module state read at every call so a pure module's words
@@ -965,8 +973,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   card's head click or any tile's pin button (`onPick` / `onPin` /
   `pinned` on `TileView`, the `pin` icon) pins it with the accent ring,
   the featured tile's pin button unpins, ← → pin the previous or next
-  (`neighbour`), the featured tile's head keeps its usual click), `Overlays.tsx` (panels, dialogs, the
-  confirm, the file viewer; the keyboard sheet behind **?** — Shift and the slash key by position, never over a field or another dialog, the same key closes it — is `features/help/KeysDialog.tsx` over `help/keys.ts`, the one list of every key the page answers, tested — a viewer's sheet leaves out the rows and groups marked `viewer: false`, the keys of what a viewer has not got (the composer, Changes, Tasks, the live and the floating terminal, Alt+Z); the palette has it as "Keyboard shortcuts"), `commands.tsx` (the **command
+  (`neighbour`; not from a field, an open menu or an overlay, whose arrows
+  are their own), the featured tile's head keeps its usual click), `Overlays.tsx` (panels, dialogs, the
+  confirm, the file viewer; the keyboard sheet behind **?** — Shift and the slash key by position, never over a field or another dialog, the same key closes it — is `features/help/KeysDialog.tsx` over `help/keys.ts`, the one list of every key the page answers, tested; the palette has it as "Keyboard shortcuts"), `commands.tsx` (the **command
   palette** on ⌘K / Ctrl+K, by key code so any layout works: every pane
   as a row to jump to — each machine's liveliest first, shells at its
   end, the current one marked — and every command the page has a button
@@ -975,7 +984,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   files rail, the panels' widths back to usual, alerts, schedules,
   usage, add a PC, and last, whatever was
   typed, "Search every conversation…", which opens the search panel with
-  the query (`actions.openSearch`, store field `search`). `commands.tsx`
+  the query (`actions.openSearch`, store field `search`); in another
+  language a command's English title is one of its keywords
+  (`english` in `lib/i18n.ts`), so English words find it too. `commands.tsx`
   is the one list; `features/palette/Palette.tsx` shows it — ↑ ↓ ↵ Esc,
   the mouse — and `features/palette/rank.ts` is the pure part, tested:
   `paneEntries` builds the rows from the roster through `radar.ts`
@@ -1067,8 +1078,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   flips the two columns (pref `review.split`, on by default with a mouse,
   the toggle in the lens head) and keeps the line focused; the rows walk
   with or without an agent to comment to, and are collected only for a
-  key that needs them; the legend in the head, hidden under
-  1180 px and on touch; the hook listens only while the lens is on screen
+  key that needs them; the legend in the head, hidden while the head
+  itself is under 1100 px wide (a container query, so the sidebar and the
+  files rail count) and on touch, the line under the branch wrapping
+  rather than cut; the hook listens only while the lens is on screen
   (`active`) and never over a field, an open menu, a dialog or the file
   viewer;
   `VerdictDialog.tsx`, `draft.ts` the comments and the messages they
@@ -1191,17 +1204,25 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the drawer's. The page: Ctrl+` by key code (`isFloatKey` in
   `float.ts`, tested; heard on `window` in the capture phase and stopped
   there, so a terminal with the focus — the drawer's own too — hides it
-  instead of typing a NUL; ⌘` is the browser's window switch), the
+  instead of typing a NUL; ⌘` is the browser's window switch; while a
+  dialog, a panel such as the palette, the confirm, the file viewer or a
+  menu is open the key does nothing, `floatKeyTakes`, since the drawer
+  would open under it), the
   rail's Shell (More on a phone) and a palette row toggle store field
   `float {machineId}` (`actions.openFloat` / `closeFloat`; the machine by
   `floatMachine`: the pane on screen's while connected, else this one,
   else the first connected); `FloatTerminal.tsx` is a drawer over
-  `.app-main`, a header (the machine's Select, the key's hint, End the
+  `.app-main`, a header (the machine's Select — the neutral names while
+  screen sharing hides a machine — the key's hint, End the
   shell behind a confirm, Hide) and `TerminalView` in fit mode on that
   pane — mounted only once shown (unseen it would attach at 80×24), kept
   mounted while hidden so the attach and the shell's output stand, never
-  touching the store's pane or lens; Esc stays the shell's; "The shell
-  ended" with Open a new one when its pane leaves the roster.
+  touching the store's pane or lens; the focus goes back on hiding to
+  whatever had it before the drawer took it (nothing on touch), else the
+  page would type into nothing; Esc stays the shell's; "The shell
+  ended" with Open a new one when its pane leaves the roster, and "…is
+  not answering" while its machine is away (the roster lists no pane of
+  a machine that is not connected; `shellView` in `float.ts`, tested).
 - `internal/watch/` — **the only poller**: every machine's
   `session.snapshot` (2s local, 4s remote) whether or not a browser is
   open. Handlers read its cache (`Snapshot` returns the last good snapshot
@@ -1569,7 +1590,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `SharingVeil` (the lenses `inert` underneath, the focus taken out) until
   "Show this pane", which holds until another pane is on screen — a
   transcript on its own the same; a wall tile shows its state line over a
-  cover, no PR, no tail, no composer; the palette's pane rows go by agent
+  cover, no PR, no Jira chip, no tail, no composer, and a creature of the
+  zoo goes by its agent's kind and the neutral names with no bubble and no
+  folder picture (`zooFace` in `features/roster/zoo.ts`, tested); the
+  sidebar card shows no Jira chip, the machine's ⓘ, ⋯ and + say its
+  neutral name and a stopped chat by its pane, the floating terminal's
+  machine picker the neutral names; the palette's pane rows go by agent
   and neutral names (`paneEntries(…, masked)`), every command's words
   through `redact`; toasts, Activity rows (a hidden folder's body replaced)
   and the Mac app's menu (`maskFeed` in `app/shellFeed.ts`, tested) say the
@@ -1590,7 +1616,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   again; `Tracker.OnAnswer`, set by the app, hears the whole text of
   every new answer read after a finish (never a seed from a snapshot):
   the review's ready mark rides on it. `FirstLine` strips the Markdown marks (headings, list and quote
-  marks, emphasis, code, links, tags; fences and rules skipped) and cuts
+  marks, emphasis, code, links, tags; fences and rules skipped, a table
+  row read as its cells joined by " · ", its delimiter row skipped) and cuts
   at a word by `Max` 120 characters; `features/chat/said.ts` is the same
   cut on the page, both tested. The same read notes **the pull request
   the agent named** (`transcript.PullRequest`, tested: the last GitHub
@@ -1638,7 +1665,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   graver of the two, `prWords`) draws it as two `.pr-state` chips in the
   `.tile-pr-group` beside the link in a wall tile's head (the review
   chip goes in a tile under 560 px — `.tile` is a size container — and
-  under 920 px), in the sidebar row's tooltip and in the workspace
+  under 920 px; a head with a PR or a Jira chip, in a tile under 800 px,
+  keeps the title and the tile's buttons on its first line and puts the
+  chip, the PR and the usage on a second, so the title is never squeezed
+  to nothing), in the sidebar row's tooltip and in the workspace
   menu's "Open PR #15" row. gh runs as the person on their own machine, like
   git does for the Changes lens: remuda itself still makes no request
   but the version checks. **The request is followed to its end.** Every
@@ -2311,7 +2341,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   twice in a project refused). The page: `features/roster/IssueChip.tsx`
   on the sidebar card's second line — in place of the branch when the
   branch is named after the issue (`branchNamesIssue`), else after it;
-  the key never cut, the status before it — and in a wall tile's head,
+  the key never cut, the status before it — and in a wall tile's head
+  (clipped rather than run over the PR beside it, its status words gone
+  in a tile under 560 px, the dot's colour and the tooltip kept),
   `features/jira/jira.ts` (tested: `issueTone`, `issueWords`,
   `issueTitle`, `branchNamesIssue`, `keyOf`), `features/jira/JiraSection.tsx`
   in Settings (site, account, token, Save that tests, Test, Remove),
@@ -2828,7 +2860,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `prefers-reduced-motion`). **Every `<button>` carries one family class**:
   `btn` (quiet), `btn primary` (the one filled button of a surface), `btn
   danger`, `btn ghost`, `icon-btn` (+ `sm`/`lg`), or `linkish`; `.on` marks a
-  toggled one, and the selected sidebar row, tab and split pane too — never
+  toggled one — the accent fill and ring on a quiet `btn`, kept under the
+  pointer (the Wall's views, sizes and filters, a picked choice) — and the
+  selected sidebar row, tab and split pane too — never
   `.sel`, the Select's own class, whose height, border, padding and type
   would follow it (`features/roster/selected.test.ts`). Fields have one base rule (every input, textarea and `.sel`;
   `.sm`, `.bare`), one placeholder, one focus ring. Rows share a radius,

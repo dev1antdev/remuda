@@ -7,11 +7,12 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { displayOf, rowLabel, stateWords, type RadarPrefs } from "@/features/roster/radar";
 import type { Tile, WallPrefs } from "@/features/roster/wall";
 import { folderOf as sessionFolder } from "@/features/roster/workspaces";
-import { CREATURE_SIZE, bubbleOf, cellMin, lookOf, poseWord, stateSince } from "@/features/roster/zoo";
+import { useSharing } from "@/features/roster/useSharing";
+import { CREATURE_SIZE, bubbleOf, cellMin, lookOf, poseWord, stateSince, zooFace } from "@/features/roster/zoo";
 import { basename } from "@/lib/text";
 import { elapsed } from "@/lib/time";
 import { FolderIcon, Logo, Tip } from "@/ui";
-import { brandColor } from "@/ui/brand";
+import { VENDOR_NAME, brandColor } from "@/ui/brand";
 import { longPress } from "@/ui/press";
 import { Creature } from "./Creature";
 import { actions } from "./store";
@@ -22,6 +23,7 @@ import { t } from "@/lib/i18n";
 const PEEK_MS = 3000;
 
 export function Zoo({ shown, size, radar, now, office }: { shown: Tile[]; size: WallPrefs["size"]; radar: RadarPrefs; now: number; office: Office | null }) {
+  const share = useSharing();
   const featured = office ? (shown.find((tile) => tile.key === office.key) ?? null) : null;
   if (office && featured) {
     return (
@@ -40,7 +42,7 @@ export function Zoo({ shown, size, radar, now, office }: { shown: Tile[]; size: 
     );
   }
   // the bubbles' row is kept in the grid only while some creature talks, so a quiet zoo has no empty band
-  const talking = shown.some((tile) => bubbleOf(tile.pane, displayOf(tile.pane, radar, now), tile.pane.radar?.alert) !== "");
+  const talking = shown.some((tile) => !share.sessionHidden(tile.machine.id, tile.session) && bubbleOf(tile.pane, displayOf(tile.pane, radar, now), tile.pane.radar?.alert) !== "");
   return (
     <div className="zoo-grid" style={{ "--zoo-cell": `${cellMin(size)}px`, "--zoo-size": `${CREATURE_SIZE[size]}px` } as CSSProperties}>
       {shown.map((tile) => (
@@ -68,10 +70,20 @@ export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false
   const words = alert ?? stateWords(display, pane.radar?.last_active, now, pane.radar?.since);
   const since = stateSince(pane);
   const how = since ? `${poseWord(look.pose)} · ${elapsed(since, now)}` : poseWord(look.pose);
-  const bubble = mode === "small" ? "" : bubbleOf(pane, display, alert);
-  const name = rowLabel(pane, tab, session.name, radar);
-  const folder = basename(sessionFolder(session)) || session.name;
-  const where = `${folder}${machine.id !== "local" ? ` · ${machine.label}` : ""}`;
+  const share = useSharing();
+  const hidden = share.sessionHidden(machine.id, session);
+  const realFolder = basename(sessionFolder(session)) || session.name;
+  const folder = hidden ? share.folderName(machine.id, sessionFolder(session), realFolder) : realFolder;
+  const { name, where, bubble, icon } = zooFace(
+    {
+      label: rowLabel(pane, tab, session.name, radar),
+      kind: VENDOR_NAME[pane.agent] ?? pane.agent,
+      folder,
+      machine: machine.id !== "local" ? share.machineLabel(machine) : null,
+      bubble: mode === "small" ? "" : bubbleOf(pane, display, alert),
+    },
+    hidden,
+  );
   const [peek, setPeek] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -108,7 +120,7 @@ export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false
       <figcaption>
         <span className="zoo-name">{name}</span>
         <span className="zoo-where">
-          <FolderIcon icon={session.icon} name={folder} size={12} />
+          <FolderIcon icon={icon ? session.icon : undefined} name={folder} size={12} />
           <span>{where}</span>
         </span>
         <span className="zoo-how">{peek ? words : how}</span>

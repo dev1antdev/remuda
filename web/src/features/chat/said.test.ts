@@ -19,6 +19,10 @@ describe("said", () => {
 });
 
 describe("firstLine", () => {
+  it("reads a table row as its cells, past the table's rule", () => {
+    expect(firstLine("| File | Change |\n|---|:--:|\n| a.go | **fixed** |")).toBe("File · Change");
+    expect(firstLine("|:---|---|\n| only | row |")).toBe("only · row");
+  });
   it("strips the marks", () => {
     expect(firstLine("\n\n- **Fixed** the `parser` in [x](http://a)\n- more")).toBe("Fixed the parser in x");
     expect(firstLine("> 1. [ ] *note* ~~old~~ <b>new</b>")).toBe("note old new");

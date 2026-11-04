@@ -441,6 +441,14 @@ button {
   color: var(--accent);
 }
 
+/* a quiet button toggled on (the Wall's views, sizes and filters, a picked choice): the accent fill, kept under the pointer */
+.btn.on:where(:not(.primary, .danger, .ghost)),
+.btn.on:where(:not(.primary, .danger, .ghost)):hover:not(:disabled) {
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 a.btn {
   text-decoration: none;
 }
@@ -4006,6 +4014,11 @@ body.is-resizing iframe {
   font-weight: 500;
 }
 
+/* the count's room is kept while there is none, so a count coming or going moves nothing in the header */
+.lens-badge.empty {
+  visibility: hidden;
+}
+
 .lens-switch button.on .lens-badge {
   background: var(--accent);
   color: var(--on-accent);
@@ -4024,7 +4037,9 @@ body.is-resizing iframe {
 }
 
 .review-head {
+  container: review-head / inline-size;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
@@ -4033,7 +4048,7 @@ body.is-resizing iframe {
 }
 
 .review-title {
-  flex: 1;
+  flex: 1 1 260px; /* narrower than this, the buttons go to a row of their own */
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -4052,9 +4067,6 @@ body.is-resizing iframe {
 .review-sub {
   color: var(--fg-dim);
   font-size: var(--fs-12);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .review-seen {
@@ -5962,6 +5974,8 @@ button.usage-row:hover {
 
   .lens-switch > button {
     min-width: 0;
+    flex: 1 1 auto;
+    padding: 0 8px;
   }
 }
 
@@ -7009,15 +7023,20 @@ body.popout {
   align-items: baseline;
   gap: 6px;
   min-width: 0;
+  overflow: hidden;
   font-family: var(--mono);
   font-size: var(--fs-12);
   white-space: nowrap;
 }
 .fp-name {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 600;
 }
 .fp-dir {
+  flex: 0 10000 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7144,7 +7163,7 @@ body.popout {
 .fv-pair > .fv-line.empty {
   background: var(--bg-input);
 }
-@media (max-width: 1180px) {
+@container review-head (max-width: 1100px) {
   .review-keys {
     display: none;
   }
@@ -7586,9 +7605,9 @@ body.popout {
 .rail {
   display: flex;
   flex-direction: column;
-  width: calc(64px * var(--text-scale));
+  width: calc(72px * var(--text-scale));
   flex-shrink: 0;
-  padding: calc(8px + env(safe-area-inset-top)) 6px 8px;
+  padding: calc(8px + env(safe-area-inset-top)) 4px 8px;
   gap: 2px;
   border-right: 1px solid var(--line);
   background: var(--bg-raised);
@@ -7612,7 +7631,7 @@ body.popout {
   justify-content: center;
   gap: 4px;
   min-height: 52px;
-  padding: 6px 2px;
+  padding: 6px 0;
   border: 0;
   border-radius: var(--r-md);
   background: none;
@@ -7650,7 +7669,7 @@ body.popout {
   content: "";
   position: absolute;
   top: 6px;
-  right: 14px;
+  right: calc(50% - 12px);
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -8098,8 +8117,33 @@ body.popout {
 }
 
 @container (max-width: 560px) {
-  .pr-state.pr-review {
+  .pr-state.pr-review,
+  .tile-jira .jira-status {
     display: none;
+  }
+}
+
+/* a head with a Jira chip or a PR, in a tile too narrow for them beside the title: the title and the tile's buttons keep
+   the first line, the chip, the PR and the usage go to a line of their own */
+@container (max-width: 800px) {
+  .tile-head:has(> .tile-jira, > .tile-pr-group) {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+
+  .tile-head:has(> .tile-jira, > .tile-pr-group)::before {
+    content: "";
+    order: 2;
+    flex-basis: 100%;
+  }
+
+  .tile-head:has(> .tile-jira, > .tile-pr-group) > :is(.tile-jira, .tile-pr-group, .tile-usage) {
+    order: 3;
+    margin: 0 0 4px;
+  }
+
+  .tile-head > .tile-jira {
+    max-width: 60%;
   }
 }
 
@@ -10034,6 +10078,7 @@ body.popout {
 .tile-jira {
   flex-shrink: 1;
   max-width: 40%;
+  overflow: hidden; /* a crowded head clips the chip rather than letting its key run over the PR beside it */
   font-size: var(--fs-12);
 }
 

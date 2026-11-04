@@ -77,3 +77,13 @@ export function stateSince(pane: Pane): number | undefined {
   if ((radar.state === "working" || radar.state === "blocked") && radar.since) return radar.since;
   return radar.last_active || undefined;
 }
+
+export type ZooFace = { name: string; where: string; bubble: string; icon: boolean };
+
+// zooFace is what a creature says of itself: its row label, its folder and machine, its bubble and its folder's picture;
+// while screen sharing hides its folder, the agent's kind and the neutral names alone, no bubble and no picture
+export function zooFace(face: { label: string; kind: string; folder: string; machine: string | null; bubble: string }, hidden: boolean): ZooFace {
+  const where = `${face.folder}${face.machine ? ` · ${face.machine}` : ""}`;
+  if (hidden) return { name: face.kind, where, bubble: "", icon: false };
+  return { name: face.label, where, bubble: face.bubble, icon: true };
+}

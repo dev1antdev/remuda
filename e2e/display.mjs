@@ -27,7 +27,7 @@ const ALL_PASSES = [
 ];
 // E2E_DISPLAY_PASSES=desk-en,phone-ru runs only those
 const PASSES = process.env.E2E_DISPLAY_PASSES ? ALL_PASSES.filter((p) => process.env.E2E_DISPLAY_PASSES.split(",").includes(p.name)) : ALL_PASSES;
-const OVERLAYS = ".menu, .popover, .row-menu, .modal, .toast, .sel-pop, .float-term, .palette";
+const OVERLAYS = ".menu, .popover, .row-menu, .modal, .toast, .sel-pop, .float-term, .palette, .fv";
 const CONTENT = ".pane-area, .wall, .tasks-main, .code-mode, .queue, .float-term";
 
 const say = (line) => console.log(`e2e display: ${line}`);
@@ -189,6 +189,12 @@ const CHECKS = `(() => {
       if (w > 2 && h > 2) problems.push(name(el) + " lies over " + name(block) + " by " + Math.round(w) + "×" + Math.round(h));
     }
   }
+  for (const el of document.querySelectorAll(".rail-label")) {
+    if (shown(el) && el.scrollWidth > el.clientWidth + 1) problems.push(name(el.parentElement) + " has its name cut: " + el.scrollWidth + " px in " + el.clientWidth);
+  }
+  for (const el of document.querySelectorAll(".lens-switch > button, .mode-switch button, .fv-tabs button, .tasks-view button")) {
+    if (shown(el) && el.scrollWidth > el.clientWidth + 1) problems.push(name(el) + " spills out of its button: " + el.scrollWidth + " px in " + el.clientWidth);
+  }
   const squeezed = [];
   for (const el of document.querySelectorAll("body *")) {
     if (el.closest("svg, .xterm, canvas, [aria-hidden=true], .sr-only")) continue;
@@ -239,9 +245,38 @@ const notesDir = `${tmp}/display/notes`;
 mkdirSync(appDir, { recursive: true });
 mkdirSync(notesDir, { recursive: true });
 git(appDir, "init", "-q", "-b", "main");
+// the repository holds work of every kind for the Changes lens: a file edited in two places far apart, a staged
+// edit, a deleted file and a new one
+const goLines = (greeting, answer) =>
+  [
+    "package main",
+    "",
+    'import "fmt"',
+    "",
+    "func main() {",
+    `\tfmt.Println("${greeting}")`,
+    ...Array.from({ length: 40 }, (_, i) => `\t// step ${i + 1} of the long walk`),
+    "}",
+    "",
+    "func answer() int {",
+    `\treturn ${answer}`,
+    "}",
+    "",
+  ].join("\n");
+mkdirSync(`${appDir}/src`, { recursive: true });
+mkdirSync(`${appDir}/docs`, { recursive: true });
 writeFileSync(`${appDir}/README.md`, "# app\n");
-git(appDir, "add", "README.md");
+writeFileSync(`${appDir}/src/app.go`, goLines("hello", 41));
+writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\n");
+writeFileSync(`${appDir}/old.txt`, "an old file\n");
+git(appDir, "add", "-A");
 git(appDir, "commit", "-q", "-m", "init");
+writeFileSync(`${appDir}/src/app.go`, goLines("hello, world", 42));
+writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\nA second note, staged.\n");
+git(appDir, "add", "docs/notes.md");
+git(appDir, "rm", "-q", "old.txt");
+writeFileSync(`${appDir}/src/new.ts`, 'export const fresh = "a new file";\n');
+const CHANGED = ["docs/notes.md", "old.txt", "src/app.go", "src/new.ts"];
 mkdirSync(`${out}/display`, { recursive: true });
 
 const made = [];
@@ -356,6 +391,148 @@ const onAgents = async () => {
   if (!(await until(() => present(".tabstrip"), 6))) throw new Error("the Agents mode did not come back");
 };
 
+// ---- the Changes lens on the repository's real work ----
+
+const check = (ok, problem) => ok || failed(problem);
+const count = (selector) => evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
+const LENS = ".lens-pane:not([hidden]) .review";
+const fileHead = (path) => `[...document.querySelectorAll('${LENS} .review-file')].find((f) => f.querySelector('.review-path')?.textContent === ${JSON.stringify(path)})?.querySelector('.review-file-head')`;
+const shownPaths = () => evaluate(`[...document.querySelectorAll('${LENS} .review-file .review-path')].map((p) => p.textContent).sort()`);
+const diffRows = () => count(`${LENS} .review-diff .fv-line:not(.hunk)`);
+
+// changesScreens draws the lens on every pass: the files, a diff with its words marked and coloured, the other
+// column layout, an unfold, a comment in the draft, the verdict dialog — nothing sent, nothing marked
+async function changesScreens() {
+  await onAgents();
+  await screen("changes-lens", {
+    open: async () => {
+      await palette("lens:changes");
+      if (!(await until(async () => (await count(`${LENS} .review-file`)) === CHANGED.length, 8))) failed(`the lens lists ${await count(`${LENS} .review-file`)} files, not ${CHANGED.length}`);
+      const paths = await shownPaths();
+      check(JSON.stringify(paths) === JSON.stringify(CHANGED), `the lens lists ${paths.join(", ")}`);
+      check((await count(`${LENS} .review-file.fresh`)) === CHANGED.length, "a file never looked at is not marked fresh");
+      check(await evaluate(`(() => { const sub = document.querySelector('${LENS} .review-sub'); return !!sub && sub.scrollWidth <= sub.clientWidth + 1 && /4/.test(sub.textContent); })()`), "the line under the branch does not say the 4 files whole");
+    },
+    expect: [`${LENS} .review-head`],
+    close: async () => {},
+  });
+  await screen("changes-diff", {
+    open: async () => {
+      await tap(await mark(fileHead("src/app.go"), "app-go"));
+      if (!(await until(async () => (await count(`${LENS} .review-hunk`)) >= 2, 6))) failed(`src/app.go shows ${await count(`${LENS} .review-hunk`)} hunks, not 2`);
+      check((await count(`${LENS} .review-diff .fv-mark`)) > 0, "no changed words are marked");
+      check((await count(`${LENS} .review-diff [class*="hl-"]`)) > 0, "the Go code is not coloured");
+      check((await count(`${LENS} .review-diff.columns`)) === (pass.phone ? 0 : 1), pass.phone ? "a phone opens the diff in two columns" : "a desk opens the diff in one column");
+    },
+    expect: [`${LENS} .review-hunk`],
+    close: async () => {},
+  });
+  await screen("changes-columns", {
+    open: async () => {
+      await tap(`${LENS} .review-head .icon-btn[aria-pressed]`);
+      if (!(await until(async () => (await count(`${LENS} .review-diff.columns`)) === (pass.phone ? 1 : 0), 3))) failed("the columns switch did not switch");
+    },
+    expect: [`${LENS} .review-hunk`],
+    close: async () => {
+      await tap(`${LENS} .review-head .icon-btn[aria-pressed]`);
+      await sleep(200);
+    },
+  });
+  await screen("changes-unfold", {
+    open: async () => {
+      const before = await diffRows();
+      await tap(await mark(`document.querySelectorAll('${LENS} .review-hunk')[1]?.querySelector('.hunk-unfold button')`, "unfold"));
+      if (!(await until(async () => (await diffRows()) > before, 5))) failed(`no line unfolded above the second hunk: ${before} rows still`);
+    },
+    expect: [`${LENS} .review-hunk`],
+    close: async () => {},
+  });
+  await screen("changes-comment", {
+    open: async () => {
+      await tap(await mark(`document.querySelector('${LENS} .review-diff .fv-line.commentable.add')`, "added-line"));
+      if (!(await until(() => present(`${LENS} .review-comment textarea`), 3))) throw new Error("no comment box under the line");
+      await send("Input.insertText", { text: "Say hello to the world in one place only." });
+      await tap(`${LENS} .review-comment button[type=submit]`);
+      if (!(await until(() => present(`${LENS} .review-note`), 3))) failed("the comment did not join the draft");
+      check((await evaluate(`document.querySelector('${LENS} .review-tag-comments')?.textContent`)) === "1", "the file's row does not count its comment");
+      check(await present(`${LENS} .review-draft-bar .review-draft-count svg`), "the draft bar does not say there is a comment");
+    },
+    expect: [`${LENS} .review-draft-bar`],
+    close: async () => {
+      await tap(`${LENS} .review-note .icon-btn`);
+      await sleep(200);
+    },
+  });
+  await screen("changes-verdict", {
+    open: async () => tap(`${LENS} .review-verdicts .btn:not(.primary)`),
+    expect: [".modal textarea"],
+  });
+  await screen("changes-file", {
+    open: async () => tap(await mark(`${fileHead("src/app.go")}?.parentElement.querySelector('.icon-btn')`, "open-file")),
+    expect: [".fv .fv-head"],
+    settle: 600,
+    close: async () => {
+      await key("Escape", "Escape");
+      if (!(await until(async () => !(await present(".fv")), 3))) failed("Esc did not close the file viewer");
+    },
+  });
+  await palette("lens:terminal");
+}
+
+// changesFlow runs once, after the passes: the Review mode lists the repository, Mark reviewed moves the baseline,
+// an edit after the look is fresh again, a commit is listed, and a commit of reviewed work reads as reviewed
+async function changesFlow() {
+  where = `${pass.name} › changes-flow`;
+  const lens = async () => {
+    await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=changes` });
+    if (!(await until(() => present(`${LENS} .review-head`), 15))) throw new Error("the Changes lens did not come up");
+  };
+  const lookAgain = async () => {
+    await tap(await mark(`document.querySelectorAll('${LENS} .review-head .icon-btn')[1]`, "look-again"));
+    await sleep(400);
+  };
+  const markReviewed = async () => {
+    await tap(`${LENS} .review-seen`);
+    await sleep(400);
+  };
+  const state = async () => evaluate(`({ files: document.querySelectorAll('${LENS} .review-file').length, fresh: [...document.querySelectorAll('${LENS} .review-file.fresh .review-path')].map((p) => p.textContent), commits: document.querySelectorAll('${LENS} .review-commit').length, seen: document.querySelectorAll('${LENS} .review-commit.seen').length, folded: !!document.querySelector('${LENS} .review-fold') })`);
+  const settles = async (want, what) => {
+    const ok = await until(async () => {
+      const now = await state();
+      return Object.entries(want).every(([key, value]) => JSON.stringify(now[key]) === JSON.stringify(value));
+    }, 8);
+    if (!ok) failed(`${what}: ${JSON.stringify(await state())}, wanted ${JSON.stringify(want)}`);
+  };
+
+  await palette("mode:review");
+  if (!(await until(() => evaluate(`[...document.querySelectorAll('.queue-item')].some((i) => i.textContent.includes("app"))`), 75))) failed("the Review mode never listed the repository with its changes");
+  else {
+    await tap(await mark(`[...document.querySelectorAll('.queue-item')].find((i) => i.textContent.includes("app"))`, "queue-app"));
+    if (!(await until(async () => (await count(".queue-main .review .review-file")) === CHANGED.length, 8))) failed("the queue's pick does not show the repository's files");
+  }
+  await lens();
+  await settles({ files: CHANGED.length, fresh: CHANGED, commits: 0 }, "before any look");
+  await markReviewed();
+  await settles({ files: 0, fresh: [], folded: true }, "after Mark reviewed: every file folded as unchanged since the look");
+  writeFileSync(`${appDir}/src/app.go`, goLines("hello, world", 43));
+  await lookAgain();
+  await settles({ fresh: ["src/app.go"], folded: true }, "an edit after the look");
+  git(appDir, "add", "-A");
+  git(appDir, "commit", "-q", "-m", "the work");
+  await lookAgain();
+  await settles({ files: 0, commits: 1, seen: 0 }, "the work committed with an edit nobody looked at");
+  await markReviewed();
+  await settles({ files: 0, commits: 0 }, "the commit reviewed");
+  writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\nA second note, staged.\nA third, reviewed before its commit.\n");
+  await lookAgain();
+  await settles({ fresh: ["docs/notes.md"] }, "a new edit");
+  await markReviewed();
+  git(appDir, "commit", "-q", "-am", "the reviewed note");
+  await lookAgain();
+  await settles({ files: 0, commits: 1, seen: 1 }, "a commit of work already reviewed");
+  say("changes flow: the queue, a look, an edit after it, a commit, a commit of reviewed work");
+}
+
 async function runPass() {
   await send("Emulation.setDeviceMetricsOverride", { width: pass.width, height: pass.height, deviceScaleFactor: 1, mobile: pass.phone });
   await send("Emulation.setTouchEmulationEnabled", { enabled: pass.phone, maxTouchPoints: pass.phone ? 5 : 0 });
@@ -422,6 +599,7 @@ async function runPass() {
       expect: [".split-chat", ".split-terminal"],
       close: async () => palette("split"),
     });
+  await changesScreens();
   await screen("float-terminal", {
     open: async () => {
       await key("`", "Backquote", 2);
@@ -509,6 +687,7 @@ try {
   if (!(await until(async () => !(await evaluate("location.search")).includes("token=") && (await present(".topbar")), 15))) throw new Error("the page did not sign in");
   const started = Date.now();
   for (pass of PASSES) await runPass();
+  await changesFlow().catch((error) => failed(`stopped: ${error.message}`));
   say(`${shots} screens in ${Math.round((Date.now() - started) / 1000)} s, screenshots in ${out}/display`);
 } catch (error) {
   failed(`stopped: ${error.message}`);

@@ -8,6 +8,7 @@ import { ago } from "@/lib/time";
 import { newer } from "@/lib/version";
 import { Icon, Popover, Tip } from "@/ui";
 import { useSharing } from "./useSharing";
+import { app } from "@/app/store";
 import { refreshHealth, type Health, type Latest, type Machine } from "./api";
 import { awakeBad, awakeWords } from "./awake";
 import { resumeStopped } from "@/features/updates/recover";
@@ -27,9 +28,16 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
   const name = share.machineLabel(m);
   // a manual read stands until the collector's next one
   useEffect(() => setFresh(null), [m.health?.at]);
+  // the vitals go with the drawer they were opened from, on a phone
+  const drawer = app.use((s) => s.drawer);
+  useEffect(() => {
+    if (!drawer) setOpen(false);
+  }, [drawer]);
   const h = fresh?.health ?? m.health;
   const l = fresh?.latest ?? latest;
-  const list = concerns(h, l, serverVersion, m.id !== "local", m.stopped, viewOnly);
+  // while sharing, a stopped chat goes by its pane rather than its title, and the rest by the neutral names
+  const stopped = share.on ? m.stopped?.map((chat) => ({ ...chat, title: "" })) : m.stopped;
+  const list = concerns(h, l, serverVersion, m.id !== "local", stopped, viewOnly).map((c) => ({ ...c, text: share.redact(c.text) }));
   const worst = list.some((c) => c.bad) ? "bad" : list.length ? "warn" : "";
   if (!h && m.state !== "connected") return null;
   const refresh = async () => {

@@ -23,7 +23,7 @@ export default function Menu({ trigger, tip, items, align = "end", side = "botto
     <DropdownMenu.Root modal={false}>
       {tip ? <Tip text={tip}>{opener}</Tip> : opener}
       <DropdownMenu.Portal container={host}>
-        <DropdownMenu.Content className="menu" align={align} side={side} sideOffset={6} collisionPadding={8} aria-label={label} onClick={(e) => e.stopPropagation()}>
+        <DropdownMenu.Content className="menu" align={align} side={side} sideOffset={6} collisionPadding={8} hideWhenDetached aria-label={label} onClick={(e) => e.stopPropagation()}>
           <MenuRows items={typeof items === "function" ? items() : items} />
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
