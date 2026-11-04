@@ -27,6 +27,7 @@ import Wall from "./Wall";
 import { folderOf, useCurrent } from "./current";
 import { useFullKeys } from "./full";
 import { useNextKey, useNextNeedingMe } from "./next";
+import { useSharingKey } from "./SharingChip";
 import { handShell, inShell } from "@/lib/shell";
 import { modeOf } from "./shellFeed";
 import { actions, app } from "./store";
@@ -48,6 +49,7 @@ export default function Shell() {
   const toasts = useToasts();
   useFullKeys();
   useNextKey(useNextNeedingMe());
+  useSharingKey();
   useVoice();
   useSyncPrefs(!viewOnly);
   useWelcomeBack();

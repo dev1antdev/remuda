@@ -13,6 +13,9 @@ import { actionLabel, actionsFor, canRemoveWorktree } from "./prActions";
 import { askRemoveWorktree, handPR } from "./prMenu";
 import { prWords } from "./prStatus";
 import { folderOf } from "./workspaces";
+import { markedFolder, sharingOf, SHARING_KEY, DEFAULT_SHARING } from "./sharing";
+import { toggleSharingFolder } from "./useSharing";
+import { readPref } from "@/lib/prefs";
 import { basename } from "@/lib/text";
 import { t, tn } from "@/lib/i18n";
 
@@ -57,6 +60,7 @@ export default function WorkspaceMenu({ menu }: { menu: NonNullable<RowMenu> }) 
       {item(t("New worktree…"), () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }))}
       {item(t("Rename workspace…"), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }))}
       {folder && item(t("Folder icon…"), () => actions.openDialog({ kind: "folder-icon", machineId: machine.id, folder, name: basename(folder), icon: session.icon }))}
+      {folder && item(markedFolder(sharingOf(readPref(SHARING_KEY, DEFAULT_SHARING)), machine.id, folder) ? t("Show when sharing the screen") : t("Hide when sharing the screen"), () => toggleSharingFolder(machine.id, folder))}
       {tab && item(t("Rename tab {tab}…", { tab: tab.named ? `“${tab.label}”` : tab.number }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }))}
       {pr && item(`${t("Open {pr}", { pr: pr.label })}${pr.status ? ` · ${prWords(pr.status)}` : ""}`, () => openUrl(pr.url))}
       {pr && chat && actionsFor(pr).map((action) => <Fragment key={action}>{item(actionLabel(action, pr.label), () => void handPR(action, machine.id, chat.id, pr.label))}</Fragment>)}

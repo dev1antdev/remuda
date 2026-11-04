@@ -17,6 +17,9 @@ import { isMac, usePref, writePref } from "@/lib/prefs";
 import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, openLensOf, type OpenLens } from "./openLens";
 import { basename, errMsg } from "@/lib/text";
 import { folderOf as sessionFolder } from "@/features/roster/workspaces";
+import { setSharingAll, toggleSharing, toggleSharingFolder, toggleSharingMachine, useSharing } from "@/features/roster/useSharing";
+import { markedFolder, markedMachine } from "@/features/roster/sharing";
+import { SHARING_KEY_NAME } from "./sharingKey";
 import { resetPanels } from "@/ui";
 import type { IconName } from "@/ui/icons";
 import { folderOf, useCurrent } from "./current";
@@ -78,10 +81,13 @@ function useCommands(): (query: string) => Entry[] {
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
   const goNext = useNextNeedingMe();
+  const share = useSharing();
   return useCallback(
     (query: string) => {
       const selection = current ? { machineId: current.machine.id, paneId: current.pane.id } : null;
-      const panes = paneEntries(machines, radar, now, step, selection, actions.selectPane);
+      const masked = (machine: (typeof machines)[number], session: Parameters<typeof share.sessionHidden>[1]) =>
+        share.sessionHidden(machine.id, session) ? { folder: share.folderName(machine.id, sessionFolder(session), session.name), machine: share.machineLabel(machine) } : null;
+      const panes = paneEntries(machines, radar, now, step, selection, actions.selectPane, masked);
       const commands: Entry[] = [];
       const command = (id: string, title: string, run: () => void, more: Partial<Entry> = {}) => commands.push({ id, kind: "command", title, keywords: [], run, ...more });
 
@@ -198,11 +204,24 @@ function useCommands(): (query: string) => Entry[] {
         command(`lang-${language}`, language === "ru" ? "Язык: Русский" : t("Language: English"), () => setLangPref(language), { hint: `${currentLang() === language ? t("now · ") : ""}${t("the page's own words; a change reloads the page")}`, icon: "monitor", keywords: ["language", "язык", "russian", "english", "русский", language] });
       }
       if (current && !viewer && mode === "herdr") command("split", split ? t("Chat and terminal: one at a time") : t("Chat beside the terminal"), actions.toggleSplit, { hint: split ? t("the lens switch shows one lens again") : t("the chat on the left, the terminal on the right, on a screen at least 1180 px wide with a mouse"), icon: "columns", keywords: ["split", "side", "beside", "chat", "terminal", "columns", "both"] });
+      command("sharing", share.on ? t("Screen-sharing mode: off") : t("Screen-sharing mode: on"), toggleSharing, {
+        hint: `${SHARING_KEY_NAME} · ${share.on ? t("names and answers show again") : t("the folders and machines you marked, or everything, read as neutral names; their panes covered")}`,
+        icon: share.on ? "eye" : "eye-off",
+        keywords: ["sharing", "screen", "share", "privacy", "hide", "stream", "demo", "screenshot"],
+      });
+      if (share.on) command("sharing-all", share.pref.all ? t("While sharing: hide only what I marked") : t("While sharing: hide everything"), () => setSharingAll(!share.pref.all), { icon: "filter", keywords: ["sharing", "screen", "hide", "all", "marked"] });
+      if (current && !viewer) {
+        const folder = sessionFolder(current.session);
+        const where = share.folderName(current.machine.id, folder, basename(folder) || current.session.name);
+        if (folder) command("sharing-folder", markedFolder(share.pref, current.machine.id, folder) ? t("Show “{folder}” when sharing", { folder: where }) : t("Hide “{folder}” when sharing", { folder: where }), () => toggleSharingFolder(current.machine.id, folder), { hint: t("its name, branch, answers and panes, while the screen-sharing mode is on"), icon: "eye-off", keywords: ["sharing", "screen", "hide", "folder", "privacy"] });
+        command("sharing-machine", markedMachine(share.pref, current.machine.id) ? t("Show {machine} when sharing", { machine: share.machineLabel(current.machine) }) : t("Hide {machine} when sharing", { machine: share.machineLabel(current.machine) }), () => toggleSharingMachine(current.machine.id), { hint: t("the machine and every folder on it, while the screen-sharing mode is on"), icon: "eye-off", keywords: ["sharing", "screen", "hide", "machine", "privacy"] });
+      }
       const typed = query.trim();
       command("import-issue", t("New task from a GitHub issue…"), () => actions.openDialog({ kind: "import-issue" }), { hint: t("read with gh on the machine, as you; an agent can start on it at once"), icon: "link", keywords: ["github", "issue", "import", "task", "new", "gh"] });
       command("search", typed ? t("Search every conversation for “{typed}”", { typed }) : t("Search every conversation…"), () => actions.openSearch(typed), { hint: t("what you or an agent said, on every machine"), icon: "search", keywords: ["find", "transcript"], always: true });
-      return [...panes, ...(viewOnly ? commands.filter((entry) => viewerCommand(entry.id)) : commands)];
+      const shown = share.on ? commands.map((entry) => ({ ...entry, title: share.redact(entry.title), hint: entry.hint && share.redact(entry.hint) })) : commands;
+      return [...panes, ...(viewOnly ? shown.filter((entry) => viewerCommand(entry.id)) : shown)];
     },
-    [machines, viewOnly, mode, lens, viewer, chatSession, chatLive, footprint, split, full, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext],
+    [machines, viewOnly, mode, lens, viewer, chatSession, chatLive, footprint, split, full, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
   );
 }

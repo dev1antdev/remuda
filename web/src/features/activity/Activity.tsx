@@ -6,6 +6,8 @@ import { useEffect } from "react";
 import { useAllPanes } from "@/app/current";
 import { actions } from "@/app/store";
 import { useRoster } from "@/features/roster/useRoster";
+import { hiddenWords } from "@/features/roster/sharing";
+import { useSharing } from "@/features/roster/useSharing";
 import { usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { whenShort } from "@/lib/time";
@@ -21,6 +23,7 @@ const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "c
 export default function Activity({ onClose }: { onClose: () => void }) {
   const { machines, feed, viewOnly } = useRoster();
   const panes = useAllPanes();
+  const share = useSharing();
   const { data: entries, error } = useQuery<Entry[]>(() => fetchFeed(), [], { every: 10_000 });
   const [, setSeen] = usePref<number>("feed.seen", 0);
   const [filter, setFilter] = usePref<Filter>("activity.filter", DEFAULT_FILTER);
@@ -36,7 +39,10 @@ export default function Activity({ onClose }: { onClose: () => void }) {
   const where = (entry: Entry) => {
     const found = panes.find((candidate) => candidate.machine.id === entry.machine && candidate.pane.id === entry.pane);
     const machine = machines.find((candidate) => candidate.id === entry.machine);
-    return { agent: found?.pane.agent ?? "", gone: !!entry.pane && !found, machine: entry.machine !== "local" ? machine?.label ?? entry.machine : "" };
+    // a row of a hidden folder, or of a pane gone from a hidden machine, keeps its kind and neutral names, not its words
+    const hidden = found ? share.sessionHidden(found.machine.id, found.session) : share.machineHidden(entry.machine) || (share.on && share.pref.all);
+    const label = machine ? share.machineLabel(machine) : share.redact(entry.machine);
+    return { agent: found?.pane.agent ?? "", gone: !!entry.pane && !found, machine: entry.machine !== "local" ? label : "", hidden };
   };
   return (
     <Dialog title={t("Activity")} icon="bell" size="md" className="activity-dialog" onClose={onClose}>
@@ -58,10 +64,10 @@ export default function Activity({ onClose }: { onClose: () => void }) {
                       {at.agent ? <Logo agent={at.agent} /> : <Icon name={KIND_ICONS[entry.kind] ?? "bell"} size={14} />}
                       <span className="activity-text">
                         <span className="activity-title">
-                          {entry.title}
+                          {share.redact(entry.title)}
                           {at.machine && <span className="activity-machine"> · {at.machine}</span>}
                         </span>
-                        {entry.body && <span className="activity-body">{entry.body}</span>}
+                        {entry.body && <span className="activity-body">{at.hidden ? hiddenWords() : share.redact(entry.body)}</span>}
                       </span>
                     </button>
                   </li>
