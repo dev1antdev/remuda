@@ -61,7 +61,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the agent by its logo and name, a shell as "terminal" — and + opens a
   terminal in the workspace's folder at once, or an agent.
 - **Folder icons** — click a folder's icon (or "Folder icon…" in a
-  workspace's ⋯ menu, or the palette) to give it a face: any emoji by
+  workspace's ⋯ menu, or the palette) to give it a face: first the ones
+  the project already has — its favicon, logo or app icon, found in the
+  checkout on its own machine, and its owner's avatar on GitHub (or on
+  GitLab, through `glab` when the machine has it) — then any emoji by
   group or by its English name, a site's icon — type `gog.com`, remuda
   reads its favicon once, right then, and keeps a copy; nothing is fetched
   later — or a picture from your computer, a company's logo made into a

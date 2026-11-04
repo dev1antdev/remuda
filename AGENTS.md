@@ -95,9 +95,9 @@ not style.
   `/api/login`. A new route goes on the guarded mux and resolves its
   machine through `machineFor` / `ready()`, never by trusting the body.
 - **Nothing phones home** but the version checks (npm registry, GitHub
-  releases; off with `-no-version-check`), and a site's favicon, fetched
-  once only when the person asks for it in the icon dialog
-  (`internal/icons`). No sudo anywhere. The uploads
+  releases; off with `-no-version-check`), and a site's favicon or a
+  GitHub owner's avatar, each fetched once only when the person asks for
+  it in the icon dialog (`internal/icons`). No sudo anywhere. The uploads
   folder `<pane dir>/.remuda/uploads` is the only thing remuda writes into
   a project.
 - **One design system** (`web/src/styles.css`): every `<button>` carries a
