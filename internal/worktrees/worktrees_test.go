@@ -65,3 +65,17 @@ func TestRemoveNeverForcesAndDeletesTheBranchOnlyAsAsked(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDiscardForcesOnlyItsOwnScript(t *testing.T) {
+	info := Info{Path: "/repo/.worktrees/arena-3-2", Branch: "arena-3-2", Repo: "/repo"}
+	s := DiscardScript(info)
+	if !strings.Contains(s, "git worktree remove --force '/repo/.worktrees/arena-3-2'") || !strings.Contains(s, "git branch -D 'arena-3-2'") {
+		t.Fatalf("script = %q", s)
+	}
+	refused := &shell.Fake{Name: "box", Answer: func(string) (string, error) {
+		return "fatal: '/repo/.worktrees/arena-3-2' is locked\n", &shell.ExitError{Code: 4}
+	}}
+	if err := Discard(refused, info); err == nil || !strings.Contains(err.Error(), "is locked") {
+		t.Fatalf("err = %v", err)
+	}
+}

@@ -188,6 +188,16 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   first, and opens the Changes lens of the one you pick beside the list:
   approve, reject or comment from one place instead of visiting each
   pane.
+- **Arena** — one prompt to several agents at once: "Arena…" in a task's
+  Start dialog, or "Arena: one prompt to several agents…" in the palette.
+  Pick two to six lanes — an agent and its model on a repository of any
+  machine — and each starts in a fresh worktree of its own, so their work
+  never meets. The Arenas panel shows them side by side: how each stands,
+  what it answered, +ins −del · files, how long it ran and what it cost.
+  "Keep this one" leaves the winner as an ordinary workspace; every other
+  lane's work — commits and uncommitted changes — is saved as a patch in
+  remuda's state folder first, then its agent stops and its worktree and
+  branch go.
 - **Standup** — the sun button in the sidebar head (or "Standup" in the
   palette) is one report over every agent on every machine: what each
   did since midnight — prompts and answers, how long and what it cost,

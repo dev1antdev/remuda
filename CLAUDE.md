@@ -1491,7 +1491,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   only when an agent pane of the workspace named a request gh read as
   merged (`mergedIn`), since a squash leaves git unsure; a branch it
   refuses is reported with the worktree already gone. The one thing
-  remuda deletes from a repository, and only when asked. The page:
+  remuda deletes from a repository, and only when asked; `Discard`
+  (`git worktree remove --force` and `git branch -D`) is kept for an
+  arena's lanes the person did not keep, their work saved as a patch
+  first (`internal/arena`). The page:
   `features/roster/prActions.ts` (tested: `canHandFailure` an open
   request with a failed check, `canSendReview` an open request,
   `canRemoveWorktree` a linked worktree whose request is merged,
@@ -1826,6 +1829,49 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   row) and "Manage recipes…"; the schedule editor's agent kind has the
   same pick, filling agent, model, arguments and prompt (shell recipes
   left out: a schedule starts no shell).
+- `internal/arena/` — **one prompt to several agents side by side**
+  (tested): an arena is a prompt — written, or a task's through
+  `tasks.Prompt` — and 2–6 lanes, each an agent kind and its model on a
+  repository workspace of a machine (`Check` refuses a shell, an unknown
+  agent, a model the kind takes no flag for); `arenas.json` in the
+  state dir, the newest `Keep` 30. `Service.Start` answers at once with
+  every lane starting and makes them one after another in the
+  background: herdr's `worktree.create` off the lane's workspace on
+  branch `arena-<arena>-<lane>`, the commit it stands on noted as the
+  lane's `Base`, the agent through `sessions.StartAgentWith` with the
+  model, a task's run through `tasks.StartRun` when it is a task's
+  arena, then the prompt handed over the way a task's start does it
+  (Claude Code's trust question for that very worktree answered yes
+  through `tasks.TrustPrompt`, any other question pushed once); a lane
+  refused on the way keeps its reason. `Service.Stats` reads each lane's
+  work against its base — commits, staged, unstaged and new files,
+  `.gitignore` kept — through a throwaway index (`GIT_INDEX_FILE`, so
+  the lane's own index never moves), one script per machine, at most
+  every 15 s. `Service.Keep(arena, lane)` keeps one and closes the
+  others: each one's whole work saved by `PatchScript` (a binary patch
+  `git apply` takes back on the base) to
+  `<state>/arenas/arena-<id>-lane-<n>-<agent>.patch`, 0600, then its
+  workspace closed and its worktree and branch removed with
+  `worktrees.Discard`; a lane whose work could not be saved, or whose
+  machine is away, stays as it is with the reason in its note; a task's
+  arena gets a comment saying what was kept and where the patches are.
+  Routes (`internal/server/arena.go`): `GET /api/arenas` (the newest
+  five with each lane's `stats`), `POST /api/arenas`, `POST
+  /api/arenas/{id}/keep {lane}`, `DELETE /api/arenas/{id}` (forgets the
+  arena, the lanes stay). The page: `features/arena/` — `ArenaDialog.tsx`
+  (dialog kind `arena`: the prompt, the lanes — agent, model as the
+  start dialogs offer it, machine, repository — two to six; "Arena…" in
+  a task's Start dialog with the task's prompt, the palette's "Arena:
+  one prompt to several agents…"), `ArenaPanel.tsx` (panel `arena`, the
+  palette's "Arenas", opened after a start: a card per lane — the agent
+  and its model, the machine, its state off the roster's radar, the
+  first line of what it answered or the lane's note, +ins −del · files,
+  how long it ran, its cost off the meter, its branch, Open and "Keep
+  this one" behind a confirm that says what happens to the rest; Forget
+  once decided; polled every 5 s while open), `arena.ts` the pure part,
+  tested: `repositories`, `defaultLanes` (two different agents on the
+  repository on screen), `whyNot`, `requestOf`, `statWords`, `paneOf`,
+  `runSeconds`, `keepWords`.
 - `internal/icons/` — **the icon the person gave a folder of the
   sidebar** (tested): an emoji or a small picture, kept in `icons.json`
   in the state dir (0600; a damaged file is logged once and read as
