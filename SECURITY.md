@@ -31,6 +31,12 @@ Two things to know about the trust boundaries:
   inside this page's origin: whatever runs in that editor — extensions,
   a repository's workspace settings — can reach this remuda's API as you.
   Open the Code mode only on machines you trust with everything here.
+  A preview of what an agent serves is the other way round: it runs on a
+  port of its own, a different origin, so the app's scripts cannot drive
+  this remuda's API; only your signed-in browser reaches it, remuda's
+  cookie is stripped before the app sees the request, and a cookie of
+  remuda's name the app tries to set is dropped. The app itself runs with
+  whatever your browser grants that origin.
 - Anything running as your user on this machine (every local agent) can
   read the token file in the state dir. The protections in the browser
   are against remote agents, repositories and pages — a local agent is

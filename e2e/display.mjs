@@ -6,7 +6,8 @@
 // row's id, a click, a key), screenshotted, and checked: no sideways scroll, every menu, popover, dialog, toast and
 // drawer inside the screen, no text squeezed to nothing, the content clear of the rail and the header, its landmarks
 // there, no console error. Every failure is collected and named by pass, screen and element; any one fails the run.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 
 const base = process.env.E2E_URL;
@@ -278,6 +279,17 @@ git(appDir, "add", "docs/notes.md");
 git(appDir, "rm", "-q", "old.txt");
 writeFileSync(`${appDir}/src/new.ts`, 'export const fresh = "a new file";\n');
 const CHANGED = ["docs/notes.md", "old.txt", "src/app.go", "src/new.ts"];
+// the "dev server" an agent would start in the repository, for the previews: python3's http.server on a free port
+const freePort = () =>
+  new Promise((resolve) => {
+    const probe = createServer();
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+const devPort = await freePort();
+const devServer = spawn("python3", ["-m", "http.server", String(devPort), "--bind", "127.0.0.1"], { cwd: appDir, stdio: "ignore" });
 mkdirSync(`${out}/display`, { recursive: true });
 
 const made = [];
@@ -547,6 +559,31 @@ async function changesFlow() {
 
 // worktreeFlow runs once, after the Changes flow: a clean worktree's workspace closed takes its folder and branch with
 // it, one with an uncommitted file keeps its folder, the leftovers dialog lists that one, and once clean removes it
+// previewFlow runs once: the dev server in the repository is listed for its workspace, remuda's own ports are not;
+// Open serves it on a port of the cockpit's (another number, since the server holds its own on this host) to the
+// signed-in caller alone, a port nothing listens on is refused, and Close shuts it
+async function previewFlow() {
+  where = `${pass.name} › preview-flow`;
+  const listed = await api("GET", "/api/previews?machine=local");
+  const mine = listed.listeners.find((l) => l.port === devPort);
+  check(mine?.workspace === app.id && mine?.label === "http.server", `the dev server is listed as ${JSON.stringify(mine)}`);
+  check(!listed.listeners.some((l) => ["remuda", "herdr"].includes(l.command) || l.port === Number(new URL(base).port)), "remuda's or herdr's own port is offered as a preview");
+  const opened = await api("POST", "/api/previews/open", { machine: "local", port: devPort });
+  check(opened.local !== devPort && opened.url.endsWith(`:${opened.local}`), `the preview opened as ${JSON.stringify(opened)}`);
+  const served = await fetch(`${opened.url}/`, { headers: { Authorization: `Bearer ${token}`, Cookie: "remuda_token=never-forwarded" } });
+  check(served.status === 200 && (await served.text()).includes("Directory listing"), `the preview answered ${served.status}`);
+  const stranger = await fetch(`${opened.url}/`);
+  check(stranger.status === 401 && !(await stranger.text()).includes("Directory listing"), `a caller with no sign-in got ${stranger.status}`);
+  const again = await api("POST", "/api/previews/open", { machine: "local", port: devPort });
+  check(again.url === opened.url, "a second Open made another preview");
+  const nothing = await fetch(`${base}/api/previews/open`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ machine: "local", port: 22 }) });
+  check(nothing.status === 404, `a port nothing of the person's listens on answered ${nothing.status}`);
+  const shut = await api("DELETE", "/api/previews", { machine: "local", port: devPort });
+  check(shut.closed === true, "Close did not shut the preview");
+  check(await fetch(`${opened.url}/`).then(() => false, () => true), "a shut preview still answers");
+  say(`preview flow: port ${devPort} listed in its workspace, opened on ${opened.local} for the signed-in caller only, shut`);
+}
+
 async function worktreeFlow() {
   where = `${pass.name} › worktree-flow`;
   const worktreeOf = async (id) => (await sessions()).find((s) => s.id === id)?.worktree?.checkout_path ?? "";
@@ -667,6 +704,14 @@ async function runPass() {
       close: async () => palette("split"),
     });
   await changesScreens();
+  await screen("previews", {
+    open: async () => {
+      await onAgents();
+      await palette("previews");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".modal .preview-row")].some((r) => r.textContent.includes("${devPort}"))`), 20))) failed(`the previews dialog does not list the dev server's port ${devPort}`);
+    },
+    expect: [".modal .preview-row"],
+  });
   await screen("float-terminal", {
     open: async () => {
       await key("`", "Backquote", 2);
@@ -756,6 +801,7 @@ try {
   for (pass of PASSES) await runPass();
   await changesFlow().catch((error) => failed(`stopped: ${error.message}`));
   await worktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
+  await previewFlow().catch((error) => failed(`stopped: ${error.message}`));
   say(`${shots} screens in ${Math.round((Date.now() - started) / 1000)} s, screenshots in ${out}/display`);
 } catch (error) {
   failed(`stopped: ${error.message}`);
@@ -763,6 +809,7 @@ try {
   await send("Page.navigate", { url: "about:blank" }).catch(() => {});
   await api("DELETE", "/api/scratch", { machine: "local" }).catch(() => {});
   for (const id of made.reverse()) await api("DELETE", `/api/sessions/${encodeURIComponent(id)}?machine=local`).catch(() => {});
+  devServer.kill();
   socket.close();
 }
 if (failures.length) {

@@ -39,6 +39,7 @@ export type AppDialog =
   | { kind: "teleport"; machineId: string; paneId: string; tabId: string; workspace: string; agent: string } // the pane's work moved to another machine, an agent carrying on there
   | { kind: "folder-icon"; machineId: string; folder: string; name: string; icon?: FolderIconRef } // a folder's icon: an emoji, a site's favicon or a picture
   | { kind: "leftovers"; machineId: string } // the machine's worktrees no workspace has open, the clean ones to remove
+  | { kind: "previews"; machineId: string; workspace?: string; name?: string } // what the machine's processes serve, the workspace's first, each opened on the cockpit
   | { kind: "reopen" } // the agents whose panes went away, each to be started again on its session
   | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string } } // one prompt to several agents, each in a worktree of its own
   | null;

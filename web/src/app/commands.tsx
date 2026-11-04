@@ -122,6 +122,8 @@ function useCommands(): (query: string) => Entry[] {
         command(`workspace:${m.id}`, where, () => actions.openDialog({ kind: "workspace", machineId: m.id }), { hint: t("an agent in a folder"), icon: "plus", keywords: ["start", "agent", "create", m.label] });
       }
       for (const m of machines.filter((m) => m.state === "connected"))
+        command(`previews:${m.id}`, t("Previews on {machine}…", { machine: m.label }), () => actions.openDialog({ kind: "previews", machineId: m.id }), { hint: t("what the agents serve there, opened in a tab of this browser"), icon: "external-link", keywords: ["preview", "port", "dev", "server", "localhost", "open", "browser", m.label] });
+      for (const m of machines.filter((m) => m.state === "connected"))
         command(`leftovers:${m.id}`, t("Leftover worktrees on {machine}…", { machine: m.label }), () => actions.openDialog({ kind: "leftovers", machineId: m.id }), { hint: t("worktrees no workspace has open"), icon: "git-branch", keywords: ["cleanup", "clean", "worktree", "garbage", "disk", m.label] });
       if (current && !viewer) {
         const { machine, session, tab } = current;
@@ -130,6 +132,7 @@ function useCommands(): (query: string) => Entry[] {
         command("tab", t("New tab in {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "tab", machineId: machine.id, session }), { hint: t("another agent in the same folder"), icon: "plus", keywords: ["agent", "create"] });
         if (session.worktree || session.branch)
           command("worktree", t("New workspace in {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }), { hint: t("a worktree of its own: a new folder and branch, an agent in it"), icon: "git-branch", keywords: ["worktree", "branch", "create", "agent"] });
+        command("previews", t("Previews of {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "previews", machineId: machine.id, workspace: session.id, name: session.name }), { hint: t("what its agents serve, opened in a tab of this browser"), icon: "external-link", keywords: ["preview", "port", "dev", "server", "localhost", "open", "browser"] });
         command("rename-workspace", t("Rename workspace {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }), { icon: "tag" });
         const folder = sessionFolder(session);
         if (folder) command("folder-icon", t("Icon for the folder {folder}…", { folder: `“${basename(folder)}”` }), () => actions.openDialog({ kind: "folder-icon", machineId: machine.id, folder, name: basename(folder), icon: session.icon }), { hint: t("an emoji, a site's icon or a picture"), icon: "folder", keywords: ["emoji", "favicon", "logo", "picture"] });

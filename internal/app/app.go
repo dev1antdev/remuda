@@ -5,9 +5,12 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +33,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/prefs"
+	"github.com/dev1antdev/remuda/internal/preview"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/quick"
@@ -471,10 +475,15 @@ func Run(ctx context.Context, o Options) error {
 		Limits:    planLimits,
 		Scratch:   shells,
 		Jira:      issues,
+		SelfPort:  auth.PortOf(o.Addr),
 	}
+	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: loopbackPreviews(o.Addr)}
+	srv.Previews = previews
+	defer previews.Shutdown()
 	if o.Tailscale {
 		var node *tsnetx.Node
 		srv.Tailscale = func() tsnetx.Status { return node.Status() } // set before the handler is handed out
+		previews.Listen = tailnetPreviews(func() *tsnetx.Node { return node })
 		node = tsnetx.Start(o.Dir, o.TailscaleName, o.AuthKey, srv.Handler())
 		defer node.Close()
 	}
@@ -487,4 +496,37 @@ func Run(ctx context.Context, o Options) error {
 		log.Printf("sign in with the token from `remuda -print-token`")
 	}
 	return server.ListenAndServe(ctx, o.Addr, srv.Handler())
+}
+
+// loopbackPreviews opens a preview on a port of the host -addr listens on, addressed by the name the page was asked at
+func loopbackPreviews(addr string) func(port int, host string) (net.Listener, string, error) {
+	bind, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		bind = "127.0.0.1"
+	}
+	return func(port int, host string) (net.Listener, string, error) {
+		ln, err := net.Listen("tcp", net.JoinHostPort(bind, strconv.Itoa(port)))
+		if err != nil {
+			return nil, "", err
+		}
+		if strings.Contains(host, ":") {
+			host = "[" + host + "]"
+		}
+		return ln, fmt.Sprintf("http://%s:%d", host, port), nil
+	}
+}
+
+// tailnetPreviews opens a preview on a port of the tailnet node's own, over TLS on its name
+func tailnetPreviews(node func() *tsnetx.Node) func(port int, host string) (net.Listener, string, error) {
+	return func(port int, _ string) (net.Listener, string, error) {
+		n := node()
+		if n == nil {
+			return nil, "", preview.ErrNotReady
+		}
+		ln, url, err := n.ListenTLS(port)
+		if errors.Is(err, tsnetx.ErrNotRunning) {
+			return nil, "", preview.ErrNotReady
+		}
+		return ln, url, err
+	}
 }
