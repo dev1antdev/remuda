@@ -26,7 +26,8 @@ type Entry struct {
 	Pane    string    `json:"pane,omitempty"`
 	Title   string    `json:"title"`
 	Body    string    `json:"body,omitempty"`
-	Quiet   bool      `json:"quiet,omitempty"` // no news: what a device sent through remuda; the bell's dot skips it
+	Quiet   bool      `json:"quiet,omitempty"`  // no news: what a device sent through remuda; the bell's dot skips it
+	Worked  int64     `json:"worked,omitempty"` // a finish: the turn's seconds, for a page's own "long turns only"
 }
 
 // Service is the list, loaded once and saved on every addition.

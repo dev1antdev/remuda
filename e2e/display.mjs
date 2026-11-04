@@ -72,7 +72,7 @@ socket.onmessage = (message) => {
     waiting.get(msg.id)(msg);
     waiting.delete(msg.id);
   }
-  if (msg.method === "Fetch.requestPaused") void dressRoster(msg.params);
+  if (msg.method === "Fetch.requestPaused") void (/\/api\/feed/.test(msg.params.request?.url ?? "") ? dressFeed(msg.params) : dressRoster(msg.params));
   if (msg.method === "Runtime.exceptionThrown") consoleErrors.push(msg.params.exceptionDetails?.exception?.description ?? msg.params.exceptionDetails?.text ?? "exception");
   if (msg.method === "Runtime.consoleAPICalled" && msg.params.type === "error") consoleErrors.push(msg.params.args.map((arg) => arg.value ?? arg.description).join(" "));
 };
@@ -364,11 +364,64 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
       for (const tab of session.tabs ?? []) for (const pane of tab.panes ?? []) Object.assign(pane, DRESS[pane.id] ?? {});
     }
   }
+  roster.feed = FEED.id; // the activity's newest id as this run sets it: a page that saw an older one reads the feed
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(roster)).toString("base64") });
 }
 
+// FEED is the activity the browser is shown: an id far past the server's own, and the alert a screen puts in it
+const FEED = { id: 900000, entries: [] };
+
+// dressFeed answers the page's read of the activity with FEED's entries, so an alert can be made to arrive
+async function dressFeed({ requestId, responseHeaders = [] }) {
+  if (FEED.entries.length === 0) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify({ entries: FEED.entries })).toString("base64") });
+}
+
 // ---- the screens ----
+
+// alertScreens: an alert the activity records shows on the page while it is in front — the feed's newest id moved, a
+// roster event (a mute set and lifted on the server) makes the page read it — and the alerts panel says what this
+// browser is, and its test puts a toast up on the page itself
+async function alertScreens() {
+  const toastWith = (words) => `[...document.querySelectorAll('.toast')].find((t) => t.textContent.includes(${JSON.stringify(words)}))`;
+  await screen("alert-toast", {
+    open: async () => {
+      FEED.id += 1;
+      FEED.entries = [{ id: FEED.id, at: iso(Date.now()), kind: "input", machine: "local", pane: paneA1, title: "app needs you", body: "claude is waiting for an answer" }];
+      await api("PUT", "/api/mutes", { machine: "local", dir: appDir, until: iso(Date.now() + 3600e3) });
+      await api("DELETE", "/api/mutes", { machine: "local", dir: appDir });
+      if (!(await until(() => evaluate(`!!${toastWith("app needs you")}`), 20))) failed(`an alert the activity recorded did not show on the page (the page: ${await evaluate(`document.visibilityState + ", focus " + document.hasFocus()`)})`);
+      check(await evaluate(`!!${toastWith("app needs you")}?.querySelector('.btn.primary')`), "the alert on the page has no Open");
+    },
+    expect: [".toast"],
+    close: async () => {
+      FEED.entries = [];
+      await evaluate(`${toastWith("app needs you")}?.querySelector('.icon-btn')?.click()`);
+      await sleep(150);
+    },
+  });
+  await screen("alerts-device", {
+    open: async () => palette("alerts"),
+    expect: [".alerts-device .alerts-device-lines li"],
+    close: async () => {},
+  });
+  await screen("alerts-test", {
+    open: async () => {
+      await tap(".alerts-test");
+      if (!(await until(() => evaluate(`!!${toastWith("remuda ·")}`), 4))) failed("the panel's test put no toast up on the page");
+    },
+    expect: [".toast"],
+    close: async () => {
+      await evaluate(`${toastWith("remuda ·")}?.querySelector('.icon-btn')?.click()`);
+      await closeAll();
+    },
+  });
+}
 
 const sidebarOpen = async () => {
   if (pass.phone && !(await present(".sidebar.open"))) {
@@ -712,6 +765,7 @@ async function runPass() {
   await screen("code", { open: async () => palette("mode:code"), expect: [".code-mode"] });
 
   for (const panel of ["standup", "usage", "schedules", "activity", "alerts", "arenas"]) await screen(`panel-${panel}`, { open: async () => palette(panel), expect: [".modal"], settle: 600 });
+  await alertScreens();
   await screen("settings", { open: async () => palette("settings"), expect: [".settings-dialog .settings-section"], close: async () => {} });
   const sections = (await evaluate(`document.querySelectorAll('.settings-dialog .settings-section').length`)) ?? 0;
   for (let i = 1; i < sections; i++)
@@ -749,7 +803,14 @@ try {
   await seed();
   await send("Page.enable");
   await send("Runtime.enable");
-  await send("Fetch.enable", { patterns: [{ urlPattern: "*/api/roster*", requestStage: "Response" }] });
+  await send("Page.bringToFront");
+  await send("Emulation.setFocusEmulationEnabled", { enabled: true }); // the page is the window in front, as at a desk
+  await send("Fetch.enable", {
+    patterns: [
+      { urlPattern: "*/api/roster*", requestStage: "Response" },
+      { urlPattern: "*/api/feed*", requestStage: "Response" },
+    ],
+  });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
   if (!(await until(async () => !(await evaluate("location.search")).includes("token=") && (await present(".topbar")), 15))) throw new Error("the page did not sign in");
   const started = Date.now();

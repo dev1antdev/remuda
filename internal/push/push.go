@@ -63,6 +63,15 @@ type Payload struct {
 	Actions []Action `json:"actions,omitempty"`
 	Panel   string   `json:"panel,omitempty"`   // a panel of the page a tap opens instead of a pane (standup)
 	Choices []string `json:"choices,omitempty"` // a question's choices in full, the words behind its choice-N actions
+	Worked  int64    `json:"worked,omitempty"`  // a finish: the turn's seconds, so a page can apply a device's "long turns" itself
+}
+
+// Delivery is the last push handed to a device: when, what, and what its push service answered ("" = taken).
+type Delivery struct {
+	At    time.Time `json:"at"`
+	Kind  string    `json:"kind"`
+	Title string    `json:"title"`
+	Error string    `json:"error,omitempty"`
 }
 
 // Action is a button on the notification; the service worker performs it.
@@ -82,6 +91,7 @@ type Service struct {
 
 	timers map[events.PaneRef][]*time.Timer
 	send   func(sub *Subscription, p Payload) error
+	last   map[string]Delivery // by endpoint, in memory: what the alerts panel says reached the push service
 
 	// OnAlert hears every alert as it goes out, or would have — the activity feed, whether or not a device is subscribed.
 	OnAlert func(p Payload)
@@ -106,7 +116,7 @@ var (
 
 // New loads or creates the VAPID keypair and the subscription store in dir.
 func New(dir string) (*Service, error) {
-	s := &Service{dir: dir, subs: map[string]*Subscription{}, timers: map[events.PaneRef][]*time.Timer{},
+	s := &Service{dir: dir, subs: map[string]*Subscription{}, timers: map[events.PaneRef][]*time.Timer{}, last: map[string]Delivery{},
 		subject: "https://github.com/dev1antdev/remuda"}
 	s.send = s.Send
 	s.Webhooks = loadWebhooks(dir)
@@ -309,10 +319,36 @@ func (s *Service) deliver(targets []*Subscription, p Payload) {
 		if muted(sub, now) {
 			continue
 		}
-		if err := s.send(sub, p); err != nil {
-			log.Printf("push to %.40s…: %v", sub.Endpoint, err)
-		}
+		_ = s.sendNoted(sub, p)
 	}
+}
+
+// sendNoted sends one payload and keeps the outcome as the device's last delivery.
+func (s *Service) sendNoted(sub *Subscription, p Payload) error {
+	err := s.send(sub, p)
+	delivery := Delivery{At: time.Now(), Kind: p.Kind, Title: p.Title}
+	if err != nil {
+		delivery.Error = err.Error()
+		log.Printf("push to %.40s…: %v", sub.Endpoint, err)
+	}
+	s.mu.Lock()
+	s.last[sub.Endpoint] = delivery
+	s.mu.Unlock()
+	return err
+}
+
+// Device is one subscription as the alerts panel reads it: whether this cockpit knows it, its prefs, its last delivery.
+func (s *Service) Device(endpoint string) (Subscription, *Delivery, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sub := s.subs[endpoint]
+	if sub == nil {
+		return Subscription{}, nil, false
+	}
+	if delivery, ok := s.last[endpoint]; ok {
+		return *sub, &delivery, true
+	}
+	return *sub, nil, true
 }
 
 // record hands an alert to the feed, when there is one, and to the webhooks: what the devices would have
@@ -337,7 +373,7 @@ func (s *Service) SendTest(endpoint string) error {
 	if sub == nil {
 		return fmt.Errorf("unknown subscription")
 	}
-	return s.Send(sub, Payload{Title: "remuda", Body: "Alerts reach this device.", Tag: "test", Kind: "test"})
+	return s.sendNoted(sub, Payload{Title: "remuda", Body: "Alerts reach this device.", Tag: "test", Kind: "test"})
 }
 
 // OnStatus schedules or calls off alerts: any status change on a pane cancels whatever was pending for it.
@@ -441,9 +477,10 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 		}
 		p := Payload{
 			Machine: ev.Pane.Machine, Pane: ev.Pane.Pane, Kind: "done",
-			Title: label + " finished",
-			Body:  agent + " is done after " + ev.Worked.Round(time.Second).String() + paneLine(ev),
-			Tag:   key.String(),
+			Title:  label + " finished",
+			Body:   agent + " is done after " + ev.Worked.Round(time.Second).String() + paneLine(ev),
+			Tag:    key.String(),
+			Worked: int64(ev.Worked / time.Second),
 		}
 		schedule(doneDelay, long, p, false, nil)
 		schedule(doneDelayFast, always, p, true, nil)

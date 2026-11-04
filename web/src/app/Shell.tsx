@@ -13,6 +13,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { resyncPush } from "@/features/alerts/push";
 import { readAlertPrefs } from "@/features/alerts/prefs";
 import { useVoice } from "@/features/alerts/useVoice";
+import { useOnPageAlerts } from "@/features/alerts/useOnPageAlerts";
 import { useSyncPrefs } from "@/features/settings/useSyncPrefs";
 import { useWelcomeBack } from "@/features/standup/useWelcomeBack";
 import ReviewQueue from "@/features/review/ReviewQueue";
@@ -56,6 +57,7 @@ export default function Shell() {
   useReopenKey(!viewOnly);
   useSharingKey();
   useVoice();
+  useOnPageAlerts();
   useSyncPrefs(!viewOnly);
   useWelcomeBack();
   useBadge();

@@ -139,7 +139,7 @@ func Run(ctx context.Context, o Options) error {
 	defer hub.Close()
 	defer pushSvc.Sockets.Close() // the Mac app's alert stream ends with "remuda is stopping", as the page's events do
 	pushSvc.OnAlert = func(p push.Payload) {
-		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body})
+		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body, Worked: p.Worked})
 		hub.RosterChanged() // the bell's dot rides on the roster
 	}
 	// a muted workspace: the pane's folder from the watcher's last snapshot, for the push service's silence check
