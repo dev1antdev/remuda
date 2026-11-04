@@ -31,8 +31,9 @@ export type Entry = {
 // Masked is what a pane of a folder hidden while the screen is shared reads as: its folder's and machine's neutral names
 export type Masked = { folder: string; machine: string };
 
-// paneEntries is every pane on every machine, each machine's liveliest first, shells at its end; a pane masked by the
-// screen-sharing mode goes by its agent and the neutral names, its own title, folder and tab name left out.
+// paneEntries is every pane on every machine, each machine's liveliest first, shells at its end; the floating terminal's
+// own shell is the drawer's, not a row; a pane masked by the screen-sharing mode goes by its agent and the neutral
+// names, its own title, folder and tab name left out.
 export function paneEntries(
   machines: Machine[],
   prefs: RadarPrefs,
@@ -45,6 +46,7 @@ export function paneEntries(
   const out: Entry[] = [];
   for (const machine of machines) {
     for (const { pane, tab, session } of recentRows(machine, { ...prefs, shells: true })) {
+      if (session.scratch) continue;
       const display: Display = pane.agent ? displayOf(pane, prefs, now) : "idle";
       const alert = pane.radar?.alert;
       const mask = masked(machine, session);

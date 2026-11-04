@@ -38,6 +38,7 @@ type Report struct {
 	Remuda        string   `json:"remuda,omitempty"`
 	CodeServer    string   `json:"code_server,omitempty"` // the release under ~/.local/opt/code-server, as the installer links it
 	Running       bool     `json:"remuda_running"`        // a remuda answers on the machine's own port: terminals go through it
+	Statusline    bool     `json:"statusline,omitempty"`  // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
 	DiskFreeGB    float64  `json:"disk_free_gb"`
 	DiskUsedPct   int      `json:"disk_used_pct"`
 	Load1         float64  `json:"load1"`
@@ -213,6 +214,7 @@ echo "arch=$(uname -m)"
 echo "cores=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null)"
 if [ -x "$HOME/.local/bin/remuda" ]; then echo "remuda=$("$HOME/.local/bin/remuda" -version 2>/dev/null)"; fi
 cs=$(readlink "$HOME/.local/opt/code-server" 2>/dev/null); case "$cs" in *code-server-*) echo "code_server=${cs##*code-server-}";; esac
+grep -q 'remuda[^"]*statusline' "$HOME/.claude/settings.json" 2>/dev/null && echo "statusline=wrapped"
 echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
 echo "uptime=$(uptime 2>/dev/null)"
 tf=""; for f in "$HOME/Library/Application Support/remuda/token" "$HOME/.config/remuda/token"; do [ -r "$f" ] && { tf="$f"; break; }; done
@@ -290,6 +292,8 @@ func Parse(out string) (Report, *machines.Peer) {
 			r.Remuda = strings.TrimPrefix(v, "remuda ")
 		case "code_server":
 			r.CodeServer = semver.FindString(v)
+		case "statusline":
+			r.Statusline = v == "wrapped"
 		case "df":
 			// Filesystem 1K-blocks Used Available Use% ... (macOS adds iused columns)
 			f := fieldsRe.Split(v, -1)

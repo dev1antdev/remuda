@@ -9,6 +9,7 @@ import { folderOf } from "@/features/roster/workspaces";
 import { useSharing } from "@/features/roster/useSharing";
 import { budgetTone, budgetWords, budgetsFor, graver, ratio, tightest, toneClass, type BudgetTone } from "@/features/usage/budgets";
 import { fillClass, tok, usd } from "@/features/usage/format";
+import { accountWindows, gravest, limitWords, type AccountWindow } from "@/features/usage/limits";
 import { FolderIcon, Icon, Tip } from "@/ui";
 import type { Located } from "./current";
 import { popOut, popOutSupported } from "./pip";
@@ -61,7 +62,7 @@ export default function Header({ current }: { current: Located | null }) {
       <SharingChip />
       {mode === "herdr" && current && !viewer && (
         <div className="lenses">
-          {current.pane.usage && current.pane.usage.window > 0 && <UsagePill usage={current.pane.usage} budget={tightest(budgetsFor(budgets, current.machine.id, current.session.dir || current.pane.cwd))} />}
+          {current.pane.usage && current.pane.usage.window > 0 && <UsagePill usage={current.pane.usage} budget={tightest(budgetsFor(budgets, current.machine.id, current.session.dir || current.pane.cwd))} limits={accountWindows(machines, Date.now())} />}
           <LensSwitch lens={lens} current={current} viewOnly={viewOnly} />
         </div>
       )}
@@ -81,20 +82,21 @@ export default function Header({ current }: { current: Located | null }) {
   );
 }
 
-// UsagePill: the context's fill and the session's cost; the budget furthest along lends its tone when that is graver,
-// and its line joins the tooltip — the pill's width never changes with it.
-function UsagePill({ usage, budget }: { usage: NonNullable<Located["pane"]["usage"]>; budget: ReturnType<typeof tightest> }) {
+// UsagePill: the context's fill and the session's cost; the budget furthest along and the fullest plan limit lend
+// their tone when that is graver, and their lines join the tooltip — the pill's width never changes with them.
+function UsagePill({ usage, budget, limits }: { usage: NonNullable<Located["pane"]["usage"]>; budget: ReturnType<typeof tightest>; limits: AccountWindow[] }) {
   const fill = usage.context / usage.window;
   const percent = Math.round(100 * fill);
   const contextTone: BudgetTone = fill >= 0.9 ? "red" : fill >= 0.7 ? "amber" : "";
-  const tone = budget ? graver(contextTone, budgetTone(ratio(budget))) : contextTone;
-  const cls = budget ? toneClass(tone) : fillClass(fill);
+  const tone = graver(budget ? graver(contextTone, budgetTone(ratio(budget))) : contextTone, gravest(limits));
+  const cls = budget || limits.length ? toneClass(tone) : fillClass(fill);
+  const planWords = limits.map((w) => limitWords(w, Date.now())).join("; ");
   const told = t("{model}: context {used} of {window} ({pct}%) · {responses} · {cost} API-equivalent so far.", { model: usage.name, used: tok(usage.context), window: tok(usage.window), pct: percent, responses: plural(usage.turns, "response"), cost: usd(usage.cost) });
   return (
     <button
       type="button"
       className={`usage-pill${cls}`}
-      title={`${told}${budget ? ` ${t("Budget: {words}.", { words: budgetWords(budget) })}` : ""} ${t("Click for the usage report.")}`}
+      title={`${told}${budget ? ` ${t("Budget: {words}.", { words: budgetWords(budget) })}` : ""}${planWords ? ` ${t("Plan: {words}.", { words: planWords })}` : ""} ${t("Click for the usage report.")}`}
       onClick={() => actions.openPanel("usage")}
     >
       <span className="usage-pill-bar">

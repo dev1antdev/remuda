@@ -109,6 +109,18 @@ func Plan(what string, r *health.Report) (Update, error) {
 		}
 		return Update{What: what, Title: "Connect the agents to your tasks (MCP)", Command: path + `"$HOME/.local/bin/remuda" mcp install`,
 			Note: "Registers remuda's MCP server with every coding agent on the machine through the agent's own command (claude mcp add, codex mcp add, gemini mcp add; Kimi when its CLI can): the agents can then list, create, move and comment on your tasks. Safe to run again; an agent already running sees the server once restarted."}, nil
+	case "statusline":
+		if r == nil || r.Claude == "" {
+			return Update{}, fmt.Errorf("Claude Code is not installed there")
+		}
+		if r.Remuda == "" {
+			return Update{}, fmt.Errorf("remuda is not installed there to keep the limits")
+		}
+		if r.Statusline {
+			return Update{}, fmt.Errorf("Claude Code's status line already goes through remuda there")
+		}
+		return Update{What: what, Title: "Show Claude Code's plan limits", Command: path + `r="$HOME/.local/bin/remuda"; "$r" statusline status >/dev/null 2>&1 || { echo "this remuda is older than the status line wrapper: update remuda here first"; exit 1; }; "$r" statusline install`,
+			Note: "Claude Code hands its status line the 5-hour and weekly limits of a Pro, Max or Ultra plan. This puts remuda in front of your status line in ~/.claude/settings.json (the file and the setting it replaces kept in remuda's state dir first): it notes the limits for the meter and the warnings, then runs your own status line as before. `remuda statusline uninstall` there puts it back."}, nil
 	case "claude":
 		if r == nil || r.Claude == "" {
 			return Update{}, fmt.Errorf("Claude Code is not installed there")
@@ -208,6 +220,9 @@ func Offered(r *health.Report, l health.Latest) []Update {
 		out = append(out, u)
 	}
 	if u, err := Plan("mcp", r); err == nil {
+		out = append(out, u)
+	}
+	if u, err := Plan("statusline", r); err == nil {
 		out = append(out, u)
 	}
 	return out

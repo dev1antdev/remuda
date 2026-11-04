@@ -55,17 +55,25 @@ type Memory struct {
 	shells  map[string]time.Time // machine|pane → since when a remembered pane has stood as a bare shell, unwatched
 	stopped map[string][]Stopped // per machine, in pane order
 	paused  map[string]bool      // machines whose herdr remuda restarts itself: the shells are its own to bring back
+	faces   map[string]paneFace  // machine|pane → its names when last seen, for the closed list
+	closed  map[string][]Closed  // per machine, newest first: the agents whose panes went away
 }
 
-// OpenMemory reads the chats remembered in dir; "" keeps them in memory alone.
+// OpenMemory reads the chats remembered in dir and the agents closed there; "" keeps them in memory alone.
 func OpenMemory(dir string) *Memory {
-	m := &Memory{dir: dir, chats: map[string]Chat{}, shells: map[string]time.Time{}, stopped: map[string][]Stopped{}, paused: map[string]bool{}}
+	m := &Memory{dir: dir, chats: map[string]Chat{}, shells: map[string]time.Time{}, stopped: map[string][]Stopped{}, paused: map[string]bool{}, faces: map[string]paneFace{}, closed: map[string][]Closed{}}
 	if dir != "" {
 		if err := state.LoadJSON(dir, chatsFile, &m.chats); err != nil {
 			log.Printf("%s: %v — starting with no chat remembered", chatsFile, err)
 		}
 		if m.chats == nil {
 			m.chats = map[string]Chat{}
+		}
+		if err := state.LoadJSON(dir, closedFile, &m.closed); err != nil {
+			log.Printf("%s: %v — starting with no closed agent listed", closedFile, err)
+		}
+		if m.closed == nil {
+			m.closed = map[string][]Closed{}
 		}
 	}
 	return m
@@ -74,7 +82,7 @@ func OpenMemory(dir string) *Memory {
 // Observe folds a machine's snapshot in: an agent pane with a session is remembered; a remembered pane that is a
 // bare shell in the same folder was stopped by a reboot when the change was not watched happening (the snapshot is
 // the machine's first, or the first after its herdr was away) and has stood so for stoppedGrace, and is forgotten
-// when the person left the agent themselves; a pane no longer there is forgotten too.
+// when the person left the agent themselves; a pane no longer there was closed — listed as such, then forgotten.
 func (m *Memory) Observe(e events.Snapshot) {
 	if e.Snap == nil {
 		return
@@ -95,6 +103,7 @@ func (m *Memory) Observe(e events.Snapshot) {
 		if _, known := agents[p.Agent]; known {
 			delete(m.shells, key)
 			if sid := sessionOf(p); sid != "" {
+				m.faces[key] = faceOf(e.Snap, p)
 				c := Chat{Kind: p.Agent, Session: sid, Dir: paneDir(e.Snap, p), Title: firstNonEmpty(e.Snap.WorkspaceLabel(p.WorkspaceID), p.DisplayTitle())}
 				if old, ok := m.chats[key]; !ok || old != c {
 					m.chats[key] = c
@@ -129,12 +138,22 @@ func (m *Memory) Observe(e events.Snapshot) {
 		delete(m.shells, key)
 		changed = true
 	}
-	for key := range m.chats {
+	closed := false
+	for key, c := range m.chats {
 		if strings.HasPrefix(key, prefix) && !seen[key] {
+			m.noteClosedLocked(e.Machine, key, strings.TrimPrefix(key, prefix), c, e.At)
 			delete(m.chats, key)
 			delete(m.shells, key)
-			changed = true
+			changed, closed = true, true
 		}
+	}
+	for key := range m.faces {
+		if strings.HasPrefix(key, prefix) && !seen[key] {
+			delete(m.faces, key)
+		}
+	}
+	if closed {
+		m.saveClosedLocked()
 	}
 	sort.Slice(stopped, func(i, j int) bool { return stopped[i].Pane < stopped[j].Pane })
 	if len(stopped) == 0 {
@@ -185,9 +204,18 @@ func (m *Memory) Forget(machineID string) {
 			changed = true
 		}
 	}
+	for key := range m.faces {
+		if strings.HasPrefix(key, machineID+"|") {
+			delete(m.faces, key)
+		}
+	}
 	m.dropShellsLocked(machineID)
 	if changed {
 		m.saveLocked()
+	}
+	if _, listed := m.closed[machineID]; listed {
+		delete(m.closed, machineID)
+		m.saveClosedLocked()
 	}
 }
 

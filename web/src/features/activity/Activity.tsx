@@ -18,7 +18,7 @@ import FilterBar from "./FilterBar";
 import { DEFAULT_FILTER, counts, filterEntries, isFiltering, type Filter } from "./filter";
 import { t } from "@/lib/i18n";
 
-const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", digest: "sun", task: "list", test: "bell", budget: "chart", review: "eye", handover: "arrow-right", recover: "play", machine: "monitor", sent: "send" };
+const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", digest: "sun", task: "list", test: "bell", budget: "chart", limits: "chart", review: "eye", handover: "arrow-right", recover: "play", machine: "monitor", sent: "send" };
 
 export default function Activity({ onClose }: { onClose: () => void }) {
   const { machines, feed, viewOnly } = useRoster();

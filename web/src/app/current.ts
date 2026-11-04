@@ -23,7 +23,7 @@ const matches = (x: Located, r: Selection) => x.machine.id === r.machineId && x.
 export function useCurrent(): Located | null {
   const panes = useAllPanes();
   const requested = app.use((s) => s.requested);
-  return useMemo(() => (requested && panes.find((x) => matches(x, requested))) ?? panes.find((x) => x.pane.agent) ?? panes[0] ?? null, [panes, requested]);
+  return useMemo(() => (requested && panes.find((x) => matches(x, requested))) ?? panes.find((x) => x.pane.agent) ?? panes.find((x) => !x.session.scratch) ?? null, [panes, requested]);
 }
 
 // the folder a pane works in: the workspace's checkout, else the pane's cwd

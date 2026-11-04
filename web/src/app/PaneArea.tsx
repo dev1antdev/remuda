@@ -9,6 +9,7 @@ import { useMedia } from "@/lib/media";
 import { isMac, isTouch } from "@/lib/prefs";
 import { basename } from "@/lib/text";
 import { closeTab, createTab, renameTab } from "@/features/roster/api";
+import { offerReopen } from "@/features/reopen/offer";
 import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
 import { ChatTools, useChatViewItems } from "@/features/chat/ChatTools";
@@ -19,6 +20,8 @@ import FilesRail from "@/features/chat/FilesRail";
 import Review from "@/features/review/Review";
 import { TerminalLens, TerminalTools, useTerminalViewItems } from "@/features/terminal/TerminalLens";
 import { Screen } from "@/features/terminal/Screen";
+import { LimitNotice } from "@/features/usage/LimitNotice";
+import { accountWindows } from "@/features/usage/limits";
 import { Icon, Notice, PANELS, Resizer } from "@/ui";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
@@ -36,7 +39,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
   const splitAsked = app.use((s) => s.split);
   const wide = useMedia(SPLIT_QUERY);
   const split = splitOn(splitAsked, wide, isTouch, lens); // the chat beside the terminal; lens is then the focused side
-  const { refresh, viewOnly } = useRoster();
+  const { refresh, viewOnly, machines } = useRoster();
   const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
   const share = useSharing();
   const [revealed, setRevealed] = useState(""); // the pane shown anyway while sharing, until another is on screen
@@ -172,7 +175,8 @@ export default function PaneArea({ current }: { current: Located | null }) {
         onCloseTab={(t) => {
           const last = session.tabs.length === 1;
           const msg = last ? tr("Close the last tab? Workspace “{workspace}” closes with it.", { workspace: share.redact(session.name) }) : tn(t.panes.length, "Close tab “{tab}”? Its {n} pane and agent stop.", "Close tab “{tab}”? Its {n} panes and agents stop.", { tab: t.label });
-          actions.ask(msg, tr("Close tab"), () => void act(closeTab(machine.id, t.id)));
+          const agents = t.panes.filter((p) => p.agent).map((p) => p.id);
+          actions.ask(msg, tr("Close tab"), () => void act(closeTab(machine.id, t.id)).then(() => offerReopen(machine.id, agents)));
         }}
       />
       <div className={`pane-body${split ? " is-split" : ""}${covered ? " is-covered" : ""}`} ref={body}>
@@ -197,6 +201,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
               active={shown("chat")}
               focused={lens === "chat"}
               viewOnly={viewOnly}
+              notice={<LimitNotice machineId={machine.id} paneId={pane.id} agent={pane.agent} limit={pane.limit} windows={accountWindows(machines, Date.now())} viewOnly={viewOnly} />}
             />
           </div>
         )}

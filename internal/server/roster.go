@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
+	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/radar"
@@ -45,6 +45,8 @@ type rosterPane struct {
 	Usage *usage.Display `json:"usage,omitempty"`
 	Said  string         `json:"said,omitempty"` // the first line of the last answer, once the agent finished
 	PR    *rosterPR      `json:"pr,omitempty"`   // the last pull or merge request the agent named
+	// a subscription limit the agent stopped on, and the person's booking to continue it after the reset
+	Limit *limits.PaneLimit `json:"limit,omitempty"`
 }
 
 // rosterPR is the request the agent named and, once gh on the machine read it, how it stands.
@@ -87,6 +89,7 @@ type rosterSession struct {
 	Icon        *icons.Icon     `json:"icon,omitempty"`   // the folder's icon, an emoji or a stored picture's hash
 	Review      *rosterReview   `json:"review,omitempty"`
 	MutedUntil  *time.Time      `json:"muted_until,omitempty"` // the folder is silenced until then: no push, no webhook, no feed row
+	Scratch     bool            `json:"scratch,omitempty"`     // the floating terminal's own shell: the drawer shows it, the sidebar does not
 	Tabs        []rosterTab     `json:"tabs"`
 }
 
@@ -102,11 +105,13 @@ type rosterMachine struct {
 	Awake    *awake.Status     `json:"awake,omitempty"`   // the keep-awake switch and whether the hold stands
 	Stopped  []restart.Stopped `json:"stopped,omitempty"` // the chats a reboot stopped: their panes are bare shells again, a Resume brings them back
 	MAC      string            `json:"mac,omitempty"`     // the address a wake-up packet names, when the person set one
+	Limits   *limits.Reading   `json:"limits,omitempty"`  // the agents' subscription windows as the machine last reported them
 }
 
-// folderOf is the folder a workspace belongs to in the sidebar: its repository's main checkout — herdr's repo_root, else
-// the folder holding the shared .git — or, outside a repository herdr knows, the workspace's own folder.
-func folderOf(worktree *herdr.WorktreeInfo, dir string) string {
+// folderOf is the folder a workspace belongs to in the sidebar: its repository's main checkout — herdr's repo_root,
+// else the folder holding the shared .git, else the root the review sweep read with git (a worktree made outside
+// herdr) — or, outside a repository, the workspace's own folder.
+func folderOf(worktree *herdr.WorktreeInfo, root, dir string) string {
 	if worktree != nil {
 		if worktree.RepoRoot != "" {
 			return worktree.RepoRoot
@@ -114,6 +119,9 @@ func folderOf(worktree *herdr.WorktreeInfo, dir string) string {
 		if strings.HasSuffix(worktree.RepoKey, "/.git") {
 			return path.Dir(worktree.RepoKey)
 		}
+	}
+	if root != "" {
+		return root
 	}
 	return dir
 }
@@ -148,6 +156,9 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			if meter, ok := s.Usage.Display(machineID, pane.PaneID); ok {
 				entry.Usage = &meter
 			}
+			if s.Limits != nil {
+				entry.Limit = s.Limits.PaneOf(machineID, pane.PaneID)
+			}
 		}
 		panesByTab[pane.TabID] = append(panesByTab[pane.TabID], entry)
 		if pane.Agent != "" {
@@ -163,7 +174,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 		}
 		tabsByWS[tab.WorkspaceID] = append(tabsByWS[tab.WorkspaceID], rosterTab{
 			ID: tab.TabID, Label: tab.Label, Number: tab.Number,
-			Named:  tab.Label != strconv.Itoa(tab.Number),
+			Named:  tabNamed(tab.Label),
 			Status: herdr.UIStatus(tab.AgentStatus, agentInTab[tab.TabID]), Panes: panes,
 		})
 		if agentInTab[tab.TabID] {
@@ -182,6 +193,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			Status:      herdr.UIStatus(ws.AgentStatus, agentInWS[ws.WorkspaceID]),
 			ActiveTabID: ws.ActiveTabID,
 			Tabs:        tabs,
+			Scratch:     s.Scratch != nil && s.Scratch.Is(machineID, ws.WorkspaceID),
 		}
 		if ws.Worktree != nil {
 			session.Worktree = &rosterWorktree{
@@ -190,7 +202,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			}
 		}
 		session.Dir = snap.WorkspaceDir(&ws)
-		session.Folder = folderOf(ws.Worktree, session.Dir)
+		session.Folder = folderOf(ws.Worktree, s.Review.Root(machineID, session.Dir), session.Dir)
 		if s.Icons != nil {
 			if icon, ok := s.Icons.Of(machineID, session.Folder); ok {
 				session.Icon = &icon
@@ -266,6 +278,11 @@ func (s *Server) rosterBody() ([]byte, string) {
 			entry.Stopped = s.Updates.Restart.Stopped(mc.ID())
 		}
 		entry.MAC = s.Machines.MAC(mc.ID())
+		if s.Limits != nil {
+			if reading := s.Limits.Of(mc.ID()); len(reading.Windows) > 0 || reading.Wrapped {
+				entry.Limits = &reading
+			}
+		}
 		out = append(out, entry)
 	}
 	roster := map[string]any{"machines": out, "agents": sessions.Agents, "version": buildversion.Build, "latest": s.Health.Latest()}
@@ -281,4 +298,19 @@ func (s *Server) rosterBody() ([]byte, string) {
 	body, _ := json.Marshal(roster)
 	sum := sha256.Sum256(body)
 	return body, `"` + hex.EncodeToString(sum[:12]) + `"`
+}
+
+// tabNamed says whether the person named a tab: herdr labels an unnamed one by a number, and after a close it may
+// label a tab by its place rather than its own number, so any label of digits alone is herdr's
+func tabNamed(label string) bool {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return false
+	}
+	for _, r := range label {
+		if r < '0' || r > '9' {
+			return true
+		}
+	}
+	return false
 }

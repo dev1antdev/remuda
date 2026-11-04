@@ -377,6 +377,7 @@ button {
 }
 
 .app-main {
+  position: relative; /* the floating terminal's drawer lies over it */
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -1080,6 +1081,123 @@ body.is-resizing {
   user-select: none;
 }
 
+body.is-resizing.is-resizing-rows {
+  cursor: row-resize;
+}
+
+/* a drawer's top edge: the same handle lying across */
+.resizer.resizer-top {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 7px;
+  margin: 0;
+  cursor: row-resize;
+}
+
+.resizer.resizer-top::before {
+  top: 3px;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 1px;
+}
+
+.resizer.resizer-top:hover::before,
+.resizer.resizer-top:focus-visible::before,
+body.is-resizing .resizer.resizer-top::before {
+  top: 2px;
+  left: 0;
+  width: auto;
+  height: 3px;
+}
+
+/* ---- the floating terminal: a drawer over every mode on a shell of its own ---- */
+.float-term {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-drawer);
+  display: flex;
+  flex-direction: column;
+  height: min(var(--float-h, 320px), calc(100% - 48px));
+  border-top: 1px solid var(--line-strong);
+  background: var(--bg);
+  box-shadow: var(--shadow-lg);
+}
+
+.float-term[hidden] {
+  display: none;
+}
+
+.float-term-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.float-term-title {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.float-term-head .sel {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+}
+
+.float-term-hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-faint);
+}
+
+.float-term-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.float-term-note {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+@media (max-width: 920px) {
+  .float-term {
+    height: 75%;
+  }
+
+  .float-term-hint {
+    display: none;
+  }
+}
+
+.float-term-end {
+  margin-left: auto;
+}
+
 body.is-resizing iframe {
   pointer-events: none;
 }
@@ -1493,6 +1611,21 @@ body.is-resizing iframe {
   animation: pulse 1.6s ease-in-out infinite;
 }
 
+/* an agent stopped on its plan limit says so in amber until it works again */
+.ws-item.is-limit > .ws-main .ws-words,
+.ws-agent-line.is-limit .ws-agent-words {
+  color: var(--amber);
+}
+
+/* a plan window in the machine's ⓘ, in the tone its use earns */
+.health-limit.is-amber {
+  color: var(--amber);
+}
+
+.health-limit.is-red {
+  color: var(--red);
+}
+
 .radar-mark.working {
   color: var(--accent);
 }
@@ -1683,6 +1816,46 @@ body.is-resizing iframe {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+/* the Automatic tab: a tile per picture the project keeps, its source under it */
+.icon-candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.icon-candidate.btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: auto;
+  min-width: 0;
+  padding: 10px 6px 8px;
+}
+
+.icon-candidate img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: var(--r-sm);
+}
+
+.icon-candidate span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.icon-looked {
+  margin: 0;
   color: var(--fg-faint);
   font-size: var(--fs-12);
 }
@@ -9366,6 +9539,242 @@ body.popout {
 .pane-body.is-split > .lens-pane.split-terminal {
   flex: 1 1 0;
   border-left: 1px solid var(--line);
+}
+
+/* ---- quote a piece of an answer, and the notes queued for the agent ---- */
+.btn.quote-pop {
+  position: fixed;
+  z-index: var(--z-menu);
+  box-shadow: var(--shadow-md);
+  background: var(--bg-overlay);
+}
+
+.chat-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 12px 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.chat-queue-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--ctl-sm);
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.chat-queue-count {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-queue-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--ctl-sm);
+}
+
+.linkish.chat-queue-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+  text-align: left;
+}
+
+.chat-queue-more {
+  color: var(--fg-faint);
+}
+
+/* ---- the arena: one prompt to several agents, their lanes side by side ---- */
+.arena-lanes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.arena-lane-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.arena-lane-row .sel {
+  min-width: 0;
+  max-width: 220px;
+}
+
+.arena-lane-row input.sm {
+  width: 150px;
+}
+
+.arena-new > .btn.ghost {
+  align-self: flex-start;
+}
+
+.arena-lane-n {
+  width: 18px;
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.arena-why {
+  margin-right: auto;
+  align-self: center;
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+.arena-from-task {
+  margin-right: auto;
+}
+
+.arena-panel .arena + .arena {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.arena-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.arena-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arena-when {
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+
+.arena-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.arena-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.arena-card.is-kept {
+  border-color: var(--green);
+  box-shadow: inset 0 0 0 1px var(--green-soft);
+}
+
+.arena-card.is-closed {
+  opacity: 0.6;
+}
+
+.arena-card.is-failed {
+  border-color: var(--red-soft);
+}
+
+.arena-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.arena-card-head b {
+  white-space: nowrap;
+}
+
+.arena-model,
+.arena-machine {
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  background: var(--bg-elev);
+  color: var(--fg-dim);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.arena-state {
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.arena-card.is-working .arena-state {
+  color: var(--accent);
+}
+
+.arena-card.is-blocked .arena-state,
+.arena-card.is-failed .arena-state {
+  color: var(--red);
+}
+
+.arena-card.is-done .arena-state,
+.arena-card.is-kept .arena-state {
+  color: var(--green);
+}
+
+.arena-words {
+  margin: 0;
+  color: var(--fg);
+  font-size: var(--fs-12);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.arena-figures {
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.arena-branch,
+.arena-patch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--fg-faint);
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.arena-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 4px;
 }
 
 /* ---- screen-sharing mode: the header's chip, the veil over a hidden folder's pane, a hidden tile's cover ---- */
