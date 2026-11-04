@@ -4,7 +4,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Icon, Logo, Menu, StatusDot, Tip } from "@/ui";
-import { brandColor } from "@/ui/brand";
+import { VENDOR_NAME, brandColor } from "@/ui/brand";
 import type { Pane, Session, Status, Tab } from "./api";
 import { tabFaces } from "./tabs";
 import { t as tr } from "@/lib/i18n";
@@ -72,9 +72,9 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onNew
                   aria-selected={t.id === tab.id}
                   className="tab-main"
                   disabled={!first}
-                  title={`${tr("Tab {n}", { n: t.number })} · ${STATUS_LABEL[t.status]} — ${t.named ? tr("double-click to rename") : tr("double-click to name it")}`}
+                  title={readOnly ? `${tr("Tab {n}", { n: t.number })} · ${STATUS_LABEL[t.status]}` : `${tr("Tab {n}", { n: t.number })} · ${STATUS_LABEL[t.status]} — ${t.named ? tr("double-click to rename") : tr("double-click to name it")}`}
                   onClick={() => first && onSelect(first.id)}
-                  onDoubleClick={() => setEditing({ id: t.id, value: t.named ? t.label : "" })}
+                  onDoubleClick={readOnly ? undefined : () => setEditing({ id: t.id, value: t.named ? t.label : "" })}
                 >
                   {face.agent ? <Logo agent={face.agent} /> : <Icon name="terminal" size={12} />}
                   <span className="tab-label">{face.label}</span>
@@ -111,13 +111,13 @@ export default function TabStrip({ session, tab, pane, onSelect, onNewTab, onNew
       {tab.panes.length > 1 && (
         <div className="split-panes">
           {tab.panes.map((p, i) => (
-            <button key={p.id} type="button" className={`split-pane${p.id === pane.id ? " on" : ""}`} aria-pressed={p.id === pane.id} onClick={() => onSelect(p.id)} title={p.cwd}>
+            <button key={p.id} type="button" className={`split-pane${p.id === pane.id ? " on" : ""}`} aria-pressed={p.id === pane.id} onClick={() => onSelect(p.id)} title={masked ? undefined : p.cwd}>
               <span className="tree-glyph">{i === tab.panes.length - 1 ? "└" : "├"}</span>
               <StatusDot status={p.status} title={STATUS_LABEL[p.status]} />
-              <span>{masked ? "" : p.title}</span>
+              <span>{masked ? (p.agent ? "" : tr("terminal")) : p.title}</span>
               {p.agent && (
                 <span className="ws-agent" style={{ color: brandColor(p.agent) }}>
-                  {p.agent}
+                  {VENDOR_NAME[p.agent] ?? p.agent}
                 </span>
               )}
             </button>

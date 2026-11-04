@@ -835,9 +835,7 @@ input[type="checkbox"]:hover:not(:checked) {
 .row-menu.radar-settings,
 .row-menu.split-menu,
 .row-menu.label-menu,
-.row-menu.color-menu,
-.row-menu.health-pop,
-.row-menu.machine-menu {
+.row-menu.color-menu {
   transform: none;
 }
 
@@ -1302,7 +1300,8 @@ body.is-resizing iframe {
   transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 
-.machine-toggle:hover {
+.machine-toggle:hover,
+.machine-toggle.on {
   background: var(--bg-hover);
   color: var(--fg);
 }
@@ -1506,14 +1505,33 @@ body.is-resizing iframe {
   margin: -2px -2px -2px 0;
 }
 
+/* an open menu keeps its button where it is: the menu hangs from it */
 .ws-main:hover .ws-menu-btn,
-.ws-main:focus-within .ws-menu-btn {
+.ws-main:focus-within .ws-menu-btn,
+.ws-main .ws-menu-btn[aria-expanded="true"] {
   display: inline-grid;
 }
 
 .ws-main:hover .ws-age,
-.ws-main:focus-within .ws-age {
+.ws-main:focus-within .ws-age,
+.ws-main:has(.ws-menu-btn[aria-expanded="true"]) .ws-age {
   display: none;
+}
+
+/* the folder's menu, the same way: under the pointer, in the focus, while open; its place is kept, so the counts
+   beside it stay where they are */
+.ws-folder-head .ws-folder-menu {
+  visibility: hidden;
+  width: 20px;
+  height: 20px;
+  margin: -2px -2px -2px 0;
+  color: var(--fg-faint);
+}
+
+.ws-folder-head:hover .ws-folder-menu,
+.ws-folder-head:focus-within .ws-folder-menu,
+.ws-folder-head .ws-folder-menu[aria-expanded="true"] {
+  visibility: visible;
 }
 
 .ws-menu-btn {
@@ -1684,6 +1702,14 @@ body.is-resizing iframe {
   margin-left: 9px;
   padding-left: 5px;
   border-left: 1px solid var(--line);
+}
+
+/* a connected machine with no workspace yet says so, and how to make one */
+.ws-empty {
+  margin: 2px 0 6px;
+  padding: 0 8px;
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
 }
 
 .folder-icon-btn.icon-btn {
@@ -5450,33 +5476,14 @@ button.usage-row:hover {
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-.row-menu.quick-menu {
-  transform: translateY(-100%);
-  min-width: 240px;
-  max-width: min(80vw, 420px);
-}
 
-.quick-menu button {
-  height: auto;
-  min-height: 30px;
-  white-space: normal;
-}
 
-.quick-icon {
-  color: var(--fg-faint);
-}
 
 .quick-label {
   flex: 1;
   min-width: 0;
 }
 
-.quick-menu .quick-manage {
-  border-top: 1px solid var(--line);
-  border-radius: 0 0 var(--r-sm) var(--r-sm);
-  margin-top: 4px;
-  color: var(--fg-dim);
-}
 
 .quick-menu .notice {
   padding: 6px 9px;
@@ -5762,10 +5769,6 @@ button.usage-row:hover {
     z-index: 29;
   }
 
-  .ws-main .ws-menu-btn {
-    display: inline-grid;
-  }
-
   .tab-close {
     opacity: 1;
   }
@@ -5803,6 +5806,15 @@ button.usage-row:hover {
   .board-card-menu,
   .turn-forward {
     opacity: 1;
+  }
+
+  /* no hover to reveal them on a touch screen: the card's and the folder's menus stand */
+  .ws-main .ws-menu-btn,
+  .ws-folder-head .ws-folder-menu {
+    display: inline-grid;
+    visibility: visible;
+    width: var(--ctl-sm);
+    height: var(--ctl-sm);
   }
 
   .icon-btn {
@@ -7647,6 +7659,27 @@ body.popout {
   animation: rise var(--fast) var(--ease);
 }
 
+/* ---- popovers (ui/Popover.tsx): a panel behind a button, inside the window, scrolling when taller than the room ---- */
+.popover {
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 16px);
+  max-height: var(--radix-popover-content-available-height, 80vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-lg);
+  color: var(--fg);
+  z-index: var(--z-menu);
+  animation: rise var(--fast) var(--ease);
+}
+
+.popover:focus {
+  outline: none;
+}
+
 .menu-item {
   display: flex;
   align-items: center;
@@ -9282,7 +9315,7 @@ body.popout {
 }
 
 .pr-chips:hover .pr-state,
-.pr-chips[data-state="open"] .pr-state {
+.pr-chips[aria-expanded="true"] .pr-state {
   filter: brightness(1.15);
 }
 

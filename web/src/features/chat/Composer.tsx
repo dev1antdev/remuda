@@ -12,7 +12,7 @@ import { filesFrom } from "@/lib/transfer";
 import { Icon, Notice, Tip } from "@/ui";
 import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
 import { useDictation } from "./dictation";
-import { expandPrompt, QuickPromptsDialog, QuickPromptsMenu } from "./QuickPrompts";
+import { expandPrompt, QuickPromptsButton, QuickPromptsDialog } from "./QuickPrompts";
 import { useHistory } from "./useHistory";
 import { applyPick, stillDismissed, tokenAt, type Dismissed, type Item } from "./complete";
 import { CompletionList, useCompletion } from "./Completion";
@@ -43,7 +43,6 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
     draftRef.current = v;
     setDraftState(v);
   };
-  const [quick, setQuick] = useState<{ x: number; y: number } | null>(null);
   const [manage, setManage] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -186,13 +185,6 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
     }
   };
 
-  useEffect(() => {
-    if (!quick) return;
-    const close = () => setQuick(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [quick]);
-
   return (
     <>
       {error && (
@@ -258,21 +250,16 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
                 <Icon name="paperclip" size={16} />
               </button>
             </Tip>
-            <Tip text={t("Quick prompts: saved texts, with {dir}, {branch} and {file} filled in")}>
-              <button
-                type="button"
-                className={`icon-btn lg composer-attach${quick ? " on" : ""}`}
-                aria-label={t("Quick prompts")}
-                aria-expanded={!!quick}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const r = e.currentTarget.getBoundingClientRect();
-                  setQuick(quick ? null : { x: r.left, y: r.top - 6 });
-                }}
-              >
-                <Icon name="zap" size={16} />
-              </button>
-            </Tip>
+            <QuickPromptsButton
+              dir={dir}
+              onPick={(text) =>
+                void expandPrompt(text, machineId, dir).then((filled) => {
+                  insertAt(filled);
+                  area.current?.focus();
+                })
+              }
+              onManage={() => setManage(true)}
+            />
             <Tip text={t("Queue it as a note for the agent (Alt+↵): sent only when you press Send on it")}>
               <button type="button" className="icon-btn lg composer-attach composer-queue" aria-label={t("Add to the queue")} disabled={!draft.trim() || att.uploading} onClick={queueDraft}>
                 <Icon name="inbox" size={16} />
@@ -292,23 +279,6 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
               </Tip>
             )}
           </>
-        )}
-        {quick && (
-          <QuickPromptsMenu
-            at={quick}
-            dir={dir}
-            onPick={(text) => {
-              setQuick(null);
-              void expandPrompt(text, machineId, dir).then((filled) => {
-                insertAt(filled);
-                area.current?.focus();
-              });
-            }}
-            onManage={() => {
-              setQuick(null);
-              setManage(true);
-            }}
-          />
         )}
         {manage && <QuickPromptsDialog dir={dir} onClose={() => setManage(false)} />}
         <textarea

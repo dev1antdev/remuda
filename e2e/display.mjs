@@ -27,7 +27,7 @@ const ALL_PASSES = [
 ];
 // E2E_DISPLAY_PASSES=desk-en,phone-ru runs only those
 const PASSES = process.env.E2E_DISPLAY_PASSES ? ALL_PASSES.filter((p) => process.env.E2E_DISPLAY_PASSES.split(",").includes(p.name)) : ALL_PASSES;
-const OVERLAYS = ".menu, .row-menu, .modal, .toast, .sel-pop, .float-term, .palette";
+const OVERLAYS = ".menu, .popover, .row-menu, .modal, .toast, .sel-pop, .float-term, .palette";
 const CONTENT = ".pane-area, .wall, .tasks-main, .code-mode, .queue, .float-term";
 
 const say = (line) => console.log(`e2e display: ${line}`);
@@ -387,14 +387,23 @@ async function runPass() {
       await sleep(150);
       await tap(await mark(firstCardOf("app") + "?.querySelector('.ws-menu-btn')", "card-menu"));
     },
-    expect: [".row-menu[role=menu]"],
+    expect: ["[role=menu].menu"],
+  });
+  await screen("folder-menu", {
+    open: async () => {
+      await sidebarOpen();
+      await hover(await mark(folderHead("app"), "folder"));
+      await sleep(150);
+      await tap(await mark(folderHead("app") + "?.querySelector('.ws-folder-menu')", "folder-menu"));
+    },
+    expect: ["[role=menu].menu"],
   });
   await screen("machine-menu", {
     open: async () => {
       await sidebarOpen();
       await tap('[data-machine-menu="local"]');
     },
-    expect: [".machine-menu"],
+    expect: ["[role=menu].menu"],
   });
   await screen("vitals", {
     open: async () => {

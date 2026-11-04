@@ -891,7 +891,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   attributes yellow, builtins red, operators sky, keys lavender).
 - `web/src/app/` — the shell. `store.ts` is the one page store: the
   *requested* pane (a deep link, a notification, a click), the lens, the
-  mode, the drawer, the open dialog / menu / panel (the panels: the
+  mode, the drawer, the open dialog / panel (the panels: the
   palette, search, alerts, activity, schedules, usage, standup, the
   release install), the notice, the
   confirm, the file viewer, the search viewer, a jump, the find bar; `actions` are the
@@ -966,7 +966,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `pinned` on `TileView`, the `pin` icon) pins it with the accent ring,
   the featured tile's pin button unpins, ← → pin the previous or next
   (`neighbour`), the featured tile's head keeps its usual click), `Overlays.tsx` (panels, dialogs, the
-  menu, the confirm, the file viewer; the keyboard sheet behind **?** — Shift and the slash key by position, never over a field or another dialog, the same key closes it — is `features/help/KeysDialog.tsx` over `help/keys.ts`, the one list of every key the page answers, tested; the palette has it as "Keyboard shortcuts"), `commands.tsx` (the **command
+  confirm, the file viewer; the keyboard sheet behind **?** — Shift and the slash key by position, never over a field or another dialog, the same key closes it — is `features/help/KeysDialog.tsx` over `help/keys.ts`, the one list of every key the page answers, tested; the palette has it as "Keyboard shortcuts"), `commands.tsx` (the **command
   palette** on ⌘K / Ctrl+K, by key code so any layout works: every pane
   as a row to jump to — each machine's liveliest first, shells at its
   end, the current one marked — and every command the page has a button
@@ -1470,7 +1470,21 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   accents, the colour from its name), its name, how its agents stand and,
   folded, its fresh files; a click folds it (pref `wsFolded`,
   `machine|folder:<path>`), the sidebar's ⋯ folds or opens every folder,
-  and a click on the icon opens the icon dialog. Open, it holds a
+  and a click on the icon opens the icon dialog. **The folder's own ⋯**
+  (`folderMenuItems` in `WorkspaceMenu.tsx`; under the pointer, in the
+  focus, while open and always on a touch screen; none for a viewer) is
+  New workspace in this folder… (the New workspace dialog on that machine
+  with the folder filled in: dialog kind `workspace` with `dir`), New
+  worktree… off its main checkout (`repositoryOf` in `workspaces.ts`,
+  tested: a linked worktree when the main checkout has no workspace, none
+  outside git), Folder icon…, Hide when sharing the screen and Open in
+  the editor; a card's ⋯ (`workspaceMenuItems`) has its own rows — a tab,
+  the renames, the pull request, fork, restart, move, the mutes, close —
+  and its folder's after them, so the flat order reaches them too. While
+  the screen-sharing mode hides a folder its menus say its neutral name,
+  never a tab's own, and offer no icon (none is drawn then, and the
+  dialog names the folder); a connected machine with no workspace says
+  so, with a New workspace… link. Open, it holds a
   two-line card per workspace — the lead agent's mark and logo, the name
   or branch, the review badge, the mute, the context from 50 %, the age
   ("12m", "3h") that the ⋯ menu takes the place of under the pointer;
@@ -2842,14 +2856,26 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Icons are `ui/icons.tsx` (inline 24px stroke paths, `<Icon name
   size={12|14|16}>`): never an emoji or a font glyph as an icon.
   `Select.tsx` replaces every native `<select>` (an icon per option, a
-  portal so nothing clips it). `Menu.tsx` is a menu behind any button
-  and `Tip.tsx` a tooltip (`TipProvider` once over the page): Radix's
-  DropdownMenu and Tooltip in the design system's clothes (`.menu`,
-  `.menu-item` with an icon slot, a hint and a shortcut, `.tip`) — the
-  keyboard walks a menu, Esc closes, both open where there is room, a tooltip never opens on a touch — every icon-only button of the
+  portal so nothing clips it). `Menu.tsx` is a menu behind any button,
+  `Popover.tsx` a panel behind one (a machine's vitals) and `Tip.tsx` a
+  tooltip (`TipProvider` once over the page): Radix's DropdownMenu,
+  Popover and Tooltip in the design system's clothes (`.menu`,
+  `.menu-item` with an icon slot, a hint and a shortcut, `.popover`,
+  `.tip`) — the keyboard walks a menu, Esc closes, all three open where
+  there is room inside the window (collision padding 8 px, a menu or a
+  popover taller than the room scrolling, Radix's available height) and
+  follow their button as the page scrolls, a click inside a menu or a
+  popover stays there (React carries a portal's clicks up its own tree,
+  into the row the button sits in), a menu's rows may be a function worked
+  out when it opens; an open trigger is `[aria-expanded="true"]` in the
+  stylesheet, never `[data-state="open"]`, which the Tip over it
+  overwrites with its own; every sidebar and card ⋯ is one of these — no
+  menu at a fixed point any more — a tooltip never opens on a touch — every icon-only button of the
   header, the sidebar, the tab strip, the composer and a wall tile —
   and a dialog's Close, a toast's and a notice's Dismiss
-  (`ui/iconButtons.test.ts`) — carries one, with an `aria-label` for the
+  (`ui/iconButtons.test.ts`, and `features/roster/iconButtons.test.ts`
+  for the sidebar's, its dialogs' and the tab strip's, a Menu's or a
+  Popover's `tip` counting for its trigger) — carries one, with an `aria-label` for the
   reader and no `title`, and a `Menu` takes a
   `tip` for its trigger; `radix-ui` is the one dependency
   beside react and xterm (with its search addon, the find over the
