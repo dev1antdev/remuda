@@ -175,7 +175,8 @@ func TestTheWrapperNeverFails(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(stateDir, SnapshotFile)); err == nil {
 		t.Fatal("kept something from nothing")
 	}
-	home, stateDir := homes(t, `{"statusLine":{"type":"command","command":"sleep 5"}}`)
+	// a shell that forks its child rather than becoming it, as dash and bash do for a list: the child holds the pipe
+	home, stateDir := homes(t, `{"statusLine":{"type":"command","command":"sleep 5; true"}}`)
 	_, err := InstallStatusline(home, stateDir, "/opt/remuda")
 	must(t, err)
 	before := StatuslineTimeout
