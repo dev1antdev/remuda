@@ -399,6 +399,14 @@ file is gone, or that runs something else by then, is skipped with the
 reason. Nothing starts until you press the button, and a chat you left
 yourself is never offered back.
 
+**A tab closed by mistake comes back.** When a tab or a workspace with
+an agent in it closes — from remuda or anywhere else — remuda keeps the
+agent's session for a while (the last 20 per machine). Right after a
+close made here a toast offers **Reopen**; later, **Alt+Z** or "Reopen a
+closed agent…" in the palette lists them, newest first, and one click
+starts the agent again on its own conversation, in a tab of its
+folder's workspace or a new workspace when that one is gone.
+
 remuda watches its own releases on GitHub too (one request every six
 hours, none with `-no-version-check`). When a newer one is out, the ⓘ of
 every machine behind it says so with a **Download & install** button, the
