@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lensOn, lensesOf } from "./paneLens";
+import { keepsTerminal, lensOn, lensesOf } from "./paneLens";
 
 describe("a pane's lenses", () => {
   it("gives an agent the three and a shell its terminal alone", () => {
@@ -12,5 +12,10 @@ describe("a pane's lenses", () => {
     expect(lensOn("terminal", "")).toBe("terminal");
     expect(lensOn("chat", "codex")).toBe("chat");
     expect(lensOn("changes", "claude")).toBe("changes");
+  });
+  it("keeps the terminal of a shell an agent starts in, not of an agent's pane a restart passed through a shell", () => {
+    expect(keepsTerminal(true, "claude")).toBe(true);
+    expect(keepsTerminal(true, "")).toBe(false);
+    expect(keepsTerminal(false, "claude")).toBe(false);
   });
 });

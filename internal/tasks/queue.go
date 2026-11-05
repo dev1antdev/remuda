@@ -54,6 +54,8 @@ type Queue struct {
 	Store *Store
 	// Machine is a machine's name and whether it is connected now.
 	Machine func(id string) (label string, connected bool)
+	// Unusable is why no agent can ever work on the machine — the host of a remuda that only serves the page — or "".
+	Unusable func(id string) string
 	// Workspace is the workspace open on the machine's folder that worktrees branch off, "" when none is.
 	Workspace func(machine, dir string) string
 	// PaneState is the radar's state of a pane (working | blocked | done | idle | unknown); ok is false once it is gone.
@@ -115,6 +117,12 @@ func (q *Queue) step(p Project) QueueNote {
 	}
 	note.Next = next.Identifier
 	agent := agentOr(a.Agent)
+	if q.Unusable != nil {
+		if why := q.Unusable(a.Machine); why != "" {
+			note.Reason = why
+			return note
+		}
+	}
 	if label, connected := q.Machine(a.Machine); !connected {
 		note.Reason = label + " is away"
 		return note

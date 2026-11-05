@@ -10,7 +10,7 @@ import { ago } from "@/lib/time";
 import { Dialog, Icon, Notice } from "@/ui";
 import { refreshHealth, type Health, type Machine } from "./api";
 import { BodyRows } from "./BodyRows";
-import { concerns } from "./concerns";
+import { hostConcerns } from "./concerns";
 import { Sparkline } from "./Sparkline";
 import { DISK_THRESHOLDS, loadThresholds, rangeOf, sparkTitle, spanWords } from "./spark";
 import { useRoster } from "./useRoster";
@@ -35,7 +35,7 @@ export default function ServerPanel({ server, onClose }: { server: Machine; onCl
       setBusy(false);
     }
   };
-  const list = concerns(h, latest, version, false, [], viewOnly);
+  const list = hostConcerns(h, latest, version, viewOnly);
   const history = h?.history && h.history.length >= 2 ? h.history : null;
   const span = history ? spanWords(history[0]!.at, history[history.length - 1]!.at) : "";
   const loads = history ? history.map((s) => s.load) : [];
@@ -75,7 +75,7 @@ export default function ServerPanel({ server, onClose }: { server: Machine; onCl
           <dt>remuda</dt>
           <dd>{version ?? "—"}</dd>
           <dt>herdr</dt>
-          <dd>{h.herdr ?? t("not needed here")}</dd>
+          <dd>{h.herdr ? t("{version} installed, not used here", { version: h.herdr }) : t("not needed here")}</dd>
           {tailscale && (
             <>
               <dt>Tailscale</dt>

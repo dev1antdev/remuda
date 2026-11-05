@@ -8,13 +8,13 @@ import { Dialog, Icon, Notice, useSubmit } from "@/ui";
 import Logo from "@/ui/Logo";
 import { broadcast, picked, statusWords, type Outcome, type QuickPick } from "./broadcast";
 import { targetKey, type AgentTarget } from "./targets";
-import { t, tn } from "@/lib/i18n";
+import { t, tc, tn } from "@/lib/i18n";
 
 const PICKS: { pick: QuickPick; label: string; title: string }[] = [
   { pick: "all", label: t("All"), title: t("Every agent that would take a message") },
   { pick: "working", label: t("Working"), title: t("The agents in the middle of something") },
   { pick: "resting", label: t("Resting"), title: t("The idle and the finished ones") },
-  { pick: "none", label: t("None"), title: t("Untick everyone") },
+  { pick: "none", label: tc("pick", "None"), title: t("Untick everyone") },
 ];
 
 export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarget[]; onClose: () => void }) {

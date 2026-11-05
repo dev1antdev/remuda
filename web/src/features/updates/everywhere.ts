@@ -44,3 +44,8 @@ export function summaryWords(steps: StepRun[], done: boolean): string {
 
 // restartsHost says whether the run ends with the page's own remuda restarting: its release is the last step
 export const restartsHost = (steps: Step[], host: string | undefined): boolean => !!host && steps.some((s) => s.machine === host && s.what === "remuda-release");
+
+// hostRestarting says whether a run that cannot be read any more went down with the page's own remuda: its release step
+// had started, so the server is restarting onto it (and the run, kept in its memory, is gone) — no failure to show
+export const hostRestarting = (steps: StepRun[], host: string | undefined): boolean =>
+  !!host && steps.some((s) => s.machine === host && s.what === "remuda-release" && (s.state === "running" || s.state === "ok"));

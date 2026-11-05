@@ -2,14 +2,14 @@
 // release — each with the command it runs, shown before Run; then the run, one step after another on the server, the
 // page's own host last, with how each went and one summary. Closing the dialog keeps the run going.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRoster } from "@/features/roster/useRoster";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { Dialog, Notice } from "@/ui";
 import { t } from "@/lib/i18n";
 import { everywherePlan, fetchEverywhere, startEverywhere, type Batch, type Step } from "./api";
-import { byMachine, restartsHost, stateWords, summaryWords } from "./everywhere";
+import { byMachine, hostRestarting, restartsHost, stateWords, summaryWords } from "./everywhere";
 
 export default function EverywhereDialog({ onClose }: { onClose: () => void }) {
   const { host } = useRoster();
@@ -17,12 +17,16 @@ export default function EverywhereDialog({ onClose }: { onClose: () => void }) {
   const [batch, setBatch] = useState<Batch | null>(null);
   const [failure, setFailure] = useState("");
   const [starting, setStarting] = useState(false);
+  const [gone, setGone] = useState(false); // the run went down with the page's own remuda, restarting onto its release
+  const shown = useRef<Batch | null>(null);
+  shown.current = batch;
   useEffect(() => {
-    if (!batch || batch.done) return;
+    if (!batch || batch.done || gone) return;
     const id = batch.id;
-    const timer = setInterval(() => fetchEverywhere(id).then(setBatch, (e) => setFailure(errMsg(e))), 2000);
+    const lost = (e: unknown) => (hostRestarting(shown.current?.steps ?? [], host?.id) ? setGone(true) : setFailure(errMsg(e)));
+    const timer = setInterval(() => fetchEverywhere(id).then(setBatch, lost), 2000);
     return () => clearInterval(timer);
-  }, [batch?.id, batch?.done]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [batch?.id, batch?.done, gone]); // eslint-disable-line react-hooks/exhaustive-deps
   const run = async (steps: Step[]) => {
     setStarting(true);
     setFailure("");
@@ -54,10 +58,14 @@ export default function EverywhereDialog({ onClose }: { onClose: () => void }) {
               </ul>
             </section>
           ))}
-          <Notice tone={batch.done ? (batch.steps.some((s) => s.state === "failed") ? "warn" : "success") : "info"}>
-            {!batch.done && <span className="spinner" aria-hidden="true" />} {summaryWords(batch.steps, batch.done)}
-            {batch.done && restarts ? ` · ${t("remuda here restarts now; the page offers a reload once the new version answers.")}` : ""}
-          </Notice>
+          {gone ? (
+            <Notice tone="info">{t("remuda here is restarting onto its new version; the page offers a reload once it answers.")}</Notice>
+          ) : (
+            <Notice tone={batch.done ? (batch.steps.some((s) => s.state === "failed") ? "warn" : "success") : "info"}>
+              {!batch.done && <span className="spinner" aria-hidden="true" />} {summaryWords(batch.steps, batch.done)}
+              {batch.done && restarts ? ` · ${t("remuda here restarts now; the page offers a reload once the new version answers.")}` : ""}
+            </Notice>
+          )}
         </>
       ) : loading && !plan ? (
         <Notice tone="hint">{t("Looking at every machine…")}</Notice>

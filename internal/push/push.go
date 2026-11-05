@@ -203,6 +203,7 @@ func (s *Service) Subscribe(sub Subscription, oldEndpoint string) {
 				sub.Label = prev.Label
 			}
 			delete(s.subs, oldEndpoint)
+			delete(s.last, oldEndpoint)
 		}
 	}
 	if prev != nil {
@@ -222,6 +223,7 @@ func (s *Service) Subscribe(sub Subscription, oldEndpoint string) {
 func (s *Service) Unsubscribe(endpoint string) {
 	s.mu.Lock()
 	delete(s.subs, endpoint)
+	delete(s.last, endpoint)
 	s.mu.Unlock()
 	s.saveSubs()
 }
@@ -332,7 +334,9 @@ func (s *Service) sendNoted(sub *Subscription, p Payload) error {
 		log.Printf("push to %.40s…: %v", sub.Endpoint, err)
 	}
 	s.mu.Lock()
-	s.last[sub.Endpoint] = delivery
+	if s.subs[sub.Endpoint] != nil { // a 404/410 dropped the device on the way: nothing is kept for an endpoint gone
+		s.last[sub.Endpoint] = delivery
+	}
 	s.mu.Unlock()
 	return err
 }

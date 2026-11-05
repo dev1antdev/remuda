@@ -612,6 +612,29 @@ func TestAServerServiceRunsWithTheFlag(t *testing.T) {
 	}
 }
 
+// TestAServerUnitIsRefusedToARemudaThatDoesNotKnowTheFlag: setup leaves a remuda already there in place, so a host on
+// a release before -server would get a unit that exits at once, over and over, and the cockpit would be gone.
+func TestAServerUnitIsRefusedToARemudaThatDoesNotKnowTheFlag(t *testing.T) {
+	dir := linuxHome(t)
+	old := "#!/bin/sh\nfor a in \"$@\"; do [ \"$a\" = -server ] && { echo 'flag provided but not defined: -server' >&2; exit 2; }; done\necho remuda v0.12.4\n"
+	write(t, filepath.Join(dir, ".local", "bin", "remuda"), old, 0o755)
+	var out strings.Builder
+	err := run("", []string{"REMUDA_ADDR=127.0.0.1:1", "REMUDA_SERVER=1"}, serviceScript, []string{"install"}, &out)
+	if err == nil {
+		t.Fatalf("a unit with -server was set up for a remuda that does not know it:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "remuda v0.12.4 at ") || !strings.Contains(out.String(), "does not know -server yet: update it first") {
+		t.Errorf("the refusal does not say which remuda and what to do:\n%s", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".config", "systemd", "user", "remuda.service")); !os.IsNotExist(err) {
+		t.Errorf("a unit was written anyway: %v", err)
+	}
+	calls, _ := os.ReadFile(filepath.Join(dir, "calls.log"))
+	if strings.Contains(string(calls), "systemctl") {
+		t.Errorf("the running service was touched:\n%s", calls)
+	}
+}
+
 // --- the agents' MCP registration ---
 
 // agents lays a home out with stand-ins for the agents' commands, each recording its arguments; kimi's has no mcp subcommand.

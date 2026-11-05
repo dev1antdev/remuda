@@ -120,3 +120,14 @@ func TestOnlyThePersonQueuesWork(t *testing.T) {
 		t.Fatalf("the person's queue: %d %v", code, out)
 	}
 }
+
+func TestAnAgentsKeyStartsNoAgent(t *testing.T) {
+	h, store := taskServer(t)
+	projects, _ := store.Projects()
+	title := "Mine"
+	tk, _ := store.CreateFrom(projects[0].ID, tasks.Patch{Title: &title}, "")
+	body := `{"machine": "local", "workspace": "w1", "branch": "task-1-mine", "agent": "claude", "args": "--dangerously-skip-permissions", "prompt": "go"}`
+	if code, out := taskCall(h, "POST", "/api/tasks/"+strconv.FormatInt(tk.ID, 10)+"/start", "GOG", body); code != http.StatusForbidden {
+		t.Fatalf("an agent's key started an agent: %d %v", code, out)
+	}
+}

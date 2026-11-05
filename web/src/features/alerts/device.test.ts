@@ -40,7 +40,7 @@ describe("the help", () => {
 describe("the last push sent and received", () => {
   const now = Date.parse("2026-11-05T12:10:00Z");
   it("says when, what, and where it stopped", () => {
-    expect(deliveryWords(null, now)).toBe("No push sent to this browser yet.");
+    expect(deliveryWords(null, now)).toBe("No push sent to this browser since remuda started.");
     expect(deliveryWords({ at: "2026-11-05T12:05:00Z", kind: "input", title: "api needs you" }, now)).toBe("Last push sent 5 min ago: api needs you — the push service took it.");
     expect(deliveryWords({ at: "2026-11-05T12:05:00Z", kind: "input", title: "api needs you", error: "push service answered 403" }, now)).toMatch(/refused: push service answered 403$/);
     expect(receivedWords(undefined, now)).toBe("No push received here yet.");

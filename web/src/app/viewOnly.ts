@@ -4,8 +4,9 @@
 // VIEWER_MODES are the modes a viewer has: the agents and the Wall; the tasks, the code and the review all write
 const VIEWER_MODES = new Set(["herdr", "wall"]);
 
-// VIEWER_PANELS are the panels a viewer has: the reports and the feed; the schedules are the person's own
-const VIEWER_PANELS = new Set(["standup", "usage", "activity"]);
+// VIEWER_PANELS are the panels a viewer has: the reports, the feed and a server's vitals (its panel hides its buttons
+// for a viewer); the schedules are the person's own
+const VIEWER_PANELS = new Set(["standup", "usage", "activity", "server"]);
 
 // viewerPlaces keeps the rail's places a viewer may open; the full list stands for everyone else
 export function viewerPlaces<T extends { mode?: string; panel?: string | null }>(places: T[], viewOnly: boolean): T[] {

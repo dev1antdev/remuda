@@ -9,7 +9,7 @@ import { fileLines, surround, whyNotUnfold, type Unfold } from "./context";
 import { draftOnRow, type DraftComment } from "./draft";
 import { Hunk, Note, type NewComment } from "./Hunk";
 import { rowsOf, splitHunks, type DiffRow } from "./hunks";
-import { offRows, type OpinionComment } from "./opinion";
+import { offRows, whereWords, type OpinionComment } from "./opinion";
 import { OpinionNote } from "./OpinionNote";
 import { t } from "@/lib/i18n";
 
@@ -206,7 +206,7 @@ function Diff({ text, split, canComment, draft, file, loadSource, onComment, onR
         <div className="review-orphans">
           <Notice tone="hint">{t("{agent}'s comments on lines this diff does not show:", { agent: opinions.reviewer })}</Notice>
           {strayOpinions.map((comment) => (
-            <OpinionNote key={comment.id} comment={comment} reviewer={opinions.reviewer} where={t("line {n}", { n: comment.line })} onAdopt={opinions.onAdopt} onDismiss={opinions.onDismiss} />
+            <OpinionNote key={comment.id} comment={comment} reviewer={opinions.reviewer} where={whereWords(comment)} onAdopt={opinions.onAdopt} onDismiss={opinions.onDismiss} />
           ))}
         </div>
       )}
@@ -214,7 +214,7 @@ function Diff({ text, split, canComment, draft, file, loadSource, onComment, onR
         <div className="review-orphans">
           <Notice tone="hint">{t("No longer on a line of this diff — still in the draft:")}</Notice>
           {strayComments.map((comment) => (
-            <Note key={comment.id} comment={comment} where={t("line {n}", { n: comment.line }) + (comment.removed ? t(" (removed)") : "")} onRemove={onRemove} />
+            <Note key={comment.id} comment={comment} where={(comment.line > 0 ? t("line {n}", { n: comment.line }) : t("the whole file")) + (comment.removed ? t(" (removed)") : "")} onRemove={onRemove} />
           ))}
         </div>
       )}

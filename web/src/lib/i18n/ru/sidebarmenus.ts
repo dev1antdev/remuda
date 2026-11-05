@@ -22,7 +22,6 @@ export const sidebarmenus: Dictionary = {
   "Disk free": "Свободно на диске",
   "{free} GB free · {used}% used": "свободно {free} ГБ · занято {used}%",
   "{label}: min {min}, max {max}, now {now}": "{label}: мин. {min}, макс. {max}, сейчас {now}",
-  "Name (optional)": "Имя (необязательно)",
   "Project folder is required": "Нужна папка проекта",
   // the pull request's state, in a card's menu and a wall tile's chip
   "no checks": "проверок нет",

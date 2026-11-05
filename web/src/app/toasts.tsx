@@ -2,7 +2,8 @@
 // the page was away, Tailscale's state, the last notice.
 
 import { useEffect, useRef } from "react";
-import { LINGER_MS, type OnPageAlert } from "@/features/alerts/onpage";
+import { alertText, LINGER_MS, type OnPageAlert } from "@/features/alerts/onpage";
+import { hiddenWords } from "@/features/roster/sharing";
 import { usePref } from "@/lib/prefs";
 import { newer } from "@/lib/version";
 import { episodeKey, remember, stoppedWords } from "@/features/roster/stopped";
@@ -76,13 +77,21 @@ export function useToasts(): ToastItem[] {
       ),
       onDismiss: () => actions.setClosedOffer(null),
     });
-  // the alerts of this device's switches, shown on the page while it is in front: Open goes to the pane, a digest to the standup
+  // the alerts of this device's switches, shown on the page while it is in front: Open goes to the pane, a digest to
+  // the standup, a budget or limit to the usage; under the screen-sharing mode a hidden folder's alert keeps its kind
+  // and neutral names but not its words, as an Activity row does
+  const hiddenAlert = (alert: OnPageAlert): boolean => {
+    if (!share.on || !alert.machine) return false;
+    const machine = machines.find((candidate) => candidate.id === alert.machine);
+    const session = machine?.sessions.find((candidate) => candidate.tabs.some((tab) => tab.panes.some((pane) => pane.id === alert.pane)));
+    return session && machine ? share.sessionHidden(machine.id, session) : share.machineHidden(alert.machine) || share.pref.all;
+  };
   for (const alert of alerts) {
     const open = alert.panel ? () => actions.openPanel(alert.panel as Panel) : alert.machine && alert.pane ? () => actions.openPane(alert.machine!, alert.pane!) : null;
     toasts.push({
       id: alert.id,
       tone: alert.tone,
-      text: alert.text,
+      text: hiddenAlert(alert) ? alertText({ title: alert.title, body: hiddenWords() }) : alertText(alert),
       action: open && (
         <button
           type="button"

@@ -19,7 +19,6 @@ export const webhooks: Dictionary = {
   "No webhooks yet.": "Вебхуков пока нет.",
   "Nothing goes there between the two times, by this device's clock ({zone}).": "Между этими двумя временами туда ничего не уходит, по часам этого устройства ({zone}).",
   "Off, the webhook stays in the list and hears nothing.": "Выключенный вебхук остаётся в списке и ничего не получает.",
-  "On": "Включён",
   "Remove the webhook “{name}”? Nothing will be sent there any more.": "Убрать вебхук «{name}»? Туда больше ничего не уйдёт.",
   "Remove this webhook": "Убрать вебхук",
   "Send it": "Присылать",

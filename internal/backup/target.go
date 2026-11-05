@@ -57,11 +57,12 @@ mkdir -p "$d" && chmod 700 "$d" && printf '%s\n' "$d"
 `
 }
 
-// FinishScript puts a backup written as <name>.partial in place, private, and removes every backup of the folder past
-// the newest keep, a line "pruned <name>" each.
+// FinishScript puts a backup written as <name>.partial in place, private, clears the partial copies earlier runs left
+// when their write was cut off, and removes every backup of the folder past the newest keep, a line "pruned <name>" each.
 func FinishScript(folder, name string, keep int) string {
 	return script.PATH + "\ncd " + script.Quote(folder) + " || exit 3\n" +
 		"mv -f " + script.Quote(name+".partial") + " " + script.Quote(name) + " && chmod 600 " + script.Quote(name) + " || exit 4\n" +
+		"rm -f -- remuda-*.tar.gz.partial\n" +
 		"ls -1 | grep -E '^remuda-[0-9]{8}T[0-9]{6}Z\\.tar\\.gz$' | sort -r | tail -n +" + strconv.Itoa(keep+1) +
 		" | while IFS= read -r f; do rm -f -- \"$f\" && printf 'pruned %s\\n' \"$f\"; done\n"
 }

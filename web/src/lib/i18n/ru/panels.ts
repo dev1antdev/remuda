@@ -104,7 +104,6 @@ export const panels: Dictionary = {
   Prompt: "Промпт",
   Ran: "Запускал",
   "Ran here lately": "Недавно здесь запускали",
-  Read: "Читал",
   Recap: "Рекап",
   Recipe: "Рецепт",
   "Reload the editor": "Перезагрузить редактор",

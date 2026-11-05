@@ -2,6 +2,7 @@ package state
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -30,12 +31,16 @@ func Hold(dir string) (release func(), err error) {
 	}, nil
 }
 
-// Held says whether a process holds the state dir's lock now, that is whether a remuda serves it.
+// Held says whether a process holds the state dir's lock now, that is whether a remuda serves it. A dir that is not
+// there is free; one whose lock cannot be taken for another reason (no permission) counts as held, so a restore never
+// goes ahead blind.
 func Held(dir string) bool {
 	release, err := Hold(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false
+	}
 	if err != nil {
-		_, missing := err.(*os.PathError)
-		return !missing
+		return true
 	}
 	release()
 	return false

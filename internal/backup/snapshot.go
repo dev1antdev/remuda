@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -54,9 +55,15 @@ func skipped(rel string) bool {
 }
 
 // Snapshot packs the state dir as one gzipped tar: every file the cockpit keeps, each SQLite database copied through
-// SQLite itself (VACUUM INTO: a consistent copy of a database a running remuda writes to), a manifest at the root.
+// SQLite itself (VACUUM INTO: a consistent copy of a database a running remuda writes to), a manifest at the root. A
+// dir reached through a symlink is walked where it leads, and one without a token is refused: a copy of an empty or a
+// wrong folder would count as a good night and push the real copies out.
 func Snapshot(dir, host, version string, now time.Time) ([]byte, Manifest, error) {
 	manifest := Manifest{Format: 1, Host: host, Version: version, At: now.UTC()}
+	dir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return nil, manifest, err
+	}
 	var buf bytes.Buffer
 	zw := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(zw)
@@ -73,6 +80,7 @@ func Snapshot(dir, host, version string, now time.Time) ([]byte, Manifest, error
 		manifest.Files++
 		return err
 	}
+	sawToken := false
 	scratch, err := os.MkdirTemp("", "remuda-backup-")
 	if err != nil {
 		return nil, manifest, err
@@ -116,10 +124,14 @@ func Snapshot(dir, host, version string, now time.Time) ([]byte, Manifest, error
 		if err != nil {
 			return fmt.Errorf("%s: %w", rel, err)
 		}
+		sawToken = sawToken || rel == "token"
 		return add(rel, info.Mode(), info.ModTime(), data)
 	})
 	if err != nil {
 		return nil, manifest, err
+	}
+	if !sawToken {
+		return nil, manifest, fmt.Errorf("%s holds no token: no remuda state dir, so no copy was taken", dir)
 	}
 	head, _ := json.MarshalIndent(manifest, "", "  ")
 	if err := add(ManifestName, 0o600, now, head); err != nil {
@@ -135,13 +147,19 @@ func Snapshot(dir, host, version string, now time.Time) ([]byte, Manifest, error
 	return buf.Bytes(), manifest, nil
 }
 
+// databaseURI opens a database read-only by its path, escaped: a "#" or "?" in a folder's name would end the path
+// early, and SQLite would open (or make) another file
+func databaseURI(path string) string {
+	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: "mode=ro&_pragma=busy_timeout(5000)"}).String()
+}
+
 // copyDatabase is a consistent copy of a SQLite database another process may be writing: VACUUM INTO a fresh file,
 // read back whole.
 func copyDatabase(path, into string) ([]byte, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&_pragma=busy_timeout(5000)")
+	db, err := sql.Open("sqlite", databaseURI(path))
 	if err != nil {
 		return nil, err
 	}

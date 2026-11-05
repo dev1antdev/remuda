@@ -27,14 +27,20 @@ import { Icon, Notice, PANELS, Resizer } from "@/ui";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
 import { actions, app, type Lens } from "./store";
-import { lensOn } from "./paneLens";
+import { keepsTerminal, lensOn } from "./paneLens";
 import { SPLIT_QUERY, shownLenses, splitOn } from "./split";
 import ViewMenu from "./ViewMenu";
 import { tn, t as tr } from "@/lib/i18n";
 
 export default function PaneArea({ current }: { current: Located | null }) {
   const agent = current?.pane.agent ?? "";
-  const lens = lensOn(app.use((s) => s.lens), agent); // a shell has its terminal alone
+  const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
+  // whether the pane on screen came on screen as a shell: an agent started at its prompt keeps its terminal in view
+  const [opened, setOpened] = useState({ pane: "", shell: false });
+  if (opened.pane !== paneKey) setOpened({ pane: paneKey, shell: !agent });
+  const pinned = opened.pane === paneKey && keepsTerminal(opened.shell, agent);
+  const asked = app.use((s) => s.lens);
+  const lens = pinned ? "terminal" : lensOn(asked, agent); // a shell has its terminal alone
   const viewer = app.use((s) => s.viewer);
   const footprint = app.use((s) => s.footprint);
   const chatSession = app.use((s) => s.chatSession);
@@ -43,13 +49,18 @@ export default function PaneArea({ current }: { current: Located | null }) {
   const wide = useMedia(SPLIT_QUERY);
   const split = splitOn(splitAsked && !!agent, wide, isTouch, lens); // the chat beside the terminal; lens is then the focused side
   const { refresh, viewOnly, machines, server } = useRoster();
-  const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
   const share = useSharing();
   const [revealed, setRevealed] = useState(""); // the pane shown anyway while sharing, until another is on screen
   const body = useRef<HTMLDivElement>(null);
   const viewerKey = viewer ? `viewer|${viewer.machine}|${viewer.session}` : "";
   const viewerHidden = !!viewer && (share.machineHidden(viewer.machine) || share.folderHidden(viewer.machine, viewer.dir));
   const covered = viewer ? viewerHidden && revealed !== viewerKey : !!current && share.sessionHidden(current.machine.id, current.session) && revealed !== paneKey;
+  // the pin is said once to the store, so the header, the address and the palette agree; the lens is the person's again
+  useEffect(() => {
+    if (!pinned) return;
+    actions.setLens("terminal");
+    setOpened({ pane: paneKey, shell: false });
+  }, [pinned, paneKey]);
   const [seenLenses, setSeenLenses] = useState<{ pane: string; lenses: Partial<Record<Lens, true>> }>({ pane: "", lenses: {} });
   useEffect(() => {
     if (!paneKey) return;

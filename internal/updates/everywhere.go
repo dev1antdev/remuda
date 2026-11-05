@@ -125,14 +125,9 @@ func (s *Service) StartEverywhere(asked []Step) (Batch, error) {
 	if s.running() {
 		return Batch{}, ErrBatchRunning
 	}
-	now := map[string]Step{}
-	for _, step := range s.EverywherePlan() {
-		now[step.Machine+"|"+step.What] = step
-	}
-	for _, step := range asked {
-		if current, ok := now[step.Machine+"|"+step.What]; !ok || current.Command != step.Command {
-			return Batch{}, &StaleError{fmt.Sprintf("%s on %s changed since it was shown — look again", step.Title, step.Label)}
-		}
+	steps, err := inPlanOrder(s.EverywherePlan(), asked)
+	if err != nil {
+		return Batch{}, err
 	}
 	s.runs.mu.Lock()
 	for _, b := range s.runs.list {
@@ -142,8 +137,8 @@ func (s *Service) StartEverywhere(asked []Step) (Batch, error) {
 		}
 	}
 	batch := &Batch{ID: batchID(), Started: time.Now()}
-	for _, step := range asked {
-		batch.Steps = append(batch.Steps, StepRun{Step: now[step.Machine+"|"+step.What], State: "waiting"})
+	for _, step := range steps {
+		batch.Steps = append(batch.Steps, StepRun{Step: step, State: "waiting"})
 	}
 	s.runs.list = append(s.runs.list, batch)
 	if len(s.runs.list) > 5 {
@@ -153,6 +148,30 @@ func (s *Service) StartEverywhere(asked []Step) (Batch, error) {
 	s.runs.mu.Unlock()
 	go s.runBatch(batch)
 	return view, nil
+}
+
+// inPlanOrder is the steps asked for, each as the plan holds it now and in the plan's order whatever the request's —
+// the page's own host last, since its remuda restarts once its release is in; a step the plan no longer holds as it
+// was shown is a StaleError
+func inPlanOrder(plan, asked []Step) ([]Step, error) {
+	now := map[string]Step{}
+	for _, step := range plan {
+		now[step.Machine+"|"+step.What] = step
+	}
+	wanted := map[string]bool{}
+	for _, step := range asked {
+		if current, ok := now[step.Machine+"|"+step.What]; !ok || current.Command != step.Command {
+			return nil, &StaleError{fmt.Sprintf("%s on %s changed since it was shown — look again", step.Title, step.Label)}
+		}
+		wanted[step.Machine+"|"+step.What] = true
+	}
+	var steps []Step
+	for _, step := range plan {
+		if wanted[step.Machine+"|"+step.What] {
+			steps = append(steps, step)
+		}
+	}
+	return steps, nil
 }
 
 // running says whether a run goes now.
@@ -197,11 +216,19 @@ func (s *Service) runBatch(batch *Batch) {
 				err = fmt.Errorf("%s is not connected now", step.Label)
 			}
 		}
+		if err == nil {
+			err = s.stillPending(mc, step)
+		}
 		if err != nil {
 			s.setStep(batch, i, func(run *StepRun) { run.State, run.Error = "skipped", err.Error() })
 			continue
 		}
 		job, err := s.Start(mc, step.What, step.Command)
+		var stale *StaleError
+		if errors.As(err, &stale) {
+			s.setStep(batch, i, func(run *StepRun) { run.State, run.Error = "skipped", err.Error() })
+			continue
+		}
 		if err != nil {
 			s.setStep(batch, i, func(run *StepRun) { run.State, run.Error = "failed", err.Error() })
 			continue
@@ -222,6 +249,21 @@ func (s *Service) runBatch(batch *Batch) {
 	s.runs.mu.Lock()
 	batch.Done, batch.Ended = true, time.Now()
 	s.runs.mu.Unlock()
+}
+
+// stillPending says why a step shown at Run is not to run now — an earlier step of the run already saw to it (the herdr
+// update installs the hooks itself), or its command moved: a skip, not a failure; nil when it stands as it was shown
+func (s *Service) stillPending(mc *machines.Machine, step Step) error {
+	for _, now := range s.machineSteps(mc) {
+		if now.What != step.What {
+			continue
+		}
+		if now.Command != step.Command {
+			return fmt.Errorf("its command changed since it was shown; look again")
+		}
+		return nil
+	}
+	return fmt.Errorf("nothing left to do: up to date now")
 }
 
 // waitJob waits for a job to end: whether it ended, went well, and why not.

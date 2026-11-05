@@ -91,7 +91,7 @@ export default function BackupSection() {
         <Select value={status.settings.keep} onChange={(keep) => void save({ keep })} options={[...new Set([...KEEP_CHOICES, status.settings.keep])].sort((a, b) => a - b).map((n) => ({ value: n, label: String(n) }))} />
       </label>
       {failure && <Notice tone="error">{failure}</Notice>}
-      {status.last && !failure && <Notice tone={status.last.error ? "error" : "success"}>{lastWords(status.last)}</Notice>}
+      {status.last && !failure && <Notice tone={status.last.error ? "error" : "success"}>{lastWords(status.last, Date.now(), status.last_good)}</Notice>}
       <div className="backup-actions">
         <button type="button" className="btn" disabled={!machine || busy || status.running} onClick={() => void run()}>
           {busy || status.running ? t("Backing up…") : t("Back up now")}

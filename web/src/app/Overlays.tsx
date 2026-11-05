@@ -71,7 +71,7 @@ export default function Overlays() {
   const openHit = (hit: SearchHit) => {
     actions.closePanel();
     const there = panes.filter((x) => x.machine.id === hit.machine && (encodePath(x.session.dir ?? "") === hit.project || encodePath(x.pane.cwd) === hit.project));
-    const pick = there.find((x) => x.pane.agent === "claude") ?? there.find((x) => x.pane.agent) ?? there[0];
+    const pick = there.find((x) => x.pane.agent === "claude") ?? there.find((x) => x.pane.agent); // a shell has no chat to jump in: the transcript opens on its own
     actions.jumpTo(hit.machine, pick ? pick.pane.id : "", hit.session, hit.uuid);
     if (pick) actions.selectPane(pick.machine.id, pick.pane.id);
     else actions.openViewer(hit);

@@ -30,6 +30,11 @@ LABEL="dev.mardeus.remuda"
 PATH_FOR_SERVICE="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 [ -x "$BIN" ] || { echo "remuda not found at $BIN (the installer or remuda setup puts it there)"; exit 1; }
+# a remuda older than -server would leave a unit that exits at once, over and over: refused before the running one is replaced
+if [ "${REMUDA_SERVER:-0}" = "1" ] && ! "$BIN" -server -version >/dev/null 2>&1; then
+    echo "$("$BIN" -version 2>/dev/null || echo "the remuda") at $BIN does not know -server yet: update it first (Download & install in its Updates, or the installer), then run this again; the running service is left as it is"
+    exit 1
+fi
 
 case "$(uname -s)" in
 Darwin)

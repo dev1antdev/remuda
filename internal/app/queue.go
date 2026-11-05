@@ -29,6 +29,12 @@ func taskQueue(store *tasks.Store, fleet *machines.Manager, watcher *watch.Watch
 			state, _ := mc.State()
 			return mc.Label(), state == machines.StateConnected
 		},
+		Unusable: func(id string) string {
+			if fleet.Server() && (id == machines.LocalID || id == "") {
+				return "this remuda only serves the page, so its own machine runs no agents: pick another in the project's settings"
+			}
+			return ""
+		},
 		Workspace: func(machineID, dir string) string {
 			snap, _ := watcher.Snapshot(machineID)
 			if snap == nil {

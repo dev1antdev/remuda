@@ -34,14 +34,17 @@ func Guarded(allow func(*http.Request) bool, signIn string, next http.Handler) h
 	})
 }
 
-// Proxy hands each request to the dev server the dial reaches: the Host and Origin it would see on the machine
-// (localhost and its port, which a dev server allows by default), remuda's cookie and any Authorization taken off on
+// Proxy hands each request to the dev server the dial reaches: the Host it would see on the machine (localhost and its
+// port, which a dev server allows by default), the Origin and Referer of the preview's own pages written as that
+// address too — another origin's left as it is, so the app's own CORS and CSRF checks still see a stranger, and a
+// stranger's Referer dropped — remuda's cookie and any Authorization taken off on
 // the way in, and on the way out a Set-Cookie of remuda's name or a Clear-Site-Data — which would sign the person out
 // of remuda, since cookies are kept by host and not by port — dropped. WebSocket upgrades (a dev server's live reload)
 // pass. A redirect to the server's own address comes back as the preview's. seen hears every request, and holds is
 // how many requests are still being answered, an upgraded one for as long as its connection stays open.
 func Proxy(dial func() (string, error), port int, base string, seen func(), holds *atomic.Int64) http.Handler {
 	own := "localhost:" + strconv.Itoa(port)
+	self := originOf(base)
 	rp := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			addr, _ := pr.In.Context().Value(dialKey{}).(string)
@@ -55,10 +58,16 @@ func Proxy(dial func() (string, error), port int, base string, seen func(), hold
 					pr.Out.AddCookie(c)
 				}
 			}
-			if pr.Out.Header.Get("Origin") != "" {
+			if origin := pr.Out.Header.Get("Origin"); origin != "" && strings.EqualFold(origin, self) {
 				pr.Out.Header.Set("Origin", "http://"+own)
 			}
+			referer := pr.Out.Header.Get("Referer")
 			pr.Out.Header.Del("Referer")
+			if len(referer) >= len(self) && strings.EqualFold(referer[:len(self)], self) {
+				if rest := referer[len(self):]; rest == "" || rest[0] == '/' {
+					pr.Out.Header.Set("Referer", "http://"+own+rest)
+				}
+			}
 		},
 		ModifyResponse: func(res *http.Response) error {
 			res.Header.Del("Clear-Site-Data")
@@ -96,6 +105,15 @@ func Proxy(dial func() (string, error), port int, base string, seen func(), hold
 }
 
 type dialKey struct{}
+
+// originOf is an address's scheme and host, as a browser writes an Origin
+func originOf(address string) string {
+	u, err := url.Parse(address)
+	if err != nil || u.Host == "" {
+		return address
+	}
+	return u.Scheme + "://" + u.Host
+}
 
 // ownLocation is a redirect to the dev server's own address (http://localhost:3000/x) written as the preview's
 func ownLocation(loc, own, base string) string {

@@ -791,18 +791,16 @@ func flagged(ss []Status, flag func(Status) bool) *Status {
 	return nil
 }
 
-// landing is where a new task goes: the on_new column, else the first open one, else the first.
+// landing is where a new task goes: the on_new column, else the first open one, else the first — never the Queued
+// column, which only the person fills, so no task an agent made and no task undone lands where the queue starts it
 func landing(ss []Status) *Status {
-	if s := flagged(ss, func(x Status) bool { return x.OnNew }); s != nil {
+	if s := flagged(ss, func(x Status) bool { return x.OnNew && !x.OnQueue }); s != nil {
 		return s
 	}
-	if s := flagged(ss, func(x Status) bool { return x.Kind != KindDone }); s != nil {
+	if s := flagged(ss, func(x Status) bool { return x.Kind != KindDone && !x.OnQueue }); s != nil {
 		return s
 	}
-	if len(ss) > 0 {
-		return &ss[0]
-	}
-	return nil
+	return flagged(ss, func(x Status) bool { return !x.OnQueue })
 }
 
 // proposals is the column an agent's task lands in for the person to triage, nil when the project keeps none.
@@ -868,6 +866,12 @@ func (st *Store) SetStatuses(projectID int64, want []Status, moves map[int64]int
 		}
 		if w.OnQueue {
 			flags["be the queue"]++
+			if w.Kind == KindDone {
+				return nil, invalid(fmt.Sprintf("column %q: a done column cannot be the Queued one", w.Title))
+			}
+			if w.OnNew || w.OnAgent || w.OnStart || w.OnFinish {
+				return nil, invalid(fmt.Sprintf("column %q: the Queued column takes only the cards the person puts there, so it cannot also take new tasks, agents' proposals, or started or finished tasks", w.Title))
+			}
 		}
 		if w.ID != 0 {
 			if statusByID(cur, w.ID) == nil {
@@ -1348,6 +1352,9 @@ func (st *Store) Update(id int64, p Patch) (Task, error) {
 		if old := statusByID(ss, cur.StatusID); old != nil {
 			next = statusByTitle(target.Statuses, old.Title)
 		}
+		if next != nil && next.OnQueue {
+			next = nil // only a move the person makes into it fills a queue, never a column matched by its name
+		}
 		if next == nil && cur.Done {
 			next = doneStatus(target.Statuses)
 		}
@@ -1606,6 +1613,9 @@ func (st *Store) StartRun(r Run) (Run, error) {
 		if err := moveTo(tx, t, *s, r.Started); err != nil {
 			return r, err
 		}
+	}
+	if _, err := tx.Exec(`UPDATE tasks SET queue_refused = '' WHERE id = ?`, r.TaskID); err != nil { // started after all: the queue's note is old news
+		return r, err
 	}
 	return r, tx.Commit()
 }

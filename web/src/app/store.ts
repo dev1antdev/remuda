@@ -280,6 +280,10 @@ export const actions = {
   dismissAlert(id: string) {
     app.set({ alerts: app.get().alerts.filter((alert) => alert.id !== id) });
   },
+  // the alerts still standing, a question answered elsewhere taken down (features/alerts/onpage.ts stillStanding)
+  setAlerts(alerts: OnPageAlert[]) {
+    app.set({ alerts });
+  },
   // the toast that offers back the agents a close just stopped; null takes it down
   setClosedOffer(closedOffer: AppState["closedOffer"]) {
     app.set({ closedOffer });

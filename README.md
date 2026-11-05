@@ -323,8 +323,9 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   stages after the first agent's work — say Codex running the tests, then
   Claude opening the pull request: each agent ends its answer with
   `STAGE DONE`, the next starts in a new tab of the same worktree with the
-  previous answer in its prompt and the card in its column, and a
-  question, an answer without the line or a card you move stops it there.
+  previous answer in its prompt and the card in its column; an answer
+  without the line (a question in the agent's own words too) or a card you
+  move stops it there, while a permission prompt only waits for you.
   Agents can propose tasks, but only you queue them.
   When the agent opens a pull request and names it (the Review mode's
   *Approve & open PR* asks for exactly that), the task notes the link, moves
@@ -608,7 +609,11 @@ keeps the backups that machine holds for others. Restored on a new
 machine, the cockpit keeps its Tailscale address, so every device stays
 signed in — never run the old one and the restored one at the same time.
 A backup holds the token: it is written 0600 into a 0700 folder on your
-own machine, and nowhere else.
+own machine, and nowhere else. It holds remuda's state dir alone: the
+machine's own `~/.ssh` — its key and the hosts it reaches — is not in
+it, so a cockpit restored on a new machine needs that machine's key let
+in on your other machines again. A server (`-server`, below) keeps no
+copies on its own disk; pick one of its machines.
 
 ### A server that only serves the page
 
@@ -630,6 +635,13 @@ is readable, the under-voltage alarm alone where it needs root) with the
 day's sparklines — and the icon turns amber or red when the box is
 warm, throttled or full. Add the machines the agents run on with the +
 beside Machines, or `herdr machine add` on the server.
+
+A box that already runs remuda keeps its binary through setup, so update
+it first — *Download & install* in its Updates — to a release that knows
+`-server`; run `remuda setup … -server` from that release too. Setup
+refuses a remuda older than the flag and leaves the running service as
+it is. A herdr already installed there stays, unused; its Updates offer
+remuda's own release alone.
 
 Every machine's ⓘ shows the same body now (memory, temperature, clock,
 throttling), and **Update everywhere** in Updates runs every connected

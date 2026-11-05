@@ -15,3 +15,27 @@ export function movesOf(rows: EditedColumn[]): Record<number, number> {
   for (const r of rows) if (r.removed) moves[r.id] = moveTarget(r, rows);
   return moves;
 }
+
+// Marks is what a column's flags say: where tasks go by themselves, and the Queued column only the person fills
+export type Marks = { key: number; kind: string; on_new: boolean; on_start: boolean; on_finish: boolean; on_agent: boolean; on_queue?: boolean };
+export type Mark = "on_agent" | "on_new" | "on_queue" | "on_start" | "on_finish";
+const BY_THEMSELVES: Mark[] = ["on_agent", "on_new", "on_start", "on_finish"];
+
+// withMark sets one mark on a column and takes it off the others; the Queued mark never shares a column with a mark
+// that puts tasks there by themselves, nor sits on a done column, so turning one on takes the other off
+export function withMark<R extends Marks>(rows: R[], key: number, mark: Mark, on: boolean): R[] {
+  return rows.map((r) => {
+    const next: R = { ...r, [mark]: r.key === key ? on : on ? false : r[mark] };
+    if (r.key !== key || !on) return next;
+    if (mark === "on_queue") {
+      for (const other of BY_THEMSELVES) next[other] = false;
+      if (r.kind === "done") next.kind = "open";
+    } else next.on_queue = false;
+    return next;
+  });
+}
+
+// withKind changes a column's kind; a done column is never the Queued one
+export function withKind<R extends Marks>(rows: R[], key: number, kind: string): R[] {
+  return rows.map((r) => (r.key !== key ? r : { ...r, kind, on_queue: kind === "done" ? false : r.on_queue }));
+}

@@ -17,7 +17,12 @@ func TestStageDoneIsTheMarkerAtTheEnd(t *testing.T) {
 		"Done.\n```\nSTAGE DONE\n```":               false,
 		"Should I also change the footer?":          false,
 		"The marker is STAGE DONE, I will write it": false,
-		"": false,
+		"So this is not STAGE DONE":                 false,
+		"Once the tests pass I will say STAGE DONE": false,
+		"Status: STAGE DONE":                        true,
+		"Reviewed — STAGE DONE":                     true,
+		"> STAGE DONE":                              true,
+		"":                                          false,
 	} {
 		if got := StageDone(answer); got != want {
 			t.Errorf("StageDone(%q) = %v, want %v", answer, got, want)
@@ -204,9 +209,10 @@ func TestThePipelineStopsForAMovedCardAQuestionOrAnAnswerWithoutTheMarker(t *tes
 			_, _ = st.Update(tk.ID, Patch{StatusID: &landing.ID})
 			h.states["w1:p1"], h.answers["w1:p1"] = "idle", "Fixed.\nSTAGE DONE"
 		}, "the card was moved by hand"},
-		{"asks", func(st *Store, h *pipeHere, tk Task, p Project) {
-			h.states["w1:p1"] = "blocked"
-		}, "the agent asked something"},
+		{"done", func(st *Store, h *pipeHere, tk Task, p Project) {
+			_, _ = st.Update(tk.ID, Patch{Done: boolp(true)})
+			h.states["w1:p1"], h.answers["w1:p1"] = "idle", "Fixed.\nSTAGE DONE"
+		}, "the task is done"},
 		{"no marker", func(st *Store, h *pipeHere, tk Task, p Project) {
 			h.states["w1:p1"], h.answers["w1:p1"] = "idle", "Should the button be blue or green?"
 		}, "the agent answered without STAGE DONE"},
@@ -248,5 +254,55 @@ func TestARunWithoutAPipelineFinishesAsBefore(t *testing.T) {
 	got, _ := st.Get(tk.ID)
 	if len(h.advances) != 0 || got.Run.Pipeline != "" || got.StatusID != column(ps[0], func(s Status) bool { return s.OnFinish }).ID {
 		t.Fatalf("a plain run: advances %d, pipeline %q, column %d", len(h.advances), got.Run.Pipeline, got.StatusID)
+	}
+}
+
+func TestAPermissionPromptOnlyWaitsAndTheAnswerDecides(t *testing.T) {
+	st := open(t)
+	p, review := piped(t, st)
+	tk, run := startPiped(t, st, p)
+	h := newPipe(st)
+	h.states["w1:p1"] = "blocked"
+	h.w.Sweep()
+	if got, _ := st.Run(run.ID); got.Pipeline != PipelineOn || len(h.advances) != 0 {
+		t.Fatalf("a dialog changed the pipeline: %q, advances %d", got.Pipeline, len(h.advances))
+	}
+	h.states["w1:p1"], h.answers["w1:p1"] = "idle", "Fixed after the approval.\nSTAGE DONE"
+	h.w.Sweep()
+	if len(h.advances) != 1 {
+		t.Fatalf("the answer after the dialog did not move the pipeline on: %d", len(h.advances))
+	}
+	if got, _ := st.Get(tk.ID); got.StatusID != review.ID {
+		t.Fatalf("the card sits in %d, not the stage's column %d", got.StatusID, review.ID)
+	}
+}
+
+func TestOnlyThePipelineMovesTheCardWhileItRuns(t *testing.T) {
+	st := open(t)
+	p, review := piped(t, st)
+	tk, first := startPiped(t, st, p)
+	h := newPipe(st)
+	h.states["w1:p1"], h.answers["w1:p1"] = "idle", "Fixed.\nSTAGE DONE"
+	h.w.Sweep()
+	if len(h.advances) != 1 {
+		t.Fatalf("advances %d", len(h.advances))
+	}
+	second, _ := st.Get(tk.ID)
+	h.answers["w1:p1"] = "One more word from the first tab."
+	h.w.Sweep()
+	if got, _ := st.Get(tk.ID); got.StatusID != review.ID {
+		t.Fatalf("an answer in the first stage's tab moved the card to %d", got.StatusID)
+	}
+	if note, err := st.OnPullRequest("studio", second.Run.Pane, "https://github.com/o/r/pull/9", "PR #9"); err != nil || note == nil || note.Moved != nil {
+		t.Fatalf("a pull request named mid-pipeline moved the card: %+v %v", note, err)
+	}
+	h.answers[second.Run.Pane] = "Tests pass.\nSTAGE DONE"
+	h.states[second.Run.Pane] = "idle"
+	h.w.Sweep()
+	if len(h.advances) != 2 {
+		t.Fatalf("the second stage did not hand over: %d advances", len(h.advances))
+	}
+	if got, _ := st.Run(first.ID); got.Pipeline != PipelinePassed {
+		t.Fatalf("the first run is %q", got.Pipeline)
 	}
 }

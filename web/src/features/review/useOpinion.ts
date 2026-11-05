@@ -9,7 +9,7 @@ import { useQuery } from "@/lib/query";
 import { dismissOpinion, fetchOpinion } from "./api";
 import type { NewComment } from "./Hunk";
 import type { DiffRow } from "./hunks";
-import { adoptedText, asksPerson, byFile, openComments, unlisted, type Opinion, type OpinionComment } from "./opinion";
+import { adoptedText, asksPerson, byFile, openComments, placeComments, type Opinion, type OpinionComment } from "./opinion";
 
 const WHILE_RUNNING = 3000;
 const OTHERWISE = 30000;
@@ -39,8 +39,10 @@ export function useOpinion({ machineId, dir, look, active, files, addComment, on
   }, [running, opinion, machines]);
   const askingPerson = asksPerson(reviewerPane);
   const open = useMemo(() => openComments(opinion), [opinion]);
-  const perFile = useMemo(() => byFile(open), [open]);
-  const apart = useMemo(() => unlisted(open, files), [open, files]);
+  const placed = useMemo(() => placeComments(opinion, files), [opinion, files]);
+  const perFile = useMemo(() => byFile(placed.onRows), [placed]);
+  const apart = placed.unlisted;
+  const moved = placed.moved;
 
   const dismiss = useCallback(
     (ids: number[]) => {
@@ -70,5 +72,5 @@ export function useOpinion({ machineId, dir, look, active, files, addComment, on
   const dismissOne = useCallback((id: number) => dismiss([id]), [dismiss]);
   const dismissAll = useCallback(() => dismiss([]), [dismiss]);
 
-  return { opinion, reviewer, askingPerson, perFile, apart, adopt, adoptAll, dismissOne, dismissAll, asking, setAsking, reload, mutate };
+  return { opinion, running, reviewer, askingPerson, perFile, apart, moved, adopt, adoptAll, dismissOne, dismissAll, asking, setAsking, reload, mutate };
 }

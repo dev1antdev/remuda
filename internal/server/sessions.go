@@ -114,10 +114,10 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*mach
 }
 
 // firstPrompt delivers the prompt a person wrote for the agent they just started; a failure is a note in the activity, with the pane to open.
-func (s *Server) firstPrompt(client *herdr.Client, ref events.PaneRef, prompt, place string) {
+func (s *Server) firstPrompt(client *herdr.Client, ref events.PaneRef, prompt, place string) error {
 	err := s.Input.FirstPrompt(client, ref, prompt, sessions.FirstPromptTimeout)
 	if err == nil || s.Push == nil {
-		return
+		return err
 	}
 	s.Push.Notify(push.Payload{
 		Machine: ref.Machine, Pane: ref.Pane, Kind: "input",
@@ -126,6 +126,7 @@ func (s *Server) firstPrompt(client *herdr.Client, ref events.PaneRef, prompt, p
 		Tag:     "first|" + ref.Pane,
 		Actions: []push.Action{{Action: "open", Title: "Open"}},
 	})
+	return err
 }
 
 // firstPromptPlace names where the agent was started for the note: the worktree's branch, the workspace's name, else its folder.

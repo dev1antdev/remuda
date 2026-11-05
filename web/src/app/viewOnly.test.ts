@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { viewerCommand, viewerMenu, viewerPlaces, viewerToasts } from "./viewOnly";
 
 const modes = [{ mode: "herdr" }, { mode: "wall" }, { mode: "tasks" }, { mode: "code" }, { mode: "review" }];
-const panels = [{ panel: "standup" }, { panel: "usage" }, { panel: "schedules" }, { panel: "activity" }];
+const panels = [{ panel: "standup" }, { panel: "usage" }, { panel: "schedules" }, { panel: "activity" }, { panel: "server" }];
 
 describe("viewerPlaces", () => {
   it("keeps every place for the full page", () => {
@@ -11,7 +11,8 @@ describe("viewerPlaces", () => {
   });
   it("keeps the agents, the Wall and the reports for a viewer", () => {
     expect(viewerPlaces(modes, true).map((p) => p.mode)).toEqual(["herdr", "wall"]);
-    expect(viewerPlaces(panels, true).map((p) => p.panel)).toEqual(["standup", "usage", "activity"]);
+    expect(viewerPlaces(panels, true).map((p) => p.panel)).toEqual(["standup", "usage", "activity", "server"]);
+    expect(viewerCommand("server"), "the palette's Server row, which the rail must match").toBe(true);
   });
 });
 

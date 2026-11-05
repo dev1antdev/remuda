@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StepRun } from "./api";
-import { byMachine, restartsHost, stateWords, summaryWords } from "./everywhere";
+import { byMachine, hostRestarting, restartsHost, stateWords, summaryWords } from "./everywhere";
 
 const step = (machine: string, what: string, state: StepRun["state"] = "waiting", error?: string): StepRun => ({ machine, label: machine.toUpperCase(), what, title: what, command: what, state, error });
 
@@ -24,5 +24,11 @@ describe("Update everywhere", () => {
     expect(restartsHost([step("gog", "remuda-release"), step("local", "remuda-release")], "local")).toBe(true);
     expect(restartsHost([step("gog", "remuda-release")], "local")).toBe(false);
     expect(restartsHost([step("local", "remuda-release")], undefined)).toBe(false);
+  });
+  it("reads a run gone with the page's own remuda as its restart, not as a failure", () => {
+    expect(hostRestarting([step("gog", "herdr", "ok"), step("local", "remuda-release", "running")], "local")).toBe(true);
+    expect(hostRestarting([step("local", "remuda-release", "ok")], "local")).toBe(true);
+    expect(hostRestarting([step("gog", "herdr", "running"), step("local", "remuda-release")], "local")).toBe(false);
+    expect(hostRestarting([step("gog", "remuda-release", "running")], "local")).toBe(false);
   });
 });
