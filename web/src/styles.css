@@ -3194,6 +3194,24 @@ body.is-resizing iframe {
   color: var(--fg-dim);
 }
 
+/* ---- previews (features/preview): a machine's port a row, its number in the code face ---- */
+.preview-row {
+  cursor: default;
+}
+
+.preview-port {
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+
+.preview-fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  font-size: var(--fs-12);
+}
+
 .alerts-dialog small {
   display: block;
   margin-top: 2px;

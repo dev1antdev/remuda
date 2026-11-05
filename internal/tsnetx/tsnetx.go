@@ -5,6 +5,7 @@ package tsnetx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -73,6 +74,26 @@ func (n *Node) Status() Status {
 
 // Close leaves the tailnet.
 func (n *Node) Close() error { return n.srv.Close() }
+
+// ErrNotRunning is a listener asked for before the node is on the tailnet.
+var ErrNotRunning = errors.New("the tailnet is not up yet")
+
+// ListenTLS opens one more port of the node's own, over TLS with the tailnet's certificate, and says its address — a
+// preview's (internal/preview). Ports 80 and 443 are the page's.
+func (n *Node) ListenTLS(port int) (net.Listener, string, error) {
+	st := n.Status()
+	if st.State != "running" || st.URL == "" {
+		return nil, "", ErrNotRunning
+	}
+	if port == 80 || port == 443 {
+		return nil, "", fmt.Errorf("port %d is the page's", port)
+	}
+	ln, err := n.srv.ListenTLS("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return nil, "", err
+	}
+	return ln, fmt.Sprintf("%s:%d", st.URL, port), nil
+}
 
 func (n *Node) run(h http.Handler) {
 	if err := n.srv.Start(); err != nil {

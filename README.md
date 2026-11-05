@@ -664,6 +664,23 @@ cookie is stripped on the way to code-server), but the editor itself is
 as trusted as this page. Open the Code mode only on machines you trust
 with everything remuda can do; see SECURITY.md.
 
+## Previews — what the agents serve
+
+An agent on GOG starts a dev server on `:3000`; **Previews…** in the
+workspace's ⋯ menu (or the ⌘K palette) lists the ports the machine's
+processes listen on — the workspace's own first (`3000 · node · vite`), the
+other workspaces' after, the rest of the machine's folded away — and
+**Open** shows one in a tab of its own. With `-tailscale` the port opens on
+the cockpit's own tailnet name, the same number when it is free:
+`https://remuda.<tailnet>.ts.net:3000`. A port of its own keeps the app's
+absolute paths working, its live reload too, and keeps the app's scripts
+off remuda's origin. Without `-tailscale` it opens on a port of the host
+remuda listens on (`http://127.0.0.1:41000`…), which a browser elsewhere
+reaches through a forward of its own. Only the browser signed in to remuda
+gets in — a viewer link does not — and remuda's cookie never reaches the
+app. Nothing is listened on by itself: a preview opens at your Open and
+closes after half an hour unused.
+
 ## Agents and your tasks
 
 Any coding agent remuda runs — Claude Code, Codex, Gemini CLI, Kimi Code —

@@ -1230,6 +1230,45 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   answers "Unable to resolve resource"; the frame's address is settled once per request, so
   coming back to the folder later does not open the file again; a path that is the folder itself opens no file (the rail can name it after a Read of the directory). **Follow** (the Code bar's button, pref `code.follow`): while the pane on screen in Agents runs an agent on this machine, its tail is polled at a tile's pace (`useChat`, `last=4`) and every edit it finishes — `newestEdit` in `code/follow.ts`, tested: the Edit / Write / MultiEdit / NotebookEdit with no error whose result came last (its call's `at` plus `took`, since calls made side by side finish out of order; the order made where a time is missing), named by `tool_id` — opens in the editor the same way; what was already there when Follow began is not news. The flag `-code-port`
   changes the port on every machine at once.
+- `internal/preview/` — **previews of what the agents serve** (tested):
+  `Script` is one POSIX script per machine — `ss -ltnpH` and `/proc` on
+  Linux, `lsof -iTCP -sTCP:LISTEN -Fpcn` and `ps` elsewhere — printing
+  every listening TCP port above 1023 with its pid, process, working
+  folder (its parent's when it has none) and arguments; `Parse` keeps one
+  per port (the IPv4 loopback's socket first), leaves out the ports given
+  (the cockpit's own `-addr`, 7317, the door 7318, code-server's), the
+  processes remuda, herdr, ssh and Tailscale run, and any whose folder is
+  `/` or unknown (a system daemon, another user's), names what it is from
+  its arguments (`labelOf`: vite, next, http.server, uvicorn …) and where
+  the machine reaches it (`Dial`: 127.0.0.1 for a wildcard, ::1 for an
+  IPv6 one — a Mac's Vite listens on `[::1]` alone — else the address);
+  `Match` names the deepest workspace folder holding it (a Mac's
+  `/private/tmp` read as `/tmp`). `Service.Open` (after the dial reached
+  the machine) opens a listener of the cockpit's own: `Listen` is the
+  tailnet node's TLS port on its name (`tsnetx.Node.ListenTLS`, 80 and
+  443 refused) with `-tailscale`, else a port of the `-addr` host
+  addressed by the name the page was asked at (`loopbackPreviews` in
+  `internal/app`); the machine's own port number first, else forty of
+  41000–41999, never one a browser refuses (`unsafePorts`), and a second
+  Open answers the one open; `closeIdleAt` shuts, every half minute, a
+  preview unasked for `IdleAfter` (30 min) that holds no connection.
+  `Proxy` forwards over the master (`Machine.ForwardHostAddr`, the
+  forward cache keyed by host and port, `sshx.Conn.ForwardTCPTo`), with
+  Host and Origin rewritten to `localhost:<port>` (a dev server's own
+  allow list), `Referer` dropped, and upgrades (live reload) passed;
+  `Guarded` lets in `Guard.SignedIn` alone. Routes
+  (`internal/server/preview.go`): `GET /api/previews?machine=`
+  (listeners and the previews open), `POST /api/previews/open {machine,
+  port}` (a port found listening now, never one the body names alone; 503
+  while the tailnet is not up), `DELETE /api/previews {machine, port}`.
+  The page: `features/preview/` — `PreviewsDialog.tsx` (dialog kind
+  `previews`: "Previews…" in the workspace's ⋯ menu, the palette's
+  "Previews of “x”…" and "Previews on <machine>…"; the workspace's ports,
+  the other workspaces', and the rest folded; Open opens the tab on the
+  click itself, so no popup blocker takes it, its opener cut, then sends
+  it to the address; Shut; polled every 5 s while open), `previews.ts`
+  the pure part, tested: `listenerWords`, `whereWords`, `split`,
+  `openOn`, `hostOf`.
 - `web/src/lib/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
   provider (`terminal/engine/links.ts`, which reads its row cell by cell, so
   a wide character or a surrogate pair before or inside a link leaves the
@@ -3180,6 +3219,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   forced to SAMEORIGIN there) and the file viewer's bytes (a stricter
   sandbox CSP). The code proxy strips `Cookie`/`Authorization` before
   forwarding — remuda's token never reaches a machine's code-server.
+  A preview (`internal/preview`) is served on a port of its own, never
+  under remuda's origin, so the app's scripts cannot drive remuda's API
+  (`csrfGuard` refuses the same-site port's Origin); it lets in only
+  `Guard.SignedIn` — the person's device or the token, never a viewer, a
+  key or a stale device — answers anyone else with a link to sign in and
+  no token form, strips `Cookie: remuda_token` and `Authorization` on the
+  way in, drops a `Set-Cookie` of remuda's name and `Clear-Site-Data` on
+  the way out (cookies are kept by host, not by port), opens only a port
+  found listening, only at the person's Open, and closes when idle.
   `decode` caps a JSON body at 1 MB; the `-addr` server has header and
   idle timeouts. The sign-in URL is logged only on the first run or to a
   terminal; a wrong token is logged with the remote address and answered
