@@ -50,7 +50,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
   const usage = pane.usage;
   const fill = usage && usage.window > 0 ? usage.context / usage.window : 0;
   const where = `${hidden ? folderName : session.name}${machine.id !== "local" ? ` · ${share.machineLabel(machine)}` : ""}`;
-  const screen = view === "screen";
+  const screen = view === "screen" || !pane.agent; // a shell, popped out, has its screen alone: no conversation to tail
   const open = () => {
     actions.selectPane(machine.id, pane.id);
     actions.setLens(screen ? "terminal" : "chat");

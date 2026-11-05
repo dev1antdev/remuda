@@ -1013,6 +1013,11 @@ input[type="checkbox"]:hover:not(:checked) {
   cursor: default;
 }
 
+/* a shell's pane: its terminal alone, the switch's room kept so the header moves nothing between an agent's tab and a shell's */
+.lens-switch.is-vacant {
+  visibility: hidden;
+}
+
 .bell {
   position: relative; /* the activity dot sits in its corner */
   display: inline-grid;
@@ -7663,6 +7668,7 @@ body.popout {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.25; /* the button's line-height of 1 clipped g, y, р and у at the box's foot */
 }
 
 .rail-btn.has-news::after {
