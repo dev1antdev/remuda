@@ -45,7 +45,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     }
 
     private func layout() -> NSView {
-        serverField.placeholderString = "this Mac's remuda, or a pairing link http://host:7317/?token=…"
+        serverField.placeholderString = "this Mac's remuda, or a cockpit's sign-in link https://remuda.…ts.net/?token=…"
         hotkeyField.placeholderString = Hotkey.defaultSpec
         note.maximumNumberOfLines = 3
         note.textColor = .secondaryLabelColor

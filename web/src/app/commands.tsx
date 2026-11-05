@@ -15,6 +15,7 @@ import { DEFAULT_WALL, tileKey, type WallPrefs } from "@/features/roster/wall";
 import { agentTitle, askRestart } from "@/features/updates/restartPane";
 import { isMac, usePref, writePref } from "@/lib/prefs";
 import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, openLensOf, type OpenLens } from "./openLens";
+import { lensOn, lensesOf } from "./paneLens";
 import { basename, errMsg } from "@/lib/text";
 import { folderOf as sessionFolder } from "@/features/roster/workspaces";
 import { canFork, forkLabel } from "@/features/chat/fork";
@@ -66,7 +67,6 @@ const toastError = (e: unknown) => actions.notify(errMsg(e), { error: true });
 function useCommands(): (query: string) => Entry[] {
   const { machines, viewOnly, jiraSite } = useRoster();
   const mode = app.use((s) => s.mode);
-  const lens = app.use((s) => s.lens);
   const viewer = app.use((s) => s.viewer);
   const chatSession = app.use((s) => s.chatSession);
   const chatLive = app.use((s) => s.chatLive);
@@ -79,6 +79,7 @@ function useCommands(): (query: string) => Entry[] {
   const darkFlavor = useDarkFlavorPref();
   const textSize = useTextSize();
   const current = useCurrent();
+  const lens = lensOn(app.use((s) => s.lens), current?.pane.agent ?? ""); // a shell has its terminal alone
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [wall, setWall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
   const [focus, setFocus] = usePref<string>("wall.focus", "");
@@ -106,7 +107,7 @@ function useCommands(): (query: string) => Entry[] {
       if (current && !viewer) {
         const folder = folderOf(current);
         for (const l of LENSES) {
-          if ((mode === "herdr" && l.lens === lens) || (l.lens === "changes" && !folder)) continue;
+          if ((mode === "herdr" && l.lens === lens) || (l.lens === "changes" && !folder) || !lensesOf(current.pane.agent).includes(l.lens)) continue;
           const show = () => {
             actions.setMode("herdr");
             actions.setLens(l.lens);
@@ -122,6 +123,8 @@ function useCommands(): (query: string) => Entry[] {
         command(`workspace:${m.id}`, where, () => actions.openDialog({ kind: "workspace", machineId: m.id }), { hint: t("an agent in a folder"), icon: "plus", keywords: ["start", "agent", "create", m.label] });
       }
       for (const m of machines.filter((m) => m.state === "connected"))
+        command(`previews:${m.id}`, t("Previews on {machine}…", { machine: m.label }), () => actions.openDialog({ kind: "previews", machineId: m.id }), { hint: t("what the agents serve there, opened in a tab of this browser"), icon: "external-link", keywords: ["preview", "port", "dev", "server", "localhost", "open", "browser", m.label] });
+      for (const m of machines.filter((m) => m.state === "connected"))
         command(`leftovers:${m.id}`, t("Leftover worktrees on {machine}…", { machine: m.label }), () => actions.openDialog({ kind: "leftovers", machineId: m.id }), { hint: t("worktrees no workspace has open"), icon: "git-branch", keywords: ["cleanup", "clean", "worktree", "garbage", "disk", m.label] });
       if (current && !viewer) {
         const { machine, session, tab } = current;
@@ -130,6 +133,7 @@ function useCommands(): (query: string) => Entry[] {
         command("tab", t("New tab in {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "tab", machineId: machine.id, session }), { hint: t("another agent in the same folder"), icon: "plus", keywords: ["agent", "create"] });
         if (session.worktree || session.branch)
           command("worktree", t("New workspace in {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "worktree", machineId: machine.id, session }), { hint: t("a worktree of its own: a new folder and branch, an agent in it"), icon: "git-branch", keywords: ["worktree", "branch", "create", "agent"] });
+        command("previews", t("Previews of {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "previews", machineId: machine.id, workspace: session.id, name: session.name }), { hint: t("what its agents serve, opened in a tab of this browser"), icon: "external-link", keywords: ["preview", "port", "dev", "server", "localhost", "open", "browser"] });
         command("rename-workspace", t("Rename workspace {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }), { icon: "tag" });
         const folder = sessionFolder(session);
         if (folder) command("folder-icon", t("Icon for the folder {folder}…", { folder: `“${basename(folder)}”` }), () => actions.openDialog({ kind: "folder-icon", machineId: machine.id, folder, name: basename(folder), icon: session.icon }), { hint: t("an emoji, a site's icon or a picture"), icon: "folder", keywords: ["emoji", "favicon", "logo", "picture"] });
@@ -227,7 +231,7 @@ function useCommands(): (query: string) => Entry[] {
       for (const language of LANGS) {
         command(`lang-${language}`, language === "ru" ? "Язык: Русский" : t("Language: English"), () => setLangPref(language), { hint: `${currentLang() === language ? t("now · ") : ""}${t("the page's own words; a change reloads the page")}`, icon: "monitor", keywords: ["language", "язык", "russian", "english", "русский", language] });
       }
-      if (current && !viewer && mode === "herdr") command("split", split ? t("Chat and terminal: one at a time") : t("Chat beside the terminal"), actions.toggleSplit, { hint: split ? t("the lens switch shows one lens again") : t("the chat on the left, the terminal on the right, on a screen at least 1180 px wide with a mouse"), icon: "columns", keywords: ["split", "side", "beside", "chat", "terminal", "columns", "both"] });
+      if (current?.pane.agent && !viewer && mode === "herdr") command("split", split ? t("Chat and terminal: one at a time") : t("Chat beside the terminal"), actions.toggleSplit, { hint: split ? t("the lens switch shows one lens again") : t("the chat on the left, the terminal on the right, on a screen at least 1180 px wide with a mouse"), icon: "columns", keywords: ["split", "side", "beside", "chat", "terminal", "columns", "both"] });
       command("sharing", share.on ? t("Screen-sharing mode: off") : t("Screen-sharing mode: on"), toggleSharing, {
         hint: `${SHARING_KEY_NAME} · ${share.on ? t("names and answers show again") : t("the folders and machines you marked, or everything, read as neutral names; their panes covered")}`,
         icon: share.on ? "eye" : "eye-off",

@@ -6,9 +6,11 @@ import { basename, dirname, errMsg, plural } from "@/lib/text";
 import { Icon, Notice, Tip } from "@/ui";
 import type { ReviewFile } from "./api";
 import { fileLines, surround, whyNotUnfold, type Unfold } from "./context";
-import type { DraftComment } from "./draft";
-import { commentKey, Hunk, Note, rowKey, type NewComment } from "./Hunk";
-import { rowsOf, splitHunks } from "./hunks";
+import { draftOnRow, type DraftComment } from "./draft";
+import { Hunk, Note, type NewComment } from "./Hunk";
+import { rowsOf, splitHunks, type DiffRow } from "./hunks";
+import { offRows, type OpinionComment } from "./opinion";
+import { OpinionNote } from "./OpinionNote";
 import { t } from "@/lib/i18n";
 
 export type { NewComment } from "./Hunk";
@@ -16,7 +18,15 @@ export type { NewComment } from "./Hunk";
 // SourceRead is the working-tree file as the viewer serves it: its text, and whether the cap cut it
 export type SourceRead = { text: string; truncated: boolean; max: number };
 
-export function FileRow({ file, open, split, onToggle, load, loadSource, onLoaded, canComment, draft, onComment, onRemove, onOpen, onCode }: {
+// Opinions is a second opinion's open comments on one file, who gave them, and what a comment's buttons do
+export type Opinions = {
+  comments: OpinionComment[];
+  reviewer: string;
+  onAdopt: (comment: OpinionComment, row?: DiffRow) => void;
+  onDismiss: (id: number) => void;
+};
+
+export function FileRow({ file, open, split, onToggle, load, loadSource, onLoaded, canComment, draft, onComment, onRemove, onOpen, onCode, opinion, reviewer, onAdopt, onDismissOpinion }: {
   file: ReviewFile;
   open: boolean;
   split: boolean;
@@ -30,7 +40,12 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
   onRemove: (id: number) => void;
   onOpen: (line?: number) => void;
   onCode?: () => void; // the file in the editor, when Code mode is there to take it
+  opinion: OpinionComment[]; // the second opinion's open comments on this file
+  reviewer: string;
+  onAdopt: (comment: OpinionComment, row?: DiffRow) => void;
+  onDismissOpinion: (id: number) => void;
 }) {
+  const opinions = useMemo<Opinions>(() => ({ comments: opinion, reviewer, onAdopt, onDismiss: onDismissOpinion }), [opinion, reviewer, onAdopt, onDismissOpinion]);
   const [attempt, setAttempt] = useState(0);
   const { data: diff, error } = useQuery(() => (open ? load(file.path) : Promise.resolve(undefined)), [open, load, file.path, attempt], { enabled: open, keep: true });
   useEffect(() => {
@@ -51,6 +66,11 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
           {draft.length > 0 && (
             <span className="review-tag review-tag-comments" title={t("{comments} in the draft", { comments: plural(draft.length, "comment") })}>
               {draft.length}
+            </span>
+          )}
+          {opinion.length > 0 && (
+            <span className="review-tag review-tag-opinion" title={t("{comments} from {agent}'s second opinion", { comments: plural(opinion.length, "comment"), agent: reviewer })}>
+              <Icon name="message" size={12} /> {opinion.length}
             </span>
           )}
           {file.untracked ? (
@@ -89,7 +109,7 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
         ) : diff === null ? (
           <div className="empty">{t("Loading…")}</div>
         ) : (
-          <Diff text={diff} split={split} canComment={canComment} draft={draft} file={file.path} loadSource={loadSource} onComment={onComment} onRemove={onRemove} />
+          <Diff text={diff} split={split} canComment={canComment} draft={draft} file={file.path} loadSource={loadSource} onComment={onComment} onRemove={onRemove} opinions={opinions} />
         ))}
     </div>
   );
@@ -101,7 +121,7 @@ type Unfolds = { forText: string; by: Record<number, Unfold>; lines: string[] | 
 const folded = (text: string): Unfolds => ({ forText: text, by: {}, lines: null, blocked: null });
 const FOLDED = folded("");
 
-function Diff({ text, split, canComment, draft, file, loadSource, onComment, onRemove }: {
+function Diff({ text, split, canComment, draft, file, loadSource, onComment, onRemove, opinions }: {
   text: string;
   split: boolean;
   canComment: boolean;
@@ -110,6 +130,7 @@ function Diff({ text, split, canComment, draft, file, loadSource, onComment, onR
   loadSource: (path: string) => Promise<SourceRead>;
   onComment: (file: string, comment: NewComment) => void;
   onRemove: (id: number) => void;
+  opinions: Opinions;
 }) {
   const hunks = useMemo(() => splitHunks(text), [text]);
   const [unfoldState, setUnfolds] = useState<Unfolds>(() => folded(text));
@@ -148,16 +169,17 @@ function Diff({ text, split, canComment, draft, file, loadSource, onComment, onR
     },
     [readLines, text],
   );
-  const rowKeys = useMemo(() => {
-    const keys = new Set<string>();
+  const shownRows = useMemo(() => {
+    const rows: DiffRow[] = [];
     hunks.forEach((hunk, index) => {
       const around = surround(hunk, hunks[index - 1] ?? null, hunks[index + 1] ?? null, unfolds.by[index], unfolds.lines);
-      for (const row of [...around.above, ...rowsOf(hunk), ...around.below]) keys.add(rowKey(row));
+      rows.push(...around.above, ...rowsOf(hunk), ...around.below);
     });
-    return keys;
+    return rows;
   }, [hunks, unfolds]);
-  const strayComments = draft.filter((comment) => !rowKeys.has(commentKey(comment)));
-  if (hunks.length === 0 && strayComments.length === 0) return <div className="empty">{t("No textual diff (binary, or identical).")}</div>;
+  const strayComments = draft.filter((comment) => !shownRows.some((row) => draftOnRow(comment, row)));
+  const strayOpinions = useMemo(() => offRows(opinions.comments, shownRows), [opinions.comments, shownRows]);
+  if (hunks.length === 0 && strayComments.length === 0 && strayOpinions.length === 0) return <div className="empty">{t("No textual diff (binary, or identical).")}</div>;
   return (
     <div className={`fv-code fv-diff review-diff${split ? " columns" : ""}${canComment ? " can-comment" : ""}`}>
       {hunks.map((hunk, index) => (
@@ -177,8 +199,17 @@ function Diff({ text, split, canComment, draft, file, loadSource, onComment, onR
           lines={unfolds.by[index] || index === hunks.length - 1 ? unfolds.lines : null}
           blocked={unfolds.blocked}
           onUnfold={onUnfold}
+          opinions={opinions}
         />
       ))}
+      {strayOpinions.length > 0 && (
+        <div className="review-orphans">
+          <Notice tone="hint">{t("{agent}'s comments on lines this diff does not show:", { agent: opinions.reviewer })}</Notice>
+          {strayOpinions.map((comment) => (
+            <OpinionNote key={comment.id} comment={comment} reviewer={opinions.reviewer} where={t("line {n}", { n: comment.line })} onAdopt={opinions.onAdopt} onDismiss={opinions.onDismiss} />
+          ))}
+        </div>
+      )}
       {strayComments.length > 0 && (
         <div className="review-orphans">
           <Notice tone="hint">{t("No longer on a line of this diff — still in the draft:")}</Notice>

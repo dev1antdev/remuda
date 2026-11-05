@@ -21,7 +21,7 @@ func TestAFailedLogIsCutOnTheMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 	whole := 60000*len("noise\n") + len("FAIL: TestThing\n")
-	if len(out) > 2*LogRead || !strings.HasSuffix(out, "FAIL: TestThing\n") { // GNU tail on a pipe may hand over a buffer past LogRead
+	if len(out) > LogRead || !strings.HasSuffix(out, "FAIL: TestThing\n") {
 		t.Fatalf("%d of %d bytes arrived, ending %q", len(out), whole, out[max(0, len(out)-40):])
 	}
 	if tail := Tail(out); !strings.Contains(tail, "FAIL: TestThing") || len(tail) > LogTail+8 {

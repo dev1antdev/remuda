@@ -2,18 +2,23 @@ import { describe, expect, it } from "vitest";
 import source from "../../public/sw.js?raw";
 
 type Answer = { ok: boolean; status: number } | Error;
-type Window = { visibilityState: string; focus: () => Promise<void>; postMessage: (message: unknown) => void };
+type Window = { visibilityState: string; focused?: boolean; focus: () => Promise<void>; postMessage: (message: unknown) => void };
+type Shown = { title: string; options: { tag: string; silent: boolean }; closed: boolean };
 
-// worker runs sw.js against stand-ins for the worker's globals: what it fetched, opened and posted is kept
+// worker runs sw.js against stand-ins for the worker's globals: what it fetched, opened, posted and showed is kept
 function worker(answer: Answer, windows: Window[] = []) {
   const handlers: Record<string, (event: unknown) => void> = {};
   const fetched: { url: string; body: unknown }[] = [];
   const opened: string[] = [];
+  const shown: Shown[] = [];
   const self = {
     addEventListener: (type: string, handler: (event: unknown) => void) => (handlers[type] = handler),
     skipWaiting: () => {},
     clients: { matchAll: async () => windows, openWindow: async (url: string) => void opened.push(url), claim: async () => {} },
-    registration: { showNotification: async () => {} },
+    registration: {
+      showNotification: async (title: string, options: Shown["options"]) => void shown.push({ title, options, closed: false }),
+      getNotifications: async ({ tag }: { tag: string }) => shown.filter((s) => s.options.tag === tag && !s.closed).map((s) => ({ close: () => (s.closed = true) })),
+    },
   };
   const fetchStandIn = async (url: string, init?: { body?: string }) => {
     fetched.push({ url, body: init?.body ? JSON.parse(init.body) : undefined });
@@ -26,8 +31,43 @@ function worker(answer: Answer, windows: Window[] = []) {
     handlers.notificationclick!({ action, notification: { close: () => {}, data }, waitUntil: (promise: Promise<unknown>) => (done = promise) });
     await done;
   };
-  return { click, fetched, opened };
+  const push = async (data: Record<string, unknown>) => {
+    let done: Promise<unknown> = Promise.resolve();
+    handlers.push!({ data: { json: () => data }, waitUntil: (promise: Promise<unknown>) => (done = promise) });
+    await done;
+  };
+  return { click, push, fetched, opened, shown };
 }
+
+const page = (visibilityState: string, focused: boolean, posted: unknown[] = []): Window => ({ visibilityState, focused, focus: async () => {}, postMessage: (message) => posted.push(message) });
+
+describe("a push", () => {
+  const alert = { title: "api needs you", body: "claude is waiting", tag: "local|w1:p1", kind: "input", machine: "local", pane: "w1:p1" };
+  it("shows a notification with a sound when no window of ours is open, and keeps it", async () => {
+    const sw = worker({ ok: true, status: 200 });
+    await sw.push(alert);
+    expect(sw.shown).toMatchObject([{ title: "api needs you", options: { tag: "local|w1:p1", silent: false }, closed: false }]);
+  });
+  it("shows it quietly beside a visible window that lacks the focus, and keeps it", async () => {
+    const sw = worker({ ok: true, status: 200 }, [page("visible", false)]);
+    await sw.push(alert);
+    expect(sw.shown).toMatchObject([{ options: { silent: true }, closed: false }]);
+  });
+  it("takes it down again when a window of ours has the focus, which shows the alert itself, and tells that window", async () => {
+    const posted: unknown[] = [];
+    const sw = worker({ ok: true, status: 200 }, [page("visible", true, posted)]);
+    await sw.push(alert);
+    expect(sw.shown).toMatchObject([{ closed: true }]);
+    expect(posted).toMatchObject([{ type: "pushed", title: "api needs you", kind: "input", shown: "page" }]);
+  });
+  it("keeps a test push even over a focused window: it is what the person asked to see", async () => {
+    const posted: unknown[] = [];
+    const sw = worker({ ok: true, status: 200 }, [page("visible", true, posted)]);
+    await sw.push({ title: "remuda", body: "Alerts reach this device.", tag: "test", kind: "test" });
+    expect(sw.shown).toMatchObject([{ closed: false }]);
+    expect(posted).toMatchObject([{ type: "pushed", kind: "test", shown: "os" }]);
+  });
+});
 
 const pane = { machine: "local", pane: "w1:p1", choices: ["Yes", "No"] };
 

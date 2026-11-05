@@ -18,9 +18,15 @@ export default function ViewMenu({ items, shell = false, page = true }: { items:
   const split = app.use((s) => s.split);
   const may = canSplit(useMedia(SPLIT_QUERY), isTouch);
   const sharing = useSharing().on;
+  // a shell has its terminal alone: no transcript for the files rail, no chat to put beside it
+  const agentRows: MenuItem[] = shell
+    ? []
+    : [
+        { label: t("Files the agent touched"), icon: "folder", hint: t("a rail beside the lens, edited files first"), checked: footprint, onSelect: actions.toggleFootprint },
+        { label: t("Chat beside the terminal"), icon: "columns", hint: may ? t("the chat on the left, the terminal on the right, a draggable edge between; the lens switch picks the side the tools serve") : t("needs a screen at least 1180 px wide and a mouse"), checked: split && may, disabled: !may, onSelect: actions.toggleSplit },
+      ];
   const pageRows: MenuItem[] = [
-    { label: t("Files the agent touched"), icon: "folder", hint: shell ? t("a shell pane has no transcript") : t("a rail beside the lens, edited files first"), checked: footprint && !shell, disabled: shell, onSelect: actions.toggleFootprint },
-    { label: t("Chat beside the terminal"), icon: "columns", hint: may ? t("the chat on the left, the terminal on the right, a draggable edge between; the lens switch picks the side the tools serve") : t("needs a screen at least 1180 px wide and a mouse"), checked: split && may, disabled: !may, onSelect: actions.toggleSplit },
+    ...agentRows,
     { label: t("Full screen"), icon: "maximize", hint: t("the lens takes the whole screen; Esc brings the page back"), shortcut: full ? t("Esc") : undefined, checked: full, onSelect: full ? leaveFull : enterFull },
     { label: t("Screen-sharing mode"), icon: "eye-off", hint: t("the folders and machines you marked, or everything, read as neutral names, their panes covered"), shortcut: SHARING_KEY_NAME, checked: sharing, onSelect: toggleSharing },
   ];

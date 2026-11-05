@@ -55,8 +55,11 @@ self.addEventListener("fetch", (event) => {
 
 // ---- push ----
 
-// Every push shows a notification: Safari revokes subscriptions whose pushes stay silent. With a
-// window visible it is shown quietly and replaces the pane's earlier one.
+// Every push shows a notification: Safari, Firefox and Chrome take a push that shows none for a silent one, and
+// revoke the subscription or show their own. A window of ours that has the focus shows the alert itself, as a toast
+// in its corner, so there the notification is taken down again at once; a visible one that lacks the focus (behind
+// another window, on a second screen) gets it quietly. A test push always stays: it is what the person asked to see.
+// The last push is noted for the alerts panel, and told to the open windows.
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -68,9 +71,11 @@ self.addEventListener("push", (event) => {
     (async () => {
       const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       const visible = wins.some((w) => w.visibilityState === "visible");
+      const focused = wins.some((w) => w.focused);
+      const tag = data.tag || "remuda";
       await self.registration.showNotification(data.title || "remuda", {
         body: data.body || "",
-        tag: data.tag || "remuda",
+        tag,
         renotify: true,
         silent: visible,
         icon: "/icons/icon-192.png",
@@ -78,9 +83,34 @@ self.addEventListener("push", (event) => {
         actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
         data: { machine: data.machine, pane: data.pane, panel: data.panel, choices: Array.isArray(data.choices) ? data.choices : [] },
       });
+      const onPage = focused && data.kind !== "test";
+      if (onPage) for (const shown of await self.registration.getNotifications({ tag })) shown.close();
+      const note = { at: Date.now(), title: data.title || "remuda", kind: data.kind || "", shown: onPage ? "page" : "os" };
+      await notePush(note);
+      for (const win of wins) win.postMessage({ type: "pushed", ...note });
     })(),
   );
 });
+
+// notePush keeps the last push in IndexedDB, where the alerts panel reads it: "a push came at 14:02" tells a push
+// that never arrived from one the system did not show
+function notePush(note) {
+  if (typeof indexedDB === "undefined") return Promise.resolve();
+  return new Promise((resolve) => {
+    const open = indexedDB.open("remuda", 1);
+    open.onupgradeneeded = () => open.result.createObjectStore("kv");
+    open.onerror = () => resolve();
+    open.onsuccess = () => {
+      const db = open.result;
+      const tx = db.transaction("kv", "readwrite");
+      tx.objectStore("kv").put(note, "lastPush");
+      tx.oncomplete = tx.onerror = () => {
+        db.close();
+        resolve();
+      };
+    };
+  });
+}
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();

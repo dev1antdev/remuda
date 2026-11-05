@@ -1,0 +1,157 @@
+// Package opinion is the second opinion on a folder's changes: another agent asked, in a tab of its own, to review
+// what the Changes lens shows without touching it, and its answer read back into comments on lines of the diff —
+// kept per machine and folder until the person adds them to their own review, dismisses them, or asks again.
+package opinion
+
+import (
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+// Finding is one comment of the reviewer's: a line of a file, how much it matters, what is wrong.
+type Finding struct {
+	Path     string `json:"path"`
+	Line     int    `json:"line"`
+	Severity string `json:"severity,omitempty"` // high, medium or low; "" when the reviewer gave none
+	Text     string `json:"text"`
+}
+
+// Answer is a reviewer's answer read: its findings, its summary, and whether it said it found nothing.
+type Answer struct {
+	Findings []Finding
+	Summary  string
+	None     bool
+}
+
+// Readable says whether the answer is one the format asked for: findings, or an explicit none.
+func (a Answer) Readable() bool { return len(a.Findings) > 0 || a.None }
+
+// MaxFindings is how many findings one answer keeps; MaxText how long a finding's text may be.
+const (
+	MaxFindings = 100
+	MaxText     = 1000
+	maxSummary  = 600
+)
+
+var (
+	sectionRe  = regexp.MustCompile(`(?i)^(?:#{1,6}\s*)?(?:\*\*|__)?\s*(findings|summary)\s*(?:\*\*|__)?\s*:?\s*(?:\*\*|__)?\s*(.*)$`)
+	leadRe     = regexp.MustCompile(`^(?:[-*+•]\s+|\d+[.)]\s+)`)
+	findingRe  = regexp.MustCompile(`^([^\s:*` + "`" + `"'()<>\[\]]+?):(\d+)(?:\s*[-–]\s*\d+)?(?::\d+)?(?:\s*[:\-—–]\s*|\s+)(.+)$`)
+	severityRe = regexp.MustCompile(`(?i)^(?:\[\s*([a-z]+)\s*\]|\(\s*([a-z]+)\s*\)|\*\*([a-z]+)\*\*|([a-z]+)\s*[:\-—–])\s*`)
+	noneRe     = regexp.MustCompile(`(?i)^(?:none|no findings?|nothing (?:to report|found)|no issues? found)\.?$`)
+)
+
+// severities maps the words reviewers use to the three the page shows.
+var severities = map[string]string{
+	"high": "high", "critical": "high", "blocker": "high", "major": "high", "severe": "high",
+	"medium": "medium", "moderate": "medium", "med": "medium",
+	"low": "low", "minor": "low", "nit": "low", "trivial": "low", "info": "low",
+}
+
+// Parse reads a reviewer's answer: `path:line: [severity] text` lines under FINDINGS (or anywhere, when the answer has
+// no sections), NONE for nothing found, the text under SUMMARY — bullets, numbers, bold, backticks and code fences
+// around them allowed. A path that starts with the folder is made relative to it.
+func Parse(text, dir string) Answer {
+	var answer Answer
+	var summary []string
+	var loose []string
+	section := ""
+	seen := map[string]bool{}
+	for _, raw := range strings.Split(text, "\n") {
+		line := strings.TrimSpace(raw)
+		if strings.HasPrefix(line, "```") || strings.HasPrefix(line, "~~~") || line == "" {
+			continue
+		}
+		if m := sectionRe.FindStringSubmatch(line); m != nil {
+			section = strings.ToLower(m[1])
+			if rest := strings.TrimSpace(m[2]); rest != "" {
+				line = rest
+			} else {
+				continue
+			}
+		}
+		if section == "summary" {
+			summary = append(summary, clean(line))
+			continue
+		}
+		bare := clean(line)
+		if noneRe.MatchString(bare) {
+			answer.None = true
+			continue
+		}
+		if finding, ok := findingOf(bare, dir); ok {
+			id := finding.Path + ":" + strconv.Itoa(finding.Line) + ":" + finding.Text
+			if !seen[id] && len(answer.Findings) < MaxFindings {
+				seen[id] = true
+				answer.Findings = append(answer.Findings, finding)
+			}
+			continue
+		}
+		loose = append(loose, bare)
+	}
+	if len(summary) == 0 && len(loose) > 0 {
+		summary = loose[len(loose)-1:]
+	}
+	answer.Summary = cut(strings.Join(summary, " "), maxSummary)
+	return answer
+}
+
+// clean is a line without its list mark, bold and backticks
+func clean(line string) string {
+	line = leadRe.ReplaceAllString(line, "")
+	line = strings.ReplaceAll(line, "`", "")
+	line = strings.ReplaceAll(line, "**", "")
+	line = strings.ReplaceAll(line, "__", "")
+	return strings.TrimSpace(line)
+}
+
+// findingOf reads one finding line, a URL or a time of day ("at 12:30 the job ran") being none
+func findingOf(line, dir string) (Finding, bool) {
+	m := findingRe.FindStringSubmatch(line)
+	if m == nil || strings.Contains(m[1], "//") {
+		return Finding{}, false
+	}
+	path := strings.TrimPrefix(m[1], "./")
+	if dir != "" {
+		path = strings.TrimPrefix(path, strings.TrimRight(dir, "/")+"/")
+	}
+	if !strings.ContainsAny(path, "./") && !isBareFileName(path) {
+		return Finding{}, false
+	}
+	number, err := strconv.Atoi(m[2])
+	if err != nil || number < 1 {
+		return Finding{}, false
+	}
+	rest := strings.TrimSpace(m[3])
+	severity := ""
+	if s := severityRe.FindStringSubmatch(rest); s != nil {
+		word := strings.ToLower(s[1] + s[2] + s[3] + s[4])
+		if mapped, ok := severities[word]; ok {
+			severity = mapped
+			rest = strings.TrimLeft(rest[len(s[0]):], ":-—– ")
+		}
+	}
+	if rest == "" {
+		return Finding{}, false
+	}
+	return Finding{Path: path, Line: number, Severity: severity, Text: cut(rest, MaxText)}, true
+}
+
+// isBareFileName is a file without an extension a repository keeps at its root: Makefile, Dockerfile, LICENSE
+func isBareFileName(path string) bool {
+	switch strings.ToLower(path) {
+	case "makefile", "dockerfile", "gemfile", "rakefile", "procfile", "justfile", "license", "jenkinsfile", "vagrantfile":
+		return true
+	}
+	return false
+}
+
+// cut keeps at most max runes, with an ellipsis when it cut
+func cut(text string, max int) string {
+	runes := []rune(strings.TrimSpace(text))
+	if len(runes) <= max {
+		return string(runes)
+	}
+	return strings.TrimSpace(string(runes[:max-1])) + "…"
+}

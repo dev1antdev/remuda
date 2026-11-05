@@ -20,6 +20,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/arena"
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
+	"github.com/dev1antdev/remuda/internal/backup"
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
@@ -32,7 +33,9 @@ import (
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/prefs"
+	"github.com/dev1antdev/remuda/internal/preview"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/quick"
@@ -81,13 +84,17 @@ type Server struct {
 	Guard     *auth.Guard
 	Keys      *auth.Keys // the agents' tasks-only keys, listed and revoked in Settings
 	UI        fs.FS
-	Live      *live.Hub       // the page's event stream, nil without one
-	Awake     *awake.Service  // the machines kept awake while their agents work
-	Icons     *icons.Store    // the icon the person gave each folder of the sidebar
-	Arena     *arena.Service  // one prompt to several agents side by side
-	Limits    *limits.Service // the agents' subscription windows, the hits and the bookings to continue after a reset
-	Scratch   *scratch.Store  // the floating terminal's shell on each machine
-	Jira      *jira.Service   // the person's Jira site and the issues their agents' work names
+	Live      *live.Hub        // the page's event stream, nil without one
+	Awake     *awake.Service   // the machines kept awake while their agents work
+	Icons     *icons.Store     // the icon the person gave each folder of the sidebar
+	Arena     *arena.Service   // one prompt to several agents side by side
+	Limits    *limits.Service  // the agents' subscription windows, the hits and the bookings to continue after a reset
+	Scratch   *scratch.Store   // the floating terminal's shell on each machine
+	Jira      *jira.Service    // the person's Jira site and the issues their agents' work names
+	Backup    *backup.Service  // the cockpit's state dir copied to another machine, nightly and on demand
+	Previews  *preview.Service // the machines' dev servers opened on the cockpit, nil without
+	SelfPort  int              // the port of -addr, never offered as a preview
+	Opinions  *opinion.Service // the second opinions another agent gave on a folder's changes
 
 	streams   termStreams
 	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
@@ -136,7 +143,10 @@ func (s *Server) Handler() http.Handler {
 	s.limitRoutes(api)
 	s.scratchRoutes(api)
 	s.jiraRoutes(api)
+	s.backupRoutes(api)
 	s.leftoverRoutes(api)
+	s.previewRoutes(api)
+	s.opinionRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard
