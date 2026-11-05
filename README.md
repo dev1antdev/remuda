@@ -569,6 +569,33 @@ make service                    # the same on this machine
 Logs: `~/Library/Logs/remuda.log` (macOS) or `journalctl --user -u remuda`.
 `remuda uninstall` removes the service and the rest (see Uninstall above).
 
+### Backups of the cockpit
+
+Everything the cockpit keeps lives in its state dir: your tasks, the
+schedules, budgets, recipes, webhooks and settings, the signed-in devices,
+the agents' keys, the token, the push keys and its Tailscale node. On a
+Raspberry Pi that is an SD card. **Settings › Backups** copies it every
+night (at a time you pick, in the cockpit's own zone) to another machine
+of your fleet, into that machine's remuda folder under
+`backups/<cockpit>/`, the newest 14 kept by default; *Back up now* takes
+one at once, and a failed run sends a notification. The databases are
+copied through SQLite itself, so a copy is consistent while the cockpit
+runs. From a shell:
+
+```bash
+remuda backup now                  # through the running service
+remuda backup list                 # the copies on the target
+remuda restore remuda-20261105T033000Z.tar.gz   # the service stopped first
+```
+
+`restore` refuses while a remuda serves the state dir, moves the dir as it
+is aside (`…/remuda.before-restore-<time>`) rather than deleting it, and
+keeps the backups that machine holds for others. Restored on a new
+machine, the cockpit keeps its Tailscale address, so every device stays
+signed in — never run the old one and the restored one at the same time.
+A backup holds the token: it is written 0600 into a 0700 folder on your
+own machine, and nowhere else.
+
 ## Docker / Portainer
 
 For a **Linux host** that runs herdr (the container shares the host's unix
@@ -636,6 +663,23 @@ every machine here. remuda keeps its own token from the editor (the
 cookie is stripped on the way to code-server), but the editor itself is
 as trusted as this page. Open the Code mode only on machines you trust
 with everything remuda can do; see SECURITY.md.
+
+## Previews — what the agents serve
+
+An agent on GOG starts a dev server on `:3000`; **Previews…** in the
+workspace's ⋯ menu (or the ⌘K palette) lists the ports the machine's
+processes listen on — the workspace's own first (`3000 · node · vite`), the
+other workspaces' after, the rest of the machine's folded away — and
+**Open** shows one in a tab of its own. With `-tailscale` the port opens on
+the cockpit's own tailnet name, the same number when it is free:
+`https://remuda.<tailnet>.ts.net:3000`. A port of its own keeps the app's
+absolute paths working, its live reload too, and keeps the app's scripts
+off remuda's origin. Without `-tailscale` it opens on a port of the host
+remuda listens on (`http://127.0.0.1:41000`…), which a browser elsewhere
+reaches through a forward of its own. Only the browser signed in to remuda
+gets in — a viewer link does not — and remuda's cookie never reaches the
+app. Nothing is listened on by itself: a preview opens at your Open and
+closes after half an hour unused.
 
 ## Agents and your tasks
 
@@ -815,7 +859,16 @@ too (the file goes over your SSH session).
 VAPID keys — the only third party is your browser vendor's push service.
 remuda watches every machine's agents itself, so alerts arrive with the
 app closed: *needs you* 10 s after an agent blocks on a question, *finished*
-a minute after a long turn. Answer at the desk first and nothing is sent.
+after every turn or only the long ones, as you choose. Answer at the desk
+first and nothing is sent. While the page is in front the same alerts show
+in its corner, with Open and an optional chime, so you see them whatever
+the system's notification settings say. The alerts panel says what this
+browser is and where it stands: notifications allowed or blocked (and
+where to allow them, in the browser and in macOS or Windows), whether it
+is subscribed to this cockpit, the last push sent and the last one
+received; *Send a test* shows both. The Mac app tells you in its window
+when the remuda it points at does not answer, and opens Settings for a
+new address.
 **A question is answered from the notification itself**: its push names
 what is asked ("Bash command · rm -rf build") and carries the first two
 choices as buttons in the dialog's own words — *Yes*, *No, and tell

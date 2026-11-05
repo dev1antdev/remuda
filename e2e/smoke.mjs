@@ -128,9 +128,10 @@ try {
   step("the terminal echoed back", `${screen.filter((line) => line.includes("e2e-ok")).length} lines carry e2e-ok`);
   await shot("terminal");
 
-  if (!(await clickText(".lens-switch button", "Chat"))) fail("no Chat button in the lens switch");
-  await until("the chat lens", () => present(".lens-pane:not([hidden]) .composer textarea"));
-  step("the chat lens shows its composer");
+  // a shell has its terminal alone: the lens switch keeps its room unseen, and no chat or changes lens opens for it
+  if (!(await evaluate(`document.querySelector(".lens-switch")?.classList.contains("is-vacant") === true`))) fail("a shell pane's lens switch is drawn");
+  if (await present(".lens-pane:not([hidden]) .composer textarea")) fail("a shell pane shows a chat composer");
+  step("a shell pane has its terminal alone");
 
   if (!(await clickText(".rail-btn", "Wall"))) fail("no Wall button on the rail");
   await until("the Wall's bar", () => present(".wall-bar"));

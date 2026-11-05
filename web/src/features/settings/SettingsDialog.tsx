@@ -4,6 +4,7 @@
 
 import { setAccentPref, setDarkFlavorPref, setDensityPref, setMonoPref, setTextSizePref, setThemePref, useAccent, useDarkFlavorPref, useDensity, useFlavor, useMono, useTextSize, useThemePref } from "@/app/theme";
 import { actions } from "@/app/store";
+import BackupSection from "./BackupSection";
 import DevicesSection from "./DevicesSection";
 import JiraSection from "@/features/jira/JiraSection";
 import { useRoster } from "@/features/roster/useRoster";
@@ -180,6 +181,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         </div>
       </section>
       {!viewOnly && <JiraSection />}
+      {!viewOnly && <BackupSection />}
       <DevicesSection />
     </Dialog>
   );

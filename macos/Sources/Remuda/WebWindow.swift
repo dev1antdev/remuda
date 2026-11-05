@@ -7,8 +7,10 @@ final class WebWindow: NSObject {
     let webView: WKWebView
     private(set) var server: Server
     var onBridge: ((Bridge, Any) -> Void)?
+    var onOpenSettings: (() -> Void)?
     private var reloadDelay: TimeInterval = 1
     private var pendingReload: DispatchWorkItem?
+    private var failures = 0 // loads in a row the server did not answer; the third puts the notice in the window
 
     // init makes the window; the cookie jar is the app's own and persists, or a throwaway one for a probe.
     init(server: Server, persistent: Bool = true) {
@@ -40,7 +42,24 @@ final class WebWindow: NSObject {
     func use(server: Server) {
         self.server = server
         reloadDelay = 1
+        failures = 0
         load()
+    }
+
+    // showUnreachable says in the window what the retries behind it cannot: the remuda the app points at does not
+    // answer, and where to point it when the cockpit moved to another machine. The page replaces it once it answers.
+    private func showUnreachable(_ reason: String) {
+        let address = htmlEscaped(server.base.absoluteString)
+        let html = """
+        <!doctype html><meta charset="utf-8"><meta name="color-scheme" content="light dark">
+        <body style="font: 14px -apple-system, sans-serif; display: grid; place-items: center; height: 100vh; margin: 0">
+        <div style="max-width: 460px; line-height: 1.5; padding: 24px">
+        <h2 style="font-size: 18px; margin: 0 0 8px">remuda at \(address) does not answer</h2>
+        <p>\(htmlEscaped(reason)). The app keeps trying and shows the page the moment it answers.</p>
+        <p>If your cockpit runs on another machine now, paste its sign-in link (its address with <code>?token=…</code>) in <a href="remuda://settings">Settings</a>; the notifications follow it.</p>
+        </div></body>
+        """
+        webView.loadHTMLString(html, baseURL: nil)
     }
 
     // load opens the page signed in: the pairing token goes once and the server strips it after setting the cookie.
@@ -139,6 +158,10 @@ extension WebWindow: NSWindowDelegate {
 extension WebWindow: WKNavigationDelegate, WKDownloadDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { return decisionHandler(.allow) }
+        if url.scheme == "remuda" {
+            if url.host == "settings" { onOpenSettings?() }
+            return decisionHandler(.cancel)
+        }
         if action.shouldPerformDownload || url.scheme == "blob" {
             return decisionHandler(.download)
         }
@@ -158,11 +181,15 @@ extension WebWindow: WKNavigationDelegate, WKDownloadDelegate {
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         let failure = error as NSError
         guard failure.domain == NSURLErrorDomain, failure.code != NSURLErrorCancelled else { return }
+        failures += 1
+        if failures == 3 { showUnreachable(failure.localizedDescription) }
         reloadLater()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard webView.url?.host == server.base.host else { return } // the notice is no sign the server answered
         reloadDelay = 1
+        failures = 0
     }
 
     // webViewWebContentProcessDidTerminate brings the page back: the view would stay blank, and this window has no reload.

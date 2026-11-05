@@ -246,13 +246,22 @@ func (c *Conn) ForwardSocket(remoteSock string) (string, error) {
 
 // ForwardTCP forwards a fresh loopback port to 127.0.0.1:remotePort on the host for as long as the master lives.
 func (c *Conn) ForwardTCP(remotePort int) (string, error) {
+	return c.ForwardTCPTo("127.0.0.1", remotePort)
+}
+
+// ForwardTCPTo forwards a fresh loopback port to host:remotePort as the machine dials it — ::1 for a server listening
+// on the IPv6 loopback alone, as a dev server on a Mac often does — for as long as the master lives.
+func (c *Conn) ForwardTCPTo(host string, remotePort int) (string, error) {
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return "", err
 	}
 	local := l.Addr().String()
 	l.Close()
-	cmd := c.cmd("-O", "forward", "-L", fmt.Sprintf("%s:127.0.0.1:%d", local, remotePort), c.Host)
+	cmd := c.cmd("-O", "forward", "-L", fmt.Sprintf("%s:%s:%d", local, host, remotePort), c.Host)
 	var errb bytes.Buffer
 	cmd.Stderr = &errb
 	if err := cmd.Run(); err != nil {

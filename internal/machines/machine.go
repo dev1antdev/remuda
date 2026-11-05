@@ -6,6 +6,7 @@ import (
 	"net"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,7 +39,7 @@ type Machine struct {
 	attach *herdr.AttachManager
 	home   string
 
-	fwds map[int]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda)
+	fwds map[forwardTo]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda, a preview)
 	peer *Peer
 
 	onState func(id, label, state, reason string) // the manager's ear for connected / error, nil for the local one
@@ -48,6 +49,12 @@ type Machine struct {
 
 	// Transcripts reads the session files on this machine.
 	Transcripts *transcript.Reader
+}
+
+// forwardTo is what a forward reaches on the machine.
+type forwardTo struct {
+	host string
+	port int
 }
 
 // tcpForward is a port forwarded over one master; a new master needs a new forward.
@@ -268,28 +275,34 @@ func (mc *Machine) CodeAddr(port int) (string, error) { return mc.ForwardAddr(po
 
 // ForwardAddr is a loopback address that reaches 127.0.0.1:port on the machine, a forward remembered per master.
 func (mc *Machine) ForwardAddr(port int) (string, error) {
+	return mc.ForwardHostAddr("127.0.0.1", port)
+}
+
+// ForwardHostAddr is an address here that reaches host:port as the machine dials it, a forward remembered per master.
+func (mc *Machine) ForwardHostAddr(host string, port int) (string, error) {
 	if mc.local {
-		return fmt.Sprintf("127.0.0.1:%d", port), nil
+		return net.JoinHostPort(host, strconv.Itoa(port)), nil
 	}
 	conn, err := mc.remoteConn()
 	if err != nil {
 		return "", err
 	}
+	to := forwardTo{host: host, port: port}
 	mc.mu.Lock()
-	if f := mc.fwds[port]; f != nil && f.conn == conn {
+	if f := mc.fwds[to]; f != nil && f.conn == conn {
 		mc.mu.Unlock()
 		return f.addr, nil
 	}
 	mc.mu.Unlock()
-	addr, err := conn.ForwardTCP(port)
+	addr, err := conn.ForwardTCPTo(host, port)
 	if err != nil {
 		return "", err
 	}
 	mc.mu.Lock()
 	if mc.fwds == nil {
-		mc.fwds = map[int]*tcpForward{}
+		mc.fwds = map[forwardTo]*tcpForward{}
 	}
-	mc.fwds[port] = &tcpForward{conn: conn, port: port, addr: addr}
+	mc.fwds[to] = &tcpForward{conn: conn, port: port, addr: addr}
 	mc.mu.Unlock()
 	return addr, nil
 }
