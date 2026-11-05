@@ -403,7 +403,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   each an icon with its name under it and a tooltip (the name whole: a
   language whose word is too long there gives a shorter one through
   `tc("rail", …)`, "События" for Activity, and the e2e display suite
-  fails a cut one); under 920 px it
+  fails a cut one; `.rail-label`'s own line-height 1.25 under the
+  button's 1, so g, y, р and у keep their descenders — the suite fails
+  any one-line `overflow: hidden` label whose glyphs, a text range's
+  box, overrun it); under 920 px it
   lies along the bottom with Agents, Wall, Tasks, Review and More (a
   menu with Code, the panels and Settings), and yields while the
   composer has the keyboard. The header is `[burger][title — takes the
@@ -412,7 +415,17 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   three lens buttons keep the room of the Changes count while there is
   none (`.lens-badge.empty`), so a count widens nothing — equal at a desk,
   as wide as their words on a phone — and
-  the Changes button is disabled (not removed) when there is no folder. The tab strip's right slot (`TabStrip tools=`) holds the lens's one
+  the Changes button is disabled (not removed) when there is no folder.
+  **A shell has its terminal alone** (`app/paneLens.ts`, tested:
+  `lensesOf(agent)`, `lensOn(asked, agent)`): a pane with no agent shows
+  the terminal lens whatever the store asks — the store keeps the lens
+  asked for, so an agent's tab comes back on it after a shell's, and a
+  `?lens=chat` link to a shell lands on its terminal, the address saying
+  so — its lens switch keeps its room unseen (`.lens-switch.is-vacant`,
+  inert) so the header moves nothing between the two, the palette offers
+  it no Show the chat, Show the changes or split, the View menu no files
+  rail or split rows, and a shell popped out shows its screen, never a
+  chat tail or a creature. The tab strip's right slot (`TabStrip tools=`) holds the lens's one
   control — Find for the chat, the key bar switch for the terminal — and
   **the View menu** (`app/ViewMenu.tsx`): the lens's own rows
   (`useChatViewItems` in `chat/ChatTools.tsx`: the timeline, Recap…,
@@ -499,7 +512,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   own state dir, headless Chrome — driving `e2e/smoke.mjs` over the
   DevTools protocol with no dependency: sign in, a scratch shell
   workspace through the API, a command typed into the terminal lens and
-  read back through `/api/screen`, the chat, the Wall, Review, Activity,
+  read back through `/api/screen`, the shell's lens switch vacant (a
+  shell has its terminal alone), the Wall, Review, Activity,
   the palette, the workspace closed, no console errors — then
   `e2e/display.mjs`, **the display checks**: a repository with two tabs
   and a linked worktree and a plain folder made through the API, a task,
@@ -981,7 +995,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (the lenses, mounted once seen, and the files rail beside them in
   `.pane-body` — store field `footprint` from the pref of that name,
   default on with a mouse, a row of the View menu whatever the lens,
-  disabled for a shell pane, hidden with the rail under 920 px and not polling there; **full screen** is the View menu's last row, `app/full.tsx` — store field `full`: the header, the sidebar and the rail go, the tab strip stays with its tools, the browser's own full screen is asked for where it exists; an Esc nothing else took leaves — not a field's or the terminal's, nor the one that closes a menu (Radix marks it with preventDefault), a dialog, the confirm or the file viewer (`app/escape.ts`, tested; the Wall's Esc that gives a focused tile back follows the same rule) — so does the browser's exit, and a mode change clears it; the palette has it), `Wall.tsx` (the **Wall mode**: every
+  absent for a shell pane, hidden with the rail under 920 px and not polling there; **full screen** is the View menu's last row, `app/full.tsx` — store field `full`: the header, the sidebar and the rail go, the tab strip stays with its tools, the browser's own full screen is asked for where it exists; an Esc nothing else took leaves — not a field's or the terminal's, nor the one that closes a menu (Radix marks it with preventDefault), a dialog, the confirm or the file viewer (`app/escape.ts`, tested; the Wall's Esc that gives a focused tile back follows the same rule) — so does the browser's exit, and a mode change clears it; the palette has it), `Wall.tsx` (the **Wall mode**: every
   agent pane on a connected machine as a tile — the sidebar row's head
   (mark, logo, label, workspace · machine, the pull request the agent named as a link with its checks and review beside it (`internal/prstatus`), context % · cost), the last 12
   turns through `features/chat/Tail`, a compact composer; a click on the
@@ -1350,7 +1364,39 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   name a `Panel` of the page (`standup`) for its tap to open instead of a
   pane.
   Routes: `GET /api/push` (public key), `POST/DELETE /api/push/subscribe`,
-  `POST /api/push/test`. **Socket devices** (`socket.go`, tested): the
+  `POST /api/push/test`, `POST /api/push/device {endpoint}` (whether this
+  cockpit knows the browser's subscription, its prefs and its last
+  delivery: `Service.Device`, the `Delivery` — when, what, the push
+  service's answer — kept in memory by `sendNoted` for every send, a
+  test's too; `device_test.go`). A finish's `Payload.Worked` (and the
+  feed entry's `Worked`) is the turn's seconds, so a page applies a
+  device's "turns over a minute" itself. **Alerts on the page**
+  (`features/alerts/onpage.ts`, tested: `wanted` — the device's switches
+  as the server reads them: a question by `input`, a finish by `done` and
+  the turn's length, a schedule's or digest's word always, every other
+  alert by `watchdog`, the person's own rows never — `newAlerts`,
+  `alertOf`, `keepNewest`, at most `MAX_ON_PAGE` 3; `useOnPageAlerts.ts`
+  from Shell): the roster's `feed` id moves with every alert recorded
+  (the live socket's `roster` event), and past the one the page saw, while
+  it is in front, `/api/feed` is read and each new alert this device
+  wants goes up as a toast in the corner (store field `alerts`,
+  `addAlert` / `dismissAlert`; `toasts.tsx`: Open to the pane or a
+  digest's standup, a question standing until opened or dismissed, the
+  rest `LINGER_MS` 15 s, an optional chime, pref `alerts.sound`, off); the
+  first roster only seeds, and neither the Mac app nor a viewer link shows
+  them. **The alerts panel tells the truth about this device**
+  (`DeviceStatus.tsx` over `device.ts`, tested: `browserOf`, `systemOf`,
+  `blockedHelp` per browser, `systemHelp` per system — macOS's System
+  Settings → Notifications, Windows' Settings → System → Notifications,
+  Focus and Do not disturb — `deliveryWords`, `receivedWords`;
+  `received.ts`: `readLastPush` from the service worker's IndexedDB,
+  `onPushed`, `fetchDevice`, `chime`): the browser and system, the
+  permission, whether this browser is subscribed to this cockpit (or holds
+  a subscription it does not know), the last push sent with the push
+  service's answer and the last received here; the finishes' choices read
+  every finish / turns over a minute / never; Send a test puts a toast up
+  on the page and, when subscribed, a system notification too.
+  **Socket devices** (`socket.go`, tested): the
   Mac app is a device whose endpoint reads `socket:<32 hex>` and carries
   no keys; its prefs, label, quiet hours, test and listing are any
   device's, and `Send` hands its payloads to the `Sockets` hub instead of
@@ -1446,8 +1492,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   09:00" / "Unmute · 42 min left", and `MutedMark` (`rows.tsx`), the
   bell-off on the sidebar row and the wall tile's head with the time
   left in its tooltip.
-- `web/public/sw.js` shows every push (Safari revokes silent subscriptions),
-  silent while a window is visible; click → `select-pane` message to an open
+- `web/public/sw.js` shows every push (Safari, Firefox and Chrome take a
+  push that shows none for a silent one), quietly beside a visible window
+  and taken down again at once (`getNotifications({tag})`) when a window
+  of ours has the focus, which shows the alert itself as a toast — never a
+  test push, which stays; every push is noted in IndexedDB (`remuda` /
+  `kv` / `lastPush`: when, what, shown by the system or the page) and told
+  to the open windows (`{type: "pushed"}`), for the alerts panel; tested
+  in `app/serviceWorker.test.ts`; click → `select-pane` message to an open
   window or `openWindow(/?machine=&pane=)` — either way the pane opens in
   the lens the pref `open.lens` names (`app/openLens.ts`, tested:
   terminal by default, chat, or the lens the page was on; the choice in
@@ -1597,9 +1649,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   by what it runs — the agent's logo and name, "terminal" for a shell,
   a name of the person's own over either, twins told apart by herdr's
   number — and its + is a menu: Terminal makes a shell tab in the
-  workspace's folder at once and shows it on the terminal lens, Agent…
-  the New tab dialog; a click on a shell's tab turns the terminal lens
-  on. (`HealthButton.tsx`, `MachineMenu.tsx`; its head is a + menu — a
+  workspace's folder at once and shows it, its terminal alone, Agent…
+  the New tab dialog; a shell's tab shows its terminal (`lensOn`), the
+  lens asked for kept for the agents' tabs. (`HealthButton.tsx`, `MachineMenu.tsx`; its head is a + menu — a
   workspace on a connected machine, an agent from a recipe, a PC — and a ⋯ menu — message
   several agents, the order, Sidebar settings; `RadarSettings.tsx` is
   `RadarFields`, the order, the row label, the idle tiers and the
@@ -3026,7 +3078,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Downloads through `WKDownloadDelegate`, a file input gets an
   `NSOpenPanel` (`runOpenPanelWith`); the page loaded again 1 s →
   30 s apart while the server cannot be reached or after the web
-  process died, the window having no reload of its own; closing hides), `Server` (the
+  process died, the window having no reload of its own — from the third
+  failed load a page of the app's own says the remuda at that address does
+  not answer and links Settings (`remuda://settings`, `showUnreachable`),
+  for a cockpit moved to another machine; closing hides), `Server` (the
   address and the token: this Mac's own from `~/Library/Application
   Support/remuda/token`, a paired one's from the login keychain under
   "remuda", one pairing at a time, every keychain status checked — a

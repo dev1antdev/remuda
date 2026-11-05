@@ -842,7 +842,16 @@ too (the file goes over your SSH session).
 VAPID keys — the only third party is your browser vendor's push service.
 remuda watches every machine's agents itself, so alerts arrive with the
 app closed: *needs you* 10 s after an agent blocks on a question, *finished*
-a minute after a long turn. Answer at the desk first and nothing is sent.
+after every turn or only the long ones, as you choose. Answer at the desk
+first and nothing is sent. While the page is in front the same alerts show
+in its corner, with Open and an optional chime, so you see them whatever
+the system's notification settings say. The alerts panel says what this
+browser is and where it stands: notifications allowed or blocked (and
+where to allow them, in the browser and in macOS or Windows), whether it
+is subscribed to this cockpit, the last push sent and the last one
+received; *Send a test* shows both. The Mac app tells you in its window
+when the remuda it points at does not answer, and opens Settings for a
+new address.
 **A question is answered from the notification itself**: its push names
 what is asked ("Bash command · rm -rf build") and carries the first two
 choices as buttons in the dialog's own words — *Yes*, *No, and tell
