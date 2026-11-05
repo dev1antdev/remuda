@@ -298,6 +298,10 @@ async function seed() {
   notes = await api("POST", "/api/sessions", { machine: "local", dir: notesDir, name: "notes", agent: "shell" });
   made.push(notes.id);
   await api("PUT", "/api/jira", { site: "http://127.0.0.1:9", account: "", token: "e2e" }).catch((error) => failed(`a Jira site: ${error.message}`));
+  // a backup of this instance's own state dir onto this machine, so the Settings section has a run and a copy to show
+  await api("PUT", "/api/backups", { machine: "local", at: "03:30", keep: 3 });
+  const taken = await api("POST", "/api/backups/run");
+  if (!taken.path?.startsWith(`${tmp}/`) || !existsSync(taken.path) || !(taken.size > 0) || !(taken.files > 0)) failed(`a backup now answered ${JSON.stringify(taken)}`);
   const projects = await api("GET", "/api/tasks/projects");
   inbox = (projects.find?.((p) => /inbox/i.test(p.title)) ?? projects[0])?.id;
   await api("POST", "/api/tasks", { project_id: inbox, title: "Draw every screen", markdown: "Every **screen** at two widths.\n\n- [ ] the desk\n- [ ] the phone" });
@@ -720,6 +724,15 @@ async function runPass() {
       expect: [".settings-dialog"],
       close: async () => {},
     });
+  await screen("settings-backups", {
+    open: async () => {
+      await evaluate(`document.querySelector('.settings-dialog .backup-settings')?.scrollIntoView({ block: "start" })`);
+      if (!(await until(async () => (await count(".backup-settings .backup-files li")) >= 1, 8))) failed("the Backups section lists no copy on the machine");
+      check(await present(".backup-settings .notice"), "the Backups section does not say how the last run went");
+    },
+    expect: [".backup-settings"],
+    close: async () => {},
+  });
   await closeAll();
   await screen("palette", {
     open: async () => {

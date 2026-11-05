@@ -15,6 +15,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/away"
+	"github.com/dev1antdev/remuda/internal/backup"
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
@@ -46,6 +47,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/setup"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
@@ -86,6 +88,12 @@ func Run(ctx context.Context, o Options) error {
 	ui, err := web.Assets()
 	if err != nil {
 		return fmt.Errorf("ui assets: %w", err)
+	}
+	// the state dir is held while served, so `remuda restore` knows to refuse
+	if release, err := state.Hold(o.Dir); err != nil {
+		log.Printf("WARNING: %v; a restore cannot tell that this remuda serves it", err)
+	} else {
+		defer release()
 	}
 
 	bus := events.NewBus()
@@ -303,6 +311,21 @@ func Run(ctx context.Context, o Options) error {
 		return mc, true
 	}, awake.ShellHolder{Dir: o.Dir, Name: strings.TrimSuffix(hostname, ".local")})
 	defer keepAwake.Close()
+	// the cockpit's state dir copied to a machine of the fleet the person picked, nightly and on demand
+	backups := backup.Open(o.Dir, hostname, o.Version)
+	backups.Target = func(id string) (backup.Target, error) {
+		mc, err := fleet.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		if _, _, err := mc.Ready(); err != nil {
+			return nil, fmt.Errorf("%s is not connected: %w", mc.Label(), err)
+		}
+		return mc, nil
+	}
+	backups.Notify = func(title, body string) {
+		pushSvc.Broadcast(push.Payload{Kind: "backup", Title: title, Body: body, Tag: "backup"})
+	}
 	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker}
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
@@ -436,6 +459,7 @@ func Run(ctx context.Context, o Options) error {
 	go hub.Run(ctx)
 	go budgets.Loop(5 * time.Minute)
 	go planLimits.Loop(30*time.Second, ctx.Done())
+	go backups.Loop(time.Minute, ctx.Done())
 
 	srv = &server.Server{
 		Machines:  fleet,
@@ -471,6 +495,7 @@ func Run(ctx context.Context, o Options) error {
 		Limits:    planLimits,
 		Scratch:   shells,
 		Jira:      issues,
+		Backup:    backups,
 	}
 	if o.Tailscale {
 		var node *tsnetx.Node

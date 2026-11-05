@@ -51,10 +51,11 @@ export const hookKindOptions = (): { value: string; label: string; hint: string 
   { value: "limits", label: t("a plan limit"), hint: t("Claude's or Codex's 5-hour or weekly window at 80 % or reached, and what a booked continue did") },
   { value: "review", label: t("a review"), hint: t("a rejected workspace whose agent says it is ready again") },
   { value: "machine", label: t("a machine away"), hint: t("a remote unreachable for two minutes, and back again after that") },
+  { value: "backup", label: t("a backup that failed"), hint: t("the nightly copy of the cockpit's state, or Back up now, could not be made") },
 ];
 
 // DEFAULT_KINDS is what a new webhook hears: everything but the finishes, which come after every turn.
-export const DEFAULT_KINDS = ["question", "watchdog", "digest", "schedule", "task", "budget", "limits", "review", "machine"];
+export const DEFAULT_KINDS = ["question", "watchdog", "digest", "schedule", "task", "budget", "limits", "review", "machine", "backup"];
 
 const kindLabel = (kind: string) => hookKindOptions().find((o) => o.value === kind)?.label ?? kind;
 

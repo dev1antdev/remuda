@@ -54,7 +54,54 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `internal/state/` — the one state dir (`<user config dir>/remuda`, 0700,
   or `REMUDA_STATE_DIR` for a second instance beside the real one)
   and the one atomic 0600 writer; token, machines.json, vapid.json and
-  push-subscriptions.json all live there.
+  push-subscriptions.json all live there. A serving remuda holds the dir's
+  lock (`Hold` / `Held` in `lock.go`, a flock on `serve.lock` that goes
+  with the process however it ends, tested) so `remuda restore` can refuse.
+- `internal/backup/` — **the cockpit's state copied to another machine**
+  (tested on temp dirs, a live WAL database and `shell.Fake`), since a
+  cockpit on a Raspberry Pi lives on an SD card. `Snapshot` packs the
+  state dir as one gzipped tar in memory: every file, each SQLite
+  database through SQLite itself (`VACUUM INTO` over a read-only
+  connection: a consistent copy of a `tasks.db` the server is writing,
+  its WAL included), the `tailscale/` node state (so a restore on a new
+  machine keeps the tsnet node, its address and every device's sign-in)
+  without its `*.txt` logs; never `ssh/` (the masters' sockets),
+  `backups/` (the copies this machine keeps), `serve.lock`, a `-wal` /
+  `-shm` / `-journal`, a `.log`, a file the atomic writer is still
+  writing (`name.123456789`, `.partial`, `.new`); a `remuda-backup.json`
+  manifest at the root (format, host, version, time, files), at most
+  `MaxSnapshot` 256 MB. `Service` (`backup.json` in the state dir:
+  `Settings{machine, at "HH:MM", keep}`, the last run and the last good
+  one, the failures in a row) takes it nightly at the person's time in
+  the cockpit's zone (`Due`: the time came since the last run, or the
+  last run failed an hour ago; a target not connected yet is waited for
+  `WaitForTarget` past the time; `Loop` ticks a minute) and on demand
+  (`Run`, one at a time, `ErrBusy`), writes it to the target as
+  `<name>.partial` through `Target.PutFile` (a `*machines.Machine`: the
+  ssh master, or a local write), then `FinishScript` moves it in place,
+  0600, and removes every copy past the newest `keep`; the folder is the
+  target's remuda state dir `backups/<cockpit>/` (`FolderScript`, the
+  door's own reckoning of the dir) or, on the cockpit's own machine,
+  under its own state dir (a second instance's is its own). A failure
+  is one `push.Broadcast` per run of failures (kind `backup`, so the
+  feed has it, the webhooks' kind `backup`, the activity's Machines
+  family). Routes (`internal/server/backup.go`, the person's only): `GET
+  /api/backups`, `PUT /api/backups {machine, at, keep}` (a machine the
+  fleet knows, "" for none), `POST /api/backups/run` (409 busy, 400 no
+  machine, 502 the reason), `GET /api/backups/files` (`ListScript`,
+  newest first). `remuda backup now|list [-addr]` asks the running
+  service with its state dir's token; `remuda restore [-yes] <file>`
+  refuses while the dir is held (saying the service's stop command),
+  reads the archive (`Read`: a manifest of format 1, no absolute or
+  `..` names, folders and regular files only), confirms, and `Restore`
+  moves the dir aside as `<dir>.before-restore-<time>`, unpacks into a
+  fresh 0700 one (every file 0600 or tighter) and carries the aside dir's
+  `backups/` over; a failure puts the old dir back. The page: Settings ›
+  Backups (`features/settings/BackupSection.tsx`, `backupApi.ts`,
+  `backup.ts` tested: `bytesWords`, `lastWords`, `nextWords`,
+  `validTime`) — the machine (none by default: nothing is copied before
+  one is picked), the time, how many stay, the last run, the next, Back
+  up now, the copies there; never for a viewer.
 - `internal/herdr/` — everything herdr. `client.go`: newline-JSON RPC over
   the Unix socket, **one request = one connection** (herdr closes the socket
   after each response; never pool). `attach.go`: ref-counted
