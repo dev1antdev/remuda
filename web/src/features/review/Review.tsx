@@ -19,11 +19,16 @@ import { Note } from "./Hunk";
 import { KEYS, useReviewKeys } from "./keys";
 import { commentsMessage, place, verdictMessage, type DraftComment, type VerdictAsk } from "./draft";
 import { VerdictDialog } from "./VerdictDialog";
+import { subWords, type OpinionComment } from "./opinion";
+import { OpinionBlock } from "./OpinionBlock";
+import { OpinionDialog } from "./OpinionDialog";
+import { useOpinion } from "./useOpinion";
 import { t } from "@/lib/i18n";
 
 export type { DraftComment } from "./draft";
 
 const NO_COMMENTS: DraftComment[] = []; // one empty list for every file without comments: a new array would redraw its hunks
+const NO_OPINION: OpinionComment[] = [];
 
 export default function Review({ machineId, paneId, dir, agent, onSeen, active = true }: {
   machineId: string;
@@ -67,6 +72,8 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
     return byFile;
   }, [draft]);
   const where = () => place(dir, review);
+  const listed = useMemo(() => (review?.files ?? []).map((file) => file.path), [review]);
+  const second = useOpinion({ machineId, dir, look, active, files: listed, addComment, onError: setActionError });
 
   const markReviewedSilently = async () => {
     setMarking(true);
@@ -146,6 +153,10 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       draft={draftByFile.get(file.path) ?? NO_COMMENTS}
       onComment={addComment}
       onRemove={removeComment}
+      opinion={second.perFile.get(file.path) ?? NO_OPINION}
+      reviewer={second.reviewer}
+      onAdopt={second.adopt}
+      onDismissOpinion={second.dismissOne}
       onOpen={(line) => onOpenFile(`${dir}/${file.path}`, line)}
       onCode={() => actions.openInCode(machineId, dir, `${dir.replace(/\/+$/, "")}/${file.path}`)}
     />
@@ -162,6 +173,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
             {lastLookText}
             {commits.length > 0 && ` · ${review?.commits_total ? t("the newest {n} of {total} commits", { n: commits.length, total: review.commits_total }) : plural(commits.length, "commit")}`}
             {files.length > 0 && ` · ${t("{files} uncommitted +{added} −{removed}", { files: plural(files.length, "file"), added, removed })}`}
+            {subWords(second.opinion) && ` · ${subWords(second.opinion)}`}
           </span>
         </div>
         <span className="review-keys" aria-hidden="true">
@@ -184,6 +196,15 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
         </Tip>
         <button
           type="button"
+          className="btn review-ask-opinion"
+          disabled={!files.length && !commits.length}
+          onClick={() => second.setAsking(true)}
+          title={t("Another agent reviews this without changing anything; its comments appear under the lines")}
+        >
+          <Icon name="message" size={14} /> {t("Second opinion")}
+        </button>
+        <button
+          type="button"
           className="btn review-seen"
           disabled={marking || (!files.length && !commits.length)}
           onClick={() => void markReviewedSilently()}
@@ -199,6 +220,18 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       )}
       {notice && <Notice tone="success">{notice}</Notice>}
       <div className="review-body">
+        {second.opinion && (
+          <OpinionBlock
+            opinion={second.opinion}
+            reviewer={second.reviewer}
+            asking={second.askingPerson}
+            apart={second.apart}
+            onAdopt={second.adopt}
+            onAdoptAll={second.adoptAll}
+            onDismiss={second.dismissOne}
+            onDismissAll={second.dismissAll}
+          />
+        )}
         {commits.length > 0 && (
           <div className="review-commits">
             {commits.map((commit) => (
@@ -283,6 +316,21 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           rememberKey={`review:${machineId}|${dir}`}
           onClose={() => setPickingAgent(false)}
           onSend={(target, text) => sendComments(target, text)}
+        />
+      )}
+      {second.asking && (
+        <OpinionDialog
+          machineId={machineId}
+          paneId={paneId}
+          dir={dir}
+          paneAgent={agent}
+          onClose={() => second.setAsking(false)}
+          onAsked={(asked, label) => {
+            second.setAsking(false);
+            second.mutate(() => asked.opinion);
+            if (asked.agent_error) setActionError(t("{agent} did not start: {error}", { agent: label, error: asked.agent_error }));
+            else showNotice(t("{agent} is reviewing in a new tab; its comments appear here when it answers.", { agent: label }));
+          }}
         />
       )}
       {openVerdict && (

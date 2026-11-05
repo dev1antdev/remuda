@@ -6,7 +6,8 @@
 // row's id, a click, a key), screenshotted, and checked: no sideways scroll, every menu, popover, dialog, toast and
 // drawer inside the screen, no text squeezed to nothing, the content clear of the rail and the header, its landmarks
 // there, no console error. Every failure is collected and named by pass, screen and element; any one fails the run.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 
 const base = process.env.E2E_URL;
@@ -38,6 +39,7 @@ const failed = (problem) => failures.push(`${where}: ${problem}`);
 
 async function api(method, path, body) {
   const response = await fetch(base + path, {
+    signal: AbortSignal.timeout(90_000), // a request the server never answers fails its screen, never holds the run
     method,
     headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
@@ -72,14 +74,27 @@ socket.onmessage = (message) => {
     waiting.get(msg.id)(msg);
     waiting.delete(msg.id);
   }
-  if (msg.method === "Fetch.requestPaused") void dressRoster(msg.params);
+  if (msg.method === "Fetch.requestPaused") {
+    const url = msg.params.request?.url ?? "";
+    if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
+    else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
+    else void dressRoster(msg.params);
+  }
   if (msg.method === "Runtime.exceptionThrown") consoleErrors.push(msg.params.exceptionDetails?.exception?.description ?? msg.params.exceptionDetails?.text ?? "exception");
   if (msg.method === "Runtime.consoleAPICalled" && msg.params.type === "error") consoleErrors.push(msg.params.args.map((arg) => arg.value ?? arg.description).join(" "));
 };
+// send is one DevTools call; one the browser never answers fails the screen it belongs to instead of holding the run
 const send = (method, params = {}) =>
-  new Promise((resolve) => {
+  new Promise((resolve, reject) => {
     const id = ++nextId;
-    waiting.set(id, resolve);
+    const timer = setTimeout(() => {
+      waiting.delete(id);
+      reject(new Error(`the browser did not answer ${method} in 30 s`));
+    }, 30_000);
+    waiting.set(id, (msg) => {
+      clearTimeout(timer);
+      resolve(msg);
+    });
     socket.send(JSON.stringify({ id, method, params }));
   });
 const evaluate = async (expression) => {
@@ -196,6 +211,25 @@ const CHECKS = `(() => {
   for (const el of document.querySelectorAll(".lens-switch > button, .mode-switch button, .fv-tabs button, .tasks-view button")) {
     if (shown(el) && el.scrollWidth > el.clientWidth + 1) problems.push(name(el) + " spills out of its button: " + el.scrollWidth + " px in " + el.clientWidth);
   }
+  // a one-line label whose box clips its text: overflow hidden with a line-height under the font's own height cuts
+  // the descenders (g, y, р, у) off at the foot; a text node's range is its glyphs' box, whatever the line-height
+  const clipped = [];
+  for (const el of document.querySelectorAll("body *")) {
+    if (el.closest("svg, .xterm, canvas, [aria-hidden=true], .sr-only, [hidden], [inert]")) continue;
+    const s = getComputedStyle(el);
+    if ((s.overflowY !== "hidden" && s.overflowY !== "clip") || s.whiteSpace !== "nowrap" || s.visibility === "hidden") continue;
+    const text = [...el.childNodes].find((node) => node.nodeType === 3 && /[gjpqyрудцщ]/i.test(node.textContent));
+    if (!text) continue;
+    const box = el.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1 || box.bottom < 0 || box.top > H) continue;
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    const glyphs = range.getBoundingClientRect();
+    const foot = box.bottom - parseFloat(s.borderBottomWidth) + 0.5; // half a pixel of rounding either way is no clipping
+    const head = box.top + parseFloat(s.borderTopWidth) - 0.5;
+    if (glyphs.height > 0 && (glyphs.bottom > foot || glyphs.top < head)) clipped.push(name(el) + " (" + Math.round(Math.max(glyphs.bottom - foot, head - glyphs.top) * 10) / 10 + " px)");
+  }
+  if (clipped.length) problems.push("text clipped by its box: " + clipped.slice(0, 4).join(", ") + (clipped.length > 4 ? " and " + (clipped.length - 4) + " more" : ""));
   const squeezed = [];
   for (const el of document.querySelectorAll("body *")) {
     if (el.closest("svg, .xterm, canvas, [aria-hidden=true], .sr-only")) continue;
@@ -278,13 +312,24 @@ git(appDir, "add", "docs/notes.md");
 git(appDir, "rm", "-q", "old.txt");
 writeFileSync(`${appDir}/src/new.ts`, 'export const fresh = "a new file";\n');
 const CHANGED = ["docs/notes.md", "old.txt", "src/app.go", "src/new.ts"];
+// the "dev server" an agent would start in the repository, for the previews: python3's http.server on a free port
+const freePort = () =>
+  new Promise((resolve) => {
+    const probe = createServer();
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+const devPort = await freePort();
+const devServer = spawn("python3", ["-m", "http.server", String(devPort), "--bind", "127.0.0.1"], { cwd: appDir, stdio: "ignore" });
 mkdirSync(`${out}/display`, { recursive: true });
 
 const made = [];
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
-let app, tree, notes, inbox, paneA1;
+let app, tree, notes, inbox, paneA1, paneN;
 let DRESS = {};
 
 // seed makes the workspaces the screens draw — the repository with two tabs and a linked worktree, a plain folder —
@@ -298,17 +343,41 @@ async function seed() {
   notes = await api("POST", "/api/sessions", { machine: "local", dir: notesDir, name: "notes", agent: "shell" });
   made.push(notes.id);
   await api("PUT", "/api/jira", { site: "http://127.0.0.1:9", account: "", token: "e2e" }).catch((error) => failed(`a Jira site: ${error.message}`));
+  // a backup of this instance's own state dir onto this machine, so the Settings section has a run and a copy to show
+  await api("PUT", "/api/backups", { machine: "local", at: "03:30", keep: 3 });
+  const taken = await api("POST", "/api/backups/run");
+  if (!taken.path?.startsWith(`${tmp}/`) || !existsSync(taken.path) || !(taken.size > 0) || !(taken.files > 0)) failed(`a backup now answered ${JSON.stringify(taken)}`);
   const projects = await api("GET", "/api/tasks/projects");
   inbox = (projects.find?.((p) => /inbox/i.test(p.title)) ?? projects[0])?.id;
   await api("POST", "/api/tasks", { project_id: inbox, title: "Draw every screen", markdown: "Every **screen** at two widths.\n\n- [ ] the desk\n- [ ] the phone" });
+  // the Inbox's agents set up: a Queued column, kept empty so the queue (on) starts nothing, and a two-stage pipeline
+  const inboxProject = projects.find((p) => p.id === inbox);
+  const columns = inboxProject.statuses.flatMap((s) => (s.on_new ? [s, { id: 0, project_id: inbox, title: "Queued", hex_color: "f1c40f", kind: "open", position: 0, on_queue: true }] : [s]));
+  const withQueue = await api("PUT", `/api/tasks/projects/${inbox}/statuses`, { statuses: columns, moves: {} });
+  const testing = withQueue.statuses.find((s) => s.on_finish);
+  await api("PUT", `/api/tasks/projects/${inbox}/automation`, {
+    automation: {
+      machine: "local",
+      dir: appDir,
+      agent: "claude",
+      queue: true,
+      max: 2,
+      stages: [
+        { name: "Tests", agent: "codex", prompt: "Run the tests on {branch} and fix what fails.", status_id: testing?.id ?? 0 },
+        { name: "Pull request", agent: "claude", prompt: "", pr: true },
+      ],
+    },
+  }).catch((error) => failed(`the Inbox's agents: ${error.message}`));
   const ready = await until(async () => {
     const list = await sessions();
     const a = list.find((s) => s.id === app.id);
     const b = list.find((s) => s.id === tree.id);
-    return a?.tabs.length >= 2 && b && list.some((s) => s.id === notes.id) ? { a, b } : null;
+    const n = list.find((s) => s.id === notes.id);
+    return a?.tabs.length >= 2 && b && n?.tabs[0]?.panes[0] ? { a, b, n } : null;
   }, 20);
   if (!ready) throw new Error("the seeded workspaces did not reach the roster");
   paneA1 = ready.a.tabs[0].panes[0].id;
+  paneN = ready.n.tabs[0].panes[0].id;
   const paneA2 = ready.a.tabs[1].panes[0].id;
   const paneB = ready.b.tabs[0].panes[0].id;
   DRESS = {
@@ -358,6 +427,47 @@ const SERVER_HOST = {
 };
 
 // dressRoster paints the agents on the e2e's own shells in the browser's copy of the roster; the server keeps its own
+// fakeOpinion answers the page's /api/opinion calls for the repository with a second opinion of its own, so the lens has
+// comments to draw with no agent asked: on src/app.go's two changed lines, on a line its diff folds away, on a file the
+// lens does not list; a dismissal is kept until the next pass, any other folder has none, and asking is refused
+let fakeOpinionState = null;
+const freshOpinion = () => ({
+  machine: "local",
+  dir: appDir,
+  agent: "codex",
+  tab: "w1:t9",
+  pane: "w1:p9",
+  asked: iso(now),
+  answered: iso(now),
+  state: "done",
+  summary: "Two real problems in src/app.go.",
+  close: true,
+  comments: [
+    { id: 1, path: "src/app.go", line: 6, severity: "high", text: "the greeting is printed twice when -quiet is set" },
+    { id: 2, path: "src/app.go", line: 50, severity: "low", text: "answer() changed without a test" },
+    { id: 3, path: "src/app.go", line: 30, text: "this step comment is stale" },
+    { id: 4, path: "README.md", line: 1, text: "the README says nothing of the change" },
+  ],
+});
+async function fakeOpinion({ requestId, request }) {
+  const url = new URL(request.url);
+  const sent = request.postData ? JSON.parse(request.postData) : {};
+  const ours = (url.searchParams.get("dir") ?? sent.dir ?? "").replace(/\/+$/, "").endsWith("/display/app");
+  let code = 200;
+  let body = { opinion: null };
+  if (request.method === "POST" && !url.pathname.endsWith("/dismiss")) [code, body] = [400, { error: "the e2e asks no agent" }];
+  else if (ours) {
+    fakeOpinionState ??= freshOpinion();
+    if (request.method === "POST") {
+      const ids = sent.ids ?? [];
+      fakeOpinionState = { ...fakeOpinionState, comments: fakeOpinionState.comments.map((c) => (ids.length === 0 || ids.includes(c.id) ? { ...c, dismissed: true } : c)) };
+    }
+    body = request.method === "DELETE" ? { ok: true } : { opinion: fakeOpinionState };
+    if (request.method === "DELETE") fakeOpinionState = null;
+  }
+  await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
   const reply = await send("Fetch.getResponseBody", { requestId });
   if (responseStatusCode !== 200 || !reply.result) {
@@ -390,12 +500,65 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
       for (const tab of session.tabs ?? []) for (const pane of tab.panes ?? []) Object.assign(pane, DRESS[pane.id] ?? {});
     }
   }
+  roster.feed = FEED.id; // the activity's newest id as this run sets it: a page that saw an older one reads the feed
   roster.server = SERVER_HOST; // the Server place a remuda -server draws: its host's vitals, the readings a Raspberry Pi gives
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(roster)).toString("base64") });
 }
 
+// FEED is the activity the browser is shown: an id far past the server's own, and the alert a screen puts in it
+const FEED = { id: 900000, entries: [] };
+
+// dressFeed answers the page's read of the activity with FEED's entries, so an alert can be made to arrive
+async function dressFeed({ requestId, responseHeaders = [] }) {
+  if (FEED.entries.length === 0) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify({ entries: FEED.entries })).toString("base64") });
+}
+
 // ---- the screens ----
+
+// alertScreens: an alert the activity records shows on the page while it is in front — the feed's newest id moved, a
+// roster event (a mute set and lifted on the server) makes the page read it — and the alerts panel says what this
+// browser is, and its test puts a toast up on the page itself
+async function alertScreens() {
+  const toastWith = (words) => `[...document.querySelectorAll('.toast')].find((t) => t.textContent.includes(${JSON.stringify(words)}))`;
+  await screen("alert-toast", {
+    open: async () => {
+      FEED.id += 1;
+      FEED.entries = [{ id: FEED.id, at: iso(Date.now()), kind: "input", machine: "local", pane: paneA1, title: "app needs you", body: "claude is waiting for an answer" }];
+      await api("PUT", "/api/mutes", { machine: "local", dir: appDir, until: iso(Date.now() + 3600e3) });
+      await api("DELETE", "/api/mutes", { machine: "local", dir: appDir });
+      if (!(await until(() => evaluate(`!!${toastWith("app needs you")}`), 20))) failed(`an alert the activity recorded did not show on the page (the page: ${await evaluate(`document.visibilityState + ", focus " + document.hasFocus()`)})`);
+      check(await evaluate(`!!${toastWith("app needs you")}?.querySelector('.btn.primary')`), "the alert on the page has no Open");
+    },
+    expect: [".toast"],
+    close: async () => {
+      FEED.entries = [];
+      await evaluate(`${toastWith("app needs you")}?.querySelector('.icon-btn')?.click()`);
+      await sleep(150);
+    },
+  });
+  await screen("alerts-device", {
+    open: async () => palette("alerts"),
+    expect: [".alerts-device .alerts-device-lines li"],
+    close: async () => {},
+  });
+  await screen("alerts-test", {
+    open: async () => {
+      await tap(".alerts-test");
+      if (!(await until(() => evaluate(`!!${toastWith("remuda ·")}`), 4))) failed("the panel's test put no toast up on the page");
+    },
+    expect: [".toast"],
+    close: async () => {
+      await evaluate(`${toastWith("remuda ·")}?.querySelector('.icon-btn')?.click()`);
+      await closeAll();
+    },
+  });
+}
 
 const sidebarOpen = async () => {
   if (pass.phone && !(await present(".sidebar.open"))) {
@@ -491,6 +654,28 @@ async function changesScreens() {
       await sleep(200);
     },
   });
+  await screen("changes-opinion", {
+    open: async () => {
+      if (!(await until(() => present(`${LENS} .opinion-block`), 6))) throw new Error("no second opinion block");
+      check((await count(`${LENS} .opinion-apart .review-opinion`)) === 1, "the comment on a file the lens does not list is not listed apart");
+      check((await count(`${LENS} .review-diff .review-opinion`)) === 3, `src/app.go carries ${await count(`${LENS} .review-diff .review-opinion`)} of its 3 comments`);
+      check((await count(`${LENS} .review-orphans .review-opinion`)) === 1, "the comment on a line the diff does not show is not listed under it");
+      check((await evaluate(`document.querySelector('${LENS} .review-tag-opinion')?.textContent?.trim()`)) === "3", "the file's row does not count the second opinion's comments");
+      await tap(await mark(`document.querySelector('${LENS} .review-hunk .review-opinion .btn')`, "adopt"));
+      if (!(await until(async () => (await evaluate(`document.querySelector('${LENS} .review-tag-comments')?.textContent`)) === "1", 3))) failed("an adopted comment did not join the draft");
+      if (!(await until(async () => (await count(`${LENS} .review-diff .review-opinion`)) === 2, 3))) failed("an adopted comment stayed among the second opinion's");
+      check(await present(`${LENS} .review-hunk .review-note`), "the adopted comment does not sit under its row as a draft note");
+    },
+    expect: [`${LENS} .opinion-block`],
+    close: async () => {
+      await tap(`${LENS} .review-note .icon-btn`);
+      await sleep(200);
+    },
+  });
+  await screen("changes-opinion-dialog", {
+    open: async () => tap(`${LENS} .review-ask-opinion`),
+    expect: [".modal .sel"],
+  });
   await screen("changes-verdict", {
     open: async () => tap(`${LENS} .review-verdicts .btn:not(.primary)`),
     expect: [".modal textarea"],
@@ -574,6 +759,31 @@ async function changesFlow() {
 
 // worktreeFlow runs once, after the Changes flow: a clean worktree's workspace closed takes its folder and branch with
 // it, one with an uncommitted file keeps its folder, the leftovers dialog lists that one, and once clean removes it
+// previewFlow runs once: the dev server in the repository is listed for its workspace, remuda's own ports are not;
+// Open serves it on a port of the cockpit's (another number, since the server holds its own on this host) to the
+// signed-in caller alone, a port nothing listens on is refused, and Close shuts it
+async function previewFlow() {
+  where = `${pass.name} › preview-flow`;
+  const listed = await api("GET", "/api/previews?machine=local");
+  const mine = listed.listeners.find((l) => l.port === devPort);
+  check(mine?.workspace === app.id && mine?.label === "http.server", `the dev server is listed as ${JSON.stringify(mine)}`);
+  check(!listed.listeners.some((l) => ["remuda", "herdr"].includes(l.command) || l.port === Number(new URL(base).port)), "remuda's or herdr's own port is offered as a preview");
+  const opened = await api("POST", "/api/previews/open", { machine: "local", port: devPort });
+  check(opened.local !== devPort && opened.url.endsWith(`:${opened.local}`), `the preview opened as ${JSON.stringify(opened)}`);
+  const served = await fetch(`${opened.url}/`, { headers: { Authorization: `Bearer ${token}`, Cookie: "remuda_token=never-forwarded" } });
+  check(served.status === 200 && (await served.text()).includes("Directory listing"), `the preview answered ${served.status}`);
+  const stranger = await fetch(`${opened.url}/`);
+  check(stranger.status === 401 && !(await stranger.text()).includes("Directory listing"), `a caller with no sign-in got ${stranger.status}`);
+  const again = await api("POST", "/api/previews/open", { machine: "local", port: devPort });
+  check(again.url === opened.url, "a second Open made another preview");
+  const nothing = await fetch(`${base}/api/previews/open`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ machine: "local", port: 22 }) });
+  check(nothing.status === 404, `a port nothing of the person's listens on answered ${nothing.status}`);
+  const shut = await api("DELETE", "/api/previews", { machine: "local", port: devPort });
+  check(shut.closed === true, "Close did not shut the preview");
+  check(await fetch(`${opened.url}/`).then(() => false, () => true), "a shut preview still answers");
+  say(`preview flow: port ${devPort} listed in its workspace, opened on ${opened.local} for the signed-in caller only, shut`);
+}
+
 async function worktreeFlow() {
   where = `${pass.name} › worktree-flow`;
   const worktreeOf = async (id) => (await sessions()).find((s) => s.id === id)?.worktree?.checkout_path ?? "";
@@ -618,6 +828,7 @@ async function worktreeFlow() {
 async function runPass() {
   await send("Emulation.setDeviceMetricsOverride", { width: pass.width, height: pass.height, deviceScaleFactor: 1, mobile: pass.phone });
   await send("Emulation.setTouchEmulationEnabled", { enabled: pass.phone, maxTouchPoints: pass.phone ? 5 : 0 });
+  fakeOpinionState = null;
   const prefs = { lang: pass.lang, "tasks.sel": { kind: "project", id: inbox }, "tasks.view": "board" };
   await evaluate(`(() => { localStorage.clear(); for (const [k, v] of Object.entries(${JSON.stringify(prefs)})) localStorage.setItem("remuda." + k, JSON.stringify(v)); })()`);
   await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
@@ -684,6 +895,24 @@ async function runPass() {
     expect: [".health-pop"],
   });
   await screen("tab-strip", { open: () => onAgents(), expect: [".tabstrip .tab", ".lens-pane:not([hidden]) .xterm-screen"] });
+  await screen("shell-tab", {
+    open: async () => {
+      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneN)}&lens=chat` });
+      if (!(await until(() => present(".lens-pane:not([hidden]) .xterm-screen"), 15))) failed("a ?lens=chat link to a shell pane did not land on its terminal");
+      check(!(await present(".lens-pane:not([hidden]) .chat-log, .lens-pane:not([hidden]) .review")), "a shell pane shows a chat or the changes");
+      check(await evaluate(`(() => { const nav = document.querySelector(".lens-switch"); return !!nav && nav.classList.contains("is-vacant") && getComputedStyle(nav).visibility === "hidden" && nav.getBoundingClientRect().width > 0; })()`), "a shell pane's lens switch is drawn, or gave up its room");
+      if (!(await until(() => evaluate(`new URLSearchParams(location.search).get("lens") === "terminal"`), 3))) failed(`a shell pane's address says lens=${await evaluate(`new URLSearchParams(location.search).get("lens")`)}`);
+      await key("k", "KeyK", CMD);
+      if (!(await until(() => present(".palette-row"), 4))) throw new Error("the palette did not open");
+      check(!(await evaluate(`!!document.querySelector('.palette-row[data-entry="lens:chat"], .palette-row[data-entry="lens:changes"], .palette-row[data-entry="split"]')`)), "the palette offers a shell pane its chat, its changes or the split");
+      await key("Escape", "Escape");
+    },
+    expect: [".tabstrip .tab"],
+    close: async () => {
+      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
+      if (!(await until(() => present(".pane-area .tab"), 15))) failed("the Agents page did not come back");
+    },
+  });
   await screen("new-tab-menu", { open: async () => tap(".tab-add"), expect: [".menu"] });
   await screen("view-menu", { open: async () => tap(".view-btn"), expect: [".menu"] });
   await screen("chat-lens", { open: async () => palette("lens:chat"), expect: [".lens-pane:not([hidden]) .chat-log, .lens-pane:not([hidden]) .composer"], close: async () => palette("lens:terminal") });
@@ -694,6 +923,14 @@ async function runPass() {
       close: async () => palette("split"),
     });
   await changesScreens();
+  await screen("previews", {
+    open: async () => {
+      await onAgents();
+      await palette("previews");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".modal .preview-row")].some((r) => r.textContent.includes("${devPort}"))`), 20))) failed(`the previews dialog does not list the dev server's port ${devPort}`);
+    },
+    expect: [".modal .preview-row"],
+  });
   await screen("float-terminal", {
     open: async () => {
       await key("`", "Backquote", 2);
@@ -732,13 +969,24 @@ async function runPass() {
   await screen("wall-zoo", { open: async () => palette("wall-zoo"), expect: [".zoo-grid .zoo-creature"] });
   if (!pass.phone) await screen("wall-office", { open: async () => palette("wall-office"), expect: [".wall-office"], close: async () => palette("wall-office") });
 
-  await screen("tasks-board", { open: async () => palette("mode:tasks"), expect: [".board"] });
+  await screen("tasks-board", { open: async () => palette("mode:tasks"), expect: [".board", ".board-col-note"] });
+  await screen("project-settings", { open: async () => tap(".tasks-settings-btn"), expect: [".project-settings .ps-queue"], settle: 500, close: async () => {} });
+  await screen("project-settings-agents", {
+    open: async () => evaluate(`document.querySelector('.project-settings .ps-queue')?.scrollIntoView({ block: "center" })`),
+    expect: [".project-settings .ps-queue input[type=checkbox]:checked"],
+    close: async () => {},
+  });
+  await screen("project-settings-pipeline", {
+    open: async () => evaluate(`[...document.querySelectorAll('.project-settings .ps-stage')].pop()?.scrollIntoView({ block: "center" })`),
+    expect: [".project-settings .ps-stage textarea"],
+  });
   await screen("tasks-list", { open: async () => evaluate(`document.querySelector('.tasks-view button')?.click()`), expect: [".tasks-list .tasks-row"] });
   await screen("task-detail", { open: async () => tap(".tasks-row"), expect: [".tasks-detail"] });
   await screen("review", { open: async () => palette("mode:review"), expect: [".queue-head"] });
   await screen("code", { open: async () => palette("mode:code"), expect: [".code-mode"] });
 
   for (const panel of ["standup", "usage", "schedules", "activity", "alerts", "arenas"]) await screen(`panel-${panel}`, { open: async () => palette(panel), expect: [".modal"], settle: 600 });
+  await alertScreens();
   await screen("server-place", {
     open: async () => {
       await palette("server");
@@ -758,6 +1006,15 @@ async function runPass() {
       expect: [".settings-dialog"],
       close: async () => {},
     });
+  await screen("settings-backups", {
+    open: async () => {
+      await evaluate(`document.querySelector('.settings-dialog .backup-settings')?.scrollIntoView({ block: "start" })`);
+      if (!(await until(async () => (await count(".backup-settings .backup-files li")) >= 1, 8))) failed("the Backups section lists no copy on the machine");
+      check(await present(".backup-settings .notice"), "the Backups section does not say how the last run went");
+    },
+    expect: [".backup-settings"],
+    close: async () => {},
+  });
   await closeAll();
   await screen("palette", {
     open: async () => {
@@ -787,13 +1044,22 @@ try {
   await seed();
   await send("Page.enable");
   await send("Runtime.enable");
-  await send("Fetch.enable", { patterns: [{ urlPattern: "*/api/roster*", requestStage: "Response" }] });
+  await send("Page.bringToFront");
+  await send("Emulation.setFocusEmulationEnabled", { enabled: true }); // the page is the window in front, as at a desk
+  await send("Fetch.enable", {
+    patterns: [
+      { urlPattern: "*/api/roster*", requestStage: "Response" },
+      { urlPattern: "*/api/feed*", requestStage: "Response" },
+      { urlPattern: "*/api/opinion*", requestStage: "Request" },
+    ],
+  });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
   if (!(await until(async () => !(await evaluate("location.search")).includes("token=") && (await present(".topbar")), 15))) throw new Error("the page did not sign in");
   const started = Date.now();
   for (pass of PASSES) await runPass();
   await changesFlow().catch((error) => failed(`stopped: ${error.message}`));
   await worktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
+  await previewFlow().catch((error) => failed(`stopped: ${error.message}`));
   say(`${shots} screens in ${Math.round((Date.now() - started) / 1000)} s, screenshots in ${out}/display`);
 } catch (error) {
   failed(`stopped: ${error.message}`);
@@ -801,6 +1067,7 @@ try {
   await send("Page.navigate", { url: "about:blank" }).catch(() => {});
   await api("DELETE", "/api/scratch", { machine: "local" }).catch(() => {});
   for (const id of made.reverse()) await api("DELETE", `/api/sessions/${encodeURIComponent(id)}?machine=local`).catch(() => {});
+  devServer.kill();
   socket.close();
 }
 if (failures.length) {

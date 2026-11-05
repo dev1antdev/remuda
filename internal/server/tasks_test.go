@@ -76,3 +76,47 @@ func TestTasksTakeMarkdownAndASource(t *testing.T) {
 		t.Errorf("a person's comment: %d %v", code, mine)
 	}
 }
+
+func TestOnlyThePersonQueuesWork(t *testing.T) {
+	h, store := taskServer(t)
+	projects, _ := store.Projects()
+	inbox := projects[0]
+	cols := append(inbox.Statuses, tasks.Status{Title: "Queued", Kind: tasks.KindOpen, OnQueue: true})
+	colsJSON, _ := json.Marshal(map[string]any{"statuses": cols})
+	if code, out := taskCall(h, "PUT", "/api/tasks/projects/"+strconv.FormatInt(inbox.ID, 10)+"/statuses", "GOG", string(colsJSON)); code != http.StatusForbidden {
+		t.Fatalf("an agent's key changed the columns: %d %v", code, out)
+	}
+	if code, out := taskCall(h, "PUT", "/api/tasks/projects/"+strconv.FormatInt(inbox.ID, 10)+"/statuses", "", string(colsJSON)); code != 200 {
+		t.Fatalf("the person's columns: %d %v", code, out)
+	}
+	p, _ := store.Project(inbox.ID)
+	var queued int64
+	for _, s := range p.Statuses {
+		if s.OnQueue {
+			queued = s.ID
+		}
+	}
+	project := strconv.FormatInt(inbox.ID, 10)
+	in := strconv.FormatInt(queued, 10)
+	if code, _ := taskCall(h, "POST", "/api/tasks", "GOG", `{"project_id": `+project+`, "title": "Mine", "status_id": `+in+`}`); code != http.StatusForbidden {
+		t.Fatalf("an agent's key made a task in Queued: %d", code)
+	}
+	code, made := taskCall(h, "POST", "/api/tasks", "GOG", `{"project_id": `+project+`, "title": "Proposed"}`)
+	if code != 200 {
+		t.Fatalf("an agent's task: %d %v", code, made)
+	}
+	id := strconv.FormatInt(int64(made["id"].(float64)), 10)
+	if code, _ := taskCall(h, "PATCH", "/api/tasks/"+id, "GOG", `{"status_id": `+in+`}`); code != http.StatusForbidden {
+		t.Fatalf("an agent's key moved a task into Queued: %d", code)
+	}
+	if code, _ := taskCall(h, "PATCH", "/api/tasks/"+id, "", `{"status_id": `+in+`}`); code != 200 {
+		t.Fatalf("the person could not queue a task: %d", code)
+	}
+	on := `{"automation": {"machine": "local", "dir": "/w/app", "queue": true, "max": 1, "stages": []}}`
+	if code, _ := taskCall(h, "PUT", "/api/tasks/projects/"+project+"/automation", "GOG", on); code != http.StatusForbidden {
+		t.Fatalf("an agent's key switched the queue on: %d", code)
+	}
+	if code, out := taskCall(h, "PUT", "/api/tasks/projects/"+project+"/automation", "", on); code != 200 || out["automation"].(map[string]any)["queue"] != true {
+		t.Fatalf("the person's queue: %d %v", code, out)
+	}
+}

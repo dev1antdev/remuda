@@ -122,6 +122,14 @@ func (g *Guard) authenticate(r *http.Request) caller {
 	return caller{ok: true, upgrade: g.Devices != nil}
 }
 
+// SignedIn says whether a request comes from the person's own signed-in browser or carries the token — never a viewer
+// link, an agent's key or a device no longer signed in: what may open a preview, which serves an app on a port of the
+// cockpit's own host, where the browser sends this cookie too.
+func (g *Guard) SignedIn(r *http.Request) bool {
+	who := g.authenticate(r)
+	return who.ok && who.key == nil && !who.viewer
+}
+
 type deviceKey struct{}
 type callerKey struct{}
 type viewerKey struct{}

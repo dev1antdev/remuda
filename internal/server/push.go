@@ -15,9 +15,27 @@ func (s *Server) pushRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/push/subscribe", s.handlePushSubscribe)
 	api.HandleFunc("DELETE /api/push/subscribe", s.handlePushUnsubscribe)
 	api.HandleFunc("POST /api/push/test", s.handlePushTest)
+	api.HandleFunc("POST /api/push/device", s.handlePushDevice)
 	s.webhookRoutes(api)
 	s.alertRoutes(api)
 	s.muteRoutes(api)
+}
+
+// handlePushDevice is POST /api/push/device {endpoint}: whether this cockpit knows the browser's subscription, the
+// prefs it holds for it and the last push it handed over with the push service's answer, for the alerts panel.
+func (s *Server) handlePushDevice(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Endpoint string `json:"endpoint"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	sub, last, known := s.Push.Device(req.Endpoint)
+	if !known {
+		writeJSON(w, map[string]any{"known": false})
+		return
+	}
+	writeJSON(w, map[string]any{"known": true, "prefs": sub.Prefs, "last": last})
 }
 
 func (s *Server) handlePushInfo(w http.ResponseWriter, r *http.Request) {

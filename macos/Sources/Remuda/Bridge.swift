@@ -89,5 +89,10 @@ func jsLiteral(_ s: String) -> String {
     return text
 }
 
+// htmlEscaped is text as it may sit in an HTML page the app writes itself.
+func htmlEscaped(_ s: String) -> String {
+    s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
+}
+
 // appVersion is the bundle's version, "dev" outside a bundle.
 let appVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"

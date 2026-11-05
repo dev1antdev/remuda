@@ -51,6 +51,13 @@ export function TaskChips({ task: t, project, status, fields, pr }: { task: Task
           </span>
         </Tip>
       )}
+      {t.queue_refused && (
+        <Tip text={tr("The queue could not start it: {why}. Move the card out of Queued and back to try again.", { why: t.queue_refused })}>
+          <span className="badge tasks-refused" aria-label={tr("The queue could not start it")}>
+            <Icon name="alert-triangle" size={12} />
+          </span>
+        </Tip>
+      )}
       {t.run && t.run.state !== "gone" && t.run.state !== "failed" && (
         <span className={`tasks-row-run is-${t.run.state}`} title={tr("{agent} on {branch}: {state}", { agent: t.run.agent, branch: t.run.branch, state: t.run.state })}>
           <Logo agent={t.run.agent} />

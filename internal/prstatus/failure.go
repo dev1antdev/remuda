@@ -22,8 +22,9 @@ const LogTail = 8 * 1024
 // from what arrives.
 const LogRead = 8 * LogTail
 
-// lastOfLog keeps a log's command to the end it needs, on the machine.
-var lastOfLog = " | tail -c " + strconv.Itoa(LogRead)
+// lastOfLog keeps a log's command to the end it needs, on the machine: the log lands in a file first, since GNU tail -c
+// on a pipe was seen handing over three times what it was asked for, and tail of a file seeks to the end exactly.
+var lastOfLog = ` | { log=$(mktemp) && cat > "$log"; tail -c ` + strconv.Itoa(LogRead) + ` "$log"; rm -f "$log"; }`
 
 // MaxRuns is how many failed runs' (or jobs') logs one message carries.
 const MaxRuns = 3

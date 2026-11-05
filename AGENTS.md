@@ -73,8 +73,12 @@ not style.
   `pane.send_text` + `pane.send_keys` — serialized per pane by
   `sessions.Input`. Never queue, retry or auto-send what a person typed. The
   exceptions are the restart after an update the person ran (CLAUDE.md,
-  `internal/restart`) and the "continue" a person booked for after a plan
-  limit's reset (`internal/limits`).
+  `internal/restart`), the "continue" a person booked for after a plan
+  limit's reset (`internal/limits`), and a project's queue and pipeline
+  once the person switched them on (`internal/tasks`: queue.go,
+  pipeline.go) — prompts the person configured, like an agent schedule's,
+  for cards the person put in the Queued column; an agent's key can
+  neither queue a card nor change a project's columns or its agents.
 - **Never `--takeover`.** herdr allows one attached client per terminal;
   stealing the slot is the person's call only. A refusal is surfaced
   (`RefusedError`, 409 on HTTP, the WebSocket close reason), never retried

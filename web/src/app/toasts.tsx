@@ -1,7 +1,8 @@
 // The toasts in the corner: a close's agents offered back, offline, a newer server, a release out, what happened while
 // the page was away, Tailscale's state, the last notice.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { LINGER_MS, type OnPageAlert } from "@/features/alerts/onpage";
 import { usePref } from "@/lib/prefs";
 import { newer } from "@/lib/version";
 import { episodeKey, remember, stoppedWords } from "@/features/roster/stopped";
@@ -10,19 +11,37 @@ import { reopen } from "@/features/reopen/offer";
 import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
 import type { ToastItem } from "@/ui";
-import { actions, app } from "./store";
+import { actions, app, type Panel } from "./store";
 import { viewerToasts } from "./viewOnly";
 import { t } from "@/lib/i18n";
 
 // CLOSED_OFFER_MS is how long the toast after a close offers its agents back
 const CLOSED_OFFER_MS = 10_000;
 
+// useAlertLinger takes an alert that needs nothing down LINGER_MS after it went up; a question stays
+function useAlertLinger(alerts: OnPageAlert[]) {
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    for (const alert of alerts) {
+      if (!alert.lingers || timers.current.has(alert.id)) continue;
+      timers.current.set(alert.id, setTimeout(() => actions.dismissAlert(alert.id), LINGER_MS));
+    }
+    for (const [id, timer] of timers.current) {
+      if (alerts.some((alert) => alert.id === id)) continue;
+      clearTimeout(timer);
+      timers.current.delete(id);
+    }
+  }, [alerts]);
+}
+
 export function useToasts(): ToastItem[] {
   const { machines, latest, tailscale, version, offline, stale, viewOnly, host } = useRoster();
   const notice = app.use((s) => s.notice);
   const away = app.use((s) => s.away);
   const closedOffer = app.use((s) => s.closedOffer);
+  const alerts = app.use((s) => s.alerts);
   const share = useSharing();
+  useAlertLinger(alerts);
   const [releaseSeen, setReleaseSeen] = usePref("release.seen", "");
   const [recoverSeen, setRecoverSeen] = usePref<string[]>("recover.seen", []);
   useEffect(() => {
@@ -57,6 +76,28 @@ export function useToasts(): ToastItem[] {
       ),
       onDismiss: () => actions.setClosedOffer(null),
     });
+  // the alerts of this device's switches, shown on the page while it is in front: Open goes to the pane, a digest to the standup
+  for (const alert of alerts) {
+    const open = alert.panel ? () => actions.openPanel(alert.panel as Panel) : alert.machine && alert.pane ? () => actions.openPane(alert.machine!, alert.pane!) : null;
+    toasts.push({
+      id: alert.id,
+      tone: alert.tone,
+      text: alert.text,
+      action: open && (
+        <button
+          type="button"
+          className="btn sm primary"
+          onClick={() => {
+            actions.dismissAlert(alert.id);
+            open();
+          }}
+        >
+          {t("Open")}
+        </button>
+      ),
+      onDismiss: () => actions.dismissAlert(alert.id),
+    });
+  }
   if (offline) toasts.push({ id: "offline", tone: "warn", text: t("Reconnecting to remuda…"), busy: true });
   if (stale && !offline)
     toasts.push({

@@ -17,6 +17,7 @@ import { Html, htmlToText, textToHtml } from "./html";
 import { issueLabel, issueLink } from "./issue";
 import { LabelsField } from "./Labels";
 import { DueInput, PrioMark, projectOption, statusOption } from "./pieces";
+import { stageWords } from "./autonomy";
 import { runWords } from "./runCost";
 import type { RunPR } from "./runPR";
 import { t as tr } from "@/lib/i18n";
@@ -44,6 +45,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
 }) {
   const run = t.run ?? null;
   const now = useNow(15000);
+  const stage = run ? stageWords(run, projects.find((p) => p.id === t.project_id)) : "";
   const spent = run ? runWords(run, now) : "";
   const tightBudget = run ? tightest(budgetsFor(budgets, run.machine, run.dir)) : null;
   const spentTone = tightBudget ? budgetTone(ratio(tightBudget)) : "";
@@ -198,8 +200,10 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
             </span>
             <span className="tasks-run-sub">
               {runLabel}
+              {run.by_queue && <> · {tr("started by the queue")}</>}
               {run.error && <> — {run.error}</>}
             </span>
+            {stage && <span className={`tasks-run-stage${run.pipeline?.startsWith("stopped") ? " is-amber" : ""}`}>{stage}</span>}
             {spent && (
               <span className={`tasks-run-spent${toneClass(spentTone)}`} title={tr("What this run spent at API prices, how long it took, the model")}>
                 {tr("Agent run: {spent}", { spent })}

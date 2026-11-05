@@ -5,6 +5,7 @@
 import { addMachine, createSession, createTab, createWorktree, renameMachine, renameSession, renameTab, type Created } from "@/features/roster/api";
 import IconDialog from "@/features/icons/IconDialog";
 import LeftoversDialog from "@/features/roster/LeftoversDialog";
+import PreviewsDialog from "@/features/preview/PreviewsDialog";
 import ServerPanel from "@/features/roster/ServerPanel";
 import EverywhereDialog from "@/features/updates/EverywhereDialog";
 import ReopenDialog from "@/features/reopen/ReopenDialog";
@@ -52,6 +53,7 @@ export default function Overlays() {
   const { machines, agents, refresh, host, server } = useRoster();
   const panes = useAllPanes();
   const leftoversOn = dialog?.kind === "leftovers" ? machines.find((m) => m.id === dialog.machineId) : undefined;
+  const previewsOn = dialog?.kind === "previews" ? machines.find((m) => m.id === dialog.machineId) : undefined;
 
   // the dialog closes even on a warning: the container exists although its agent did not start, and a second submit would make another
   const landOn = async (machineId: string, made: Created) => {
@@ -115,6 +117,9 @@ export default function Overlays() {
       )}
       {dialog?.kind === "folder-icon" && <IconDialog machineId={dialog.machineId} folder={dialog.folder} name={dialog.name} icon={dialog.icon} onClose={actions.closeDialog} />}
       {leftoversOn && <LeftoversDialog machine={leftoversOn} onClose={actions.closeDialog} />}
+      {previewsOn && dialog?.kind === "previews" && (
+        <PreviewsDialog machineId={previewsOn.id} machineLabel={previewsOn.label} workspace={dialog.workspace} workspaceName={dialog.name} onClose={actions.closeDialog} />
+      )}
       {dialog?.kind === "reopen" && <ReopenDialog onClose={actions.closeDialog} />}
       {dialog?.kind === "arena" && <ArenaDialog taskId={dialog.taskId} title={dialog.title} prompt={dialog.prompt} at={dialog.at} onClose={actions.closeDialog} />}
       {dialog?.kind === "workspace" && (

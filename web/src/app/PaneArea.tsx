@@ -27,19 +27,21 @@ import { Icon, Notice, PANELS, Resizer } from "@/ui";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
 import { actions, app, type Lens } from "./store";
+import { lensOn } from "./paneLens";
 import { SPLIT_QUERY, shownLenses, splitOn } from "./split";
 import ViewMenu from "./ViewMenu";
 import { tn, t as tr } from "@/lib/i18n";
 
 export default function PaneArea({ current }: { current: Located | null }) {
-  const lens = app.use((s) => s.lens);
+  const agent = current?.pane.agent ?? "";
+  const lens = lensOn(app.use((s) => s.lens), agent); // a shell has its terminal alone
   const viewer = app.use((s) => s.viewer);
   const footprint = app.use((s) => s.footprint);
   const chatSession = app.use((s) => s.chatSession);
   const narrow = useMedia("(max-width: 920px)"); // the stylesheet hides the rail there: it must not poll unseen
   const splitAsked = app.use((s) => s.split);
   const wide = useMedia(SPLIT_QUERY);
-  const split = splitOn(splitAsked, wide, isTouch, lens); // the chat beside the terminal; lens is then the focused side
+  const split = splitOn(splitAsked && !!agent, wide, isTouch, lens); // the chat beside the terminal; lens is then the focused side
   const { refresh, viewOnly, machines, server } = useRoster();
   const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
   const share = useSharing();
@@ -159,19 +161,9 @@ export default function PaneArea({ current }: { current: Located | null }) {
             <ViewMenu items={lens === "terminal" && !viewOnly ? terminalItems : lens === "chat" ? chatItems : []} shell={!pane.agent} />
           </>
         }
-        onSelect={(paneId) => {
-          actions.selectPane(machine.id, paneId);
-          if (session.tabs.some((t) => t.panes.some((p) => p.id === paneId && !p.agent))) actions.setLens("terminal"); // a shell has only its terminal
-        }}
+        onSelect={(paneId) => actions.selectPane(machine.id, paneId)}
         onNewTab={() => actions.openDialog({ kind: "tab", machineId: machine.id, session })}
-        onNewTerminal={() =>
-          void act(
-            createTab({ machine: machine.id, workspace: session.id, name: "", agent: "" }).then((made) => {
-              actions.selectPane(machine.id, made.pane);
-              actions.setLens("terminal");
-            }),
-          )
-        }
+        onNewTerminal={() => void act(createTab({ machine: machine.id, workspace: session.id, name: "", agent: "" }).then((made) => actions.selectPane(machine.id, made.pane)))}
         onRename={(t, label) => void act(renameTab(machine.id, t.id, label))}
         onCloseTab={(t) => {
           const last = session.tabs.length === 1;

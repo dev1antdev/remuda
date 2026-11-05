@@ -5,9 +5,12 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +18,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
 	"github.com/dev1antdev/remuda/internal/away"
+	"github.com/dev1antdev/remuda/internal/backup"
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
@@ -29,7 +33,9 @@ import (
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/prefs"
+	"github.com/dev1antdev/remuda/internal/preview"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/quick"
@@ -46,6 +52,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/setup"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
@@ -89,6 +96,12 @@ func Run(ctx context.Context, o Options) error {
 	ui, err := web.Assets()
 	if err != nil {
 		return fmt.Errorf("ui assets: %w", err)
+	}
+	// the state dir is held while served, so `remuda restore` knows to refuse
+	if release, err := state.Hold(o.Dir); err != nil {
+		log.Printf("WARNING: %v; a restore cannot tell that this remuda serves it", err)
+	} else {
+		defer release()
 	}
 
 	bus := events.NewBus()
@@ -143,7 +156,7 @@ func Run(ctx context.Context, o Options) error {
 	defer hub.Close()
 	defer pushSvc.Sockets.Close() // the Mac app's alert stream ends with "remuda is stopping", as the page's events do
 	pushSvc.OnAlert = func(p push.Payload) {
-		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body})
+		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body, Worked: p.Worked})
 		hub.RosterChanged() // the bell's dot rides on the roster
 	}
 	// a muted workspace: the pane's folder from the watcher's last snapshot, for the push service's silence check
@@ -203,8 +216,49 @@ func Run(ctx context.Context, o Options) error {
 	})
 	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
 	reviews := review.New(o.Dir)
-	// a rejected folder whose agent answers that it is ready again: the review notes it, the person is told
+	// a second opinion's reviewer, once it has answered, has its tab closed when the opinion asked for that
+	opinions := opinion.NewService(o.Dir)
+	opinions.Read = func(machineID, paneID string) (string, string, bool) {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return "", "", false
+		}
+		conv, err := chats.Open(mc, paneID, "", "", false)
+		if err != nil || conv.Path == "" {
+			return "", "", false
+		}
+		turns, err := conv.Turns()
+		if err != nil || len(turns) == 0 {
+			return "", "", false
+		}
+		prompt := ""
+		for _, part := range turns[0].Parts {
+			if turns[0].Role == "user" && part.Type == "text" {
+				prompt += part.Text
+			}
+		}
+		last := turns[len(turns)-1]
+		if last.Role != "assistant" {
+			return prompt, "", true
+		}
+		return prompt, last.Answer(), true
+	}
+	opinions.Close = func(machineID, tabID string) error {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return err
+		}
+		client, _, err := mc.Ready()
+		if err != nil {
+			return err
+		}
+		defer watcher.Refresh(mc)
+		return client.TabClose(tabID)
+	}
+	// a rejected folder whose agent answers that it is ready again: the review notes it, the person is told; a
+	// second opinion's reviewer answering is its opinion
 	sayings.OnAnswer = func(machineID, paneID, text string) {
+		opinions.Hear(machineID, paneID, text)
 		snap, _ := watcher.Snapshot(machineID)
 		if snap == nil {
 			return
@@ -307,6 +361,21 @@ func Run(ctx context.Context, o Options) error {
 		return mc, true
 	}, awake.ShellHolder{Dir: o.Dir, Name: strings.TrimSuffix(hostname, ".local")})
 	defer keepAwake.Close()
+	// the cockpit's state dir copied to a machine of the fleet the person picked, nightly and on demand
+	backups := backup.Open(o.Dir, hostname, o.Version)
+	backups.Target = func(id string) (backup.Target, error) {
+		mc, err := fleet.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		if _, _, err := mc.Ready(); err != nil {
+			return nil, fmt.Errorf("%s is not connected: %w", mc.Label(), err)
+		}
+		return mc, nil
+	}
+	backups.Notify = func(title, body string) {
+		pushSvc.Broadcast(push.Payload{Kind: "backup", Title: title, Body: body, Tag: "backup"})
+	}
 	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker}
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
@@ -354,7 +423,9 @@ func Run(ctx context.Context, o Options) error {
 		requests.Forget(e.Machine)
 		restarter.Memory.Forget(e.Machine)
 		planLimits.Forget(e.Machine)
+		opinions.ForgetMachine(e.Machine)
 	})
+	events.Subscribe(bus, opinions.OnStatus)
 	events.Subscribe(bus, pushSvc.OnStatus)
 	events.Subscribe(bus, sayings.OnStatus)
 	events.Subscribe(bus, planLimits.OnStatus)
@@ -433,7 +504,22 @@ func Run(ctx context.Context, o Options) error {
 		Notify:  pushSvc.Notify,
 		PRTouch: requests.TouchPane,
 	}
+	launcher := &tasks.Launcher{Store: taskStore, Input: input, Watch: watcher, Notify: pushSvc.Notify}
+	// a pipeline's next stage: its agent in a new tab of the worktree, through the launcher on the run's machine
+	runWatch.Advance = func(prev tasks.Run, index int, stage tasks.Stage, prompt string) error {
+		mc, err := fleet.Get(prev.Machine)
+		if err != nil {
+			return err
+		}
+		client, _, err := mc.Ready()
+		if err != nil {
+			return err
+		}
+		_, err = launcher.StartStage(mc, client, prev, index, stage, prompt)
+		return err
+	}
 	go runWatch.Loop(15 * time.Second)
+	go taskQueue(taskStore, fleet, watcher, launcher, tracker, chats, planLimits, budgets, pushSvc.Notify).Loop(30 * time.Second)
 	events.Subscribe(bus, func(e events.PullRequestNamed) { runWatch.OnPullRequest(e.Pane.Machine, e.Pane.Pane, e.URL, e.Label) })
 	events.Subscribe(bus, func(e events.PullRequestState) {
 		runWatch.OnPullRequestState(e.Pane.Machine, e.Pane.Pane, e.URL, e.State)
@@ -442,6 +528,7 @@ func Run(ctx context.Context, o Options) error {
 	go hub.Run(ctx)
 	go budgets.Loop(5 * time.Minute)
 	go planLimits.Loop(30*time.Second, ctx.Done())
+	go backups.Loop(time.Minute, ctx.Done())
 
 	srv = &server.Server{
 		Machines:  fleet,
@@ -450,7 +537,7 @@ func Run(ctx context.Context, o Options) error {
 		Chat:      chats,
 		Updates:   &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet},
 		Tasks:     taskStore,
-		Launcher:  &tasks.Launcher{Store: taskStore, Input: input, Watch: watcher, Notify: pushSvc.Notify},
+		Launcher:  launcher,
 		Push:      pushSvc,
 		Feed:      activity,
 		Said:      sayings,
@@ -477,10 +564,17 @@ func Run(ctx context.Context, o Options) error {
 		Limits:    planLimits,
 		Scratch:   shells,
 		Jira:      issues,
+		Backup:    backups,
+		SelfPort:  auth.PortOf(o.Addr),
+		Opinions:  opinions,
 	}
+	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: loopbackPreviews(o.Addr)}
+	srv.Previews = previews
+	defer previews.Shutdown()
 	if o.Tailscale {
 		var node *tsnetx.Node
 		srv.Tailscale = func() tsnetx.Status { return node.Status() } // set before the handler is handed out
+		previews.Listen = tailnetPreviews(func() *tsnetx.Node { return node })
 		node = tsnetx.Start(o.Dir, o.TailscaleName, o.AuthKey, srv.Handler())
 		defer node.Close()
 	}
@@ -493,4 +587,37 @@ func Run(ctx context.Context, o Options) error {
 		log.Printf("sign in with the token from `remuda -print-token`")
 	}
 	return server.ListenAndServe(ctx, o.Addr, srv.Handler())
+}
+
+// loopbackPreviews opens a preview on a port of the host -addr listens on, addressed by the name the page was asked at
+func loopbackPreviews(addr string) func(port int, host string) (net.Listener, string, error) {
+	bind, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		bind = "127.0.0.1"
+	}
+	return func(port int, host string) (net.Listener, string, error) {
+		ln, err := net.Listen("tcp", net.JoinHostPort(bind, strconv.Itoa(port)))
+		if err != nil {
+			return nil, "", err
+		}
+		if strings.Contains(host, ":") {
+			host = "[" + host + "]"
+		}
+		return ln, fmt.Sprintf("http://%s:%d", host, port), nil
+	}
+}
+
+// tailnetPreviews opens a preview on a port of the tailnet node's own, over TLS on its name
+func tailnetPreviews(node func() *tsnetx.Node) func(port int, host string) (net.Listener, string, error) {
+	return func(port int, _ string) (net.Listener, string, error) {
+		n := node()
+		if n == nil {
+			return nil, "", preview.ErrNotReady
+		}
+		ln, url, err := n.ListenTLS(port)
+		if errors.Is(err, tsnetx.ErrNotRunning) {
+			return nil, "", preview.ErrNotReady
+		}
+		return ln, url, err
+	}
 }
