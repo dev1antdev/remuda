@@ -39,17 +39,19 @@ import { actions, app } from "./store";
 import { useBadge } from "./useBadge";
 import { useShellFeed } from "./useShellFeed";
 import { useToasts } from "./toasts";
+import { lensOn } from "./paneLens";
 import { panelOf, writeURL } from "./url";
 import { t } from "@/lib/i18n";
 
 export default function Shell() {
   const mode = app.use((s) => s.mode);
-  const lens = app.use((s) => s.lens);
+  const asked = app.use((s) => s.lens);
   const drawer = app.use((s) => s.drawer);
   const viewer = app.use((s) => s.viewer);
   const codeOpened = app.use((s) => s.codeOpened);
   const full = app.use((s) => s.full);
   const current = useCurrent();
+  const lens = lensOn(asked, current?.pane.agent ?? ""); // the address says the lens on screen: a shell's is its terminal
   const { machines, viewOnly } = useRoster();
   const toasts = useToasts();
   useFullKeys();
@@ -67,7 +69,7 @@ export default function Shell() {
   useEffect(() => {
     if (!current && machines.length === 0) return; // the roster has not answered yet: the address keeps the pane it asked for
     writeURL({ selection: current ? { machineId: current.machine.id, paneId: current.pane.id } : null, mode, lens });
-  }, [current?.machine.id, current?.pane.id, machines.length === 0, mode, lens]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [current?.machine.id, current?.pane.id, current?.pane.agent, machines.length === 0, mode, lens]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // ⌘K on a Mac, Ctrl+K elsewhere, by key code whatever the layout, opens the palette; a terminal keeps its own Ctrl+K.
@@ -105,9 +107,10 @@ export default function Shell() {
       if (e.code !== "KeyF" || e.altKey || (isMac ? !e.metaKey : !e.ctrlKey)) return;
       const s = app.get();
       if (s.mode !== "herdr" || s.dialog || s.panel || s.file || s.confirm) return;
-      const terminal = !s.viewer && s.lens === "terminal" && !!shown.current;
+      const on = lensOn(s.lens, shown.current?.pane.agent ?? "");
+      const terminal = !s.viewer && on === "terminal" && !!shown.current;
       if (isMac ? e.shiftKey : e.shiftKey !== terminal) return;
-      if (!s.viewer && !terminal && (s.lens !== "chat" || !shown.current)) return;
+      if (!s.viewer && !terminal && (on !== "chat" || !shown.current)) return;
       e.preventDefault();
       actions.openFind();
     };

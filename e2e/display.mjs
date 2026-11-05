@@ -38,6 +38,7 @@ const failed = (problem) => failures.push(`${where}: ${problem}`);
 
 async function api(method, path, body) {
   const response = await fetch(base + path, {
+    signal: AbortSignal.timeout(90_000), // a request the server never answers fails its screen, never holds the run
     method,
     headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
@@ -76,10 +77,18 @@ socket.onmessage = (message) => {
   if (msg.method === "Runtime.exceptionThrown") consoleErrors.push(msg.params.exceptionDetails?.exception?.description ?? msg.params.exceptionDetails?.text ?? "exception");
   if (msg.method === "Runtime.consoleAPICalled" && msg.params.type === "error") consoleErrors.push(msg.params.args.map((arg) => arg.value ?? arg.description).join(" "));
 };
+// send is one DevTools call; one the browser never answers fails the screen it belongs to instead of holding the run
 const send = (method, params = {}) =>
-  new Promise((resolve) => {
+  new Promise((resolve, reject) => {
     const id = ++nextId;
-    waiting.set(id, resolve);
+    const timer = setTimeout(() => {
+      waiting.delete(id);
+      reject(new Error(`the browser did not answer ${method} in 30 s`));
+    }, 30_000);
+    waiting.set(id, (msg) => {
+      clearTimeout(timer);
+      resolve(msg);
+    });
     socket.send(JSON.stringify({ id, method, params }));
   });
 const evaluate = async (expression) => {
@@ -196,6 +205,25 @@ const CHECKS = `(() => {
   for (const el of document.querySelectorAll(".lens-switch > button, .mode-switch button, .fv-tabs button, .tasks-view button")) {
     if (shown(el) && el.scrollWidth > el.clientWidth + 1) problems.push(name(el) + " spills out of its button: " + el.scrollWidth + " px in " + el.clientWidth);
   }
+  // a one-line label whose box clips its text: overflow hidden with a line-height under the font's own height cuts
+  // the descenders (g, y, р, у) off at the foot; a text node's range is its glyphs' box, whatever the line-height
+  const clipped = [];
+  for (const el of document.querySelectorAll("body *")) {
+    if (el.closest("svg, .xterm, canvas, [aria-hidden=true], .sr-only, [hidden], [inert]")) continue;
+    const s = getComputedStyle(el);
+    if ((s.overflowY !== "hidden" && s.overflowY !== "clip") || s.whiteSpace !== "nowrap" || s.visibility === "hidden") continue;
+    const text = [...el.childNodes].find((node) => node.nodeType === 3 && /[gjpqyрудцщ]/i.test(node.textContent));
+    if (!text) continue;
+    const box = el.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1 || box.bottom < 0 || box.top > H) continue;
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    const glyphs = range.getBoundingClientRect();
+    const foot = box.bottom - parseFloat(s.borderBottomWidth) + 0.5; // half a pixel of rounding either way is no clipping
+    const head = box.top + parseFloat(s.borderTopWidth) - 0.5;
+    if (glyphs.height > 0 && (glyphs.bottom > foot || glyphs.top < head)) clipped.push(name(el) + " (" + Math.round(Math.max(glyphs.bottom - foot, head - glyphs.top) * 10) / 10 + " px)");
+  }
+  if (clipped.length) problems.push("text clipped by its box: " + clipped.slice(0, 4).join(", ") + (clipped.length > 4 ? " and " + (clipped.length - 4) + " more" : ""));
   const squeezed = [];
   for (const el of document.querySelectorAll("body *")) {
     if (el.closest("svg, .xterm, canvas, [aria-hidden=true], .sr-only")) continue;
@@ -284,7 +312,7 @@ const made = [];
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
-let app, tree, notes, inbox, paneA1;
+let app, tree, notes, inbox, paneA1, paneN;
 let DRESS = {};
 
 // seed makes the workspaces the screens draw — the repository with two tabs and a linked worktree, a plain folder —
@@ -305,10 +333,12 @@ async function seed() {
     const list = await sessions();
     const a = list.find((s) => s.id === app.id);
     const b = list.find((s) => s.id === tree.id);
-    return a?.tabs.length >= 2 && b && list.some((s) => s.id === notes.id) ? { a, b } : null;
+    const n = list.find((s) => s.id === notes.id);
+    return a?.tabs.length >= 2 && b && n?.tabs[0]?.panes[0] ? { a, b, n } : null;
   }, 20);
   if (!ready) throw new Error("the seeded workspaces did not reach the roster");
   paneA1 = ready.a.tabs[0].panes[0].id;
+  paneN = ready.n.tabs[0].panes[0].id;
   const paneA2 = ready.a.tabs[1].panes[0].id;
   const paneB = ready.b.tabs[0].panes[0].id;
   DRESS = {
@@ -710,6 +740,24 @@ async function runPass() {
     expect: [".health-pop"],
   });
   await screen("tab-strip", { open: () => onAgents(), expect: [".tabstrip .tab", ".lens-pane:not([hidden]) .xterm-screen"] });
+  await screen("shell-tab", {
+    open: async () => {
+      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneN)}&lens=chat` });
+      if (!(await until(() => present(".lens-pane:not([hidden]) .xterm-screen"), 15))) failed("a ?lens=chat link to a shell pane did not land on its terminal");
+      check(!(await present(".lens-pane:not([hidden]) .chat-log, .lens-pane:not([hidden]) .review")), "a shell pane shows a chat or the changes");
+      check(await evaluate(`(() => { const nav = document.querySelector(".lens-switch"); return !!nav && nav.classList.contains("is-vacant") && getComputedStyle(nav).visibility === "hidden" && nav.getBoundingClientRect().width > 0; })()`), "a shell pane's lens switch is drawn, or gave up its room");
+      if (!(await until(() => evaluate(`new URLSearchParams(location.search).get("lens") === "terminal"`), 3))) failed(`a shell pane's address says lens=${await evaluate(`new URLSearchParams(location.search).get("lens")`)}`);
+      await key("k", "KeyK", CMD);
+      if (!(await until(() => present(".palette-row"), 4))) throw new Error("the palette did not open");
+      check(!(await evaluate(`!!document.querySelector('.palette-row[data-entry="lens:chat"], .palette-row[data-entry="lens:changes"], .palette-row[data-entry="split"]')`)), "the palette offers a shell pane its chat, its changes or the split");
+      await key("Escape", "Escape");
+    },
+    expect: [".tabstrip .tab"],
+    close: async () => {
+      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
+      if (!(await until(() => present(".pane-area .tab"), 15))) failed("the Agents page did not come back");
+    },
+  });
   await screen("new-tab-menu", { open: async () => tap(".tab-add"), expect: [".menu"] });
   await screen("view-menu", { open: async () => tap(".view-btn"), expect: [".menu"] });
   await screen("chat-lens", { open: async () => palette("lens:chat"), expect: [".lens-pane:not([hidden]) .chat-log, .lens-pane:not([hidden]) .composer"], close: async () => palette("lens:terminal") });
