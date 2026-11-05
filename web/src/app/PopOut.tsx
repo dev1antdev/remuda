@@ -39,7 +39,7 @@ function Popped({ popout }: { popout: Selection }) {
   const located = panes.find((x) => x.machine.id === popout.machineId && x.pane.id === popout.paneId);
   return (
     <div className="popout-body">
-      {located && wall.view === "zoo" ? (
+      {located && wall.view === "zoo" && located.pane.agent ? (
         <div className="zoo-popout">
           <ZooCreature tile={{ ...located, key: tileKey(located.machine.id, located.pane.id) }} radar={radar} now={now} mode="big" />
         </div>
