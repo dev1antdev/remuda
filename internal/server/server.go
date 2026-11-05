@@ -20,6 +20,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/arena"
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
+	"github.com/dev1antdev/remuda/internal/backup"
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
@@ -89,6 +90,7 @@ type Server struct {
 	Limits    *limits.Service  // the agents' subscription windows, the hits and the bookings to continue after a reset
 	Scratch   *scratch.Store   // the floating terminal's shell on each machine
 	Jira      *jira.Service    // the person's Jira site and the issues their agents' work names
+	Backup    *backup.Service  // the cockpit's state dir copied to another machine, nightly and on demand
 	Previews  *preview.Service // the machines' dev servers opened on the cockpit, nil without
 	SelfPort  int              // the port of -addr, never offered as a preview
 
@@ -139,6 +141,7 @@ func (s *Server) Handler() http.Handler {
 	s.limitRoutes(api)
 	s.scratchRoutes(api)
 	s.jiraRoutes(api)
+	s.backupRoutes(api)
 	s.leftoverRoutes(api)
 	s.previewRoutes(api)
 	api.Handle("GET /", s.staticHandler())

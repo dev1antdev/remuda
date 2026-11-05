@@ -9,6 +9,7 @@ import type { FolderIconRef, Machine, Session } from "@/features/roster/api";
 import type { FileTarget } from "@/features/files/target";
 import type { SearchHit } from "@/features/search/api";
 import type { BudgetStatus } from "@/features/usage/api";
+import { keepNewest, type OnPageAlert } from "@/features/alerts/onpage";
 import { readURL } from "./url";
 import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, lensToOpen, openLensOf } from "./openLens";
 
@@ -80,6 +81,7 @@ export type AppState = {
   full: boolean; // the lens takes the whole screen: no header, no sidebar, no rail (app/full.tsx)
   find: Find | null; // the find bar over the chat lens or the transcript viewer, null while closed
   away: string | null; // what the agents did while the page was away, one toast line until it is dismissed or followed
+  alerts: OnPageAlert[]; // the alerts shown on the page while it is in front (features/alerts/onpage.ts), newest last
   closedOffer: { machineId: string; ids: string[]; text: string } | null; // a close just made through the page: a toast offers its agents back
   taskAsked: { projectId: number; taskId: number; start: boolean; n: number } | null; // a task the Tasks mode is asked to open, once (one just made from an issue); start = the agent dialog on it too
   split: boolean; // the chat beside the terminal, asked for by a per-device pref; shown only on a wide screen with a mouse (app/split.ts)
@@ -115,6 +117,7 @@ export const app = createStore<AppState>({
   full: false,
   find: null,
   away: null,
+  alerts: [],
   closedOffer: null,
   taskAsked: null,
   split: readPref("split", false),
@@ -268,6 +271,13 @@ export const actions = {
   // what happened while the page was away, as one toast line; null takes the toast down
   setAway(away: string | null) {
     app.set({ away });
+  },
+  // an alert shown in the corner while the page is in front; the same one once, the newest few
+  addAlert(alert: OnPageAlert) {
+    app.set({ alerts: keepNewest(app.get().alerts, alert) });
+  },
+  dismissAlert(id: string) {
+    app.set({ alerts: app.get().alerts.filter((alert) => alert.id !== id) });
   },
   // the toast that offers back the agents a close just stopped; null takes it down
   setClosedOffer(closedOffer: AppState["closedOffer"]) {

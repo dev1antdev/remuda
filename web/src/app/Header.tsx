@@ -13,6 +13,7 @@ import { accountWindows, gravest, limitWords, type AccountWindow } from "@/featu
 import { FolderIcon, Icon, Tip } from "@/ui";
 import type { Located } from "./current";
 import { popOut, popOutSupported } from "./pip";
+import { lensOn } from "./paneLens";
 import { SharingChip } from "./SharingChip";
 import { actions, app, type Lens } from "./store";
 import { t } from "@/lib/i18n";
@@ -20,7 +21,7 @@ import { t } from "@/lib/i18n";
 export default function Header({ current }: { current: Located | null }) {
   const { machines, budgets, viewOnly } = useRoster();
   const mode = app.use((s) => s.mode);
-  const lens = app.use((s) => s.lens);
+  const lens = lensOn(app.use((s) => s.lens), current?.pane.agent ?? "");
   const drawer = app.use((s) => s.drawer);
   const share = useSharing();
   const viewer = app.use((s) => s.viewer);
@@ -107,7 +108,10 @@ function UsagePill({ usage, budget, limits }: { usage: NonNullable<Located["pane
   );
 }
 
+// LensSwitch is the pane's three lenses; a shell has its terminal alone, so the switch keeps its room unseen and
+// going from an agent's tab to a shell's moves nothing in the header
 function LensSwitch({ lens, current, viewOnly }: { lens: Lens; current: Located; viewOnly: boolean }) {
+  const vacant = !current.pane.agent;
   const tab = (id: Lens, label: string, extra?: { disabled?: boolean; title?: string; badge?: number }) => (
     <button role="tab" aria-selected={lens === id} className={lens === id ? "on" : ""} disabled={extra?.disabled} title={extra?.title} onClick={() => actions.setLens(id)}>
       {label}
@@ -119,7 +123,7 @@ function LensSwitch({ lens, current, viewOnly }: { lens: Lens; current: Located;
     </button>
   );
   return (
-    <nav className="lens-switch" role="tablist" aria-label={t("View")}>
+    <nav className={`lens-switch${vacant ? " is-vacant" : ""}`} role="tablist" aria-label={t("View")} aria-hidden={vacant || undefined} inert={vacant || undefined}>
       {tab("chat", t("Chat"))}
       {tab("terminal", t("Terminal"))}
       {tab("changes", t("Changes"), {

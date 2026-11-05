@@ -569,6 +569,33 @@ make service                    # the same on this machine
 Logs: `~/Library/Logs/remuda.log` (macOS) or `journalctl --user -u remuda`.
 `remuda uninstall` removes the service and the rest (see Uninstall above).
 
+### Backups of the cockpit
+
+Everything the cockpit keeps lives in its state dir: your tasks, the
+schedules, budgets, recipes, webhooks and settings, the signed-in devices,
+the agents' keys, the token, the push keys and its Tailscale node. On a
+Raspberry Pi that is an SD card. **Settings › Backups** copies it every
+night (at a time you pick, in the cockpit's own zone) to another machine
+of your fleet, into that machine's remuda folder under
+`backups/<cockpit>/`, the newest 14 kept by default; *Back up now* takes
+one at once, and a failed run sends a notification. The databases are
+copied through SQLite itself, so a copy is consistent while the cockpit
+runs. From a shell:
+
+```bash
+remuda backup now                  # through the running service
+remuda backup list                 # the copies on the target
+remuda restore remuda-20261105T033000Z.tar.gz   # the service stopped first
+```
+
+`restore` refuses while a remuda serves the state dir, moves the dir as it
+is aside (`…/remuda.before-restore-<time>`) rather than deleting it, and
+keeps the backups that machine holds for others. Restored on a new
+machine, the cockpit keeps its Tailscale address, so every device stays
+signed in — never run the old one and the restored one at the same time.
+A backup holds the token: it is written 0600 into a 0700 folder on your
+own machine, and nowhere else.
+
 ## Docker / Portainer
 
 For a **Linux host** that runs herdr (the container shares the host's unix
@@ -832,7 +859,16 @@ too (the file goes over your SSH session).
 VAPID keys — the only third party is your browser vendor's push service.
 remuda watches every machine's agents itself, so alerts arrive with the
 app closed: *needs you* 10 s after an agent blocks on a question, *finished*
-a minute after a long turn. Answer at the desk first and nothing is sent.
+after every turn or only the long ones, as you choose. Answer at the desk
+first and nothing is sent. While the page is in front the same alerts show
+in its corner, with Open and an optional chime, so you see them whatever
+the system's notification settings say. The alerts panel says what this
+browser is and where it stands: notifications allowed or blocked (and
+where to allow them, in the browser and in macOS or Windows), whether it
+is subscribed to this cockpit, the last push sent and the last one
+received; *Send a test* shows both. The Mac app tells you in its window
+when the remuda it points at does not answer, and opens Settings for a
+new address.
 **A question is answered from the notification itself**: its push names
 what is asked ("Bash command · rm -rf build") and carries the first two
 choices as buttons in the dialog's own words — *Yes*, *No, and tell

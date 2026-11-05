@@ -1013,6 +1013,11 @@ input[type="checkbox"]:hover:not(:checked) {
   cursor: default;
 }
 
+/* a shell's pane: its terminal alone, the switch's room kept so the header moves nothing between an agent's tab and a shell's */
+.lens-switch.is-vacant {
+  visibility: hidden;
+}
+
 .bell {
   position: relative; /* the activity dot sits in its corner */
   display: inline-grid;
@@ -3034,6 +3039,48 @@ body.is-resizing iframe {
 }
 
 /* ---- alerts ---- */
+/* this device's word in the alerts panel: browser and system, permission, subscription, the last push sent and received */
+.alerts-device {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.alerts-device-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.alerts-device-permission {
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.alerts-device-permission.is-granted {
+  color: var(--green);
+}
+
+.alerts-device-permission.is-denied {
+  color: var(--red);
+}
+
+.alerts-device-lines {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  line-height: 1.4;
+}
+
 .alerts-row,
 .alerts-opt {
   display: flex;
@@ -7681,6 +7728,7 @@ body.popout {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.25; /* the button's line-height of 1 clipped g, y, р and у at the box's foot */
 }
 
 .rail-btn.has-news::after {
@@ -10118,6 +10166,59 @@ body.popout {
   display: flex;
   gap: 6px;
   margin-top: 4px;
+}
+
+/* ---- backups (features/settings/BackupSection.tsx): the cockpit's state copied to another machine ---- */
+.backup-hint {
+  margin: 0 0 4px;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.backup-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.backup-actions .backup-hint {
+  margin: 0;
+}
+
+.backup-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.backup-files .backup-hint {
+  overflow-wrap: anywhere;
+}
+
+.backup-files ul {
+  max-height: 160px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  list-style: none;
+}
+
+.backup-files li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 10px;
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.backup-size {
+  color: var(--fg-dim);
 }
 
 /* ---- the zoo: every agent on the Wall as a little creature (app/Zoo.tsx, app/Creature.tsx). Its palette is mixed from

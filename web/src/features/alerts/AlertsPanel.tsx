@@ -7,6 +7,9 @@ import { inShell } from "@/lib/shell";
 import { speak, useVoices, voiceSupported } from "@/features/alerts/useVoice";
 import { DEFAULT_VOICE, type VoicePrefs } from "@/features/alerts/voice";
 import WebhooksSection from "@/features/alerts/WebhooksSection";
+import DeviceStatus from "@/features/alerts/DeviceStatus";
+import { testAlert } from "@/features/alerts/onpage";
+import { actions } from "@/app/store";
 import { alertSections } from "@/features/alerts/sections";
 import { useRoster } from "@/features/roster/useRoster";
 import Select from "@/ui/Select";
@@ -21,8 +24,12 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [done, showDone] = useTimedNotice(6000);
+  const [looks, setLooks] = useState(0); // every change of the subscription or a test reads the device's status again
 
-  const reload = async () => setState(await getPushState());
+  const reload = async () => {
+    setState(await getPushState());
+    setLooks((n) => n + 1);
+  };
   useEffect(() => {
     void reload();
   }, []);
@@ -74,9 +81,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
       {native && !viewOnly && <Notice tone="hint">{t("Notifications come through the Mac app")}</Notice>}
       {shown.push && !state && <Notice tone="hint">{t("Checking…")}</Notice>}
       {shown.push && state && !state.supported && <Notice tone="warn">{state.reason}</Notice>}
-      {shown.push && state?.supported && state.permission === "denied" && (
-        <Notice tone="warn">{t("Notifications are blocked for this site — allow them in the browser's site settings.")}</Notice>
-      )}
+      {shown.push && state?.supported && <DeviceStatus state={state} version={looks} />}
 
       {shown.push && state?.supported && (
         <div className="alerts-row">
@@ -98,6 +103,11 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
             {state.subscribed ? t("Turn off") : t("Turn on")}
           </button>
         </div>
+      )}
+      {err && (
+        <Notice tone="error" onDismiss={() => setErr("")}>
+          {err}
+        </Notice>
       )}
 
       <label className="alerts-opt alerts-open">
@@ -134,15 +144,15 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
           <label className="alerts-opt">
             <span>
               {t("When an agent")} <b>{t("finishes")}</b>
-              <small>{t("Turns ≥ 1 min, a minute after; “always” means every turn, after 10 s.")}</small>
+              <small>{t("Every finish 10 s after it; or only turns that worked a minute or more, a minute after.")}</small>
             </span>
             <Select
               value={prefs.done}
               onChange={(done) => changePrefs({ ...prefs, done })}
               options={[
+                { value: "always", label: t("every finish") },
+                { value: "long", label: t("turns over a minute") },
                 { value: "off", label: t("never") },
-                { value: "long", label: t("long turns") },
-                { value: "always", label: t("always") },
               ]}
             />
           </label>
@@ -179,17 +189,24 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      {shown.push && state?.subscribed && state.endpoint && (
+      {!viewOnly && !native && (
         <button
           type="button"
           className="btn sm alerts-test"
           disabled={busy}
-          onClick={() => void run(() => sendTestPush(state.endpoint!), "Test push sent — it should appear in a moment.")}
+          onClick={() => {
+            actions.addAlert(testAlert());
+            const endpoint = state?.subscribed ? state.endpoint : undefined;
+            if (!endpoint) {
+              showDone(t("A test is up in the corner of this page. Turn on push for a system notification too."));
+              return;
+            }
+            void run(() => sendTestPush(endpoint), t("A test is up in the corner of this page, and a system notification should appear in a moment."));
+          }}
         >
-          {t("Send a test push")}
+          {t("Send a test")}
         </button>
       )}
-      {err && <Notice tone="error" onDismiss={() => setErr("")}>{err}</Notice>}
       {done && <Notice tone="success">{done}</Notice>}
       {shown.webhooks && <WebhooksSection />}
     </Dialog>
