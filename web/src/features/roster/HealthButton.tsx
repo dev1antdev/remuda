@@ -14,6 +14,7 @@ import { awakeBad, awakeWords } from "./awake";
 import { resumeStopped } from "@/features/updates/recover";
 import { limitTone, limitWords } from "@/features/usage/limits";
 import { concerns, updateLabel } from "./concerns";
+import { BodyRows } from "./BodyRows";
 import { Sparkline } from "./Sparkline";
 import { DISK_THRESHOLDS, loadThresholds, rangeOf, sparkTitle, spanWords } from "./spark";
 import { t, tn } from "@/lib/i18n";
@@ -85,7 +86,7 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
       >
         <div className="health-head">
           <b>{name}</b>
-          <span className="dim">{h?.os}</span>
+          <span className="dim">{[h?.os, h?.model].filter(Boolean).join(" · ")}</span>
           {!viewOnly && (
             <Tip text={t("Read again now")}>
               <button type="button" className="icon-btn sm" aria-label={t("Read again now")} disabled={busy} onClick={() => void refresh()}>
@@ -172,6 +173,7 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
               {h.uptime ? ` · ${t("up {time}", { time: h.uptime })}` : ""}
               {history && <Sparkline values={loads} min={loadRange.min} max={loadRange.max} color="var(--ctp-blue)" thresholds={loadThresholds(h.cores)} title={sparkTitle(t("Load"), loads, (v) => v.toFixed(2), span)} />}
             </dd>
+            <BodyRows health={h} span={span} />
             {m.awake?.on && (
               <>
                 <dt>{t("Awake")}</dt>

@@ -77,15 +77,18 @@ type Options struct {
 	VersionCheck  bool
 	Version       string
 	Door          bool // place the agents' door files here and on every remote (off for a scratch instance)
+	Server        bool // serve the page only: the host is no machine of the fleet, its herdr neither needed nor kept
 }
 
 // Run builds remuda and serves until ctx ends.
 func Run(ctx context.Context, o Options) error {
 	bin, err := herdr.FindBinary(o.HerdrBin)
-	if err != nil {
+	if err != nil && !o.Server {
 		return fmt.Errorf("herdr: %w", err)
 	}
-	if err := herdr.EnsureServer(bin, o.Socket); err != nil {
+	if o.Server {
+		log.Print("serving the page only (-server): this machine is none of the cockpit's; its herdr is neither asked nor kept")
+	} else if err := herdr.EnsureServer(bin, o.Socket); err != nil {
 		log.Printf("WARNING: herdr is not answering at %s (%v); remuda will keep trying", o.Socket, err)
 	} else if version, protocol, err := herdr.NewClient(o.Socket).Ping(); err == nil {
 		log.Printf("connected to herdr %s (protocol %d) at %s", version, protocol, o.Socket)
@@ -120,8 +123,9 @@ func Run(ctx context.Context, o Options) error {
 		log.Print("the agents' door stays closed: no agent-key / agent-url files are placed here or on a remote machine (-door opens it)")
 	}
 	fleet := machines.NewManager(o.Dir, o.Socket, bin, door)
+	fleet.SetServer(o.Server)
 	defer fleet.Close()
-	if local, err := fleet.Get(machines.LocalID); err == nil && o.Door {
+	if local, err := fleet.Get(machines.LocalID); err == nil && o.Door && !o.Server {
 		if err := auth.EnsureDoor(o.Dir, keys, local.Label(), auth.LoopbackURL(o.Addr)); err != nil {
 			log.Printf("WARNING: %v; the agents on this machine cannot reach the tasks", err)
 		}
@@ -436,7 +440,9 @@ func Run(ctx context.Context, o Options) error {
 		}
 		hub.RosterChanged()
 	})
-	events.Subscribe(bus, func(e events.LocalHerdrDown) { keeper.Revive(e.Err) })
+	if !o.Server {
+		events.Subscribe(bus, func(e events.LocalHerdrDown) { keeper.Revive(e.Err) })
+	}
 	events.Subscribe(bus, func(e events.Snapshot) { keepAwake.Observe(e.Machine, awake.Working(e.Snap)) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { keepAwake.Forget(e.Machine) })
 	shells := scratch.Open(o.Dir) // the floating terminal's shell on each machine
@@ -529,7 +535,7 @@ func Run(ctx context.Context, o Options) error {
 		Watch:     watcher,
 		Input:     input,
 		Chat:      chats,
-		Updates:   &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher},
+		Updates:   &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet},
 		Tasks:     taskStore,
 		Launcher:  launcher,
 		Push:      pushSvc,

@@ -3,6 +3,7 @@
 import { newer } from "@/lib/version";
 import { VENDOR_NAME } from "@/ui/brand";
 import type { Health, Latest, StoppedChat } from "./api";
+import { bodyConcerns } from "./body";
 import { stoppedNames, stoppedWords } from "./stopped";
 import { t } from "@/lib/i18n";
 
@@ -32,8 +33,16 @@ function found(h: Health | undefined, latest: Latest | undefined, serverVersion:
   const have = remote ? h.remuda : serverVersion;
   if (have && latest?.remuda && newer(have, latest.remuda)) out.push({ key: "release", text: `remuda ${latest.remuda} is out (${have} here)`, update: "remuda-release" });
   if (h.disk_used_pct >= 90 || (h.disk_free_gb > 0 && h.disk_free_gb < 10)) out.push({ key: "disk", text: t("Disk {pct}% full, {gb} GB free", { pct: h.disk_used_pct, gb: h.disk_free_gb.toFixed(0) }), bad: h.disk_used_pct >= 95 });
+  bodyConcerns(h).forEach((c, i) => out.push({ key: `body-${i}`, ...c }));
   if (h.error && !h.claude && !h.herdr) out.push({ key: "err", text: h.error, bad: true });
   return out;
+}
+
+// serverTone is the Server place's icon on the rail: red for anything bad in the host's body or disk, amber for a look,
+// none when all is well; the versions are the Updates' business, not the icon's
+export function serverTone(h: Health | undefined): "bad" | "warn" | "" {
+  const list = found(h, undefined, undefined, false, []).filter((c) => c.key === "disk" || c.key === "err" || c.key.startsWith("body-"));
+  return list.some((c) => c.bad) ? "bad" : list.length ? "warn" : "";
 }
 
 // hookNames says which agents' herdr hooks are behind, by the agents' names

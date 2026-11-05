@@ -30,6 +30,7 @@ type Machine struct {
 	lastAttempt time.Time
 	lastAlive   time.Time // last `ssh -O check`, so transport errors don't spawn one each
 	removed     bool      // taken out of the registry; never reconnect, pollers stop
+	serverHost  bool      // the local one, when remuda serves the page only: its herdr is never asked (Manager.SetServer)
 	serverStart time.Time // when remuda last started `herdr server` there
 	herdrBin    string    // herdr's binary on the machine, once known
 	socket      string
@@ -250,6 +251,9 @@ func (mc *Machine) transportError(err error) {
 func (mc *Machine) Ready() (*herdr.Client, *herdr.AttachManager, error) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
+	if mc.local && mc.serverHost {
+		return nil, nil, ErrServerHost
+	}
 	if mc.local {
 		return mc.client, mc.attach, nil
 	}

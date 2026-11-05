@@ -93,7 +93,10 @@ export type Session = {
 
 // a machine's vitals, read by internal/health a few minutes apart
 // one probe's load and the disk's free percentage
-export type Sample = { at: string; load: number; disk_free: number };
+export type Sample = { at: string; load: number; disk_free: number; mem?: number; temp?: number }; // mem: % in use; temp: the CPU's °C
+
+// what a Raspberry Pi's firmware held the board back for: now, and since boot when its word was readable
+export type Throttle = { now: string[]; since?: string[]; word?: string };
 
 export type Health = {
   at: string;
@@ -123,6 +126,16 @@ export type Health = {
   error?: string;
   code_server?: string; // the release linked under ~/.local/opt/code-server
   statusline?: boolean; // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
+  model?: string; // the board or the computer: "Raspberry Pi 4 Model B Rev 1.5", "Mac16,1"
+  mem_total_mb?: number;
+  mem_avail_mb?: number; // what a new program could have without swapping
+  swap_total_mb?: number;
+  swap_used_mb?: number;
+  temp_c?: number; // the CPU's, where the system tells it without sudo
+  temp_crit_c?: number;
+  freq_mhz?: number;
+  freq_max_mhz?: number;
+  throttle?: Throttle;
 };
 
 // the newest versions out there; remuda is its own newest release on GitHub
@@ -153,7 +166,10 @@ export type StoppedChat = { pane: string; agent: string; title: string };
 
 export type AgentKind = { id: string; label: string };
 
-export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[]; jira?: string }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far; jira: the Jira site, when set
+// ServerHost is the host of a remuda serving the page only (remuda -server): no machine of the fleet, its vitals behind the Server place
+export type ServerHost = { id: string; label: string; health?: Health };
+
+export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[]; jira?: string; server?: ServerHost }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far; jira: the Jira site, when set
 
 // fetchRoster returns null when the roster is unchanged (304 via ETag); viewOnly says a viewer link signed this page in.
 export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null; viewOnly: boolean }> {

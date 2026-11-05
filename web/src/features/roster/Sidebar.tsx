@@ -15,13 +15,14 @@ import { entries, type Folder } from "./workspaces";
 import { useSharing } from "./useSharing";
 import { hueStyle } from "./hue";
 import { moving, useClock, useSpinner } from "./useClocks";
+import { NO_MACHINES } from "./server";
 import { useRoster } from "./useRoster";
 import { t } from "@/lib/i18n";
 
 export type { Current } from "./rows";
 
 export default function Sidebar() {
-  const { machines, latest, viewOnly } = useRoster();
+  const { machines, latest, viewOnly, server } = useRoster();
   const serverVersion = __REMUDA_VERSION__ === "dev" ? undefined : __REMUDA_VERSION__;
   const located = useCurrent();
   const current: Current = located ? { machineId: located.machine.id, sessionId: located.session.id, paneId: located.pane.id } : null;
@@ -91,6 +92,7 @@ export default function Sidebar() {
           />
         </span>}
       </div>
+      {server && machines.length === 0 && <p className="ws-empty">{t(NO_MACHINES)}</p>}
       {machines.map((m) => {
         const folded = !!collapsed[m.id];
         const n = summary(m);

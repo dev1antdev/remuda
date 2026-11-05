@@ -23,7 +23,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   real service only — never with `-no-door`, and not by a scratch
   instance with `REMUDA_STATE_DIR` set unless `-door` asks, so a look or
   the e2e beside the real one never overwrites its door on a remote;
-  `app.Options.Door`, one log line when it stays closed); subcommands
+  `app.Options.Door`, one log line when it stays closed), `-server`
+  (also `REMUDA_SERVER=1`; `app.Options.Server`, see "Server mode"
+  below; without it the host is a machine of its own, there is no
+  `-client` flag); subcommands
   `search` and `usage` for the deployed binary on a remote machine, and
   `setup`, `uninstall` and `code` (see "Installing and uninstalling"
   below), `mcp` and `tasks` (the agents' door to the task list, see
@@ -155,6 +158,26 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Machine.Transcripts` is a `transcript.Reader`. `local` is always present,
   named "This Mac · <host>" on a Mac and "This machine · <host>" on
   anything else (`localLabel`, tested) until the person renames it.
+  **Server mode** (`remuda -server`, `Manager.SetServer`, tested): the
+  host serves the page only and is no machine of the fleet — `List`
+  leaves it out, so the roster's `machines`, the watcher (no local poll,
+  so no `LocalHerdrDown` and no keeper), the search, the usage, the
+  recap and standup, teleport's targets and the budgets' hosts never see
+  it, while `All` (the vitals collector, `Close`) still has it; its
+  `Ready()` is `ErrServerHost`, so a route naming it says why; the app
+  neither needs nor starts its herdr (`herdr.FindBinary` may fail),
+  places no door for its own agents (the remotes still get theirs), and
+  `/api/health` answers `server: true` with no herdr, which the vitals'
+  peer probe reads as no peer to relay terminals through. The roster
+  carries the host as `server {id, label, health}`; the page's
+  `useRoster()` gives it as `server` (a machine with no workspaces,
+  `hostMachine` in `features/roster/server.ts`, tested) and `host` (the
+  machine serving the page, the fleet's local one or the server), which
+  the release toast and panel use; the empty states say how to add a
+  machine (`NO_MACHINES`) and a start button picks the first connected
+  machine (`startOn`). `remuda setup -server [-host H]` installs no
+  herdr and writes `-server` into the service unit (`REMUDA_SERVER=1`
+  to `install-service.sh`, tested on its stand-ins).
   **Remotes come from herdr itself**: `SyncHerdr` reads `herdr machine list
   --json` (the watcher calls it every 30s, with a 5s timeout) and adds
   enabled machines under **herdr's own id** with `Source: "herdr"` (not
@@ -399,7 +422,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   ends xterm's own drag; a click that never moves is left to xterm. The ⬚ selection layer (phone long-press) is screen-only.
 - **Nothing in a bar moves when state changes.** The page's places are
   **the rail** (`app/Rail.tsx`) down the left edge: the five modes, then
-  Standup, Usage, Schedules, Activity (a dot for news) and Settings,
+  Standup, Usage, Schedules, Activity (a dot for news), Shell, in server
+  mode **Server** (panel `server`, `features/roster/ServerPanel.tsx`:
+  the host's load, disk, memory, temperature, clock and throttling with
+  the day's sparklines, its versions and tailnet address, what wants a
+  look, Read again, Updates…, Update everywhere…; an amber or red dot
+  from `serverTone` in `concerns.ts`, tested; the palette's "Server ·
+  <name>", a viewer's too) and Settings,
   each an icon with its name under it and a tooltip (the name whole: a
   language whose word is too long there gives a shorter one through
   `tc("rail", …)`, "События" for Activity, and the e2e display suite
@@ -456,11 +485,27 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   remuda versions, how Claude Code was installed, herdr's agent hooks
   that lag the installed herdr (`OutdatedHooks`, the shell behind
   `Report.OutdatedHooks`) and its plugins from GitHub (`GitHubPlugins` →
-  `Report.Plugins`), disk, load, the core count, uptime)
+  `Report.Plugins`), disk, load, the core count, uptime, and **the body**
+  (`host.go`, tested on rp-orange's and a Mac's recorded answers):
+  `HostScript` prints raw lines that Go parses — memory from
+  `/proc/meminfo` or a Mac's `hw.memsize` and `vm_stat` (free, inactive,
+  speculative and purgeable pages as available) with the swap, the CPU's
+  thermal zone (the cpu / x86_pkg / soc one over a battery's or the
+  wifi's, its critical trip point), cpufreq's clock against its top, the
+  board's model, and a Raspberry Pi's throttling: `vcgencmd
+  get_throttled` or sysfs's `get_throttled`, decoded by `ParseThrottle`
+  (bits 0–3 now, 16–19 since boot: under-voltage, frequency capped,
+  throttled, soft temperature limit), else — Ubuntu keeps `/dev/vcio`
+  root's — the `rpi_volt` hwmon's `in0_lcrit_alarm` alone, now only; no
+  sudo anywhere; the page's `features/roster/body.ts` (tested) words
+  them, `BodyRows.tsx` draws them in a machine's ⓘ and the Server place,
+  and `bodyConcerns` (under-voltage and heat from 85 °C bad, a capped
+  clock, 75 °C and tight memory a look) join the ⓘ's concerns)
   from one POSIX script per machine through `shell.Text`, every 15
   minutes and on demand (`POST /api/machines/{id}/health`). **The day's
   vitals are kept** (`history.go`, tested): every probe that read the
-  machine adds a `Sample{At, Load, DiskFree %}` to the machine's history
+  machine adds a `Sample{At, Load, DiskFree %, MemUsed %, Temp °C}` (the
+  last two where read; sparklines of them in `BodyRows`) to the machine's history
   — one on demand within a minute of the last replaces it — the last
   `HistoryKeep` (96, a day of probes) per machine, written to
   `<state>/vitals.json` after each probe and read back at start (a
@@ -499,7 +544,23 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   does the rest. `updates.Service` (`Available`, `Start`, `Recent`, `Job`)
   is what the four update routes call: `Start` refuses a command that is
   not the one shown with a `StaleError` (409), deploys this very binary
-  for `what = remuda`, and wraps an agent update in the restart hooks. `make release` writes `bin/checksums.txt`; `make
+  for `what = remuda`, and wraps an agent update in the restart hooks.
+  **Update everywhere** (`everywhere.go`, tested; the Updates dialog's
+  button, the Server place, the palette, dialog kind `update-everywhere`
+  → `features/updates/EverywhereDialog.tsx`, `everywhere.ts` tested):
+  `GET /api/updates/everywhere` is `EverywherePlan`, every connected
+  machine's pending updates as `Step{machine, label, what, title,
+  command}` — herdr, hooks, the agents, code-server, a newer remuda
+  release, only where something newer is known (`pendingUpdate`), in that
+  order on each machine, the remotes first and the page's own host last,
+  since its remuda restarts once its job ends; each command shown before
+  Run; `POST /api/updates/everywhere {steps}` checks every step against
+  the plan as it stands (a moved one is a `StaleError`, nothing starts;
+  a second run while one goes is `ErrBatchRunning`, both 409) and
+  `runBatch` runs them one after another through `Start`, each waiting
+  for its job (`StepTimeout` 30 min), a failed or skipped step leaving
+  the rest to run; `GET …/everywhere/{id}` is the run's `Batch` with each
+  step's state, the last five kept in memory. `make release` writes `bin/checksums.txt`; `make
   publish` (on `main` with `release` fast-forwarded in, a tag on HEAD, a
   clean tree, the checks green) pushes the tag, and
   `.github/workflows/release.yml` builds the binaries and makes the

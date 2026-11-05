@@ -6463,6 +6463,59 @@ button.usage-row:hover {
   overflow-wrap: anywhere;
 }
 
+/* ---- Update everywhere (features/updates/EverywhereDialog.tsx): a machine's steps, each with its command, then how each went ---- */
+.everywhere-machine h3 {
+  margin: 0 0 4px;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.everywhere-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.everywhere-steps li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-13);
+}
+
+.everywhere-steps li:has(> .everywhere-state) {
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.everywhere-steps summary {
+  cursor: pointer;
+}
+
+.everywhere-state {
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+  text-align: right;
+}
+
+.everywhere-steps li.is-running .everywhere-state {
+  color: var(--accent);
+}
+
+.everywhere-steps li.is-ok .everywhere-state {
+  color: var(--green);
+}
+
+.everywhere-steps li.is-failed .everywhere-state,
+.everywhere-steps li.is-skipped .everywhere-state {
+  color: var(--amber);
+}
+
 .updates-log {
   margin: 0;
   max-height: 44dvh;
@@ -7866,7 +7919,9 @@ body.popout {
   line-height: 1.25; /* the button's line-height of 1 clipped g, y, р and у at the box's foot */
 }
 
-.rail-btn.has-news::after {
+.rail-btn.has-news::after,
+.rail-btn.has-warn::after,
+.rail-btn.has-bad::after {
   content: "";
   position: absolute;
   top: 6px;
@@ -7876,6 +7931,48 @@ body.popout {
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 2px var(--bg-raised);
+}
+
+/* the Server place: the host's body or disk wants a look (amber) or is a concern (red) */
+.rail-btn.has-warn::after {
+  background: var(--amber);
+}
+
+.rail-btn.has-bad::after {
+  background: var(--red);
+}
+
+.server-concerns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-12);
+}
+
+.server-concerns li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.server-concerns li.is-warn {
+  color: var(--amber);
+}
+
+.server-concerns li.is-bad {
+  color: var(--red);
+}
+
+.server-rows {
+  font-size: var(--fs-12);
+}
+
+/* three buttons in longer words than English are two rows on a phone, never cut at the edge */
+.server-panel .modal-actions {
+  flex-wrap: wrap;
 }
 
 .rail-btn.rail-more {
@@ -9641,7 +9738,8 @@ body.popout {
 
 /* ---- the keep-awake switch: the ⓘ row when the hold could not be taken ---- */
 
-.health-rows dd.health-awake-bad {
+.health-rows dd.health-awake-bad,
+.health-rows dd.health-body-warn {
   color: var(--amber);
 }
 
