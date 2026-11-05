@@ -569,6 +569,33 @@ make service                    # the same on this machine
 Logs: `~/Library/Logs/remuda.log` (macOS) or `journalctl --user -u remuda`.
 `remuda uninstall` removes the service and the rest (see Uninstall above).
 
+### Backups of the cockpit
+
+Everything the cockpit keeps lives in its state dir: your tasks, the
+schedules, budgets, recipes, webhooks and settings, the signed-in devices,
+the agents' keys, the token, the push keys and its Tailscale node. On a
+Raspberry Pi that is an SD card. **Settings › Backups** copies it every
+night (at a time you pick, in the cockpit's own zone) to another machine
+of your fleet, into that machine's remuda folder under
+`backups/<cockpit>/`, the newest 14 kept by default; *Back up now* takes
+one at once, and a failed run sends a notification. The databases are
+copied through SQLite itself, so a copy is consistent while the cockpit
+runs. From a shell:
+
+```bash
+remuda backup now                  # through the running service
+remuda backup list                 # the copies on the target
+remuda restore remuda-20261105T033000Z.tar.gz   # the service stopped first
+```
+
+`restore` refuses while a remuda serves the state dir, moves the dir as it
+is aside (`…/remuda.before-restore-<time>`) rather than deleting it, and
+keeps the backups that machine holds for others. Restored on a new
+machine, the cockpit keeps its Tailscale address, so every device stays
+signed in — never run the old one and the restored one at the same time.
+A backup holds the token: it is written 0600 into a 0700 folder on your
+own machine, and nowhere else.
+
 ## Docker / Portainer
 
 For a **Linux host** that runs herdr (the container shares the host's unix

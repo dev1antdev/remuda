@@ -10150,6 +10150,59 @@ body.popout {
   margin-top: 4px;
 }
 
+/* ---- backups (features/settings/BackupSection.tsx): the cockpit's state copied to another machine ---- */
+.backup-hint {
+  margin: 0 0 4px;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.backup-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.backup-actions .backup-hint {
+  margin: 0;
+}
+
+.backup-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.backup-files .backup-hint {
+  overflow-wrap: anywhere;
+}
+
+.backup-files ul {
+  max-height: 160px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  list-style: none;
+}
+
+.backup-files li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 10px;
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.backup-size {
+  color: var(--fg-dim);
+}
+
 /* ---- the zoo: every agent on the Wall as a little creature (app/Zoo.tsx, app/Creature.tsx). Its palette is mixed from
    the vendor's hue (--zoo-skin, set per creature) and the flavour's tokens; its state reads from the pose and the sign ---- */
 .zoo-creature {
