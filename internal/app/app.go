@@ -498,7 +498,22 @@ func Run(ctx context.Context, o Options) error {
 		Notify:  pushSvc.Notify,
 		PRTouch: requests.TouchPane,
 	}
+	launcher := &tasks.Launcher{Store: taskStore, Input: input, Watch: watcher, Notify: pushSvc.Notify}
+	// a pipeline's next stage: its agent in a new tab of the worktree, through the launcher on the run's machine
+	runWatch.Advance = func(prev tasks.Run, index int, stage tasks.Stage, prompt string) error {
+		mc, err := fleet.Get(prev.Machine)
+		if err != nil {
+			return err
+		}
+		client, _, err := mc.Ready()
+		if err != nil {
+			return err
+		}
+		_, err = launcher.StartStage(mc, client, prev, index, stage, prompt)
+		return err
+	}
 	go runWatch.Loop(15 * time.Second)
+	go taskQueue(taskStore, fleet, watcher, launcher, tracker, chats, planLimits, budgets, pushSvc.Notify).Loop(30 * time.Second)
 	events.Subscribe(bus, func(e events.PullRequestNamed) { runWatch.OnPullRequest(e.Pane.Machine, e.Pane.Pane, e.URL, e.Label) })
 	events.Subscribe(bus, func(e events.PullRequestState) {
 		runWatch.OnPullRequestState(e.Pane.Machine, e.Pane.Pane, e.URL, e.State)
@@ -516,7 +531,7 @@ func Run(ctx context.Context, o Options) error {
 		Chat:      chats,
 		Updates:   &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher},
 		Tasks:     taskStore,
-		Launcher:  &tasks.Launcher{Store: taskStore, Input: input, Watch: watcher, Notify: pushSvc.Notify},
+		Launcher:  launcher,
 		Push:      pushSvc,
 		Feed:      activity,
 		Said:      sayings,

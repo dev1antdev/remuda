@@ -312,6 +312,20 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   worktree is answered for you), the task moves to *In progress*, and
   every answer the agent finishes comes back to the task as a comment
   with a push — and moves it on to *Testing*, unless you moved it first.
+  A project's settings say **where its agents work** — a machine and one
+  of its repositories, the agent, its model and arguments (a recipe fills
+  them) — and the Start dialog begins from there. Switch on **the queue**
+  and mark a column *Queued*: the cards you put there start by themselves,
+  top first, as many at once as you allow, once the machine is there, the
+  agent's plan window has room and no budget over the folder is crossed;
+  the column's head says what the next card waits for, and a start that
+  was refused waits until you move the card again. A **pipeline** adds
+  stages after the first agent's work — say Codex running the tests, then
+  Claude opening the pull request: each agent ends its answer with
+  `STAGE DONE`, the next starts in a new tab of the same worktree with the
+  previous answer in its prompt and the card in its column, and a
+  question, an answer without the line or a card you move stops it there.
+  Agents can propose tasks, but only you queue them.
   When the agent opens a pull request and names it (the Review mode's
   *Approve & open PR* asks for exactly that), the task notes the link, moves
   on the same way, and shows the request with its checks on the card and in

@@ -23,8 +23,11 @@ type StartRequest struct {
 	Branch    string `json:"branch"`
 	Base      string `json:"base"`
 	Agent     string `json:"agent"`
+	Model     string `json:"model"` // as the agent's CLI names it, "" for its default
+	Args      string `json:"args"`  // extra arguments as the person typed them
 	Groom     bool   `json:"groom"`
 	Prompt    string `json:"prompt"`
+	Queued    bool   `json:"-"` // the project's queue starts it, not the person
 }
 
 // Launcher starts an agent on a task: a worktree off a workspace, the agent in it, the prompt handed over in the background.
@@ -42,6 +45,10 @@ func (req *StartRequest) Normalize() error {
 	}
 	if req.Agent == "shell" || !sessions.KnownAgent(req.Agent) {
 		return invalid(fmt.Sprintf("an agent is required, not %q", req.Agent))
+	}
+	req.Model, req.Args = strings.TrimSpace(req.Model), strings.TrimSpace(req.Args)
+	if err := checkStart(req.Agent, req.Model, req.Args); err != nil {
+		return invalid(err.Error())
 	}
 	req.Branch, req.Base = strings.TrimSpace(req.Branch), strings.TrimSpace(req.Base)
 	if req.Workspace == "" || req.Branch == "" {
@@ -65,12 +72,18 @@ func (l *Launcher) Start(mc *machines.Machine, client *herdr.Client, task Task, 
 	}
 	included, includeErr := worktrees.Include(mc, res.Worktree.Path)
 	pane := res.RootPane.PaneID
-	if err := sessions.StartAgent(client, pane, req.Agent); err != nil {
+	args, _ := sessions.SplitArgs(req.Args)
+	if err := sessions.StartAgentWith(client, pane, req.Agent, sessions.Start{Model: req.Model, Args: args}); err != nil {
 		l.Watch.Refresh(mc)
 		return Task{}, fmt.Errorf("the worktree %s is there, but %w: %v", res.Worktree.Branch, ErrAgentStart, err)
 	}
 	l.Watch.Refresh(mc)
-	run, err := l.Store.StartRun(Run{TaskID: task.ID, Machine: mc.ID(), Workspace: res.Workspace.WorkspaceID, Pane: pane, Dir: res.Worktree.Path, Branch: res.Worktree.Branch, Agent: req.Agent})
+	project, _ := l.Store.Project(task.ProjectID)
+	run := Run{TaskID: task.ID, Machine: mc.ID(), Workspace: res.Workspace.WorkspaceID, Pane: pane, Dir: res.Worktree.Path, Branch: res.Worktree.Branch, Agent: req.Agent, ByQueue: req.Queued}
+	if len(project.Automation.Stages) > 0 {
+		run.Pipeline = PipelineOn
+	}
+	run, err = l.Store.StartRun(run)
 	if err != nil {
 		return Task{}, err
 	}
@@ -79,13 +92,40 @@ func (l *Launcher) Start(mc *machines.Machine, client *herdr.Client, task Task, 
 	}
 	prompt := strings.TrimSpace(req.Prompt)
 	if prompt == "" {
-		project, _ := l.Store.Project(task.ProjectID)
 		prompt = Prompt(task, project, req.Groom)
 	} else if req.Groom && !strings.HasPrefix(prompt, "/grill-me") {
 		prompt = "/grill-me " + prompt
 	}
+	if run.Pipeline == PipelineOn {
+		prompt += "\n\n" + StageAsk
+	}
 	go l.deliver(mc, client, run, task, prompt)
 	return l.Store.Get(task.ID)
+}
+
+// StartStage starts a pipeline's next stage: its agent in a new tab of the previous stage's worktree, the run
+// recorded and the card moved to the stage's column, the prompt handed over in the background as a start's is.
+func (l *Launcher) StartStage(mc *machines.Machine, client *herdr.Client, prev Run, index int, stage Stage, prompt string) (Run, error) {
+	tab, err := client.TabCreate(prev.Workspace, stage.Name)
+	if err != nil {
+		return Run{}, err
+	}
+	pane := tab.RootPane.PaneID
+	if err := sessions.StartAgentWith(client, pane, agentOr(stage.Agent), sessions.Start{Model: stage.Model}); err != nil {
+		l.Watch.Refresh(mc)
+		return Run{}, fmt.Errorf("%w: %v", ErrAgentStart, err)
+	}
+	l.Watch.Refresh(mc)
+	run, err := l.Store.StartStageRun(prev, index, stage, pane)
+	if err != nil {
+		return Run{}, err
+	}
+	task, err := l.Store.Get(prev.TaskID)
+	if err != nil {
+		return Run{}, err
+	}
+	go l.deliver(mc, client, run, task, prompt)
+	return run, nil
 }
 
 // includeNote is the task's comment on the files the new worktree got from .worktreeinclude, or why it got none
@@ -159,6 +199,7 @@ func (l *Launcher) fail(run Run, note string) {
 	}
 	_ = l.Store.SetRun(run.ID, RunFailed, note)
 	_, _ = l.Store.AddComment(run.TaskID, "remuda", note)
+	_ = l.Store.StopPipeline(run.ID, "the prompt never reached the agent")
 }
 
 // isTrustPrompt recognises Claude Code's "do you trust this folder" screen for the given folder, nothing else.

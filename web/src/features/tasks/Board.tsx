@@ -5,6 +5,7 @@ import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode 
 import type { Project, Status, Task } from "@/features/tasks/api";
 import Icon from "@/ui/icons";
 import { Notice, Tip, useDismiss, useSubmit } from "@/ui";
+import { queueWords } from "./autonomy";
 import { dropAfter, markerSlot } from "./drop";
 import { longPress } from "./press";
 import { pickHow, type Pick } from "./selection";
@@ -95,6 +96,13 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
                   </span>
                 </Tip>
               )}
+              {s.on_queue && (
+                <Tip text={tr("Queued: the queue starts the tasks you put here, top first, while its switch is on")}>
+                  <span className="board-col-mark" aria-label={tr("The queue starts these")}>
+                    <Icon name="clock" size={12} />
+                  </span>
+                </Tip>
+              )}
               <span className="badge quiet">{list.length}</span>
               <Tip text={tr("Add a task to {column}", { column: s.title })}>
                 <button type="button" className="icon-btn sm" aria-label={tr("Add a task to {column}", { column: s.title })} onClick={() => setAdding(s.id)}>
@@ -102,6 +110,7 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
                 </button>
               </Tip>
             </header>
+            {s.on_queue && <QueueLine project={project} />}
             <div className="board-col-body">
               {adding === s.id && <ColumnAdd onAdd={(title) => onAdd(title, s.id)} onClose={() => setAdding(null)} />}
               {list.map((t, i) => (
@@ -230,6 +239,16 @@ function Card({ task: t, statuses, selected, picked, selecting, dragging, before
         {chips(t)}
       </div>
     </article>
+  );
+}
+
+// QueueLine is what the queue does for the Queued column: off, the next card and why it waits, what it just started
+function QueueLine({ project }: { project: Project }) {
+  const said = queueWords(project);
+  return (
+    <p className={`board-col-note is-${said.tone}`} title={said.text}>
+      {said.text}
+    </p>
   );
 }
 
