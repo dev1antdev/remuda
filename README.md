@@ -954,6 +954,14 @@ marked *ready again*, and a push says so; both take a note and carry
 your comments, and both start the next look from now. The comments can also go on their own,
 to this agent or any other. "Mark reviewed" just clears the counts — the
 agent hears nothing.
+**Second opinion** asks another agent — Codex for work Claude Code did,
+Claude Code for the rest, or whichever you pick — to review the same
+changes in a new tab of the workspace, told to change nothing and to
+answer one finding a line. Its comments come back under the lines they
+name, blue beside your own, with how much each matters; *Add to my
+review* takes one into your draft, *Add all* every one, *Dismiss* sets it
+aside, and the ones on lines the diff no longer shows are listed apart.
+Its tab closes once it has answered, unless you say otherwise.
 
 **Activity** (the bell in the header) is what happened while you were
 away: every finish, question, watchdog note, failed schedule, task

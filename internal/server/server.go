@@ -33,6 +33,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/preview"
 	"github.com/dev1antdev/remuda/internal/prstatus"
@@ -93,6 +94,7 @@ type Server struct {
 	Backup    *backup.Service  // the cockpit's state dir copied to another machine, nightly and on demand
 	Previews  *preview.Service // the machines' dev servers opened on the cockpit, nil without
 	SelfPort  int              // the port of -addr, never offered as a preview
+	Opinions  *opinion.Service // the second opinions another agent gave on a folder's changes
 
 	streams   termStreams
 	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
@@ -144,6 +146,7 @@ func (s *Server) Handler() http.Handler {
 	s.backupRoutes(api)
 	s.leftoverRoutes(api)
 	s.previewRoutes(api)
+	s.opinionRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

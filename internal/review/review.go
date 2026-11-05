@@ -346,24 +346,34 @@ func (store *Store) Diff(host shell.Host, dir, path string) (string, error) {
 
 var hexRe = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 
+// Snapshot is the folder's HEAD and the blob of every uncommitted file ("gone" for a deleted one): what a look saw.
+func Snapshot(host shell.Host, dir string) (string, map[string]string, error) {
+	snapshot := script.InDir(dir) + `git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` + blobsScript()
+	output, err := shell.Text(host, snapshot, 60*time.Second)
+	if err != nil {
+		return "", nil, err
+	}
+	head, blobLines, _ := strings.Cut(output, "\x1e\n")
+	blobs := map[string]string{}
+	for _, line := range strings.Split(strings.TrimRight(blobLines, "\n"), "\n") {
+		if path, blob, ok := strings.Cut(line, "\x1f"); ok {
+			blobs[path] = blob
+		}
+	}
+	return strings.TrimSpace(head), blobs, nil
+}
+
 // MarkSeen moves the folder's baseline to now: HEAD, the blob of every
 // uncommitted file, and the verdict the agent was told.
 func (store *Store) MarkSeen(host shell.Host, dir, verdict string) (Baseline, error) {
 	if !VerdictOK(verdict) {
 		return Baseline{}, fmt.Errorf("no such verdict: %q", verdict)
 	}
-	snapshot := script.InDir(dir) + `git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` + blobsScript()
-	output, err := shell.Text(host, snapshot, 60*time.Second)
+	head, blobs, err := Snapshot(host, dir)
 	if err != nil {
 		return Baseline{}, err
 	}
-	head, blobLines, _ := strings.Cut(output, "\x1e\n")
-	baseline := Baseline{Head: strings.TrimSpace(head), Blobs: map[string]string{}, Verdict: verdict, At: time.Now()}
-	for _, line := range strings.Split(strings.TrimRight(blobLines, "\n"), "\n") {
-		if path, blob, ok := strings.Cut(line, "\x1f"); ok {
-			baseline.Blobs[path] = blob
-		}
-	}
+	baseline := Baseline{Head: head, Blobs: blobs, Verdict: verdict, At: time.Now()}
 	store.mu.Lock()
 	store.baselines[key(host.ID(), dir)] = baseline
 	store.badges[key(host.ID(), dir)] = Badge{}

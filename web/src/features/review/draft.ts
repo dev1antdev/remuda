@@ -1,6 +1,7 @@
 // The review's draft: comments on diff lines, and the messages they become when sent to the agent.
 
 import type { Review, Verdict } from "./api";
+import type { DiffRow } from "./hunks";
 
 export type DraftComment = {
   id: number;
@@ -26,7 +27,15 @@ export const PR_ASK =
 export type VerdictAsk = "none" | "commit" | "pr";
 
 export const commentLines = (draft: DraftComment[]) =>
-  draft.map((comment, index) => `${index + 1}. ${comment.file}:${comment.line}${comment.removed ? " (removed line)" : ""}\n   > ${comment.code}\n   ${comment.text.replace(/\n/g, "\n   ")}`);
+  draft.map((comment, index) => `${index + 1}. ${comment.file}:${comment.line}${comment.removed ? " (removed line)" : ""}${comment.code ? `\n   > ${comment.code}` : ""}\n   ${comment.text.replace(/\n/g, "\n   ")}`);
+
+// draftOnRow says whether a draft comment sits under the row: by its address, or by its line alone when it carries
+// no row's text (a second opinion's comment added from the block, before its file's diff was read)
+export function draftOnRow(comment: DraftComment, row: DiffRow): boolean {
+  if (row.kind === "meta") return false;
+  if (comment.code) return comment.code === row.text && (comment.removed ? row.kind === "del" && row.oldLine === comment.line : row.kind !== "del" && row.newLine === comment.line);
+  return comment.removed ? row.kind === "del" && row.oldLine === comment.line : row.kind !== "del" && row.newLine === comment.line;
+}
 
 // commentsMessage is the draft alone, no verdict: one numbered message
 export const commentsMessage = (draft: DraftComment[], where: string) => [`Review comments (${draft.length}) on ${where}:`, ...commentLines(draft)].join("\n\n");

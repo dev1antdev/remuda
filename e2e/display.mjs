@@ -74,7 +74,12 @@ socket.onmessage = (message) => {
     waiting.get(msg.id)(msg);
     waiting.delete(msg.id);
   }
-  if (msg.method === "Fetch.requestPaused") void (/\/api\/feed/.test(msg.params.request?.url ?? "") ? dressFeed(msg.params) : dressRoster(msg.params));
+  if (msg.method === "Fetch.requestPaused") {
+    const url = msg.params.request?.url ?? "";
+    if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
+    else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
+    else void dressRoster(msg.params);
+  }
   if (msg.method === "Runtime.exceptionThrown") consoleErrors.push(msg.params.exceptionDetails?.exception?.description ?? msg.params.exceptionDetails?.text ?? "exception");
   if (msg.method === "Runtime.consoleAPICalled" && msg.params.type === "error") consoleErrors.push(msg.params.args.map((arg) => arg.value ?? arg.description).join(" "));
 };
@@ -378,6 +383,47 @@ async function seed() {
   say(`seeded: app ${app.id} (two tabs), its worktree ${tree.id}, notes ${notes.id}, the Inbox ${inbox}`);
 }
 // dressRoster paints the agents on the e2e's own shells in the browser's copy of the roster; the server keeps its own
+// fakeOpinion answers the page's /api/opinion calls for the repository with a second opinion of its own, so the lens has
+// comments to draw with no agent asked: on src/app.go's two changed lines, on a line its diff folds away, on a file the
+// lens does not list; a dismissal is kept until the next pass, any other folder has none, and asking is refused
+let fakeOpinionState = null;
+const freshOpinion = () => ({
+  machine: "local",
+  dir: appDir,
+  agent: "codex",
+  tab: "w1:t9",
+  pane: "w1:p9",
+  asked: iso(now),
+  answered: iso(now),
+  state: "done",
+  summary: "Two real problems in src/app.go.",
+  close: true,
+  comments: [
+    { id: 1, path: "src/app.go", line: 6, severity: "high", text: "the greeting is printed twice when -quiet is set" },
+    { id: 2, path: "src/app.go", line: 50, severity: "low", text: "answer() changed without a test" },
+    { id: 3, path: "src/app.go", line: 30, text: "this step comment is stale" },
+    { id: 4, path: "README.md", line: 1, text: "the README says nothing of the change" },
+  ],
+});
+async function fakeOpinion({ requestId, request }) {
+  const url = new URL(request.url);
+  const sent = request.postData ? JSON.parse(request.postData) : {};
+  const ours = (url.searchParams.get("dir") ?? sent.dir ?? "").replace(/\/+$/, "").endsWith("/display/app");
+  let code = 200;
+  let body = { opinion: null };
+  if (request.method === "POST" && !url.pathname.endsWith("/dismiss")) [code, body] = [400, { error: "the e2e asks no agent" }];
+  else if (ours) {
+    fakeOpinionState ??= freshOpinion();
+    if (request.method === "POST") {
+      const ids = sent.ids ?? [];
+      fakeOpinionState = { ...fakeOpinionState, comments: fakeOpinionState.comments.map((c) => (ids.length === 0 || ids.includes(c.id) ? { ...c, dismissed: true } : c)) };
+    }
+    body = request.method === "DELETE" ? { ok: true } : { opinion: fakeOpinionState };
+    if (request.method === "DELETE") fakeOpinionState = null;
+  }
+  await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
   const reply = await send("Fetch.getResponseBody", { requestId });
   if (responseStatusCode !== 200 || !reply.result) {
@@ -563,6 +609,28 @@ async function changesScreens() {
       await sleep(200);
     },
   });
+  await screen("changes-opinion", {
+    open: async () => {
+      if (!(await until(() => present(`${LENS} .opinion-block`), 6))) throw new Error("no second opinion block");
+      check((await count(`${LENS} .opinion-apart .review-opinion`)) === 1, "the comment on a file the lens does not list is not listed apart");
+      check((await count(`${LENS} .review-diff .review-opinion`)) === 3, `src/app.go carries ${await count(`${LENS} .review-diff .review-opinion`)} of its 3 comments`);
+      check((await count(`${LENS} .review-orphans .review-opinion`)) === 1, "the comment on a line the diff does not show is not listed under it");
+      check((await evaluate(`document.querySelector('${LENS} .review-tag-opinion')?.textContent?.trim()`)) === "3", "the file's row does not count the second opinion's comments");
+      await tap(await mark(`document.querySelector('${LENS} .review-hunk .review-opinion .btn')`, "adopt"));
+      if (!(await until(async () => (await evaluate(`document.querySelector('${LENS} .review-tag-comments')?.textContent`)) === "1", 3))) failed("an adopted comment did not join the draft");
+      if (!(await until(async () => (await count(`${LENS} .review-diff .review-opinion`)) === 2, 3))) failed("an adopted comment stayed among the second opinion's");
+      check(await present(`${LENS} .review-hunk .review-note`), "the adopted comment does not sit under its row as a draft note");
+    },
+    expect: [`${LENS} .opinion-block`],
+    close: async () => {
+      await tap(`${LENS} .review-note .icon-btn`);
+      await sleep(200);
+    },
+  });
+  await screen("changes-opinion-dialog", {
+    open: async () => tap(`${LENS} .review-ask-opinion`),
+    expect: [".modal .sel"],
+  });
   await screen("changes-verdict", {
     open: async () => tap(`${LENS} .review-verdicts .btn:not(.primary)`),
     expect: [".modal textarea"],
@@ -715,6 +783,7 @@ async function worktreeFlow() {
 async function runPass() {
   await send("Emulation.setDeviceMetricsOverride", { width: pass.width, height: pass.height, deviceScaleFactor: 1, mobile: pass.phone });
   await send("Emulation.setTouchEmulationEnabled", { enabled: pass.phone, maxTouchPoints: pass.phone ? 5 : 0 });
+  fakeOpinionState = null;
   const prefs = { lang: pass.lang, "tasks.sel": { kind: "project", id: inbox }, "tasks.view": "board" };
   await evaluate(`(() => { localStorage.clear(); for (const [k, v] of Object.entries(${JSON.stringify(prefs)})) localStorage.setItem("remuda." + k, JSON.stringify(v)); })()`);
   await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
@@ -915,6 +984,7 @@ try {
     patterns: [
       { urlPattern: "*/api/roster*", requestStage: "Response" },
       { urlPattern: "*/api/feed*", requestStage: "Response" },
+      { urlPattern: "*/api/opinion*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });

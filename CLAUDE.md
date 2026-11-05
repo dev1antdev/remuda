@@ -1209,6 +1209,78 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   lists the workspace even with nothing uncommitted, since the agent may
   have committed its fixes); the queue sorts such a workspace first with
   a green "ready again" badge and "says it is ready again" under its name.
+- `internal/opinion/` — **the second opinion** (tested): another agent asked
+  to review what the Changes lens shows of a folder, without touching it.
+  The lens head's **Second opinion** button opens `OpinionDialog.tsx` —
+  the reviewer another vendor than the pane's agent by default
+  (`reviewerFor` in `features/review/opinion.ts`: Codex for Claude Code,
+  Claude Code for the rest), its model as the start dialogs offer it,
+  "Close its tab once it has answered" (pref `opinion.close`, on) — and
+  `POST /api/opinion {machine, pane, dir, agent, model?, args?, close}`
+  (`internal/server/opinion.go`): the folder must be the pane's
+  workspace's (`reviewedWorkspace`, else the first workspace standing on
+  it), must be a checkout with something to review (409 otherwise), its
+  HEAD and blobs read (`review.Snapshot`, which MarkSeen now uses too),
+  a tab "<Agent> review" made in that workspace, the opinion kept as
+  `running` *before* the agent starts (`Store.Begin`, in place of the
+  folder's last), the agent started (`sessions.StartAgentWith`; a refusal
+  is `Fail` with the reason) and handed `opinion.Prompt(scopeOf(summary))`
+  in the background (`firstPrompt`): the scope — the uncommitted work
+  against HEAD, the commits since the last look by `git log -p
+  <base>..HEAD`, the files with their counts (40 named) — the hands-off
+  rules (read only: no edit, stage, commit, formatter, stash or install)
+  and the one answer form: `FINDINGS`, then `path:LINE: [high|medium|low]
+  text` a line, `NONE` for nothing, then `SUMMARY`, the prompt ending
+  with `(second opinion request <Ref>)`, a random id the opinion keeps.
+  The answer is heard through `said.Tracker.OnAnswer` (app.go:
+  `opinions.Hear` before the review's ready mark) and, since herdr names
+  no session for some Codex panes and the said tracker reads none then,
+  by the service itself when the reviewer's pane comes to rest
+  (`Service.OnStatus`, a few tries 3 s apart, through `Read`: app.go
+  opens the pane's conversation the way the chat does, its folder
+  fallback included) — accepted only from the conversation whose first
+  prompt is this very request (`IsRequest`: `PromptStart` and the ref),
+  so an earlier review in the folder, or the person's own Codex there, is
+  never taken for it (seen live: without the ref a second run read the
+  first one's answer). `Parse` (answer.go) reads the findings under
+  FINDINGS — or anywhere when there are no sections — past bullets,
+  numbers, bold, backticks and code fences, a path starting with the
+  folder made relative, `path:12-14` and `path:12:5` taken at 12, the
+  severity in brackets, parentheses, bold or as `word:` mapped onto
+  high / medium / low (critical, major, blocker → high; minor, nit, info
+  → low), a URL or a time of day never a finding, the same finding once,
+  at most `MaxFindings` 100 of `MaxText` 1000 runes; a readable answer
+  (findings, or an explicit none) is `done` with its comments numbered,
+  any other `unreadable` with a note and its tab kept; the reviewer's tab
+  closes once the answer is read when the opinion asked for it
+  (`Service.Close`, app.go over the machine's herdr `TabClose`); a
+  reviewer pane gone first (`events.PaneStatus` to `Gone`) is `gone`; a
+  removed machine's opinions are dropped. `opinions.json` in the state
+  dir (0600, a damaged file an empty store, said once). Routes: `GET
+  /api/opinion?machine&dir` (null for none), `POST /api/opinion/dismiss
+  {machine, dir, ids}` (none for all), `DELETE /api/opinion`. The page:
+  `useOpinion.ts` reads it every 3 s while `running`, 30 s otherwise;
+  the line under the branch adds `subWords` ("second opinion: 4
+  comments", "second opinion on its way");
+  `OpinionBlock.tsx` at the top of the lens — "Second opinion · Codex",
+  `headWords` ("4 comments", "Codex is reviewing…", "Codex is asking you
+  something in its tab" while its pane waits on the person — `asksPerson`
+  off the roster, a folder Codex was never trusted in asks first — why
+  there are none), the summary, Open its tab, Add all / Dismiss all, the
+  comments on files the lens does not list (`unlisted`); each comment as
+  an `OpinionNote.tsx` — blue, dashed, its severity on the left edge in
+  red or amber — under the diff row whose new line it names (`onRow`,
+  never a removed line, in `Hunk`), the ones no row carries even
+  unfolded listed under their file's diff (`offRows`), the file's row
+  counting them (`.review-tag-opinion`); "Add to my review" puts it in the
+  person's draft (`adoptedText`: "[high] … — second opinion of Codex", in
+  English like every message the draft sends) under its row and dismisses
+  it; a comment added from the block carries no row's text, so the
+  draft matches it by its line alone (`draftOnRow` in `draft.ts`, which
+  Hunk and Diff now use for every draft comment, and its message quotes no
+  row). The e2e display suite fakes `/api/opinion` in the browser
+  (`fakeOpinion`) and checks the comments' places, the adoption and the
+  dialog.
 - `internal/code/` — the **Code mode**: each machine runs its own
   code-server (VS Code in the browser) on `127.0.0.1:7320`, `auth: none`,
   installed by `remuda code [-host H]` (`internal/setup/scripts/
@@ -3192,6 +3264,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   that as 409, never type into the menu), `pane.send_text` + 150ms +
   `pane.send_keys ["Enter"]` as the shell fallback. Everything per-pane is
   serialized by `sessions.Input`, one lock per pane. Never queue or auto-send user input.
+  The first prompts remuda composes itself — a handover's, a second
+  opinion's review request (`opinion.Prompt`) — go only
+  to the agent it just started in a new tab, and only because the person
+  pressed that dialog's button; never to a pane that was already there.
 - **Terminal bytes go over WS binary frames**, control messages over JSON
   text frames. The attach PTY paints the screen on start; late joiners get
   a repaint (see attach.go), never a byte replay.
