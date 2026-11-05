@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             let made = WebWindow(server: next)
             made.onBridge = { [weak self] message, _ in self?.bridge(message) }
+            made.onOpenSettings = { [weak self] in self?.openSettings() }
             made.load()
             web = made
         }

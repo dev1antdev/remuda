@@ -3,6 +3,7 @@
 // one, so the first confirmation would hit a dead endpoint.
 
 import { check, sendJSON } from "@/lib/http";
+import { t } from "@/lib/i18n";
 
 // Quiet is a daily window in this device's zone during which the server sends it nothing.
 export type Quiet = { from: string; to: string; tz: string };
@@ -87,7 +88,7 @@ export function enablePush(prefs: Prefs): Promise<void> {
         sub = null;
       }
       if (!sub) {
-        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+        sub = await subscribeOrSay(reg, key);
       }
       await register(sub, prefs);
     } finally {
@@ -95,6 +96,22 @@ export function enablePush(prefs: Prefs): Promise<void> {
     }
   })();
   return inflight;
+}
+
+// SUBSCRIBE_TIMEOUT_MS is how long the browser's push service may take to register: a browser without one may never answer
+const SUBSCRIBE_TIMEOUT_MS = 20_000;
+
+// subscribeOrSay registers with the browser's push service, or says in the person's words why it could not
+async function subscribeOrSay(reg: ServiceWorkerRegistration, key: Uint8Array<ArrayBuffer>): Promise<PushSubscription> {
+  try {
+    return await Promise.race([
+      reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(t("The browser's push service gave no answer in 20 s."))), SUBSCRIBE_TIMEOUT_MS)),
+    ]);
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    throw new Error(t("The browser would not register for push ({reason}). A private window, a headless browser or one without a push service cannot get pushes; the alerts still show on this page while it is in front.", { reason }));
+  }
 }
 
 export async function updatePrefs(prefs: Prefs): Promise<void> {
