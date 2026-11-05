@@ -4351,6 +4351,141 @@ body.is-resizing iframe {
   border-color: var(--accent-ring);
 }
 
+/* ---- the second opinion (features/review/Opinion*): another agent's comments, blue where the person's own are the accent ---- */
+.review-tag-opinion {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  border-color: color-mix(in srgb, var(--blue) 40%, transparent);
+}
+
+.review-opinion {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 2px 8px 6px 44px;
+  padding: 6px 8px 6px 10px;
+  border: 1px dashed color-mix(in srgb, var(--blue) 45%, transparent);
+  border-left: 3px solid var(--blue);
+  border-radius: var(--r-md);
+  background: var(--blue-soft);
+  white-space: pre-wrap;
+  font: var(--fs-13)/1.45 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+.review-opinion.sev-high {
+  border-left-color: var(--red);
+}
+
+.review-opinion.sev-medium {
+  border-left-color: var(--amber);
+}
+
+.review-opinion-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.review-opinion-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 3px;
+  color: var(--blue);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+
+.review-opinion-who .review-note-where {
+  display: inline;
+  margin: 0;
+  font-weight: 400;
+}
+
+.review-opinion-sev {
+  padding: 0 6px;
+  border-radius: 99px;
+  background: var(--bg-active);
+  color: var(--fg-dim);
+  font-weight: 500;
+}
+
+.sev-high .review-opinion-sev {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.sev-medium .review-opinion-sev {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.opinion-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--blue) 35%, transparent);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--blue) 6%, var(--bg-raised));
+}
+
+.opinion-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-13);
+}
+
+.opinion-title {
+  font-weight: 600;
+  color: var(--blue);
+}
+
+.opinion-words {
+  flex: 1 1 200px;
+  min-width: 0;
+  color: var(--fg-dim);
+}
+
+.opinion-block.running .opinion-words {
+  animation: pulse 1.6s var(--ease) infinite;
+}
+
+.opinion-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.opinion-summary {
+  margin: 0;
+  color: var(--fg);
+  font-size: var(--fs-13);
+}
+
+.opinion-apart {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.opinion-apart .review-opinion {
+  margin-left: 0;
+}
+
+.modal label.check-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
 .review-draft-bar {
   position: sticky;
   bottom: 0;

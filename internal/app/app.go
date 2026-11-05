@@ -29,6 +29,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/push"
@@ -199,8 +200,49 @@ func Run(ctx context.Context, o Options) error {
 	})
 	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
 	reviews := review.New(o.Dir)
-	// a rejected folder whose agent answers that it is ready again: the review notes it, the person is told
+	// a second opinion's reviewer, once it has answered, has its tab closed when the opinion asked for that
+	opinions := opinion.NewService(o.Dir)
+	opinions.Read = func(machineID, paneID string) (string, string, bool) {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return "", "", false
+		}
+		conv, err := chats.Open(mc, paneID, "", "", false)
+		if err != nil || conv.Path == "" {
+			return "", "", false
+		}
+		turns, err := conv.Turns()
+		if err != nil || len(turns) == 0 {
+			return "", "", false
+		}
+		prompt := ""
+		for _, part := range turns[0].Parts {
+			if turns[0].Role == "user" && part.Type == "text" {
+				prompt += part.Text
+			}
+		}
+		last := turns[len(turns)-1]
+		if last.Role != "assistant" {
+			return prompt, "", true
+		}
+		return prompt, last.Answer(), true
+	}
+	opinions.Close = func(machineID, tabID string) error {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return err
+		}
+		client, _, err := mc.Ready()
+		if err != nil {
+			return err
+		}
+		defer watcher.Refresh(mc)
+		return client.TabClose(tabID)
+	}
+	// a rejected folder whose agent answers that it is ready again: the review notes it, the person is told; a
+	// second opinion's reviewer answering is its opinion
 	sayings.OnAnswer = func(machineID, paneID, text string) {
+		opinions.Hear(machineID, paneID, text)
 		snap, _ := watcher.Snapshot(machineID)
 		if snap == nil {
 			return
@@ -350,7 +392,9 @@ func Run(ctx context.Context, o Options) error {
 		requests.Forget(e.Machine)
 		restarter.Memory.Forget(e.Machine)
 		planLimits.Forget(e.Machine)
+		opinions.ForgetMachine(e.Machine)
 	})
+	events.Subscribe(bus, opinions.OnStatus)
 	events.Subscribe(bus, pushSvc.OnStatus)
 	events.Subscribe(bus, sayings.OnStatus)
 	events.Subscribe(bus, planLimits.OnStatus)
@@ -471,6 +515,7 @@ func Run(ctx context.Context, o Options) error {
 		Limits:    planLimits,
 		Scratch:   shells,
 		Jira:      issues,
+		Opinions:  opinions,
 	}
 	if o.Tailscale {
 		var node *tsnetx.Node
