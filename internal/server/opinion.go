@@ -69,6 +69,10 @@ func (s *Server) handleOpinionAsk(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, err)
 		return
 	}
+	if running, ok := s.Opinions.Running(mc.ID(), req.Dir); ok && snap.Pane(running.Pane) != nil {
+		httpErr(w, http.StatusConflict, errors.New("a second opinion is on its way: wait for its answer, or close its tab"))
+		return
+	}
 	summary := s.Review.Summary(mc, req.Dir)
 	switch {
 	case summary.Error != "":
@@ -100,11 +104,16 @@ func (s *Server) handleOpinionAsk(w http.ResponseWriter, r *http.Request) {
 	})
 	resp := map[string]any{"tab": res.Tab.TabID, "pane": pane}
 	if err := sessions.StartAgentWith(client, pane, req.Agent, start); err != nil {
-		s.Opinions.Fail(mc.ID(), req.Dir, "the reviewer did not start: "+err.Error())
+		s.Opinions.Fail(mc.ID(), pane, "the reviewer did not start: "+err.Error())
 		op, _ = s.Opinions.Get(mc.ID(), req.Dir)
 		resp["agent_error"] = err.Error()
 	} else {
-		go s.firstPrompt(client, events.PaneRef{Machine: mc.ID(), Pane: pane}, opinion.Prompt(scopeOf(summary), op.Ref), label)
+		machine, prompt := mc.ID(), opinion.Prompt(scopeOf(summary), op.Ref)
+		go func() {
+			if err := s.firstPrompt(client, events.PaneRef{Machine: machine, Pane: pane}, prompt, label); err != nil {
+				s.Opinions.Fail(machine, pane, "the request did not reach the reviewer: "+err.Error())
+			}
+		}()
 	}
 	resp["opinion"] = op
 	s.Watch.Refresh(mc)
@@ -152,7 +161,8 @@ func scopeOf(summary review.Summary) opinion.Scope {
 	return scope
 }
 
-// handleOpinionGet is GET /api/opinion?machine=&dir=: the folder's opinion, null when it has none.
+// handleOpinionGet is GET /api/opinion?machine=&dir=: the folder's opinion, null when it has none; with open
+// comments, the files of theirs that changed since the reviewer was asked (`moved`: their lines may have moved).
 func (s *Server) handleOpinionGet(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.machineFor(r, "")
 	if err != nil {
@@ -164,11 +174,17 @@ func (s *Server) handleOpinionGet(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, errors.New("dir required"))
 		return
 	}
-	if op, ok := s.Opinions.Get(mc.ID(), dir); ok {
-		writeJSON(w, map[string]any{"opinion": op})
+	op, ok := s.Opinions.Get(mc.ID(), dir)
+	if !ok {
+		writeJSON(w, map[string]any{"opinion": nil})
 		return
 	}
-	writeJSON(w, map[string]any{"opinion": nil})
+	if op.State == opinion.Done && op.Open() > 0 {
+		if _, blobs, err := review.Snapshot(mc, dir); err == nil {
+			op.Moved = opinion.Moved(op, blobs)
+		}
+	}
+	writeJSON(w, map[string]any{"opinion": op})
 }
 
 // handleOpinionDismiss is POST /api/opinion/dismiss {machine, dir, ids}: those comments set aside — added to the

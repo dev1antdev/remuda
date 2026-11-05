@@ -78,10 +78,7 @@ func (w *RunWatch) Sweep() {
 			continue
 		}
 		w.noteUsage(r, started, now())
-		if r.Pipeline == PipelineOn && state == "blocked" {
-			_ = w.Store.StopPipeline(r.ID, "the agent asked something")
-			w.notifyTask(r, "the pipeline stops: the agent asks something", "Answer it in the pane and carry on by hand.")
-		}
+		// a permission prompt or a choice dialog (blocked) only waits for the person: the answer that follows decides
 		if state == "working" || state == "unknown" {
 			continue
 		}
@@ -95,16 +92,18 @@ func (w *RunWatch) Sweep() {
 			answer = "…" + string(rs[len(rs)-6000:]) // the end is the answer
 		}
 		_, _ = w.Store.AddComment(r.TaskID, "agent", answer)
-		_ = w.Store.SetRun(r.ID, RunFinished, id)
-		r.State, r.Finished = RunFinished, now().UTC().Format(time.RFC3339)
-		w.noteUsage(r, started, now())
+		// the pipeline's step before the answer is noted as reported: a restart in between hears the answer again and
+		// takes the step, where the other order would leave the pipeline on for good
 		var stage string
 		var moved *Status
 		handled := false
 		if r.Pipeline == PipelineOn {
 			stage, moved, handled = w.onStageAnswer(r, answer)
 		}
-		if !handled {
+		_ = w.Store.SetRun(r.ID, RunFinished, id)
+		r.State, r.Finished = RunFinished, now().UTC().Format(time.RFC3339)
+		w.noteUsage(r, started, now())
+		if !handled && r.Pipeline != PipelinePassed { // an earlier stage's tab answering again leaves the card to the pipeline
 			moved, _ = w.Store.OnFinish(r.TaskID)
 		}
 		if w.Notify != nil {
@@ -125,21 +124,6 @@ func (w *RunWatch) Sweep() {
 			})
 		}
 	}
-}
-
-// notifyTask pushes a word about a run's task.
-func (w *RunWatch) notifyTask(r Run, what, body string) {
-	if w.Notify == nil {
-		return
-	}
-	t, _ := w.Store.Get(r.TaskID)
-	w.Notify(push.Payload{
-		Machine: r.Machine, Pane: r.Pane, Kind: "task",
-		Title:   fmt.Sprintf("Task %s: %s", t.Identifier, what),
-		Body:    firstLine(t.Title) + " — " + body,
-		Tag:     fmt.Sprintf("task|%d", r.TaskID),
-		Actions: []push.Action{{Action: "open", Title: "Open"}},
-	})
 }
 
 // noteUsage writes the meter's figures on the run when they moved: every sweep while the pane is there, so they stay

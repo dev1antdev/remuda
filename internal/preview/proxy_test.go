@@ -69,7 +69,7 @@ func TestAPreviewKeepsRemudasSecretsOnBothWays(t *testing.T) {
 	}
 	body, _ := io.ReadAll(res.Body)
 	res.Body.Close()
-	if got := string(body); got != "host=localhost:3000 cookie=app_session=abc auth= origin=http://localhost:3000 referer=" {
+	if got := string(body); got != "host=localhost:3000 cookie=app_session=abc auth= origin=http://localhost:3000 referer=http://localhost:3000/page" {
 		t.Fatalf("the dev server was asked %q", got)
 	}
 	if cookies := res.Header.Values("Set-Cookie"); len(cookies) != 1 || !strings.HasPrefix(cookies[0], "app_session=") {
@@ -80,6 +80,28 @@ func TestAPreviewKeepsRemudasSecretsOnBothWays(t *testing.T) {
 	}
 	if last.Load() == 0 {
 		t.Fatal("the request was not noted for the idle closer")
+	}
+}
+
+func TestAnotherOriginReachesTheDevServerAsItIs(t *testing.T) {
+	front, _, _ := previewOf(t, true, 3000)
+	for _, c := range []struct{ origin, referer, want string }{
+		{"https://evil.example", "https://evil.example/x", "origin=https://evil.example referer="},
+		{"https://remuda.example.ts.net:4000", "https://remuda.example.ts.net:30001/x", "origin=https://remuda.example.ts.net:4000 referer="},
+		{"HTTPS://REMUDA.EXAMPLE.TS.NET:3000", "https://remuda.example.ts.net:3000", "origin=http://localhost:3000 referer=http://localhost:3000"},
+	} {
+		req, _ := http.NewRequest("GET", front.URL+"/", nil)
+		req.Header.Set("Origin", c.origin)
+		req.Header.Set("Referer", c.referer)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if !strings.HasSuffix(string(body), c.want) {
+			t.Errorf("Origin %q, Referer %q reached the dev server as %q, want …%q", c.origin, c.referer, body, c.want)
+		}
 	}
 }
 

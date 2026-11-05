@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DiffRow } from "./hunks";
-import { adoptedText, asksPerson, byFile, headWords, offRows, onRow, openComments, reviewerFor, subWords, unlisted, type Opinion, type OpinionComment } from "./opinion";
+import { addressOf, adoptedText, asksPerson, byFile, headWords, offRows, onRow, openComments, placeComments, reviewerFor, subWords, unlisted, whereWords, type Opinion, type OpinionComment } from "./opinion";
 
 const comment = (id: number, path: string, line: number, more: Partial<OpinionComment> = {}): OpinionComment => ({ id, path, line, text: `note ${id}`, ...more });
 const row = (kind: DiffRow["kind"], oldLine: number | null, newLine: number | null): DiffRow => ({ kind, oldLine, newLine, text: `${kind === "add" ? "+" : kind === "del" ? "-" : " "}x` }) as DiffRow;
@@ -33,6 +33,23 @@ describe("where the comments sit", () => {
     expect([...byFile(open).keys()]).toEqual(["a.go", "gone.go"]);
     expect(unlisted(open, ["a.go", "b.go"]).map((c) => c.id)).toEqual([4]);
     expect(openComments(null)).toEqual([]);
+  });
+});
+
+describe("placeComments", () => {
+  it("sets apart the comments on files changed since the reviewer was asked, and on files the lens does not list", () => {
+    const op = opinion({ moved: ["b.go"], comments: [comment(1, "a.go", 6), comment(2, "b.go", 3), comment(3, "gone.go", 2), comment(4, "b.go", 9, { dismissed: true })] });
+    const placed = placeComments(op, ["a.go", "b.go"]);
+    expect(placed.onRows.map((c) => c.id)).toEqual([1]);
+    expect(placed.unlisted.map((c) => c.id)).toEqual([3]);
+    expect(placed.moved.map((c) => c.id)).toEqual([2]);
+    expect(placeComments(null, ["a.go"])).toEqual({ onRows: [], unlisted: [], moved: [] });
+  });
+  it("names a comment on a file as a whole by the file alone", () => {
+    expect(addressOf(comment(1, "a.go", 0))).toBe("a.go");
+    expect(addressOf(comment(1, "a.go", 7))).toBe("a.go:7");
+    expect(whereWords(comment(1, "a.go", 0))).toBe("the whole file");
+    expect(whereWords(comment(1, "a.go", 7))).toBe("line 7");
   });
 });
 

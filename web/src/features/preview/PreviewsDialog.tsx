@@ -2,6 +2,7 @@
 // and the machine's others after, each with Open: the port opened on the cockpit for this browser alone, in a new tab.
 
 import { useState } from "react";
+import { useSharing } from "@/features/roster/useSharing";
 import { useQuery } from "@/lib/query";
 import { errMsg, plural } from "@/lib/text";
 import { Dialog, Icon, Notice } from "@/ui";
@@ -17,6 +18,8 @@ export default function PreviewsDialog({ machineId, machineLabel, workspace, wor
   onClose: () => void;
 }) {
   const { data, error, loading, reload } = useQuery(() => fetchPreviews(machineId), [machineId], { every: 5000 });
+  const { redact } = useSharing(); // under the screen-sharing mode the machine, the workspace and the servers' folders wear their neutral names
+  const machine = redact(machineLabel);
   const [busy, setBusy] = useState(0);
   const [failure, setFailure] = useState("");
   const [showOthers, setShowOthers] = useState(false);
@@ -51,14 +54,17 @@ export default function PreviewsDialog({ machineId, machineLabel, workspace, wor
       setFailure(errMsg(e));
     }
   };
-  const row = (l: Listener) => <PortRow key={l.port} listener={l} preview={openOn(open, l.port)} busy={busy === l.port} onOpen={() => void show(l.port)} onClose={() => void shut(l.port)} />;
+  const row = (l: Listener) => <PortRow key={l.port} listener={l} preview={openOn(open, l.port)} busy={busy === l.port} redact={redact} onOpen={() => void show(l.port)} onClose={() => void shut(l.port)} />;
 
   return (
-    <Dialog title={workspaceName ? t("Previews of {workspace}", { workspace: workspaceName }) : t("Previews on {machine}", { machine: machineLabel })} icon="external-link" size="md" onClose={onClose}>
-      <p className="modal-hint">{t("What the agents serve on {machine}, opened through this cockpit for this browser alone, in a tab of its own. A preview nobody uses for half an hour closes.", { machine: machineLabel })}</p>
-      {(error || failure) && <Notice tone="error">{failure || error}</Notice>}
+    <Dialog title={workspaceName ? t("Previews of {workspace}", { workspace: redact(workspaceName) }) : t("Previews on {machine}", { machine })} icon="external-link" size="md" onClose={onClose}>
+      <p className="modal-hint">{t("What the agents serve on {machine}, opened through this cockpit for this browser alone, in a tab of its own. A preview nobody uses for half an hour closes.", { machine })}</p>
+      {(error || failure) && <Notice tone="error">{redact(failure || error || "")}</Notice>}
       {loading && !data && <Notice tone="hint">{t("Looking at the ports…")}</Notice>}
-      {data && here.length + workspaces.length === 0 && <Notice tone="hint">{t("Nothing of yours listens on a port of {machine} now. Start the dev server in the workspace — npm run dev, python3 -m http.server — and it shows here.", { machine: machineLabel })}</Notice>}
+      {data && listeners.length === 0 && <Notice tone="hint">{t("Nothing of yours listens on a port of {machine} now. Start the dev server in the workspace — npm run dev, python3 -m http.server — and it shows here.", { machine })}</Notice>}
+      {data && listeners.length > 0 && here.length + workspaces.length === 0 && (
+        <Notice tone="hint">{t("No workspace's server listens on a port of {machine} now. Start the dev server in the workspace — npm run dev, python3 -m http.server — and it shows here.", { machine })}</Notice>
+      )}
       {listeners.length > 0 && (
         <ul className="pick-list preview-list">
           {here.length > 0 && (
@@ -92,10 +98,10 @@ export default function PreviewsDialog({ machineId, machineLabel, workspace, wor
   );
 }
 
-function PortRow({ listener, preview, busy, onOpen, onClose }: { listener: Listener; preview?: Preview; busy: boolean; onOpen: () => void; onClose: () => void }) {
-  const where = whereWords(listener);
+function PortRow({ listener, preview, busy, redact, onOpen, onClose }: { listener: Listener; preview?: Preview; busy: boolean; redact: (text: string) => string; onOpen: () => void; onClose: () => void }) {
+  const where = redact(whereWords(listener));
   return (
-    <li className="pick-row preview-row" title={listener.dir}>
+    <li className="pick-row preview-row" title={listener.dir ? redact(listener.dir) : undefined}>
       <span className="pick-name">
         <span className="preview-port">{listenerWords(listener)}</span>
         {where && <span className="pick-hint"> · {where}</span>}

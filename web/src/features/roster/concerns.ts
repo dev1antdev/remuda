@@ -38,10 +38,19 @@ function found(h: Health | undefined, latest: Latest | undefined, serverVersion:
   return out;
 }
 
+// bodyOrDisk is a concern about the host itself: its disk, its body, a probe that failed
+const bodyOrDisk = (key: string) => key === "disk" || key === "err" || key.startsWith("body-");
+
+// hostConcerns are what the Server place lists: the host's own release and what bodyOrDisk keeps — a herdr, its hooks or
+// an agent still installed there serve no workspace, so their versions are none of a server's business
+export function hostConcerns(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, viewOnly = false): Concern[] {
+  return concerns(h, latest, serverVersion, false, [], viewOnly).filter((c) => c.key === "release" || bodyOrDisk(c.key));
+}
+
 // serverTone is the Server place's icon on the rail: red for anything bad in the host's body or disk, amber for a look,
 // none when all is well; the versions are the Updates' business, not the icon's
 export function serverTone(h: Health | undefined): "bad" | "warn" | "" {
-  const list = found(h, undefined, undefined, false, []).filter((c) => c.key === "disk" || c.key === "err" || c.key.startsWith("body-"));
+  const list = found(h, undefined, undefined, false, []).filter((c) => bodyOrDisk(c.key));
   return list.some((c) => c.bad) ? "bad" : list.length ? "warn" : "";
 }
 

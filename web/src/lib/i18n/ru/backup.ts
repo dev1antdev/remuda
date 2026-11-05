@@ -18,6 +18,8 @@ export const backup: Dictionary = {
   "No copy in {folder} yet": "В {folder} пока нет копий",
   "Failed {when}, to {machine}: {error}": "Не удалось {when}, на {machine}: {error}",
   "Taken {when} to {machine} · {size} · {files} files": "Сделана {when} на {machine} · {size} · файлов: {files}",
+  "the newest good copy is from {when}": "последняя удачная копия — {when}",
+  "no good copy yet": "удачной копии пока нет",
   "next today at {time}": "следующая сегодня в {time}",
   "next tomorrow at {time}": "следующая завтра в {time}",
   "next on {date}": "следующая {date}",

@@ -197,9 +197,9 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
         <button
           type="button"
           className="btn review-ask-opinion"
-          disabled={!files.length && !commits.length}
+          disabled={(!files.length && !commits.length) || second.running}
           onClick={() => second.setAsking(true)}
-          title={t("Another agent reviews this without changing anything; its comments appear under the lines")}
+          title={second.running ? t("A second opinion is on its way: wait for its answer, or close its tab") : t("Another agent reviews this without changing anything; its comments appear under the lines")}
         >
           <Icon name="message" size={14} /> {t("Second opinion")}
         </button>
@@ -226,6 +226,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
             reviewer={second.reviewer}
             asking={second.askingPerson}
             apart={second.apart}
+            moved={second.moved}
             onAdopt={second.adopt}
             onAdoptAll={second.adoptAll}
             onDismiss={second.dismissOne}
@@ -258,7 +259,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           <div className="review-orphans">
             <Notice tone="hint">{t("Comments on files no longer in this list — still in the draft:")}</Notice>
             {orphanComments.map((comment) => (
-              <Note key={comment.id} comment={comment} where={`${comment.file}:${comment.line}`} onRemove={removeComment} />
+              <Note key={comment.id} comment={comment} where={comment.line > 0 ? `${comment.file}:${comment.line}` : comment.file} onRemove={removeComment} />
             ))}
           </div>
         )}

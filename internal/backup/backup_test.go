@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"database/sql"
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -93,6 +94,95 @@ func TestASnapshotHoldsTheStateAndLeavesTheRestOut(t *testing.T) {
 		if err := db.QueryRow("select title from tasks").Scan(&title); err != nil || title != "kept through the WAL" {
 			t.Fatalf("the copied database reads %q, %v", title, err)
 		}
+	}
+}
+
+// copiedTitle is the title the tasks table of a snapshot's tasks.db holds, "" when the snapshot has no database
+func copiedTitle(t *testing.T, archive []byte) string {
+	t.Helper()
+	_, entries, err := Read(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name != "tasks.db" {
+			continue
+		}
+		copied := filepath.Join(t.TempDir(), "copy.db")
+		write(t, copied, string(e.Data))
+		db, err := sql.Open("sqlite", copied)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+		var title string
+		if err := db.QueryRow("select title from tasks").Scan(&title); err != nil {
+			t.Fatalf("the copied database: %v", err)
+		}
+		return title
+	}
+	return ""
+}
+
+func TestACopyOfAnEmptyOrAWrongFolderIsRefused(t *testing.T) {
+	if _, _, err := Snapshot(t.TempDir(), "rp-orange", "v", time.Now()); err == nil || !strings.Contains(err.Error(), "no token") {
+		t.Fatalf("an empty folder was packed as a good copy: %v", err)
+	}
+	if _, _, err := Snapshot(filepath.Join(t.TempDir(), "missing"), "rp-orange", "v", time.Now()); err == nil {
+		t.Fatal("a folder that is not there was packed")
+	}
+}
+
+func TestAStateDirBehindASymlinkOrWithAnOddNameIsCopiedWhole(t *testing.T) {
+	dir, _ := stateDir(t)
+	link := filepath.Join(t.TempDir(), "remuda")
+	if err := os.Symlink(dir, link); err != nil {
+		t.Fatal(err)
+	}
+	archive, manifest, err := Snapshot(link, "rp-orange", "v", time.Now())
+	if err != nil || manifest.Files != 4 || copiedTitle(t, archive) != "kept through the WAL" {
+		t.Fatalf("through a symlink: %d files, %v", manifest.Files, err)
+	}
+
+	parent := filepath.Join(t.TempDir(), "Application Support #2 ?x")
+	odd := filepath.Join(parent, "remuda")
+	write(t, filepath.Join(odd, "token"), "t")
+	made, err := sql.Open("sqlite", (&url.URL{Scheme: "file", Path: filepath.ToSlash(filepath.Join(odd, "tasks.db"))}).String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer made.Close()
+	for _, q := range []string{"create table tasks (title text)", "insert into tasks values ('under an odd name')"} {
+		if _, err := made.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	archive, manifest, err = Snapshot(odd, "rp-orange", "v", time.Now())
+	if err != nil || manifest.Files != 2 || copiedTitle(t, archive) != "under an odd name" {
+		t.Fatalf("under %q: %d files, %v", odd, manifest.Files, err)
+	}
+	left, _ := os.ReadDir(parent)
+	if len(left) != 1 {
+		t.Fatalf("the copy left files beside the state dir: %v", left)
+	}
+}
+
+func TestPuttingACopyInPlaceClearsTheHalfWrittenOnes(t *testing.T) {
+	folder := t.TempDir()
+	write(t, filepath.Join(folder, "remuda-20261104T033000Z.tar.gz.partial"), "cut off yesterday")
+	write(t, filepath.Join(folder, "remuda-20261105T033000Z.tar.gz.partial"), "today's")
+	write(t, filepath.Join(folder, "notes.txt"), "the person's")
+	out, err := shell.Text(shell.Local{Name: "local"}, FinishScript(folder, "remuda-20261105T033000Z.tar.gz", 2), Timeout)
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	var left []string
+	entries, _ := os.ReadDir(folder)
+	for _, e := range entries {
+		left = append(left, e.Name())
+	}
+	if strings.Join(left, " ") != "notes.txt remuda-20261105T033000Z.tar.gz" {
+		t.Fatalf("left %v", left)
 	}
 }
 

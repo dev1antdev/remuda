@@ -316,6 +316,10 @@ func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
+	if auth.CallerName(r.Context()) != "" {
+		httpErr(w, http.StatusForbidden, fmt.Errorf("an agent's key cannot start agents: the person starts one on a task, or puts the card in the Queued column"))
+		return
+	}
 	task, err := s.Tasks.Get(id)
 	if err != nil {
 		s.taskReply(w, nil, err)

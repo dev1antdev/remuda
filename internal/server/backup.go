@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/dev1antdev/remuda/internal/backup"
@@ -22,23 +23,32 @@ func (s *Server) handleBackups(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.Backup.Status())
 }
 
-// handleBackupsPut is PUT /api/backups {machine, at, keep}: a machine the fleet knows, or "" for no backups.
+// handleBackupsPut is PUT /api/backups {machine, at, keep}: a machine of the fleet, or "" for no backups. A remuda
+// that serves the page only has no machine of its own there: a copy on its own disk would die with it.
 func (s *Server) handleBackupsPut(w http.ResponseWriter, r *http.Request) {
 	var settings backup.Settings
 	if !decode(w, r, &settings) {
 		return
 	}
-	if settings.Machine != "" {
-		if _, err := s.Machines.Get(settings.Machine); err != nil {
-			httpErr(w, 400, err)
-			return
-		}
+	if settings.Machine != "" && !s.inFleet(settings.Machine) {
+		httpErr(w, 400, fmt.Errorf("%q is no machine of the fleet to keep the copies on; pick one of its machines", settings.Machine))
+		return
 	}
 	if err := s.Backup.Put(settings); err != nil {
 		httpErr(w, 400, err)
 		return
 	}
 	writeJSON(w, s.Backup.Status())
+}
+
+// inFleet says whether a machine is one the cockpit works with: the host only while it is no server
+func (s *Server) inFleet(id string) bool {
+	for _, mc := range s.Machines.List() {
+		if mc.ID() == id {
+			return true
+		}
+	}
+	return false
 }
 
 // handleBackupRun is POST /api/backups/run: a backup now, answered when it is on the target. 409 while one runs, 400

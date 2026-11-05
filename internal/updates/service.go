@@ -56,7 +56,22 @@ func (s *Service) Available(mc *machines.Machine) []Update {
 	if u, ok := serverRestartPlan(mc, report, snap); ok {
 		offered = append(offered, u)
 	}
+	if s.Machines != nil && s.Machines.Server() && mc.Local() {
+		return serverHostOnly(offered)
+	}
 	return offered
+}
+
+// serverHostOnly is what the host of a remuda serving the page only is offered: its own release alone — a herdr, its
+// hooks, an agent or the tasks' MCP there serve no workspace, and a restart of its herdr is refused (machines.ErrServerHost)
+func serverHostOnly(offered []Update) []Update {
+	kept := []Update{}
+	for _, u := range offered {
+		if u.What == "remuda-release" {
+			kept = append(kept, u)
+		}
+	}
+	return kept
 }
 
 // Recent is the machine's latest jobs, newest first, and how many chats there wait for a restart.

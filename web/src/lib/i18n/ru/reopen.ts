@@ -13,6 +13,5 @@ export const reopen: Dictionary = {
   "No closed agent to bring back. An agent whose tab or workspace closes is listed here, on its own session.": "Возвращать некого. Агент, чья вкладка или пространство закрылись, появится здесь вместе со своей сессией.",
   "Closed agents": "Закрытые агенты",
   "Start it again on its own session": "Запустить снова на его сессии",
-  "starting…": "запускаю…",
   "reopen an agent whose tab or workspace closed": "вернуть агента, чья вкладка или пространство закрылись",
 };

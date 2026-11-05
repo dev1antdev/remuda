@@ -46,7 +46,14 @@ type Opinion struct {
 	Summary   string            `json:"summary,omitempty"`
 	Comments  []Comment         `json:"comments"`
 	Close     bool              `json:"close"` // the reviewer's tab closes once it has answered
+	// Moved is the files of the comments that changed since the reviewer was asked: their lines may have moved. Worked
+	// out when the opinion is read for the page, never kept.
+	Moved []string `json:"moved,omitempty"`
 }
+
+// listening says whether the opinion still takes an answer from its reviewer: one asked and not answered, or one
+// answered in a form that could not be read — a question in plain words, say — whose reviewer may answer again
+func (op Opinion) listening() bool { return op.State == Running || op.State == Unreadable }
 
 // Open is how many comments are neither added to the person's review nor dismissed.
 func (op Opinion) Open() int {
@@ -113,7 +120,7 @@ func (store *Store) Answer(machine, pane, text string) (Opinion, bool) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	for k, op := range store.ops {
-		if op.Machine != machine || op.Pane != pane || op.State != Running {
+		if op.Machine != machine || op.Pane != pane || !op.listening() {
 			continue
 		}
 		answer := Parse(text, op.Dir)
@@ -134,22 +141,56 @@ func (store *Store) Answer(machine, pane, text string) (Opinion, bool) {
 	return Opinion{}, false
 }
 
-// Waiting says whether a running opinion waits on that pane's answer.
+// Waiting says whether an opinion waits on that pane's answer.
 func (store *Store) Waiting(machine, pane string) bool {
 	_, ok := store.waitingOn(machine, pane)
 	return ok
 }
 
-// waitingOn is the running opinion that waits on that pane's answer.
+// waitingOn is the opinion that waits on that pane's answer.
 func (store *Store) waitingOn(machine, pane string) (Opinion, bool) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	for _, op := range store.ops {
-		if op.Machine == machine && op.Pane == pane && op.State == Running {
+		if op.Machine == machine && op.Pane == pane && op.listening() {
 			return op, true
 		}
 	}
 	return Opinion{}, false
+}
+
+// Reviewer says whether the pane is a second opinion's reviewer: its answers are the opinion's, never the folder's
+// own agent saying it is ready for another look.
+func (store *Store) Reviewer(machine, pane string) bool {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	for _, op := range store.ops {
+		if op.Machine == machine && op.Pane == pane {
+			return true
+		}
+	}
+	return false
+}
+
+// Running is the folder's opinion while its reviewer has not answered yet.
+func (store *Store) Running(machine, dir string) (Opinion, bool) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	op, ok := store.ops[key(machine, dir)]
+	return op, ok && op.State == Running
+}
+
+// runningOn is every opinion of the machine whose reviewer has not answered yet.
+func (store *Store) runningOn(machine string) []Opinion {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	var list []Opinion
+	for _, op := range store.ops {
+		if op.Machine == machine && op.State == Running {
+			list = append(list, op)
+		}
+	}
+	return list
 }
 
 // Gone notes that a running reviewer's pane closed before it answered.
@@ -167,15 +208,38 @@ func (store *Store) Gone(machine, pane string) bool {
 	return false
 }
 
-// Fail notes that the folder's running opinion could not be asked: the agent did not start.
-func (store *Store) Fail(machine, dir, why string) {
+// Fail notes that the opinion asked of that pane could not be asked: the agent did not start, or the request never
+// reached it.
+func (store *Store) Fail(machine, pane, why string) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	if op, ok := store.ops[key(machine, dir)]; ok && op.State == Running {
-		op.State, op.Note = Gone, why
-		store.ops[key(machine, dir)] = op
-		store.save()
+	for k, op := range store.ops {
+		if op.Machine == machine && op.Pane == pane && op.State == Running {
+			op.State, op.Note = Gone, why
+			store.ops[k] = op
+			store.save()
+			return
+		}
 	}
+}
+
+// Moved is the files of the opinion's open comments whose blob is no longer the one the reviewer was shown: the
+// blobs of the folder's uncommitted files now. A file no longer uncommitted is the lens's to leave out, not moved.
+func Moved(op Opinion, now map[string]string) []string {
+	seen := map[string]bool{}
+	var moved []string
+	for _, c := range op.Comments {
+		if c.Dismissed || seen[c.Path] {
+			continue
+		}
+		seen[c.Path] = true
+		was, asked := op.Blobs[c.Path]
+		is, there := now[c.Path]
+		if there && (!asked || was != is) {
+			moved = append(moved, c.Path)
+		}
+	}
+	return moved
 }
 
 // Dismiss sets the comments with those ids aside (all of them for none given): added to the person's own review, or

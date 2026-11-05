@@ -14,13 +14,12 @@ import { t } from "@/lib/i18n";
 import { AgentsSettings } from "./AgentsSettings";
 import { automationOf, sameAutomation, saveable } from "./autonomy";
 import { PipelineSettings } from "./PipelineSettings";
-import { moveTarget, movesOf } from "./workflow";
+import { moveTarget, movesOf, withKind, withMark, type Mark } from "./workflow";
 
 export const PALETTE = ["e67e22", "2ecc71", "3498db", "9b59b6", "e74c3c", "1abc9c", "f1c40f", "95a5a6"];
 export const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)]!;
 
-type Flag = "on_agent" | "on_new" | "on_queue" | "on_start" | "on_finish";
-const FLAGS: { flag: Flag; icon: IconName; title: string }[] = [
+const FLAGS: { flag: Mark; icon: IconName; title: string }[] = [
   { flag: "on_agent", icon: "bot", title: t("Tasks agents propose land here, for you to accept or decline") },
   { flag: "on_new", icon: "inbox", title: t("New tasks land here") },
   { flag: "on_queue", icon: "clock", title: t("Queued: the queue starts the tasks you put here, top first, while its switch is on") },
@@ -50,8 +49,8 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
   const [nextKey, setNextKey] = useState(project.statuses.length + 1);
 
   const update = (key: number, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-  // one column per flag: setting it here clears it elsewhere
-  const flag = (key: number, which: Flag, on: boolean) => setRows((rs) => rs.map((r) => ({ ...r, [which]: r.key === key ? on : on ? false : r[which] })));
+  // one column per flag: setting it here clears it elsewhere, and the Queued column takes no other
+  const flag = (key: number, which: Mark, on: boolean) => setRows((rs) => withMark(rs, key, which, on));
   const shift = (key: number, dir: -1 | 1) => setRows((rs) => shifted(rs, key, dir));
   const remove = (key: number) =>
     setRows((rs) => {
@@ -165,7 +164,7 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
             <Select<"open" | "done">
               className="sm"
               value={r.kind}
-              onChange={(kind) => update(r.key, { kind })}
+              onChange={(kind) => setRows((rs) => withKind(rs, r.key, kind))}
               options={[
                 { value: "open", label: t("Not done") },
                 { value: "done", label: t("Done") },

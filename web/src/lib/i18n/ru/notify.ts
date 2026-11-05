@@ -4,7 +4,7 @@
 import type { Dictionary } from "../../i18n";
 
 export const notify: Dictionary = {
-  "remuda · Alerts show on this page while it is in front.": "remuda · Уведомления показываются на этой странице, пока она на переднем плане.",
+  "Alerts show on this page while it is in front.": "Уведомления показываются на этой странице, пока она на переднем плане.",
   "Firefox blocks notifications for this site: click the icon left of the address, then Permissions → Send notifications → Allow, and reload.":
     "Firefox блокирует уведомления этого сайта: нажми значок слева от адреса, затем «Разрешения» → «Отправлять уведомления» → «Разрешить», и обнови страницу.",
   "Safari blocks notifications for this site: Safari → Settings → Websites → Notifications → this site → Allow, and reload.":
@@ -21,7 +21,7 @@ export const notify: Dictionary = {
     "На iPhone и iPad уведомления приходят только в remuda, добавленный на экран «Домой»; Настройки → Уведомления → remuda их разрешает.",
   "Nothing appears? Settings → Apps → {browser} → Notifications must be on.": "Ничего не появляется? Настройки → Приложения → {browser} → Уведомления должны быть включены.",
   "Nothing appears? The system's notification settings must let {browser} show them.": "Ничего не появляется? Системные настройки уведомлений должны разрешать {browser} их показывать.",
-  "No push sent to this browser yet.": "Этому браузеру ещё ничего не отправлялось.",
+  "No push sent to this browser since remuda started.": "С запуска remuda этому браузеру ничего не отправлялось.",
   "Last push sent {when}: {title} — refused: {error}": "Последнее отправлено {when}: {title} — отклонено: {error}",
   "Last push sent {when}: {title} — the push service took it.": "Последнее отправлено {when}: {title} — служба push его приняла.",
   "No push received here yet.": "Сюда ещё ничего не приходило.",

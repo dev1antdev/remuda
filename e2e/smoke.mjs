@@ -31,6 +31,7 @@ async function until(what, check, seconds = 20) {
 
 async function api(method, path, body) {
   const response = await fetch(base + path, {
+    signal: AbortSignal.timeout(90_000), // a request the server never answers fails the smoke, never holds the run
     method,
     headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
@@ -58,10 +59,18 @@ socket.onmessage = (message) => {
   if (msg.method === "Runtime.exceptionThrown") consoleErrors.push(msg.params.exceptionDetails?.exception?.description ?? "exception");
   if (msg.method === "Runtime.consoleAPICalled" && msg.params.type === "error") consoleErrors.push(msg.params.args.map((arg) => arg.value ?? arg.description).join(" "));
 };
+// send is one DevTools call; one the browser never answers fails the smoke instead of holding the run
 const send = (method, params = {}) =>
-  new Promise((resolve) => {
+  new Promise((resolve, reject) => {
     const id = ++nextId;
-    waiting.set(id, resolve);
+    const timer = setTimeout(() => {
+      waiting.delete(id);
+      reject(new Error(`the browser did not answer ${method} in 30 s`));
+    }, 30_000);
+    waiting.set(id, (msg) => {
+      clearTimeout(timer);
+      resolve(msg);
+    });
     socket.send(JSON.stringify({ id, method, params }));
   });
 const evaluate = async (expression) => {

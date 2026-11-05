@@ -26,8 +26,11 @@ export const PR_ASK =
 // VerdictAsk is what an approval asks of the agent beyond the word: nothing, the commit, or the commit pushed as a pull request
 export type VerdictAsk = "none" | "commit" | "pr";
 
+// a comment's address: its file and line, the file alone for a comment on the file as a whole (line 0, a second opinion's)
+const addressOf = (comment: DraftComment) => (comment.line > 0 ? `${comment.file}:${comment.line}` : `${comment.file} (the whole file)`);
+
 export const commentLines = (draft: DraftComment[]) =>
-  draft.map((comment, index) => `${index + 1}. ${comment.file}:${comment.line}${comment.removed ? " (removed line)" : ""}${comment.code ? `\n   > ${comment.code}` : ""}\n   ${comment.text.replace(/\n/g, "\n   ")}`);
+  draft.map((comment, index) => `${index + 1}. ${addressOf(comment)}${comment.removed ? " (removed line)" : ""}${comment.code ? `\n   > ${comment.code}` : ""}\n   ${comment.text.replace(/\n/g, "\n   ")}`);
 
 // draftOnRow says whether a draft comment sits under the row: by its address, or by its line alone when it carries
 // no row's text (a second opinion's comment added from the block, before its file's diff was read)

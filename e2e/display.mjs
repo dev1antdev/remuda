@@ -215,7 +215,8 @@ const CHECKS = `(() => {
   // the descenders (g, y, р, у) off at the foot; a text node's range is its glyphs' box, whatever the line-height
   const clipped = [];
   for (const el of document.querySelectorAll("body *")) {
-    if (el.closest("svg, .xterm, canvas, [aria-hidden=true], .sr-only, [hidden], [inert]")) continue;
+    // an aria-hidden label is still drawn — the rail's names are, the button saying its name to a reader — so it counts
+    if (el.closest("svg, .xterm, canvas, .sr-only, [hidden], [inert]")) continue;
     const s = getComputedStyle(el);
     if ((s.overflowY !== "hidden" && s.overflowY !== "clip") || s.whiteSpace !== "nowrap" || s.visibility === "hidden") continue;
     const text = [...el.childNodes].find((node) => node.nodeType === 3 && /[gjpqyрудцщ]/i.test(node.textContent));
@@ -529,7 +530,8 @@ async function alertScreens() {
   await screen("alert-toast", {
     open: async () => {
       FEED.id += 1;
-      FEED.entries = [{ id: FEED.id, at: iso(Date.now()), kind: "input", machine: "local", pane: paneA1, title: "app needs you", body: "claude is waiting for an answer" }];
+      const asking = Object.keys(DRESS).find((id) => DRESS[id].status === "input"); // a question's toast stands only while its pane asks
+      FEED.entries = [{ id: FEED.id, at: iso(Date.now()), kind: "input", machine: "local", pane: asking, title: "app needs you", body: "codex is waiting for an answer" }];
       await api("PUT", "/api/mutes", { machine: "local", dir: appDir, until: iso(Date.now() + 3600e3) });
       await api("DELETE", "/api/mutes", { machine: "local", dir: appDir });
       if (!(await until(() => evaluate(`!!${toastWith("app needs you")}`), 20))) failed(`an alert the activity recorded did not show on the page (the page: ${await evaluate(`document.visibilityState + ", focus " + document.hasFocus()`)})`);
@@ -567,6 +569,14 @@ const sidebarOpen = async () => {
     if (!(await until(() => present(".sidebar.open"), 3))) throw new Error("the sidebar drawer did not open");
     await sleep(300);
   }
+};
+// tapUntil presses a button and, when what it opens is not there yet, once more: a phone's drawer still sliding in
+// under load can take the first tap on its way
+const tapUntil = async (selector, opened) => {
+  await tap(selector);
+  if (await until(() => present(opened), 2)) return;
+  await tap(selector);
+  await until(() => present(opened), 3);
 };
 const folderHead = (name) => `[...document.querySelectorAll('.ws-folder-head')].find((h) => h.querySelector('.ws-folder-name')?.textContent === ${JSON.stringify(name)})`;
 const firstCardOf = (folder) => `${folderHead(folder)}?.parentElement.querySelector('.ws-item')`;
@@ -883,14 +893,14 @@ async function runPass() {
   await screen("machine-menu", {
     open: async () => {
       await sidebarOpen();
-      await tap('[data-machine-menu="local"]');
+      await tapUntil('[data-machine-menu="local"]', "[role=menu].menu");
     },
     expect: ["[role=menu].menu"],
   });
   await screen("vitals", {
     open: async () => {
       await sidebarOpen();
-      await tap('[data-health-btn="local"]');
+      await tapUntil('[data-health-btn="local"]', ".health-pop");
     },
     expect: [".health-pop"],
   });
@@ -913,6 +923,38 @@ async function runPass() {
       if (!(await until(() => present(".pane-area .tab"), 15))) failed("the Agents page did not come back");
     },
   });
+  // an agent appearing in a pane: started at a shell's prompt, the terminal stays; an agent's pane a restart passed
+  // through a shell goes back to its chat — herdr's agent field played by the browser's dressed roster (desks only)
+  if (!pass.phone)
+    await screen("agent-in-a-shell", {
+      open: async () => {
+        const lensShown = () => evaluate(`document.querySelector(".lens-pane:not([hidden]) .chat-log, .lens-pane:not([hidden]) .composer") ? "chat" : document.querySelector(".lens-pane:not([hidden]) .xterm-screen") ? "terminal" : ""`);
+        const vacant = () => evaluate(`!!document.querySelector(".lens-switch.is-vacant")`);
+        await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneN)}&lens=chat` });
+        if (!(await until(async () => (await lensShown()) === "terminal", 15))) throw new Error("the shell pane did not come up on its terminal");
+        DRESS[paneN] = { agent: "claude", status: "run", title: "claude, typed at the prompt", radar: { state: "working", since: now, last_active: now } };
+        if (!(await until(async () => !(await vacant()), 30))) throw new Error("the page never saw the agent start in the shell");
+        await sleep(600);
+        check((await lensShown()) === "terminal", "an agent started at a shell's prompt turned the pane to its chat");
+        check(await evaluate(`new URLSearchParams(location.search).get("lens") === "terminal"`), "the address of a shell an agent started in does not say its terminal");
+        delete DRESS[paneN];
+        const agentPane = DRESS[paneA1];
+        await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=chat` });
+        if (!(await until(async () => (await lensShown()) === "chat", 15))) throw new Error("the agent's pane did not come up on its chat");
+        DRESS[paneA1] = { ...agentPane, agent: "" };
+        if (!(await until(vacant, 30))) throw new Error("the page never saw the agent leave for its restart");
+        DRESS[paneA1] = agentPane;
+        if (!(await until(async () => !(await vacant()), 30))) throw new Error("the page never saw the agent come back");
+        await sleep(600);
+        check((await lensShown()) === "chat", "an agent's pane a restart passed through a shell did not go back to its chat");
+      },
+      expect: [".tabstrip .tab"],
+      close: async () => {
+        delete DRESS[paneN];
+        await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
+        if (!(await until(() => present(".pane-area .tab"), 15))) failed("the Agents page did not come back");
+      },
+    });
   await screen("new-tab-menu", { open: async () => tap(".tab-add"), expect: [".menu"] });
   await screen("view-menu", { open: async () => tap(".view-btn"), expect: [".menu"] });
   await screen("chat-lens", { open: async () => palette("lens:chat"), expect: [".lens-pane:not([hidden]) .chat-log, .lens-pane:not([hidden]) .composer"], close: async () => palette("lens:terminal") });

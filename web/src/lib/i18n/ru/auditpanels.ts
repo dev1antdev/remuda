@@ -28,7 +28,6 @@ export const auditpanels: Dictionary = {
   and: "и",
   "in the composer; one tap puts the text in. Shared by every device that uses this remuda.":
     "в поле ввода; одно нажатие вставляет текст. Общие для всех устройств этого remuda.",
-  "become the pane's folder, its branch and the file you last opened.": "превращаются в папку панели, её ветку и файл, открытый последним.",
   "only {folder}": "только {folder}",
   forward: "переслать",
   "code-server is not running on {machine}": "code-server не запущен на {machine}",
@@ -63,7 +62,6 @@ export const auditpanels: Dictionary = {
   "The task moves to": "Задача переходит в",
   "The task stays where it is;": "Задача остаётся на месте;",
   "Running on {machine}… (closing this keeps it running)": "Выполняется на {machine}… (если закрыть окно, работа продолжится)",
-  "That turn is older than the loaded part of this transcript (the last 16 MB).": "Этот ход старше загруженной части записи (последние 16 МБ).",
   "No textual diff (binary, or identical).": "Текстовых изменений нет (двоичный файл или без отличий).",
   "Name (optional)": "Название (необязательно)",
   "Workspace name (optional)": "Название пространства (необязательно)",

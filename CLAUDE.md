@@ -63,10 +63,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `internal/backup/` — **the cockpit's state copied to another machine**
   (tested on temp dirs, a live WAL database and `shell.Fake`), since a
   cockpit on a Raspberry Pi lives on an SD card. `Snapshot` packs the
-  state dir as one gzipped tar in memory: every file, each SQLite
+  state dir as one gzipped tar in memory — the dir followed through a
+  symlink, and refused when it holds no `token`, since a copy of an empty
+  or a wrong folder would count as a good night and push the real copies
+  out: every file, each SQLite
   database through SQLite itself (`VACUUM INTO` over a read-only
-  connection: a consistent copy of a `tasks.db` the server is writing,
-  its WAL included), the `tailscale/` node state (so a restore on a new
+  connection, its path escaped as a URI by `databaseURI`, a `#` or `?` in
+  a folder's name else ending it early: a consistent copy of a `tasks.db`
+  the server is writing, its WAL included), the `tailscale/` node state (so a restore on a new
   machine keeps the tsnet node, its address and every device's sign-in)
   without its `*.txt` logs; never `ssh/` (the masters' sockets),
   `backups/` (the copies this machine keeps), `serve.lock`, a `-wal` /
@@ -82,7 +86,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`Run`, one at a time, `ErrBusy`), writes it to the target as
   `<name>.partial` through `Target.PutFile` (a `*machines.Machine`: the
   ssh master, or a local write), then `FinishScript` moves it in place,
-  0600, and removes every copy past the newest `keep`; the folder is the
+  0600, clears the `.partial` copies cut-off runs left, and removes every
+  copy past the newest `keep`; the target is a machine of the fleet
+  (`Manager.List`: a `-server` host never, a copy on its own disk dying
+  with it — refused by the route and by `Target` in `internal/app`; a
+  cockpit's own machine needs no herdr to take one); the folder is the
   target's remuda state dir `backups/<cockpit>/` (`FolderScript`, the
   door's own reckoning of the dir) or, on the cockpit's own machine,
   under its own state dir (a second instance's is its own). A failure
@@ -90,18 +98,23 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   feed has it, the webhooks' kind `backup`, the activity's Machines
   family). Routes (`internal/server/backup.go`, the person's only): `GET
   /api/backups`, `PUT /api/backups {machine, at, keep}` (a machine the
-  fleet knows, "" for none), `POST /api/backups/run` (409 busy, 400 no
+  fleet knows, "" for none; under `-server` never the host itself, a 400:
+  a copy on the disk it copies dies with it), `POST /api/backups/run` (409 busy, 400 no
   machine, 502 the reason), `GET /api/backups/files` (`ListScript`,
   newest first). `remuda backup now|list [-addr]` asks the running
   service with its state dir's token; `remuda restore [-yes] <file>`
-  refuses while the dir is held (saying the service's stop command),
+  refuses while the dir is held (`state.Held`: a lock that cannot be
+  read counts as held; saying the service's stop command),
   reads the archive (`Read`: a manifest of format 1, no absolute or
   `..` names, folders and regular files only), confirms, and `Restore`
   moves the dir aside as `<dir>.before-restore-<time>`, unpacks into a
   fresh 0700 one (every file 0600 or tighter) and carries the aside dir's
-  `backups/` over; a failure puts the old dir back. The page: Settings ›
+  `backups/` over; a failure puts the old dir back. A copy holds the
+  state dir alone: the machine's own `~/.ssh` (its key, the hosts it
+  reaches) is not in it, which `restore` says when it is done. The page: Settings ›
   Backups (`features/settings/BackupSection.tsx`, `backupApi.ts`,
-  `backup.ts` tested: `bytesWords`, `lastWords`, `nextWords`,
+  `backup.ts` tested: `bytesWords`, `lastWords` — a failure followed by
+  how old the newest good copy is, or that there is none — `nextWords`,
   `validTime`) — the machine (none by default: nothing is copied before
   one is picked), the time, how many stay, the last run, the next, Back
   up now, the copies there; never for a viewer.
@@ -177,7 +190,17 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   machine (`NO_MACHINES`) and a start button picks the first connected
   machine (`startOn`). `remuda setup -server [-host H]` installs no
   herdr and writes `-server` into the service unit (`REMUDA_SERVER=1`
-  to `install-service.sh`, tested on its stand-ins).
+  to `install-service.sh`, tested on its stand-ins); since setup leaves
+  a remuda already on the host in place, the script first asks the
+  binary (`remuda -server -version`) and refuses, the running service
+  untouched, one older than the flag — its unit would exit at once,
+  over and over. A herdr already there is left installed and running.
+  The host is offered its own release alone (`serverHostOnly` in
+  `updates.Available`, tested): a herdr, its hooks, an agent or the
+  tasks' MCP there serve no workspace, and its herdr's restart would
+  meet `ErrServerHost`; the Server place lists the release, the disk
+  and the body alone (`hostConcerns`, tested) and says a herdr still
+  installed there is not used.
   **Remotes come from herdr itself**: `SyncHerdr` reads `herdr machine list
   --json` (the watcher calls it every 30s, with a 5s timeout) and adds
   enabled machines under **herdr's own id** with `Source: "herdr"` (not
@@ -454,7 +477,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   inert) so the header moves nothing between the two, the palette offers
   it no Show the chat, Show the changes or split, the View menu no files
   rail or split rows, and a shell popped out shows its screen, never a
-  chat tail or a creature. The tab strip's right slot (`TabStrip tools=`) holds the lens's one
+  chat tail or a creature. An agent started at a shell's prompt (`claude`
+  typed there) keeps the terminal in view rather than turning to the lens
+  kept for agents (`keepsTerminal`: only for a pane that came on screen
+  as a shell, so an agent's pane a restart passes through a shell goes
+  back to its lens); a search hit in a folder where only a shell is open
+  opens the transcript on its own. The tab strip's right slot (`TabStrip tools=`) holds the lens's one
   control — Find for the chat, the key bar switch for the terminal — and
   **the View menu** (`app/ViewMenu.tsx`): the lens's own rows
   (`useChatViewItems` in `chat/ChatTools.tsx`: the timeline, Recap…,
@@ -556,11 +584,17 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   since its remuda restarts once its job ends; each command shown before
   Run; `POST /api/updates/everywhere {steps}` checks every step against
   the plan as it stands (a moved one is a `StaleError`, nothing starts;
-  a second run while one goes is `ErrBatchRunning`, both 409) and
-  `runBatch` runs them one after another through `Start`, each waiting
-  for its job (`StepTimeout` 30 min), a failed or skipped step leaving
-  the rest to run; `GET …/everywhere/{id}` is the run's `Batch` with each
-  step's state, the last five kept in memory. `make release` writes `bin/checksums.txt`; `make
+  a second run while one goes is `ErrBatchRunning`, both 409), puts them
+  in the plan's order whatever the request's (`inPlanOrder`, tested:
+  the page's own host last) and `runBatch` runs them one after another
+  through `Start`, each waiting for its job (`StepTimeout` 30 min), a
+  failed or skipped step leaving the rest to run; a step an earlier one
+  already saw to (the herdr update installs the hooks itself) or whose
+  command moved meanwhile is skipped with the reason, not failed
+  (`stillPending`); `GET …/everywhere/{id}` is the run's `Batch` with
+  each step's state, the last five kept in memory — a run gone with the
+  page's own remuda, its release step started, reads on the page as
+  that restart, not as an error (`hostRestarting`, tested). `make release` writes `bin/checksums.txt`; `make
   publish` (on `main` with `release` fast-forwarded in, a tag on HEAD, a
   clean tree, the checks green) pushes the tag, and
   `.github/workflows/release.yml` builds the binaries and makes the
@@ -1001,7 +1035,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   attributes a person reads, the props of menus, palette rows and the
   keys sheet, a file with a local `t` imports it as `tr` — and
   `web/scripts/strings.mjs` lists what is still outside `t()` (or `--keys`
-  every key, `--wrap` wraps the plain cases); the server's words — pushes,
+  every key, `--wrap` wraps the plain cases); `lib/i18n/areas.test.ts`
+  fails on an area file left out of `ru.ts` and on one English string
+  given two different Russian words in two area files (the later spread
+  would win silently): one translation must fit every place the string is
+  used, and a place that needs its own word gets it through `tc` (the
+  rail's, Broadcast's `pick|None`); the server's words — pushes,
   the feed, the recap and standup Markdown, the MCP answers — and the
   agents' own prompts stay English), `highlight.ts` (**the syntax
   highlighter**, dependency-free and tested: `tokenize(text, lang)` is one
@@ -1280,43 +1319,70 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `POST /api/opinion {machine, pane, dir, agent, model?, args?, close}`
   (`internal/server/opinion.go`): the folder must be the pane's
   workspace's (`reviewedWorkspace`, else the first workspace standing on
-  it), must be a checkout with something to review (409 otherwise), its
+  it), must be a checkout with something to review (409 otherwise), and
+  must have no opinion still running whose reviewer's pane stands (409:
+  wait, or close its tab; the lens's button is disabled meanwhile), its
   HEAD and blobs read (`review.Snapshot`, which MarkSeen now uses too),
   a tab "<Agent> review" made in that workspace, the opinion kept as
   `running` *before* the agent starts (`Store.Begin`, in place of the
   folder's last), the agent started (`sessions.StartAgentWith`; a refusal
-  is `Fail` with the reason) and handed `opinion.Prompt(scopeOf(summary))`
-  in the background (`firstPrompt`): the scope — the uncommitted work
+  is `Fail` with the reason, by the reviewer's pane) and handed
+  `opinion.Prompt(scopeOf(summary))` in the background (`firstPrompt`,
+  which now answers its error: a request that never reached the reviewer
+  is `Fail` too, never a review running for good): the scope — the uncommitted work
   against HEAD, the commits since the last look by `git log -p
   <base>..HEAD`, the files with their counts (40 named) — the hands-off
   rules (read only: no edit, stage, commit, formatter, stash or install)
   and the one answer form: `FINDINGS`, then `path:LINE: [high|medium|low]
   text` a line, `NONE` for nothing, then `SUMMARY`, the prompt ending
   with `(second opinion request <Ref>)`, a random id the opinion keeps.
-  The answer is heard through `said.Tracker.OnAnswer` (app.go:
-  `opinions.Hear` before the review's ready mark) and, since herdr names
-  no session for some Codex panes and the said tracker reads none then,
-  by the service itself when the reviewer's pane comes to rest
-  (`Service.OnStatus`, a few tries 3 s apart, through `Read`: app.go
-  opens the pane's conversation the way the chat does, its folder
-  fallback included) — accepted only from the conversation whose first
-  prompt is this very request (`IsRequest`: `PromptStart` and the ref),
-  so an earlier review in the folder, or the person's own Codex there, is
-  never taken for it (seen live: without the ref a second run read the
-  first one's answer). `Parse` (answer.go) reads the findings under
+  The answer is read by the service itself, never through the said
+  tracker (whose reading of a pane without a session could be another
+  conversation of the folder's, and whose answers a reviewer's pane
+  never feeds to the review's ready mark: `Store.Reviewer`): when the
+  reviewer's pane comes to rest (`Service.OnStatus`), and on every
+  snapshot for a finish no status move told of — remuda down at the time
+  (`Service.Observe`: a running reviewer at rest read at most every 20 s,
+  one whose pane the machine no longer has `gone`, a snapshot from before
+  the tab ignored) — a few tries 3 s apart, one read in flight per pane,
+  through `Read` (app.go): the pane's conversation the way the chat
+  opens it, accepted only when its first prompt is this very request
+  (`Answered` / `IsRequest`: `PromptStart` and the ref), else the
+  conversation *found* by the request (`opinion.Request`, find.go,
+  tested on real files: `FindScript` greps the agent's session files —
+  Claude Code's in the folder's project, Codex's and Gemini CLI's of the
+  last two days — for the ref line on the reviewer's machine, then the
+  file is followed through `Reader.Live` to where a compaction moved the
+  conversation): so a Codex pane herdr names no session for, any reviewer
+  on a remote machine (every one, for a cockpit on a server), and a
+  compacted review are all read, and an earlier review in the folder, or
+  the person's own agent there, is never taken for it. `Parse` (answer.go) reads the findings under
   FINDINGS — or anywhere when there are no sections — past bullets,
-  numbers, bold, backticks and code fences, a path starting with the
-  folder made relative, `path:12-14` and `path:12:5` taken at 12, the
+  numbers, bold, backticks, Markdown links (`[src/a.go:12](…)`, as Codex
+  names a file) and code fences, an indented line carrying on the finding
+  above it, a path starting with the
+  folder made relative, `path:12-14` and `path:12:5` taken at 12, under
+  FINDINGS `path: text` or `path:0:` a finding on the file as a whole
+  (line 0: listed under its file, addressed "(the whole file)" in the
+  draft's message), the
   severity in brackets, parentheses, bold or as `word:` mapped onto
   high / medium / low (critical, major, blocker → high; minor, nit, info
-  → low), a URL or a time of day never a finding, the same finding once,
+  → low), a URL, an address (`127.0.0.1:8080`) or a time of day never a
+  finding, the same finding once,
   at most `MaxFindings` 100 of `MaxText` 1000 runes; a readable answer
   (findings, or an explicit none) is `done` with its comments numbered,
-  any other `unreadable` with a note and its tab kept; the reviewer's tab
+  any other `unreadable` with a note and its tab kept — and still heard:
+  a reviewer that asked something in plain words and then answered in the
+  form is read again; the reviewer's tab
   closes once the answer is read when the opinion asked for it
-  (`Service.Close`, app.go over the machine's herdr `TabClose`); a
+  (`Service.Close`, app.go over the machine's herdr `TabClose`, only while
+  that tab still holds the reviewer's pane); a
   reviewer pane gone first (`events.PaneStatus` to `Gone`) is `gone`; a
-  removed machine's opinions are dropped. `opinions.json` in the state
+  removed machine's opinions are dropped. `GET` marks, for a done
+  opinion with open comments, the files changed since the request
+  (`moved`: `opinion.Moved` against a fresh `review.Snapshot`), whose
+  comments the block lists apart — "the lines it named may have moved" —
+  instead of under rows they may no longer mean (`placeComments`). `opinions.json` in the state
   dir (0600, a damaged file an empty store, said once). Routes: `GET
   /api/opinion?machine&dir` (null for none), `POST /api/opinion/dismiss
   {machine, dir, ids}` (none for all), `DELETE /api/opinion`. The page:
@@ -1380,16 +1446,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the machine) opens a listener of the cockpit's own: `Listen` is the
   tailnet node's TLS port on its name (`tsnetx.Node.ListenTLS`, 80 and
   443 refused) with `-tailscale`, else a port of the `-addr` host
-  addressed by the name the page was asked at (`loopbackPreviews` in
-  `internal/app`); the machine's own port number first, else forty of
-  41000–41999, never one a browser refuses (`unsafePorts`), and a second
-  Open answers the one open; `closeIdleAt` shuts, every half minute, a
-  preview unasked for `IdleAfter` (30 min) that holds no connection.
+  addressed by the name the page was asked at (`LoopbackListen`, tested:
+  never a port something on the host already answers on over 127.0.0.1
+  or ::1 — a Mac lets a 127.0.0.1 listener bind over another process's
+  wildcard one, which would take the host's own dev server's port and
+  proxy a local preview into itself); the machine's own port number
+  first, else forty of 41000–41999, never one a browser refuses
+  (`unsafePorts`), and a second Open answers the one open; `closeIdleAt`
+  shuts, every half minute, a preview unasked for `IdleAfter` (30 min)
+  that holds no connection; `CloseMachine` shuts a removed machine's
+  (`events.MachineRemoved`), and after `Shutdown` nothing opens.
   `Proxy` forwards over the master (`Machine.ForwardHostAddr`, the
   forward cache keyed by host and port, `sshx.Conn.ForwardTCPTo`), with
-  Host and Origin rewritten to `localhost:<port>` (a dev server's own
-  allow list), `Referer` dropped, and upgrades (live reload) passed;
-  `Guarded` lets in `Guard.SignedIn` alone. Routes
+  Host rewritten to `localhost:<port>` (a dev server's own allow list),
+  the preview's own Origin and Referer written as that address too —
+  another origin's Origin passed as it is, so the app's CORS and CSRF
+  checks still see a stranger, a stranger's Referer dropped — and
+  upgrades (live reload) passed; `Guarded` lets in `Guard.SignedIn`
+  alone. Routes
   (`internal/server/preview.go`): `GET /api/previews?machine=`
   (listeners and the previews open), `POST /api/previews/open {machine,
   port}` (a port found listening now, never one the body names alone; 503
@@ -1399,7 +1473,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   "Previews of “x”…" and "Previews on <machine>…"; the workspace's ports,
   the other workspaces', and the rest folded; Open opens the tab on the
   click itself, so no popup blocker takes it, its opener cut, then sends
-  it to the address; Shut; polled every 5 s while open), `previews.ts`
+  it to the address; Shut; polled every 5 s while open; under the
+  screen-sharing mode the machine, the workspace and the servers'
+  folders go through `useSharing().redact`), `previews.ts`
   the pure part, tested: `listenerWords`, `whereWords`, `split`,
   `openOn`, `hostOf`.
 - `web/src/lib/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
@@ -1540,23 +1616,31 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   cockpit knows the browser's subscription, its prefs and its last
   delivery: `Service.Device`, the `Delivery` — when, what, the push
   service's answer — kept in memory by `sendNoted` for every send, a
-  test's too; `device_test.go`). A finish's `Payload.Worked` (and the
+  test's too, and forgotten with the device: its unsubscription, a
+  rotation, a 404/410 on the way; `device_test.go`). A finish's `Payload.Worked` (and the
   feed entry's `Worked`) is the turn's seconds, so a page applies a
   device's "turns over a minute" itself. **Alerts on the page**
   (`features/alerts/onpage.ts`, tested: `wanted` — the device's switches
   as the server reads them: a question by `input`, a finish by `done` and
-  the turn's length, a schedule's or digest's word always, every other
+  the turn's length, what `push.Broadcast` sends every device (a
+  schedule's word, a digest, a backup's failure) always, every other
   alert by `watchdog`, the person's own rows never — `newAlerts`,
-  `alertOf`, `keepNewest`, at most `MAX_ON_PAGE` 3; `useOnPageAlerts.ts`
-  from Shell): the roster's `feed` id moves with every alert recorded
-  (the live socket's `roster` event), and past the one the page saw, while
-  it is in front, `/api/feed` is read and each new alert this device
-  wants goes up as a toast in the corner (store field `alerts`,
-  `addAlert` / `dismissAlert`; `toasts.tsx`: Open to the pane or a
-  digest's standup, a question standing until opened or dismissed, the
-  rest `LINGER_MS` 15 s, an optional chime, pref `alerts.sound`, off); the
-  first roster only seeds, and neither the Mac app nor a viewer link shows
-  them. **The alerts panel tells the truth about this device**
+  `alertOf`, `alertText`, `keepNewest`, at most `MAX_ON_PAGE` 3,
+  `stillStanding`, `quietNow` as the server's `Quiet.Covers`;
+  `useOnPageAlerts.ts` from Shell): the roster's `feed` id moves with
+  every alert recorded (the live socket's `roster` event), and past the
+  one the page saw, while it is in front, `/api/feed` is read and each new
+  alert this device wants goes up as a toast in the corner (store field
+  `alerts`, `addAlert` / `dismissAlert` / `setAlerts`; `toasts.tsx`: Open
+  to the pane, a digest's standup or, for a budget or a plan limit, the
+  Usage panel; a question standing until opened, dismissed or no longer
+  asked — the roster's radar no longer blocked, answered anywhere — the
+  rest `LINGER_MS` 15 s; under the screen-sharing mode a hidden folder's
+  alert says "hidden while sharing" for its words, as an Activity row;
+  an optional chime, pref `alerts.sound`, off, silent inside the device's
+  quiet hours); the first roster only seeds, and neither the Mac app nor
+  a viewer link shows them. A window on screen without the focus gets the
+  toast and the system's notification, the latter quiet. **The alerts panel tells the truth about this device**
   (`DeviceStatus.tsx` over `device.ts`, tested: `browserOf`, `systemOf`,
   `blockedHelp` per browser, `systemHelp` per system — macOS's System
   Settings → Notifications, Windows' Settings → System → Notifications,
@@ -1625,7 +1709,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   alert `record` hands to the feed goes to each enabled webhook whose
   `Kinds` include its `HookKind` (input → question, done → finish, the
   watchdog's three → watchdog, the rest by name: digest, schedule, task,
-  budget, limits, review, machine — `HookKinds` is the one list, the page's
+  budget, limits, review, machine, backup — `HookKinds` is the one list, the page's
   picker must match it) outside its own quiet hours — a question 10 s after
   the block, called off when answered at the desk, every finish 10 s
   after, as the feed hears them — in a goroutine each, one try and one
@@ -2916,7 +3000,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Prompt, StatusID, PR}` after the first agent's work; a run started while
   the project has stages is `pipeline: on`, and every prompt of it ends
   with `StageAsk` — end with the line `STAGE DONE` (`StageMarker`,
-  `StageDone`: the last line outside a fence, the marks stripped). On a
+  `StageDone`: the last line outside a fence, the marks stripped, the
+  marker alone or after a sentence or a label — "Status: STAGE DONE",
+  never "not STAGE DONE"). On a
   finish `RunWatch.onStageAnswer` checks the card is where the pipeline
   put it (`expect_status`) and the answer ends with the marker, then
   `RunWatch.Advance` (`Launcher.StartStage`: `tab.create` in the run's
@@ -2926,10 +3012,23 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   start's is) with `StagePrompt` (`{task}`, `{previous}` the answer less
   the marker, `{branch}`, a PR stage's `PRAsk`); after the last stage
   `FinishPipeline` (`done`, the card to `on_finish` while it sits where the
-  pipeline left it, so a merge moves it on as usual). A question
-  (`blocked`), an answer without the marker, a failed delivery or a card
-  the person moved is `stopped: <why>` with a comment by remuda; the
-  usual finish move stays out of an intermediate stage. The page:
+  pipeline left it, so a merge moves it on as usual). An answer without
+  the marker (a question in words too), a failed delivery, a card the
+  person moved or a task done is `stopped: <why>` with a comment by
+  remuda; a permission prompt or a choice dialog (`blocked`) only waits,
+  the answer after it decides. While a run's pipeline is on or passed the
+  card is the pipeline's alone: the usual finish move, a named pull
+  request (`OnPullRequest`) and an earlier stage's tab answering again
+  leave it be. The stage's step comes before the answer is noted as
+  reported, so a restart in between takes it then. **The Queued column**
+  takes only the person's moves: `SetStatuses` refuses it on a done
+  column or with `on_new`, `on_agent`, `on_start` or `on_finish` (the
+  page's `withMark` / `withKind` in `workflow.ts`, tested, take the other
+  mark off), `landing` never picks it (an agent's task, a task undone), a
+  move to another project never lands in it by its name, and an agent's
+  key gets a 403 at `POST /api/tasks/{id}/start` as at the queue; a start
+  clears the card's `queue_refused`; the queue's `Unusable` says why the
+  host of a `-server` remuda runs no agents. The page:
   `ProjectSettings.tsx` holds `AgentsSettings.tsx` (machine, repository —
   `repositories`, the machine's own checkouts — agent, model, arguments,
   a recipe's fill, the queue's switch with "At most N working at once",
@@ -3052,7 +3151,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   once, `DELETE /api/viewer-keys/{id}` (the screens signed out counted);
   `GET /api/agent-keys` leaves the viewer links out. The page: `useRoster().
   viewOnly` from that header, `app/viewOnly.ts` (`viewerPlaces`, tested)
-  keeps the rail to Agents, Wall, Standup, Usage and Activity, the header
+  keeps the rail to Agents, Wall, Standup, Usage, Activity and a server's
+  Server place (its panel hides Read again and the updates), the header
   wears "Viewing only" and no search, Changes is shut, the terminal lens
   is the Wall's screen view (`features/terminal/Screen.tsx`, no attach),
   the chat and the tiles have no composer, keys or question buttons, the

@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/dev1antdev/remuda/internal/backup"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/jira"
@@ -65,5 +67,20 @@ func TestAServersHealthSaysItIsOne(t *testing.T) {
 	r, peer := health.Parse(`peer={"ok":true,"server":true,"version":"v1"}` + "\npeer_token=t\n")
 	if r.Running || peer != nil {
 		t.Fatal("another cockpit would relay terminals through a server, which has no herdr")
+	}
+}
+
+func TestAServerIsNoTargetForItsOwnBackup(t *testing.T) {
+	s := serverModeServer(t)
+	s.Backup = backup.Open(t.TempDir(), "pi", "v-test")
+	put := httptest.NewRecorder()
+	s.handleBackupsPut(put, httptest.NewRequest(http.MethodPut, "/api/backups", strings.NewReader(`{"machine":"local","at":"03:30","keep":14}`)))
+	if put.Code != http.StatusBadRequest || !strings.Contains(put.Body.String(), "pick one of its machines") {
+		t.Fatalf("the host as its own backup's target: %d %s", put.Code, put.Body.String())
+	}
+	off := httptest.NewRecorder()
+	s.handleBackupsPut(off, httptest.NewRequest(http.MethodPut, "/api/backups", strings.NewReader(`{"machine":"","at":"03:30","keep":14}`)))
+	if off.Code != http.StatusOK {
+		t.Fatalf("no backups: %d %s", off.Code, off.Body.String())
 	}
 }

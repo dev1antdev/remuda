@@ -55,7 +55,6 @@ export const server: Dictionary = {
   "failed: {why}": "не вышло: {why}",
   "{done} of {total} done": "готово {done} из {total}",
   "{n} updated": ["обновлено: {n}", "обновлено: {n}", "обновлено: {n}"],
-  "{n} failed": ["не вышло: {n}", "не вышло: {n}", "не вышло: {n}"],
   "{n} skipped": ["пропущено: {n}", "пропущено: {n}", "пропущено: {n}"],
   "remuda here restarts now; the page offers a reload once the new version answers.": "remuda здесь сейчас перезапустится; страница предложит перезагрузку, когда ответит новая версия.",
   "Looking at every machine…": "Смотрю каждую машину…",
@@ -64,4 +63,6 @@ export const server: Dictionary = {
     "Шаг за шагом, каждый — как написано в его команде; неудачный шаг не останавливает остальные. remuda этой страницы — последним: он перезапустится, когда его шаг закончится.",
   "Close (it keeps running)": "Закрыть (продолжит работать)",
   "Run all {n}": "Запустить все: {n}",
+  "{version} installed, not used here": "{version} установлен, здесь не используется",
+  "remuda here is restarting onto its new version; the page offers a reload once it answers.": "remuda здесь перезапускается на новую версию; страница предложит перезагрузку, когда он ответит.",
 };

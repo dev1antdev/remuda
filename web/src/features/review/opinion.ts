@@ -27,6 +27,7 @@ export type Opinion = {
   summary?: string;
   comments: OpinionComment[];
   close: boolean;
+  moved?: string[]; // the files of its comments that changed since it was asked: their lines may have moved
 };
 
 // reviewerFor is the agent a second opinion asks by default: another vendor than the pane's — Claude Code and Codex
@@ -59,6 +60,27 @@ export const offRows = (comments: OpinionComment[], rows: DiffRow[]): OpinionCom
 
 // unlisted is the open comments on files the lens does not list
 export const unlisted = (comments: OpinionComment[], files: string[]): OpinionComment[] => comments.filter((comment) => !files.includes(comment.path));
+
+// Placed is where the open comments go: under the rows of their file's diff, or apart — on files the lens does not
+// list, or on files changed since the reviewer was asked, whose lines may no longer be the ones it meant
+export type Placed = { onRows: OpinionComment[]; unlisted: OpinionComment[]; moved: OpinionComment[] };
+
+export function placeComments(opinion: Opinion | null | undefined, files: string[]): Placed {
+  const open = openComments(opinion);
+  const moved = new Set(opinion?.moved ?? []);
+  const kept = open.filter((comment) => !moved.has(comment.path));
+  return {
+    onRows: kept.filter((comment) => files.includes(comment.path)),
+    unlisted: unlisted(kept, files),
+    moved: open.filter((comment) => moved.has(comment.path)),
+  };
+}
+
+// whereWords is a comment's place as a note set apart from its row says it: its line, or the file as a whole
+export const whereWords = (comment: OpinionComment): string => (comment.line > 0 ? t("line {n}", { n: comment.line }) : t("the whole file"));
+
+// addressOf is a comment's file and line, the file alone for one on the file as a whole
+export const addressOf = (comment: OpinionComment): string => (comment.line > 0 ? `${comment.path}:${comment.line}` : comment.path);
 
 // severityWords is a comment's severity as its tag says it
 export function severityWords(severity: Severity | undefined): string {

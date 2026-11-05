@@ -43,9 +43,11 @@ func (st *Store) OnPullRequest(machine, pane, url, label string) (*PRNote, error
 	if _, err := st.AddComment(r.TaskID, "agent", "Opened "+label+": "+url); err != nil {
 		return nil, err
 	}
-	moved, err := st.OnFinish(r.TaskID)
-	if err != nil {
-		return nil, err
+	var moved *Status
+	if r.Pipeline != PipelineOn && r.Pipeline != PipelinePassed { // while a pipeline runs, the card is the pipeline's to move
+		if moved, err = st.OnFinish(r.TaskID); err != nil {
+			return nil, err
+		}
 	}
 	t, err := st.Get(r.TaskID)
 	if err != nil {

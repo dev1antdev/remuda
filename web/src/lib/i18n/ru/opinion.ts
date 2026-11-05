@@ -33,4 +33,7 @@ export const opinion: Dictionary = {
   "{agent} is reviewing in a new tab; its comments appear here when it answers.": "{agent} смотрит изменения в новом табе; комментарии появятся здесь, когда он ответит.",
   "{comments} from {agent}'s second opinion": "{comments} из второго мнения {agent}",
   "{agent}'s comments on lines this diff does not show:": "Комментарии {agent} к строкам, которых нет в этом диффе:",
+  "On files changed since it was asked — the lines it named may have moved:": "По файлам, изменённым после вопроса, — названные строки могли сдвинуться:",
+  "the whole file": "весь файл",
+  "A second opinion is on its way: wait for its answer, or close its tab": "Второе мнение уже в пути: дождитесь ответа или закройте его таб",
 };

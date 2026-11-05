@@ -1,6 +1,7 @@
 package state
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -26,5 +27,15 @@ func TestTheStateDirIsHeldWhileItIsServed(t *testing.T) {
 	}
 	if Held(filepath.Join(dir, "missing")) {
 		t.Fatal("a dir that is not there reads as held")
+	}
+	if os.Geteuid() != 0 {
+		locked := filepath.Join(t.TempDir(), "remuda")
+		if err := os.Mkdir(locked, 0o500); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(locked, 0o700) })
+		if !Held(locked) {
+			t.Fatal("a dir whose lock cannot be taken reads as free")
+		}
 	}
 }

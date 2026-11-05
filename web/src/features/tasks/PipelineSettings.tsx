@@ -31,7 +31,7 @@ export function PipelineSettings({ stages, onChange, agents, statuses }: {
       <p className="modal-hint">
         {t("Stages after the first agent's work, one after another: every prompt asks the agent to end with a line reading")} <code>STAGE DONE</code>
         {t(
-          ", and such an answer starts the next stage — its agent in a new tab of the same worktree, the card in its column. A question, an answer without the line or a card you move stops it. In a prompt, {task} is the task, {previous} the last stage's answer, {branch} the branch.",
+          ", and such an answer starts the next stage — its agent in a new tab of the same worktree, the card in its column. An answer without the line — a question in its own words too — or a card you move stops it; a permission prompt or a choice only waits for you. In a prompt, {task} is the task, {previous} the last stage's answer, {branch} the branch.",
         )}
       </p>
       <div className="ps-rows">

@@ -30,7 +30,6 @@ export const autonomy: Dictionary = {
   "no workspace open on it now": "сейчас на нём не открыто пространство",
   Model: "Модель",
   "the agent's default": "по умолчанию у агента",
-  "Fill from a recipe": "Заполнить из рецепта",
   "A saved way to start an agent": "Сохранённый способ запуска агента",
   "Start queued tasks by themselves": "Запускать задачи из очереди сами",
   "At most": "Не больше",
@@ -41,8 +40,8 @@ export const autonomy: Dictionary = {
   Pipeline: "Конвейер",
   "Stages after the first agent's work, one after another: every prompt asks the agent to end with a line reading":
     "Этапы после работы первого агента, один за другим: каждый промпт просит агента закончить ответ строкой",
-  ", and such an answer starts the next stage — its agent in a new tab of the same worktree, the card in its column. A question, an answer without the line or a card you move stops it. In a prompt, {task} is the task, {previous} the last stage's answer, {branch} the branch.":
-    ", и такой ответ запускает следующий этап — его агента в новом табе того же worktree, карточку в его колонке. Вопрос, ответ без этой строки или карточка, которую вы передвинули, его останавливают. В промпте {task} — задача, {previous} — ответ прошлого этапа, {branch} — ветка.",
+  ", and such an answer starts the next stage — its agent in a new tab of the same worktree, the card in its column. An answer without the line — a question in its own words too — or a card you move stops it; a permission prompt or a choice only waits for you. In a prompt, {task} is the task, {previous} the last stage's answer, {branch} the branch.":
+    ", и такой ответ запускает следующий этап — его агента в новом табе того же worktree, карточку в его колонке. Ответ без этой строки — в том числе вопрос своими словами — или карточка, которую вы передвинули, его останавливают; запрос разрешения или выбор только ждут вас. В промпте {task} — задача, {previous} — ответ прошлого этапа, {branch} — ветка.",
   "Stage name": "Название этапа",
   model: "модель",
   "stays where it is": "остаётся на месте",

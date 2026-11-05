@@ -10,7 +10,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -218,32 +217,21 @@ func Run(ctx context.Context, o Options) error {
 	reviews := review.New(o.Dir)
 	// a second opinion's reviewer, once it has answered, has its tab closed when the opinion asked for that
 	opinions := opinion.NewService(o.Dir)
-	opinions.Read = func(machineID, paneID string) (string, string, bool) {
-		mc, err := fleet.Get(machineID)
+	opinions.Read = func(op opinion.Opinion) (string, bool) {
+		mc, err := fleet.Get(op.Machine)
 		if err != nil {
-			return "", "", false
+			return "", false
 		}
-		conv, err := chats.Open(mc, paneID, "", "", false)
-		if err != nil || conv.Path == "" {
-			return "", "", false
-		}
-		turns, err := conv.Turns()
-		if err != nil || len(turns) == 0 {
-			return "", "", false
-		}
-		prompt := ""
-		for _, part := range turns[0].Parts {
-			if turns[0].Role == "user" && part.Type == "text" {
-				prompt += part.Text
+		if conv, err := chats.Open(mc, op.Pane, "", "", true); err == nil && conv.Path != "" {
+			if turns, err := conv.Turns(); err == nil {
+				if answer, ok := opinion.Answered(turns, op); ok {
+					return answer, true
+				}
 			}
 		}
-		last := turns[len(turns)-1]
-		if last.Role != "assistant" {
-			return prompt, "", true
-		}
-		return prompt, last.Answer(), true
+		return opinion.Request(mc, mc.Transcripts, op)
 	}
-	opinions.Close = func(machineID, tabID string) error {
+	opinions.Close = func(machineID, tabID, paneID string) error {
 		mc, err := fleet.Get(machineID)
 		if err != nil {
 			return err
@@ -252,13 +240,20 @@ func Run(ctx context.Context, o Options) error {
 		if err != nil {
 			return err
 		}
+		if snap, _ := watcher.Snapshot(machineID); snap != nil {
+			if pane := snap.Pane(paneID); pane == nil || pane.TabID != tabID {
+				return fmt.Errorf("tab %s no longer holds the reviewer's pane %s", tabID, paneID)
+			}
+		}
 		defer watcher.Refresh(mc)
 		return client.TabClose(tabID)
 	}
-	// a rejected folder whose agent answers that it is ready again: the review notes it, the person is told; a
-	// second opinion's reviewer answering is its opinion
+	// a rejected folder whose agent answers that it is ready again: the review notes it, the person is told; a second
+	// opinion's reviewer is read by the opinions themselves (OnStatus, Observe), by its request, and never counts here
 	sayings.OnAnswer = func(machineID, paneID, text string) {
-		opinions.Hear(machineID, paneID, text)
+		if opinions.Reviewer(machineID, paneID) {
+			return
+		}
 		snap, _ := watcher.Snapshot(machineID)
 		if snap == nil {
 			return
@@ -368,6 +363,12 @@ func Run(ctx context.Context, o Options) error {
 		if err != nil {
 			return nil, err
 		}
+		if mc.Local() {
+			if o.Server {
+				return nil, errors.New("this remuda serves the page only: a copy on its own disk would die with it; pick another machine in Settings › Backups")
+			}
+			return mc, nil // a file written here needs no herdr
+		}
 		if _, _, err := mc.Ready(); err != nil {
 			return nil, fmt.Errorf("%s is not connected: %w", mc.Label(), err)
 		}
@@ -426,6 +427,7 @@ func Run(ctx context.Context, o Options) error {
 		opinions.ForgetMachine(e.Machine)
 	})
 	events.Subscribe(bus, opinions.OnStatus)
+	events.Subscribe(bus, opinions.Observe)
 	events.Subscribe(bus, pushSvc.OnStatus)
 	events.Subscribe(bus, sayings.OnStatus)
 	events.Subscribe(bus, planLimits.OnStatus)
@@ -568,9 +570,10 @@ func Run(ctx context.Context, o Options) error {
 		SelfPort:  auth.PortOf(o.Addr),
 		Opinions:  opinions,
 	}
-	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: loopbackPreviews(o.Addr)}
+	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews
 	defer previews.Shutdown()
+	events.Subscribe(bus, func(e events.MachineRemoved) { previews.CloseMachine(e.Machine) })
 	if o.Tailscale {
 		var node *tsnetx.Node
 		srv.Tailscale = func() tsnetx.Status { return node.Status() } // set before the handler is handed out
@@ -587,24 +590,6 @@ func Run(ctx context.Context, o Options) error {
 		log.Printf("sign in with the token from `remuda -print-token`")
 	}
 	return server.ListenAndServe(ctx, o.Addr, srv.Handler())
-}
-
-// loopbackPreviews opens a preview on a port of the host -addr listens on, addressed by the name the page was asked at
-func loopbackPreviews(addr string) func(port int, host string) (net.Listener, string, error) {
-	bind, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		bind = "127.0.0.1"
-	}
-	return func(port int, host string) (net.Listener, string, error) {
-		ln, err := net.Listen("tcp", net.JoinHostPort(bind, strconv.Itoa(port)))
-		if err != nil {
-			return nil, "", err
-		}
-		if strings.Contains(host, ":") {
-			host = "[" + host + "]"
-		}
-		return ln, fmt.Sprintf("http://%s:%d", host, port), nil
-	}
 }
 
 // tailnetPreviews opens a preview on a port of the tailnet node's own, over TLS on its name

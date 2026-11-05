@@ -59,6 +59,9 @@ describe("a comment without a row's text", () => {
   it("is quoted by nothing in the message", () => {
     expect(commentsMessage([adopted], "/x")).toContain("1. src/a.go:6\n   [high] a race");
   });
+  it("on a file as a whole is addressed by the file, never a line 0", () => {
+    expect(commentsMessage([{ ...adopted, line: 0 }], "/x")).toContain("1. src/a.go (the whole file)\n   [high] a race");
+  });
   it("sits under the new file's line it names; one with a row's text only under that very row", () => {
     expect(draftOnRow(adopted, { kind: "add", text: "+x", newLine: 6, oldLine: null })).toBe(true);
     expect(draftOnRow(adopted, { kind: "", text: " x", newLine: 6, oldLine: 6 })).toBe(true);

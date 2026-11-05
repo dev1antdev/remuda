@@ -116,6 +116,7 @@ func restoreCmd(args []string) {
 		fmt.Println("the state dir as it was is at", aside)
 	}
 	fmt.Println("restored into", dir, "— start the service again:", startHint())
+	fmt.Println("the copy holds remuda's state alone: on a new machine, set up its ~/.ssh (its key let in on the other machines, the hosts in its config) before the machines connect")
 }
 
 // stopHint and startHint are the service's own commands on this system, as install-service.sh sets it up

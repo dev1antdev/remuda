@@ -10,6 +10,8 @@ export const preview: Dictionary = {
   "Looking at the ports…": "Смотрю порты…",
   "Nothing of yours listens on a port of {machine} now. Start the dev server in the workspace — npm run dev, python3 -m http.server — and it shows here.":
     "Сейчас ни один ваш процесс не слушает порт на {machine}. Запустите dev-сервер в пространстве — npm run dev, python3 -m http.server — и он появится здесь.",
+  "No workspace's server listens on a port of {machine} now. Start the dev server in the workspace — npm run dev, python3 -m http.server — and it shows here.":
+    "Сейчас ни один сервер из пространств не слушает порт на {machine}. Запустите dev-сервер в пространстве — npm run dev, python3 -m http.server — и он появится здесь.",
   "In this workspace": "В этом пространстве",
   "In the other workspaces": "В других пространствах",
   "In the workspaces": "В пространствах",

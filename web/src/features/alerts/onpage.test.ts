@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Entry } from "@/features/activity/api";
-import { alertOf, keepNewest, MAX_ON_PAGE, newAlerts, wanted } from "./onpage";
+import { alertOf, alertText, keepNewest, MAX_ON_PAGE, newAlerts, quietNow, stillStanding, wanted } from "./onpage";
 import type { Prefs } from "./push";
 
 const entry = (id: number, kind: string, more: Partial<Entry> = {}): Entry => ({ id, at: "", kind, machine: "local", pane: "w1:p1", title: `t${id}`, ...more });
@@ -20,6 +20,8 @@ describe("wanted", () => {
     }
     expect(wanted(entry(1, "digest"), prefs({ watchdog: false }))).toBe(true);
     expect(wanted(entry(1, "schedule"), prefs({ watchdog: false }))).toBe(true);
+    expect(wanted(entry(1, "backup", { machine: "", pane: "" }), prefs({ watchdog: false })), "a failed backup goes to every device, as push.Broadcast sends it").toBe(true);
+    expect(alertOf(entry(1, "backup", { machine: "", pane: "" })).tone).toBe("warn");
   });
   it("never tells the person of their own doing", () => {
     for (const kind of ["sent", "recover", "handover", "teleport"]) expect(wanted(entry(1, kind), prefs()), kind).toBe(false);
@@ -39,18 +41,28 @@ describe("newAlerts", () => {
 
 describe("alertOf and keepNewest", () => {
   it("makes a toast that opens the pane, a digest the standup", () => {
-    expect(alertOf(entry(3, "input", { title: "api needs you", body: "claude is waiting" }))).toEqual({
+    const question = alertOf(entry(3, "input", { title: "api needs you", body: "claude is waiting" }));
+    expect(question).toEqual({
       id: "alert-3",
       kind: "input",
-      text: "api needs you · claude is waiting",
+      title: "api needs you",
+      body: "claude is waiting",
       machine: "local",
       pane: "w1:p1",
       panel: undefined,
       tone: "warn",
       lingers: false,
     });
+    expect(alertText(question)).toBe("api needs you · claude is waiting");
+    expect(alertText(alertOf(entry(9, "machine", { pane: "" })))).toBe("t9");
     expect(alertOf(entry(4, "done"))).toMatchObject({ tone: "success", lingers: true });
     expect(alertOf(entry(5, "digest", { pane: "", machine: "" }))).toMatchObject({ panel: "standup", pane: undefined, machine: undefined });
+  });
+  it("opens the usage for a budget or a limit, and a backup's failure warns", () => {
+    expect(alertOf(entry(6, "budget", { pane: "" }))).toMatchObject({ panel: "usage", tone: "warn" });
+    expect(alertOf(entry(7, "limits", { pane: "" }))).toMatchObject({ panel: "usage" });
+    expect(alertOf(entry(8, "limits"))).toMatchObject({ panel: undefined, pane: "w1:p1" });
+    expect(alertOf(entry(10, "backup", { pane: "" }))).toMatchObject({ panel: undefined, tone: "warn" });
   });
   it("keeps one of each and the newest few", () => {
     let standing = keepNewest([], alertOf(entry(1, "input")));
@@ -58,5 +70,36 @@ describe("alertOf and keepNewest", () => {
     expect(standing).toHaveLength(1);
     for (let id = 2; id < 8; id++) standing = keepNewest(standing, alertOf(entry(id, "done")));
     expect(standing.map((a) => a.id)).toEqual(Array.from({ length: MAX_ON_PAGE }, (_, i) => `alert-${8 - MAX_ON_PAGE + i}`));
+  });
+});
+
+describe("what the server broadcasts", () => {
+  it("shows a backup's failure whatever the watchdog switch, as push.Broadcast sends it", () => {
+    expect(wanted(entry(1, "backup", { pane: "" }), prefs({ watchdog: false }))).toBe(true);
+  });
+});
+
+describe("stillStanding", () => {
+  it("takes a question's toast down once its pane no longer asks, and nothing else", () => {
+    const standing = [alertOf(entry(1, "input")), alertOf(entry(2, "done")), alertOf(entry(3, "input", { pane: "w2:p1" }))];
+    expect(stillStanding(standing, () => true)).toBe(standing);
+    const kept = stillStanding(standing, (_machine, pane) => pane === "w2:p1");
+    expect(kept.map((a) => a.id)).toEqual(["alert-2", "alert-3"]);
+    expect(stillStanding([alertOf(entry(4, "input", { pane: "" }))], () => false)).toHaveLength(1);
+  });
+});
+
+describe("quietNow", () => {
+  const at = (iso: string) => new Date(iso);
+  it("reads the window in the device's own zone, as the server's Quiet.Covers", () => {
+    const night = { from: "22:00", to: "07:00", tz: "Europe/Warsaw" };
+    expect(quietNow(night, at("2026-11-05T22:30:00+01:00"))).toBe(true);
+    expect(quietNow(night, at("2026-11-05T06:59:00+01:00"))).toBe(true);
+    expect(quietNow(night, at("2026-11-05T07:00:00+01:00"))).toBe(false);
+    expect(quietNow(night, at("2026-11-05T12:00:00+01:00"))).toBe(false);
+    expect(quietNow({ from: "09:00", to: "17:00", tz: "UTC" }, at("2026-11-05T12:00:00Z"))).toBe(true);
+    expect(quietNow({ from: "09:00", to: "09:00", tz: "UTC" }, at("2026-11-05T09:00:00Z"))).toBe(false);
+    expect(quietNow({ from: "09:00", to: "17:00", tz: "Not/AZone" }, at("2026-11-05T12:00:00Z"))).toBe(true);
+    expect(quietNow(undefined)).toBe(false);
   });
 });

@@ -78,7 +78,8 @@ not style.
   once the person switched them on (`internal/tasks`: queue.go,
   pipeline.go) — prompts the person configured, like an agent schedule's,
   for cards the person put in the Queued column; an agent's key can
-  neither queue a card nor change a project's columns or its agents.
+  neither queue a card, start an agent on one, nor change a project's
+  columns or its agents, and no task lands in the Queued column by itself.
 - **Never `--takeover`.** herdr allows one attached client per terminal;
   stealing the slot is the person's call only. A refusal is surfaced
   (`RefusedError`, 409 on HTTP, the WebSocket close reason), never retried

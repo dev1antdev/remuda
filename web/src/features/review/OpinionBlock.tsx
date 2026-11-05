@@ -5,14 +5,15 @@
 import { actions } from "@/app/store";
 import { Icon, Logo } from "@/ui";
 import { t } from "@/lib/i18n";
-import { headWords, openComments, type Opinion, type OpinionComment } from "./opinion";
+import { addressOf, headWords, openComments, type Opinion, type OpinionComment } from "./opinion";
 import { OpinionNote } from "./OpinionNote";
 
-export function OpinionBlock({ opinion, reviewer, asking, apart, onAdopt, onAdoptAll, onDismiss, onDismissAll }: {
+export function OpinionBlock({ opinion, reviewer, asking, apart, moved, onAdopt, onAdoptAll, onDismiss, onDismissAll }: {
   opinion: Opinion;
   reviewer: string;
   asking: boolean; // the reviewer waits for the person in its tab
   apart: OpinionComment[]; // on files the lens does not list
+  moved: OpinionComment[]; // on files changed since it was asked: the lines it named may have moved
   onAdopt: (comment: OpinionComment) => void;
   onAdoptAll: () => void;
   onDismiss: (id: number) => void;
@@ -48,7 +49,15 @@ export function OpinionBlock({ opinion, reviewer, asking, apart, onAdopt, onAdop
         <div className="opinion-apart">
           <span className="modal-hint">{t("On files this list does not show:")}</span>
           {apart.map((comment) => (
-            <OpinionNote key={comment.id} comment={comment} reviewer={reviewer} where={`${comment.path}:${comment.line}`} onAdopt={onAdopt} onDismiss={onDismiss} />
+            <OpinionNote key={comment.id} comment={comment} reviewer={reviewer} where={addressOf(comment)} onAdopt={onAdopt} onDismiss={onDismiss} />
+          ))}
+        </div>
+      )}
+      {moved.length > 0 && (
+        <div className="opinion-apart opinion-moved">
+          <span className="modal-hint">{t("On files changed since it was asked — the lines it named may have moved:")}</span>
+          {moved.map((comment) => (
+            <OpinionNote key={comment.id} comment={comment} reviewer={reviewer} where={addressOf(comment)} onAdopt={onAdopt} onDismiss={onDismiss} />
           ))}
         </div>
       )}

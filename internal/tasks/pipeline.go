@@ -3,8 +3,10 @@ package tasks
 // The pipeline: a project's stages after the first agent's work. Every prompt of a run in a pipeline asks the agent to
 // end its answer with StageMarker once its part is done; such an answer starts the next stage — its agent in a new tab
 // of the same worktree, its prompt with the task, the previous stage's answer and the branch filled in, the card in the
-// stage's column — and the last one's ends the pipeline, the card going where a finish sends it. A question, an answer
-// without the marker, a failed start, or a card the person moved stops it for that run.
+// stage's column — and the last one's ends the pipeline, the card going where a finish sends it. An answer without the
+// marker (a question asked in words too), a failed start, a card the person moved or a task done stops it for that run;
+// a permission prompt or a choice dialog only waits, the answer after it decides. While it runs, only the pipeline moves
+// the card: a named pull request and an earlier stage's tab answering again leave it where it is.
 
 import (
 	"fmt"
@@ -30,11 +32,16 @@ const StageAsk = "When your part of this work is done, end your answer with a li
 // PRAsk is a PR stage's request, the review's own wording for an approval that opens a pull request.
 const PRAsk = "Commit the work now, with a message that says what changed for the person, push the branch, and open a pull request with `gh pr create` against the repository's usual base branch; name the pull request's link in your answer."
 
-// StageDone says whether an answer ends with the marker: its last line outside a code fence, the marks stripped, is
-// the marker or ends with it.
+// StageDone says whether an answer ends with the marker: its last line outside a code fence, the marks stripped, is the
+// marker alone or after a sentence or a label ("All tests pass. STAGE DONE", "Status: STAGE DONE") — never a phrase that
+// only mentions it ("this is not STAGE DONE yet"), since the next stage's agent starts on it.
 func StageDone(answer string) bool {
-	last := lastLine(answer)
-	return last == StageMarker || strings.HasSuffix(last, " "+StageMarker)
+	before, ok := strings.CutSuffix(lastLine(answer), StageMarker)
+	if !ok {
+		return false
+	}
+	before = strings.TrimSpace(before)
+	return before == "" || strings.ContainsAny(before[len(before)-1:], ".!:;-") || strings.HasSuffix(before, "—") || strings.HasSuffix(before, "–") || strings.HasSuffix(before, "→")
 }
 
 // lastLine is an answer's last non-empty line outside a fence, its Markdown marks and closing punctuation stripped.
@@ -199,6 +206,9 @@ func (w *RunWatch) onStageAnswer(r Run, answer string) (words string, moved *Sta
 	stop := func(why string) (string, *Status, bool) {
 		_ = w.Store.StopPipeline(r.ID, why)
 		return "the pipeline stops: " + why, nil, false
+	}
+	if t.Done {
+		return stop("the task is done")
 	}
 	if r.Expect != 0 && t.StatusID != r.Expect {
 		return stop("the card was moved by hand")

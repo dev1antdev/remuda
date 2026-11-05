@@ -70,7 +70,7 @@ export function systemHelp(browser: Browser, system: System): string {
 
 // deliveryWords is the last push this cockpit handed the browser's push service, and what the service said
 export function deliveryWords(last: Delivery | null | undefined, now = Date.now()): string {
-  if (!last) return t("No push sent to this browser yet.");
+  if (!last) return t("No push sent to this browser since remuda started."); // the server keeps its deliveries in memory
   const when = ago(last.at, now);
   return last.error ? t("Last push sent {when}: {title} — refused: {error}", { when, title: last.title, error: last.error }) : t("Last push sent {when}: {title} — the push service took it.", { when, title: last.title });
 }

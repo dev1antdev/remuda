@@ -11,7 +11,7 @@ import { maskFeed, sameFeed, shellRows, type ShellFeed } from "./shellFeed";
 
 export function useShellFeed(): void {
   const native = inShell();
-  const { machines, version } = useRoster();
+  const { machines, version, host } = useRoster();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const share = useSharing();
   const ready = useRef(false);
@@ -20,8 +20,8 @@ export function useShellFeed(): void {
   useEffect(() => {
     if (!native || ready.current || !version) return;
     ready.current = true;
-    tellShell({ type: "ready", version, machine: machines.find((m) => m.id === "local")?.label ?? "local" });
-  }, [native, version, machines]);
+    tellShell({ type: "ready", version, machine: host?.label ?? "local" }); // the machine serving the page, a server's host too
+  }, [native, version, host]);
 
   useEffect(() => {
     if (!native || !version) return; // nothing before the first roster: an empty menu would only flash

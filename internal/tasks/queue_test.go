@@ -274,3 +274,147 @@ func TestBranchForReadsLikeThePagesOwn(t *testing.T) {
 		}
 	}
 }
+
+func TestNothingLandsInTheQueuedColumnButThePersonsMove(t *testing.T) {
+	st := open(t)
+	ps, _ := st.Projects()
+	inbox := ps[0]
+	var cols []Status
+	cols = append(cols, Status{Title: "Queued", Kind: KindOpen, OnQueue: true})
+	for _, s := range inbox.Statuses {
+		s.OnNew, s.OnAgent = false, false // no column takes new tasks or proposals: the first open one would
+		cols = append(cols, s)
+	}
+	saved, err := st.SetStatuses(inbox.ID, cols, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queuedCol := *flagged(saved, func(s Status) bool { return s.OnQueue })
+	mine, _ := st.CreateFrom(inbox.ID, Patch{Title: str("Mine")}, "")
+	theirs, _ := st.CreateFrom(inbox.ID, Patch{Title: str("Theirs")}, "GOG · w3:p1")
+	for _, tk := range []Task{mine, theirs} {
+		if tk.StatusID == queuedCol.ID {
+			t.Fatalf("%q landed in the Queued column", tk.Title)
+		}
+	}
+	queuedTask, _ := st.Update(mine.ID, Patch{StatusID: &queuedCol.ID})
+	done, _ := st.Update(queuedTask.ID, Patch{Done: boolp(true)})
+	if undone, _ := st.Update(done.ID, Patch{Done: boolp(false)}); undone.StatusID == queuedCol.ID {
+		t.Fatal("a task undone went back into the Queued column")
+	}
+	other, _ := st.CreateProject("Other", 0)
+	var ocols []Status
+	for _, s := range other.Statuses {
+		ocols = append(ocols, s)
+		if s.OnNew {
+			ocols = append(ocols, Status{Title: "Queued", Kind: KindOpen, OnQueue: true})
+		}
+	}
+	if _, err := st.SetStatuses(other.ID, ocols, nil); err != nil {
+		t.Fatal(err)
+	}
+	moved, _ := st.Update(theirs.ID, Patch{StatusID: &queuedCol.ID})
+	moved, err = st.Update(moved.ID, Patch{ProjectID: &other.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.QueueColumn(other.ID, moved.StatusID) {
+		t.Fatal("a card moved to another project landed in its Queued column by the name")
+	}
+}
+
+func TestTheQueuedColumnTakesNoOtherMark(t *testing.T) {
+	st := open(t)
+	ps, _ := st.Projects()
+	inbox := ps[0]
+	for name, change := range map[string]func(s *Status){
+		"new":      func(s *Status) { s.OnNew = true },
+		"proposed": func(s *Status) { s.OnAgent = true },
+		"start":    func(s *Status) { s.OnStart = true },
+		"finish":   func(s *Status) { s.OnFinish = true },
+		"done":     func(s *Status) { s.Kind = KindDone },
+	} {
+		var cols []Status
+		for _, s := range inbox.Statuses {
+			s.OnNew, s.OnAgent, s.OnStart, s.OnFinish = false, false, false, false
+			cols = append(cols, s)
+		}
+		q := Status{Title: "Queued", Kind: KindOpen, OnQueue: true}
+		change(&q)
+		cols = append(cols, q)
+		if _, err := st.SetStatuses(inbox.ID, cols, nil); !errors.Is(err, ErrInvalid) {
+			t.Errorf("a Queued column that also takes %s was kept: %v", name, err)
+		}
+	}
+}
+
+func TestAStartClearsTheQueuesRefusal(t *testing.T) {
+	st := open(t)
+	p := queued(t, st, 1)
+	q := column(p, func(s Status) bool { return s.OnQueue })
+	tk := into(t, st, p.ID, "Refused", q)
+	h := newQueue(st)
+	h.startErr = errors.New("herdr said no")
+	h.q.Sweep()
+	if got, _ := st.Get(tk.ID); got.Refused == "" {
+		t.Fatal("no refusal noted")
+	}
+	if _, err := st.StartRun(Run{TaskID: tk.ID, Machine: "studio", Workspace: "w9", Pane: "w9:p1", Agent: "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.Get(tk.ID); got.Refused != "" {
+		t.Fatalf("the person's start left the queue's refusal on the card: %q", got.Refused)
+	}
+}
+
+func TestTheQueueSaysWhyTheServersOwnMachineRunsNothing(t *testing.T) {
+	st := open(t)
+	p := queued(t, st, 1)
+	into(t, st, p.ID, "Waits", column(p, func(s Status) bool { return s.OnQueue }))
+	h := newQueue(st)
+	h.q.Unusable = func(id string) string { return "this remuda only serves the page" }
+	h.q.Sweep()
+	if n := note(t, st, p.ID); n.State != "waiting" || n.Reason != "this remuda only serves the page" || len(h.starts) != 0 {
+		t.Fatalf("note %+v, starts %d", n, len(h.starts))
+	}
+}
+
+func TestAStoreFromBeforeTheQueueOpensWithItsTasks(t *testing.T) {
+	dir := t.TempDir()
+	old, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps, _ := old.Projects()
+	tk, _ := old.Create(ps[0].ID, Patch{Title: str("Kept")})
+	if _, err := old.StartRun(Run{TaskID: tk.ID, Machine: "studio", Workspace: "w1", Pane: "w1:p1", Agent: "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, drop := range []string{ // the schema as 0.12.4 left it
+		`ALTER TABLE statuses DROP COLUMN on_queue`,
+		`ALTER TABLE projects DROP COLUMN automation`,
+		`ALTER TABLE tasks DROP COLUMN queue_refused`,
+		`ALTER TABLE task_runs DROP COLUMN by_queue`,
+		`ALTER TABLE task_runs DROP COLUMN stage`,
+		`ALTER TABLE task_runs DROP COLUMN pipeline`,
+		`ALTER TABLE task_runs DROP COLUMN expect_status`,
+	} {
+		if _, err := old.db.Exec(drop); err != nil {
+			t.Fatalf("%s: %v", drop, err)
+		}
+	}
+	old.Close()
+	st, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	got, err := st.Get(tk.ID)
+	if err != nil || got.Title != "Kept" || got.Run == nil || got.Run.ByQueue || got.Run.Pipeline != "" || got.Refused != "" {
+		t.Fatalf("the old task after the upgrade: %+v %v", got, err)
+	}
+	p, _ := st.Project(ps[0].ID)
+	if p.Automation.Queue || p.Automation.Max != 1 || len(p.Automation.Stages) != 0 || flagged(p.Statuses, func(s Status) bool { return s.OnQueue }) != nil {
+		t.Fatalf("the old project after the upgrade: %+v", p.Automation)
+	}
+}

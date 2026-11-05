@@ -10,7 +10,12 @@ describe("the backups' words", () => {
   it("says where the last run went, or why it did not", () => {
     const now = Date.parse("2026-11-05T12:00:00Z");
     expect(lastWords({ at: "2026-11-05T09:00:00Z", machine: "gog-id", label: "GOG", size: 2048, files: 31, took: 1.2 }, now)).toBe("Taken 3 h ago to GOG · 2 KB · 31 files");
-    expect(lastWords({ at: "2026-11-05T11:55:00Z", machine: "gog-id", took: 0, error: "GOG is not connected" }, now)).toBe("Failed 5 min ago, to gog-id: GOG is not connected");
+    expect(lastWords({ at: "2026-11-05T11:55:00Z", machine: "gog-id", took: 0, error: "GOG is not connected" }, now)).toBe("Failed 5 min ago, to gog-id: GOG is not connected · no good copy yet");
+  });
+  it("says how old the newest good copy is while the runs fail", () => {
+    const now = Date.parse("2026-11-05T12:00:00Z");
+    const good = { at: "2026-11-05T09:00:00Z", machine: "gog-id", label: "GOG", size: 2048, files: 31, took: 1.2 };
+    expect(lastWords({ at: "2026-11-05T11:55:00Z", machine: "gog-id", took: 0, error: "GOG is not connected" }, now, good)).toBe("Failed 5 min ago, to gog-id: GOG is not connected · the newest good copy is from 3 h ago");
   });
   it("says when the nightly run comes", () => {
     const now = new Date(2026, 10, 5, 12, 0);

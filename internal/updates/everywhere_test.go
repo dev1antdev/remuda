@@ -2,6 +2,7 @@ package updates
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,11 +64,58 @@ func TestARunGoesOnPastAStepThatFailsAndEndsDone(t *testing.T) {
 	if !ok || !got.Done || got.Ended.IsZero() {
 		t.Fatalf("the run did not end: %+v", got)
 	}
-	if got.Steps[0].State != "skipped" || got.Steps[1].State != "failed" || got.Steps[1].Error == "" {
+	if got.Steps[0].State != "skipped" || got.Steps[1].State != "skipped" || got.Steps[1].Error != "nothing left to do: up to date now" {
 		t.Fatalf("steps %+v", got.Steps)
 	}
 	s.runs.list = append(s.runs.list, &Batch{ID: "b2"})
 	if _, err := s.StartEverywhere([]Step{{Machine: "local", What: "herdr"}}); !errors.Is(err, ErrBatchRunning) {
 		t.Fatalf("a second run while one goes = %v, want ErrBatchRunning", err)
+	}
+}
+
+func TestARunGoesInThePlansOrderTheHostLast(t *testing.T) {
+	plan := []Step{
+		{Machine: "gog", What: "herdr", Command: "herdr update --handoff"},
+		{Machine: "gog", What: "remuda-release", Command: "curl gog"},
+		{Machine: "local", What: "remuda-release", Command: "curl here"},
+	}
+	steps, err := inPlanOrder(plan, []Step{plan[2], plan[0], plan[1]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, step := range steps {
+		order = append(order, step.Machine+"/"+step.What)
+	}
+	if got := strings.Join(order, " "); got != "gog/herdr gog/remuda-release local/remuda-release" {
+		t.Fatalf("the run's order %s: the page's own host must restart last", got)
+	}
+	if steps, _ := inPlanOrder(plan, []Step{plan[2]}); len(steps) != 1 || steps[0].Machine != "local" {
+		t.Fatalf("only the steps asked for run: %+v", steps)
+	}
+	var stale *StaleError
+	if _, err := inPlanOrder(plan, []Step{{Machine: "gog", What: "herdr", Command: "brew upgrade herdr"}}); !errors.As(err, &stale) {
+		t.Fatalf("a command other than the one shown = %v, want a StaleError", err)
+	}
+}
+
+func TestAServersHostIsOfferedItsReleaseAlone(t *testing.T) {
+	offered := []Update{{What: "herdr"}, {What: "hooks"}, {What: "mcp"}, {What: "remuda-release", Command: "curl"}, {What: "restart-herdr"}}
+	if kept := serverHostOnly(offered); len(kept) != 1 || kept[0].What != "remuda-release" {
+		t.Fatalf("a server's host is offered %+v", kept)
+	}
+	if kept := serverHostOnly([]Update{{What: "herdr"}}); kept == nil || len(kept) != 0 {
+		t.Fatalf("nothing to offer is an empty list, not %+v", kept)
+	}
+	s := everywhereService(t)
+	s.Machines.SetServer(true)
+	host, err := s.Machines.Get(machines.LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range s.Available(host) {
+		if u.What != "remuda-release" {
+			t.Errorf("a server's host is offered %s", u.What)
+		}
 	}
 }

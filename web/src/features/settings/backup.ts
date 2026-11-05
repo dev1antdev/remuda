@@ -12,12 +12,14 @@ export function bytesWords(size: number): string {
   return t("{n} MB", { n: (size / 1024 / 1024).toFixed(1) });
 }
 
-// lastWords is what the last run came to: where it went, how big, or why it did not
-export function lastWords(result: BackupResult, now = Date.now()): string {
+// lastWords is what the last run came to: where it went, how big, or why it did not — and then how old the newest good
+// copy is, or that there is none, since a run of failures leaves the person with that copy alone
+export function lastWords(result: BackupResult, now = Date.now(), good?: BackupResult): string {
   const when = ago(result.at, now);
   const where = result.label || result.machine;
-  if (result.error) return t("Failed {when}, to {machine}: {error}", { when, machine: where, error: result.error });
-  return t("Taken {when} to {machine} · {size} · {files} files", { when, machine: where, size: bytesWords(result.size ?? 0), files: result.files ?? 0 });
+  if (!result.error) return t("Taken {when} to {machine} · {size} · {files} files", { when, machine: where, size: bytesWords(result.size ?? 0), files: result.files ?? 0 });
+  const failed = t("Failed {when}, to {machine}: {error}", { when, machine: where, error: result.error });
+  return `${failed} · ${good ? t("the newest good copy is from {when}", { when: ago(good.at, now) }) : t("no good copy yet")}`;
 }
 
 const clock = (d: Date) => d.toLocaleTimeString(locale() ?? [], { hour: "2-digit", minute: "2-digit" });

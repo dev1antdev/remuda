@@ -112,3 +112,37 @@ func TestPromptAsksForTheFormParseReads(t *testing.T) {
 		t.Error("a long file list is not cut")
 	}
 }
+
+func TestParseReadsLinksContinuationsAndWholeFileFindings(t *testing.T) {
+	answer := Parse("FINDINGS\r\n"+
+		"- [src/app.go:12](src/app.go#L12): [high] the token is logged\r\n"+
+		"- [server.go:40](/Users/me/app/internal/server.go:40) — the lock is never released\r\n"+
+		"  when the handler returns early, so the next request hangs.\r\n"+
+		"- internal/a_test.go: [medium] no test covers the empty input\r\n"+
+		"- docs/guide.md:0: [low] the page is out of date as a whole\r\n"+
+		"SUMMARY\r\n"+
+		"Two real bugs.\r\n", "/Users/me/app")
+	want := []Finding{
+		{Path: "src/app.go", Line: 12, Severity: "high", Text: "the token is logged"},
+		{Path: "server.go", Line: 40, Text: "the lock is never released when the handler returns early, so the next request hangs."},
+		{Path: "internal/a_test.go", Line: 0, Severity: "medium", Text: "no test covers the empty input"},
+		{Path: "docs/guide.md", Line: 0, Severity: "low", Text: "the page is out of date as a whole"},
+	}
+	if !reflect.DeepEqual(answer.Findings, want) || answer.Summary != "Two real bugs." {
+		t.Fatalf("answer %+v", answer)
+	}
+}
+
+func TestParseTakesNoAddressForAFile(t *testing.T) {
+	answer := Parse("FINDINGS\n127.0.0.1:8080: the server binds every interface\nlocalhost:3000 is taken\nNote: nothing else\nSUMMARY\nfine", "")
+	if len(answer.Findings) != 0 {
+		t.Fatalf("an address or a note read as a finding: %+v", answer.Findings)
+	}
+	inside := Parse("FINDINGS\nsrc/a.go: the whole file\n", "")
+	if len(inside.Findings) != 1 || inside.Findings[0].Line != 0 {
+		t.Fatalf("a file-level finding under FINDINGS: %+v", inside.Findings)
+	}
+	if loose := Parse("The main thing: config.yaml: keeps the old key.", ""); len(loose.Findings) != 0 {
+		t.Fatalf("a file named in a sentence outside FINDINGS read as a finding: %+v", loose.Findings)
+	}
+}

@@ -38,11 +38,15 @@ type Service struct {
 	Allow     func(*http.Request) bool // the person's own signed-in device or the token
 	IdleAfter time.Duration
 
-	mu    sync.Mutex
-	open  map[string]*entry
-	sweep sync.Once
-	stop  chan struct{}
+	mu     sync.Mutex
+	open   map[string]*entry
+	sweep  sync.Once
+	stop   chan struct{}
+	closed bool // Shutdown ran: nothing opens any more
 }
+
+// errShutdown is an Open after remuda began to stop.
+var errShutdown = errors.New("remuda is stopping")
 
 type entry struct {
 	Preview
@@ -61,6 +65,9 @@ func (s *Service) Open(machine string, port int, dial func() (string, error), ho
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed {
+		return Preview{}, errShutdown
+	}
 	if s.open == nil {
 		s.open = map[string]*entry{}
 		s.stop = make(chan struct{})
@@ -79,7 +86,7 @@ func (s *Service) Open(machine string, port int, dial func() (string, error), ho
 	e.srv = &http.Server{Handler: Guarded(s.Allow, signIn, Proxy(dial, port, url, seen, &e.holds)), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = e.srv.Serve(ln) }()
 	s.open[key(machine, port)] = e
-	s.sweep.Do(func() { go s.closeIdle() })
+	s.sweep.Do(func() { go s.closeIdle(s.stop) })
 	return e.Preview, nil
 }
 
@@ -146,11 +153,28 @@ func (s *Service) Close(machine string, port int) bool {
 	return true
 }
 
+// CloseMachine shuts every preview of a machine, when it leaves the fleet.
+func (s *Service) CloseMachine(machine string) {
+	s.mu.Lock()
+	var gone []*entry
+	for k, e := range s.open {
+		if e.Machine == machine {
+			gone = append(gone, e)
+			delete(s.open, k)
+		}
+	}
+	s.mu.Unlock()
+	for _, e := range gone {
+		_ = e.srv.Close()
+	}
+}
+
 // Shutdown shuts every preview, when remuda stops.
 func (s *Service) Shutdown() {
 	s.mu.Lock()
 	open := s.open
 	s.open = nil
+	s.closed = true
 	if s.stop != nil {
 		close(s.stop)
 		s.stop = nil
@@ -161,11 +185,8 @@ func (s *Service) Shutdown() {
 	}
 }
 
-// closeIdle shuts, every half minute, the previews nothing has asked for IdleAfter and that hold no connection
-func (s *Service) closeIdle() {
-	s.mu.Lock()
-	stop := s.stop
-	s.mu.Unlock()
+// closeIdle shuts, every half minute, the previews nothing has asked for IdleAfter and that hold no connection, until stop
+func (s *Service) closeIdle(stop chan struct{}) {
 	tick := time.NewTicker(30 * time.Second)
 	defer tick.Stop()
 	for {
