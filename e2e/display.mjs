@@ -331,6 +331,32 @@ async function seed() {
   };
   say(`seeded: app ${app.id} (two tabs), its worktree ${tree.id}, notes ${notes.id}, the Inbox ${inbox}`);
 }
+// SERVER_HOST is the host of a remuda serving the page only, as rp-orange's vitals read it: a Raspberry Pi 4, warm, its
+// firmware's word unreadable without root, a day of samples for the sparklines
+const SERVER_HOST = {
+  id: "local",
+  label: "This machine · rp-orange",
+  health: {
+    at: iso(now - 60e3),
+    os: "Linux 6.17.0-1018-raspi",
+    arch: "arm64",
+    model: "Raspberry Pi 4 Model B Rev 1.5",
+    cores: 4,
+    load1: 0.42,
+    uptime: "28 days, 9:03",
+    disk_free_gb: 107,
+    disk_used_pct: 4,
+    mem_total_mb: 7798,
+    mem_avail_mb: 6657,
+    temp_c: 77.4,
+    temp_crit_c: 110,
+    freq_mhz: 1300,
+    freq_max_mhz: 1800,
+    throttle: { now: [] },
+    history: Array.from({ length: 24 }, (_, i) => ({ at: iso(now - (24 - i) * 15 * 60e3), load: 0.3 + (i % 5) / 10, disk_free: 96, mem: 14 + (i % 3), temp: 60 + (i % 8) * 2 })),
+  },
+};
+
 // dressRoster paints the agents on the e2e's own shells in the browser's copy of the roster; the server keeps its own
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
   const reply = await send("Fetch.getResponseBody", { requestId });
@@ -364,6 +390,7 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
       for (const tab of session.tabs ?? []) for (const pane of tab.panes ?? []) Object.assign(pane, DRESS[pane.id] ?? {});
     }
   }
+  roster.server = SERVER_HOST; // the Server place a remuda -server draws: its host's vitals, the readings a Raspberry Pi gives
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(roster)).toString("base64") });
 }
@@ -712,6 +739,17 @@ async function runPass() {
   await screen("code", { open: async () => palette("mode:code"), expect: [".code-mode"] });
 
   for (const panel of ["standup", "usage", "schedules", "activity", "alerts", "arenas"]) await screen(`panel-${panel}`, { open: async () => palette(panel), expect: [".modal"], settle: 600 });
+  await screen("server-place", {
+    open: async () => {
+      await palette("server");
+      if (!(await until(() => evaluate(`!!document.querySelector(".server-panel .health-rows") && document.querySelector(".server-panel").textContent.includes("77.4 °C")`), 4))) failed("the Server place does not show the host's temperature");
+      check((await count(".server-panel .spark")) >= 4, `the Server place draws ${await count(".server-panel .spark")} sparklines, not the load, disk, memory and temperature`);
+      check((await count(".server-concerns li.is-warn")) === 1, "a warm host is not said to want a look");
+      if (!pass.phone) check(await present(".rail-btn.has-warn"), "the Server place's rail icon wears no amber dot for a warm host");
+    },
+    expect: [".server-panel"],
+  });
+  await screen("update-everywhere", { open: async () => palette("update-everywhere"), expect: [".modal.everywhere, .everywhere"], settle: 800 });
   await screen("settings", { open: async () => palette("settings"), expect: [".settings-dialog .settings-section"], close: async () => {} });
   const sections = (await evaluate(`document.querySelectorAll('.settings-dialog .settings-section').length`)) ?? 0;
   for (let i = 1; i < sections; i++)

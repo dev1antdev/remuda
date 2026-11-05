@@ -6,6 +6,7 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -55,6 +56,29 @@ type Manager struct {
 	door     *Door                                 // how every remote's agents reach the tasks here; nil opens none
 	saveMu   sync.Mutex                            // writes of machines.json, one at a time
 	onState  func(id, label, state, reason string) // hears every remote's connection move, set by OnState
+	server   bool                                  // the host serves the page only: no machine of the fleet (SetServer)
+}
+
+// ErrServerHost is what a request for the host's own herdr gets when remuda runs as a server: it has no workspaces.
+var ErrServerHost = errors.New("this remuda runs as a server: the machine it runs on has no workspaces of its own; pick one of its machines")
+
+// SetServer makes the host no machine of the fleet: List leaves it out, so the roster, the watcher, the search, the
+// usage and the standups never see it, and its herdr is never asked; its vitals are still read (All).
+func (m *Manager) SetServer(on bool) {
+	m.mu.Lock()
+	m.server = on
+	local := m.machines[LocalID]
+	m.mu.Unlock()
+	local.mu.Lock()
+	local.serverHost = on
+	local.mu.Unlock()
+}
+
+// Server says whether the host serves the page only.
+func (m *Manager) Server() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.server
 }
 
 // OnState sets who hears a remote machine's connection move: connected, or error with the reason.
@@ -376,7 +400,22 @@ func (m *Manager) Get(id string) (*Machine, error) {
 	return mc, nil
 }
 
+// List is the fleet the cockpit works with: every machine, the host too unless it serves the page only.
 func (m *Manager) List() []*Machine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]*Machine, 0, len(m.order))
+	for _, id := range m.order {
+		if m.server && id == LocalID {
+			continue
+		}
+		out = append(out, m.machines[id])
+	}
+	return out
+}
+
+// All is every machine, the host always: its vitals are read and its connections closed whatever it serves.
+func (m *Manager) All() []*Machine {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]*Machine, 0, len(m.order))
@@ -387,7 +426,7 @@ func (m *Manager) List() []*Machine {
 }
 
 func (m *Manager) Close() {
-	for _, mc := range m.List() {
+	for _, mc := range m.All() {
 		mc.mu.Lock()
 		conn := mc.conn
 		mc.mu.Unlock()

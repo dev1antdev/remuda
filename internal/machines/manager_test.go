@@ -1,9 +1,44 @@
 package machines
 
 import (
+	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestAServersHostIsNoMachineOfTheFleet(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	m.machines["gog"] = newRemote(Config{ID: "gog", Label: "GOG", Host: "gog.remote"})
+	m.order = append(m.order, "gog")
+	if ids := idsOf(m.List()); ids != "local,gog" {
+		t.Fatalf("a cockpit's fleet is %s", ids)
+	}
+	m.SetServer(true)
+	if !m.Server() || idsOf(m.List()) != "gog" || idsOf(m.All()) != "local,gog" {
+		t.Fatalf("a server's fleet %s, every machine %s", idsOf(m.List()), idsOf(m.All()))
+	}
+	host, err := m.Get(LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := host.Ready(); !errors.Is(err, ErrServerHost) {
+		t.Fatalf("the host's herdr was offered: %v", err)
+	}
+	m.SetServer(false)
+	if _, _, err := host.Ready(); err != nil || idsOf(m.List()) != "local,gog" {
+		t.Fatalf("back to a cockpit: %v, %s", err, idsOf(m.List()))
+	}
+}
+
+func idsOf(list []*Machine) string {
+	ids := make([]string, len(list))
+	for i, mc := range list {
+		ids[i] = mc.ID()
+	}
+	return strings.Join(ids, ",")
+}
 
 // TestRenameCountsCharactersNotBytes: the page lets sixty characters through, so the server counts the same way —
 // a Cyrillic name of thirty-one letters is not "over sixty".

@@ -148,7 +148,12 @@ func (s *Server) Handler() http.Handler {
 }
 
 // handleHealth answers from the watcher's cache, unauthenticated: it never asks herdr and says only what the peer probe needs.
+// A server says so: it has no herdr of its own, so another cockpit must never take it for a peer to relay terminals through.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if s.Machines.Server() {
+		writeJSON(w, map[string]any{"ok": true, "herdr": false, "server": true, "version": buildversion.Build})
+		return
+	}
 	snap, err := s.Watch.Snapshot(machines.LocalID)
 	if snap == nil || err != nil {
 		writeJSON(w, map[string]any{"ok": true, "herdr": false})

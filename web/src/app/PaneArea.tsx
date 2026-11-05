@@ -10,6 +10,7 @@ import { isMac, isTouch } from "@/lib/prefs";
 import { basename } from "@/lib/text";
 import { closeTab, createTab, renameTab } from "@/features/roster/api";
 import { offerReopen } from "@/features/reopen/offer";
+import { NO_MACHINES, startOn } from "@/features/roster/server";
 import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
 import { ChatTools, useChatViewItems } from "@/features/chat/ChatTools";
@@ -39,7 +40,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
   const splitAsked = app.use((s) => s.split);
   const wide = useMedia(SPLIT_QUERY);
   const split = splitOn(splitAsked, wide, isTouch, lens); // the chat beside the terminal; lens is then the focused side
-  const { refresh, viewOnly, machines } = useRoster();
+  const { refresh, viewOnly, machines, server } = useRoster();
   const paneKey = current ? `${current.machine.id}|${current.pane.id}` : "";
   const share = useSharing();
   const [revealed, setRevealed] = useState(""); // the pane shown anyway while sharing, until another is on screen
@@ -130,9 +131,9 @@ export default function PaneArea({ current }: { current: Located | null }) {
     return (
       <main className="pane-area">
         <div className="placeholder">
-          <p>{tr("No pane selected.")}</p>
-          {!viewOnly && (
-            <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
+          <p>{server && machines.length === 0 ? tr(NO_MACHINES) : tr("No pane selected.")}</p>
+          {!viewOnly && machines.length > 0 && (
+            <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: startOn(machines) })}>
               {tr("Start an agent")}
             </button>
           )}

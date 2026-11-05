@@ -110,6 +110,13 @@ type rosterMachine struct {
 	Limits   *limits.Reading   `json:"limits,omitempty"`  // the agents' subscription windows as the machine last reported them
 }
 
+// rosterServer is the host of a remuda serving the page only: its name and vitals, for the Server place, never a machine of the fleet.
+type rosterServer struct {
+	ID     string         `json:"id"`
+	Label  string         `json:"label"`
+	Health *health.Report `json:"health,omitempty"`
+}
+
 // folderOf is the folder a workspace belongs to in the sidebar: its repository's main checkout — herdr's repo_root,
 // else the folder holding the shared .git, else the root the review sweep read with git (a worktree made outside
 // herdr) — or, outside a repository, the workspace's own folder.
@@ -309,6 +316,11 @@ func (s *Server) rosterBody() ([]byte, string) {
 		out = append(out, entry)
 	}
 	roster := map[string]any{"machines": out, "agents": sessions.Agents, "version": buildversion.Build, "latest": s.Health.Latest()}
+	if s.Machines.Server() {
+		if host, err := s.Machines.Get(machines.LocalID); err == nil {
+			roster["server"] = rosterServer{ID: host.ID(), Label: host.Label(), Health: s.Health.Report(host.ID())} // the Server place: no machine of the fleet, only its vitals
+		}
+	}
 	if s.Feed != nil {
 		roster["feed"] = s.Feed.LastID() // the newest activity entry: the bell knows there is news without asking
 	}

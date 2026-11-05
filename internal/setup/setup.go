@@ -49,6 +49,7 @@ type Options struct {
 	AuthKey   string
 	Addr      string
 	NoService bool   // herdr and its server only
+	Server    bool   // the service serves the page only: no herdr there, the flag -server in its unit
 	Version   string // this build's: a remote without remuda gets the same release when it is one
 }
 
@@ -70,9 +71,17 @@ func Run(o Options, out io.Writer) error {
 			env = append(env, "TS_AUTHKEY="+o.AuthKey)
 		}
 	}
-	fmt.Fprintf(out, "— herdr and its server%s\n", where(o.Host))
-	if err := run(o.Host, env, setupScript, nil, out); err != nil {
-		return fmt.Errorf("setup: %w", err)
+	if o.Server && o.NoService {
+		return fmt.Errorf("setup: -server is a service that serves the page; -no-service would leave nothing to set up")
+	}
+	if o.Server {
+		env = append(env, "REMUDA_SERVER=1")
+		fmt.Fprintf(out, "— no herdr%s: a server serves the page only, the agents run on its machines\n", where(o.Host))
+	} else {
+		fmt.Fprintf(out, "— herdr and its server%s\n", where(o.Host))
+		if err := run(o.Host, env, setupScript, nil, out); err != nil {
+			return fmt.Errorf("setup: %w", err)
+		}
 	}
 	if o.NoService {
 		return nil

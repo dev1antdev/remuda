@@ -17,3 +17,12 @@ export const fetchJob = (id: string): Promise<Job> => getJSON(`/api/jobs/${encod
 export const restartPane = (machineId: string, paneId: string): Promise<{ job: string }> => sendJSON("POST", "/api/panes/restart", { machine: machineId, pane: paneId });
 // every chat a reboot stopped on the machine started again on its session: a job, or the refusal when none is stopped
 export const recoverChats = (machineId: string): Promise<{ job: string }> => sendJSON("POST", "/api/panes/recover", { machine: machineId });
+
+// Update everywhere: one step per pending update of a connected machine, the page's own host last
+export type Step = { machine: string; label: string; what: string; title: string; command: string };
+export type StepRun = Step & { state: "waiting" | "running" | "ok" | "failed" | "skipped"; job?: string; error?: string };
+export type Batch = { id: string; started: string; ended?: string; done: boolean; steps: StepRun[] };
+export const everywherePlan = (): Promise<Step[]> => getJSON<{ steps: Step[] }>("/api/updates/everywhere").then((r) => r.steps);
+// the steps shown go back as they were: one that moved since is refused, and nothing runs
+export const startEverywhere = (steps: Step[]): Promise<Batch> => sendJSON("POST", "/api/updates/everywhere", { steps });
+export const fetchEverywhere = (id: string): Promise<Batch> => getJSON(`/api/updates/everywhere/${encodeURIComponent(id)}`);

@@ -3,6 +3,7 @@
 // a job whose output streams in. Run sends the command shown back: the server runs that or refuses.
 
 import { useEffect, useRef, useState } from "react";
+import { actions } from "@/app/store";
 import { fetchJob, listJobs, listUpdates, startUpdate, type Job, type Update } from "@/features/updates/api";
 import type { Machine } from "@/features/roster/api";
 import Icon from "@/ui/icons";
@@ -197,6 +198,17 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
             </div>
           )}
           <div className="modal-actions">
+            <button
+              type="button"
+              className="btn"
+              title={tr("Every connected machine's pending updates, one after another, this page's own remuda last")}
+              onClick={() => {
+                onClose();
+                actions.openDialog({ kind: "update-everywhere" });
+              }}
+            >
+              {tr("Update everywhere…")}
+            </button>
             <button type="button" className="btn" onClick={onClose}>
               {tr("Close")}
             </button>

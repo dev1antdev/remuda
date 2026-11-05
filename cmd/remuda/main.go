@@ -43,6 +43,7 @@ func main() {
 	noCheck := flag.Bool("no-version-check", false, "never ask npm and GitHub what the newest Claude Code, herdr and remuda are")
 	noDoor := flag.Bool("no-door", false, "keep the agents' door closed: no agent-key / agent-url files here or on a remote machine (a scratch instance beside the real one must not overwrite the real one's)")
 	withDoor := flag.Bool("door", false, "open the agents' door although REMUDA_STATE_DIR is set, which closes it by itself")
+	serverOnly := flag.Bool("server", os.Getenv("REMUDA_SERVER") == "1", "serve the page only (also REMUDA_SERVER=1): this machine is no machine of the cockpit — no workspaces here, its herdr neither needed nor kept — and its vitals stand behind the Server place on the rail; without it (the default, a client of its own herdr) the machine remuda runs on is one of the cockpit's machines")
 	flag.Usage = help
 	flag.Parse()
 
@@ -72,7 +73,8 @@ func main() {
 		Addr: *addr, HerdrBin: *herdrBin, Socket: *socket, CodePort: *codePort,
 		Tailscale: *tailscale, TailscaleName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"),
 		VersionCheck: !*noCheck, Version: version,
-		Door: doorOpen(*noDoor, *withDoor, os.Getenv("REMUDA_STATE_DIR") != ""),
+		Door:   doorOpen(*noDoor, *withDoor, os.Getenv("REMUDA_STATE_DIR") != ""),
+		Server: *serverOnly,
 	})
 	if err != nil {
 		log.Print(err)
@@ -94,7 +96,7 @@ func help() {
 	w := flag.CommandLine.Output()
 	fmt.Fprint(w, `remuda — a browser and phone cockpit for the coding agents herdr runs
 
-  remuda [flags]       the server (the background service runs this)
+  remuda [flags]       the server (the background service runs this); -server for a host that only serves the page
   remuda setup         herdr, its server, the agent hooks and the service, here or -host H
   remuda code          code-server for the Code mode, here or -host H
   remuda mcp           your task list for the coding agents, over MCP; mcp install registers it with each agent, here or -host H

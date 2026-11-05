@@ -569,6 +569,33 @@ make service                    # the same on this machine
 Logs: `~/Library/Logs/remuda.log` (macOS) or `journalctl --user -u remuda`.
 `remuda uninstall` removes the service and the rest (see Uninstall above).
 
+### A server that only serves the page
+
+A small box that is always on — a Raspberry Pi — can hold the cockpit
+for every browser and phone while the agents run on your other
+machines. Run it as a server:
+
+```bash
+remuda setup -host pi.remote -server -tailscale   # no herdr there; the unit runs remuda -server
+```
+
+`-server` (or `REMUDA_SERVER=1`) keeps the machine remuda runs on out of
+the cockpit: it is not in the sidebar, the Wall or any picker, no
+workspace starts there, and its herdr is neither needed nor kept. Its
+health stands behind **Server** on the rail instead — load, disk,
+memory, temperature, the CPU's clock and a Raspberry Pi's throttling
+(under-voltage, capped clock; the full firmware word where `vcgencmd`
+is readable, the under-voltage alarm alone where it needs root) with the
+day's sparklines — and the icon turns amber or red when the box is
+warm, throttled or full. Add the machines the agents run on with the +
+beside Machines, or `herdr machine add` on the server.
+
+Every machine's ⓘ shows the same body now (memory, temperature, clock,
+throttling), and **Update everywhere** in Updates runs every connected
+machine's pending updates one after another — herdr, the agents,
+code-server, remuda's release — each command shown first, the cockpit
+itself last.
+
 ## Docker / Portainer
 
 For a **Linux host** that runs herdr (the container shares the host's unix

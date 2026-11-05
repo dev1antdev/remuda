@@ -18,7 +18,7 @@ import { t } from "@/lib/i18n";
 const CLOSED_OFFER_MS = 10_000;
 
 export function useToasts(): ToastItem[] {
-  const { machines, latest, tailscale, version, offline, stale, viewOnly } = useRoster();
+  const { machines, latest, tailscale, version, offline, stale, viewOnly, host } = useRoster();
   const notice = app.use((s) => s.notice);
   const away = app.use((s) => s.away);
   const closedOffer = app.use((s) => s.closedOffer);
@@ -70,7 +70,7 @@ export function useToasts(): ToastItem[] {
       ),
     });
   const release = latest?.remuda;
-  const local = machines.find((m) => m.id === "local");
+  const local = host;
   if (release && version && newer(version, release) && releaseSeen !== release && !offline)
     toasts.push({
       id: "release",

@@ -18,10 +18,13 @@ import (
 
 // Service lists what a machine can update and starts the one asked for, as a job the person first saw as a command.
 type Service struct {
-	Health  *health.Collector
-	Jobs    *jobs.Runner
-	Restart *restart.Restarter
-	Watch   *watch.Watcher
+	Health   *health.Collector
+	Jobs     *jobs.Runner
+	Restart  *restart.Restarter
+	Watch    *watch.Watcher
+	Machines *machines.Manager // every machine, for Update everywhere
+
+	runs batches // Update everywhere's recent runs
 }
 
 // StaleError is a run whose command is no longer the one shown: the person should look again.

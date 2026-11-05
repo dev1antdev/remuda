@@ -8,6 +8,7 @@ import { startLive, useLive, useLiveConnected } from "@/lib/live";
 import { useQuery } from "@/lib/query";
 import type { BudgetStatus } from "@/features/usage/api";
 import { fetchRoster, type AgentKind, type Latest, type Machine, type Roster, type Tailscale } from "./api";
+import { hostMachine } from "./server";
 
 export type RosterState = {
   machines: Machine[];
@@ -18,6 +19,8 @@ export type RosterState = {
   feed?: number; // the newest activity entry: past the one seen here, the bell has news
   budgets?: BudgetStatus[]; // the spending limits with what their periods have cost so far
   jiraSite?: string; // the person's Jira site, when one is set: a task can then come from a Jira issue
+  server?: Machine; // the host of a remuda serving the page only (remuda -server), no machine of the fleet: the Server place's
+  host?: Machine; // the machine that serves the page, in the fleet or not: its own updates (a release) are offered on it
   offline: boolean;
   stale: string | null; // the server's version when this page is older
   viewOnly: boolean; // a viewer link signed this page in: it draws, and hides every control that would type or change
@@ -49,8 +52,11 @@ export function RosterProvider({ children }: { children: ReactNode }) {
     startLive();
   }, []);
   useLive("roster", reload);
-  const value = useMemo<RosterState>(
-    () => ({
+  const value = useMemo<RosterState>(() => {
+    const server = data?.server ? hostMachine(data.server) : undefined;
+    return {
+      server,
+      host: data?.machines.find((m) => m.id === "local") ?? server,
       machines: data?.machines ?? [],
       agents: data?.agents ?? [],
       latest: data?.latest,
@@ -63,9 +69,8 @@ export function RosterProvider({ children }: { children: ReactNode }) {
       stale,
       viewOnly,
       refresh: reload,
-    }),
-    [data, error, stale, viewOnly, reload],
-  );
+    };
+  }, [data, error, stale, viewOnly, reload]);
   return <RosterContext.Provider value={value}>{children}</RosterContext.Provider>;
 }
 

@@ -5,6 +5,8 @@
 import { addMachine, createSession, createTab, createWorktree, renameMachine, renameSession, renameTab, type Created } from "@/features/roster/api";
 import IconDialog from "@/features/icons/IconDialog";
 import LeftoversDialog from "@/features/roster/LeftoversDialog";
+import ServerPanel from "@/features/roster/ServerPanel";
+import EverywhereDialog from "@/features/updates/EverywhereDialog";
 import ReopenDialog from "@/features/reopen/ReopenDialog";
 import ArenaDialog from "@/features/arena/ArenaDialog";
 import ArenaPanel from "@/features/arena/ArenaPanel";
@@ -47,9 +49,8 @@ export default function Overlays() {
   const search = app.use((s) => s.search);
   const confirm = app.use((s) => s.confirm);
   const file = app.use((s) => s.file);
-  const { machines, agents, refresh } = useRoster();
+  const { machines, agents, refresh, host, server } = useRoster();
   const panes = useAllPanes();
-  const local = machines.find((m) => m.id === "local");
   const leftoversOn = dialog?.kind === "leftovers" ? machines.find((m) => m.id === dialog.machineId) : undefined;
 
   // the dialog closes even on a warning: the container exists although its agent did not start, and a second submit would make another
@@ -77,7 +78,9 @@ export default function Overlays() {
   return (
     <>
       {panel === "palette" && <CommandPalette />}
-      {panel === "release" && local && <UpdatesDialog machine={local} what="remuda-release" onClose={actions.closePanel} />}
+      {panel === "release" && host && <UpdatesDialog machine={host} what="remuda-release" onClose={actions.closePanel} />}
+      {panel === "server" && server && <ServerPanel server={server} onClose={actions.closePanel} />}
+      {dialog?.kind === "update-everywhere" && <EverywhereDialog onClose={actions.closeDialog} />}
       {panel === "alerts" && <AlertsPanel onClose={actions.closePanel} />}
       {panel === "activity" && <Activity onClose={actions.closePanel} />}
       {panel === "schedules" && <Schedules machines={machines} onClose={actions.closePanel} ask={actions.ask} />}

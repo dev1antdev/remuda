@@ -64,7 +64,7 @@ const toastError = (e: unknown) => actions.notify(errMsg(e), { error: true });
 
 // useCommands is the list for what was typed: the panes first, then the commands that apply right now.
 function useCommands(): (query: string) => Entry[] {
-  const { machines, viewOnly, jiraSite } = useRoster();
+  const { machines, viewOnly, jiraSite, server } = useRoster();
   const mode = app.use((s) => s.mode);
   const lens = app.use((s) => s.lens);
   const viewer = app.use((s) => s.viewer);
@@ -102,6 +102,8 @@ function useCommands(): (query: string) => Entry[] {
 
       command("next-needs", t("Go to the next agent that needs you"), goNext, { hint: `${NEXT_KEY} · ${t("a question open, a watchdog note, a finish not looked at")}`, icon: "arrow-right", keywords: ["next", "needs", "attention", "waiting", "blocked", "question", "done", "jump"] });
       for (const m of MODES) if (m.mode !== mode) command(`mode:${m.mode}`, m.title, () => actions.setMode(m.mode), { hint: m.hint, icon: m.icon, keywords: ["mode", m.mode] });
+      command("update-everywhere", t("Update everywhere…"), () => actions.openDialog({ kind: "update-everywhere" }), { hint: t("every connected machine's pending updates, one after another"), icon: "refresh-cw", keywords: ["update", "upgrade", "all", "machines", "herdr", "claude", "codex", "release"] });
+      if (server) command("server", t("Server · {name}", { name: server.label }), () => actions.togglePanel("server"), { hint: t("its load, memory, temperature and throttling"), icon: "server", keywords: ["server", "host", "pi", "raspberry", "vitals", "temperature", "memory", "throttle"] });
       command("reopen", t("Reopen a closed agent…"), () => actions.openDialog({ kind: "reopen" }), { hint: `${REOPEN_KEY} · ${t("an agent whose tab or workspace closed, back on its own session")}`, icon: "refresh-cw", keywords: ["reopen", "undo", "closed", "restore", "tab", "back", "resume"] });
       if (current && !viewer) {
         const folder = folderOf(current);
@@ -247,6 +249,6 @@ function useCommands(): (query: string) => Entry[] {
       const shown = share.on ? commands.map((entry) => ({ ...entry, title: share.redact(entry.title), hint: entry.hint && share.redact(entry.hint) })) : commands;
       return [...panes, ...(viewOnly ? shown.filter((entry) => viewerCommand(entry.id)) : shown)];
     },
-    [machines, viewOnly, jiraSite, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
+    [machines, viewOnly, jiraSite, server, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
   );
 }

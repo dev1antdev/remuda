@@ -586,6 +586,32 @@ func TestTheServiceUnitsRunFromAHomeWithASpace(t *testing.T) {
 	}
 }
 
+func TestAServerServiceRunsWithTheFlag(t *testing.T) {
+	dir := linuxHome(t)
+	var out strings.Builder
+	if err := run("", []string{"REMUDA_ADDR=127.0.0.1:1", "REMUDA_SERVER=1", "REMUDA_TAILSCALE=1"}, serviceScript, []string{"install"}, &out); err != nil {
+		t.Fatalf("install-service: %v\n%s", err, out.String())
+	}
+	unit, err := os.ReadFile(filepath.Join(dir, ".config", "systemd", "user", "remuda.service"))
+	if err != nil {
+		t.Fatalf("no unit written: %v\n%s", err, out.String())
+	}
+	if want := "\" -addr \"127.0.0.1:1\" -server -tailscale -tailscale-hostname remuda\n"; !strings.Contains(string(unit), want) {
+		t.Errorf("the unit lacks %q:\n%s", want, unit)
+	}
+	out.Reset()
+	if err := run("", []string{"REMUDA_ADDR=127.0.0.1:1"}, serviceScript, []string{"install"}, &out); err != nil {
+		t.Fatalf("install-service: %v\n%s", err, out.String())
+	}
+	unit, _ = os.ReadFile(filepath.Join(dir, ".config", "systemd", "user", "remuda.service"))
+	if strings.Contains(string(unit), "-server") {
+		t.Errorf("a cockpit's unit names -server:\n%s", unit)
+	}
+	if err := Run(Options{Server: true, NoService: true}, &out); err == nil {
+		t.Error("-server with -no-service set nothing up and said nothing")
+	}
+}
+
 // --- the agents' MCP registration ---
 
 // agents lays a home out with stand-ins for the agents' commands, each recording its arguments; kimi's has no mcp subcommand.

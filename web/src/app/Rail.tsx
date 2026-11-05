@@ -5,6 +5,7 @@
 import { unread } from "@/features/activity/group";
 import { DEFAULT_FILTER, filterWords, type Filter } from "@/features/activity/filter";
 import { machineLabel } from "@/features/roster/options";
+import { serverTone } from "@/features/roster/concerns";
 import { useRoster } from "@/features/roster/useRoster";
 import { keyWords } from "@/features/terminal/float/float";
 import { toggleFloat } from "@/features/terminal/float/useFloatKey";
@@ -32,13 +33,15 @@ const PANELS: (Place & { panel: Panel })[] = [
 ];
 const SETTINGS: Place = { label: t("Settings"), icon: "sliders", about: t("The theme, the sidebar, the panels, the alerts, the keys") };
 const FLOAT: Place = { label: t("Shell"), icon: "square-terminal", about: t("A floating terminal over any screen, on a shell of its own · {key}", { key: keyWords(isMac) }) };
+const SERVER: Place = { label: t("Server"), icon: "server", about: t("The machine this remuda serves the page from: its load, memory, temperature and throttling") };
 
 export default function Rail() {
   const mode = app.use((s) => s.mode);
   const panel = app.use((s) => s.panel);
   const dialog = app.use((s) => s.dialog);
   const float = app.use((s) => s.float);
-  const { feed, machines, viewOnly } = useRoster();
+  const { feed, machines, viewOnly, server } = useRoster();
+  const serverDot = server ? serverTone(server.health) : "";
   const current = useCurrent();
   const onFloat = () => toggleFloat(machines, current?.machine.id ?? null);
   const modes = viewerPlaces(MODES, viewOnly);
@@ -53,6 +56,7 @@ export default function Rail() {
     ...modes.filter((m) => m.desk).map((m) => ({ label: m.label, icon: m.icon, hint: m.about, checked: mode === m.mode, onSelect: () => actions.setMode(m.mode) })),
     { sep: true },
     ...panels.map((p) => ({ label: p.label, icon: p.icon, hint: p.about, checked: panel === p.panel, onSelect: () => actions.togglePanel(p.panel) })),
+    ...(server ? [{ label: SERVER.label, icon: SERVER.icon, hint: SERVER.about, checked: panel === "server", onSelect: () => actions.togglePanel("server") } as MenuItem] : []),
     ...(viewOnly
       ? []
       : [
@@ -84,16 +88,18 @@ export default function Rail() {
           <RailButton key={p.panel} place={placeOf(p)} on={panel === p.panel} dot={p.panel === "activity" && news} onClick={() => actions.togglePanel(p.panel)} />
         ))}
         {!viewOnly && <RailButton place={FLOAT} on={!!float} onClick={onFloat} />}
+        {server && <RailButton place={SERVER} on={panel === "server"} tone={serverDot} onClick={() => actions.togglePanel("server")} />}
         {!viewOnly && <RailButton place={SETTINGS} on={dialog?.kind === "settings"} onClick={() => actions.openDialog({ kind: "settings" })} />}
       </div>
     </nav>
   );
 }
 
-function RailButton({ place, on, dot = false, desk = false, onClick }: { place: Place; on: boolean; dot?: boolean; desk?: boolean; onClick: () => void }) {
+// tone: the Server place's dot, amber for a look and red for a concern in the host's body or disk
+function RailButton({ place, on, dot = false, tone = "", desk = false, onClick }: { place: Place; on: boolean; dot?: boolean; tone?: "bad" | "warn" | ""; desk?: boolean; onClick: () => void }) {
   return (
     <Tip text={place.about} side="right">
-      <button type="button" className={`rail-btn${on ? " on" : ""}${dot ? " has-news" : ""}${desk ? " rail-desk" : ""}`} aria-pressed={on} aria-label={place.label} onClick={onClick}>
+      <button type="button" className={`rail-btn${on ? " on" : ""}${dot ? " has-news" : ""}${tone ? ` has-${tone}` : ""}${desk ? " rail-desk" : ""}`} aria-pressed={on} aria-label={place.label} onClick={onClick}>
         <Icon name={place.icon} size={18} />
         <span className="rail-label" aria-hidden="true">{place.short ?? place.label}</span>
       </button>
