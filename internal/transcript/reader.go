@@ -30,11 +30,13 @@ type Reader struct {
 	subTails     map[string]*cachedTail  // remote subagent files by path
 	subagents    map[string]*subagentEntry
 	subDirs      map[string]dirListing // a remote session's subagent folder, as listed a moment ago
+	reads        int64                 // counts the cached tails' reads: which one was read longest ago
 }
 
 type cachedTail struct {
 	version Version
 	data    []byte
+	read    int64 // Reader.reads when it was last read
 }
 
 type continuation struct {
@@ -156,14 +158,17 @@ func (r *Reader) remoteTail(path string, v Version) ([]byte, error) {
 	return r.remoteTailIn(r.tails, path, v, 8)
 }
 
-// remoteTailIn is remoteTail over one of the caches, which keeps at most keep files.
+// remoteTailIn is remoteTail over one of the caches, which keeps at most keep files' worth of bytes (remoteTailCap each).
 func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Version, keep int) ([]byte, error) {
 	r.mu.Lock()
 	cached := tails[path]
-	r.mu.Unlock()
 	if cached != nil && cached.version == v {
+		r.reads++
+		cached.read = r.reads
+		r.mu.Unlock()
 		return cached.data, nil
 	}
+	r.mu.Unlock()
 
 	// every read is cut at the size the stat saw: what the agent wrote since belongs to the next version
 	quoted := script.Quote(path)
@@ -187,17 +192,34 @@ func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Versi
 	}
 
 	r.mu.Lock()
-	tails[path] = &cachedTail{version: v, data: data}
-	if len(tails) > keep {
-		for k := range tails {
-			if k != path {
-				delete(tails, k)
-				break
-			}
-		}
-	}
+	r.reads++
+	tails[path] = &cachedTail{version: v, data: data, read: r.reads}
+	evictTails(tails, path, keep*remoteTailCap)
 	r.mu.Unlock()
 	return data, nil
+}
+
+// evictTails drops the files read longest ago until the cache holds budget bytes at most, the one just read kept. A
+// count of files emptied at random sent a conversation nothing had changed in over the wire whole again as soon as
+// more files than that were read in turn — a wall's tiles, the task runs' sweep.
+func evictTails(tails map[string]*cachedTail, keep string, budget int) {
+	held := 0
+	for _, tail := range tails {
+		held += len(tail.data)
+	}
+	for held > budget {
+		oldest := ""
+		for path, tail := range tails {
+			if path != keep && (oldest == "" || tail.read < tails[oldest].read) {
+				oldest = path
+			}
+		}
+		if oldest == "" {
+			return
+		}
+		held -= len(tails[oldest].data)
+		delete(tails, oldest)
+	}
 }
 
 // ResolveSession finds the session file of herdr's agent_session for an agent kind (claude, codex, gemini; "" tries

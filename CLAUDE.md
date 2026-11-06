@@ -232,7 +232,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   forwarding, else one `ssh host nc -U <sock>` exec per request
   (one sshd on :2222 answers "unknown channel type"). Remote
   transcripts are fetched by `stat` + `tail -c` delta into a small
-  per-session byte cache (`transcript.Reader.Turns` hides local vs remote);
+  per-session byte cache (`transcript.Reader.Turns` hides local vs remote;
+  eight files' worth of bytes, the file read longest ago let go first —
+  `evictTails`, tested: one emptied at random by count fetched thirteen
+  conversations read in turn whole again every round);
   `Reader.ResolveSession` finds `<uuid>.jsonl` and caches the hit on both sides.
   `Machine.Ready()` reconnects a dead remote at most every 15s; a removed
   machine never reconnects and its watcher loop exits. **A sleeping
