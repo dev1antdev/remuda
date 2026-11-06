@@ -86,10 +86,10 @@ func LeftoversScript(root string) string {
 	return script.PATH + "\nroot=" + script.Quote(root) + "\n" +
 		"[ -d \"$root\" ] || exit 0\n" +
 		"for dir in \"$root\"/*/*/; do\n" +
-		"  [ -d \"$dir\" ] || continue\n" +
+		"  [ -d \"$dir\" ] && [ ! -L \"${dir%/}\" ] || continue\n" +
 		"  dir=${dir%/}\n" +
 		"  if [ ! -f \"$dir/.git\" ]; then branch='!'; dirty=''\n" +
-		"  else branch=$(git -C \"$dir\" rev-parse --abbrev-ref HEAD 2>/dev/null) || branch='?'; dirty=$(git -C \"$dir\" status --porcelain 2>/dev/null | head -1); fi\n" +
+		"  else branch=$(git -C \"$dir\" rev-parse --abbrev-ref HEAD 2>/dev/null) || branch='?'; dirty=$(git -C \"$dir\" status --porcelain --untracked-files=normal 2>/dev/null | head -1); fi\n" +
 		"  kb=$(du -sk \"$dir\" 2>/dev/null | cut -f1)\n" +
 		"  printf '%s\\037%s\\037%s\\037%s\\n' \"$dir\" \"$branch\" \"$dirty\" \"${kb:-0}\"\n" +
 		"done\n"

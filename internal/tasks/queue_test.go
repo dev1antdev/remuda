@@ -348,6 +348,17 @@ func TestTheQueuedColumnTakesNoOtherMark(t *testing.T) {
 	}
 }
 
+func TestAProjectKeepsAnOpenColumnBesidesTheQueuedOne(t *testing.T) {
+	st := open(t)
+	ps, _ := st.Projects()
+	inbox := ps[0]
+	cols := []Status{{Title: "Queued", Kind: KindOpen, OnQueue: true}, {Title: "Done", Kind: KindDone}}
+	if _, err := st.SetStatuses(inbox.ID, cols, nil); !errors.Is(err, ErrInvalid) {
+		tk, _ := st.Create(inbox.ID, Patch{Title: str("New")})
+		t.Fatalf("columns with no open one but the Queued were kept (%v): a new task landed done=%v", err, tk.Done)
+	}
+}
+
 func TestAStartClearsTheQueuesRefusal(t *testing.T) {
 	st := open(t)
 	p := queued(t, st, 1)
@@ -416,5 +427,103 @@ func TestAStoreFromBeforeTheQueueOpensWithItsTasks(t *testing.T) {
 	p, _ := st.Project(ps[0].ID)
 	if p.Automation.Queue || p.Automation.Max != 1 || len(p.Automation.Stages) != 0 || flagged(p.Statuses, func(s Status) bool { return s.OnQueue }) != nil {
 		t.Fatalf("the old project after the upgrade: %+v", p.Automation)
+	}
+}
+
+// queuedWithoutStart is the Inbox with a Queued column after New and no column marked for started tasks, the queue on
+func queuedWithoutStart(t *testing.T, st *Store) Project {
+	t.Helper()
+	ps, _ := st.Projects()
+	inbox := ps[0]
+	var cols []Status
+	for _, s := range inbox.Statuses {
+		s.OnStart = false
+		cols = append(cols, s)
+		if s.OnNew {
+			cols = append(cols, Status{Title: "Queued", Kind: KindOpen, OnQueue: true})
+		}
+	}
+	if _, err := st.SetStatuses(inbox.ID, cols, nil); err != nil {
+		t.Fatal(err)
+	}
+	p, err := st.SetAutomation(inbox.ID, Automation{Machine: "studio", Dir: "/w/app", Agent: "claude", Queue: true, Max: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestACardTheStartLeavesInQueuedIsNotStartedAgainUntilItMoves(t *testing.T) {
+	st := open(t)
+	p := queuedWithoutStart(t, st)
+	queue := column(p, func(s Status) bool { return s.OnQueue })
+	tk := into(t, st, p.ID, "Fix the login page", queue)
+	h := newQueue(st)
+
+	h.q.Sweep()
+	if len(h.starts) != 1 {
+		t.Fatalf("starts %d", len(h.starts))
+	}
+	run := mustRun(t, st, tk.ID)
+	_ = st.SetRun(run.ID, RunRunning, "")
+	_ = st.SetRun(run.ID, RunFinished, "rec-1")
+	h.states[run.Pane] = "done"
+	h.q.Sweep()
+	h.q.Sweep()
+	if len(h.starts) != 1 {
+		t.Fatalf("the queue started another agent on a card it had started already: %d starts", len(h.starts))
+	}
+	if got, _ := st.Get(tk.ID); got.StatusID != queue.ID || got.Refused == "" {
+		t.Fatalf("the card: column %d, note %q", got.StatusID, got.Refused)
+	}
+
+	landing := column(p, func(s Status) bool { return s.OnNew })
+	if _, err := st.Update(tk.ID, Patch{StatusID: &landing.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Update(tk.ID, Patch{StatusID: &queue.ID}); err != nil {
+		t.Fatal(err)
+	}
+	h.q.Sweep()
+	if len(h.starts) != 2 {
+		t.Fatalf("a card the person queued again was not started: %d starts", len(h.starts))
+	}
+}
+
+func TestAStageNeverMovesTheCardIntoTheQueuedColumn(t *testing.T) {
+	st := open(t)
+	p := queued(t, st, 1)
+	queue := column(p, func(s Status) bool { return s.OnQueue })
+	if _, err := st.SetAutomation(p.ID, Automation{Machine: "studio", Dir: "/w/app", Queue: true, Stages: []Stage{{Name: "Tests", Prompt: "x", StatusID: queue.ID}}}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("a stage moving the card into the Queued column was kept: %v", err)
+	}
+	review := column(p, func(s Status) bool { return s.OnFinish })
+	if _, err := st.SetAutomation(p.ID, Automation{Machine: "studio", Dir: "/w/app", Stages: []Stage{{Name: "Tests", Prompt: "x", StatusID: review.ID}}}); err != nil {
+		t.Fatal(err)
+	}
+	var cols []Status // the stage's column is made the Queued one afterwards
+	for _, s := range p.Statuses {
+		switch {
+		case s.OnQueue:
+			s.OnQueue = false
+		case s.ID == review.ID:
+			s.OnFinish, s.OnQueue = false, true
+		}
+		cols = append(cols, s)
+	}
+	if _, err := st.SetStatuses(p.ID, cols, nil); err != nil {
+		t.Fatal(err)
+	}
+	tk, _ := st.Create(p.ID, Patch{Title: str("Fix login")})
+	first, err := st.StartRun(Run{TaskID: tk.ID, Machine: "studio", Workspace: "w1", Pane: "w1:p1", Agent: "claude", Pipeline: PipelineOn})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := st.Get(tk.ID)
+	if _, err := st.StartStageRun(first, 1, Stage{Name: "Tests", Prompt: "x", StatusID: review.ID}, "w1:p2"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.Get(tk.ID); got.StatusID != before.StatusID || st.QueueColumn(p.ID, got.StatusID) {
+		t.Fatalf("the stage moved the card from %d to %d, the Queued column", before.StatusID, got.StatusID)
 	}
 }

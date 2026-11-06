@@ -75,7 +75,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   without its `*.txt` logs; never `ssh/` (the masters' sockets),
   `backups/` (the copies this machine keeps), `serve.lock`, a `-wal` /
   `-shm` / `-journal`, a `.log`, a file the atomic writer is still
-  writing (`name.123456789`, `.partial`, `.new`); a `remuda-backup.json`
+  writing (`name.123456789`, a number of any length; the tailnet node's
+  `name.tmp123456789`; `.partial`, `.new`); a `remuda-backup.json`
   manifest at the root (format, host, version, time, files), at most
   `MaxSnapshot` 256 MB. `Service` (`backup.json` in the state dir:
   `Settings{machine, at "HH:MM", keep}`, the last run and the last good
@@ -1207,8 +1208,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   minute apart and never two at once per machine, one shell over
   `Snapshot.WorkspaceDirs()` that also reads each folder's branch
   (`git symbolic-ref`, a short hash when detached; `Store.Branch`, set
-  by a summary too, dropped for a folder that stopped being a
-  repository) and its repository's main folder (`Store.Root`: for a
+  by a summary too unless detached, dropped with the badge for a folder
+  that stopped being a repository) and its repository's main folder (`Store.Root`: for a
   linked worktree the parent of `git rev-parse --git-common-dir`, so a
   worktree made outside herdr still joins its repository's folder in the
   sidebar — git names a linked worktree's repository by its real path —
@@ -1320,7 +1321,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Claude Code for the rest), its model as the start dialogs offer it,
   "Close its tab once it has answered" (pref `opinion.close`, on) — and
   `POST /api/opinion {machine, pane, dir, agent, model?, args?, close}`
-  (`internal/server/opinion.go`): the folder must be the pane's
+  (`internal/server/opinion.go`): the reviewer Claude Code, Codex or
+  Gemini CLI, whose answers remuda reads (400 for another), the folder must be the pane's
   workspace's (`reviewedWorkspace`, else the first workspace standing on
   it), must be a checkout with something to review (409 otherwise), and
   must have no opinion still running whose reviewer's pane stands (409:
@@ -1363,7 +1365,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   FINDINGS — or anywhere when there are no sections — past bullets,
   numbers, bold, backticks, Markdown links (`[src/a.go:12](…)`, as Codex
   names a file) and code fences, an indented line carrying on the finding
-  above it, a path starting with the
+  above it (a dunder, a `__tests__`, `[slug]` or `(group)` folder and a
+  file called summary.go kept as the path they are), a path starting with the
   folder made relative, `path:12-14` and `path:12:5` taken at 12, under
   FINDINGS `path: text` or `path:0:` a finding on the file as a whole
   (line 0: listed under its file, addressed "(the whole file)" in the
@@ -2050,8 +2053,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   run follows the pull request"). **The reviewers' word and a red CI go
   to the agent** (`failure.go`, `comments.go`, `handoff.go`, tested on
   `shell.Fake`): `Failure(host, label, url)` runs `gh pr checks --json`
-  on the machine, then `gh run view <id> --log-failed` for each run a
-  failed check points into (`FailedRuns`, at most `MaxRuns`), and
+  on the machine, then `gh run view -R <host/owner/repo> <id> --log-failed`
+  for each run a failed check points into (`FailedRuns`, at most `MaxRuns`;
+  the repository read off the check's link, `RunRepo`, since gh outside a
+  checkout knows no repository of its own), and
   composes `FailureMessage` — the failed checks named with their links,
   each run's log `Tail` (the last `LogTail` 8 KB at a line, escapes
   stripped, out of the last `LogRead` 64 KB the machine sends: a CI log
@@ -2072,8 +2077,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   send. `POST /api/pr/failure` and `POST /api/pr/review` `{machine,
   pane}` (`internal/server/pr.go`, `prHandoff`) take the pane's link
   from `said.Tracker.Link`, compose on the pane's machine and send the
-  text through `sessions.Input.Submit` as the chat does — 409 for an
-  agent waiting on a question or nothing to send, 502 with gh's (or
+  text through `sessions.Input.SubmitToAgent` — 409 for a pane whose
+  agent left, an agent waiting on a question or nothing to send, 502 with gh's (or
   glab's) line, 400 for a link that is neither.
   **A merged worktree goes** (`internal/worktrees`, tested on
   `shell.Fake`): `DELETE /api/worktrees/{id}` for a workspace herdr
@@ -2092,7 +2097,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   checkout are never touched) and no other workspace stands on it or has
   a pane in it (`usedElsewhere`, read off the snapshot before the
   close), `Tidy` runs after the close — the folder removed when `git
-  status` is clean (never `--force`: an uncommitted change keeps it, said
+  status` is clean, new files counted whatever its config (never `--force`: an uncommitted change keeps it, said
   in the answer's `worktree.kept`), its branch by git's `-d`, or `-D` when
   its request was read as merged, else kept (`branch_kept`) — and the
   page's confirm says so (`closeAsk`, `madeWorktree` in
@@ -2101,7 +2106,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   palette, dialog kind `leftovers` → `LeftoversDialog.tsx`): `GET
   /api/machines/{id}/leftovers` lists, in one script (`LeftoversScript`:
   du for the size), every folder two levels under the root that no
-  workspace's folder or pane's cwd is in (`Leftovers`), with its branch,
+  workspace's folder or pane's cwd is in (`Leftovers`; a link there is none), with its branch,
   its first uncommitted change, or why git cannot read it (a folder with
   no linked worktree's `.git` file is only named); `POST
   …/leftovers/remove {paths}` takes each one still a leftover down with
@@ -2526,7 +2531,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   person's booking (`Book`, `POST /api/limits/continue {machine, pane,
   at}`, `DELETE` calls it off; at most `MaxAhead` 8 days ahead; kept in
   `limits.json`): `Loop` says "continue" when due through
-  `sessions.Input.Submit` — only to the conversation booked for, at rest
+  `sessions.Input.SubmitToAgent` — only to the conversation booked for, at rest
   and asking nothing (working again: dropped quietly; a question,
   another conversation or a pane its agent left: dropped with a push
   saying so, never typed into a shell) — a quiet "sent"
@@ -2615,7 +2620,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the lane's own index never moves), one script per machine, at most
   every 15 s. `Service.Keep(arena, lane)` keeps one and closes the
   others: each one's whole work saved by `PatchScript` (a binary patch
-  `git apply` takes back on the base) to
+  `git apply` takes back on the base, through the plumbing `diff-index`, which no diff setting of the person's changes; a lane whose base was never read is kept) to
   `<state>/arenas/arena-<id>-lane-<n>-<agent>.patch`, 0600, then its
   workspace closed and its worktree and the lane's own branch removed
   with `worktrees.Discard` (`ownBranch`: never a branch the lane's agent
@@ -2705,7 +2710,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Cloud, v2 on a server; Basic with the account and the token, else
   Bearer (a personal access token); `Timeout` 10 s, an answer capped at
   4 MB, an error naming the host alone — never the token or the address
-  (`ErrNotFound`, `ErrRefused`); `Myself`, `Projects` (Cloud's search a
+  (`ErrNotFound`, `ErrRefused`), no redirect followed off the site's
+  scheme, host and port but an upgrade to https (`stayOnSite`: Go's own
+  rule keeps the header for any port and scheme of the host); `Myself`, `Projects` (Cloud's search a
   page at a time), `Issue` (summary, status and its category, assignee),
   `Full` (with type, reporter, labels and the description made Markdown:
   `ADFMarkdown` for Cloud's document format, `WikiMarkdown` for a
@@ -2778,8 +2785,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Dates are RFC 3339 UTC strings, "" when unset. `GET /api/tasks?view=
   today|upcoming|open|proposed|project&project=&done=1&q=&page=&tz=` — the smart
   views cut by the viewer's local day (`tz`), `proposed` the open tasks
-  sitting in an `on_agent` column, newest first, every project's or one's,
-  the search case-folds in Go
+  sitting in an `on_agent` column, newest first, every project's or one's
+  (today and upcoming too: `tasks_list` keeps the view a project is named
+  with), the search case-folds in Go
   (SQLite's `lower()` is ASCII only), 50 a page; `POST /api/tasks`,
   `GET/PATCH/DELETE /api/tasks/{id}` (PATCH is partial: nil keeps, `""`
   clears a date), `PUT /api/tasks/{id}/labels {label_id}`, `DELETE
@@ -2817,8 +2825,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   column without After goes to the bottom. `PUT /api/tasks/projects/{id}/
   statuses {statuses, moves}` replaces the list whole (`SetStatuses`: id
   0 creates, a missing id is removed and its tasks go to `moves[old]`,
-  required while it has any; ≥1 open and ≥1 done; each flag at most
-  once). `view=board` lists a project whole in column order, one page,
+  required while it has any; ≥1 open besides the Queued one and ≥1 done;
+  each flag at most once). `view=board` lists a project whole in column order, one page,
   done columns capped at `BoardDone` (50 latest). **Fields**
   (`fields.go`): per project, `kind` text|number|select|multi|date|check|
   link, `options`, `on_card`, `in_prompt`; values sit in `task_fields` as
@@ -2896,11 +2904,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   HTML the page renders — paragraphs with line breaks, `#`–`####`
   headings, lists one level deep with `- [ ]` items as checkboxes,
   fenced and inline code, bold, italic, http links and bare addresses,
-  rules and quotes, everything escaped, `MaxMarkdown` 64 KB. On the
-  page a `.task-source` badge (the `bot` icon, the source in its Tip) in
+  rules and quotes, everything escaped, `MaxMarkdown` 64 KB, the links
+  read in time linear in a line (`linkScan`: a regexp tried at every `[`
+  took 46 s on a line of them). On the page a `.task-source` badge (the `bot` icon, the source in its Tip) in
   the list rows and the board cards, "by <source>" in the detail head;
   `.tasks-html` has styles for headings, quotes and rules. `POST /api/tasks/import
-  {machine, project_id, url}`; the page: `ImportIssueDialog.tsx` (dialog
+  {machine, project_id, url}` (an agent's key gets a 403: the import runs
+  gh as the person and files outside Proposed); the page: `ImportIssueDialog.tsx` (dialog
   kind `import-issue`, the link button in the Tasks head and the
   palette's "New task from a GitHub issue…"; Create, or Create & start an
   agent…), `issue.ts` tested (`isIssueURL`, `issueLink`, `issueLabel` —
@@ -3030,8 +3040,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   page's `withMark` / `withKind` in `workflow.ts`, tested, take the other
   mark off), `landing` never picks it (an agent's task, a task undone), a
   move to another project never lands in it by its name, and an agent's
-  key gets a 403 at `POST /api/tasks/{id}/start` as at the queue; a start
-  clears the card's `queue_refused`; the queue's `Unusable` says why the
+  key gets a 403 at `POST /api/tasks/{id}/start` as at the queue, and a
+  stage's column is never it (`SetAutomation` refuses one, `StartStageRun`
+  leaves the card); a start clears the card's `queue_refused`, or sets it
+  when the card stays queued (no column takes a started task), so the
+  queue starts it once until it moves; the queue's `Unusable` says why the
   host of a `-server` remuda runs no agents. The page:
   `ProjectSettings.tsx` holds `AgentsSettings.tsx` (machine, repository —
   `repositories`, the machine's own checkouts — agent, model, arguments,
@@ -3123,7 +3136,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   403 "this key is for tasks and reading only" at once, logged once an
   hour per key (`strayedKey`); the key's
   name is `auth.CallerName(ctx)` in a handler (a task made through one
-  carries it as its source). **Viewer links** (the same `Keys` store,
+  carries it as its source; "an agent" for a key of a machine with no
+  name, never "", which is the person's). **Viewer links** (the same `Keys` store,
   scope `viewer`, prefix `rv_…`, `MintViewer(name)` — several side by
   side, named for whose screen it is): a read-only sign-in for the TV in
   the office or a colleague watching a run. `ViewerAllows(method, path)`
@@ -3225,7 +3239,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (herdr's `send_keys` grammar), `RefOK` (a branch name git gets as an
   argument), and `Input`: one lock per pane, `Submit` (`agent.prompt`, else
   `send_text` + Enter; `ErrAgentBusy` while a menu is open), `SendKeys`,
-  `SubmitToFolder` (the scheduler's door); `StartIn(client, snap, dir,
+  `SubmitToAgent` (`agent.prompt` alone: a pane whose agent left is
+  `ErrNoAgent`, never typed into its shell — the schedules, the pull
+  requests' hand-offs and a booked continue), `SubmitToFolder` (the
+  scheduler's door, through it); `StartIn(client, snap, dir,
   label, kind, start)` (place.go, tested) starts an agent in a folder —
   a new tab of the folder's workspace when the snapshot has one, else a
   new workspace on the folder — and answers a `Place` (pane, tab,
@@ -3532,7 +3549,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   way in, drops a `Set-Cookie` of remuda's name and `Clear-Site-Data` on
   the way out (cookies are kept by host, not by port), opens only a port
   found listening, only at the person's Open, and closes when idle.
-  `decode` caps a JSON body at 1 MB; the `-addr` server has header and
+  `decode` caps a JSON body at 1 MB, `HandleLogin` the unsigned sign-in
+  form at 4 KB; the `-addr` server has header and
   idle timeouts. The sign-in URL is logged only on the first run or to a
   terminal; a wrong token is logged with the remote address and answered
   after 500 ms; `REMUDA_TOKEN` must be ≥ 32 characters. A browser's

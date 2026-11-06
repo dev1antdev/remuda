@@ -180,7 +180,7 @@ func gitHubAvatar(ctx context.Context, client *http.Client, owner string) ([]byt
 	if owner == "" {
 		return nil, fmt.Errorf("no owner")
 	}
-	data, _, err := fetch(ctx, client, GitHubBase+"/"+url.PathEscape(owner)+".png?size=128", MaxImage)
+	data, _, err := fetch(ctx, client, GitHubBase+"/"+url.PathEscape(owner)+".png?size=128", MaxImage, true)
 	return data, err
 }
 

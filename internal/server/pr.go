@@ -59,8 +59,8 @@ func (s *Server) prHandoff(compose func(host shell.Shell, label, url string) (st
 			httpErr(w, http.StatusBadGateway, fmt.Errorf("%s on %s: %w", prstatus.Tool(link.URL), mc.Label(), err))
 			return
 		}
-		if err := s.Input.Submit(client, events.PaneRef{Machine: mc.ID(), Pane: req.Pane}, text); err != nil {
-			if errors.Is(err, sessions.ErrAgentBusy) {
+		if err := s.Input.SubmitToAgent(client, events.PaneRef{Machine: mc.ID(), Pane: req.Pane}, text); err != nil {
+			if errors.Is(err, sessions.ErrAgentBusy) || errors.Is(err, sessions.ErrNoAgent) {
 				httpErr(w, http.StatusConflict, err)
 				return
 			}

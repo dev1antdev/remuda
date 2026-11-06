@@ -127,8 +127,14 @@ func (a *Automation) normalize(statuses []Status) error {
 		if err := checkStart(agentOr(s.Agent), s.Model, ""); err != nil {
 			return invalid(fmt.Sprintf("stage %q: %s", s.Name, err))
 		}
-		if s.StatusID != 0 && statusByID(statuses, s.StatusID) == nil {
-			return invalid(fmt.Sprintf("stage %q moves the card to a column this project does not have", s.Name))
+		if s.StatusID != 0 {
+			column := statusByID(statuses, s.StatusID)
+			if column == nil {
+				return invalid(fmt.Sprintf("stage %q moves the card to a column this project does not have", s.Name))
+			}
+			if column.OnQueue {
+				return invalid(fmt.Sprintf("stage %q moves the card to the Queued column, which only you fill", s.Name))
+			}
 		}
 	}
 	return nil
