@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { choosable, keysTo, questionLines } from "./question";
+import { choosable, keysTo, pressInTurn, questionLines } from "./question";
 
 const options = [
   { n: 1, label: "Yes", picked: false },
@@ -16,6 +16,23 @@ describe("keysTo", () => {
   it("starts at the first choice when none is picked", () => {
     const none = options.map((o) => ({ ...o, picked: false }));
     expect(keysTo(none, 2)).toEqual(["down", "down", "enter"]);
+  });
+});
+
+describe("pressInTurn", () => {
+  it("stops at the first key refused, so a lost ↓ is never followed by the Enter that would confirm the wrong choice", async () => {
+    const sent: string[] = [];
+    const went = await pressInTurn(["down", "down", "enter"], (key) => {
+      sent.push(key);
+      return sent.length !== 2;
+    });
+    expect(went).toBe(false);
+    expect(sent).toEqual(["down", "down"]);
+  });
+  it("sends every key when each goes, an answer of nothing counting as gone", async () => {
+    const sent: string[] = [];
+    expect(await pressInTurn(["up", "enter"], async (key) => void sent.push(key))).toBe(true);
+    expect(sent).toEqual(["up", "enter"]);
   });
 });
 

@@ -16,6 +16,13 @@ export function keysTo(options: QuestionOption[], index: number): string[] {
   return keys;
 }
 
+// pressInTurn sends the keys one request at a time and stops at the first one refused: an Enter after a lost ↓ would
+// confirm whatever choice the cursor still sits on
+export async function pressInTurn(keys: string[], press: (key: string) => Promise<boolean | void> | boolean | void): Promise<boolean> {
+  for (const key of keys) if ((await press(key)) === false) return false;
+  return true;
+}
+
 // questionLines splits the dialog's words: the first line heads it, the last line asks, what is between is the detail.
 export function questionLines(text: string): { head: string; detail: string; ask: string } {
   const lines = text.split("\n");

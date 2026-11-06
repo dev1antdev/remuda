@@ -7,7 +7,7 @@ import { useLive, useLiveConnected, watchPane } from "@/lib/live";
 import { useQuery } from "@/lib/query";
 import { fetchQuestion } from "./api";
 import { PromptKeys } from "./PromptKeys";
-import { choosable, keysTo, questionLines } from "./question";
+import { choosable, keysTo, pressInTurn, questionLines } from "./question";
 import { t } from "@/lib/i18n";
 
 export function QuestionCard({ machineId, paneId, active, compact = false, onKeys, children }: {
@@ -15,7 +15,7 @@ export function QuestionCard({ machineId, paneId, active, compact = false, onKey
   paneId: string;
   active: boolean; // read every 2 s only while on screen (10 s with the event socket up, and at once when the pane's status moves)
   compact?: boolean; // a tile: the head and the ask, the detail left out
-  onKeys: (keys: string[]) => Promise<void> | void;
+  onKeys: (keys: string[]) => Promise<boolean | void> | boolean | void; // false: the keys did not reach the pane
   children: ReactNode; // the words before the blind keys when the screen shows no dialog
 }) {
   const connected = useLiveConnected();
@@ -52,7 +52,7 @@ export function QuestionCard({ machineId, paneId, active, compact = false, onKey
   const choose = async (index: number) => {
     setSending(true);
     try {
-      for (const key of keysTo(asked.options, index)) await onKeys([key]);
+      await pressInTurn(keysTo(asked.options, index), (key) => onKeys([key]));
     } finally {
       setSending(false);
       setTimeout(reload, 600); // the screen after the answer: the next question, or none
