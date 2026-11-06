@@ -1767,7 +1767,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   digest) → `open-panel` or `openWindow(/?panel=standup)` instead, which
   `Shell.tsx` and `url.ts` answer; `pushsubscriptionchange`
   re-subscribes. `web/src/features/alerts/push.ts` is single-flight and re-registers on every
-  load with permission granted. Push needs a secure context: localhost or
+  load with permission granted — subscribing anew, the old endpoint named as
+  `old_endpoint`, when the browser's subscription was made under another key
+  than the server's (`resyncPush`, tested), since the push service refuses
+  every push to it. Push needs a secure context: localhost or
   `tailscale serve` HTTPS; iPhone needs the home-screen app.
 - `web/src/lib/shell.ts` — **the Mac app's bridge** (tested). The app
   announces itself as `window.remudaShell = {native: true, version}`

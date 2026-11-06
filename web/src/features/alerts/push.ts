@@ -50,11 +50,12 @@ async function serverKey(): Promise<string> {
   return ((await res.json()) as { public_key: string }).public_key;
 }
 
-async function register(sub: PushSubscription, prefs: Prefs): Promise<void> {
+async function register(sub: PushSubscription, prefs: Prefs, oldEndpoint?: string): Promise<void> {
   await sendJSON("POST", "/api/push/subscribe", {
     subscription: sub.toJSON(),
     prefs,
     label: navigator.userAgent.slice(0, 120),
+    ...(oldEndpoint ? { old_endpoint: oldEndpoint } : {}),
   });
 }
 
@@ -132,15 +133,29 @@ export function sendTestPush(endpoint: string): Promise<void> {
   return sendJSON("POST", "/api/push/test", { endpoint });
 }
 
-// resyncPush re-registers silently on every load with permission granted, so a server that lost its state regains this device.
-export async function resyncPush(prefs: Prefs): Promise<void> {
-  if (!support().ok || Notification.permission !== "granted") return;
-  try {
-    const sub = await currentSub();
-    if (sub) await register(sub, prefs);
-  } catch {
-    /* best effort */
-  }
+// resyncPush re-registers silently on every load with permission granted, so a server that lost its state regains this
+// device; a subscription made under another key than the server's — a new state folder, a cockpit moved to another
+// machine under the same address — can never be delivered to, so it is replaced with one under the server's key.
+export function resyncPush(prefs: Prefs): Promise<void> {
+  if (!support().ok || Notification.permission !== "granted") return Promise.resolve();
+  if (inflight) return inflight;
+  inflight = (async () => {
+    try {
+      const reg = await registration();
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) return;
+      const key = urlBase64ToUint8Array(await serverKey());
+      if (sameKey(sub, key)) return await register(sub, prefs);
+      const old = sub.endpoint;
+      await sub.unsubscribe();
+      await register(await subscribeOrSay(reg, key), prefs, old);
+    } catch {
+      /* best effort */
+    } finally {
+      inflight = null;
+    }
+  })();
+  return inflight;
 }
 
 function sameKey(sub: PushSubscription, key: Uint8Array<ArrayBuffer>): boolean {
