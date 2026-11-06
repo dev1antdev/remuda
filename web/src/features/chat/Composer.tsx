@@ -13,6 +13,7 @@ import { Icon, Notice, Tip } from "@/ui";
 import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
 import { useDictation } from "./dictation";
 import { expandPrompt, QuickPromptsButton, QuickPromptsDialog } from "./QuickPrompts";
+import { leftAfterSend } from "./history";
 import { useHistory } from "./useHistory";
 import { applyPick, listFor, stillDismissed, tokenAt, type Dismissed, type Item } from "./complete";
 import { CompletionList, useCompletion } from "./Completion";
@@ -168,15 +169,18 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
     att.remove(a.id);
   };
 
+  // the box stays open while the send is out: what is typed or attached meanwhile stays for the next message
   const send = async () => {
-    const text = draft.trim();
+    const sent = draftRef.current;
+    const text = sent.trim();
     if (!text || sending || att.uploading) return;
+    const went = att.items.map((a) => a.id);
     setSending(true);
     try {
       await submitPrompt(machineId, paneId, text);
       history.add(text);
-      setDraft("");
-      att.clear();
+      setDraft((d) => leftAfterSend(d, sent));
+      went.forEach((id) => att.remove(id));
       setError(null);
     } catch (e) {
       setError(errMsg(e));
