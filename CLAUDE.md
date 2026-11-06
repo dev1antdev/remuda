@@ -1965,7 +1965,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and neutral names (`paneEntries(…, masked)`), every command's words
   through `redact`; toasts, Activity rows (a hidden folder's body replaced)
   and the Mac app's menu (`maskFeed` in `app/shellFeed.ts`, tested) say the
-  neutral names. Nothing sent to or kept by the server changes; pushes,
+  neutral names, and so do every confirm and the dialogs the menus and the
+  palette open — leftovers, MAC address, Updates, Update everywhere, the
+  move to another machine, a new workspace, tab or worktree, the folder
+  picker, the arenas (`sharingDialogs.test.ts`; a rename's field keeps the
+  name it changes). Nothing sent to or kept by the server changes; pushes,
   webhooks, standup and usage reports are not masked.
 - `internal/said/` — the first line of every finished agent's last answer,
   for the roster (`pane.said`) and so for the sidebar row and the wall
