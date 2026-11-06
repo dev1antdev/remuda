@@ -73,13 +73,25 @@ func stayOnSite(site string) func(*http.Request, []*http.Request) error {
 			return errors.New("the site's address is not usable")
 		}
 		dest := req.URL
-		same := dest.Scheme == base.Scheme && strings.EqualFold(dest.Host, base.Host)
-		upgrade := base.Scheme == "http" && dest.Scheme == "https" && strings.EqualFold(dest.Hostname(), base.Hostname())
+		sameHost := strings.EqualFold(dest.Hostname(), base.Hostname())
+		same := dest.Scheme == base.Scheme && sameHost && portOf(dest) == portOf(base)
+		upgrade := base.Scheme == "http" && dest.Scheme == "https" && sameHost
 		if !same && !upgrade {
 			return errors.New("it sent the request off the site, where the token does not go")
 		}
 		return nil
 	}
+}
+
+// portOf is the port an address reaches, its scheme's own when it names none.
+func portOf(u *url.URL) string {
+	if port := u.Port(); port != "" {
+		return port
+	}
+	if u.Scheme == "https" {
+		return "443"
+	}
+	return "80"
 }
 
 // api is the REST path of the site's version: 3 on Cloud, 2 on a server.
