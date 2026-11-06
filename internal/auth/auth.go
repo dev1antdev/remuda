@@ -147,7 +147,8 @@ func DeviceID(ctx context.Context) string {
 	return id
 }
 
-// CallerName is the name of the agent key a request came with (the machine it was placed on), "" for the token or a device.
+// CallerName is the name of the agent key a request came with (the machine it was placed on, "an agent" when it has
+// none), "" for the token or a device.
 func CallerName(ctx context.Context) string {
 	name, _ := ctx.Value(callerKey{}).(string)
 	return name
@@ -187,7 +188,7 @@ func (g *Guard) Middleware(next http.Handler) http.Handler {
 					http.Error(w, who.key.Reach(), http.StatusForbidden)
 					return
 				}
-				ctx := context.WithValue(r.Context(), callerKey{}, who.key.Name)
+				ctx := context.WithValue(r.Context(), callerKey{}, who.key.caller())
 				next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, viewerKey{}, who.viewer)))
 				return
 			}
@@ -247,8 +248,12 @@ func (g *Guard) viewerLink(w http.ResponseWriter, r *http.Request, presented str
 	http.Redirect(w, r, u.String(), http.StatusSeeOther)
 }
 
+// maxLoginForm bounds the sign-in form, which anybody may send: a token and room to spare, never megabytes held in memory.
+const maxLoginForm = 4 << 10
+
 // HandleLogin signs the browser in with a posted token.
 func (g *Guard) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxLoginForm)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return

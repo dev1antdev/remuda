@@ -60,10 +60,7 @@ func (s *Server) handleViewerKeyMint(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, errors.New("a name for the link, please: whose screen it is"))
 		return
 	}
-	if len(name) > 80 {
-		name = name[:80]
-	}
-	key, rec, err := store.MintViewer(name)
+	key, rec, err := store.MintViewer(cutBetweenLetters(name, 80))
 	if err != nil {
 		httpErr(w, 500, err)
 		return

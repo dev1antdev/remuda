@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/state"
 )
@@ -155,10 +156,7 @@ func (d *Devices) Rename(id, name string) (Device, error) {
 	if name == "" {
 		name = device.Kind()
 	}
-	if len(name) > 80 {
-		name = name[:80]
-	}
-	device.Name = name
+	device.Name = cutBetweenLetters(name, 80)
 	if err := d.saveLocked(); err != nil {
 		return Device{}, err
 	}
@@ -238,6 +236,17 @@ func (d *Devices) sortedLocked() []Device {
 func hashOf(secret string) string {
 	sum := sha256.Sum256([]byte(secret))
 	return hex.EncodeToString(sum[:])
+}
+
+// cutBetweenLetters keeps at most max bytes of s, ending between characters rather than inside one.
+func cutBetweenLetters(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	for max > 0 && !utf8.RuneStart(s[max]) {
+		max--
+	}
+	return s[:max]
 }
 
 func trimAgent(agent string) string {
