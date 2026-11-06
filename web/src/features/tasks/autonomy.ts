@@ -87,3 +87,14 @@ export function whyNotQueue(a: Automation, statuses: Status[]): string {
   if (!queueColumn(statuses)) return t("Mark a column Queued first");
   return "";
 }
+
+// whyNotSave is what the server would refuse in the agents' settings, "" when nothing: the columns are saved before
+// them, so a refusal there would leave the edit half saved — or, for a queue whose column went, saved with the queue on
+// and nothing for it to start
+export function whyNotSave(a: Automation, statuses: Status[]): string {
+  if (a.queue && (!a.machine || !a.dir)) return t("The queue needs a machine and a repository, or switch it off");
+  if (a.queue && !queueColumn(statuses)) return t("The queue needs a column marked Queued, or switch it off");
+  const at = a.stages.findIndex((s) => !s.pr && !s.prompt.trim());
+  if (at >= 0) return t("Stage {n} needs a prompt", { n: at + 1 });
+  return "";
+}

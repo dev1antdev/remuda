@@ -12,6 +12,7 @@ import { FormDialog, Icon, Logo, Select, Tip, useSubmit } from "@/ui";
 import type { AgentKind, Machine, Session, StartExtras } from "./api";
 import FolderPicker from "./FolderPicker";
 import { machineOptions } from "./options";
+import { useSharing } from "./useSharing";
 import { choiceFor, CUSTOM, EMPTY_DRAFT, hasModelFlag, hasOptions, lastModelKey, modelChoices, modelPlaceholder, optionsFor, type Draft } from "./startOptions";
 import { t } from "@/lib/i18n";
 
@@ -174,9 +175,10 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, defaultDi
     await onCreate(machine, dir.trim(), name.trim(), agent, extras());
   });
   const target = machines.find((m) => m.id === machine);
-  const options = machineOptions(machines, { onlyConnected: false }).map((o) => {
+  const share = useSharing(); // under the screen-sharing mode the machines by their neutral names, their hosts unsaid
+  const options = machineOptions(machines, { onlyConnected: false, label: share.machineLabel }).map((o) => {
     const m = machines.find((x) => x.id === o.value);
-    return m && m.state !== "connected" ? { ...o, hint: m.state, disabled: true } : { ...o, hint: m?.host };
+    return m && m.state !== "connected" ? { ...o, hint: m.state, disabled: true } : { ...o, hint: m && share.machineHidden(m.id) ? undefined : m?.host };
   });
   return (
     <FormDialog title={t("New workspace")} icon="folder" onClose={onClose} submit={submit} submitLabel={t("Create")}>
@@ -188,7 +190,7 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, defaultDi
       )}
       <label>
         {t("Project folder")}
-        {target && target.id !== "local" ? ` ${t("on {machine}", { machine: target.label })}` : ""}
+        {target && target.id !== "local" ? ` ${t("on {machine}", { machine: share.machineLabel(target) })}` : ""}
         <span className="field-row">
           <input autoFocus={!defaultDir} value={dir} placeholder="/Users/you/Projects/app" onChange={(e) => setDir(e.target.value)} />
           <Tip text={t("Browse the folders on the machine")}>
@@ -229,8 +231,9 @@ export function NewTabDialog({ session, agents, onCreate, onClose }: {
   const [name, setName] = useState("");
   const { agent, pickAgent, draft, setDraft, options, applyRecipe } = useStart("shell");
   const submit = useSubmit(() => onCreate(name.trim(), agent, options()));
+  const { redact } = useSharing(); // under the screen-sharing mode the workspace by its neutral name
   return (
-    <FormDialog title={t("New tab in {workspace}", { workspace: session.name })} icon="plus" hint={t("Opens in the workspace's folder, like herdr's prefix+c.")} onClose={onClose} submit={submit} submitLabel={t("Create tab")}>
+    <FormDialog title={t("New tab in {workspace}", { workspace: redact(session.name) })} icon="plus" hint={t("Opens in the workspace's folder, like herdr's prefix+c.")} onClose={onClose} submit={submit} submitLabel={t("Create tab")}>
       <label>
         {t("Name (optional)")}
         <input autoFocus value={name} placeholder="tests" onChange={(e) => setName(e.target.value)} />
@@ -255,7 +258,8 @@ export function NewWorktreeDialog({ session, agents, onCreate, onClose }: {
     if (!branch.trim()) throw new Error(t("Branch name is required"));
     await onCreate(branch.trim(), base.trim(), name.trim(), agent, options());
   });
-  const repo = session.worktree?.repo_name ?? session.name;
+  const { redact } = useSharing(); // under the screen-sharing mode the repository by its neutral name
+  const repo = redact(session.worktree?.repo_name ?? session.name);
   return (
     <FormDialog
       title={t("New workspace in {repo}", { repo })}
@@ -301,7 +305,7 @@ export function AddMachineDialog({ onAdd, onClose }: { onAdd: (label: string, ho
   const [host, setHost] = useState("");
   const [label, setLabel] = useState("");
   const submit = useSubmit(async () => {
-    if (!host.trim()) throw new Error("SSH host is required");
+    if (!host.trim()) throw new Error(t("SSH host is required"));
     await onAdd(label.trim(), host.trim());
   });
   return (

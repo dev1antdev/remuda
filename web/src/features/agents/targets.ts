@@ -1,6 +1,8 @@
 // An agent pane from herdr's roster, flattened for the pickers that send text to one.
 
 import type { Machine } from "@/features/roster/api";
+import { folderOf } from "@/features/roster/workspaces";
+import { VENDOR_NAME } from "@/ui/brand";
 
 export type AgentTarget = {
   machineId: string;
@@ -11,6 +13,7 @@ export type AgentTarget = {
   agent: string;
   status: string;
   cwd: string;
+  folder?: string; // the workspace's folder, the one the screen-sharing mode hides
 };
 
 export const targetKey = (a: { machineId: string; paneId: string }) => `${a.machineId}|${a.paneId}`;
@@ -32,7 +35,14 @@ export function agentTargets(machines: Machine[]): AgentTarget[] {
             agent: pane.agent,
             status: pane.status,
             cwd: pane.cwd,
+            folder: folderOf(session),
           });
         }
   return out;
+}
+
+// targetWords is how a picker names an agent: its workspace and its tab or conversation, or, while the screen-sharing
+// mode hides its folder (masked: the folder's neutral name), that name and the agent's kind, as the tab strip says it
+export function targetWords(a: AgentTarget, masked: string | null): string {
+  return masked === null ? `${a.sessionName} › ${a.paneTitle}` : `${masked} › ${VENDOR_NAME[a.agent] ?? a.agent}`;
 }

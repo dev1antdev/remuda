@@ -32,6 +32,11 @@ describe("bubbleOf", () => {
     expect(bubbleOf(pane(), "done")).toBe("");
   });
 
+  it("never cuts an answer between the halves of an emoji", () => {
+    const bubble = bubbleOf(pane({ said: `a${"🚀".repeat(60)}` }), "done");
+    expect(bubble).toBe(`a${"🚀".repeat(44)}…`);
+  });
+
   it("cuts a long answer at a word", () => {
     const long = pane({ said: "word ".repeat(40).trim() });
     const bubble = bubbleOf(long, "done");

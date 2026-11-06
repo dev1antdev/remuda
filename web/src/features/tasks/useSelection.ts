@@ -7,6 +7,7 @@ import { isTouch } from "@/lib/prefs";
 import { addTaskLabel, deleteTask, patchTask, type Label, type Status, type Task } from "./api";
 import { columnChoices, deleteWords, labelChoices, outcomeWords, plan, runInSequence, type Action, type Request } from "./bulk";
 import { NONE, isSelected, prune, range, toggle, type Pick, type Selection } from "./selection";
+import { t } from "@/lib/i18n";
 
 const send = (r: Request) => (r.op === "patch" ? patchTask(r.id, r.fields) : r.op === "label" ? addTaskLabel(r.id, r.labelId) : deleteTask(r.id));
 
@@ -51,7 +52,7 @@ export function useSelection({ tasks, labels, columns, drop, refresh }: {
     refresh();
   };
   const act = (action: Action) => {
-    if (action.kind === "delete") actions.ask(deleteWords(count), "Delete", () => void run(action));
+    if (action.kind === "delete") actions.ask(deleteWords(count), t("Delete"), () => void run(action));
     else void run(action);
   };
 

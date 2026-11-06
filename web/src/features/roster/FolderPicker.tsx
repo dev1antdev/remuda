@@ -10,6 +10,7 @@ import { folderOptions } from "@/features/roster/options";
 import { basename } from "@/lib/text";
 import { Dialog, Notice, Tip } from "@/ui";
 import { useQuery } from "@/lib/query";
+import { useSharing } from "@/features/roster/useSharing";
 import { t } from "@/lib/i18n";
 
 export default function FolderPicker({ machine, machines, start, onPick, onClose }: {
@@ -29,9 +30,10 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
   const go = (p: string) => setPath(p);
   const crumbs = data?.path ? data.path.split("/").filter(Boolean) : [];
   const known = folderOptions(machines, machine.id);
+  const { machineLabel, redact } = useSharing(); // under the screen-sharing mode the machine and the workspaces by their neutral names
   const here = data?.path ?? path;
   return (
-    <Dialog title={t("Folder on {machine}", { machine: machine.label.split(" · ")[0] ?? "" })} icon="folder" size="md" onClose={onClose} className="picker">
+    <Dialog title={t("Folder on {machine}", { machine: machineLabel(machine).split(" · ")[0] ?? "" })} icon="folder" size="md" onClose={onClose} className="picker">
       <form
         className="picker-path"
         onSubmit={(e) => {
@@ -89,10 +91,10 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
       </div>
       {known.length > 0 && (
         <div className="picker-known">
-          <span className="dim">{t("Workspaces on {machine}", { machine: machine.label })}</span>
+          <span className="dim">{t("Workspaces on {machine}", { machine: machineLabel(machine) })}</span>
           {known.map((o) => (
-            <button key={o.value} type="button" className="linkish" title={o.value} onClick={() => onPick(o.value)}>
-              <Icon name="folder" size={12} /> {o.label}
+            <button key={o.value} type="button" className="linkish" title={redact(o.value)} onClick={() => onPick(o.value)}>
+              <Icon name="folder" size={12} /> {redact(o.label)}
             </button>
           ))}
         </div>

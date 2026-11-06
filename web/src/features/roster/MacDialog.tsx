@@ -6,9 +6,11 @@ import { FormDialog, useSubmit } from "@/ui";
 import { t } from "@/lib/i18n";
 import { setMachineMAC, type Machine } from "./api";
 import { isMAC } from "./wake";
+import { useSharing } from "./useSharing";
 
 export function MacDialog({ machine, onClose }: { machine: Machine; onClose: () => void }) {
   const [mac, setMac] = useState(machine.mac ?? "");
+  const { machineLabel } = useSharing();
   const submit = useSubmit(async () => {
     const value = mac.trim();
     if (value && !isMAC(value)) throw new Error(t("An address looks like aa:bb:cc:dd:ee:ff"));
@@ -17,7 +19,7 @@ export function MacDialog({ machine, onClose }: { machine: Machine; onClose: () 
   });
   return (
     <FormDialog
-      title={t("MAC address of {machine}", { machine: machine.label })}
+      title={t("MAC address of {machine}", { machine: machineLabel(machine) })}
       icon="monitor"
       hint={t("Wake up sends the magic packet to this address on every network this remuda is on — the machine must be on the same one, with Wake-on-LAN allowed in its firmware. Leave it empty to forget the address.")}
       onClose={onClose}

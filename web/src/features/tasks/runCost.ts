@@ -4,14 +4,15 @@ import { elapsed } from "@/lib/time";
 import { usd } from "@/features/usage/format";
 import type { Run, Task } from "./api";
 
-type Spent = Pick<Run, "state" | "started" | "cost" | "model" | "took">;
+type Spent = Pick<Run, "state" | "started" | "finished" | "cost" | "model" | "took">;
 
-// runSeconds is how long a run has taken: its own figure once it finished, else the time since it started;
-// nothing for a pane that went away before any finish was noted
+// runSeconds is how long a run has taken: its own figure once it finished — from the start to the finish noted when the
+// meter never read the pane — else the time since it started; nothing for a pane that went away before any finish was noted
 export function runSeconds(run: Spent, now: number): number {
   if (run.took && run.took > 0) return run.took;
   if (run.state === "gone" || run.state === "failed") return 0;
-  return Math.max(0, Math.round((now - new Date(run.started).getTime()) / 1000));
+  const end = run.state === "finished" && run.finished ? new Date(run.finished).getTime() : now;
+  return Math.max(0, Math.round(((Number.isNaN(end) ? now : end) - new Date(run.started).getTime()) / 1000));
 }
 
 // runTime says the seconds as a span: "40 s", "38 min", "1 h 12 min"

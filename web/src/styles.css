@@ -5179,6 +5179,9 @@ button.usage-row:hover {
 }
 
 .row-menu.color-menu {
+  position: absolute;
+  left: 0;
+  top: 100%;
   flex-direction: row;
   flex-wrap: wrap;
   min-width: 0;
