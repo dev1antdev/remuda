@@ -2327,7 +2327,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   it opens the page on the pane instead, as a choice does
   (`app/serviceWorker.test.ts` runs `sw.js` on stand-ins) — (a question's push
   carries its choices the same way, see `internal/push`).
-- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — things on a timetable, three **kinds**
+- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either, a day field that starts with `*` — `*/2` too — is unrestricted; a minute the hour a clock falls back repeats does not run again, `wallMinute`, and `Next` says so) — things on a timetable, three **kinds**
   (`Kind`, `prompt` for a record from before the field). A **prompt**
   schedule names a machine and a **folder** (panes come and go; the
   project stays), a five-field cron in the server's local time
