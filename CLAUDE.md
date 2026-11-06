@@ -1635,7 +1635,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   to the pane, a digest's standup or, for a budget or a plan limit, the
   Usage panel; a question standing until opened, dismissed or no longer
   asked — the roster's radar no longer blocked, answered anywhere — the
-  rest `LINGER_MS` 15 s; under the screen-sharing mode a hidden folder's
+  rest `LINGER_MS` 15 s, an `input` alert whose pane was never seen asking
+  (a first prompt not delivered) among them; under the screen-sharing mode a hidden folder's
   alert says "hidden while sharing" for its words, as an Activity row;
   an optional chime, pref `alerts.sound`, off, silent inside the device's
   quiet hours); the first roster only seeds, and neither the Mac app nor
