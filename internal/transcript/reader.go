@@ -386,7 +386,8 @@ func (r *Reader) Predecessor(path string) string {
 	return earlier
 }
 
-// nextContinuation is one hop, cached for a minute.
+// nextContinuation is one hop, cached for a minute; a remote that does not answer keeps what was known for another
+// minute, and when nothing was, is asked again next time.
 func (r *Reader) nextContinuation(path string) string {
 	r.mu.Lock()
 	known, ok := r.continuation[path]
@@ -399,6 +400,10 @@ func (r *Reader) nextContinuation(path string) string {
 		next = Continuation(path)
 	} else if out, err := shell.Text(r.host, ContinuationScript(script.Quote(path)), 20*time.Second); err == nil {
 		next = strings.TrimSpace(out)
+	} else if ok {
+		next = known.next
+	} else {
+		return ""
 	}
 	r.mu.Lock()
 	r.continuation[path] = continuation{next: next, at: time.Now()}
