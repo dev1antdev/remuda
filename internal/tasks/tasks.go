@@ -1620,7 +1620,7 @@ func (st *Store) StartRun(r Run) (Run, error) {
 	// where the note keeps the queue from starting it again until the person moves it
 	held := ""
 	if c := statusByID(ss, r.Expect); c != nil && c.OnQueue {
-		held = "an agent was started on it already; move the card out of Queued and back for the queue to start another"
+		held = "an agent was started on it already" // the page goes on: move the card out of Queued and back to try again
 	}
 	if _, err := tx.Exec(`UPDATE tasks SET queue_refused = ? WHERE id = ?`, held, r.TaskID); err != nil {
 		return r, err
