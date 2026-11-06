@@ -186,7 +186,7 @@ func (r *Reader) subagentFile(path string, version Version) ([]Turn, error) {
 	if r.host.Local() {
 		return parseFile(path, true)
 	}
-	data, err := r.remoteTailIn(r.subTails, path, version, 32)
+	data, err := r.remoteTailIn(r.subTails, path, version, remoteSubTailsBudget)
 	if err != nil {
 		return nil, err
 	}

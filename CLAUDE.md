@@ -227,8 +227,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   transports**: a forwarded unix socket when the sshd allows streamlocal
   forwarding, else one `ssh host nc -U <sock>` exec per request
   (one sshd on :2222 answers "unknown channel type"). Remote
-  transcripts are fetched by `stat` + `tail -c` delta into a small
-  per-session byte cache (`transcript.Reader.Turns` hides local vs remote);
+  transcripts are fetched by `stat` + `tail -c` delta into a per-machine
+  byte cache (`transcript.Reader.Turns` hides local vs remote; the last
+  8 MB of a file, 128 MB of tails in all and 64 MB of subagents', the
+  ones read longest ago going first, never one read in the last minute
+  for a file not cached yet: a wall of agents reads every file in turn);
   `Reader.ResolveSession` finds `<uuid>.jsonl` and caches the hit on both sides.
   `Machine.Ready()` reconnects a dead remote at most every 15s; a removed
   machine never reconnects and its watcher loop exits. **A sleeping
@@ -2432,7 +2435,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   tokens}` — context = the last response's input + cache tokens.
   The live session's `<session>/subagents/*.jsonl` (listed in one round
   trip, `Reader.DirVersions`) and sidechain records count toward the pane
-  too — the number should agree with Claude Code's own. **Report**: `Scan` (`GET /api/usage?days=&machine=
+  too, less the copy of the parent's response a fork's file opens with
+  — the number should agree with Claude Code's own. **Report**: `Scan` (`GET /api/usage?days=&machine=
   &tz=`, since = a local midnight) walks `~/.claude/projects` for files
   written since, oldest first, each message id once across the files (a
   continuation's copied tail is credited to the session that made it),

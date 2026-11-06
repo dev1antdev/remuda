@@ -10,7 +10,7 @@ export type BudgetTone = "" | "dim" | "amber" | "red";
 
 export const PERIODS: { value: Period; label: string }[] = [
   { value: "day", label: t("A day") },
-  { value: "week", label: "A week (from Monday)" },
+  { value: "week", label: t("A week (from Monday)") },
   { value: "month", label: t("A month") },
 ];
 
@@ -50,7 +50,7 @@ export function tightest(list: BudgetStatus[]): BudgetStatus | null {
 }
 
 // periodWords: today, this week, this month
-export const periodWords = (p: Period): string => (p === "week" ? "this week" : p === "month" ? "this month" : "today");
+export const periodWords = (p: Period): string => (p === "week" ? t("this week") : p === "month" ? t("this month") : t("today"));
 
 // budgetWords: "$16.40 of $20.0 this week · 82 %", or what is known while the spend is not read yet; a spend many
 // times the limit says so instead of a number nobody reads
@@ -68,7 +68,7 @@ export function missingWords(b: BudgetStatus, machineLabel: (id: string) => stri
 
 // scopeWords: "everything", a machine's name, or "<machine> · <folder>"
 export function scopeWords(b: BudgetStatus, machineLabel: (id: string) => string): string {
-  if (!b.machine) return "everything";
+  if (!b.machine) return t("everything");
   if (!b.dir) return machineLabel(b.machine);
   return `${machineLabel(b.machine)} · ${basename(b.dir)}`;
 }

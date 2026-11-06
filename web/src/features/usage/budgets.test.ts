@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
+import { ru } from "@/lib/i18n/ru";
 import type { BudgetStatus } from "./api";
-import { budgetTone, budgetWords, budgetsFor, graver, missingWords, periodWords, ratio, scopeWords, tightest, toneClass } from "./budgets";
+import { budgetTone, budgetWords, budgetsFor, graver, missingWords, PERIODS, periodWords, ratio, scopeWords, tightest, toneClass } from "./budgets";
 
 const budget = (over: Partial<BudgetStatus> = {}): BudgetStatus => ({
   id: "b",
@@ -88,5 +90,16 @@ describe("words", () => {
     expect(scopeWords(budget(), label)).toBe("everything");
     expect(scopeWords(budget({ machine: "gog" }), label)).toBe("GOG");
     expect(scopeWords(budget({ machine: "gog", dir: "/home/me/remuda" }), label)).toBe("GOG · remuda");
+  });
+  it("speaks the page's language, the period and the scope too", () => {
+    setLang("ru");
+    try {
+      expect(budgetWords(budget())).toBe("$16.4 из $20.0 на этой неделе · 82 %");
+      expect(budgetWords(budget({ period: "month", collected: undefined }))).toBe("$20.0 в этом месяце · читаем…");
+      expect(scopeWords(budget(), (id) => id)).toBe("всё");
+      expect(PERIODS.filter((p) => !ru[p.label]).map((p) => p.label)).toEqual([]);
+    } finally {
+      setLang("en");
+    }
   });
 });
