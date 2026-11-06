@@ -3035,7 +3035,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   "Add a Queued column") and `PipelineSettings.tsx` (the stages);
   `autonomy.ts` the pure part, tested: `automationOf`, `queueWords`,
   `stageWords` (the task's run block), `repositories`, `saveable`,
-  `sameAutomation`, `whyNotQueue`.
+  `sameAutomation`, `whyNotQueue`, `whyNotSave` (Save held while the
+  queue has no place or Queued column, or a stage no prompt: the columns
+  are saved first, so a refusal after them would leave half a save).
 - `internal/mcp/` + `internal/tasksapi/` — **the agents and the tasks**.
   `remuda mcp` is a Model Context Protocol server over stdio
   (`mcp.Server`: hand-written JSON-RPC 2.0, one message a line, no
