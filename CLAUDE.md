@@ -1552,7 +1552,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `session.snapshot` (2s local, 4s remote) whether or not a browser is
   open. Handlers read its cache (`Snapshot` returns the last good snapshot
   plus the last error) and never ask herdr inline; mutations call `Refresh`.
-  It publishes `events.Snapshot` and one `events.PaneStatus` per pane
+  It publishes `events.Snapshot` — once the snapshot is in its cache, so
+  an ear asking `Snapshot` about the panes is told of the same one (tested)
+  — and one `events.PaneStatus` per pane
   status transition (push, the restarts and the radar hear them); the
   first snapshot of a machine only seeds state — a reconnect must not
   replay a day of alerts.
