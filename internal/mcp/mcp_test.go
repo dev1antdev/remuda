@@ -256,6 +256,27 @@ func TestReadToolsSeeTheOtherAgents(t *testing.T) {
 	}
 }
 
+func TestAProjectKeepsTheViewAskedFor(t *testing.T) {
+	web := httptest.NewServer(&fakeList{})
+	t.Cleanup(web.Close)
+	tools := &Tools{Client: tasksapi.New(tasksapi.Door{URL: web.URL, Key: "rk_test"})}
+	for _, c := range []struct {
+		args ListArgs
+		view string
+	}{
+		{ListArgs{View: "today", Project: "remuda"}, "today"},
+		{ListArgs{View: "upcoming", Project: "1"}, "upcoming"},
+		{ListArgs{Project: "remuda"}, "project"},
+		{ListArgs{View: "open", Project: "remuda"}, "project"},
+		{ListArgs{View: "today", Project: "remuda", Done: true}, "project"},
+	} {
+		q, _, err := tools.Query(c.args)
+		if err != nil || q.View != c.view || q.Project != 1 {
+			t.Errorf("%+v: view %q project %d (%v), want %q in project 1", c.args, q.View, q.Project, err, c.view)
+		}
+	}
+}
+
 func TestRefusalsAndUnknowns(t *testing.T) {
 	srv, _ := newServer(t)
 	answers := session(t, srv,

@@ -1470,9 +1470,17 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 		tomorrow := time.Date(y, m, d+1, 0, 0, 0, 0, loc)
 		where = append(where, "done = 0", "due_date != ''", "due_date < ?")
 		args = append(args, tomorrow.UTC().Format(time.RFC3339))
+		if q.Project != 0 {
+			where = append(where, "project_id = ?")
+			args = append(args, q.Project)
+		}
 	case "upcoming":
 		where = append(where, "done = 0", "due_date != ''", "due_date < ?")
 		args = append(args, now.Add(7*24*time.Hour).UTC().Format(time.RFC3339))
+		if q.Project != 0 {
+			where = append(where, "project_id = ?")
+			args = append(args, q.Project)
+		}
 	case "open":
 		where = append(where, "done = 0")
 	case "proposed":

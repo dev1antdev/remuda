@@ -2774,8 +2774,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Dates are RFC 3339 UTC strings, "" when unset. `GET /api/tasks?view=
   today|upcoming|open|proposed|project&project=&done=1&q=&page=&tz=` — the smart
   views cut by the viewer's local day (`tz`), `proposed` the open tasks
-  sitting in an `on_agent` column, newest first, every project's or one's,
-  the search case-folds in Go
+  sitting in an `on_agent` column, newest first, every project's or one's
+  (today and upcoming too: `tasks_list` keeps the view a project is named
+  with), the search case-folds in Go
   (SQLite's `lower()` is ASCII only), 50 a page; `POST /api/tasks`,
   `GET/PATCH/DELETE /api/tasks/{id}` (PATCH is partial: nil keeps, `""`
   clears a date), `PUT /api/tasks/{id}/labels {label_id}`, `DELETE
