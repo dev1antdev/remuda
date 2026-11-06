@@ -118,6 +118,19 @@ func TestLoginFormMintsDevice(t *testing.T) {
 	}
 }
 
+// The sign-in form is the one write anybody may send unsigned: a token is short, so a body of megabytes is refused
+// before it is read into memory, not parsed in full and then answered as a wrong token.
+func TestLoginFormRefusesAHugeBody(t *testing.T) {
+	g, _ := newGuard(t)
+	req := httptest.NewRequest("POST", "/api/login", strings.NewReader("token="+strings.Repeat("x", 4<<20)))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	g.HandleLogin(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("a 4 MB sign-in form: %d, want 400 before it is read whole", rec.Code)
+	}
+}
+
 func TestLegacyCookieUpgraded(t *testing.T) {
 	g, h := newGuard(t)
 	res := get(h, "/api/roster", &http.Cookie{Name: CookieName, Value: testToken}, chromeMac)

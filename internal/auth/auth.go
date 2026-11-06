@@ -248,8 +248,12 @@ func (g *Guard) viewerLink(w http.ResponseWriter, r *http.Request, presented str
 	http.Redirect(w, r, u.String(), http.StatusSeeOther)
 }
 
+// maxLoginForm bounds the sign-in form, which anybody may send: a token and room to spare, never megabytes held in memory.
+const maxLoginForm = 4 << 10
+
 // HandleLogin signs the browser in with a posted token.
 func (g *Guard) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxLoginForm)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
