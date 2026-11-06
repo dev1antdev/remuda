@@ -1,4 +1,5 @@
 import { readPref } from "@/lib/prefs";
+import { inShell, tellShell } from "@/lib/shell";
 import type { Prefs, Quiet } from "@/features/alerts/push";
 
 export const DEFAULT_ALERT_PREFS: Prefs = { input: true, done: "long", watchdog: true };
@@ -18,3 +19,9 @@ export function readAlertPrefs(): Prefs {
 
 // readQuietWindow is the window last set on this device, kept while quiet hours are off so turning them on again brings it back.
 export const readQuietWindow = (): Omit<Quiet, "tz"> => readPref("alerts.quiet", DEFAULT_QUIET);
+
+// tellAppPrefs hands this device's switches and quiet hours to the Mac app, whose socket device the server alerts by
+// them as it does a browser by its subscription's; false outside the app
+export function tellAppPrefs(prefs: Prefs): boolean {
+  return inShell() && tellShell({ type: "alerts", prefs });
+}

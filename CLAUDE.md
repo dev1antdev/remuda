@@ -1791,7 +1791,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `MAX_ROWS` 12, as `{machine, machineLabel, pane, workspace, title,
   said, tone, state}` (`said` is "waiting for an answer" for a question,
   the watchdog's note for an amber one, else the first line of the last
-  answer) and counts the rest as working or idle. Functions in, defined
+  answer) and counts the rest as working or idle; `{type: "alerts",
+  prefs}` (`tellAppPrefs` in `features/alerts/prefs.ts`, tested) on every
+  load and every change in the alerts panel — the app's socket device on
+  the server goes by the switches and quiet hours set there, as a browser
+  by its subscription's. Functions in, defined
   by Shell.tsx beside the service worker's messages: `select(machine,
   pane)` opens the pane on its chat, `openPanel(name)` a panel `panelOf`
   knows, `openMode(name)` a mode (`agents` is the first), `alert` is
@@ -3451,8 +3455,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `MainMenu`, `AppDelegate` (the
   wiring). **The bridge**: the app injects `window.remudaShell = {native,
   version}` at document start and listens on the script message handler
-  `remuda`; the page posts `ready`, `badge {count, tone}` and `menu
-  {rows, working, idle}` as they change and defines
+  `remuda`; the page posts `ready`, `badge {count, tone}`, `menu
+  {rows, working, idle}` and `alerts {prefs}` (which `AlertSocket.use`
+  hands to `POST /api/push/socket`, one call at a time) as they change and defines
   `remudaShell.select(machine, pane)`, `.openPanel(name)` and
   `.openMode(mode)`, which the app calls. The user agent ends in
   `remuda-mac/<version>`. Not in the app: the pop-out (Chrome's API)

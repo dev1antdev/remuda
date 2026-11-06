@@ -34,6 +34,7 @@ enum Bridge {
     case ready(version: String, machine: String)
     case badge(count: Int, tone: Tone?)
     case menu(rows: [MenuRow], working: Int, idle: Int)
+    case alerts(prefs: [String: Any])
     case other(type: String)
 
     init?(_ body: Any) {
@@ -46,6 +47,9 @@ enum Bridge {
         case "menu":
             let rows = (d["rows"] as? [[String: Any]] ?? []).compactMap(MenuRow.init)
             self = .menu(rows: rows, working: d["working"] as? Int ?? 0, idle: d["idle"] as? Int ?? 0)
+        case "alerts":
+            guard let prefs = d["prefs"] as? [String: Any] else { return nil }
+            self = .alerts(prefs: prefs)
         default:
             self = .other(type: type)
         }

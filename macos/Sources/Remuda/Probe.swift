@@ -71,7 +71,7 @@ struct Probe {
             case .ready: note("ready")
             case .badge: note("badge")
             case .menu: note("menu")
-            case .other: break
+            case .alerts, .other: break
             }
         }
         alerts.onAlert = { _, text in

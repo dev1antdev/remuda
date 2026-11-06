@@ -11,7 +11,7 @@ import { markSeen } from "@/features/roster/api";
 import Sidebar from "@/features/roster/Sidebar";
 import { useRoster } from "@/features/roster/useRoster";
 import { resyncPush } from "@/features/alerts/push";
-import { readAlertPrefs } from "@/features/alerts/prefs";
+import { readAlertPrefs, tellAppPrefs } from "@/features/alerts/prefs";
 import { useVoice } from "@/features/alerts/useVoice";
 import { useOnPageAlerts } from "@/features/alerts/useOnPageAlerts";
 import { useSyncPrefs } from "@/features/settings/useSyncPrefs";
@@ -123,6 +123,7 @@ export default function Shell() {
   useEffect(() => {
     if (!viewOnly) void resyncPush(readAlertPrefs());
     if (inShell()) {
+      tellAppPrefs(readAlertPrefs()); // the app's socket device goes by this device's switches, the zone of the moment with them
       handShell({
         select: (machine, pane) => {
           if (!machine || !pane) return;

@@ -13,6 +13,7 @@ final class AlertSocket {
     private var backoff: TimeInterval = 1
     private var stopped = false
     private var minted: String?
+    private var prefs: [String: Any]? // the page's alert switches and quiet hours, which the server sends this device by
     var onAlert: ((Alert, String) -> Void)?
     var onState: ((String, String) -> Void)?
 
@@ -53,6 +54,13 @@ final class AlertSocket {
         task = nil
     }
 
+    // use takes the page's alert switches and quiet hours and hands them to the server for this device.
+    func use(prefs: [String: Any]) {
+        self.prefs = prefs
+        guard !stopped else { return }
+        Task { @MainActor in await self.register() }
+    }
+
     private func open() {
         Task { @MainActor in
             await self.register()
@@ -60,15 +68,34 @@ final class AlertSocket {
         }
     }
 
-    // register mints the device, or renews its label when it exists already; a device the server has forgotten is minted anew.
+    // register mints the device, or renews its label and prefs when it exists already, one call at a time: prefs that
+    // arrive while a call is out go in one more, so neither a second device is minted nor the page's prefs lost.
     private func register() async {
+        if registering {
+            registerAgain = true
+            return
+        }
+        registering = true
+        repeat {
+            registerAgain = false
+            await registerOnce()
+        } while registerAgain && !stopped
+        registering = false
+    }
+
+    private var registering = false
+    private var registerAgain = false
+
+    // registerOnce is one call; a device the server has forgotten is minted anew, with the prefs the page gave.
+    private func registerOnce() async {
         var body: [String: Any] = ["label": label]
         if let endpoint { body["endpoint"] = endpoint }
+        if let prefs { body["prefs"] = prefs }
         do {
             let (data, status) = try await server.request("/api/push/socket", method: "POST", json: body)
             if status == 404, endpoint != nil {
                 endpoint = nil
-                return await register()
+                return await registerOnce()
             }
             guard status == 200,
                   let answer = try JSONSerialization.jsonObject(with: data) as? [String: Any],
