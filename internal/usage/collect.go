@@ -28,7 +28,7 @@ func Collect(hosts []shell.Host, since time.Time, loc *time.Location, tz string)
 			defer wg.Done()
 			report := MachineReport{ID: host.ID(), Label: host.Label()}
 			if host.Local() {
-				rep, err := Scan(host.Home()+"/.claude/projects", since, loc)
+				rep, err := ScanHome(host.Home(), since, loc)
 				if err != nil {
 					report.Error = err.Error()
 				} else {

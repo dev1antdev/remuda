@@ -7,9 +7,37 @@ import (
 )
 
 // Question is what an agent asks on its screen while it waits: the dialog's words and the choices it offers, the cursor on one.
+// A multi-select takes several: Enter ticks the row under the cursor and a Submit row under the choices sends them.
 type Question struct {
 	Text    string   `json:"text"`
 	Options []Option `json:"options"`
+	Multi   bool     `json:"multi,omitempty"`
+}
+
+// Choices are the words of the choices one press answers the dialog with: none for a multi-select.
+func (q Question) Choices() []string {
+	if q.Multi {
+		return nil
+	}
+	out := make([]string, len(q.Options))
+	for i, o := range q.Options {
+		out[i] = o.Label
+	}
+	return out
+}
+
+// tickBox is the box Claude Code draws at the head of a multi-select's every row, "[✔]" once ticked ("[√]" or "[×]" where
+// the terminal's font lacks the tick).
+var tickBox = regexp.MustCompile(`^\[[ ✔√×]\]`)
+
+// takesSeveral says every choice carries a multi-select's box.
+func takesSeveral(options []Option) bool {
+	for _, o := range options {
+		if !tickBox.MatchString(o.Label) {
+			return false
+		}
+	}
+	return len(options) > 0
 }
 
 // Option is one choice of a dialog: its number when the dialog shows one, else its place in the list.
@@ -21,8 +49,9 @@ type Option struct {
 
 const (
 	cursor        = "❯"
-	borderRunes   = "│╭╮╰╯─┃┏┓┗┛━║╔╗╚╝═┌┐└┘├┤┬┴┼"
+	borderRunes   = "│╭╮╰╯─┃┏┓┗┛━║╔╗╚╝═┌┐└┘├┤┬┴┼╌╍┄┅┈┉╎╏┆┇┊┋" // a dashed rule, a diff's frame inside a dialog, reads as a blank row
 	boxTops       = "╭┌┏╔"
+	ruleRunes     = "─━═"
 	questionLines = 40 // how far above the choices the dialog's words are read
 )
 
@@ -34,11 +63,13 @@ type screenLine struct {
 	col    int  // the column of the first rune that is not a border or a space; -1 on a blank row
 	boxed  bool // the row sits inside a box: it starts with a border
 	boxTop bool // the row is a box's top edge
+	rule   bool // the row is a solid rule and nothing else: a dialog's top border without its sides, the input box's edge
 }
 
 // ParseQuestion reads a dialog off a pane's visible screen: Claude Code's permission prompts, its trust prompt and
-// an AskUserQuestion's choices — a cursor (❯) on one line of a list, numbered or aligned inside a box, with the
-// dialog's words above it. Anything else is no question: a plain prompt, a shell, a numbered list in an answer.
+// an AskUserQuestion's choices — a cursor (❯) on one line of a list, numbered, or aligned inside a box or under a
+// dialog's top rule, with the dialog's words above it. Anything else is no question: a plain prompt, a shell, a
+// numbered list in an answer, the lines typed into the input box.
 func ParseQuestion(screen string) (Question, bool) {
 	lines := screenLines(screen)
 	at := -1
@@ -52,9 +83,6 @@ func ParseQuestion(screen string) (Question, bool) {
 	}
 	rest := strings.TrimSpace(strings.TrimPrefix(lines[at].text, cursor))
 	isNumbered := numbered.MatchString(rest)
-	if !isNumbered && !lines[at].boxed {
-		return Question{}, false
-	}
 	left := lines[at].col + 2 // where every other choice starts: under the cursor line's words
 	isOption := func(l screenLine) bool {
 		if strings.HasPrefix(l.text, cursor+" ") {
@@ -88,6 +116,10 @@ func ParseQuestion(screen string) (Question, bool) {
 		}
 		bottom = i
 	}
+	frame := frameTop(lines, top, bottom)
+	if !isNumbered && !lines[at].boxed && frame < 0 {
+		return Question{}, false
+	}
 	var options []Option
 	for _, l := range lines[top : bottom+1] {
 		if isOption(l) {
@@ -99,7 +131,36 @@ func ParseQuestion(screen string) (Question, bool) {
 	if len(options) < 2 || !consecutive(options) {
 		return Question{}, false
 	}
-	return Question{Text: wordsAbove(lines, top), Options: options}, true
+	return Question{Text: wordsAbove(lines, top, frame), Options: options, Multi: takesSeveral(options)}, true
+}
+
+// frameTop is the row of the rule a dialog drawn with its top border alone sits under, as Claude Code 2.1 draws its
+// permission and trust dialogs: within questionLines above the choices, the dialog's words between padded off the
+// edge (a row at the edge is the conversation's, under some other rule), and no rule under the choices, where the
+// input box would close; -1 when the choices sit in no such frame.
+func frameTop(lines []screenLine, top, bottom int) int {
+	for i := bottom + 1; i < len(lines); i++ {
+		if lines[i].rule {
+			return -1
+		}
+	}
+	for i := top - 1; i >= 0 && top-i <= questionLines; i-- {
+		if !lines[i].rule {
+			continue
+		}
+		words := false
+		for j := i + 1; j < top; j++ {
+			if lines[j].col == 0 {
+				return -1
+			}
+			words = words || lines[j].col > 0
+		}
+		if words {
+			return i
+		}
+		return -1
+	}
+	return -1
 }
 
 // option reads one choice line: the cursor, the number when the list has them, the words.
@@ -129,8 +190,9 @@ func consecutive(options []Option) bool {
 	return picked == 1
 }
 
-// wordsAbove is the dialog's text over its choices: the rows of the same box, or up to the blank row above an unboxed list.
-func wordsAbove(lines []screenLine, top int) string {
+// wordsAbove is the dialog's text over its choices: the rows of the same box, the rows under the frame's top rule, or
+// for a list in neither the paragraph above it, past the blank rows that set the choices off.
+func wordsAbove(lines []screenLine, top, frame int) string {
 	var rows []string
 	for i := top - 1; i >= 0 && top-i <= questionLines; i-- {
 		l := lines[i]
@@ -138,8 +200,15 @@ func wordsAbove(lines []screenLine, top int) string {
 			if l.boxTop || !l.boxed {
 				break
 			}
+		} else if frame >= 0 {
+			if i == frame {
+				break
+			}
 		} else if l.col < 0 {
-			break
+			if len(rows) > 0 {
+				break
+			}
+			continue
 		}
 		rows = append(rows, l.text)
 	}
@@ -166,6 +235,8 @@ func screenLines(screen string) []screenLine {
 		lead := strings.TrimLeft(r, " ")
 		out[i].boxed = strings.HasPrefix(lead, "│") || strings.HasPrefix(lead, "┃") || strings.HasPrefix(lead, "║")
 		out[i].boxTop = lead != "" && strings.ContainsRune(boxTops, []rune(lead)[0])
+		trimmed := strings.TrimSpace(r)
+		out[i].rule = trimmed != "" && strings.Trim(trimmed, ruleRunes) == ""
 	}
 	return out
 }

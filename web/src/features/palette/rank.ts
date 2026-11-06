@@ -1,15 +1,18 @@
 // The palette's list: every pane as a row to jump to, every command the page offers, and their order by
 // what was typed. Pure: the rows are built from the roster, the ranking from words.
 
-import type { Machine } from "@/features/roster/api";
+import type { FolderIconRef, Machine, Pane, Session, Tab } from "@/features/roster/api";
 import { machineHue } from "@/features/roster/hue";
 import { displayOf, markOf, recentRows, rowLabel, stateWords, type Display, type RadarPrefs } from "@/features/roster/radar";
 import { basename } from "@/lib/text";
+import { folderOf } from "@/features/roster/workspaces";
 import type { IconName } from "@/ui/icons";
+import { VENDOR_NAME } from "@/ui/brand";
+import { t } from "@/lib/i18n";
 
 export type Selection = { machineId: string; paneId: string };
 
-export type PaneRow = { machineId: string; paneId: string; agent: string; display: Display; alert?: string; mark: string; current: boolean };
+export type PaneRow = { machineId: string; paneId: string; agent: string; display: Display; alert?: string; mark: string; current: boolean; folder: { name: string; icon?: FolderIconRef } };
 
 export type Entry = {
   id: string;
@@ -26,21 +29,49 @@ export type Entry = {
   run: () => void;
 };
 
-// paneEntries is every pane on every machine, each machine's liveliest first, shells at its end.
-export function paneEntries(machines: Machine[], prefs: RadarPrefs, now: number, step: number, current: Selection | null, open: (machineId: string, paneId: string) => void): Entry[] {
+// Masked is what a pane of a folder hidden while the screen is shared reads as: its folder's and machine's neutral names
+export type Masked = { folder: string; machine: string };
+
+// paneTitle is what a pane is called in the palette: its row label, or for a folder hidden while the screen is shared its
+// agent's name alone, never its own title or a tab name of the person's
+export function paneTitle(pane: Pane, tab: Tab, workspace: string, prefs: RadarPrefs, masked: boolean): string {
+  if (masked) return pane.agent ? (VENDOR_NAME[pane.agent] ?? pane.agent) : t("shell");
+  return rowLabel(pane, tab, workspace, prefs);
+}
+
+// tabName is a tab in a command's words: the name the person gave it, quoted, else its number; the number alone while
+// its folder is hidden for a shared screen
+export function tabName(tab: Tab, masked: boolean): string {
+  return tab.named && !masked ? `“${tab.label}”` : String(tab.number);
+}
+
+// paneEntries is every pane on every machine, each machine's liveliest first, shells at its end; the floating terminal's
+// own shell is the drawer's, not a row; a pane masked by the screen-sharing mode goes by its agent and the neutral
+// names, its own title, folder and tab name left out.
+export function paneEntries(
+  machines: Machine[],
+  prefs: RadarPrefs,
+  now: number,
+  step: number,
+  current: Selection | null,
+  open: (machineId: string, paneId: string) => void,
+  masked: (machine: Machine, session: Session) => Masked | null = () => null,
+): Entry[] {
   const out: Entry[] = [];
   for (const machine of machines) {
     for (const { pane, tab, session } of recentRows(machine, { ...prefs, shells: true })) {
+      if (session.scratch) continue;
       const display: Display = pane.agent ? displayOf(pane, prefs, now) : "idle";
       const alert = pane.radar?.alert;
+      const mask = masked(machine, session);
       out.push({
         id: `pane:${machine.id}|${pane.id}`,
         kind: "pane",
-        title: rowLabel(pane, tab, session.name, prefs),
-        hint: `${session.name}${machine.id !== "local" ? ` · ${machine.label}` : ""}`,
+        title: paneTitle(pane, tab, session.name, prefs, !!mask),
+        hint: mask ? `${mask.folder}${machine.id !== "local" ? ` · ${mask.machine}` : ""}` : `${session.name}${machine.id !== "local" ? ` · ${machine.label}` : ""}`,
         hue: machineHue(machine.id) ?? undefined,
-        detail: pane.agent ? (alert ?? stateWords(display, pane.radar?.last_active, now, pane.radar?.since)) : "shell",
-        keywords: [session.name, machine.label, pane.agent || "shell", basename(pane.cwd), tab.named ? tab.label : ""].filter(Boolean),
+        detail: pane.agent ? (alert ?? stateWords(display, pane.radar?.last_active, now, pane.radar?.since)) : t("shell"),
+        keywords: mask ? [mask.folder, mask.machine, pane.agent || "shell"] : [session.name, machine.label, pane.agent || "shell", basename(pane.cwd), tab.named ? tab.label : ""].filter(Boolean),
         pane: {
           machineId: machine.id,
           paneId: pane.id,
@@ -49,6 +80,7 @@ export function paneEntries(machines: Machine[], prefs: RadarPrefs, now: number,
           alert,
           mark: alert ? "!" : pane.agent ? markOf(display, step) : "$",
           current: current?.machineId === machine.id && current.paneId === pane.id,
+          folder: mask ? { name: mask.folder } : { name: basename(folderOf(session)) || session.name, icon: session.icon },
         },
         run: () => open(machine.id, pane.id),
       });

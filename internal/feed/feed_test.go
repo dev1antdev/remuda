@@ -31,3 +31,20 @@ func TestAddListKeepsNewestFirstAndBounded(t *testing.T) {
 		t.Errorf("not persisted: last %d, %d entries", again.LastID(), len(again.List(0)))
 	}
 }
+
+func TestAQuietEntryIsListedButIsNoNews(t *testing.T) {
+	s := New(t.TempDir())
+	news := s.Add(Entry{Kind: "done", Machine: "local", Pane: "w1:p1", Title: "ws finished"})
+	s.Add(Entry{Kind: "sent", Quiet: true, Machine: "local", Pane: "w1:p1", Title: "iPhone sent «yes» to ws · w1:p1"})
+	if got := s.LastID(); got != news.ID {
+		t.Fatalf("LastID = %d, want the news entry %d", got, news.ID)
+	}
+	if list := s.List(0); len(list) != 2 || !list[0].Quiet || list[1].Quiet {
+		t.Fatalf("List: %+v", list)
+	}
+	only := New(t.TempDir())
+	only.Add(Entry{Kind: "sent", Quiet: true, Title: "quiet"})
+	if only.LastID() != 0 {
+		t.Fatalf("a feed of quiet entries alone has no news")
+	}
+}

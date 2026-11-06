@@ -1,59 +1,53 @@
-// The machine's own ⋯ menu: rename, updates, the SSH host to copy, and — for one added here — remove.
+// The machine's own ⋯ menu: rename, updates, the keep-awake switch, a wake-up for a sleeping machine with a known
+// MAC address, the SSH host to copy, whether the screen-sharing mode hides it, and — for one added here — remove.
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
+import { act } from "@/app/act";
+import { actions } from "@/app/store";
 import UpdatesDialog from "@/features/updates/Updates";
-import { Icon, Tip, useDismiss } from "@/ui";
-import type { Machine } from "./api";
+import { copyText } from "@/lib/host";
+import { Icon, Menu, type MenuItem } from "@/ui";
+import { setAwake, wakeMachine, type Machine } from "./api";
+import { MacDialog } from "./MacDialog";
+import { canWake, wokeWords } from "./wake";
+import { markedMachine } from "./sharing";
+import { toggleSharingMachine, useSharing } from "./useSharing";
+import { t } from "@/lib/i18n";
 
 export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machine; onRename: () => void; onRemove?: () => void }) {
-  const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
   const [updates, setUpdates] = useState(false);
-  const close = useCallback(() => setOpen(null), []);
-  useDismiss(!!open, close, [".machine-menu", `[data-machine-menu="${CSS.escape(m.id)}"]`]);
-  const pick = (fn: () => void) => () => {
-    setOpen(null);
-    fn();
-  };
+  const [mac, setMac] = useState(false);
+  const share = useSharing();
+  const name = share.machineLabel(m);
+  const connected = m.state === "connected";
+  const wake = () => void act(wakeMachine(m.id).then(({ sent }) => actions.notify(wokeWords(name, sent))));
+  // the clipboard the way the rest of the page reaches it: the Clipboard API where the origin is secure, else the fallback
+  const copyHost = (host: string) => void copyText(host).then((ok) => actions.notify(ok ? t("SSH host copied") : t("The SSH host could not be copied"), { brief: true, error: !ok }));
+  const items = (): MenuItem[] => [
+    { label: t("Rename…"), icon: "edit", onSelect: onRename },
+    { label: t("Updates…"), icon: "refresh-cw", disabled: !connected, onSelect: () => setUpdates(true) },
+    { label: t("Keep awake while agents work"), icon: "sun", checked: !!m.awake?.on, disabled: !connected, onSelect: () => void act(setAwake(m.id, !m.awake?.on)) },
+    ...(canWake(m) ? [{ label: t("Wake up"), icon: "zap" as const, onSelect: wake }] : []),
+    { label: t("MAC address…"), icon: "plug", hint: m.mac, onSelect: () => setMac(true) },
+    { label: t("Leftover worktrees…"), icon: "git-branch", hint: t("worktrees no workspace has open"), disabled: !connected, onSelect: () => actions.openDialog({ kind: "leftovers", machineId: m.id }) },
+    { label: t("Hide when sharing the screen"), icon: "eye-off", checked: markedMachine(share.pref, m.id), onSelect: () => toggleSharingMachine(m.id) },
+    ...(m.host ? [{ label: t("Copy SSH host"), icon: "copy" as const, onSelect: () => copyHost(m.host!) }] : []),
+    ...(onRemove ? [{ sep: true } as const, { label: t("Remove machine"), icon: "trash" as const, danger: true, onSelect: onRemove }] : []),
+  ];
   return (
     <>
-      <Tip text="Rename, copy the SSH host, remove">
-      <button
-        type="button"
-        className={`icon-btn${open ? " on" : ""}`}
-        data-machine-menu={m.id}
-        aria-label={`${m.label}: rename, copy the SSH host, remove`}
-        aria-haspopup="menu"
-        aria-expanded={!!open}
-        onClick={(e) => {
-          e.stopPropagation();
-          const r = e.currentTarget.getBoundingClientRect();
-          setOpen(open ? null : { x: Math.min(r.left, window.innerWidth - 230), y: r.bottom + 4 });
-        }}
-      >
-        <Icon name="more" size={14} />
-      </button>
-      </Tip>
-      {open && (
-        <div className="row-menu machine-menu" role="menu" style={{ left: open.x, top: open.y }} onClick={(e) => e.stopPropagation()}>
-          <button type="button" role="menuitem" onClick={pick(onRename)}>
-            <Icon name="edit" size={14} /> Rename…
+      <Menu
+        label={t("{machine}: rename, wake, copy the SSH host, remove", { machine: name })}
+        tip={t("Rename, wake, copy the SSH host, remove")}
+        items={items}
+        trigger={
+          <button type="button" className="icon-btn" data-machine-menu={m.id} aria-label={t("{machine}: rename, wake, copy the SSH host, remove", { machine: name })}>
+            <Icon name="more" size={14} />
           </button>
-          <button type="button" role="menuitem" onClick={pick(() => setUpdates(true))} disabled={m.state !== "connected"}>
-            <Icon name="refresh-cw" size={14} /> Updates…
-          </button>
-          {m.host && (
-            <button type="button" role="menuitem" onClick={pick(() => void navigator.clipboard?.writeText(m.host!))}>
-              <Icon name="copy" size={14} /> Copy SSH host
-            </button>
-          )}
-          {onRemove && (
-            <button type="button" role="menuitem" className="danger" onClick={pick(onRemove)}>
-              <Icon name="trash" size={14} /> Remove machine
-            </button>
-          )}
-        </div>
-      )}
+        }
+      />
       {updates && <UpdatesDialog machine={m} onClose={() => setUpdates(false)} />}
+      {mac && <MacDialog machine={m} onClose={() => setMac(false)} />}
     </>
   );
 }

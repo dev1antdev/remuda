@@ -113,6 +113,27 @@ func TestMarkdownIsAStandupReport(t *testing.T) {
 	}
 }
 
+func TestConversationIsOneAgentsReport(t *testing.T) {
+	since := time.Date(2026, 10, 24, 9, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 10, 24, 18, 30, 0, 0, time.UTC)
+	md := Conversation(Of(sample(), time.Time{}), since, now)
+	for _, want := range []string{"# Recap · 24 Oct 2026", "Since 24 Oct 09:00.", "- 2 prompts · 2 answers · 1 min 37 s · 38k tokens · $0.43", "- 7 tool calls (Read 3,", "- Edited: `/a/b.go`", "- 1 subagent · 1 question", "- Last answer: Fixed"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("conversation lacks %q:\n%s", want, md)
+		}
+	}
+	if strings.Contains(md, "##") || strings.Contains(md, "Standup") {
+		t.Errorf("a conversation's report has no agent headings:\n%s", md)
+	}
+	open := Recap{Prompts: 1, Asking: true}
+	if whole := Conversation(open, time.Time{}, now); strings.Contains(whole, "Since") || !strings.Contains(whole, "- A question is open") {
+		t.Errorf("the whole conversation, with a question open:\n%s", whole)
+	}
+	if quiet := Conversation(Recap{}, since, now); !strings.Contains(quiet, "Nothing happened in this period.") {
+		t.Errorf("quiet:\n%s", quiet)
+	}
+}
+
 func TestSpentAndFigures(t *testing.T) {
 	cases := map[float64]string{12: "12 s", 252: "4 min 12 s", 300: "5 min", 4320: "1 h 12 min", 7200: "2 h"}
 	for seconds, want := range cases {

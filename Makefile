@@ -1,4 +1,4 @@
-.PHONY: all build web server dev run test webtest typecheck e2e docker docker-test release publish deploy service code clean
+.PHONY: all build web server dev run test webtest typecheck e2e docker docker-test release publish deploy service code mac clean
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 PUBLISH_BRANCH ?= main
@@ -98,3 +98,7 @@ code:
 
 clean:
 	rm -rf bin web/dist
+
+# make mac — the Mac app, bin/remuda.app: a window on the page, the menu bar, native notifications (macos/README.md).
+mac:
+	sh macos/build.sh

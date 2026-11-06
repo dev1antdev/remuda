@@ -131,3 +131,49 @@ func TestParseQuestionTakesTheDialogAtTheBottom(t *testing.T) {
 		t.Fatalf("a bare prompt under the dialog hid it: %+v", q)
 	}
 }
+
+// dialogOf is the key a notification carries for the dialog on a screen
+func dialogOf(screen string) string {
+	q, _ := ParseQuestion(screen)
+	return DialogKey(q.Text)
+}
+
+func TestAnswerWalksToTheChoiceStillOnTheScreen(t *testing.T) {
+	keys, err := Answer(bashPrompt, 2, "No, and tell Claude what to do differently (esc)", dialogOf(bashPrompt))
+	if err != nil || strings.Join(keys, " ") != "down down enter" {
+		t.Fatalf("third choice: %v %v", keys, err)
+	}
+	keys, err = Answer(askUser, 0, "A JSON file Simple, 300 entries, rewritten whole", dialogOf(askUser))
+	if err != nil || strings.Join(keys, " ") != "up enter" {
+		t.Fatalf("a choice above the cursor: %v %v", keys, err)
+	}
+	keys, err = Answer(bashPrompt, 0, "Yes", dialogOf(bashPrompt))
+	if err != nil || strings.Join(keys, " ") != "enter" {
+		t.Fatalf("the picked choice: %v %v", keys, err)
+	}
+	if _, err := Answer(bashPrompt, 0, "Yes, and don't ask again", dialogOf(bashPrompt)); err == nil || !strings.Contains(err.Error(), "now reads") {
+		t.Errorf("a choice that reads differently: %v", err)
+	}
+	if _, err := Answer(bashPrompt, 7, "Yes", dialogOf(bashPrompt)); err == nil || !strings.Contains(err.Error(), "3 choices") {
+		t.Errorf("an index past the list: %v", err)
+	}
+	if _, err := Answer("● I'll remove the build folder.\n\n❯ \n", 0, "Yes", dialogOf(bashPrompt)); err == nil || !strings.Contains(err.Error(), "no question") {
+		t.Errorf("no dialog: %v", err)
+	}
+}
+
+// A notification stays in the list after its dialog was answered at the desk; the agent's next permission prompt offers
+// the same "Yes" first, and a tap on the old notification must not approve a command the person never saw.
+func TestAnswerRefusesALaterDialogWithTheSameChoices(t *testing.T) {
+	later := strings.NewReplacer("rm -rf build", "rm -rf /Users/me", "Remove the build folder", "Remove the home folder").Replace(bashPrompt)
+	if _, err := Answer(later, 0, "Yes", dialogOf(bashPrompt)); err == nil || !strings.Contains(err.Error(), "something else") {
+		t.Fatalf("the earlier dialog's notification answered a later one: %v", err)
+	}
+	if _, err := Answer(bashPrompt, 0, "Yes", ""); err == nil {
+		t.Fatal("a choice that names no dialog was answered")
+	}
+	narrower := strings.NewReplacer("Remove the build folder", "Remove the build\n│   folder").Replace(bashPrompt)
+	if keys, err := Answer(narrower, 0, "Yes", dialogOf(bashPrompt)); err != nil || strings.Join(keys, " ") != "enter" {
+		t.Fatalf("the same dialog wrapped anew by a resize was refused: %v %v", keys, err)
+	}
+}

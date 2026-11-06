@@ -3,6 +3,7 @@
 // again on a reload or a poll.
 
 import type { Machine } from "@/features/roster/api";
+import { t } from "@/lib/i18n";
 
 export type VoicePrefs = { on: boolean; voice?: string }; // voice: the browser voice's name; none for the default
 export const DEFAULT_VOICE: VoicePrefs = { on: false };
@@ -21,7 +22,7 @@ export function linesToSay(machines: Machine[], heard: Set<string>): { lines: Li
           const radar = pane.radar;
           if (!pane.agent || !radar) continue;
           const id = `${machine.id}|${pane.id}`;
-          const label = machine.id === "local" ? session.name : `${session.name} on ${machine.label}`;
+          const label = machine.id === "local" ? session.name : t("{workspace} on {machine}", { workspace: session.name, machine: machine.label });
           let key = "";
           let text = "";
           if (radar.alert) {
@@ -29,7 +30,7 @@ export function linesToSay(machines: Machine[], heard: Set<string>): { lines: Li
             text = `${label}: ${radar.alert}`;
           } else if (radar.state === "blocked") {
             key = `${id}|asks|${radar.since ?? ""}`;
-            text = `${label} is waiting for you`;
+            text = t("{agent} is waiting for you", { agent: label });
           } else if (radar.state === "done" && pane.said) {
             key = `${id}|done|${radar.since ?? ""}`;
             text = `${label}: ${pane.said}`;

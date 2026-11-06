@@ -37,6 +37,7 @@ type Baseline struct {
 	Blobs   map[string]string `json:"files"` // blob hash by path of every file uncommitted then; "gone" for a deleted one
 	Verdict string            `json:"verdict,omitempty"`
 	At      time.Time         `json:"at"`
+	Ready   time.Time         `json:"ready,omitzero"` // when the agent said the rejected work is ready for another look
 }
 
 // Commit is one commit made since the baseline.
@@ -57,16 +58,20 @@ type File struct {
 }
 
 // Summary is the review of one folder.
+// maxCommits is how many commits since the baseline a summary lists; the rest are counted in CommitsTotal.
+const maxCommits = 300
+
 type Summary struct {
-	Repo     string    `json:"repo,omitempty"`
-	Branch   string    `json:"branch,omitempty"`
-	Head     string    `json:"head,omitempty"`
-	Baseline *Baseline `json:"baseline,omitempty"`
-	Commits  []Commit  `json:"commits"`
-	Files    []File    `json:"files"`
-	Fresh    int       `json:"fresh"`
-	Error    string    `json:"error,omitempty"`
-	At       time.Time `json:"at"`
+	Repo         string    `json:"repo,omitempty"`
+	Branch       string    `json:"branch,omitempty"`
+	Head         string    `json:"head,omitempty"`
+	Baseline     *Baseline `json:"baseline,omitempty"`
+	Commits      []Commit  `json:"commits"`
+	CommitsTotal int       `json:"commits_total,omitempty"` // every commit since the baseline, when more than the listed ones
+	Files        []File    `json:"files"`
+	Fresh        int       `json:"fresh"`
+	Error        string    `json:"error,omitempty"`
+	At           time.Time `json:"at"`
 }
 
 // Badge is the roster's count for one workspace.
@@ -75,13 +80,15 @@ type Badge struct {
 	Fresh   int `json:"fresh"`
 }
 
-// Store keeps every folder's baseline on disk and the roster's badges in memory.
+// Store keeps every folder's baseline on disk and the roster's badges and branches in memory.
 type Store struct {
 	dir string
 
 	mu        sync.Mutex
 	baselines map[string]Baseline // by machine|folder
 	badges    map[string]Badge
+	branches  map[string]string     // the branch each folder has checked out, a short hash when detached
+	roots     map[string]string     // the repository's main folder for each folder, a worktree's too
 	sweeps    map[string]badgeSweep // by machine
 }
 
@@ -95,7 +102,7 @@ func key(machineID, dir string) string { return machineID + "|" + dir }
 
 // New loads the baselines kept in dir.
 func New(dir string) *Store {
-	store := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}, sweeps: map[string]badgeSweep{}}
+	store := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}, branches: map[string]string{}, roots: map[string]string{}, sweeps: map[string]badgeSweep{}}
 	if err := state.LoadJSON(dir, baselineFile, &store.baselines); err != nil {
 		log.Printf("%s is unreadable (%v): every folder counts as never reviewed", baselineFile, err)
 	}
@@ -121,24 +128,61 @@ func (store *Store) Badge(machineID, dir string) (Badge, bool) {
 	return badge, ok
 }
 
+// Branch is the branch the folder has checked out as the last look read it, "" outside git or before the first sweep.
+func (store *Store) Branch(machineID, dir string) string {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return store.branches[key(machineID, dir)]
+}
+
+// Root is the main folder of the repository the folder belongs to — for a linked worktree, its repository's — as the
+// last sweep read it; "" outside git or before the first sweep.
+func (store *Store) Root(machineID, dir string) string {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return store.roots[key(machineID, dir)]
+}
+
+func (store *Store) setRoot(storeKey, root string) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if root == "" {
+		delete(store.roots, storeKey)
+		return
+	}
+	store.roots[storeKey] = root
+}
+
+func (store *Store) setBranch(storeKey, branch string) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if branch == "" || branch == "HEAD" {
+		delete(store.branches, storeKey)
+		return
+	}
+	store.branches[storeKey] = branch
+}
+
 // summaryScript gathers everything Summary needs in one shell, sections separated by a line of \x1e and fields by \x1f:
-// repo/branch/HEAD, the first-parent commits since the baseline, the numstat against HEAD, the untracked files, every uncommitted file's blob, and per commit the blobs it left (none for a merge).
+// repo/branch/HEAD, the newest maxCommits first-parent commits since the baseline, the numstat against HEAD, the untracked files, every uncommitted file's blob, per commit the blobs it left (none for a merge) — one git log, never a process per commit: a repository pulled after weeks has hundreds — and how many commits there are in all.
 func summaryScript(dir, baselineHead string) string {
 	return script.InRepo(dir) +
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
 		`base=` + script.Quote(baselineHead) + `; if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then :; else base=HEAD; fi; ` +
-		`if [ "$base" != HEAD ]; then git log --first-parent --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
+		`if [ "$base" != HEAD ]; then git log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --format='%h%x1f%s%x1f%ct' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
 		`git -c core.quotepath=off diff --no-renames --relative --numstat HEAD 2>/dev/null; printf '\036\n'; ` +
 		`git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
 		blobsScript() + `; printf '\036\n'; ` +
-		`if [ "$base" != HEAD ]; then for c in $(git rev-list --first-parent "$base"..HEAD 2>/dev/null); do printf '%s\n' "$c"; git -c core.quotepath=off diff-tree --no-commit-id -r --relative --no-renames "$c" 2>/dev/null | while IFS= read -r l; do printf '\037%s\n' "$l"; done; done; fi`
+		`if [ "$base" != HEAD ]; then git -c core.quotepath=off log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --raw --no-renames --no-abbrev --relative --format='%H' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
+		`if [ "$base" != HEAD ]; then git rev-list --count --first-parent "$base"..HEAD 2>/dev/null; fi`
 }
 
 // blobsScript prints "<path>\x1f<blob hash>" per uncommitted file, one per line, "gone" for a deleted one.
 // Paths are relative to the folder; a rename is a deletion plus an addition.
 func blobsScript() string {
 	return `{ git -c core.quotepath=off diff --no-renames --relative --name-only HEAD 2>/dev/null; git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; } | ` +
-		`while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\037%s\n' "$f" "$(git hash-object -- "$f" 2>/dev/null)"; else printf '%s\037gone\n' "$f"; fi; done`
+		`{ t=$(mktemp 2>/dev/null) || t=/tmp/remuda-blobs.$$; : > "$t"; while IFS= read -r f; do if [ -f "$f" ]; then printf '%s\n' "$f" >> "$t"; else printf '%s\037gone\n' "$f"; fi; done; ` +
+		`if [ -s "$t" ]; then git -c core.quotepath=off hash-object --stdin-paths < "$t" 2>/dev/null | paste -d "$(printf '\037')" "$t" -; fi; rm -f "$t"; }`
 }
 
 // Summary reviews one folder against its baseline.
@@ -162,6 +206,9 @@ func (store *Store) Summary(host shell.Host, dir string) Summary {
 	summary.Repo = headLines[0]
 	if len(headLines) > 1 {
 		summary.Branch = headLines[1]
+		if summary.Branch != "HEAD" { // a detached HEAD keeps the short hash the sweep read for the sidebar
+			store.setBranch(key(host.ID(), dir), summary.Branch)
+		}
 	}
 	if len(headLines) > 2 {
 		summary.Head = headLines[2]
@@ -201,23 +248,32 @@ func (store *Store) Summary(host shell.Host, dir string) Summary {
 			if line == "" {
 				continue
 			}
-			if !strings.HasPrefix(line, "\x1f") {
+			if !strings.HasPrefix(line, ":") {
 				closeCommit()
 				commitSHA, allReviewed, anyFile = line, true, false
 				continue
 			}
-			// a diff-tree line: ":100644 100644 <old blob> <new blob> M\t<path>"
-			modes, path, ok := strings.Cut(line[1:], "\t")
+			// a raw line of git log: ":100644 100644 <old blob> <new blob> M\t<path>"
+			modes, path, ok := strings.Cut(line, "\t")
 			fields := strings.Fields(modes)
 			if !ok || len(fields) < 4 {
 				continue
 			}
 			anyFile = true
-			if reviewed, ok := baseline.Blobs[path]; !ok || reviewed != fields[3] {
+			left := fields[3]
+			if strings.Trim(left, "0") == "" { // a deletion leaves the null blob, which a look recorded as gone
+				left = "gone"
+			}
+			if reviewed, ok := baseline.Blobs[path]; !ok || reviewed != left {
 				allReviewed = false
 			}
 		}
 		closeCommit()
+		if len(sections) > 6 {
+			if total, err := strconv.Atoi(strings.TrimSpace(sections[6])); err == nil && total > len(summary.Commits) {
+				summary.CommitsTotal = total
+			}
+		}
 		for i := range summary.Commits {
 			for fullSHA := range seenCommits {
 				if strings.HasPrefix(fullSHA, summary.Commits[i].SHA) {
@@ -296,24 +352,34 @@ func (store *Store) Diff(host shell.Host, dir, path string) (string, error) {
 
 var hexRe = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 
+// Snapshot is the folder's HEAD and the blob of every uncommitted file ("gone" for a deleted one): what a look saw.
+func Snapshot(host shell.Host, dir string) (string, map[string]string, error) {
+	snapshot := script.InDir(dir) + `git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` + blobsScript()
+	output, err := shell.Text(host, snapshot, 60*time.Second)
+	if err != nil {
+		return "", nil, err
+	}
+	head, blobLines, _ := strings.Cut(output, "\x1e\n")
+	blobs := map[string]string{}
+	for _, line := range strings.Split(strings.TrimRight(blobLines, "\n"), "\n") {
+		if path, blob, ok := strings.Cut(line, "\x1f"); ok {
+			blobs[path] = blob
+		}
+	}
+	return strings.TrimSpace(head), blobs, nil
+}
+
 // MarkSeen moves the folder's baseline to now: HEAD, the blob of every
 // uncommitted file, and the verdict the agent was told.
 func (store *Store) MarkSeen(host shell.Host, dir, verdict string) (Baseline, error) {
 	if !VerdictOK(verdict) {
 		return Baseline{}, fmt.Errorf("no such verdict: %q", verdict)
 	}
-	snapshot := script.InDir(dir) + `git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` + blobsScript()
-	output, err := shell.Text(host, snapshot, 60*time.Second)
+	head, blobs, err := Snapshot(host, dir)
 	if err != nil {
 		return Baseline{}, err
 	}
-	head, blobLines, _ := strings.Cut(output, "\x1e\n")
-	baseline := Baseline{Head: strings.TrimSpace(head), Blobs: map[string]string{}, Verdict: verdict, At: time.Now()}
-	for _, line := range strings.Split(strings.TrimRight(blobLines, "\n"), "\n") {
-		if path, blob, ok := strings.Cut(line, "\x1f"); ok {
-			baseline.Blobs[path] = blob
-		}
-	}
+	baseline := Baseline{Head: head, Blobs: blobs, Verdict: verdict, At: time.Now()}
 	store.mu.Lock()
 	store.baselines[key(host.ID(), dir)] = baseline
 	store.badges[key(host.ID(), dir)] = Badge{}
@@ -345,8 +411,17 @@ func (store *Store) RefreshBadges(host shell.Host, dirs []string) {
 	}()
 }
 
-// Badges refreshes the roster's counts for many folders of one machine in
-// a single round trip.
+// branchScript prints the branch checked out, or the short hash of a detached HEAD, then on a line of its own the
+// repository's main folder: for a linked worktree the parent of the common git dir it shares with its repository, else
+// the checkout's own top folder — a submodule's git dir sits under its parent's .git/modules, never beside it.
+const branchScript = `{ git symbolic-ref --short -q HEAD || git rev-parse --short HEAD; } 2>/dev/null; ` +
+	`gd=$(cd "$(git rev-parse --git-dir 2>/dev/null)" 2>/dev/null && pwd -P); ` +
+	`common=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P); ` +
+	`if [ -n "$gd" ] && [ "$gd" = "$common" ]; then (cd "./$(git rev-parse --show-cdup 2>/dev/null)" 2>/dev/null && pwd); ` +
+	`elif [ -n "$common" ]; then (cd "$common/.." 2>/dev/null && pwd); fi`
+
+// Badges refreshes the roster's counts and branches for many folders of one machine in
+// a single round trip: per folder, the folder, the branch and the uncommitted blobs.
 func (store *Store) Badges(host shell.Host, dirs []string) {
 	if len(dirs) == 0 {
 		return
@@ -357,14 +432,19 @@ func (store *Store) Badges(host shell.Host, dirs []string) {
 		baseline, _ := store.baseline(host.ID(), dir)
 		baselines[dir] = baseline
 		sweep.WriteString(`( ` + script.InRepo(dir) +
-			`printf '%s\036' ` + script.Quote(dir) + `; ` + blobsScript() + `; printf '\035\n' ); `)
+			`printf '%s\036' ` + script.Quote(dir) + `; ` + branchScript + `; printf '\036'; ` + blobsScript() + `; printf '\035\n' ); `)
 	}
 	output, err := shell.Text(host, sweep.String(), 90*time.Second)
 	if err != nil {
 		return
 	}
+	answered := map[string]bool{}
 	for _, record := range strings.Split(output, "\x1d\n") {
-		dir, blobLines, ok := strings.Cut(record, "\x1e")
+		dir, rest, ok := strings.Cut(record, "\x1e")
+		if !ok {
+			continue
+		}
+		branch, blobLines, ok := strings.Cut(rest, "\x1e")
 		if !ok {
 			continue
 		}
@@ -372,6 +452,10 @@ func (store *Store) Badges(host shell.Host, dirs []string) {
 		if !ok {
 			continue
 		}
+		answered[dir] = true
+		branchLine, rootLine, _ := strings.Cut(strings.TrimRight(branch, "\n"), "\n")
+		store.setBranch(key(host.ID(), dir), strings.TrimSpace(branchLine))
+		store.setRoot(key(host.ID(), dir), strings.TrimSpace(rootLine))
 		hasBaseline := !baseline.At.IsZero()
 		badge := Badge{}
 		for _, line := range strings.Split(strings.TrimRight(blobLines, "\n"), "\n") {
@@ -385,5 +469,14 @@ func (store *Store) Badges(host shell.Host, dirs []string) {
 			}
 		}
 		store.setBadge(key(host.ID(), dir), baseline, badge)
+	}
+	for _, dir := range dirs {
+		if !answered[dir] {
+			store.setBranch(key(host.ID(), dir), "") // no longer a repository: no branch or changes to show
+			store.setRoot(key(host.ID(), dir), "")
+			store.mu.Lock()
+			delete(store.badges, key(host.ID(), dir))
+			store.mu.Unlock()
+		}
 	}
 }

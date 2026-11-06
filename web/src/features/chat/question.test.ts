@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { keysTo, questionLines } from "./question";
+import { choosable, keysTo, pressInTurn, questionLines, sameDialog } from "./question";
 
 const options = [
   { n: 1, label: "Yes", picked: false },
@@ -16,6 +16,46 @@ describe("keysTo", () => {
   it("starts at the first choice when none is picked", () => {
     const none = options.map((o) => ({ ...o, picked: false }));
     expect(keysTo(none, 2)).toEqual(["down", "down", "enter"]);
+  });
+});
+
+describe("sameDialog", () => {
+  const offered = { text: "Bash command\n\nrm -rf build\n\nDo you want to proceed?", options };
+  it("is the dialog the choice was offered on, wherever the cursor has moved since", () => {
+    const moved = { ...offered, options: options.map((o, i) => ({ ...o, picked: i === 0 })) };
+    expect(sameDialog(offered, moved)).toBe(true);
+    // the cursor read again is where the walk starts: on the first choice now, "Yes" is one Enter away
+    expect(keysTo(moved.options, 0)).toEqual(["enter"]);
+  });
+  it("is not another dialog that took its place, or the same words with other choices", () => {
+    expect(sameDialog(offered, { ...offered, text: "Bash command\n\ngit push --force\n\nDo you want to proceed?" })).toBe(false);
+    expect(sameDialog(offered, { ...offered, options: options.slice(0, 2) })).toBe(false);
+    expect(sameDialog(offered, { ...offered, options: options.map((o, i) => (i === 1 ? { ...o, label: "Yes, allow all edits" } : o)) })).toBe(false);
+  });
+});
+
+describe("pressInTurn", () => {
+  it("stops at the first key refused, so a lost ↓ is never followed by the Enter that would confirm the wrong choice", async () => {
+    const sent: string[] = [];
+    const went = await pressInTurn(["down", "down", "enter"], (key) => {
+      sent.push(key);
+      return sent.length !== 2;
+    });
+    expect(went).toBe(false);
+    expect(sent).toEqual(["down", "down"]);
+  });
+  it("sends every key when each goes, an answer of nothing counting as gone", async () => {
+    const sent: string[] = [];
+    expect(await pressInTurn(["up", "enter"], async (key) => void sent.push(key))).toBe(true);
+    expect(sent).toEqual(["up", "enter"]);
+  });
+});
+
+describe("choosable", () => {
+  it("takes one press for a single choice, never for a multi-select", () => {
+    expect(choosable({ text: "Proceed?", options })).toBe(true);
+    expect(choosable({ text: "Which features?", options, multi: true })).toBe(false);
+    expect(choosable({ text: "Nothing to pick", options: [] })).toBe(false);
   });
 });
 

@@ -31,6 +31,7 @@ async function until(what, check, seconds = 20) {
 
 async function api(method, path, body) {
   const response = await fetch(base + path, {
+    signal: AbortSignal.timeout(90_000), // a request the server never answers fails the smoke, never holds the run
     method,
     headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
@@ -58,10 +59,18 @@ socket.onmessage = (message) => {
   if (msg.method === "Runtime.exceptionThrown") consoleErrors.push(msg.params.exceptionDetails?.exception?.description ?? "exception");
   if (msg.method === "Runtime.consoleAPICalled" && msg.params.type === "error") consoleErrors.push(msg.params.args.map((arg) => arg.value ?? arg.description).join(" "));
 };
+// send is one DevTools call; one the browser never answers fails the smoke instead of holding the run
 const send = (method, params = {}) =>
-  new Promise((resolve) => {
+  new Promise((resolve, reject) => {
     const id = ++nextId;
-    waiting.set(id, resolve);
+    const timer = setTimeout(() => {
+      waiting.delete(id);
+      reject(new Error(`the browser did not answer ${method} in 30 s`));
+    }, 30_000);
+    waiting.set(id, (msg) => {
+      clearTimeout(timer);
+      resolve(msg);
+    });
     socket.send(JSON.stringify({ id, method, params }));
   });
 const evaluate = async (expression) => {
@@ -128,9 +137,10 @@ try {
   step("the terminal echoed back", `${screen.filter((line) => line.includes("e2e-ok")).length} lines carry e2e-ok`);
   await shot("terminal");
 
-  if (!(await clickText(".lens-switch button", "Chat"))) fail("no Chat button in the lens switch");
-  await until("the chat lens", () => present(".lens-pane:not([hidden]) .composer textarea"));
-  step("the chat lens shows its composer");
+  // a shell has its terminal alone: the lens switch keeps its room unseen, and no chat or changes lens opens for it
+  if (!(await evaluate(`document.querySelector(".lens-switch")?.classList.contains("is-vacant") === true`))) fail("a shell pane's lens switch is drawn");
+  if (await present(".lens-pane:not([hidden]) .composer textarea")) fail("a shell pane shows a chat composer");
+  step("a shell pane has its terminal alone");
 
   if (!(await clickText(".rail-btn", "Wall"))) fail("no Wall button on the rail");
   await until("the Wall's bar", () => present(".wall-bar"));

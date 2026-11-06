@@ -1,5 +1,8 @@
 // The page counts as visible while this document is, or any other document drawn from it: the pop-out window
-// stays on screen when the tab behind it is hidden, and the polls that feed it must go on.
+// stays on screen when the tab behind it is hidden, and the polls that feed it must go on. Inside the Mac app it is
+// always visible: the menu bar and the Dock badge are drawn from its roster while the window is hidden.
+
+import { inShell } from "./shell";
 
 const others = new Set<Document>();
 const watchers = new Set<() => void>();
@@ -21,7 +24,8 @@ export function alsoVisible(doc: Document): () => void {
   };
 }
 
-export const pageVisible = () => document.visibilityState === "visible" || [...others].some((doc) => doc.visibilityState === "visible");
+export const pageVisible = () =>
+  inShell() || document.visibilityState === "visible" || [...others].some((doc) => doc.visibilityState === "visible");
 
 // watchVisibility calls back whenever any document of ours changes visibility or leaves; the return stops it.
 export function watchVisibility(fn: () => void): () => void {

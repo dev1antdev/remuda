@@ -2,7 +2,7 @@
 
 import { getJSON } from "@/lib/http";
 
-export type SearchHit = { machine: string; project: string; dir: string; session: string; uuid: string; ts: string; role: "user" | "assistant"; snippet: string };
+export type SearchHit = { machine: string; agent?: string; project: string; dir: string; session: string; uuid: string; ts: string; role: "user" | "assistant"; snippet: string };
 // encodePath is the name Claude Code gives a folder's project directory, the same rule as transcript.EncodePath on the server
 export const encodePath = (dir: string) => dir.replace(/[^A-Za-z0-9]/g, "-");
 export type SearchResult = { hits: SearchHit[]; errors?: Record<string, string>; more: boolean };

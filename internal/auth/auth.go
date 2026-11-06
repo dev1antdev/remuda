@@ -1,7 +1,8 @@
 // Package auth is deliberately small: one bearer token, required on every
 // request behind the guard. No accounts, no third parties. The token lives in
 // a 0600 file in the state dir; a signed-in browser keeps a device cookie with a
-// secret of its own (devices.go), never the token itself.
+// secret of its own (devices.go), never the token itself; the agents on a
+// machine hold a key that opens the task routes and nothing else (keys.go).
 package auth
 
 import (
@@ -54,13 +55,16 @@ type Guard struct {
 	token   string
 	host    string
 	Devices *Devices // the signed-in browsers; nil keeps the token itself in the cookie, as before devices
+	Keys    *Keys    // the agents' keys; nil refuses every rk_ bearer
 	stale   sync.Map // ids of revoked devices whose cookie was already logged
+	strayed sync.Map // key ids whose reach past their scope was logged, with when
 }
 
-// NewGuard guards with one token; with a Devices store every signed-in browser gets a secret of its own instead.
-func NewGuard(token string, devices *Devices) *Guard {
+// NewGuard guards with one token; with a Devices store every signed-in browser gets a secret of its own instead,
+// and with a Keys store an agent key opens the routes of its scope.
+func NewGuard(token string, devices *Devices, keys *Keys) *Guard {
 	h, _ := os.Hostname()
-	return &Guard{token: token, host: strings.TrimSuffix(h, ".local"), Devices: devices}
+	return &Guard{token: token, host: strings.TrimSuffix(h, ".local"), Devices: devices, Keys: keys}
 }
 
 func (g *Guard) ok(presented string) bool {
@@ -68,10 +72,13 @@ func (g *Guard) ok(presented string) bool {
 		subtle.ConstantTimeCompare([]byte(presented), []byte(g.token)) == 1
 }
 
-// caller is who a request comes from: a device, the bearer token (no device), a legacy cookie holding the token (to upgrade),
-// a device no longer signed in (stale), or nobody.
+// caller is who a request comes from: a device, the bearer token (no device), an agent key (reaching its scope only),
+// a viewer (by key or by a device a viewer link signed in: the page's reads only), a legacy cookie holding the token
+// (to upgrade), a device no longer signed in (stale), or nobody.
 type caller struct {
 	device  string
+	key     *Key
+	viewer  bool
 	ok      bool
 	upgrade bool
 	stale   bool
@@ -79,7 +86,18 @@ type caller struct {
 
 func (g *Guard) authenticate(r *http.Request) caller {
 	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
-		return caller{ok: g.ok(strings.TrimPrefix(h, "Bearer "))}
+		bearer := strings.TrimPrefix(h, "Bearer ")
+		if IsKey(bearer) {
+			if g.Keys == nil {
+				return caller{}
+			}
+			key, ok := g.Keys.Check(bearer)
+			if !ok {
+				return caller{}
+			}
+			return caller{key: &key, viewer: key.Scope == ScopeViewer, ok: true}
+		}
+		return caller{ok: g.ok(bearer)}
 	}
 	c, err := r.Cookie(CookieName)
 	if err != nil {
@@ -93,7 +111,10 @@ func (g *Guard) authenticate(r *http.Request) caller {
 		if !ok {
 			return caller{stale: true}
 		}
-		return caller{device: device.ID, ok: true}
+		if device.Viewer && (g.Keys == nil || !g.Keys.Has(device.Key)) { // the link was revoked: its screens go with it
+			return caller{stale: true}
+		}
+		return caller{device: device.ID, viewer: device.Viewer, ok: true}
 	}
 	if !g.ok(c.Value) {
 		return caller{}
@@ -101,7 +122,24 @@ func (g *Guard) authenticate(r *http.Request) caller {
 	return caller{ok: true, upgrade: g.Devices != nil}
 }
 
+// SignedIn says whether a request comes from the person's own signed-in browser or carries the token — never a viewer
+// link, an agent's key or a device no longer signed in: what may open a preview, which serves an app on a port of the
+// cockpit's own host, where the browser sends this cookie too.
+func (g *Guard) SignedIn(r *http.Request) bool {
+	who := g.authenticate(r)
+	return who.ok && who.key == nil && !who.viewer
+}
+
 type deviceKey struct{}
+type callerKey struct{}
+type viewerKey struct{}
+
+// IsViewer says whether a request came from a viewer — a viewer key, or a device a viewer link signed in — so a
+// handler marks nothing as the person's own look.
+func IsViewer(ctx context.Context) bool {
+	v, _ := ctx.Value(viewerKey{}).(bool)
+	return v
+}
 
 // DeviceID is the signed-in device a request came from, "" for a bearer caller.
 func DeviceID(ctx context.Context) string {
@@ -109,14 +147,27 @@ func DeviceID(ctx context.Context) string {
 	return id
 }
 
-// Middleware rejects unauthenticated requests; a valid ?token= (the pairing link) signs the browser in and is stripped from the URL.
+// CallerName is the name of the agent key a request came with (the machine it was placed on, "an agent" when it has
+// none), "" for the token or a device.
+func CallerName(ctx context.Context) string {
+	name, _ := ctx.Value(callerKey{}).(string)
+	return name
+}
+
+// Middleware rejects unauthenticated requests; a valid ?token= (the pairing link) signs the browser in and is stripped
+// from the URL, and a valid ?viewer= (a viewer link) signs it in as a viewer the same way.
 func (g *Guard) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if qv := r.URL.Query().Get("viewer"); qv != "" {
+			g.viewerLink(w, r, qv)
+			return
+		}
 		if qt := r.URL.Query().Get("token"); qt != "" {
 			if !g.ok(qt) {
 				g.refused(r)
 			} else {
-				if who := g.authenticate(r); who.device == "" { // a browser already signed in keeps its device
+				// a browser already signed in keeps its device; a viewer's screen, shown the token, becomes a device of the person's own
+				if who := g.authenticate(r); who.device == "" || who.viewer {
 					if !g.signIn(w, r) {
 						return
 					}
@@ -131,10 +182,25 @@ func (g *Guard) Middleware(next http.Handler) http.Handler {
 		}
 		who := g.authenticate(r)
 		if who.ok {
+			if who.key != nil {
+				if !who.key.Allows(r.Method, r.URL.Path) {
+					g.strayedKey(*who.key, r)
+					http.Error(w, who.key.Reach(), http.StatusForbidden)
+					return
+				}
+				ctx := context.WithValue(r.Context(), callerKey{}, who.key.caller())
+				next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, viewerKey{}, who.viewer)))
+				return
+			}
+			if who.viewer && !ViewerAllows(r.Method, r.URL.Path) {
+				http.Error(w, "this link is for viewing only", http.StatusForbidden)
+				return
+			}
 			if who.upgrade && !g.signIn(w, r) {
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), deviceKey{}, who.device)))
+			ctx := context.WithValue(r.Context(), deviceKey{}, who.device)
+			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, viewerKey{}, who.viewer)))
 			return
 		}
 		if who.stale {
@@ -148,8 +214,46 @@ func (g *Guard) Middleware(next http.Handler) http.Handler {
 	})
 }
 
+// viewerLink is a page opened with ?viewer=<key>: a browser not yet signed in gets a viewer device tied to that key
+// and is sent on without the key in its address; a browser already signed in keeps its device; a wrong key is refused
+// like a wrong token.
+func (g *Guard) viewerLink(w http.ResponseWriter, r *http.Request, presented string) {
+	var key Key
+	ok := false
+	if g.Keys != nil {
+		key, ok = g.Keys.Check(presented)
+	}
+	if !ok || key.Scope != ScopeViewer {
+		g.refused(r)
+		g.serveLogin(w)
+		return
+	}
+	if who := g.authenticate(r); who.device == "" {
+		if g.Devices == nil {
+			http.Error(w, "this remuda keeps no devices", http.StatusServiceUnavailable)
+			return
+		}
+		cookie, _, err := g.Devices.MintViewer(ipOf(r), r.UserAgent(), key.ID)
+		if err != nil {
+			log.Printf("auth: could not keep the viewer: %v", err)
+			http.Error(w, "could not sign in", http.StatusInternalServerError)
+			return
+		}
+		g.setCookie(w, r, cookie)
+	}
+	q := r.URL.Query()
+	q.Del("viewer")
+	u := *r.URL
+	u.RawQuery = q.Encode()
+	http.Redirect(w, r, u.String(), http.StatusSeeOther)
+}
+
+// maxLoginForm bounds the sign-in form, which anybody may send: a token and room to spare, never megabytes held in memory.
+const maxLoginForm = 4 << 10
+
 // HandleLogin signs the browser in with a posted token.
 func (g *Guard) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxLoginForm)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
@@ -198,6 +302,16 @@ func (g *Guard) staleCookie(w http.ResponseWriter, r *http.Request) {
 	if _, seen := g.stale.LoadOrStore(id, true); !seen {
 		log.Printf("auth: device %s is no longer signed in (from %s)", id, r.RemoteAddr)
 	}
+}
+
+// strayedKey logs an agent key reaching past its scope, once an hour per key: a misconfigured agent, not a guess at the token.
+func (g *Guard) strayedKey(key Key, r *http.Request) {
+	now := time.Now()
+	if last, seen := g.strayed.Load(key.ID); seen && now.Sub(last.(time.Time)) < time.Hour {
+		return
+	}
+	g.strayed.Store(key.ID, now)
+	log.Printf("auth: the %s key of %s asked for %s %s; %s", key.Scope, key.Name, r.Method, r.URL.Path, key.Reach())
 }
 
 // refused logs a wrong token with its address and makes the caller wait, so guessing is slow.

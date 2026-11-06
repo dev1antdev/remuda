@@ -73,6 +73,23 @@ func TestSubmitPrefersThePromptAndTypesForAShell(t *testing.T) {
 	}
 }
 
+func TestSubmitToAgentNeverTypesIntoAShell(t *testing.T) {
+	in := NewInput(nil, nil)
+	ref := events.PaneRef{Machine: "local", Pane: "w1:p1"}
+	agent := &fakeClient{}
+	if err := in.SubmitToAgent(agent, ref, "hello"); err != nil || len(agent.typed) != 1 || agent.typed[0] != "prompt:hello" {
+		t.Fatalf("agent: %v %v", err, agent.typed)
+	}
+	left := &fakeClient{promptErr: &herdr.Error{Code: "agent_not_found"}}
+	if err := in.SubmitToAgent(left, ref, "Look at the failing job\nrm -rf build"); !errors.Is(err, ErrNoAgent) || len(left.typed) != 0 || len(left.keys) != 0 {
+		t.Fatalf("a pane whose agent left: %v, typed %v, keys %v", err, left.typed, left.keys)
+	}
+	blocked := &fakeClient{promptErr: &herdr.Error{Code: "agent_blocked"}}
+	if err := in.SubmitToAgent(blocked, ref, "x"); !errors.Is(err, ErrAgentBusy) || len(blocked.typed) != 0 {
+		t.Fatalf("blocked: %v %v", err, blocked.typed)
+	}
+}
+
 func TestRefOK(t *testing.T) {
 	for _, bad := range []string{"", "-x", "a b", "a..b", "a\tb", "x\x7f"} {
 		if RefOK(bad) {
@@ -101,9 +118,45 @@ func TestKeysAndAgents(t *testing.T) {
 	if err := StartAgent(client, "w1:p1", "claude"); err != nil || client.starts != 3 {
 		t.Fatalf("start retried %d times: %v", client.starts, err)
 	}
-	refused := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_name_taken"}}}
-	if err := StartAgent(refused, "w1:p1", "claude"); !herdr.IsCode(err, "agent_name_taken") || refused.starts != 1 {
+	taken := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_name_taken"}}}
+	if err := StartAgent(taken, "w1:p1", "claude"); err != nil || taken.starts != 2 || strings.Join(taken.withArgs, " ") != "claude claude-w1-p1" {
+		t.Fatalf("a taken name is tried once more with the pane's id: %v, starts %d, %v", err, taken.starts, taken.withArgs)
+	}
+	stillTaken := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_name_taken"}, {Code: "agent_name_taken"}}}
+	if err := StartAgent(stillTaken, "w1:p1", "claude"); !herdr.IsCode(err, "agent_name_taken") || stillTaken.starts != 2 {
+		t.Fatalf("a name taken twice is final: %v", err)
+	}
+	refused := &fakeClient{startErrs: []*herdr.Error{{Code: "agent_kind_unknown"}}}
+	if err := StartAgent(refused, "w1:p1", "claude"); !herdr.IsCode(err, "agent_kind_unknown") || refused.starts != 1 {
 		t.Fatalf("another refusal is final: %v", err)
+	}
+	if got := UniqueName("codex", "w1Y:p1"); got != "codex-w1y-p1" {
+		t.Fatalf("UniqueName = %q", got)
+	}
+}
+
+func TestForkArgs(t *testing.T) {
+	cases := map[string]string{"claude": "--resume s1 --fork-session", "codex": "fork s1"}
+	for kind, want := range cases {
+		args, ok := ForkArgs(kind, "s1")
+		if !ok || strings.Join(args, " ") != want || !CanFork(kind) {
+			t.Errorf("%s: %q %v, want %q", kind, args, ok, want)
+		}
+	}
+	for _, kind := range []string{"gemini", "kimi", "shell", "pi"} {
+		if _, ok := ForkArgs(kind, "s1"); ok || CanFork(kind) {
+			t.Errorf("%s forks nothing", kind)
+		}
+	}
+	args, err := StartArgs("claude", Start{Resume: "0123-abcd", Fork: true, Model: "opus"})
+	if err != nil || strings.Join(args, " ") != "--resume 0123-abcd --fork-session --model opus" {
+		t.Fatalf("claude fork with a model: %q %v", args, err)
+	}
+	if _, err := StartArgs("gemini", Start{Resume: "0123-abcd", Fork: true}); err == nil {
+		t.Errorf("gemini cannot fork")
+	}
+	if _, err := StartArgs("claude", Start{Fork: true}); err == nil {
+		t.Errorf("a fork without a session is refused")
 	}
 }
 

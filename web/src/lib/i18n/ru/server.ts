@@ -1,0 +1,68 @@
+// The Russian words of server mode, the Server place, a machine's body in its vitals, and Update everywhere.
+
+import type { Dictionary } from "../../i18n";
+
+export const server: Dictionary = {
+  // the body's rows and words
+  "{used} of {total} GB used": "занято {used} из {total} ГБ",
+  "{avail} GB available": "доступно {avail} ГБ",
+  "swap {used} of {total} GB": "подкачка {used} из {total} ГБ",
+  "{temp} °C": "{temp} °C",
+  "critical at {temp} °C": "критическая {temp} °C",
+  "{now} of {max} GHz": "{now} из {max} ГГц",
+  "{now} GHz": "{now} ГГц",
+  "under-voltage": "недостаток питания",
+  "frequency capped": "частота ограничена",
+  throttled: "троттлинг",
+  "soft temperature limit": "мягкий температурный предел",
+  "now: {what}": "сейчас: {what}",
+  "none now": "сейчас нет",
+  "under-voltage alarm only: the firmware's word needs root here (vcgencmd)": "виден только сигнал о питании: полное слово прошивки здесь читается только от root (vcgencmd)",
+  "since boot: {what}": "с загрузки: {what}",
+  "none since boot": "с загрузки не было",
+  "Under-voltage: the power supply is too weak": "Недостаток питания: блок питания слишком слабый",
+  "Held back now: {what}": "Сейчас сдерживается: {what}",
+  "Held back since boot: {what}": "Сдерживался с загрузки: {what}",
+  "Hot: {temp} °C": "Горячо: {temp} °C",
+  "Warm: {temp} °C": "Тепло: {temp} °C",
+  "Memory nearly full: {pct}% in use": "Память почти кончилась: занято {pct}%",
+  "Memory tight: {pct}% in use": "Памяти мало: занято {pct}%",
+  Memory: "Память",
+  "Memory in use": "Занятая память",
+  Temperature: "Температура",
+  "CPU clock": "Частота CPU",
+  Throttling: "Троттлинг",
+  // server mode and the Server place
+  "This remuda serves the page only: add a machine its agents run on — the + beside Machines, any SSH host with herdr — or run herdr machine add on the server.":
+    "Этот remuda только отдаёт страницу: добавьте машину, на которой работают агенты, — «+» рядом с «Машины», любой SSH-хост с herdr, — или выполните herdr machine add на сервере.",
+  Server: "Сервер",
+  "The machine this remuda serves the page from: its load, memory, temperature and throttling": "Машина, с которой этот remuda отдаёт страницу: нагрузка, память, температура и троттлинг",
+  "Server · {name}": "Сервер · {name}",
+  "This remuda serves the page only: the machine it runs on is none of the cockpit's, its agents run on the machines in the sidebar.":
+    "Этот remuda только отдаёт страницу: машина, на которой он работает, не входит в кабину, агенты работают на машинах из боковой панели.",
+  System: "Система",
+  "not needed here": "здесь не нужен",
+  "its load, memory, temperature and throttling": "нагрузка, память, температура и троттлинг",
+  // Update everywhere
+  "Update everywhere": "Обновить везде",
+  "Update everywhere…": "Обновить везде…",
+  "every connected machine's pending updates, one after another": "все ожидающие обновления на подключённых машинах, по очереди",
+  "Every connected machine's pending updates, one after another, this page's own remuda last": "Все ожидающие обновления на подключённых машинах, по очереди, remuda этой страницы — последним",
+  waiting: "ждёт",
+  "running…": "идёт…",
+  "skipped: {why}": "пропущено: {why}",
+  skipped: "пропущено",
+  "failed: {why}": "не вышло: {why}",
+  "{done} of {total} done": "готово {done} из {total}",
+  "{n} updated": ["обновлено: {n}", "обновлено: {n}", "обновлено: {n}"],
+  "{n} skipped": ["пропущено: {n}", "пропущено: {n}", "пропущено: {n}"],
+  "remuda here restarts now; the page offers a reload once the new version answers.": "remuda здесь сейчас перезапустится; страница предложит перезагрузку, когда ответит новая версия.",
+  "Looking at every machine…": "Смотрю каждую машину…",
+  "Everything is up to date on every connected machine.": "На всех подключённых машинах всё свежее.",
+  "One step after another, each as its command says; a step that fails leaves the rest to run. The page's own remuda goes last: it restarts once its step ends.":
+    "Шаг за шагом, каждый — как написано в его команде; неудачный шаг не останавливает остальные. remuda этой страницы — последним: он перезапустится, когда его шаг закончится.",
+  "Close (it keeps running)": "Закрыть (продолжит работать)",
+  "Run all {n}": "Запустить все: {n}",
+  "{version} installed, not used here": "{version} установлен, здесь не используется",
+  "remuda here is restarting onto its new version; the page offers a reload once it answers.": "remuda здесь перезапускается на новую версию; страница предложит перезагрузку, когда он ответит.",
+};

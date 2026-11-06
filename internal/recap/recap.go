@@ -5,7 +5,6 @@ package recap
 
 import (
 	"encoding/json"
-	"regexp"
 	"strings"
 	"time"
 
@@ -39,7 +38,8 @@ type Recap struct {
 	Asking    bool           `json:"asking"` // the last turn ends in a question still without an answer
 	First     string         `json:"first,omitempty"`
 	Last      string         `json:"last,omitempty"`
-	Said      string         `json:"said,omitempty"` // the first line of the last answer
+	Said      string         `json:"said,omitempty"`  // the first line of the last answer
+	Spans     []Span         `json:"spans,omitempty"` // when it worked, waited and sat idle over the period, set by the Service
 }
 
 // MaxCommands is how many shell commands a recap lists.
@@ -94,11 +94,11 @@ func Of(turns []transcript.Turn, since time.Time) Recap {
 				r.Failed++
 			}
 			if r.Longest == nil || p.Took > r.Longest.Took {
-				r.Longest = &Call{Name: p.ToolName, Hint: hint(p), Took: p.Took}
+				r.Longest = &Call{Name: p.ToolName, Hint: Hint(p), Took: p.Took}
 			}
 			switch {
-			case p.ToolName == "Bash":
-				if cmd := inputField(p.Input, "command"); cmd != "" && len(r.Commands) < MaxCommands {
+			case transcript.ShellCommand(p) != "":
+				if cmd := transcript.ShellCommand(p); len(r.Commands) < MaxCommands {
 					r.Commands = append(r.Commands, oneLine(cmd, 160))
 				}
 			case editTools[p.ToolName]:
@@ -113,7 +113,7 @@ func Of(turns []transcript.Turn, since time.Time) Recap {
 				}
 			case agentTool[p.ToolName]:
 				r.Subagents++
-			case p.ToolName == "AskUserQuestion":
+			case transcript.IsQuestion(p.ToolName):
 				r.Questions++
 			}
 		}
@@ -128,7 +128,7 @@ func Of(turns []transcript.Turn, since time.Time) Recap {
 		}
 	}
 	r.Read = kept
-	r.Asking = lastRole == "assistant" && lastPart != nil && lastPart.ToolName == "AskUserQuestion" && lastPart.Output == "" && !lastPart.IsError
+	r.Asking = lastRole == "assistant" && lastPart != nil && transcript.IsQuestion(lastPart.ToolName) && lastPart.Output == "" && !lastPart.IsError
 	r.Said = said.FirstLine(lastAnswer)
 	return r
 }
@@ -136,47 +136,17 @@ func Of(turns []transcript.Turn, since time.Time) Recap {
 // Quiet is a recap with nothing in it: no prompt, no answer, no call.
 func (r Recap) Quiet() bool { return r.Prompts == 0 && r.Answers == 0 && r.Calls == 0 }
 
-var cutFieldRe = regexp.MustCompile(`"(file_path|notebook_path|command|pattern|url|description|query)":"((?:[^"\\]|\\.)*)"`)
-
 // inputField is the first of the keys found in a tool's input: an object, or the string the server cut a big input to.
 func inputField(input json.RawMessage, keys ...string) string {
-	if len(input) == 0 {
-		return ""
-	}
-	var obj map[string]any
-	if json.Unmarshal(input, &obj) == nil {
-		for _, key := range keys {
-			if s, ok := obj[key].(string); ok && s != "" {
-				return s
-			}
-		}
-		return ""
-	}
-	var cut string
-	if json.Unmarshal(input, &cut) != nil {
-		return ""
-	}
-	found := map[string]string{}
-	for _, m := range cutFieldRe.FindAllStringSubmatch(cut, -1) {
-		var value string
-		if json.Unmarshal([]byte(`"`+m[2]+`"`), &value) == nil {
-			found[m[1]] = value
-		}
-	}
-	for _, key := range keys {
-		if found[key] != "" {
-			return found[key]
-		}
-	}
-	return ""
+	return transcript.InputField(input, keys...)
 }
 
-// hint is what a call was about in a few words: its file, else its command, pattern, address or description.
-func hint(p *transcript.Part) string {
+// Hint is what a call was about in a few words: its file, else its command, pattern, address or description.
+func Hint(p *transcript.Part) string {
 	if path := inputField(p.Input, "file_path", "notebook_path", "path"); path != "" {
 		return path
 	}
-	return oneLine(inputField(p.Input, "command", "pattern", "url", "description", "query"), 80)
+	return oneLine(inputField(p.Input, "command", "cmd", "pattern", "url", "description", "query", "input"), 80)
 }
 
 // oneLine is a text on one line cut to n runes, an ellipsis when cut.

@@ -24,4 +24,9 @@ describe("unread", () => {
     expect(unread(undefined, 0)).toBe(false);
     expect(unread(1, 0)).toBe(true);
   });
+  it("is news when the newest id is below the one seen here: the cockpit's activity started over (a new state folder, another machine)", () => {
+    expect(unread(4, 1500)).toBe(true);
+    expect(unread(0, 1500)).toBe(false);
+    expect(unread(undefined, 1500)).toBe(false);
+  });
 });

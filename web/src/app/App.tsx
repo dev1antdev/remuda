@@ -6,6 +6,7 @@ import { RosterProvider } from "@/features/roster/useRoster";
 import { ErrorBoundary, Notice, TipProvider } from "@/ui";
 import { startDiagnostics } from "./diag";
 import Shell from "./Shell";
+import { t } from "@/lib/i18n";
 
 export default function App() {
   useEffect(startDiagnostics, []);
@@ -13,9 +14,9 @@ export default function App() {
     <ErrorBoundary
       fallback={(message) => (
         <div className="placeholder">
-          <Notice tone="error">The page hit an error: {message}</Notice>
+          <Notice tone="error">{t("The page hit an error: {message}", { message })}</Notice>
           <button type="button" className="btn primary" onClick={() => location.reload()}>
-            Reload
+            {t("Reload")}
           </button>
         </div>
       )}

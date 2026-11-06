@@ -38,3 +38,23 @@ func TestSocketPathLeavesOpenSSHItsSuffix(t *testing.T) {
 		t.Fatalf("one byte over was still used: %s (%d bytes)", p, len(p))
 	}
 }
+
+// TestTempDirSocketsAreTheInstancesOwn: two instances whose state dirs are too long for a socket both fall back to
+// the temp dir, where the name must still tell them apart, or a scratch instance reuses the real one's master.
+func TestTempDirSocketsAreTheInstancesOwn(t *testing.T) {
+	defer func(d string) { SocketDir = d }(SocketDir)
+	SocketDir = "/Users/dev1antdev/Library/Application Support/remuda/ssh"
+	real := tmpPath("remuda-ssh-", "gog.remote", ".ctl")
+	again := tmpPath("remuda-ssh-", "gog.remote", ".ctl")
+	SocketDir = "/private/tmp/claude-501/-Users-dev1antdev-Projects-mardeus-remuda/scratchpad/state/ssh"
+	scratch := tmpPath("remuda-ssh-", "gog.remote", ".ctl")
+	if real != again {
+		t.Fatalf("the same instance got two names: %s, %s", real, again)
+	}
+	if real == scratch {
+		t.Fatalf("two instances share %s", real)
+	}
+	if filepath.Dir(real) != filepath.Clean(os.TempDir()) || filepath.Dir(scratch) != filepath.Clean(os.TempDir()) {
+		t.Fatalf("not in the temp dir: %s, %s", real, scratch)
+	}
+}

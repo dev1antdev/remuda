@@ -13,7 +13,8 @@ func (s *Server) questionRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/question", s.handleQuestion)
 }
 
-// handleQuestion is GET /api/question?machine&pane: the dialog on the pane's screen with its choices, null when the screen shows none.
+// handleQuestion is GET /api/question?machine&pane: the dialog on the pane's screen with its choices, null when the screen shows
+// none, and the permission mode Claude Code's footer names, left out when no footer is on screen.
 func (s *Server) handleQuestion(w http.ResponseWriter, r *http.Request) {
 	paneID := r.URL.Query().Get("pane")
 	if paneID == "" {
@@ -30,9 +31,12 @@ func (s *Server) handleQuestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
+	answer := map[string]any{"question": nil}
 	if q, ok := chat.ParseQuestion(screen); ok {
-		writeJSON(w, map[string]any{"question": q})
-		return
+		answer["question"] = q
 	}
-	writeJSON(w, map[string]any{"question": nil})
+	if mode, ok := chat.ParseMode(screen); ok {
+		answer["mode"] = mode
+	}
+	writeJSON(w, answer)
 }

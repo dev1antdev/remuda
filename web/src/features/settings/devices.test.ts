@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { deviceLine, revokeQuestion } from "./devices";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
+import { deviceLine, revokeOthersQuestion, revokeQuestion, signedOutWords } from "./devices";
+
+afterEach(() => setLang("en"));
 
 const now = Date.parse("2026-10-25T12:00:00Z");
 const device = { name: "Chrome on macOS", kind: "Chrome on macOS", last_seen: "2026-10-25T09:00:00Z", ip: "192.168.1.4", this: false };
@@ -22,5 +25,15 @@ describe("revokeQuestion", () => {
   });
   it("names another device", () => {
     expect(revokeQuestion({ name: "the phone", this: false })).toEqual({ text: "Sign “the phone” out? It needs the token to sign in again.", label: "Revoke" });
+  });
+});
+
+describe("revokeOthersQuestion and signedOutWords", () => {
+  it("ask before and count after, in the page's language with its plural", () => {
+    expect(revokeOthersQuestion()).toEqual({ text: "Sign out every other device? Each needs the token to sign in again.", label: "Sign out others" });
+    expect([1, 3].map(signedOutWords)).toEqual(["1 device signed out", "3 devices signed out"]);
+    setLang("ru");
+    expect(revokeOthersQuestion().label).toBe("Выйти на остальных");
+    expect([1, 3, 5, 21].map(signedOutWords)).toEqual(["1 устройство вышло", "3 устройства вышли", "5 устройств вышли", "21 устройство вышло"]);
   });
 });

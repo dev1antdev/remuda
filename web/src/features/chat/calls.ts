@@ -1,6 +1,7 @@
 // What a turn's tool calls add up to: how many failed, how many repeated an earlier call of the same turn exactly.
 
 import type { Part, Turn } from "./api";
+import { t } from "@/lib/i18n";
 
 export type CallStats = { failed: number; repeated: number };
 
@@ -27,7 +28,7 @@ function callKey(part: Part): string {
 // callWords is the foot's phrase for the stats, "" when nothing went wrong
 export function callWords(stats: CallStats): string {
   const words: string[] = [];
-  if (stats.failed) words.push(`${stats.failed} failed`);
-  if (stats.repeated) words.push(`${stats.repeated} repeated`);
+  if (stats.failed) words.push(t("{n} failed", { n: stats.failed }));
+  if (stats.repeated) words.push(t("{n} repeated", { n: stats.repeated }));
   return words.join(" · ");
 }

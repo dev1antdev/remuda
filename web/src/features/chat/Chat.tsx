@@ -1,7 +1,7 @@
 // Chat is the chat lens: the transcript from Claude Code's own session file, read server-side and polled
-// at the pane's pace; sending types into the live pane.
+// at the pane's pace; sending types into the live pane; text selected in an answer can be quoted into the reply.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { actions, app } from "@/app/store";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import SendToAgent from "@/features/agents/SendToAgent";
@@ -9,14 +9,17 @@ import type { OpenFile } from "@/features/files/target";
 import { act } from "@/app/act";
 import { createTab, sendKeys, submitPrompt, type PaneUsage } from "@/features/roster/api";
 import { copyText } from "@/lib/host";
+import { usePref } from "@/lib/prefs";
 import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
 import { Icon, Notice, Select, useTimedNotice } from "@/ui";
 import type { Subagent, Turn } from "./api";
 import Composer from "./Composer";
-import { anchorsItself, hiddenCount, idle, nextReveal } from "./mount";
+import { ALL_REVEALED, anchorsItself, hiddenCount, idle, nextReveal } from "./mount";
+import { isPinned, pinKey, pinOf, togglePin, type Pin } from "./pins";
 import { PlanBar } from "./PlanBar";
 import { QuestionCard } from "./QuestionCard";
+import { quoteText } from "./quote";
 import { revealTurn } from "./reveal";
 import { TimelineBar } from "./TimelineBar";
 import { turnLink } from "./turnLink";
@@ -24,8 +27,10 @@ import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFind } from "./useFind";
 import { useFollowBottom } from "./useFollowBottom";
+import { useQuote } from "./useQuote";
+import { t } from "@/lib/i18n";
 
-export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session }: {
+export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session, viewOnly = false, focused = true, notice }: {
   machineId: string;
   paneId: string; // "" shows a transcript on its own (a search jump), read-only
   status: string;
@@ -35,8 +40,11 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   workspaceId?: string; // with agent: an older session picked here can be resumed in a new tab of this workspace
   agent?: string;
   active?: boolean; // the lens on screen; a hidden one keeps its state and waits
+  focused?: boolean; // in the split view, the side the find bar serves; the terminal beside it has the bar otherwise
   subagent?: string; // with no pane: one subagent's own conversation, read-only
   session?: string; // with no pane: the session to show when no jump names it (the viewer)
+  viewOnly?: boolean; // a viewer link signed the page in: the conversation shows, nothing is typed
+  notice?: ReactNode; // a word over the composer from elsewhere on the page: a plan limit the agent stopped on
 }) {
   const readOnly = !paneId;
   const agents = useAgentTargets();
@@ -62,6 +70,12 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
 
   // the transcript, at the pane's pace: two seconds while the agent works or asks, ten otherwise
   const { data: chat, error: fetchError } = useChat({ machineId, paneId, sessionId, dir, every: busy ? 2000 : 10000, active, subagent });
+  // the pane's own session id goes to the store, so the Pins list can tell its pins from an older session's
+  useEffect(() => {
+    if (readOnly || sessionId !== null || !chat?.session_id) return;
+    actions.setChatLive(chat.session_id);
+  }, [readOnly, sessionId, chat?.session_id]);
+  useEffect(() => () => actions.setChatLive(null), []);
 
   // a long conversation mounts from its end: the last turns at once, the earlier ones in idle slices; the find bar and a
   // jump to an earlier turn want them all at once. `revealed` belongs to one session, so a switch starts over.
@@ -70,7 +84,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   const [reveal, setReveal] = useState<{ session?: string; n: number }>({ n: 0 });
   const revealed = reveal.session === loaded ? reveal.n : 0;
   const hidden = hiddenCount(turns.length, revealed);
-  const revealAll = useCallback(() => setReveal({ session: loaded, n: turns.length }), [loaded, turns.length]);
+  const revealAll = useCallback(() => setReveal({ session: loaded, n: ALL_REVEALED }), [loaded]);
   const anchor = useRef<{ height: number; top: number } | null>(null); // the log's measure before a slice, for a browser without scroll anchoring
   useEffect(() => {
     const log = logRef.current;
@@ -91,8 +105,17 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   useEffect(() => {
     if (finding && hidden > 0) revealAll();
   }, [finding, hidden, revealAll]);
-  useFind(logRef, { active, chat, mounted: hidden === 0 });
+  useFind(logRef, { active: active && focused, chat, mounted: hidden === 0 });
   const follow = useFollowBottom(logRef, { active, chat, startAtBottom: !jump?.turn, mounted: hidden });
+  // a quote of a selected piece of an answer, handed to the composer; the selection let go once it is there
+  const [quote, setQuote] = useState<{ text: string; n: number } | undefined>(undefined);
+  const onQuote = useCallback((selected: string) => {
+    const text = quoteText(selected);
+    if (!text) return;
+    setQuote((was) => ({ text, n: (was?.n ?? 0) + 1 }));
+    logRef.current?.ownerDocument.getSelection()?.removeAllRanges();
+  }, []);
+  const quotePop = useQuote(logRef, !readOnly && !viewOnly && active && focused, onQuote);
 
   // a search hit: scroll to its turn once that session is on screen, or say it is older than the loaded tail
   const pendingTurn = useRef<string | null>(jump?.turn ?? null);
@@ -110,10 +133,25 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       const id = turn.ids?.[0];
       if (!id) return;
       void copyText(turnLink(location.origin, { machineId, paneId, session: shownSession.current ?? "", turn: id })).then((ok) =>
-        actions.notify(ok ? "Link copied" : "The link could not be copied", { brief: true, error: !ok }),
+        actions.notify(ok ? t("Link copied") : t("The link could not be copied"), { brief: true, error: !ok }),
       );
     },
     [machineId, paneId],
+  );
+  // the pins of this folder's conversations: a bookmark on a turn of the session shown, kept per folder so it outlives a compaction
+  const [pins, setPins] = usePref<Pin[]>(pinKey(machineId, dir), []);
+  const pinnedIds = useMemo(() => new Set(pins.map((p) => p.turn)), [pins]);
+  const pinsRef = useRef(pins);
+  pinsRef.current = pins;
+  const onPin = useCallback(
+    (turn: Turn) => {
+      const pin = pinOf(turn, shownSession.current ?? "");
+      if (!pin) return;
+      const was = isPinned(pinsRef.current, pin.turn);
+      setPins((prev) => togglePin(prev, pin));
+      actions.notify(was ? t("Unpinned") : t("Pinned — Pins… in the View menu lists it"), { brief: true });
+    },
+    [setPins],
   );
   useEffect(() => {
     if (!jump) return;
@@ -147,6 +185,14 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
     el.classList.add("turn-hit");
     setTimeout(() => el.classList.remove("turn-hit"), 2600);
   }, [chat, jump, hidden]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a jump into a session the lens cannot open (a pin whose file is gone): said once, the conversation shown stays
+  useEffect(() => {
+    if (!jump || !fetchError || !pendingTurn.current || (chat && chat.session_id === jump.session)) return;
+    pendingTurn.current = null;
+    actions.clearJump();
+    actions.notify(t("That turn's conversation could not be opened: {error}", { error: fetchError }), { error: true });
+    if (!readOnly) setSessionId(null);
+  }, [fetchError, jump, chat, readOnly]);
 
   const sessions = chat?.sessions ?? [];
   if (sessionId === null && chat?.session_id) live.current = chat.session_id;
@@ -155,7 +201,14 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
     if (!older || !workspaceId || !agent) return;
     void act(createTab({ machine: machineId, workspace: workspaceId, name: "", agent, resume: older }).then((created) => actions.selectPane(machineId, created.pane)));
   };
-  const keys = (ks: string[]) => sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
+  const keys = (ks: string[]) =>
+    sendKeys(machineId, paneId, ks).then(
+      () => true,
+      (e) => {
+        setActionError(errMsg(e));
+        return false;
+      },
+    );
   const context = usage && usage.window > 0 ? usage.context / usage.window : 0;
   const error = actionError ?? (fetchError || null);
 
@@ -170,8 +223,8 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
             options={sessions.map((s) => ({ value: s.id, label: s.title || s.id.slice(0, 8), hint: whenShort(s.mod_time) }))}
           />
           {older && workspaceId && agent && (
-            <button type="button" className="btn sm" title="A new tab in this workspace, the agent started on this conversation" onClick={resume}>
-              <Icon name="corner-down-left" size={12} /> Resume in a new tab
+            <button type="button" className="btn sm" title={t("A new tab in this workspace, the agent started on this conversation")} onClick={resume}>
+              <Icon name="corner-down-left" size={12} /> {t("Resume in a new tab")}
             </button>
           )}
         </div>
@@ -179,43 +232,69 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       <TimelineBar turns={turns} machineId={machineId} paneId={paneId} session={chat?.session_id} />
       <PlanBar plan={chat?.plan} />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
-        {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : readOnly ? "This transcript is empty." : "No transcript for this pane's folder yet."}</div>}
+        {turns.length === 0 && <div className="empty chat-empty">{chat === null ? t("Loading…") : readOnly ? t("This transcript is empty.") : t("No transcript for this pane's folder yet.")}</div>}
         {turns.slice(hidden).map((t, i) => (
-          <TurnView key={t.ids?.[0] || hidden + i} turn={t} machineId={machineId} onOpenFile={onOpenFile} onForward={others ? onForward : undefined} onLink={readOnly ? undefined : onLink} subagents={chat?.subagents} onOpenSubagent={onOpenSubagent} diffs />
+          <TurnView
+            key={t.ids?.[0] || hidden + i}
+            turn={t}
+            machineId={machineId}
+            onOpenFile={onOpenFile}
+            onForward={others ? onForward : undefined}
+            onLink={readOnly ? undefined : onLink}
+            onPin={readOnly ? undefined : onPin}
+            pinned={!!t.ids?.[0] && pinnedIds.has(t.ids[0])}
+            subagents={chat?.subagents}
+            onOpenSubagent={onOpenSubagent}
+            diffs
+          />
         ))}
       </div>
-      {!readOnly && status === "input" && (
+      {!readOnly && !viewOnly && status === "input" && (
         <Notice tone="warn" icon="alert-triangle" className="chat-notice">
           <QuestionCard machineId={machineId} paneId={paneId} active={active} onKeys={keys}>
-            The agent is waiting for an answer — check the terminal, or:
+            {t("The agent is waiting for an answer — check the terminal, or:")}
           </QuestionCard>
         </Notice>
       )}
+      {!readOnly && notice}
       {error && (
         <Notice tone="error" className="chat-notice" onDismiss={() => setActionError(null)}>
           {error}
         </Notice>
       )}
-      {!readOnly && context >= 0.8 && status !== "run" && (
+      {!readOnly && !viewOnly && context >= 0.8 && status !== "run" && (
         <Notice
           tone="warn"
           icon="chart"
           className={`chat-notice${context >= 0.9 ? " is-red" : ""}`}
           action={
             <button type="button" className="linkish" onClick={() => void submitPrompt(machineId, paneId, "/compact").catch((e) => setActionError(errMsg(e)))}>
-              Compact now
+              {t("Compact now")}
             </button>
           }
         >
-          Context {Math.round(100 * context)}% full — Claude Code compacts on its own near the edge; compacting now keeps the summary yours to steer.
+          {t("Context {pct}% full — Claude Code compacts on its own near the edge; compacting now keeps the summary yours to steer.", { pct: Math.round(100 * context) })}
         </Notice>
       )}
       {jumpMiss && (
         <Notice tone="info" className="chat-notice" onDismiss={() => setJumpMiss(false)}>
-          That turn is older than the loaded part of this transcript (the last 16 MB).
+          {t("That turn is older than the loaded part of this transcript (the last 16 MB).")}
         </Notice>
       )}
-      {!readOnly && <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} />}
+      {quotePop && (
+        <button
+          type="button"
+          className="btn sm quote-pop"
+          style={{ right: Math.max(8, document.documentElement.clientWidth - quotePop.x), top: Math.max(8, quotePop.y - 34) }}
+          title={t("Quote it in your reply (Q)")}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onQuote(quotePop.text)}
+        >
+          <Icon name="message" size={12} /> {t("Quote")}
+        </button>
+      )}
+      {!readOnly && !viewOnly && <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} agent={agent} onScreen={active} quote={quote} />}
+      {!readOnly && viewOnly && <div className="chat-viewonly">{t("Viewing only")}</div>}
       {forwarded && (
         <Notice tone="success" icon="check" className="chat-notice" onDismiss={clearForwarded}>
           {forwarded}
@@ -223,7 +302,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       )}
       {forward !== null && (
         <SendToAgent
-          title="Forward to another agent"
+          title={t("Forward to another agent")}
           text={forward}
           agents={agents}
           currentPane={{ machineId, paneId }}
@@ -233,7 +312,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           onSend={async (target, text) => {
             await submitPrompt(target.machineId, target.paneId, text);
             setForward(null);
-            showForwarded(`Forwarded to ${target.agent} in ${target.sessionName}.`);
+            showForwarded(t("Forwarded to {agent} in {workspace}.", { agent: target.agent, workspace: target.sessionName }));
           }}
         />
       )}

@@ -3,7 +3,7 @@
 import type { Machine, Pane, Session, Tab } from "./api";
 import { displayOf, type RadarPrefs } from "./radar";
 
-export type WallView = "chat" | "screen"; // what a tile shows: the last turns of the conversation, or the terminal as it is
+export type WallView = "chat" | "screen" | "zoo"; // what a tile shows: the last turns of the conversation, the terminal as it is, or the agent as a creature (app/Zoo.tsx)
 export type WallPrefs = { size: "s" | "m" | "l"; hideIdle: boolean; needsMe: boolean; view: WallView };
 export const DEFAULT_WALL: WallPrefs = { size: "m", hideIdle: false, needsMe: false, view: "chat" };
 
@@ -67,10 +67,43 @@ export function withFocus(shown: Tile[], key: string): { big: Tile | null; rest:
 }
 
 // nextNeedingMe is the agent to go to after the one at fromKey: the tiles that need the person, in the roster's order,
-// round and round; nobody when none needs one, the same tile when it is the only one
-export function nextNeedingMe(machines: Machine[], radar: RadarPrefs, now: number, fromKey: string): Tile | null {
-  const waiting = tiles(machines, [], { ...DEFAULT_WALL, needsMe: true }, radar, now).shown;
+// round and round, less the ones hidden (on the Wall, the tiles hidden by hand, which could not take it); nobody when
+// none needs one, the same tile when it is the only one
+export function nextNeedingMe(machines: Machine[], radar: RadarPrefs, now: number, fromKey: string, hidden: string[] = []): Tile | null {
+  const waiting = tiles(machines, hidden, { ...DEFAULT_WALL, needsMe: true }, radar, now).shown;
   if (!waiting.length) return null;
   const at = waiting.findIndex((tile) => tile.key === fromKey);
   return waiting[(at + 1) % waiting.length] ?? null;
+}
+
+// OFFICE_ROTATE is how long office mode keeps one agent large before the next, when nothing is pinned and nobody needs the person
+export const OFFICE_ROTATE = 20_000;
+
+// featured is the agent office mode shows large: the pinned one while it is on the wall; else the first that needs the
+// person, one asking a question before the rest; else the tiles in the wall's order — the current one until its
+// OFFICE_ROTATE since `since` is up, then the next, round and round; "" when the wall is empty
+export function featured(shown: Tile[], pinned: string, current: string, since: number, now: number, radar: RadarPrefs): string {
+  if (!shown.length) return "";
+  if (pinned && shown.some((tile) => tile.key === pinned)) return pinned;
+  const asking = shown.find((tile) => displayOf(tile.pane, radar, now) === "blocked");
+  if (asking) return asking.key;
+  const waiting = shown.find((tile) => needsMe(tile.pane, radar, now));
+  if (waiting) return waiting.key;
+  const at = shown.findIndex((tile) => tile.key === current);
+  if (at >= 0 && now - since < OFFICE_ROTATE) return current;
+  return shown[(at + 1) % shown.length]!.key;
+}
+
+// rotates says whether office mode will move on by itself: nothing pinned, nobody waiting, more than one agent
+export function rotates(shown: Tile[], pinned: string, now: number, radar: RadarPrefs): boolean {
+  return !pinned && shown.length > 1 && !shown.some((tile) => needsMe(tile.pane, radar, now));
+}
+
+// neighbour is the tile after (1) or before (-1) the current one in the wall's order, round and round; the first or the
+// last when the current one is unknown
+export function neighbour(shown: Tile[], current: string, by: 1 | -1): string {
+  if (!shown.length) return "";
+  const at = shown.findIndex((tile) => tile.key === current);
+  if (at < 0) return (by > 0 ? shown[0] : shown[shown.length - 1])!.key;
+  return shown[(at + by + shown.length) % shown.length]!.key;
 }

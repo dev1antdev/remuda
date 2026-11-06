@@ -3,11 +3,13 @@
 // the last used for this key preselected), edit the text, send through the chat's own path.
 
 import { useState } from "react";
-import { targetKey, type AgentTarget } from "./targets";
+import { targetKey, targetWords, type AgentTarget } from "./targets";
+import { useSharing } from "@/features/roster/useSharing";
 import { usePref } from "@/lib/prefs";
 import Select from "@/ui/Select";
 import Logo from "@/ui/Logo";
 import { Dialog, Notice, useSubmit } from "@/ui";
+import { t } from "@/lib/i18n";
 
 export default function SendToAgent({ title, text: initialText, agents, currentPane, rememberKey, exclude, onClose, onSend }: {
   title: string;
@@ -28,6 +30,8 @@ export default function SendToAgent({ title, text: initialText, agents, currentP
   const [target, setTarget] = useState(initial ? targetKey(initial) : "");
   const [text, setText] = useState(initialText);
   const chosen = choices.find((a) => targetKey(a) === target);
+  const share = useSharing(); // under the screen-sharing mode the machines and the hidden folders' agents by their neutral names
+  const masked = (a: AgentTarget) => (share.folderHidden(a.machineId, a.folder ?? "") ? share.folderName(a.machineId, a.folder ?? "", a.sessionName) : null);
   const { busy, err, run } = useSubmit(async () => {
     if (!chosen || !text.trim()) return;
     setRemembered({ ...remembered, [rememberKey]: target }); // before the dialog goes away
@@ -47,35 +51,35 @@ export default function SendToAgent({ title, text: initialText, agents, currentP
       }}
     >
       {choices.length === 0 ? (
-        <Notice tone="hint">No other agent is running.</Notice>
+        <Notice tone="hint">{t("No other agent is running.")}</Notice>
       ) : (
         <label>
-          Agent
+          {t("Agent")}
           <Select
             value={target}
             onChange={setTarget}
             options={choices.map((a) => ({
               value: targetKey(a),
-              label: `${a.sessionName} › ${a.paneTitle}`,
+              label: targetWords(a, masked(a)),
               hint: `${a.agent} · ${a.status}`,
-              group: a.machineLabel,
+              group: share.redact(a.machineLabel),
               icon: <Logo agent={a.agent} />,
             }))}
           />
         </label>
       )}
-      {chosen && <p className="modal-hint tasks-send-cwd">{chosen.cwd}</p>}
+      {chosen && masked(chosen) === null && <p className="modal-hint tasks-send-cwd">{chosen.cwd}</p>}
       <label>
-        Message
+        {t("Message")}
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={9} />
       </label>
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" className="btn primary" disabled={busy || !chosen || !text.trim()}>
-          {busy ? "Sending…" : "Send"}
+          {busy ? t("Sending…") : t("Send")}
         </button>
       </div>
     </Dialog>

@@ -6,17 +6,30 @@ describe("cron presets", () => {
     expect(cronFor("daily", 9, 30)).toBe("30 9 * * *");
     expect(cronFor("weekdays", 7, 0)).toBe("0 7 * * 1-5");
     expect(cronFor("hourly", 9, 15)).toBe("15 * * * *");
+    expect(cronFor("every3h", 9, 5)).toBe("5 */3 * * *");
     expect(cronFor("custom", 9, 15)).toBeNull();
   });
   it("read their own cron back, with the time", () => {
     expect(parseCron("30 9 * * *")).toEqual({ preset: "daily", hh: 9, mm: 30 });
     expect(parseCron("0 7 * * 1-5")).toEqual({ preset: "weekdays", hh: 7, mm: 0 });
     expect(parseCron("15 * * * *")).toEqual({ preset: "hourly", hh: 9, mm: 15 });
+    expect(parseCron("5 */3 * * *")).toEqual({ preset: "every3h", hh: 9, mm: 5 });
     expect(parseCron(DEFAULT_CRON)).toEqual({ preset: "weekdays", hh: 9, mm: 0 });
   });
   it("call anything else custom, keeping a readable time", () => {
     expect(parseCron("0 9 1 * *")).toEqual({ preset: "custom", hh: 9, mm: 0 });
     expect(parseCron("*/5 * * * *")).toEqual({ preset: "custom", hh: 9, mm: 0 });
     expect(parseCron("0 22 * * 0,6")).toEqual({ preset: "custom", hh: 22, mm: 0 });
+  });
+  it("keep a weekday restriction an hourly cron carries, instead of reading it as every hour of every day", () => {
+    expect(parseCron("5 * * * 1-5").preset).toBe("custom");
+    expect(parseCron("0 */3 * * 1-5").preset).toBe("custom");
+  });
+  it("round-trip every preset through its own cron", () => {
+    for (const preset of ["daily", "weekdays", "hourly", "every3h"] as const) {
+      const cron = cronFor(preset, 14, 45)!;
+      expect(parseCron(cron).preset).toBe(preset);
+      expect(cronFor(parseCron(cron).preset, parseCron(cron).hh, parseCron(cron).mm)).toBe(cron);
+    }
   });
 });

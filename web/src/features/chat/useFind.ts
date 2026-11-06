@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, type RefObject } from "react";
 import { actions, app } from "@/app/store";
-import { findRanges, MAX_MATCHES } from "./find";
+import { findRanges, MAX_MATCHES, revealDue, type FindView } from "./find";
 import { revealRange } from "./reveal";
 
 const ALL = "remuda-find";
@@ -18,6 +18,7 @@ export function useFind(logRef: RefObject<HTMLDivElement | null>, { active, chat
   const at = app.use((s) => s.find?.at ?? 0);
   const ranges = useRef<Range[]>([]);
   const marked = useRef<Element | null>(null); // the turn outlined where no highlight registry exists
+  const revealed = useRef<FindView | null>(null); // what the current match was last brought into view for
 
   // the matches, painted again whenever the query or the turns change, or the last of a long conversation's turns mount
   useEffect(() => {
@@ -39,10 +40,17 @@ export function useFind(logRef: RefObject<HTMLDivElement | null>, { active, chat
     };
   }, [active, open, query, at, chat, mounted, logRef]);
 
-  // the current match comes on screen when it is chosen, not on every poll
+  // the current match comes on screen when it is chosen, and again once the earlier turns have mounted — not on every poll
   useEffect(() => {
     const log = logRef.current;
-    if (!active || !open || !log) return;
+    if (!active || !open || !log) {
+      revealed.current = null;
+      return;
+    }
+    const view = { query, at, mounted };
+    const due = revealDue(revealed.current, view);
+    revealed.current = view;
+    if (!due) return;
     const current = ranges.current[at];
     const was = marked.current;
     marked.current = null;
@@ -56,7 +64,7 @@ export function useFind(logRef: RefObject<HTMLDivElement | null>, { active, chat
     if (was !== turn) was?.classList.remove("turn-hit");
     turn?.classList.add("turn-hit");
     marked.current = turn;
-  }, [active, open, query, at, logRef]);
+  }, [active, open, query, at, mounted, logRef]);
 
   useEffect(
     () => () => {

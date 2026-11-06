@@ -1,6 +1,7 @@
 // Package chat finds the conversation behind a pane: the session file
-// herdr names, followed through the files a compaction moved it to, and
-// what its last turn says. The transcript is read, never written.
+// herdr names — Claude Code's, Codex's or Gemini's, by the pane's agent —
+// followed through the files a compaction moved it to, and what its last
+// turn says. The transcript is read, never written.
 package chat
 
 import (
@@ -49,7 +50,7 @@ func (c *Service) SessionFile(machineID string, pane *herdr.PaneInfo) (*machines
 	if err != nil {
 		return nil, "", false
 	}
-	path, err := mc.Transcripts.ResolveSession(pane.Dir(), pane.AgentSession.Kind, pane.AgentSession.Value)
+	path, err := mc.Transcripts.ResolveSession(pane.AgentSession.Agent, pane.Dir(), pane.AgentSession.Kind, pane.AgentSession.Value)
 	if err != nil {
 		return nil, "", false
 	}
@@ -161,6 +162,25 @@ func (c *Service) PullRequest(machineID, paneID string) (transcript.Link, bool) 
 	return transcript.PullRequest(turns)
 }
 
+// Texts is the last n texts of the pane's conversation, the person's prompts and the agent's answers alike, newest
+// first: what an issue key the work is about is read from.
+func (c *Service) Texts(machineID, paneID string, n int) []string {
+	turns, ok := c.paneTurns(machineID, paneID)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for i := len(turns) - 1; i >= 0 && len(out) < n; i-- {
+		parts := turns[i].Parts
+		for j := len(parts) - 1; j >= 0 && len(out) < n; j-- {
+			if parts[j].Type == "text" && parts[j].Text != "" {
+				out = append(out, parts[j].Text)
+			}
+		}
+	}
+	return out
+}
+
 // LastToolCalls is the last n tool calls of the assistant's latest turn, for the loop check.
 func (c *Service) LastToolCalls(machineID, paneID string, n int) []string {
 	last, ok := c.LastTurn(machineID, paneID)
@@ -172,6 +192,28 @@ func (c *Service) LastToolCalls(machineID, paneID string, n int) []string {
 		calls = calls[len(calls)-n:]
 	}
 	return calls
+}
+
+// RateLimited says whether the pane's conversation ends in the harness's note that a subscription limit stopped the
+// agent, read off the last 64 KB of its live file, with when it was written and its words.
+func (c *Service) RateLimited(machineID, paneID string) (time.Time, string, bool) {
+	pane, _ := c.Pane(machineID, paneID)
+	if pane == nil {
+		return time.Time{}, "", false
+	}
+	mc, path, ok := c.SessionFile(machineID, pane)
+	if !ok {
+		return time.Time{}, "", false
+	}
+	version, err := mc.Transcripts.Version(path)
+	if err != nil {
+		return time.Time{}, "", false
+	}
+	tail, err := mc.Transcripts.ReadFrom(path, max(0, version.Size-64<<10))
+	if err != nil {
+		return time.Time{}, "", false
+	}
+	return transcript.RateLimited(tail)
 }
 
 // LastAnswer is the text the assistant's latest turn ended with and the id of its last record; "" when the turn ends in a tool call.
@@ -309,7 +351,7 @@ func (c *tailCache) remember(key tailKey, tail Tail) {
 func (c *Service) Open(mc *machines.Machine, paneID, sessionID, dir string, tail bool) (Conversation, error) {
 	conv := Conversation{reader: mc.Transcripts, tails: &c.tails}
 	if paneID == "" {
-		path, err := mc.Transcripts.ResolveSession(dir, "id", sessionID)
+		path, err := mc.Transcripts.ResolveSession("", dir, "id", sessionID)
 		if err != nil {
 			return conv, &NotFoundError{fmt.Errorf("session %s: %w", sessionID, err)}
 		}
@@ -320,24 +362,25 @@ func (c *Service) Open(mc *machines.Machine, paneID, sessionID, dir string, tail
 			return conv, &NotFoundError{fmt.Errorf("pane %s not found", paneID)}
 		}
 		conv.Dir = pane.Dir()
-		if sessionID != "" { // only a session of this folder: another folder's is the viewer's business
+		format := transcript.FormatOfAgent(pane.Agent) // the folder's sessions of the pane's own agent: those it can resume
+		if sessionID != "" {                           // only a session of this folder: another folder's is the viewer's business
 			if mc.Local() {
-				conv.Sessions, _ = transcript.Sessions(conv.Dir)
+				conv.Sessions, _ = transcript.Sessions(format, conv.Dir)
 				for _, session := range conv.Sessions {
 					if session.ID == sessionID {
 						conv.Path = session.Path
 					}
 				}
-			} else if path, err := mc.Transcripts.ResolveSession(conv.Dir, "id", sessionID); err == nil && strings.Contains(path, "/"+transcript.EncodePath(conv.Dir)+"/") {
+			} else if path, err := mc.Transcripts.ResolveSession(pane.Agent, conv.Dir, "id", sessionID); err == nil && (format != transcript.Claude || strings.Contains(path, "/"+transcript.EncodePath(conv.Dir)+"/")) {
 				conv.Path = path
 			}
 		}
-		if conv.Path == "" && pane.AgentSession != nil && pane.AgentSession.Agent == "claude" {
-			conv.Path, _ = mc.Transcripts.ResolveSession(conv.Dir, pane.AgentSession.Kind, pane.AgentSession.Value)
+		if conv.Path == "" && pane.AgentSession != nil {
+			conv.Path, _ = mc.Transcripts.ResolveSession(pane.AgentSession.Agent, conv.Dir, pane.AgentSession.Kind, pane.AgentSession.Value)
 		}
 		if conv.Path == "" && mc.Local() {
 			if conv.Sessions == nil {
-				conv.Sessions, _ = transcript.Sessions(conv.Dir)
+				conv.Sessions, _ = transcript.Sessions(format, conv.Dir)
 			}
 			if len(conv.Sessions) > 0 {
 				conv.Path = conv.Sessions[0].Path
@@ -359,7 +402,7 @@ func (c *Service) Open(mc *machines.Machine, paneID, sessionID, dir string, tail
 	conv.ID = transcript.SessionID(conv.Path)
 	conv.Subagents, conv.stamp, _ = mc.Transcripts.Subagents(conv.Path, time.Now())
 	if conv.Sessions == nil && mc.Local() && paneID != "" && !tail {
-		conv.Sessions, _ = transcript.Sessions(conv.Dir)
+		conv.Sessions, _ = transcript.Sessions(transcript.FormatOf(conv.Path), conv.Dir)
 	}
 	return conv, nil
 }

@@ -59,14 +59,25 @@ type Payload struct {
 	Title   string   `json:"title"`
 	Body    string   `json:"body"`
 	Tag     string   `json:"tag"`
-	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop | schedule | digest | task | budget
+	Kind    string   `json:"kind"` // input | done | test | stuck | waiting | loop | schedule | digest | task | budget | review
 	Actions []Action `json:"actions,omitempty"`
-	Panel   string   `json:"panel,omitempty"` // a panel of the page a tap opens instead of a pane (standup)
+	Panel   string   `json:"panel,omitempty"`   // a panel of the page a tap opens instead of a pane (standup)
+	Choices []string `json:"choices,omitempty"` // a question's choices in full, the words behind its choice-N actions
+	Dialog  string   `json:"dialog,omitempty"`  // the question's dialog key, sent back with a choice so no later dialog is answered
+	Worked  int64    `json:"worked,omitempty"`  // a finish: the turn's seconds, so a page can apply a device's "long turns" itself
+}
+
+// Delivery is the last push handed to a device: when, what, and what its push service answered ("" = taken).
+type Delivery struct {
+	At    time.Time `json:"at"`
+	Kind  string    `json:"kind"`
+	Title string    `json:"title"`
+	Error string    `json:"error,omitempty"`
 }
 
 // Action is a button on the notification; the service worker performs it.
 type Action struct {
-	Action string `json:"action"` // open | esc
+	Action string `json:"action"` // open | esc | choice-0 | choice-1
 	Title  string `json:"title"`
 }
 
@@ -81,9 +92,19 @@ type Service struct {
 
 	timers map[events.PaneRef][]*time.Timer
 	send   func(sub *Subscription, p Payload) error
+	last   map[string]Delivery // by endpoint, in memory: what the alerts panel says reached the push service
 
 	// OnAlert hears every alert as it goes out, or would have — the activity feed, whether or not a device is subscribed.
 	OnAlert func(p Payload)
+	// Question reads the dialog off a pane's screen when a question push goes out, so its choices ride as buttons.
+	Question func(machine, pane string) (Asked, bool)
+	// Webhooks hear the same alerts, each the kinds the person gave it.
+	Webhooks *Webhooks
+	// Sockets are the live connections of the socket devices, the Mac app among them.
+	Sockets *Sockets
+	// Mutes are the workspace folders the person silenced for a while; Folder names a pane's folder for the check.
+	Mutes  *Mutes
+	Folder func(machine, pane string) string
 }
 
 // Delays are variables so tests can shrink them.
@@ -96,9 +117,12 @@ var (
 
 // New loads or creates the VAPID keypair and the subscription store in dir.
 func New(dir string) (*Service, error) {
-	s := &Service{dir: dir, subs: map[string]*Subscription{}, timers: map[events.PaneRef][]*time.Timer{},
+	s := &Service{dir: dir, subs: map[string]*Subscription{}, timers: map[events.PaneRef][]*time.Timer{}, last: map[string]Delivery{},
 		subject: "https://github.com/dev1antdev/remuda"}
 	s.send = s.Send
+	s.Webhooks = loadWebhooks(dir)
+	s.Sockets = newSockets()
+	s.Mutes = loadMutes(dir)
 	if err := s.loadKeys(); err != nil {
 		return nil, err
 	}
@@ -180,6 +204,7 @@ func (s *Service) Subscribe(sub Subscription, oldEndpoint string) {
 				sub.Label = prev.Label
 			}
 			delete(s.subs, oldEndpoint)
+			delete(s.last, oldEndpoint)
 		}
 	}
 	if prev != nil {
@@ -199,6 +224,7 @@ func (s *Service) Subscribe(sub Subscription, oldEndpoint string) {
 func (s *Service) Unsubscribe(endpoint string) {
 	s.mu.Lock()
 	delete(s.subs, endpoint)
+	delete(s.last, endpoint)
 	s.mu.Unlock()
 	s.saveSubs()
 }
@@ -214,6 +240,10 @@ func (s *Service) Subscriptions() []Subscription {
 
 // Send pushes one payload to one subscription; a 404/410 from the push service means the browser dropped it.
 func (s *Service) Send(sub *Subscription, p Payload) error {
+	if IsSocket(sub.Endpoint) {
+		s.Sockets.Deliver(sub.Endpoint, p)
+		return nil
+	}
 	body, _ := json.Marshal(p)
 	urgency := webpush.UrgencyNormal
 	if p.Kind == "input" {
@@ -260,12 +290,16 @@ func topic(tag string) string {
 	return t
 }
 
-// Notify sends one payload now to every device that wants the watchdog's word (the pref defaults to on).
+// Notify sends one payload now to every device that wants the watchdog's word (the pref defaults to on), or, for a note
+// of a question's kind (a task's agent asking first), the question's: the switch the page's toast reads it by.
 func (s *Service) Notify(p Payload) {
+	if s.silenced(p) {
+		return
+	}
 	s.record(p)
 	var targets []*Subscription
 	for _, sub := range s.list() {
-		if sub.Prefs.Watchdog != nil && !*sub.Prefs.Watchdog {
+		if p.Kind == "input" && !sub.Prefs.Input || p.Kind != "input" && sub.Prefs.Watchdog != nil && !*sub.Prefs.Watchdog {
 			continue
 		}
 		targets = append(targets, sub)
@@ -275,6 +309,9 @@ func (s *Service) Notify(p Payload) {
 
 // Broadcast sends one payload now to every device, whatever its watchdog pref: a schedule's word is the person's own.
 func (s *Service) Broadcast(p Payload) {
+	if s.silenced(p) {
+		return
+	}
 	s.record(p)
 	s.deliver(s.list(), p)
 }
@@ -286,17 +323,52 @@ func (s *Service) deliver(targets []*Subscription, p Payload) {
 		if muted(sub, now) {
 			continue
 		}
-		if err := s.send(sub, p); err != nil {
-			log.Printf("push to %.40s…: %v", sub.Endpoint, err)
-		}
+		_ = s.sendNoted(sub, p)
 	}
 }
 
-// record hands an alert to the feed, when there is one.
+// sendNoted sends one payload and keeps the outcome as the device's last delivery.
+func (s *Service) sendNoted(sub *Subscription, p Payload) error {
+	err := s.send(sub, p)
+	delivery := Delivery{At: time.Now(), Kind: p.Kind, Title: p.Title}
+	if err != nil {
+		delivery.Error = err.Error()
+		log.Printf("push to %.40s…: %v", sub.Endpoint, err)
+	}
+	s.mu.Lock()
+	if s.subs[sub.Endpoint] != nil { // a 404/410 dropped the device on the way: nothing is kept for an endpoint gone
+		s.last[sub.Endpoint] = delivery
+	}
+	s.mu.Unlock()
+	return err
+}
+
+// Device is one subscription as the alerts panel reads it: whether this cockpit knows it, its prefs, its last delivery.
+func (s *Service) Device(endpoint string) (Subscription, *Delivery, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sub := s.subs[endpoint]
+	if sub == nil {
+		return Subscription{}, nil, false
+	}
+	if delivery, ok := s.last[endpoint]; ok {
+		return *sub, &delivery, true
+	}
+	return *sub, nil, true
+}
+
+// record hands an alert to the feed, when there is one, and to the webhooks: what the devices would have
+// heard, whether or not one is subscribed.
 func (s *Service) record(p Payload) {
 	if s.OnAlert != nil {
 		s.OnAlert(p)
 	}
+	s.Webhooks.Deliver(p)
+}
+
+// anyoneListens says whether an alert would reach something beside the devices: the feed or a webhook.
+func (s *Service) anyoneListens(kind string) bool {
+	return s.OnAlert != nil || s.Webhooks.Wants(kind)
 }
 
 // SendTest proves the whole path for one device.
@@ -307,7 +379,7 @@ func (s *Service) SendTest(endpoint string) error {
 	if sub == nil {
 		return fmt.Errorf("unknown subscription")
 	}
-	return s.Send(sub, Payload{Title: "remuda", Body: "Alerts reach this device.", Tag: "test", Kind: "test"})
+	return s.sendNoted(sub, Payload{Title: "remuda", Body: "Alerts reach this device.", Tag: "test", Kind: "test"})
 }
 
 // OnStatus schedules or calls off alerts: any status change on a pane cancels whatever was pending for it.
@@ -326,7 +398,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 	for _, sub := range s.subs {
 		subs = append(subs, sub)
 	}
-	if len(subs) == 0 && s.OnAlert == nil {
+	if len(subs) == 0 && s.OnAlert == nil && !s.Webhooks.Any() {
 		return
 	}
 
@@ -340,18 +412,26 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 	}
 
 	var pending []*time.Timer
-	// note: the feed hears this alert when it fires, so a finish or a question answered at the desk is no news either
-	schedule := func(delay time.Duration, targets []*Subscription, p Payload, note bool) {
-		if len(targets) == 0 && !(note && s.OnAlert != nil) {
+	// note: the feed hears this alert when it fires, so a finish or a question answered at the desk is no news either;
+	// dress reads what the pane shows at that moment into the payload (nil: sent as built)
+	schedule := func(delay time.Duration, targets []*Subscription, p Payload, note bool, dress func(Payload) Payload) {
+		if len(targets) == 0 && !(note && s.anyoneListens(p.Kind)) {
 			return
 		}
 		var t *time.Timer
 		t = time.AfterFunc(delay, func() {
-			// drop only this timer: a sibling (the other device group's delay) must stay cancellable by a later status change
+			if dress != nil {
+				p = dress(p)
+			}
+			// drop only this timer: a sibling (the other device group's delay) must stay cancellable by a later status change;
+			// one no longer listed was called off by a status change while the screen was read, after it had fired
 			s.mu.Lock()
+			standing := false
 			rest := s.timers[key][:0]
 			for _, o := range s.timers[key] {
-				if o != t {
+				if o == t {
+					standing = true
+				} else {
 					rest = append(rest, o)
 				}
 			}
@@ -361,6 +441,9 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 				s.timers[key] = rest
 			}
 			s.mu.Unlock()
+			if !standing || s.silenced(p) {
+				return
+			}
 			if note {
 				s.record(p)
 			}
@@ -382,7 +465,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 			Title: label + " needs you",
 			Body:  agent + " is waiting for an answer" + paneLine(ev),
 			Tag:   key.String(),
-		}, true)
+		}, true, s.asked)
 	case herdr.StatusDone:
 		if ev.From != herdr.StatusWorking {
 			return
@@ -400,12 +483,13 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 		}
 		p := Payload{
 			Machine: ev.Pane.Machine, Pane: ev.Pane.Pane, Kind: "done",
-			Title: label + " finished",
-			Body:  agent + " is done after " + ev.Worked.Round(time.Second).String() + paneLine(ev),
-			Tag:   key.String(),
+			Title:  label + " finished",
+			Body:   agent + " is done after " + ev.Worked.Round(time.Second).String() + paneLine(ev),
+			Tag:    key.String(),
+			Worked: int64(ev.Worked / time.Second),
 		}
-		schedule(doneDelay, long, p, false)
-		schedule(doneDelayFast, always, p, true)
+		schedule(doneDelay, long, p, false, nil)
+		schedule(doneDelayFast, always, p, true, nil)
 	default:
 		return
 	}

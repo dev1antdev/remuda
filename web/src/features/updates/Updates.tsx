@@ -3,26 +3,29 @@
 // a job whose output streams in. Run sends the command shown back: the server runs that or refuses.
 
 import { useEffect, useRef, useState } from "react";
+import { actions } from "@/app/store";
 import { fetchJob, listJobs, listUpdates, startUpdate, type Job, type Update } from "@/features/updates/api";
 import type { Machine } from "@/features/roster/api";
 import Icon from "@/ui/icons";
 import { errMsg } from "@/lib/text";
 import { Dialog, Notice } from "@/ui";
 import { useQuery } from "@/lib/query";
+import { useSharing } from "@/features/roster/useSharing";
+import { tn, t as tr } from "@/lib/i18n";
 
 // missingText says why the update asked for is not on the machine's list
 function missingText(what: string): string {
   switch (what) {
     case "remuda":
-      return "This remuda cannot be deployed there: that needs a remote machine of the same OS and CPU, and a released build here.";
+      return tr("This remuda cannot be deployed there: that needs a remote machine of the same OS and CPU, and a released build here.");
     case "remuda-release":
-      return "No newer release of remuda is known for this machine.";
+      return tr("No newer release of remuda is known for this machine.");
     case "hooks":
-      return "herdr's hooks there are current.";
+      return tr("herdr's hooks there are current.");
     case "plugins":
-      return "No herdr plugin from GitHub is installed there, or herdr there is older than 0.9.4.";
+      return tr("No herdr plugin from GitHub is installed there, or herdr there is older than 0.9.4.");
   }
-  return `Nothing to update called “${what}” there any more.`;
+  return tr("Nothing to update called “{what}” there any more.", { what });
 }
 
 // lastJob is the job last started per machine, so the dialog opened again shows the one still running
@@ -62,7 +65,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
       fetchJob(id).then(setJob, (e) => {
         clearInterval(t);
         setErr(errMsg(e));
-        setJob((j) => (j && j.id === id ? { ...j, done: true, ok: false, error: "lost track of the job" } : j));
+        setJob((j) => (j && j.id === id ? { ...j, done: true, ok: false, error: tr("lost track of the job") } : j));
       });
     }, 1000);
     return () => clearInterval(t);
@@ -85,7 +88,8 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
     const el = log.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [job?.output]);
-  const label = machine.label.split(" · ")[0];
+  const { machineLabel, redact } = useSharing(); // under the screen-sharing mode the machine and its folders by their neutral names
+  const label = machineLabel(machine).split(" · ")[0];
   const back = () => {
     setJob(null);
     setPicked(null);
@@ -106,77 +110,77 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
   }, [listShown]);
   const when = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return (
-    <Dialog title={job ? job.title : picked ? picked.title : `Updates on ${label}`} icon="refresh-cw" size="md" onClose={onClose} className="updates">
-      {error && <Notice tone="error">{error}</Notice>}
-      {err && <Notice tone="error" onDismiss={() => setErr("")}>{err}</Notice>}
+    <Dialog title={job ? redact(job.title) : picked ? redact(picked.title) : tr("Updates on {machine}", { machine: label })} icon="refresh-cw" size="md" onClose={onClose} className="updates">
+      {error && <Notice tone="error">{redact(error)}</Notice>}
+      {err && <Notice tone="error" onDismiss={() => setErr("")}>{redact(err)}</Notice>}
       {job ? (
         <>
-          {job.command && <code className="updates-cmd">{job.command}</code>}
+          {job.command && <code className="updates-cmd">{redact(job.command)}</code>}
           <pre className="updates-log" ref={log}>
-            {job.output || (job.done ? "" : "…")}
+            {redact(job.output) || (job.done ? "" : "…")}
           </pre>
           {job.done ? (
             job.ok ? (
               picked?.what === "remuda-release" && machine.id === "local" ? (
                 <Notice tone="info" icon="refresh-cw">
-                  Done. remuda is restarting here; the page offers a reload once the new version answers.
+                  {tr("Done. remuda is restarting here; the page offers a reload once the new version answers.")}
                 </Notice>
               ) : (
                 <Notice tone="success" icon="check">
-                  Done.
+                  {tr("Done.")}
                 </Notice>
               )
             ) : (
-              <Notice tone="error">{job.error || "failed"}</Notice>
+              <Notice tone="error">{redact(job.error || tr("failed"))}</Notice>
             )
           ) : (
             <Notice tone="info">
-              <span className="spinner" aria-hidden="true" /> Running on {label}… (closing this keeps it running)
+              <span className="spinner" aria-hidden="true" /> {tr("Running on {machine}… (closing this keeps it running)", { machine: label })}
             </Notice>
           )}
           <div className="modal-actions">
             {job.done && (
               <button type="button" className="btn" onClick={back}>
-                Back
+                {tr("Back")}
               </button>
             )}
             <button type="button" className="btn primary" onClick={onClose}>
-              Close
+              {tr("Close")}
             </button>
           </div>
         </>
       ) : picked ? (
         <>
-          <p className="updates-note">{picked.note}</p>
+          <p className="updates-note">{picked.note && redact(picked.note)}</p>
           <p className="dim">
             {picked.what.startsWith("restart-")
-              ? `This goes through herdr on ${label}, pane by pane:`
+              ? tr("This goes through herdr on {machine}, pane by pane:", { machine: label })
               : picked.what === "remuda-release"
-                ? `This runs on ${label}, as you: the download from GitHub, the check, the install, the restart of remuda there:`
-                : `This runs on ${label}, as you, through the shell remuda already uses there:`}
+                ? tr("This runs on {machine}, as you: the download from GitHub, the check, the install, the restart of remuda there:", { machine: label })
+                : tr("This runs on {machine}, as you, through the shell remuda already uses there:", { machine: label })}
           </p>
-          <code className="updates-cmd">{picked.command}</code>
+          <code className="updates-cmd">{redact(picked.command)}</code>
           <div className="modal-actions">
             <button type="button" className="btn" onClick={back}>
-              Back
+              {tr("Back")}
             </button>
             <button type="button" className="btn primary" onClick={() => void run(picked)}>
-              <Icon name="play" size={14} /> Run
+              <Icon name="play" size={14} /> {tr("Run")}
             </button>
           </div>
         </>
       ) : (
         <>
           {missing && <Notice tone="warn" onDismiss={() => setMissing("")}>{missing}</Notice>}
-          {loading && <div className="notice hint">Looking…</div>}
-          {data && data.length === 0 && <div className="empty">Nothing here that remuda knows how to update.</div>}
+          {loading && <div className="notice hint">{tr("Looking…")}</div>}
+          {data && data.length === 0 && <div className="empty">{tr("Nothing here that remuda knows how to update.")}</div>}
           <div className="updates-list">
             {data?.map((u) => (
               <button key={u.what} type="button" className="updates-row" onClick={() => setPicked(u)}>
-                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "code" ? "code" : u.what === "herdr" || u.what === "hooks" || u.what === "plugins" || u.what.startsWith("remuda") ? "refresh-cw" : "sparkles"} size={14} />
+                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "code" ? "code" : u.what === "mcp" ? "plug" : u.what === "statusline" ? "chart" : u.what === "herdr" || u.what === "hooks" || u.what === "plugins" || u.what.startsWith("remuda") ? "refresh-cw" : "sparkles"} size={14} />
                 <span className="updates-row-text">
-                  <span>{u.title}</span>
-                  <span className="dim">{u.note?.split(". ")[0]}</span>
+                  <span>{redact(u.title)}</span>
+                  <span className="dim">{redact(u.note?.split(". ")[0] ?? "")}</span>
                 </span>
                 <Icon name="chevron-right" size={12} />
               </button>
@@ -185,19 +189,30 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           {recent.data && recent.data.jobs.length > 0 && (
             <div className="updates-recent">
               <span className="dim">
-                Ran here lately
-                {recent.data.pending > 0 ? ` · ${recent.data.pending} chat${recent.data.pending > 1 ? "s" : ""} waiting to restart` : ""}
+                {tr("Ran here lately")}
+                {recent.data.pending > 0 ? ` · ${tn(recent.data.pending, "{n} chat waiting to restart", "{n} chats waiting to restart")}` : ""}
               </span>
               {recent.data.jobs.map((j) => (
-                <button key={j.id} type="button" className="linkish updates-job" onClick={() => open(j.id)} title={j.error || (j.done ? (j.ok ? "done" : "failed") : "running")}>
-                  <Icon name={j.done ? (j.ok ? "check" : "x") : "refresh-cw"} size={12} className={j.done ? (j.ok ? "ok" : "bad") : "spin"} /> {j.title} · {when(j.started)}
+                <button key={j.id} type="button" className="linkish updates-job" onClick={() => open(j.id)} title={redact(j.error ?? "") || (j.done ? (j.ok ? tr("done") : tr("failed")) : tr("running"))}>
+                  <Icon name={j.done ? (j.ok ? "check" : "x") : "refresh-cw"} size={12} className={j.done ? (j.ok ? "ok" : "bad") : "spin"} /> {redact(j.title)} · {when(j.started)}
                 </button>
               ))}
             </div>
           )}
           <div className="modal-actions">
+            <button
+              type="button"
+              className="btn"
+              title={tr("Every connected machine's pending updates, one after another, this page's own remuda last")}
+              onClick={() => {
+                onClose();
+                actions.openDialog({ kind: "update-everywhere" });
+              }}
+            >
+              {tr("Update everywhere…")}
+            </button>
             <button type="button" className="btn" onClick={onClose}>
-              Close
+              {tr("Close")}
             </button>
           </div>
         </>

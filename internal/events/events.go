@@ -37,10 +37,19 @@ type Snapshot struct {
 	Machine string
 	Snap    *herdr.Snapshot
 	At      time.Time
+	First   bool // the machine's first snapshot, or the first after its polls failed: what changed in between was not watched happening
 }
 
 // MachineRemoved says a machine left the registry and its watcher loop ended.
 type MachineRemoved struct{ Machine string }
+
+// MachineState says a remote machine's connection moved: State is "connected" or "error", Reason the error's words.
+type MachineState struct {
+	Machine string
+	Label   string
+	State   string
+	Reason  string
+}
 
 // JobDone is a job that ended on a machine.
 type JobDone struct {
@@ -57,6 +66,15 @@ type PullRequestNamed struct {
 	Pane  PaneRef
 	URL   string
 	Label string
+}
+
+// PullRequestState says what gh read of a pull request an agent named: its state on the first read, and every move
+// after it (OPEN → MERGED or CLOSED). Was is the state read before, "" on the first read.
+type PullRequestState struct {
+	Pane  PaneRef
+	URL   string
+	State string
+	Was   string
 }
 
 // Bus delivers each event to every subscriber of its type, in subscription order, on the publisher's goroutine.

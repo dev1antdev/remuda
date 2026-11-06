@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 	"time"
@@ -16,7 +17,34 @@ type UsageRecord struct {
 	At                                                              time.Time
 	Sidechain                                                       bool
 	Cwd                                                             string
+	Window                                                          int // the model's context window when the file says it (Codex does), 0 otherwise
 	Input, Output, CacheRead, CacheWrite5m, CacheWrite1h, WebSearch int64
+}
+
+// UsageScanner reads a session file's API responses a line at a time: Claude Code's assistant records, Codex's
+// token records (with the model and the window the records before them named), Gemini's answers with tokens.
+type UsageScanner interface {
+	Scan(line []byte) (UsageRecord, bool)
+}
+
+type claudeUsageScanner struct{}
+
+func (claudeUsageScanner) Scan(line []byte) (UsageRecord, bool) {
+	if !bytes.Contains(line, []byte(`"usage"`)) {
+		return UsageRecord{}, false
+	}
+	return UsageOf(line)
+}
+
+// NewUsageScanner is the scanner for a session file, by the format its path says.
+func NewUsageScanner(path string) UsageScanner {
+	switch FormatOf(path) {
+	case Codex:
+		return &codexUsageScanner{}
+	case Gemini:
+		return geminiUsageScanner{}
+	}
+	return claudeUsageScanner{}
 }
 
 type usageRecord struct {

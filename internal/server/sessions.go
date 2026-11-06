@@ -11,15 +11,17 @@ import (
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/text"
+	"github.com/dev1antdev/remuda/internal/worktrees"
 )
 
 // Sessions: workspaces, tabs and worktrees made and closed through herdr, and what people type into panes.
 
 func (s *Server) sessionRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/sessions", s.handleNewWorkspace)
-	api.HandleFunc("DELETE /api/sessions/{id}", s.closeHandler((*herdr.Client).WorkspaceClose))
+	api.HandleFunc("DELETE /api/sessions/{id}", s.handleWorkspaceClose)
 	api.HandleFunc("PATCH /api/sessions/{id}", s.renameHandler((*herdr.Client).WorkspaceRename))
 	api.HandleFunc("POST /api/tabs", s.handleNewTab)
 	api.HandleFunc("DELETE /api/tabs/{id}", s.closeHandler((*herdr.Client).TabClose))
@@ -69,7 +71,7 @@ func (req *createReq) start() (sessions.Start, error) {
 
 // create is the one path for every "make a container, start an agent in it" request.
 // The agent kind is checked before any RPC: an unknown one must not leave an orphaned container.
-func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*herdr.Client, *createReq) (id string, pane *herdr.PaneInfo, extra map[string]any, err error)) {
+func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*machines.Machine, *herdr.Client, *createReq) (id string, pane *herdr.PaneInfo, extra map[string]any, err error)) {
 	var req createReq
 	if !decode(w, r, &req) {
 		return
@@ -87,7 +89,7 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*herd
 	if !ok {
 		return
 	}
-	id, pane, extra, err := build(client, &req)
+	id, pane, extra, err := build(mc, client, &req)
 	if err != nil {
 		rpcErr(w, err)
 		return
@@ -112,10 +114,10 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, build func(*herd
 }
 
 // firstPrompt delivers the prompt a person wrote for the agent they just started; a failure is a note in the activity, with the pane to open.
-func (s *Server) firstPrompt(client *herdr.Client, ref events.PaneRef, prompt, place string) {
+func (s *Server) firstPrompt(client *herdr.Client, ref events.PaneRef, prompt, place string) error {
 	err := s.Input.FirstPrompt(client, ref, prompt, sessions.FirstPromptTimeout)
 	if err == nil || s.Push == nil {
-		return
+		return err
 	}
 	s.Push.Notify(push.Payload{
 		Machine: ref.Machine, Pane: ref.Pane, Kind: "input",
@@ -124,6 +126,7 @@ func (s *Server) firstPrompt(client *herdr.Client, ref events.PaneRef, prompt, p
 		Tag:     "first|" + ref.Pane,
 		Actions: []push.Action{{Action: "open", Title: "Open"}},
 	})
+	return err
 }
 
 // firstPromptPlace names where the agent was started for the note: the worktree's branch, the workspace's name, else its folder.
@@ -141,7 +144,7 @@ func firstPromptPlace(req *createReq, extra map[string]any) string {
 }
 
 func (s *Server) handleNewWorkspace(w http.ResponseWriter, r *http.Request) {
-	s.create(w, r, func(c *herdr.Client, req *createReq) (string, *herdr.PaneInfo, map[string]any, error) {
+	s.create(w, r, func(_ *machines.Machine, c *herdr.Client, req *createReq) (string, *herdr.PaneInfo, map[string]any, error) {
 		res, err := c.WorkspaceCreate(req.Dir, req.Name)
 		if err != nil {
 			return "", nil, nil, err
@@ -151,7 +154,7 @@ func (s *Server) handleNewWorkspace(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNewTab(w http.ResponseWriter, r *http.Request) {
-	s.create(w, r, func(c *herdr.Client, req *createReq) (string, *herdr.PaneInfo, map[string]any, error) {
+	s.create(w, r, func(_ *machines.Machine, c *herdr.Client, req *createReq) (string, *herdr.PaneInfo, map[string]any, error) {
 		if req.Workspace == "" {
 			return "", nil, nil, &herdr.Error{Code: "invalid_request", Message: "workspace required"}
 		}
@@ -164,7 +167,7 @@ func (s *Server) handleNewTab(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNewWorktree(w http.ResponseWriter, r *http.Request) {
-	s.create(w, r, func(c *herdr.Client, req *createReq) (string, *herdr.PaneInfo, map[string]any, error) {
+	s.create(w, r, func(mc *machines.Machine, c *herdr.Client, req *createReq) (string, *herdr.PaneInfo, map[string]any, error) {
 		branch, base := strings.TrimSpace(req.Branch), strings.TrimSpace(req.Base)
 		if req.Workspace == "" || branch == "" {
 			return "", nil, nil, &herdr.Error{Code: "invalid_request", Message: "workspace and branch required"}
@@ -176,9 +179,73 @@ func (s *Server) handleNewWorktree(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return "", nil, nil, err
 		}
-		return res.Workspace.WorkspaceID, &res.RootPane,
-			map[string]any{"path": res.Worktree.Path, "branch": res.Worktree.Branch}, nil
+		extra := map[string]any{"path": res.Worktree.Path, "branch": res.Worktree.Branch}
+		// before the agent starts, so it finds the .env and local configs the repository lists in .worktreeinclude
+		if included, err := worktrees.Include(mc, res.Worktree.Path); err != nil {
+			extra["include_error"] = err.Error()
+		} else if included.Listed {
+			extra["included"] = included
+		}
+		return res.Workspace.WorkspaceID, &res.RootPane, extra, nil
 	})
+}
+
+// handleWorkspaceClose is DELETE /api/sessions/{id}: the workspace closed and, when it stood on a worktree herdr or
+// remuda made that no other workspace uses, the worktree taken down after it as far as nothing is lost
+// (worktrees.Tidy: the folder once clean, the branch once merged); the answer's worktree says what became of it.
+func (s *Server) handleWorkspaceClose(w http.ResponseWriter, r *http.Request) {
+	mc, client, _, ok := s.ready(w, r, "")
+	if !ok {
+		return
+	}
+	id := r.PathValue("id")
+	tree, merged := s.madeWorktree(mc, id)
+	if err := client.WorkspaceClose(id); err != nil {
+		rpcErr(w, err)
+		return
+	}
+	s.Watch.Refresh(mc)
+	answer := map[string]any{"ok": true}
+	if tree != "" {
+		answer["worktree"] = worktrees.Tidy(mc, tree, merged)
+	}
+	writeJSON(w, answer)
+}
+
+// madeWorktree is the worktree herdr or remuda made that the workspace alone stands on, "" for any other folder, and
+// whether a request its agents named was read as merged — from the snapshot before the close
+func (s *Server) madeWorktree(mc *machines.Machine, id string) (string, bool) {
+	snap, _ := s.Watch.Snapshot(mc.ID())
+	if snap == nil {
+		return "", false
+	}
+	ws := snap.Workspace(id)
+	if ws == nil || ws.Worktree == nil || !ws.Worktree.IsLinkedWorktree || !worktrees.Made(mc.Home(), ws.Worktree.CheckoutPath) {
+		return "", false
+	}
+	tree := ws.Worktree.CheckoutPath
+	if usedElsewhere(snap, id, tree) {
+		return "", false
+	}
+	return tree, s.mergedIn(mc, id)
+}
+
+// usedElsewhere says whether another workspace stands on the worktree or has a pane inside it.
+func usedElsewhere(snap *herdr.Snapshot, id, tree string) bool {
+	inside := func(dir string) bool { return dir == tree || strings.HasPrefix(dir, tree+"/") }
+	for i := range snap.Workspaces {
+		other := &snap.Workspaces[i]
+		if other.WorkspaceID != id && other.Worktree != nil && inside(other.Worktree.CheckoutPath) {
+			return true
+		}
+	}
+	for i := range snap.Panes {
+		pane := &snap.Panes[i]
+		if pane.WorkspaceID != id && (inside(pane.CWD) || inside(pane.ForegroundCWD)) {
+			return true
+		}
+	}
+	return false
 }
 
 // closeHandler closes a workspace or tab by path id and refreshes the roster.
@@ -250,6 +317,7 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		rpcErr(w, err)
 		return
 	}
+	s.noteSent(r.Context(), mc.ID(), req.Pane, req.Text, false)
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -279,6 +347,7 @@ func (s *Server) handleKeys(w http.ResponseWriter, r *http.Request) {
 		rpcErr(w, err)
 		return
 	}
+	s.noteSent(r.Context(), mc.ID(), req.Pane, sent.KeyWords(keys), true)
 	writeJSON(w, map[string]any{"ok": true})
 }
 

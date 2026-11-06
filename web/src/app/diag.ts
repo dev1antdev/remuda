@@ -4,16 +4,17 @@
 import { stallWords, toastDue, watchStalls } from "@/lib/perf";
 import { plural } from "@/lib/text";
 import { actions, app } from "./store";
+import { t } from "@/lib/i18n";
 
-const MODE_NAMES = { herdr: "Agents", wall: "the Wall", tasks: "Tasks", code: "Code", review: "Review" } as const;
+const MODE_NAMES = { herdr: t("Agents"), wall: t("Wall"), tasks: t("Tasks"), code: t("Code"), review: t("Review") } as const;
 
 // wherePage says where the page is right now, in the words a person would use; the pane shown is the address bar's (url.ts keeps it)
 export function wherePage(): string {
   const { mode, lens } = app.get();
-  if (mode === "wall") return `on the Wall (${plural(document.querySelectorAll(".tile").length, "tile")})`;
+  if (mode === "wall") return t("on the Wall ({tiles})", { tiles: plural(document.querySelectorAll(".tile").length, "tile") });
   const url = new URLSearchParams(location.search);
   const pane = url.get("pane") ? `, ${url.get("machine") ?? "local"} ${url.get("pane")}` : "";
-  return mode === "herdr" ? `in Agents, ${lens} lens${pane}` : `in ${MODE_NAMES[mode]}`;
+  return mode === "herdr" ? t("in Agents, {lens} lens{pane}", { lens, pane }) : t("in {mode}", { mode: MODE_NAMES[mode] });
 }
 
 // startDiagnostics begins the watch; the console line carries the stall for a bug report, the toast says a long one happened
@@ -23,6 +24,6 @@ export function startDiagnostics(): () => void {
     console.warn(`[remuda] ${stallWords(stall)}`, stall);
     if (!toastDue(stall, lastToast)) return;
     lastToast = stall.at;
-    actions.notify(`${stallWords(stall)} — the console has the details`, { error: true });
+    actions.notify(t("{stall} — the console has the details", { stall: stallWords(stall) }), { error: true });
   });
 }

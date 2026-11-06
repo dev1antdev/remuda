@@ -67,9 +67,11 @@ func releaseURLOK(raw, tag string) bool {
 // InstallScript puts ~/.local/bin/remuda.new where the service runs remuda from, once it has shown it runs at all.
 const InstallScript = `chmod +x "$HOME/.local/bin/remuda.new" && "$HOME/.local/bin/remuda.new" -version && mv "$HOME/.local/bin/remuda.new" "$HOME/.local/bin/remuda"`
 
-// RestartScript restarts the service, launchd or systemd, and says so when there is none.
+// RestartScript restarts the service, launchd or systemd, and says so when there is none — or neither manager at all,
+// since the new binary then sits beside a remuda still running the old one.
 const RestartScript = `if command -v launchctl >/dev/null 2>&1; then launchctl kickstart -k "gui/$(id -u)/dev.mardeus.remuda" 2>&1 || echo "(no launchd service; start remuda there yourself)"; ` +
-	`elif command -v systemctl >/dev/null 2>&1; then systemctl --user restart remuda.service 2>&1 || echo "(no systemd service; start remuda there yourself)"; fi`
+	`elif command -v systemctl >/dev/null 2>&1; then systemctl --user restart remuda.service 2>&1 || echo "(no systemd service; start remuda there yourself)"; ` +
+	`else echo "(neither launchd nor systemd here: start the new remuda yourself)"; fi`
 
 // restartLater is for the machine whose remuda runs the job itself: detached
 // and two seconds on, so the job ends first and the page hears it did.

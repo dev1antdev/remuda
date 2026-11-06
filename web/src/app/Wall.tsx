@@ -1,31 +1,41 @@
 // The Wall mode: every agent on one screen, a tile each — its state, its last turns or its terminal as it is, a
-// line to answer — in a grid that fits the window, or one of them given the whole wall with the rest in a strip under it. app composes: the tile is ./Tile over features/chat/Tail, which panes make a tile
-// and in what order is features/roster/wall.
+// line to answer — or, in the zoo view, a creature each (./Zoo) — in a grid that fits the window, or one of them given
+// the whole wall with the rest in a strip under it,
+// or, in office mode for a second screen, one of them large beside a column of cards, the one that needs the person or
+// the next in turn every 20 s unless a card is pinned. app composes: the tile is ./Tile over features/chat/Tail, which
+// panes make a tile, in what order and which one office mode features is features/roster/wall.
 
 import { useEffect, useMemo, type CSSProperties } from "react";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
+import { NO_MACHINES, startOn } from "@/features/roster/server";
 import { useRoster } from "@/features/roster/useRoster";
 import { DEFAULT_WALL, TILE_MIN, tiles, withFocus, type Tile, type WallPrefs, type WallView } from "@/features/roster/wall";
 import { usePref } from "@/lib/prefs";
 import { Icon } from "@/ui";
+import { enterFull, leaveFull } from "./full";
 import { popOut, popOutSupported } from "./pip";
-import { actions } from "./store";
+import { escapeIsFree, overlayOpen } from "./escape";
+import { actions, app } from "./store";
 import { TileView } from "./Tile";
+import { useOffice } from "./useOffice";
+import { Zoo } from "./Zoo";
+import { t, tn } from "@/lib/i18n";
 
 const VIEWS: { view: WallView; label: string; title: string }[] = [
-  { view: "chat", label: "Chat", title: "Each tile the last turns of its conversation" },
-  { view: "screen", label: "Screen", title: "Each tile its terminal as it is, scaled to fit" },
+  { view: "chat", label: t("Chat"), title: t("Each tile the last turns of its conversation") },
+  { view: "screen", label: t("Screen"), title: t("Each tile its terminal as it is, scaled to fit") },
+  { view: "zoo", label: t("Zoo"), title: t("Each agent as a little creature whose pose says what it does: for a screen across the room") },
 ];
 
 const SIZES: { size: WallPrefs["size"]; title: string }[] = [
-  { size: "s", title: "Small tiles: the most on screen" },
-  { size: "m", title: "Medium tiles" },
-  { size: "l", title: "Large tiles: the most of each conversation" },
+  { size: "s", title: t("Small tiles: the most on screen") },
+  { size: "m", title: t("Medium tiles") },
+  { size: "l", title: t("Large tiles: the most of each conversation") },
 ];
 
 export default function Wall() {
-  const { machines } = useRoster();
+  const { machines, viewOnly, server } = useRoster();
   const [prefs, setPrefs] = usePref<WallPrefs>("wall", DEFAULT_WALL);
   const [hidden, setHidden] = usePref<string[]>("wall.hidden", []);
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
@@ -34,16 +44,27 @@ export default function Wall() {
   const list = useMemo(() => tiles(machines, hidden, prefs, radar, now), [machines, hidden, prefs, radar, now]);
   const [focus, setFocus] = usePref<string>("wall.focus", "");
   const { big, rest } = useMemo(() => withFocus(list.shown, focus), [list.shown, focus]);
+  const [office, setOffice] = usePref<boolean>("wall.office", false);
+  const show = useOffice(office, list.shown, radar, setOffice);
   useEffect(() => {
-    if (!big) return;
+    if (!big && !office) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || (event.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]") || document.querySelector(".modal-scrim, .sel-pop")) return;
-      setFocus("");
+      if ((event.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]") || document.querySelector(".modal-scrim, .sel-pop")) return;
+      if (big && !office && escapeIsFree({ key: event.key, defaultPrevented: event.defaultPrevented, target: event.target as Element | null }, overlayOpen(app.get()))) setFocus("");
+      const takenElsewhere = event.defaultPrevented || !!(event.target as HTMLElement | null)?.closest("[role=menu]") || overlayOpen(app.get());
+      if (office && !takenElsewhere && (event.code === "ArrowRight" || event.code === "ArrowLeft")) show.step(event.code === "ArrowRight" ? 1 : -1);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [big, setFocus]);
+  }, [big, office, setFocus, show.step]);
+  const toggleOffice = () => {
+    setOffice(!office);
+    if (office) leaveFull();
+    else enterFull();
+  };
   const n = list.shown.length;
+  const featuredTile = office ? (list.shown.find((t) => t.key === show.key) ?? null) : null;
+  const cards = featuredTile ? list.shown.filter((t) => t !== featuredTile) : [];
   const tile = (t: Tile, brief = false) => (
     <TileView
       key={t.key}
@@ -53,8 +74,11 @@ export default function Wall() {
       step={step}
       now={now}
       brief={brief}
-      focused={t === big}
-      onFocus={() => setFocus(t === big ? "" : t.key)}
+      focused={!office && t === big}
+      onFocus={office ? undefined : () => setFocus(t === big ? "" : t.key)}
+      onPin={office ? () => show.pin(t.key) : undefined}
+      onPick={office && t !== featuredTile ? () => show.pin(t.key) : undefined}
+      pinned={office && t.key === show.pinned}
       onHide={() => setHidden((h) => [...h.filter((k) => k !== t.key), t.key])}
       onPopOut={popOutSupported ? () => void popOut({ machineId: t.machine.id, paneId: t.pane.id }) : undefined}
     />
@@ -62,30 +86,28 @@ export default function Wall() {
   return (
     <main className="wall">
       <div className="wall-bar">
-        <span className="wall-count">
-          {n} agent{n === 1 ? "" : "s"}
-        </span>
+        <span className="wall-count">{tn(n, "{n} agent", "{n} agents")}</span>
         <button
           type="button"
           className={`btn sm${prefs.needsMe ? " on" : ""}`}
           aria-pressed={prefs.needsMe}
-          title="Only the agents waiting for you: a question open, a watchdog note, a finish you have not looked at"
+          title={t("Only the agents waiting for you: a question open, a watchdog note, a finish you have not looked at")}
           onClick={() => setPrefs({ ...prefs, needsMe: !prefs.needsMe })}
         >
-          Needs me{prefs.needsMe && list.calm ? ` (${list.calm})` : ""}
+          {t("Needs me")}{prefs.needsMe && list.calm ? ` (${list.calm})` : ""}
         </button>
         <button
           type="button"
           className={`btn sm${prefs.hideIdle ? " on" : ""}`}
           aria-pressed={prefs.hideIdle}
-          title={`Hide the agents idle for over ${radar.freshMinutes} min (the sidebar's fresh tier)`}
+          title={t("Hide the agents idle for over {n} min (the sidebar's fresh tier)", { n: radar.freshMinutes })}
           onClick={() => setPrefs({ ...prefs, hideIdle: !prefs.hideIdle })}
         >
-          Hide idle{prefs.hideIdle && list.idle ? ` (${list.idle})` : ""}
+          {t("Hide idle")}{prefs.hideIdle && list.idle ? ` (${list.idle})` : ""}
         </button>
         {list.hidden > 0 && (
-          <button type="button" className="btn sm" title="Bring back the tiles hidden by hand" onClick={() => setHidden([])}>
-            Show {list.hidden} hidden
+          <button type="button" className="btn sm" title={t("Bring back the tiles hidden by hand")} onClick={() => setHidden([])}>
+            {t("Show {n} hidden", { n: list.hidden })}
           </button>
         )}
         <span className="wall-spacer" />
@@ -103,16 +125,34 @@ export default function Wall() {
             </button>
           ))}
         </span>
-        <button type="button" className="btn sm" title="Start an agent in a new workspace" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
-          <Icon name="plus" size={12} /> Agent
+        <button
+          type="button"
+          className={`btn sm wall-office-btn${office ? " on" : ""}`}
+          aria-pressed={office}
+          title={office ? t("Leave office mode (Esc)") : t("Office mode for a second screen: one agent large — the one that needs you, else each in turn every 20 s — the rest as cards; a card pins its agent; full screen")}
+          onClick={toggleOffice}
+        >
+          <Icon name="monitor" size={12} /> {t("Office")}
         </button>
+        {!viewOnly && <button type="button" className="btn sm" title={t("Start an agent in a new workspace")} onClick={() => actions.openDialog({ kind: "workspace", machineId: startOn(machines) })}>
+          <Icon name="plus" size={12} /> {t("Agent")}
+        </button>}
       </div>
       {n === 0 ? (
         <div className="placeholder">
-          <p>{machines.some((m) => m.state === "connected") ? (list.calm ? "Nobody needs you right now." : list.hidden || list.idle ? "Every agent is hidden or idle." : "No agent runs anywhere.") : "No machine connected."}</p>
-          <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
-            Start an agent
-          </button>
+          <p>{machines.some((m) => m.state === "connected") ? (list.calm ? t("Nobody needs you right now.") : list.hidden || list.idle ? t("Every agent is hidden or idle.") : t("No agent runs anywhere.")) : server && machines.length === 0 ? t(NO_MACHINES) : t("No machine connected.")}</p>
+          {!viewOnly && machines.length > 0 && <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: startOn(machines) })}>
+            {t("Start an agent")}
+          </button>}
+        </div>
+      ) : prefs.view === "zoo" ? (
+        <Zoo shown={list.shown} size={prefs.size} radar={radar} now={now} office={office ? show : null} />
+      ) : featuredTile ? (
+        <div className="wall-office">
+          <div className="wall-office-main">{tile(featuredTile)}</div>
+          <div className="wall-office-cards" aria-label={t("The other agents; a click pins one")}>
+            {cards.map((t) => tile(t, true))}
+          </div>
         </div>
       ) : big ? (
         <>

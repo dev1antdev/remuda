@@ -13,6 +13,15 @@ describe("newestEdit", () => {
     expect(newestEdit(turns)).toEqual({ id: "t2", path: "/w/b.go" });
   });
 
+  it("is the edit whose result came last, when calls made side by side finish out of order", () => {
+    const slow = { type: "tool" as const, tool_name: "Edit", tool_id: "t1", input: { file_path: "/w/a.go" }, at: "2026-11-02T10:00:00Z", took: 9, output: "ok" };
+    const quick = { type: "tool" as const, tool_name: "Write", tool_id: "t2", input: { file_path: "/w/b.go" }, at: "2026-11-02T10:00:01Z", took: 1, output: "ok" };
+    expect(newestEdit([assistant(slow, quick)])).toEqual({ id: "t1", path: "/w/a.go" });
+    expect(newestEdit([assistant(slow, { ...quick, took: 20 })])).toEqual({ id: "t2", path: "/w/b.go" });
+    // one finished before the other was looked at: the slow one is news once its result lands
+    expect(newestEdit([assistant({ ...slow, output: undefined, took: undefined }, quick)])).toEqual({ id: "t2", path: "/w/b.go" });
+  });
+
   it("waits for the result and skips a failed edit", () => {
     expect(newestEdit([assistant({ type: "tool", tool_name: "Edit", tool_id: "t1", input: { file_path: "/w/a.go" } })])).toBeNull();
     expect(newestEdit([assistant({ type: "tool", tool_name: "Edit", tool_id: "t1", input: { file_path: "/w/a.go" }, output: "no such file", is_error: true })])).toBeNull();

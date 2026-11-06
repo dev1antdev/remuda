@@ -1,9 +1,11 @@
 // The projects as a tree in the mode's sidebar, favourites first, and the dialog that makes one.
 
 import { useMemo, useState, type ReactNode } from "react";
+import { plural } from "@/lib/text";
 import { Dialog, Icon, Notice, Select, useSubmit } from "@/ui";
 import { createProject, type Project } from "./api";
 import { projectOption } from "./pieces";
+import { t } from "@/lib/i18n";
 
 export function ProjectTree({ projects, selected, onSelect }: { projects: Project[]; selected: number; onSelect: (id: number) => void }) {
   const children = useMemo(() => {
@@ -25,13 +27,18 @@ export function ProjectTree({ projects, selected, onSelect }: { projects: Projec
       <div key={p.id}>
         <button
           type="button"
-          className={`tasks-nav project${p.id === selected ? " sel" : ""}`}
+          className={`tasks-nav project${p.id === selected ? " on" : ""}`}
           style={{ paddingLeft: 12 + depth * 14 }}
           onClick={() => onSelect(p.id)}
           title={p.description || p.title}
         >
           <span className="tasks-dot" style={{ background: p.hex_color ? `#${p.hex_color}` : "var(--line-strong)" }} />
           <span className="tasks-nav-label">{p.title}</span>
+          {p.proposed > 0 && (
+            <span className="badge quiet" title={t("{tasks} proposed by agents", { tasks: plural(p.proposed, "task") })}>
+              {p.proposed}
+            </span>
+          )}
           {p.is_favorite && <Icon name="star" size={12} className="tasks-star" />}
         </button>
         {render(children.get(p.id) ?? [], depth + 1)}
@@ -46,7 +53,7 @@ export function NewProjectDialog({ projects, onClose, onCreated }: { projects: P
   const { busy, err, run } = useSubmit(async () => onCreated(await createProject(title.trim(), parent)));
   return (
     <Dialog
-      title="New project"
+      title={t("New project")}
       icon="folder"
       as="form"
       onClose={onClose}
@@ -56,20 +63,20 @@ export function NewProjectDialog({ projects, onClose, onCreated }: { projects: P
       }}
     >
       <label>
-        Name
+        {t("Name")}
         <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus required />
       </label>
       <label>
-        Inside
-        <Select value={parent} onChange={setParent} options={[{ value: 0, label: "— top level —" }, ...projects.filter((p) => !p.is_archived).map(projectOption)]} />
+        {t("Inside")}
+        <Select value={parent} onChange={setParent} options={[{ value: 0, label: t("— top level —") }, ...projects.filter((p) => !p.is_archived).map(projectOption)]} />
       </label>
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" className="btn primary" disabled={busy || !title.trim()}>
-          {busy ? "Creating…" : "Create"}
+          {busy ? t("Creating…") : t("Create")}
         </button>
       </div>
     </Dialog>

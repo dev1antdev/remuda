@@ -1,23 +1,28 @@
-// Schedules: prompts sent to an agent on a timetable, or the standup pushed as a digest. A list with the next and last run,
-// a switch per row, "Run now", and the editor.
+// Schedules: prompts sent to an agent on a timetable, the standup pushed as a digest, or a fresh agent started in a
+// folder. A list with the next and last run, a switch per row, "Run now", and the editor.
 
 import { useState } from "react";
 import type { Machine } from "@/features/roster/api";
 import { machineLabel } from "@/features/roster/options";
+import { useRoster } from "@/features/roster/useRoster";
 import { useQuery } from "@/lib/query";
 import { basename, errMsg } from "@/lib/text";
 import { ago, whenShort } from "@/lib/time";
-import { Dialog, Icon, Notice } from "@/ui";
+import { Dialog, Icon, Logo, Notice, Tip } from "@/ui";
+import { agentWords, watchedWords } from "./agent";
 import { deleteSchedule, fetchSchedules, putSchedule, runSchedule, type Schedule } from "./api";
 import { NEVER } from "./cron";
 import { kindOf, sinceWords } from "./digest";
 import { ScheduleEditor } from "./ScheduleEditor";
+import { t } from "@/lib/i18n";
 
 export default function Schedules({ machines, onClose, ask }: {
   machines: Machine[];
   onClose: () => void;
   ask: (text: string, label: string, run: () => void) => void;
 }) {
+  const { agents } = useRoster();
+  const agentLabel = (id: string | undefined) => agents.find((a) => a.id === id)?.label ?? id ?? "";
   const [actionError, setActionError] = useState("");
   const [editing, setEditing] = useState<Partial<Schedule> | null>(null);
   const { data: items, error: fetchError, reload, mutate } = useQuery(fetchSchedules, []);
@@ -36,63 +41,81 @@ export default function Schedules({ machines, onClose, ask }: {
 
   return (
     <Dialog
-      title="Schedules"
+      title={t("Schedules")}
       icon="calendar"
       size="md"
       className="schedules"
       onClose={onClose}
       controls={
         <button type="button" className="btn sm" onClick={() => setEditing({ enabled: true })}>
-          <Icon name="plus" size={12} /> New
+          <Icon name="plus" size={12} /> {t("New")}
         </button>
       }
     >
       <Notice tone="hint">
-        A prompt sent to the agent running in a folder, or the standup pushed to your devices as a digest, on a timetable — in the remuda host's local
-        time. A minute with no agent there, or an agent busy with a question, is skipped and noted.
+        {t(
+          "A prompt sent to the agent running in a folder, the standup pushed to your devices as a digest, or a fresh agent started in a folder with a prompt, on a timetable — in the remuda host's local time. A minute with no agent there, or an agent busy with a question, is skipped and noted.",
+        )}
       </Notice>
       {error && (
         <Notice tone="error" onDismiss={() => setActionError("")}>
           {error}
         </Notice>
       )}
-      {items && items.length === 0 && !editing && <div className="empty">No schedules yet.</div>}
+      {items && items.length === 0 && !editing && <div className="empty">{t("No schedules yet.")}</div>}
       <div className="schedules-list">
         {items?.map((s) => (
           <div key={s.id} className={`schedule${s.enabled ? "" : " off"}`}>
-            <input type="checkbox" checked={s.enabled} title={s.enabled ? "On" : "Off"} aria-label={s.enabled ? "On" : "Off"} onChange={(e) => toggle(s, e.target.checked)} />
+            <input type="checkbox" checked={s.enabled} title={s.enabled ? t("On") : t("Off")} aria-label={s.enabled ? t("On") : t("Off")} onChange={(e) => toggle(s, e.target.checked)} />
             <div className="schedule-copy">
               <div className="schedule-label">
-                {kindOf(s) === "digest" && <Icon name="sun" size={12} className="schedule-digest-mark" aria-label="Standup digest" />}
+                {kindOf(s) === "digest" && <Icon name="sun" size={12} className="schedule-digest-mark" aria-label={t("Standup digest")} />}
+                {kindOf(s) === "agent" && (
+                  <span className="schedule-agent-mark" aria-label={t("Starts {agent}", { agent: agentLabel(s.agent) })}>
+                    <Logo agent={s.agent ?? ""} />
+                  </span>
+                )}
                 {s.label}
               </div>
               <div className="schedule-sub">
-                <code>{s.cron}</code> · {kindOf(s) === "digest" ? `to your devices · ${sinceWords(s.since)}` : `${machineLabel(machines, s.machine)} · ${basename(s.dir)}`}
-                {s.enabled && s.next && s.next !== NEVER && <span> · next {whenShort(s.next)}</span>}
+                <code>{s.cron}</code> ·{" "}
+                {kindOf(s) === "digest"
+                  ? t("to your devices · {since}", { since: sinceWords(s.since) })
+                  : kindOf(s) === "agent"
+                    ? agentWords(s, machineLabel(machines, s.machine), basename(s.dir), agentLabel(s.agent))
+                    : `${machineLabel(machines, s.machine)} · ${basename(s.dir)}`}
+                {watchedWords(s) && <span> · {watchedWords(s)}</span>}
+                {s.enabled && s.next && s.next !== NEVER && <span> · {t("next {when}", { when: whenShort(s.next) })}</span>}
                 {s.last_run && s.last_run !== NEVER && (
                   <>
                     {" · "}
                     <span className={s.last_ok ? "ok" : "bad"}>
-                      last {ago(s.last_run)}: {s.last_result}
+                      {t("last {ago}: {result}", { ago: ago(s.last_run), result: s.last_result })}
                     </span>
                   </>
                 )}
               </div>
             </div>
-            <button type="button" className="icon-btn" title="Run now" onClick={() => void runSchedule(s.id ?? "").then(reload, fail)}>
-              <Icon name="zap" size={14} />
-            </button>
-            <button type="button" className="icon-btn" title="Edit" onClick={() => setEditing(s)}>
-              <Icon name="sliders" size={14} />
-            </button>
-            <button
-              type="button"
-              className="icon-btn danger"
-              title="Delete"
-              onClick={() => ask(`Delete the schedule “${s.label}”?`, "Delete", () => void deleteSchedule(s.id ?? "").then(reload, fail))}
-            >
-              <Icon name="trash" size={14} />
-            </button>
+            <Tip text={t("Run now")}>
+              <button type="button" className="icon-btn" aria-label={t("Run now")} onClick={() => void runSchedule(s.id ?? "").then(reload, fail)}>
+                <Icon name="zap" size={14} />
+              </button>
+            </Tip>
+            <Tip text={t("Edit")}>
+              <button type="button" className="icon-btn" aria-label={t("Edit")} onClick={() => setEditing(s)}>
+                <Icon name="sliders" size={14} />
+              </button>
+            </Tip>
+            <Tip text={t("Delete")}>
+              <button
+                type="button"
+                className="icon-btn danger"
+                aria-label={t("Delete")}
+                onClick={() => ask(t("Delete the schedule “{label}”?", { label: s.label }), t("Delete"), () => void deleteSchedule(s.id ?? "").then(reload, fail))}
+              >
+                <Icon name="trash" size={14} />
+              </button>
+            </Tip>
           </div>
         ))}
       </div>

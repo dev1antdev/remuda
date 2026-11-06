@@ -81,7 +81,8 @@ jobs:
       - name: make e2e
         run: E2E_OUT="$RUNNER_TEMP/e2e-shots" make e2e
       - uses: actions/upload-artifact@v7
-        if: failure()
+        # the display checks' screenshots are worth a look after a green run too
+        if: always()
         with:
           name: e2e-screenshots
           path: ${{ runner.temp }}/e2e-shots

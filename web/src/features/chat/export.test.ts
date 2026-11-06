@@ -49,4 +49,25 @@ describe("exportFileName", () => {
     expect(exportFileName({ ...meta, workspace: "Открытые МР / мастер", sessionId: undefined })).toBe("Открытые-МР-мастер-2026-10-23.md");
     expect(exportFileName({ ...meta, workspace: "///" })).toBe("conversation-2026-10-23-01234567.md");
   });
+
+  it("cuts a long workspace at 40 characters, never between the halves of one nor before a dash", () => {
+    expect(exportFileName({ ...meta, workspace: `${"a".repeat(39)} tail` })).toBe(`${"a".repeat(39)}-2026-10-23-01234567.md`);
+    expect(exportFileName({ ...meta, workspace: `a${"𠀀".repeat(45)}`, sessionId: undefined })).toBe(`a${"𠀀".repeat(39)}-2026-10-23.md`);
+  });
+
+  it("names the day on the person's own clock, not Greenwich's", () => {
+    // the worker's zone, set for this test: 00:30 on the 24th in Moscow is still the 23rd in UTC, 23:30 on the 23rd in
+    // New York already the 24th
+    const env = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
+    const zone = env.TZ;
+    try {
+      env.TZ = "Europe/Moscow";
+      expect(exportFileName({ ...meta, when: new Date(2026, 9, 24, 0, 30) })).toBe("remuda-2026-10-24-01234567.md");
+      env.TZ = "America/New_York";
+      expect(exportFileName({ ...meta, when: new Date(2026, 9, 23, 23, 30) })).toBe("remuda-2026-10-23-01234567.md");
+    } finally {
+      if (zone === undefined) delete env.TZ;
+      else env.TZ = zone;
+    }
+  });
 });

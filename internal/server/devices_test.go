@@ -20,7 +20,7 @@ func deviceServer(t *testing.T) (http.Handler, *auth.Devices, *http.Cookie, *htt
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Server{Guard: auth.NewGuard(deviceTestToken, devices)}
+	s := &Server{Guard: auth.NewGuard(deviceTestToken, devices, nil)}
 	mux := http.NewServeMux()
 	s.deviceRoutes(mux)
 	mine, _, _ := devices.Mint("10.0.0.1", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36")

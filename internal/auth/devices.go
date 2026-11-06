@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/state"
 )
@@ -30,10 +31,17 @@ type Device struct {
 	LastSeen time.Time `json:"last_seen"`
 	IP       string    `json:"ip,omitempty"`
 	Agent    string    `json:"agent,omitempty"`
+	Viewer   bool      `json:"viewer,omitempty"` // signed in by a viewer link: it reads the page and types nothing
+	Key      string    `json:"key,omitempty"`    // the viewer key it was made with; the device goes with the key
 }
 
-// Kind is the browser and the system the device's user agent names, "Chrome on macOS".
-func (d Device) Kind() string { return DeviceName(d.Agent) }
+// Kind is the browser and the system the device's user agent names, "Chrome on macOS" — "viewer · Chrome on macOS" for one a viewer link signed in.
+func (d Device) Kind() string {
+	if d.Viewer {
+		return "viewer · " + DeviceName(d.Agent)
+	}
+	return DeviceName(d.Agent)
+}
 
 // Devices is the store of signed-in devices, <state dir>/devices.json.
 type Devices struct {
@@ -62,13 +70,23 @@ func OpenDevices(dir string) (*Devices, error) {
 
 // Mint signs a browser in: a random secret whose hash is kept, a name read off the user agent; the cookie value carries the id and the secret.
 func (d *Devices) Mint(ip, agent string) (cookie string, device Device, err error) {
+	return d.mint(ip, agent, "")
+}
+
+// MintViewer signs a browser in through a viewer link: a device like any other, marked as a viewer and tied to the key.
+func (d *Devices) MintViewer(ip, agent, keyID string) (cookie string, device Device, err error) {
+	return d.mint(ip, agent, keyID)
+}
+
+func (d *Devices) mint(ip, agent, viewerKey string) (cookie string, device Device, err error) {
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
 		return "", Device{}, err
 	}
 	raw := hex.EncodeToString(secret)
 	now := d.now()
-	device = Device{ID: state.NewID(), Hash: hashOf(raw), Name: DeviceName(agent), Created: now, LastSeen: now, IP: ip, Agent: trimAgent(agent)}
+	device = Device{ID: state.NewID(), Hash: hashOf(raw), Created: now, LastSeen: now, IP: ip, Agent: trimAgent(agent), Viewer: viewerKey != "", Key: viewerKey}
+	device.Name = device.Kind()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.list[device.ID] = &device
@@ -109,6 +127,17 @@ func (d *Devices) Check(cookie string) (Device, bool) {
 }
 
 // List is every signed-in device, the most recently seen first.
+// Name is the device's name, for a row that says who did something; false for an id it does not know.
+func (d *Devices) Name(id string) (string, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	device, ok := d.list[id]
+	if !ok {
+		return "", false
+	}
+	return device.Name, true
+}
+
 func (d *Devices) List() []Device {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -127,10 +156,7 @@ func (d *Devices) Rename(id, name string) (Device, error) {
 	if name == "" {
 		name = device.Kind()
 	}
-	if len(name) > 80 {
-		name = name[:80]
-	}
-	device.Name = name
+	device.Name = cutBetweenLetters(name, 80)
 	if err := d.saveLocked(); err != nil {
 		return Device{}, err
 	}
@@ -149,6 +175,25 @@ func (d *Devices) Revoke(id string) bool {
 		log.Printf("devices: %v", err)
 	}
 	return true
+}
+
+// RevokeByKey forgets every device a viewer key signed in and says how many went: a revoked link takes its screens with it.
+func (d *Devices) RevokeByKey(keyID string) int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	gone := 0
+	for id, device := range d.list {
+		if device.Viewer && device.Key == keyID {
+			delete(d.list, id)
+			gone++
+		}
+	}
+	if gone > 0 {
+		if err := d.saveLocked(); err != nil {
+			log.Printf("devices: %v", err)
+		}
+	}
+	return gone
 }
 
 // RevokeOthers forgets every device but the one to keep and says how many went.
@@ -193,6 +238,17 @@ func hashOf(secret string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// cutBetweenLetters keeps at most max bytes of s, ending between characters rather than inside one.
+func cutBetweenLetters(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	for max > 0 && !utf8.RuneStart(s[max]) {
+		max--
+	}
+	return s[:max]
+}
+
 func trimAgent(agent string) string {
 	agent = strings.TrimSpace(agent)
 	if len(agent) > 200 {
@@ -203,6 +259,9 @@ func trimAgent(agent string) string {
 
 // DeviceName reads the browser and the system off a user agent, "Safari on iPhone", "Chrome on macOS", "a browser" when it says neither.
 func DeviceName(agent string) string {
+	if strings.Contains(agent, "remuda-mac/") {
+		return "remuda on macOS"
+	}
 	browser := ""
 	switch {
 	case strings.Contains(agent, "Edg/"):

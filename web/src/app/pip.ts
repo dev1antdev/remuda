@@ -3,7 +3,8 @@
 
 import { alsoVisible } from "@/lib/visibility";
 import { actions, type Selection } from "./store";
-import { currentLook, dressLook } from "./theme";
+import { dressAlso } from "./theme";
+import { t } from "@/lib/i18n";
 
 type PipOpener = { requestWindow(options?: { width?: number; height?: number }): Promise<Window>; window: Window | null };
 
@@ -29,13 +30,15 @@ export async function popOut(selection: Selection): Promise<void> {
     win = await pip.requestWindow({ width: WIDTH, height: HEIGHT });
   } catch (e) {
     actions.setPopOut(null);
-    actions.notify(`Could not open the window: ${e instanceof Error ? e.message : String(e)}`, { error: true });
+    actions.notify(t("Could not open the window: {error}", { error: e instanceof Error ? e.message : String(e) }), { error: true });
     return;
   }
   dress(win.document);
   const forget = alsoVisible(win.document); // its polls go on while the tab behind it is hidden
+  const undress = dressAlso(win.document); // a change of theme, flavour, accent, text size, density or font reaches it too
   win.addEventListener("pagehide", () => {
     forget();
+    undress();
     if (current === win) {
       current = null;
       actions.setPopOut(null);
@@ -51,14 +54,10 @@ export function closePopOut(): void {
   current = null;
 }
 
-// dress gives the new document this page's stylesheets (a built page links one file, the dev server injects
-// style tags) and the body class the pop-out rules hang on.
+// dress gives the new document this page's language, its stylesheets (a built page links one file, the dev server
+// injects style tags) and the body class the pop-out rules hang on; its look comes from dressAlso.
 function dress(doc: Document) {
   doc.documentElement.lang = document.documentElement.lang;
-  doc.documentElement.dataset.theme = document.documentElement.dataset.theme;
-  doc.documentElement.dataset.flavor = document.documentElement.dataset.flavor;
-  doc.documentElement.dataset.accent = document.documentElement.dataset.accent;
-  dressLook(doc, currentLook());
   for (const sheet of Array.from(document.styleSheets)) {
     if (sheet.href) {
       const link = doc.createElement("link");

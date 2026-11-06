@@ -131,14 +131,14 @@ func (w *Watcher) poll(mc *machines.Machine) (*herdr.Snapshot, error) {
 }
 
 // apply stores the snapshot, publishes it, and emits one event per pane whose status changed;
-// a machine's first snapshot only seeds state, so a reconnect replays no alerts.
+// a machine's first snapshot only seeds state, so a reconnect replays no alerts. The snapshot is the watcher's before
+// it is announced: its ears ask the watcher about the panes they were told of.
 func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 	now := time.Now()
-	events.Publish(w.bus, events.Snapshot{Machine: machineID, Snap: snap, At: now})
-
 	var changes []events.PaneStatus
 	w.mu.Lock()
 	st := w.stateFor(machineID)
+	first := st.snap == nil || st.err != nil
 	seed := st.snap == nil
 	back := st.err != nil // the first good poll after an outage: the gap is not a turn
 	st.snap, st.at, st.err = snap, now, nil
@@ -180,6 +180,7 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 	}
 	w.mu.Unlock()
 
+	events.Publish(w.bus, events.Snapshot{Machine: machineID, Snap: snap, At: now, First: first})
 	for _, change := range changes {
 		if change.To != events.Gone {
 			log.Printf("status %s (%s): %s → %s", change.Pane, change.Workspace, change.From, change.To)

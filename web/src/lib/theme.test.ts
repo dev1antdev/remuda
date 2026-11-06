@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import css from "../styles.css?raw";
+import { setLang } from "./i18n";
 import {
   ACCENTS,
   accentName,
@@ -15,6 +16,7 @@ import {
   resolveFlavor,
   resolveTheme,
   terminalTheme,
+  themeChoiceName,
   themeOf,
   themePrefOf,
   withAlpha,
@@ -114,5 +116,23 @@ describe("the palettes", () => {
 describe("withAlpha", () => {
   it("turns hex into rgba", () => {
     expect(withAlpha("#ef9f76", 0.5)).toBe("rgba(239, 159, 118, 0.5)");
+  });
+});
+
+describe("themeChoiceName", () => {
+  afterEach(() => setLang("en"));
+  it("names the theme's choices in the page's language", () => {
+    expect([themeChoiceName("system", "mocha"), themeChoiceName("dark", "mocha"), themeChoiceName("light", "mocha")]).toEqual(["Follow the system", "Mocha (dark)", "Latte (light)"]);
+    setLang("ru");
+    expect([themeChoiceName("system", "frappe"), themeChoiceName("dark", "frappe"), themeChoiceName("light", "frappe")]).toEqual(["Как в системе", "Frappé (тёмная)", "Latte (светлая)"]);
+  });
+});
+
+describe("the stylesheet's colours", () => {
+  it("are tokens everywhere but the palette's own --ctp-* lines: a literal colour would not follow the flavour", () => {
+    const literal = /#[0-9a-fA-F]{3,8}\b|\b(?:rgb|hsl)a?\(\s*\d/;
+    const lines = css.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, " ")).split("\n");
+    const strays = lines.map((line, i) => [i + 1, line.trim()] as const).filter(([, line]) => literal.test(line) && !line.startsWith("--ctp-"));
+    expect(strays).toEqual([]);
   });
 });

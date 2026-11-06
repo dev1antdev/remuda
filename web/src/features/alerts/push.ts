@@ -3,6 +3,7 @@
 // one, so the first confirmation would hit a dead endpoint.
 
 import { check, sendJSON } from "@/lib/http";
+import { t } from "@/lib/i18n";
 
 // Quiet is a daily window in this device's zone during which the server sends it nothing.
 export type Quiet = { from: string; to: string; tz: string };
@@ -49,11 +50,12 @@ async function serverKey(): Promise<string> {
   return ((await res.json()) as { public_key: string }).public_key;
 }
 
-async function register(sub: PushSubscription, prefs: Prefs): Promise<void> {
+async function register(sub: PushSubscription, prefs: Prefs, oldEndpoint?: string): Promise<void> {
   await sendJSON("POST", "/api/push/subscribe", {
     subscription: sub.toJSON(),
     prefs,
     label: navigator.userAgent.slice(0, 120),
+    ...(oldEndpoint ? { old_endpoint: oldEndpoint } : {}),
   });
 }
 
@@ -82,19 +84,37 @@ export function enablePush(prefs: Prefs): Promise<void> {
       const reg = await registration();
       const key = urlBase64ToUint8Array(await serverKey());
       let sub = await reg.pushManager.getSubscription();
+      let replaced: string | undefined;
       if (sub && !sameKey(sub, key)) {
+        replaced = sub.endpoint;
         await sub.unsubscribe();
         sub = null;
       }
       if (!sub) {
-        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+        sub = await subscribeOrSay(reg, key);
       }
-      await register(sub, prefs);
+      await register(sub, prefs, replaced);
     } finally {
       inflight = null;
     }
   })();
   return inflight;
+}
+
+// SUBSCRIBE_TIMEOUT_MS is how long the browser's push service may take to register: a browser without one may never answer
+const SUBSCRIBE_TIMEOUT_MS = 20_000;
+
+// subscribeOrSay registers with the browser's push service, or says in the person's words why it could not
+async function subscribeOrSay(reg: ServiceWorkerRegistration, key: Uint8Array<ArrayBuffer>): Promise<PushSubscription> {
+  try {
+    return await Promise.race([
+      reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(t("The browser's push service gave no answer in 20 s."))), SUBSCRIBE_TIMEOUT_MS)),
+    ]);
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    throw new Error(t("The browser would not register for push ({reason}). A private window, a headless browser or one without a push service cannot get pushes; the alerts still show on this page while it is in front.", { reason }));
+  }
 }
 
 export async function updatePrefs(prefs: Prefs): Promise<void> {
@@ -115,15 +135,29 @@ export function sendTestPush(endpoint: string): Promise<void> {
   return sendJSON("POST", "/api/push/test", { endpoint });
 }
 
-// resyncPush re-registers silently on every load with permission granted, so a server that lost its state regains this device.
-export async function resyncPush(prefs: Prefs): Promise<void> {
-  if (!support().ok || Notification.permission !== "granted") return;
-  try {
-    const sub = await currentSub();
-    if (sub) await register(sub, prefs);
-  } catch {
-    /* best effort */
-  }
+// resyncPush re-registers silently on every load with permission granted, so a server that lost its state regains this
+// device; a subscription made under another key than the server's — a new state folder, a cockpit moved to another
+// machine under the same address — can never be delivered to, so it is replaced with one under the server's key.
+export function resyncPush(prefs: Prefs): Promise<void> {
+  if (!support().ok || Notification.permission !== "granted") return Promise.resolve();
+  if (inflight) return inflight;
+  inflight = (async () => {
+    try {
+      const reg = await registration();
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) return;
+      const key = urlBase64ToUint8Array(await serverKey());
+      if (sameKey(sub, key)) return await register(sub, prefs);
+      const old = sub.endpoint;
+      await sub.unsubscribe();
+      await register(await subscribeOrSay(reg, key), prefs, old);
+    } catch {
+      /* best effort */
+    } finally {
+      inflight = null;
+    }
+  })();
+  return inflight;
 }
 
 function sameKey(sub: PushSubscription, key: Uint8Array<ArrayBuffer>): boolean {

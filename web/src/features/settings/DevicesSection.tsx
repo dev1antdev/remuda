@@ -1,12 +1,16 @@
 // The signed-in devices, a section of Settings: each with a name of its own (a click on it edits), what it is and when
-// it was last seen, a Revoke behind a confirm; under the list, every other device signed out at once.
+// it was last seen, a Revoke behind a confirm; under the list, every other device signed out at once, then the
+// agents' keys (AgentKeys.tsx).
 
 import { useState, type KeyboardEvent } from "react";
 import { actions } from "@/app/store";
 import { useQuery } from "@/lib/query";
-import { errMsg, plural } from "@/lib/text";
+import { errMsg } from "@/lib/text";
+import AgentKeys from "./AgentKeys";
+import ViewerKeys from "./ViewerKeys";
 import { fetchDevices, renameDevice, revokeDevice, revokeOtherDevices, type Device } from "./api";
-import { deviceLine, revokeQuestion } from "./devices";
+import { deviceLine, revokeOthersQuestion, revokeQuestion, signedOutWords } from "./devices";
+import { t } from "@/lib/i18n";
 
 export default function DevicesSection() {
   const { data: devices, error, reload, mutate } = useQuery<Device[]>(() => fetchDevices(), []);
@@ -29,19 +33,21 @@ export default function DevicesSection() {
       void revokeDevice(device.id).then(({ self }) => {
         if (self) location.reload();
         else {
-          actions.notify(`${device.name} signed out`, { brief: true });
+          actions.notify(t("{device} signed out", { device: device.name }), { brief: true });
           reload();
         }
       }, fail),
     );
   };
-  const revokeOthers = () =>
-    actions.ask("Sign out every other device? Each needs the token to sign in again.", "Sign out others", () =>
+  const revokeOthers = () => {
+    const { text, label } = revokeOthersQuestion();
+    actions.ask(text, label, () =>
       void revokeOtherDevices().then(({ revoked }) => {
-        actions.notify(`${plural(revoked, "device")} signed out`, { brief: true });
+        actions.notify(signedOutWords(revoked), { brief: true });
         reload();
       }, fail),
     );
+  };
   const onKey = (device: Device) => (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") rename(device, e.currentTarget.value);
     if (e.key === "Escape") setEditing(null);
@@ -49,38 +55,41 @@ export default function DevicesSection() {
 
   return (
     <section className="settings-section">
-      <h3>Devices</h3>
+      <h3>{t("Devices")}</h3>
       {error && <div className="settings-row device-row"><span><small>{error}</small></span></div>}
       {devices?.map((device) => (
         <div key={device.id} className="settings-row device-row">
           <span>
             <span className="device-head">
               {editing === device.id ? (
-                <input className="sm device-name-field" defaultValue={device.name} autoFocus aria-label="Device name" onKeyDown={onKey(device)} onBlur={(e) => rename(device, e.currentTarget.value)} />
+                <input className="sm device-name-field" defaultValue={device.name} autoFocus aria-label={t("Device name")} onKeyDown={onKey(device)} onBlur={(e) => rename(device, e.currentTarget.value)} />
               ) : (
-                <button type="button" className="linkish device-name" title="Rename this device" onClick={() => setEditing(device.id)}>
+                <button type="button" className="linkish device-name" title={t("Rename this device")} onClick={() => setEditing(device.id)}>
                   {device.name}
                 </button>
               )}
-              {device.this && <span className="badge quiet">this device</span>}
+              {device.this && <span className="badge quiet">{t("this device")}</span>}
+              {device.viewer && <span className="badge quiet">{t("viewer")}</span>}
             </span>
             <small>{deviceLine(device, now)}</small>
           </span>
           <button type="button" className="btn danger sm" onClick={() => revoke(device)}>
-            {device.this ? "Sign out" : "Revoke"}
+            {device.this ? t("Sign out") : t("Revoke")}
           </button>
         </div>
       ))}
       {devices && devices.length > 1 && (
         <div className="settings-row device-row devices-foot">
           <span>
-            <small>Lost a phone? Every other device is signed out at once; this one stays.</small>
+            <small>{t("Lost a phone? Every other device is signed out at once; this one stays.")}</small>
           </span>
           <button type="button" className="btn sm" onClick={revokeOthers}>
-            Sign out every other device
+            {t("Sign out every other device")}
           </button>
         </div>
       )}
+      <AgentKeys />
+      <ViewerKeys />
     </section>
   );
 }

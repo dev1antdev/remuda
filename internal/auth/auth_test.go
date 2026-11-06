@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // testToken is long enough for the guard and plain enough that a secret scan reads it as what it is
@@ -25,7 +26,7 @@ func newGuard(t *testing.T) (*Guard, http.Handler) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g := NewGuard(testToken, devices)
+	g := NewGuard(testToken, devices, nil)
 	return g, g.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "device="+DeviceID(r.Context()))
 	}))
@@ -117,6 +118,19 @@ func TestLoginFormMintsDevice(t *testing.T) {
 	}
 }
 
+// The sign-in form is the one write anybody may send unsigned: a token is short, so a body of megabytes is refused
+// before it is read into memory, not parsed in full and then answered as a wrong token.
+func TestLoginFormRefusesAHugeBody(t *testing.T) {
+	g, _ := newGuard(t)
+	req := httptest.NewRequest("POST", "/api/login", strings.NewReader("token="+strings.Repeat("x", 4<<20)))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	g.HandleLogin(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("a 4 MB sign-in form: %d, want 400 before it is read whole", rec.Code)
+	}
+}
+
 func TestLegacyCookieUpgraded(t *testing.T) {
 	g, h := newGuard(t)
 	res := get(h, "/api/roster", &http.Cookie{Name: CookieName, Value: testToken}, chromeMac)
@@ -202,6 +216,7 @@ func TestWrongCookiesAndBearer(t *testing.T) {
 func TestDeviceName(t *testing.T) {
 	cases := map[string]string{
 		chromeMac: "Chrome on macOS",
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) remuda-mac/0.10.0":                                 "remuda on macOS",
 		"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1": "Safari on iPhone",
 		"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0":                                                                  "Firefox on Linux",
 		"Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36":                   "Chrome on Android",
@@ -266,6 +281,19 @@ func TestStoreReloadRenameAndRevokeOthers(t *testing.T) {
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, devicesFile)); err != nil || strings.Contains(string(b), strings.Split(first, ".")[2]) {
 		t.Fatal("the file must hold hashes, never a secret")
+	}
+}
+
+// A long name in Cyrillic is cut between letters, never inside one: the list would read it with a broken last letter.
+func TestALongNameIsCutBetweenLetters(t *testing.T) {
+	devices, _ := OpenDevices(t.TempDir())
+	_, device, _ := devices.Mint("10.0.0.1", chromeMac)
+	renamed, err := devices.Rename(device.ID, strings.Repeat("Ноутбук ", 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !utf8.ValidString(renamed.Name) || len(renamed.Name) > 80 || !strings.HasPrefix(renamed.Name, "Ноутбук") {
+		t.Fatalf("cut to %q (%d bytes)", renamed.Name, len(renamed.Name))
 	}
 }
 

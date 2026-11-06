@@ -40,7 +40,7 @@ export function useChat({ machineId, paneId, sessionId, dir, every, active, last
   useLive("chat", (event) => {
     if (active && paneId && event.machine === machineId && event.pane === paneId) reload();
   });
-  // a change of pace (the status flipped) or coming on screen is a look at once; not on mount, the query has just gone out
+  // a change of pace (the status flipped) is a look at once; not on mount, the query has just gone out, and coming on screen is useQuery's own
   const mounted = useRef(false);
   useEffect(() => {
     if (!mounted.current) {
@@ -48,6 +48,6 @@ export function useChat({ machineId, paneId, sessionId, dir, every, active, last
       return;
     }
     if (active) reload();
-  }, [every, active, reload]);
+  }, [every, reload]); // eslint-disable-line react-hooks/exhaustive-deps
   return query;
 }

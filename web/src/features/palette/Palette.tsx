@@ -3,9 +3,10 @@
 
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { hueColor } from "@/features/roster/hue";
-import { Dialog, Icon, Logo } from "@/ui";
+import { Dialog, FolderIcon, Icon, Logo } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import { rank, type Entry } from "./rank";
+import { t } from "@/lib/i18n";
 
 export default function Palette({ entries, onClose }: { entries: (query: string) => Entry[]; onClose: () => void }) {
   const [query, setQuery] = useState("");
@@ -49,8 +50,8 @@ export default function Palette({ entries, onClose }: { entries: (query: string)
           aria-expanded="true"
           aria-controls="palette-list"
           aria-activedescendant={list.length ? `palette-${at}` : undefined}
-          aria-label="Jump to an agent or run a command"
-          placeholder="Jump to an agent or run a command…"
+          aria-label={t("Jump to an agent or run a command")}
+          placeholder={t("Jump to an agent or run a command…")}
           spellCheck={false}
           value={query}
           onChange={(e) => {
@@ -62,7 +63,7 @@ export default function Palette({ entries, onClose }: { entries: (query: string)
       </div>
       <div className="palette-list" id="palette-list" role="listbox">
         {list.map((entry, i) => {
-          const head = entry.kind !== lastKind && !entry.always ? <div className="palette-group">{entry.kind === "pane" ? "Agents" : "Commands"}</div> : null;
+          const head = entry.kind !== lastKind && !entry.always ? <div className="palette-group">{entry.kind === "pane" ? t("Agents") : t("Commands")}</div> : null;
           lastKind = entry.always ? "" : entry.kind;
           return (
             <Row key={entry.id} entry={entry} id={`palette-${i}`} selected={i === at} head={head} onHover={() => setIndex(i)} onPick={() => pick(entry)} />
@@ -72,13 +73,13 @@ export default function Palette({ entries, onClose }: { entries: (query: string)
       <div className="palette-foot">
         <span>
           <kbd>↑</kbd>
-          <kbd>↓</kbd> move
+          <kbd>↓</kbd> {t("move")}
         </span>
         <span>
-          <kbd>↵</kbd> run
+          <kbd>↵</kbd> {t("run")}
         </span>
         <span>
-          <kbd>esc</kbd> close
+          <kbd>esc</kbd> {t("close")}
         </span>
       </div>
     </Dialog>
@@ -91,7 +92,7 @@ function Row({ entry, id, selected, head, onHover, onPick }: { entry: Entry; id:
   return (
     <>
       {head}
-      <div id={id} role="option" aria-selected={selected} className={`palette-row${entry.danger ? " danger" : ""}`} onMouseMove={onHover} onClick={onPick}>
+      <div id={id} role="option" aria-selected={selected} data-entry={entry.id} className={`palette-row${entry.danger ? " danger" : ""}`} onMouseMove={onHover} onClick={onPick}>
         {pane ? (
           <>
             <span className={`radar-mark ${pane.alert ? "alert" : pane.display}`} style={markStyle}>
@@ -114,10 +115,11 @@ function Row({ entry, id, selected, head, onHover, onPick }: { entry: Entry; id:
         {entry.hint && (
           <span className="palette-hint">
             {entry.hue !== undefined && <i className="hue-dot" style={{ background: hueColor(entry.hue) }} />}
+            {pane && <FolderIcon icon={pane.folder.icon} name={pane.folder.name} size={12} />}
             {entry.hint}
           </span>
         )}
-        {pane?.current ? <span className="palette-detail">here now</span> : entry.detail ? <span className="palette-detail">{entry.detail}</span> : null}
+        {pane?.current ? <span className="palette-detail">{t("here now")}</span> : entry.detail ? <span className="palette-detail">{entry.detail}</span> : null}
       </div>
     </>
   );

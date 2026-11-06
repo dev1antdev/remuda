@@ -181,3 +181,27 @@ func TestFeedHearsAlertsWithoutSubscriptions(t *testing.T) {
 		t.Errorf("heard %v, want %v", heard, want)
 	}
 }
+
+// A note of a question's kind — a task's or an arena's agent asking first, a first prompt not delivered — goes by the
+// device's question switch, as the page's toast reads it, and a watchdog note by the watchdog's.
+func TestNotifyFollowsTheSwitchOfItsKind(t *testing.T) {
+	s, _ := newTestService(t)
+	off := false
+	questionsOnly := Subscription{Endpoint: "https://push.example/questions", Prefs: Prefs{Input: true, Done: "long", Watchdog: &off}}
+	questionsOnly.Keys.P256dh, questionsOnly.Keys.Auth = "p", "a"
+	s.Subscribe(questionsOnly, "")
+	watchdogOnly := Subscription{Endpoint: "https://push.example/dev", Prefs: Prefs{Input: false, Done: "long"}}
+	watchdogOnly.Keys.P256dh, watchdogOnly.Keys.Auth = "p", "a"
+	s.Subscribe(watchdogOnly, "")
+	var to []string
+	s.send = func(sub *Subscription, p Payload) error {
+		to = append(to, p.Kind+" → "+sub.Endpoint)
+		return nil
+	}
+	s.Notify(Payload{Machine: "local", Pane: "w1:p1", Kind: "input", Title: "Task #3: the agent asks something first"})
+	s.Notify(Payload{Machine: "local", Pane: "w1:p1", Kind: "stuck", Title: "api looks stuck"})
+	sort.Strings(to)
+	if got := strings.Join(to, ", "); got != "input → https://push.example/questions, stuck → https://push.example/dev" {
+		t.Fatalf("sent %s", got)
+	}
+}

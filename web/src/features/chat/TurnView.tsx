@@ -1,6 +1,6 @@
 // One turn of the transcript: its text as Markdown, its thinking and tool calls folded (each call with how long it took, a
 // failed one in red), an Edit's change under its call in the lens, a picture the agent read or wrote as a thumbnail, a foot
-// with what the answer spent and what went wrong, a forward button and a link to the turn.
+// with what the answer spent and what went wrong, a forward button, a link to the turn and a pin that keeps it in the Pins list.
 
 import { memo, useState, type ReactNode } from "react";
 import { fileUrl } from "@/features/files/api";
@@ -19,20 +19,23 @@ import { PLAN_TOOLS, planCallWords } from "./plan";
 import { PLAN_MARK } from "./PlanBar";
 import { SubagentRow } from "./SubagentRow";
 import { sameSubagents, subagentsOf } from "./subagents";
+import { t } from "@/lib/i18n";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 export const TurnView = memo(
-  function TurnView({ turn, machineId, onOpenFile, onForward, onLink, subagents, onOpenSubagent, diffs }: {
+  function TurnView({ turn, machineId, onOpenFile, onForward, onLink, onPin, pinned, subagents, onOpenSubagent, diffs }: {
     turn: Turn;
     machineId?: string;
     onOpenFile: OpenFile;
     onForward?: (text: string) => void;
     onLink?: (turn: Turn) => void; // copies a link to this turn; only a pane's conversation has one
+    onPin?: (turn: Turn) => void; // pins or unpins this turn; only a pane's conversation has one
+    pinned?: boolean; // the turn is in the Pins list: a mark in its corner, the pin button on
     subagents?: Subagent[]; // the conversation's, drawn under the Agent calls that spawned them
     onOpenSubagent?: (s: Subagent) => void;
-    diffs?: boolean; // an Edit's change drawn under its call: the lens, not a tile
+    diffs?: boolean; // an Edit's change drawn under its call, a mermaid fence drawn as its diagram: the lens, not a tile
   }) {
-    const cls = turn.role === "user" ? "turn turn-user" : "turn turn-assistant";
+    const cls = `turn ${turn.role === "user" ? "turn-user" : "turn-assistant"}${pinned ? " turn-pinned" : ""}`;
     const text = turn.parts
       .filter((p) => p.type === "text")
       .map((p) => p.text ?? "")
@@ -40,23 +43,35 @@ export const TurnView = memo(
       .trim();
     return (
       <div className={cls} data-ids={turn.ids?.join(" ")}>
-        <ErrorBoundary fallback={(message) => <Notice tone="error">This turn could not be drawn: {message}</Notice>}>
+        {pinned && (
+          <span className="turn-pin-mark" title={t("Pinned")}>
+            <Icon name="pin" size={12} />
+          </span>
+        )}
+        <ErrorBoundary resetKey={turn} fallback={(message) => <Notice tone="error">{t("This turn could not be drawn: {message}", { message })}</Notice>}>
           {turn.parts.map((p, i) => (
             <PartView key={i} part={p} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} diffs={diffs} />
           ))}
         </ErrorBoundary>
         {turn.role === "assistant" && <Spent turn={turn} />}
-        {(!!(onForward && text && turn.role === "assistant") || !!(onLink && turn.ids?.length)) && (
+        {(!!(onForward && text && turn.role === "assistant") || !!((onLink || onPin) && turn.ids?.length)) && (
           <div className="turn-actions">
             {onForward && text && turn.role === "assistant" && (
-              <button type="button" className="linkish turn-forward" title="Forward this to another agent" onClick={() => onForward(text)}>
-                <Icon name="send" size={12} /> forward
+              <button type="button" className="linkish turn-forward" title={t("Forward this to another agent")} onClick={() => onForward(text)}>
+                <Icon name="send" size={12} /> {t("forward")}
               </button>
             )}
             {onLink && !!turn.ids?.length && (
-              <Tip text="Copy a link that opens this conversation at this turn">
-                <button type="button" className="icon-btn sm turn-link" aria-label="Copy link to this turn" onClick={() => onLink(turn)}>
+              <Tip text={t("Copy a link that opens this conversation at this turn")}>
+                <button type="button" className="icon-btn sm turn-link" aria-label={t("Copy link to this turn")} onClick={() => onLink(turn)}>
                   <Icon name="link" size={12} />
+                </button>
+              </Tip>
+            )}
+            {onPin && !!turn.ids?.length && (
+              <Tip text={pinned ? t("Unpin this turn") : t("Pin this turn: the Pins list in the View menu finds it again")}>
+                <button type="button" className={pinned ? "icon-btn sm turn-pin on" : "icon-btn sm turn-pin"} aria-label={pinned ? t("Unpin this turn") : t("Pin this turn")} aria-pressed={!!pinned} onClick={() => onPin(turn)}>
+                  <Icon name="pin" size={12} />
                 </button>
               </Tip>
             )}
@@ -70,6 +85,8 @@ export const TurnView = memo(
     a.onOpenFile === b.onOpenFile &&
     a.onForward === b.onForward &&
     a.onLink === b.onLink &&
+    a.onPin === b.onPin &&
+    a.pinned === b.pinned &&
     a.onOpenSubagent === b.onOpenSubagent &&
     a.diffs === b.diffs &&
     sameTurn(a.turn, b.turn) &&
@@ -91,10 +108,10 @@ export function sameTurn(a: Turn, b: Turn): boolean {
 // Spent is the quiet foot of an answer: how long it took, the tokens it used, what it cost at API prices, and what
 // went wrong among its calls — the failed ones, the ones repeating an earlier call exactly. Nothing when there is nothing to say.
 function Spent({ turn }: { turn: Turn }) {
-  const words = [turn.took ? spent(turn.took) : "", turn.tokens ? `${tok(turn.tokens)} tokens` : "", turn.cost ? usd(turn.cost) : ""].filter(Boolean);
+  const words = [turn.took ? spent(turn.took) : "", turn.tokens ? t("{n} tokens", { n: tok(turn.tokens) }) : "", turn.cost ? usd(turn.cost) : ""].filter(Boolean);
   const wrong = callWords(callStats(turn));
   if (!words.length && !wrong) return null;
-  const title = `${turn.model ? `${turn.model} · ` : ""}from your prompt to the end of this answer; the tokens of its API responses, cache included, at API prices — on a subscription a measure, not a bill${wrong ? "; a repeated call is one whose tool and input match an earlier call of this answer exactly" : ""}`;
+  const title = `${turn.model ? `${turn.model} · ` : ""}from your prompt to the end of this answer; the tokens of its API responses, cache included, at API prices — on a subscription a measure, not a bill${wrong ? t("; a repeated call is one whose tool and input match an earlier call of this answer exactly") : ""}`;
   return (
     <span className="turn-spent" title={title}>
       {words.join(" · ")}
@@ -116,7 +133,7 @@ function Folded({ className, summary, children }: { className: string; summary: 
 
 function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent, diffs }: { part: Part; machineId?: string; onOpenFile: OpenFile; subagents?: Subagent[]; onOpenSubagent?: (s: Subagent) => void; diffs?: boolean }) {
   if (part.type === "text") {
-    return <Markdown text={part.text ?? ""} onOpenFile={onOpenFile} />;
+    return <Markdown text={part.text ?? ""} onOpenFile={onOpenFile} diagrams={diffs} />;
   }
   if (part.type === "thinking") {
     return (
@@ -124,7 +141,7 @@ function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent, diff
         className="part-thinking"
         summary={
           <>
-            <Icon name="sparkles" size={12} className="part-tool-icon" /> Thinking
+            <Icon name="sparkles" size={12} className="part-tool-icon" /> {t("Thinking")}
           </>
         }
       >
@@ -163,16 +180,16 @@ function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent, diff
                     e.preventDefault();
                     onOpenFile({ path: file, prefer: EDIT_TOOLS.has(name) ? "changes" : "file" });
                   }}
-                  title={EDIT_TOOLS.has(name) ? "Open the file with its changes" : "Open the file"}
+                  title={`${file}\n${EDIT_TOOLS.has(name) ? t("Open the file with its changes") : t("Open the file")}`}
                 >
-                  {hint}
+                  <bdi dir="ltr">{hint}</bdi>
                 </button>
               ) : (
                 <span className="part-hint">{hint}</span>
               )}
-              {everywhere && <span className="part-hint"> · every occurrence</span>}
+              {everywhere && <span className="part-hint"> {t("· every occurrence")}</span>}
               {part.took ? (
-                <span className="part-took" title={part.is_error ? "The call failed, and how long it took" : "How long the call took"}>
+                <span className="part-took" title={part.is_error ? t("The call failed, and how long it took") : t("How long the call took")}>
                   {took(part.took)}
                 </span>
               ) : null}
@@ -198,7 +215,7 @@ function Thumb({ machineId, path, onOpenFile }: { machineId: string; path: strin
   const [gone, setGone] = useState(false);
   if (gone) return null;
   return (
-    <button type="button" className="linkish part-image" title={`${path}\nOpen the file`} onClick={() => onOpenFile({ path, prefer: "file" })}>
+    <button type="button" className="linkish part-image" title={`${path}\n${t("Open the file")}`} onClick={() => onOpenFile({ path, prefer: "file" })}>
       <img src={fileUrl(machineId, path)} alt={basename(path)} loading="lazy" onError={() => setGone(true)} />
     </button>
   );

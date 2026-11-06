@@ -12,6 +12,7 @@ import { took } from "@/lib/time";
 import { Notice } from "@/ui";
 import type { Subagent } from "./api";
 import Composer from "./Composer";
+import { useRoster } from "@/features/roster/useRoster";
 import { doing, type Doing } from "./doing";
 import { counts, progressWords } from "./plan";
 import { QuestionCard } from "./QuestionCard";
@@ -20,14 +21,16 @@ import { subagentWords } from "./subagents";
 import { TurnView } from "./TurnView";
 import { useChat } from "./useChat";
 import { useFollowBottom } from "./useFollowBottom";
+import { t } from "@/lib/i18n";
 
 export const TAIL_TURNS = 12;
 
-const Tail = memo(function Tail({ machineId, paneId, status, dir, words, settled = false, said: fallback, active }: {
+const Tail = memo(function Tail({ machineId, paneId, status, dir, agent = "", words, settled = false, said: fallback, active }: {
   machineId: string;
   paneId: string;
   status: string;
   dir: string;
+  agent?: string; // the pane's agent kind, for the composer's completion
   words: string;
   settled?: boolean; // the agent finished or sits idle: the state line says what it answered
   said?: string; // the roster's line, until the tail has the turns
@@ -51,12 +54,12 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, words, settled
     <div className="chat tail">
       <TileState words={words} doing={now} said={answered} plan={progress} subagents={subs} />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
-        {turns.length === 0 && <div className="empty chat-empty">{chat === null ? "Loading…" : "No transcript yet."}</div>}
+        {turns.length === 0 && <div className="empty chat-empty">{chat === null ? t("Loading…") : t("No transcript yet.")}</div>}
         {turns.map((t, i) => (
           <TurnView key={t.ids?.[0] || i} turn={t} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} />
         ))}
       </div>
-      <TailAnswer machineId={machineId} paneId={paneId} status={status} dir={dir} active={active} error={fetchError || null} />
+      <TailAnswer machineId={machineId} paneId={paneId} status={status} dir={dir} agent={agent} active={active} error={fetchError || null} />
     </div>
   );
 });
@@ -70,7 +73,7 @@ export function TileState({ words, doing, said, plan, subagents }: { words: stri
     <div className="tile-state">
       <span className="tile-words">{words}</span>
       {plan && (
-        <span className="tile-plan" title="The agent's plan: items done of all">
+        <span className="tile-plan" title={t("The agent's plan: items done of all")}>
           {plan}
         </span>
       )}
@@ -107,7 +110,7 @@ function Running({ since }: { since: string }) {
   const seconds = Math.max(0, (now - new Date(since).getTime()) / 1000);
   if (!Number.isFinite(seconds)) return null;
   return (
-    <span className={seconds >= LONG_CALL ? "tile-running is-long" : "tile-running"} title={seconds >= LONG_CALL ? "This call has run for over a minute" : undefined}>
+    <span className={seconds >= LONG_CALL ? "tile-running is-long" : "tile-running"} title={seconds >= LONG_CALL ? t("This call has run for over a minute") : undefined}>
       {" · "}
       {took(seconds)}
     </span>
@@ -115,16 +118,31 @@ function Running({ since }: { since: string }) {
 }
 
 // TailAnswer is the foot of a tile whatever it shows above: the keys for a question the agent asks, an error, the one-line composer.
-export function TailAnswer({ machineId, paneId, status, dir, active = true, error: shown = null }: { machineId: string; paneId: string; status: string; dir: string; active?: boolean; error?: string | null }) {
+export function TailAnswer({ machineId, paneId, status, dir, agent = "", active = true, error: shown = null }: { machineId: string; paneId: string; status: string; dir: string; agent?: string; active?: boolean; error?: string | null }) {
   const [actionError, setActionError] = useState<string | null>(null);
-  const keys = (ks: string[]) => sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
+  const { viewOnly } = useRoster();
+  const keys = (ks: string[]) =>
+    sendKeys(machineId, paneId, ks).then(
+      () => true,
+      (e) => {
+        setActionError(errMsg(e));
+        return false;
+      },
+    );
   const error = actionError ?? shown;
+  if (viewOnly) {
+    return error ? (
+      <Notice tone="error" className="chat-notice">
+        {error}
+      </Notice>
+    ) : null;
+  }
   return (
     <>
       {status === "input" && (
         <Notice tone="warn" icon="alert-triangle" className="chat-notice">
           <QuestionCard machineId={machineId} paneId={paneId} active={active} compact onKeys={keys}>
-            Waiting for an answer:
+            {t("Waiting for an answer:")}
           </QuestionCard>
         </Notice>
       )}
@@ -133,7 +151,7 @@ export function TailAnswer({ machineId, paneId, status, dir, active = true, erro
           {error}
         </Notice>
       )}
-      <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} compact />
+      <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} agent={agent} compact />
     </>
   );
 }
