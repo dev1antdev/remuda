@@ -16,10 +16,14 @@ export type ShellRow = {
   state: string;
 };
 
+// ShellAlertPrefs are this device's alert switches and quiet hours, which the app's socket device on the server goes by
+export type ShellAlertPrefs = { input: boolean; done: string; watchdog?: boolean; quiet?: { from: string; to: string; tz: string } };
+
 export type ShellMessage =
   | { type: "ready"; version: string; machine: string }
   | { type: "badge"; count: number; tone: ShellTone | null }
-  | { type: "menu"; rows: ShellRow[]; working: number; idle: number };
+  | { type: "menu"; rows: ShellRow[]; working: number; idle: number }
+  | { type: "alerts"; prefs: ShellAlertPrefs };
 
 // ShellHandlers are the functions the page defines for the app to call
 export type ShellHandlers = {

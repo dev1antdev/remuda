@@ -73,7 +73,7 @@ func Favicon(ctx context.Context, client *http.Client, raw string) (string, stri
 	defer cancel()
 	page := site
 	var candidates []iconLink
-	body, final, pageErr := fetch(ctx, client, site.String(), MaxPage)
+	body, final, pageErr := fetch(ctx, client, site.String(), MaxPage, false)
 	if pageErr == nil {
 		page = final
 		candidates = rankLinks(linksIn(string(body), final))
@@ -104,7 +104,7 @@ func Favicon(ctx context.Context, client *http.Client, raw string) (string, stri
 			}
 			continue
 		}
-		data, _, err := fetch(ctx, client, candidate.href, MaxImage)
+		data, _, err := fetch(ctx, client, candidate.href, MaxImage, true)
 		if err != nil {
 			failed("its icon: "+err.Error(), candidate)
 			continue
@@ -127,8 +127,9 @@ func Favicon(ctx context.Context, client *http.Client, raw string) (string, stri
 	return "", "", fmt.Errorf("no icon found on %s: %s", site.Host, reason)
 }
 
-// fetch GETs an address as remuda, answering at most limit bytes and the address it ended at; more than limit is an error.
-func fetch(ctx context.Context, client *http.Client, address string, limit int64) ([]byte, *url.URL, error) {
+// fetch GETs an address as remuda, answering at most limit bytes and the address it ended at; more than limit is an
+// error when the answer must be whole (a picture), else its first limit bytes are the answer (a page's head).
+func fetch(ctx context.Context, client *http.Client, address string, limit int64, whole bool) ([]byte, *url.URL, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
 	if err != nil {
 		return nil, nil, errors.New("the address does not read")
@@ -147,7 +148,10 @@ func fetch(ctx context.Context, client *http.Client, address string, limit int64
 		return nil, nil, errors.New("its answer broke off")
 	}
 	if int64(len(data)) > limit {
-		return nil, nil, fmt.Errorf("its answer is over %d KB", limit>>10)
+		if whole {
+			return nil, nil, fmt.Errorf("its answer is over %d KB", limit>>10)
+		}
+		data = data[:limit]
 	}
 	return data, res.Request.URL, nil
 }

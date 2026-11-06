@@ -12,6 +12,7 @@ import ReopenDialog from "@/features/reopen/ReopenDialog";
 import ArenaDialog from "@/features/arena/ArenaDialog";
 import ArenaPanel from "@/features/arena/ArenaPanel";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import { AddMachineDialog, NewTabDialog, NewWorkspaceDialog, NewWorktreeDialog, RenameDialog, RenameMachineDialog } from "@/features/roster/dialogs";
 import Activity from "@/features/activity/Activity";
 import BroadcastDialog from "@/features/agents/BroadcastDialog";
@@ -51,6 +52,7 @@ export default function Overlays() {
   const confirm = app.use((s) => s.confirm);
   const file = app.use((s) => s.file);
   const { machines, agents, refresh, host, server } = useRoster();
+  const share = useSharing(); // a confirm names what it acts on: under the screen-sharing mode, by its neutral name
   const panes = useAllPanes();
   const leftoversOn = dialog?.kind === "leftovers" ? machines.find((m) => m.id === dialog.machineId) : undefined;
   const previewsOn = dialog?.kind === "previews" ? machines.find((m) => m.id === dialog.machineId) : undefined;
@@ -95,7 +97,7 @@ export default function Overlays() {
       {file && <FileViewer machineId={file.machineId} paneId={file.paneId} dir={file.dir} target={file.target} onClose={actions.closeFile} onRetarget={actions.retargetFile} />}
       {confirm && (
         <ConfirmDialog
-          text={confirm.text}
+          text={share.on ? share.redact(confirm.text) : confirm.text}
           label={confirm.label}
           onClose={actions.closeConfirm}
           onConfirm={() => {

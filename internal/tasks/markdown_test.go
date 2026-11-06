@@ -3,6 +3,7 @@ package tasks
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMarkdownHTMLDrawsEveryConstruct(t *testing.T) {
@@ -69,6 +70,34 @@ func TestMarkdownHTMLEscapesAndGuards(t *testing.T) {
 	}
 	if got := MarkdownHTML("```\nnever closed"); got != "<pre><code>never closed</code></pre>" {
 		t.Errorf("an unclosed fence: %s", got)
+	}
+}
+
+func TestMarkdownHTMLCostsItsLengthOnBrackets(t *testing.T) {
+	for _, md := range []string{
+		strings.Repeat("[", MaxMarkdown),
+		strings.Repeat("[a](", MaxMarkdown/4),
+		strings.Repeat("[a](http://x", MaxMarkdown/12),
+		strings.Repeat("[", MaxMarkdown/2) + "](http://" + strings.Repeat("a", MaxMarkdown/2),
+	} {
+		start := time.Now()
+		got := MarkdownHTML(md)
+		if took := time.Since(start); took > 2*time.Second {
+			t.Errorf("%q…: %s for %d bytes", md[:12], took, len(md))
+		}
+		if !strings.Contains(md, "http") && strings.Contains(got, "<a ") {
+			t.Errorf("%q…: a link was drawn where none closes", md[:12])
+		}
+	}
+	for md, want := range map[string]string{
+		"[[x](http://u)":               `<p><a href="http://u">[x</a></p>`,
+		"[a] [b](https://h/p?q=1) end": `<p>[a] <a href="https://h/p?q=1">b</a> end</p>`,
+		"[b](http://) [c](http://h x)": `<p>[b](<a href="http://">http://</a>) [c](<a href="http://h">http://h</a> x)</p>`,
+		"[](http://h)":                 `<p>[](<a href="http://h">http://h</a>)</p>`,
+	} {
+		if got := MarkdownHTML(md); got != want {
+			t.Errorf("%q:\n got %s\nwant %s", md, got, want)
+		}
 	}
 }
 

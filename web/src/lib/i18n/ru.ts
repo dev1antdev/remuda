@@ -52,6 +52,10 @@ import { preview } from "./ru/preview";
 import { opinion } from "./ru/opinion";
 import { autonomy } from "./ru/autonomy";
 import { server } from "./ru/server";
+import { audit3transcripts } from "./ru/audit3transcripts";
+import { audit3webpanels } from "./ru/audit3webpanels";
+import { audit3webchat } from "./ru/audit3webchat";
+import { audit3alerts } from "./ru/audit3alerts";
 import { audit3webcore } from "./ru/audit3webcore";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...wake, ...activity, ...viewonly, ...splitview, ...shellwords, ...sidebar, ...worktreeinclude, ...quote, ...reopen, ...forkchat, ...autoicon, ...gitlab, ...teleport, ...arena, ...limits, ...floatterm, ...screenshare, ...jira, ...mermaid, ...zoo, ...auditchat, ...sidebarmenus, ...auditpanels, ...tidy, ...notify, ...backup, ...preview, ...opinion, ...autonomy, ...server, ...audit3webcore };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...wake, ...activity, ...viewonly, ...splitview, ...shellwords, ...sidebar, ...worktreeinclude, ...quote, ...reopen, ...forkchat, ...autoicon, ...gitlab, ...teleport, ...arena, ...limits, ...floatterm, ...screenshare, ...jira, ...mermaid, ...zoo, ...auditchat, ...sidebarmenus, ...auditpanels, ...tidy, ...notify, ...backup, ...preview, ...opinion, ...autonomy, ...server, ...audit3transcripts, ...audit3webpanels, ...audit3webchat, ...audit3alerts, ...audit3webcore };

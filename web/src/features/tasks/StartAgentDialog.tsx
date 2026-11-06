@@ -60,7 +60,7 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
   const { busy, err, run } = useSubmit(async () => {
     setRemembered({ ...remembered, [String(t.project_id)]: { machine, workspace } });
     const task = await startTask(t.id, { machine, workspace, branch: branch.trim(), base: base.trim(), agent, model: setUp.model, args: setUp.args, groom, prompt });
-    onStarted(task, `${ws?.label ?? tr("the workspace")}${m && m.id !== "local" ? ` on ${m.label}` : ""}`);
+    onStarted(task, `${ws?.label ?? tr("the workspace")}${m && m.id !== "local" ? ` ${tr("on {machine}", { machine: m.label })}` : ""}`);
   });
   return (
     <Dialog

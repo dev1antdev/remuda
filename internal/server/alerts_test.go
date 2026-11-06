@@ -65,6 +65,35 @@ func TestAlertsSocketRefusesBeforeTheUpgrade(t *testing.T) {
 	}
 }
 
+// The Mac app asleep or gone answers no ping: its device is let go of, so the alerts go no more into a socket nobody reads.
+func TestAlertsSocketLetsGoOfADeviceThatDoesNotAnswerPings(t *testing.T) {
+	quickPings(t)
+	s, mux := alertsServer(t)
+	_, out := taskCall(mux, "POST", "/api/push/socket", "", `{"label":"app"}`)
+	endpoint := out["endpoint"].(string)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/ws/alerts?endpoint="+endpoint, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow() // never read: a client answers pings only while it reads
+	for i := 0; i < 50 && !s.Push.Sockets.Connected(endpoint); i++ {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !s.Push.Sockets.Connected(endpoint) {
+		t.Fatal("the device never connected")
+	}
+	for deadline := time.Now().Add(2 * time.Second); s.Push.Sockets.Connected(endpoint); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("a device that answers no ping still counts as connected")
+		}
+	}
+}
+
 func TestAlertsSocketCarriesTheDevicesAlerts(t *testing.T) {
 	s, mux := alertsServer(t)
 	_, out := taskCall(mux, "POST", "/api/push/socket", "", `{"label":"app"}`)

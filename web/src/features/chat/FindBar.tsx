@@ -12,7 +12,7 @@ import { t } from "@/lib/i18n";
 
 const SHORTCUT = isMac ? "⌘F" : "Ctrl+F";
 
-export function FindTool({ what = "in this conversation", shortcut = SHORTCUT }: { what?: string; shortcut?: string }) {
+export function FindTool({ what = t("in this conversation"), shortcut = SHORTCUT }: { what?: string; shortcut?: string }) {
   const find = app.use((s) => s.find);
   const field = useRef<HTMLInputElement>(null);
   // every ⌘F puts the focus back in the field, with the query selected for a new one

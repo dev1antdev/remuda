@@ -314,14 +314,15 @@ func sinceKnown(mode string) bool {
 }
 
 // Tick runs every enabled schedule whose cron matches this minute and was neither run nor started this minute yet — a
-// delivery may outlast the half minute to the next tick; call it about every half minute.
+// delivery may outlast the half minute to the next tick, and the hour a clock falls back reads a minute it ran at
+// already; call it about every half minute.
 func (st *Store) Tick() {
 	now := st.now()
 	minute := now.Truncate(time.Minute)
 	st.mu.Lock()
 	var due []*Schedule
 	for _, s := range st.items {
-		if !s.Enabled || s.LastRun.Truncate(time.Minute).Equal(minute) || st.firing[s.ID].Equal(minute) {
+		if !s.Enabled || wallMinute(s.LastRun, now.Location()) == wallMinute(now, now.Location()) || st.firing[s.ID].Equal(minute) {
 			continue
 		}
 		if c, err := Parse(s.Cron); err == nil && c.Matches(now) {
@@ -368,7 +369,7 @@ func Parse(expr string) (Cron, error) {
 		return Cron{}, fmt.Errorf("cron needs five fields (minute hour day month weekday), got %d", len(parts))
 	}
 	var c Cron
-	c.anyDay, c.anyWeek = parts[2] == "*", parts[4] == "*"
+	c.anyDay, c.anyWeek = strings.HasPrefix(parts[2], "*"), strings.HasPrefix(parts[4], "*") // Vixie's DOM_STAR: "*/2" too
 	for i, part := range parts {
 		lo, hi := ranges[i][0], ranges[i][1]
 		allowed := make([]bool, hi+1)
@@ -428,14 +429,30 @@ func (c Cron) Matches(t time.Time) bool {
 	return day && week
 }
 
-// Next is the first matching minute after t, within a year.
+// Next is the first matching minute after t, within a year, that does not read on the wall clock as the match before it:
+// the hour a clock falls back repeats a minute Tick ran at already.
 func (c Cron) Next(t time.Time) (time.Time, bool) {
-	cur := t.Truncate(time.Minute).Add(time.Minute)
-	for i := 0; i < 366*24*60; i++ {
+	from := t.Truncate(time.Minute).Add(time.Minute)
+	cur := from.Add(-fallBackReach)
+	last := ""
+	for i := 0; i < 366*24*60+int(fallBackReach/time.Minute); i++ {
 		if c.Matches(cur) {
-			return cur, true
+			wall := wallMinute(cur, cur.Location())
+			if !cur.Before(from) && wall != last {
+				return cur, true
+			}
+			last = wall
 		}
 		cur = cur.Add(time.Minute)
 	}
 	return time.Time{}, false
+}
+
+// fallBackReach is how far back Next looks for a match a fall-back repeats: no zone turns its clock back further.
+const fallBackReach = 3 * time.Hour
+
+// wallMinute is a moment as the wall clock reads it in loc, to the minute: the hour a clock falls back reads the same
+// minutes twice.
+func wallMinute(t time.Time, loc *time.Location) string {
+	return t.In(loc).Format("2006-01-02 15:04")
 }

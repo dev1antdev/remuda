@@ -355,6 +355,10 @@ func (s *Server) handleTaskImport(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
+	if auth.CallerName(r.Context()) != "" {
+		httpErr(w, http.StatusForbidden, fmt.Errorf("an agent's key imports no issue: it runs gh on the person's machine; file the task with POST /api/tasks, where it waits in Proposed"))
+		return
+	}
 	if _, _, _, ok := tasks.IssueURL(req.URL); !ok {
 		httpErr(w, http.StatusBadRequest, errors.New("a GitHub issue address looks like https://github.com/owner/repo/issues/123"))
 		return

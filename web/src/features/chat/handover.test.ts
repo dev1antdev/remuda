@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
 import { clampTurns, DEFAULT_TURNS, handedOverWords, handoverWords, MAX_TURNS, nextAgent, turnOptions } from "./handover";
 
 describe("clampTurns", () => {
@@ -26,6 +27,15 @@ describe("handoverWords", () => {
     expect(handoverWords(0)).toBe("the recap of this conversation");
     expect(handoverWords(1)).toBe("the recap and the last exchange in full");
     expect(handoverWords(3)).toBe("the recap and the last 3 exchanges in full");
+  });
+  it("says it in the page's language for none and one exchange too", () => {
+    setLang("ru");
+    try {
+      expect(handoverWords(0)).toBe("рекап этого разговора");
+      expect(handoverWords(1)).toBe("рекап и последний обмен целиком");
+    } finally {
+      setLang("en");
+    }
   });
 });
 

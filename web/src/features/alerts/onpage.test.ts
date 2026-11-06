@@ -81,11 +81,17 @@ describe("what the server broadcasts", () => {
 
 describe("stillStanding", () => {
   it("takes a question's toast down once its pane no longer asks, and nothing else", () => {
-    const standing = [alertOf(entry(1, "input")), alertOf(entry(2, "done")), alertOf(entry(3, "input", { pane: "w2:p1" }))];
+    const standing = stillStanding([alertOf(entry(1, "input")), alertOf(entry(2, "done")), alertOf(entry(3, "input", { pane: "w2:p1" }))], () => true);
     expect(stillStanding(standing, () => true)).toBe(standing);
     const kept = stillStanding(standing, (_machine, pane) => pane === "w2:p1");
     expect(kept.map((a) => a.id)).toEqual(["alert-2", "alert-3"]);
     expect(stillStanding([alertOf(entry(4, "input", { pane: "" }))], () => false)).toHaveLength(1);
+  });
+  it("keeps a note about a pane that never asked — a first prompt not delivered — for as long as any other alert", () => {
+    const note = alertOf(entry(5, "input", { title: "The first prompt for api was not delivered" }));
+    const shown = stillStanding([note], () => false);
+    expect(shown).toMatchObject([{ id: "alert-5", lingers: true }]);
+    expect(stillStanding(shown, () => false)).toBe(shown);
   });
 });
 

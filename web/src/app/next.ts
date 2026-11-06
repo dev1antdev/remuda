@@ -19,10 +19,11 @@ export function useNextNeedingMe(): () => void {
   const current = useCurrent();
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [focus, setFocus] = usePref<string>("wall.focus", "");
+  const [hidden] = usePref<string[]>("wall.hidden", []);
   return useCallback(() => {
     const onWall = mode === "wall";
     const from = onWall && focus ? focus : current ? tileKey(current.machine.id, current.pane.id) : "";
-    const next = nextNeedingMe(machines, radar, Date.now(), from);
+    const next = nextNeedingMe(machines, radar, Date.now(), from, onWall ? hidden : []);
     if (!next) {
       actions.notify(t("Nobody needs you right now"), { brief: true });
       return;
@@ -36,7 +37,7 @@ export function useNextNeedingMe(): () => void {
       return;
     }
     actions.openPane(next.machine.id, next.pane.id);
-  }, [machines, mode, current, radar, focus, setFocus]);
+  }, [machines, mode, current, radar, focus, setFocus, hidden]);
 }
 
 // useNextKey binds Alt+N by key code, whatever the layout; a terminal keeps its own keys, a dialog keeps the focus, and

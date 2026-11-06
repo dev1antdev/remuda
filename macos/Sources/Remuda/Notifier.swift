@@ -58,7 +58,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         content.threadIdentifier = alert.tag.isEmpty ? alert.kind : alert.tag
         content.categoryIdentifier = category
         content.sound = .default
-        content.userInfo = ["machine": alert.machine, "pane": alert.pane, "panel": alert.panel, "choices": alert.choices, "kind": alert.kind]
+        content.userInfo = ["machine": alert.machine, "pane": alert.pane, "panel": alert.panel, "choices": alert.choices, "dialog": alert.dialog, "kind": alert.kind]
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         center.add(request) { error in
             if let error { NSLog("remuda: notification: %@", error.localizedDescription) }
@@ -91,12 +91,13 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let pane = info["pane"] as? String ?? ""
         let panel = info["panel"] as? String ?? ""
         let choices = info["choices"] as? [String] ?? []
+        let dialog = info["dialog"] as? String ?? ""
         let action = response.actionIdentifier
         let open: () -> Void = { [weak self] in DispatchQueue.main.async { self?.onOpen?(machine, pane, panel) } }
         if action == "esc" {
             send("/api/keys", ["machine": machine, "pane": pane, "keys": ["esc"]], else: open, then: handler)
         } else if action.hasPrefix("choice-"), let index = Int(action.dropFirst("choice-".count)), index < choices.count {
-            send("/api/question/answer", ["machine": machine, "pane": pane, "index": index, "label": choices[index]], else: open, then: handler)
+            send("/api/question/answer", ["machine": machine, "pane": pane, "index": index, "label": choices[index], "dialog": dialog], else: open, then: handler)
         } else {
             open()
             handler()

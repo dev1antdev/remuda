@@ -211,7 +211,10 @@ func (t *Tools) Query(a ListArgs) (tasksapi.Query, []tasks.Project, error) {
 		if err != nil {
 			return tasksapi.Query{}, nil, err
 		}
-		q.Project, q.View = p.ID, "project"
+		q.Project = p.ID
+		if q.View == "open" || a.Done { // today and upcoming stay what they are, cut to the project
+			q.View = "project"
+		}
 	}
 	return q, projects, nil
 }
@@ -230,13 +233,16 @@ func (t *Tools) List(a ListArgs) (string, error) {
 	names := projectNames(projects)
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d task%s", len(list), plural(len(list)))
-	if q.View == "project" {
+	switch {
+	case q.View == "project":
 		fmt.Fprintf(&b, " in %s", names[q.Project])
-	} else {
+	case q.Project != 0:
+		fmt.Fprintf(&b, " in %s (%s)", names[q.Project], q.View)
+	default:
 		fmt.Fprintf(&b, " (%s)", q.View)
 	}
 	if pages > 1 {
-		fmt.Fprintf(&b, ", page %d of %d", max(a.Page, 1), pages)
+		fmt.Fprintf(&b, ", page %d of %d", min(max(a.Page, 1), pages), pages)
 	}
 	b.WriteString("\n\n")
 	if len(list) == 0 {
@@ -424,7 +430,10 @@ func (t *Tools) Update(a UpdateArgs) (tasksapi.Task, error) {
 		return tasksapi.Task{}, err
 	}
 	w := tasksapi.Write{Title: a.Title, Done: a.Done, Priority: a.Priority}
-	if a.Description != nil {
+	switch {
+	case a.Description != nil && strings.TrimSpace(*a.Description) == "":
+		w.Description = a.Description // the Markdown field goes unsent when empty, so the description is cleared this way
+	case a.Description != nil:
 		w.Markdown = *a.Description
 	}
 	if a.Column != "" {

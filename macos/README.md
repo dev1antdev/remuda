@@ -110,7 +110,9 @@ request.
 The app injects `window.remudaShell = {native: true, version}` before the
 page runs and listens on the script message handler `remuda`. The page
 posts `{type: "ready"}` once, `{type: "badge", count, tone}` and
-`{type: "menu", rows, working, idle}` whenever they change; the app calls
+`{type: "menu", rows, working, idle}` whenever they change, and `{type:
+"alerts", prefs}` on every load and every change of the alerts panel,
+which the app hands to the server as its device's prefs; the app calls
 `remudaShell.select(machine, pane)`, `remudaShell.openPanel(name)` and
 `remudaShell.openMode(mode)`, which the page defines. The sources are one
 file per piece under `Sources/Remuda/`: `WebWindow` (the window and the

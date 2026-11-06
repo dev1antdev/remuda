@@ -72,9 +72,10 @@ func ParseStats(out string) map[int]Stat {
 	return stats
 }
 
-// PatchScript prints the lane's whole work against its base as a binary patch git apply takes back.
+// PatchScript prints the lane's whole work against its base as a binary patch git apply takes back: through the
+// plumbing diff-index, which no external diff tool, textconv, colour or prefix setting of the person's changes.
 func PatchScript(dir, base string) string {
 	return script.PATH + "\ncd " + script.Quote(dir) + " 2>/dev/null || { echo 'the worktree is not there'; exit 3; }\n" +
 		throwaway(base) + " || { " + cleanup + "; echo 'git could not read the work'; exit 4; }\n" +
-		`GIT_INDEX_FILE="$t" git diff --cached --binary ` + script.Quote(base) + "; status=$?; " + cleanup + "; exit $status\n"
+		`GIT_INDEX_FILE="$t" git diff-index --cached -p --binary ` + script.Quote(base) + " --; status=$?; " + cleanup + "; exit $status\n"
 }

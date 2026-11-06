@@ -59,15 +59,17 @@ export const cellMin = (size: WallPrefs["size"]) => CREATURE_SIZE[size] + 72;
 export const BUBBLE_MAX = 90;
 
 // bubbleOf is the speech bubble over a creature: the first line of what the agent answered, once it finished or rests,
-// cut at a word; nothing while it works, asks or carries a note
+// cut at a word, never between the halves of a surrogate pair; nothing while it works, asks or carries a note
 export function bubbleOf(pane: Pane, display: Display, alert?: string): string {
   if (alert || !pane.said) return "";
   if (display !== "done" && display !== "idle" && display !== "idle_fresh" && display !== "idle_stale") return "";
   const text = pane.said.trim();
   if (text.length <= BUBBLE_MAX) return text;
-  const cut = text.slice(0, BUBBLE_MAX);
-  const space = cut.lastIndexOf(" ");
-  return `${(space > BUBBLE_MAX / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+  const space = text.slice(0, BUBBLE_MAX).lastIndexOf(" ");
+  let end = space > BUBBLE_MAX / 2 ? space : BUBBLE_MAX;
+  const code = text.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return `${text.slice(0, end).trimEnd()}…`;
 }
 
 // stateSince is when the state on show began: the start of the work or the question, else the last turn

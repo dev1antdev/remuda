@@ -71,10 +71,10 @@ func TestParseQuestionCases(t *testing.T) {
 	if !ok || len(q.Options) != 3 || !q.Options[1].Picked || q.Options[1].Label != "Yes, and don't ask again for npm run build commands in /Users/me/project" {
 		t.Fatalf("a wrapped cursor row: %+v %v", q, ok)
 	}
-	if keys, err := Answer(wrappedCursor, 0, "Yes"); err != nil || strings.Join(keys, " ") != "up enter" {
+	if keys, err := Answer(wrappedCursor, 0, "Yes", dialogOf(wrappedCursor)); err != nil || strings.Join(keys, " ") != "up enter" {
 		t.Fatalf("a choice above the cursor: %v %v", keys, err)
 	}
-	if keys, err := Answer(wrappedCursor, 2, "No, and tell Claude what to do differently (esc)"); err != nil || strings.Join(keys, " ") != "down enter" {
+	if keys, err := Answer(wrappedCursor, 2, "No, and tell Claude what to do differently (esc)", dialogOf(wrappedCursor)); err != nil || strings.Join(keys, " ") != "down enter" {
 		t.Fatalf("a choice below the cursor: %v %v", keys, err)
 	}
 
@@ -85,11 +85,11 @@ func TestParseQuestionCases(t *testing.T) {
 	if q.Options[1].Label != "Memory Gone on a restart" || !q.Options[2].Picked || q.Options[3].Label != "Type something." {
 		t.Fatalf("several questions' choices: %+v", q.Options)
 	}
-	if keys, err := Answer(severalQuestions, 3, "Type something."); err != nil || strings.Join(keys, " ") != "down enter" {
+	if keys, err := Answer(severalQuestions, 3, "Type something.", dialogOf(severalQuestions)); err != nil || strings.Join(keys, " ") != "down enter" {
 		t.Fatalf("the typed answer: %v %v", keys, err)
 	}
 	changed := strings.Replace(severalQuestions, "2. Memory", "2. Redis", 1)
-	if _, err := Answer(changed, 1, "Memory Gone on a restart"); err == nil || !strings.Contains(err.Error(), "now reads") {
+	if _, err := Answer(changed, 1, "Memory Gone on a restart", dialogOf(changed)); err == nil || !strings.Contains(err.Error(), "now reads") {
 		t.Fatalf("a choice that changed since it was offered: %v", err)
 	}
 }

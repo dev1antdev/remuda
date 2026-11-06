@@ -17,7 +17,7 @@ func TestQuestionPushCarriesTheChoicesAsButtons(t *testing.T) {
 	var asked []string
 	s.Question = func(machine, pane string) (Asked, bool) {
 		asked = append(asked, machine+"/"+pane)
-		return Asked{Text: bashDialog, Choices: []string{"Yes", "Yes, and don't ask again for rm commands in /Users/me/project", "No, and tell Claude what to do differently (esc)"}}, true
+		return Asked{Text: bashDialog, Choices: []string{"Yes", "Yes, and don't ask again for rm commands in /Users/me/project", "No, and tell Claude what to do differently (esc)"}, Key: "the-bash-dialog"}, true
 	}
 	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "p1"}, Workspace: "api", Agent: "claude", From: "working", To: "blocked"})
 	time.Sleep(80 * time.Millisecond)
@@ -35,6 +35,9 @@ func TestQuestionPushCarriesTheChoicesAsButtons(t *testing.T) {
 	if len(p.Choices) != 3 || p.Choices[2] != "No, and tell Claude what to do differently (esc)" {
 		t.Errorf("choices %v", p.Choices)
 	}
+	if p.Dialog != "the-bash-dialog" {
+		t.Errorf("the dialog's key does not ride with its choices: %q", p.Dialog)
+	}
 }
 
 func TestQuestionPushWithoutADialogStaysPlain(t *testing.T) {
@@ -43,11 +46,11 @@ func TestQuestionPushWithoutADialogStaysPlain(t *testing.T) {
 		ok    bool
 	}{
 		"no dialog on the screen": {Asked{}, false},
-		"one choice":              {Asked{Text: "Really?", Choices: []string{"Yes"}}, true},
+		"one choice":              {Asked{Text: "Really?", Choices: []string{"Yes"}, Key: "k"}, true},
 	}
 	for name, c := range cases {
 		p := askedPayload(Payload{Kind: "input", Body: "claude is waiting for an answer"}, c.asked, c.ok)
-		if len(p.Actions) != 0 || len(p.Choices) != 0 {
+		if len(p.Actions) != 0 || len(p.Choices) != 0 || p.Dialog != "" {
 			t.Errorf("%s: actions %+v choices %v", name, p.Actions, p.Choices)
 		}
 		if c.ok && p.Body != "Really?" || !c.ok && p.Body != "claude is waiting for an answer" {

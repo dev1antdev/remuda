@@ -63,6 +63,7 @@ type Payload struct {
 	Actions []Action `json:"actions,omitempty"`
 	Panel   string   `json:"panel,omitempty"`   // a panel of the page a tap opens instead of a pane (standup)
 	Choices []string `json:"choices,omitempty"` // a question's choices in full, the words behind its choice-N actions
+	Dialog  string   `json:"dialog,omitempty"`  // the question's dialog key, sent back with a choice so no later dialog is answered
 	Worked  int64    `json:"worked,omitempty"`  // a finish: the turn's seconds, so a page can apply a device's "long turns" itself
 }
 
@@ -289,7 +290,8 @@ func topic(tag string) string {
 	return t
 }
 
-// Notify sends one payload now to every device that wants the watchdog's word (the pref defaults to on).
+// Notify sends one payload now to every device that wants the watchdog's word (the pref defaults to on), or, for a note
+// of a question's kind (a task's agent asking first), the question's: the switch the page's toast reads it by.
 func (s *Service) Notify(p Payload) {
 	if s.silenced(p) {
 		return
@@ -297,7 +299,7 @@ func (s *Service) Notify(p Payload) {
 	s.record(p)
 	var targets []*Subscription
 	for _, sub := range s.list() {
-		if sub.Prefs.Watchdog != nil && !*sub.Prefs.Watchdog {
+		if p.Kind == "input" && !sub.Prefs.Input || p.Kind != "input" && sub.Prefs.Watchdog != nil && !*sub.Prefs.Watchdog {
 			continue
 		}
 		targets = append(targets, sub)

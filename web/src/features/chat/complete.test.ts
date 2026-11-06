@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyPick, commandItems, MAX_SHOWN, modelCommand, pathItems, stillDismissed, tokenAt, type Command, type Token } from "./complete";
+import { applyPick, commandItems, listFor, MAX_SHOWN, modelCommand, pathItems, stillDismissed, tokenAt, type Command, type Token } from "./complete";
 
 describe("tokenAt", () => {
   it("sees a slash command only at the very start, up to the first space", () => {
@@ -41,6 +41,23 @@ describe("stillDismissed", () => {
     expect(stillDismissed(closed, { kind: "command", start: 0, end: 1, query: "" })).toBe(closed);
     expect(stillDismissed({ kind: "path", start: 4 }, { kind: "path", start: 9, end: 10, query: "" })).toBeNull();
     expect(stillDismissed(null, slash)).toBeNull();
+  });
+});
+
+describe("listFor", () => {
+  const slash: Token = { kind: "command", start: 0, end: 8, query: "compact" };
+
+  it("shows the list of the token at the caret", () => {
+    expect(listFor(slash, null, false)).toBe(slash);
+    expect(listFor(null, null, false)).toBeNull();
+  });
+
+  it("shows none while ↑ ↓ walk the history, so a recalled slash command leaves the arrows and Enter to the walk", () => {
+    expect(listFor(slash, null, true)).toBeNull();
+  });
+
+  it("shows none for the token Esc closed", () => {
+    expect(listFor(slash, { kind: "command", start: 0 }, false)).toBeNull();
   });
 });
 

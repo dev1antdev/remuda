@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/tasks"
 )
 
@@ -129,5 +131,26 @@ func TestAnAgentsKeyStartsNoAgent(t *testing.T) {
 	body := `{"machine": "local", "workspace": "w1", "branch": "task-1-mine", "agent": "claude", "args": "--dangerously-skip-permissions", "prompt": "go"}`
 	if code, out := taskCall(h, "POST", "/api/tasks/"+strconv.FormatInt(tk.ID, 10)+"/start", "GOG", body); code != http.StatusForbidden {
 		t.Fatalf("an agent's key started an agent: %d %v", code, out)
+	}
+}
+
+// An issue import runs gh on a machine of the person's with their sign-in and files the task outside the proposals:
+// an agent's key files its tasks through POST /api/tasks, where they wait in Proposed.
+func TestAnAgentsKeyImportsNoIssue(t *testing.T) {
+	store, err := tasks.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { store.Close() })
+	dir := t.TempDir()
+	fleet := machines.NewManager(dir, filepath.Join(dir, "no-herdr.sock"), "herdr", nil)
+	fleet.SetServer(true) // its own machine answers no Ready: nothing runs gh here
+	s := &Server{Tasks: store, Machines: fleet}
+	h := http.NewServeMux()
+	s.tasksRoutes(h)
+	projects, _ := store.Projects()
+	body := `{"machine": "local", "project_id": ` + strconv.FormatInt(projects[0].ID, 10) + `, "url": "https://github.com/acme/app/issues/7"}`
+	if code, out := taskCall(h, "POST", "/api/tasks/import", "GOG", body); code != http.StatusForbidden {
+		t.Fatalf("an agent's key imported an issue: %d %v", code, out)
 	}
 }
