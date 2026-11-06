@@ -36,8 +36,11 @@ func TestChecksParseAndTheFailedRunsAreNamedOnce(t *testing.T) {
 	if s := ChecksScript("https://github.com/o/r/pull/7"); !strings.Contains(s, "gh pr checks 'https://github.com/o/r/pull/7' --json name,state,link,bucket,workflow") {
 		t.Fatalf("script = %q", s)
 	}
-	if s := LogScript("123"); !strings.Contains(s, "gh run view '123' --log-failed") {
+	if s := LogScript("github.com/o/r", "123"); !strings.Contains(s, "gh run view -R 'github.com/o/r' '123' --log-failed") {
 		t.Fatalf("script = %q", s)
+	}
+	if checks[1].RunRepo() != "github.com/o/r" || checks[4].RunRepo() != "" {
+		t.Fatal("run repositories")
 	}
 }
 
@@ -89,9 +92,9 @@ func TestFailureRunsTheChecksThenEachFailedRunsLog(t *testing.T) {
 		switch {
 		case strings.Contains(s, "gh pr checks"):
 			return checksJSON, nil
-		case strings.Contains(s, "gh run view '40693613487'"):
+		case strings.Contains(s, "'40693613487' --log-failed"):
 			return "build\tTest\t2026-10-29T10:00:00Z ##[error]Process completed with exit code 1.\n", &shell.ExitError{Code: 1}
-		case strings.Contains(s, "gh run view '40693613499'"):
+		case strings.Contains(s, "'40693613499' --log-failed"):
 			return "docs\tBuild\t2026-10-29T10:00:00Z cancelled\n", nil
 		}
 		return "", nil
@@ -102,6 +105,10 @@ func TestFailureRunsTheChecksThenEachFailedRunsLog(t *testing.T) {
 	}
 	if got := host.Scripts(); len(got) != 3 || !strings.Contains(got[1], "'40693613487' --log-failed") || !strings.Contains(got[2], "'40693613499' --log-failed") {
 		t.Fatalf("scripts = %q", got)
+	}
+	// gh run view finds a run only in a repository, and the script runs in the home folder, outside any checkout
+	if got := host.Scripts(); !strings.Contains(got[1], "gh run view -R 'github.com/o/r' '40693613487'") {
+		t.Fatalf("the run is looked up without its repository: %q", got[1])
 	}
 	if !strings.Contains(msg, "##[error]Process completed with exit code 1.") || !strings.Contains(msg, "docs\tBuild") {
 		t.Fatalf("message:\n%s", msg)

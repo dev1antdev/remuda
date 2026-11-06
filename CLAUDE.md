@@ -2048,8 +2048,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   run follows the pull request"). **The reviewers' word and a red CI go
   to the agent** (`failure.go`, `comments.go`, `handoff.go`, tested on
   `shell.Fake`): `Failure(host, label, url)` runs `gh pr checks --json`
-  on the machine, then `gh run view <id> --log-failed` for each run a
-  failed check points into (`FailedRuns`, at most `MaxRuns`), and
+  on the machine, then `gh run view -R <host/owner/repo> <id> --log-failed`
+  for each run a failed check points into (`FailedRuns`, at most `MaxRuns`;
+  the repository read off the check's link, `RunRepo`, since gh outside a
+  checkout knows no repository of its own), and
   composes `FailureMessage` — the failed checks named with their links,
   each run's log `Tail` (the last `LogTail` 8 KB at a line, escapes
   stripped, out of the last `LogRead` 64 KB the machine sends: a CI log
