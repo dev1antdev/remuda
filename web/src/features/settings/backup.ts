@@ -1,7 +1,7 @@
 // The words of the Backups section: a copy's size, the last run, the next nightly one, the choices of how many stay.
 
 import { locale, t } from "@/lib/i18n";
-import { ago } from "@/lib/time";
+import { ago, tenth } from "@/lib/time";
 import type { BackupResult } from "./backupApi";
 
 export const KEEP_CHOICES = [3, 7, 14, 30, 60, 90];
@@ -9,7 +9,7 @@ export const KEEP_CHOICES = [3, 7, 14, 30, 60, 90];
 // bytesWords is a copy's size: "640 KB", "1.2 MB"
 export function bytesWords(size: number): string {
   if (size < 1024 * 1024) return t("{n} KB", { n: Math.max(1, Math.round(size / 1024)) });
-  return t("{n} MB", { n: (size / 1024 / 1024).toFixed(1) });
+  return t("{n} MB", { n: tenth(size / 1024 / 1024) });
 }
 
 // lastWords is what the last run came to: where it went, how big, or why it did not — and then how old the newest good
