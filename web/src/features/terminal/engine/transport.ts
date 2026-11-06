@@ -15,6 +15,17 @@ export type Stream = {
   note: (text: string) => void; // a line on the screen from remuda itself
 };
 
+// refusal is why the server would not open a stream, in its own words — another client holds the terminal — else the status
+async function refusal(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: string };
+    if (body.error) return body.error;
+  } catch {
+    // no words: the status says it
+  }
+  return `open failed (${res.status})`;
+}
+
 // Once WebSockets prove unusable, every terminal on this page uses HTTP without trying again.
 let preferHTTP = false;
 let wsFailures = 0;
@@ -110,7 +121,7 @@ export function connect(stream: Stream): Transport {
       const sentSize = sizeText();
       const { cols, rows } = stream.size();
       const res = await fetch(`/api/term/open?${stream.query}&cols=${cols}&rows=${rows}`, { method: "POST" });
-      if (!res.ok) throw new Error(`open failed (${res.status})`);
+      if (!res.ok) throw new Error(await refusal(res));
       sid = ((await res.json()) as { sid: string }).sid;
       if (stopped) {
         closeStream(); // closed while opening: nothing may pin the attach
@@ -160,8 +171,10 @@ export function connect(stream: Stream): Transport {
           if (stopped) return;
           if (buf.length) stream.onBytes(buf);
           if (res.headers.get("X-Remuda-End") === "1") {
-            sid = null; // the server dropped it already
-            stream.note("terminal detached");
+            // the server dropped it already; the attach ended (herdr restarted, say) and a fresh one is asked for, as the socket does
+            sid = null;
+            stream.note("terminal detached — reconnecting");
+            later(500);
             return;
           }
         } catch {

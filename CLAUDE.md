@@ -690,7 +690,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   of painting it; a refusal triggers one more probe (`peerAfterRefusal`,
   at most every 30 s); still no peer → the refusal is the WebSocket close
   reason (≤120 bytes; the client writes it on the screen at every retry)
-  or a 409 on the HTTP transport. A plain GET of `/ws/pane` (the client's
+  or a 409 on the HTTP transport, whose words the client writes the same
+  way; an attach that ended is asked for again on either transport. A plain GET of `/ws/pane` (the client's
   proxy probe) is 426 before anything attaches. A peer's requests carry
   the bearer token and no Origin, so csrfGuard lets them through. Never
   `--takeover`.
