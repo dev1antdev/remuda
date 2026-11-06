@@ -55,6 +55,23 @@ self.addEventListener("fetch", (event) => {
 
 // ---- push ----
 
+// isPage says whether a window shows the cockpit's page, the one that puts an alert up in its own corner and answers a
+// tap: a tab of the same origin on the editor under /code/ or on a file under /api/ shows neither
+function isPage(win) {
+  let path;
+  try {
+    path = new URL(win.url).pathname;
+  } catch {
+    return false;
+  }
+  return win.frameType !== "nested" && !path.startsWith("/api/") && !path.startsWith("/ws/") && path !== "/code" && !path.startsWith("/code/");
+}
+
+// pages are the open windows that show the cockpit's page
+async function pages() {
+  return (await self.clients.matchAll({ type: "window", includeUncontrolled: true })).filter(isPage);
+}
+
 // Every push shows a notification: Safari, Firefox and Chrome take a push that shows none for a silent one, and
 // revoke the subscription or show their own. A window of ours that has the focus shows the alert itself, as a toast
 // in its corner, so there the notification is taken down again at once; a visible one that lacks the focus (behind
@@ -69,7 +86,7 @@ self.addEventListener("push", (event) => {
   }
   event.waitUntil(
     (async () => {
-      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const wins = await pages();
       const visible = wins.some((w) => w.visibilityState === "visible");
       const focused = wins.some((w) => w.focused);
       const tag = data.tag || "remuda";
@@ -141,7 +158,7 @@ self.addEventListener("notificationclick", (event) => {
           if (res && res.ok) return;
         }
       }
-      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const wins = await pages();
       const win = wins.find((w) => w.visibilityState === "visible") || wins[0];
       if (win) {
         try {

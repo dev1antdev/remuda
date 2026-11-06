@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import source from "../../public/sw.js?raw";
 
 type Answer = { ok: boolean; status: number } | Error;
-type Window = { visibilityState: string; focused?: boolean; focus: () => Promise<void>; postMessage: (message: unknown) => void };
+type Window = { url: string; visibilityState: string; focused?: boolean; frameType?: string; focus: () => Promise<void>; postMessage: (message: unknown) => void };
 type Shown = { title: string; options: { tag: string; silent: boolean }; closed: boolean };
 
 // worker runs sw.js against stand-ins for the worker's globals: what it fetched, opened, posted and showed is kept
@@ -39,7 +39,10 @@ function worker(answer: Answer, windows: Window[] = []) {
   return { click, push, fetched, opened, shown };
 }
 
-const page = (visibilityState: string, focused: boolean, posted: unknown[] = []): Window => ({ visibilityState, focused, focus: async () => {}, postMessage: (message) => posted.push(message) });
+const page = (visibilityState: string, focused: boolean, posted: unknown[] = [], url = "http://127.0.0.1:7317/?machine=local&pane=w1%3Ap1"): Window => ({ url, visibilityState, focused, focus: async () => {}, postMessage: (message) => posted.push(message) });
+
+// editor is a tab of the same origin that is not the cockpit's page: the editor's own tab, opened from the Code mode
+const editor = (visibilityState: string, focused: boolean, posted: unknown[] = []): Window => page(visibilityState, focused, posted, "http://127.0.0.1:7317/code/local/?folder=/tmp/x");
 
 describe("a push", () => {
   const alert = { title: "api needs you", body: "claude is waiting", tag: "local|w1:p1", kind: "input", machine: "local", pane: "w1:p1" };
@@ -59,6 +62,13 @@ describe("a push", () => {
     await sw.push(alert);
     expect(sw.shown).toMatchObject([{ closed: true }]);
     expect(posted).toMatchObject([{ type: "pushed", title: "api needs you", kind: "input", shown: "page" }]);
+  });
+  it("keeps it, with its sound, when the window that has the focus is the editor's tab or a file, which show no alert", async () => {
+    const posted: unknown[] = [];
+    const sw = worker({ ok: true, status: 200 }, [editor("visible", true, posted), page("hidden", false), page("visible", true, [], "http://127.0.0.1:7317/api/fs/file?machine=local&path=/tmp/a.png")]);
+    await sw.push(alert);
+    expect(sw.shown).toMatchObject([{ options: { silent: false }, closed: false }]);
+    expect(posted).toEqual([]);
   });
   it("keeps a test push even over a focused window: it is what the person asked to see", async () => {
     const posted: unknown[] = [];
@@ -87,10 +97,22 @@ describe("the notification's Esc", () => {
   });
   it("brings an open window to the pane instead of a new one", async () => {
     const posted: unknown[] = [];
-    const sw = worker({ ok: false, status: 409 }, [{ visibilityState: "hidden", focus: async () => {}, postMessage: (message) => posted.push(message) }]);
+    const sw = worker({ ok: false, status: 409 }, [page("hidden", false, posted)]);
     await sw.click("esc", pane);
     expect(posted).toEqual([{ type: "select-pane", machine: "local", pane: "w1:p1" }]);
     expect(sw.opened).toEqual([]);
+  });
+  it("brings up the page rather than the editor's tab in front of it, and opens one when only the editor is open", async () => {
+    const onPage: unknown[] = [];
+    const onEditor: unknown[] = [];
+    const both = worker({ ok: false, status: 409 }, [editor("visible", true, onEditor), page("hidden", false, onPage)]);
+    await both.click("esc", pane);
+    expect(onPage).toEqual([{ type: "select-pane", machine: "local", pane: "w1:p1" }]);
+    expect(onEditor).toEqual([]);
+    const alone = worker({ ok: false, status: 409 }, [editor("visible", true, onEditor)]);
+    await alone.click("esc", pane);
+    expect(alone.opened).toEqual(["/?machine=local&pane=w1%3Ap1"]);
+    expect(onEditor).toEqual([]);
   });
 });
 

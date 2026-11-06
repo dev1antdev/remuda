@@ -1752,7 +1752,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   push that shows none for a silent one), quietly beside a visible window
   and taken down again at once (`getNotifications({tag})`) when a window
   of ours has the focus, which shows the alert itself as a toast — never a
-  test push, which stays; every push is noted in IndexedDB (`remuda` /
+  test push, which stays; a window of ours is one on the page itself
+  (`isPage`: never the editor's own tab under `/code/` or a file under
+  `/api/`, which show no toast, nor a tap's target); every push is noted in IndexedDB (`remuda` /
   `kv` / `lastPush`: when, what, shown by the system or the page) and told
   to the open windows (`{type: "pushed"}`), for the alerts panel; tested
   in `app/serviceWorker.test.ts`; click → `select-pane` message to an open
