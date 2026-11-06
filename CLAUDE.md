@@ -75,7 +75,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   without its `*.txt` logs; never `ssh/` (the masters' sockets),
   `backups/` (the copies this machine keeps), `serve.lock`, a `-wal` /
   `-shm` / `-journal`, a `.log`, a file the atomic writer is still
-  writing (`name.123456789`, `.partial`, `.new`); a `remuda-backup.json`
+  writing (`name.123456789`, a number of any length; the tailnet node's
+  `name.tmp123456789`; `.partial`, `.new`); a `remuda-backup.json`
   manifest at the root (format, host, version, time, files), at most
   `MaxSnapshot` 256 MB. `Service` (`backup.json` in the state dir:
   `Settings{machine, at "HH:MM", keep}`, the last run and the last good
