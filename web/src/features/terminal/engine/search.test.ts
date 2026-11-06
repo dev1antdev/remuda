@@ -27,10 +27,17 @@ describe("searchDecorations", () => {
 describe("occurrences", () => {
   it("lists every place on every row, case-folded", () => {
     expect(occurrences(["Error: x", "", "no error, ERROR"], "error")).toEqual([
-      { row: 0, col: 0 },
-      { row: 2, col: 3 },
-      { row: 2, col: 10 },
+      { row: 0, col: 0, length: 5 },
+      { row: 2, col: 3, length: 5 },
+      { row: 2, col: 10, length: 5 },
     ]);
+  });
+  it("measures a match in the row's own UTF-16 units, so an emoji in the query is marked whole", () => {
+    // the server counts "🚀x" as two characters; on the screen it is three units over three cells
+    const [hit] = occurrences(["🚀x end"], "🚀x");
+    expect(hit).toEqual({ row: 0, col: 0, length: 3 });
+    const row = { length: 7, getCell: (x: number) => ({ getWidth: () => [2, 0, 1, 1, 1, 1, 1][x]!, getChars: () => ["🚀", "", "x", " ", "e", "n", "d"][x]! }) } as never;
+    expect(cellSpan(row, hit!.col, hit!.length)).toEqual({ col: 0, width: 3 });
   });
 });
 

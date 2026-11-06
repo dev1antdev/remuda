@@ -34,19 +34,20 @@ export function searchDecorations(c: Swatches): ISearchDecorationOptions {
   };
 }
 
-export type Occurrence = { row: number; col: number };
+export type Occurrence = { row: number; col: number; length: number };
 
-// occurrences lists where the query sits on the screen's rows, case-folded, a character index per match
+// occurrences lists where the query sits on the screen's rows, case-folded, each match's start and length in UTF-16 units
+// of its row's text — what cellSpan reads, where the server counts characters
 export function occurrences(lines: string[], query: string): Occurrence[] {
   const out: Occurrence[] = [];
   lines.forEach((line, row) => {
-    for (const [col] of findRanges(line, query)) out.push({ row, col });
+    for (const [col, end] of findRanges(line, query)) out.push({ row, col, length: end - col });
   });
   return out;
 }
 
 // pickNear chooses the occurrence on the row expected or a neighbour of it (a screen a row off), nearest the column; -1 for none
-export function pickNear(found: Occurrence[], expectedRow: number, col: number): number {
+export function pickNear(found: Pick<Occurrence, "row" | "col">[], expectedRow: number, col: number): number {
   const rows = found.map((o) => (Math.abs(o.row - expectedRow) <= 1 ? o.row : Number.NaN));
   const row = nearest(rows.filter((r) => !Number.isNaN(r)), expectedRow);
   if (row < 0) return -1;
@@ -120,7 +121,7 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
     term.clearSelection();
   };
   return {
-    show(next, expectedRow, col, length) {
+    show(next, expectedRow, col) {
       stop();
       query = next;
       const started = Date.now();
@@ -129,7 +130,7 @@ export function installSearch(term: XTerm, flavor: () => Flavor, forgetSelection
         const found = occurrences(screenLines(), query);
         const pick = pickNear(found, expectedRow, col);
         if (pick >= 0) {
-          mark(found[pick]!.row, found[pick]!.col, length);
+          mark(found[pick]!.row, found[pick]!.col, found[pick]!.length);
           return;
         }
         if (Date.now() - started < SETTLE_MS) {
