@@ -192,7 +192,7 @@ func Run(ctx context.Context, o Options) error {
 		if !ok {
 			return push.Asked{}, false
 		}
-		return push.Asked{Text: q.Text, Choices: q.Choices()}, true
+		return push.Asked{Text: q.Text, Choices: q.Choices(), Key: chat.DialogKey(q.Text)}, true
 	}
 	tracker := radar.New(o.Dir, chats.LastWriteOf)
 	defer tracker.Flush()

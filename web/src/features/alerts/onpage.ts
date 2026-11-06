@@ -30,7 +30,7 @@ const WARNING = new Set(["input", "stuck", "waiting", "loop", "budget", "limits"
 const PANEL_OF: Record<string, string> = { digest: "standup", budget: "usage", limits: "usage" };
 
 // OnPageAlert is a toast's alert, its title and body apart so the screen-sharing mode can keep a hidden folder's words out
-export type OnPageAlert = { id: string; kind: string; title: string; body?: string; machine?: string; pane?: string; panel?: string; tone: "warn" | "success" | "info"; lingers: boolean };
+export type OnPageAlert = { id: string; kind: string; title: string; body?: string; machine?: string; pane?: string; panel?: string; tone: "warn" | "success" | "info"; lingers: boolean; asked?: boolean }; // asked: its pane was seen asking
 
 // wanted says whether this device asks to be told of an entry: a question, a finish by the done switch and the turn's
 // length, the server's broadcasts always, every other alert (the watchdog, the review, a budget, a machine) by the watchdog switch
@@ -78,10 +78,22 @@ export function keepNewest(standing: OnPageAlert[], next: OnPageAlert): OnPageAl
 }
 
 // stillStanding are the alerts to keep up: a question's toast goes once its pane no longer asks — answered at the
-// terminal, from a phone, in another tab — or is gone; the same array back when nothing went
+// terminal, from a phone, in another tab — or is gone; one whose pane was never seen asking is a note about the pane
+// (a first prompt not delivered), which goes like any other alert; the same array back when nothing moved
 export function stillStanding(alerts: OnPageAlert[], asks: (machine: string, pane: string) => boolean): OnPageAlert[] {
-  const kept = alerts.filter((alert) => alert.kind !== "input" || !alert.machine || !alert.pane || asks(alert.machine, alert.pane));
-  return kept.length === alerts.length ? alerts : kept;
+  let moved = false;
+  const kept: OnPageAlert[] = [];
+  for (const alert of alerts) {
+    if (alert.kind !== "input" || !alert.machine || !alert.pane) kept.push(alert);
+    else if (asks(alert.machine, alert.pane)) {
+      kept.push(alert.asked ? alert : { ...alert, asked: true });
+      moved ||= !alert.asked;
+    } else if (!alert.asked) {
+      kept.push(alert.lingers ? alert : { ...alert, lingers: true });
+      moved ||= !alert.lingers;
+    } else moved = true;
+  }
+  return moved ? kept : alerts;
 }
 
 // minutesIn is a moment's clock in a zone as minutes past midnight; an unknown zone reads as UTC, as the server's

@@ -25,5 +25,6 @@ function dayLabel(at: Date, now: number): string {
   return fmtDate(at);
 }
 
-// unread says whether the feed has entries this device has not opened the panel for
-export const unread = (newest: number | undefined, seen: number): boolean => (newest ?? 0) > seen;
+// unread says whether the feed has entries this device has not opened the panel for; a newest id below the one seen
+// means the cockpit's activity started over (a new state folder, another machine at the same address), all of it news
+export const unread = (newest: number | undefined, seen: number): boolean => (newest ?? 0) > 0 && (newest ?? 0) !== seen;

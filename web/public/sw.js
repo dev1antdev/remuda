@@ -55,6 +55,23 @@ self.addEventListener("fetch", (event) => {
 
 // ---- push ----
 
+// isPage says whether a window shows the cockpit's page, the one that puts an alert up in its own corner and answers a
+// tap: a tab of the same origin on the editor under /code/ or on a file under /api/ shows neither
+function isPage(win) {
+  let path;
+  try {
+    path = new URL(win.url).pathname;
+  } catch {
+    return false;
+  }
+  return win.frameType !== "nested" && !path.startsWith("/api/") && !path.startsWith("/ws/") && path !== "/code" && !path.startsWith("/code/");
+}
+
+// pages are the open windows that show the cockpit's page
+async function pages() {
+  return (await self.clients.matchAll({ type: "window", includeUncontrolled: true })).filter(isPage);
+}
+
 // Every push shows a notification: Safari, Firefox and Chrome take a push that shows none for a silent one, and
 // revoke the subscription or show their own. A window of ours that has the focus shows the alert itself, as a toast
 // in its corner, so there the notification is taken down again at once; a visible one that lacks the focus (behind
@@ -69,7 +86,7 @@ self.addEventListener("push", (event) => {
   }
   event.waitUntil(
     (async () => {
-      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const wins = await pages();
       const visible = wins.some((w) => w.visibilityState === "visible");
       const focused = wins.some((w) => w.focused);
       const tag = data.tag || "remuda";
@@ -81,7 +98,7 @@ self.addEventListener("push", (event) => {
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
         actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
-        data: { machine: data.machine, pane: data.pane, panel: data.panel, choices: Array.isArray(data.choices) ? data.choices : [] },
+        data: { machine: data.machine, pane: data.pane, panel: data.panel, choices: Array.isArray(data.choices) ? data.choices : [], dialog: data.dialog || "" },
       });
       const onPage = focused && data.kind !== "test";
       if (onPage) for (const shown of await self.registration.getNotifications({ tag })) shown.close();
@@ -114,7 +131,7 @@ function notePush(note) {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const { machine, pane, panel, choices } = event.notification.data || {};
+  const { machine, pane, panel, choices, dialog } = event.notification.data || {};
   event.waitUntil(
     (async () => {
       // a button on a watchdog notification: Esc goes straight to the pane; refused or unreachable, the page opens
@@ -127,8 +144,8 @@ self.addEventListener("notificationclick", (event) => {
         }).catch(() => null);
         if (res && res.ok) return;
       }
-      // a choice on a question notification: the server checks the dialog still shows it, then picks it;
-      // a dialog that changed or closed is a refusal, and the page opens on the pane instead
+      // a choice on a question notification: the server checks the screen still shows that very dialog (its key) with
+      // that choice, then picks it; a dialog that changed or closed is a refusal, and the page opens on the pane instead
       if (/^choice-\d$/.test(event.action) && machine && pane) {
         const index = Number(event.action.slice("choice-".length));
         const label = Array.isArray(choices) ? choices[index] : undefined;
@@ -136,12 +153,12 @@ self.addEventListener("notificationclick", (event) => {
           const res = await fetch("/api/question/answer", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ machine, pane, index, label }),
+            body: JSON.stringify({ machine, pane, index, label, dialog }),
           }).catch(() => null);
           if (res && res.ok) return;
         }
       }
-      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const wins = await pages();
       const win = wins.find((w) => w.visibilityState === "visible") || wins[0];
       if (win) {
         try {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { errMsg } from "@/lib/text";
-import { deviceZone, readAlertPrefs, readQuietWindow } from "@/features/alerts/prefs";
+import { deviceZone, readAlertPrefs, readQuietWindow, tellAppPrefs } from "@/features/alerts/prefs";
 import { usePref, writePref } from "@/lib/prefs";
 import { disablePush, enablePush, getPushState, sendTestPush, updatePrefs, type Prefs, type PushState, type Quiet } from "@/features/alerts/push";
 import { inShell } from "@/lib/shell";
@@ -52,7 +52,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
   const changePrefs = (next: Prefs) => {
     setPrefs(next);
     writePref("alerts", next);
-    if (!state?.subscribed) return;
+    if (tellAppPrefs(next) || !state?.subscribed) return;
     queue.current = queue.current.then(() => updatePrefs(next)).catch((e) => setErr(errMsg(e)));
   };
 

@@ -101,7 +101,7 @@ func TestParseQuestionReadsADialogFramedByATopRule(t *testing.T) {
 			}
 		}
 	}
-	keys, err := Answer(framedTrust, 1, "Yes, I trust this folder")
+	keys, err := Answer(framedTrust, 1, "Yes, I trust this folder", dialogOf(framedTrust))
 	if err != nil || strings.Join(keys, " ") != "down enter" {
 		t.Errorf("trusting the folder: %v %v", keys, err)
 	}

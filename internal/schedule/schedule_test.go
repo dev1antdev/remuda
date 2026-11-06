@@ -285,3 +285,57 @@ func TestDigestFiresSinceItsPeriodAndPushes(t *testing.T) {
 		t.Fatalf("without a digest source: %+v", got)
 	}
 }
+
+// Vixie cron reads a day field that starts with "*" as unrestricted, a step like "*/2" too: such a day-of-month and a
+// restricted day-of-week fire only on the days both allow.
+func TestCronStepInADayFieldReadsAsStarLikeVixie(t *testing.T) {
+	c, err := Parse("0 9 */2 * 1") // an odd day of the month that is a Monday
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Matches(at("2026-10-07 09:00")) { // the 7th, a Wednesday
+		t.Fatal("an odd day that is no Monday matched")
+	}
+	if !c.Matches(at("2026-10-05 09:00")) { // the 5th, a Monday
+		t.Fatal("an odd Monday did not match")
+	}
+	if c.Matches(at("2026-10-12 09:00")) { // the 12th, a Monday
+		t.Fatal("an even Monday matched")
+	}
+}
+
+// The night a clock falls back reads 01:30 twice; a schedule at 01:30 runs once that night, and the list says its next
+// run is the next night's.
+func TestTickFiresOnceInTheHourAFallBackRepeats(t *testing.T) {
+	newYork, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("no zone database:", err)
+	}
+	var mu sync.Mutex
+	sent := 0
+	st := New(t.TempDir(), func(machine, dir, text string) (string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		sent++
+		return "pane", nil
+	}, nil, nil)
+	now := time.Date(2026, 11, 1, 5, 30, 0, 0, time.UTC).In(newYork) // 01:30 EDT
+	st.now = func() time.Time { return now }
+	if _, err := st.Put(Schedule{Machine: "local", Dir: "/tmp/x", Cron: "30 1 * * *", Prompt: "status", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	st.Tick()
+	st.Wait()
+	now = time.Date(2026, 11, 1, 6, 30, 0, 0, time.UTC).In(newYork) // 01:30 EST, an hour later
+	st.Tick()
+	st.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	if sent != 1 {
+		t.Fatalf("the 01:30 schedule ran %d times the night the clock fell back", sent)
+	}
+	now = time.Date(2026, 11, 1, 5, 45, 0, 0, time.UTC).In(newYork) // 01:45 EDT, after the run
+	if next := st.List()[0].Next; !next.Equal(time.Date(2026, 11, 2, 6, 30, 0, 0, time.UTC)) {
+		t.Fatalf("next %v, want the next night's 01:30", next.In(newYork))
+	}
+}

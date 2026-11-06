@@ -5,10 +5,12 @@ import (
 	"unicode/utf8"
 )
 
-// Asked is the dialog on a pane's screen when a question push goes out: its words and its choices in order.
+// Asked is the dialog on a pane's screen when a question push goes out: its words, its choices in order, and its key
+// (chat.DialogKey), which a choice tapped on the notification sends back so only that very dialog is answered.
 type Asked struct {
 	Text    string
 	Choices []string
+	Key     string
 }
 
 // Two buttons is what a notification shows; a choice's words are cut so both fit on a phone.
@@ -44,6 +46,7 @@ func askedPayload(p Payload, asked Asked, ok bool) Payload {
 		p.Actions = append(p.Actions, Action{Action: "choice-" + string(rune('0'+i)), Title: cutRunes(choice, choiceTitleRunes)})
 	}
 	p.Choices = append([]string(nil), asked.Choices...)
+	p.Dialog = asked.Key
 	return p
 }
 

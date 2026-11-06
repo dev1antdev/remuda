@@ -1622,7 +1622,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   so a window set at home fits the clock on a trip; the window last set
   is kept on the device (pref `alerts.quiet`) while the hours are off.
   `Notify` goes to the devices that want the watchdog's word — the
-  review's "ready for another look" (`Kind: "review"`) rides on it too —
+  review's "ready for another look" (`Kind: "review"`) rides on it too;
+  one of kind `input` (a task's or an arena's agent asking first, a first
+  prompt not delivered) to those that want the questions, as the page reads it —
   `Broadcast`
   to every device (the schedules' digest and failures); a `Payload` may
   name a `Panel` of the page (`standup`) for its tap to open instead of a
@@ -1651,7 +1653,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   to the pane, a digest's standup or, for a budget or a plan limit, the
   Usage panel; a question standing until opened, dismissed or no longer
   asked — the roster's radar no longer blocked, answered anywhere — the
-  rest `LINGER_MS` 15 s; under the screen-sharing mode a hidden folder's
+  rest `LINGER_MS` 15 s, an `input` alert whose pane was never seen asking
+  (a first prompt not delivered) among them; under the screen-sharing mode a hidden folder's
   alert says "hidden while sharing" for its words, as an Activity row;
   an optional chime, pref `alerts.sound`, off, silent inside the device's
   quiet hours); the first roster only seeds, and neither the Mac app nor
@@ -1690,15 +1693,19 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   out with the dialog's first line and its detail's first line as the
   body ("Bash command · rm -rf build"), the first two choices as
   `actions` `choice-0` / `choice-1` with their words cut to 24 runes as
-  the titles, and every choice in full as `choices` (`Question.Choices`);
+  the titles, every choice in full as `choices` (`Question.Choices`) and
+  the dialog's key as `dialog` (`chat.DialogKey`: a hash of its words with
+  the spaces left out, so a resize that wraps them anew keeps it);
   one choice or none leaves the plain push, and so does a multi-select
   (`Question.Multi`: every row carries Claude Code's `[ ]` / `[✔]` box;
   Enter ticks the row under the cursor and a Submit row under the choices
   sends them, so no one tap answers it). A tap on a choice has the service worker post
-  `POST /api/question/answer {machine, pane, index, label}`
-  (`internal/server/answer.go`): the screen is read again and
+  `POST /api/question/answer {machine, pane, index, label, dialog}` (the Mac
+  app's Notifier the same) (`internal/server/answer.go`): the screen is read again and
   `chat.Answer` (answer.go, tested) refuses with a 409 when no dialog is
-  there, when it is a multi-select, or the choice at `index` no longer reads `label` — the worker
+  there, when it is a multi-select, when its key is not `dialog` — a later
+  permission prompt offers the same "Yes", and a notification left in the
+  list must not approve it — or the choice at `index` no longer reads `label` — the worker
   then opens the page on the pane — else `chat.KeysTo` walks the cursor
   (`up` / `down` × n, `enter`) in one request, the pane's typing lock
   (`sessions.Input.Lock`) held from the screen read to the keys
@@ -1768,7 +1775,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   push that shows none for a silent one), quietly beside a visible window
   and taken down again at once (`getNotifications({tag})`) when a window
   of ours has the focus, which shows the alert itself as a toast — never a
-  test push, which stays; every push is noted in IndexedDB (`remuda` /
+  test push, which stays; a window of ours is one on the page itself
+  (`isPage`: never the editor's own tab under `/code/` or a file under
+  `/api/`, which show no toast, nor a tap's target); every push is noted in IndexedDB (`remuda` /
   `kv` / `lastPush`: when, what, shown by the system or the page) and told
   to the open windows (`{type: "pushed"}`), for the alerts panel; tested
   in `app/serviceWorker.test.ts`; click → `select-pane` message to an open
@@ -1781,7 +1790,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   digest) → `open-panel` or `openWindow(/?panel=standup)` instead, which
   `Shell.tsx` and `url.ts` answer; `pushsubscriptionchange`
   re-subscribes. `web/src/features/alerts/push.ts` is single-flight and re-registers on every
-  load with permission granted. Push needs a secure context: localhost or
+  load with permission granted — subscribing anew, the old endpoint named as
+  `old_endpoint`, when the browser's subscription was made under another key
+  than the server's (`resyncPush`, tested), since the push service refuses
+  every push to it. Push needs a secure context: localhost or
   `tailscale serve` HTTPS; iPhone needs the home-screen app.
 - `web/src/lib/shell.ts` — **the Mac app's bridge** (tested). The app
   announces itself as `window.remudaShell = {native: true, version}`
@@ -1798,7 +1810,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `MAX_ROWS` 12, as `{machine, machineLabel, pane, workspace, title,
   said, tone, state}` (`said` is "waiting for an answer" for a question,
   the watchdog's note for an amber one, else the first line of the last
-  answer) and counts the rest as working or idle. Functions in, defined
+  answer) and counts the rest as working or idle; `{type: "alerts",
+  prefs}` (`tellAppPrefs` in `features/alerts/prefs.ts`, tested) on every
+  load and every change in the alerts panel — the app's socket device on
+  the server goes by the switches and quiet hours set there, as a browser
+  by its subscription's. Functions in, defined
   by Shell.tsx beside the service worker's messages: `select(machine,
   pane)` opens the pane on its chat, `openPanel(name)` a panel `panelOf`
   knows, `openMode(name)` a mode (`agents` is the first), `alert` is
@@ -1814,7 +1830,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   it is ready again — and `feed.Service.Add` keeps it in
   `feed.json` (300 newest, numbered); `GET /api/feed?limit=` lists them, the
   roster carries `feed` (the newest id) so the bell shows a dot when it is
-  past pref `feed.seen`. **What a device sent is a row too** (`internal/sent`,
+  past pref `feed.seen` — or below it, the activity started over on a new
+  state folder or another machine at the same address (`unread` in
+  `features/activity/group.ts`, tested). **What a device sent is a row too** (`internal/sent`,
   tested): every `/api/submit`, `/api/keys` and `/api/question/answer`
   (`Server.noteSent`) and the restart's own exit and `/restart`
   (`Restarter.Typed`, wired in app.go) add a `quiet` entry — "iPhone sent
@@ -2342,7 +2360,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   it opens the page on the pane instead, as a choice does
   (`app/serviceWorker.test.ts` runs `sw.js` on stand-ins) — (a question's push
   carries its choices the same way, see `internal/push`).
-- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either) — things on a timetable, three **kinds**
+- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either, a day field that starts with `*` — `*/2` too — is unrestricted; a minute the hour a clock falls back repeats does not run again, `wallMinute`, and `Next` says so) — things on a timetable, three **kinds**
   (`Kind`, `prompt` for a record from before the field). A **prompt**
   schedule names a machine and a **folder** (panes come and go; the
   project stays), a five-field cron in the server's local time
@@ -2370,7 +2388,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `schedules.json` so a restart still watches it) and `Store.OnStatus`
   hears every `events.PaneStatus`: `done`, or `idle` after the pane was
   seen `working`, takes the tab down — the workspace when it was made
-  for the run — through `Close`, off the watcher's goroutine (the place
+  for the run and holds no other tab by now — through `Close`, off the watcher's goroutine (the place
   is let go of as the close is dispatched, so a further change of the
   pane before it lands closes and pushes nothing twice), and notes
   "answered: <first line of the last answer>" plus a push "Scout “…”
@@ -3268,7 +3286,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Watch`, `Input`, `Notify`) does that on a machine (`StartInFolder`,
   the first prompt handed over in the background, a push when it was
   not delivered) and takes the place down again (`Close`: the workspace
-  it made, else the tab) — the agent schedules' door; and `FirstPrompt` (the text a
+  it made, else the tab, by the last snapshot — `closePlace`, tested: the
+  tab alone once the person added another to the workspace, nothing for a
+  pane gone, a refusal when the tab no longer holds the pane) — the agent schedules' door; and `FirstPrompt` (the text a
   person wrote in the New workspace / tab / worktree dialog for the agent
   they started: `agent.prompt` under the pane's lock every
   `FirstPromptRetry` while the agent is still coming up, until it takes
@@ -3482,8 +3502,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `MainMenu`, `AppDelegate` (the
   wiring). **The bridge**: the app injects `window.remudaShell = {native,
   version}` at document start and listens on the script message handler
-  `remuda`; the page posts `ready`, `badge {count, tone}` and `menu
-  {rows, working, idle}` as they change and defines
+  `remuda`; the page posts `ready`, `badge {count, tone}`, `menu
+  {rows, working, idle}` and `alerts {prefs}` (which `AlertSocket.use`
+  hands to `POST /api/push/socket`, one call at a time) as they change and defines
   `remudaShell.select(machine, pane)`, `.openPanel(name)` and
   `.openMode(mode)`, which the app calls. The user agent ends in
   `remuda-mac/<version>`. Not in the app: the pop-out (Chrome's API)

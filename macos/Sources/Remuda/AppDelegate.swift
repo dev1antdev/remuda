@@ -74,6 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DockBadge.set(count: count)
         case .menu(let rows, let working, let idle):
             status.setMenu(rows: rows, working: working, idle: idle)
+        case .alerts(let prefs):
+            alerts?.use(prefs: prefs)
         case .ready, .other:
             break
         }

@@ -32,7 +32,7 @@ func TestAMultiSelectIsReadButNotAnsweredByOneChoice(t *testing.T) {
 	if choices := q.Choices(); len(choices) != 0 {
 		t.Fatalf("a push offers choices a tap cannot answer: %v", choices)
 	}
-	keys, err := Answer(multiSelect, 1, q.Options[1].Label)
+	keys, err := Answer(multiSelect, 1, q.Options[1].Label, DialogKey(q.Text))
 	if err == nil || !strings.Contains(err.Error(), "several choices") {
 		t.Fatalf("one choice walked into a multi-select: %v %v", keys, err)
 	}
