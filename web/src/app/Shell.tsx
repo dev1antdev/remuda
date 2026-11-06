@@ -123,7 +123,7 @@ export default function Shell() {
   useEffect(() => {
     if (!viewOnly) void resyncPush(readAlertPrefs());
     if (inShell()) {
-      tellAppPrefs(readAlertPrefs()); // the app's socket device goes by this device's switches, the zone of the moment with them
+      tellAppPrefs(readAlertPrefs());
       handShell({
         select: (machine, pane) => {
           if (!machine || !pane) return;
