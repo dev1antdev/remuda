@@ -3026,8 +3026,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   page's `withMark` / `withKind` in `workflow.ts`, tested, take the other
   mark off), `landing` never picks it (an agent's task, a task undone), a
   move to another project never lands in it by its name, and an agent's
-  key gets a 403 at `POST /api/tasks/{id}/start` as at the queue; a start
-  clears the card's `queue_refused`; the queue's `Unusable` says why the
+  key gets a 403 at `POST /api/tasks/{id}/start` as at the queue, and a
+  stage's column is never it (`SetAutomation` refuses one, `StartStageRun`
+  leaves the card); a start clears the card's `queue_refused`, or sets it
+  when the card stays queued (no column takes a started task), so the
+  queue starts it once until it moves; the queue's `Unusable` says why the
   host of a `-server` remuda runs no agents. The page:
   `ProjectSettings.tsx` holds `AgentsSettings.tsx` (machine, repository —
   `repositories`, the machine's own checkouts — agent, model, arguments,

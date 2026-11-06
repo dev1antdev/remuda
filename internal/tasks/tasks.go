@@ -1614,7 +1614,13 @@ func (st *Store) StartRun(r Run) (Run, error) {
 			return r, err
 		}
 	}
-	if _, err := tx.Exec(`UPDATE tasks SET queue_refused = '' WHERE id = ?`, r.TaskID); err != nil { // started after all: the queue's note is old news
+	// started after all: the queue's note is old news, unless the card stays queued (no column takes a started task),
+	// where the note keeps the queue from starting it again until the person moves it
+	held := ""
+	if c := statusByID(ss, r.Expect); c != nil && c.OnQueue {
+		held = "an agent was started on it already; move the card out of Queued and back for the queue to start another"
+	}
+	if _, err := tx.Exec(`UPDATE tasks SET queue_refused = ? WHERE id = ?`, held, r.TaskID); err != nil {
 		return r, err
 	}
 	return r, tx.Commit()

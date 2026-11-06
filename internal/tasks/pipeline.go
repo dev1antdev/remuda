@@ -102,6 +102,9 @@ func (st *Store) StartStageRun(prev Run, index int, stage Stage, pane string) (R
 	r := Run{TaskID: prev.TaskID, Machine: prev.Machine, Workspace: prev.Workspace, Pane: pane, Dir: prev.Dir, Branch: prev.Branch,
 		Agent: agentOr(stage.Agent), State: RunStarting, Started: st.stamp(), ByQueue: prev.ByQueue, Stage: index, Pipeline: PipelineOn, Expect: t.StatusID}
 	column := statusByID(ss, stage.StatusID)
+	if column != nil && column.OnQueue {
+		column = nil // only the person puts a card in the Queued column
+	}
 	if column != nil {
 		r.Expect = column.ID
 	}
