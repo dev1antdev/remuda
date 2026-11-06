@@ -58,7 +58,7 @@ export function BulkBar({ count, busy, columns, labels, onAct, onStart, onClear 
       <button type="button" className="btn sm danger soft" disabled={busy} onClick={() => onAct({ kind: "delete" })}>
         <Icon name="trash" size={14} /> {t("Delete…")}
       </button>
-      <Tip text="Clear the selection (Esc)">
+      <Tip text={t("Clear the selection (Esc)")}>
         <button type="button" className="icon-btn sm bulk-clear" aria-label={t("Clear the selection")} disabled={busy} onClick={onClear}>
           <Icon name="x" size={14} />
         </button>

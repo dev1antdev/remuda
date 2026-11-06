@@ -21,7 +21,7 @@ export const projectOption = (p: Project) => ({
 export const statusOption = (s: Status) => ({
   value: s.id,
   label: s.title,
-  hint: s.kind === "done" ? "done" : undefined,
+  hint: s.kind === "done" ? tr("done") : undefined,
   icon: <span className="tasks-dot" style={{ background: `#${s.hex_color || "888"}` }} />,
 });
 

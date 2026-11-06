@@ -42,7 +42,7 @@ export function startRequest(r: Recipe, machine: string, dir: string): StartRequ
 
 // agentLabel is the agent's name as the roster says it; a shell is a plain shell
 export function agentLabel(agents: AgentKind[], id: string): string {
-  if (id === "" || id === "shell") return "Plain shell";
+  if (id === "" || id === "shell") return t("Plain shell");
   return agents.find((a) => a.id === id)?.label ?? id;
 }
 
@@ -61,13 +61,16 @@ export function recipeWords(r: Recipe, agents: AgentKind[]): string {
   return parts.join(" · ");
 }
 
-// firstWords is the first line of a text cut at a word, an ellipsis when something was left out
+// firstWords is the first line of a text cut at a word, never between the halves of a surrogate pair, an ellipsis
+// when something was left out
 export function firstWords(text: string, max: number): string {
   const line = text.trim().split("\n")[0] ?? "";
   if (line.length <= max) return line;
-  const cut = line.slice(0, max + 1);
-  const at = cut.lastIndexOf(" ");
-  return `${(at > max / 2 ? cut.slice(0, at) : cut.slice(0, max)).trimEnd()}…`;
+  const at = line.slice(0, max + 1).lastIndexOf(" ");
+  let end = at > max / 2 ? at : max;
+  const code = line.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return `${line.slice(0, end).trimEnd()}…`;
 }
 
 // lastRecipeKey is the pref that remembers the recipe last started in a folder of a machine

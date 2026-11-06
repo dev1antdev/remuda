@@ -2,7 +2,7 @@
 
 import { plural } from "@/lib/text";
 import type { Label, Status, Task } from "./api";
-import { t } from "@/lib/i18n";
+import { t, tn } from "@/lib/i18n";
 
 export type Action =
   | { kind: "move"; statusId: number } // one project's column
@@ -119,12 +119,25 @@ export function startWords(outcome: Outcome, skipped: Task[]): string {
   return parts.join(", ");
 }
 
-const VERBS: Record<Action["kind"], string> = { move: "moved", "move-named": "moved", label: "labelled", done: "marked done", delete: "deleted" };
+// doneWords is how many the action went through for: "3 moved", "1 labelled"
+function doneWords(action: Action, n: number): string {
+  switch (action.kind) {
+    case "move":
+    case "move-named":
+      return tn(n, "{n} moved", "{n} moved");
+    case "label":
+      return tn(n, "{n} labelled", "{n} labelled");
+    case "done":
+      return tn(n, "{n} marked done", "{n} marked done");
+    case "delete":
+      return tn(n, "{n} deleted", "{n} deleted");
+  }
+}
 
 // outcomeWords: "3 moved", "2 moved, 1 failed: no such column", "1 labelled, 2 skipped"
 export function outcomeWords(action: Action, outcome: Outcome, skipped: number): string {
-  const parts = [`${outcome.done} ${VERBS[action.kind]}`];
-  if (outcome.failed) parts.push(`${outcome.failed} failed${outcome.error ? `: ${outcome.error}` : ""}`);
+  const parts = [doneWords(action, outcome.done)];
+  if (outcome.failed) parts.push(tn(outcome.failed, "{n} failed", "{n} failed") + (outcome.error ? `: ${outcome.error}` : ""));
   if (skipped) parts.push(t("{n} skipped", { n: skipped }));
   return parts.join(", ");
 }

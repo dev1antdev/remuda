@@ -339,6 +339,25 @@ func (in *Input) Submit(client Prompter, ref events.PaneRef, text string) error 
 	}
 }
 
+// ErrNoAgent: the pane runs no agent now, and what was written for one must not reach its shell, which would run every line.
+var ErrNoAgent = errors.New("no agent runs in that pane now; nothing was sent")
+
+// SubmitToAgent delivers text meant for an agent — a schedule's prompt, a pull request's failures, a booked "continue" —
+// through herdr's own submit only: a pane whose agent left since it was picked gets nothing, never the text typed.
+func (in *Input) SubmitToAgent(client Prompter, ref events.PaneRef, text string) error {
+	lock := in.lock(ref)
+	lock.Lock()
+	defer lock.Unlock()
+	err := client.AgentPrompt(ref.Pane, text)
+	switch {
+	case herdr.IsCode(err, "agent_blocked"):
+		return ErrAgentBusy
+	case herdr.IsCode(err, "agent_not_found"):
+		return ErrNoAgent
+	}
+	return err
+}
+
 // FirstPromptRetry and FirstPromptTimeout pace the delivery of a first prompt: a try every so often until the agent takes it.
 var (
 	FirstPromptRetry   = 2 * time.Second
@@ -402,7 +421,7 @@ func (in *Input) SubmitToFolder(machineID, dir, text string) (string, error) {
 	if pane == nil {
 		return "", fmt.Errorf("no agent is running in %s on %s", dir, mc.Label())
 	}
-	if err := in.Submit(client, events.PaneRef{Machine: machineID, Pane: pane.PaneID}, text); err != nil {
+	if err := in.SubmitToAgent(client, events.PaneRef{Machine: machineID, Pane: pane.PaneID}, text); err != nil {
 		return "", err
 	}
 	return pane.DisplayTitle(), nil

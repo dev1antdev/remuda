@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
 import type { Label, Status, Task } from "./api";
 import { columnChoices, deleteWords, labelChoices, outcomeWords, plan, runInSequence, startPlan, startWords, type Request } from "./bulk";
 
@@ -100,6 +101,14 @@ describe("runInSequence", () => {
     expect(outcomeWords({ kind: "move", statusId: 1 }, { done: 3, failed: 0, error: "" }, 1)).toBe("3 moved, 1 skipped");
     expect(outcomeWords({ kind: "label", labelId: 1 }, { done: 1, failed: 0, error: "" }, 0)).toBe("1 labelled");
     expect(deleteWords(2)).toBe("Delete 2 tasks? They are gone for good.");
+  });
+  describe("in Russian", () => {
+    afterEach(() => setLang("en"));
+    it("says how the action went in the page's language", () => {
+      setLang("ru");
+      expect(outcomeWords({ kind: "move", statusId: 1 }, { done: 3, failed: 1, error: "нет колонки" }, 2)).toBe("перемещено: 3, 1 с ошибкой: нет колонки, пропущено: 2");
+      expect(outcomeWords({ kind: "done" }, { done: 1, failed: 0, error: "" }, 0)).toBe("отмечено готовым: 1");
+    });
   });
 });
 

@@ -51,3 +51,22 @@ func TestATailThatIsNoQueryIsForwardedWhole(t *testing.T) {
 		t.Fatalf("the flushed tail should keep the escape: %q", f)
 	}
 }
+
+// TestAQueryCutRightAfterItsEscapeIsStillAnswered: the attach asks the scanner only of the chunks that may hold a
+// query, and a chunk ending in the escape alone was not one of them — the rest of the query then went to every viewer,
+// whose xterm answered it into the pane.
+func TestAQueryCutRightAfterItsEscapeIsStillAnswered(t *testing.T) {
+	var q queryScanner
+	var forward, replies []byte
+	for _, chunk := range []string{"a\x1b", "[?1016$pb", "plain text"} {
+		f, r := q.pass([]byte(chunk))
+		forward = append(forward, f...)
+		replies = append(replies, r...)
+	}
+	if string(forward) != "abplain text" {
+		t.Fatalf("forward = %q, want the query kept from the viewers", forward)
+	}
+	if string(replies) != "\x1b[?1016;2$y" {
+		t.Fatalf("replies = %q, want the query answered", replies)
+	}
+}

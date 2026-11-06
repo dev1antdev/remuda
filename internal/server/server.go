@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/arena"
 	"github.com/dev1antdev/remuda/internal/auth"
@@ -247,6 +248,17 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 		return false
 	}
 	return true
+}
+
+// cutBetweenLetters keeps at most max bytes of s, ending between characters rather than inside one.
+func cutBetweenLetters(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	for max > 0 && !utf8.RuneStart(s[max]) {
+		max--
+	}
+	return s[:max]
 }
 
 // machineFor finds the request's machine: ?machine=, the X-Remuda-Machine header, or the id a POST body carried; empty means local.

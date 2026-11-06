@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { Dialog, Notice } from "@/ui";
@@ -13,6 +14,7 @@ import { byMachine, hostRestarting, restartsHost, stateWords, summaryWords } fro
 
 export default function EverywhereDialog({ onClose }: { onClose: () => void }) {
   const { host } = useRoster();
+  const { redact } = useSharing(); // under the screen-sharing mode the machines and their folders by their neutral names
   const { data: plan, error, loading } = useQuery(everywherePlan, []);
   const [batch, setBatch] = useState<Batch | null>(null);
   const [failure, setFailure] = useState("");
@@ -42,17 +44,17 @@ export default function EverywhereDialog({ onClose }: { onClose: () => void }) {
   const restarts = restartsHost(steps, host?.id);
   return (
     <Dialog title={t("Update everywhere")} icon="refresh-cw" size="md" onClose={onClose} className="updates everywhere">
-      {(error || failure) && <Notice tone="error">{failure || error}</Notice>}
+      {(error || failure) && <Notice tone="error">{redact(failure || error || "")}</Notice>}
       {batch ? (
         <>
           {byMachine(batch.steps).map((group) => (
             <section key={group.machine} className="everywhere-machine">
-              <h3>{group.label}</h3>
+              <h3>{redact(group.label)}</h3>
               <ul className="everywhere-steps">
                 {group.steps.map((step) => (
                   <li key={step.what} className={`is-${step.state}`}>
-                    <span className="everywhere-title">{step.title}</span>
-                    <span className="everywhere-state">{stateWords(step)}</span>
+                    <span className="everywhere-title">{redact(step.title)}</span>
+                    <span className="everywhere-state">{redact(stateWords(step))}</span>
                   </li>
                 ))}
               </ul>
@@ -76,13 +78,13 @@ export default function EverywhereDialog({ onClose }: { onClose: () => void }) {
           <p className="modal-hint">{t("One step after another, each as its command says; a step that fails leaves the rest to run. The page's own remuda goes last: it restarts once its step ends.")}</p>
           {byMachine(steps).map((group) => (
             <section key={group.machine} className="everywhere-machine">
-              <h3>{group.label}</h3>
+              <h3>{redact(group.label)}</h3>
               <ul className="everywhere-steps">
                 {group.steps.map((step) => (
                   <li key={step.what}>
                     <details>
-                      <summary className="everywhere-title">{step.title}</summary>
-                      <code className="updates-cmd">{step.command}</code>
+                      <summary className="everywhere-title">{redact(step.title)}</summary>
+                      <code className="updates-cmd">{redact(step.command)}</code>
                     </details>
                   </li>
                 ))}

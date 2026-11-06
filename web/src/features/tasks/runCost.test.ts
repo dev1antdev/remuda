@@ -8,6 +8,10 @@ describe("runSeconds", () => {
   it("is the run's own figure once it finished", () => {
     expect(runSeconds({ state: "finished", started, took: 2280 }, now)).toBe(2280);
   });
+  it("counts to the finish noted when the meter never gave the run its own figure", () => {
+    expect(runSeconds({ state: "finished", started, finished: "2026-10-27T12:30:00Z" }, now)).toBe(1800);
+    expect(runSeconds({ state: "finished", started, finished: "2026-10-27T12:30:00Z", took: 0 }, now)).toBe(1800);
+  });
   it("counts from the start while the agent still works", () => {
     expect(runSeconds({ state: "running", started }, now)).toBe(2400);
     expect(runSeconds({ state: "running", started, took: 0 }, now)).toBe(2400);

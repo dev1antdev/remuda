@@ -86,6 +86,13 @@ describe("folderCounts", () => {
     const [entry] = entries(machine([a, b]), { ...DEFAULT_RADAR, shells: true });
     expect(entry?.kind === "folder" && folderCounts(entry.folder)).toEqual({ working: 1, blocked: 1, done: 1, agents: 3, fresh: 3 });
   });
+  it("counts a checkout's fresh files once, however many workspaces stand on it", () => {
+    const a = session("api", [tab([pane()])], { folder: "/p/backend", dir: "/p/backend", review: { changed: 4, fresh: 2 } });
+    const b = session("backend", [tab([pane()])], { folder: "/p/backend", dir: "/p/backend", review: { changed: 4, fresh: 2 } });
+    const tree = session("fix", [tab([pane()])], { folder: "/p/backend", dir: "/w/fix", worktree: repo("backend", true), review: { changed: 1, fresh: 1 } });
+    const [entry] = entries(machine([a, b, tree]), DEFAULT_RADAR);
+    expect(entry?.kind === "folder" && folderCounts(entry.folder).fresh).toBe(3);
+  });
 });
 
 describe("leadOf", () => {

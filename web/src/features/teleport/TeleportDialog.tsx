@@ -8,6 +8,7 @@ import { actions } from "@/app/store";
 import { closeTab, type AgentKind } from "@/features/roster/api";
 import { DEFAULT_TURNS, turnOptions } from "@/features/chat/handover";
 import { fetchJob, type Job } from "@/features/updates/api";
+import { useSharing } from "@/features/roster/useSharing";
 import { errMsg } from "@/lib/text";
 import { Dialog, Logo, Notice, Select } from "@/ui";
 import { t } from "@/lib/i18n";
@@ -36,6 +37,8 @@ export default function TeleportDialog({ machineId, paneId, tabId, workspace, ag
   const [moved, setMoved] = useState<Moved | null>(null);
   const [starting, setStarting] = useState(false);
   const log = useRef<HTMLPreElement>(null);
+  const { redact } = useSharing(); // under the screen-sharing mode the workspace, the machines and the folders by their neutral names
+  const place = redact(workspace);
 
   useEffect(() => {
     let live = true;
@@ -98,28 +101,28 @@ export default function TeleportDialog({ machineId, paneId, tabId, workspace, ag
     actions.openPane(moved.machine, moved.pane);
   };
   const closeSource = () =>
-    actions.ask(t("Close the tab of {workspace} here? Its agent stops; the work itself stays in its folder.", { workspace }), t("Close tab"), () => void act(closeTab(machineId, tabId)));
+    actions.ask(t("Close the tab of {workspace} here? Its agent stops; the work itself stays in its folder.", { workspace: place }), t("Close tab"), () => void act(closeTab(machineId, tabId)));
 
   const label = agents.find((a) => a.id === kind)?.label ?? kind;
   return (
     <Dialog title={t("Move the work to another machine")} icon="send" size="md" onClose={onClose}>
-      {!found && !error && <p className="modal-hint">{t("Reading the work in {workspace}…", { workspace })}</p>}
+      {!found && !error && <p className="modal-hint">{t("Reading the work in {workspace}…", { workspace: place })}</p>}
       {found && (
         <p className="modal-hint">
           {agent
-            ? t("{words}: a new worktree of a clone there gets the branch, its commits and the uncommitted changes as they are; {agent} carries on with the gist of this conversation. Nothing here changes.", { words: sourceWords(found.source), agent: label })
-            : t("{words}: a new worktree of a clone there gets the branch, its commits and the uncommitted changes as they are; {agent} starts there, told where the work came from. Nothing here changes.", { words: sourceWords(found.source), agent: label })}
+            ? t("{words}: a new worktree of a clone there gets the branch, its commits and the uncommitted changes as they are; {agent} carries on with the gist of this conversation. Nothing here changes.", { words: redact(sourceWords(found.source)), agent: label })
+            : t("{words}: a new worktree of a clone there gets the branch, its commits and the uncommitted changes as they are; {agent} starts there, told where the work came from. Nothing here changes.", { words: redact(sourceWords(found.source)), agent: label })}
         </p>
       )}
       {found && !job && (
         <>
           <label>
             {t("Machine")}
-            <Select value={target} onChange={pickTarget} options={found.targets.map((x) => ({ value: x.machine, label: x.label, hint: targetHint(x) }))} />
+            <Select value={target} onChange={pickTarget} options={found.targets.map((x) => ({ value: x.machine, label: redact(x.label), hint: redact(targetHint(x)) }))} />
           </label>
           <label>
             {t("Clone of the repository there")}
-            <Select value={choice} onChange={setChoice} options={folderChoices(chosen)} />
+            <Select value={choice} onChange={setChoice} options={folderChoices(chosen).map((o) => ({ ...o, label: redact(o.label), hint: o.hint && redact(o.hint) }))} />
           </label>
           {choice === TYPED && (
             <label>
@@ -137,11 +140,11 @@ export default function TeleportDialog({ machineId, paneId, tabId, workspace, ag
           </label>
         </>
       )}
-      {job && <pre className="updates-log" ref={log}>{job.output || t("Starting…")}</pre>}
-      {job?.done && job.ok && <Notice tone="success">{t("Moved: {agent} carries on on {machine}. The agent here keeps running until you close it.", { agent: label, machine: chosen?.label ?? target })}</Notice>}
-      {job?.done && !job.ok && <Notice tone="error">{job.error || t("The move stopped")}</Notice>}
-      {error && <Notice tone="error">{error}</Notice>}
-      {found && !job && blocked && <p className="modal-hint">{blocked}</p>}
+      {job && <pre className="updates-log" ref={log}>{redact(job.output) || t("Starting…")}</pre>}
+      {job?.done && job.ok && <Notice tone="success">{t("Moved: {agent} carries on on {machine}. The agent here keeps running until you close it.", { agent: label, machine: redact(chosen?.label ?? target) })}</Notice>}
+      {job?.done && !job.ok && <Notice tone="error">{redact(job.error || t("The move stopped"))}</Notice>}
+      {error && <Notice tone="error">{redact(error)}</Notice>}
+      {found && !job && blocked && <p className="modal-hint">{redact(blocked)}</p>}
       <div className="modal-actions">
         {job?.done && job.ok && tabId && (
           <button type="button" className="btn danger" onClick={closeSource}>
@@ -153,7 +156,7 @@ export default function TeleportDialog({ machineId, paneId, tabId, workspace, ag
         </button>
         {!job && (
           <button type="button" className="btn primary" disabled={!found || !!blocked || starting} onClick={() => void move()}>
-            {t("Move to {machine}", { machine: chosen?.label ?? "…" })}
+            {t("Move to {machine}", { machine: redact(chosen?.label ?? "…") })}
           </button>
         )}
         {job?.done && job.ok && moved?.pane && (

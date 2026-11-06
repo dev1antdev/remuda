@@ -158,6 +158,52 @@ func TestMoveCarriesTheWorkWhole(t *testing.T) {
 	}
 }
 
+func TestMoveCarriesTheWorkWhateverTheSourcesDiffSettings(t *testing.T) {
+	needGit(t)
+	_, source, target := clones(t)
+	working(t, source)
+	external := filepath.Join(t.TempDir(), "difft")
+	if err := os.WriteFile(external, []byte("#!/bin/sh\necho 'a pretty picture of the change'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range map[string]string{"diff.noprefix": "true", "diff.external": external, "color.ui": "always", "diff.mnemonicPrefix": "true"} {
+		git(t, source, "config", key, value)
+	}
+	var lines []string
+	landed, err := Move{Source: newMachine(t, "mac", "This Mac"), SourceDir: source, Target: newMachine(t, "gog", "GOG"), TargetDir: target,
+		Start: func(Landed, Source) error { return nil }}.Run(func(line string) { lines = append(lines, line) })
+	if err != nil {
+		t.Fatalf("move: %v\n%s", err, strings.Join(lines, "\n"))
+	}
+	if read(t, filepath.Join(landed.Dir, "app.txt")) != "one\ntwo\nthree\n" || read(t, filepath.Join(landed.Dir, "staged.txt")) != "staged\n" {
+		t.Fatal("the changes did not arrive as they were")
+	}
+}
+
+// cutOff is a machine the copy of the work never reaches whole
+type cutOff struct{ machine }
+
+func (m cutOff) PutFile(path string, data []byte, _ time.Duration) error {
+	_ = os.WriteFile(path, data[:len(data)/2], 0o600)
+	return os.ErrDeadlineExceeded
+}
+
+func TestACopyCutOffLeavesNoPackOnTheTarget(t *testing.T) {
+	needGit(t)
+	_, source, target := clones(t)
+	working(t, source)
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	_, err := Move{Source: newMachine(t, "mac", "This Mac"), SourceDir: source, Target: cutOff{newMachine(t, "gog", "GOG")}, TargetDir: target,
+		Start: func(Landed, Source) error { return nil }}.Run(func(string) {})
+	if err == nil {
+		t.Fatal("a copy cut off went on")
+	}
+	if left, _ := filepath.Glob(filepath.Join(tmp, "remuda-teleport.*")); len(left) != 0 {
+		t.Fatalf("left on the target: %v", left)
+	}
+}
+
 func TestMoveRenamesABranchTheTargetHas(t *testing.T) {
 	needGit(t)
 	_, source, target := clones(t)

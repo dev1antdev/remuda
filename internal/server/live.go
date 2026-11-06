@@ -16,8 +16,8 @@ func (s *Server) liveRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /ws/events", s.handleEventsWS)
 }
 
-// livePing is how often a quiet stream is pinged, so a dead page is let go of.
-const livePing = 30 * time.Second
+// livePing is how often a quiet stream is pinged, so a dead page is let go of; livePongWait how long its answer may take.
+var livePing, livePongWait = 30 * time.Second, 10 * time.Second
 
 type liveClientMsg struct {
 	Sub []string `json:"sub"` // the panes the page shows, "machine|pane"
@@ -62,10 +62,11 @@ func (s *Server) handleEventsWS(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			case <-ping.C:
-				pctx, cancel := context.WithTimeout(wctx, 10*time.Second)
+				pctx, cancel := context.WithTimeout(wctx, livePongWait)
 				err := c.Ping(pctx)
 				cancel()
 				if err != nil {
+					c.CloseNow() // a ping unanswered leaves the read waiting on a connection nobody answers: it ends here
 					return
 				}
 			case <-wctx.Done():

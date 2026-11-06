@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // testToken is long enough for the guard and plain enough that a secret scan reads it as what it is
@@ -114,6 +115,19 @@ func TestLoginFormMintsDevice(t *testing.T) {
 	g.HandleLogin(rec, req)
 	if rec.Code != http.StatusForbidden || len(g.Devices.List()) != 1 {
 		t.Fatalf("a wrong token: %d, %d devices", rec.Code, len(g.Devices.List()))
+	}
+}
+
+// The sign-in form is the one write anybody may send unsigned: a token is short, so a body of megabytes is refused
+// before it is read into memory, not parsed in full and then answered as a wrong token.
+func TestLoginFormRefusesAHugeBody(t *testing.T) {
+	g, _ := newGuard(t)
+	req := httptest.NewRequest("POST", "/api/login", strings.NewReader("token="+strings.Repeat("x", 4<<20)))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	g.HandleLogin(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("a 4 MB sign-in form: %d, want 400 before it is read whole", rec.Code)
 	}
 }
 
@@ -267,6 +281,19 @@ func TestStoreReloadRenameAndRevokeOthers(t *testing.T) {
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, devicesFile)); err != nil || strings.Contains(string(b), strings.Split(first, ".")[2]) {
 		t.Fatal("the file must hold hashes, never a secret")
+	}
+}
+
+// A long name in Cyrillic is cut between letters, never inside one: the list would read it with a broken last letter.
+func TestALongNameIsCutBetweenLetters(t *testing.T) {
+	devices, _ := OpenDevices(t.TempDir())
+	_, device, _ := devices.Mint("10.0.0.1", chromeMac)
+	renamed, err := devices.Rename(device.ID, strings.Repeat("Ноутбук ", 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !utf8.ValidString(renamed.Name) || len(renamed.Name) > 80 || !strings.HasPrefix(renamed.Name, "Ноутбук") {
+		t.Fatalf("cut to %q (%d bytes)", renamed.Name, len(renamed.Name))
 	}
 }
 

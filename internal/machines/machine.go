@@ -40,8 +40,9 @@ type Machine struct {
 	attach *herdr.AttachManager
 	home   string
 
-	fwds map[forwardTo]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda, a preview)
-	peer *Peer
+	fwds  map[forwardTo]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda, a preview)
+	fwdMu sync.Mutex                // one forward made at a time, so asks of a port at once make one, not one each
+	peer  *Peer
 
 	onState func(id, label, state, reason string) // the manager's ear for connected / error, nil for the local one
 
@@ -292,6 +293,8 @@ func (mc *Machine) ForwardHostAddr(host string, port int) (string, error) {
 		return "", err
 	}
 	to := forwardTo{host: host, port: port}
+	mc.fwdMu.Lock()
+	defer mc.fwdMu.Unlock()
 	mc.mu.Lock()
 	if f := mc.fwds[to]; f != nil && f.conn == conn {
 		mc.mu.Unlock()

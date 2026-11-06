@@ -73,6 +73,23 @@ func TestSubmitPrefersThePromptAndTypesForAShell(t *testing.T) {
 	}
 }
 
+func TestSubmitToAgentNeverTypesIntoAShell(t *testing.T) {
+	in := NewInput(nil, nil)
+	ref := events.PaneRef{Machine: "local", Pane: "w1:p1"}
+	agent := &fakeClient{}
+	if err := in.SubmitToAgent(agent, ref, "hello"); err != nil || len(agent.typed) != 1 || agent.typed[0] != "prompt:hello" {
+		t.Fatalf("agent: %v %v", err, agent.typed)
+	}
+	left := &fakeClient{promptErr: &herdr.Error{Code: "agent_not_found"}}
+	if err := in.SubmitToAgent(left, ref, "Look at the failing job\nrm -rf build"); !errors.Is(err, ErrNoAgent) || len(left.typed) != 0 || len(left.keys) != 0 {
+		t.Fatalf("a pane whose agent left: %v, typed %v, keys %v", err, left.typed, left.keys)
+	}
+	blocked := &fakeClient{promptErr: &herdr.Error{Code: "agent_blocked"}}
+	if err := in.SubmitToAgent(blocked, ref, "x"); !errors.Is(err, ErrAgentBusy) || len(blocked.typed) != 0 {
+		t.Fatalf("blocked: %v %v", err, blocked.typed)
+	}
+}
+
 func TestRefOK(t *testing.T) {
 	for _, bad := range []string{"", "-x", "a b", "a..b", "a\tb", "x\x7f"} {
 		if RefOK(bad) {
