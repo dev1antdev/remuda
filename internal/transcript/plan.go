@@ -44,6 +44,10 @@ func Plan(turns []Turn) []PlanItem {
 				}
 			case "TaskUpdate":
 				items = updatedTask(items, part.Input)
+			case "update_plan": // Codex's: the whole list each time, a step and its status
+				if list, ok := codexPlan(part.Input); ok {
+					items = list
+				}
 			}
 		}
 	}
@@ -75,6 +79,29 @@ func todoList(input json.RawMessage) ([]PlanItem, bool) {
 			id = strconv.Itoa(i + 1)
 		}
 		items = append(items, PlanItem{ID: id, Text: todo.Content, Active: todo.ActiveForm, Status: planStatus(todo.Status)})
+	}
+	return items, true
+}
+
+type codexPlanInput struct {
+	Plan []struct {
+		Step   string `json:"step"`
+		Status string `json:"status"`
+	} `json:"plan"`
+}
+
+// codexPlan is update_plan's whole list: each step numbered by its place, its status one of Codex's three (the same words).
+func codexPlan(input json.RawMessage) ([]PlanItem, bool) {
+	var in codexPlanInput
+	if json.Unmarshal(input, &in) != nil || in.Plan == nil {
+		return nil, false
+	}
+	items := make([]PlanItem, 0, len(in.Plan))
+	for i, step := range in.Plan {
+		if step.Step == "" {
+			continue
+		}
+		items = append(items, PlanItem{ID: strconv.Itoa(i + 1), Text: step.Step, Status: planStatus(step.Status)})
 	}
 	return items, true
 }

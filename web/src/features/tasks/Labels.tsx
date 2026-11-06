@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { errMsg } from "@/lib/text";
-import { Icon } from "@/ui";
+import { Icon, Tip } from "@/ui";
 import { addTaskLabel, createLabel, removeTaskLabel, type Label, type Task } from "./api";
 import { labelStyle } from "./pieces";
 import { randomColor } from "./ProjectSettings";
+import { t as tr } from "@/lib/i18n";
 
 export function LabelsField({ task: t, labels, onChange, onLabelsChanged, onError }: {
   task: Task;
@@ -52,14 +53,16 @@ export function LabelsField({ task: t, labels, onChange, onLabelsChanged, onErro
   const attached = (t.labels ?? []).some((l) => l.title.toLowerCase() === wanted);
   return (
     <div className="tasks-field labels">
-      <span className="tasks-field-name">Labels</span>
+      <span className="tasks-field-name">{tr("Labels")}</span>
       <span className="tasks-labels">
         {(t.labels ?? []).map((l) => (
           <span key={l.id} className="tasks-label" style={labelStyle(l)}>
             {l.title}
-            <button type="button" className="icon-btn sm tasks-label-x" onClick={() => void dropLabel(l)} title="Remove" aria-label={`Remove ${l.title}`}>
-              <Icon name="x" size={12} />
-            </button>
+            <Tip text={tr("Remove {label}", { label: l.title })}>
+              <button type="button" className="icon-btn sm tasks-label-x" onClick={() => void dropLabel(l)} aria-label={tr("Remove {label}", { label: l.title })}>
+                <Icon name="x" size={12} />
+              </button>
+            </Tip>
           </span>
         ))}
         {picking ? (
@@ -67,7 +70,7 @@ export function LabelsField({ task: t, labels, onChange, onLabelsChanged, onErro
             <input
               autoFocus
               value={query}
-              placeholder="label…"
+              placeholder={tr("label…")}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") setPicking(false);
@@ -89,14 +92,14 @@ export function LabelsField({ task: t, labels, onChange, onLabelsChanged, onErro
               ))}
               {query.trim() && !exact && !attached && (
                 <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => void newLabel(query)}>
-                  <Icon name="plus" size={12} /> create “{query.trim()}”
+                  <Icon name="plus" size={12} /> {tr("create “{name}”", { name: query.trim() })}
                 </button>
               )}
             </span>
           </span>
         ) : (
           <button type="button" className="linkish" onClick={() => setPicking(true)}>
-            <Icon name="plus" size={12} /> label
+            <Icon name="plus" size={12} /> {tr("label")}
           </button>
         )}
       </span>

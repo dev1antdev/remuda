@@ -29,8 +29,12 @@ export function readURL(): { requested: Selection | null; mode?: Mode; lens?: Le
   };
 }
 
-// writeURL replaces the address in place, keeping any history state another part of the page put there.
-export function writeURL(at: { selection: Selection | null; mode: Mode; lens: Lens }) {
+export type Where = { selection: Selection | null; mode: Mode; lens: Lens };
+
+// addressFor is the address a place of the page has: the pane and, in Agents, its lens, the mode when it is not Agents;
+// "/" for the first mode with nothing selected. The query is read as text, never through URLSearchParams.size, which
+// Safari 16 lacks: there it was undefined, so every address came out as "/" and a reload lost the pane.
+export function addressFor(at: Where): string {
   const q = new URLSearchParams();
   if (at.selection) {
     q.set("machine", at.selection.machineId);
@@ -38,6 +42,12 @@ export function writeURL(at: { selection: Selection | null; mode: Mode; lens: Le
   }
   if (at.mode !== "herdr") q.set("mode", at.mode);
   if (at.selection && at.mode === "herdr") q.set("lens", at.lens);
-  const next = q.size ? `/?${q}` : "/";
+  const query = q.toString();
+  return query ? `/?${query}` : "/";
+}
+
+// writeURL replaces the address in place, keeping any history state another part of the page put there.
+export function writeURL(at: Where) {
+  const next = addressFor(at);
   if (location.pathname + location.search !== next) history.replaceState(history.state, "", next);
 }

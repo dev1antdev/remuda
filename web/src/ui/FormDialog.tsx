@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Dialog } from "./Dialog";
 import { Notice } from "./Notice";
 import type { IconName } from "@/ui/icons";
+import { t } from "@/lib/i18n";
 
 export type Submit = { err: string; busy: boolean; run: () => Promise<void> };
 
@@ -34,7 +35,7 @@ export function FormDialog({ title, icon, hint, children, onClose, submit, submi
       {submit.err && <Notice tone="error">{submit.err}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" className="btn primary" disabled={submit.busy}>
           {submit.busy ? "…" : submitLabel}

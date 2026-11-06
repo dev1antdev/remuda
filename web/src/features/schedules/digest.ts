@@ -1,28 +1,29 @@
 // The pure part of a digest schedule: the periods it may cover and the words the list says about it.
 
 import type { DigestSince, Schedule, ScheduleKind } from "./api";
+import { t } from "@/lib/i18n";
 
 export const SINCE_OPTIONS: { value: DigestSince; label: string }[] = [
-  { value: "midnight", label: "Since midnight" },
-  { value: "24h", label: "Last 24 h" },
-  { value: "7d", label: "Last 7 days" },
-  { value: "last", label: "Since the previous digest" },
+  { value: "midnight", label: t("Since midnight") },
+  { value: "24h", label: t("Last 24 h") },
+  { value: "7d", label: t("Last 7 days") },
+  { value: "last", label: t("Since the previous digest") },
 ];
 
 // kindOf reads a schedule's kind, prompt for a record from before the kinds
-export const kindOf = (s: Pick<Schedule, "kind">): ScheduleKind => (s.kind === "digest" ? "digest" : "prompt");
+export const kindOf = (s: Pick<Schedule, "kind">): ScheduleKind => (s.kind === "digest" || s.kind === "agent" ? s.kind : "prompt");
 
-// sinceWords says what period a digest covers, as its row reads
+// sinceWords says what period a digest covers, as its row reads, in the page's language
 export function sinceWords(since: DigestSince | undefined): string {
   switch (since) {
     case "24h":
-      return "the last 24 h";
+      return t("the last 24 h");
     case "7d":
-      return "the last 7 days";
+      return t("the last 7 days");
     case "last":
-      return "since the previous digest";
+      return t("since the previous digest");
     default:
-      return "since midnight";
+      return t("since midnight");
   }
 }
 

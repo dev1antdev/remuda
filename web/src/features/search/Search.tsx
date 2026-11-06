@@ -8,16 +8,17 @@ import type { Machine } from "@/features/roster/api";
 import { basename, errMsg } from "@/lib/text";
 import { connected, folderOptions, machineLabel, machineOptions } from "@/features/roster/options";
 import { whenShort } from "@/lib/time";
-import { Dialog, Notice } from "@/ui";
+import { Dialog, Notice, Tip } from "@/ui";
 import Select from "@/ui/Select";
 import Icon from "@/ui/icons";
 import Logo from "@/ui/Logo";
+import { t } from "@/lib/i18n";
 
 const PERIODS = [
-  { value: "0", label: "Any time" },
-  { value: "1", label: "Today" },
-  { value: "7", label: "Last 7 days" },
-  { value: "30", label: "Last 30 days" },
+  { value: "0", label: t("Any time") },
+  { value: "1", label: t("Today") },
+  { value: "7", label: t("Last 7 days") },
+  { value: "30", label: t("Last 30 days") },
 ];
 
 export default function Search({ machines, initial = "", onClose, onOpen }: { machines: Machine[]; initial?: string; onClose: () => void; onOpen: (hit: SearchHit) => void }) {
@@ -67,11 +68,13 @@ export default function Search({ machines, initial = "", onClose, onOpen }: { ma
     <Dialog onClose={onClose} className="search-dialog">
       <div className="search-head">
         <Icon name="search" size={16} className="search-head-icon" />
-        <input autoFocus value={q} placeholder="Search every conversation…" aria-label="Search every conversation" spellCheck={false} onChange={(e) => setQ(e.target.value)} />
+        <input autoFocus value={q} placeholder={t("Search every conversation…")} aria-label={t("Search every conversation")} spellCheck={false} onChange={(e) => setQ(e.target.value)} />
         {busy && <span className="search-busy" />}
-        <button type="button" className="icon-btn" onClick={onClose} title="Close" aria-label="Close">
-          <Icon name="x" size={16} />
-        </button>
+        <Tip text={t("Close")}>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label={t("Close")}>
+            <Icon name="x" size={16} />
+          </button>
+        </Tip>
       </div>
       <div className="search-filters">
         {connected(machines).length > 1 && (
@@ -81,10 +84,10 @@ export default function Search({ machines, initial = "", onClose, onOpen }: { ma
               setMachine(v);
               setDir("");
             }}
-            options={machineOptions(machines, { all: "All machines" })}
+            options={machineOptions(machines, { all: t("All machines") })}
           />
         )}
-        <Select value={dir} onChange={setDir} options={[{ value: "", label: "All folders" }, ...folders]} />
+        <Select value={dir} onChange={setDir} options={[{ value: "", label: t("All folders") }, ...folders]} />
         <Select value={days} onChange={setDays} options={PERIODS} />
       </div>
       <div className="search-list">
@@ -95,11 +98,11 @@ export default function Search({ machines, initial = "", onClose, onOpen }: { ma
               {machineLabel(machines, id)}: {msg}
             </Notice>
           ))}
-        {!res && !err && <div className="empty">{short ? "What was said, by you or an agent, anywhere. Two characters to start." : "Searching…"}</div>}
-        {res && res.hits.length === 0 && <div className="empty">Nothing matches.</div>}
+        {!res && !err && <div className="empty">{short ? t("What was said, by you or an agent, anywhere. Two characters to start.") : t("Searching…")}</div>}
+        {res && res.hits.length === 0 && <div className="empty">{t("Nothing matches.")}</div>}
         {res?.hits.map((h) => (
           <button key={`${h.machine}|${h.session}|${h.uuid}`} type="button" className="search-hit" title={h.dir} data-project={h.project} onClick={() => onOpen(h)}>
-            <span className="search-hit-who">{h.role === "assistant" ? <Logo agent="claude" /> : <Icon name="user" size={14} />}</span>
+            <span className="search-hit-who">{h.role === "assistant" ? <Logo agent={h.agent || "claude"} /> : <Icon name="user" size={14} />}</span>
             <span className="search-hit-body">
               <span className="search-hit-meta">
                 <b>{basename(h.dir)}</b>
@@ -110,7 +113,7 @@ export default function Search({ machines, initial = "", onClose, onOpen }: { ma
             </span>
           </button>
         ))}
-        {res?.more && <Notice tone="hint">Only the newest 200 — narrow it down with a folder or a period.</Notice>}
+        {res?.more && <Notice tone="hint">{t("Only the newest 200 — narrow it down with a folder or a period.")}</Notice>}
       </div>
     </Dialog>
   );

@@ -35,6 +35,9 @@ var uninstallScript string
 //go:embed scripts/install-code.sh
 var codeScript string
 
+//go:embed scripts/install-mcp.sh
+var mcpScript string
+
 // CodeVersion is the code-server release install-code.sh installs and the Updates row offers; the script's default must match.
 const CodeVersion = "4.140.0"
 
@@ -46,6 +49,7 @@ type Options struct {
 	AuthKey   string
 	Addr      string
 	NoService bool   // herdr and its server only
+	Server    bool   // the service serves the page only: no herdr there, the flag -server in its unit
 	Version   string // this build's: a remote without remuda gets the same release when it is one
 }
 
@@ -67,9 +71,17 @@ func Run(o Options, out io.Writer) error {
 			env = append(env, "TS_AUTHKEY="+o.AuthKey)
 		}
 	}
-	fmt.Fprintf(out, "— herdr and its server%s\n", where(o.Host))
-	if err := run(o.Host, env, setupScript, nil, out); err != nil {
-		return fmt.Errorf("setup: %w", err)
+	if o.Server && o.NoService {
+		return fmt.Errorf("setup: -server is a service that serves the page; -no-service would leave nothing to set up")
+	}
+	if o.Server {
+		env = append(env, "REMUDA_SERVER=1")
+		fmt.Fprintf(out, "— no herdr%s: a server serves the page only, the agents run on its machines\n", where(o.Host))
+	} else {
+		fmt.Fprintf(out, "— herdr and its server%s\n", where(o.Host))
+		if err := run(o.Host, env, setupScript, nil, out); err != nil {
+			return fmt.Errorf("setup: %w", err)
+		}
 	}
 	if o.NoService {
 		return nil
@@ -154,6 +166,21 @@ func Code(host, action string, port int, out io.Writer) error {
 		env = append(env, "CODE_PORT="+strconv.Itoa(port))
 	}
 	return run(host, env, codeScript, []string{action}, out)
+}
+
+// MCP registers `remuda mcp` with every coding agent on the machine (install), says which have it (status) or takes it out (uninstall), here or on a host.
+func MCP(host, action string, out io.Writer) error {
+	return run(host, nil, mcpScript, []string{action}, out)
+}
+
+// statuslineScript runs the machine's own remuda for the status line wrapper; one too old to have it says so.
+const statuslineScript = `r="$HOME/.local/bin/remuda"
+if ! "$r" statusline status >/dev/null 2>&1; then echo "the remuda on this machine is older than the status line wrapper: update it first"; exit 1; fi
+exec "$r" statusline "$1"`
+
+// Statusline runs `remuda statusline install|status|uninstall` on host, with that machine's own remuda.
+func Statusline(host, action string, out io.Writer) error {
+	return run(host, nil, statuslineScript, []string{action}, out)
 }
 
 func where(host string) string {

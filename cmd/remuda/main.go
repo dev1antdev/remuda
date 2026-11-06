@@ -41,6 +41,9 @@ func main() {
 	tailscale := flag.Bool("tailscale", false, "join your tailnet as a node of its own and serve HTTPS there (no tailscale serve needed); first run prints a login URL unless TS_AUTHKEY is set")
 	tsName := flag.String("tailscale-hostname", "remuda", "the node's name on the tailnet (https://<name>.<tailnet>.ts.net)")
 	noCheck := flag.Bool("no-version-check", false, "never ask npm and GitHub what the newest Claude Code, herdr and remuda are")
+	noDoor := flag.Bool("no-door", false, "keep the agents' door closed: no agent-key / agent-url files here or on a remote machine (a scratch instance beside the real one must not overwrite the real one's)")
+	withDoor := flag.Bool("door", false, "open the agents' door although REMUDA_STATE_DIR is set, which closes it by itself")
+	serverOnly := flag.Bool("server", os.Getenv("REMUDA_SERVER") == "1", "serve the page only (also REMUDA_SERVER=1): this machine is no machine of the cockpit — no workspaces here, its herdr neither needed nor kept — and its vitals stand behind the Server place on the rail; without it (the default, a client of its own herdr) the machine remuda runs on is one of the cockpit's machines")
 	flag.Usage = help
 	flag.Parse()
 
@@ -70,6 +73,8 @@ func main() {
 		Addr: *addr, HerdrBin: *herdrBin, Socket: *socket, CodePort: *codePort,
 		Tailscale: *tailscale, TailscaleName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"),
 		VersionCheck: !*noCheck, Version: version,
+		Door:   doorOpen(*noDoor, *withDoor, os.Getenv("REMUDA_STATE_DIR") != ""),
+		Server: *serverOnly,
 	})
 	if err != nil {
 		log.Print(err)
@@ -77,14 +82,28 @@ func main() {
 	}
 }
 
+// doorOpen says whether this instance places the agents' door files: never with -no-door, and not for a scratch
+// instance (REMUDA_STATE_DIR set) unless -door asks, so a second remuda beside the real one leaves its door alone.
+func doorOpen(noDoor, withDoor, scratch bool) bool {
+	if noDoor {
+		return false
+	}
+	return !scratch || withDoor
+}
+
 // help is `remuda -h`: the server's flags, and the commands a person with nothing but the binary needs to know are there.
 func help() {
 	w := flag.CommandLine.Output()
 	fmt.Fprint(w, `remuda — a browser and phone cockpit for the coding agents herdr runs
 
-  remuda [flags]       the server (the background service runs this)
+  remuda [flags]       the server (the background service runs this); -server for a host that only serves the page
   remuda setup         herdr, its server, the agent hooks and the service, here or -host H
   remuda code          code-server for the Code mode, here or -host H
+  remuda mcp           your task list for the coding agents, over MCP; mcp install registers it with each agent, here or -host H
+  remuda tasks         your tasks from a shell: list, show, add, move, comment
+  remuda statusline    Claude Code's plan limits for remuda; statusline install puts it before your status line, here or -host H
+  remuda backup        the cockpit's state copied to the machine Settings › Backups names: backup now, backup list
+  remuda restore       a backup back into this machine's state dir, the service stopped first
   remuda uninstall     take remuda off this machine again (-all: herdr and your data too)
 
 Each command lists its own flags with -h. The server's:

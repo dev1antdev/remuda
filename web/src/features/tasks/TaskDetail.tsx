@@ -1,11 +1,15 @@
 // The open task on the right: every field in place, the ways to hand it to an agent, the run on it, the description, the comments.
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { actions } from "@/app/store";
+import { useNow } from "@/lib/clock";
+import { checksTone, checksWords, prWords, reviewTone, reviewWords } from "@/features/roster/prStatus";
 import { openUrl } from "@/lib/host";
 import { errMsg } from "@/lib/text";
 import { fmtDate } from "@/lib/time";
-import { Icon, Logo, Select, useDismiss } from "@/ui";
+import type { BudgetStatus } from "@/features/usage/api";
+import { budgetsFor, budgetTone, ratio, tightest, toneClass } from "@/features/usage/budgets";
+import { Icon, Logo, Select, Tip, useDismiss } from "@/ui";
 import { patchTask, PRIORITIES, type Field, type Label, type Project, type Run, type Status, type Task } from "./api";
 import { CommentsField } from "./Comments";
 import { FieldInput } from "./fields";
@@ -13,8 +17,12 @@ import { Html, htmlToText, textToHtml } from "./html";
 import { issueLabel, issueLink } from "./issue";
 import { LabelsField } from "./Labels";
 import { DueInput, PrioMark, projectOption, statusOption } from "./pieces";
+import { stageWords } from "./autonomy";
+import { runWords } from "./runCost";
+import type { RunPR } from "./runPR";
+import { t as tr } from "@/lib/i18n";
 
-export function TaskDetail({ task: t, projects, statuses, fields, labels, onChange, onLabelsChanged, onClose, onDelete, onError, canSend, onSend, canStart, onStart, machineLabel, liveStatus, onOpenPane }: {
+export function TaskDetail({ task: t, projects, statuses, fields, labels, onChange, onLabelsChanged, onClose, onDelete, onError, canSend, onSend, canStart, onStart, machineLabel, liveStatus, prOf, onOpenPane, budgets }: {
   task: Task;
   projects: Project[];
   statuses: Status[];
@@ -31,13 +39,22 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
   onStart: () => void;
   machineLabel: (id: string) => string;
   liveStatus: (r: Run) => string | null; // the pane's status from the roster, null when it is not there
+  prOf: (r: Run) => RunPR | null; // the pull request the run noted, with its state while the pane is there
   onOpenPane: (machineId: string, paneId: string) => void;
+  budgets?: BudgetStatus[]; // the spending limits, for the tone of what the run spent
 }) {
   const run = t.run ?? null;
+  const now = useNow(15000);
+  const stage = run ? stageWords(run, projects.find((p) => p.id === t.project_id)) : "";
+  const spent = run ? runWords(run, now) : "";
+  const tightBudget = run ? tightest(budgetsFor(budgets, run.machine, run.dir)) : null;
+  const spentTone = tightBudget ? budgetTone(ratio(tightBudget)) : "";
   const issue = issueLink(t.description);
   const paneStatus = run ? liveStatus(run) : null;
-  const runLabel = !run ? "" : run.state === "starting" ? "starting…" : run.state === "failed" ? "failed" : run.state === "gone" ? "closed" : paneStatus === "run" ? "working" : paneStatus === "input" ? "waiting for you" : paneStatus === null ? "closed" : run.state === "finished" ? "finished" : "running";
+  const pr = run ? prOf(run) : null;
+  const runLabel = !run ? "" : run.state === "starting" ? tr("starting…") : run.state === "failed" ? tr("failed") : run.state === "gone" ? tr("closed") : paneStatus === "run" ? tr("working") : paneStatus === "input" ? tr("waiting for you") : paneStatus === null ? tr("closed") : run.state === "finished" ? tr("finished") : tr("running");
   const [title, setTitle] = useState(t.title);
+  useEffect(() => setTitle(t.title), [t.title]);
   const [sendMenu, setSendMenu] = useState(false);
   const closeSendMenu = useCallback(() => setSendMenu(false), []);
   useDismiss(sendMenu, closeSendMenu, [".split"]);
@@ -69,18 +86,25 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
           className="tasks-check"
           checked={t.done}
           onChange={() => void patch({ done: !t.done })}
-          title={t.done ? "Mark undone" : "Mark done"}
-          aria-label={t.done ? "Mark undone" : "Mark done"}
+          title={t.done ? tr("Mark undone") : tr("Mark done")}
+          aria-label={t.done ? tr("Mark undone") : tr("Mark done")}
         />
         <span className="tasks-ident">{t.identifier}</span>
+        {t.source && (
+          <span className="tasks-source" title={tr("Made by an agent on {source}", { source: t.source })}>
+            <Icon name="bot" size={12} /> {tr("by {source}", { source: t.source })}
+          </span>
+        )}
         {issue && (
           <button type="button" className="linkish tasks-issue" title={issue} onClick={() => openUrl(issue)}>
             {issueLabel(issue)} <Icon name="external-link" size={12} />
           </button>
         )}
-        <button type="button" className="icon-btn tasks-close" onClick={onClose} title="Close" aria-label="Close">
-          <Icon name="x" size={16} />
-        </button>
+        <Tip text={tr("Close")}>
+          <button type="button" className="icon-btn tasks-close" onClick={onClose} aria-label={tr("Close")}>
+            <Icon name="x" size={16} />
+          </button>
+        </Tip>
       </div>
       <input
         className="tasks-title"
@@ -94,11 +118,11 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
       />
 
       <div className="tasks-field">
-        <span className="tasks-field-name">Status</span>
+        <span className="tasks-field-name">{tr("Status")}</span>
         <Select value={t.status_id} onChange={(status_id) => void patch({ status_id })} options={statuses.map(statusOption)} />
       </div>
       <div className="tasks-field">
-        <span className="tasks-field-name">Project</span>
+        <span className="tasks-field-name">{tr("Project")}</span>
         <Select
           value={t.project_id}
           onChange={(project_id) => void patch({ project_id })}
@@ -106,16 +130,16 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
         />
       </div>
       <div className="tasks-field">
-        <span className="tasks-field-name">Due</span>
+        <span className="tasks-field-name">{tr("Due")}</span>
         <DueInput value={t.due_date} onCommit={(iso) => void patch({ due_date: iso })} />
         {t.due_date && (
           <button type="button" className="linkish" onClick={() => void patch({ due_date: "" })}>
-            clear
+            {tr("clear")}
           </button>
         )}
       </div>
       <div className="tasks-field">
-        <span className="tasks-field-name">Priority</span>
+        <span className="tasks-field-name">{tr("Priority")}</span>
         <Select
           value={t.priority}
           onChange={(priority) => void patch({ priority })}
@@ -125,7 +149,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
       <LabelsField task={t} labels={labels} onChange={onChange} onLabelsChanged={onLabelsChanged} onError={onError} />
       {fields.map((f) => (
         <div key={f.id} className={`tasks-field kind-${f.kind}`}>
-          <span className="tasks-field-name" title={f.in_prompt ? "Goes to the agent with the task" : undefined}>
+          <span className="tasks-field-name" title={f.in_prompt ? tr("Goes to the agent with the task") : undefined}>
             {f.title}
           </span>
           <FieldInput field={f} value={t.fields?.[String(f.id)]} onCommit={(v) => void patch({ fields: { [String(f.id)]: v } })} />
@@ -133,31 +157,33 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
       ))}
 
       <div className="tasks-send">
-        <span className={`split${canSend ? "" : " off"}`} title={canSend ? "" : "No agent is running in herdr"}>
-          <button type="button" className="split-main" disabled={!canSend} onClick={() => onSend(false)}>
-            Send to agent
+        <span className={`split${canSend ? "" : " off"}`} title={canSend ? "" : tr("No agent is running in herdr")}>
+          <button type="button" className="btn primary split-main" disabled={!canSend} onClick={() => onSend(false)}>
+            {tr("Send to agent")}
           </button>
-          <button type="button" className="split-arrow" disabled={!canSend} onClick={() => setSendMenu((m) => !m)} title="More ways to send" aria-haspopup="menu" aria-expanded={sendMenu}>
-            <Icon name="chevron-down" size={14} />
-          </button>
+          <Tip text={tr("More ways to send")}>
+            <button type="button" className="btn primary split-arrow" disabled={!canSend} onClick={() => setSendMenu((m) => !m)} aria-label={tr("More ways to send")} aria-haspopup="menu" aria-expanded={sendMenu}>
+              <Icon name="chevron-down" size={14} />
+            </button>
+          </Tip>
           {sendMenu && (
             <span className="row-menu split-menu" role="menu">
               <button type="button" role="menuitem" onClick={pickSend(() => onSend(false))}>
-                Send to agent
+                {tr("Send to agent")}
               </button>
               <button type="button" role="menuitem" onClick={pickSend(() => onSend(true))}>
-                Send to agent for grooming
+                {tr("Send to agent for grooming")}
                 <span className="split-hint">/grill-me</span>
               </button>
-              <button type="button" role="menuitem" disabled={!canStart} onClick={pickSend(onStart)} title={canStart ? "" : "No connected machine has a workspace to branch off"}>
-                Start an agent in a new worktree…
+              <button type="button" role="menuitem" disabled={!canStart} onClick={pickSend(onStart)} title={canStart ? "" : tr("No connected machine has a workspace to branch off")}>
+                {tr("Start an agent in a new worktree…")}
               </button>
             </span>
           )}
         </span>
         {!run && canStart && (
           <button type="button" className="linkish" onClick={onStart}>
-            <Icon name="git-branch" size={12} /> Start an agent on it
+            <Icon name="git-branch" size={12} /> {tr("Start an agent on it")}
           </button>
         )}
       </div>
@@ -174,17 +200,38 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
             </span>
             <span className="tasks-run-sub">
               {runLabel}
+              {run.by_queue && <> · {tr("started by the queue")}</>}
               {run.error && <> — {run.error}</>}
             </span>
+            {stage && <span className={`tasks-run-stage${run.pipeline?.startsWith("stopped") ? " is-amber" : ""}`}>{stage}</span>}
+            {spent && (
+              <span className={`tasks-run-spent${toneClass(spentTone)}`} title={tr("What this run spent at API prices, how long it took, the model")}>
+                {tr("Agent run: {spent}", { spent })}
+              </span>
+            )}
+            {pr && (
+              <span className="tasks-run-pr">
+                <button type="button" className="linkish" title={`${pr.url}\n${tr("Open in a new tab")}`} onClick={() => openUrl(pr.url)}>
+                  <Icon name="external-link" size={12} /> {pr.label}
+                </button>
+                {pr.status && (
+                  <span className={`pr-state is-${checksTone(pr.status)}`} title={tr("{pr}: {status} · read with gh on the machine", { pr: pr.label, status: prWords(pr.status) })}>
+                    <span className="pr-dot" />
+                    {checksWords(pr.status)}
+                  </span>
+                )}
+                {pr.status && reviewWords(pr.status) && <span className={`pr-state pr-review is-${reviewTone(pr.status)}`}>{reviewWords(pr.status)}</span>}
+              </span>
+            )}
           </span>
           {paneStatus !== null && (
             <button type="button" className="linkish" onClick={() => onOpenPane(run.machine, run.pane)}>
-              Open <Icon name="chevron-right" size={12} />
+              {tr("Open")} <Icon name="chevron-right" size={12} />
             </button>
           )}
           {run.dir && (
-            <button type="button" className="linkish" title="The worktree's changes in the Review mode" onClick={() => actions.openReview(run.machine, run.dir)}>
-              <Icon name="circle-check" size={12} /> Review
+            <button type="button" className="linkish" title={tr("The worktree's changes in the Review mode")} onClick={() => actions.openReview(run.machine, run.dir)}>
+              <Icon name="circle-check" size={12} /> {tr("Review")}
             </button>
           )}
         </div>
@@ -192,7 +239,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
 
       <div className="tasks-desc">
         <div className="tasks-field-name">
-          Description
+          {tr("Description")}
           {!editingDesc && (
             <button
               type="button"
@@ -202,7 +249,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
                 setEditingDesc(true);
               }}
             >
-              <Icon name="edit" size={12} /> edit
+              <Icon name="edit" size={12} /> {tr("edit")}
             </button>
           )}
         </div>
@@ -211,7 +258,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
             <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={8} autoFocus />
             <div className="modal-actions">
               <button type="button" className="btn" onClick={() => setEditingDesc(false)}>
-                Cancel
+                {tr("Cancel")}
               </button>
               <button
                 type="button"
@@ -221,7 +268,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
                   void patch({ description: textToHtml(desc) });
                 }}
               >
-                Save
+                {tr("Save")}
               </button>
             </div>
           </>
@@ -230,7 +277,7 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
             <Html html={t.description} />
           </div>
         ) : (
-          <div className="placeholder small">No description.</div>
+          <div className="placeholder small">{tr("No description.")}</div>
         )}
       </div>
 
@@ -238,11 +285,11 @@ export function TaskDetail({ task: t, projects, statuses, fields, labels, onChan
 
       <div className="tasks-detail-foot">
         <span className="tasks-meta">
-          created {fmtDate(t.created)}
-          {t.done && t.done_at && <> · done {fmtDate(t.done_at)}</>}
+          {tr("created {date}", { date: fmtDate(t.created) })}
+          {t.done && t.done_at && <> · {tr("done {date}", { date: fmtDate(t.done_at) })}</>}
         </span>
         <button type="button" className="linkish danger" onClick={onDelete}>
-          <Icon name="trash" size={12} /> Delete
+          <Icon name="trash" size={12} /> {tr("Delete")}
         </button>
       </div>
     </aside>

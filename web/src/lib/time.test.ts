@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLang } from "./i18n";
 import { ago, elapsed, spent, took } from "./time";
+
+afterEach(() => setLang("en"));
 
 describe("ago", () => {
   const now = Date.UTC(2026, 9, 13, 12, 0, 0);
@@ -48,5 +51,10 @@ describe("took", () => {
     expect(took(9.96)).toBe("10.0 s");
     expect(took(12.4)).toBe("12 s");
     expect(took(252)).toBe("4 min 12 s");
+  });
+  it("writes the tenth with the language's decimal mark", () => {
+    setLang("ru");
+    expect(took(0.84)).toBe("0,8 с");
+    expect(took(12.4)).toBe("12 с");
   });
 });

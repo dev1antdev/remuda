@@ -14,6 +14,10 @@ import (
 // Server restarts herdr's server onto the installed binary and starts every
 // chat that came back as a bare shell again, its panes locked throughout.
 func (r *Restarter) Server(mc *machines.Machine, say func(string)) error {
+	if r.Memory != nil {
+		r.Memory.Pause(mc.ID()) // the shells herdr restores are this job's to bring back, not a reboot's
+		defer r.Memory.Unpause(mc.ID())
+	}
 	client, _, err := mc.Ready()
 	if err != nil {
 		return err

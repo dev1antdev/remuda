@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { editRows, editsOf, foldRows, NO_NEWLINE, rowTokens, type EditRow } from "./editDiff";
+import { setLang } from "@/lib/i18n";
+import { editRows, editsOf, foldRows, moreWords, NO_NEWLINE, rowTokens, type EditRow } from "./editDiff";
 
 const kinds = (rows: EditRow[]) => rows.map((r) => r.kind).join(" ");
 const texts = (rows: EditRow[]) => rows.map((r) => `${r.kind === "del" ? "-" : r.kind === "add" ? "+" : " "}${r.text}`);
@@ -71,6 +72,16 @@ describe("foldRows", () => {
     const rows = editRows("a\nb\nc", "a\nx\nc");
     expect(foldRows(rows, 24)).toEqual({ shown: rows, more: 0 });
     expect(foldRows(rows, 2)).toEqual({ shown: rows.slice(0, 2), more: 2 });
+  });
+  it("says how many more lines in the page's language", () => {
+    expect(moreWords(1)).toBe("1 more line");
+    expect(moreWords(5)).toBe("5 more lines");
+    setLang("ru");
+    try {
+      expect(moreWords(5)).toBe("ещё 5 строк");
+    } finally {
+      setLang("en");
+    }
   });
 });
 

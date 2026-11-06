@@ -4,6 +4,9 @@ import { getJSON } from "@/lib/http";
 
 export type Call = { name: string; hint?: string; took: number };
 
+// Span is one stretch of the agent's period: working, waiting on a question it asked, or idle; turn is the record to jump to
+export type Span = { from: string; to: string; state: "working" | "waiting" | "idle"; turn?: string };
+
 export type Recap = {
   prompts: number;
   answers: number;
@@ -23,6 +26,7 @@ export type Recap = {
   first?: string;
   last?: string;
   said?: string; // the first line of the last answer
+  spans?: Span[]; // when it worked, waited and sat idle over the period
 };
 
 export type Item = {

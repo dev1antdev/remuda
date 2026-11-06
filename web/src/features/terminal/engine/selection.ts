@@ -58,13 +58,29 @@ export function relocate(rows: string[], rowText: Map<number, string>, offset: n
   return best !== null && bestVotes >= 2 && bestVotes * 2 > total && bestVotes >= unique * 0.3 ? best : null;
 }
 
-// sliceRows is the text between two positions over the remembered rows, trailing spaces trimmed.
-export function sliceRows(rowText: Map<number, string>, s: Pos, e: Pos): string {
+// CellLine is what lineCells needs of a buffer line: xterm's IBufferLine, or a stand-in in a test
+export type CellLine = { length: number; getCell: (x: number) => { getChars: () => string; getWidth: () => number } | undefined };
+
+// lineCells reads a row one cell at a time as xterm's translateToString does — a wide character in its first cell and ""
+// in the spacer after it, an empty cell a space — so a column indexes the row and the cells joined are its text
+export function lineCells(line: CellLine): string[] {
+  const cells: string[] = [];
+  for (let x = 0; x < line.length; ) {
+    const cell = line.getCell(x);
+    const width = cell?.getWidth() || 1;
+    cells.push(cell?.getChars() || " ");
+    for (let spacer = 1; spacer < width && x + spacer < line.length; spacer++) cells.push("");
+    x += width;
+  }
+  return cells;
+}
+
+// sliceRows is the text between two positions over the remembered rows, kept cell by cell, trailing spaces trimmed.
+export function sliceRows(rowCells: Map<number, string[]>, s: Pos, e: Pos): string {
   const lines: string[] = [];
   for (let r = s.row; r <= e.row; r++) {
-    let t = rowText.get(r) ?? "";
-    if (r === e.row) t = t.slice(0, e.col);
-    if (r === s.row) t = t.slice(s.col);
+    const cells = rowCells.get(r) ?? [];
+    const t = cells.slice(r === s.row ? s.col : 0, r === e.row ? e.col : cells.length).join("");
     lines.push(t.replace(/[ \t ]+$/, ""));
   }
   return lines.join("\n");
@@ -78,6 +94,7 @@ export function trackSelection(term: Terminal, reporter: Reporter, modes: Modes)
   let anchor: Pos | null = null;
   let head: Pos | null = null;
   const rowText = new Map<number, string>(); // content row → its text when last seen
+  const rowCells = new Map<number, string[]>(); // the same rows cell by cell, which a selection's columns index
   let applying = false; // our own term.select, not the user's
   let settleTimer: ReturnType<typeof setTimeout> | null = null;
   // the drag: its anchor, whether it moved, where the held button is, and the edge it is past
@@ -87,14 +104,20 @@ export function trackSelection(term: Terminal, reporter: Reporter, modes: Modes)
   let edge: "up" | "down" | null = null;
   let edgeTimer: ReturnType<typeof setInterval> | null = null;
 
-  const screenRows = (): string[] => {
+  const screenRows = (): string[][] => {
     const buf = term.buffer.active;
-    const out: string[] = [];
-    for (let y = 0; y < term.rows; y++) out.push(buf.getLine(buf.baseY + y)?.translateToString(false) ?? "");
+    const out: string[][] = [];
+    for (let y = 0; y < term.rows; y++) {
+      const line = buf.getLine(buf.baseY + y);
+      out.push(line ? lineCells(line) : []);
+    }
     return out;
   };
-  const remember = (rows: string[]) => {
-    for (let y = 0; y < rows.length; y++) rowText.set(y + offset, rows[y]!);
+  const remember = (rows: string[][]) => {
+    for (let y = 0; y < rows.length; y++) {
+      rowCells.set(y + offset, rows[y]!);
+      rowText.set(y + offset, rows[y]!.join(""));
+    }
   };
   const ordered = (): [Pos, Pos] | null => (anchor && head ? (before(anchor, head) ? [anchor, head] : [head, anchor]) : null);
   const forget = () => {
@@ -102,6 +125,7 @@ export function trackSelection(term: Terminal, reporter: Reporter, modes: Modes)
     offset = 0;
     attached = true;
     rowText.clear();
+    rowCells.clear();
   };
   const pointerPos = (): Pos | null => {
     if (!pointer) return null;
@@ -137,7 +161,7 @@ export function trackSelection(term: Terminal, reporter: Reporter, modes: Modes)
     settleTimer = null;
     if (!anchor) return;
     const rows = screenRows();
-    const found = relocate(rows, rowText, offset);
+    const found = relocate(rows.map((cells) => cells.join("")), rowText, offset);
     if (found === null) {
       attached = false;
     } else {
@@ -227,7 +251,7 @@ export function trackSelection(term: Terminal, reporter: Reporter, modes: Modes)
     active: () => anchor !== null,
     text: () => {
       const o = ordered();
-      return o ? sliceRows(rowText, o[0], o[1]) : "";
+      return o ? sliceRows(rowCells, o[0], o[1]) : "";
     },
     forget,
     onPainted: () => {

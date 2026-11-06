@@ -14,6 +14,7 @@ func (s *Server) machineRoutes(api *http.ServeMux) {
 	api.HandleFunc("DELETE /api/machines/{id}", s.handleRemoveMachine)
 	api.HandleFunc("PATCH /api/machines/{id}", s.handleRenameMachine)
 	api.HandleFunc("POST /api/machines/{id}/health", s.handleMachineHealth)
+	s.wakeRoutes(api)
 }
 
 func (s *Server) handleAddMachine(w http.ResponseWriter, r *http.Request) {
@@ -40,25 +41,37 @@ func (s *Server) handleRemoveMachine(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true})
 }
 
-// handleRenameMachine is PATCH /api/machines/{id} {label}: a name of the user's own for the machine; empty goes back to the registry's.
+// handleRenameMachine is PATCH /api/machines/{id} {label?, mac?}, partial: a name of the user's own for the machine
+// (empty goes back to the registry's) and the MAC address a wake-up packet names (empty forgets it); a field left out
+// stays as it is.
 func (s *Server) handleRenameMachine(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Label string `json:"label"`
+		Label *string `json:"label"`
+		MAC   *string `json:"mac"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req); err != nil {
 		httpErr(w, 400, err)
 		return
 	}
-	mc, err := s.Machines.Rename(r.PathValue("id"), req.Label)
+	id := r.PathValue("id")
+	mc, err := s.Machines.Get(id)
 	if err != nil {
-		if mc == nil {
-			httpErr(w, 404, err)
-		} else {
-			httpErr(w, 500, err)
-		}
+		httpErr(w, 404, err)
 		return
 	}
-	writeJSON(w, map[string]any{"ok": true, "label": mc.Label()})
+	if req.Label != nil {
+		if _, err := s.Machines.Rename(id, *req.Label); err != nil {
+			httpErr(w, 500, err)
+			return
+		}
+	}
+	if req.MAC != nil {
+		if _, err := s.Machines.SetMAC(id, *req.MAC); err != nil {
+			httpErr(w, 400, err)
+			return
+		}
+	}
+	writeJSON(w, map[string]any{"ok": true, "label": mc.Label(), "mac": s.Machines.MAC(id)})
 }
 
 // handleMachineHealth is POST /api/machines/{id}/health: read the machine's vitals now.

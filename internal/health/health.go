@@ -23,28 +23,41 @@ type Report struct {
 	At time.Time `json:"at"`
 	OS string    `json:"os,omitempty"` // "macOS 26.6.2", "Linux 6.8.0"
 
-	Claude        string   `json:"claude,omitempty"`
-	ClaudeVia     string   `json:"claude_via,omitempty"` // brew | npm | native | "" — how to update it
-	Codex         string   `json:"codex,omitempty"`
-	CodexVia      string   `json:"codex_via,omitempty"`
-	Gemini        string   `json:"gemini,omitempty"`
-	GeminiVia     string   `json:"gemini_via,omitempty"`
-	Kimi          string   `json:"kimi,omitempty"`
-	KimiVia       string   `json:"kimi_via,omitempty"`
-	HerdrVia      string   `json:"herdr_via,omitempty"` // brew | installer | "" — how herdr is updated
-	Arch          string   `json:"arch,omitempty"`      // arm64 | amd64
-	Herdr         string   `json:"herdr,omitempty"`
-	HerdrServer   string   `json:"herdr_server,omitempty"`
-	Remuda        string   `json:"remuda,omitempty"`
-	CodeServer    string   `json:"code_server,omitempty"` // the release under ~/.local/opt/code-server, as the installer links it
-	Running       bool     `json:"remuda_running"`        // a remuda answers on the machine's own port: terminals go through it
-	DiskFreeGB    float64  `json:"disk_free_gb"`
-	DiskUsedPct   int      `json:"disk_used_pct"`
-	Load1         float64  `json:"load1"`
-	Uptime        string   `json:"uptime,omitempty"`
-	OutdatedHooks []Hook   `json:"outdated_hooks,omitempty"` // herdr's agent integrations behind what the installed herdr writes
-	Plugins       []Plugin `json:"plugins,omitempty"`        // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
-	Error         string   `json:"error,omitempty"`
+	Claude        string    `json:"claude,omitempty"`
+	ClaudeVia     string    `json:"claude_via,omitempty"` // brew | npm | native | "" — how to update it
+	Codex         string    `json:"codex,omitempty"`
+	CodexVia      string    `json:"codex_via,omitempty"`
+	Gemini        string    `json:"gemini,omitempty"`
+	GeminiVia     string    `json:"gemini_via,omitempty"`
+	Kimi          string    `json:"kimi,omitempty"`
+	KimiVia       string    `json:"kimi_via,omitempty"`
+	HerdrVia      string    `json:"herdr_via,omitempty"` // brew | installer | "" — how herdr is updated
+	Arch          string    `json:"arch,omitempty"`      // arm64 | amd64
+	Herdr         string    `json:"herdr,omitempty"`
+	HerdrServer   string    `json:"herdr_server,omitempty"`
+	Remuda        string    `json:"remuda,omitempty"`
+	CodeServer    string    `json:"code_server,omitempty"` // the release under ~/.local/opt/code-server, as the installer links it
+	Running       bool      `json:"remuda_running"`        // a remuda answers on the machine's own port: terminals go through it
+	Statusline    bool      `json:"statusline,omitempty"`  // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
+	DiskFreeGB    float64   `json:"disk_free_gb"`
+	DiskUsedPct   int       `json:"disk_used_pct"`
+	Load1         float64   `json:"load1"`
+	Cores         int       `json:"cores,omitempty"` // what a load of 1.0 per core means
+	Uptime        string    `json:"uptime,omitempty"`
+	Model         string    `json:"model,omitempty"`         // the board or the computer: "Raspberry Pi 4 Model B Rev 1.5", "Mac15,6"
+	MemTotalMB    int       `json:"mem_total_mb,omitempty"`  // host.go: /proc/meminfo, or a Mac's hw.memsize
+	MemAvailMB    int       `json:"mem_avail_mb,omitempty"`  // what a new program could have without swapping
+	SwapTotalMB   int       `json:"swap_total_mb,omitempty"` // 0: no swap
+	SwapUsedMB    int       `json:"swap_used_mb,omitempty"`
+	TempC         float64   `json:"temp_c,omitempty"`      // the CPU's thermal zone, where one is readable without sudo (none on a Mac)
+	TempCritC     float64   `json:"temp_crit_c,omitempty"` // that zone's critical trip point
+	FreqMHz       int       `json:"freq_mhz,omitempty"`    // the CPU's clock now and its top: a Pi held back runs below it
+	FreqMaxMHz    int       `json:"freq_max_mhz,omitempty"`
+	Throttle      *Throttle `json:"throttle,omitempty"`       // a Raspberry Pi's firmware word, or its under-voltage alarm alone
+	OutdatedHooks []Hook    `json:"outdated_hooks,omitempty"` // herdr's agent integrations behind what the installed herdr writes
+	Plugins       []Plugin  `json:"plugins,omitempty"`        // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
+	Error         string    `json:"error,omitempty"`
+	History       []Sample  `json:"history,omitempty"` // the day's samples, oldest first (Collector.Report attaches them)
 }
 
 // Hook is one of herdr's agent integrations as `herdr integration status` reports it outdated: the version on the machine and the one the installed herdr writes.
@@ -89,15 +102,19 @@ type Collector struct {
 	// Check turns the outbound version lookups on
 	Check bool
 
+	dir string // the state dir, where the day's samples are kept; "" keeps them in memory only
+
 	mu      sync.Mutex
 	reports map[string]*Report
+	history history
 	latest  Latest
 	release Release
 	locks   map[string]*sync.Mutex // one read of a machine at a time; a second waits for it
 }
 
-func New(m *machines.Manager, version string, check bool) *Collector {
-	return &Collector{machines: m, Version: version, Check: check, reports: map[string]*Report{}, locks: map[string]*sync.Mutex{}}
+// New makes a collector keeping its samples in dir ("" for none on disk).
+func New(dir string, m *machines.Manager, version string, check bool) *Collector {
+	return &Collector{dir: dir, machines: m, Version: version, Check: check, reports: map[string]*Report{}, history: loadHistory(dir), locks: map[string]*sync.Mutex{}}
 }
 
 // Start keeps every connected machine's report no older than interval and the versions fresh.
@@ -107,7 +124,7 @@ func (c *Collector) Start(interval time.Duration) {
 			if c.Check {
 				c.refreshLatest()
 			}
-			for _, mc := range c.machines.List() {
+			for _, mc := range c.machines.All() {
 				if st, _ := mc.State(); st != machines.StateConnected {
 					continue
 				}
@@ -123,7 +140,7 @@ func (c *Collector) Start(interval time.Duration) {
 	}()
 }
 
-// Report is the machine's last reading, nil before the first.
+// Report is the machine's last reading with the day's samples, nil before the first.
 func (c *Collector) Report(id string) *Report {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -132,6 +149,7 @@ func (c *Collector) Report(id string) *Report {
 		return nil
 	}
 	cp := *r
+	cp.History = append([]Sample(nil), c.history[id]...)
 	return &cp
 }
 
@@ -190,6 +208,7 @@ func (c *Collector) Refresh(mc *machines.Machine) {
 	c.mu.Lock()
 	c.reports[mc.ID()] = &r
 	c.mu.Unlock()
+	c.remember(mc.ID(), r)
 }
 
 // Script prints the vitals, one "key=value" per line, every probe silent when its tool is missing.
@@ -202,11 +221,13 @@ for a in claude codex gemini kimi; do c=$(command -v "$a" 2>/dev/null); if [ -n 
 h=$(command -v herdr 2>/dev/null); if [ -n "$h" ]; then echo "herdr=$(herdr --version 2>/dev/null | head -1)"; echo "herdr_path=$(readlink "$h" 2>/dev/null || printf %s "$h")"; echo "herdr_server=$(herdr status server 2>/dev/null | sed -n 's/^version: //p' | head -1)"; fi
 if [ -n "$h" ]; then ` + OutdatedHooks + ` | sed 's/^/hook=/'; ` + GitHubPlugins + ` | sed 's/^/plugin=/'; fi
 echo "arch=$(uname -m)"
+echo "cores=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null)"
 if [ -x "$HOME/.local/bin/remuda" ]; then echo "remuda=$("$HOME/.local/bin/remuda" -version 2>/dev/null)"; fi
 cs=$(readlink "$HOME/.local/opt/code-server" 2>/dev/null); case "$cs" in *code-server-*) echo "code_server=${cs##*code-server-}";; esac
+grep -q 'remuda[^"]*statusline' "$HOME/.claude/settings.json" 2>/dev/null && echo "statusline=wrapped"
 echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
 echo "uptime=$(uptime 2>/dev/null)"
-tf=""; for f in "$HOME/Library/Application Support/remuda/token" "$HOME/.config/remuda/token"; do [ -r "$f" ] && { tf="$f"; break; }; done
+` + HostScript + `tf=""; for f in "$HOME/Library/Application Support/remuda/token" "$HOME/.config/remuda/token"; do [ -r "$f" ] && { tf="$f"; break; }; done
 if [ -n "$tf" ] && command -v curl >/dev/null 2>&1; then ph=$(curl -s -m 2 http://127.0.0.1:7317/api/health 2>/dev/null); case "$ph" in *'"ok":true'*) echo "peer=$ph"; echo "peer_token=$(cat "$tf")";; esac; fi
 `
 }
@@ -223,12 +244,16 @@ var (
 func Parse(out string) (Report, *machines.Peer) {
 	var r Report
 	var peer *machines.Peer
+	var host body
 	for _, line := range strings.Split(out, "\n") {
 		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
 		if !ok {
 			continue
 		}
 		v = strings.TrimSpace(v)
+		if host.parseHost(&r, k, v) {
+			continue
+		}
 		switch k {
 		case "os":
 			r.OS = strings.TrimSpace(v)
@@ -275,10 +300,14 @@ func Parse(out string) (Report, *machines.Peer) {
 			default:
 				r.Arch = v
 			}
+		case "cores":
+			r.Cores, _ = strconv.Atoi(v)
 		case "remuda":
 			r.Remuda = strings.TrimPrefix(v, "remuda ")
 		case "code_server":
 			r.CodeServer = semver.FindString(v)
+		case "statusline":
+			r.Statusline = v == "wrapped"
 		case "df":
 			// Filesystem 1K-blocks Used Available Use% ... (macOS adds iused columns)
 			f := fieldsRe.Split(v, -1)
@@ -300,9 +329,10 @@ func Parse(out string) (Report, *machines.Peer) {
 		case "peer":
 			var ph struct {
 				OK      bool   `json:"ok"`
+				Server  bool   `json:"server"` // a remuda serving the page only has no herdr to relay terminals to
 				Version string `json:"version"`
 			}
-			if json.Unmarshal([]byte(v), &ph) == nil && ph.OK {
+			if json.Unmarshal([]byte(v), &ph) == nil && ph.OK && !ph.Server {
 				r.Running = true
 				if peer == nil {
 					peer = &machines.Peer{Port: 7317}
@@ -316,6 +346,7 @@ func Parse(out string) (Report, *machines.Peer) {
 			peer.Token = v
 		}
 	}
+	host.finish(&r)
 	if peer != nil && (peer.Token == "" || !r.Running) {
 		peer = nil
 	}

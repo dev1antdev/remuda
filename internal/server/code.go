@@ -6,9 +6,27 @@ import (
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/code"
+	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // Code mode: a machine's code-server behind the guard.
+
+// editorFolders are the folders the machine's workspaces live in, the floating terminal's own home-folder shell left out
+func (s *Server) editorFolders(machineID string, snap *herdr.Snapshot) []string {
+	var folders []string
+	seen := map[string]bool{}
+	for i := range snap.Workspaces {
+		ws := &snap.Workspaces[i]
+		if s.Scratch != nil && s.Scratch.Is(machineID, ws.WorkspaceID) {
+			continue
+		}
+		if dir := snap.WorkspaceDir(ws); dir != "" && !seen[dir] {
+			seen[dir] = true
+			folders = append(folders, dir)
+		}
+	}
+	return folders
+}
 
 func (s *Server) codeRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/code/{machine}", s.handleCodeStatus)
@@ -70,7 +88,7 @@ func (s *Server) handleCodeWorkspace(w http.ResponseWriter, r *http.Request) {
 	snap, _ := s.Watch.Snapshot(mc.ID())
 	var folders []string
 	if snap != nil {
-		folders = snap.WorkspaceDirs()
+		folders = s.editorFolders(mc.ID(), snap)
 	}
 	if len(folders) == 0 {
 		httpErr(w, 409, fmt.Errorf("no workspace on %s yet", mc.Label()))

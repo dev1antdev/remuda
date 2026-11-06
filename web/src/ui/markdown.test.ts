@@ -20,6 +20,26 @@ describe("parseBlocks", () => {
   it("keeps CRLF text whole", () => {
     expect(parseBlocks("one\r\ntwo\r\n")).toMatchObject([{ t: "p", lines: ["one", "two"] }]);
   });
+  it("closes a fence only on a bare run of its own mark at least as long as the opening one, as CommonMark does", () => {
+    expect(parseBlocks("```\nExample:\n```js\nx()\n````\nafter\n")).toMatchObject([{ t: "code", lang: "", code: "Example:\n```js\nx()" }, { t: "p", lines: ["after"] }]);
+    expect(parseBlocks("````md\n```js\ninner\n```\n````\n")).toMatchObject([{ t: "code", lang: "md", code: "```js\ninner\n```" }]);
+    expect(parseBlocks("~~~\na\n```\nb\n~~~  \n")).toMatchObject([{ t: "code", code: "a\n```\nb" }]);
+  });
+  it("keeps a heading's own # and drops only a closing run after a space, as CommonMark reads it", () => {
+    expect(parseBlocks("## Rewriting in C#\n### F# notes ##\n# Done ###\n# Issue #42")).toMatchObject([
+      { t: "h", level: 2, text: "Rewriting in C#" },
+      { t: "h", level: 3, text: "F# notes" },
+      { t: "h", level: 1, text: "Done" },
+      { t: "h", level: 1, text: "Issue #42" },
+    ]);
+  });
+  it("reads a line of triple backticks around words as a code span, not as a fence that swallows the rest", () => {
+    expect(parseBlocks("Run ```ls``` first.\n```ls```\nthen look\n\n```js\nx()\n```\n")).toMatchObject([
+      { t: "p", lines: ["Run ```ls``` first.", "```ls```", "then look"] },
+      { t: "code", lang: "js", code: "x()" },
+    ]);
+    expect(parseBlocks("~~~a`b\ncode\n~~~\n")).toMatchObject([{ t: "code", lang: "a`b", code: "code" }]);
+  });
   it("stops nesting quotes and lists at a depth, so a line of thousands of marks is text, not a stack overflow", () => {
     const quotes = parseBlocks(">".repeat(5000) + "x");
     let block = quotes[0]!;
@@ -32,6 +52,29 @@ describe("parseBlocks", () => {
     expect(block).toMatchObject({ t: "p", lines: [">".repeat(5000 - 16) + "x"] });
     expect(() => parseBlocks("- ".repeat(5000) + "x")).not.toThrow();
     expect(() => parseBlocks("1. ".repeat(5000) + "x")).not.toThrow();
+  });
+  it("reads a line with a long run of spaces in milliseconds: a heading, a fence and a table's rule cost the line's length", () => {
+    const spaces = " ".repeat(60_000);
+    const started = performance.now();
+    expect(parseBlocks(`# a${spaces}x`)).toMatchObject([{ t: "h", level: 1, text: `a${spaces}x` }]);
+    expect(parseBlocks("```" + spaces + "x y")).toMatchObject([{ t: "p" }]);
+    expect(parseBlocks(`a | b\n--${spaces}x`)).toMatchObject([{ t: "p", lines: ["a | b", `--${spaces}x`] }]);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+  it("reads fences, headings and table rules as it did", () => {
+    expect(parseBlocks("```  js  \nx\n```")).toMatchObject([{ t: "code", lang: "js", code: "x" }]);
+    expect(parseBlocks("   ~~~\nx\n~~~")).toMatchObject([{ t: "code", lang: "", code: "x" }]);
+    expect(parseBlocks("```js x\ny")).toMatchObject([{ t: "p", lines: ["```js x", "y"] }]);
+    expect(parseBlocks("    ```\nx")).toMatchObject([{ t: "p" }]);
+    expect(parseBlocks("#  \n## a ##  \n#hash\n####### seven\n#\tTab")).toMatchObject([
+      { t: "h", level: 1, text: "" },
+      { t: "h", level: 2, text: "a" },
+      { t: "p", lines: ["#hash", "####### seven"] },
+      { t: "h", level: 1, text: "Tab" },
+    ]);
+    expect(parseBlocks("# ###")).toMatchObject([{ t: "h", level: 1, text: "###" }]);
+    for (const rule of ["|---|---|", "--|--", "| :--: | --: |", "  |--|  ", "-- |", "|--"]) expect(parseBlocks(`a | b\n${rule}\n1 | 2`), rule).toMatchObject([{ t: "table" }]);
+    for (const rule of ["|--||", "||--", "|", "- -", "|-|"]) expect(parseBlocks(`a | b\n${rule}`), rule).not.toMatchObject([{ t: "table" }]);
   });
 });
 
@@ -48,5 +91,14 @@ describe("Markdown", () => {
     expect(html).not.toContain("<strong>");
     expect(html).not.toContain("path-link");
     expect(performance.now() - started).toBeLessThan(500);
+  });
+  it("draws a run of backticks under the long-line cap in milliseconds, and still reads code spans as CommonMark does", () => {
+    const started = performance.now();
+    const html = draw("`".repeat(9_999) + "\n\n" + "`".repeat(5_000) + "a".repeat(4_999));
+    expect(html).not.toContain("md-code");
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(draw("see `x`, ``a`b`` and `` ` ``")).toContain('<code class="md-code">a`b</code>');
+    expect(draw("``a` is no span")).not.toContain("md-code");
+    expect(draw("```ls``` on its own")).toContain('<code class="md-code">ls</code>');
   });
 });

@@ -56,10 +56,18 @@ type SessionInfo struct {
 	ModTime time.Time `json:"mod_time"`
 	Size    int64     `json:"-"`
 	Title   string    `json:"title,omitempty"`
+	Agent   string    `json:"agent,omitempty"` // codex or gemini; "" for Claude Code
 }
 
-// SessionID is the session uuid a transcript path names.
+// SessionID is the session id a transcript path names: the file's stem for Claude Code, the thread id in a
+// rollout's name for Codex, the id a Gemini chat's metadata carries.
 func SessionID(path string) string {
+	switch FormatOf(path) {
+	case Codex:
+		return CodexSessionID(path)
+	case Gemini:
+		return GeminiSessionID(path)
+	}
 	return strings.TrimSuffix(filepath.Base(path), ".jsonl")
 }
 
@@ -87,8 +95,14 @@ func projectsDir() string {
 	return filepath.Join(home, ".claude", "projects")
 }
 
-// Sessions lists the session files for a working directory, newest first.
-func Sessions(cwd string) ([]SessionInfo, error) {
+// Sessions lists the session files of one format for a working directory, newest first.
+func Sessions(format Format, cwd string) ([]SessionInfo, error) {
+	switch format {
+	case Codex:
+		return codexSessions(homeDir(), cwd), nil
+	case Gemini:
+		return geminiSessions(homeDir(), cwd), nil
+	}
 	dir := filepath.Join(projectsDir(), EncodePath(cwd))
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -187,6 +201,31 @@ func scanTitle(path string) (title string, final bool) {
 		return title, true
 	}
 	return first, n >= titleScanLines
+}
+
+// FindSession locates a session file by id in one format, or in every format when none is named: Claude Code's
+// project dirs, Codex's date tree, Gemini's chats.
+func FindSession(format Format, cwd, id string) (string, error) {
+	formats := []Format{format}
+	if format == "" {
+		formats = []Format{Claude, Codex, Gemini}
+	}
+	for _, f := range formats {
+		var path string
+		var err error
+		switch f {
+		case Codex:
+			path, err = findCodexSession(homeDir(), id)
+		case Gemini:
+			path, err = findGeminiSession(homeDir(), cwd, id)
+		default:
+			path, err = FindSessionByID(cwd, id)
+		}
+		if err == nil {
+			return path, nil
+		}
+	}
+	return "", os.ErrNotExist
 }
 
 // FindSessionByID locates <uuid>.jsonl: the project dir encoded from cwd first, then every project dir.
@@ -304,19 +343,41 @@ type contentBlock struct {
 	ToolUseID string          `json:"tool_use_id"`
 	Content   json.RawMessage `json:"content"` // tool_result payload
 	IsError   bool            `json:"is_error"`
+	ToolName  string          `json:"tool_name"` // a tool_reference block's: the tool a ToolSearch result points to
 }
 
 const tailWindow = 16 * 1024 * 1024
 
-// Parse reads the tail of a session file into turns; a torn last line (Claude mid-append) is skipped, never fatal.
-// A subagent's records (sidechain ones) are left out: they are its own conversation (Reader.SubagentTurns).
+// Parse reads the tail of a session file into turns, by the format its path says; a torn last line (the agent
+// mid-append) is skipped, never fatal. A subagent's records (sidechain ones) are left out: they are its own
+// conversation (Reader.SubagentTurns).
 func Parse(path string) ([]Turn, error) {
+	switch FormatOf(path) {
+	case Codex:
+		return parseCodexFile(path)
+	case Gemini:
+		return parseGeminiFile(path)
+	}
 	return parseFile(path, false)
 }
 
-// ParseBytes parses transcript content already in memory.
+// ParseBytes parses Claude Code transcript content already in memory.
 func ParseBytes(data []byte) ([]Turn, error) {
 	return parseBytes(data, false)
+}
+
+// ParseBytesOf parses transcript content already in memory, in the given format.
+func ParseBytesOf(format Format, data []byte) ([]Turn, error) {
+	if len(data) > tailWindow {
+		data = data[len(data)-tailWindow:]
+	}
+	switch format {
+	case Codex:
+		return parseCodex(bytes.NewReader(data))
+	case Gemini:
+		return parseGemini(data)
+	}
+	return parseRecords(bytes.NewReader(data), false)
 }
 
 func parseBytes(data []byte, keepSidechain bool) ([]Turn, error) {
@@ -580,13 +641,13 @@ func plainUserText(raw json.RawMessage) string {
 	return ""
 }
 
-// resultText flattens a tool_result content (string or blocks) to text; a picture alone reads "[image]", so the call
-// still counts as answered.
+// resultText flattens a tool_result content (string or blocks) to text; a picture alone reads "[image]" and a
+// ToolSearch result, tool_reference blocks alone, reads as the tools' names, so the call still counts as answered.
 func resultText(raw json.RawMessage) string {
 	if s := stringContent(raw); s != "" {
 		return s
 	}
-	var parts []string
+	var parts, tools []string
 	pictures := 0
 	for _, b := range blocks(raw) {
 		switch {
@@ -594,10 +655,20 @@ func resultText(raw json.RawMessage) string {
 			parts = append(parts, b.Text)
 		case b.Type == "image":
 			pictures++
+		case b.Type == "tool_reference":
+			if b.ToolName == "" {
+				b.ToolName = "[tool]"
+			}
+			tools = append(tools, b.ToolName)
 		}
 	}
-	if len(parts) == 0 && pictures > 0 {
-		return "[image]"
+	if len(parts) == 0 {
+		switch {
+		case len(tools) > 0:
+			return strings.Join(tools, ", ")
+		case pictures > 0:
+			return "[image]"
+		}
 	}
 	return strings.Join(parts, "\n")
 }
@@ -624,7 +695,46 @@ func truncateJSON(raw json.RawMessage, n int) json.RawMessage {
 
 // ---- continuations ----
 
-var parentRe = regexp.MustCompile(`"parentUuid":"([0-9a-f-]{36})"`)
+var (
+	parentRe      = regexp.MustCompile(`"parentUuid":"([0-9a-f-]{36})"`)
+	continuedInRe = regexp.MustCompile(`"continuedInSessionId":"([0-9a-f-]{36})"`)
+)
+
+const continuedInTail = 64 * 1024 // the continued-in record is among the old file's last lines
+
+// continuedIn is the session a file says its conversation went on in: Claude Code's continued-in record, written at
+// the end of the old file when the conversation moves to a new one; "" when the file says nothing.
+func continuedIn(path string) string {
+	tail, err := tailBytes(path, continuedInTail)
+	if err != nil {
+		return ""
+	}
+	found := continuedInRe.FindAllSubmatch(tail, -1)
+	if len(found) == 0 {
+		return ""
+	}
+	return string(found[len(found)-1][1])
+}
+
+// tailBytes is the last n bytes of a file, the whole of a shorter one.
+func tailBytes(path string, n int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	start := max(st.Size()-n, 0)
+	buf := make([]byte, st.Size()-start)
+	read, err := f.ReadAt(buf, start)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	return buf[:read], nil
+}
 
 // firstParent is the first parentUuid in the head of a session file.
 func firstParent(path string) string {
@@ -675,13 +785,22 @@ func hasRecord(path, uuid string) bool {
 }
 
 // Continuation is the newer session file in path's folder that continues it, or ""; one step, callers loop.
-// A compaction moves the conversation to a new file whose first parentUuid names a record of the old one, while herdr keeps naming the old id.
+// A compaction moves the conversation to a new file while herdr keeps naming the old id: the old file ends with a
+// continued-in record naming the new session, and the new file's first parentUuid names a record of the old one (the
+// only trace an older Claude Code left, and read when the record is missing).
 func Continuation(path string) string {
 	st, err := os.Stat(path)
 	if err != nil {
 		return ""
 	}
 	dir := filepath.Dir(path)
+	if id := continuedIn(path); id != "" {
+		if next := filepath.Join(dir, id+".jsonl"); next != path {
+			if _, err := os.Stat(next); err == nil {
+				return next
+			}
+		}
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return ""
@@ -710,22 +829,33 @@ func Continuation(path string) string {
 	return ""
 }
 
-// Predecessor is the older file in path's folder that path continues, or "".
+// Predecessor is the older file in path's folder that path continues, or "": the sibling whose continued-in record
+// names path's session, else the one holding the record path's first parentUuid names.
 func Predecessor(path string) string {
-	parent := firstParent(path)
-	if parent == "" {
-		return ""
-	}
 	dir := filepath.Dir(path)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return ""
 	}
+	var siblings []string
 	for _, e := range entries {
 		p := filepath.Join(dir, e.Name())
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") || p == path {
 			continue
 		}
+		siblings = append(siblings, p)
+	}
+	id := SessionID(path)
+	for _, p := range siblings {
+		if continuedIn(p) == id {
+			return p
+		}
+	}
+	parent := firstParent(path)
+	if parent == "" {
+		return ""
+	}
+	for _, p := range siblings {
 		if hasRecord(p, parent) {
 			return p
 		}
@@ -735,17 +865,22 @@ func Predecessor(path string) string {
 
 // PredecessorScript is Predecessor as a POSIX shell one-liner for a remote machine: prints the older file, or nothing.
 func PredecessorScript(quotedPath string) string {
-	return `new=` + quotedPath + `; dir=$(dirname "$new"); ` +
+	return `new=` + quotedPath + `; dir=$(dirname "$new"); id=$(basename "$new" .jsonl); ` +
+		`for f in "$dir"/*.jsonl; do [ "$f" = "$new" ] && continue; if tail -c 65536 "$f" 2>/dev/null | grep -qF "\"continuedInSessionId\":\"$id\""; then printf %s "$f"; exit 0; fi; done; ` +
 		`p=$(head -c 65536 "$new" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$p" ] || exit 0; ` +
 		`for f in "$dir"/*.jsonl; do [ "$f" = "$new" ] && continue; if grep -q "\"uuid\":\"$p\"" "$f" 2>/dev/null; then printf %s "$f"; exit 0; fi; done`
 }
 
-// ContinuationScript is Continuation as a POSIX shell one-liner for a remote machine: prints the continuing file, or nothing.
+// ContinuationScript is Continuation as a POSIX shell one-liner for a remote machine: prints the continuing file, or
+// nothing. The listing is read a line at a time, so a path with a space stays whole.
 func ContinuationScript(quotedPath string) string {
-	return `old=` + quotedPath + `; dir=$(dirname "$old"); for f in $(ls -t "$dir"/*.jsonl 2>/dev/null); do ` +
+	return `old=` + quotedPath + `; dir=$(dirname "$old"); ` +
+		`id=$(tail -c 65536 "$old" 2>/dev/null | grep -o '"continuedInSessionId":"[0-9a-f-]*"' | tail -1 | cut -d'"' -f4); ` +
+		`if [ -n "$id" ] && [ "$dir/$id.jsonl" != "$old" ] && [ -f "$dir/$id.jsonl" ]; then printf %s "$dir/$id.jsonl"; exit 0; fi; ` +
+		`ls -t "$dir"/*.jsonl 2>/dev/null | while IFS= read -r f; do ` +
 		`[ "$f" = "$old" ] && break; [ "$f" -nt "$old" ] || continue; ` +
 		`p=$(head -c 65536 "$f" | grep -o '"parentUuid":"[0-9a-f-]*"' | head -1 | cut -d'"' -f4); [ -n "$p" ] || continue; ` +
-		`if grep -q "\"uuid\":\"$p\"" "$old"; then printf %s "$f"; exit 0; fi; done`
+		`if grep -q "\"uuid\":\"$p\"" "$old"; then printf %s "$f"; break; fi; done`
 }
 
 // ---- what a turn ended with ----

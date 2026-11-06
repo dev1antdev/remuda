@@ -17,7 +17,7 @@ func (s *Server) recapRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/standup", s.handleStandup)
 }
 
-// handleRecap is GET /api/recap?machine&pane[&session] or ?machine&dir&session [&since=RFC3339]: one conversation's recap and its Markdown.
+// handleRecap is GET /api/recap?machine&pane[&session] or ?machine&dir&session [&since=RFC3339]: one conversation's recap, and the report as Markdown.
 func (s *Server) handleRecap(w http.ResponseWriter, r *http.Request) {
 	mc, err := s.machineFor(r, "")
 	if err != nil {
@@ -48,7 +48,7 @@ func (s *Server) handleRecap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, map[string]any{"since": sinceText(since), "recap": summary})
+	writeJSON(w, map[string]any{"since": sinceText(since), "recap": summary, "markdown": recap.Conversation(summary, since.In(time.Local), time.Now())})
 }
 
 // handleStandup is GET /api/standup?tz=<IANA>[&since=RFC3339]: every agent on every connected machine with its recap since local midnight, and the report as Markdown.

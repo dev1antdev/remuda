@@ -47,19 +47,22 @@ export function writePref(key: string, value: unknown): void {
 }
 
 // applyPref is a write that came from another device through the server: stored with the stamp it was set at, every hook of
-// the key woken, the sync layer not told (it is the one calling)
+// the key woken, the sync layer not told (it is the one calling). Another build may have written it in another shape, so
+// the hooks read it back through readPref, as they read storage at load.
 export function applyPref(key: string, value: unknown, at: string): void {
-  store(key, value);
+  store(key, value, false);
   setStamp(key, at);
 }
 
-function store(key: string, value: unknown): void {
+// store writes a pref and wakes its hooks; cached keeps the value as the hooks' copy, else they read storage again
+function store(key: string, value: unknown, cached = true): void {
   try {
     localStorage.setItem(`remuda.${key}`, JSON.stringify(value));
   } catch {
     /* private mode etc. */
   }
-  values.set(key, value);
+  if (cached) values.set(key, value);
+  else values.delete(key);
   for (const notify of listeners.get(key) ?? []) notify();
 }
 
@@ -140,7 +143,8 @@ export function watchPref(key: string, notify: () => void): () => void {
   };
 }
 
-function current<T>(key: string, fallback: T): T {
+// prefValue is the value every hook of the key reads: the shared copy, read from storage through readPref once
+export function prefValue<T>(key: string, fallback: T): T {
   if (!values.has(key)) values.set(key, readPref(key, fallback));
   return values.get(key) as T;
 }
@@ -160,10 +164,10 @@ export function usePref<T>(key: string, fallback: T): [T, (next: T | ((prev: T) 
     },
     [key],
   );
-  const value = useSyncExternalStore(subscribe, () => current(key, fallbackRef.current));
+  const value = useSyncExternalStore(subscribe, () => prefValue(key, fallbackRef.current));
   const set = useCallback(
     (next: T | ((prev: T) => T)) => {
-      const v = typeof next === "function" ? (next as (p: T) => T)(current(key, fallbackRef.current)) : next;
+      const v = typeof next === "function" ? (next as (p: T) => T)(prefValue(key, fallbackRef.current)) : next;
       writePref(key, v);
     },
     [key],

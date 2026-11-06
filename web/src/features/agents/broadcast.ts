@@ -2,6 +2,7 @@
 // answered — an agent busy with a question refuses and is reported, nothing is queued. Pure but for the send given.
 
 import { targetKey, type AgentTarget } from "./targets";
+import { t } from "@/lib/i18n";
 
 export type QuickPick = "all" | "working" | "resting" | "none";
 
@@ -37,12 +38,12 @@ export async function broadcast(targets: AgentTarget[], text: string, send: (tar
 export function statusWords(status: string): string {
   switch (status) {
     case "run":
-      return "working";
+      return t("working");
     case "input":
-      return "asking — would refuse";
+      return t("asking — would refuse");
     case "done":
-      return "done";
+      return t("done");
     default:
-      return "idle";
+      return t("idle");
   }
 }

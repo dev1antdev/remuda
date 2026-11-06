@@ -1,13 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fileUrl, fsDiff, fsStat, fsText, type FileDiff, type FileInfo } from "@/features/files/api";
+import { highlightLines, langOf } from "@/lib/highlight";
 import { basename, errMsg } from "@/lib/text";
 import { Notice, Tip } from "@/ui";
 import Icon from "@/ui/icons";
+import { Markdown } from "@/ui/Markdown";
+import { Mermaid } from "@/ui/Mermaid";
+import { opensDrawn, previewOf } from "@/ui/mermaidLook";
+import { tokenNodes } from "@/ui/Tokens";
+import { changeCounts, diffLines, type DiffLine } from "./diffLines";
 
 import type { FileTarget } from "./target";
 import { actions } from "@/app/store";
+import { useRoster } from "@/features/roster/useRoster";
+import { t } from "@/lib/i18n";
 
-type Tab = "file" | "changes";
+type Tab = "file" | "drawn" | "changes";
+
+// startTab is the view a file opens in: its changes when asked, drawn when it is Markdown or a diagram and no line was named
+const startTab = (target: FileTarget): Tab => (target.prefer === "changes" ? "changes" : opensDrawn(target.path, target.line, target.prefer) ? "drawn" : "file");
 
 // FileViewer opens what the agent wrote: the file itself and its uncommitted change in git, read from the machine the pane lives on
 export default function FileViewer({
@@ -28,8 +39,9 @@ export default function FileViewer({
   const [info, setInfo] = useState<FileInfo | null>(null);
   const [text, setText] = useState<{ text: string; truncated: boolean; max: number } | null>(null);
   const [diff, setDiff] = useState<FileDiff | null>(null);
-  const [tab, setTab] = useState<Tab>(target.prefer ?? "file");
+  const [tab, setTab] = useState<Tab>(() => startTab(target));
   const [error, setError] = useState<string | null>(null);
+  const { viewOnly } = useRoster(); // a viewer link's screen reads the file only: no diff, no editor
   const lineRef = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
 
@@ -71,14 +83,14 @@ export default function FileViewer({
     setText(null);
     setDiff(null);
     setError(null);
-    setTab(target.prefer ?? "file");
+    setTab(startTab(target));
     (async () => {
       try {
         const i = await fsStat(machineId, paneId, target.path, dir);
         if (stop) return;
         setInfo(i);
         if (i.kind === "text") {
-          const [t, d] = await Promise.all([fsText(machineId, i.path), fsDiff(machineId, i.path).catch(() => null)]);
+          const [t, d] = await Promise.all([fsText(machineId, i.path), viewOnly ? null : fsDiff(machineId, i.path).catch(() => null)]);
           if (stop) return;
           setText(t);
           setDiff(d);
@@ -91,7 +103,7 @@ export default function FileViewer({
     return () => {
       stop = true;
     };
-  }, [machineId, paneId, dir, target.path, target.prefer]);
+  }, [machineId, paneId, dir, target.path, target.prefer, viewOnly]);
 
   useEffect(() => {
     if (tab === "file" && text && target.line) {
@@ -100,8 +112,12 @@ export default function FileViewer({
   }, [tab, text, target.line]);
 
   const name = basename(info?.path ?? target.path);
-  const counts = useMemo(() => countChanges(diff?.diff ?? ""), [diff]);
+  const lang = langOf(info?.path ?? target.path);
+  const changes = useMemo(() => diffLines(diff?.diff ?? "", lang), [diff, lang]);
+  const counts = useMemo(() => changeCounts(changes), [changes]);
   const hasDiff = !!(diff && diff.diff);
+  const drawnAs = info?.kind === "text" ? previewOf(info.path) : null;
+  const shown: Tab = tab === "drawn" && !drawnAs ? "file" : tab;
 
   return (
     <div className="fv-scrim" onMouseDown={(e) => e.target === e.currentTarget && close()}>
@@ -129,49 +145,60 @@ export default function FileViewer({
               </bdi>
             </span>
           </div>
-          {info?.kind === "text" && (
-            <nav className="fv-tabs" aria-label="View">
-              <button type="button" className={tab === "file" ? "on" : ""} aria-pressed={tab === "file"} onClick={() => setTab("file")}>
-                File
+          {info?.kind === "text" && (!viewOnly || drawnAs) && (
+            <nav className="fv-tabs" aria-label={t("View")}>
+              <button type="button" className={shown === "file" ? "on" : ""} aria-pressed={shown === "file"} onClick={() => setTab("file")}>
+                {t("File")}
               </button>
-              <button
-                type="button"
-                className={tab === "changes" ? "on" : ""}
-                aria-pressed={tab === "changes"}
-                onClick={() => setTab("changes")}
-                title={diff?.untracked ? "New file, not yet in git" : diff?.repo ? "Uncommitted change against HEAD" : "Not inside a git repository"}
-              >
-                Changes
-                {hasDiff && <span className="fv-badge">{`+${counts.add} −${counts.del}`}</span>}
-              </button>
+              {drawnAs && (
+                <button type="button" className={shown === "drawn" ? "on" : ""} aria-pressed={shown === "drawn"} onClick={() => setTab("drawn")} title={drawnAs === "mermaid" ? t("The diagram, drawn") : t("The Markdown, drawn")}>
+                  {t("Preview")}
+                </button>
+              )}
+              {!viewOnly && (
+                <button
+                  type="button"
+                  className={shown === "changes" ? "on" : ""}
+                  aria-pressed={shown === "changes"}
+                  onClick={() => setTab("changes")}
+                  title={diff?.untracked ? t("New file, not yet in git") : diff?.repo ? t("Uncommitted change against HEAD") : t("Not inside a git repository")}
+                >
+                  {t("Changes")}
+                  {hasDiff && <span className="fv-badge">{`+${counts.add} −${counts.del}`}</span>}
+                </button>
+              )}
             </nav>
           )}
-          <Tip text="Open in Code (VS Code on this machine), at this line">
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label="Open in Code"
-              onClick={() => {
-                close();
-                actions.openInCode(machineId, dir, info?.path ?? target.path, target.line);
-              }}
-            >
-              <Icon name="code" size={16} />
+          {!viewOnly && (
+            <Tip text={t("Open in Code (VS Code on this machine), at this line")}>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={t("Open in Code")}
+                onClick={() => {
+                  close();
+                  actions.openInCode(machineId, dir, info?.path ?? target.path, target.line);
+                }}
+              >
+                <Icon name="code" size={16} />
+              </button>
+            </Tip>
+          )}
+          <Tip text={t("Close (Esc)")}>
+            <button type="button" className="icon-btn" onClick={close} aria-label={t("Close")}>
+              <Icon name="x" size={16} />
             </button>
           </Tip>
-          <button type="button" className="icon-btn" onClick={close} title="Close (Esc)" aria-label="Close">
-            <Icon name="x" size={16} />
-          </button>
         </header>
 
         <div className="fv-body">
           {error && <Notice tone="error">{error}</Notice>}
-          {!error && !info && <div className="empty">Loading…</div>}
+          {!error && !info && <div className="empty">{t("Loading…")}</div>}
           {info?.kind === "missing" && (
             <div className="empty">
               {info.candidates?.length ? (
                 <>
-                  <p>Several files match — pick one:</p>
+                  <p>{t("Several files match — pick one:")}</p>
                   {info.candidates.map((c) => (
                     <button key={c} type="button" className="btn fv-cand" onClick={() => onRetarget({ ...target, path: c })}>
                       {c}
@@ -179,12 +206,12 @@ export default function FileViewer({
                   ))}
                 </>
               ) : (
-                <p>File not found on this machine.</p>
+                <p>{t("File not found on this machine.")}</p>
               )}
             </div>
           )}
-          {info?.kind === "dir" && <div className="empty">That's a folder.</div>}
-          {info?.kind === "binary" && <div className="empty">Binary file · {fmtSize(info.size)}</div>}
+          {info?.kind === "dir" && <div className="empty">{t("That's a folder.")}</div>}
+          {info?.kind === "binary" && <div className="empty">{t("Binary file · {size}", { size: fmtSize(info.size) })}</div>}
           {info?.kind === "image" && (
             <div className="fv-media">
               <img src={fileUrl(machineId, info.path)} alt={name} />
@@ -196,31 +223,43 @@ export default function FileViewer({
             </div>
           )}
           {info?.kind === "pdf" && <iframe className="fv-pdf" src={fileUrl(machineId, info.path)} title={name} />}
-          {info?.kind === "text" && tab === "file" && text && <CodeView text={text.text} line={target.line} lineRef={lineRef} />}
-          {info?.kind === "text" && tab === "file" && text?.truncated && (
-            <div className="empty">
-              … cut at {fmtSize(text.max)} of {fmtSize(info.size)}
+          {info?.kind === "text" && shown === "file" && text && <CodeView text={text.text} lang={lang} line={target.line} lineRef={lineRef} />}
+          {info?.kind === "text" && shown === "drawn" && text && (
+            <div className="fv-drawn">
+              {drawnAs === "mermaid" ? <FileDiagram source={text.text} /> : <Markdown text={text.text} onOpenFile={onRetarget} diagrams />}
             </div>
           )}
-          {info?.kind === "text" && tab === "changes" && <DiffView diff={diff} />}
+          {info?.kind === "text" && shown !== "changes" && text?.truncated && (
+            <div className="empty">
+              {t("… cut at {cut} of {size}", { cut: fmtSize(text.max), size: fmtSize(info.size) })}
+            </div>
+          )}
+          {info?.kind === "text" && shown === "changes" && <DiffView diff={diff} lines={changes} />}
         </div>
       </div>
     </div>
   );
 }
 
-// CodeView splits once per text, not per render: a 512KB file is 10k rows.
-function CodeView({ text, line, lineRef }: { text: string; line?: number; lineRef: React.RefObject<HTMLDivElement | null> }) {
-  const lines = useMemo(() => text.split("\n"), [text]);
+// FileDiagram draws a .mmd file; one mermaid cannot read says why, the File tab keeping its text
+function FileDiagram({ source }: { source: string }) {
+  const [error, setError] = useState("");
+  useEffect(() => setError(""), [source]);
+  return error ? <Notice tone="error">{t("Mermaid could not read it: {error}", { error })}</Notice> : <Mermaid source={source} onError={setError} />;
+}
+
+// CodeView splits and colours once per text, not per render: a 512KB file is 10k rows (past the highlighter's cap they stay plain)
+function CodeView({ text, lang, line, lineRef }: { text: string; lang: string; line?: number; lineRef: React.RefObject<HTMLDivElement | null> }) {
+  const lines = useMemo(() => (lang ? highlightLines(text, lang) : text.split("\n").map((l) => [{ kind: "plain" as const, text: l }])), [text, lang]);
   return (
     <div className="fv-code">
-      {lines.map((l, i) => {
+      {lines.map((tokens, i) => {
         const n = i + 1;
         const hit = n === line;
         return (
           <div key={n} className={hit ? "fv-line hit" : "fv-line"} ref={hit ? lineRef : undefined}>
             <span className="fv-ln">{n}</span>
-            <span className="fv-src">{l}</span>
+            <span className="fv-src">{tokenNodes(tokens)}</span>
           </div>
         );
       })}
@@ -228,41 +267,19 @@ function CodeView({ text, line, lineRef }: { text: string; line?: number; lineRe
   );
 }
 
-type DiffKind = "add" | "del" | "hunk" | "meta" | "";
+// the classes are the review's: a kept line has none, a note (no newline at the end) reads as the header does
+const LINE_CLASS: Record<DiffLine["kind"], string> = { add: "add", del: "del", hunk: "hunk", meta: "meta", note: "meta", context: "" };
 
-function diffLineKind(l: string): DiffKind {
-  if (l.startsWith("+++") || l.startsWith("---") || l.startsWith("diff ") || l.startsWith("index ")) return "meta";
-  if (l.startsWith("+")) return "add";
-  if (l.startsWith("-")) return "del";
-  if (l.startsWith("@@")) return "hunk";
-  return "";
-}
-
-// the lines added and removed, for the tab's badge
-function countChanges(diff: string): { add: number; del: number } {
-  let add = 0;
-  let del = 0;
-  if (diff) {
-    for (const l of diff.split("\n")) {
-      const k = diffLineKind(l);
-      if (k === "add") add++;
-      else if (k === "del") del++;
-    }
-  }
-  return { add, del };
-}
-
-function DiffView({ diff }: { diff: FileDiff | null }) {
-  const lines = useMemo(() => (diff?.diff ?? "").split("\n"), [diff]);
-  if (!diff) return <div className="empty">Could not run git here.</div>;
-  if (!diff.repo) return <div className="empty">Not inside a git repository.</div>;
-  if (diff.untracked) return <div className="empty">New file — not yet added to git, so the whole file is the change.</div>;
-  if (!diff.diff) return <div className="empty">No uncommitted changes — the file matches HEAD.</div>;
+function DiffView({ diff, lines }: { diff: FileDiff | null; lines: DiffLine[] }) {
+  if (!diff) return <div className="empty">{t("Could not run git here.")}</div>;
+  if (!diff.repo) return <div className="empty">{t("Not inside a git repository.")}</div>;
+  if (diff.untracked) return <div className="empty">{t("New file — not yet added to git, so the whole file is the change.")}</div>;
+  if (!diff.diff) return <div className="empty">{t("No uncommitted changes — the file matches HEAD.")}</div>;
   return (
     <div className="fv-code fv-diff">
-      {lines.map((l, i) => (
-        <div key={i} className={`fv-line ${diffLineKind(l)}`}>
-          <span className="fv-src">{l}</span>
+      {lines.map((line, i) => (
+        <div key={i} className={`fv-line ${LINE_CLASS[line.kind]}`}>
+          <span className="fv-src">{line.tokens ? [line.text.slice(0, 1), ...tokenNodes(line.tokens)] : line.text}</span>
         </div>
       ))}
     </div>
@@ -271,6 +288,6 @@ function DiffView({ diff }: { diff: FileDiff | null }) {
 
 function fmtSize(n: number): string {
   if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  if (n < 1024 * 1024) return t("{n} KB", { n: (n / 1024).toFixed(1) });
+  return t("{n} MB", { n: (n / 1024 / 1024).toFixed(1) });
 }

@@ -3,6 +3,7 @@
 // side's numbers sit at a fixed offset from them: what the hunks above added less what they removed.
 
 import { rowsOf, type DiffHunk, type DiffRow } from "./hunks";
+import { t } from "@/lib/i18n";
 
 export const UNFOLD_STEP = 10;
 
@@ -70,5 +71,5 @@ export function fileLines(text: string): string[] {
 
 // whyNotUnfold says why a file's lines are not to be had: the viewer cut it at its cap, so the lines past that are missing
 export function whyNotUnfold(read: { truncated: boolean; max: number }): string | null {
-  return read.truncated ? `The file is over ${Math.round(read.max / 1024)} KB and remuda reads only its start, so the lines around the hunks cannot be unfolded` : null;
+  return read.truncated ? t("The file is over {kb} KB and remuda reads only its start, so the lines around the hunks cannot be unfolded", { kb: Math.round(read.max / 1024) }) : null;
 }

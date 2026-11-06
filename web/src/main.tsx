@@ -1,3 +1,4 @@
+import "@/app/lang"; // first: the language is set before any module builds its words
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "@/app/App";

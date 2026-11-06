@@ -3,75 +3,105 @@
 // four modes a thumb reaches and the rest behind More.
 
 import { unread } from "@/features/activity/group";
+import { DEFAULT_FILTER, filterWords, type Filter } from "@/features/activity/filter";
+import { machineLabel } from "@/features/roster/options";
+import { serverTone } from "@/features/roster/concerns";
 import { useRoster } from "@/features/roster/useRoster";
-import { usePref } from "@/lib/prefs";
+import { keyWords } from "@/features/terminal/float/float";
+import { toggleFloat } from "@/features/terminal/float/useFloatKey";
+import { useCurrent } from "./current";
+import { viewerPlaces } from "./viewOnly";
+import { isMac, usePref } from "@/lib/prefs";
 import { Icon, Menu, Tip, type IconName, type MenuItem } from "@/ui";
 import { actions, app, type Mode, type Panel } from "./store";
+import { t, tc } from "@/lib/i18n";
 
-type Place = { label: string; icon: IconName; about: string };
+// short is the word under the icon when the language's full name does not fit there
+type Place = { label: string; short?: string; icon: IconName; about: string };
 const MODES: (Place & { mode: Mode; desk?: boolean })[] = [
-  { mode: "herdr", label: "Agents", icon: "terminal", about: "Your agents and terminals, from herdr" },
-  { mode: "wall", label: "Wall", icon: "layers", about: "Every agent on one screen, a tile each" },
-  { mode: "tasks", label: "Tasks", icon: "list", about: "Your tasks, kept on this remuda" },
-  { mode: "code", label: "Code", icon: "code", about: "VS Code on a machine, through remuda", desk: true },
-  { mode: "review", label: "Review", icon: "circle-check", about: "Every workspace with changes to review, in one list" },
+  { mode: "herdr", label: t("Agents"), icon: "terminal", about: t("Your agents and terminals, from herdr") },
+  { mode: "wall", label: t("Wall"), icon: "layers", about: t("Every agent on one screen, a tile each") },
+  { mode: "tasks", label: t("Tasks"), icon: "list", about: t("Your tasks, kept on this remuda") },
+  { mode: "code", label: t("Code"), icon: "code", about: t("VS Code on a machine, through remuda"), desk: true },
+  { mode: "review", label: t("Review"), icon: "circle-check", about: t("Every workspace with changes to review, in one list") },
 ];
 const PANELS: (Place & { panel: Panel })[] = [
-  { panel: "standup", label: "Standup", icon: "sun", about: "What every agent did today, in one report" },
-  { panel: "usage", label: "Usage", icon: "chart", about: "What the agents cost, by day, project and session" },
-  { panel: "schedules", label: "Schedules", icon: "calendar", about: "Prompts sent to agents on a timetable" },
-  { panel: "activity", label: "Activity", icon: "bell", about: "What happened across the agents while you were away; the alert settings are inside" },
+  { panel: "standup", label: t("Standup"), icon: "sun", about: t("What every agent did today, in one report") },
+  { panel: "usage", label: t("Usage"), icon: "chart", about: t("What the agents cost, by day, project and session") },
+  { panel: "schedules", label: t("Schedules"), short: tc("rail", "Schedules"), icon: "calendar", about: t("Prompts sent to agents on a timetable") },
+  { panel: "activity", label: t("Activity"), short: tc("rail", "Activity"), icon: "bell", about: t("What happened across the agents while you were away; the alert settings are inside") },
 ];
-const SETTINGS: Place = { label: "Settings", icon: "sliders", about: "The theme, the sidebar, the panels, the alerts, the keys" };
+const SETTINGS: Place = { label: t("Settings"), icon: "sliders", about: t("The theme, the sidebar, the panels, the alerts, the keys") };
+const FLOAT: Place = { label: t("Shell"), icon: "square-terminal", about: t("A floating terminal over any screen, on a shell of its own · {key}", { key: keyWords(isMac) }) };
+const SERVER: Place = { label: t("Server"), icon: "server", about: t("The machine this remuda serves the page from: its load, memory, temperature and throttling") };
 
 export default function Rail() {
   const mode = app.use((s) => s.mode);
   const panel = app.use((s) => s.panel);
   const dialog = app.use((s) => s.dialog);
-  const { feed } = useRoster();
+  const float = app.use((s) => s.float);
+  const { feed, machines, viewOnly, server } = useRoster();
+  const serverDot = server ? serverTone(server.health) : "";
+  const current = useCurrent();
+  const onFloat = () => toggleFloat(machines, current?.machine.id ?? null);
+  const modes = viewerPlaces(MODES, viewOnly);
+  const panels = viewerPlaces(PANELS, viewOnly);
   const [seen] = usePref<number>("feed.seen", 0);
   const news = unread(feed, seen);
+  const [filter] = usePref<Filter>("activity.filter", DEFAULT_FILTER);
+  const filtered = filterWords(filter, (family) => t(family.label), machineLabel(machines, filter.machine));
+  // the bell's tooltip says when the panel is filtered, so a quiet panel is not mistaken for a quiet day
+  const placeOf = (p: Place & { panel: Panel }): Place => (p.panel === "activity" && filtered ? { ...p, about: `${p.about} · ${t("filtered: {words}", { words: filtered })}` } : p);
   const more: MenuItem[] = [
-    ...MODES.filter((m) => m.desk).map((m) => ({ label: m.label, icon: m.icon, hint: m.about, checked: mode === m.mode, onSelect: () => actions.setMode(m.mode) })),
+    ...modes.filter((m) => m.desk).map((m) => ({ label: m.label, icon: m.icon, hint: m.about, checked: mode === m.mode, onSelect: () => actions.setMode(m.mode) })),
     { sep: true },
-    ...PANELS.map((p) => ({ label: p.label, icon: p.icon, hint: p.about, checked: panel === p.panel, onSelect: () => actions.togglePanel(p.panel) })),
-    { sep: true },
-    { label: SETTINGS.label, icon: SETTINGS.icon, hint: SETTINGS.about, onSelect: () => actions.openDialog({ kind: "settings" }) },
+    ...panels.map((p) => ({ label: p.label, icon: p.icon, hint: p.about, checked: panel === p.panel, onSelect: () => actions.togglePanel(p.panel) })),
+    ...(server ? [{ label: SERVER.label, icon: SERVER.icon, hint: SERVER.about, checked: panel === "server", onSelect: () => actions.togglePanel("server") } as MenuItem] : []),
+    ...(viewOnly
+      ? []
+      : [
+          { label: FLOAT.label, icon: FLOAT.icon, hint: FLOAT.about, checked: !!float, onSelect: onFloat } as MenuItem,
+          { sep: true } as MenuItem,
+          { label: SETTINGS.label, icon: SETTINGS.icon, hint: SETTINGS.about, onSelect: () => actions.openDialog({ kind: "settings" }) } as MenuItem,
+        ]),
   ];
   return (
-    <nav className="rail" aria-label="Places">
+    <nav className="rail" aria-label={t("Places")}>
       <div className="rail-group">
-        {MODES.map((m) => (
+        {modes.map((m) => (
           <RailButton key={m.mode} place={m} on={mode === m.mode} desk={m.desk} onClick={() => actions.setMode(m.mode)} />
         ))}
         <Menu
-          label="More places"
+          label={t("More places")}
           side="top"
           trigger={
-            <button type="button" className="rail-btn rail-more" aria-label="More">
+            <button type="button" className="rail-btn rail-more" aria-label={t("More")}>
               <Icon name="more" size={18} />
-              <span className="rail-label">More</span>
+              <span className="rail-label">{t("More")}</span>
             </button>
           }
           items={more}
         />
       </div>
       <div className="rail-group rail-foot">
-        {PANELS.map((p) => (
-          <RailButton key={p.panel} place={p} on={panel === p.panel} dot={p.panel === "activity" && news} onClick={() => actions.togglePanel(p.panel)} />
+        {panels.map((p) => (
+          <RailButton key={p.panel} place={placeOf(p)} on={panel === p.panel} dot={p.panel === "activity" && news} onClick={() => actions.togglePanel(p.panel)} />
         ))}
-        <RailButton place={SETTINGS} on={dialog?.kind === "settings"} onClick={() => actions.openDialog({ kind: "settings" })} />
+        {!viewOnly && <RailButton place={FLOAT} on={!!float} onClick={onFloat} />}
+        {server && <RailButton place={SERVER} on={panel === "server"} tone={serverDot} onClick={() => actions.togglePanel("server")} />}
+        {!viewOnly && <RailButton place={SETTINGS} on={dialog?.kind === "settings"} onClick={() => actions.openDialog({ kind: "settings" })} />}
       </div>
     </nav>
   );
 }
 
-function RailButton({ place, on, dot = false, desk = false, onClick }: { place: Place; on: boolean; dot?: boolean; desk?: boolean; onClick: () => void }) {
+// tone: the Server place's dot, amber for a look and red for a concern in the host's body or disk
+function RailButton({ place, on, dot = false, tone = "", desk = false, onClick }: { place: Place; on: boolean; dot?: boolean; tone?: "bad" | "warn" | ""; desk?: boolean; onClick: () => void }) {
   return (
     <Tip text={place.about} side="right">
-      <button type="button" className={`rail-btn${on ? " on" : ""}${dot ? " has-news" : ""}${desk ? " rail-desk" : ""}`} aria-pressed={on} onClick={onClick}>
+      <button type="button" className={`rail-btn${on ? " on" : ""}${dot ? " has-news" : ""}${tone ? ` has-${tone}` : ""}${desk ? " rail-desk" : ""}`} aria-pressed={on} aria-label={place.label} onClick={onClick}>
         <Icon name={place.icon} size={18} />
-        <span className="rail-label">{place.label}</span>
+        <span className="rail-label" aria-hidden="true">{place.short ?? place.label}</span>
       </button>
     </Tip>
   );

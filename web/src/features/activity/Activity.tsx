@@ -1,45 +1,57 @@
 // The activity panel behind the bell: what happened across the agents while nobody was looking — every alert the
-// pushes carry, by day, newest first — a row opens its pane; the alert settings wait at the foot.
+// pushes carry, by day, newest first — a row opens its pane; the alert settings wait at the foot. What a device sent
+// through remuda is a quiet row among them: no news, drawn in the quiet colour.
 
 import { useEffect } from "react";
 import { useAllPanes } from "@/app/current";
 import { actions } from "@/app/store";
 import { useRoster } from "@/features/roster/useRoster";
+import { hiddenWords } from "@/features/roster/sharing";
+import { useSharing } from "@/features/roster/useSharing";
 import { usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { whenShort } from "@/lib/time";
 import { Dialog, Icon, Logo, Notice, type IconName } from "@/ui";
 import { fetchFeed, type Entry } from "./api";
 import { groupByDay } from "./group";
+import FilterBar from "./FilterBar";
+import { DEFAULT_FILTER, counts, filterEntries, isFiltering, type Filter } from "./filter";
+import { t } from "@/lib/i18n";
 
-const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", digest: "sun", task: "list", test: "bell", budget: "chart" };
+const KIND_ICONS: Record<string, IconName> = { input: "alert-triangle", done: "circle-check", stuck: "alert-triangle", waiting: "alert-triangle", loop: "refresh-cw", schedule: "calendar", digest: "sun", task: "list", test: "bell", budget: "chart", limits: "chart", review: "eye", handover: "arrow-right", recover: "play", machine: "monitor", sent: "send" };
 
 export default function Activity({ onClose }: { onClose: () => void }) {
-  const { machines, feed } = useRoster();
+  const { machines, feed, viewOnly } = useRoster();
   const panes = useAllPanes();
+  const share = useSharing();
   const { data: entries, error } = useQuery<Entry[]>(() => fetchFeed(), [], { every: 10_000 });
   const [, setSeen] = usePref<number>("feed.seen", 0);
+  const [filter, setFilter] = usePref<Filter>("activity.filter", DEFAULT_FILTER);
+  const shown = entries ? filterEntries(entries, filter) : [];
   useEffect(() => {
     if (feed) setSeen(feed);
   }, [feed, setSeen]);
   const open = (entry: Entry) => {
     if (!entry.pane) return;
-    actions.selectPane(entry.machine, entry.pane);
-    actions.setMode("herdr");
-    actions.setLens("chat");
+    actions.openPane(entry.machine, entry.pane);
     onClose();
   };
   const where = (entry: Entry) => {
     const found = panes.find((candidate) => candidate.machine.id === entry.machine && candidate.pane.id === entry.pane);
     const machine = machines.find((candidate) => candidate.id === entry.machine);
-    return { agent: found?.pane.agent ?? "", gone: !!entry.pane && !found, machine: entry.machine !== "local" ? machine?.label ?? entry.machine : "" };
+    // a row of a hidden folder, or of a pane gone from a hidden machine, keeps its kind and neutral names, not its words
+    const hidden = found ? share.sessionHidden(found.machine.id, found.session) : share.machineHidden(entry.machine) || (share.on && share.pref.all);
+    const label = machine ? share.machineLabel(machine) : share.redact(entry.machine);
+    return { agent: found?.pane.agent ?? "", gone: !!entry.pane && !found, machine: entry.machine !== "local" ? label : "", hidden };
   };
   return (
-    <Dialog title="Activity" icon="bell" size="md" className="activity-dialog" onClose={onClose}>
+    <Dialog title={t("Activity")} icon="bell" size="md" className="activity-dialog" onClose={onClose}>
       {error && <Notice tone="error">{error}</Notice>}
-      {entries && entries.length === 0 && <Notice tone="hint">Nothing yet: a finish, a question, a watchdog note or a task's move lands here as it happens.</Notice>}
+      {entries && entries.length === 0 && <Notice tone="hint">{t("Nothing yet: a finish, a question, a watchdog note or a task's move lands here as it happens.")}</Notice>}
+      {entries && entries.length > 0 && <FilterBar filter={filter} counts={counts(entries, filter.machine)} machines={machines} onChange={setFilter} />}
+      {entries && entries.length > 0 && shown.length === 0 && isFiltering(filter) && <Notice tone="hint">{t("Nothing here with these filters.")}</Notice>}
       {entries &&
-        groupByDay(entries).map((day) => (
+        groupByDay(shown).map((day) => (
           <section key={day.label} className="activity-day">
             <h3 className="activity-day-head">{day.label}</h3>
             <ul className="activity-list">
@@ -47,15 +59,15 @@ export default function Activity({ onClose }: { onClose: () => void }) {
                 const at = where(entry);
                 return (
                   <li key={entry.id}>
-                    <button type="button" className={`activity-row${at.gone ? " gone" : ""}`} disabled={!entry.pane} onClick={() => open(entry)} title={at.gone ? "That pane is gone" : entry.pane ? "Open the pane" : undefined}>
+                    <button type="button" className={`activity-row${at.gone ? " gone" : ""}${entry.quiet ? " quiet" : ""}`} disabled={!entry.pane} onClick={() => open(entry)} title={at.gone ? t("That pane is gone") : entry.pane ? t("Open the pane") : undefined}>
                       <span className="activity-when">{whenShort(entry.at)}</span>
                       {at.agent ? <Logo agent={at.agent} /> : <Icon name={KIND_ICONS[entry.kind] ?? "bell"} size={14} />}
                       <span className="activity-text">
                         <span className="activity-title">
-                          {entry.title}
+                          {share.redact(entry.title)}
                           {at.machine && <span className="activity-machine"> · {at.machine}</span>}
                         </span>
-                        {entry.body && <span className="activity-body">{entry.body}</span>}
+                        {entry.body && <span className="activity-body">{at.hidden ? hiddenWords() : share.redact(entry.body)}</span>}
                       </span>
                     </button>
                   </li>
@@ -64,11 +76,13 @@ export default function Activity({ onClose }: { onClose: () => void }) {
             </ul>
           </section>
         ))}
-      <div className="modal-actions activity-foot">
-        <button type="button" className="btn" onClick={() => actions.openPanel("alerts")}>
-          <Icon name="settings" size={14} /> Alerts on this device
-        </button>
-      </div>
+      {!viewOnly && (
+        <div className="modal-actions activity-foot">
+          <button type="button" className="btn" onClick={() => actions.openPanel("alerts")}>
+            <Icon name="settings" size={14} /> {t("Alerts on this device")}
+          </button>
+        </div>
+      )}
     </Dialog>
   );
 }

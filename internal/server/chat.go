@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
@@ -66,7 +67,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		s.writeSubagent(w, r, conv, subagent)
 		return
 	}
-	if paneID != "" && last == 0 { // a tile's tail is not the person's look at the pane: the lens is
+	if paneID != "" && last == 0 && !auth.IsViewer(r.Context()) { // a tile's tail is not the person's look at the pane, nor a viewer's: the lens is
 		s.Radar.Seen(mc.ID(), paneID)
 	}
 	if conv.Path == "" {

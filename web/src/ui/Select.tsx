@@ -5,6 +5,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Icon from "@/ui/icons";
+import { groupsOf, shownOrder } from "./selectGroups";
 
 export type Option<T extends string | number> = {
   value: T;
@@ -33,7 +34,8 @@ export default function Select<T extends string | number>({ value, options, onCh
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   const chosen = options.find((o) => o.value === value);
-  const enabled = options.filter((o) => !o.disabled);
+  const groups = groupsOf(options);
+  const enabled = shownOrder(groups).filter((o) => !o.disabled); // in the order the list draws them, as the buttons the focus walks are
 
   const place = () => {
     const r = btn.current?.getBoundingClientRect();
@@ -100,13 +102,6 @@ export default function Select<T extends string | number>({ value, options, onCh
     if (o.value !== value) onChange(o.value);
   };
   const move = (d: number) => setFocus((f) => (enabled.length ? (f + d + enabled.length) % enabled.length : -1));
-
-  const groups: { name: string | undefined; items: Option<T>[] }[] = [];
-  for (const o of options) {
-    const g = groups.find((x) => x.name === o.group);
-    if (g) g.items.push(o);
-    else groups.push({ name: o.group, items: [o] });
-  }
 
   return (
     <>

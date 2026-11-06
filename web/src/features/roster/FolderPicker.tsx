@@ -8,8 +8,10 @@ import type { Machine } from "@/features/roster/api";
 import Icon from "@/ui/icons";
 import { folderOptions } from "@/features/roster/options";
 import { basename } from "@/lib/text";
-import { Dialog, Notice } from "@/ui";
+import { Dialog, Notice, Tip } from "@/ui";
 import { useQuery } from "@/lib/query";
+import { useSharing } from "@/features/roster/useSharing";
+import { t } from "@/lib/i18n";
 
 export default function FolderPicker({ machine, machines, start, onPick, onClose }: {
   machine: Machine;
@@ -28,9 +30,10 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
   const go = (p: string) => setPath(p);
   const crumbs = data?.path ? data.path.split("/").filter(Boolean) : [];
   const known = folderOptions(machines, machine.id);
+  const { machineLabel, redact } = useSharing(); // under the screen-sharing mode the machine and the workspaces by their neutral names
   const here = data?.path ?? path;
   return (
-    <Dialog title={`Folder on ${machine.label.split(" · ")[0]}`} icon="folder" size="md" onClose={onClose} className="picker">
+    <Dialog title={t("Folder on {machine}", { machine: machineLabel(machine).split(" · ")[0] ?? "" })} icon="folder" size="md" onClose={onClose} className="picker">
       <form
         className="picker-path"
         onSubmit={(e) => {
@@ -38,19 +41,23 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
           go(typed.trim());
         }}
       >
-        <button type="button" className="icon-btn" title="Up one folder" disabled={!data?.parent} onClick={() => data?.parent && go(data.parent)}>
-          <Icon name="arrow-left" size={14} />
-        </button>
-        <button type="button" className="icon-btn" title="Home" onClick={() => go("")}>
-          <Icon name="user" size={14} />
-        </button>
-        <input className="sm" value={typed} spellCheck={false} onChange={(e) => setTyped(e.target.value)} placeholder="/path/to/folder" aria-label="Path" />
-        <button type="submit" className="btn sm" title="Go to the typed path">
-          Go
+        <Tip text={t("Up one folder")}>
+          <button type="button" className="icon-btn" aria-label={t("Up one folder")} disabled={!data?.parent} onClick={() => data?.parent && go(data.parent)}>
+            <Icon name="arrow-left" size={14} />
+          </button>
+        </Tip>
+        <Tip text={t("Home")}>
+          <button type="button" className="icon-btn" aria-label={t("Home")} onClick={() => go("")}>
+            <Icon name="user" size={14} />
+          </button>
+        </Tip>
+        <input className="sm" value={typed} spellCheck={false} onChange={(e) => setTyped(e.target.value)} placeholder="/path/to/folder" aria-label={t("Path")} />
+        <button type="submit" className="btn sm" title={t("Go to the typed path")}>
+          {t("Go")}
         </button>
       </form>
       {crumbs.length > 0 && (
-        <div className="picker-crumbs" aria-label="Path">
+        <div className="picker-crumbs" aria-label={t("Path")}>
           <button type="button" className="linkish" onClick={() => go("/")}>
             /
           </button>
@@ -63,7 +70,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
       )}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="picker-list" aria-busy={loading}>
-        {data && data.dirs.length === 0 && !loading && <div className="notice hint">No subfolders here.</div>}
+        {data && data.dirs.length === 0 && !loading && <div className="notice hint">{t("No subfolders here.")}</div>}
         {data?.dirs.map((d) => {
           const full = (data.path === "/" ? "" : data.path) + "/" + d.name;
           return (
@@ -71,35 +78,37 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
               <button type="button" className="picker-open" onClick={() => go(full)} title={full}>
                 <Icon name={d.git ? "git-branch" : "folder"} size={14} className={d.git ? "picker-git" : undefined} />
                 <span className="picker-name">{d.name}</span>
-                {d.git && <span className="picker-tag">repo</span>}
+                {d.git && <span className="picker-tag">{t("repo")}</span>}
               </button>
-              <button type="button" className="icon-btn sm" title={`Choose ${d.name}`} aria-label={`Choose ${d.name}`} onClick={() => onPick(full)}>
-                <Icon name="check" size={12} />
-              </button>
+              <Tip text={t("Choose {name}", { name: d.name })}>
+                <button type="button" className="icon-btn sm" aria-label={t("Choose {name}", { name: d.name })} onClick={() => onPick(full)}>
+                  <Icon name="check" size={12} />
+                </button>
+              </Tip>
             </div>
           );
         })}
       </div>
       {known.length > 0 && (
         <div className="picker-known">
-          <span className="dim">Workspaces on {machine.label}</span>
+          <span className="dim">{t("Workspaces on {machine}", { machine: machineLabel(machine) })}</span>
           {known.map((o) => (
-            <button key={o.value} type="button" className="linkish" title={o.value} onClick={() => onPick(o.value)}>
-              <Icon name="folder" size={12} /> {o.label}
+            <button key={o.value} type="button" className="linkish" title={redact(o.value)} onClick={() => onPick(o.value)}>
+              <Icon name="folder" size={12} /> {redact(o.label)}
             </button>
           ))}
         </div>
       )}
       <div className="modal-actions picker-foot">
         <label className="row">
-          <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} /> Hidden folders
+          <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} /> {t("Hidden folders")}
         </label>
         <span className="spacer" />
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="button" className="btn primary" disabled={!here} onClick={() => onPick(here)}>
-          Choose {here ? basename(here) || "/" : "…"}
+          {t("Choose {name}", { name: here ? basename(here) || "/" : "…" })}
         </button>
       </div>
     </Dialog>

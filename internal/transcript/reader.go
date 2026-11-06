@@ -35,6 +35,7 @@ type Reader struct {
 type cachedTail struct {
 	version Version
 	data    []byte
+	read    time.Time // when it was last asked for
 }
 
 type continuation struct {
@@ -42,7 +43,14 @@ type continuation struct {
 	at   time.Time
 }
 
-const remoteTailCap = 8 * 1024 * 1024
+const (
+	remoteTailCap = 8 * 1024 * 1024 // the most of one remote file kept
+	// what each cache of a machine's remote files holds at most: a wall of busy agents reads every file in turn
+	remoteTailsBudget    = 128 << 20
+	remoteSubTailsBudget = 64 << 20
+	// a tail asked for this recently is not pushed out for a file not cached yet: the next read would fetch it whole again
+	recentlyRead = time.Minute
+)
 
 // NewReader reads the transcripts on host.
 func NewReader(host shell.Host) *Reader {
@@ -148,22 +156,24 @@ func (r *Reader) Turns(path string, v Version) ([]Turn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ParseBytes(data)
+	return ParseBytesOf(FormatOf(path), data)
 }
 
 // remoteTail returns the file tail, fetching only the delta since the cached copy when the file merely grew.
 func (r *Reader) remoteTail(path string, v Version) ([]byte, error) {
-	return r.remoteTailIn(r.tails, path, v, 8)
+	return r.remoteTailIn(r.tails, path, v, remoteTailsBudget)
 }
 
-// remoteTailIn is remoteTail over one of the caches, which keeps at most keep files.
-func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Version, keep int) ([]byte, error) {
+// remoteTailIn is remoteTail over one of the caches, which holds at most budget bytes (see keepTail).
+func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Version, budget int) ([]byte, error) {
 	r.mu.Lock()
 	cached := tails[path]
-	r.mu.Unlock()
 	if cached != nil && cached.version == v {
+		cached.read = time.Now()
+		r.mu.Unlock()
 		return cached.data, nil
 	}
+	r.mu.Unlock()
 
 	// every read is cut at the size the stat saw: what the agent wrote since belongs to the next version
 	quoted := script.Quote(path)
@@ -187,36 +197,58 @@ func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Versi
 	}
 
 	r.mu.Lock()
-	tails[path] = &cachedTail{version: v, data: data}
-	if len(tails) > keep {
-		for k := range tails {
-			if k != path {
-				delete(tails, k)
-				break
-			}
-		}
-	}
+	keepTail(tails, path, &cachedTail{version: v, data: data, read: time.Now()}, budget)
 	r.mu.Unlock()
 	return data, nil
 }
 
-// ResolveSession finds the session file of herdr's agent_session: the exact id first, else a glob across project dirs.
-func (r *Reader) ResolveSession(cwd, kind, value string) (string, error) {
-	// the agent's own hooks chose these: a path only under ~/.claude/projects, an id only what looks like one
+// keepTail caches a file's tail within budget bytes, the tails read longest ago going first: a file not cached before
+// goes uncached rather than push out one read within recentlyRead. The caller holds r.mu.
+func keepTail(tails map[string]*cachedTail, path string, tail *cachedTail, budget int) {
+	_, wasCached := tails[path]
+	tails[path] = tail
+	size := 0
+	for _, t := range tails {
+		size += len(t.data)
+	}
+	for size > budget {
+		oldest := ""
+		for k, t := range tails {
+			if k != path && (oldest == "" || t.read.Before(tails[oldest].read)) {
+				oldest = k
+			}
+		}
+		if oldest == "" {
+			return
+		}
+		if time.Since(tails[oldest].read) < recentlyRead && !wasCached {
+			delete(tails, path)
+			return
+		}
+		size -= len(tails[oldest].data)
+		delete(tails, oldest)
+	}
+}
+
+// ResolveSession finds the session file of herdr's agent_session for an agent kind (claude, codex, gemini; "" tries
+// every format): the exact id in the folder's own place first, else a search across the format's tree.
+func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) {
+	// the agent's own hooks chose these: a path only under one of the session roots, an id only what looks like one
 	if kind == "path" {
 		clean := filepath.Clean(value)
-		under := filepath.Join(r.host.Home(), ".claude", "projects") + "/"
-		if !strings.HasSuffix(clean, ".jsonl") || !strings.HasPrefix(clean, under) {
-			return "", fmt.Errorf("session path %q is not a session file under ~/.claude/projects", value)
+		if !(strings.HasSuffix(clean, ".jsonl") || strings.HasSuffix(clean, ".json")) || !UnderRoot(r.host.Home(), clean) {
+			return "", fmt.Errorf("session path %q is not a session file under ~/.claude/projects, ~/.codex/sessions or ~/.gemini/tmp", value)
 		}
 		return clean, nil
 	}
 	if !text.SessionID(value) {
 		return "", fmt.Errorf("session id %q does not look like one", value)
 	}
+	format := FormatOfAgent(agent)
+	key := string(format) + "|" + value
 	r.mu.Lock()
-	cached, ok := r.sessionPath[value]
-	missedAt, missed := r.sessionMiss[value]
+	cached, ok := r.sessionPath[key]
+	missedAt, missed := r.sessionMiss[key]
 	r.mu.Unlock()
 	if ok {
 		if !r.host.Local() {
@@ -233,21 +265,17 @@ func (r *Reader) ResolveSession(cwd, kind, value string) (string, error) {
 	var path string
 	miss := func(err error) (string, error) {
 		r.mu.Lock()
-		r.sessionMiss[value] = time.Now()
+		r.sessionMiss[key] = time.Now()
 		r.mu.Unlock()
 		return "", err
 	}
 	if r.host.Local() {
 		var err error
-		if path, err = FindSessionByID(cwd, value); err != nil {
+		if path, err = FindSession(format, cwd, value); err != nil {
 			return miss(err)
 		}
 	} else {
-		projects := r.host.Home() + "/.claude/projects"
-		primary := projects + "/" + EncodePath(cwd) + "/" + value + ".jsonl"
-		find := `if [ -f ` + script.Quote(primary) + ` ]; then printf %s ` + script.Quote(primary) + `; else ls ` +
-			script.Quote(projects) + `/*/` + script.Quote(value+".jsonl") + ` 2>/dev/null | head -1; fi`
-		out, err := shell.Text(r.host, find, 15*time.Second)
+		out, err := shell.Text(r.host, findScript(format, r.host.Home(), cwd, value), 15*time.Second)
 		if err != nil {
 			return miss(err)
 		}
@@ -256,10 +284,44 @@ func (r *Reader) ResolveSession(cwd, kind, value string) (string, error) {
 		}
 	}
 	r.mu.Lock()
-	r.sessionPath[value] = path
-	delete(r.sessionMiss, value)
+	r.sessionPath[key] = path
+	delete(r.sessionMiss, key)
 	r.mu.Unlock()
 	return path, nil
+}
+
+// findScript is FindSession as a shell line for a remote machine: the formats tried in turn, the first path printed.
+func findScript(format Format, home, cwd, id string) string {
+	formats := []Format{format}
+	if format == "" {
+		formats = []Format{Claude, Codex, Gemini}
+	}
+	quotedHome := script.Quote(home)
+	var steps []string
+	for _, f := range formats {
+		switch f {
+		case Codex:
+			steps = append(steps, codexFindScript(quotedHome, id))
+		case Gemini:
+			steps = append(steps, geminiFindScript(quotedHome, id))
+		default:
+			projects := home + "/.claude/projects"
+			primary := projects + "/" + EncodePath(cwd) + "/" + id + ".jsonl"
+			steps = append(steps, `if [ -f `+script.Quote(primary)+` ]; then printf %s `+script.Quote(primary)+`; else ls `+
+				script.Quote(projects)+`/*/`+script.Quote(id+".jsonl")+` 2>/dev/null | head -1; fi`)
+		}
+	}
+	if len(steps) == 1 {
+		return steps[0]
+	}
+	var b strings.Builder
+	for i, step := range steps {
+		b.WriteString(`p=$(` + step + `); [ -n "$p" ] && { printf %s "$p"; exit 0; }`)
+		if i < len(steps)-1 {
+			b.WriteString("; ")
+		}
+	}
+	return b.String()
 }
 
 // Live is the file a session's conversation goes on in now: the end of its chain of continuations.
@@ -269,9 +331,13 @@ func (r *Reader) Live(path string) string {
 	return chain[len(chain)-1]
 }
 
-// Chain is the file and every file it went on in, oldest first, up to 8 hops.
+// Chain is the file and every file it went on in, oldest first, up to 8 hops. Only Claude Code moves a
+// conversation between files: another format's chain is the file alone.
 func (r *Reader) Chain(path string) []string {
 	chain := []string{path}
+	if FormatOf(path) != Claude {
+		return chain
+	}
 	for hops := 0; hops < 8; hops++ {
 		next := r.nextContinuation(path)
 		if next == "" {
@@ -298,6 +364,9 @@ func (r *Reader) Lineage(path string) []string {
 
 // Predecessor is the file a session file continues after a compaction ("" when none), cached for good.
 func (r *Reader) Predecessor(path string) string {
+	if FormatOf(path) != Claude {
+		return ""
+	}
 	r.mu.Lock()
 	earlier, ok := r.predecessor[path]
 	r.mu.Unlock()
@@ -317,7 +386,8 @@ func (r *Reader) Predecessor(path string) string {
 	return earlier
 }
 
-// nextContinuation is one hop, cached for a minute.
+// nextContinuation is one hop, cached for a minute; a remote that does not answer keeps what was known for another
+// minute, and when nothing was, is asked again next time.
 func (r *Reader) nextContinuation(path string) string {
 	r.mu.Lock()
 	known, ok := r.continuation[path]
@@ -330,6 +400,10 @@ func (r *Reader) nextContinuation(path string) string {
 		next = Continuation(path)
 	} else if out, err := shell.Text(r.host, ContinuationScript(script.Quote(path)), 20*time.Second); err == nil {
 		next = strings.TrimSpace(out)
+	} else if ok {
+		next = known.next
+	} else {
+		return ""
 	}
 	r.mu.Lock()
 	r.continuation[path] = continuation{next: next, at: time.Now()}

@@ -201,3 +201,15 @@ func TestTrackerSeedsFromASnapshotOnce(t *testing.T) {
 		t.Fatal("a forgotten machine keeps its lines")
 	}
 }
+
+func TestFirstLineReadsATableRowAsItsCells(t *testing.T) {
+	for in, want := range map[string]string{
+		"| File | Change |\n|---|:--:|\n| a.go | **fixed** |": "File · Change",
+		"|:---|---|\n| only | row |":                          "only · row",
+		"Done:\n| a | b |":                                    "Done:",
+	} {
+		if got := FirstLine(in); got != want {
+			t.Errorf("FirstLine(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

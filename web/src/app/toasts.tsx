@@ -1,51 +1,163 @@
-// The toasts in the corner: offline, a newer server, a release out, what happened while the page was away, Tailscale's
-// state, the last notice.
+// The toasts in the corner: a close's agents offered back, offline, a newer server, a release out, what happened while
+// the page was away, Tailscale's state, the last notice.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { alertText, LINGER_MS, type OnPageAlert } from "@/features/alerts/onpage";
+import { hiddenWords } from "@/features/roster/sharing";
 import { usePref } from "@/lib/prefs";
 import { newer } from "@/lib/version";
+import { episodeKey, remember, stoppedWords } from "@/features/roster/stopped";
+import { resumeStopped } from "@/features/updates/recover";
+import { reopen } from "@/features/reopen/offer";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import type { ToastItem } from "@/ui";
-import { actions, app } from "./store";
+import { actions, app, type Panel } from "./store";
+import { viewerToasts } from "./viewOnly";
+import { t } from "@/lib/i18n";
+
+// CLOSED_OFFER_MS is how long the toast after a close offers its agents back
+const CLOSED_OFFER_MS = 10_000;
+
+// useAlertLinger takes an alert that needs nothing down LINGER_MS after it went up; a question stays
+function useAlertLinger(alerts: OnPageAlert[]) {
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    for (const alert of alerts) {
+      if (!alert.lingers || timers.current.has(alert.id)) continue;
+      timers.current.set(alert.id, setTimeout(() => actions.dismissAlert(alert.id), LINGER_MS));
+    }
+    for (const [id, timer] of timers.current) {
+      if (alerts.some((alert) => alert.id === id)) continue;
+      clearTimeout(timer);
+      timers.current.delete(id);
+    }
+  }, [alerts]);
+}
 
 export function useToasts(): ToastItem[] {
-  const { machines, latest, tailscale, version, offline, stale } = useRoster();
+  const { machines, latest, tailscale, version, offline, stale, viewOnly, host } = useRoster();
   const notice = app.use((s) => s.notice);
   const away = app.use((s) => s.away);
+  const closedOffer = app.use((s) => s.closedOffer);
+  const alerts = app.use((s) => s.alerts);
+  const share = useSharing();
+  useAlertLinger(alerts);
   const [releaseSeen, setReleaseSeen] = usePref("release.seen", "");
+  const [recoverSeen, setRecoverSeen] = usePref<string[]>("recover.seen", []);
   useEffect(() => {
     if (!notice || notice.error) return;
     const t = setTimeout(actions.clearNotice, notice.brief ? 2000 : 6000);
     return () => clearTimeout(t);
   }, [notice]);
+  useEffect(() => {
+    if (!closedOffer) return;
+    const t = setTimeout(() => actions.setClosedOffer(null), CLOSED_OFFER_MS);
+    return () => clearTimeout(t);
+  }, [closedOffer]);
 
   const toasts: ToastItem[] = [];
-  if (offline) toasts.push({ id: "offline", tone: "warn", text: "Reconnecting to remuda…", busy: true });
+  // a close just made through the page: its agents offered back on their sessions for a few seconds
+  if (closedOffer)
+    toasts.push({
+      id: "closed",
+      tone: "info",
+      text: closedOffer.text,
+      action: (
+        <button
+          type="button"
+          className="btn sm primary"
+          onClick={() => {
+            actions.setClosedOffer(null);
+            void reopen(closedOffer.machineId, closedOffer.ids);
+          }}
+        >
+          {t("Reopen")}
+        </button>
+      ),
+      onDismiss: () => actions.setClosedOffer(null),
+    });
+  // the alerts of this device's switches, shown on the page while it is in front: Open goes to the pane, a digest to
+  // the standup, a budget or limit to the usage; under the screen-sharing mode a hidden folder's alert keeps its kind
+  // and neutral names but not its words, as an Activity row does
+  const hiddenAlert = (alert: OnPageAlert): boolean => {
+    if (!share.on || !alert.machine) return false;
+    const machine = machines.find((candidate) => candidate.id === alert.machine);
+    const session = machine?.sessions.find((candidate) => candidate.tabs.some((tab) => tab.panes.some((pane) => pane.id === alert.pane)));
+    return session && machine ? share.sessionHidden(machine.id, session) : share.machineHidden(alert.machine) || share.pref.all;
+  };
+  for (const alert of alerts) {
+    const open = alert.panel ? () => actions.openPanel(alert.panel as Panel) : alert.machine && alert.pane ? () => actions.openPane(alert.machine!, alert.pane!) : null;
+    toasts.push({
+      id: alert.id,
+      tone: alert.tone,
+      text: hiddenAlert(alert) ? alertText({ title: alert.title, body: hiddenWords() }) : alertText(alert),
+      action: open && (
+        <button
+          type="button"
+          className="btn sm primary"
+          onClick={() => {
+            actions.dismissAlert(alert.id);
+            open();
+          }}
+        >
+          {t("Open")}
+        </button>
+      ),
+      onDismiss: () => actions.dismissAlert(alert.id),
+    });
+  }
+  if (offline) toasts.push({ id: "offline", tone: "warn", text: t("Reconnecting to remuda…"), busy: true });
   if (stale && !offline)
     toasts.push({
       id: "stale",
       tone: "info",
-      text: `remuda ${stale} is on the server; this page runs ${__REMUDA_VERSION__}.`,
+      text: t("remuda {server} is on the server; this page runs {page}.", { server: stale, page: __REMUDA_VERSION__ }),
       action: (
         <button type="button" className="btn sm primary" onClick={() => location.reload()}>
-          Reload
+          {t("Reload")}
         </button>
       ),
     });
   const release = latest?.remuda;
-  const local = machines.find((m) => m.id === "local");
+  const local = host;
   if (release && version && newer(version, release) && releaseSeen !== release && !offline)
     toasts.push({
       id: "release",
       tone: "info",
-      text: `remuda ${release} is out; this one is ${version}.`,
+      text: t("remuda {release} is out; this one is {version}.", { release, version }),
       action: local && (
         <button type="button" className="btn sm primary" onClick={() => actions.openPanel("release")}>
-          Download & install
+          {t("Download & install")}
         </button>
       ),
       onDismiss: () => setReleaseSeen(release),
     });
+  // the chats a reboot stopped: one toast per machine and episode, the same Resume as the ⓘ's
+  for (const m of machines) {
+    const stopped = m.stopped ?? [];
+    if (!stopped.length) continue;
+    const key = episodeKey(m.id, stopped);
+    if (recoverSeen.includes(key)) continue;
+    toasts.push({
+      id: `recover-${m.id}`,
+      tone: "warn",
+      text: `${m.label}: ${stoppedWords(stopped.length)}`,
+      action: (
+        <button
+          type="button"
+          className="btn sm primary"
+          onClick={() => {
+            setRecoverSeen(remember(recoverSeen, key));
+            void resumeStopped(m.id, stopped.length);
+          }}
+        >
+          {t("Resume")}
+        </button>
+      ),
+      onDismiss: () => setRecoverSeen(remember(recoverSeen, key)),
+    });
+  }
   if (away)
     toasts.push({
       id: "away",
@@ -60,7 +172,7 @@ export function useToasts(): ToastItem[] {
             actions.openPanel("standup");
           }}
         >
-          Standup
+          {t("Standup")}
         </button>
       ),
       onDismiss: () => actions.setAway(null),
@@ -70,13 +182,15 @@ export function useToasts(): ToastItem[] {
     toasts.push({
       id: "tailscale",
       tone: "info",
-      text: "Tailscale: this remuda is not on your tailnet yet.",
+      text: t("Tailscale: this remuda is not on your tailnet yet."),
       action: (
         <a className="btn sm primary" href={tailscale.login_url} target="_blank" rel="noreferrer">
-          Log in
+          {t("Log in")}
         </a>
       ),
     });
-  if (tailscale?.state === "error") toasts.push({ id: "tailscale", tone: "error", text: `Tailscale: ${tailscale.error}` });
-  return toasts;
+  if (tailscale?.state === "error") toasts.push({ id: "tailscale", tone: "error", text: `Tailscale: ${tailscale.error}` }); // the error is the daemon's own words
+  // the screen-sharing mode swaps the hidden names out of every toast that names them
+  const shown = share.on ? toasts.map((toast) => (typeof toast.text === "string" ? { ...toast, text: share.redact(toast.text) } : toast)) : toasts;
+  return viewOnly ? viewerToasts(shown) : shown;
 }

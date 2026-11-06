@@ -8,3 +8,4 @@ web/tsconfig.tsbuildinfo
 
 # the worktrees Claude Code agents work in beside the checkout
 .claude/worktrees/
+macos/.build/

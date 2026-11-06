@@ -10,6 +10,7 @@ import { Notice } from "@/ui";
 import { parseAnsi, type Span } from "./ansi";
 import { fetchScreen } from "./api";
 import { thumbFont } from "./engine/geometry";
+import { t } from "@/lib/i18n";
 
 const BASE_FONT = 13;
 
@@ -43,8 +44,8 @@ export const Screen = memo(function Screen({ machineId, paneId, cols, busy, acti
   const box = useRef<HTMLDivElement>(null);
   const fontSize = useFitFont(box, width);
   return (
-    <div className="screen" ref={box} style={{ fontSize }} onClick={onOpen} title="Open the terminal in Agents">
-      {text === null && !error && <div className="empty chat-empty">Loading…</div>}
+    <div className="screen" ref={box} style={{ fontSize }} onClick={onOpen} title={t("Open the terminal in Agents")}>
+      {text === null && !error && <div className="empty chat-empty">{t("Loading…")}</div>}
       {error && (
         <Notice tone="error" className="chat-notice">
           {error}

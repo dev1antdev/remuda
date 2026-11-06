@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
+import { ru } from "@/lib/i18n/ru";
 import type { BudgetStatus } from "./api";
-import { budgetTone, budgetWords, budgetsFor, graver, missingWords, periodWords, ratio, scopeWords, tightest, toneClass } from "./budgets";
+import { budgetTone, budgetWords, budgetsFor, graver, missingWords, PERIODS, periodWords, ratio, scopeWords, tightest, toneClass } from "./budgets";
 
 const budget = (over: Partial<BudgetStatus> = {}): BudgetStatus => ({
   id: "b",
@@ -24,6 +26,14 @@ describe("ratio and tone", () => {
     expect(budgetTone(0.8)).toBe("amber");
     expect(budgetTone(1)).toBe("red");
     expect(budgetTone(3)).toBe("red");
+  });
+  it("turns amber at the very spend the words call 80 % and the server pushes for", () => {
+    const at80 = budget({ spent: 2.4, limit: 3, period: "day" }); // 2.4 / 3 is 0.7999999999999999 in floating point
+    expect(budgetWords(at80)).toContain("80 %");
+    expect(budgetTone(ratio(at80))).toBe("amber");
+    const atLimit = budget({ spent: 0.7 * 3, limit: 2.1, period: "day" }); // three runs at $0.70 against $2.10: 0.9999999999999998
+    expect(budgetWords(atLimit)).toContain("100 %");
+    expect(budgetTone(ratio(atLimit))).toBe("red");
   });
   it("picks the graver tone and the pill's class", () => {
     expect(graver("amber", "red")).toBe("red");
@@ -80,5 +90,16 @@ describe("words", () => {
     expect(scopeWords(budget(), label)).toBe("everything");
     expect(scopeWords(budget({ machine: "gog" }), label)).toBe("GOG");
     expect(scopeWords(budget({ machine: "gog", dir: "/home/me/remuda" }), label)).toBe("GOG · remuda");
+  });
+  it("speaks the page's language, the period and the scope too", () => {
+    setLang("ru");
+    try {
+      expect(budgetWords(budget())).toBe("$16.4 из $20.0 на этой неделе · 82 %");
+      expect(budgetWords(budget({ period: "month", collected: undefined }))).toBe("$20.0 в этом месяце · читаем…");
+      expect(scopeWords(budget(), (id) => id)).toBe("всё");
+      expect(PERIODS.filter((p) => !ru[p.label]).map((p) => p.label)).toEqual([]);
+    } finally {
+      setLang("en");
+    }
   });
 });

@@ -5,9 +5,10 @@ import { actions } from "@/app/store";
 import type { FileTarget } from "@/features/files/target";
 import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
-import { Icon, Logo } from "@/ui";
+import { Icon, Logo, Tip } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import { addComment, deleteComment, type Run, type Task } from "./api";
+import { t as tr } from "@/lib/i18n";
 
 export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
   task: Task;
@@ -37,7 +38,7 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
   };
   return (
     <div className="tasks-comments">
-      <div className="tasks-field-name">Comments</div>
+      <div className="tasks-field-name">{tr("Comments")}</div>
       {comments.map((c) => (
         <div key={c.id} className={`tasks-comment by-${c.author}`}>
           <div className="tasks-comment-head">
@@ -48,7 +49,7 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
                 </>
               ) : c.author === "you" ? (
                 <>
-                  <Icon name="user" size={12} /> you
+                  <Icon name="user" size={12} /> {tr("you")}
                 </>
               ) : (
                 <>
@@ -59,43 +60,44 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
             <span className="tasks-comment-when" title={new Date(c.created).toLocaleString()}>
               {whenShort(c.created)}
             </span>
-            <button
-              type="button"
-              className="icon-btn sm"
-              title="Delete comment"
-              aria-label="Delete comment"
-              onClick={() =>
-                void deleteComment(c.id).then(
-                  () => onChange({ ...t, comments: comments.filter((x) => x.id !== c.id) }),
-                  (e) => onError(errMsg(e)),
-                )
-              }
-            >
-              <Icon name="x" size={12} />
-            </button>
+            <Tip text={tr("Delete comment")}>
+              <button
+                type="button"
+                className="icon-btn sm"
+                aria-label={tr("Delete comment")}
+                onClick={() =>
+                  void deleteComment(c.id).then(
+                    () => onChange({ ...t, comments: comments.filter((x) => x.id !== c.id) }),
+                    (e) => onError(errMsg(e)),
+                  )
+                }
+              >
+                <Icon name="x" size={12} />
+              </button>
+            </Tip>
           </div>
           <div className="tasks-comment-body">
-            <Markdown text={c.body} onOpenFile={openFile} />
+            <Markdown text={c.body} onOpenFile={openFile} diagrams />
           </div>
         </div>
       ))}
       {run?.state === "finished" && !t.done && (
         <button type="button" className="btn primary tasks-comment-done" onClick={onMarkDone}>
-          <Icon name="check" size={14} /> Mark done
+          <Icon name="check" size={14} /> {tr("Mark done")}
         </button>
       )}
       <div className="tasks-comment-add">
         <textarea
           rows={2}
           value={comment}
-          placeholder="A note on this task…"
+          placeholder={tr("A note on this task…")}
           onChange={(e) => setComment(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void post();
           }}
         />
         <button type="button" className="btn" disabled={posting || !comment.trim()} onClick={() => void post()}>
-          Comment
+          {tr("Comment")}
         </button>
       </div>
     </div>

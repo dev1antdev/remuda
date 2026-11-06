@@ -17,8 +17,16 @@ type RunWatch struct {
 	// LastAnswer is the text the agent's latest turn ended with and the id of its last record;
 	// "" when the turn ends in a tool call, since a permission stop or a question asked through a tool is no answer.
 	LastAnswer func(machine, pane string) (text string, id string)
-	Notify     func(push.Payload)
-	Now        func() time.Time
+	// Usage is the meter's reading of a pane: what its agent spent so far; ok is false before anything was read.
+	Usage  func(machine, pane string) (cost float64, tokens int64, model string, ok bool)
+	Notify func(push.Payload)
+	// PRTouch asks for the pull request a pane's run names to be read again when its last read is old enough, so a merge
+	// moves the task with no page open.
+	PRTouch func(machine, pane string)
+	// Advance starts a pipeline's next stage after the previous run's agent said it is done: the agent in a new tab of
+	// the worktree with the prompt, the run recorded (Launcher.StartStage).
+	Advance func(prev Run, index int, stage Stage, prompt string) error
+	Now     func() time.Time
 
 	missing map[int64]time.Time
 }
@@ -58,13 +66,19 @@ func (w *RunWatch) Sweep() {
 			continue
 		}
 		delete(w.missing, r.ID)
+		if r.PRURL != "" && w.PRTouch != nil {
+			w.PRTouch(r.Machine, r.Pane)
+		}
 		if r.State == RunStarting {
 			if now().Sub(started) > startWindow {
 				_ = w.Store.SetRun(r.ID, RunFailed, "the prompt was never delivered")
 				_, _ = w.Store.AddComment(r.TaskID, "remuda", "The task was never handed to the agent. The worktree is there; send it by hand.")
+				_ = w.Store.StopPipeline(r.ID, "the prompt never reached the agent")
 			}
 			continue
 		}
+		w.noteUsage(r, started, now())
+		// a permission prompt or a choice dialog (blocked) only waits for the person: the answer that follows decides
 		if state == "working" || state == "unknown" {
 			continue
 		}
@@ -78,11 +92,26 @@ func (w *RunWatch) Sweep() {
 			answer = "…" + string(rs[len(rs)-6000:]) // the end is the answer
 		}
 		_, _ = w.Store.AddComment(r.TaskID, "agent", answer)
+		// the pipeline's step before the answer is noted as reported: a restart in between hears the answer again and
+		// takes the step, where the other order would leave the pipeline on for good
+		var stage string
+		var moved *Status
+		handled := false
+		if r.Pipeline == PipelineOn {
+			stage, moved, handled = w.onStageAnswer(r, answer)
+		}
 		_ = w.Store.SetRun(r.ID, RunFinished, id)
-		moved, _ := w.Store.OnFinish(r.TaskID)
+		r.State, r.Finished = RunFinished, now().UTC().Format(time.RFC3339)
+		w.noteUsage(r, started, now())
+		if !handled && r.Pipeline != PipelinePassed { // an earlier stage's tab answering again leaves the card to the pipeline
+			moved, _ = w.Store.OnFinish(r.TaskID)
+		}
 		if w.Notify != nil {
 			t, _ := w.Store.Get(r.TaskID)
 			title := fmt.Sprintf("Task %s: %s finished", t.Identifier, r.Agent)
+			if stage != "" {
+				title += ", " + stage
+			}
 			if moved != nil {
 				title += " → " + moved.Title
 			}
@@ -95,6 +124,30 @@ func (w *RunWatch) Sweep() {
 			})
 		}
 	}
+}
+
+// noteUsage writes the meter's figures on the run when they moved: every sweep while the pane is there, so they stay
+// once it is gone; took is the seconds from the start to the finish, 0 while the agent still works.
+func (w *RunWatch) noteUsage(r Run, started, now time.Time) {
+	if w.Usage == nil {
+		return
+	}
+	cost, tokens, model, ok := w.Usage(r.Machine, r.Pane)
+	if !ok {
+		return
+	}
+	took := 0
+	if r.State == RunFinished {
+		finished, err := time.Parse(time.RFC3339, r.Finished)
+		if err != nil {
+			finished = now
+		}
+		took = int(finished.Sub(started).Round(time.Second).Seconds())
+	}
+	if cost == r.Cost && tokens == r.Tokens && model == r.Model && took == r.Took {
+		return
+	}
+	_ = w.Store.SetRunUsage(r.ID, cost, tokens, model, took)
 }
 
 // Loop sweeps forever.

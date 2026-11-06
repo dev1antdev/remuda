@@ -1,12 +1,16 @@
 // Start an agent on a task: a worktree off a workspace's repository, Claude in it, the task's prompt once it is up.
 
 import { useEffect, useMemo, useState } from "react";
+import { actions } from "@/app/store";
 import type { Machine } from "@/features/roster/api";
 import { machineOptions } from "@/features/roster/options";
 import { usePref } from "@/lib/prefs";
 import { Dialog, Icon, Notice, Select, useSubmit } from "@/ui";
+import { useRoster } from "@/features/roster/useRoster";
 import { startTask, type Project, type Task } from "./api";
+import { automationOf } from "./autonomy";
 import { branchFor, taskPrompt } from "./prompt";
+import { t as tr } from "@/lib/i18n";
 
 export function StartAgentDialog({ task: t, project, moveTo, machines, currentPane, onClose, onStarted }: {
   task: Task;
@@ -20,13 +24,23 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
   const connected = machines.filter((m) => m.state === "connected" && m.sessions.some((s) => s.dir));
   const [remembered, setRemembered] = usePref<Record<string, { machine: string; workspace: string }>>("tasks.start", {});
   const last = remembered[String(t.project_id)];
-  const [machine, setMachine] = useState(() => (connected.find((m) => m.id === last?.machine) ?? connected.find((m) => m.id === currentPane?.machineId) ?? connected[0])?.id ?? "");
+  // the project's own settings first: where its agents work and which agent starts
+  const setUp = automationOf(project);
+  const { agents } = useRoster();
+  const agent = setUp.agent || "claude";
+  const [machine, setMachine] = useState(
+    () => (connected.find((m) => m.id === setUp.machine) ?? connected.find((m) => m.id === last?.machine) ?? connected.find((m) => m.id === currentPane?.machineId) ?? connected[0])?.id ?? "",
+  );
   const workspaces = useMemo(() => {
     const m = machines.find((x) => x.id === machine);
     // the repos themselves, not their worktrees: a worktree branches off its repo
     return (m?.sessions ?? []).filter((s) => s.dir && !s.worktree?.linked).map((s) => ({ value: s.id, label: s.name, hint: s.dir, icon: <Icon name="folder" size={14} /> }));
   }, [machines, machine]);
-  const [workspace, setWorkspace] = useState(() => (workspaces.find((w) => w.value === last?.workspace) ?? workspaces[0])?.value ?? "");
+  const [workspace, setWorkspace] = useState(() => {
+    const m = machines.find((x) => x.id === machine);
+    const onSetUp = machine === setUp.machine ? m?.sessions.find((s) => s.dir === setUp.dir && !s.worktree?.linked)?.id : undefined;
+    return (workspaces.find((w) => w.value === onSetUp) ?? workspaces.find((w) => w.value === last?.workspace) ?? workspaces[0])?.value ?? "";
+  });
   useEffect(() => {
     if (!workspaces.some((w) => w.value === workspace)) setWorkspace(workspaces[0]?.value ?? "");
   }, [workspaces, workspace]);
@@ -45,12 +59,12 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
   const ready = !!workspace && !!branch.trim() && !!prompt.trim();
   const { busy, err, run } = useSubmit(async () => {
     setRemembered({ ...remembered, [String(t.project_id)]: { machine, workspace } });
-    const task = await startTask(t.id, { machine, workspace, branch: branch.trim(), base: base.trim(), agent: "claude", groom, prompt });
-    onStarted(task, `${ws?.label ?? "the workspace"}${m && m.id !== "local" ? ` on ${m.label}` : ""}`);
+    const task = await startTask(t.id, { machine, workspace, branch: branch.trim(), base: base.trim(), agent, model: setUp.model, args: setUp.args, groom, prompt });
+    onStarted(task, `${ws?.label ?? tr("the workspace")}${m && m.id !== "local" ? ` ${tr("on {machine}", { machine: m.label })}` : ""}`);
   });
   return (
     <Dialog
-      title={<>Start an agent on {t.identifier}</>}
+      title={<>{tr("Start an agent on {task}", { task: t.identifier })}</>}
       icon="git-branch"
       size="md"
       as="form"
@@ -62,43 +76,47 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
       }}
     >
       <p className="modal-hint">
-        A worktree branches off the workspace's repository, Claude starts in it and gets the task once it is up.{" "}
+        {agent === "claude" && !setUp.model
+          ? tr("A worktree branches off the workspace's repository, Claude starts in it and gets the task once it is up.")
+          : tr("A worktree branches off the workspace's repository, {agent} starts in it, as the project's settings say, and gets the task once it is up.", {
+              agent: [agents.find((a) => a.id === agent)?.label ?? agent, setUp.model].filter(Boolean).join(" · "),
+            })}{" "}
         {moveTo ? (
           <>
-            The task moves to <b>{moveTo}</b>;
+            {tr("The task moves to")} <b>{moveTo}</b>;
           </>
         ) : (
-          "The task stays where it is;"
+          tr("The task stays where it is;")
         )}{" "}
-        every answer the agent finishes comes back here as a comment.
+        {tr("every answer the agent finishes comes back here as a comment.")}
       </p>
       <div className="schedule-row">
         {connected.length > 1 && (
           <label>
-            Machine
+            {tr("Machine")}
             <Select value={machine} onChange={setMachine} options={machineOptions(connected, { onlyConnected: false })} />
           </label>
         )}
         <label className="grow">
-          Workspace
-          <Select value={workspace} onChange={setWorkspace} placeholder="Pick a repository" options={workspaces} />
+          {tr("Workspace")}
+          <Select value={workspace} onChange={setWorkspace} placeholder={tr("Pick a repository")} options={workspaces} />
         </label>
       </div>
       <div className="schedule-row">
         <label className="grow">
-          Branch
+          {tr("Branch")}
           <input value={branch} onChange={(e) => setBranch(e.target.value)} spellCheck={false} required />
         </label>
         <label className="grow">
-          From
-          <input value={base} onChange={(e) => setBase(e.target.value)} placeholder="the current branch" spellCheck={false} />
+          {tr("From")}
+          <input value={base} onChange={(e) => setBase(e.target.value)} placeholder={tr("the current branch")} spellCheck={false} />
         </label>
       </div>
       <label className="tasks-toggle">
-        <input type="checkbox" checked={groom} onChange={(e) => toggleGroom(e.target.checked)} /> groom first (<code>/grill-me</code>)
+        <input type="checkbox" checked={groom} onChange={(e) => toggleGroom(e.target.checked)} /> {tr("groom first")} (<code>/grill-me</code>)
       </label>
       <label>
-        Prompt
+        {tr("Prompt")}
         <textarea
           rows={6}
           value={prompt}
@@ -110,11 +128,23 @@ export function StartAgentDialog({ task: t, project, moveTo, machines, currentPa
       </label>
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
+        <button
+          type="button"
+          className="btn ghost arena-from-task"
+          title={tr("The same prompt to several agents at once, each in a worktree of its own, to keep the best")}
+          disabled={!prompt.trim()}
+          onClick={() => {
+            onClose();
+            actions.openDialog({ kind: "arena", taskId: t.id, title: `${t.identifier} ${t.title}`, prompt, at: machine && workspace ? { machineId: machine, workspaceId: workspace } : undefined });
+          }}
+        >
+          <Icon name="columns" size={14} /> {tr("Arena…")}
+        </button>
         <button type="button" className="btn" onClick={onClose}>
-          Cancel
+          {tr("Cancel")}
         </button>
         <button type="submit" className="btn primary" disabled={busy || !ready}>
-          {busy ? "Starting…" : "Start"}
+          {busy ? tr("Starting…") : tr("Start")}
         </button>
       </div>
     </Dialog>

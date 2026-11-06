@@ -6,6 +6,7 @@ import (
 	"net"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,6 +30,7 @@ type Machine struct {
 	lastAttempt time.Time
 	lastAlive   time.Time // last `ssh -O check`, so transport errors don't spawn one each
 	removed     bool      // taken out of the registry; never reconnect, pollers stop
+	serverHost  bool      // the local one, when remuda serves the page only: its herdr is never asked (Manager.SetServer)
 	serverStart time.Time // when remuda last started `herdr server` there
 	herdrBin    string    // herdr's binary on the machine, once known
 	socket      string
@@ -38,11 +40,23 @@ type Machine struct {
 	attach *herdr.AttachManager
 	home   string
 
-	fwds map[int]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda)
-	peer *Peer
+	fwds  map[forwardTo]*tcpForward // ports forwarded over the master, once asked for (code-server, a peer remuda, a preview)
+	fwdMu sync.Mutex                // one forward made at a time, so asks of a port at once make one, not one each
+	peer  *Peer
+
+	onState func(id, label, state, reason string) // the manager's ear for connected / error, nil for the local one
+
+	door    *Door  // the way its agents reach the tasks here, opened after every connect
+	doorKey string // the key placed there, kept so a reconnect places the same one
 
 	// Transcripts reads the session files on this machine.
 	Transcripts *transcript.Reader
+}
+
+// forwardTo is what a forward reaches on the machine.
+type forwardTo struct {
+	host string
+	port int
 }
 
 // tcpForward is a port forwarded over one master; a new master needs a new forward.
@@ -90,13 +104,18 @@ func (mc *Machine) Removed() bool {
 // fail tears the connection down and records why.
 func (mc *Machine) fail(err error) {
 	mc.mu.Lock()
+	was := mc.state
 	mc.state = StateError
 	mc.errMsg = err.Error()
 	conn := mc.conn
 	mc.conn, mc.client, mc.attach = nil, nil, nil
+	hook := mc.onState
 	mc.mu.Unlock()
 	if conn != nil {
 		conn.Close()
+	}
+	if hook != nil && was != StateError {
+		hook(mc.ID(), mc.Label(), StateError, err.Error())
 	}
 }
 
@@ -174,11 +193,16 @@ func (mc *Machine) connect() {
 	mc.home = home
 	mc.herdrBin, mc.socket = bin, sock
 	mc.attach = herdr.NewAttachManager(func(termID string) *exec.Cmd {
-		return conn.AttachCmd(bin, termID)
+		return conn.AttachCmd(bin, sock, termID)
 	})
 	mc.state = StateConnected
 	mc.errMsg = ""
+	hook := mc.onState
 	mc.mu.Unlock()
+	go mc.openDoor(conn)
+	if hook != nil {
+		hook(mc.ID(), mc.Label(), StateConnected, "")
+	}
 }
 
 // rpcClient picks the RPC transport: a forwarded unix socket, else one `nc -U` exec per request over the master
@@ -228,6 +252,9 @@ func (mc *Machine) transportError(err error) {
 func (mc *Machine) Ready() (*herdr.Client, *herdr.AttachManager, error) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
+	if mc.local && mc.serverHost {
+		return nil, nil, ErrServerHost
+	}
 	if mc.local {
 		return mc.client, mc.attach, nil
 	}
@@ -253,28 +280,36 @@ func (mc *Machine) CodeAddr(port int) (string, error) { return mc.ForwardAddr(po
 
 // ForwardAddr is a loopback address that reaches 127.0.0.1:port on the machine, a forward remembered per master.
 func (mc *Machine) ForwardAddr(port int) (string, error) {
+	return mc.ForwardHostAddr("127.0.0.1", port)
+}
+
+// ForwardHostAddr is an address here that reaches host:port as the machine dials it, a forward remembered per master.
+func (mc *Machine) ForwardHostAddr(host string, port int) (string, error) {
 	if mc.local {
-		return fmt.Sprintf("127.0.0.1:%d", port), nil
+		return net.JoinHostPort(host, strconv.Itoa(port)), nil
 	}
 	conn, err := mc.remoteConn()
 	if err != nil {
 		return "", err
 	}
+	to := forwardTo{host: host, port: port}
+	mc.fwdMu.Lock()
+	defer mc.fwdMu.Unlock()
 	mc.mu.Lock()
-	if f := mc.fwds[port]; f != nil && f.conn == conn {
+	if f := mc.fwds[to]; f != nil && f.conn == conn {
 		mc.mu.Unlock()
 		return f.addr, nil
 	}
 	mc.mu.Unlock()
-	addr, err := conn.ForwardTCP(port)
+	addr, err := conn.ForwardTCPTo(host, port)
 	if err != nil {
 		return "", err
 	}
 	mc.mu.Lock()
 	if mc.fwds == nil {
-		mc.fwds = map[int]*tcpForward{}
+		mc.fwds = map[forwardTo]*tcpForward{}
 	}
-	mc.fwds[port] = &tcpForward{conn: conn, port: port, addr: addr}
+	mc.fwds[to] = &tcpForward{conn: conn, port: port, addr: addr}
 	mc.mu.Unlock()
 	return addr, nil
 }

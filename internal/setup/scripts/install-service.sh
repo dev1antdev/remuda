@@ -21,10 +21,20 @@ TS_ARGS=""
 if [ "${REMUDA_TAILSCALE:-0}" = "1" ]; then
     TS_ARGS="-tailscale -tailscale-hostname ${REMUDA_TAILSCALE_HOSTNAME:-remuda}"
 fi
+# REMUDA_SERVER=1 makes the service serve the page only (remuda -server):
+# this machine is none of the cockpit's, its herdr neither needed nor kept.
+if [ "${REMUDA_SERVER:-0}" = "1" ]; then
+    TS_ARGS="-server${TS_ARGS:+ $TS_ARGS}"
+fi
 LABEL="dev.mardeus.remuda"
 PATH_FOR_SERVICE="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 [ -x "$BIN" ] || { echo "remuda not found at $BIN (the installer or remuda setup puts it there)"; exit 1; }
+# a remuda older than -server would leave a unit that exits at once, over and over: refused before the running one is replaced
+if [ "${REMUDA_SERVER:-0}" = "1" ] && ! "$BIN" -server -version >/dev/null 2>&1; then
+    echo "$("$BIN" -version 2>/dev/null || echo "the remuda") at $BIN does not know -server yet: update it first (Download & install in its Updates, or the installer), then run this again; the running service is left as it is"
+    exit 1
+fi
 
 case "$(uname -s)" in
 Darwin)
@@ -64,8 +74,9 @@ EOF
         rm -f "$HOME/Library/LaunchAgents/dev.mardeus.herdr-ui.plist" "$HOME/.local/bin/herdr-ui"
         launchctl bootout "gui/$UID_NUM/$LABEL" 2>/dev/null || true
         sleep 1
-        if command -v lsof >/dev/null 2>&1 && lsof -ti "tcp:${ADDR##*:}" >/dev/null 2>&1; then
-            echo "something already listens on $ADDR (pid $(lsof -ti "tcp:${ADDR##*:}" | head -1)); stop it first"; exit 1
+        # listeners only: lsof's tcp:PORT alone names a connection to that port too, a browser's to another machine's remuda
+        if command -v lsof >/dev/null 2>&1 && lsof -ti "tcp:${ADDR##*:}" -sTCP:LISTEN >/dev/null 2>&1; then
+            echo "something already listens on $ADDR (pid $(lsof -ti "tcp:${ADDR##*:}" -sTCP:LISTEN | head -1)); stop it first"; exit 1
         fi
         launchctl bootstrap "gui/$UID_NUM" "$PLIST" 2>/dev/null || launchctl load -w "$PLIST"
         sleep 2
@@ -97,9 +108,9 @@ Description=remuda — browser/phone client for herdr
 After=default.target
 
 [Service]
-ExecStart=$BIN -addr $ADDR $TS_ARGS
+ExecStart="$BIN" -addr "$ADDR" $TS_ARGS
 KillMode=process
-Environment=PATH=$PATH_FOR_SERVICE$([ -n "$TS_AUTHKEY" ] && printf '\nEnvironment=TS_AUTHKEY=%s' "$TS_AUTHKEY")
+Environment="PATH=$PATH_FOR_SERVICE"$([ -n "$TS_AUTHKEY" ] && printf '\nEnvironment=TS_AUTHKEY=%s' "$TS_AUTHKEY")
 Restart=always
 RestartSec=3
 

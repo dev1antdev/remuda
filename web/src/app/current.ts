@@ -1,11 +1,13 @@
-// The pane on screen: the one requested when the roster still has it, else the first agent pane, else the first pane.
+// The pane on screen: the one requested when the roster still has it, else the first agent pane, else the first pane
+// (shownPane.ts: the floating terminal's own shell is never a fallback).
 
 import { useMemo } from "react";
-import type { Machine, Pane, Session, Tab } from "@/features/roster/api";
+import type { Machine } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
-import { app, type Selection } from "./store";
+import { shownPane, type Located } from "./shownPane";
+import { app } from "./store";
 
-export type Located = { machine: Machine; session: Session; tab: Tab; pane: Pane };
+export type { Located } from "./shownPane";
 
 export function allPanes(machines: Machine[]): Located[] {
   const out: Located[] = [];
@@ -18,12 +20,10 @@ export function useAllPanes(): Located[] {
   return useMemo(() => allPanes(machines), [machines]);
 }
 
-const matches = (x: Located, r: Selection) => x.machine.id === r.machineId && x.pane.id === r.paneId;
-
 export function useCurrent(): Located | null {
   const panes = useAllPanes();
   const requested = app.use((s) => s.requested);
-  return useMemo(() => (requested && panes.find((x) => matches(x, requested))) ?? panes.find((x) => x.pane.agent) ?? panes[0] ?? null, [panes, requested]);
+  return useMemo(() => shownPane(panes, requested), [panes, requested]);
 }
 
 // the folder a pane works in: the workspace's checkout, else the pane's cwd

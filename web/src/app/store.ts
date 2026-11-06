@@ -5,11 +5,13 @@
 import { createStore } from "@/lib/store";
 import { isTouch, readPref, writePref } from "@/lib/prefs";
 import { clamp, step } from "@/features/chat/find";
-import type { Machine, Session } from "@/features/roster/api";
+import type { FolderIconRef, Machine, Session } from "@/features/roster/api";
 import type { FileTarget } from "@/features/files/target";
 import type { SearchHit } from "@/features/search/api";
 import type { BudgetStatus } from "@/features/usage/api";
+import { keepNewest, type OnPageAlert } from "@/features/alerts/onpage";
 import { readURL } from "./url";
+import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, lensToOpen, openLensOf } from "./openLens";
 
 export type Lens = "chat" | "terminal" | "changes";
 export type Mode = "herdr" | "wall" | "tasks" | "code" | "review";
@@ -18,7 +20,7 @@ export type Selection = { machineId: string; paneId: string };
 // Every "make something" dialog, keyed so only one is open at a time.
 export type AppDialog =
   | { kind: "rename"; machineId: string; what: "tab" | "workspace"; id: string; label: string }
-  | { kind: "workspace"; machineId: string }
+  | { kind: "workspace"; machineId: string; dir?: string } // dir: the folder it opens on, from a folder's own menu
   | { kind: "tab"; machineId: string; session: Session }
   | { kind: "worktree"; machineId: string; session: Session }
   | { kind: "machine" }
@@ -29,19 +31,32 @@ export type AppDialog =
   | { kind: "recap"; machineId: string; paneId: string; session: string | null; dir: string; title: string } // one conversation's recap; paneId "" = a transcript on its own
   | { kind: "budget"; budget: BudgetStatus | null } // a spending limit, new or the one given
   | { kind: "import-issue"; projectId?: number } // a task from a GitHub issue, into the project named or the one picked in the dialog
+  | { kind: "import-jira"; projectId?: number } // a task from a Jira issue, read from the person's site
+  | { kind: "handover"; machineId: string; paneId: string; session: string | null; agent: string; workspace: string } // this conversation continued by another agent in a new tab
+  | { kind: "recipes" } // the saved ways to start an agent, edited as a list
+  | { kind: "start-recipe"; machineId?: string; dir?: string } // an agent started from a recipe, in the folder at hand unless the recipe has its own
+  | { kind: "pins"; machineId: string; paneId: string; dir: string; shown: string | null; title: string } // the turns pinned in a folder's conversations; shown = the session on screen, whose pins name no session
+  | { kind: "model"; machineId: string; paneId: string; current?: string } // a Claude Code pane's model switched through its own /model; current = what the meter last saw it answer with
+  | { kind: "teleport"; machineId: string; paneId: string; tabId: string; workspace: string; agent: string } // the pane's work moved to another machine, an agent carrying on there
+  | { kind: "folder-icon"; machineId: string; folder: string; name: string; icon?: FolderIconRef } // a folder's icon: an emoji, a site's favicon or a picture
+  | { kind: "leftovers"; machineId: string } // the machine's worktrees no workspace has open, the clean ones to remove
+  | { kind: "previews"; machineId: string; workspace?: string; name?: string } // what the machine's processes serve, the workspace's first, each opened on the cockpit
+  | { kind: "update-everywhere" } // every connected machine's updates, one after another, the page's own host last
+  | { kind: "reopen" } // the agents whose panes went away, each to be started again on its session
+  | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string } } // one prompt to several agents, each in a worktree of its own
   | null;
 
-export type RowMenu = { machine: Machine; session: Session; x: number; y: number } | null;
 export type NoticeMsg = { text: string; error?: boolean; brief?: boolean };
 export type Confirm = { text: string; label: string; run: () => void };
 // a jump names its pane ("" = the transcript viewer): a Chat gets it only when it is that pane's
 export type Jump = { machineId: string; paneId: string; session: string; turn: string; n: number };
-export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | null;
+export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | "arena" | "server" | null; // server: the host's vitals, in server mode
 // what the transcript viewer shows, read-only: a session by folder and id, or one of its subagents
 export type Viewer = Pick<SearchHit, "machine" | "dir" | "session"> & { subagent?: { id: string; description: string } };
 // the find bar over the conversation shown: the bar writes the query and the step, the chat writes the count;
-// opened counts the ⌘F presses, so each one puts the focus back in the field
-export type Find = { query: string; at: number; total: number; opened: number };
+// opened counts the ⌘F presses, so each one puts the focus back in the field; steps counts the bar's steps and by
+// says which way the last one went, for a lens whose matches are walked outside the page (the terminal's)
+export type Find = { query: string; at: number; total: number; opened: number; steps: number; by: 1 | -1 };
 
 export type AppState = {
   requested: Selection | null; // the selection is a request; the pane shown is derived from it, never fixed up in an effect
@@ -49,7 +64,6 @@ export type AppState = {
   mode: Mode;
   drawer: boolean;
   dialog: AppDialog;
-  menu: RowMenu;
   panel: Panel; // the one overlay panel open, if any
   search: string; // what the search panel opens with: the palette hands over what was typed in it
   notice: NoticeMsg | null;
@@ -62,12 +76,17 @@ export type AppState = {
   footprint: boolean; // the files rail beside the lenses, a per-device pref
   codeFile: { machineId: string; folder: string; path: string; line?: number; n: number } | null; // a file the Code mode is asked to open, once; folder "" keeps the one picked
   chatSession: string | null; // an older session of its folder the chat lens shows instead of the pane's live one; the export follows it
+  chatLive: string | null; // the pane's own session id while its chat lens is mounted, so the pins list can tell its pins from an older session's
   reviewAsked: { machineId: string; dir: string } | null; // a folder the Review mode is asked to pick, once (a task's run)
   lastFile: { machineId: string; path: string } | null; // the file last opened in the viewer: what {file} means in a quick prompt
   full: boolean; // the lens takes the whole screen: no header, no sidebar, no rail (app/full.tsx)
   find: Find | null; // the find bar over the chat lens or the transcript viewer, null while closed
   away: string | null; // what the agents did while the page was away, one toast line until it is dismissed or followed
+  alerts: OnPageAlert[]; // the alerts shown on the page while it is in front (features/alerts/onpage.ts), newest last
+  closedOffer: { machineId: string; ids: string[]; text: string } | null; // a close just made through the page: a toast offers its agents back
   taskAsked: { projectId: number; taskId: number; start: boolean; n: number } | null; // a task the Tasks mode is asked to open, once (one just made from an issue); start = the agent dialog on it too
+  split: boolean; // the chat beside the terminal, asked for by a per-device pref; shown only on a wide screen with a mouse (app/split.ts)
+  float: { machineId: string } | null; // the floating terminal's drawer, open on that machine's scratch shell; null while hidden
 };
 
 const fromURL = readURL();
@@ -77,11 +96,10 @@ const linked = fromURL.turn ? { machineId: fromURL.turn.machineId, paneId: fromU
 
 export const app = createStore<AppState>({
   requested: fromURL.requested,
-  lens: linked ? "chat" : (fromURL.lens ?? (isTouch ? "chat" : "terminal")),
+  lens: linked ? "chat" : (fromURL.lens ?? (fromURL.requested ? lensToOpen(openLensOf(readPref(OPEN_LENS_KEY, DEFAULT_OPEN_LENS)), isTouch ? "chat" : "terminal") : isTouch ? "chat" : "terminal")),
   mode,
   drawer: false,
   dialog: null,
-  menu: null,
   panel: fromURL.panel,
   search: "",
   notice: null,
@@ -94,12 +112,17 @@ export const app = createStore<AppState>({
   footprint: readPref("footprint", !isTouch),
   codeFile: null,
   chatSession: null,
+  chatLive: null,
   reviewAsked: null,
   lastFile: null,
   full: false,
   find: null,
   away: null,
+  alerts: [],
+  closedOffer: null,
   taskAsked: null,
+  split: readPref("split", false),
+  float: null,
 });
 
 let jumps = linked ? 1 : 0;
@@ -111,6 +134,12 @@ export const actions = {
   selectPane(machineId: string, paneId: string) {
     app.set({ requested: { machineId, paneId }, viewer: null, drawer: false, mode: "herdr" });
     writePref("mode", "herdr");
+  },
+  // a pane brought up by a notification, the Mac app's menu, an Activity row or Alt+N: the lens the person chose for that
+  openPane(machineId: string, paneId: string) {
+    actions.selectPane(machineId, paneId);
+    const pref = openLensOf(readPref(OPEN_LENS_KEY, DEFAULT_OPEN_LENS));
+    if (pref !== "keep") app.set({ lens: pref });
   },
   setLens(lens: Lens) {
     app.set({ lens });
@@ -136,17 +165,18 @@ export const actions = {
   closeDrawer() {
     app.set({ drawer: false });
   },
+  // the floating terminal on a machine's scratch shell; hiding it leaves the shell running
+  openFloat(machineId: string) {
+    app.set({ float: { machineId }, drawer: false });
+  },
+  closeFloat() {
+    app.set({ float: null });
+  },
   openDialog(dialog: AppDialog) {
-    app.set({ dialog, menu: null });
+    app.set({ dialog });
   },
   closeDialog() {
     app.set({ dialog: null });
-  },
-  openMenu(menu: RowMenu) {
-    app.set((s) => ({ menu: menu && s.menu?.session.id === menu.session.id ? null : menu }));
-  },
-  closeMenu() {
-    app.set({ menu: null });
   },
   openPanel(panel: Panel) {
     app.set({ panel });
@@ -210,9 +240,13 @@ export const actions = {
   showChatSession(chatSession: string | null) {
     app.set({ chatSession });
   },
+  // the chat lens noted the pane's own session id (null once it is gone)
+  setChatLive(chatLive: string | null) {
+    app.set((s) => (s.chatLive === chatLive ? {} : { chatLive }));
+  },
   // the find bar: opened again, it keeps its query and takes the focus back
   openFind() {
-    app.set((s) => ({ find: { query: s.find?.query ?? "", at: s.find?.at ?? 0, total: s.find?.total ?? 0, opened: (s.find?.opened ?? 0) + 1 } }));
+    app.set((s) => ({ find: { query: s.find?.query ?? "", at: s.find?.at ?? 0, total: s.find?.total ?? 0, opened: (s.find?.opened ?? 0) + 1, steps: s.find?.steps ?? 0, by: s.find?.by ?? 1 } }));
   },
   closeFind() {
     app.set({ find: null });
@@ -221,11 +255,15 @@ export const actions = {
     app.set((s) => (s.find ? { find: { ...s.find, query, at: 0 } } : {}));
   },
   stepFind(by: 1 | -1) {
-    app.set((s) => (s.find ? { find: { ...s.find, at: step(s.find.at, s.find.total, by) } } : {}));
+    app.set((s) => (s.find ? { find: { ...s.find, at: step(s.find.at, s.find.total, by), steps: s.find.steps + 1, by } } : {}));
   },
-  // the chat counted the matches of the query shown
-  foundMatches(total: number) {
-    app.set((s) => (s.find && s.find.total !== total ? { find: { ...s.find, total, at: clamp(s.find.at, total) } } : {}));
+  // the lens counted the matches of the query shown; the terminal says which one it stands on too
+  foundMatches(total: number, at?: number) {
+    app.set((s) => {
+      if (!s.find) return {};
+      const now = at ?? clamp(s.find.at, total);
+      return s.find.total !== total || s.find.at !== now ? { find: { ...s.find, total, at: now } } : {};
+    });
   },
   openInCode(machineId: string, folder: string, path: string, line?: number) {
     app.set({ mode: "code", codeOpened: true, codeFile: { machineId, folder, path, line, n: ++codeOpens } });
@@ -235,6 +273,21 @@ export const actions = {
   setAway(away: string | null) {
     app.set({ away });
   },
+  // an alert shown in the corner while the page is in front; the same one once, the newest few
+  addAlert(alert: OnPageAlert) {
+    app.set({ alerts: keepNewest(app.get().alerts, alert) });
+  },
+  dismissAlert(id: string) {
+    app.set({ alerts: app.get().alerts.filter((alert) => alert.id !== id) });
+  },
+  // the alerts still standing, a question answered elsewhere taken down (features/alerts/onpage.ts stillStanding)
+  setAlerts(alerts: OnPageAlert[]) {
+    app.set({ alerts });
+  },
+  // the toast that offers back the agents a close just stopped; null takes it down
+  setClosedOffer(closedOffer: AppState["closedOffer"]) {
+    app.set({ closedOffer });
+  },
   // openTask takes the person to a task in the Tasks mode, with the start-an-agent dialog on it when asked
   openTask(projectId: number, taskId: number, start = false) {
     app.set({ mode: "tasks", full: false, taskAsked: { projectId, taskId, start, n: ++taskOpens } });
@@ -242,5 +295,11 @@ export const actions = {
   },
   taskOpened() {
     app.set({ taskAsked: null });
+  },
+  // the chat beside the terminal, on or off; a pref per device, since a width suits a screen
+  toggleSplit() {
+    const split = !app.get().split;
+    app.set({ split });
+    writePref("split", split);
   },
 };

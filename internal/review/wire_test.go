@@ -20,8 +20,9 @@ func TestSummaryReadsTheScriptsAnswer(t *testing.T) {
 		"1\t0\ta.txt\n3\t2\tb.txt\n",
 		"new.txt\n",
 		"a.txt" + script.US + reviewedBlob + "\nb.txt" + script.US + freshBlob + "\nnew.txt" + script.US + freshBlob + "\n",
-		"abc1234000000000000000000000000000000000\n" + script.US + ":100644 100644 0000000 " + reviewedBlob + " M\ta.txt\n" +
-			"def5678000000000000000000000000000000000\n" + script.US + ":100644 100644 0000000 " + freshBlob + " M\tb.txt\n",
+		"abc1234000000000000000000000000000000000\n\n:100644 100644 0000000 " + reviewedBlob + " M\ta.txt\n" +
+			"def5678000000000000000000000000000000000\n\n:100644 100644 0000000 " + freshBlob + " M\tb.txt\n",
+		"14\n",
 	}, script.RS+"\n")
 	host := &shell.Fake{Name: "box", Remote: true, Answer: func(string) (string, error) { return answer, nil }}
 
@@ -36,6 +37,9 @@ func TestSummaryReadsTheScriptsAnswer(t *testing.T) {
 	}
 	if len(summary.Commits) != 2 || !summary.Commits[0].Seen || summary.Commits[1].Seen || summary.Commits[0].Subject != "committed as reviewed" {
 		t.Fatalf("commits: %+v", summary.Commits)
+	}
+	if summary.CommitsTotal != 14 {
+		t.Fatalf("commits total = %d, want 14 (the count past the listed ones)", summary.CommitsTotal)
 	}
 	if len(summary.Files) != 3 || summary.Fresh != 2 {
 		t.Fatalf("files: %+v", summary.Files)

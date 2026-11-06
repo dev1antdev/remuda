@@ -1,7 +1,8 @@
 // Package schedule runs things on a timetable: a prompt to the agent in a
-// workspace folder (panes come and go, the project stays), or the standup as a
-// digest pushed to the person's devices; a five-field cron in local time; a run
-// is never queued or retried.
+// workspace folder (panes come and go, the project stays), the standup as a
+// digest pushed to the person's devices, or a fresh agent started in a folder
+// with a prompt and taken down once it has answered; a five-field cron in
+// local time; a run is never queued or retried.
 package schedule
 
 import (
@@ -22,10 +23,11 @@ import (
 
 const file = "schedules.json"
 
-// The kinds of schedule: a prompt to an agent, or the standup pushed as a digest.
+// The kinds of schedule: a prompt to an agent, the standup pushed as a digest, or a fresh agent started in a folder.
 const (
 	KindPrompt = "prompt"
 	KindDigest = "digest"
+	KindAgent  = "agent"
 )
 
 // What a digest covers: since local midnight, the last 24 hours, the last 7 days, or since its previous run.
@@ -38,19 +40,24 @@ const (
 
 type Schedule struct {
 	ID      string `json:"id"`
-	Kind    string `json:"kind"` // prompt (the default) | digest
+	Kind    string `json:"kind"` // prompt (the default) | digest | agent
 	Machine string `json:"machine"`
 	Dir     string `json:"dir"`
 	Label   string `json:"label"`
 	Cron    string `json:"cron"`
 	Prompt  string `json:"prompt"`
 	Since   string `json:"since,omitempty"` // a digest's period: midnight | 24h | 7d | last
+	Agent   string `json:"agent,omitempty"` // an agent schedule's kind of agent
+	Model   string `json:"model,omitempty"` // the model as the agent's own CLI names it, "" for its default
+	Args    string `json:"args,omitempty"`  // extra arguments, as the person wrote them
+	Close   bool   `json:"close,omitempty"` // take the tab down once the agent has answered
 	Enabled bool   `json:"enabled"`
 
 	Next       time.Time `json:"next,omitzero"` // the coming run, filled in by List
 	LastRun    time.Time `json:"last_run,omitzero"`
 	LastResult string    `json:"last_result,omitempty"`
 	LastOK     bool      `json:"last_ok"`
+	LastPane   *Started  `json:"last_pane,omitempty"` // the agent the last run started, while it is watched for its answer
 }
 
 // Submit delivers a prompt to the agent in a folder and names the pane it went to.
@@ -64,15 +71,17 @@ type Store struct {
 	submit Submit
 	notify func(push.Payload)
 	digest Digest
+	Agents Agents // the app's way to start, close and read an agent schedule's agent; set after New
 	now    func() time.Time
 
 	mu       sync.Mutex
 	items    map[string]*Schedule
+	firing   map[string]time.Time // the minute each schedule was last dispatched for, until its run has noted LastRun
 	inflight sync.WaitGroup
 }
 
 func New(dir string, submit Submit, notify func(push.Payload), digest Digest) *Store {
-	st := &Store{dir: dir, submit: submit, notify: notify, digest: digest, now: time.Now, items: map[string]*Schedule{}}
+	st := &Store{dir: dir, submit: submit, notify: notify, digest: digest, now: time.Now, items: map[string]*Schedule{}, firing: map[string]time.Time{}}
 	var list []*Schedule
 	if err := state.LoadJSON(dir, file, &list); err != nil {
 		log.Printf("%s is unreadable (%v): no schedules until it is fixed", file, err)
@@ -155,8 +164,12 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 		if s.Label == "" {
 			s.Label = "Standup digest"
 		}
+	case KindAgent:
+		if err := checkAgent(&s); err != nil {
+			return s, err
+		}
 	default:
-		return s, errors.New("a schedule is a prompt or a digest")
+		return s, errors.New("a schedule is a prompt, a digest or an agent")
 	}
 	if _, err := Parse(s.Cron); err != nil {
 		return s, err
@@ -166,7 +179,7 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 	if s.ID == "" {
 		s.ID = state.NewID()
 	} else if old, ok := st.items[s.ID]; ok {
-		s.LastRun, s.LastResult, s.LastOK = old.LastRun, old.LastResult, old.LastOK
+		s.LastRun, s.LastResult, s.LastOK, s.LastPane = old.LastRun, old.LastResult, old.LastOK, old.LastPane
 	}
 	cp := s
 	st.items[s.ID] = &cp
@@ -180,6 +193,7 @@ func (st *Store) Delete(id string) error {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	delete(st.items, id)
+	delete(st.firing, id)
 	return st.saveLocked()
 }
 
@@ -201,8 +215,12 @@ func (st *Store) Run(id string) (Schedule, error) {
 }
 
 func (st *Store) fire(s *Schedule) {
-	if s.Kind == KindDigest {
+	switch s.Kind {
+	case KindDigest:
 		st.fireDigest(s)
+		return
+	case KindAgent:
+		st.fireAgent(s)
 		return
 	}
 	pane, err := st.submit(s.Machine, s.Dir, s.Prompt)
@@ -295,17 +313,20 @@ func sinceKnown(mode string) bool {
 	return false
 }
 
-// Tick runs every enabled schedule whose cron matches this minute and has not run this minute yet; call it about every half minute.
+// Tick runs every enabled schedule whose cron matches this minute and was neither run nor started this minute yet — a
+// delivery may outlast the half minute to the next tick, and the hour a clock falls back reads a minute it ran at
+// already; call it about every half minute.
 func (st *Store) Tick() {
 	now := st.now()
 	minute := now.Truncate(time.Minute)
 	st.mu.Lock()
 	var due []*Schedule
 	for _, s := range st.items {
-		if !s.Enabled || s.LastRun.Truncate(time.Minute).Equal(minute) {
+		if !s.Enabled || wallMinute(s.LastRun, now.Location()) == wallMinute(now, now.Location()) || st.firing[s.ID].Equal(minute) {
 			continue
 		}
 		if c, err := Parse(s.Cron); err == nil && c.Matches(now) {
+			st.firing[s.ID] = minute
 			due = append(due, s)
 		}
 	}
@@ -348,7 +369,7 @@ func Parse(expr string) (Cron, error) {
 		return Cron{}, fmt.Errorf("cron needs five fields (minute hour day month weekday), got %d", len(parts))
 	}
 	var c Cron
-	c.anyDay, c.anyWeek = parts[2] == "*", parts[4] == "*"
+	c.anyDay, c.anyWeek = strings.HasPrefix(parts[2], "*"), strings.HasPrefix(parts[4], "*") // Vixie's DOM_STAR: "*/2" too
 	for i, part := range parts {
 		lo, hi := ranges[i][0], ranges[i][1]
 		allowed := make([]bool, hi+1)
@@ -408,14 +429,30 @@ func (c Cron) Matches(t time.Time) bool {
 	return day && week
 }
 
-// Next is the first matching minute after t, within a year.
+// Next is the first matching minute after t, within a year, that does not read on the wall clock as the match before it:
+// the hour a clock falls back repeats a minute Tick ran at already.
 func (c Cron) Next(t time.Time) (time.Time, bool) {
-	cur := t.Truncate(time.Minute).Add(time.Minute)
-	for i := 0; i < 366*24*60; i++ {
+	from := t.Truncate(time.Minute).Add(time.Minute)
+	cur := from.Add(-fallBackReach)
+	last := ""
+	for i := 0; i < 366*24*60+int(fallBackReach/time.Minute); i++ {
 		if c.Matches(cur) {
-			return cur, true
+			wall := wallMinute(cur, cur.Location())
+			if !cur.Before(from) && wall != last {
+				return cur, true
+			}
+			last = wall
 		}
 		cur = cur.Add(time.Minute)
 	}
 	return time.Time{}, false
+}
+
+// fallBackReach is how far back Next looks for a match a fall-back repeats: no zone turns its clock back further.
+const fallBackReach = 3 * time.Hour
+
+// wallMinute is a moment as the wall clock reads it in loc, to the minute: the hour a clock falls back reads the same
+// minutes twice.
+func wallMinute(t time.Time, loc *time.Location) string {
+	return t.In(loc).Format("2006-01-02 15:04")
 }
