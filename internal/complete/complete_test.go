@@ -2,6 +2,9 @@ package complete
 
 import (
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -154,5 +157,54 @@ func TestFilesListTheFolderAndNoteACut(t *testing.T) {
 	big := ParsePaths(strings.Join(many, "\n") + "\n")
 	if len(big.Paths) != MaxPaths || !big.Cut {
 		t.Fatalf("a folder past MaxPaths is cut and says so: %d, cut %v", len(big.Paths), big.Cut)
+	}
+}
+
+func TestAnAnswerPastItsMinuteIsLetGo(t *testing.T) {
+	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
+	svc := New()
+	svc.now = func() time.Time { return now }
+	host := &shell.Fake{Name: "box", Answer: func(string) (string, error) { return "a.go\n", nil }}
+	for i := 0; i < 50; i++ {
+		if _, err := svc.Files(host, "/worktrees/task-"+strings.Repeat("x", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now = now.Add(CacheFor + time.Second)
+	if _, err := svc.Files(host, "/repo"); err != nil {
+		t.Fatal(err)
+	}
+	svc.mu.Lock()
+	kept := len(svc.cache)
+	svc.mu.Unlock()
+	if kept != 1 {
+		t.Fatalf("the lists of folders nobody asked for again stay in memory: %d kept", kept)
+	}
+}
+
+func TestFilesNameAFileOutsideASCIIAsItIs(t *testing.T) {
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init", "-q")
+	for _, name := range []string{"отчёт.md", "plain.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("add", "plain.txt")
+	files, err := New().Files(shell.Local{Name: "here"}, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"отчёт.md": true, "plain.txt": true}
+	if len(files.Paths) != 2 || !want[files.Paths[0]] || !want[files.Paths[1]] {
+		t.Fatalf("git lists the files by their own names, not quoted: %q", files.Paths)
 	}
 }

@@ -175,6 +175,23 @@ func TestGuardLetsAKeyReachTasksOnly(t *testing.T) {
 	}
 }
 
+// A machine whose label is blank (a herdr machine named nothing, a label of spaces) gets a key with no name; the
+// routes that keep an agent from starting agents or queueing cards tell it by its name, so it must never read as none.
+func TestAKeyWithNoNameIsStillAnAgent(t *testing.T) {
+	keys := openKeys(t, t.TempDir())
+	g := NewGuard(testToken, nil, keys)
+	h := g.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "caller="+CallerName(r.Context()))
+	}))
+	key, _, err := keys.Mint("   ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, body := withKeyMethod(h, "POST", "/api/tasks/7/start", key); code != 200 || body == "caller=" {
+		t.Fatalf("a key with no name reads as the person: %d %q", code, body)
+	}
+}
+
 func TestKeysUnderConcurrentUse(t *testing.T) {
 	keys := openKeys(t, t.TempDir())
 	key, _, _ := keys.Mint("GOG")

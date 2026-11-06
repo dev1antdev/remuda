@@ -133,6 +133,26 @@ func TestACopyOfAnEmptyOrAWrongFolderIsRefused(t *testing.T) {
 	}
 }
 
+func TestASnapshotLeavesOutEveryHalfWrittenFile(t *testing.T) {
+	dir, _ := stateDir(t)
+	write(t, filepath.Join(dir, "tailscale", "tailscaled.state.tmp2847561930"), "{half a node")
+	write(t, filepath.Join(dir, "tailscale", "certs", "box.ts.net.crt.tmp93"), "half a cert")
+	write(t, filepath.Join(dir, "prefs.json.4821"), "{half")
+	archive, manifest, err := Snapshot(dir, "rp-orange", "v", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, entries, err := Read(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names(entries) {
+		if strings.Contains(name, ".tmp") || strings.HasPrefix(name, "prefs.json") {
+			t.Fatalf("a file still being written went into the copy: %s (%d files)", name, manifest.Files)
+		}
+	}
+}
+
 func TestAStateDirBehindASymlinkOrWithAnOddNameIsCopiedWhole(t *testing.T) {
 	dir, _ := stateDir(t)
 	link := filepath.Join(t.TempDir(), "remuda")
