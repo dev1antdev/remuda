@@ -1,5 +1,7 @@
 // Finding in the conversation shown: where a query occurs in a text, and the walk from match to match.
 
+import { t } from "@/lib/i18n";
+
 export type Span = [start: number, end: number];
 
 // MAX_MATCHES bounds what one find paints: past it the count reads "2000+" and the rest is left unmarked.
@@ -45,8 +47,8 @@ export function revealDue(was: FindView | null, now: FindView): boolean {
   return was.query !== now.query || was.at !== now.at || (!was.mounted && now.mounted);
 }
 
-// countWords says "3 of 12", "0 of 0" while nothing matches, and "2000+" past the bound.
+// countWords says "3 of 12", "0 of 0" while nothing matches, and "2000+" past the bound, in the page's language.
 export function countWords(at: number, total: number): string {
-  if (total <= 0) return "0 of 0";
-  return `${at + 1} of ${total >= MAX_MATCHES ? `${MAX_MATCHES}+` : total}`;
+  if (total <= 0) return t("0 of 0");
+  return t("{at} of {total}", { at: at + 1, total: total >= MAX_MATCHES ? `${MAX_MATCHES}+` : total });
 }
