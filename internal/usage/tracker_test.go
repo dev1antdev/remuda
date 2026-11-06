@@ -2,6 +2,7 @@ package usage
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/transcript"
@@ -77,5 +78,33 @@ func TestAFileJustMovedToKeepsTheMeter(t *testing.T) {
 	d, ok := tr.Display("m", "p1")
 	if !ok || d.Turns != 3 || d.Tokens.Output != 60 || d.Context != 1100 || d.Name != "Fable 5.1" {
 		t.Fatalf("display %+v %v, want the old file's sum and its last response's context", d, ok)
+	}
+}
+
+// listedFiles is memFiles whose folders list the files in them
+type listedFiles struct{ memFiles }
+
+func (l listedFiles) DirVersions(dir string) (map[string]transcript.Version, error) {
+	out := map[string]transcript.Version{}
+	for path := range l.memFiles {
+		if strings.HasPrefix(path, dir+"/") && !strings.Contains(strings.TrimPrefix(path, dir+"/"), "/") {
+			out[path], _ = l.Version(path)
+		}
+	}
+	return out, nil
+}
+
+func TestAForkedSubagentsCopyOfItsSpawningResponseCountsOnce(t *testing.T) {
+	// a fork's transcript opens with a copy of the parent's response that spawned it, its usage and all
+	fork := strings.TrimSuffix(liveFile, ".jsonl") + "/subagents/agent-a1.jsonl"
+	files := listedFiles{memFiles{
+		liveFile: []byte(rec("m1", "claude-fable-5-1", "2026-10-06T10:00:00Z", 10) + rec("m2", "claude-fable-5-1", "2026-10-06T10:01:00Z", 20)),
+		fork:     []byte(rec("m1", "claude-fable-5-1", "2026-10-06T10:00:00Z", 10) + rec("f1", "claude-fable-5-1", "2026-10-06T10:00:30Z", 5)),
+	}}
+	tr := NewTracker()
+	tr.Observe("m", files, "p1", []string{liveFile})
+	d, ok := tr.Display("m", "p1")
+	if !ok || d.Turns != 3 || d.Tokens.Output != 35 {
+		t.Fatalf("display %+v %v, want m1, m2 and the fork's own f1, each once", d, ok)
 	}
 }

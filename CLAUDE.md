@@ -2430,7 +2430,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   tokens}` — context = the last response's input + cache tokens.
   The live session's `<session>/subagents/*.jsonl` (listed in one round
   trip, `Reader.DirVersions`) and sidechain records count toward the pane
-  too — the number should agree with Claude Code's own. **Report**: `Scan` (`GET /api/usage?days=&machine=
+  too, less the copy of the parent's response a fork's file opens with
+  — the number should agree with Claude Code's own. **Report**: `Scan` (`GET /api/usage?days=&machine=
   &tz=`, since = a local midnight) walks `~/.claude/projects` for files
   written since, oldest first, each message id once across the files (a
   continuation's copied tail is credited to the session that made it),
