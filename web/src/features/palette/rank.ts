@@ -8,6 +8,7 @@ import { basename } from "@/lib/text";
 import { folderOf } from "@/features/roster/workspaces";
 import type { IconName } from "@/ui/icons";
 import { VENDOR_NAME } from "@/ui/brand";
+import { t } from "@/lib/i18n";
 
 export type Selection = { machineId: string; paneId: string };
 
@@ -34,7 +35,7 @@ export type Masked = { folder: string; machine: string };
 // paneTitle is what a pane is called in the palette: its row label, or for a folder hidden while the screen is shared its
 // agent's name alone, never its own title or a tab name of the person's
 export function paneTitle(pane: Pane, tab: Tab, workspace: string, prefs: RadarPrefs, masked: boolean): string {
-  if (masked) return pane.agent ? (VENDOR_NAME[pane.agent] ?? pane.agent) : "shell";
+  if (masked) return pane.agent ? (VENDOR_NAME[pane.agent] ?? pane.agent) : t("shell");
   return rowLabel(pane, tab, workspace, prefs);
 }
 
@@ -69,7 +70,7 @@ export function paneEntries(
         title: paneTitle(pane, tab, session.name, prefs, !!mask),
         hint: mask ? `${mask.folder}${machine.id !== "local" ? ` · ${mask.machine}` : ""}` : `${session.name}${machine.id !== "local" ? ` · ${machine.label}` : ""}`,
         hue: machineHue(machine.id) ?? undefined,
-        detail: pane.agent ? (alert ?? stateWords(display, pane.radar?.last_active, now, pane.radar?.since)) : "shell",
+        detail: pane.agent ? (alert ?? stateWords(display, pane.radar?.last_active, now, pane.radar?.since)) : t("shell"),
         keywords: mask ? [mask.folder, mask.machine, pane.agent || "shell"] : [session.name, machine.label, pane.agent || "shell", basename(pane.cwd), tab.named ? tab.label : ""].filter(Boolean),
         pane: {
           machineId: machine.id,
