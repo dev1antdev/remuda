@@ -12,7 +12,7 @@ import { RadarFields } from "@/features/roster/RadarSettings";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { DENSITY_NAMES, MONO_FONTS, monoName, monoStack, TEXT_SIZE_NAMES, TEXT_SIZES, type Density, type MonoFont } from "@/lib/look";
 import { usePref } from "@/lib/prefs";
-import { ACCENTS, accentName, DARK_FLAVORS, FLAVOR_NAMES, FLAVORS, swatches } from "@/lib/theme";
+import { ACCENTS, accentName, DARK_FLAVORS, FLAVOR_NAMES, FLAVORS, swatches, themeChoiceName } from "@/lib/theme";
 import { Dialog, Icon, resetPanels, Select, Tip } from "@/ui";
 import { SYNC_PREF } from "./useSyncPrefs";
 import { LANG_NAMES, LANGS, t } from "@/lib/i18n";
@@ -50,9 +50,9 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             value={themePref}
             onChange={setThemePref}
             options={[
-              { value: "system", label: t("Follow the system"), icon: <Icon name="monitor" size={14} /> },
-              { value: "dark", label: `${FLAVOR_NAMES[darkFlavor]} (dark)`, icon: <Icon name="moon" size={14} /> },
-              { value: "light", label: "Latte (light)", icon: <Icon name="sun" size={14} /> },
+              { value: "system", label: themeChoiceName("system", darkFlavor), icon: <Icon name="monitor" size={14} /> },
+              { value: "dark", label: themeChoiceName("dark", darkFlavor), icon: <Icon name="moon" size={14} /> },
+              { value: "light", label: themeChoiceName("light", darkFlavor), icon: <Icon name="sun" size={14} /> },
             ]}
           />
         </label>

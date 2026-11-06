@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import css from "../styles.css?raw";
+import { setLang } from "./i18n";
 import {
   ACCENTS,
   accentName,
@@ -15,6 +16,7 @@ import {
   resolveFlavor,
   resolveTheme,
   terminalTheme,
+  themeChoiceName,
   themeOf,
   themePrefOf,
   withAlpha,
@@ -114,5 +116,14 @@ describe("the palettes", () => {
 describe("withAlpha", () => {
   it("turns hex into rgba", () => {
     expect(withAlpha("#ef9f76", 0.5)).toBe("rgba(239, 159, 118, 0.5)");
+  });
+});
+
+describe("themeChoiceName", () => {
+  afterEach(() => setLang("en"));
+  it("names the theme's choices in the page's language", () => {
+    expect([themeChoiceName("system", "mocha"), themeChoiceName("dark", "mocha"), themeChoiceName("light", "mocha")]).toEqual(["Follow the system", "Mocha (dark)", "Latte (light)"]);
+    setLang("ru");
+    expect([themeChoiceName("system", "frappe"), themeChoiceName("dark", "frappe"), themeChoiceName("light", "frappe")]).toEqual(["Как в системе", "Frappé (тёмная)", "Latte (светлая)"]);
   });
 });

@@ -5,11 +5,11 @@
 import { useState, type KeyboardEvent } from "react";
 import { actions } from "@/app/store";
 import { useQuery } from "@/lib/query";
-import { errMsg, plural } from "@/lib/text";
+import { errMsg } from "@/lib/text";
 import AgentKeys from "./AgentKeys";
 import ViewerKeys from "./ViewerKeys";
 import { fetchDevices, renameDevice, revokeDevice, revokeOtherDevices, type Device } from "./api";
-import { deviceLine, revokeQuestion } from "./devices";
+import { deviceLine, revokeOthersQuestion, revokeQuestion, signedOutWords } from "./devices";
 import { t } from "@/lib/i18n";
 
 export default function DevicesSection() {
@@ -39,13 +39,15 @@ export default function DevicesSection() {
       }, fail),
     );
   };
-  const revokeOthers = () =>
-    actions.ask(t("Sign out every other device? Each needs the token to sign in again."), "Sign out others", () =>
+  const revokeOthers = () => {
+    const { text, label } = revokeOthersQuestion();
+    actions.ask(text, label, () =>
       void revokeOtherDevices().then(({ revoked }) => {
-        actions.notify(t("{devices} signed out", { devices: plural(revoked, "device") }), { brief: true });
+        actions.notify(signedOutWords(revoked), { brief: true });
         reload();
       }, fail),
     );
+  };
   const onKey = (device: Device) => (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") rename(device, e.currentTarget.value);
     if (e.key === "Escape") setEditing(null);
@@ -79,7 +81,7 @@ export default function DevicesSection() {
       {devices && devices.length > 1 && (
         <div className="settings-row device-row devices-foot">
           <span>
-            <small>Lost a phone? Every other device is signed out at once; this one stays.</small>
+            <small>{t("Lost a phone? Every other device is signed out at once; this one stays.")}</small>
           </span>
           <button type="button" className="btn sm" onClick={revokeOthers}>
             {t("Sign out every other device")}

@@ -2,7 +2,7 @@
 
 import { ago } from "@/lib/time";
 import type { Device } from "./api";
-import { t } from "@/lib/i18n";
+import { t, tn } from "@/lib/i18n";
 
 // deviceLine is "Chrome on macOS · seen 3 h ago · from 192.168.1.4", the kind left out when the name is the kind
 export function deviceLine(device: Pick<Device, "name" | "kind" | "last_seen" | "ip">, now = Date.now()): string {
@@ -18,3 +18,11 @@ export function revokeQuestion(device: Pick<Device, "name" | "this">): { text: s
   if (device.this) return { text: t("Sign this device out? The token is needed to sign in again."), label: t("Sign out") };
   return { text: t("Sign “{device}” out? It needs the token to sign in again.", { device: device.name }), label: t("Revoke") };
 }
+
+// revokeOthersQuestion is the confirm before every other device is signed out
+export function revokeOthersQuestion(): { text: string; label: string } {
+  return { text: t("Sign out every other device? Each needs the token to sign in again."), label: t("Sign out others") };
+}
+
+// signedOutWords is the word after: how many devices went, the verb agreeing with the count
+export const signedOutWords = (n: number): string => tn(n, "{n} device signed out", "{n} devices signed out");
