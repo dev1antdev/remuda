@@ -248,6 +248,44 @@ func TestAnErrorNamesNeitherTheTokenNorTheAddress(t *testing.T) {
 	}
 }
 
+func TestTheTokenFollowsNoRedirectOffTheSite(t *testing.T) {
+	var leaked atomic.Bool
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			leaked.Store(true)
+		}
+		_, _ = w.Write([]byte(`{"displayName":"Ann"}`))
+	}))
+	defer elsewhere.Close()
+	site := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, elsewhere.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer site.Close()
+	_, err := NewClient(Config{Site: site.URL, Token: token}, site.Client()).Myself(context.Background())
+	if leaked.Load() {
+		t.Fatal("the token went over plain http to another port of the site's host")
+	}
+	if err == nil || strings.Contains(err.Error(), token) {
+		t.Fatalf("a redirect off the site is refused, naming no token: %v", err)
+	}
+
+	moved := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/old/rest/api/2/myself" {
+			http.Redirect(w, r, "/new/rest/api/2/myself", http.StatusMovedPermanently)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer "+token {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"displayName":"Ann"}`))
+	}))
+	defer moved.Close()
+	if who, err := NewClient(Config{Site: moved.URL + "/old", Token: token}, moved.Client()).Myself(context.Background()); err != nil || who != "Ann" {
+		t.Fatalf("a redirect within the site is followed: %q, %v", who, err)
+	}
+}
+
 func TestWikiAndDocumentsBecomeMarkdown(t *testing.T) {
 	got := WikiMarkdown("h1. Title\n* one\n** two\nbq. quoted\n----\n{noformat}raw *x*{noformat}\n{color:red}red{color} _it_ and *b*")
 	for _, part := range []string{"# Title", "- one", "  - two", "> quoted", "---", "```\nraw *x*\n```", "red *it* and **b**"} {

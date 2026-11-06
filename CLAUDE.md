@@ -2701,7 +2701,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Cloud, v2 on a server; Basic with the account and the token, else
   Bearer (a personal access token); `Timeout` 10 s, an answer capped at
   4 MB, an error naming the host alone — never the token or the address
-  (`ErrNotFound`, `ErrRefused`); `Myself`, `Projects` (Cloud's search a
+  (`ErrNotFound`, `ErrRefused`), no redirect followed off the site's
+  scheme, host and port but an upgrade to https (`stayOnSite`: Go's own
+  rule keeps the header for any port and scheme of the host); `Myself`, `Projects` (Cloud's search a
   page at a time), `Issue` (summary, status and its category, assignee),
   `Full` (with type, reporter, labels and the description made Markdown:
   `ADFMarkdown` for Cloud's document format, `WikiMarkdown` for a

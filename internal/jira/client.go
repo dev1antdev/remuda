@@ -51,12 +51,35 @@ type Client struct {
 	http *http.Client
 }
 
-// NewClient is a client of the site; a nil http client gets one with Timeout.
+// NewClient is a client of the site; a nil http client gets one with Timeout. Either way it follows no redirect off the
+// site's own host and port, nor from https down to http: the token rides on every request it makes.
 func NewClient(cfg Config, hc *http.Client) *Client {
 	if hc == nil {
 		hc = &http.Client{Timeout: Timeout}
 	}
-	return &Client{cfg: cfg, http: hc}
+	onSite := *hc
+	onSite.CheckRedirect = stayOnSite(cfg.Site)
+	return &Client{cfg: cfg, http: &onSite}
+}
+
+// stayOnSite is the redirect rule: the site's own scheme, host and port, or an upgrade to https on its host.
+func stayOnSite(site string) func(*http.Request, []*http.Request) error {
+	base, err := url.Parse(site)
+	return func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		if err != nil {
+			return errors.New("the site's address is not usable")
+		}
+		dest := req.URL
+		same := dest.Scheme == base.Scheme && strings.EqualFold(dest.Host, base.Host)
+		upgrade := base.Scheme == "http" && dest.Scheme == "https" && strings.EqualFold(dest.Hostname(), base.Hostname())
+		if !same && !upgrade {
+			return errors.New("it sent the request off the site, where the token does not go")
+		}
+		return nil
+	}
 }
 
 // api is the REST path of the site's version: 3 on Cloud, 2 on a server.
