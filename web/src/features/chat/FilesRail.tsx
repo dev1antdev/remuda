@@ -7,7 +7,7 @@ import { actions, app } from "@/app/store";
 import type { OpenFile } from "@/features/files/target";
 import { basename, dirname, plural } from "@/lib/text";
 import { ago } from "@/lib/time";
-import { Icon } from "@/ui";
+import { Icon, Tip } from "@/ui";
 import { footprint, shownPath, type Touch } from "./footprint";
 import { useChat } from "./useChat";
 import { t } from "@/lib/i18n";
@@ -83,9 +83,11 @@ function Row({ touch, dir, now, onOpen, onCode }: { touch: Touch; dir: string; n
           {touch.at > 0 && ` · ${ago(touch.at, now)}`}
         </span>
       </button>
-      <button type="button" className="icon-btn sm fp-code" title="Open in Code (VS Code on this machine)" onClick={onCode}>
-        <Icon name="code" size={12} />
-      </button>
+      <Tip text={t("Open in Code (VS Code on this machine)")}>
+        <button type="button" className="icon-btn sm fp-code" aria-label={t("Open in Code")} onClick={onCode}>
+          <Icon name="code" size={12} />
+        </button>
+      </Tip>
     </div>
   );
 }

@@ -22,7 +22,7 @@ once after cloning and after every change under `web/`.
 | TypeScript check | `make typecheck` (`tsc --noEmit` + `go vet`) |
 | The page's unit tests (Vitest on the pure modules) | `make webtest` (`npm test` in `web/`; `make test` runs it too) |
 | Everything, as CI does (`.github/workflows/ci.yml`) | `make test && make typecheck`, or `docker build --target test .` |
-| The end-to-end smoke: a throwaway herdr, a remuda of its own, headless Chrome (`scripts/e2e.sh`, `e2e/smoke.mjs`) | `make e2e` (needs herdr, node and Chrome; nothing of yours is touched) |
+| The end-to-end smoke and the display checks: a throwaway herdr, a remuda of its own, headless Chrome, every screen at a desk's and a phone's width in English and Russian (`scripts/e2e.sh`, `e2e/smoke.mjs`, `e2e/display.mjs`) | `make e2e` (needs herdr, node and Chrome; nothing of yours is touched; `E2E_DISPLAY_PASSES=desk-en` for one pass, `E2E_SMOKE_ONLY=1` for the smoke alone) |
 | A pull request | against `release`: `gh pr create --base release` |
 | A release | `git checkout main && git merge --ff-only release && git tag -a vX.Y.Z -m 'remuda X.Y.Z' && make publish` — the Release workflow builds and publishes it |
 | Binaries for every host | `make release`; `make deploy HOST=<ssh host>` |
@@ -64,12 +64,22 @@ not style.
 - **herdr owns every process and status.** remuda keeps no session state
   and must keep working across its own restart while agents run. Never
   spawn, kill or track an agent yourself; ask herdr over its RPC.
-- **`~/.claude` is read-only.** Transcripts are parsed, never written.
+- **`~/.claude` is read-only.** Transcripts are parsed, never written; the
+  one write is `remuda statusline install`, which puts the wrapper before
+  the status line in `settings.json` only when the person runs it or
+  presses Run on its Updates row (a backup kept in remuda's state dir,
+  `internal/limits`), and a test of it runs in a temp HOME only.
   Input reaches an agent only through herdr — `agent.prompt`, else
   `pane.send_text` + `pane.send_keys` — serialized per pane by
-  `sessions.Input`. Never queue, retry or auto-send what a person typed. The one
-  exception is the restart after an update the person ran (CLAUDE.md,
-  `internal/restart`).
+  `sessions.Input`. Never queue, retry or auto-send what a person typed. The
+  exceptions are the restart after an update the person ran (CLAUDE.md,
+  `internal/restart`), the "continue" a person booked for after a plan
+  limit's reset (`internal/limits`), and a project's queue and pipeline
+  once the person switched them on (`internal/tasks`: queue.go,
+  pipeline.go) — prompts the person configured, like an agent schedule's,
+  for cards the person put in the Queued column; an agent's key can
+  neither queue a card, start an agent on one, nor change a project's
+  columns or its agents, and no task lands in the Queued column by itself.
 - **Never `--takeover`.** herdr allows one attached client per terminal;
   stealing the slot is the person's call only. A refusal is surfaced
   (`RefusedError`, 409 on HTTP, the WebSocket close reason), never retried
@@ -95,9 +105,16 @@ not style.
   `/api/login`. A new route goes on the guarded mux and resolves its
   machine through `machineFor` / `ready()`, never by trusting the body.
 - **Nothing phones home** but the version checks (npm registry, GitHub
-  releases; off with `-no-version-check`). No sudo anywhere. The uploads
-  folder `<pane dir>/.remuda/uploads` is the only thing remuda writes into
-  a project.
+  releases; off with `-no-version-check`), a site's favicon or a
+  GitHub owner's avatar, each fetched once only when the person asks for
+  it in the icon dialog (`internal/icons`), and the person's own Jira site
+  once they set it in Settings (`internal/jira`: the issues their work
+  names, read only while a page is open). No sudo anywhere. remuda writes two things into a
+  project: the uploads folder `<pane dir>/.remuda/uploads`, and into a
+  worktree remuda itself just made, the ignored files the repository's own
+  `.worktreeinclude` lists, copied from its main checkout — never a tracked
+  file, never over one already there, nothing outside the repository
+  (`internal/worktrees/include.go`).
 - **One design system** (`web/src/styles.css`): every `<button>` carries a
   family class, radii and type sizes come from the scales, icons are
   `icons.tsx` (never an emoji), an icon-only button says what it does
@@ -117,10 +134,14 @@ not style.
   search addon (`@xterm/addon-search`, the find over the terminal's
   scrollback: the same project as xterm, not worth writing twice) and
   radix-ui (menus, tooltips, popovers: the primitives whose keyboard and
-  focus behaviour is not worth writing twice; `ui/Menu.tsx` and
-  `ui/Tip.tsx` are the only places that import it); add nothing without
-  a reason that survives review. Never `innerHTML`:
-  Markdown and task descriptions render to React nodes. Per-device state
+  focus behaviour is not worth writing twice; `ui/Menu.tsx`, `ui/Popover.tsx` and
+  `ui/Tip.tsx` are the only places that import it) and mermaid (the
+  flowcharts and sequence diagrams agents draw in their answers and
+  files, too big to write ourselves; loaded only when a diagram is on
+  screen, `ui/Mermaid.tsx` is the only place that imports it); add
+  nothing without a reason that survives review. Never `innerHTML`:
+  Markdown and task descriptions render to React nodes, and a diagram's
+  SVG is parsed as XML and its nodes adopted. Per-device state
   is `usePref` (`lib/prefs.ts`); every request goes through `lib/http.ts`
   (`check` / `getJSON` / `sendJSON`) from a feature's own `api.ts`; a
   screen reads the server through `useQuery` (`lib/query.ts`) and the

@@ -513,6 +513,180 @@ func TestCodeVersionMatchesTheScript(t *testing.T) {
 	}
 }
 
+// --- the services on Linux ---
+
+// linuxHome is a home with a space in its name on a machine that says it is Linux: stand-ins for uname, loginctl,
+// systemctl and curl first on PATH, a remuda and a code-server release in place, so the service scripts write their
+// units and reach nothing real.
+func linuxHome(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(home(t), "John Doe")
+	t.Setenv("HOME", dir)
+	bin := filepath.Join(dir, ".local", "bin")
+	for name, body := range map[string]string{
+		"uname":     `case "$1" in -m) echo x86_64 ;; *) echo Linux ;; esac`,
+		"loginctl":  ``,
+		"systemctl": ``,
+		"curl":      ``,
+	} {
+		write(t, filepath.Join(bin, name), "#!/bin/sh\necho \""+name+" $*\" >> \"$HOME/calls.log\"\n"+body+"\n", 0o755)
+	}
+	write(t, filepath.Join(bin, "remuda"), fakeBinary, 0o755)
+	write(t, filepath.Join(dir, ".local", "opt", "code-server-"+CodeVersion, "bin", "code-server"), "#!/bin/sh\n[ \"$1\" = --list-extensions ] && echo catppuccin.catppuccin-vsc\n", 0o755)
+	t.Setenv("PATH", bin+":/usr/bin:/bin")
+	for _, name := range []string{"uname", "systemctl", "curl"} {
+		out, err := exec.Command("sh", "-c", `command -v "$1"`, "sh", name).Output()
+		if got := strings.TrimSpace(string(out)); err != nil || got != filepath.Join(bin, name) {
+			t.Fatalf("%s resolves to %q, not to its stand-in", name, got)
+		}
+	}
+	return dir
+}
+
+func TestTheServiceUnitsRunFromAHomeWithASpace(t *testing.T) {
+	dir := linuxHome(t)
+	var out strings.Builder
+	if err := run("", []string{"REMUDA_ADDR=127.0.0.1:1"}, serviceScript, []string{"install"}, &out); err != nil {
+		t.Fatalf("install-service: %v\n%s", err, out.String())
+	}
+	unit, err := os.ReadFile(filepath.Join(dir, ".config", "systemd", "user", "remuda.service"))
+	if err != nil {
+		t.Fatalf("no unit written: %v\n%s", err, out.String())
+	}
+	for _, want := range []string{
+		"\nExecStart=\"" + filepath.Join(dir, ".local", "bin", "remuda") + "\" -addr \"127.0.0.1:1\"",
+		"\nEnvironment=\"PATH=" + filepath.Join(dir, ".local", "bin") + ":",
+	} {
+		if !strings.Contains(string(unit), want) {
+			t.Errorf("the unit lacks %q, so systemd would cut the path at the space:\n%s", want, unit)
+		}
+	}
+
+	out.Reset()
+	if err := Code("", "install", 7320, &out); err != nil {
+		t.Fatalf("install-code: %v\n%s", err, out.String())
+	}
+	unit, err = os.ReadFile(filepath.Join(dir, ".config", "systemd", "user", "code-server.service"))
+	if err != nil {
+		t.Fatalf("no code-server unit written: %v\n%s", err, out.String())
+	}
+	for _, want := range []string{
+		"\nExecStart=\"" + filepath.Join(dir, ".local", "opt", "code-server", "bin", "code-server") + "\" --config \"" + filepath.Join(dir, ".config", "code-server", "config.yaml") + "\"",
+		"\nEnvironment=\"PATH=" + filepath.Join(dir, ".local", "bin") + ":",
+	} {
+		if !strings.Contains(string(unit), want) {
+			t.Errorf("the code-server unit lacks %q:\n%s", want, unit)
+		}
+	}
+	calls, _ := os.ReadFile(filepath.Join(dir, "calls.log"))
+	for _, want := range []string{"systemctl --user enable remuda.service", "systemctl --user restart remuda.service", "systemctl --user enable code-server.service"} {
+		if !strings.Contains(string(calls), want) {
+			t.Errorf("the stand-ins never saw %q:\n%s", want, calls)
+		}
+	}
+}
+
+func TestAServerServiceRunsWithTheFlag(t *testing.T) {
+	dir := linuxHome(t)
+	var out strings.Builder
+	if err := run("", []string{"REMUDA_ADDR=127.0.0.1:1", "REMUDA_SERVER=1", "REMUDA_TAILSCALE=1"}, serviceScript, []string{"install"}, &out); err != nil {
+		t.Fatalf("install-service: %v\n%s", err, out.String())
+	}
+	unit, err := os.ReadFile(filepath.Join(dir, ".config", "systemd", "user", "remuda.service"))
+	if err != nil {
+		t.Fatalf("no unit written: %v\n%s", err, out.String())
+	}
+	if want := "\" -addr \"127.0.0.1:1\" -server -tailscale -tailscale-hostname remuda\n"; !strings.Contains(string(unit), want) {
+		t.Errorf("the unit lacks %q:\n%s", want, unit)
+	}
+	out.Reset()
+	if err := run("", []string{"REMUDA_ADDR=127.0.0.1:1"}, serviceScript, []string{"install"}, &out); err != nil {
+		t.Fatalf("install-service: %v\n%s", err, out.String())
+	}
+	unit, _ = os.ReadFile(filepath.Join(dir, ".config", "systemd", "user", "remuda.service"))
+	if strings.Contains(string(unit), "-server") {
+		t.Errorf("a cockpit's unit names -server:\n%s", unit)
+	}
+	if err := Run(Options{Server: true, NoService: true}, &out); err == nil {
+		t.Error("-server with -no-service set nothing up and said nothing")
+	}
+}
+
+// TestAServerUnitIsRefusedToARemudaThatDoesNotKnowTheFlag: setup leaves a remuda already there in place, so a host on
+// a release before -server would get a unit that exits at once, over and over, and the cockpit would be gone.
+func TestAServerUnitIsRefusedToARemudaThatDoesNotKnowTheFlag(t *testing.T) {
+	dir := linuxHome(t)
+	old := "#!/bin/sh\nfor a in \"$@\"; do [ \"$a\" = -server ] && { echo 'flag provided but not defined: -server' >&2; exit 2; }; done\necho remuda v0.12.4\n"
+	write(t, filepath.Join(dir, ".local", "bin", "remuda"), old, 0o755)
+	var out strings.Builder
+	err := run("", []string{"REMUDA_ADDR=127.0.0.1:1", "REMUDA_SERVER=1"}, serviceScript, []string{"install"}, &out)
+	if err == nil {
+		t.Fatalf("a unit with -server was set up for a remuda that does not know it:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "remuda v0.12.4 at ") || !strings.Contains(out.String(), "does not know -server yet: update it first") {
+		t.Errorf("the refusal does not say which remuda and what to do:\n%s", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".config", "systemd", "user", "remuda.service")); !os.IsNotExist(err) {
+		t.Errorf("a unit was written anyway: %v", err)
+	}
+	calls, _ := os.ReadFile(filepath.Join(dir, "calls.log"))
+	if strings.Contains(string(calls), "systemctl") {
+		t.Errorf("the running service was touched:\n%s", calls)
+	}
+}
+
+// macHome is a home on a machine that says it is a Mac: stand-ins for uname, launchctl, curl and an lsof that knows
+// one socket on every port — a listener when listeners is set, else a connection that only came from or went to it.
+func macHome(t *testing.T, listeners bool) string {
+	t.Helper()
+	dir := home(t)
+	bin := filepath.Join(dir, ".local", "bin")
+	lsof := `for a in "$@"; do [ "$a" = -sTCP:LISTEN ] && listening=1; done; [ -n "$listening" ] && exit 1; echo 4242`
+	if listeners {
+		lsof = `echo 4242`
+	}
+	for name, body := range map[string]string{
+		"uname":     `case "$1" in -m) echo arm64 ;; *) echo Darwin ;; esac`,
+		"launchctl": ``,
+		"curl":      ``,
+		"lsof":      lsof,
+	} {
+		write(t, filepath.Join(bin, name), "#!/bin/sh\necho \""+name+" $*\" >> \"$HOME/calls.log\"\n"+body+"\n", 0o755)
+	}
+	write(t, filepath.Join(bin, "remuda"), fakeBinary, 0o755)
+	t.Setenv("PATH", bin+":/usr/bin:/bin")
+	for _, name := range []string{"uname", "launchctl", "curl", "lsof"} {
+		out, err := exec.Command("sh", "-c", `command -v "$1"`, "sh", name).Output()
+		if got := strings.TrimSpace(string(out)); err != nil || got != filepath.Join(bin, name) {
+			t.Fatalf("%s resolves to %q, not to its stand-in", name, got)
+		}
+	}
+	return dir
+}
+
+// A browser still holding a connection to the service just stopped, or to another machine's remuda on the same port,
+// is no listener: only something that listens on the port keeps the service from being installed.
+func TestTheMacServiceIsRefusedOnlyByAListener(t *testing.T) {
+	dir := macHome(t, false)
+	var out strings.Builder
+	if err := run("", []string{"REMUDA_ADDR=127.0.0.1:7317"}, serviceScript, []string{"install"}, &out); err != nil {
+		t.Fatalf("a connection on the port kept the service out: %v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "Library", "LaunchAgents", "dev.mardeus.remuda.plist")); err != nil {
+		t.Fatalf("no plist written: %v\n%s", err, out.String())
+	}
+	calls, _ := os.ReadFile(filepath.Join(dir, "calls.log"))
+	if !strings.Contains(string(calls), "launchctl bootstrap") {
+		t.Errorf("the service was not loaded:\n%s", calls)
+	}
+
+	macHome(t, true)
+	out.Reset()
+	if err := run("", []string{"REMUDA_ADDR=127.0.0.1:7317"}, serviceScript, []string{"install"}, &out); err == nil || !strings.Contains(out.String(), "something already listens on 127.0.0.1:7317 (pid 4242)") {
+		t.Fatalf("a listener on the port did not keep the service out: %v\n%s", err, out.String())
+	}
+}
+
 // --- the agents' MCP registration ---
 
 // agents lays a home out with stand-ins for the agents' commands, each recording its arguments; kimi's has no mcp subcommand.

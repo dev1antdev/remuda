@@ -230,7 +230,7 @@ function WebhookForm({ draft, busy, onChange, onCancel, onSave }: { draft: Draft
       </label>
       <div className="alerts-quiet">
         <input type="time" className="sm" value={draft.quiet.from} disabled={!draft.quietOn} aria-label={t("Quiet from")} onChange={(e) => setTime("from", e.target.value)} />
-        <span>to</span>
+        <span>{t("to")}</span>
         <input type="time" className="sm" value={draft.quiet.to} disabled={!draft.quietOn} aria-label={t("Quiet until")} onChange={(e) => setTime("to", e.target.value)} />
       </div>
       <label className="alerts-opt">

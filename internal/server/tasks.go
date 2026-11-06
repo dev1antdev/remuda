@@ -2,11 +2,12 @@ package server
 
 import (
 	"errors"
-	"github.com/dev1antdev/remuda/internal/auth"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/tasks"
 )
@@ -59,6 +60,10 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 		if !decode(w, r, &req) {
 			return
 		}
+		if auth.CallerName(r.Context()) != "" {
+			httpErr(w, http.StatusForbidden, fmt.Errorf("an agent's key cannot change a project's columns"))
+			return
+		}
 		if _, err := s.Tasks.SetStatuses(id, req.Statuses, req.Moves); err != nil {
 			s.taskReply(w, nil, err)
 			return
@@ -82,6 +87,24 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 			return
 		}
 		p, err := s.Tasks.Project(id)
+		s.taskReply(w, p, err)
+	})
+	api.HandleFunc("PUT /api/tasks/projects/{id}/automation", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		var req struct {
+			Automation tasks.Automation `json:"automation"`
+		}
+		if !decode(w, r, &req) {
+			return
+		}
+		if auth.CallerName(r.Context()) != "" {
+			httpErr(w, http.StatusForbidden, fmt.Errorf("an agent's key cannot change how a project's agents start"))
+			return
+		}
+		p, err := s.Tasks.SetAutomation(id, req.Automation)
 		s.taskReply(w, p, err)
 	})
 	api.HandleFunc("GET /api/tasks/labels", func(w http.ResponseWriter, r *http.Request) {
@@ -116,6 +139,9 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 			return
 		}
 		withMarkdown(&req.Patch, req.Markdown)
+		if !s.queueKept(w, r, req.ProjectID, req.StatusID) {
+			return
+		}
 		t, err := s.Tasks.CreateFrom(req.ProjectID, req.Patch, tasks.Source(auth.CallerName(r.Context()), req.Source))
 		s.taskReply(w, t, err)
 	})
@@ -138,6 +164,20 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 			return
 		}
 		withMarkdown(&req.Patch, req.Markdown)
+		if req.StatusID != nil {
+			cur, err := s.Tasks.Get(id)
+			if err != nil {
+				s.taskReply(w, nil, err)
+				return
+			}
+			project := cur.ProjectID
+			if req.ProjectID != nil {
+				project = *req.ProjectID
+			}
+			if !s.queueKept(w, r, project, req.StatusID) {
+				return
+			}
+		}
 		t, err := s.Tasks.Update(id, req.Patch)
 		s.taskReply(w, t, err)
 	})
@@ -208,6 +248,16 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 }
 
 // handleTaskList is GET /api/tasks?view=today|upcoming|open|proposed|project&project=&done=1&q=&page=&tz=.
+// queueKept refuses an agent's key a card put into a Queued column, answering 403 itself: the queue starts only what
+// the person queued, so an agent cannot set agents of its own going.
+func (s *Server) queueKept(w http.ResponseWriter, r *http.Request, projectID int64, statusID *int64) bool {
+	if auth.CallerName(r.Context()) == "" || statusID == nil || !s.Tasks.QueueColumn(projectID, *statusID) {
+		return true
+	}
+	httpErr(w, http.StatusForbidden, fmt.Errorf("only the person puts a task in the Queued column; leave it in Proposed"))
+	return false
+}
+
 func (s *Server) handleTaskList(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	project, _ := strconv.ParseInt(q.Get("project"), 10, 64)
@@ -266,6 +316,10 @@ func (s *Server) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
+	if auth.CallerName(r.Context()) != "" {
+		httpErr(w, http.StatusForbidden, fmt.Errorf("an agent's key cannot start agents: the person starts one on a task, or puts the card in the Queued column"))
+		return
+	}
 	task, err := s.Tasks.Get(id)
 	if err != nil {
 		s.taskReply(w, nil, err)
@@ -299,6 +353,10 @@ func (s *Server) handleTaskImport(w http.ResponseWriter, r *http.Request) {
 		URL       string `json:"url"`
 	}
 	if !decode(w, r, &req) {
+		return
+	}
+	if auth.CallerName(r.Context()) != "" {
+		httpErr(w, http.StatusForbidden, fmt.Errorf("an agent's key imports no issue: it runs gh on the person's machine; file the task with POST /api/tasks, where it waits in Proposed"))
 		return
 	}
 	if _, _, _, ok := tasks.IssueURL(req.URL); !ok {

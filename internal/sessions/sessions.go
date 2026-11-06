@@ -62,6 +62,7 @@ type Starter interface {
 // Start is the person's choices for an agent about to start: an earlier conversation to come back to, a model, arguments of their own.
 type Start struct {
 	Resume string   // a session id of the folder's, "" for a fresh conversation
+	Fork   bool     // with Resume: start on a copy of that conversation, the original left as it is
 	Model  string   // the model as the agent's own CLI names it, "" for its default
 	Args   []string // extra arguments, as the person wrote them
 }
@@ -115,12 +116,21 @@ func UniqueName(kind, paneID string) string {
 // StartArgs is the command line a Start comes to for a kind, nil when it asks for nothing beyond the agent's defaults.
 func StartArgs(kind string, start Start) ([]string, error) {
 	var args []string
-	if start.Resume != "" {
+	switch {
+	case start.Resume != "" && start.Fork:
+		fork, ok := ForkArgs(kind, start.Resume)
+		if !ok {
+			return nil, fmt.Errorf("%s cannot fork a conversation", kind)
+		}
+		args = append(args, fork...)
+	case start.Resume != "":
 		resume, ok := ResumeArgs(kind, start.Resume)
 		if !ok {
 			return nil, fmt.Errorf("%s cannot resume a session", kind)
 		}
 		args = append(args, resume...)
+	case start.Fork:
+		return nil, fmt.Errorf("a fork needs the session to copy")
 	}
 	if start.Model != "" {
 		model, ok := ModelArgs(kind, start.Model)
@@ -159,6 +169,29 @@ func ResumeArgs(kind, session string) ([]string, bool) {
 		return nil, false
 	}
 	return append(append([]string(nil), flags...), session), true
+}
+
+// forkFlags is how each agent starts on a copy of a conversation, as its own CLI documents it: the arguments before
+// the session id and after it; a kind missing here cannot fork (Gemini CLI and Kimi Code document no fork).
+var forkFlags = map[string]struct{ before, after []string }{
+	"claude": {before: []string{"--resume"}, after: []string{"--fork-session"}},
+	"codex":  {before: []string{"fork"}},
+}
+
+// ForkArgs is the agent's command-line arguments that start it on a copy of a session, false for a kind that cannot.
+func ForkArgs(kind, session string) ([]string, bool) {
+	flags, ok := forkFlags[kind]
+	if !ok {
+		return nil, false
+	}
+	args := append(append([]string(nil), flags.before...), session)
+	return append(args, flags.after...), true
+}
+
+// CanFork says whether remuda knows how to start the kind on a copy of a conversation.
+func CanFork(kind string) bool {
+	_, ok := forkFlags[kind]
+	return ok
 }
 
 // modelFlags is how each agent is told which model to run; the name goes right after.
@@ -306,6 +339,25 @@ func (in *Input) Submit(client Prompter, ref events.PaneRef, text string) error 
 	}
 }
 
+// ErrNoAgent: the pane runs no agent now, and what was written for one must not reach its shell, which would run every line.
+var ErrNoAgent = errors.New("no agent runs in that pane now; nothing was sent")
+
+// SubmitToAgent delivers text meant for an agent — a schedule's prompt, a pull request's failures, a booked "continue" —
+// through herdr's own submit only: a pane whose agent left since it was picked gets nothing, never the text typed.
+func (in *Input) SubmitToAgent(client Prompter, ref events.PaneRef, text string) error {
+	lock := in.lock(ref)
+	lock.Lock()
+	defer lock.Unlock()
+	err := client.AgentPrompt(ref.Pane, text)
+	switch {
+	case herdr.IsCode(err, "agent_blocked"):
+		return ErrAgentBusy
+	case herdr.IsCode(err, "agent_not_found"):
+		return ErrNoAgent
+	}
+	return err
+}
+
 // FirstPromptRetry and FirstPromptTimeout pace the delivery of a first prompt: a try every so often until the agent takes it.
 var (
 	FirstPromptRetry   = 2 * time.Second
@@ -369,7 +421,7 @@ func (in *Input) SubmitToFolder(machineID, dir, text string) (string, error) {
 	if pane == nil {
 		return "", fmt.Errorf("no agent is running in %s on %s", dir, mc.Label())
 	}
-	if err := in.Submit(client, events.PaneRef{Machine: machineID, Pane: pane.PaneID}, text); err != nil {
+	if err := in.SubmitToAgent(client, events.PaneRef{Machine: machineID, Pane: pane.PaneID}, text); err != nil {
 		return "", err
 	}
 	return pane.DisplayTitle(), nil

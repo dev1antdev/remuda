@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Review } from "./api";
-import { COMMIT_ASK, PR_ASK, commentsMessage, place, verdictMessage, type DraftComment } from "./draft";
+import { COMMIT_ASK, PR_ASK, commentsMessage, draftOnRow, place, verdictMessage, type DraftComment } from "./draft";
 
 const comment: DraftComment = { id: 1, file: "internal/server/chat.go", line: 42, removed: false, code: "+\tif err != nil {", text: "handle the error\nproperly" };
 const removed: DraftComment = { id: 2, file: "web/src/app.ts", line: 7, removed: true, code: "-const x = 1;", text: "why gone?" };
@@ -51,5 +51,23 @@ describe("verdictMessage with a pull request asked", () => {
     expect(PR_ASK).toContain("link");
     expect(verdictMessage("approved", "", [], "/x", "commit")).not.toContain(PR_ASK);
     expect(verdictMessage("changes", "fix it", [], "/x", "pr")).not.toContain(PR_ASK);
+  });
+});
+
+describe("a comment without a row's text", () => {
+  const adopted: DraftComment = { id: 3, file: "src/a.go", line: 6, removed: false, code: "", text: "[high] a race — second opinion of Codex" };
+  it("is quoted by nothing in the message", () => {
+    expect(commentsMessage([adopted], "/x")).toContain("1. src/a.go:6\n   [high] a race");
+  });
+  it("on a file as a whole is addressed by the file, never a line 0", () => {
+    expect(commentsMessage([{ ...adopted, line: 0 }], "/x")).toContain("1. src/a.go (the whole file)\n   [high] a race");
+  });
+  it("sits under the new file's line it names; one with a row's text only under that very row", () => {
+    expect(draftOnRow(adopted, { kind: "add", text: "+x", newLine: 6, oldLine: null })).toBe(true);
+    expect(draftOnRow(adopted, { kind: "", text: " x", newLine: 6, oldLine: 6 })).toBe(true);
+    expect(draftOnRow(adopted, { kind: "del", text: "-x", newLine: null, oldLine: 6 })).toBe(false);
+    expect(draftOnRow(comment, { kind: "add", text: "+\tif err != nil {", newLine: 42, oldLine: null })).toBe(true);
+    expect(draftOnRow(comment, { kind: "add", text: "+other", newLine: 42, oldLine: null })).toBe(false);
+    expect(draftOnRow(removed, { kind: "del", text: "-const x = 1;", newLine: null, oldLine: 7 })).toBe(true);
   });
 });

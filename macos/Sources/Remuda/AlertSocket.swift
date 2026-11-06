@@ -1,17 +1,19 @@
 import Foundation
 
 // AlertSocket is the app as a device of remuda's push service: registered with /api/push/socket, then every alert
-// the phone would get arrives over /ws/alerts; the socket comes back by itself with a growing pause.
+// the phone would get arrives over /ws/alerts; the socket comes back by itself with a growing pause. Every callback
+// of the session lands on the main queue, so the task, the backoff and the stop flag are only ever touched there.
 final class AlertSocket {
     private static let endpointKey = "alerts.endpoint"
     private let server: Server
     private let label: String
     private let remember: Bool
-    private let session = URLSession(configuration: .default)
+    private let session = URLSession(configuration: .default, delegate: nil, delegateQueue: .main)
     private var task: URLSessionWebSocketTask?
     private var backoff: TimeInterval = 1
     private var stopped = false
     private var minted: String?
+    private var prefs: [String: Any]? // the page's alert switches and quiet hours, which the server sends this device by
     var onAlert: ((Alert, String) -> Void)?
     var onState: ((String, String) -> Void)?
 
@@ -22,17 +24,24 @@ final class AlertSocket {
         self.remember = remember
     }
 
-    // endpoint is the device's name on the server.
+    // endpoint is the device's name on the server, kept per server so going back to one finds its device and prefs again;
+    // the single key of before is the fallback until the server's own is written (empty once a 404 cleared it).
     var endpoint: String? {
-        get { remember ? UserDefaults.standard.string(forKey: AlertSocket.endpointKey) : minted }
+        get {
+            guard remember else { return minted }
+            if let own = UserDefaults.standard.string(forKey: serverEndpointKey) { return own.isEmpty ? nil : own }
+            return UserDefaults.standard.string(forKey: AlertSocket.endpointKey)
+        }
         set {
             if remember {
-                UserDefaults.standard.set(newValue, forKey: AlertSocket.endpointKey)
+                UserDefaults.standard.set(newValue ?? "", forKey: serverEndpointKey)
             } else {
                 minted = newValue
             }
         }
     }
+
+    private var serverEndpointKey: String { AlertSocket.endpointKey + "." + server.base.absoluteString }
 
     func start() {
         stopped = false
@@ -45,6 +54,13 @@ final class AlertSocket {
         task = nil
     }
 
+    // use takes the page's alert switches and quiet hours and hands them to the server for this device.
+    func use(prefs: [String: Any]) {
+        self.prefs = prefs
+        guard !stopped else { return }
+        Task { @MainActor in await self.register() }
+    }
+
     private func open() {
         Task { @MainActor in
             await self.register()
@@ -52,15 +68,34 @@ final class AlertSocket {
         }
     }
 
-    // register mints the device, or renews its label when it exists already; a device the server has forgotten is minted anew.
+    // register mints the device, or renews its label and prefs when it exists already, one call at a time: prefs that
+    // arrive while a call is out go in one more, so neither a second device is minted nor the page's prefs lost.
     private func register() async {
+        if registering {
+            registerAgain = true
+            return
+        }
+        registering = true
+        repeat {
+            registerAgain = false
+            await registerOnce()
+        } while registerAgain && !stopped
+        registering = false
+    }
+
+    private var registering = false
+    private var registerAgain = false
+
+    // registerOnce is one call; a device the server has forgotten is minted anew, with the prefs the page gave.
+    private func registerOnce() async {
         var body: [String: Any] = ["label": label]
         if let endpoint { body["endpoint"] = endpoint }
+        if let prefs { body["prefs"] = prefs }
         do {
             let (data, status) = try await server.request("/api/push/socket", method: "POST", json: body)
             if status == 404, endpoint != nil {
                 endpoint = nil
-                return await register()
+                return await registerOnce()
             }
             guard status == 200,
                   let answer = try JSONSerialization.jsonObject(with: data) as? [String: Any],

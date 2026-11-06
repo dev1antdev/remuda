@@ -1,10 +1,12 @@
 // The board: a project's columns side by side, its tasks as cards — dragged on a desk, moved from a
 // ⋯ menu on a phone, shown in the order given: the server's, or the one the last drop made.
 
-import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import type { Project, Status, Task } from "@/features/tasks/api";
 import Icon from "@/ui/icons";
-import { Notice, Tip, useDismiss, useSubmit } from "@/ui";
+import { Menu, Notice, Tip, useSubmit } from "@/ui";
+import { queueWords } from "./autonomy";
+import { dropAfter, markerSlot } from "./drop";
 import { longPress } from "./press";
 import { pickHow, type Pick } from "./selection";
 import { t as tr } from "@/lib/i18n";
@@ -55,12 +57,8 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
     const t = tasks.find((x) => x.id === drag);
     clear();
     if (!t) return;
-    const column = byStatus.get(statusId) ?? [];
-    const was = column.findIndex((x) => x.id === t.id);
-    if (was >= 0 && (was === index || was === index - 1)) return; // the same place
-    const others = column.filter((x) => x.id !== t.id);
-    const after = index <= 0 ? 0 : others[Math.min(index, others.length) - 1]!.id;
-    onMove(t, statusId, after);
+    const target = dropAfter((byStatus.get(statusId) ?? []).map((x) => x.id), t.id, index);
+    if (target) onMove(t, statusId, target.after);
   };
 
   return (
@@ -68,6 +66,7 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
       {project.statuses.map((s) => {
         const list = byStatus.get(s.id) ?? [];
         const here = over?.status === s.id;
+        const slot = here ? markerSlot(list.map((x) => x.id), drag ?? -1, over!.index) : -1;
         return (
           <section
             key={s.id}
@@ -97,11 +96,21 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
                   </span>
                 </Tip>
               )}
+              {s.on_queue && (
+                <Tip text={tr("Queued: the queue starts the tasks you put here, top first, while its switch is on")}>
+                  <span className="board-col-mark" aria-label={tr("The queue starts these")}>
+                    <Icon name="clock" size={12} />
+                  </span>
+                </Tip>
+              )}
               <span className="badge quiet">{list.length}</span>
-              <button type="button" className="icon-btn sm" title={tr("Add a task to {column}", { column: s.title })} aria-label={tr("Add a task to {column}", { column: s.title })} onClick={() => setAdding(s.id)}>
-                <Icon name="plus" size={14} />
-              </button>
+              <Tip text={tr("Add a task to {column}", { column: s.title })}>
+                <button type="button" className="icon-btn sm" aria-label={tr("Add a task to {column}", { column: s.title })} onClick={() => setAdding(s.id)}>
+                  <Icon name="plus" size={14} />
+                </button>
+              </Tip>
             </header>
+            {s.on_queue && <QueueLine project={project} />}
             <div className="board-col-body">
               {adding === s.id && <ColumnAdd onAdd={(title) => onAdd(title, s.id)} onClose={() => setAdding(null)} />}
               {list.map((t, i) => (
@@ -113,7 +122,7 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
                   picked={!!picked?.(t.id)}
                   selecting={!!selecting}
                   dragging={t.id === drag}
-                  before={here && over!.index === i}
+                  before={slot === i}
                   draggable={draggable}
                   onOpen={() => onOpen(t.id)}
                   onPick={onPick && ((how) => onPick(t, how))}
@@ -127,7 +136,7 @@ export default function Board({ project, tasks, openId, draggable, picked, selec
                   chips={chips}
                 />
               ))}
-              {here && over!.index >= list.length && <div className="board-drop-end" />}
+              {here && slot >= list.length && <div className="board-drop-end" />}
             </div>
           </section>
         );
@@ -152,16 +161,13 @@ function Card({ task: t, statuses, selected, picked, selecting, dragging, before
   onDragEnd: () => void;
   chips: (t: Task) => ReactNode;
 }) {
-  const [menu, setMenu] = useState(false);
-  const closeMenu = useCallback(() => setMenu(false), []);
-  useDismiss(menu, closeMenu, [".board-card-menu"]);
   const elsewhere = statuses.filter((s) => s.id !== t.status_id);
   const pickRef = useRef(onPick);
   pickRef.current = onPick;
   const press = useMemo(() => longPress(() => pickRef.current?.("toggle")), []);
   return (
     <article
-      className={`board-card${selected ? " sel" : ""}${picked ? " picked" : ""}${dragging ? " dragging" : ""}${before ? " drop-before" : ""}${t.done ? " done" : ""}`}
+      className={`board-card${selected ? " is-open" : ""}${picked ? " picked" : ""}${dragging ? " dragging" : ""}${before ? " drop-before" : ""}${t.done ? " done" : ""}`}
       data-id={t.id}
       draggable={draggable}
       role="button"
@@ -189,39 +195,16 @@ function Card({ task: t, statuses, selected, picked, selecting, dragging, before
       <div className="board-card-head">
         <span className="board-card-title">{t.title}</span>
         <span className="board-card-menu">
-          <button
-            type="button"
-            className="icon-btn sm"
-            title={tr("Move to…")}
-            aria-label={tr("Move to another column")}
-            aria-haspopup="menu"
-            aria-expanded={menu}
-            disabled={elsewhere.length === 0}
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenu((m) => !m);
-            }}
-          >
-            <Icon name="more" size={14} />
-          </button>
-          {menu && (
-            <span className="row-menu" role="menu">
-              {elsewhere.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  role="menuitem"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenu(false);
-                    onMoveTo(s.id);
-                  }}
-                >
-                  <span className="tasks-dot" style={{ background: `#${s.hex_color || "888"}` }} /> {s.title}
-                </button>
-              ))}
-            </span>
-          )}
+          <Menu
+            label={tr("Move to another column")}
+            tip={tr("Move to…")}
+            items={() => elsewhere.map((s) => ({ label: s.title, onSelect: () => onMoveTo(s.id) }))}
+            trigger={
+              <button type="button" className="icon-btn sm" aria-label={tr("Move to another column")} disabled={elsewhere.length === 0} onClick={(e) => e.stopPropagation()}>
+                <Icon name="more" size={14} />
+              </button>
+            }
+          />
         </span>
       </div>
       <div className="board-card-chips">
@@ -229,6 +212,16 @@ function Card({ task: t, statuses, selected, picked, selecting, dragging, before
         {chips(t)}
       </div>
     </article>
+  );
+}
+
+// QueueLine is what the queue does for the Queued column: off, the next card and why it waits, what it just started
+function QueueLine({ project }: { project: Project }) {
+  const said = queueWords(project);
+  return (
+    <p className={`board-col-note is-${said.tone}`} title={said.text}>
+      {said.text}
+    </p>
   );
 }
 

@@ -11,9 +11,10 @@ export const machineLabel = (machines: Machine[], id: string) => machines.find((
 
 export const connected = (machines: Machine[]) => machines.filter((m) => m.state === "connected");
 
-export function machineOptions(machines: Machine[], opts: { all?: string; onlyConnected?: boolean } = {}): Option<string>[] {
+// machineOptions lists the machines for a Select; label names each (the screen-sharing mode's neutral names), else its own
+export function machineOptions(machines: Machine[], opts: { all?: string; onlyConnected?: boolean; label?: (m: Machine) => string } = {}): Option<string>[] {
   const list = opts.onlyConnected === false ? machines : connected(machines);
-  const out: Option<string>[] = list.map((m) => ({ value: m.id, label: m.label, icon: <span className={`dot machine-state is-${m.state}`} /> }));
+  const out: Option<string>[] = list.map((m) => ({ value: m.id, label: opts.label ? opts.label(m) : m.label, icon: <span className={`dot machine-state is-${m.state}`} /> }));
   if (opts.all) out.unshift({ value: "all", label: opts.all });
   return out;
 }
@@ -25,7 +26,7 @@ export function folderOptions(machines: Machine[], machineId: string | "all"): O
   for (const m of machines) {
     if (machineId !== "all" && m.id !== machineId) continue;
     for (const s of m.sessions) {
-      if (!s.dir) continue;
+      if (!s.dir || s.scratch) continue;
       const cur = seen.get(s.dir);
       if (cur) cur.machines.push(m.label);
       else seen.set(s.dir, { name: s.name, machines: [m.label] });

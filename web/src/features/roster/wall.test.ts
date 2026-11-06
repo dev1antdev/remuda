@@ -116,6 +116,11 @@ describe("nextNeedingMe", () => {
     expect(nextNeedingMe(roster, DEFAULT_RADAR, NOW, "nowhere|x")?.key).toBe("local|b");
   });
 
+  it("passes over the tiles hidden by hand, which could not take the Wall", () => {
+    expect(nextNeedingMe(roster, DEFAULT_RADAR, NOW, "local|b", ["gog|d"])?.key).toBe("gog|a");
+    expect(nextNeedingMe(roster, DEFAULT_RADAR, NOW, "", ["local|b", "gog|d", "gog|a"])).toBeNull();
+  });
+
   it("answers nobody when every agent is fine, and the same one when it is alone", () => {
     expect(nextNeedingMe([machine("local", [session("a", [working, fresh])])], DEFAULT_RADAR, NOW, "")).toBeNull();
     expect(nextNeedingMe([machine("local", [session("a", [working, blocked])])], DEFAULT_RADAR, NOW, "local|b")?.key).toBe("local|b");

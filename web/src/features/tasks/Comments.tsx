@@ -5,7 +5,7 @@ import { actions } from "@/app/store";
 import type { FileTarget } from "@/features/files/target";
 import { errMsg } from "@/lib/text";
 import { whenShort } from "@/lib/time";
-import { Icon, Logo } from "@/ui";
+import { Icon, Logo, Tip } from "@/ui";
 import { Markdown } from "@/ui/Markdown";
 import { addComment, deleteComment, type Run, type Task } from "./api";
 import { t as tr } from "@/lib/i18n";
@@ -49,7 +49,7 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
                 </>
               ) : c.author === "you" ? (
                 <>
-                  <Icon name="user" size={12} /> you
+                  <Icon name="user" size={12} /> {tr("you")}
                 </>
               ) : (
                 <>
@@ -60,23 +60,24 @@ export function CommentsField({ task: t, run, onChange, onError, onMarkDone }: {
             <span className="tasks-comment-when" title={new Date(c.created).toLocaleString()}>
               {whenShort(c.created)}
             </span>
-            <button
-              type="button"
-              className="icon-btn sm"
-              title={tr("Delete comment")}
-              aria-label={tr("Delete comment")}
-              onClick={() =>
-                void deleteComment(c.id).then(
-                  () => onChange({ ...t, comments: comments.filter((x) => x.id !== c.id) }),
-                  (e) => onError(errMsg(e)),
-                )
-              }
-            >
-              <Icon name="x" size={12} />
-            </button>
+            <Tip text={tr("Delete comment")}>
+              <button
+                type="button"
+                className="icon-btn sm"
+                aria-label={tr("Delete comment")}
+                onClick={() =>
+                  void deleteComment(c.id).then(
+                    () => onChange({ ...t, comments: comments.filter((x) => x.id !== c.id) }),
+                    (e) => onError(errMsg(e)),
+                  )
+                }
+              >
+                <Icon name="x" size={12} />
+              </button>
+            </Tip>
           </div>
           <div className="tasks-comment-body">
-            <Markdown text={c.body} onOpenFile={openFile} />
+            <Markdown text={c.body} onOpenFile={openFile} diagrams />
           </div>
         </div>
       ))}

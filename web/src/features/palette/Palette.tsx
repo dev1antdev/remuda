@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { hueColor } from "@/features/roster/hue";
-import { Dialog, Icon, Logo } from "@/ui";
+import { Dialog, FolderIcon, Icon, Logo } from "@/ui";
 import { brandColor } from "@/ui/brand";
 import { rank, type Entry } from "./rank";
 import { t } from "@/lib/i18n";
@@ -73,13 +73,13 @@ export default function Palette({ entries, onClose }: { entries: (query: string)
       <div className="palette-foot">
         <span>
           <kbd>↑</kbd>
-          <kbd>↓</kbd> move
+          <kbd>↓</kbd> {t("move")}
         </span>
         <span>
-          <kbd>↵</kbd> run
+          <kbd>↵</kbd> {t("run")}
         </span>
         <span>
-          <kbd>esc</kbd> close
+          <kbd>esc</kbd> {t("close")}
         </span>
       </div>
     </Dialog>
@@ -92,7 +92,7 @@ function Row({ entry, id, selected, head, onHover, onPick }: { entry: Entry; id:
   return (
     <>
       {head}
-      <div id={id} role="option" aria-selected={selected} className={`palette-row${entry.danger ? " danger" : ""}`} onMouseMove={onHover} onClick={onPick}>
+      <div id={id} role="option" aria-selected={selected} data-entry={entry.id} className={`palette-row${entry.danger ? " danger" : ""}`} onMouseMove={onHover} onClick={onPick}>
         {pane ? (
           <>
             <span className={`radar-mark ${pane.alert ? "alert" : pane.display}`} style={markStyle}>
@@ -115,6 +115,7 @@ function Row({ entry, id, selected, head, onHover, onPick }: { entry: Entry; id:
         {entry.hint && (
           <span className="palette-hint">
             {entry.hue !== undefined && <i className="hue-dot" style={{ background: hueColor(entry.hue) }} />}
+            {pane && <FolderIcon icon={pane.folder.icon} name={pane.folder.name} size={12} />}
             {entry.hint}
           </span>
         )}

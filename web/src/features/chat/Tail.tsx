@@ -121,7 +121,14 @@ function Running({ since }: { since: string }) {
 export function TailAnswer({ machineId, paneId, status, dir, agent = "", active = true, error: shown = null }: { machineId: string; paneId: string; status: string; dir: string; agent?: string; active?: boolean; error?: string | null }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const { viewOnly } = useRoster();
-  const keys = (ks: string[]) => sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
+  const keys = (ks: string[]) =>
+    sendKeys(machineId, paneId, ks).then(
+      () => true,
+      (e) => {
+        setActionError(errMsg(e));
+        return false;
+      },
+    );
   const error = actionError ?? shown;
   if (viewOnly) {
     return error ? (

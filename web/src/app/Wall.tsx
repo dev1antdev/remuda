@@ -1,5 +1,6 @@
 // The Wall mode: every agent on one screen, a tile each — its state, its last turns or its terminal as it is, a
-// line to answer — in a grid that fits the window, or one of them given the whole wall with the rest in a strip under it,
+// line to answer — or, in the zoo view, a creature each (./Zoo) — in a grid that fits the window, or one of them given
+// the whole wall with the rest in a strip under it,
 // or, in office mode for a second screen, one of them large beside a column of cards, the one that needs the person or
 // the next in turn every 20 s unless a card is pinned. app composes: the tile is ./Tile over features/chat/Tail, which
 // panes make a tile, in what order and which one office mode features is features/roster/wall.
@@ -7,20 +8,24 @@
 import { useEffect, useMemo, type CSSProperties } from "react";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
+import { NO_MACHINES, startOn } from "@/features/roster/server";
 import { useRoster } from "@/features/roster/useRoster";
 import { DEFAULT_WALL, TILE_MIN, tiles, withFocus, type Tile, type WallPrefs, type WallView } from "@/features/roster/wall";
 import { usePref } from "@/lib/prefs";
 import { Icon } from "@/ui";
 import { enterFull, leaveFull } from "./full";
 import { popOut, popOutSupported } from "./pip";
-import { actions } from "./store";
+import { escapeIsFree, overlayOpen } from "./escape";
+import { actions, app } from "./store";
 import { TileView } from "./Tile";
 import { useOffice } from "./useOffice";
-import { t } from "@/lib/i18n";
+import { Zoo } from "./Zoo";
+import { t, tn } from "@/lib/i18n";
 
 const VIEWS: { view: WallView; label: string; title: string }[] = [
   { view: "chat", label: t("Chat"), title: t("Each tile the last turns of its conversation") },
   { view: "screen", label: t("Screen"), title: t("Each tile its terminal as it is, scaled to fit") },
+  { view: "zoo", label: t("Zoo"), title: t("Each agent as a little creature whose pose says what it does: for a screen across the room") },
 ];
 
 const SIZES: { size: WallPrefs["size"]; title: string }[] = [
@@ -30,7 +35,7 @@ const SIZES: { size: WallPrefs["size"]; title: string }[] = [
 ];
 
 export default function Wall() {
-  const { machines, viewOnly } = useRoster();
+  const { machines, viewOnly, server } = useRoster();
   const [prefs, setPrefs] = usePref<WallPrefs>("wall", DEFAULT_WALL);
   const [hidden, setHidden] = usePref<string[]>("wall.hidden", []);
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
@@ -45,8 +50,9 @@ export default function Wall() {
     if (!big && !office) return;
     const onKey = (event: KeyboardEvent) => {
       if ((event.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]") || document.querySelector(".modal-scrim, .sel-pop")) return;
-      if (event.key === "Escape" && big && !office) setFocus("");
-      if (office && (event.code === "ArrowRight" || event.code === "ArrowLeft")) show.step(event.code === "ArrowRight" ? 1 : -1);
+      if (big && !office && escapeIsFree({ key: event.key, defaultPrevented: event.defaultPrevented, target: event.target as Element | null }, overlayOpen(app.get()))) setFocus("");
+      const takenElsewhere = event.defaultPrevented || !!(event.target as HTMLElement | null)?.closest("[role=menu]") || overlayOpen(app.get());
+      if (office && !takenElsewhere && (event.code === "ArrowRight" || event.code === "ArrowLeft")) show.step(event.code === "ArrowRight" ? 1 : -1);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -80,9 +86,7 @@ export default function Wall() {
   return (
     <main className="wall">
       <div className="wall-bar">
-        <span className="wall-count">
-          {n} agent{n === 1 ? "" : "s"}
-        </span>
+        <span className="wall-count">{tn(n, "{n} agent", "{n} agents")}</span>
         <button
           type="button"
           className={`btn sm${prefs.needsMe ? " on" : ""}`}
@@ -103,7 +107,7 @@ export default function Wall() {
         </button>
         {list.hidden > 0 && (
           <button type="button" className="btn sm" title={t("Bring back the tiles hidden by hand")} onClick={() => setHidden([])}>
-            Show {list.hidden} hidden
+            {t("Show {n} hidden", { n: list.hidden })}
           </button>
         )}
         <span className="wall-spacer" />
@@ -125,22 +129,24 @@ export default function Wall() {
           type="button"
           className={`btn sm wall-office-btn${office ? " on" : ""}`}
           aria-pressed={office}
-          title={office ? "Leave office mode (Esc)" : t("Office mode for a second screen: one agent large — the one that needs you, else each in turn every 20 s — the rest as cards; a card pins its agent; full screen")}
+          title={office ? t("Leave office mode (Esc)") : t("Office mode for a second screen: one agent large — the one that needs you, else each in turn every 20 s — the rest as cards; a card pins its agent; full screen")}
           onClick={toggleOffice}
         >
           <Icon name="monitor" size={12} /> {t("Office")}
         </button>
-        {!viewOnly && <button type="button" className="btn sm" title={t("Start an agent in a new workspace")} onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
+        {!viewOnly && <button type="button" className="btn sm" title={t("Start an agent in a new workspace")} onClick={() => actions.openDialog({ kind: "workspace", machineId: startOn(machines) })}>
           <Icon name="plus" size={12} /> {t("Agent")}
         </button>}
       </div>
       {n === 0 ? (
         <div className="placeholder">
-          <p>{machines.some((m) => m.state === "connected") ? (list.calm ? t("Nobody needs you right now.") : list.hidden || list.idle ? t("Every agent is hidden or idle.") : t("No agent runs anywhere.")) : t("No machine connected.")}</p>
-          {!viewOnly && <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: "local" })}>
+          <p>{machines.some((m) => m.state === "connected") ? (list.calm ? t("Nobody needs you right now.") : list.hidden || list.idle ? t("Every agent is hidden or idle.") : t("No agent runs anywhere.")) : server && machines.length === 0 ? t(NO_MACHINES) : t("No machine connected.")}</p>
+          {!viewOnly && machines.length > 0 && <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "workspace", machineId: startOn(machines) })}>
             {t("Start an agent")}
           </button>}
         </div>
+      ) : prefs.view === "zoo" ? (
+        <Zoo shown={list.shown} size={prefs.size} radar={radar} now={now} office={office ? show : null} />
       ) : featuredTile ? (
         <div className="wall-office">
           <div className="wall-office-main">{tile(featuredTile)}</div>

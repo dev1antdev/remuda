@@ -3,7 +3,7 @@
 import type { Machine, Pane, Session, Tab } from "./api";
 import { displayOf, type RadarPrefs } from "./radar";
 
-export type WallView = "chat" | "screen"; // what a tile shows: the last turns of the conversation, or the terminal as it is
+export type WallView = "chat" | "screen" | "zoo"; // what a tile shows: the last turns of the conversation, the terminal as it is, or the agent as a creature (app/Zoo.tsx)
 export type WallPrefs = { size: "s" | "m" | "l"; hideIdle: boolean; needsMe: boolean; view: WallView };
 export const DEFAULT_WALL: WallPrefs = { size: "m", hideIdle: false, needsMe: false, view: "chat" };
 
@@ -67,9 +67,10 @@ export function withFocus(shown: Tile[], key: string): { big: Tile | null; rest:
 }
 
 // nextNeedingMe is the agent to go to after the one at fromKey: the tiles that need the person, in the roster's order,
-// round and round; nobody when none needs one, the same tile when it is the only one
-export function nextNeedingMe(machines: Machine[], radar: RadarPrefs, now: number, fromKey: string): Tile | null {
-  const waiting = tiles(machines, [], { ...DEFAULT_WALL, needsMe: true }, radar, now).shown;
+// round and round, less the ones hidden (on the Wall, the tiles hidden by hand, which could not take it); nobody when
+// none needs one, the same tile when it is the only one
+export function nextNeedingMe(machines: Machine[], radar: RadarPrefs, now: number, fromKey: string, hidden: string[] = []): Tile | null {
+  const waiting = tiles(machines, hidden, { ...DEFAULT_WALL, needsMe: true }, radar, now).shown;
   if (!waiting.length) return null;
   const at = waiting.findIndex((tile) => tile.key === fromKey);
   return waiting[(at + 1) % waiting.length] ?? null;

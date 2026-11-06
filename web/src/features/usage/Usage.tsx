@@ -14,6 +14,8 @@ import { Dialog, Icon, Notice, Tip } from "@/ui";
 import { useQuery } from "@/lib/query";
 import Select from "@/ui/Select";
 import { budgetTone, budgetWords, missingWords, ratio, scopeWords } from "./budgets";
+import { accountWindows, agentName, claudeUnread, limitTone, resetTime, windowName } from "./limits";
+import { useNow } from "@/lib/clock";
 import { t, tn } from "@/lib/i18n";
 
 const PERIODS = [
@@ -33,7 +35,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
 }) {
   const [days, setDays] = useState("7");
   const [machine, setMachine] = useState("all");
-  const { budgets } = useRoster();
+  const { budgets, viewOnly } = useRoster();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { data, error, loading } = useQuery(() => fetchUsage(Number(days), machine === "all" ? "" : machine, tz), [days, machine, tz], { keep: true });
   const several = connected(machines).length > 1;
@@ -120,11 +122,11 @@ export default function Usage({ machines, onClose, onOpenSession }: {
       }
     >
       <Notice tone="hint">
-        What the agents' transcripts say they cost, at Claude Code's own API prices — on a subscription a measure of where the work went, not a bill. Each
-        machine reads its own history.
+        {t("What the agents' transcripts say they cost, at Claude Code's own API prices — on a subscription a measure of where the work went, not a bill. Each machine reads its own history.")}
       </Notice>
       {error && <Notice tone="error">{error}</Notice>}
-      <Budgets budgets={budgets ?? []} machines={machines} />
+      <PlanLimits machines={machines} viewOnly={viewOnly} />
+      <Budgets budgets={budgets ?? []} machines={machines} editable={!viewOnly} />
       {sum.perMachine
         .filter((m) => m.error)
         .map((m) => (
@@ -135,11 +137,11 @@ export default function Usage({ machines, onClose, onOpenSession }: {
       <div className="usage-cards">
         <div className="usage-card">
           <span className="usage-card-n">{usd(sum.total.cost)}</span>
-          <span className="usage-card-l">API-equivalent</span>
+          <span className="usage-card-l">{t("API-equivalent")}</span>
         </div>
         <div className="usage-card">
           <span className="usage-card-n">{sum.total.turns.toLocaleString()}</span>
-          <span className="usage-card-l">responses</span>
+          <span className="usage-card-l">{t("responses")}</span>
         </div>
         <div className="usage-card">
           <span className="usage-card-n">{tok(sum.total.output)}</span>
@@ -180,7 +182,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
             <div key={m.model} className="usage-row">
               <span className="usage-row-name">{m.name}</span>
               <span className="usage-row-meta">
-                {tok(m.output)} out · {tok(m.input + m.cache_read + m.cache_write)} in
+                {t("{out} out · {in} in", { out: tok(m.output), in: tok(m.input + m.cache_read + m.cache_write) })}
               </span>
               <span className="usage-row-cost">{usd(m.cost)}</span>
             </div>
@@ -222,16 +224,55 @@ export default function Usage({ machines, onClose, onOpenSession }: {
   );
 }
 
-// Budgets is the panel's first section: every limit with a thin bar of its period's spend, and the way to add one.
-function Budgets({ budgets, machines }: { budgets: BudgetStatus[]; machines: Machine[] }) {
+// PlanLimits is the panel's first section: each agent's subscription windows, as full as their latest reading says, and
+// where Claude Code runs with nobody reading its limits, the way to have them read (not for a viewer, who cannot)
+function PlanLimits({ machines, viewOnly }: { machines: Machine[]; viewOnly: boolean }) {
+  const now = useNow(30_000);
+  const windows = accountWindows(machines, now);
+  const unread = viewOnly ? [] : machines.filter(claudeUnread);
+  if (windows.length === 0 && unread.length === 0) return null;
+  return (
+    <section className="budgets plan-limits">
+      <h3>{t("Plan limits")}</h3>
+      {windows.length === 0 && <div className="empty">{t("No plan limits read yet: Codex reports its own after its next answer.")}</div>}
+      {windows.map((w) => {
+        const tone = limitTone(w.used);
+        return (
+          <div key={`${w.agent}|${w.name}`} className={`budget-row${tone ? ` is-${tone}` : ""}`} title={t("Read on {machine}, {ago}", { machine: w.machineLabel, ago: ago(w.at) })}>
+            <span className="budget-scope">
+              {agentName(w.agent)} · {windowName(w.name)}
+              <span className="usage-row-sub"> · {t("resets {time}", { time: resetTime(w.resets_at, now) })}</span>
+            </span>
+            <span className="budget-bar" aria-hidden="true">
+              <span style={{ width: `${Math.min(100, w.used)}%` }} />
+            </span>
+            <span className="budget-words">{Math.floor(w.used)} %</span>
+          </div>
+        );
+      })}
+      {unread.length > 0 && (
+        <div className="empty">
+          {t("Claude Code shows its plan limits to its status line alone, and remuda reads them there once you let it. Not set up yet on {machines}: the machine's ⓘ → Updates → “Show Claude Code's plan limits”.", { machines: unread.map((m) => m.label).join(", ") })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// Budgets is the panel's second section: every limit with a thin bar of its period's spend, and the way to add or edit one
+// where the screen may change them (a viewer link's screen sees the limits only, and nothing when there are none)
+function Budgets({ budgets, machines, editable }: { budgets: BudgetStatus[]; machines: Machine[]; editable: boolean }) {
   const label = (id: string) => machineLabel(machines, id);
+  if (!editable && budgets.length === 0) return null;
   return (
     <section className="budgets">
       <h3>
         {t("Budgets")}
-        <button type="button" className="btn sm" onClick={() => actions.openDialog({ kind: "budget", budget: null })}>
-          <Icon name="plus" size={12} /> {t("Add a budget")}
-        </button>
+        {editable && (
+          <button type="button" className="btn sm" onClick={() => actions.openDialog({ kind: "budget", budget: null })}>
+            <Icon name="plus" size={12} /> {t("Add a budget")}
+          </button>
+        )}
       </h3>
       {budgets.length === 0 && <div className="empty">{t("No budgets yet: a limit per day, week or month, on everything or one machine or folder. The usage pill turns amber at 80 %, a push comes at 80 % and at the limit.")}</div>}
       {budgets.map((b) => {
@@ -249,11 +290,13 @@ function Budgets({ budgets, machines }: { budgets: BudgetStatus[]; machines: Mac
               <span style={{ width: `${Math.min(100, 100 * r)}%` }} />
             </span>
             <span className="budget-words">{budgetWords(b)}</span>
-            <Tip text={t("Edit this budget")}>
-              <button type="button" className="icon-btn sm" aria-label={t("Edit this budget")} onClick={() => actions.openDialog({ kind: "budget", budget: b })}>
-                <Icon name="edit" size={14} />
-              </button>
-            </Tip>
+            {editable && (
+              <Tip text={t("Edit this budget")}>
+                <button type="button" className="icon-btn sm" aria-label={t("Edit this budget")} onClick={() => actions.openDialog({ kind: "budget", budget: b })}>
+                  <Icon name="edit" size={14} />
+                </button>
+              </Tip>
+            )}
           </div>
         );
       })}

@@ -1,9 +1,11 @@
 // The plain text of a Markdown table cell: what the person reads once the inline marks are rendered, so a copy of the
 // cell gives the words and not the asterisks. INLINE is the one grammar renderInline draws and this strips.
 
+// A code span opens on a whole run of backticks (never from inside one, as CommonMark reads it), so the engine never
+// tries the run's every length: tried that way, a line of four thousand backticks took six seconds, one of ten thousand minutes.
 export const INLINE = new RegExp(
   [
-    "(`+)([\\s\\S]*?[^`])\\1(?!`)", // 1,2 code span
+    "(?<!`)(`+)(?!`)([\\s\\S]*?[^`])\\1(?!`)", // 1,2 code span
     "\\[([^\\]\\n]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)", // 3,4 link
     "\\*\\*([^*\\n]+?)\\*\\*", // 5 bold
     "__([^_\\n]+?)__", // 6 bold

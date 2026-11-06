@@ -215,9 +215,11 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
           </Tip>
         )}
         {status?.available && (
-          <button type="button" className="icon-btn" title={t("Open the editor in its own tab")} onClick={() => frame && openUrl(frame.src)}>
-            <Icon name="external-link" size={14} />
-          </button>
+          <Tip text={t("Open the editor in its own tab")}>
+            <button type="button" className="icon-btn" aria-label={t("Open the editor in its own tab")} onClick={() => frame && openUrl(frame.src)}>
+              <Icon name="external-link" size={14} />
+            </button>
+          </Tip>
         )}
       </div>
       {!machine ? (
@@ -229,17 +231,19 @@ export default function Code({ machines, currentMachine, currentFolder, currentP
       ) : (
         <div className="code-install">
           <h2>
-            <Icon name="terminal" size={18} /> code-server is not running on {machine.label}
+            <Icon name="terminal" size={18} /> {t("code-server is not running on {machine}", { machine: machine.label })}
           </h2>
           <p className="modal-hint">{status.error}</p>
           <p className="modal-hint">
-            Install it there as a background service (VS Code in the browser, bound to 127.0.0.1:{status.port || "7320"} with no auth of its own — remuda's
-            token is the door):
+            {t("Install it there as a background service (VS Code in the browser, bound to 127.0.0.1:{port} with no auth of its own — remuda's token is the door):", {
+              port: status.port || "7320",
+            })}
           </p>
           <pre className="code-cmd">{machine.id === "local" ? t("remuda code") : `remuda code -host ${machine.host ?? machine.label}`}</pre>
           <p className="modal-hint">
-            …in a terminal on the machine that serves this page (<code>~/.local/bin/remuda</code> when it is not on your PATH). It downloads a pinned
-            release of code-server and verifies its checksum.
+            {t("…in a terminal on the machine that serves this page (")}
+            <code>~/.local/bin/remuda</code>
+            {t(" when it is not on your PATH). It downloads a pinned release of code-server and verifies its checksum.")}
           </p>
           <div className="modal-actions">
             <button type="button" className="btn" onClick={() => probe(true)} disabled={checking}>

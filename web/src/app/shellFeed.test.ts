@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session } from "@/features/roster/api";
 import { DEFAULT_RADAR } from "@/features/roster/radar";
-import { MAX_ROWS, modeOf, sameFeed, shellRows } from "./shellFeed";
+import { MAX_ROWS, maskFeed, modeOf, sameFeed, shellRows } from "./shellFeed";
 
 const NOW = 1_700_000_000_000;
 
@@ -67,5 +67,21 @@ describe("modeOf", () => {
     expect(modeOf("code")).toBe("code");
     expect(modeOf("settings")).toBeNull();
     expect(modeOf(3)).toBeNull();
+  });
+});
+
+describe("maskFeed", () => {
+  it("leaves the menu alone while the mode is off, and puts neutral names on a hidden folder's rows", () => {
+    const m = machine("gog", [pane("q", "claude", { state: "blocked" }, "an answer"), pane("d", "codex", { state: "done" }, "Done: shipped")]);
+    const feed = shellRows([m], DEFAULT_RADAR, NOW);
+    const off = { on: false, sessionHidden: () => true, machineLabel: () => "Machine 1", folderName: () => "Project A" };
+    expect(maskFeed(feed, [m], off)).toBe(feed);
+    const on = { ...off, on: true };
+    expect(maskFeed(feed, [m], on).rows.map((r) => [r.machineLabel, r.workspace, r.title, r.said])).toEqual([
+      ["Machine 1", "Project A", "Project A", "hidden while sharing"],
+      ["Machine 1", "Project A", "Project A", "hidden while sharing"],
+    ]);
+    const shown = { ...on, sessionHidden: () => false };
+    expect(maskFeed(feed, [m], shown).rows[1]).toMatchObject({ machineLabel: "Machine 1", title: "d title", said: "Done: shipped" });
   });
 });

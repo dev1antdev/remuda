@@ -38,7 +38,7 @@ export default function Standup({ onClose }: { onClose: () => void }) {
     if (await copyText(data.markdown)) actions.notify(t("Copied the standup as Markdown"), { brief: true });
     else actions.notify(t("Could not copy"), { error: true });
   };
-  const periodWords = period === "today" ? "today" : period === "day" ? t("in the last 24 hours") : t("in the last 7 days");
+  const periodWords = period === "today" ? t("today") : period === "day" ? t("in the last 24 hours") : t("in the last 7 days");
 
   return (
     <Dialog
@@ -66,7 +66,7 @@ export default function Standup({ onClose }: { onClose: () => void }) {
               {item.machine !== "local" && <span className="standup-machine"> · {item.label}</span>}
             </span>
             <span className={`standup-state is-${item.alert ? "blocked" : item.state}`} title={item.alert}>
-              {t(stateLabel(item))}
+              {stateLabel(item)}
             </span>
             {item.recap.cost > 0 && <span className="standup-cost">{usd(item.recap.cost)}</span>}
           </button>
@@ -76,7 +76,7 @@ export default function Standup({ onClose }: { onClose: () => void }) {
       {idle.length > 0 && (
         <details className="standup-quiet">
           <summary>
-            {plural(idle.length, "agent")} with nothing to report {periodWords}
+            {t("{agents} with nothing to report {period}", { agents: plural(idle.length, "agent"), period: periodWords })}
           </summary>
           <ul>
             {idle.map((item) => (

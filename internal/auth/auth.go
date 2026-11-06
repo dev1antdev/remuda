@@ -122,6 +122,14 @@ func (g *Guard) authenticate(r *http.Request) caller {
 	return caller{ok: true, upgrade: g.Devices != nil}
 }
 
+// SignedIn says whether a request comes from the person's own signed-in browser or carries the token — never a viewer
+// link, an agent's key or a device no longer signed in: what may open a preview, which serves an app on a port of the
+// cockpit's own host, where the browser sends this cookie too.
+func (g *Guard) SignedIn(r *http.Request) bool {
+	who := g.authenticate(r)
+	return who.ok && who.key == nil && !who.viewer
+}
+
 type deviceKey struct{}
 type callerKey struct{}
 type viewerKey struct{}
@@ -139,7 +147,8 @@ func DeviceID(ctx context.Context) string {
 	return id
 }
 
-// CallerName is the name of the agent key a request came with (the machine it was placed on), "" for the token or a device.
+// CallerName is the name of the agent key a request came with (the machine it was placed on, "an agent" when it has
+// none), "" for the token or a device.
 func CallerName(ctx context.Context) string {
 	name, _ := ctx.Value(callerKey{}).(string)
 	return name
@@ -157,7 +166,8 @@ func (g *Guard) Middleware(next http.Handler) http.Handler {
 			if !g.ok(qt) {
 				g.refused(r)
 			} else {
-				if who := g.authenticate(r); who.device == "" { // a browser already signed in keeps its device
+				// a browser already signed in keeps its device; a viewer's screen, shown the token, becomes a device of the person's own
+				if who := g.authenticate(r); who.device == "" || who.viewer {
 					if !g.signIn(w, r) {
 						return
 					}
@@ -178,7 +188,7 @@ func (g *Guard) Middleware(next http.Handler) http.Handler {
 					http.Error(w, who.key.Reach(), http.StatusForbidden)
 					return
 				}
-				ctx := context.WithValue(r.Context(), callerKey{}, who.key.Name)
+				ctx := context.WithValue(r.Context(), callerKey{}, who.key.caller())
 				next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, viewerKey{}, who.viewer)))
 				return
 			}
@@ -238,8 +248,12 @@ func (g *Guard) viewerLink(w http.ResponseWriter, r *http.Request, presented str
 	http.Redirect(w, r, u.String(), http.StatusSeeOther)
 }
 
+// maxLoginForm bounds the sign-in form, which anybody may send: a token and room to spare, never megabytes held in memory.
+const maxLoginForm = 4 << 10
+
 // HandleLogin signs the browser in with a posted token.
 func (g *Guard) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxLoginForm)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return

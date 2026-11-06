@@ -3,6 +3,7 @@
 
 import { Tooltip } from "radix-ui";
 import type { ReactElement, ReactNode } from "react";
+import { usePortalHost } from "./portal";
 
 export function TipProvider({ children }: { children: ReactNode }) {
   return (
@@ -13,10 +14,11 @@ export function TipProvider({ children }: { children: ReactNode }) {
 }
 
 export default function Tip({ text, side = "bottom", children }: { text: ReactNode; side?: "top" | "bottom" | "left" | "right"; children: ReactElement }) {
+  const host = usePortalHost();
   return (
     <Tooltip.Root>
       <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
-      <Tooltip.Portal>
+      <Tooltip.Portal container={host}>
         <Tooltip.Content className="tip" side={side} sideOffset={6} collisionPadding={8}>
           {text}
         </Tooltip.Content>

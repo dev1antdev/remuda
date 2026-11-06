@@ -44,6 +44,9 @@ function resolved(): Dress {
 
 const store = createStore<Dress>(resolved());
 
+// the other documents of ours that wear the page's look: the pop-out's
+const others = new Set<Document>();
+
 // startTheme dresses the document now and again whenever a pref or the system changes
 export function startTheme(): void {
   apply();
@@ -51,11 +54,25 @@ export function startTheme(): void {
   for (const key of [THEME_PREF_KEY, DARK_FLAVOR_KEY, ACCENT_KEY, TEXT_SIZE_KEY, DENSITY_KEY, MONO_KEY]) watchPref(key, apply);
 }
 
+// dressAlso dresses another document of ours now and on every change after, until the return lets it go
+export function dressAlso(doc: Document): () => void {
+  others.add(doc);
+  dress(doc, store.get());
+  return () => {
+    others.delete(doc);
+  };
+}
+
 function apply() {
-  const dress = resolved();
-  store.set(dress);
-  dressDocument(document, dress.flavor, dress.accent);
-  dressLook(document, dress);
+  const look = resolved();
+  store.set(look);
+  dress(document, look);
+  for (const doc of others) dress(doc, look);
+}
+
+function dress(doc: Document, look: Dress) {
+  dressDocument(doc, look.flavor, look.accent);
+  dressLook(doc, look);
 }
 
 // dressDocument puts the flavour and the accent on a document's root: the stylesheet switches on the data attributes,

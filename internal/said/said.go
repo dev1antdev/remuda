@@ -21,6 +21,7 @@ type Inputs struct {
 	Version func(machineID, paneID string) (string, bool) // the session file's version; false when the pane has none
 	Answer  func(machineID, paneID string) (text, id string)
 	Link    func(machineID, paneID string) (transcript.Link, bool) // the last pull request the agent named; nil reads none
+	Keys    func(machineID, paneID string) []string                // the issue keys the conversation names, newest first; nil reads none
 }
 
 type entry struct {
@@ -28,6 +29,7 @@ type entry struct {
 	line    string
 	link    transcript.Link
 	hasLink bool
+	keys    []string
 }
 
 // Tracker holds one line per pane and reads one pane at a time per machine; a pull request first named goes on the bus.
@@ -36,6 +38,7 @@ type Tracker struct {
 	bus     *events.Bus
 	mu      sync.Mutex
 	lines   map[string]entry
+	gen     map[string]uint64 // a pane's starts of work and close so far: a read begun before the latest one writes no line
 	queue   map[string][]request
 	running map[string]bool
 
@@ -51,7 +54,7 @@ type request struct {
 }
 
 func New(in Inputs, bus *events.Bus) *Tracker {
-	return &Tracker{in: in, bus: bus, lines: map[string]entry{}, queue: map[string][]request{}, running: map[string]bool{}}
+	return &Tracker{in: in, bus: bus, lines: map[string]entry{}, gen: map[string]uint64{}, queue: map[string][]request{}, running: map[string]bool{}}
 }
 
 func key(machineID, paneID string) string { return machineID + "|" + paneID }
@@ -77,8 +80,19 @@ func (t *Tracker) Link(machineID, paneID string) (transcript.Link, bool) {
 	return e.link, e.hasLink
 }
 
-// OnStatus hears every transition: a finish is read, a start of work clears the line (the link stays: the request is
-// still there), a closed pane is forgotten.
+// Keys is the issue keys the pane's conversation named, newest first, kept while the agent works on; nil when none.
+func (t *Tracker) Keys(machineID, paneID string) []string {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.lines[key(machineID, paneID)].keys
+}
+
+// OnStatus hears every transition: a finish is read, a start of work clears the line (the link and the keys stay: the
+// work is still about them), a closed pane is forgotten. The two that take the line away move the pane's generation, so a read still
+// in flight writes no line; a finish leaves it, a line read for one finish being as good as for the next.
 func (t *Tracker) OnStatus(ev events.PaneStatus) {
 	if ev.Kind == "" {
 		return
@@ -89,12 +103,14 @@ func (t *Tracker) OnStatus(ev events.PaneStatus) {
 		t.ask(ev.Pane.Machine, ev.Pane.Pane, true)
 	case herdr.StatusWorking:
 		t.mu.Lock()
+		t.gen[k]++
 		if e, ok := t.lines[k]; ok {
-			t.lines[k] = entry{link: e.link, hasLink: e.hasLink}
+			t.lines[k] = entry{link: e.link, hasLink: e.hasLink, keys: e.keys}
 		}
 		t.mu.Unlock()
 	case events.Gone:
 		t.mu.Lock()
+		t.gen[k]++
 		delete(t.lines, k)
 		t.mu.Unlock()
 	}
@@ -126,6 +142,11 @@ func (t *Tracker) Forget(machineID string) {
 	for k := range t.lines {
 		if strings.HasPrefix(k, machineID+"|") {
 			delete(t.lines, k)
+		}
+	}
+	for k := range t.gen {
+		if strings.HasPrefix(k, machineID+"|") {
+			delete(t.gen, k)
 		}
 	}
 }
@@ -165,13 +186,17 @@ func (t *Tracker) drain(machineID string) {
 }
 
 // read brings the pane's line up to its file: an unchanged file is not parsed again; a new answer after a finish
-// is handed whole to OnAnswer.
+// is handed whole to OnAnswer. A status change while it reads takes the line out of what is kept: an agent at work
+// again keeps only the request it named, a closed pane nothing.
 func (t *Tracker) read(machineID, paneID string, finish bool) {
 	k := key(machineID, paneID)
+	t.mu.Lock()
+	generation := t.gen[k]
+	t.mu.Unlock()
 	version, ok := t.in.Version(machineID, paneID)
 	if !ok {
 		t.mu.Lock()
-		if _, known := t.lines[k]; !known {
+		if _, known := t.lines[k]; !known && t.gen[k] == generation {
 			t.lines[k] = entry{}
 		}
 		t.mu.Unlock()
@@ -188,8 +213,20 @@ func (t *Tracker) read(machineID, paneID string, finish bool) {
 	if t.in.Link != nil {
 		e.link, e.hasLink = t.in.Link(machineID, paneID)
 	}
+	if t.in.Keys != nil {
+		e.keys = t.in.Keys(machineID, paneID)
+	}
 	t.mu.Lock()
-	t.lines[k] = e
+	_, still := t.lines[k]
+	switch {
+	case t.gen[k] == generation:
+		t.lines[k] = e
+	case still:
+		e = entry{link: e.link, hasLink: e.hasLink, keys: e.keys}
+		t.lines[k] = e
+	default:
+		e = entry{}
+	}
 	t.mu.Unlock()
 	if e.hasLink && (!have.hasLink || have.link.URL != e.link.URL) {
 		events.Publish(t.bus, events.PullRequestNamed{Pane: events.PaneRef{Machine: machineID, Pane: paneID}, URL: e.link.URL, Label: e.link.Label})
@@ -202,6 +239,7 @@ func (t *Tracker) read(machineID, paneID string, finish bool) {
 var (
 	leadMarks = regexp.MustCompile(`^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+)`)
 	rule      = regexp.MustCompile(`^(?:-{3,}|\*{3,}|_{3,})$`)
+	tableRule = regexp.MustCompile(`^\|?[\s:|-]*-[\s:|-]*$`)
 	image     = regexp.MustCompile(`!\[([^\]]*)\]\([^)]*\)`)
 	link      = regexp.MustCompile(`\[([^\]]+)\]\([^)]*\)`)
 	bold      = regexp.MustCompile(`\*\*(.+?)\*\*|__(.+?)__`)
@@ -221,14 +259,28 @@ func FirstLine(text string) string {
 			inFence = !inFence
 			continue
 		}
-		if inFence || rule.MatchString(line) {
+		if inFence || rule.MatchString(line) || strings.HasPrefix(line, "|") && tableRule.MatchString(line) {
 			continue
 		}
-		if line = Plain(line); line != "" {
+		if line = Plain(cells(line)); line != "" {
 			return cut(line, Max)
 		}
 	}
 	return ""
+}
+
+// cells reads a table row as its cells joined by " · ", any other line as it is
+func cells(line string) string {
+	if !strings.HasPrefix(line, "|") {
+		return line
+	}
+	var kept []string
+	for _, cell := range strings.Split(line, "|") {
+		if cell = strings.TrimSpace(cell); cell != "" {
+			kept = append(kept, cell)
+		}
+	}
+	return strings.Join(kept, " · ")
 }
 
 // Plain is one line with its Markdown marks stripped: list and quote marks, headings, emphasis, code, links, tags.

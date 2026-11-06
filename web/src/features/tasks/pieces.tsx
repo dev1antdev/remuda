@@ -21,7 +21,7 @@ export const projectOption = (p: Project) => ({
 export const statusOption = (s: Status) => ({
   value: s.id,
   label: s.title,
-  hint: s.kind === "done" ? "done" : undefined,
+  hint: s.kind === "done" ? tr("done") : undefined,
   icon: <span className="tasks-dot" style={{ background: `#${s.hex_color || "888"}` }} />,
 });
 
@@ -48,6 +48,13 @@ export function TaskChips({ task: t, project, status, fields, pr }: { task: Task
         <Tip text={tr("Made by an agent on {source}", { source: t.source })}>
           <span className="badge quiet task-source" aria-label={tr("Made by an agent on {source}", { source: t.source })}>
             <Icon name="bot" size={12} />
+          </span>
+        </Tip>
+      )}
+      {t.queue_refused && (
+        <Tip text={tr("The queue could not start it: {why}. Move the card out of Queued and back to try again.", { why: t.queue_refused })}>
+          <span className="badge tasks-refused" aria-label={tr("The queue could not start it")}>
+            <Icon name="alert-triangle" size={12} />
           </span>
         </Tip>
       )}

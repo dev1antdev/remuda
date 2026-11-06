@@ -43,9 +43,11 @@ func (st *Store) OnPullRequest(machine, pane, url, label string) (*PRNote, error
 	if _, err := st.AddComment(r.TaskID, "agent", "Opened "+label+": "+url); err != nil {
 		return nil, err
 	}
-	moved, err := st.OnFinish(r.TaskID)
-	if err != nil {
-		return nil, err
+	var moved *Status
+	if r.Pipeline != PipelineOn && r.Pipeline != PipelinePassed { // while a pipeline runs, the card is the pipeline's to move
+		if moved, err = st.OnFinish(r.TaskID); err != nil {
+			return nil, err
+		}
 	}
 	t, err := st.Get(r.TaskID)
 	if err != nil {
@@ -139,7 +141,7 @@ func (st *Store) onMerged(taskID int64) (*Status, error) {
 	return to, tx.Commit()
 }
 
-// OnPullRequestState hears what gh read of a request a pane's agent named: a merge closes the task's loop with a push.
+// OnPullRequestState hears what gh or glab read of a request a pane's agent named: a merge closes the task's loop with a push.
 func (w *RunWatch) OnPullRequestState(machine, pane, url, state string) {
 	if state != "MERGED" {
 		return

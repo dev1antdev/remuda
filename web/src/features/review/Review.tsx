@@ -12,18 +12,23 @@ import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { basename, errMsg, plural } from "@/lib/text";
 import { ago } from "@/lib/time";
-import { Icon, Notice, useTimedNotice } from "@/ui";
+import { Icon, Notice, Tip, useTimedNotice } from "@/ui";
 import { fetchReview, fetchReviewDiff, markReviewed, type Review as ReviewData, type ReviewFile, type Verdict } from "./api";
 import { FileRow, type NewComment } from "./Diff";
 import { Note } from "./Hunk";
 import { KEYS, useReviewKeys } from "./keys";
 import { commentsMessage, place, verdictMessage, type DraftComment, type VerdictAsk } from "./draft";
 import { VerdictDialog } from "./VerdictDialog";
+import { subWords, type OpinionComment } from "./opinion";
+import { OpinionBlock } from "./OpinionBlock";
+import { OpinionDialog } from "./OpinionDialog";
+import { useOpinion } from "./useOpinion";
 import { t } from "@/lib/i18n";
 
 export type { DraftComment } from "./draft";
 
 const NO_COMMENTS: DraftComment[] = []; // one empty list for every file without comments: a new array would redraw its hunks
+const NO_OPINION: OpinionComment[] = [];
 
 export default function Review({ machineId, paneId, dir, agent, onSeen, active = true }: {
   machineId: string;
@@ -67,6 +72,8 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
     return byFile;
   }, [draft]);
   const where = () => place(dir, review);
+  const listed = useMemo(() => (review?.files ?? []).map((file) => file.path), [review]);
+  const second = useOpinion({ machineId, dir, look, active, files: listed, addComment, onError: setActionError });
 
   const markReviewedSilently = async () => {
     setMarking(true);
@@ -75,7 +82,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       setOpenFile(null);
       lookAgain();
       onSeen?.();
-      showNotice("Reviewed — the next look starts from here.");
+      showNotice(t("Reviewed — the next look starts from here."));
     } catch (failure) {
       setActionError(errMsg(failure));
     } finally {
@@ -89,7 +96,8 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       await submitPrompt(target.machineId, target.paneId, text);
       setDraft([]);
       setPickingAgent(false);
-      showNotice(`Sent ${plural(draft.length, "comment")} to ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""}.`);
+      const comments = plural(draft.length, "comment");
+      showNotice(target.sessionName ? t("Sent {comments} to {agent} in {workspace}.", { comments, agent: target.agent, workspace: target.sessionName }) : t("Sent {comments} to {agent}.", { comments, agent: target.agent }));
     } finally {
       setSending(false);
     }
@@ -103,7 +111,9 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
     setOpenFile(null);
     lookAgain();
     onSeen?.();
-    showNotice(`${verdict === "approved" ? t("Approved") : t("Rejected")} — ${target.agent}${target.sessionName ? ` in ${target.sessionName}` : ""} has been told${ask === "pr" ? t(" and asked to open a pull request") : ask === "commit" ? t(" and asked to commit") : ""}.`);
+    const said = verdict === "approved" ? t("Approved") : t("Rejected");
+    const told = target.sessionName ? t("{verdict} — {agent} in {workspace} has been told", { verdict: said, agent: target.agent, workspace: target.sessionName }) : t("{verdict} — {agent} has been told", { verdict: said, agent: target.agent });
+    showNotice(`${told}${ask === "pr" ? t(" and asked to open a pull request") : ask === "commit" ? t(" and asked to commit") : ""}.`);
   };
 
   const files = review?.files ?? [];
@@ -143,6 +153,10 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       draft={draftByFile.get(file.path) ?? NO_COMMENTS}
       onComment={addComment}
       onRemove={removeComment}
+      opinion={second.perFile.get(file.path) ?? NO_OPINION}
+      reviewer={second.reviewer}
+      onAdopt={second.adopt}
+      onDismissOpinion={second.dismissOne}
       onOpen={(line) => onOpenFile(`${dir}/${file.path}`, line)}
       onCode={() => actions.openInCode(machineId, dir, `${dir.replace(/\/+$/, "")}/${file.path}`)}
     />
@@ -153,12 +167,13 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       <div className="review-head">
         <div className="review-title">
           <span className="review-branch">
-            <Icon name="git-branch" size={12} /> {review?.branch || "detached"}
+            <Icon name="git-branch" size={12} /> {review?.branch || t("detached")}
           </span>
           <span className="review-sub">
             {lastLookText}
             {commits.length > 0 && ` · ${review?.commits_total ? t("the newest {n} of {total} commits", { n: commits.length, total: review.commits_total }) : plural(commits.length, "commit")}`}
             {files.length > 0 && ` · ${t("{files} uncommitted +{added} −{removed}", { files: plural(files.length, "file"), added, removed })}`}
+            {subWords(second.opinion) && ` · ${subWords(second.opinion)}`}
           </span>
         </div>
         <span className="review-keys" aria-hidden="true">
@@ -169,11 +184,24 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
             </span>
           ))}
         </span>
-        <button type="button" className={`icon-btn${split ? " on" : ""}`} aria-pressed={split} title={split ? "Two columns, the old file on the left (s)" : "One column (s)"} onClick={() => setSplit((on) => !on)}>
-          <Icon name="columns" size={14} />
-        </button>
-        <button type="button" className="icon-btn" title={t("Look again")} onClick={lookAgain}>
-          <Icon name="refresh-cw" size={14} />
+        <Tip text={split ? t("Two columns, the old file on the left (s)") : t("One column (s)")}>
+          <button type="button" className={`icon-btn${split ? " on" : ""}`} aria-pressed={split} aria-label={t("One column or two")} onClick={() => setSplit((on) => !on)}>
+            <Icon name="columns" size={14} />
+          </button>
+        </Tip>
+        <Tip text={t("Look again")}>
+          <button type="button" className="icon-btn" aria-label={t("Look again")} onClick={lookAgain}>
+            <Icon name="refresh-cw" size={14} />
+          </button>
+        </Tip>
+        <button
+          type="button"
+          className="btn review-ask-opinion"
+          disabled={(!files.length && !commits.length) || second.running}
+          onClick={() => second.setAsking(true)}
+          title={second.running ? t("A second opinion is on its way: wait for its answer, or close its tab") : t("Another agent reviews this without changing anything; its comments appear under the lines")}
+        >
+          <Icon name="message" size={14} /> {t("Second opinion")}
         </button>
         <button
           type="button"
@@ -192,13 +220,26 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       )}
       {notice && <Notice tone="success">{notice}</Notice>}
       <div className="review-body">
+        {second.opinion && (
+          <OpinionBlock
+            opinion={second.opinion}
+            reviewer={second.reviewer}
+            asking={second.askingPerson}
+            apart={second.apart}
+            moved={second.moved}
+            onAdopt={second.adopt}
+            onAdoptAll={second.adoptAll}
+            onDismiss={second.dismissOne}
+            onDismissAll={second.dismissAll}
+          />
+        )}
         {commits.length > 0 && (
           <div className="review-commits">
             {commits.map((commit) => (
               <div key={commit.sha} className={`review-commit${commit.seen ? " seen" : ""}`} title={commit.seen ? t("A commit of work you already reviewed") : undefined}>
                 <code>{commit.sha}</code>
                 <span className="review-commit-subject">{commit.subject}</span>
-                {commit.seen && <span className="review-tag">reviewed</span>}
+                {commit.seen && <span className="review-tag">{t("reviewed")}</span>}
                 <span className="review-commit-when">{ago(commit.when * 1000)}</span>
               </div>
             ))}
@@ -209,7 +250,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
         {unchangedFiles.length > 0 && (
           <div className="review-fold">
             <button type="button" className="linkish" aria-expanded={showUnchanged} onClick={() => setShowUnchanged((shown) => !shown)}>
-              <Icon name={showUnchanged ? "chevron-down" : "chevron-right"} size={12} /> {plural(unchangedFiles.length, "file")} unchanged since you looked
+              <Icon name={showUnchanged ? "chevron-down" : "chevron-right"} size={12} /> {t("{files} unchanged since you looked", { files: plural(unchangedFiles.length, "file") })}
             </button>
             {showUnchanged && unchangedFiles.map((file) => fileRow(file))}
           </div>
@@ -218,7 +259,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           <div className="review-orphans">
             <Notice tone="hint">{t("Comments on files no longer in this list — still in the draft:")}</Notice>
             {orphanComments.map((comment) => (
-              <Note key={comment.id} comment={comment} where={`${comment.file}:${comment.line}`} onRemove={removeComment} />
+              <Note key={comment.id} comment={comment} where={comment.line > 0 ? `${comment.file}:${comment.line}` : comment.file} onRemove={removeComment} />
             ))}
           </div>
         )}
@@ -243,9 +284,11 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
                     <Icon name="send" size={12} /> {t("Send")}
                   </button>
                   {agents.length > 1 && (
-                    <button type="button" className="icon-btn" title={t("Send the comments to another agent")} disabled={sending} onClick={() => setPickingAgent(true)}>
-                      <Icon name="chevron-down" size={14} />
-                    </button>
+                    <Tip text={t("Send the comments to another agent")}>
+                      <button type="button" className="icon-btn" aria-label={t("Send the comments to another agent")} disabled={sending} onClick={() => setPickingAgent(true)}>
+                        <Icon name="chevron-down" size={14} />
+                      </button>
+                    </Tip>
                   )}
                 </>
               ) : (
@@ -274,6 +317,21 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           rememberKey={`review:${machineId}|${dir}`}
           onClose={() => setPickingAgent(false)}
           onSend={(target, text) => sendComments(target, text)}
+        />
+      )}
+      {second.asking && (
+        <OpinionDialog
+          machineId={machineId}
+          paneId={paneId}
+          dir={dir}
+          paneAgent={agent}
+          onClose={() => second.setAsking(false)}
+          onAsked={(asked, label) => {
+            second.setAsking(false);
+            second.mutate(() => asked.opinion);
+            if (asked.agent_error) setActionError(t("{agent} did not start: {error}", { agent: label, error: asked.agent_error }));
+            else showNotice(t("{agent} is reviewing in a new tab; its comments appear here when it answers.", { agent: label }));
+          }}
         />
       )}
       {openVerdict && (

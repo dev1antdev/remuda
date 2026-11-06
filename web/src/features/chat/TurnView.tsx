@@ -33,7 +33,7 @@ export const TurnView = memo(
     pinned?: boolean; // the turn is in the Pins list: a mark in its corner, the pin button on
     subagents?: Subagent[]; // the conversation's, drawn under the Agent calls that spawned them
     onOpenSubagent?: (s: Subagent) => void;
-    diffs?: boolean; // an Edit's change drawn under its call: the lens, not a tile
+    diffs?: boolean; // an Edit's change drawn under its call, a mermaid fence drawn as its diagram: the lens, not a tile
   }) {
     const cls = `turn ${turn.role === "user" ? "turn-user" : "turn-assistant"}${pinned ? " turn-pinned" : ""}`;
     const text = turn.parts
@@ -48,7 +48,7 @@ export const TurnView = memo(
             <Icon name="pin" size={12} />
           </span>
         )}
-        <ErrorBoundary fallback={(message) => <Notice tone="error">{t("This turn could not be drawn: {message}", { message })}</Notice>}>
+        <ErrorBoundary resetKey={turn} fallback={(message) => <Notice tone="error">{t("This turn could not be drawn: {message}", { message })}</Notice>}>
           {turn.parts.map((p, i) => (
             <PartView key={i} part={p} machineId={machineId} onOpenFile={onOpenFile} subagents={subagents} onOpenSubagent={onOpenSubagent} diffs={diffs} />
           ))}
@@ -58,7 +58,7 @@ export const TurnView = memo(
           <div className="turn-actions">
             {onForward && text && turn.role === "assistant" && (
               <button type="button" className="linkish turn-forward" title={t("Forward this to another agent")} onClick={() => onForward(text)}>
-                <Icon name="send" size={12} /> forward
+                <Icon name="send" size={12} /> {t("forward")}
               </button>
             )}
             {onLink && !!turn.ids?.length && (
@@ -133,7 +133,7 @@ function Folded({ className, summary, children }: { className: string; summary: 
 
 function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent, diffs }: { part: Part; machineId?: string; onOpenFile: OpenFile; subagents?: Subagent[]; onOpenSubagent?: (s: Subagent) => void; diffs?: boolean }) {
   if (part.type === "text") {
-    return <Markdown text={part.text ?? ""} onOpenFile={onOpenFile} />;
+    return <Markdown text={part.text ?? ""} onOpenFile={onOpenFile} diagrams={diffs} />;
   }
   if (part.type === "thinking") {
     return (
@@ -180,9 +180,9 @@ function PartView({ part, machineId, onOpenFile, subagents, onOpenSubagent, diff
                     e.preventDefault();
                     onOpenFile({ path: file, prefer: EDIT_TOOLS.has(name) ? "changes" : "file" });
                   }}
-                  title={EDIT_TOOLS.has(name) ? t("Open the file with its changes") : t("Open the file")}
+                  title={`${file}\n${EDIT_TOOLS.has(name) ? t("Open the file with its changes") : t("Open the file")}`}
                 >
-                  {hint}
+                  <bdi dir="ltr">{hint}</bdi>
                 </button>
               ) : (
                 <span className="part-hint">{hint}</span>

@@ -23,6 +23,9 @@ type RunWatch struct {
 	// PRTouch asks for the pull request a pane's run names to be read again when its last read is old enough, so a merge
 	// moves the task with no page open.
 	PRTouch func(machine, pane string)
+	// Advance starts a pipeline's next stage after the previous run's agent said it is done: the agent in a new tab of
+	// the worktree with the prompt, the run recorded (Launcher.StartStage).
+	Advance func(prev Run, index int, stage Stage, prompt string) error
 	Now     func() time.Time
 
 	missing map[int64]time.Time
@@ -70,10 +73,12 @@ func (w *RunWatch) Sweep() {
 			if now().Sub(started) > startWindow {
 				_ = w.Store.SetRun(r.ID, RunFailed, "the prompt was never delivered")
 				_, _ = w.Store.AddComment(r.TaskID, "remuda", "The task was never handed to the agent. The worktree is there; send it by hand.")
+				_ = w.Store.StopPipeline(r.ID, "the prompt never reached the agent")
 			}
 			continue
 		}
 		w.noteUsage(r, started, now())
+		// a permission prompt or a choice dialog (blocked) only waits for the person: the answer that follows decides
 		if state == "working" || state == "unknown" {
 			continue
 		}
@@ -87,13 +92,26 @@ func (w *RunWatch) Sweep() {
 			answer = "…" + string(rs[len(rs)-6000:]) // the end is the answer
 		}
 		_, _ = w.Store.AddComment(r.TaskID, "agent", answer)
+		// the pipeline's step before the answer is noted as reported: a restart in between hears the answer again and
+		// takes the step, where the other order would leave the pipeline on for good
+		var stage string
+		var moved *Status
+		handled := false
+		if r.Pipeline == PipelineOn {
+			stage, moved, handled = w.onStageAnswer(r, answer)
+		}
 		_ = w.Store.SetRun(r.ID, RunFinished, id)
 		r.State, r.Finished = RunFinished, now().UTC().Format(time.RFC3339)
 		w.noteUsage(r, started, now())
-		moved, _ := w.Store.OnFinish(r.TaskID)
+		if !handled && r.Pipeline != PipelinePassed { // an earlier stage's tab answering again leaves the card to the pipeline
+			moved, _ = w.Store.OnFinish(r.TaskID)
+		}
 		if w.Notify != nil {
 			t, _ := w.Store.Get(r.TaskID)
 			title := fmt.Sprintf("Task %s: %s finished", t.Identifier, r.Agent)
+			if stage != "" {
+				title += ", " + stage
+			}
 			if moved != nil {
 				title += " → " + moved.Title
 			}

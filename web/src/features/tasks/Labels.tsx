@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { errMsg } from "@/lib/text";
-import { Icon } from "@/ui";
+import { Icon, Tip } from "@/ui";
 import { addTaskLabel, createLabel, removeTaskLabel, type Label, type Task } from "./api";
 import { labelStyle } from "./pieces";
 import { randomColor } from "./ProjectSettings";
@@ -58,9 +58,11 @@ export function LabelsField({ task: t, labels, onChange, onLabelsChanged, onErro
         {(t.labels ?? []).map((l) => (
           <span key={l.id} className="tasks-label" style={labelStyle(l)}>
             {l.title}
-            <button type="button" className="icon-btn sm tasks-label-x" onClick={() => void dropLabel(l)} title={tr("Remove")} aria-label={tr("Remove {label}", { label: l.title })}>
-              <Icon name="x" size={12} />
-            </button>
+            <Tip text={tr("Remove {label}", { label: l.title })}>
+              <button type="button" className="icon-btn sm tasks-label-x" onClick={() => void dropLabel(l)} aria-label={tr("Remove {label}", { label: l.title })}>
+                <Icon name="x" size={12} />
+              </button>
+            </Tip>
           </span>
         ))}
         {picking ? (
@@ -90,7 +92,7 @@ export function LabelsField({ task: t, labels, onChange, onLabelsChanged, onErro
               ))}
               {query.trim() && !exact && !attached && (
                 <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => void newLabel(query)}>
-                  <Icon name="plus" size={12} /> create “{query.trim()}”
+                  <Icon name="plus" size={12} /> {tr("create “{name}”", { name: query.trim() })}
                 </button>
               )}
             </span>

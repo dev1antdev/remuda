@@ -23,6 +23,7 @@ export const chat: Dictionary = {
   Down: "Вниз",
   Enter: "Enter",
   "Escape: close the dialog": "Escape: закрыть диалог",
+  "Several choices: Enter ticks one, then go down to Submit": "Можно выбрать несколько: Enter отмечает вариант, затем спуститесь к Submit",
   "Export as Markdown": "Экспорт в Markdown",
   "Exported from remuda on {date}": "Экспортировано из remuda {date}",
   "Files the agent touched": "Файлы, которых касался агент",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FIRST_TURNS, hiddenCount, MOUNT_STEP, nextReveal } from "./mount";
+import { ALL_REVEALED, FIRST_TURNS, hiddenCount, MOUNT_STEP, nextReveal } from "./mount";
 
 describe("progressive mount", () => {
   it("hides nothing of a short conversation", () => {
@@ -15,11 +15,21 @@ describe("progressive mount", () => {
     const revealedAll = 1680;
     expect(hiddenCount(1685, revealedAll)).toBe(0);
   });
-  it("reveals a step at a time and stops at the start", () => {
+  it("reveals a step at a time, and everything once a slice reaches the start", () => {
     expect(nextReveal(1680, 0)).toBe(MOUNT_STEP);
-    expect(nextReveal(1680, 1400)).toBe(1480);
     expect(nextReveal(1680, 1000)).toBe(1000 + MOUNT_STEP);
-    expect(nextReveal(1680, 1480)).toBe(1480);
-    expect(nextReveal(50, 0)).toBe(0);
+    expect(nextReveal(1680, 1400)).toBe(ALL_REVEALED);
+    expect(nextReveal(1680, 1480)).toBe(ALL_REVEALED);
+    expect(nextReveal(50, 0)).toBe(ALL_REVEALED);
+  });
+  it("hides no turn again once the log was mounted to its start, however many arrive", () => {
+    const revealed = nextReveal(1680, 1400);
+    expect(hiddenCount(1680, revealed)).toBe(0);
+    expect(hiddenCount(1681, revealed)).toBe(0);
+    expect(hiddenCount(5000, revealed)).toBe(0);
+  });
+  it("hides only the turn that pushed a just-crossed short conversation past the first screenful, once", () => {
+    expect(hiddenCount(FIRST_TURNS + 1, 0)).toBe(1);
+    expect(hiddenCount(FIRST_TURNS + 50, nextReveal(FIRST_TURNS + 1, 0))).toBe(0);
   });
 });

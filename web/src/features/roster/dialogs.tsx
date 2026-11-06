@@ -8,10 +8,11 @@ import RecipesDialog from "@/features/recipes/RecipesDialog";
 import { readPref, writePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { dirname } from "@/lib/text";
-import { FormDialog, Icon, Logo, Select, useSubmit } from "@/ui";
+import { FormDialog, Icon, Logo, Select, Tip, useSubmit } from "@/ui";
 import type { AgentKind, Machine, Session, StartExtras } from "./api";
 import FolderPicker from "./FolderPicker";
 import { machineOptions } from "./options";
+import { useSharing } from "./useSharing";
 import { choiceFor, CUSTOM, EMPTY_DRAFT, hasModelFlag, hasOptions, lastModelKey, modelChoices, modelPlaceholder, optionsFor, type Draft } from "./startOptions";
 import { t } from "@/lib/i18n";
 
@@ -103,7 +104,8 @@ function StartOptionsFields({ kind, draft, agents, onChange, onRecipe }: { kind:
       {recipePick}
       <button type="button" className="linkish start-options-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
         <Icon name={open ? "chevron-down" : "chevron-right"} size={12} />
-        Options{!open && hasOptions(kind, draft) ? t(" · set") : ""}
+        {t("Options")}
+        {!open && hasOptions(kind, draft) ? t(" · set") : ""}
       </button>
       {open && (
         <>
@@ -155,26 +157,28 @@ export function RenameDialog({ what, label, onClose, onRename }: { what: "tab" |
   );
 }
 
-export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate, onClose }: {
+export function NewWorkspaceDialog({ machines, agents, defaultMachine, defaultDir = "", onCreate, onClose }: {
   machines: Machine[];
   agents: AgentKind[];
   defaultMachine: string;
+  defaultDir?: string; // the folder a folder's own menu opened it on
   onCreate: (machine: string, dir: string, name: string, agent: string, extras: StartExtras) => Promise<void>;
   onClose: () => void;
 }) {
   const [machine, setMachine] = useState(defaultMachine);
-  const [dir, setDir] = useState("");
+  const [dir, setDir] = useState(defaultDir);
   const [name, setName] = useState("");
   const { agent, pickAgent, draft, setDraft, options: extras, applyRecipe } = useStart(defaultAgent(agents, "claude"));
   const [picking, setPicking] = useState(false);
   const submit = useSubmit(async () => {
-    if (!dir.trim()) throw new Error("Project folder is required");
+    if (!dir.trim()) throw new Error(t("Project folder is required"));
     await onCreate(machine, dir.trim(), name.trim(), agent, extras());
   });
   const target = machines.find((m) => m.id === machine);
-  const options = machineOptions(machines, { onlyConnected: false }).map((o) => {
+  const share = useSharing(); // under the screen-sharing mode the machines by their neutral names, their hosts unsaid
+  const options = machineOptions(machines, { onlyConnected: false, label: share.machineLabel }).map((o) => {
     const m = machines.find((x) => x.id === o.value);
-    return m && m.state !== "connected" ? { ...o, hint: m.state, disabled: true } : { ...o, hint: m?.host };
+    return m && m.state !== "connected" ? { ...o, hint: m.state, disabled: true } : { ...o, hint: m && share.machineHidden(m.id) ? undefined : m?.host };
   });
   return (
     <FormDialog title={t("New workspace")} icon="folder" onClose={onClose} submit={submit} submitLabel={t("Create")}>
@@ -186,12 +190,14 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate,
       )}
       <label>
         {t("Project folder")}
-        {target && target.id !== "local" ? ` ${t("on {machine}", { machine: target.label })}` : ""}
+        {target && target.id !== "local" ? ` ${t("on {machine}", { machine: share.machineLabel(target) })}` : ""}
         <span className="field-row">
-          <input autoFocus value={dir} placeholder="/Users/you/Projects/app" onChange={(e) => setDir(e.target.value)} />
-          <button type="button" className="icon-btn lg" title={t("Browse the folders on the machine")} disabled={!target || target.state !== "connected"} onClick={() => setPicking(true)}>
-            <Icon name="folder" size={16} />
-          </button>
+          <input autoFocus={!defaultDir} value={dir} placeholder="/Users/you/Projects/app" onChange={(e) => setDir(e.target.value)} />
+          <Tip text={t("Browse the folders on the machine")}>
+            <button type="button" className="icon-btn lg" aria-label={t("Browse the folders on the machine")} disabled={!target || target.state !== "connected"} onClick={() => setPicking(true)}>
+              <Icon name="folder" size={16} />
+            </button>
+          </Tip>
         </span>
       </label>
       {picking && target && (
@@ -207,8 +213,8 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, onCreate,
         />
       )}
       <label>
-        Name (optional)
-        <input value={name} placeholder="checkout-api" onChange={(e) => setName(e.target.value)} />
+        {t("Name (optional)")}
+        <input autoFocus={!!defaultDir} value={name} placeholder="checkout-api" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
       <StartOptionsFields kind={agent} draft={draft} agents={agents} onChange={setDraft} onRecipe={applyRecipe} />
@@ -225,10 +231,11 @@ export function NewTabDialog({ session, agents, onCreate, onClose }: {
   const [name, setName] = useState("");
   const { agent, pickAgent, draft, setDraft, options, applyRecipe } = useStart("shell");
   const submit = useSubmit(() => onCreate(name.trim(), agent, options()));
+  const { redact } = useSharing(); // under the screen-sharing mode the workspace by its neutral name
   return (
-    <FormDialog title={t("New tab in {workspace}", { workspace: session.name })} icon="plus" hint={t("Opens in the workspace's folder, like herdr's prefix+c.")} onClose={onClose} submit={submit} submitLabel={t("Create tab")}>
+    <FormDialog title={t("New tab in {workspace}", { workspace: redact(session.name) })} icon="plus" hint={t("Opens in the workspace's folder, like herdr's prefix+c.")} onClose={onClose} submit={submit} submitLabel={t("Create tab")}>
       <label>
-        Name (optional)
+        {t("Name (optional)")}
         <input autoFocus value={name} placeholder="tests" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
@@ -248,33 +255,30 @@ export function NewWorktreeDialog({ session, agents, onCreate, onClose }: {
   const [name, setName] = useState("");
   const { agent, pickAgent, draft, setDraft, options, applyRecipe } = useStart(defaultAgent(agents, "claude"));
   const submit = useSubmit(async () => {
-    if (!branch.trim()) throw new Error("Branch name is required");
+    if (!branch.trim()) throw new Error(t("Branch name is required"));
     await onCreate(branch.trim(), base.trim(), name.trim(), agent, options());
   });
-  const repo = session.worktree?.repo_name ?? session.name;
+  const { redact } = useSharing(); // under the screen-sharing mode the repository by its neutral name
+  const repo = redact(session.worktree?.repo_name ?? session.name);
   return (
     <FormDialog
-      title={t("New worktree of {repo}", { repo })}
+      title={t("New workspace in {repo}", { repo })}
       icon="git-branch"
-      hint={
-        <>
-          <code>{t("git worktree add")}</code> creates the branch's own checkout; it opens as a workspace nested under {repo}, and the agent starts there beside the first one.
-        </>
-      }
+      hint={t("A worktree of its own: a folder with its own branch beside {repo}, so the agents of different workspaces never touch each other's files. Closing the workspace removes it again once nothing in it is uncommitted.", { repo })}
       onClose={onClose}
       submit={submit}
-      submitLabel={t("Create worktree")}
+      submitLabel={t("Create workspace")}
     >
       <label>
         {t("Branch")}
         <input autoFocus value={branch} onChange={(e) => setBranch(e.target.value)} />
       </label>
       <label>
-        Base (optional — branch, tag or commit; default: the current HEAD)
+        {t("Base (optional — a branch, tag or commit; the current HEAD by default)")}
         <input value={base} placeholder="main" onChange={(e) => setBase(e.target.value)} />
       </label>
       <label>
-        Workspace name (optional)
+        {t("Workspace name (optional)")}
         <input value={name} placeholder={t("defaults to the branch")} onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
@@ -301,7 +305,7 @@ export function AddMachineDialog({ onAdd, onClose }: { onAdd: (label: string, ho
   const [host, setHost] = useState("");
   const [label, setLabel] = useState("");
   const submit = useSubmit(async () => {
-    if (!host.trim()) throw new Error("SSH host is required");
+    if (!host.trim()) throw new Error(t("SSH host is required"));
     await onAdd(label.trim(), host.trim());
   });
   return (
@@ -310,7 +314,8 @@ export function AddMachineDialog({ onAdd, onClose }: { onAdd: (label: string, ho
       icon="monitor"
       hint={
         <>
-          Machines saved in herdr appear on their own. This adds another: any host your <code>ssh</code> reaches with keys, with herdr running there.
+          {t("Machines saved in herdr appear on their own. This adds another: any host your")} <code>ssh</code>{" "}
+          {t("reaches with keys, with herdr running there.")}
         </>
       }
       onClose={onClose}
@@ -322,7 +327,7 @@ export function AddMachineDialog({ onAdd, onClose }: { onAdd: (label: string, ho
         <input autoFocus value={host} placeholder="build-box" onChange={(e) => setHost(e.target.value)} />
       </label>
       <label>
-        Label (optional)
+        {t("Label (optional)")}
         <input value={label} placeholder={t("Build box")} onChange={(e) => setLabel(e.target.value)} />
       </label>
     </FormDialog>

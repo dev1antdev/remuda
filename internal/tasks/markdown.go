@@ -14,9 +14,7 @@ const MaxMarkdown = 64 << 10
 // paragraphs, headings, lists one level deep with task items as checkboxes, fenced and inline code, bold, italic,
 // http links, rules and quotes; everything else stays text.
 func MarkdownHTML(md string) string {
-	if len(md) > MaxMarkdown {
-		md = md[:MaxMarkdown]
-	}
+	md = cutBytes(md, MaxMarkdown)
 	lines := strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n")
 	var out strings.Builder
 	var para, quote []string
@@ -84,7 +82,6 @@ var (
 	headingRe = regexp.MustCompile(`^(#{1,4})\s+(.*?)\s*#*$`)
 	ruleRe    = regexp.MustCompile(`^(-{3,}|\*{3,}|_{3,})$`)
 	itemRe    = regexp.MustCompile(`^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$`)
-	linkRe    = regexp.MustCompile(`^\[([^\]]+)\]\((https?://[^\s)]+)\)`)
 	urlRe     = regexp.MustCompile(`^https?://[^\s<>"']+`)
 )
 
@@ -141,6 +138,7 @@ func (l *listWriter) close() {
 // inline draws a line's marks: code spans, bold, italic, links and bare addresses; everything else escaped.
 func inline(s string) string {
 	var b strings.Builder
+	links := linkScan{s: s, closeAt: -1, stopAt: -1}
 	for i := 0; i < len(s); {
 		switch {
 		case s[i] == '`':
@@ -163,9 +161,9 @@ func inline(s string) string {
 				continue
 			}
 		case s[i] == '[':
-			if m := linkRe.FindStringSubmatch(s[i:]); m != nil {
-				b.WriteString(`<a href="` + html.EscapeString(m[2]) + `">` + inline(m[1]) + "</a>")
-				i += len(m[0])
+			if text, url, end, ok := links.at(i); ok {
+				b.WriteString(`<a href="` + html.EscapeString(url) + `">` + inline(text) + "</a>")
+				i = end
 				continue
 			}
 		case strings.HasPrefix(s[i:], "http://") || strings.HasPrefix(s[i:], "https://"):
@@ -191,6 +189,56 @@ func inline(s string) string {
 		i++
 	}
 	return b.String()
+}
+
+// linkScan reads [text](http…) links off one line in time linear in its length: the closing bracket and the end of
+// an address are each looked for once per stretch of the line, where a regexp tried at every '[' cost the line's
+// square (65 536 brackets took 46 s).
+type linkScan struct {
+	s                  string
+	closeFrom, closeAt int // closeAt is the first ']' at or after closeFrom, len(s) when there is none
+	stopFrom, stopAt   int // stopAt is the first ')' or space at or after stopFrom, len(s) when there is none
+}
+
+// at is the link that opens at s[i], '[': its text, its address and where it ends; false when none does.
+func (l *linkScan) at(i int) (text, url string, end int, ok bool) {
+	closing := firstFrom(l.s, i+1, &l.closeFrom, &l.closeAt, func(c byte) bool { return c == ']' })
+	if closing == i+1 || closing+1 >= len(l.s) || l.s[closing+1] != '(' {
+		return "", "", 0, false
+	}
+	start := closing + 2
+	scheme := 0
+	switch rest := l.s[start:]; {
+	case strings.HasPrefix(rest, "http://"):
+		scheme = len("http://")
+	case strings.HasPrefix(rest, "https://"):
+		scheme = len("https://")
+	default:
+		return "", "", 0, false
+	}
+	stop := firstFrom(l.s, start, &l.stopFrom, &l.stopAt, func(c byte) bool {
+		return c == ')' || c == ' ' || c == '\t' || c == '\n' || c == '\f' || c == '\r'
+	})
+	if stop >= len(l.s) || l.s[stop] != ')' || stop == start+scheme {
+		return "", "", 0, false
+	}
+	return l.s[i+1 : closing], l.s[start:stop], stop + 1, true
+}
+
+// firstFrom is the first byte at or after p that matches, len(s) for none; the last answer is kept in from and at
+// and given again for any p between them, since no match lies there.
+func firstFrom(s string, p int, from, at *int, match func(byte) bool) int {
+	if *from <= p && p <= *at {
+		return *at
+	}
+	*from, *at = p, len(s)
+	for j := p; j < len(s); j++ {
+		if match(s[j]) {
+			*at = j
+			break
+		}
+	}
+	return *at
 }
 
 // emphasisEnd is where a *word* or _word_ closes, 0 when it does not: the mark hugs its text, and an underscore

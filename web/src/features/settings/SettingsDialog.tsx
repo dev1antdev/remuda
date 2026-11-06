@@ -4,12 +4,15 @@
 
 import { setAccentPref, setDarkFlavorPref, setDensityPref, setMonoPref, setTextSizePref, setThemePref, useAccent, useDarkFlavorPref, useDensity, useFlavor, useMono, useTextSize, useThemePref } from "@/app/theme";
 import { actions } from "@/app/store";
+import BackupSection from "./BackupSection";
 import DevicesSection from "./DevicesSection";
+import JiraSection from "@/features/jira/JiraSection";
+import { useRoster } from "@/features/roster/useRoster";
 import { RadarFields } from "@/features/roster/RadarSettings";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { DENSITY_NAMES, MONO_FONTS, monoName, monoStack, TEXT_SIZE_NAMES, TEXT_SIZES, type Density, type MonoFont } from "@/lib/look";
 import { usePref } from "@/lib/prefs";
-import { ACCENTS, accentName, DARK_FLAVORS, FLAVOR_NAMES, FLAVORS, swatches } from "@/lib/theme";
+import { ACCENTS, accentName, DARK_FLAVORS, FLAVOR_NAMES, FLAVORS, swatches, themeChoiceName } from "@/lib/theme";
 import { Dialog, Icon, resetPanels, Select, Tip } from "@/ui";
 import { SYNC_PREF } from "./useSyncPrefs";
 import { LANG_NAMES, LANGS, t } from "@/lib/i18n";
@@ -29,6 +32,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const palette = swatches(flavor);
   const [radar, setRadar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [sync, setSync] = usePref<boolean>(SYNC_PREF, false);
+  const { viewOnly } = useRoster();
   const after = (run: () => void) => () => {
     onClose();
     run();
@@ -46,9 +50,9 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             value={themePref}
             onChange={setThemePref}
             options={[
-              { value: "system", label: t("Follow the system"), icon: <Icon name="monitor" size={14} /> },
-              { value: "dark", label: `${FLAVOR_NAMES[darkFlavor]} (dark)`, icon: <Icon name="moon" size={14} /> },
-              { value: "light", label: "Latte (light)", icon: <Icon name="sun" size={14} /> },
+              { value: "system", label: themeChoiceName("system", darkFlavor), icon: <Icon name="monitor" size={14} /> },
+              { value: "dark", label: themeChoiceName("dark", darkFlavor), icon: <Icon name="moon" size={14} /> },
+              { value: "light", label: themeChoiceName("light", darkFlavor), icon: <Icon name="sun" size={14} /> },
             ]}
           />
         </label>
@@ -163,7 +167,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         <div className="settings-row">
           <span>
             {t("Keyboard shortcuts")}
-            <small>Every key the page answers (also behind ?)</small>
+            <small>{t("Every key the page answers (also behind ?)")}</small>
           </span>
           <button type="button" className="btn sm" onClick={after(() => actions.openDialog({ kind: "keys" }))}>
             {t("Show")}
@@ -176,6 +180,8 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
           </span>
         </div>
       </section>
+      {!viewOnly && <JiraSection />}
+      {!viewOnly && <BackupSection />}
       <DevicesSection />
     </Dialog>
   );

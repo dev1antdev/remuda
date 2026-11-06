@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { currentLang, fill, hasTranslation, languageOf, langPrefOf, locale, pluralIndex, setLang, t, tn } from "./i18n";
+import { currentLang, english, fill, hasTranslation, languageOf, langPrefOf, locale, pluralIndex, setLang, t, tc, tn } from "./i18n";
 
 afterEach(() => setLang("en"));
 
@@ -22,6 +22,27 @@ describe("t", () => {
     expect(t("{n} tabs", { n: 1 })).toBe("1 вкладка");
     expect(t("{n} tabs", { n: 3 })).toBe("3 вкладки");
     expect(t("{n} tabs", { n: 5 })).toBe("5 вкладок");
+  });
+});
+
+describe("tc", () => {
+  it("takes the language's word for the narrow place, else the usual one, else the English", () => {
+    setLang("ru");
+    expect(tc("rail", "Activity")).toBe("События");
+    expect(t("Activity")).toBe("Активность");
+    expect(tc("rail", "Usage")).toBe(t("Usage"));
+    setLang("en");
+    expect(tc("rail", "Activity")).toBe("Activity");
+  });
+});
+
+describe("english", () => {
+  it("answers the English a translated string came from, and a string it does not hold as it is", () => {
+    setLang("ru");
+    expect(english(t("Activity"))).toBe("Activity");
+    expect(english("не из словаря")).toBe("не из словаря");
+    setLang("en");
+    expect(english("Activity")).toBe("Activity");
   });
 });
 
@@ -54,6 +75,18 @@ describe("pluralIndex", () => {
     expect([2, 3, 4, 22, 24].map((n) => pluralIndex(n, "ru"))).toEqual([1, 1, 1, 1, 1]);
     expect([0, 5, 11, 12, 14, 19, 20, 25, 111].map((n) => pluralIndex(n, "ru"))).toEqual([2, 2, 2, 2, 2, 2, 2, 2, 2]);
     expect(pluralIndex(-3, "ru")).toBe(1);
+  });
+  it("follows CLDR for every count, a fraction too: Russian's other is written as the few form (1,5 файла), English's as the plural", () => {
+    const forms = { ru: { one: 0, few: 1, many: 2, other: 1 }, en: { one: 0, other: 1 } } as const;
+    const counts = [...Array.from({ length: 230 }, (_, i) => i), 0.5, 1.5, 2.5, 5.25, 11.1, 21.5, 101.5, 0.1, -1.5, -21];
+    for (const language of ["ru", "en"] as const) {
+      const rules = new Intl.PluralRules(language);
+      for (const n of counts) expect(pluralIndex(n, language), `${language} ${n}`).toBe((forms[language] as Record<string, number>)[rules.select(n)]);
+    }
+    setLang("ru");
+    expect(tn(1.5, "{n} file", "{n} files")).toBe("1.5 файла");
+    setLang("en");
+    expect(tn(1.5, "{n} file", "{n} files")).toBe("1.5 files");
   });
 });
 

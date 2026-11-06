@@ -6,14 +6,17 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/state"
@@ -53,6 +56,29 @@ type Manager struct {
 	door     *Door                                 // how every remote's agents reach the tasks here; nil opens none
 	saveMu   sync.Mutex                            // writes of machines.json, one at a time
 	onState  func(id, label, state, reason string) // hears every remote's connection move, set by OnState
+	server   bool                                  // the host serves the page only: no machine of the fleet (SetServer)
+}
+
+// ErrServerHost is what a request for the host's own herdr gets when remuda runs as a server: it has no workspaces.
+var ErrServerHost = errors.New("this remuda runs as a server: the machine it runs on has no workspaces of its own; pick one of its machines")
+
+// SetServer makes the host no machine of the fleet: List leaves it out, so the roster, the watcher, the search, the
+// usage and the standups never see it, and its herdr is never asked; its vitals are still read (All).
+func (m *Manager) SetServer(on bool) {
+	m.mu.Lock()
+	m.server = on
+	local := m.machines[LocalID]
+	m.mu.Unlock()
+	local.mu.Lock()
+	local.serverHost = on
+	local.mu.Unlock()
+}
+
+// Server says whether the host serves the page only.
+func (m *Manager) Server() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.server
 }
 
 // OnState sets who hears a remote machine's connection move: connected, or error with the reason.
@@ -113,7 +139,7 @@ func (m *Manager) MAC(id string) string {
 // Rename gives the machine a name of the user's own, kept in labels.json; an empty name goes back to the registry's.
 func (m *Manager) Rename(id, label string) (*Machine, error) {
 	label = strings.TrimSpace(label)
-	if len(label) > 60 {
+	if utf8.RuneCountInString(label) > 60 {
 		return nil, fmt.Errorf("a name has 60 characters at most")
 	}
 	mc, err := m.Get(id)
@@ -138,12 +164,22 @@ func (m *Manager) Rename(id, label string) (*Machine, error) {
 	return mc, nil
 }
 
+// localLabel is the name the machine remuda runs on goes by until the person gives it one: "This Mac · studio" on a
+// Mac, "This machine · rp-orange" on anything else (a cockpit on a Raspberry Pi said "This Mac" once)
+func localLabel(goos, host string) string {
+	host = strings.TrimSuffix(host, ".local")
+	if goos == "darwin" {
+		return "This Mac · " + host
+	}
+	return "This machine · " + host
+}
+
 // NewManager builds the registry: the local machine plus what machines.json lists; herdr's own come through SyncHerdr.
 // Every remote gets the door given once it connects (nil: none).
 func NewManager(dir, localSocket, localHerdrBin string, door *Door) *Manager {
 	host, _ := os.Hostname()
 	local := &Machine{
-		Cfg:      Config{ID: LocalID, Label: "This Mac · " + strings.TrimSuffix(host, ".local")},
+		Cfg:      Config{ID: LocalID, Label: localLabel(runtime.GOOS, host)},
 		local:    true,
 		state:    StateConnected,
 		herdrBin: localHerdrBin,
@@ -364,7 +400,22 @@ func (m *Manager) Get(id string) (*Machine, error) {
 	return mc, nil
 }
 
+// List is the fleet the cockpit works with: every machine, the host too unless it serves the page only.
 func (m *Manager) List() []*Machine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]*Machine, 0, len(m.order))
+	for _, id := range m.order {
+		if m.server && id == LocalID {
+			continue
+		}
+		out = append(out, m.machines[id])
+	}
+	return out
+}
+
+// All is every machine, the host always: its vitals are read and its connections closed whatever it serves.
+func (m *Manager) All() []*Machine {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]*Machine, 0, len(m.order))
@@ -375,7 +426,7 @@ func (m *Manager) List() []*Machine {
 }
 
 func (m *Manager) Close() {
-	for _, mc := range m.List() {
+	for _, mc := range m.All() {
 		mc.mu.Lock()
 		conn := mc.conn
 		mc.mu.Unlock()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { revokeViewerQuestion, viewerLine } from "./viewerLinks";
+import { revokedWords, revokeViewerQuestion, viewerLine } from "./viewerLinks";
 
 const now = Date.parse("2026-10-29T12:00:00Z");
 
@@ -18,5 +18,13 @@ describe("revokeViewerQuestion", () => {
     expect(q.text).toContain("the office TV");
     expect(q.text).toContain("signed out");
     expect(q.label).toBe("Revoke");
+  });
+});
+
+describe("revokedWords", () => {
+  it("counts the screens signed out, one in the singular", () => {
+    expect(revokedWords("the office TV", 0)).toBe("The link “the office TV” is revoked");
+    expect(revokedWords("the office TV", 1)).toBe("The link “the office TV” is revoked; 1 screen signed out");
+    expect(revokedWords("the office TV", 2)).toBe("The link “the office TV” is revoked; 2 screens signed out");
   });
 });

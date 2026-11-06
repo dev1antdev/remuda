@@ -65,7 +65,7 @@ func attachRefused(mc *machines.Machine, err error) string {
 		msg = "another client holds this terminal on " + mc.Label() + " — start remuda there to share it"
 	}
 	if len(msg) > 120 {
-		msg = msg[:117] + "…"
+		msg = cutBetweenLetters(msg, 117) + "…"
 	}
 	return msg
 }

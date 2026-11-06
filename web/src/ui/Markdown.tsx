@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { findPaths } from "@/lib/paths";
-import { highlightLines, langOf } from "@/lib/highlight";
+import { closesFence, highlightLines, langOf } from "@/lib/highlight";
 import type { OpenFile } from "@/features/files/target";
 import Icon from "@/ui/icons";
 import { tokenNodes } from "@/ui/Tokens";
@@ -8,6 +8,8 @@ import { copyText, openUrl } from "@/lib/host";
 import { t } from "@/lib/i18n";
 import TableCell from "@/ui/TableCell";
 import { INLINE } from "@/ui/cellText";
+import { Mermaid } from "@/ui/Mermaid";
+import { isMermaid } from "@/ui/mermaidLook";
 
 // links open in a new tab — never by navigating this page
 const link = (url: string) => (e: MouseEvent) => {
@@ -33,12 +35,42 @@ type Block =
   | { t: "table"; head: string[]; rows: string[][] }
   | { t: "hr" };
 
-const FENCE = /^\s{0,3}(`{3,}|~{3,})\s*(\S*)\s*$/;
-const HEADING = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/;
+// The fence's mark and the heading's hashes are matched alone and the rest of the line read in code: a pattern with two
+// runs of \s around the info string or the closing hashes cost a line of sixty thousand spaces six seconds.
+const FENCE_MARK = /^\s{0,3}(`{3,}|~{3,})/;
+const HEADING_MARK = /^\s{0,3}(#{1,6})\s+/;
 const HR = /^\s{0,3}([-*_])(\s*\1){2,}\s*$/;
 const LIST = /^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/;
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
-const TABLE_SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+const TABLE_CELL = /^:?-{2,}:?$/;
+
+// fenceOf is the mark and the info string of a line that opens a fence: the info one word, blanks around it allowed
+function fenceOf(line: string): { marker: string; info: string } | null {
+  const mark = line.match(FENCE_MARK);
+  if (!mark) return null;
+  const info = line.slice(mark[0].length).trim();
+  return /\s/.test(info) ? null : { marker: mark[1]!, info };
+}
+
+// headingOf is a heading's level and text; a closing run of # counts only after a space: "## Rewriting in C#" keeps its C#
+function headingOf(line: string): { level: number; text: string } | null {
+  const mark = line.match(HEADING_MARK);
+  if (!mark) return null;
+  const text = line.slice(mark[0].length).trimEnd();
+  let hashes = text.length;
+  while (hashes > 0 && text[hashes - 1] === "#") hashes--;
+  const closed = hashes > 0 && hashes < text.length && /\s/.test(text[hashes - 1]!);
+  return { level: mark[1]!.length, text: closed ? text.slice(0, hashes).trimEnd() : text };
+}
+
+// tableRule says whether a line is the rule under a table's head: cells of two dashes or more, a colon at either end
+// for the alignment, between pipes, the outer pipes optional
+function tableRule(line: string): boolean {
+  let row = line.trim();
+  if (row.startsWith("|")) row = row.slice(1);
+  if (row.endsWith("|")) row = row.slice(0, -1);
+  return row.split("|").every((cell) => TABLE_CELL.test(cell.trim()));
+}
 
 // A list item: its blocks, and for a task item ("[ ] …" / "[x] …") its state.
 type ListItem = { blocks: Block[]; checked: boolean | null };
@@ -66,23 +98,23 @@ export function parseBlocks(src: string, depth = 0): Block[] {
       continue;
     }
 
-    const fence = line.match(FENCE);
-    if (fence) {
+    const fence = fenceOf(line);
+    // a backtick fence's info string holds no backtick: "```code```" on a line of its own is a code span, not a fence that swallows the rest
+    if (fence && !(fence.marker.startsWith("`") && fence.info.includes("`"))) {
       flushPara();
-      const marker = fence[1]!;
-      const lang = fence[2] ?? "";
+      const { marker, info: lang } = fence;
       const code: string[] = [];
       i++;
-      while (i < lines.length && !lines[i]!.trim().startsWith(marker)) code.push(lines[i++]!);
+      while (i < lines.length && !closesFence(lines[i]!, marker)) code.push(lines[i++]!);
       i++; // closing fence (or EOF)
       out.push({ t: "code", lang, code: code.join("\n") });
       continue;
     }
 
-    const h = line.match(HEADING);
+    const h = headingOf(line);
     if (h) {
       flushPara();
-      out.push({ t: "h", level: h[1]!.length, text: h[2]! });
+      out.push({ t: "h", ...h });
       i++;
       continue;
     }
@@ -144,7 +176,7 @@ export function parseBlocks(src: string, depth = 0): Block[] {
       continue;
     }
 
-    if (line.includes("|") && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1]!)) {
+    if (line.includes("|") && i + 1 < lines.length && tableRule(lines[i + 1]!)) {
       flushPara();
       const head = cells(line);
       i += 2;
@@ -226,12 +258,13 @@ function plain(text: string, onOpenFile: OpenFile | null, key: string): ReactNod
 
 // ---- blocks → React ----
 
-export function Markdown({ text, onOpenFile }: { text: string; onOpenFile: OpenFile }) {
+// diagrams draws a mermaid fence as its diagram (the chat lens, the viewer, a task's comments); a wall tile leaves it code
+export function Markdown({ text, onOpenFile, diagrams = false }: { text: string; onOpenFile: OpenFile; diagrams?: boolean }) {
   const blocks = useMemo(() => parseBlocks(text), [text]);
-  return <div className="md">{renderBlocks(blocks, onOpenFile, "b")}</div>;
+  return <div className="md">{renderBlocks(blocks, onOpenFile, "b", diagrams)}</div>;
 }
 
-function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string): ReactNode[] {
+function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string, diagrams: boolean): ReactNode[] {
   return blocks.map((b, i) => {
     const k = `${key}${i}`;
     switch (b.t) {
@@ -251,9 +284,9 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string): React
         return <Tag key={k} className={`md-h md-h${b.level}`}>{renderInline(b.text, onOpenFile, k)}</Tag>;
       }
       case "code":
-        return <CodeBlock key={k} lang={b.lang} code={b.code} />;
+        return diagrams && isMermaid(b.lang) ? <MermaidBlock key={k} lang={b.lang} code={b.code} /> : <CodeBlock key={k} lang={b.lang} code={b.code} />;
       case "quote":
-        return <blockquote key={k}>{renderBlocks(b.blocks, onOpenFile, k)}</blockquote>;
+        return <blockquote key={k}>{renderBlocks(b.blocks, onOpenFile, k, diagrams)}</blockquote>;
       case "hr":
         return <hr key={k} />;
       case "table":
@@ -290,7 +323,7 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string): React
             {b.items.map(({ blocks, checked }, j) => (
               <li key={j} className={checked === null ? undefined : checked ? "task done" : "task"}>
                 {checked !== null && <input type="checkbox" checked={checked} disabled />}
-                {renderBlocks(blocks, onOpenFile, `${k}i${j}`)}
+                {renderBlocks(blocks, onOpenFile, `${k}i${j}`, diagrams)}
               </li>
             ))}
           </Tag>
@@ -300,9 +333,25 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string): React
   });
 }
 
+// MermaidBlock is a mermaid fence drawn as its diagram, its source a press away; a source mermaid cannot read stays
+// code, with the reason under the bar
+function MermaidBlock({ lang, code }: { lang: string; code: string }) {
+  const [source, setSource] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => setError(""), [code]);
+  const toggle = !error && (
+    <button type="button" className="linkish md-pre-toggle" onClick={() => setSource((shown) => !shown)}>
+      <Icon name={source ? "eye" : "code"} size={12} /> {source ? t("Diagram") : t("Source")}
+    </button>
+  );
+  const note = error ? <div className="mermaid-error">{t("Mermaid could not read it: {error}", { error })}</div> : null;
+  return <CodeBlock lang={lang} code={code} extra={toggle} note={note} body={source || error ? undefined : <Mermaid source={code} onError={setError} />} />;
+}
+
 // CodeBlock is a fence: its language in the bar, a copy button, the first 40 lines until unfolded, the code coloured
-// by lib/highlight when the language is known (a fence without one, or a dump past the cap, stays one plain string)
-function CodeBlock({ lang, code }: { lang: string; code: string }) {
+// by lib/highlight when the language is known (a fence without one, or a dump past the cap, stays one plain string);
+// a body in the code's place draws it otherwise (a diagram), extra sits in the bar and a note under it
+function CodeBlock({ lang, code, extra, note, body }: { lang: string; code: string; extra?: ReactNode; note?: ReactNode; body?: ReactNode }) {
   const lines = code.split("\n");
   const long = lines.length > 40;
   const [open, setOpen] = useState(!long);
@@ -314,9 +363,10 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const shown = open ? code : lines.slice(0, 40).join("\n");
   const shownLines = coloured && (open ? coloured : coloured.slice(0, 40));
   return (
-    <div className="md-pre">
+    <div className={body ? "md-pre md-diagram" : "md-pre"}>
       <div className="md-pre-bar">
-        <span>{lang || "code"}</span>
+        <span>{lang || t("code")}</span>
+        {extra}
         <button
           type="button"
           className="linkish"
@@ -329,22 +379,25 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
             });
           }}
         >
-          <Icon name={copied ? "check" : "copy"} size={12} /> {copied ? "copied" : "copy"}
+          <Icon name={copied ? "check" : "copy"} size={12} /> {copied ? t("copied") : t("copy")}
         </button>
       </div>
-      <pre>
-        <code>
-          {shownLines
-            ? shownLines.map((tokens, i) => (
-                <Fragment key={i}>
-                  {i > 0 && "\n"}
-                  {tokenNodes(tokens)}
-                </Fragment>
-              ))
-            : shown}
-        </code>
-      </pre>
-      {long && (
+      {note}
+      {body ?? (
+        <pre>
+          <code>
+            {shownLines
+              ? shownLines.map((tokens, i) => (
+                  <Fragment key={i}>
+                    {i > 0 && "\n"}
+                    {tokenNodes(tokens)}
+                  </Fragment>
+                ))
+              : shown}
+          </code>
+        </pre>
+      )}
+      {!body && long && (
         <button type="button" className="linkish md-more" onClick={() => setOpen((o) => !o)}>
           {open ? t("Show less") : t("Show all {n} lines", { n: lines.length })}
         </button>

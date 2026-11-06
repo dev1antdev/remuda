@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
 import type { Health } from "./api";
 import { concerns, updateLabel } from "./concerns";
 
@@ -21,6 +22,17 @@ describe("concerns", () => {
     expect(concerns(h, { at: "", herdr: "0.9.5" }, "v0.6.0", false)).toEqual([{ key: "hooks", text: "herdr's hooks for Claude Code, Codex and Copilot are outdated", update: "hooks" }]);
     expect(concerns(health({ herdr: "0.9.5", outdated_hooks: [{ agent: "qodercli" }] }), undefined, "v0.6.0", false)[0]?.text).toBe("herdr's hooks for Qoder are outdated");
     expect(concerns(health({ herdr: "0.9.5", outdated_hooks: [], plugins: [{ id: "herdr.push", source: "x/y" }] }), undefined, "v0.6.0", false)).toEqual([]);
+  });
+  it("says the same to a viewer link's page, with no update to run, since the server refuses it every one", () => {
+    const h = health({ claude: "2.1.0", herdr: "0.9.1", herdr_server: "0.9.0", disk_used_pct: 96 });
+    const stopped = [{ pane: "w1:p1", agent: "claude", title: "api" }];
+    const latest = { at: "", claude: "2.2.0", herdr: "0.9.1" };
+    const full = concerns(h, latest, "v0.9.0", false, stopped);
+    const viewer = concerns(h, latest, "v0.9.0", false, stopped, true);
+    expect(full.filter((c) => c.update).length).toBeGreaterThan(0);
+    expect(viewer.map((c) => c.text)).toEqual(full.map((c) => c.text));
+    expect(viewer.filter((c) => c.update)).toEqual([]);
+    expect(viewer.find((c) => c.key === "disk")?.bad).toBe(true);
   });
   it("puts the chats a reboot stopped first, vitals or none, with a Resume", () => {
     const stopped = [{ pane: "w1:p1", agent: "claude", title: "api" }];
@@ -49,5 +61,14 @@ describe("concerns", () => {
     expect(updateLabel("remuda")).toBe("Deploy");
     expect(updateLabel("remuda-release")).toBe("Download & install");
     expect(updateLabel("restart-herdr")).toBe("Restart");
+  });
+  describe("in Russian", () => {
+    afterEach(() => setLang("en"));
+    it("says what is out and labels the buttons in the page's language", () => {
+      setLang("ru");
+      const list = concerns(health({ claude: "2.1.0", code_server: "4.90.0" }), { at: "", claude: "2.2.0", code: "4.99.0" }, "v0.5.0", false);
+      expect(list.map((c) => c.text)).toEqual(["Вышел Claude Code 2.2.0 (здесь 2.1.0)", "remuda теперь ставит code-server 4.99.0 (здесь 4.90.0)"]);
+      expect(["claude", "remuda", "restart-herdr"].map(updateLabel)).toEqual(["Обновить", "Развернуть", "Перезапустить"]);
+    });
   });
 });

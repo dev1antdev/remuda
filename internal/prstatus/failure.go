@@ -6,32 +6,46 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/script"
 )
 
-// A red check handed to the agent: the request's checks read with gh, the failed ones' run logs, one message.
+// A red check handed to the agent: the request's checks read with gh, the failed ones' run logs, one message; a merge
+// request's failed jobs and their logs come through glab in the same shape (gitlab.go).
 
 // LogTail is how much of a failed run's log goes to the agent: its end, where the failure is.
 const LogTail = 8 * 1024
 
-// MaxRuns is how many failed runs' logs one message carries.
+// LogRead is how much of a log the machine sends at all, its end: a CI log runs to tens of megabytes, and LogTail is cut
+// from what arrives.
+const LogRead = 8 * LogTail
+
+// lastOfLog keeps a log's command to the end it needs, on the machine: the log lands in a file first, since GNU tail -c
+// on a pipe was seen handing over three times what it was asked for, and tail of a file seeks to the end exactly.
+var lastOfLog = ` | { log=$(mktemp) && cat > "$log"; tail -c ` + strconv.Itoa(LogRead) + ` "$log"; rm -f "$log"; }`
+
+// MaxRuns is how many failed runs' (or jobs') logs one message carries.
 const MaxRuns = 3
 
-// Check is one of a request's checks as gh pr checks lists it.
+// Check is one of a request's checks as gh pr checks lists it, or one of a merge request's pipeline jobs.
 type Check struct {
 	Name     string `json:"name"`
 	State    string `json:"state"`
 	Bucket   string `json:"bucket"` // pass, fail, pending, skipping, cancel
 	Link     string `json:"link"`
-	Workflow string `json:"workflow"`
+	Workflow string `json:"workflow"` // a job's stage, for a merge request
+	Job      int64  `json:"-"`        // a merge request's job, whose log glab reads
 }
 
 // Failed says whether the check needs a hand: failed or cancelled.
 func (c Check) Failed() bool { return c.Bucket == "fail" || c.Bucket == "cancel" }
 
-var runLink = regexp.MustCompile(`/actions/runs/(\d+)`)
+var (
+	runLink = regexp.MustCompile(`/actions/runs/(\d+)`)
+	runRepo = regexp.MustCompile(`^https?://([^/\s]+)/([^/\s]+)/([^/\s]+)/actions/runs/\d+`)
+)
 
 // RunID is the GitHub Actions run a check's link points into, "" for a check from elsewhere.
 func (c Check) RunID() string {
@@ -40,6 +54,15 @@ func (c Check) RunID() string {
 		return ""
 	}
 	return m[1]
+}
+
+// RunRepo is the repository that run lives in, HOST/OWNER/REPO as gh's -R takes it; "" when the link does not say.
+func (c Check) RunRepo() string {
+	m := runRepo.FindStringSubmatch(c.Link)
+	if m == nil {
+		return ""
+	}
+	return m[1] + "/" + m[2] + "/" + m[3]
 }
 
 // ChecksScript lists a request's checks on the pane's machine.
@@ -79,9 +102,14 @@ func FailedRuns(checks []Check) []string {
 	return runs
 }
 
-// LogScript prints the log of a run's failed steps.
-func LogScript(runID string) string {
-	return script.PATH + "\ngh run view " + script.Quote(runID) + " --log-failed 2>&1"
+// LogScript prints the log of a run's failed steps, the run found in its repository: the script runs in the home folder,
+// where gh run view knows no repository of its own.
+func LogScript(repo, runID string) string {
+	where := ""
+	if repo != "" {
+		where = "-R " + script.Quote(repo) + " "
+	}
+	return script.PATH + "\ngh run view " + where + script.Quote(runID) + " --log-failed 2>&1" + lastOfLog
 }
 
 var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
@@ -105,6 +133,26 @@ var ErrNothingFailed = errors.New("no check of the request has failed")
 
 // FailureMessage is what the agent is told: which checks failed, where, and the end of each failed run's log.
 func FailureMessage(label, url string, checks []Check, logs map[string]string) (string, error) {
+	runs := make([]string, 0, len(logs))
+	for id := range logs {
+		runs = append(runs, id)
+	}
+	sort.Strings(runs)
+	ordered := make([]runLog, 0, len(runs))
+	for _, id := range runs {
+		ordered = append(ordered, runLog{heading: fmt.Sprintf("The failed steps of run %s, the end of their log:", id), text: logs[id]})
+	}
+	return failureMessage(label, url, checks, ordered)
+}
+
+// runLog is one failed run's or job's log under the words that say what it is.
+type runLog struct {
+	heading string
+	text    string
+}
+
+// failureMessage names the failed checks with their links, then each log's end under its heading.
+func failureMessage(label, url string, checks []Check, logs []runLog) (string, error) {
 	var failed []Check
 	for _, c := range checks {
 		if c.Failed() {
@@ -125,17 +173,12 @@ func FailureMessage(label, url string, checks []Check, logs map[string]string) (
 			fmt.Fprintf(&b, "- %s: %s\n", c.Name, c.Link)
 		}
 	}
-	runs := make([]string, 0, len(logs))
-	for id := range logs {
-		runs = append(runs, id)
-	}
-	sort.Strings(runs)
-	for _, id := range runs {
-		tail := Tail(logs[id])
+	for _, l := range logs {
+		tail := Tail(l.text)
 		if tail == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "\nThe failed steps of run %s, the end of their log:\n\n```\n%s\n```\n", id, tail)
+		fmt.Fprintf(&b, "\n%s\n\n```\n%s\n```\n", l.heading, tail)
 	}
 	b.WriteString("\nFix what the log shows, push the fix to the branch, and say when the checks are green again.")
 	return b.String(), nil

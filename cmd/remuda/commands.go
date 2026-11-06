@@ -20,13 +20,16 @@ import (
 // commands are the subcommands beside the server: setup, uninstall and code for people, search and usage for a remuda on a
 // remote machine, mcp and tasks for the coding agents (and a person at a shell) to reach the task list.
 var commands = map[string]func(args []string){
-	"setup":     setupCmd,
-	"uninstall": uninstallCmd,
-	"code":      codeCmd,
-	"search":    searchCmd,
-	"usage":     usageCmd,
-	"mcp":       mcpCmd,
-	"tasks":     tasksCmd,
+	"setup":      setupCmd,
+	"uninstall":  uninstallCmd,
+	"code":       codeCmd,
+	"search":     searchCmd,
+	"usage":      usageCmd,
+	"mcp":        mcpCmd,
+	"tasks":      tasksCmd,
+	"statusline": statuslineCmd,
+	"backup":     backupCmd,
+	"restore":    restoreCmd,
 }
 
 // searchCmd is the scanner a remote machine's remuda runs for the search lens.
@@ -94,8 +97,9 @@ func setupCmd(args []string) {
 	addr := fs.String("addr", "127.0.0.1:7317", "the service's loopback address")
 	noService := fs.Bool("no-service", false, "herdr and its server only; no remuda service")
 	open := fs.Bool("open", false, "open the page in the browser once the service answers (a Mac at the desk only)")
+	serverOnly := fs.Bool("server", false, "the service serves the page only (-server): no herdr installed or started there, the machine none of the cockpit's")
 	fs.Parse(args)
-	err := setup.Run(setup.Options{Host: *host, Tailscale: *ts, TSName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"), Addr: *addr, NoService: *noService, Version: version}, os.Stdout)
+	err := setup.Run(setup.Options{Host: *host, Tailscale: *ts, TSName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"), Addr: *addr, NoService: *noService, Server: *serverOnly, Version: version}, os.Stdout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

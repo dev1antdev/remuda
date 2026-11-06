@@ -109,7 +109,7 @@ func (l *Launcher) firstPrompt(client Prompter, ref events.PaneRef, prompt, labe
 	})
 }
 
-// Close takes the place down through herdr: the workspace when it was made for the agent, else the tab alone.
+// Close takes the place down through herdr, as the machine's last snapshot shows it (closePlace).
 func (l *Launcher) Close(machineID string, place Place) error {
 	mc, err := l.Machines.Get(machineID)
 	if err != nil {
@@ -119,11 +119,46 @@ func (l *Launcher) Close(machineID string, place Place) error {
 	if err != nil {
 		return err
 	}
-	if place.MadeWorkspace {
-		err = client.WorkspaceClose(place.Workspace)
-	} else {
-		err = client.TabClose(place.Tab)
-	}
+	snap, _ := l.Watch.Snapshot(machineID)
+	err = closePlace(client, snap, place)
 	l.Watch.Refresh(mc)
 	return err
+}
+
+// placeCloser is what taking a place down needs of herdr's client.
+type placeCloser interface {
+	WorkspaceClose(workspaceID string) error
+	TabClose(tabID string) error
+}
+
+// closePlace takes down the workspace made for the agent, or its tab alone once the workspace holds another tab — the
+// person's own, added meanwhile; nothing when the pane is gone already, and a refusal when its tab no longer holds it.
+// Without a snapshot the place goes as it was made.
+func closePlace(client placeCloser, snap *herdr.Snapshot, place Place) error {
+	if snap != nil {
+		pane := snap.Pane(place.Pane)
+		if pane == nil {
+			return nil
+		}
+		if pane.TabID != place.Tab {
+			return fmt.Errorf("tab %s no longer holds the agent's pane %s", place.Tab, place.Pane)
+		}
+		if place.MadeWorkspace && otherTabs(snap, place) {
+			return client.TabClose(place.Tab)
+		}
+	}
+	if place.MadeWorkspace {
+		return client.WorkspaceClose(place.Workspace)
+	}
+	return client.TabClose(place.Tab)
+}
+
+// otherTabs says whether the place's workspace holds a tab beside the place's own.
+func otherTabs(snap *herdr.Snapshot, place Place) bool {
+	for _, tab := range snap.Tabs {
+		if tab.WorkspaceID == place.Workspace && tab.TabID != place.Tab {
+			return true
+		}
+	}
+	return false
 }

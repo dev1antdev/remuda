@@ -87,8 +87,8 @@ export const handOver = (req: { machine: string; pane: string; session: string |
 
 // ---- quick prompts: saved texts for the composer ----
 export type QuestionOption = { n: number; label: string; picked: boolean };
-// Question is the dialog on the pane's screen: its words, and its choices with the cursor on one.
-export type Question = { text: string; options: QuestionOption[] };
+// Question is the dialog on the pane's screen: its words, and its choices with the cursor on one; multi when it takes several.
+export type Question = { text: string; options: QuestionOption[]; multi?: boolean };
 export const fetchQuestion = (machineId: string, paneId: string): Promise<Question | null> =>
   getJSON<{ question: Question | null }>(`/api/question?${new URLSearchParams({ machine: machineId, pane: paneId })}`).then((r) => r.question);
 // fetchMode is the permission mode Claude Code's footer names on the same screen read, null when no footer is on screen
@@ -105,3 +105,8 @@ export const fetchCommands = (machineId: string, dir: string, agent: string): Pr
   getJSON<{ commands: CompleteCommand[] | null }>(`/api/complete?${new URLSearchParams({ machine: machineId, dir, kind: "commands", agent })}`).then((r) => r.commands ?? []);
 export const fetchPaths = (machineId: string, dir: string): Promise<{ paths: string[]; cut?: boolean }> =>
   getJSON<{ paths: string[] | null; cut?: boolean }>(`/api/complete?${new URLSearchParams({ machine: machineId, dir, kind: "paths" })}`).then((r) => ({ paths: r.paths ?? [], cut: r.cut }));
+
+// forkConversation starts the pane's agent on a copy of its conversation — the session given, else the live one — in a
+// new tab of its workspace; agent_error says why the tab came up without the agent
+export const forkConversation = (machine: string, pane: string, session?: string): Promise<{ id: string; pane: string; agent_error?: string }> =>
+  sendJSON("POST", "/api/fork", { machine, pane, ...(session ? { session } : {}) });

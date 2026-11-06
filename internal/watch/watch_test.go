@@ -1,6 +1,8 @@
 package watch
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/events"
@@ -45,5 +47,25 @@ func TestApplySeedsThenReportsTransitions(t *testing.T) {
 	}
 	if _, err := w.Snapshot("nope"); err == nil {
 		t.Fatal("an unwatched machine has no snapshot")
+	}
+}
+
+// TestASnapshotIsTheWatchersOwnWhenItIsAnnounced: the snapshot's ears ask the watcher about its panes — the plan
+// limits' check of an agent first seen at rest, the said tracker's first read — and were told of the snapshot before,
+// or of none at all on a machine's first, so an agent stopped on its limit when remuda started went unnoticed.
+func TestASnapshotIsTheWatchersOwnWhenItIsAnnounced(t *testing.T) {
+	bus := events.NewBus()
+	w := New(nil, bus)
+	var mismatches []string
+	events.Subscribe(bus, func(e events.Snapshot) {
+		if snap, err := w.Snapshot(e.Machine); snap != e.Snap || err != nil {
+			mismatches = append(mismatches, fmt.Sprintf("announced %p, the watcher has %p (%v)", e.Snap, snap, err))
+		}
+	})
+	pane := herdr.PaneInfo{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", AgentStatus: herdr.StatusIdle}
+	w.apply("gog", &herdr.Snapshot{Panes: []herdr.PaneInfo{pane}})
+	w.apply("gog", &herdr.Snapshot{Panes: []herdr.PaneInfo{pane}})
+	if len(mismatches) != 0 {
+		t.Fatalf("the watcher answered another snapshot than the one announced:\n%s", strings.Join(mismatches, "\n"))
 	}
 }

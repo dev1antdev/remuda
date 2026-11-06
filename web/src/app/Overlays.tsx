@@ -1,11 +1,19 @@
-// Everything that opens over the page: the "make something" dialogs, the workspace menu, the confirm, the
+// Everything that opens over the page: the "make something" dialogs, the confirm, the
 // panels (the palette, search, alerts, schedules, usage, the release install) and the file viewer. Each reads what it
 // needs from the store and closes itself through the actions.
 
 import { addMachine, createSession, createTab, createWorktree, renameMachine, renameSession, renameTab, type Created } from "@/features/roster/api";
+import IconDialog from "@/features/icons/IconDialog";
+import LeftoversDialog from "@/features/roster/LeftoversDialog";
+import PreviewsDialog from "@/features/preview/PreviewsDialog";
+import ServerPanel from "@/features/roster/ServerPanel";
+import EverywhereDialog from "@/features/updates/EverywhereDialog";
+import ReopenDialog from "@/features/reopen/ReopenDialog";
+import ArenaDialog from "@/features/arena/ArenaDialog";
+import ArenaPanel from "@/features/arena/ArenaPanel";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import { AddMachineDialog, NewTabDialog, NewWorkspaceDialog, NewWorktreeDialog, RenameDialog, RenameMachineDialog } from "@/features/roster/dialogs";
-import WorkspaceMenu from "@/features/roster/WorkspaceMenu";
 import Activity from "@/features/activity/Activity";
 import BroadcastDialog from "@/features/agents/BroadcastDialog";
 import PinsDialog from "@/features/chat/PinsDialog";
@@ -18,9 +26,11 @@ import Schedules from "@/features/schedules/Schedules";
 import Search from "@/features/search/Search";
 import RecapDialog from "@/features/standup/RecapDialog";
 import HandoverDialog from "@/features/chat/HandoverDialog";
+import TeleportDialog from "@/features/teleport/TeleportDialog";
 import ModelDialog from "@/features/chat/ModelDialog";
 import { handedOverWords } from "@/features/chat/handover";
 import ImportIssueDialog from "@/features/tasks/ImportIssueDialog";
+import ImportJiraDialog from "@/features/tasks/ImportJiraDialog";
 import RecipesDialog from "@/features/recipes/RecipesDialog";
 import StartFromRecipeDialog from "@/features/recipes/StartFromRecipeDialog";
 import Standup from "@/features/standup/StandupPanel";
@@ -37,14 +47,15 @@ import { t } from "@/lib/i18n";
 export default function Overlays() {
   const dialog = app.use((s) => s.dialog);
   const targets = useAgentTargets();
-  const menu = app.use((s) => s.menu);
   const panel = app.use((s) => s.panel);
   const search = app.use((s) => s.search);
   const confirm = app.use((s) => s.confirm);
   const file = app.use((s) => s.file);
-  const { machines, agents, refresh } = useRoster();
+  const { machines, agents, refresh, host, server } = useRoster();
+  const share = useSharing(); // a confirm names what it acts on: under the screen-sharing mode, by its neutral name
   const panes = useAllPanes();
-  const local = machines.find((m) => m.id === "local");
+  const leftoversOn = dialog?.kind === "leftovers" ? machines.find((m) => m.id === dialog.machineId) : undefined;
+  const previewsOn = dialog?.kind === "previews" ? machines.find((m) => m.id === dialog.machineId) : undefined;
 
   // the dialog closes even on a warning: the container exists although its agent did not start, and a second submit would make another
   const landOn = async (machineId: string, made: Created) => {
@@ -52,6 +63,7 @@ export default function Overlays() {
     refresh();
     actions.selectPane(machineId, made.pane);
     if (made.warning) actions.notify(made.warning);
+    if (made.note) actions.notify(made.note);
   };
   const done = async () => {
     actions.closeDialog();
@@ -61,7 +73,7 @@ export default function Overlays() {
   const openHit = (hit: SearchHit) => {
     actions.closePanel();
     const there = panes.filter((x) => x.machine.id === hit.machine && (encodePath(x.session.dir ?? "") === hit.project || encodePath(x.pane.cwd) === hit.project));
-    const pick = there.find((x) => x.pane.agent === "claude") ?? there.find((x) => x.pane.agent) ?? there[0];
+    const pick = there.find((x) => x.pane.agent === "claude") ?? there.find((x) => x.pane.agent); // a shell has no chat to jump in: the transcript opens on its own
     actions.jumpTo(hit.machine, pick ? pick.pane.id : "", hit.session, hit.uuid);
     if (pick) actions.selectPane(pick.machine.id, pick.pane.id);
     else actions.openViewer(hit);
@@ -70,20 +82,22 @@ export default function Overlays() {
   return (
     <>
       {panel === "palette" && <CommandPalette />}
-      {panel === "release" && local && <UpdatesDialog machine={local} what="remuda-release" onClose={actions.closePanel} />}
+      {panel === "release" && host && <UpdatesDialog machine={host} what="remuda-release" onClose={actions.closePanel} />}
+      {panel === "server" && server && <ServerPanel server={server} onClose={actions.closePanel} />}
+      {dialog?.kind === "update-everywhere" && <EverywhereDialog onClose={actions.closeDialog} />}
       {panel === "alerts" && <AlertsPanel onClose={actions.closePanel} />}
       {panel === "activity" && <Activity onClose={actions.closePanel} />}
       {panel === "schedules" && <Schedules machines={machines} onClose={actions.closePanel} ask={actions.ask} />}
       {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} />}
       {panel === "standup" && <Standup onClose={actions.closePanel} />}
+      {panel === "arena" && <ArenaPanel onClose={actions.closePanel} />}
       {panel === "usage" && (
         <Usage machines={machines} onClose={actions.closePanel} onOpenSession={(machine, project, session, dir) => openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" })} />
       )}
       {file && <FileViewer machineId={file.machineId} paneId={file.paneId} dir={file.dir} target={file.target} onClose={actions.closeFile} onRetarget={actions.retargetFile} />}
-      {menu && <WorkspaceMenu menu={menu} />}
       {confirm && (
         <ConfirmDialog
-          text={confirm.text}
+          text={share.on ? share.redact(confirm.text) : confirm.text}
           label={confirm.label}
           onClose={actions.closeConfirm}
           onConfirm={() => {
@@ -103,11 +117,19 @@ export default function Overlays() {
           }}
         />
       )}
+      {dialog?.kind === "folder-icon" && <IconDialog machineId={dialog.machineId} folder={dialog.folder} name={dialog.name} icon={dialog.icon} onClose={actions.closeDialog} />}
+      {leftoversOn && <LeftoversDialog machine={leftoversOn} onClose={actions.closeDialog} />}
+      {previewsOn && dialog?.kind === "previews" && (
+        <PreviewsDialog machineId={previewsOn.id} machineLabel={previewsOn.label} workspace={dialog.workspace} workspaceName={dialog.name} onClose={actions.closeDialog} />
+      )}
+      {dialog?.kind === "reopen" && <ReopenDialog onClose={actions.closeDialog} />}
+      {dialog?.kind === "arena" && <ArenaDialog taskId={dialog.taskId} title={dialog.title} prompt={dialog.prompt} at={dialog.at} onClose={actions.closeDialog} />}
       {dialog?.kind === "workspace" && (
         <NewWorkspaceDialog
           machines={machines}
           agents={agents}
           defaultMachine={dialog.machineId}
+          defaultDir={dialog.dir}
           onClose={actions.closeDialog}
           onCreate={async (machine, dir, name, agent, extras) => landOn(machine, await createSession({ machine, name, dir, agent, ...extras }))}
         />
@@ -153,6 +175,16 @@ export default function Overlays() {
           }}
         />
       )}
+      {dialog?.kind === "import-jira" && (
+        <ImportJiraDialog
+          projectId={dialog.projectId}
+          onClose={actions.closeDialog}
+          onCreated={(task, start) => {
+            actions.closeDialog();
+            actions.openTask(task.project_id, task.id, start);
+          }}
+        />
+      )}
       {dialog?.kind === "recap" && <RecapDialog machineId={dialog.machineId} paneId={dialog.paneId} session={dialog.session} dir={dialog.dir} title={dialog.title} onClose={actions.closeDialog} />}
       {dialog?.kind === "handover" && (
         <HandoverDialog
@@ -173,6 +205,9 @@ export default function Overlays() {
             else actions.notify(handedOverWords(label, made.size), { brief: true });
           }}
         />
+      )}
+      {dialog?.kind === "teleport" && (
+        <TeleportDialog machineId={dialog.machineId} paneId={dialog.paneId} tabId={dialog.tabId} workspace={dialog.workspace} agent={dialog.agent} agents={agents} onClose={actions.closeDialog} />
       )}
       {dialog?.kind === "model" && (
         <ModelDialog

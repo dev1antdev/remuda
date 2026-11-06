@@ -17,8 +17,20 @@ export function said(turns: Turn[]): string {
   return firstLine(texts.join("\n\n"));
 }
 
-const LEAD_MARKS = /^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+)/;
+// LEAD_MARKS is the run of list and quote marks and headings a line starts with, taken in one pass
+const LEAD_MARKS = /^(?:(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+)\s*)+/;
 const RULE = /^(?:-{3,}|\*{3,}|_{3,})$/;
+const TABLE_RULE = /^\|?[\s:|-]*-[\s:|-]*$/;
+
+// cells reads a table row as its cells joined by " · ", any other line as it is
+const cells = (line: string) =>
+  line.startsWith("|")
+    ? line
+        .split("|")
+        .map((cell) => cell.trim())
+        .filter(Boolean)
+        .join(" · ")
+    : line;
 
 // firstLine is the first line that says something, its marks stripped and cut to SAID_MAX characters.
 export function firstLine(text: string): string {
@@ -29,29 +41,27 @@ export function firstLine(text: string): string {
       inFence = !inFence;
       continue;
     }
-    if (inFence || RULE.test(line)) continue;
-    const said = plain(line);
+    if (inFence || RULE.test(line) || (line.startsWith("|") && TABLE_RULE.test(line))) continue;
+    const said = plain(cells(line));
     if (said) return cut(said, SAID_MAX);
   }
   return "";
 }
 
-// plain is one line with its Markdown marks stripped: list and quote marks, headings, emphasis, code, links, tags.
+// plain is one line with its Markdown marks stripped: list and quote marks, headings, emphasis, code, links, tags. A link,
+// a picture or a tag ends before the next bracket of its kind, so a line of thousands of them unclosed costs its length,
+// not its square.
 export function plain(line: string): string {
-  let out = line.trim();
-  for (;;) {
-    const stripped = out.replace(LEAD_MARKS, "");
-    if (stripped === out) break;
-    out = stripped.trim();
-  }
-  return out
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+  return line
+    .trim()
+    .replace(LEAD_MARKS, "")
+    .replace(/!\[([^[\]]*)\]\([^)[\]]*\)/g, "$1")
+    .replace(/\[([^[\]]+)\]\([^)[\]]*\)/g, "$1")
     .replace(/\*\*(.+?)\*\*|__(.+?)__/g, "$1$2")
     .replace(/\*(\S(?:[^*]*\S)?)\*/g, "$1")
     .replace(/`([^`]*)`/g, "$1")
     .replace(/~~(.+?)~~/g, "$1")
-    .replace(/<[^>]+>/g, "")
+    .replace(/<[^<>]+>/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }

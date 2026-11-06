@@ -1,0 +1,35 @@
+// The Russian words of Jira: the chips, its section of Settings, a task from a Jira issue.
+
+import type { Dictionary } from "../../i18n";
+
+export const jira: Dictionary = {
+  "assigned to {name}": "у {name}",
+  unassigned: "ни на ком",
+  "Open in Jira": "Открыть в Jira",
+  "Signed in as {who}; {projects} visible.": "Вход как {who}; видно {projects}.",
+  "{n} projects": ["{n} проект", "{n} проекта", "{n} проектов"],
+  "Forget the Jira site and its token? The chips go, the tasks made from issues stay.": "Забыть сайт Jira и его токен? Чипы уйдут, задачи из тикетов останутся.",
+  "Jira is off.": "Jira выключена.",
+  Jira: "Jira",
+  "The issue keys your branches and agents name — CRMOPS-6279 — become chips with their status, and a task can come from an issue. remuda asks your site only while a page is open, and nothing before you set it here.": "Ключи тикетов, которые называют ваши ветки и агенты, — CRMOPS-6279 — становятся чипами с их статусом, а задачу можно сделать из тикета. remuda обращается к вашему сайту, только пока открыта страница, и ничего — пока вы его здесь не зададите.",
+  Site: "Сайт",
+  "Account e-mail": "E-mail аккаунта",
+  "Account (empty for a personal access token)": "Аккаунт (пусто для personal access token)",
+  "API token": "API-токен",
+  Token: "Токен",
+  "kept — type a new one to replace it": "сохранён — введите новый, чтобы заменить",
+  "from id.atlassian.com › Security › API tokens": "на id.atlassian.com › Security › API tokens",
+  "a personal access token": "personal access token",
+  "New task from a Jira issue": "Новая задача из тикета Jira",
+  "The issue is read from {site} with the token you set in Settings; its summary, description and labels become a task that names it. Nothing is written to Jira.": "Тикет читается с {site} токеном из настроек; его заголовок, описание и метки становятся задачей со ссылкой на него. В Jira ничего не пишется.",
+  "Set your Jira site in Settings first.": "Сначала задайте сайт Jira в настройках.",
+  "CRMOPS-6279, or the issue's address": "CRMOPS-6279 или адрес тикета",
+  "New task from a Jira issue…": "Новая задача из тикета Jira…",
+  "read from your Jira site; an agent can start on it at once": "читается с вашего сайта Jira; агент может сразу начать",
+  "New task from an issue": "Новая задача из тикета",
+  "New task from a GitHub or Jira issue": "Новая задача из issue GitHub или тикета Jira",
+  "From a GitHub issue…": "Из issue GitHub…",
+  "read with gh on the machine": "читается через gh на машине",
+  "From a Jira issue…": "Из тикета Jira…",
+  "read from your Jira site": "читается с вашего сайта Jira",
+};

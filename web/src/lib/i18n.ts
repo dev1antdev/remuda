@@ -46,6 +46,13 @@ export function t(text: string, vars?: Vars): string {
   return vars ? fill(out, vars) : out;
 }
 
+// tc is a word for a narrow place: the dictionary's entry under "context|text" when the language has a shorter one
+// there (the rail's labels under their icons), else t(text)
+export function tc(context: string, text: string): string {
+  const entry = DICTS[lang][`${context}|${text}`];
+  return typeof entry === "string" ? entry : t(text);
+}
+
 // tn counts: the English pair by the count ("{n} file" / "{n} files"), another language's form table under the plural key
 export function tn(n: number, one: string, many: string, vars?: Vars): string {
   const entry = DICTS[lang][many];
@@ -58,9 +65,11 @@ export function fill(text: string, vars: Vars): string {
   return text.replace(/\{(\w+)\}/g, (slot, name: string) => (name in vars ? String(vars[name] ?? "") : slot));
 }
 
-// pluralIndex is the form a count takes: English one / other; Russian one (1, 21, 31…), few (2–4, 22–24…), many (0, 5–20, 25–30…)
+// pluralIndex is the form a count takes, by CLDR: English one / other; Russian one (1, 21, 31…), few (2–4, 22–24…), many
+// (0, 5–20, 25–30…), and for a fraction CLDR's other, which a three-form table writes as the few form ("1,5 файла")
 export function pluralIndex(n: number, language: Lang = lang): number {
-  const a = Math.abs(Math.trunc(n));
+  if (!Number.isInteger(n)) return 1;
+  const a = Math.abs(n);
   if (language === "ru") {
     const m10 = a % 10;
     const m100 = a % 100;
@@ -77,6 +86,19 @@ function pick(forms: string[], n: number): string {
 
 // locale is what the Intl formats take: the language's tag, or the browser's own for English
 export const locale = (): string | undefined => (lang === "ru" ? "ru-RU" : undefined);
+
+// english is the English a string of the current language was translated from, so a search can take either
+// language's words; a string the dictionary does not hold (one with its slots filled) comes back as it is
+let originals: { of: Lang; map: Map<string, string> } | undefined;
+export function english(text: string): string {
+  if (lang === "en") return text;
+  if (originals?.of !== lang) {
+    const map = new Map<string, string>();
+    for (const [key, value] of Object.entries(DICTS[lang])) if (typeof value === "string" && !map.has(value)) map.set(value, key);
+    originals = { of: lang, map };
+  }
+  return originals.map.get(text) ?? text;
+}
 
 // hasTranslation says whether the language knows a string (the dictionary's own test uses it)
 export const hasTranslation = (text: string, language: Lang = lang): boolean => text in DICTS[language];

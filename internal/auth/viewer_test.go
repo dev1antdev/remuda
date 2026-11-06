@@ -60,7 +60,7 @@ func TestViewerKeyReadsAndNeverTypes(t *testing.T) {
 			t.Fatalf("%s %s with the key: %d %s", try.method, try.path, code, body)
 		}
 	}
-	for _, path := range []string{"/api/chat", "/api/screen", "/api/scrollback", "/api/feed", "/api/standup", "/ws/events", "/", "/assets/index-abc.js", "/icons/icon-512.png"} {
+	for _, path := range []string{"/api/chat", "/api/screen", "/api/scrollback", "/api/feed", "/api/standup", "/ws/events", "/", "/assets/index-abc.js", "/icons/icon-512.png", "/api/icons/" + strings.Repeat("a", 64)} {
 		if code, _, _ := call(h, "GET", path, nil, key); code != 200 {
 			t.Fatalf("GET %s with the key: %d", path, code)
 		}
@@ -125,5 +125,33 @@ func TestAFullDeviceOpeningAViewerLinkStaysFull(t *testing.T) {
 	}
 	if code, body, _ := call(h, "POST", "/api/submit", mine, ""); code != 200 || !strings.HasSuffix(body, "viewer=no") {
 		t.Fatalf("still full: %d %s", code, body)
+	}
+}
+
+func TestThePairingLinkOnAViewerScreenSignsItInFull(t *testing.T) {
+	g, h := viewerGuard(t)
+	key, _, _ := g.Keys.MintViewer("the office TV")
+	_, _, res := call(h, "GET", "/?viewer="+key, nil, "")
+	screen := cookieOf(t, res)
+
+	code, _, res := call(h, "GET", "/?token="+testToken+"&mode=wall", screen, "")
+	if code != http.StatusSeeOther || res.Header.Get("Location") != "/?mode=wall" {
+		t.Fatalf("the pairing link on the screen: %d %s", code, res.Header.Get("Location"))
+	}
+	mine := cookieOf(t, res)
+	if !IsDeviceCookie(mine.Value) || mine.Value == screen.Value {
+		t.Fatalf("the screen should get a device of its own, got %q", mine.Value)
+	}
+	if code, body, _ := call(h, "POST", "/api/submit", mine, ""); code != 200 || !strings.HasSuffix(body, "viewer=no") {
+		t.Fatalf("after the pairing link the screen is still a viewer: %d %s", code, body)
+	}
+	full := 0
+	for _, device := range g.Devices.List() {
+		if !device.Viewer {
+			full++
+		}
+	}
+	if full != 1 {
+		t.Fatalf("%d full devices after the pairing link, want 1", full)
 	}
 }

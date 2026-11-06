@@ -37,8 +37,8 @@ final class Hotkey {
         "i": 34, "p": 35, "l": 37, "j": 38, "k": 40, "n": 45, "m": 46, "space": 49,
     ]
 
-    // parse reads "opt+cmd+r" or "⌥⌘R": cmd/⌘, opt/alt/⌥, ctrl/⌃, shift/⇧ and one letter, digit or space.
-    static func parse(_ spec: String) -> (UInt32, UInt32)? {
+    // read splits "opt+cmd+r" or "⌥⌘R" into the Carbon modifiers (cmd/⌘, opt/alt/⌥, ctrl/⌃, shift/⇧) and the key's name.
+    private static func read(_ spec: String) -> (modifiers: UInt32, key: String) {
         var modifiers: UInt32 = 0
         var key = ""
         let cleaned = spec.lowercased().replacingOccurrences(of: "⌘", with: "cmd+").replacingOccurrences(of: "⌥", with: "opt+")
@@ -52,19 +52,25 @@ final class Hotkey {
             default: key = part
             }
         }
+        return (modifiers, key)
+    }
+
+    // parse reads a spec as the key code and modifiers Carbon takes: at least one modifier and one letter, digit or space.
+    static func parse(_ spec: String) -> (UInt32, UInt32)? {
+        let (modifiers, key) = read(spec)
         guard modifiers != 0, let code = keyCodes[key] else { return nil }
         return (code, modifiers)
     }
 
-    // label is the spec as a menu shows it, "⌥⌘R".
-    static func label(_ spec: String) -> String {
-        guard let (_, modifiers) = parse(spec) else { return spec }
-        var out = ""
-        if modifiers & UInt32(controlKey) != 0 { out += "⌃" }
-        if modifiers & UInt32(optionKey) != 0 { out += "⌥" }
-        if modifiers & UInt32(shiftKey) != 0 { out += "⇧" }
-        if modifiers & UInt32(cmdKey) != 0 { out += "⌘" }
-        let key = spec.lowercased().split(separator: "+").last.map(String.init) ?? ""
-        return out + (key == "space" ? "Space" : key.uppercased())
+    // menuEquivalent is the spec as a menu item's key equivalent and modifier mask, nil for one parse refuses.
+    static func menuEquivalent(_ spec: String) -> (key: String, mask: NSEvent.ModifierFlags)? {
+        guard parse(spec) != nil else { return nil }
+        let (modifiers, key) = read(spec)
+        var mask: NSEvent.ModifierFlags = []
+        if modifiers & UInt32(controlKey) != 0 { mask.insert(.control) }
+        if modifiers & UInt32(optionKey) != 0 { mask.insert(.option) }
+        if modifiers & UInt32(shiftKey) != 0 { mask.insert(.shift) }
+        if modifiers & UInt32(cmdKey) != 0 { mask.insert(.command) }
+        return (key == "space" ? " " : key, mask)
     }
 }

@@ -27,7 +27,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     func show(server: Server?, hotkey: String, permission words: String, message: String) {
         serverField.stringValue = server.map { $0.isLocal ? "" : $0.base.absoluteString } ?? ""
         hotkeyField.stringValue = hotkey
-        permission.stringValue = "Notifications: " + words
+        setPermission(words)
         note.stringValue = message
         loginBox.state = SMAppService.mainApp.status == .enabled ? .on : .off
         window.center()
@@ -39,8 +39,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         note.stringValue = message
     }
 
+    // setPermission words the notification permission alone; the note and what is typed in the fields stay.
+    func setPermission(_ words: String) {
+        permission.stringValue = "Notifications: " + words
+    }
+
     private func layout() -> NSView {
-        serverField.placeholderString = "this Mac's remuda, or a pairing link http://host:7317/?token=…"
+        serverField.placeholderString = "this Mac's remuda, or a cockpit's sign-in link https://remuda.…ts.net/?token=…"
         hotkeyField.placeholderString = Hotkey.defaultSpec
         note.maximumNumberOfLines = 3
         note.textColor = .secondaryLabelColor

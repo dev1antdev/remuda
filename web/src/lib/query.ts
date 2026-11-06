@@ -17,7 +17,7 @@ export type Query<T> = {
 
 export type QueryOptions = {
   every?: number; // poll this many ms apart while enabled and the tab is visible
-  enabled?: boolean; // false pauses the polling and the reloads; the data stays
+  enabled?: boolean; // false pauses the polling and the reloads; the data stays, and true again reads at once
   keep?: boolean; // changed inputs keep the old data on screen until the new answer comes
 };
 
@@ -79,6 +79,15 @@ export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
+  // back on screen, the screen reads at once rather than at the next tick: a question card shown again kept the choices of
+  // a dialog that may have closed for up to ten seconds, and a click on one walked the cursor through whatever came next
+  const wasEnabled = useRef(enabled);
+  useEffect(() => {
+    const resumed = resumes(wasEnabled.current, enabled, inflight.current);
+    wasEnabled.current = enabled;
+    if (resumed) void run();
+  }, [enabled, run]);
+
   useEffect(() => {
     if (!every || !enabled) return;
     const tick = () => {
@@ -93,4 +102,10 @@ export function useQuery<T>(fn: () => Promise<T | undefined>, deps: unknown[], {
   }, [every, enabled, run]);
 
   return { data, error, loading, fetching, reload, mutate };
+}
+
+// resumes says whether a query coming out of a pause reads at once: it was paused, it is on again, and no read is out
+// already (the one its changed inputs just sent, or one sent a moment before the pause)
+export function resumes(wasEnabled: boolean, enabled: boolean, inflight: boolean): boolean {
+  return enabled && !wasEnabled && !inflight;
 }

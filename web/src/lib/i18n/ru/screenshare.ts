@@ -1,0 +1,38 @@
+// The Russian words of the screen-sharing mode: its switch, its chip and menus, the neutral names, the veil.
+
+import type { Dictionary } from "../../i18n";
+
+export const screenshare: Dictionary = {
+  "Project {letter}": "Проект {letter}",
+  "Machine {n}": "Машина {n}",
+  "hidden while sharing": "скрыто при показе экрана",
+  "Screen-sharing mode": "Режим показа экрана",
+  "Screen-sharing mode: every folder and machine reads as a neutral name": "Режим показа экрана: все папки и машины под нейтральными именами",
+  "Screen-sharing mode: the folders and machines you marked read as neutral names": "Режим показа экрана: отмеченные папки и машины под нейтральными именами",
+  "Screen-sharing mode is on": "Режим показа экрана включён",
+  Sharing: "Показ экрана",
+  "Hide everything": "Скрывать всё",
+  "every folder and machine reads as a neutral name": "все папки и машины под нейтральными именами",
+  "Hide only what I marked": "Скрывать только отмеченное",
+  "{n} marked in the ⋯ menus": ["{n} отметка в меню ⋯", "{n} отметки в меню ⋯", "{n} отметок в меню ⋯"],
+  "nothing marked yet: “Hide when sharing the screen” in a workspace's or a machine's ⋯ menu": "пока ничего не отмечено: «Скрывать при показе экрана» в меню ⋯ пространства или машины",
+  "Turn screen-sharing off": "Выключить режим показа экрана",
+  "Hidden while sharing": "Скрыто при показе экрана",
+  "Show this pane": "Показать эту панель",
+  "Screen-sharing mode: off": "Режим показа экрана: выключить",
+  "Screen-sharing mode: on": "Режим показа экрана: включить",
+  "names and answers show again": "имена и ответы снова видны",
+  "the folders and machines you marked, or everything, read as neutral names; their panes covered": "отмеченные папки и машины, или всё, под нейтральными именами; их панели закрыты",
+  "While sharing: hide only what I marked": "При показе экрана: скрывать только отмеченное",
+  "While sharing: hide everything": "При показе экрана: скрывать всё",
+  "Show “{folder}” when sharing": "Не скрывать «{folder}» при показе экрана",
+  "Hide “{folder}” when sharing": "Скрывать «{folder}» при показе экрана",
+  "its name, branch, answers and panes, while the screen-sharing mode is on": "её имя, ветку, ответы и панели, пока включён режим показа экрана",
+  "Show {machine} when sharing": "Не скрывать {machine} при показе экрана",
+  "Hide {machine} when sharing": "Скрывать {machine} при показе экрана",
+  "the machine and every folder on it, while the screen-sharing mode is on": "машину и все папки на ней, пока включён режим показа экрана",
+  "Show when sharing the screen": "Не скрывать при показе экрана",
+  "Hide when sharing the screen": "Скрывать при показе экрана",
+  "the folders and machines you marked, or everything, read as neutral names, their panes covered": "отмеченные папки и машины, или всё, под нейтральными именами, их панели закрыты",
+  "screen-sharing mode: the folders and machines you marked read as neutral names": "режим показа экрана: отмеченные папки и машины под нейтральными именами",
+};

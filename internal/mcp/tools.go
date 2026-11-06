@@ -211,7 +211,10 @@ func (t *Tools) Query(a ListArgs) (tasksapi.Query, []tasks.Project, error) {
 		if err != nil {
 			return tasksapi.Query{}, nil, err
 		}
-		q.Project, q.View = p.ID, "project"
+		q.Project = p.ID
+		if q.View == "open" || a.Done { // today and upcoming stay what they are, cut to the project
+			q.View = "project"
+		}
 	}
 	return q, projects, nil
 }
@@ -230,13 +233,16 @@ func (t *Tools) List(a ListArgs) (string, error) {
 	names := projectNames(projects)
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d task%s", len(list), plural(len(list)))
-	if q.View == "project" {
+	switch {
+	case q.View == "project":
 		fmt.Fprintf(&b, " in %s", names[q.Project])
-	} else {
+	case q.Project != 0:
+		fmt.Fprintf(&b, " in %s (%s)", names[q.Project], q.View)
+	default:
 		fmt.Fprintf(&b, " (%s)", q.View)
 	}
 	if pages > 1 {
-		fmt.Fprintf(&b, ", page %d of %d", max(a.Page, 1), pages)
+		fmt.Fprintf(&b, ", page %d of %d", min(max(a.Page, 1), pages), pages)
 	}
 	b.WriteString("\n\n")
 	if len(list) == 0 {
@@ -424,7 +430,10 @@ func (t *Tools) Update(a UpdateArgs) (tasksapi.Task, error) {
 		return tasksapi.Task{}, err
 	}
 	w := tasksapi.Write{Title: a.Title, Done: a.Done, Priority: a.Priority}
-	if a.Description != nil {
+	switch {
+	case a.Description != nil && strings.TrimSpace(*a.Description) == "":
+		w.Description = a.Description // the Markdown field goes unsent when empty, so the description is cleared this way
+	case a.Description != nil:
 		w.Markdown = *a.Description
 	}
 	if a.Column != "" {
@@ -657,10 +666,15 @@ func day(s string) string {
 }
 
 // dueOf is a due date as the list stores it: a date means the end of that day here, a moment is kept.
-func dueOf(s string) (string, error) {
+func dueOf(s string) (string, error) { return dueIn(s, time.Local) }
+
+// dueIn is dueOf by the clock of loc: a date is its last second there, the day the clock springs forward or falls back
+// included (24 hours from midnight would be the next day's first hour, or an hour short).
+func dueIn(s string, loc *time.Location) (string, error) {
 	s = strings.TrimSpace(s)
-	if d, err := time.ParseInLocation("2006-01-02", s, time.Local); err == nil {
-		return d.Add(24*time.Hour - time.Second).UTC().Format(time.RFC3339), nil
+	if d, err := time.ParseInLocation("2006-01-02", s, loc); err == nil {
+		year, month, day := d.Date()
+		return time.Date(year, month, day+1, 0, 0, 0, 0, loc).Add(-time.Second).UTC().Format(time.RFC3339), nil
 	}
 	if t, err := time.Parse(time.RFC3339, s); err == nil {
 		return t.UTC().Format(time.RFC3339), nil

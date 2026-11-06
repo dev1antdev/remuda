@@ -1,23 +1,41 @@
 // The composer owns the draft, so typing never re-renders the transcript: attachments uploaded at once,
 // quick prompts, dictation, Enter to send (Shift+Enter a new line; on a phone the button sends), ↑ in an empty
-// line to bring back what was sent before. The compact one, in a wall tile, is the line and its buttons alone.
+// line to bring back what was sent before; a quote of the answer put after what is typed; Alt+Enter keeps the text as a
+// note in the agent's queue, sent only from the queue's own buttons. The compact one, in a wall tile, is the line and
+// its buttons alone.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { sendKeys, submitPrompt } from "@/features/roster/api";
-import { isTouch } from "@/lib/prefs";
+import { isTouch, usePref } from "@/lib/prefs";
 import { errMsg } from "@/lib/text";
 import { filesFrom } from "@/lib/transfer";
 import { Icon, Notice, Tip } from "@/ui";
 import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
 import { useDictation } from "./dictation";
-import { expandPrompt, QuickPromptsDialog, QuickPromptsMenu } from "./QuickPrompts";
+import { expandPrompt, QuickPromptsButton, QuickPromptsDialog } from "./QuickPrompts";
+import { leftAfterSend } from "./history";
 import { useHistory } from "./useHistory";
-import { applyPick, tokenAt, type Item } from "./complete";
+import { applyPick, listFor, stillDismissed, tokenAt, type Dismissed, type Item } from "./complete";
 import { CompletionList, useCompletion } from "./Completion";
 import { ModeChip } from "./ModeChip";
+import { addNote, numbered, queueKey, removeNote, sentAway, type QueuedNote } from "./queue";
+import { QueueList } from "./QueueList";
+import { withQuote } from "./quote";
 import { t } from "@/lib/i18n";
 
-export default function Composer({ machineId, paneId, working, dir, agent = "", compact = false, onScreen = true }: { machineId: string; paneId: string; working: boolean; dir: string; agent?: string; compact?: boolean; onScreen?: boolean }) {
+const NO_NOTES: QueuedNote[] = [];
+const noteId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+export default function Composer({ machineId, paneId, working, dir, agent = "", compact = false, onScreen = true, quote }: {
+  machineId: string;
+  paneId: string;
+  working: boolean;
+  dir: string;
+  agent?: string;
+  compact?: boolean;
+  onScreen?: boolean;
+  quote?: { text: string; n: number }; // a quote of the answer to put in the box; n moves with every new one
+}) {
   // the insertions read the draft through a ref: a state updater must stay free of side effects
   const [draft, setDraftState] = useState("");
   const draftRef = useRef("");
@@ -26,7 +44,6 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
     draftRef.current = v;
     setDraftState(v);
   };
-  const [quick, setQuick] = useState<{ x: number; y: number } | null>(null);
   const [manage, setManage] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,13 +52,16 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
   const picker = useRef<HTMLInputElement>(null);
   const att = useAttachments(machineId, paneId);
   const history = useHistory(machineId, dir);
+  const [notes, setNotes] = usePref<QueuedNote[]>(queueKey(machineId, dir, paneId), NO_NOTES);
 
   // the completion: the token under the caret, its list from the machine, the row the keys are on, the token Esc closed
+  // (forgotten once the caret has left it, so the next slash or @ at the same place gets its list again)
   const [caretPos, setCaretPos] = useState(0);
   const [active, setActive] = useState(0);
-  const [dismissed, setDismissed] = useState<{ kind: string; start: number } | null>(null);
+  const [dismissed, setDismissed] = useState<Dismissed | null>(null);
   const token = useMemo(() => tokenAt(draft, caretPos), [draft, caretPos]);
-  const open = token && !(dismissed && dismissed.kind === token.kind && dismissed.start === token.start) ? token : null;
+  const open = listFor(token, dismissed, history.browsing());
+  useEffect(() => setDismissed((was) => stillDismissed(was, token)), [token]);
   const completion = useCompletion(machineId, dir, agent, open);
   const shown = completion.items;
   const at = Math.min(active, Math.max(0, shown.length - 1));
@@ -77,6 +97,52 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
     area.current?.setSelectionRange(at, at);
   }, [draft]);
 
+  // a quote of the answer goes after what is typed, the caret under it, the box focused to write the reply
+  const quoteN = quote?.n;
+  useEffect(() => {
+    if (!quote?.text) return;
+    const next = withQuote(draftRef.current, quote.text);
+    caret.current = next.caret;
+    moveCaret.current = next.caret;
+    setDraft(next.draft);
+    area.current?.focus();
+  }, [quoteN]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the queue: the draft kept as a note for later; a send through the chat's own path takes notes away only once it went
+  const queueDraft = () => {
+    const text = draftRef.current;
+    if (!text.trim() || att.uploading) return; // a file still uploading would land its @mention in the next draft
+    setNotes((list) => addNote(list, text, noteId(), Date.now()));
+    setDraft("");
+    att.clear();
+    history.reset();
+    area.current?.focus();
+  };
+  const sendNotes = async (list: QueuedNote[]) => {
+    if (!list.length || sending) return;
+    const text = numbered(list);
+    setSending(true);
+    try {
+      await submitPrompt(machineId, paneId, text);
+      history.add(text);
+      setNotes((all) => sentAway(all, list));
+      setError(null);
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setSending(false);
+    }
+  };
+  const editNote = (note: QueuedNote) => {
+    setNotes((list) => removeNote(list, note.id));
+    const before = draftRef.current.replace(/\s+$/, "");
+    const next = before ? `${before}\n\n${note.text}` : note.text;
+    caret.current = next.length;
+    moveCaret.current = next.length;
+    setDraft(next);
+    area.current?.focus();
+  };
+
   // pick puts the row's text in place of the token and leaves the caret after it, the field still focused
   const pick = (item: Item) => {
     if (!open) return;
@@ -103,15 +169,18 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
     att.remove(a.id);
   };
 
+  // the box stays open while the send is out: what is typed or attached meanwhile stays for the next message
   const send = async () => {
-    const text = draft.trim();
+    const sent = draftRef.current;
+    const text = sent.trim();
     if (!text || sending || att.uploading) return;
+    const went = att.items.map((a) => a.id);
     setSending(true);
     try {
       await submitPrompt(machineId, paneId, text);
       history.add(text);
-      setDraft("");
-      att.clear();
+      setDraft((d) => leftAfterSend(d, sent));
+      went.forEach((id) => att.remove(id));
       setError(null);
     } catch (e) {
       setError(errMsg(e));
@@ -120,13 +189,6 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
     }
   };
 
-  useEffect(() => {
-    if (!quick) return;
-    const close = () => setQuick(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [quick]);
-
   return (
     <>
       {error && (
@@ -134,6 +196,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
           {error}
         </Notice>
       )}
+      {!compact && notes.length > 0 && <QueueList notes={notes} busy={sending} onSend={(list) => void sendNotes(list)} onEdit={editNote} onRemove={(note) => setNotes((list) => removeNote(list, note.id))} />}
       {att.items.length > 0 && (
         <div className="attachments">
           {att.items.map((a) => (
@@ -147,9 +210,11 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
               )}
               <span className="attachment-name">{a.file.name}</span>
               {!a.upload && !a.error && <span className="attachment-spin" />}
-              <button type="button" className="icon-btn sm danger attachment-x" title={t("Remove")} aria-label={t("Remove")} onClick={() => removeAttachment(a)}>
-                <Icon name="x" size={12} />
-              </button>
+              <Tip text={t("Remove")}>
+                <button type="button" className="icon-btn sm danger attachment-x" aria-label={t("Remove")} onClick={() => removeAttachment(a)}>
+                  <Icon name="x" size={12} />
+                </button>
+              </Tip>
             </div>
           ))}
         </div>
@@ -186,24 +251,24 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
         {!compact && (
           <>
             {agent === "claude" && <ModeChip machineId={machineId} paneId={paneId} active={onScreen} />}
-            <Tip text={`Attach files (up to ${MAX_ATTACHMENTS}): they are uploaded into the pane's folder`}>
+            <Tip text={t("Attach files (up to {n}): they are uploaded into the pane's folder", { n: MAX_ATTACHMENTS })}>
               <button type="button" className="icon-btn lg composer-attach" aria-label={t("Attach files")} disabled={att.items.length >= MAX_ATTACHMENTS} onClick={() => picker.current?.click()}>
                 <Icon name="paperclip" size={16} />
               </button>
             </Tip>
-            <Tip text={t("Quick prompts: saved texts, with {dir}, {branch} and {file} filled in")}>
-              <button
-                type="button"
-                className={`icon-btn lg composer-attach${quick ? " on" : ""}`}
-                aria-label={t("Quick prompts")}
-                aria-expanded={!!quick}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const r = e.currentTarget.getBoundingClientRect();
-                  setQuick(quick ? null : { x: r.left, y: r.top - 6 });
-                }}
-              >
-                <Icon name="zap" size={16} />
+            <QuickPromptsButton
+              dir={dir}
+              onPick={(text) =>
+                void expandPrompt(text, machineId, dir).then((filled) => {
+                  insertAt(filled);
+                  area.current?.focus();
+                })
+              }
+              onManage={() => setManage(true)}
+            />
+            <Tip text={t("Queue it as a note for the agent (Alt+↵): sent only when you press Send on it")}>
+              <button type="button" className="icon-btn lg composer-attach composer-queue" aria-label={t("Add to the queue")} disabled={!draft.trim() || att.uploading} onClick={queueDraft}>
+                <Icon name="inbox" size={16} />
               </button>
             </Tip>
             {dictation.supported && (
@@ -220,23 +285,6 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
               </Tip>
             )}
           </>
-        )}
-        {quick && (
-          <QuickPromptsMenu
-            at={quick}
-            dir={dir}
-            onPick={(text) => {
-              setQuick(null);
-              void expandPrompt(text, machineId, dir).then((filled) => {
-                insertAt(filled);
-                area.current?.focus();
-              });
-            }}
-            onManage={() => {
-              setQuick(null);
-              setManage(true);
-            }}
-          />
         )}
         {manage && <QuickPromptsDialog dir={dir} onClose={() => setManage(false)} />}
         <textarea
@@ -279,6 +327,12 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
                 return;
               }
             }
+            // Alt+Enter keeps the text as a note in the queue, in the lens
+            if (!compact && e.key === "Enter" && e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              queueDraft();
+              return;
+            }
             // phone keyboards have no Shift+Enter: there Enter breaks the line and the button sends
             if (isTouch) return;
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -297,11 +351,11 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
             }
           }}
         />
-        <button type="button" className="btn primary composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title={isTouch ? t("Send") : "Send (Enter)"}>
+        <button type="button" className="btn primary composer-send" disabled={sending || att.uploading || !draft.trim()} onClick={() => void send()} title={isTouch ? t("Send") : t("Send (Enter)")}>
           {sending ? (
             "…"
           ) : att.uploading ? (
-            "Uploading…"
+            t("Uploading…")
           ) : (
             <>
               <span>{t("Send")}</span>

@@ -25,9 +25,14 @@ import (
 type Conn struct {
 	Host string
 
-	ctl    string // control socket path
-	master *exec.Cmd
+	ctl       string // control socket path
+	master    *exec.Cmd
+	masterErr *lockedBuffer // what the master said: why it could not connect, then nothing more is kept
 }
+
+// masterErrMax is how much of the master's stderr is kept: its first lines say why it could not connect, and over a
+// life of days it goes on with a line for every channel the host refuses — a herdr down, a port nothing listens on.
+const masterErrMax = 4096
 
 // SocketDir is where the control and forward sockets go when main sets it: the state dir, the person's own.
 // Unset, the temp dir, where on a shared box another user's socket could sit at the name and be reused.
@@ -67,21 +72,29 @@ func (c *Conn) cmd(args ...string) *exec.Cmd {
 	return exec.Command("ssh", append(base, args...)...)
 }
 
+// session is a command that rides the master and nothing else. With the master gone, ssh would "fall back to
+// connecting normally" (ssh_config, ControlMaster): a connection of its own for every script and every RPC, and an
+// nc bridge that keeps answering that way never lets the machine notice its master died. The proxy that exits at
+// once makes that fallback fail instead; a live master never consults it.
+func (c *Conn) session(args ...string) *exec.Cmd {
+	return c.cmd(append([]string{"-o", "ProxyCommand=false"}, args...)...)
+}
+
 // Dial starts (or reuses) a ControlMaster to host and verifies it answers.
 func Dial(host string) (*Conn, error) {
 	c := &Conn{Host: host, ctl: tmpPath("remuda-ssh-", host, ".ctl")}
-	if c.Alive() {
+	if c.listening() {
 		return c, nil // a previous remuda run left a live master; reuse it
 	}
 	os.Remove(c.ctl)
 
 	cmd := c.cmd("-M", "-N", host)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	stderr := &lockedBuffer{max: masterErrMax}
+	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	c.master = cmd
+	c.master, c.masterErr = cmd, stderr
 	exited := make(chan struct{})
 	go func() {
 		cmd.Wait()
@@ -91,7 +104,7 @@ func Dial(host string) (*Conn, error) {
 	deadline := time.Now().Add(15 * time.Second)
 wait:
 	for time.Now().Before(deadline) {
-		if c.Alive() {
+		if c.listening() {
 			return c, nil
 		}
 		select {
@@ -111,10 +124,19 @@ wait:
 // Alive reports whether the master still answers.
 func (c *Conn) Alive() bool { return c.cmd("-O", "check", c.Host).Run() == nil }
 
+// listening is Alive asked only once the control socket is there: a master puts it in place once it has signed in,
+// and until then every ask is an ssh started for nothing — five a second for as long as a host does not answer.
+func (c *Conn) listening() bool {
+	if _, err := os.Stat(c.ctl); err != nil {
+		return false
+	}
+	return c.Alive()
+}
+
 // run executes a remote command over the master with a deadline, stdin streamed to it when given.
 func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
 	// every script here is POSIX sh; the remote login shell may be anything
-	cmd := c.cmd(c.Host, "sh -c "+script.Quote(command))
+	cmd := c.session(c.Host, "sh -c "+script.Quote(command))
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -142,7 +164,7 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 
 // Stream runs a remote command, handing sink its output (stdout and stderr) as it comes; the exit status is the error.
 func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) error {
-	cmd := c.cmd(c.Host, "sh -c "+script.Quote("exec 2>&1; "+command))
+	cmd := c.session(c.Host, "sh -c "+script.Quote("exec 2>&1; "+command))
 	pr, pw := io.Pipe()
 	cmd.Stdout, cmd.Stderr = pw, pw
 	if err := cmd.Start(); err != nil {
@@ -226,11 +248,16 @@ func forwardBackSpec(remotePort, localPort int) string {
 	return fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", remotePort, localPort)
 }
 
-// ForwardSocket forwards a local unix socket to a remote one over the master and returns the local path.
+// ForwardSocket forwards a local unix socket to a remote one over the master and returns the local path. A forward
+// of that socket the master already holds — from an earlier connect over it, or an earlier remuda whose master lives
+// on — is cancelled first: asked for the same forward again, the master answers "found existing forwarding" and
+// binds nothing, so unlinking the old listener's file would leave no socket at all.
 func (c *Conn) ForwardSocket(remoteSock string) (string, error) {
 	local := tmpPath("remuda-fw-", c.Host+"\x00"+remoteSock, ".sock")
+	spec := local + ":" + remoteSock
+	c.cmd("-O", "cancel", "-L", spec, c.Host).Run()
 	os.Remove(local)
-	cmd := c.cmd("-O", "forward", "-L", local+":"+remoteSock, c.Host)
+	cmd := c.cmd("-O", "forward", "-L", spec, c.Host)
 	var errb bytes.Buffer
 	cmd.Stderr = &errb
 	if err := cmd.Run(); err != nil {
@@ -241,13 +268,22 @@ func (c *Conn) ForwardSocket(remoteSock string) (string, error) {
 
 // ForwardTCP forwards a fresh loopback port to 127.0.0.1:remotePort on the host for as long as the master lives.
 func (c *Conn) ForwardTCP(remotePort int) (string, error) {
+	return c.ForwardTCPTo("127.0.0.1", remotePort)
+}
+
+// ForwardTCPTo forwards a fresh loopback port to host:remotePort as the machine dials it — ::1 for a server listening
+// on the IPv6 loopback alone, as a dev server on a Mac often does — for as long as the master lives.
+func (c *Conn) ForwardTCPTo(host string, remotePort int) (string, error) {
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return "", err
 	}
 	local := l.Addr().String()
 	l.Close()
-	cmd := c.cmd("-O", "forward", "-L", fmt.Sprintf("%s:127.0.0.1:%d", local, remotePort), c.Host)
+	cmd := c.cmd("-O", "forward", "-L", fmt.Sprintf("%s:%s:%d", local, host, remotePort), c.Host)
 	var errb bytes.Buffer
 	cmd.Stderr = &errb
 	if err := cmd.Run(); err != nil {
@@ -259,9 +295,13 @@ func (c *Conn) ForwardTCP(remotePort int) (string, error) {
 // DialExec runs a remote command over the master and exposes its stdin/stdout as a net.Conn:
 // the RPC transport for an sshd that refuses unix-socket forwarding (`nc -U <socket>` bridges to herdr).
 func (c *Conn) DialExec(command string, timeout time.Duration) (net.Conn, error) {
-	cmd := c.cmd(c.Host, command)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	return newCmdConn(c.session(c.Host, command), timeout)
+}
+
+// newCmdConn starts the command and wraps its stdin and stdout as a net.Conn that the deadline ends.
+func newCmdConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
+	stderr := &lockedBuffer{}
+	cmd.Stderr = stderr
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -273,7 +313,7 @@ func (c *Conn) DialExec(command string, timeout time.Duration) (net.Conn, error)
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	cc := &cmdConn{cmd: cmd, stdin: stdin, stdout: stdout, stderr: &stderr}
+	cc := &cmdConn{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr}
 	cc.SetDeadline(time.Now().Add(timeout))
 	return cc, nil
 }
@@ -282,11 +322,35 @@ type cmdConn struct {
 	cmd      *exec.Cmd
 	stdin    io.WriteCloser
 	stdout   io.ReadCloser
-	stderr   *bytes.Buffer
+	stderr   *lockedBuffer
 	mu       sync.Mutex
 	timer    *time.Timer
 	closed   bool
 	timedOut bool
+}
+
+// lockedBuffer holds the command's stderr: exec copies into it on a goroutine of its own while a failing Read or
+// Write reads it for its words.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+	max int // the most it keeps, the first bytes; 0 keeps everything
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.max > 0 && b.buf.Len()+len(p) > b.max {
+		b.buf.Write(p[:max(b.max-b.buf.Len(), 0)])
+		return len(p), nil
+	}
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 // wrap turns a failure after the deadline into os.ErrDeadlineExceeded, else adds what ssh said.
@@ -360,8 +424,14 @@ func (a sshAddr) Network() string { return "ssh" }
 func (a sshAddr) String() string  { return string(a) }
 
 // AttachCmd builds the remote `herdr terminal attach` to run under a local PTY; ssh -tt carries window-size changes.
-func (c *Conn) AttachCmd(herdrBin, terminalID string) *exec.Cmd {
-	cmd := c.cmd("-tt", c.Host, script.Quote(herdrBin)+" terminal attach "+script.Quote(terminalID))
+// The machine's herdr socket travels as HERDR_SOCKET_PATH, as the local attach's does, so a herdr listening off its
+// default path is reached; through sh, since the remote login shell may be anything.
+func (c *Conn) AttachCmd(herdrBin, socket, terminalID string) *exec.Cmd {
+	remote := "exec " + script.Quote(herdrBin) + " terminal attach " + script.Quote(terminalID)
+	if socket != "" {
+		remote = "HERDR_SOCKET=" + script.Quote(socket) + " HERDR_SOCKET_PATH=" + script.Quote(socket) + " " + remote
+	}
+	cmd := c.session("-tt", c.Host, "sh -c "+script.Quote(remote))
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 	return cmd
 }

@@ -19,7 +19,17 @@ export type Status = {
   on_start: boolean;
   on_finish: boolean;
   on_agent: boolean; // where a task an agent makes lands, for the person to accept or decline
+  on_queue?: boolean; // the tasks the project's queue starts by themselves, top first, while its switch is on
 };
+
+// a pipeline stage after the first agent's work: an agent in a new tab of the same worktree, the card in its column
+export type Stage = { name: string; agent: string; model?: string; prompt: string; status_id?: number; pr?: boolean };
+
+// how a project's agents work: where, which agent, the queue's switch, the pipeline's stages
+export type Automation = { machine: string; dir: string; agent: string; model?: string; args?: string; queue: boolean; max: number; stages: Stage[] };
+
+// what a project's queue does now, while its switch is on; the reason is the server's words
+export type QueueNote = { state: "idle" | "waiting" | "started"; reason?: string; next?: string; working: number; max: number; at: string };
 
 // a project's own field: what its tasks carry besides what every task has
 export type FieldKind = "text" | "number" | "select" | "multi" | "date" | "check" | "link";
@@ -59,6 +69,8 @@ export type Project = {
   statuses: Status[]; // the workflow, in order
   fields: Field[]; // its own fields, in order
   proposed: number; // the open tasks agents put in its on_agent column
+  automation?: Automation;
+  queue?: QueueNote | null;
 };
 
 export type Task = {
@@ -79,6 +91,7 @@ export type Task = {
   created: string;
   updated: string;
   cost?: number; // USD: what every agent started on it spent, its runs summed
+  queue_refused?: string; // why the queue could not start it; tried again once the card moves
   run?: Run | null; // the latest agent started on it
   comments?: Comment[]; // on a single-task fetch
 };
@@ -105,6 +118,9 @@ export type Run = {
   took?: number; // seconds from the start to the finish, 0 while the agent still works
   pr_url?: string; // the pull request the agent opened, once it named it
   pr_label?: string; // "PR #15" / "MR !9"
+  by_queue?: boolean; // the project's queue started it
+  stage?: number; // the pipeline stage it runs: 0 the first agent's work, 1… the project's stages
+  pipeline?: string; // "" outside a pipeline, else on | passed | done | stopped: <why>
 };
 
 export type Comment = { id: number; task_id: number; author: "agent" | "you" | "remuda"; body: string; created: string };
@@ -126,6 +142,8 @@ export const putStatuses = (projectId: number, statuses: Status[], moves: Record
   sendJSON<Project>("PUT", `/api/tasks/projects/${projectId}/statuses`, { statuses, moves });
 // the fields replaced whole: a field with id 0 is new, one left out goes with its values
 export const putFields = (projectId: number, fields: Field[]) => sendJSON<Project>("PUT", `/api/tasks/projects/${projectId}/fields`, { fields });
+// how the project's agents work, replaced whole: checked against its saved columns, so the columns go first
+export const putAutomation = (projectId: number, automation: Automation) => sendJSON<Project>("PUT", `/api/tasks/projects/${projectId}/automation`, { automation });
 
 export const listLabels = () => get<Label[]>("/api/tasks/labels");
 export const createLabel = (title: string, hex_color: string) => sendJSON<Label>("POST", "/api/tasks/labels", { title, hex_color });
@@ -158,7 +176,7 @@ export const deleteTask = (id: number) => sendJSON<unknown>("DELETE", `/api/task
 export const addTaskLabel = (taskId: number, labelId: number) => sendJSON<Task>("PUT", `/api/tasks/${taskId}/labels`, { label_id: labelId });
 export const removeTaskLabel = (taskId: number, labelId: number) => sendJSON<Task>("DELETE", `/api/tasks/${taskId}/labels/${labelId}`);
 
-export const startTask = (id: number, req: { machine: string; workspace: string; branch: string; base: string; agent: string; groom: boolean; prompt: string }) =>
+export const startTask = (id: number, req: { machine: string; workspace: string; branch: string; base: string; agent: string; model?: string; args?: string; groom: boolean; prompt: string }) =>
   sendJSON<Task>("POST", `/api/tasks/${id}/start`, req);
 // importIssue makes a task of a GitHub issue, read with gh on the machine as the person
 export const importIssue = (machine: string, projectId: number, url: string) => sendJSON<Task>("POST", "/api/tasks/import", { machine, project_id: projectId, url });

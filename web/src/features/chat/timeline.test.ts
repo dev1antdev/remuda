@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Part, Turn } from "./api";
-import { chips, LOOP_FROM, SQUEEZE_MS, squeezer, summary, timeline } from "./timeline";
+import { chips, LONGEST_FROM, LOOP_FROM, SQUEEZE_MS, squeezer, summary, timeline } from "./timeline";
 
 const T0 = Date.parse("2026-10-24T10:00:00.000Z");
 const at = (s: number) => new Date(T0 + s * 1000).toISOString();
@@ -52,6 +52,14 @@ describe("timeline", () => {
     const line = timeline([user(0, "go"), answer(1, 300, [call("Read", { file_path: "/w/a.go" }, { took: 0.4, at: at(2) }), call("Bash", { command: "make web" }, { took: 95, at: at(3) })])]);
     expect(line.highlights).toEqual([expect.objectContaining({ kind: "longest", at: T0 + 3000, label: "Longest call 1 min 35 s", detail: "Bash make web" })]);
     expect(chips(line)).toEqual([{ kind: "longest", id: "a1", text: "Longest call 1 min 35 s", title: "Bash make web" }]);
+  });
+
+  it("marks no longest call while every call was quick", () => {
+    const quick = timeline([user(0, "go"), answer(1, 3, [call("Read", { file_path: "/w/a.go" }, { took: 0.1, at: at(2) }), call("Grep", { pattern: "x" }, { took: LONGEST_FROM - 0.5, at: at(3) })])]);
+    expect(quick.highlights).toEqual([]);
+    expect(chips(quick)).toEqual([]);
+    const slow = timeline([user(0, "go"), answer(1, 9, [call("Bash", { command: "go vet" }, { took: LONGEST_FROM, at: at(2) })])]);
+    expect(slow.highlights.map((h) => h.kind)).toEqual(["longest"]);
   });
 
   it("marks a loop of identical calls from three on, and a new prompt breaks the run", () => {

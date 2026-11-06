@@ -3,6 +3,7 @@
 // browser's PerformanceObserver on "longtask" entries; the words and the toast rule are pure and tested.
 
 import { t } from "@/lib/i18n";
+import { tenth } from "@/lib/time";
 
 export type Stall = { ms: number; where: string; at: number };
 
@@ -12,7 +13,7 @@ export const TOAST_SPACING = 60_000; // ms: one toast a minute at most
 
 // stallWords is the line: "The page stalled 4.2 s on the Wall (13 tiles)"
 export function stallWords(stall: Stall): string {
-  const seconds = stall.ms >= 10_000 ? `${Math.round(stall.ms / 1000)} s` : `${(stall.ms / 1000).toFixed(1)} s`;
+  const seconds = t("{n} s", { n: stall.ms >= 10_000 ? Math.round(stall.ms / 1000) : tenth(stall.ms / 1000) });
   return t("The page stalled {seconds} {where}", { seconds, where: stall.where }).trimEnd();
 }
 

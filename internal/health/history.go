@@ -7,11 +7,13 @@ import (
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
-// Sample is one probe's load and disk reading, kept so the ⓘ can show the day.
+// Sample is one probe's load, disk, memory and temperature reading, kept so the ⓘ and the Server place can show the day.
 type Sample struct {
 	At       time.Time `json:"at"`
 	Load     float64   `json:"load"`
-	DiskFree float64   `json:"disk_free"` // percent of the disk free
+	DiskFree float64   `json:"disk_free"`      // percent of the disk free
+	MemUsed  float64   `json:"mem,omitempty"`  // percent of the memory in use, 0 where it was not read
+	Temp     float64   `json:"temp,omitempty"` // the CPU's °C, 0 where there is no reading
 }
 
 const (
@@ -62,10 +64,15 @@ func sample(r Report) (Sample, bool) {
 	if r.Load1 == 0 && r.DiskFreeGB == 0 {
 		return Sample{}, false
 	}
-	return Sample{At: r.At, Load: r.Load1, DiskFree: float64(100 - r.DiskUsedPct)}, true
+	s := Sample{At: r.At, Load: r.Load1, DiskFree: float64(100 - r.DiskUsedPct), Temp: r.TempC}
+	if r.MemTotalMB > 0 && r.MemAvailMB > 0 {
+		s.MemUsed = float64(int(1000*float64(r.MemTotalMB-r.MemAvailMB)/float64(r.MemTotalMB))) / 10
+	}
+	return s, true
 }
 
-// remember keeps the report's sample for the machine and writes the history out; the file is written outside the lock.
+// remember keeps the report's sample for the machine and writes the history out; the file is written outside the lock,
+// from a copy, since the next probe may replace a sample in place meanwhile.
 func (c *Collector) remember(id string, r Report) {
 	s, ok := sample(r)
 	if !ok {
@@ -75,7 +82,7 @@ func (c *Collector) remember(id string, r Report) {
 	c.history[id] = note(c.history[id], s)
 	snapshot := make(history, len(c.history))
 	for k, v := range c.history {
-		snapshot[k] = v
+		snapshot[k] = append([]Sample(nil), v...)
 	}
 	c.mu.Unlock()
 	if c.dir == "" {

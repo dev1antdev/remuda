@@ -35,6 +35,7 @@ type Reader struct {
 type cachedTail struct {
 	version Version
 	data    []byte
+	read    time.Time // when it was last asked for
 }
 
 type continuation struct {
@@ -42,7 +43,14 @@ type continuation struct {
 	at   time.Time
 }
 
-const remoteTailCap = 8 * 1024 * 1024
+const (
+	remoteTailCap = 8 * 1024 * 1024 // the most of one remote file kept
+	// what each cache of a machine's remote files holds at most: a wall of busy agents reads every file in turn
+	remoteTailsBudget    = 128 << 20
+	remoteSubTailsBudget = 64 << 20
+	// a tail asked for this recently is not pushed out for a file not cached yet: the next read would fetch it whole again
+	recentlyRead = time.Minute
+)
 
 // NewReader reads the transcripts on host.
 func NewReader(host shell.Host) *Reader {
@@ -153,17 +161,19 @@ func (r *Reader) Turns(path string, v Version) ([]Turn, error) {
 
 // remoteTail returns the file tail, fetching only the delta since the cached copy when the file merely grew.
 func (r *Reader) remoteTail(path string, v Version) ([]byte, error) {
-	return r.remoteTailIn(r.tails, path, v, 8)
+	return r.remoteTailIn(r.tails, path, v, remoteTailsBudget)
 }
 
-// remoteTailIn is remoteTail over one of the caches, which keeps at most keep files.
-func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Version, keep int) ([]byte, error) {
+// remoteTailIn is remoteTail over one of the caches, which holds at most budget bytes (see keepTail).
+func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Version, budget int) ([]byte, error) {
 	r.mu.Lock()
 	cached := tails[path]
-	r.mu.Unlock()
 	if cached != nil && cached.version == v {
+		cached.read = time.Now()
+		r.mu.Unlock()
 		return cached.data, nil
 	}
+	r.mu.Unlock()
 
 	// every read is cut at the size the stat saw: what the agent wrote since belongs to the next version
 	quoted := script.Quote(path)
@@ -187,17 +197,37 @@ func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Versi
 	}
 
 	r.mu.Lock()
-	tails[path] = &cachedTail{version: v, data: data}
-	if len(tails) > keep {
-		for k := range tails {
-			if k != path {
-				delete(tails, k)
-				break
-			}
-		}
-	}
+	keepTail(tails, path, &cachedTail{version: v, data: data, read: time.Now()}, budget)
 	r.mu.Unlock()
 	return data, nil
+}
+
+// keepTail caches a file's tail within budget bytes, the tails read longest ago going first: a file not cached before
+// goes uncached rather than push out one read within recentlyRead. The caller holds r.mu.
+func keepTail(tails map[string]*cachedTail, path string, tail *cachedTail, budget int) {
+	_, wasCached := tails[path]
+	tails[path] = tail
+	size := 0
+	for _, t := range tails {
+		size += len(t.data)
+	}
+	for size > budget {
+		oldest := ""
+		for k, t := range tails {
+			if k != path && (oldest == "" || t.read.Before(tails[oldest].read)) {
+				oldest = k
+			}
+		}
+		if oldest == "" {
+			return
+		}
+		if time.Since(tails[oldest].read) < recentlyRead && !wasCached {
+			delete(tails, path)
+			return
+		}
+		size -= len(tails[oldest].data)
+		delete(tails, oldest)
+	}
 }
 
 // ResolveSession finds the session file of herdr's agent_session for an agent kind (claude, codex, gemini; "" tries
@@ -356,7 +386,8 @@ func (r *Reader) Predecessor(path string) string {
 	return earlier
 }
 
-// nextContinuation is one hop, cached for a minute.
+// nextContinuation is one hop, cached for a minute; a remote that does not answer keeps what was known for another
+// minute, and when nothing was, is asked again next time.
 func (r *Reader) nextContinuation(path string) string {
 	r.mu.Lock()
 	known, ok := r.continuation[path]
@@ -369,6 +400,10 @@ func (r *Reader) nextContinuation(path string) string {
 		next = Continuation(path)
 	} else if out, err := shell.Text(r.host, ContinuationScript(script.Quote(path)), 20*time.Second); err == nil {
 		next = strings.TrimSpace(out)
+	} else if ok {
+		next = known.next
+	} else {
+		return ""
 	}
 	r.mu.Lock()
 	r.continuation[path] = continuation{next: next, at: time.Now()}

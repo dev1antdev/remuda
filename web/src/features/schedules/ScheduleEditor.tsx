@@ -204,7 +204,7 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
         <div className="schedule-row">
           <label className="grow">
             <span>
-              {t("Name")} <span className="dim">(optional)</span>
+              {t("Name")} <span className="dim">{t("(optional)")}</span>
             </span>
             <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t("Standup digest")} />
           </label>
@@ -216,7 +216,7 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
       ) : (
         <label>
           <span>
-            {t("Name")} <span className="dim">(optional)</span>
+            {t("Name")} <span className="dim">{t("(optional)")}</span>
           </span>
           <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={kind === "agent" ? t("Scout") : t("Morning status")} />
         </label>
@@ -245,8 +245,9 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
             {t("Close the tab when the agent has answered")}
           </label>
           <p className="schedule-note">
-            Each run opens a fresh tab in the folder's workspace (or a workspace on the folder) and hands the agent the prompt once it is up. A question
-            the agent asks is yours to answer: nothing closes while it waits. The conversation stays readable through the search after the tab is gone.
+            {t(
+              "Each run opens a fresh tab in the folder's workspace (or a workspace on the folder) and hands the agent the prompt once it is up. A question the agent asks is yours to answer: nothing closes while it waits. The conversation stays readable through the search after the tab is gone.",
+            )}
           </p>
         </>
       )}
