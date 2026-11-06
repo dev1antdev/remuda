@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
 import { broadcast, picked, statusWords } from "./broadcast";
 import type { AgentTarget } from "./targets";
 
@@ -34,4 +35,9 @@ describe("statusWords", () => {
   it("says the state as the picker does", () => {
     expect(["run", "input", "done", "idle", "shell"].map(statusWords)).toEqual(["working", "asking — would refuse", "done", "idle", "idle"]);
   });
+  it("says it in the page's language", () => {
+    setLang("ru");
+    expect(["run", "input", "done", "idle"].map(statusWords)).toEqual(["работает", "спрашивает — откажется", "готово", "простаивает"]);
+  });
+  afterEach(() => setLang("en"));
 });

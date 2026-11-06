@@ -301,7 +301,7 @@ export function AddMachineDialog({ onAdd, onClose }: { onAdd: (label: string, ho
   const [host, setHost] = useState("");
   const [label, setLabel] = useState("");
   const submit = useSubmit(async () => {
-    if (!host.trim()) throw new Error("SSH host is required");
+    if (!host.trim()) throw new Error(t("SSH host is required"));
     await onAdd(label.trim(), host.trim());
   });
   return (

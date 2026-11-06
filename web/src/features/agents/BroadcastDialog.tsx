@@ -59,7 +59,7 @@ export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarg
                 <span className="pick-name">
                   {target.sessionName} › {target.paneTitle}
                 </span>
-                <span className="pick-hint">{error ?? "sent"}</span>
+                <span className="pick-hint">{error ?? t("sent")}</span>
               </li>
             ))}
           </ul>

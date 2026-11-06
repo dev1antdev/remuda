@@ -42,7 +42,7 @@ export function startRequest(r: Recipe, machine: string, dir: string): StartRequ
 
 // agentLabel is the agent's name as the roster says it; a shell is a plain shell
 export function agentLabel(agents: AgentKind[], id: string): string {
-  if (id === "" || id === "shell") return "Plain shell";
+  if (id === "" || id === "shell") return t("Plain shell");
   return agents.find((a) => a.id === id)?.label ?? id;
 }
 

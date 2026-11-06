@@ -16,13 +16,13 @@ import { tn, t as tr } from "@/lib/i18n";
 function missingText(what: string): string {
   switch (what) {
     case "remuda":
-      return "This remuda cannot be deployed there: that needs a remote machine of the same OS and CPU, and a released build here.";
+      return tr("This remuda cannot be deployed there: that needs a remote machine of the same OS and CPU, and a released build here.");
     case "remuda-release":
-      return "No newer release of remuda is known for this machine.";
+      return tr("No newer release of remuda is known for this machine.");
     case "hooks":
-      return "herdr's hooks there are current.";
+      return tr("herdr's hooks there are current.");
     case "plugins":
-      return "No herdr plugin from GitHub is installed there, or herdr there is older than 0.9.4.";
+      return tr("No herdr plugin from GitHub is installed there, or herdr there is older than 0.9.4.");
   }
   return tr("Nothing to update called “{what}” there any more.", { what });
 }
@@ -121,7 +121,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
             job.ok ? (
               picked?.what === "remuda-release" && machine.id === "local" ? (
                 <Notice tone="info" icon="refresh-cw">
-                  Done. remuda is restarting here; the page offers a reload once the new version answers.
+                  {tr("Done. remuda is restarting here; the page offers a reload once the new version answers.")}
                 </Notice>
               ) : (
                 <Notice tone="success" icon="check">
@@ -129,7 +129,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
                 </Notice>
               )
             ) : (
-              <Notice tone="error">{job.error || "failed"}</Notice>
+              <Notice tone="error">{job.error || tr("failed")}</Notice>
             )
           ) : (
             <Notice tone="info">
@@ -191,7 +191,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
                 {recent.data.pending > 0 ? ` · ${tn(recent.data.pending, "{n} chat waiting to restart", "{n} chats waiting to restart")}` : ""}
               </span>
               {recent.data.jobs.map((j) => (
-                <button key={j.id} type="button" className="linkish updates-job" onClick={() => open(j.id)} title={j.error || (j.done ? (j.ok ? "done" : "failed") : "running")}>
+                <button key={j.id} type="button" className="linkish updates-job" onClick={() => open(j.id)} title={j.error || (j.done ? (j.ok ? tr("done") : tr("failed")) : tr("running"))}>
                   <Icon name={j.done ? (j.ok ? "check" : "x") : "refresh-cw"} size={12} className={j.done ? (j.ok ? "ok" : "bad") : "spin"} /> {j.title} · {when(j.started)}
                 </button>
               ))}

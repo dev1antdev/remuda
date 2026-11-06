@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
 import type { Health } from "./api";
 import { concerns, updateLabel } from "./concerns";
 
@@ -60,5 +61,14 @@ describe("concerns", () => {
     expect(updateLabel("remuda")).toBe("Deploy");
     expect(updateLabel("remuda-release")).toBe("Download & install");
     expect(updateLabel("restart-herdr")).toBe("Restart");
+  });
+  describe("in Russian", () => {
+    afterEach(() => setLang("en"));
+    it("says what is out and labels the buttons in the page's language", () => {
+      setLang("ru");
+      const list = concerns(health({ claude: "2.1.0", code_server: "4.90.0" }), { at: "", claude: "2.2.0", code: "4.99.0" }, "v0.5.0", false);
+      expect(list.map((c) => c.text)).toEqual(["Вышел Claude Code 2.2.0 (здесь 2.1.0)", "remuda теперь ставит code-server 4.99.0 (здесь 4.90.0)"]);
+      expect(["claude", "remuda", "restart-herdr"].map(updateLabel)).toEqual(["Обновить", "Развернуть", "Перезапустить"]);
+    });
   });
 });
