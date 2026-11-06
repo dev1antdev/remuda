@@ -210,9 +210,11 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
               )}
               <span className="attachment-name">{a.file.name}</span>
               {!a.upload && !a.error && <span className="attachment-spin" />}
-              <button type="button" className="icon-btn sm danger attachment-x" title={t("Remove")} aria-label={t("Remove")} onClick={() => removeAttachment(a)}>
-                <Icon name="x" size={12} />
-              </button>
+              <Tip text={t("Remove")}>
+                <button type="button" className="icon-btn sm danger attachment-x" aria-label={t("Remove")} onClick={() => removeAttachment(a)}>
+                  <Icon name="x" size={12} />
+                </button>
+              </Tip>
             </div>
           ))}
         </div>

@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { useQuery } from "@/lib/query";
 import { basename, errMsg } from "@/lib/text";
-import { Dialog, Icon, Menu, Notice, type MenuItem } from "@/ui";
+import { Dialog, Icon, Menu, Notice, Tip, type MenuItem } from "@/ui";
 import { fetchReview } from "@/features/review/api";
 import { app } from "@/app/store";
 import { fetchQuick, saveQuick, type QuickPrompt } from "./api";
@@ -90,9 +90,11 @@ export function QuickPromptsDialog({ dir, onClose }: { dir: string; onClose: () 
             <label className="quick-scope">
               <input type="checkbox" checked={!!q.dir} onChange={(e) => edit(i, { dir: e.target.checked ? dir : "" })} /> {t("only {folder}", { folder })}
             </label>
-            <button type="button" className="icon-btn danger" title={t("Remove")} aria-label={t("Remove")} onClick={() => setList((l) => (l ?? []).filter((_, j) => j !== i))}>
-              <Icon name="trash" size={14} />
-            </button>
+            <Tip text={t("Remove")}>
+              <button type="button" className="icon-btn danger" aria-label={t("Remove")} onClick={() => setList((l) => (l ?? []).filter((_, j) => j !== i))}>
+                <Icon name="trash" size={14} />
+              </button>
+            </Tip>
           </div>
         ))}
       </div>

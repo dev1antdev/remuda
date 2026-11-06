@@ -3377,7 +3377,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   header, the sidebar, the tab strip, the composer and a wall tile —
   and a dialog's Close, a toast's and a notice's Dismiss
   (`ui/iconButtons.test.ts`, and `features/roster/iconButtons.test.ts`
-  for the sidebar's, its dialogs' and the tab strip's, a Menu's or a
+  for the sidebar's, its dialogs' and the tab strip's, `features/chat/iconButtons.test.ts`
+  for the composer's and the chat's, a Menu's or a
   Popover's `tip` counting for its trigger) — carries one, with an `aria-label` for the
   reader and no `title`, and a `Menu` takes a
   `tip` for its trigger; `radix-ui` is the one dependency
