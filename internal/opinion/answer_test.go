@@ -146,3 +146,25 @@ func TestParseTakesNoAddressForAFile(t *testing.T) {
 		t.Fatalf("a file named in a sentence outside FINDINGS read as a finding: %+v", loose.Findings)
 	}
 }
+
+func TestParseKeepsThePathsAndWordsReviewersReallyName(t *testing.T) {
+	got := Parse("FINDINGS\n"+
+		"pkg/__init__.py:3: [high] the import cycle is back\n"+
+		"web/src/__tests__/a.test.ts:9: [low] a**2 is never checked against __len__\n"+
+		"summary.go:12: [medium] the summary is built twice\n"+
+		"app/blog/[slug]/page.tsx:14: [high] the slug is not escaped\n"+
+		"app/(marketing)/page.tsx:12: the layout is lost\n"+
+		"src/io.go:40: low-level helper leaks the fd\n"+
+		"SUMMARY\nFine otherwise.", "")
+	want := []Finding{
+		{Path: "pkg/__init__.py", Line: 3, Severity: "high", Text: "the import cycle is back"},
+		{Path: "web/src/__tests__/a.test.ts", Line: 9, Severity: "low", Text: "a**2 is never checked against __len__"},
+		{Path: "summary.go", Line: 12, Severity: "medium", Text: "the summary is built twice"},
+		{Path: "app/blog/[slug]/page.tsx", Line: 14, Severity: "high", Text: "the slug is not escaped"},
+		{Path: "app/(marketing)/page.tsx", Line: 12, Text: "the layout is lost"},
+		{Path: "src/io.go", Line: 40, Text: "low-level helper leaks the fd"},
+	}
+	if !reflect.DeepEqual(got.Findings, want) || got.Summary != "Fine otherwise." {
+		t.Fatalf("findings:\n%+v\nsummary %q", got.Findings, got.Summary)
+	}
+}

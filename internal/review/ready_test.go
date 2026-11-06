@@ -22,6 +22,11 @@ func TestReadyWords(t *testing.T) {
 		"```\nREADY FOR REVIEW\n```\nThat is what the script prints.": false,
 		"":      false,
 		"Done.": false,
+		"Tests still fail.\n\nStatus: NOT READY FOR REVIEW":                            false,
+		"Ping me and I'll mark it READY FOR REVIEW":                                    false,
+		"It's not quite ready for review yet — two tests fail.":                        false,
+		"…but it won't be ready for review until the migration lands.":                 false,
+		"Everything you asked for is in.\n\nNot a single test fails. READY FOR REVIEW": true,
 	}
 	for text, want := range cases {
 		if got := ReadyWords(text); got != want {

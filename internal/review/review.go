@@ -206,7 +206,9 @@ func (store *Store) Summary(host shell.Host, dir string) Summary {
 	summary.Repo = headLines[0]
 	if len(headLines) > 1 {
 		summary.Branch = headLines[1]
-		store.setBranch(key(host.ID(), dir), summary.Branch)
+		if summary.Branch != "HEAD" { // a detached HEAD keeps the short hash the sweep read for the sidebar
+			store.setBranch(key(host.ID(), dir), summary.Branch)
+		}
 	}
 	if len(headLines) > 2 {
 		summary.Head = headLines[2]
@@ -258,7 +260,11 @@ func (store *Store) Summary(host shell.Host, dir string) Summary {
 				continue
 			}
 			anyFile = true
-			if reviewed, ok := baseline.Blobs[path]; !ok || reviewed != fields[3] {
+			left := fields[3]
+			if strings.Trim(left, "0") == "" { // a deletion leaves the null blob, which a look recorded as gone
+				left = "gone"
+			}
+			if reviewed, ok := baseline.Blobs[path]; !ok || reviewed != left {
 				allReviewed = false
 			}
 		}
@@ -466,8 +472,11 @@ func (store *Store) Badges(host shell.Host, dirs []string) {
 	}
 	for _, dir := range dirs {
 		if !answered[dir] {
-			store.setBranch(key(host.ID(), dir), "") // no longer a repository: no branch to show
+			store.setBranch(key(host.ID(), dir), "") // no longer a repository: no branch or changes to show
 			store.setRoot(key(host.ID(), dir), "")
+			store.mu.Lock()
+			delete(store.badges, key(host.ID(), dir))
+			store.mu.Unlock()
 		}
 	}
 }

@@ -151,6 +151,26 @@ func TestAMergeBringsNoFilesOfItsOwn(t *testing.T) {
 	}
 }
 
+func TestACommitOfAReviewedDeletionIsSeen(t *testing.T) {
+	dir, git, write := scratchCheckout(t)
+	write("a.txt", "a")
+	write("b.txt", "b")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	_ = os.Remove(filepath.Join(dir, "b.txt"))
+	write("a.txt", "a2")
+	machine := shell.Local{Name: "local"}
+	store := New(t.TempDir())
+	if _, err := store.MarkSeen(machine, dir, ""); err != nil {
+		t.Fatal(err)
+	}
+	git("commit", "-qam", "the reviewed work")
+	summary := store.Summary(machine, dir)
+	if summary.Error != "" || len(summary.Commits) != 1 || !summary.Commits[0].Seen {
+		t.Fatalf("a commit of exactly the reviewed work, a deletion among it: %+v %s", summary.Commits, summary.Error)
+	}
+}
+
 func TestBadgesReadTheBranch(t *testing.T) {
 	dir, git, write := scratchCheckout(t)
 	write("a.txt", "a")
@@ -184,9 +204,21 @@ func TestBadgesReadTheBranch(t *testing.T) {
 	if branch, short := store.Branch("local", dir), git("rev-parse", "--short", "HEAD"); branch != short {
 		t.Fatalf("detached: branch = %q, want the short hash %q", branch, short)
 	}
+	store.Summary(machine, dir)
+	if branch, short := store.Branch("local", dir), git("rev-parse", "--short", "HEAD"); branch != short {
+		t.Fatalf("detached, after a look at the Changes lens: branch = %q, want the short hash %q", branch, short)
+	}
 
+	write("a.txt", "a2")
+	store.Badges(machine, []string{dir})
+	if badge, ok := store.Badge("local", dir); !ok || badge.Changed != 1 {
+		t.Fatalf("badge before the repository goes: %+v", badge)
+	}
 	_ = os.RemoveAll(filepath.Join(dir, ".git"))
 	store.Badges(machine, []string{dir})
+	if badge, ok := store.Badge("local", dir); ok && badge.Changed != 0 {
+		t.Fatalf("a folder that stopped being a repository keeps its badge %+v", badge)
+	}
 	if branch := store.Branch("local", dir); branch != "" {
 		t.Fatalf("a folder that stopped being a repository keeps branch %q", branch)
 	}

@@ -184,6 +184,12 @@ func TestViewsSearchAndPaging(t *testing.T) {
 	if got := titles("open", Query{}); len(got) != 5 || got[4] != undated.Title {
 		t.Fatalf("open: %v", got)
 	}
+	if got := titles("upcoming", Query{Project: work.ID}); len(got) != 1 || got[0] != "Next week" {
+		t.Fatalf("upcoming in one project: %v", got)
+	}
+	if got := titles("today", Query{Project: work.ID}); len(got) != 0 {
+		t.Fatalf("today in a project with nothing due: %v", got)
+	}
 	if got := titles("project", Query{Project: inbox[0].ID}); len(got) != 2 {
 		t.Fatalf("project open: %v", got)
 	}

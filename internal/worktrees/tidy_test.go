@@ -179,3 +179,38 @@ func TestLeftoversAreTheWorktreesNoWorkspaceHasOpen(t *testing.T) {
 		t.Fatalf("a machine with no worktrees: %v %v", list, err)
 	}
 }
+
+func TestALinkUnderTheRootIsNoLeftover(t *testing.T) {
+	host, main, _ := madeRepo(t)
+	hand := filepath.Join(host.home, "code", "app-hand")
+	gitIn(t, main, "worktree", "add", "-q", "-b", "hand", hand)
+	if err := os.MkdirAll(filepath.Join(Root(host.home), "app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(hand, filepath.Join(Root(host.home), "app", "hand")); err != nil {
+		t.Fatal(err)
+	}
+	list, err := Leftovers(host, []string{hand})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("a link to a worktree made elsewhere, open in a workspace, is a leftover: %+v", list)
+	}
+}
+
+func TestTidyKeepsNewFilesThatGitStatusIsToldToHide(t *testing.T) {
+	host, main, trees := madeRepo(t, "t1")
+	gitIn(t, main, "config", "status.showUntrackedFiles", "no")
+	write(t, filepath.Join(trees["t1"], "new.go"), "package new\n")
+	if list, _ := Leftovers(host, nil); len(list) != 1 || list[0].Dirty == "" {
+		t.Fatalf("the leftover with a new file reads clean: %+v", list)
+	}
+	got := Tidy(host, trees["t1"], true)
+	if got.Removed || !strings.Contains(got.Kept, "uncommitted") {
+		t.Fatalf("a worktree with a new file was taken down: %+v", got)
+	}
+	if _, err := os.Stat(filepath.Join(trees["t1"], "new.go")); err != nil {
+		t.Fatalf("the new file is gone: %v", err)
+	}
+}

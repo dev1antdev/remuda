@@ -35,15 +35,20 @@ const (
 )
 
 var (
-	sectionRe  = regexp.MustCompile(`(?i)^(?:#{1,6}\s*)?(?:\*\*|__)?\s*(findings|summary)\s*(?:\*\*|__)?\s*:?\s*(?:\*\*|__)?\s*(.*)$`)
+	// a heading's word alone, or followed by a colon or a space and its text: never a file named summary.go
+	sectionRe  = regexp.MustCompile(`(?i)^(?:#{1,6}\s*)?(?:\*\*|__)?\s*(findings|summary)(?:\s*(?:\*\*|__)?\s*(?::|\s|$)\s*(?:\*\*|__)?\s*(.*))?$`)
 	leadRe     = regexp.MustCompile(`^(?:[-*+•]\s+|\d+[.)]\s+)`)
 	linkRe     = regexp.MustCompile(`\[([^\]]+)\]\([^)\s]*\)`) // [src/a.go:12](src/a.go#L12), as Codex names a file
-	findingRe  = regexp.MustCompile(`^([^\s:*` + "`" + `"'()<>\[\]]+?):(\d+)(?:\s*[-–]\s*\d+)?(?::\d+)?(?:\s*[:\-—–]\s*|\s+)(.+)$`)
-	fileRe     = regexp.MustCompile(`^([^\s:*` + "`" + `"'()<>\[\]]+?)\s*:\s+(.+)$`) // a finding on a file as a whole, under FINDINGS
-	fileNameRe = regexp.MustCompile(`(?:/|\.[A-Za-z0-9]+$)`)
-	addressRe  = regexp.MustCompile(`^[\d.]+$`) // 127.0.0.1:8080 is an address, not a file and a line
-	severityRe = regexp.MustCompile(`(?i)^(?:\[\s*([a-z]+)\s*\]|\(\s*([a-z]+)\s*\)|\*\*([a-z]+)\*\*|([a-z]+)\s*[:\-—–])\s*`)
-	noneRe     = regexp.MustCompile(`(?i)^(?:none|no findings?|nothing (?:to report|found)|no issues? found)\.?$`)
+	starBoldRe = regexp.MustCompile(`(^|[\s(])\*\*([^*\s](?:[^*]*[^*\s])?)\*\*`)
+	// __bold__ is a pair around more than a name: never a Python dunder (__len__) or a __tests__ folder inside a path
+	underBoldRe  = regexp.MustCompile(`(^|[\s(])__([^_\s](?:[^_]*[^_\s])?)__($|[\s:,;!?)—–-])`)
+	findingRe    = regexp.MustCompile(`^([^\s:*` + "`" + `"'<>]+?):(\d+)(?:\s*[-–]\s*\d+)?(?::\d+)?(?:\s*[:\-—–]\s*|\s+)(.+)$`) // [slug] and (group) folders are paths too
+	fileRe       = regexp.MustCompile(`^([^\s:*` + "`" + `"'<>]+?)\s*:\s+(.+)$`)                                                // a finding on a file as a whole, under FINDINGS
+	fileNameRe   = regexp.MustCompile(`(?:/|\.[A-Za-z0-9]+$)`)
+	addressRe    = regexp.MustCompile(`^[\d.]+$`)                                                                                      // 127.0.0.1:8080 is an address, not a file and a line
+	severityRe   = regexp.MustCompile(`(?i)^(?:\[\s*([a-z]+)\s*\]|\(\s*([a-z]+)\s*\)|\*\*([a-z]+)\*\*|([a-z]+)\s*(?::|—|–|\s-\s))\s*`) // low-level is a word, not low
+	noneRe       = regexp.MustCompile(`(?i)^(?:none|no findings?|nothing (?:to report|found)|no issues? found)\.?$`)
+	identifierRe = regexp.MustCompile(`^\w+$`)
 )
 
 // severities maps the words reviewers use to the three the page shows.
@@ -120,8 +125,14 @@ func clean(line string) string {
 	line = leadRe.ReplaceAllString(line, "")
 	line = linkRe.ReplaceAllString(line, "$1")
 	line = strings.ReplaceAll(line, "`", "")
-	line = strings.ReplaceAll(line, "**", "")
-	line = strings.ReplaceAll(line, "__", "")
+	line = starBoldRe.ReplaceAllString(line, "$1$2")
+	line = underBoldRe.ReplaceAllStringFunc(line, func(m string) string {
+		s := underBoldRe.FindStringSubmatch(m)
+		if identifierRe.MatchString(s[2]) {
+			return m
+		}
+		return s[1] + s[2] + s[3]
+	})
 	return strings.TrimSpace(line)
 }
 
