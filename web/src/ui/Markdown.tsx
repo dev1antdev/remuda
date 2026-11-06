@@ -35,13 +35,42 @@ type Block =
   | { t: "table"; head: string[]; rows: string[][] }
   | { t: "hr" };
 
-const FENCE = /^\s{0,3}(`{3,}|~{3,})\s*(\S*)\s*$/;
-// a closing run of # counts only after a space: "## Rewriting in C#" keeps its C#
-const HEADING = /^\s{0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/;
+// The fence's mark and the heading's hashes are matched alone and the rest of the line read in code: a pattern with two
+// runs of \s around the info string or the closing hashes cost a line of sixty thousand spaces six seconds.
+const FENCE_MARK = /^\s{0,3}(`{3,}|~{3,})/;
+const HEADING_MARK = /^\s{0,3}(#{1,6})\s+/;
 const HR = /^\s{0,3}([-*_])(\s*\1){2,}\s*$/;
 const LIST = /^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/;
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
-const TABLE_SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+const TABLE_CELL = /^:?-{2,}:?$/;
+
+// fenceOf is the mark and the info string of a line that opens a fence: the info one word, blanks around it allowed
+function fenceOf(line: string): { marker: string; info: string } | null {
+  const mark = line.match(FENCE_MARK);
+  if (!mark) return null;
+  const info = line.slice(mark[0].length).trim();
+  return /\s/.test(info) ? null : { marker: mark[1]!, info };
+}
+
+// headingOf is a heading's level and text; a closing run of # counts only after a space: "## Rewriting in C#" keeps its C#
+function headingOf(line: string): { level: number; text: string } | null {
+  const mark = line.match(HEADING_MARK);
+  if (!mark) return null;
+  const text = line.slice(mark[0].length).trimEnd();
+  let hashes = text.length;
+  while (hashes > 0 && text[hashes - 1] === "#") hashes--;
+  const closed = hashes > 0 && hashes < text.length && /\s/.test(text[hashes - 1]!);
+  return { level: mark[1]!.length, text: closed ? text.slice(0, hashes).trimEnd() : text };
+}
+
+// tableRule says whether a line is the rule under a table's head: cells of two dashes or more, a colon at either end
+// for the alignment, between pipes, the outer pipes optional
+function tableRule(line: string): boolean {
+  let row = line.trim();
+  if (row.startsWith("|")) row = row.slice(1);
+  if (row.endsWith("|")) row = row.slice(0, -1);
+  return row.split("|").every((cell) => TABLE_CELL.test(cell.trim()));
+}
 
 // A list item: its blocks, and for a task item ("[ ] …" / "[x] …") its state.
 type ListItem = { blocks: Block[]; checked: boolean | null };
@@ -69,12 +98,11 @@ export function parseBlocks(src: string, depth = 0): Block[] {
       continue;
     }
 
-    const fence = line.match(FENCE);
+    const fence = fenceOf(line);
     // a backtick fence's info string holds no backtick: "```code```" on a line of its own is a code span, not a fence that swallows the rest
-    if (fence && !(fence[1]!.startsWith("`") && fence[2]!.includes("`"))) {
+    if (fence && !(fence.marker.startsWith("`") && fence.info.includes("`"))) {
       flushPara();
-      const marker = fence[1]!;
-      const lang = fence[2] ?? "";
+      const { marker, info: lang } = fence;
       const code: string[] = [];
       i++;
       while (i < lines.length && !closesFence(lines[i]!, marker)) code.push(lines[i++]!);
@@ -83,10 +111,10 @@ export function parseBlocks(src: string, depth = 0): Block[] {
       continue;
     }
 
-    const h = line.match(HEADING);
+    const h = headingOf(line);
     if (h) {
       flushPara();
-      out.push({ t: "h", level: h[1]!.length, text: h[2]! });
+      out.push({ t: "h", ...h });
       i++;
       continue;
     }
@@ -148,7 +176,7 @@ export function parseBlocks(src: string, depth = 0): Block[] {
       continue;
     }
 
-    if (line.includes("|") && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1]!)) {
+    if (line.includes("|") && i + 1 < lines.length && tableRule(lines[i + 1]!)) {
       flushPara();
       const head = cells(line);
       i += 2;
