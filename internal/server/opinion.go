@@ -11,6 +11,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/sessions"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 // The second opinion: another agent asked, in a new tab of the folder's workspace, to review what the Changes lens
@@ -48,6 +49,10 @@ func (s *Server) handleOpinionAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	if !sessions.KnownAgent(req.Agent) {
 		httpErr(w, 400, fmt.Errorf("unknown agent %q", req.Agent))
+		return
+	}
+	if transcript.FormatOfAgent(req.Agent) == "" { // its answer could never be read: the opinion would wait for good
+		httpErr(w, 400, fmt.Errorf("remuda reads the answers of Claude Code, Codex and Gemini CLI only: ask one of them, not %s", agentLabel(req.Agent)))
 		return
 	}
 	start, err := (&createReq{Agent: req.Agent, Model: req.Model, Args: req.Args}).start()

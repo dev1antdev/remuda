@@ -1317,7 +1317,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Claude Code for the rest), its model as the start dialogs offer it,
   "Close its tab once it has answered" (pref `opinion.close`, on) — and
   `POST /api/opinion {machine, pane, dir, agent, model?, args?, close}`
-  (`internal/server/opinion.go`): the folder must be the pane's
+  (`internal/server/opinion.go`): the reviewer Claude Code, Codex or
+  Gemini CLI, whose answers remuda reads (400 for another), the folder must be the pane's
   workspace's (`reviewedWorkspace`, else the first workspace standing on
   it), must be a checkout with something to review (409 otherwise), and
   must have no opinion still running whose reviewer's pane stands (409:
