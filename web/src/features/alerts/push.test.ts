@@ -52,6 +52,15 @@ describe("resyncPush", () => {
     expect(b.posted).toMatchObject([{ url: "/api/push/subscribe", body: { subscription: { endpoint: "https://push.example/old" }, prefs } }]);
   });
 
+  it("turned on again under a changed key, names the subscription it replaces, so the server stops pushing to the dead one", async () => {
+    const b = browser([1, 2, 3], [9, 8, 7]);
+    vi.stubGlobal("Notification", { permission: "granted", requestPermission: async () => "granted" });
+    const { enablePush } = await import("./push");
+    await enablePush(prefs);
+    expect(b.made).toEqual(["https://push.example/new"]);
+    expect(b.posted).toMatchObject([{ url: "/api/push/subscribe", body: { subscription: { endpoint: "https://push.example/new" }, old_endpoint: "https://push.example/old" } }]);
+  });
+
   it("subscribes anew when the server's key changed, since the old subscription can never be delivered to", async () => {
     const b = browser([1, 2, 3], [9, 8, 7]);
     const { resyncPush } = await import("./push");

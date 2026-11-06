@@ -84,14 +84,16 @@ export function enablePush(prefs: Prefs): Promise<void> {
       const reg = await registration();
       const key = urlBase64ToUint8Array(await serverKey());
       let sub = await reg.pushManager.getSubscription();
+      let replaced: string | undefined;
       if (sub && !sameKey(sub, key)) {
+        replaced = sub.endpoint;
         await sub.unsubscribe();
         sub = null;
       }
       if (!sub) {
         sub = await subscribeOrSay(reg, key);
       }
-      await register(sub, prefs);
+      await register(sub, prefs, replaced);
     } finally {
       inflight = null;
     }
