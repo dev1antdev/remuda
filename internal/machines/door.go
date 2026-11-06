@@ -1,6 +1,7 @@
 package machines
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -34,6 +35,27 @@ esac
 mkdir -p "$d" && chmod 700 "$d" && cat > "$d/agent-key.new" && mv -f "$d/agent-key.new" "$d/agent-key" && printf '%s\n' ` + script.Quote(url) + ` > "$d/agent-url" && chmod 600 "$d/agent-key" "$d/agent-url"`
 }
 
+// doorTries and doorPause: a reverse forward the machine's sshd refuses because the connection of a remuda that just
+// restarted still holds the port there is asked again, a minute in all, while this connection is the machine's.
+var doorTries, doorPause = 7, 10 * time.Second
+
+// forwardSoon asks for the forward until it holds, the tries run out or the connection is no longer current.
+func forwardSoon(forward func() error, current func() bool) error {
+	var err error
+	for try := 0; try < doorTries; try++ {
+		if try > 0 {
+			time.Sleep(doorPause)
+			if !current() {
+				return errors.New("the connection went away")
+			}
+		}
+		if err = forward(); err == nil {
+			return nil
+		}
+	}
+	return err
+}
+
 // openDoor lets the machine's agents reach this remuda's task list, once per connection; a sshd that forbids the
 // reverse forward, or a state dir that cannot be written, is a log line, never a failure of the connection.
 func (mc *Machine) openDoor(conn *sshx.Conn) {
@@ -41,7 +63,12 @@ func (mc *Machine) openDoor(conn *sshx.Conn) {
 	if door == nil || door.LocalPort == 0 || door.Key == nil {
 		return
 	}
-	if err := conn.ForwardBack(DoorPort, door.LocalPort); err != nil {
+	current := func() bool {
+		mc.mu.Lock()
+		defer mc.mu.Unlock()
+		return mc.conn == conn
+	}
+	if err := forwardSoon(func() error { return conn.ForwardBack(DoorPort, door.LocalPort) }, current); err != nil {
 		log.Printf("%s: no door for its agents to the tasks here: %v", mc.Cfg.Host, err)
 		return
 	}

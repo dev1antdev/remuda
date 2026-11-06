@@ -227,7 +227,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   places the same one while it still passes) and `agent-url`
   (`http://127.0.0.1:7318`) in the machine's state dir, 0600 — the files
   `remuda mcp` and `remuda tasks` read there; `Door{LocalPort, Key}` is
-  the manager's, given by `internal/app`; a sshd that forbids `-R` is a
+  the manager's, given by `internal/app`; a refused `-R` is asked again
+  for a minute while the connection stands (`forwardSoon`: after this
+  remuda's own restart the machine's sshd may still hold 7318 for the
+  connection that just ended), then a sshd that forbids it is a
   log line, not a failure of the connection. **Two RPC
   transports**: a forwarded unix socket when the sshd allows streamlocal
   forwarding, else one `ssh host nc -U <sock>` exec per request
