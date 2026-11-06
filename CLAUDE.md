@@ -2896,7 +2896,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   page a `.task-source` badge (the `bot` icon, the source in its Tip) in
   the list rows and the board cards, "by <source>" in the detail head;
   `.tasks-html` has styles for headings, quotes and rules. `POST /api/tasks/import
-  {machine, project_id, url}`; the page: `ImportIssueDialog.tsx` (dialog
+  {machine, project_id, url}` (an agent's key gets a 403: the import runs
+  gh as the person and files outside Proposed); the page: `ImportIssueDialog.tsx` (dialog
   kind `import-issue`, the link button in the Tasks head and the
   palette's "New task from a GitHub issue…"; Create, or Create & start an
   agent…), `issue.ts` tested (`isIssueURL`, `issueLink`, `issueLabel` —
