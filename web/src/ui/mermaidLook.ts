@@ -21,6 +21,17 @@ export function previewOf(path: string): "markdown" | "mermaid" | null {
 // opensDrawn says whether the viewer starts on the drawn view: a file that has one, asked for neither its changes nor a line
 export const opensDrawn = (path: string, line?: number, prefer?: "file" | "changes"): boolean => previewOf(path) !== null && !line && prefer !== "changes";
 
+// what the URL parser drops from a URL before it reads the scheme, so "java\tscript:" runs as javascript: does
+const URL_NOISE = /[\u0000-\u0020]/g;
+const SCRIPT_URL = /(?:javascript|vbscript):/;
+
+// unsafeAttribute says whether an attribute of a drawn diagram could run something: an event handler, or a value naming a
+// script URL however it is spelled — a link's, or the one an animation would set a link to
+export function unsafeAttribute(name: string, value: string): boolean {
+  if (name.toLowerCase().startsWith("on")) return true;
+  return SCRIPT_URL.test(value.replace(URL_NOISE, "").toLowerCase());
+}
+
 // flavorOf reads the root's data-flavor, Frappé when it names none of the four
 export function flavorOf(value: string | undefined): Flavor {
   return value === "latte" || value === "macchiato" || value === "mocha" ? value : "frappe";
