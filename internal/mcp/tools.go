@@ -430,7 +430,10 @@ func (t *Tools) Update(a UpdateArgs) (tasksapi.Task, error) {
 		return tasksapi.Task{}, err
 	}
 	w := tasksapi.Write{Title: a.Title, Done: a.Done, Priority: a.Priority}
-	if a.Description != nil {
+	switch {
+	case a.Description != nil && strings.TrimSpace(*a.Description) == "":
+		w.Description = a.Description // the Markdown field goes unsent when empty, so the description is cleared this way
+	case a.Description != nil:
 		w.Markdown = *a.Description
 	}
 	if a.Column != "" {

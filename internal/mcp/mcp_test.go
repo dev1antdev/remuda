@@ -277,6 +277,18 @@ func TestAProjectKeepsTheViewAskedFor(t *testing.T) {
 	}
 }
 
+func TestAnEmptyDescriptionClearsIt(t *testing.T) {
+	list := &fakeList{tasks: []map[string]any{{"id": float64(1), "identifier": "#1", "project_id": float64(1), "status_id": float64(10), "title": "x", "description": "<p>old words</p>", "labels": []any{}}}}
+	web := httptest.NewServer(list)
+	t.Cleanup(web.Close)
+	tools := &Tools{Client: tasksapi.New(tasksapi.Door{URL: web.URL, Key: "rk_test"})}
+	empty := ""
+	got, err := tools.Update(UpdateArgs{ID: 1, Description: &empty})
+	if err != nil || got.Description != "" {
+		t.Fatalf("task_update with an empty description kept %q (%v)", got.Description, err)
+	}
+}
+
 func TestRefusalsAndUnknowns(t *testing.T) {
 	srv, _ := newServer(t)
 	answers := session(t, srv,
