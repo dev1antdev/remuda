@@ -2360,7 +2360,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `schedules.json` so a restart still watches it) and `Store.OnStatus`
   hears every `events.PaneStatus`: `done`, or `idle` after the pane was
   seen `working`, takes the tab down — the workspace when it was made
-  for the run — through `Close`, off the watcher's goroutine (the place
+  for the run and holds no other tab by now — through `Close`, off the watcher's goroutine (the place
   is let go of as the close is dispatched, so a further change of the
   pane before it lands closes and pushes nothing twice), and notes
   "answered: <first line of the last answer>" plus a push "Scout “…”
@@ -3243,7 +3243,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Watch`, `Input`, `Notify`) does that on a machine (`StartInFolder`,
   the first prompt handed over in the background, a push when it was
   not delivered) and takes the place down again (`Close`: the workspace
-  it made, else the tab) — the agent schedules' door; and `FirstPrompt` (the text a
+  it made, else the tab, by the last snapshot — `closePlace`, tested: the
+  tab alone once the person added another to the workspace, nothing for a
+  pane gone, a refusal when the tab no longer holds the pane) — the agent schedules' door; and `FirstPrompt` (the text a
   person wrote in the New workspace / tab / worktree dialog for the agent
   they started: `agent.prompt` under the pane's lock every
   `FirstPromptRetry` while the agent is still coming up, until it takes
