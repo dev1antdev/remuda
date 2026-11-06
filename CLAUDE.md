@@ -1204,8 +1204,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   minute apart and never two at once per machine, one shell over
   `Snapshot.WorkspaceDirs()` that also reads each folder's branch
   (`git symbolic-ref`, a short hash when detached; `Store.Branch`, set
-  by a summary too, dropped for a folder that stopped being a
-  repository) and its repository's main folder (`Store.Root`: for a
+  by a summary too unless detached, dropped with the badge for a folder
+  that stopped being a repository) and its repository's main folder (`Store.Root`: for a
   linked worktree the parent of `git rev-parse --git-common-dir`, so a
   worktree made outside herdr still joins its repository's folder in the
   sidebar — git names a linked worktree's repository by its real path —
