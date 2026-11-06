@@ -277,3 +277,16 @@ func TestTheReviewersTabClosesOnlyAfterAReadableAnswer(t *testing.T) {
 		t.Fatalf("asked at %v", op.Asked)
 	}
 }
+
+func TestADismissLeavesACopyHandedOutBeforeAlone(t *testing.T) {
+	store := NewStore(t.TempDir())
+	asked(store, "w3:p2")
+	store.Answer("gog", "w3:p2", "FINDINGS\na.go:1: x\nb.go:2: y")
+	before, _ := store.Get("gog", "/w/app") // being written out to a page while the dismiss runs
+	if _, err := store.Dismiss("gog", "/w/app", nil); err != nil {
+		t.Fatal(err)
+	}
+	if before.Comments[0].Dismissed || before.Comments[1].Dismissed {
+		t.Fatal("a dismiss wrote into a copy handed out before it, outside the lock")
+	}
+}
