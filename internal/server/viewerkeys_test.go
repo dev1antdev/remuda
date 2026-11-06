@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/auth"
 )
@@ -95,5 +96,18 @@ func TestViewerLinksMintedListedAndRevokedWithTheirScreens(t *testing.T) {
 	}
 	if len(s.Guard.Devices.List()) != 1 {
 		t.Fatalf("the screen should be signed out with its link: %+v", s.Guard.Devices.List())
+	}
+}
+
+// A link named at length in Cyrillic keeps whole letters: its name is cut between them, never inside one.
+func TestAViewerLinksLongNameIsCutBetweenLetters(t *testing.T) {
+	h, _, mine := viewerServer(t)
+	code, body := viewerCall(h, "POST", "/api/viewer-keys", `{"name":"`+strings.Repeat("Телевизоры ", 10)+`"}`, mine)
+	var made struct{ Name string }
+	if err := json.Unmarshal([]byte(body), &made); code != 200 || err != nil {
+		t.Fatalf("mint: %d %v %s", code, err, body)
+	}
+	if !utf8.ValidString(made.Name) || len(made.Name) > 80 || !strings.HasPrefix(made.Name, "Телевизор") || strings.ContainsRune(made.Name, utf8.RuneError) {
+		t.Fatalf("cut to %q (%d bytes)", made.Name, len(made.Name))
 	}
 }

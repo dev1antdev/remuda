@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // testToken is long enough for the guard and plain enough that a secret scan reads it as what it is
@@ -267,6 +268,19 @@ func TestStoreReloadRenameAndRevokeOthers(t *testing.T) {
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, devicesFile)); err != nil || strings.Contains(string(b), strings.Split(first, ".")[2]) {
 		t.Fatal("the file must hold hashes, never a secret")
+	}
+}
+
+// A long name in Cyrillic is cut between letters, never inside one: the list would read it with a broken last letter.
+func TestALongNameIsCutBetweenLetters(t *testing.T) {
+	devices, _ := OpenDevices(t.TempDir())
+	_, device, _ := devices.Mint("10.0.0.1", chromeMac)
+	renamed, err := devices.Rename(device.ID, strings.Repeat("Ноутбук ", 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !utf8.ValidString(renamed.Name) || len(renamed.Name) > 80 || !strings.HasPrefix(renamed.Name, "Ноутбук") {
+		t.Fatalf("cut to %q (%d bytes)", renamed.Name, len(renamed.Name))
 	}
 }
 
