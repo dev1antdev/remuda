@@ -42,7 +42,10 @@ type Check struct {
 // Failed says whether the check needs a hand: failed or cancelled.
 func (c Check) Failed() bool { return c.Bucket == "fail" || c.Bucket == "cancel" }
 
-var runLink = regexp.MustCompile(`/actions/runs/(\d+)`)
+var (
+	runLink = regexp.MustCompile(`/actions/runs/(\d+)`)
+	runRepo = regexp.MustCompile(`^https?://([^/\s]+)/([^/\s]+)/([^/\s]+)/actions/runs/\d+`)
+)
 
 // RunID is the GitHub Actions run a check's link points into, "" for a check from elsewhere.
 func (c Check) RunID() string {
@@ -51,6 +54,15 @@ func (c Check) RunID() string {
 		return ""
 	}
 	return m[1]
+}
+
+// RunRepo is the repository that run lives in, HOST/OWNER/REPO as gh's -R takes it; "" when the link does not say.
+func (c Check) RunRepo() string {
+	m := runRepo.FindStringSubmatch(c.Link)
+	if m == nil {
+		return ""
+	}
+	return m[1] + "/" + m[2] + "/" + m[3]
 }
 
 // ChecksScript lists a request's checks on the pane's machine.
@@ -90,9 +102,14 @@ func FailedRuns(checks []Check) []string {
 	return runs
 }
 
-// LogScript prints the log of a run's failed steps.
-func LogScript(runID string) string {
-	return script.PATH + "\ngh run view " + script.Quote(runID) + " --log-failed 2>&1" + lastOfLog
+// LogScript prints the log of a run's failed steps, the run found in its repository: the script runs in the home folder,
+// where gh run view knows no repository of its own.
+func LogScript(repo, runID string) string {
+	where := ""
+	if repo != "" {
+		where = "-R " + script.Quote(repo) + " "
+	}
+	return script.PATH + "\ngh run view " + where + script.Quote(runID) + " --log-failed 2>&1" + lastOfLog
 }
 
 var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)

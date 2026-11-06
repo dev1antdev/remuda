@@ -75,7 +75,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   without its `*.txt` logs; never `ssh/` (the masters' sockets),
   `backups/` (the copies this machine keeps), `serve.lock`, a `-wal` /
   `-shm` / `-journal`, a `.log`, a file the atomic writer is still
-  writing (`name.123456789`, `.partial`, `.new`); a `remuda-backup.json`
+  writing (`name.123456789`, a number of any length; the tailnet node's
+  `name.tmp123456789`; `.partial`, `.new`); a `remuda-backup.json`
   manifest at the root (format, host, version, time, files), at most
   `MaxSnapshot` 256 MB. `Service` (`backup.json` in the state dir:
   `Settings{machine, at "HH:MM", keep}`, the last run and the last good
@@ -2047,8 +2048,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   run follows the pull request"). **The reviewers' word and a red CI go
   to the agent** (`failure.go`, `comments.go`, `handoff.go`, tested on
   `shell.Fake`): `Failure(host, label, url)` runs `gh pr checks --json`
-  on the machine, then `gh run view <id> --log-failed` for each run a
-  failed check points into (`FailedRuns`, at most `MaxRuns`), and
+  on the machine, then `gh run view -R <host/owner/repo> <id> --log-failed`
+  for each run a failed check points into (`FailedRuns`, at most `MaxRuns`;
+  the repository read off the check's link, `RunRepo`, since gh outside a
+  checkout knows no repository of its own), and
   composes `FailureMessage` — the failed checks named with their links,
   each run's log `Tail` (the last `LogTail` 8 KB at a line, escapes
   stripped, out of the last `LogRead` 64 KB the machine sends: a CI log
@@ -2701,7 +2704,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Cloud, v2 on a server; Basic with the account and the token, else
   Bearer (a personal access token); `Timeout` 10 s, an answer capped at
   4 MB, an error naming the host alone — never the token or the address
-  (`ErrNotFound`, `ErrRefused`); `Myself`, `Projects` (Cloud's search a
+  (`ErrNotFound`, `ErrRefused`), no redirect followed off the site's
+  scheme, host and port but an upgrade to https (`stayOnSite`: Go's own
+  rule keeps the header for any port and scheme of the host); `Myself`, `Projects` (Cloud's search a
   page at a time), `Issue` (summary, status and its category, assignee),
   `Full` (with type, reporter, labels and the description made Markdown:
   `ADFMarkdown` for Cloud's document format, `WikiMarkdown` for a

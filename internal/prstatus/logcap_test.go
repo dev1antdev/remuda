@@ -10,7 +10,7 @@ import (
 
 func TestAFailedLogIsCutOnTheMachine(t *testing.T) {
 	m, _ := MergeParts("https://gitlab.com/team/app/-/merge_requests/9")
-	for _, text := range []string{LogScript("123"), TraceScript(m, 77)} {
+	for _, text := range []string{LogScript("github.com/o/r", "123"), TraceScript(m, 77)} {
 		if !strings.HasSuffix(text, lastOfLog) {
 			t.Fatalf("a whole CI log crosses the link: %q", text)
 		}

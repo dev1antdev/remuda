@@ -38,8 +38,9 @@ type Manifest struct {
 // keeps for others (and for itself).
 var skippedDirs = map[string]bool{"ssh": true, "backups": true}
 
-// tempName is a file the atomic writer is still writing, "tasks.json.123456789", and an upload's partial copy
-var tempName = regexp.MustCompile(`\.\d{6,}$|\.partial$|\.new$`)
+// tempName is a file the atomic writer is still writing, "tasks.json.123456789" (os.CreateTemp's number has any length),
+// the tailnet node's own, "tailscaled.state.tmp123456789", and an upload's partial copy
+var tempName = regexp.MustCompile(`\.\d+$|\.tmp\d+$|\.partial$|\.new$`)
 
 // skipped says whether a file of the state dir stays out of the snapshot: a live database's side files (the database
 // itself goes through SQLite), the lock, the tailnet node's logs, files half written.
