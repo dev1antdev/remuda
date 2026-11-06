@@ -2069,8 +2069,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   send. `POST /api/pr/failure` and `POST /api/pr/review` `{machine,
   pane}` (`internal/server/pr.go`, `prHandoff`) take the pane's link
   from `said.Tracker.Link`, compose on the pane's machine and send the
-  text through `sessions.Input.Submit` as the chat does — 409 for an
-  agent waiting on a question or nothing to send, 502 with gh's (or
+  text through `sessions.Input.SubmitToAgent` — 409 for a pane whose
+  agent left, an agent waiting on a question or nothing to send, 502 with gh's (or
   glab's) line, 400 for a link that is neither.
   **A merged worktree goes** (`internal/worktrees`, tested on
   `shell.Fake`): `DELETE /api/worktrees/{id}` for a workspace herdr
@@ -2522,7 +2522,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   person's booking (`Book`, `POST /api/limits/continue {machine, pane,
   at}`, `DELETE` calls it off; at most `MaxAhead` 8 days ahead; kept in
   `limits.json`): `Loop` says "continue" when due through
-  `sessions.Input.Submit` — only to the conversation booked for, at rest
+  `sessions.Input.SubmitToAgent` — only to the conversation booked for, at rest
   and asking nothing (working again: dropped quietly; a question,
   another conversation or a pane its agent left: dropped with a push
   saying so, never typed into a shell) — a quiet "sent"
@@ -3225,7 +3225,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (herdr's `send_keys` grammar), `RefOK` (a branch name git gets as an
   argument), and `Input`: one lock per pane, `Submit` (`agent.prompt`, else
   `send_text` + Enter; `ErrAgentBusy` while a menu is open), `SendKeys`,
-  `SubmitToFolder` (the scheduler's door); `StartIn(client, snap, dir,
+  `SubmitToAgent` (`agent.prompt` alone: a pane whose agent left is
+  `ErrNoAgent`, never typed into its shell — the schedules, the pull
+  requests' hand-offs and a booked continue), `SubmitToFolder` (the
+  scheduler's door, through it); `StartIn(client, snap, dir,
   label, kind, start)` (place.go, tested) starts an agent in a folder —
   a new tab of the folder's workspace when the snapshot has one, else a
   new workspace on the folder — and answers a `Place` (pane, tab,
