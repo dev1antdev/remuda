@@ -355,6 +355,9 @@ func (s *Service) discard(a Arena, lane Lane) (patch, note string) {
 	if lane.Dir == "" && lane.WorkspaceID == "" {
 		return "", "" // it never started: nothing to close
 	}
+	if lane.Dir != "" && lane.Base == "" { // the commit it started from was never read: no patch could hold its work
+		return "", "kept: its work could not be saved (the commit it started from is not known)"
+	}
 	mc, err := s.Machines.Get(lane.Machine)
 	if err != nil {
 		return "", "kept: " + err.Error()

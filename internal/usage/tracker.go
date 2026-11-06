@@ -113,7 +113,7 @@ func (t *Tracker) Observe(machineID string, files Files, paneID string, chain []
 	}
 	t.refresh(machineID, files, live, false, chain)
 	// Claude Code's own counter includes <session>/subagents/*.jsonl
-	t.observeSubagents(machineID, files, live)
+	t.observeSubagents(machineID, files, chain)
 }
 
 // elsewhere is the message ids the other files of a lineage already count: a continuation file opens with a copy of
@@ -135,7 +135,10 @@ func (t *Tracker) elsewhere(machineID string, chain []string, path string) map[s
 	return counted
 }
 
-func (t *Tracker) observeSubagents(machineID string, files Files, live string) {
+// observeSubagents keeps the live file's subagents current; a fork's transcript opens with a copy of the response that
+// spawned it, which the file that made it counts.
+func (t *Tracker) observeSubagents(machineID string, files Files, chain []string) {
+	live := chain[len(chain)-1]
 	k := key(machineID, live)
 	t.mu.Lock()
 	last := t.subsChecked[k]
@@ -152,11 +155,14 @@ func (t *Tracker) observeSubagents(machineID string, files Files, live string) {
 		return
 	}
 	paths := make([]string, 0, len(vers))
-	for p, v := range vers {
+	for p := range vers {
 		paths = append(paths, p)
-		t.read(machineID, files, p, v, nil)
 	}
 	sort.Strings(paths)
+	counted := append(append([]string(nil), chain...), paths...)
+	for _, p := range paths {
+		t.read(machineID, files, p, vers[p], func() map[string]bool { return t.elsewhere(machineID, counted, p) })
+	}
 	t.mu.Lock()
 	t.subs[k] = paths
 	t.mu.Unlock()
@@ -181,12 +187,12 @@ func (t *Tracker) refresh(machineID string, files Files, path string, once bool,
 	if err != nil {
 		return
 	}
-	t.read(machineID, files, path, v, t.elsewhere(machineID, chain, path))
+	t.read(machineID, files, path, v, func() map[string]bool { return t.elsewhere(machineID, chain, path) })
 }
 
 // read brings a file's sum up to version v, reading only what was added since the last look; a response whose id is
-// in skip is another file's and left out.
-func (t *Tracker) read(machineID string, files Files, path string, v transcript.Version, skip map[string]bool) {
+// in skip's answer, asked once there is something to read, is another file's and left out.
+func (t *Tracker) read(machineID string, files Files, path string, v transcript.Version, skipOf func() map[string]bool) {
 	k := key(machineID, path)
 	t.mu.Lock()
 	st := t.files[k]
@@ -230,6 +236,7 @@ func (t *Tracker) read(machineID string, files Files, path string, v transcript.
 		scanner = transcript.NewUsageScanner(path)
 	}
 	// parsed outside the lock: a big first read must not hold the roster
+	skip := skipOf()
 	var recs []transcript.UsageRecord
 	_ = transcript.Lines(bytes.NewReader(data), 64*1024*1024, func(line []byte) {
 		if r, ok := scanner.Scan(line); ok && !skip[r.MessageID] { // sidechains spend too

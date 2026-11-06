@@ -74,8 +74,9 @@ EOF
         rm -f "$HOME/Library/LaunchAgents/dev.mardeus.herdr-ui.plist" "$HOME/.local/bin/herdr-ui"
         launchctl bootout "gui/$UID_NUM/$LABEL" 2>/dev/null || true
         sleep 1
-        if command -v lsof >/dev/null 2>&1 && lsof -ti "tcp:${ADDR##*:}" >/dev/null 2>&1; then
-            echo "something already listens on $ADDR (pid $(lsof -ti "tcp:${ADDR##*:}" | head -1)); stop it first"; exit 1
+        # listeners only: lsof's tcp:PORT alone names a connection to that port too, a browser's to another machine's remuda
+        if command -v lsof >/dev/null 2>&1 && lsof -ti "tcp:${ADDR##*:}" -sTCP:LISTEN >/dev/null 2>&1; then
+            echo "something already listens on $ADDR (pid $(lsof -ti "tcp:${ADDR##*:}" -sTCP:LISTEN | head -1)); stop it first"; exit 1
         fi
         launchctl bootstrap "gui/$UID_NUM" "$PLIST" 2>/dev/null || launchctl load -w "$PLIST"
         sleep 2

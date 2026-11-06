@@ -1,6 +1,7 @@
 // The day strip's pure part: the window it shows, the spans laid out on a bar of WIDTH units, the hour marks under it,
 // and the words of a span.
 
+import { t } from "@/lib/i18n";
 import { spent } from "@/lib/time";
 import type { Span } from "./api";
 
@@ -46,13 +47,14 @@ export function hourMarks(from: number, to: number, every = 3, width = WIDTH): M
   return marks;
 }
 
-const STATE_WORDS: Record<Span["state"], string> = { working: "Working", waiting: "Waiting for you", idle: "Idle" };
-
 const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 // spanWords names a segment for its tooltip: "Working 14:02–14:48, 46 min"
 export function spanWords(seg: Pick<Segment, "state" | "from" | "to">): string {
-  return `${STATE_WORDS[seg.state]} ${clock(seg.from)}–${clock(seg.to)}, ${spent((seg.to - seg.from) / 1000)}`;
+  const vars = { from: clock(seg.from), to: clock(seg.to), took: spent((seg.to - seg.from) / 1000) };
+  if (seg.state === "working") return t("Working {from}–{to}, {took}", vars);
+  if (seg.state === "waiting") return t("Waiting for you {from}–{to}, {took}", vars);
+  return t("Idle {from}–{to}, {took}", vars);
 }
 
 // hourLabel is the hour under a mark, in the device's own clock

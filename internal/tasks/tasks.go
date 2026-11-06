@@ -846,7 +846,9 @@ func (st *Store) SetStatuses(projectID int64, want []Status, moves map[int64]int
 		switch w.Kind {
 		case "", KindOpen:
 			w.Kind = KindOpen
-			open++
+			if !w.OnQueue { // new tasks never land in the Queued column, so it is no open column for them
+				open++
+			}
 		case KindDone:
 			done++
 		default:
@@ -1468,9 +1470,17 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 		tomorrow := time.Date(y, m, d+1, 0, 0, 0, 0, loc)
 		where = append(where, "done = 0", "due_date != ''", "due_date < ?")
 		args = append(args, tomorrow.UTC().Format(time.RFC3339))
+		if q.Project != 0 {
+			where = append(where, "project_id = ?")
+			args = append(args, q.Project)
+		}
 	case "upcoming":
 		where = append(where, "done = 0", "due_date != ''", "due_date < ?")
 		args = append(args, now.Add(7*24*time.Hour).UTC().Format(time.RFC3339))
+		if q.Project != 0 {
+			where = append(where, "project_id = ?")
+			args = append(args, q.Project)
+		}
 	case "open":
 		where = append(where, "done = 0")
 	case "proposed":
@@ -1614,7 +1624,13 @@ func (st *Store) StartRun(r Run) (Run, error) {
 			return r, err
 		}
 	}
-	if _, err := tx.Exec(`UPDATE tasks SET queue_refused = '' WHERE id = ?`, r.TaskID); err != nil { // started after all: the queue's note is old news
+	// started after all: the queue's note is old news, unless the card stays queued (no column takes a started task),
+	// where the note keeps the queue from starting it again until the person moves it
+	held := ""
+	if c := statusByID(ss, r.Expect); c != nil && c.OnQueue {
+		held = "an agent was started on it already" // the page goes on: move the card out of Queued and back to try again
+	}
+	if _, err := tx.Exec(`UPDATE tasks SET queue_refused = ? WHERE id = ?`, held, r.TaskID); err != nil {
 		return r, err
 	}
 	return r, tx.Commit()

@@ -26,6 +26,7 @@ func TestAnOpinionIsAskedOnlyOfAnAgentForAFolder(t *testing.T) {
 		"a shell":       {`{"machine":"local","dir":"/w/app","agent":"shell"}`, "a folder and an agent"},
 		"no agent":      {`{"machine":"local","dir":"/w/app"}`, "a folder and an agent"},
 		"unknown agent": {`{"machine":"local","dir":"/w/app","agent":"rm -rf"}`, "unknown agent"},
+		"unread agent":  {`{"machine":"local","dir":"/w/app","agent":"kimi"}`, "reads the answers of"},
 		"bad arguments": {`{"machine":"local","dir":"/w/app","agent":"codex","args":"\"unclosed"}`, ""},
 	} {
 		code, out := taskCall(mux, "POST", "/api/opinion", "", c.body)
