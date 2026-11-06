@@ -219,7 +219,7 @@ func cut(text string, max int) string {
 
 // pathsScript lists the folder's files, one a line, relative to it; one more than MaxPaths so a cut shows.
 func pathsScript(dir string) string {
-	return script.InDir(dir) + "if git rev-parse --show-toplevel >/dev/null 2>&1; then git ls-files --cached --others --exclude-standard 2>/dev/null; else find . -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | sed 's|^\\./||'; fi | head -n " + strconv.Itoa(MaxPaths+1)
+	return script.InDir(dir) + "if git rev-parse --show-toplevel >/dev/null 2>&1; then git -c core.quotePath=false ls-files --cached --others --exclude-standard 2>/dev/null; else find . -type f -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | sed 's|^\\./||'; fi | head -n " + strconv.Itoa(MaxPaths+1)
 }
 
 // ParsePaths reads pathsScript's answer.
