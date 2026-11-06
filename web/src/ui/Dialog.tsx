@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Icon, { type IconName } from "@/ui/icons";
 import Tip from "@/ui/Tip";
 import { dialogTakesEscape } from "./dialogEscape";
+import { focusReturn } from "./dialogFocus";
 import { t } from "@/lib/i18n";
 
 // openDialogs counts the open dialogs: the page behind them is inert until the last one closes.
@@ -24,8 +25,9 @@ export function Dialog({ title, icon, size = "sm", as = "div", onClose, onSubmit
 }) {
   const id = useId();
   const box = useRef<HTMLDivElement & HTMLFormElement>(null);
-  // the element to give the focus back to, read before the first render: an autoFocus field has it by the time an effect runs
-  const [opener] = useState(() => document.activeElement as HTMLElement | null);
+  // the element to give the focus back to, read before the first render: an autoFocus field has it by the time an effect
+  // runs; for a menu's row, the menu's button (dialogFocus.ts)
+  const [opener] = useState(() => focusReturn(document.activeElement as HTMLElement | null, (id) => document.getElementById(id)));
   useEffect(() => {
     const root = document.getElementById("root");
     openDialogs++;

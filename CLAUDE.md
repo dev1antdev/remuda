@@ -3345,7 +3345,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   not the Esc a tooltip or a menu inside it used to close itself, which
   Radix marks with preventDefault (`dialogEscape.ts`, tested) — focus
   in and back out — the opener is read before the first render, since an
-  autoFocus field has the focus by the time an effect runs — `#root` inert while open, `as="form"` + `onSubmit`,
+  autoFocus field has the focus by the time an effect runs, and a menu's
+  row, gone once the menu closes, hands it to the menu's button
+  (`dialogFocus.ts`, tested) — `#root` inert while open, `as="form"` + `onSubmit`,
   sizes sm/md/lg), `FormDialog`, `ConfirmDialog`, `Notice` (tones
   error/success/warn/info/hint, optional icon, action and dismiss),
   `Toasts`, `useTimedNotice`, `useDismiss` (popovers), `useSubmit`,
