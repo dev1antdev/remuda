@@ -226,8 +226,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   transports**: a forwarded unix socket when the sshd allows streamlocal
   forwarding, else one `ssh host nc -U <sock>` exec per request
   (one sshd on :2222 answers "unknown channel type"). Remote
-  transcripts are fetched by `stat` + `tail -c` delta into a small
-  per-session byte cache (`transcript.Reader.Turns` hides local vs remote);
+  transcripts are fetched by `stat` + `tail -c` delta into a per-machine
+  byte cache (`transcript.Reader.Turns` hides local vs remote; the last
+  8 MB of a file, 128 MB of tails in all and 64 MB of subagents', the
+  ones read longest ago going first, never one read in the last minute
+  for a file not cached yet: a wall of agents reads every file in turn);
   `Reader.ResolveSession` finds `<uuid>.jsonl` and caches the hit on both sides.
   `Machine.Ready()` reconnects a dead remote at most every 15s; a removed
   machine never reconnects and its watcher loop exits. **A sleeping
