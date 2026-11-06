@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { langOf, splitTokens, type Token } from "@/lib/highlight";
 import { tokenNodes } from "@/ui/Tokens";
 import type { Part } from "./api";
-import { editRows, editsOf, foldRows, rowTokens, type EditRow } from "./editDiff";
+import { editRows, editsOf, foldRows, moreWords, rowTokens, type EditRow } from "./editDiff";
 import { toolPath } from "./footprint";
 import { t } from "@/lib/i18n";
 
@@ -27,7 +27,7 @@ export function EditChange({ part }: { part: Part }) {
       ))}
       {more > 0 && (
         <button type="button" className="linkish edit-more" onClick={() => setUnfolded(true)}>
-          {more} more lines
+          {moreWords(more)}
         </button>
       )}
     </div>

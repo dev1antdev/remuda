@@ -201,7 +201,14 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
     if (!older || !workspaceId || !agent) return;
     void act(createTab({ machine: machineId, workspace: workspaceId, name: "", agent, resume: older }).then((created) => actions.selectPane(machineId, created.pane)));
   };
-  const keys = (ks: string[]) => sendKeys(machineId, paneId, ks).catch((e) => setActionError(errMsg(e)));
+  const keys = (ks: string[]) =>
+    sendKeys(machineId, paneId, ks).then(
+      () => true,
+      (e) => {
+        setActionError(errMsg(e));
+        return false;
+      },
+    );
   const context = usage && usage.window > 0 ? usage.context / usage.window : 0;
   const error = actionError ?? (fetchError || null);
 

@@ -19,8 +19,8 @@ export function turnOptions(): { value: number; label: string }[] {
 
 // handoverWords says what the new agent gets as its first prompt
 export function handoverWords(turns: number): string {
-  if (turns <= 0) return "the recap of this conversation";
-  if (turns === 1) return "the recap and the last exchange in full";
+  if (turns <= 0) return t("the recap of this conversation");
+  if (turns === 1) return t("the recap and the last exchange in full");
   return t("the recap and the last {n} exchanges in full", { n: turns });
 }
 

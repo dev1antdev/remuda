@@ -50,6 +50,11 @@ describe("exportFileName", () => {
     expect(exportFileName({ ...meta, workspace: "///" })).toBe("conversation-2026-10-23-01234567.md");
   });
 
+  it("cuts a long workspace at 40 characters, never between the halves of one nor before a dash", () => {
+    expect(exportFileName({ ...meta, workspace: `${"a".repeat(39)} tail` })).toBe(`${"a".repeat(39)}-2026-10-23-01234567.md`);
+    expect(exportFileName({ ...meta, workspace: `a${"𠀀".repeat(45)}`, sessionId: undefined })).toBe(`a${"𠀀".repeat(39)}-2026-10-23.md`);
+  });
+
   it("names the day on the person's own clock, not Greenwich's", () => {
     // the worker's zone, set for this test: 00:30 on the 24th in Moscow is still the 23rd in UTC, 23:30 on the 23rd in
     // New York already the 24th

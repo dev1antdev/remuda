@@ -13,8 +13,9 @@ import { Icon, Notice, Tip } from "@/ui";
 import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments";
 import { useDictation } from "./dictation";
 import { expandPrompt, QuickPromptsButton, QuickPromptsDialog } from "./QuickPrompts";
+import { leftAfterSend } from "./history";
 import { useHistory } from "./useHistory";
-import { applyPick, stillDismissed, tokenAt, type Dismissed, type Item } from "./complete";
+import { applyPick, listFor, stillDismissed, tokenAt, type Dismissed, type Item } from "./complete";
 import { CompletionList, useCompletion } from "./Completion";
 import { ModeChip } from "./ModeChip";
 import { addNote, numbered, queueKey, removeNote, sentAway, type QueuedNote } from "./queue";
@@ -59,7 +60,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState<Dismissed | null>(null);
   const token = useMemo(() => tokenAt(draft, caretPos), [draft, caretPos]);
-  const open = stillDismissed(dismissed, token) ? null : token;
+  const open = listFor(token, dismissed, history.browsing());
   useEffect(() => setDismissed((was) => stillDismissed(was, token)), [token]);
   const completion = useCompletion(machineId, dir, agent, open);
   const shown = completion.items;
@@ -168,15 +169,18 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
     att.remove(a.id);
   };
 
+  // the box stays open while the send is out: what is typed or attached meanwhile stays for the next message
   const send = async () => {
-    const text = draft.trim();
+    const sent = draftRef.current;
+    const text = sent.trim();
     if (!text || sending || att.uploading) return;
+    const went = att.items.map((a) => a.id);
     setSending(true);
     try {
       await submitPrompt(machineId, paneId, text);
       history.add(text);
-      setDraft("");
-      att.clear();
+      setDraft((d) => leftAfterSend(d, sent));
+      went.forEach((id) => att.remove(id));
       setError(null);
     } catch (e) {
       setError(errMsg(e));
@@ -206,9 +210,11 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
               )}
               <span className="attachment-name">{a.file.name}</span>
               {!a.upload && !a.error && <span className="attachment-spin" />}
-              <button type="button" className="icon-btn sm danger attachment-x" title={t("Remove")} aria-label={t("Remove")} onClick={() => removeAttachment(a)}>
-                <Icon name="x" size={12} />
-              </button>
+              <Tip text={t("Remove")}>
+                <button type="button" className="icon-btn sm danger attachment-x" aria-label={t("Remove")} onClick={() => removeAttachment(a)}>
+                  <Icon name="x" size={12} />
+                </button>
+              </Tip>
             </div>
           ))}
         </div>

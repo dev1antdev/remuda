@@ -3,6 +3,7 @@
 
 import { changedSpan } from "@/features/review/hunks";
 import { highlightLines, type Token } from "@/lib/highlight";
+import { tn } from "@/lib/i18n";
 
 export type Edit = { old: string; new: string; replaceAll: boolean };
 
@@ -76,6 +77,9 @@ export function editRows(oldText: string, newText: string): EditRow[] {
 export function foldRows(rows: EditRow[], max: number): { shown: EditRow[]; more: number } {
   return rows.length <= max ? { shown: rows, more: 0 } : { shown: rows.slice(0, max), more: rows.length - max };
 }
+
+// moreWords is the fold's link under a change cut short, in the page's language
+export const moreWords = (more: number): string => tn(more, "{n} more line", "{n} more lines");
 
 // linesOf splits a text into its lines, a trailing newline closing the last line rather than opening an empty one
 function linesOf(text: string): string[] {
