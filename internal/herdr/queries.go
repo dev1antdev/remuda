@@ -67,7 +67,17 @@ func reply(data []byte, m []int) []byte {
 	}
 }
 
-// hasQuery says whether a chunk carries any query at all, so a scanner is only asked when it matters.
+// pass is scan for the chunks that may hold a query — one with an escape in it, or the one after a held tail — and
+// the chunk as it is for every other.
+func (q *queryScanner) pass(chunk []byte) (forward, replies []byte) {
+	if !hasQuery(chunk) && len(q.carry) == 0 {
+		return chunk, nil
+	}
+	return q.scan(chunk)
+}
+
+// hasQuery says whether a chunk may carry a query or the start of one, so a scanner is only asked when it matters: an
+// escape at a chunk's very end is a query's first byte as much as one followed by its bracket.
 func hasQuery(chunk []byte) bool {
-	return bytes.Contains(chunk, []byte{0x1b, '['})
+	return bytes.IndexByte(chunk, 0x1b) >= 0
 }
