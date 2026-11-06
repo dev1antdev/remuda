@@ -63,6 +63,7 @@ type Payload struct {
 	Actions []Action `json:"actions,omitempty"`
 	Panel   string   `json:"panel,omitempty"`   // a panel of the page a tap opens instead of a pane (standup)
 	Choices []string `json:"choices,omitempty"` // a question's choices in full, the words behind its choice-N actions
+	Dialog  string   `json:"dialog,omitempty"`  // the question's dialog key, sent back with a choice so no later dialog is answered
 	Worked  int64    `json:"worked,omitempty"`  // a finish: the turn's seconds, so a page can apply a device's "long turns" itself
 }
 

@@ -1674,15 +1674,19 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   out with the dialog's first line and its detail's first line as the
   body ("Bash command · rm -rf build"), the first two choices as
   `actions` `choice-0` / `choice-1` with their words cut to 24 runes as
-  the titles, and every choice in full as `choices` (`Question.Choices`);
+  the titles, every choice in full as `choices` (`Question.Choices`) and
+  the dialog's key as `dialog` (`chat.DialogKey`: a hash of its words with
+  the spaces left out, so a resize that wraps them anew keeps it);
   one choice or none leaves the plain push, and so does a multi-select
   (`Question.Multi`: every row carries Claude Code's `[ ]` / `[✔]` box;
   Enter ticks the row under the cursor and a Submit row under the choices
   sends them, so no one tap answers it). A tap on a choice has the service worker post
-  `POST /api/question/answer {machine, pane, index, label}`
-  (`internal/server/answer.go`): the screen is read again and
+  `POST /api/question/answer {machine, pane, index, label, dialog}` (the Mac
+  app's Notifier the same) (`internal/server/answer.go`): the screen is read again and
   `chat.Answer` (answer.go, tested) refuses with a 409 when no dialog is
-  there, when it is a multi-select, or the choice at `index` no longer reads `label` — the worker
+  there, when it is a multi-select, when its key is not `dialog` — a later
+  permission prompt offers the same "Yes", and a notification left in the
+  list must not approve it — or the choice at `index` no longer reads `label` — the worker
   then opens the page on the pane — else `chat.KeysTo` walks the cursor
   (`up` / `down` × n, `enter`) in one request, the pane's typing lock
   (`sessions.Input.Lock`) held from the screen read to the keys

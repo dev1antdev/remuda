@@ -63,6 +63,7 @@ struct Alert {
     let actions: [(action: String, title: String)]
     let panel: String
     let choices: [String]
+    let dialog: String // the question's dialog key, sent back with a choice so only that very dialog is answered
 
     init?(json: Data) {
         guard let d = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any] else { return nil }
@@ -78,6 +79,7 @@ struct Alert {
         }
         panel = d["panel"] as? String ?? ""
         choices = d["choices"] as? [String] ?? []
+        dialog = d["dialog"] as? String ?? ""
     }
 }
 
