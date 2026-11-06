@@ -1606,7 +1606,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   so a window set at home fits the clock on a trip; the window last set
   is kept on the device (pref `alerts.quiet`) while the hours are off.
   `Notify` goes to the devices that want the watchdog's word — the
-  review's "ready for another look" (`Kind: "review"`) rides on it too —
+  review's "ready for another look" (`Kind: "review"`) rides on it too;
+  one of kind `input` (a task's or an arena's agent asking first, a first
+  prompt not delivered) to those that want the questions, as the page reads it —
   `Broadcast`
   to every device (the schedules' digest and failures); a `Payload` may
   name a `Panel` of the page (`standup`) for its tap to open instead of a
