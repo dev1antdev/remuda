@@ -846,7 +846,9 @@ func (st *Store) SetStatuses(projectID int64, want []Status, moves map[int64]int
 		switch w.Kind {
 		case "", KindOpen:
 			w.Kind = KindOpen
-			open++
+			if !w.OnQueue { // new tasks never land in the Queued column, so it is no open column for them
+				open++
+			}
 		case KindDone:
 			done++
 		default:

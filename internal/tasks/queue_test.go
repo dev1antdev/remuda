@@ -348,6 +348,17 @@ func TestTheQueuedColumnTakesNoOtherMark(t *testing.T) {
 	}
 }
 
+func TestAProjectKeepsAnOpenColumnBesidesTheQueuedOne(t *testing.T) {
+	st := open(t)
+	ps, _ := st.Projects()
+	inbox := ps[0]
+	cols := []Status{{Title: "Queued", Kind: KindOpen, OnQueue: true}, {Title: "Done", Kind: KindDone}}
+	if _, err := st.SetStatuses(inbox.ID, cols, nil); !errors.Is(err, ErrInvalid) {
+		tk, _ := st.Create(inbox.ID, Patch{Title: str("New")})
+		t.Fatalf("columns with no open one but the Queued were kept (%v): a new task landed done=%v", err, tk.Done)
+	}
+}
+
 func TestAStartClearsTheQueuesRefusal(t *testing.T) {
 	st := open(t)
 	p := queued(t, st, 1)

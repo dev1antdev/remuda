@@ -2813,8 +2813,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   column without After goes to the bottom. `PUT /api/tasks/projects/{id}/
   statuses {statuses, moves}` replaces the list whole (`SetStatuses`: id
   0 creates, a missing id is removed and its tasks go to `moves[old]`,
-  required while it has any; ≥1 open and ≥1 done; each flag at most
-  once). `view=board` lists a project whole in column order, one page,
+  required while it has any; ≥1 open besides the Queued one and ≥1 done;
+  each flag at most once). `view=board` lists a project whole in column order, one page,
   done columns capped at `BoardDone` (50 latest). **Fields**
   (`fields.go`): per project, `kind` text|number|select|multi|date|check|
   link, `options`, `on_card`, `in_prompt`; values sit in `task_fields` as
