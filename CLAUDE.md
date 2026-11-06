@@ -387,7 +387,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   rows, ↵ or Tab picks, Esc closes the list for that token until the
   caret leaves it (`stillDismissed`: a later slash or @ at the same place
   gets its list again), a click picks — a pick replaces the whole word
-  under the caret, the part past it too (`applyPick`); the lists come from `GET /api/complete?machine&dir&kind=commands
+  under the caret, the part past it too (`applyPick`); no list opens
+  while ↑ ↓ walk the history (`listFor`), so a recalled `/compact` leaves
+  the arrows and Enter to the walk; the lists come from `GET /api/complete?machine&dir&kind=commands
   |paths&agent` (`internal/server/complete.go` → `internal/complete`,
   tested on `shell.Fake`): the agent's built-ins (`builtins.go` — Claude
   Code's, Codex's and Gemini CLI's own commands as their binaries and

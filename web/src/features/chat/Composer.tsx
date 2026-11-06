@@ -14,7 +14,7 @@ import { MAX_ATTACHMENTS, useAttachments, type Attachment } from "./attachments"
 import { useDictation } from "./dictation";
 import { expandPrompt, QuickPromptsButton, QuickPromptsDialog } from "./QuickPrompts";
 import { useHistory } from "./useHistory";
-import { applyPick, stillDismissed, tokenAt, type Dismissed, type Item } from "./complete";
+import { applyPick, listFor, stillDismissed, tokenAt, type Dismissed, type Item } from "./complete";
 import { CompletionList, useCompletion } from "./Completion";
 import { ModeChip } from "./ModeChip";
 import { addNote, numbered, queueKey, removeNote, sentAway, type QueuedNote } from "./queue";
@@ -59,7 +59,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState<Dismissed | null>(null);
   const token = useMemo(() => tokenAt(draft, caretPos), [draft, caretPos]);
-  const open = stillDismissed(dismissed, token) ? null : token;
+  const open = listFor(token, dismissed, history.browsing());
   useEffect(() => setDismissed((was) => stillDismissed(was, token)), [token]);
   const completion = useCompletion(machineId, dir, agent, open);
   const shown = completion.items;
