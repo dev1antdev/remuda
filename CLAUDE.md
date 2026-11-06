@@ -1814,7 +1814,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   it is ready again — and `feed.Service.Add` keeps it in
   `feed.json` (300 newest, numbered); `GET /api/feed?limit=` lists them, the
   roster carries `feed` (the newest id) so the bell shows a dot when it is
-  past pref `feed.seen`. **What a device sent is a row too** (`internal/sent`,
+  past pref `feed.seen` — or below it, the activity started over on a new
+  state folder or another machine at the same address (`unread` in
+  `features/activity/group.ts`, tested). **What a device sent is a row too** (`internal/sent`,
   tested): every `/api/submit`, `/api/keys` and `/api/question/answer`
   (`Server.noteSent`) and the restart's own exit and `/restart`
   (`Restarter.Typed`, wired in app.go) add a `quiet` entry — "iPhone sent
