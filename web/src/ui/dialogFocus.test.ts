@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { focusReturn, type FocusHolder } from "./dialogFocus";
+import { backTo, focusReturn, type FocusHolder } from "./dialogFocus";
 
 // a stand-in element: its id, and the menu it sits in with the id of the button that opened it, if any
 const element = (id: string, menuOf?: string): FocusHolder & { id: string } => ({
@@ -22,5 +22,18 @@ describe("focusReturn", () => {
   it("is the row itself when the menu names no button that is still there", () => {
     const row = element("row", "radix-:gone:");
     expect(focusReturn(row, byId)).toBe(row);
+  });
+});
+
+describe("backTo", () => {
+  const button = { isConnected: true, name: "the button that had the focus before the palette" };
+  it("is the opener while it is still on the page", () => {
+    const field = { isConnected: true, name: "a field of the dialog under this one" };
+    expect(backTo(field, button)).toBe(field);
+  });
+  it("is where the dialog it was opened from would have sent it once that one is gone: a dialog the palette opened", () => {
+    expect(backTo({ isConnected: false, name: "the palette's field" }, button)).toBe(button);
+    expect(backTo(null, button)).toBe(button);
+    expect(backTo({ isConnected: false, name: "gone" }, null)).toBeNull();
   });
 });

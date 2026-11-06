@@ -9,3 +9,9 @@ export function focusReturn<T extends FocusHolder>(active: T | null, byId: (id: 
   const trigger = active?.closest?.('[role="menu"]')?.getAttribute("aria-labelledby");
   return (trigger ? byId(trigger) : null) ?? active;
 }
+
+// backTo is where the focus goes as a dialog closes: its opener while that is still on the page, else where the dialog it
+// was opened from would have sent it — a dialog the palette opened outlives the palette and its field
+export function backTo<T extends { isConnected?: boolean }>(opener: T | null, outer: T | null): T | null {
+  return opener?.isConnected ? opener : outer;
+}

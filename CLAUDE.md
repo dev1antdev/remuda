@@ -3346,7 +3346,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Radix marks with preventDefault (`dialogEscape.ts`, tested) — focus
   in and back out — the opener is read before the first render, since an
   autoFocus field has the focus by the time an effect runs, and a menu's
-  row, gone once the menu closes, hands it to the menu's button
+  row, gone once the menu closes, hands it to the menu's button, a dialog
+  the palette opened to where the palette would have given it
   (`dialogFocus.ts`, tested) — `#root` inert while open, `as="form"` + `onSubmit`,
   sizes sm/md/lg), `FormDialog`, `ConfirmDialog`, `Notice` (tones
   error/success/warn/info/hint, optional icon, action and dismiss),
