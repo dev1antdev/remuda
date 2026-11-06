@@ -1073,7 +1073,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   release install), the notice, the
   confirm, the file viewer, the search viewer, a jump, the find bar; `actions` are the
   only writes. `current.ts` derives the shown pane from the requested
-  one, falling back to the first agent pane — nothing fixes selection up
+  one, falling back to the first agent pane, never the floating
+  terminal's shell (`shownPane.ts`, tested) — nothing fixes selection up
   in effects. `url.ts`: the address bar follows the store once the roster has answered (before that a link's pane stays in the address rather than being dropped for a moment)
   (`?machine=&pane=&mode=&lens=`, `history.replaceState`; `addressFor`, tested, reads the query as text, since Safari 16's URLSearchParams has no `size` and every address there once came out as `/`) and is read
   once at load, so a link or a reload lands on the same pane in the same
