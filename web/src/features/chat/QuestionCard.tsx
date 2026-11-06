@@ -7,7 +7,7 @@ import { useLive, useLiveConnected, watchPane } from "@/lib/live";
 import { useQuery } from "@/lib/query";
 import { fetchQuestion } from "./api";
 import { PromptKeys } from "./PromptKeys";
-import { choosable, keysTo, pressInTurn, questionLines } from "./question";
+import { choosable, keysTo, pressInTurn, questionLines, sameDialog } from "./question";
 import { t } from "@/lib/i18n";
 
 export function QuestionCard({ machineId, paneId, active, compact = false, onKeys, children }: {
@@ -52,7 +52,10 @@ export function QuestionCard({ machineId, paneId, active, compact = false, onKey
   const choose = async (index: number) => {
     setSending(true);
     try {
-      await pressInTurn(keysTo(asked.options, index), (key) => onKeys([key]));
+      // the screen read again first: the cursor may have moved, or another dialog taken this one's place, since the card
+      // read it; the keys walk from where the cursor is now, and nothing goes to a dialog the card did not show
+      const now = await fetchQuestion(machineId, paneId).catch(() => null);
+      if (now && choosable(now) && sameDialog(asked, now)) await pressInTurn(keysTo(now.options, index), (key) => onKeys([key]));
     } finally {
       setSending(false);
       setTimeout(reload, 600); // the screen after the answer: the next question, or none

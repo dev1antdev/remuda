@@ -7,6 +7,12 @@ export function choosable(question: Question): boolean {
   return !question.multi && question.options.length > 0;
 }
 
+// sameDialog says the dialog read now is the one a choice was offered on: the same words and the same choices, wherever
+// the cursor sits among them now
+export function sameDialog(offered: Question, now: Question): boolean {
+  return offered.text === now.text && offered.options.length === now.options.length && offered.options.every((option, i) => option.label === now.options[i]!.label);
+}
+
 // keysTo walks the cursor from the picked choice to the one at index and confirms it.
 export function keysTo(options: QuestionOption[], index: number): string[] {
   const picked = Math.max(0, options.findIndex((o) => o.picked));
