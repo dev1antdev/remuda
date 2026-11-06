@@ -33,7 +33,7 @@ func InspectScript(path string) string {
 		"git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo 'not a git worktree'; exit 3; }\n" +
 		"printf '%s\\n' \"$(git rev-parse --abbrev-ref HEAD 2>/dev/null)\"\n" +
 		"printf '%s\\n' \"$(git worktree list --porcelain | sed -n '1s/^worktree //p')\"\n" +
-		"git status --porcelain 2>/dev/null | head -1\n"
+		"git status --porcelain --untracked-files=normal 2>/dev/null | head -1\n"
 }
 
 // ParseInspect reads the script's three lines.

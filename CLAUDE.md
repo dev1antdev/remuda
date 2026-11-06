@@ -2089,7 +2089,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   checkout are never touched) and no other workspace stands on it or has
   a pane in it (`usedElsewhere`, read off the snapshot before the
   close), `Tidy` runs after the close — the folder removed when `git
-  status` is clean (never `--force`: an uncommitted change keeps it, said
+  status` is clean, new files counted whatever its config (never `--force`: an uncommitted change keeps it, said
   in the answer's `worktree.kept`), its branch by git's `-d`, or `-D` when
   its request was read as merged, else kept (`branch_kept`) — and the
   page's confirm says so (`closeAsk`, `madeWorktree` in
@@ -2098,7 +2098,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   palette, dialog kind `leftovers` → `LeftoversDialog.tsx`): `GET
   /api/machines/{id}/leftovers` lists, in one script (`LeftoversScript`:
   du for the size), every folder two levels under the root that no
-  workspace's folder or pane's cwd is in (`Leftovers`), with its branch,
+  workspace's folder or pane's cwd is in (`Leftovers`; a link there is none), with its branch,
   its first uncommitted change, or why git cannot read it (a folder with
   no linked worktree's `.git` file is only named); `POST
   …/leftovers/remove {paths}` takes each one still a leftover down with
