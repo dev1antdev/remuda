@@ -1,11 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
 import { bytesWords, lastWords, nextWords, validTime } from "./backup";
+
+afterEach(() => setLang("en"));
 
 describe("the backups' words", () => {
   it("says a copy's size", () => {
     expect(bytesWords(300)).toBe("1 KB");
     expect(bytesWords(640 * 1024)).toBe("640 KB");
     expect(bytesWords(1.25 * 1024 * 1024)).toBe("1.3 MB");
+    setLang("ru");
+    expect(bytesWords(1.25 * 1024 * 1024)).toBe("1,3 МБ");
   });
   it("says where the last run went, or why it did not", () => {
     const now = Date.parse("2026-11-05T12:00:00Z");

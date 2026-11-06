@@ -3351,7 +3351,7 @@ body.is-resizing iframe {
 .fv-badge {
   font-size: var(--fs-11);
   font-family: var(--mono);
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-active);
   border-radius: 99px;
   padding: 1px 6px;
 }

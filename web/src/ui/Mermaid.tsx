@@ -6,7 +6,7 @@
 import { memo, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { errMsg } from "@/lib/text";
 import { t } from "@/lib/i18n";
-import { lookOf, mermaidConfig } from "./mermaidLook";
+import { lookOf, mermaidConfig, unsafeAttribute } from "./mermaidLook";
 
 type MermaidAPI = (typeof import("mermaid"))["default"];
 
@@ -67,11 +67,7 @@ function adopt(svg: string, box: HTMLElement): boolean {
   if (root.namespaceURI !== SVG_NS || doc.getElementsByTagName("parsererror").length > 0) return false;
   for (const script of Array.from(root.getElementsByTagName("script"))) script.remove();
   for (const el of [root, ...Array.from(root.getElementsByTagName("*"))]) {
-    for (const attr of Array.from(el.attributes)) {
-      const name = attr.name.toLowerCase();
-      const value = attr.value.trim().toLowerCase();
-      if (name.startsWith("on") || ((name === "href" || name === "xlink:href") && value.startsWith("javascript:"))) el.removeAttribute(attr.name);
-    }
+    for (const attr of Array.from(el.attributes)) if (unsafeAttribute(attr.name, attr.value)) el.removeAttribute(attr.name);
   }
   const view = (root.getAttribute("viewBox") ?? "").split(/[\s,]+/).map(Number);
   if (view.length === 4 && view[2]! > 0 && view[3]! > 0) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Pane, Tab } from "./api";
-import { tabAgent, tabFaces } from "./tabs";
+import { closeTabAsk, tabAgent, tabFaces } from "./tabs";
 
 const pane = (over: Partial<Pane> = {}): Pane => ({ id: "p", title: "", agent: "claude", cwd: "/x", focused: false, status: "idle", cols: 80, rows: 24, ...over }) as Pane;
 const tab = (id: string, number: number, panes: Pane[], over: Partial<Tab> = {}): Tab => ({ id, number, label: "", named: false, status: "idle", panes, ...over }) as unknown as Tab;
@@ -34,5 +34,19 @@ describe("tabFaces", () => {
   it("leaves out the names the person gave while masked, telling the twins apart again", () => {
     const masked = tabFaces([tab("t1", 1, [pane()], { named: true, label: "acme-billing" }), tab("t3", 3, [pane({ agent: "" })], { named: true, label: "kubectl prod" }), tab("t4", 4, [pane()])], true);
     expect([...masked.values()].map((f) => f.label)).toEqual(["Claude Code 1", "terminal", "Claude Code 4"]);
+  });
+});
+
+describe("closeTabAsk", () => {
+  const tabs = [tab("t1", 1, [pane()], { named: true, label: "acme-billing" }), tab("t2", 2, [pane(), pane({ agent: "" })]), tab("t3", 3, [pane()])];
+  it("names the tab as the strip does: the person's own name, else its agent and number", () => {
+    expect(closeTabAsk(tabs, tabs[0]!, false, "api")).toBe("Close tab “acme-billing”? Its 1 pane and agent stop.");
+    expect(closeTabAsk(tabs, tabs[1]!, false, "api")).toBe("Close tab “Claude Code 2”? Its 2 panes and agents stop.");
+  });
+  it("never says a name of the person's own while the screen is shared", () => {
+    expect(closeTabAsk(tabs, tabs[0]!, true, "Project A")).toBe("Close tab “Claude Code 1”? Its 1 pane and agent stop.");
+  });
+  it("names the workspace that closes with the last tab", () => {
+    expect(closeTabAsk([tabs[0]!], tabs[0]!, true, "Project A")).toBe("Close the last tab? Workspace “Project A” closes with it.");
   });
 });

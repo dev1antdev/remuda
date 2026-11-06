@@ -96,6 +96,12 @@ export const FLAVOR_NAMES: Record<Flavor, string> = { latte: "Latte", frappe: "F
 // accentName is an accent's name with its first letter up, for a label
 export const accentName = (accent: Accent): string => t(accent[0]!.toUpperCase() + accent.slice(1));
 
+// themeChoiceName is how the theme's switch names a choice: the system's, the dark flavour picked, or Latte
+export function themeChoiceName(pref: ThemePref, dark: DarkFlavor): string {
+  if (pref === "dark") return t("{flavor} (dark)", { flavor: FLAVOR_NAMES[dark] });
+  return pref === "light" ? t("Latte (light)") : t("Follow the system");
+}
+
 export const swatches = (flavor: Flavor): Swatches => FLAVORS[flavor];
 
 // AnsiPalette is a terminal's sixteen colours, its ink and its paper

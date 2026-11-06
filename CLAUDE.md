@@ -1085,7 +1085,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   release install), the notice, the
   confirm, the file viewer, the search viewer, a jump, the find bar; `actions` are the
   only writes. `current.ts` derives the shown pane from the requested
-  one, falling back to the first agent pane — nothing fixes selection up
+  one, falling back to the first agent pane, never the floating
+  terminal's shell (`shownPane.ts`, tested) — nothing fixes selection up
   in effects. `url.ts`: the address bar follows the store once the roster has answered (before that a link's pane stays in the address rather than being dropped for a moment)
   (`?machine=&pane=&mode=&lens=`, `history.replaceState`; `addressFor`, tested, reads the query as text, since Safari 16's URLSearchParams has no `size` and every address there once came out as `/`) and is read
   once at load, so a link or a reload lands on the same pane in the same
@@ -3404,7 +3405,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   not the Esc a tooltip or a menu inside it used to close itself, which
   Radix marks with preventDefault (`dialogEscape.ts`, tested) — focus
   in and back out — the opener is read before the first render, since an
-  autoFocus field has the focus by the time an effect runs — `#root` inert while open, `as="form"` + `onSubmit`,
+  autoFocus field has the focus by the time an effect runs, and a menu's
+  row, gone once the menu closes, hands it to the menu's button, a dialog
+  the palette opened to where the palette would have given it
+  (`dialogFocus.ts`, tested) — `#root` inert while open, `as="form"` + `onSubmit`,
   sizes sm/md/lg), `FormDialog`, `ConfirmDialog`, `Notice` (tones
   error/success/warn/info/hint, optional icon, action and dismiss),
   `Toasts`, `useTimedNotice`, `useDismiss` (popovers), `useSubmit`,

@@ -88,7 +88,7 @@ function allGroups(mac: boolean): KeyGroup[] {
       viewer: false,
       rows: [
         { keys: [mac ? "⌘ F" : "Ctrl ⇧ F"], what: t("find in the scrollback") },
-        { keys: ["any key"], what: t("goes to the app in the pane; the tab strip's key bar types ⏎, Esc, Tab, the arrows, and holds Ctrl or Alt for the next key") },
+        { keys: [t("any key")], what: t("goes to the app in the pane; the tab strip's key bar types ⏎, Esc, Tab, the arrows, and holds Ctrl or Alt for the next key") },
       ],
     },
   ];

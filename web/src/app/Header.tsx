@@ -53,7 +53,7 @@ export default function Header({ current }: { current: Located | null }) {
                 {current.session.name}
               </>
             )}
-            <span className="title-agent"> · {current.pane.agent || "shell"}</span>
+            <span className="title-agent"> · {current.pane.agent || t("shell")}</span>
           </>
         ) : (
           "remuda"

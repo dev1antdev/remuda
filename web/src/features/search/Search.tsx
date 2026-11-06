@@ -8,7 +8,7 @@ import type { Machine } from "@/features/roster/api";
 import { basename, errMsg } from "@/lib/text";
 import { connected, folderOptions, machineLabel, machineOptions } from "@/features/roster/options";
 import { whenShort } from "@/lib/time";
-import { Dialog, Notice } from "@/ui";
+import { Dialog, Notice, Tip } from "@/ui";
 import Select from "@/ui/Select";
 import Icon from "@/ui/icons";
 import Logo from "@/ui/Logo";
@@ -70,9 +70,11 @@ export default function Search({ machines, initial = "", onClose, onOpen }: { ma
         <Icon name="search" size={16} className="search-head-icon" />
         <input autoFocus value={q} placeholder={t("Search every conversation…")} aria-label={t("Search every conversation")} spellCheck={false} onChange={(e) => setQ(e.target.value)} />
         {busy && <span className="search-busy" />}
-        <button type="button" className="icon-btn" onClick={onClose} title={t("Close")} aria-label={t("Close")}>
-          <Icon name="x" size={16} />
-        </button>
+        <Tip text={t("Close")}>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label={t("Close")}>
+            <Icon name="x" size={16} />
+          </button>
+        </Tip>
       </div>
       <div className="search-filters">
         {connected(machines).length > 1 && (

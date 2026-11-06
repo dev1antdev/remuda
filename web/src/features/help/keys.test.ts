@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
 import { keyGroups } from "./keys";
+
+afterEach(() => setLang("en"));
 
 describe("keyGroups", () => {
   it("names every key and what it does, in groups with distinct titles", () => {
@@ -19,6 +22,14 @@ describe("keyGroups", () => {
     expect(rows).toContain("Chat: ↑ ↓ ↵ Tab Esc");
     expect(rows).toContain("Chat: ↵ ⇧ ↵ Esc");
     expect(rows).toContain("Changes: ⌘ ↵");
+  });
+
+  it("says the caps that are words in the page's language", () => {
+    setLang("ru");
+    const caps = keyGroups(true).flatMap((g) => g.rows.flatMap((r) => r.keys));
+    expect(caps).toContain("⌘ клик");
+    expect(caps).toContain("любая клавиша");
+    expect(caps.filter((cap) => /click|any key/.test(cap))).toEqual([]);
   });
 
   it("says ⌘ on a Mac and Ctrl elsewhere", () => {

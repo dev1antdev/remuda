@@ -16,6 +16,7 @@ import { useSharing } from "@/features/roster/useSharing";
 import { ChatTools, useChatViewItems } from "@/features/chat/ChatTools";
 import { FindTool } from "@/features/chat/FindBar";
 import TabStrip from "@/features/roster/TabStrip";
+import { closeTabAsk } from "@/features/roster/tabs";
 import Chat from "@/features/chat/Chat";
 import FilesRail from "@/features/chat/FilesRail";
 import Review from "@/features/review/Review";
@@ -30,7 +31,7 @@ import { actions, app, type Lens } from "./store";
 import { keepsTerminal, lensOn } from "./paneLens";
 import { SPLIT_QUERY, shownLenses, splitOn } from "./split";
 import ViewMenu from "./ViewMenu";
-import { tn, t as tr } from "@/lib/i18n";
+import { t as tr } from "@/lib/i18n";
 
 export default function PaneArea({ current }: { current: Located | null }) {
   const agent = current?.pane.agent ?? "";
@@ -177,8 +178,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
         onNewTerminal={() => void act(createTab({ machine: machine.id, workspace: session.id, name: "", agent: "" }).then((made) => actions.selectPane(machine.id, made.pane)))}
         onRename={(t, label) => void act(renameTab(machine.id, t.id, label))}
         onCloseTab={(t) => {
-          const last = session.tabs.length === 1;
-          const msg = last ? tr("Close the last tab? Workspace “{workspace}” closes with it.", { workspace: share.redact(session.name) }) : tn(t.panes.length, "Close tab “{tab}”? Its {n} pane and agent stop.", "Close tab “{tab}”? Its {n} panes and agents stop.", { tab: t.label });
+          const msg = closeTabAsk(session.tabs, t, share.sessionHidden(machine.id, session), share.redact(session.name));
           const agents = t.panes.filter((p) => p.agent).map((p) => p.id);
           actions.ask(msg, tr("Close tab"), () => void act(closeTab(machine.id, t.id)).then(() => offerReopen(machine.id, agents)));
         }}

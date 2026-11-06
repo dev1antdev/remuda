@@ -1,7 +1,7 @@
 // The one set of time words: how long ago, when (short), a date — in the page's language (lib/i18n): the words
 // through t() and tn(), the dates through the Intl formats of locale().
 
-import { locale, t, tn } from "./i18n";
+import { currentLang, locale, t, tn } from "./i18n";
 
 type When = Date | string | number;
 const toDate = (d: When) => (d instanceof Date ? d : new Date(d));
@@ -38,9 +38,15 @@ export function spent(seconds: number): string {
   return m % 60 ? t("{h} h {m} min", { h, m: m % 60 }) : t("{n} h", { n: h });
 }
 
+// tenth is a number to one decimal place with the language's decimal mark: "0.8", "0,8" in Russian
+export function tenth(n: number): string {
+  const text = n.toFixed(1);
+  return currentLang() === "ru" ? text.replace(".", ",") : text;
+}
+
 // took says how long one call took: a tenth under ten seconds ("0.8 s", "1.2 s"), else as spent ("12 s", "4 min 12 s").
 export function took(seconds: number): string {
-  if (seconds < 10) return t("{n} s", { n: (Math.round(Math.max(0, seconds) * 10) / 10).toFixed(1) });
+  if (seconds < 10) return t("{n} s", { n: tenth(Math.round(Math.max(0, seconds) * 10) / 10) });
   return spent(seconds);
 }
 

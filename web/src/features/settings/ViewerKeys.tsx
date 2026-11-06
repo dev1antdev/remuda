@@ -8,7 +8,7 @@ import { copyText } from "@/lib/host";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { fetchViewerKeys, makeViewerKey, revokeViewerKey, type ViewerKey } from "./api";
-import { revokeViewerQuestion, viewerLine } from "./viewerLinks";
+import { revokedWords, revokeViewerQuestion, viewerLine } from "./viewerLinks";
 import { t } from "@/lib/i18n";
 
 export default function ViewerKeys() {
@@ -44,7 +44,7 @@ export default function ViewerKeys() {
     const { text, label } = revokeViewerQuestion(key);
     actions.ask(text, label, () =>
       void revokeViewerKey(key.id).then(({ screens }) => {
-        actions.notify(screens > 0 ? t("The link “{name}” is revoked; {n} screens signed out", { name: key.name, n: screens }) : t("The link “{name}” is revoked", { name: key.name }), { brief: true });
+        actions.notify(revokedWords(key.name, screens), { brief: true });
         if (made?.name === key.name) setMade(null);
         reload();
       }, fail),

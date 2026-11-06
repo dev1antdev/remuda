@@ -4,10 +4,10 @@
 
 import { useCallback } from "react";
 import Palette from "@/features/palette/Palette";
-import { paneEntries, type Entry } from "@/features/palette/rank";
+import { paneEntries, paneTitle, tabName, type Entry } from "@/features/palette/rank";
 import { exportConversation } from "@/features/chat/export";
 import { useTimelineShown } from "@/features/chat/TimelineBar";
-import { DEFAULT_RADAR, rowLabel, type RadarPrefs } from "@/features/roster/radar";
+import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { closeWorkspace } from "@/features/roster/WorkspaceMenu";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
@@ -139,7 +139,7 @@ function useCommands(): (query: string) => Entry[] {
         command("rename-workspace", t("Rename workspace {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "workspace", id: session.id, label: session.name }), { icon: "tag" });
         const folder = sessionFolder(session);
         if (folder) command("folder-icon", t("Icon for the folder {folder}…", { folder: `“${basename(folder)}”` }), () => actions.openDialog({ kind: "folder-icon", machineId: machine.id, folder, name: basename(folder), icon: session.icon }), { hint: t("an emoji, a site's icon or a picture"), icon: "folder", keywords: ["emoji", "favicon", "logo", "picture"] });
-        command("rename-tab", t("Rename tab {tab}…", { tab: tab.named ? `“${tab.label}”` : tab.number }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }), { icon: "tag" });
+        command("rename-tab", t("Rename tab {tab}…", { tab: tabName(tab, share.sessionHidden(machine.id, session)) }), () => actions.openDialog({ kind: "rename", machineId: machine.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }), { icon: "tag" });
         if (current.pane.agent) command("restart-pane", t("Restart {agent} on its session…", { agent: agentTitle(current.pane.agent) }), () => askRestart(machine.id, current.pane.id, current.pane.agent), { hint: t("its own exit, then started again on the same conversation"), icon: "refresh-cw", keywords: ["restart", "resume", "stuck", "hung", "reload", "again"] });
         command("close-workspace", t("Close workspace {workspace}", { workspace: named }), () => closeWorkspace(machine, session), { hint: t("its panes close and the agents in them stop"), icon: "x", danger: true, keywords: ["kill", "stop", "quit"] });
         if (popOutSupported) command("popout", t("Pop out this agent"), () => void popOut(selection!), { hint: t("a small window above every other app"), icon: "pip", keywords: ["picture", "window", "float"] });
@@ -180,7 +180,7 @@ function useCommands(): (query: string) => Entry[] {
         actions.setMode("wall");
       }, { hint: t("every tile its own size again"), icon: "minimize", keywords: ["wall", "focus", "grid", "leave"] });
       if (current && current.pane.agent && tileKey(current.machine.id, current.pane.id) !== focus)
-        command("wall-focus", t("Focus {agent} on the Wall", { agent: rowLabel(current.pane, current.tab, current.session.name, radar) }), () => {
+        command("wall-focus", t("Focus {agent} on the Wall", { agent: paneTitle(current.pane, current.tab, current.session.name, radar, share.sessionHidden(current.machine.id, current.session)) }), () => {
           setFocus(tileKey(current.machine.id, current.pane.id));
           actions.setMode("wall");
         }, { hint: t("this agent takes the wall, the others wait in a strip"), icon: "maximize", keywords: ["wall", "focus", "big", "zoom"] });

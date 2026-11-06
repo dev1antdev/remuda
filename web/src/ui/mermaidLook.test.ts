@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FLAVORS } from "@/lib/theme";
-import { flavorOf, isMarkdownFile, isMermaid, isMermaidFile, lookOf, mermaidConfig, opensDrawn, previewOf } from "./mermaidLook";
+import { flavorOf, isMarkdownFile, isMermaid, isMermaidFile, lookOf, mermaidConfig, opensDrawn, previewOf, unsafeAttribute } from "./mermaidLook";
 
 describe("which fences and files are diagrams", () => {
   it("reads a fence's first word, any case", () => {
@@ -50,5 +50,27 @@ describe("the look a diagram wears", () => {
     expect(config.themeVariables.nodeBorder).toBe(FLAVORS.latte.blue);
     expect(mermaidConfig("mocha", "peach", "Inter").themeVariables.darkMode).toBe(true);
     expect(config.themeVariables.pie1).toBe(FLAVORS.latte.pink);
+  });
+});
+
+describe("unsafeAttribute", () => {
+  it("is an event handler, or a value naming a script URL however it is spelled: the URL parser drops a tab or a newline in the scheme", () => {
+    expect(unsafeAttribute("onclick", "x()")).toBe(true);
+    expect(unsafeAttribute("ONLOAD", "x()")).toBe(true);
+    expect(unsafeAttribute("href", "javascript:alert(1)")).toBe(true);
+    expect(unsafeAttribute("href", "java\tscript:alert(1)")).toBe(true);
+    expect(unsafeAttribute("xlink:href", " \nJaVa\nScRiPt:alert(1)")).toBe(true);
+    expect(unsafeAttribute("href", "vbscript:msgbox")).toBe(true);
+  });
+  it("is what an animation would set a link to, which no href check sees", () => {
+    expect(unsafeAttribute("to", "javascript:alert(1)")).toBe(true);
+    expect(unsafeAttribute("values", "#a;javascript:alert(1)")).toBe(true);
+  });
+  it("leaves a diagram's own attributes and its links alone", () => {
+    expect(unsafeAttribute("href", "https://example.com/a?b=c")).toBe(false);
+    expect(unsafeAttribute("href", "#remuda-mermaid-1")).toBe(false);
+    expect(unsafeAttribute("class", "node default flowchart-label")).toBe(false);
+    expect(unsafeAttribute("d", "M0,0 L10,10")).toBe(false);
+    expect(unsafeAttribute("style", "max-width: 640px;")).toBe(false);
   });
 });
