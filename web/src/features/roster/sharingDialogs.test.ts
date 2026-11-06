@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import overlays from "@/app/Overlays.tsx?raw";
+import broadcast from "@/features/agents/BroadcastDialog.tsx?raw";
+import send from "@/features/agents/SendToAgent.tsx?raw";
 import arena from "@/features/arena/ArenaPanel.tsx?raw";
 import teleport from "@/features/teleport/TeleportDialog.tsx?raw";
 import everywhere from "@/features/updates/EverywhereDialog.tsx?raw";
@@ -14,12 +16,14 @@ const making = dialogs.slice(dialogs.indexOf("export function NewWorkspaceDialog
 
 // the dialogs and the confirm the sidebar's menus, the ⓘ and the palette open — the menus already saying the neutral
 // names under the screen-sharing mode — and what in them would say a real one straight off the roster or the server
-const SOURCES = { overlays, arena, teleport, everywhere, updates, making, picker, leftovers, mac };
+const SOURCES = { overlays, broadcast, send, arena, teleport, everywhere, updates, making, picker, leftovers, mac };
 const RAW_NAMES = [
   /(?<!redact\()\b(?:machine|target|group|chosen\?|x)\.label\b/, // a machine's own label, not through the mode
   /\{ workspace \}\)|workspace: session\.name\b/, // a workspace's own name in the words
   /(?<!redact\()session\.worktree\?\.repo_name/, // a repository's own name
   /(?<!key=)\{left\.(?:repo|name|path)\}/, // a leftover worktree's folder, said rather than a key
+  /sessionName\}? › \$?\{\w+\.paneTitle/, // an agent by its workspace's own name and its conversation's title
+  /group: a\.machineLabel|>\{label\}</, // a picker's machine group by its own label
 ];
 
 describe("the dialogs the screen-sharing mode reaches", () => {
@@ -35,5 +39,7 @@ describe("the dialogs the screen-sharing mode reaches", () => {
     expect('t("MAC address of {machine}", { machine: machine.label })').toMatch(RAW_NAMES[0]!);
     expect('t("Reading the work in {workspace}…", { workspace })').toMatch(RAW_NAMES[1]!);
     expect("<h3>{redact(group.label)}</h3>").not.toMatch(RAW_NAMES[0]!);
+    expect("label: `${a.sessionName} › ${a.paneTitle}`,").toMatch(RAW_NAMES[4]!);
+    expect('<span className="pick-machine">{label}</span>').toMatch(RAW_NAMES[5]!);
   });
 });

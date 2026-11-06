@@ -7,7 +7,8 @@ import { submitPrompt } from "@/features/roster/api";
 import { Dialog, Icon, Notice, useSubmit } from "@/ui";
 import Logo from "@/ui/Logo";
 import { broadcast, picked, statusWords, type Outcome, type QuickPick } from "./broadcast";
-import { targetKey, type AgentTarget } from "./targets";
+import { targetKey, targetWords, type AgentTarget } from "./targets";
+import { useSharing } from "@/features/roster/useSharing";
 import { t, tc, tn } from "@/lib/i18n";
 
 const PICKS: { pick: QuickPick; label: string; title: string }[] = [
@@ -35,6 +36,8 @@ export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarg
     });
   const machines = [...new Set(agents.map((agent) => agent.machineLabel))];
   const failed = outcomes?.filter((outcome) => outcome.error).length ?? 0;
+  const share = useSharing(); // under the screen-sharing mode the machines and the hidden folders' agents by their neutral names
+  const masked = (a: AgentTarget) => (share.folderHidden(a.machineId, a.folder ?? "") ? share.folderName(a.machineId, a.folder ?? "", a.sessionName) : null);
   return (
     <Dialog
       title={t("Message several agents")}
@@ -56,10 +59,8 @@ export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarg
               <li key={targetKey(target)} className={`pick-row${error ? " failed" : ""}`}>
                 <Icon name={error ? "alert-triangle" : "circle-check"} size={14} />
                 <Logo agent={target.agent} />
-                <span className="pick-name">
-                  {target.sessionName} › {target.paneTitle}
-                </span>
-                <span className="pick-hint">{error ?? t("sent")}</span>
+                <span className="pick-name">{targetWords(target, masked(target))}</span>
+                <span className="pick-hint">{error ? share.redact(error) : t("sent")}</span>
               </li>
             ))}
           </ul>
@@ -84,7 +85,7 @@ export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarg
           <ul className="pick-list">
             {machines.map((label) => (
               <li key={label} className="pick-group">
-                {machines.length > 1 && <span className="pick-machine">{label}</span>}
+                {machines.length > 1 && <span className="pick-machine">{share.redact(label)}</span>}
                 <ul>
                   {agents
                     .filter((agent) => agent.machineLabel === label)
@@ -92,12 +93,10 @@ export default function BroadcastDialog({ agents, onClose }: { agents: AgentTarg
                       const key = targetKey(agent);
                       return (
                         <li key={key}>
-                          <label className={`pick-row${agent.status === "input" ? " asking" : ""}`} title={agent.cwd}>
+                          <label className={`pick-row${agent.status === "input" ? " asking" : ""}`} title={masked(agent) === null ? agent.cwd : undefined}>
                             <input type="checkbox" checked={ticked.has(key)} onChange={() => toggle(key)} />
                             <Logo agent={agent.agent} />
-                            <span className="pick-name">
-                              {agent.sessionName} › {agent.paneTitle}
-                            </span>
+                            <span className="pick-name">{targetWords(agent, masked(agent))}</span>
                             <span className="pick-hint">{statusWords(agent.status)}</span>
                           </label>
                         </li>
