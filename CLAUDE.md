@@ -160,6 +160,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   -c 'HERDR_SOCKET_PATH=<the machine's socket> exec herdr terminal
   attach …'` command builder (`AttachCmd`: the socket as the local attach
   gets it, through sh since the login shell there may be anything).
+  Every session — a script, the `nc -U` bridge, an attach — rides the
+  master or fails (`session`: `-o ProxyCommand=false`, which a live master
+  never consults): with the master gone ssh would connect by itself, a
+  handshake per request, and a bridge answering that way never lets the
+  machine notice (tested on the real ssh against the loopback's port 1).
   remuda implements no SSH itself.
 - `internal/machines/` — the multi-PC registry: `manager.go` (the
   registry), `machine.go` (one machine: its state, the ssh master, the

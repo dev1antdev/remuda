@@ -67,6 +67,14 @@ func (c *Conn) cmd(args ...string) *exec.Cmd {
 	return exec.Command("ssh", append(base, args...)...)
 }
 
+// session is a command that rides the master and nothing else. With the master gone, ssh would "fall back to
+// connecting normally" (ssh_config, ControlMaster): a connection of its own for every script and every RPC, and an
+// nc bridge that keeps answering that way never lets the machine notice its master died. The proxy that exits at
+// once makes that fallback fail instead; a live master never consults it.
+func (c *Conn) session(args ...string) *exec.Cmd {
+	return c.cmd(append([]string{"-o", "ProxyCommand=false"}, args...)...)
+}
+
 // Dial starts (or reuses) a ControlMaster to host and verifies it answers.
 func Dial(host string) (*Conn, error) {
 	c := &Conn{Host: host, ctl: tmpPath("remuda-ssh-", host, ".ctl")}
@@ -114,7 +122,7 @@ func (c *Conn) Alive() bool { return c.cmd("-O", "check", c.Host).Run() == nil }
 // run executes a remote command over the master with a deadline, stdin streamed to it when given.
 func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
 	// every script here is POSIX sh; the remote login shell may be anything
-	cmd := c.cmd(c.Host, "sh -c "+script.Quote(command))
+	cmd := c.session(c.Host, "sh -c "+script.Quote(command))
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -142,7 +150,7 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 
 // Stream runs a remote command, handing sink its output (stdout and stderr) as it comes; the exit status is the error.
 func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) error {
-	cmd := c.cmd(c.Host, "sh -c "+script.Quote("exec 2>&1; "+command))
+	cmd := c.session(c.Host, "sh -c "+script.Quote("exec 2>&1; "+command))
 	pr, pw := io.Pipe()
 	cmd.Stdout, cmd.Stderr = pw, pw
 	if err := cmd.Start(); err != nil {
@@ -273,7 +281,7 @@ func (c *Conn) ForwardTCPTo(host string, remotePort int) (string, error) {
 // DialExec runs a remote command over the master and exposes its stdin/stdout as a net.Conn:
 // the RPC transport for an sshd that refuses unix-socket forwarding (`nc -U <socket>` bridges to herdr).
 func (c *Conn) DialExec(command string, timeout time.Duration) (net.Conn, error) {
-	return newCmdConn(c.cmd(c.Host, command), timeout)
+	return newCmdConn(c.session(c.Host, command), timeout)
 }
 
 // newCmdConn starts the command and wraps its stdin and stdout as a net.Conn that the deadline ends.
@@ -404,7 +412,7 @@ func (c *Conn) AttachCmd(herdrBin, socket, terminalID string) *exec.Cmd {
 	if socket != "" {
 		remote = "HERDR_SOCKET=" + script.Quote(socket) + " HERDR_SOCKET_PATH=" + script.Quote(socket) + " " + remote
 	}
-	cmd := c.cmd("-tt", c.Host, "sh -c "+script.Quote(remote))
+	cmd := c.session("-tt", c.Host, "sh -c "+script.Quote(remote))
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 	return cmd
 }
