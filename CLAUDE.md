@@ -161,6 +161,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   -c 'HERDR_SOCKET_PATH=<the machine's socket> exec herdr terminal
   attach …'` command builder (`AttachCmd`: the socket as the local attach
   gets it, through sh since the login shell there may be anything).
+  Every session — a script, the `nc -U` bridge, an attach — rides the
+  master or fails (`session`: `-o ProxyCommand=false`, which a live master
+  never consults): with the master gone ssh would connect by itself, a
+  handshake per request, and a bridge answering that way never lets the
+  machine notice (tested on the real ssh against the loopback's port 1).
   remuda implements no SSH itself.
 - `internal/machines/` — the multi-PC registry: `manager.go` (the
   registry), `machine.go` (one machine: its state, the ssh master, the
@@ -1550,7 +1555,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `session.snapshot` (2s local, 4s remote) whether or not a browser is
   open. Handlers read its cache (`Snapshot` returns the last good snapshot
   plus the last error) and never ask herdr inline; mutations call `Refresh`.
-  It publishes `events.Snapshot` and one `events.PaneStatus` per pane
+  It publishes `events.Snapshot` — once the snapshot is in its cache, so
+  an ear asking `Snapshot` about the panes is told of the same one (tested)
+  — and one `events.PaneStatus` per pane
   status transition (push, the restarts and the radar hear them); the
   first snapshot of a machine only seeds state — a reconnect must not
   replay a day of alerts.

@@ -233,13 +233,9 @@ func (a *attach) readLoop(m *AttachManager) {
 	for {
 		n, err := a.pty.Read(buf)
 		if n > 0 {
-			data := append([]byte(nil), buf[:n]...)
-			if hasQuery(data) || len(queries.carry) > 0 {
-				var replies []byte
-				data, replies = queries.scan(data)
-				if len(replies) > 0 {
-					_, _ = a.pty.Write(replies)
-				}
+			data, replies := queries.pass(append([]byte(nil), buf[:n]...))
+			if len(replies) > 0 {
+				_, _ = a.pty.Write(replies)
 			}
 			if len(data) == 0 {
 				continue
