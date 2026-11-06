@@ -25,9 +25,14 @@ import (
 type Conn struct {
 	Host string
 
-	ctl    string // control socket path
-	master *exec.Cmd
+	ctl       string // control socket path
+	master    *exec.Cmd
+	masterErr *lockedBuffer // what the master said: why it could not connect, then nothing more is kept
 }
+
+// masterErrMax is how much of the master's stderr is kept: its first lines say why it could not connect, and over a
+// life of days it goes on with a line for every channel the host refuses — a herdr down, a port nothing listens on.
+const masterErrMax = 4096
 
 // SocketDir is where the control and forward sockets go when main sets it: the state dir, the person's own.
 // Unset, the temp dir, where on a shared box another user's socket could sit at the name and be reused.
@@ -78,18 +83,18 @@ func (c *Conn) session(args ...string) *exec.Cmd {
 // Dial starts (or reuses) a ControlMaster to host and verifies it answers.
 func Dial(host string) (*Conn, error) {
 	c := &Conn{Host: host, ctl: tmpPath("remuda-ssh-", host, ".ctl")}
-	if c.Alive() {
+	if c.listening() {
 		return c, nil // a previous remuda run left a live master; reuse it
 	}
 	os.Remove(c.ctl)
 
 	cmd := c.cmd("-M", "-N", host)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	stderr := &lockedBuffer{max: masterErrMax}
+	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	c.master = cmd
+	c.master, c.masterErr = cmd, stderr
 	exited := make(chan struct{})
 	go func() {
 		cmd.Wait()
@@ -99,7 +104,7 @@ func Dial(host string) (*Conn, error) {
 	deadline := time.Now().Add(15 * time.Second)
 wait:
 	for time.Now().Before(deadline) {
-		if c.Alive() {
+		if c.listening() {
 			return c, nil
 		}
 		select {
@@ -118,6 +123,15 @@ wait:
 
 // Alive reports whether the master still answers.
 func (c *Conn) Alive() bool { return c.cmd("-O", "check", c.Host).Run() == nil }
+
+// listening is Alive asked only once the control socket is there: a master puts it in place once it has signed in,
+// and until then every ask is an ssh started for nothing — five a second for as long as a host does not answer.
+func (c *Conn) listening() bool {
+	if _, err := os.Stat(c.ctl); err != nil {
+		return false
+	}
+	return c.Alive()
+}
 
 // run executes a remote command over the master with a deadline, stdin streamed to it when given.
 func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
@@ -320,11 +334,16 @@ type cmdConn struct {
 type lockedBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
+	max int // the most it keeps, the first bytes; 0 keeps everything
 }
 
 func (b *lockedBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.max > 0 && b.buf.Len()+len(p) > b.max {
+		b.buf.Write(p[:max(b.max-b.buf.Len(), 0)])
+		return len(p), nil
+	}
 	return b.buf.Write(p)
 }
 
