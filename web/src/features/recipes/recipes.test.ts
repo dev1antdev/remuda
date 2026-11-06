@@ -67,5 +67,6 @@ describe("the words", () => {
     expect(firstWords("one two three four", 9)).toBe("one two…");
     expect(firstWords("first line\nsecond", 40)).toBe("first line");
     expect(firstWords("averyveryverylongwordwithoutaspace", 10)).toBe("averyveryv…");
+    expect(firstWords(`a${"🚀".repeat(20)}`, 10)).toBe(`a${"🚀".repeat(4)}…`);
   });
 });
