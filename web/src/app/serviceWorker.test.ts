@@ -72,8 +72,8 @@ describe("a push", () => {
   });
   it("keeps a question's choices and its dialog's key on the notification, for a tap to send back", async () => {
     const sw = worker({ ok: true, status: 200 });
-    await sw.push({ ...alert, actions: [{ action: "choice-0", title: "Yes" }], choices: ["Yes", "No"], dialog: "0f1e2d3c4b5a6978" });
-    expect(sw.shown).toMatchObject([{ options: { data: { machine: "local", pane: "w1:p1", choices: ["Yes", "No"], dialog: "0f1e2d3c4b5a6978" } } }]);
+    await sw.push({ ...alert, actions: [{ action: "choice-0", title: "Yes" }], choices: ["Yes", "No"], dialog: "the-bash-dialog" });
+    expect(sw.shown).toMatchObject([{ options: { data: { machine: "local", pane: "w1:p1", choices: ["Yes", "No"], dialog: "the-bash-dialog" } } }]);
   });
   it("keeps a test push even over a focused window: it is what the person asked to see", async () => {
     const posted: unknown[] = [];
@@ -84,7 +84,7 @@ describe("a push", () => {
   });
 });
 
-const pane = { machine: "local", pane: "w1:p1", choices: ["Yes", "No"], dialog: "0f1e2d3c4b5a6978" };
+const pane = { machine: "local", pane: "w1:p1", choices: ["Yes", "No"], dialog: "the-bash-dialog" };
 
 describe("the notification's Esc", () => {
   it("sends Esc to the pane and opens nothing when the server takes it", async () => {
@@ -125,7 +125,7 @@ describe("a notification's choice", () => {
   it("answers through the server, and opens the pane when the dialog moved", async () => {
     const taken = worker({ ok: true, status: 200 });
     await taken.click("choice-1", pane);
-    expect(taken.fetched[0]).toEqual({ url: "/api/question/answer", body: { machine: "local", pane: "w1:p1", index: 1, label: "No", dialog: "0f1e2d3c4b5a6978" } });
+    expect(taken.fetched[0]).toEqual({ url: "/api/question/answer", body: { machine: "local", pane: "w1:p1", index: 1, label: "No", dialog: "the-bash-dialog" } });
     expect(taken.opened).toEqual([]);
     const moved = worker({ ok: false, status: 409 });
     await moved.click("choice-0", pane);

@@ -17,7 +17,7 @@ func TestQuestionPushCarriesTheChoicesAsButtons(t *testing.T) {
 	var asked []string
 	s.Question = func(machine, pane string) (Asked, bool) {
 		asked = append(asked, machine+"/"+pane)
-		return Asked{Text: bashDialog, Choices: []string{"Yes", "Yes, and don't ask again for rm commands in /Users/me/project", "No, and tell Claude what to do differently (esc)"}, Key: "0f1e2d3c4b5a6978"}, true
+		return Asked{Text: bashDialog, Choices: []string{"Yes", "Yes, and don't ask again for rm commands in /Users/me/project", "No, and tell Claude what to do differently (esc)"}, Key: "the-bash-dialog"}, true
 	}
 	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "p1"}, Workspace: "api", Agent: "claude", From: "working", To: "blocked"})
 	time.Sleep(80 * time.Millisecond)
@@ -35,7 +35,7 @@ func TestQuestionPushCarriesTheChoicesAsButtons(t *testing.T) {
 	if len(p.Choices) != 3 || p.Choices[2] != "No, and tell Claude what to do differently (esc)" {
 		t.Errorf("choices %v", p.Choices)
 	}
-	if p.Dialog != "0f1e2d3c4b5a6978" {
+	if p.Dialog != "the-bash-dialog" {
 		t.Errorf("the dialog's key does not ride with its choices: %q", p.Dialog)
 	}
 }
