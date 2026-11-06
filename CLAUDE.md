@@ -1360,7 +1360,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   FINDINGS — or anywhere when there are no sections — past bullets,
   numbers, bold, backticks, Markdown links (`[src/a.go:12](…)`, as Codex
   names a file) and code fences, an indented line carrying on the finding
-  above it, a path starting with the
+  above it (a dunder, a `__tests__`, `[slug]` or `(group)` folder and a
+  file called summary.go kept as the path they are), a path starting with the
   folder made relative, `path:12-14` and `path:12:5` taken at 12, under
   FINDINGS `path: text` or `path:0:` a finding on the file as a whole
   (line 0: listed under its file, addressed "(the whole file)" in the
