@@ -67,7 +67,8 @@ func IncludeScript(worktree string) string {
 		"  if [ -L \"$src\" ]; then\n" +
 		"    target=$(readlink \"$src\")\n" +
 		"    case \"$target\" in /*) to=$target ;; *) to=\"$(dirname \"$src\")/$target\" ;; esac\n" +
-		"    todir=$(cd \"$(dirname \"$to\")\" 2>/dev/null && pwd -P) || todir=\n" +
+		"    if [ -d \"$to\" ]; then todir=$(cd \"$to\" 2>/dev/null && pwd -P) || todir=\n" + // a link to a folder, .. among them, is where it leads
+		"    else todir=$(cd \"$(dirname \"$to\")\" 2>/dev/null && pwd -P) || todir=; fi\n" +
 		"    case \"$todir/\" in \"$main\"/*) ;; *) " + skip("a link out of the repository") + ";; esac\n" +
 		"  elif [ ! -f \"$src\" ]; then " + skip("not a file") + "; fi\n" +
 		"  up=$dir; while [ ! -d \"$up\" ] && [ \"$up\" != / ]; do up=$(dirname \"$up\"); done\n" +

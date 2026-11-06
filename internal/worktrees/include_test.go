@@ -149,6 +149,37 @@ func TestIncludeKeepsALinkThatStaysInsideAndWritesNothingOutsideTheWorktree(t *t
 	}
 }
 
+func TestIncludeSkipsALinkWhoseLastStepLeadsOut(t *testing.T) {
+	main, worktree := repoWithWorktree(t, map[string]string{
+		".gitignore":       "*.local\n",
+		".worktreeinclude": "*.local\n",
+		"real.local":       "real\n",
+		"tracked.env":      "t\n",
+	})
+	if err := os.Symlink("..", filepath.Join(main, "up.local")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("real.local/../..", filepath.Join(main, "up2.local")); err != nil {
+		t.Fatal(err)
+	}
+	in, err := Include(shell.Local{Name: "local"}, worktree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	skipped := map[string]string{}
+	for _, s := range in.Skipped {
+		skipped[s.Path] = s.Why
+	}
+	for _, name := range []string{"up.local", "up2.local"} {
+		if skipped[name] != "a link out of the repository" {
+			t.Errorf("%s: skipped %q, copied %v", name, skipped[name], in.Copied)
+		}
+		if _, err := os.Lstat(filepath.Join(worktree, name)); err == nil {
+			t.Errorf("%s, a link to the repository's parent, is in the worktree", name)
+		}
+	}
+}
+
 func TestIncludeWithoutTheFileCopiesNothingAndSaysNothing(t *testing.T) {
 	_, worktree := repoWithWorktree(t, map[string]string{".gitignore": "*.env\n", ".env": "x\n", "tracked.env": "t\n"})
 	in, err := Include(shell.Local{Name: "local"}, worktree)
