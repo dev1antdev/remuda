@@ -217,6 +217,17 @@ func ViewerAllows(method, path string) bool {
 	return !strings.HasPrefix(path, "/api/") && !strings.HasPrefix(path, "/ws/") && !strings.HasPrefix(path, "/code/")
 }
 
+// unnamedCaller is a key's caller name when the machine it was placed on has no name: never "", which is the person's.
+const unnamedCaller = "an agent"
+
+// caller is the name a request with this key goes by: the key's own, else unnamedCaller.
+func (key Key) caller() string {
+	if name := strings.TrimSpace(key.Name); name != "" {
+		return name
+	}
+	return unnamedCaller
+}
+
 // Reach is what a key of this scope opens, in words, for the log and the refusal.
 func (key Key) Reach() string {
 	if key.Scope == ScopeViewer {

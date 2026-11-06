@@ -33,10 +33,17 @@ func TestHandoverRefusesBadRequests(t *testing.T) {
 }
 
 func TestHandoverWords(t *testing.T) {
-	for n, want := range map[int]string{0: "from Claude Code · the recap · 2 KB", 1: "from Claude Code · the recap and the last exchange · 2 KB", 3: "from Claude Code · the recap and the last 3 exchanges · 2 KB"} {
-		if got := handoverWords("Claude Code", n, 2000); got != want {
+	for n, want := range map[int]string{-2: "from Claude Code · the recap · 2 KB", 0: "from Claude Code · the recap · 2 KB", 1: "from Claude Code · the recap and the last exchange · 2 KB", 3: "from Claude Code · the recap and the last 3 exchanges · 2 KB"} {
+		if got := handoverWords("Claude Code", n, 12, 2000); got != want {
 			t.Errorf("handoverWords(%d) = %q, want %q", n, got, want)
 		}
+	}
+	// the default 3 over a conversation of one exchange carries that one; 50 asked carries MaxLastN
+	if got := handoverWords("Codex", 3, 1, 2000); got != "from Codex · the recap and the last exchange · 2 KB" {
+		t.Errorf("a short conversation: %q", got)
+	}
+	if got := handoverWords("Codex", 50, 40, 2000); got != "from Codex · the recap and the last 10 exchanges · 2 KB" {
+		t.Errorf("more than a handover carries: %q", got)
 	}
 	if agentLabel("codex") != "Codex" || agentLabel("odd") != "odd" {
 		t.Errorf("agentLabel: %q %q", agentLabel("codex"), agentLabel("odd"))
