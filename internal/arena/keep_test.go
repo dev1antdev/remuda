@@ -40,6 +40,19 @@ func TestOneLaneIsKeptAndNeverAnotherAfterIt(t *testing.T) {
 	}
 }
 
+func TestALaneWhoseBaseIsUnknownIsKeptNotDiscarded(t *testing.T) {
+	s, a := twoLanes(t)
+	_ = s.Store.SetLane(a.ID, 1, func(l *Lane) { l.Dir, l.State = "/tmp/arena-1-1", LaneRunning })
+	_ = s.Store.SetLane(a.ID, 2, func(l *Lane) { l.Dir, l.Machine, l.State = "/tmp/arena-1-2", "local", LaneRunning }) // the base never came back
+	got, err := s.Keep(a.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lane := got.Lane(2); lane.State == LaneDiscarded || !strings.HasPrefix(lane.Note, "kept: ") {
+		t.Fatalf("a lane whose work cannot be saved was discarded: %+v", lane)
+	}
+}
+
 func TestALaneNotMadeYetIsNeverMadeOnceTheArenaIsDecided(t *testing.T) {
 	s, a := twoLanes(t)
 	_ = s.Store.SetLane(a.ID, 1, func(l *Lane) { l.Dir, l.State = "/tmp/arena-1-1", LaneRunning })

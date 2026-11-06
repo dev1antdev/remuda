@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -108,6 +109,36 @@ func TestContinuationStillReadsTheParentOfAnOlderFile(t *testing.T) {
 	}
 	if got := runScript(t, PredecessorScript(script.Quote(next))); got != old {
 		t.Fatalf("predecessor script printed %q", got)
+	}
+}
+
+func TestARemoteThatFailsToAnswerKeepsTheConversationWhereItWent(t *testing.T) {
+	old, next := continuedSession(t)
+	failing := false
+	host := &shell.Fake{Name: "gog", Remote: true, Answer: func(line string) (string, error) {
+		if failing && strings.HasPrefix(line, "old=") {
+			return "", errors.New("ssh: the master is reconnecting")
+		}
+		out, err := exec.Command("sh", "-c", line).Output()
+		return string(out), err
+	}}
+	reader := NewReader(host)
+	if got := reader.Live(old); got != next {
+		t.Fatalf("Live(old) = %q, want %q", got, next)
+	}
+	reader.continuation[old] = continuation{next: next, at: time.Now().Add(-2 * time.Minute)}
+	failing = true
+	if got := reader.Live(old); got != next {
+		t.Fatalf("Live(old) = %q while the machine does not answer: the conversation went back to before its compaction", got)
+	}
+
+	fresh := NewReader(host)
+	if got := fresh.Live(old); got != old {
+		t.Fatalf("Live(old) = %q with nothing known and no answer", got)
+	}
+	failing = false
+	if got := fresh.Live(old); got != next {
+		t.Fatalf("Live(old) = %q once the machine answers again: a failed look was kept as no continuation", got)
 	}
 }
 

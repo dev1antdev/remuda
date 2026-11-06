@@ -30,13 +30,12 @@ type Reader struct {
 	subTails     map[string]*cachedTail  // remote subagent files by path
 	subagents    map[string]*subagentEntry
 	subDirs      map[string]dirListing // a remote session's subagent folder, as listed a moment ago
-	reads        int64                 // counts the cached tails' reads: which one was read longest ago
 }
 
 type cachedTail struct {
 	version Version
 	data    []byte
-	read    int64 // Reader.reads when it was last read
+	read    time.Time // when it was last asked for
 }
 
 type continuation struct {
@@ -44,7 +43,14 @@ type continuation struct {
 	at   time.Time
 }
 
-const remoteTailCap = 8 * 1024 * 1024
+const (
+	remoteTailCap = 8 * 1024 * 1024 // the most of one remote file kept
+	// what each cache of a machine's remote files holds at most: a wall of busy agents reads every file in turn
+	remoteTailsBudget    = 128 << 20
+	remoteSubTailsBudget = 64 << 20
+	// a tail asked for this recently is not pushed out for a file not cached yet: the next read would fetch it whole again
+	recentlyRead = time.Minute
+)
 
 // NewReader reads the transcripts on host.
 func NewReader(host shell.Host) *Reader {
@@ -155,16 +161,15 @@ func (r *Reader) Turns(path string, v Version) ([]Turn, error) {
 
 // remoteTail returns the file tail, fetching only the delta since the cached copy when the file merely grew.
 func (r *Reader) remoteTail(path string, v Version) ([]byte, error) {
-	return r.remoteTailIn(r.tails, path, v, 8)
+	return r.remoteTailIn(r.tails, path, v, remoteTailsBudget)
 }
 
-// remoteTailIn is remoteTail over one of the caches, which keeps at most keep files' worth of bytes (remoteTailCap each).
-func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Version, keep int) ([]byte, error) {
+// remoteTailIn is remoteTail over one of the caches, which holds at most budget bytes (see keepTail).
+func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Version, budget int) ([]byte, error) {
 	r.mu.Lock()
 	cached := tails[path]
 	if cached != nil && cached.version == v {
-		r.reads++
-		cached.read = r.reads
+		cached.read = time.Now()
 		r.mu.Unlock()
 		return cached.data, nil
 	}
@@ -192,32 +197,35 @@ func (r *Reader) remoteTailIn(tails map[string]*cachedTail, path string, v Versi
 	}
 
 	r.mu.Lock()
-	r.reads++
-	tails[path] = &cachedTail{version: v, data: data, read: r.reads}
-	evictTails(tails, path, keep*remoteTailCap)
+	keepTail(tails, path, &cachedTail{version: v, data: data, read: time.Now()}, budget)
 	r.mu.Unlock()
 	return data, nil
 }
 
-// evictTails drops the files read longest ago until the cache holds budget bytes at most, the one just read kept. A
-// count of files emptied at random sent a conversation nothing had changed in over the wire whole again as soon as
-// more files than that were read in turn — a wall's tiles, the task runs' sweep.
-func evictTails(tails map[string]*cachedTail, keep string, budget int) {
-	held := 0
-	for _, tail := range tails {
-		held += len(tail.data)
+// keepTail caches a file's tail within budget bytes, the tails read longest ago going first: a file not cached before
+// goes uncached rather than push out one read within recentlyRead. The caller holds r.mu.
+func keepTail(tails map[string]*cachedTail, path string, tail *cachedTail, budget int) {
+	_, wasCached := tails[path]
+	tails[path] = tail
+	size := 0
+	for _, t := range tails {
+		size += len(t.data)
 	}
-	for held > budget {
+	for size > budget {
 		oldest := ""
-		for path, tail := range tails {
-			if path != keep && (oldest == "" || tail.read < tails[oldest].read) {
-				oldest = path
+		for k, t := range tails {
+			if k != path && (oldest == "" || t.read.Before(tails[oldest].read)) {
+				oldest = k
 			}
 		}
 		if oldest == "" {
 			return
 		}
-		held -= len(tails[oldest].data)
+		if time.Since(tails[oldest].read) < recentlyRead && !wasCached {
+			delete(tails, path)
+			return
+		}
+		size -= len(tails[oldest].data)
 		delete(tails, oldest)
 	}
 }
@@ -378,7 +386,8 @@ func (r *Reader) Predecessor(path string) string {
 	return earlier
 }
 
-// nextContinuation is one hop, cached for a minute.
+// nextContinuation is one hop, cached for a minute; a remote that does not answer keeps what was known for another
+// minute, and when nothing was, is asked again next time.
 func (r *Reader) nextContinuation(path string) string {
 	r.mu.Lock()
 	known, ok := r.continuation[path]
@@ -391,6 +400,10 @@ func (r *Reader) nextContinuation(path string) string {
 		next = Continuation(path)
 	} else if out, err := shell.Text(r.host, ContinuationScript(script.Quote(path)), 20*time.Second); err == nil {
 		next = strings.TrimSpace(out)
+	} else if ok {
+		next = known.next
+	} else {
+		return ""
 	}
 	r.mu.Lock()
 	r.continuation[path] = continuation{next: next, at: time.Now()}

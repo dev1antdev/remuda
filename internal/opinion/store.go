@@ -255,6 +255,7 @@ func (store *Store) Dismiss(machine, dir string, ids []int) (Opinion, error) {
 	for _, id := range ids {
 		wanted[id] = true
 	}
+	op.Comments = append([]Comment(nil), op.Comments...) // the copies Get handed out are read outside the lock
 	for i := range op.Comments {
 		if len(ids) == 0 || wanted[op.Comments[i].ID] {
 			op.Comments[i].Dismissed = true

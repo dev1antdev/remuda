@@ -84,10 +84,11 @@ func (s *Server) handleAlertsWS(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			case <-ping.C:
-				pctx, cancel := context.WithTimeout(wctx, 10*time.Second)
+				pctx, cancel := context.WithTimeout(wctx, livePongWait)
 				err := c.Ping(pctx)
 				cancel()
 				if err != nil {
+					c.CloseNow() // a ping unanswered leaves the read waiting on a connection nobody answers: it ends here
 					return
 				}
 			case <-wctx.Done():

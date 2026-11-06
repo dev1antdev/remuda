@@ -4,6 +4,7 @@ import (
 	"log"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/said"
@@ -17,9 +18,9 @@ var (
 	notReady     = []string{"not ready", "not yet ready", "isn't ready", "isn’t ready", "не готово", "will ", "i'll", "i’ll", "once "} // a promise for later is not the word
 )
 
-// ReadyWords reports whether an answer says the work is ready for another look: the Marker on a line of its own or
-// at the end of the answer, or one of a few plain phrases on a line that does not also say "not" — never inside a
-// code fence.
+// ReadyWords reports whether an answer says the work is ready for another look: the Marker on a line of its own, or
+// it or one of a few plain phrases on a line that promises nothing for later and whose sentence does not say "not"
+// before it ("NOT READY FOR REVIEW", "won't be ready for review") — never inside a code fence.
 func ReadyWords(text string) bool {
 	inFence := false
 	var lines []string
@@ -34,15 +35,40 @@ func ReadyWords(text string) bool {
 		}
 		lines = append(lines, strings.TrimRight(said.Plain(line), " .!"))
 	}
-	for i, line := range lines {
-		if line == Marker || (i == len(lines)-1 && strings.HasSuffix(line, " "+Marker)) {
+	for _, line := range lines {
+		if line == Marker {
 			return true
 		}
 		folded := strings.ToLower(line)
 		if containsAny(folded, notReady) {
 			continue
 		}
-		if containsAny(folded, readyPhrases) {
+		if at := firstIndex(folded, readyPhrases); at >= 0 && !negated(folded[:at]) {
+			return true
+		}
+	}
+	return false
+}
+
+// firstIndex is where the first of the phrases stands in the line, -1 when none does.
+func firstIndex(line string, phrases []string) int {
+	first := -1
+	for _, phrase := range phrases {
+		if at := strings.Index(line, phrase); at >= 0 && (first < 0 || at < first) {
+			first = at
+		}
+	}
+	return first
+}
+
+// negated says whether the sentence leading up to a ready phrase takes it back: "not quite", "won't be", "не".
+func negated(before string) bool {
+	if cut := strings.LastIndexAny(before, ".!?;"); cut >= 0 {
+		before = before[cut+1:]
+	}
+	words := strings.FieldsFunc(before, func(r rune) bool { return !unicode.IsLetter(r) && r != '\'' && r != '’' })
+	for _, word := range words {
+		if word == "not" || word == "не" || strings.HasSuffix(word, "n't") || strings.HasSuffix(word, "n’t") {
 			return true
 		}
 	}

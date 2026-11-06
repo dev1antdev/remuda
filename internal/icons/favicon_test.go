@@ -59,6 +59,15 @@ func TestFaviconPrefersTheTouchIconThenTheLargest(t *testing.T) {
 	}
 }
 
+func TestFaviconReadsTheLinksInABigPagesFirstMegabyte(t *testing.T) {
+	big := `<link rel="icon" href="/fav.png"><script>` + strings.Repeat("x", MaxPage) + `</script>`
+	srv, _ := site(t, big, map[string][]byte{"/fav.png": pngBytes})
+	data, from, err := fetched(t, srv)
+	if err != nil || from != srv.URL+"/fav.png" || !strings.HasPrefix(data, "data:image/png;base64,") {
+		t.Fatalf("a page past a megabyte still names its icon in its head: %q %v", from, err)
+	}
+}
+
 func TestFaviconResolvesARelativeHrefAgainstThePage(t *testing.T) {
 	srv, _ := site(t, `<link rel="icon" href="img/icon.svg">`, map[string][]byte{"/img/icon.svg": []byte(svgText)})
 	data, from, err := fetched(t, srv)

@@ -635,6 +635,58 @@ func TestAServerUnitIsRefusedToARemudaThatDoesNotKnowTheFlag(t *testing.T) {
 	}
 }
 
+// macHome is a home on a machine that says it is a Mac: stand-ins for uname, launchctl, curl and an lsof that knows
+// one socket on every port — a listener when listeners is set, else a connection that only came from or went to it.
+func macHome(t *testing.T, listeners bool) string {
+	t.Helper()
+	dir := home(t)
+	bin := filepath.Join(dir, ".local", "bin")
+	lsof := `for a in "$@"; do [ "$a" = -sTCP:LISTEN ] && listening=1; done; [ -n "$listening" ] && exit 1; echo 4242`
+	if listeners {
+		lsof = `echo 4242`
+	}
+	for name, body := range map[string]string{
+		"uname":     `case "$1" in -m) echo arm64 ;; *) echo Darwin ;; esac`,
+		"launchctl": ``,
+		"curl":      ``,
+		"lsof":      lsof,
+	} {
+		write(t, filepath.Join(bin, name), "#!/bin/sh\necho \""+name+" $*\" >> \"$HOME/calls.log\"\n"+body+"\n", 0o755)
+	}
+	write(t, filepath.Join(bin, "remuda"), fakeBinary, 0o755)
+	t.Setenv("PATH", bin+":/usr/bin:/bin")
+	for _, name := range []string{"uname", "launchctl", "curl", "lsof"} {
+		out, err := exec.Command("sh", "-c", `command -v "$1"`, "sh", name).Output()
+		if got := strings.TrimSpace(string(out)); err != nil || got != filepath.Join(bin, name) {
+			t.Fatalf("%s resolves to %q, not to its stand-in", name, got)
+		}
+	}
+	return dir
+}
+
+// A browser still holding a connection to the service just stopped, or to another machine's remuda on the same port,
+// is no listener: only something that listens on the port keeps the service from being installed.
+func TestTheMacServiceIsRefusedOnlyByAListener(t *testing.T) {
+	dir := macHome(t, false)
+	var out strings.Builder
+	if err := run("", []string{"REMUDA_ADDR=127.0.0.1:7317"}, serviceScript, []string{"install"}, &out); err != nil {
+		t.Fatalf("a connection on the port kept the service out: %v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "Library", "LaunchAgents", "dev.mardeus.remuda.plist")); err != nil {
+		t.Fatalf("no plist written: %v\n%s", err, out.String())
+	}
+	calls, _ := os.ReadFile(filepath.Join(dir, "calls.log"))
+	if !strings.Contains(string(calls), "launchctl bootstrap") {
+		t.Errorf("the service was not loaded:\n%s", calls)
+	}
+
+	macHome(t, true)
+	out.Reset()
+	if err := run("", []string{"REMUDA_ADDR=127.0.0.1:7317"}, serviceScript, []string{"install"}, &out); err == nil || !strings.Contains(out.String(), "something already listens on 127.0.0.1:7317 (pid 4242)") {
+		t.Fatalf("a listener on the port did not keep the service out: %v\n%s", err, out.String())
+	}
+}
+
 // --- the agents' MCP registration ---
 
 // agents lays a home out with stand-ins for the agents' commands, each recording its arguments; kimi's has no mcp subcommand.

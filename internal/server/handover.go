@@ -113,14 +113,16 @@ func (s *Server) handleHandover(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.Feed != nil {
 		workspace := snap.WorkspaceLabel(pane.WorkspaceID)
-		s.Feed.Add(feed.Entry{Kind: "handover", Machine: mc.ID(), Pane: newPane, Title: "Handed over to " + to + ": " + workspace, Body: handoverWords(from, lastN, len(text))})
+		s.Feed.Add(feed.Entry{Kind: "handover", Machine: mc.ID(), Pane: newPane, Title: "Handed over to " + to + ": " + workspace, Body: handoverWords(from, lastN, len(handover.Exchanges(turns)), len(text))})
 	}
 	s.Watch.Refresh(mc)
 	writeJSON(w, resp)
 }
 
-// handoverWords says what went over, for the activity: "from Claude Code · the recap and the last 3 exchanges · 14 KB".
-func handoverWords(from string, lastN, size int) string {
+// handoverWords says what went over, for the activity: "from Claude Code · the recap and the last 3 exchanges · 14 KB";
+// the exchanges asked for are counted as handover.Text carries them, at most MaxLastN and the conversation's own.
+func handoverWords(from string, lastN, exchanges, size int) string {
+	lastN = max(0, min(lastN, handover.MaxLastN, exchanges))
 	what := "the recap"
 	switch lastN {
 	case 0:

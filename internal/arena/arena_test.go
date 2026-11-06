@@ -218,3 +218,54 @@ func TestALanesWorkIsSavedWholeAndTheWorktreeGoes(t *testing.T) {
 		t.Fatalf("the branch stays: %q", branches)
 	}
 }
+
+func TestALanesPatchIgnoresThePersonsDiffSettings(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	repo := t.TempDir()
+	git := func(dir string, args ...string) string {
+		cmd := exec.Command("git", append([]string{"-c", "user.email=t@t", "-c", "user.name=t"}, args...)...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git(repo, "init", "-q")
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(repo, "add", "-A")
+	git(repo, "commit", "-qm", "init")
+	base := git(repo, "rev-parse", "HEAD")
+	external := filepath.Join(t.TempDir(), "difft")
+	if err := os.WriteFile(external, []byte("#!/bin/sh\necho 'a pretty picture of the change'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range map[string]string{"diff.noprefix": "true", "diff.external": external, "color.ui": "always"} {
+		git(repo, "config", key, value)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	patch, err := shell.Text(shell.Local{Name: "local"}, PatchScript(repo, base), ScriptTimeout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := filepath.Join(t.TempDir(), "check")
+	git(repo, "worktree", "add", "-q", "--detach", check, base)
+	patchFile := filepath.Join(t.TempDir(), "lane.patch")
+	if err := os.WriteFile(patchFile, []byte(patch), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "apply", "--binary", patchFile)
+	cmd.Dir = check
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("the saved patch does not apply: %v\n%s\npatch:\n%s", err, out, patch)
+	}
+	if got, _ := os.ReadFile(filepath.Join(check, "a.txt")); string(got) != "one\ntwo\n" {
+		t.Fatalf("rebuilt as %q", got)
+	}
+}
