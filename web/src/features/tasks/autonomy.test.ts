@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine } from "@/features/roster/api";
 import type { Project, Run, Status } from "./api";
-import { automationOf, queueWords, repositories, saveable, sameAutomation, stageWords, whyNotQueue, NO_AUTOMATION } from "./autonomy";
+import { automationOf, queueWords, repositories, saveable, sameAutomation, stageWords, whyNotQueue, whyNotSave, NO_AUTOMATION } from "./autonomy";
 
 const col = (id: number, more: Partial<Status> = {}): Status => ({ id, project_id: 1, title: `c${id}`, hex_color: "", kind: "open", position: id, on_new: false, on_start: false, on_finish: false, on_agent: false, ...more });
 const project = (more: Partial<Project> = {}): Project => ({
@@ -63,6 +63,15 @@ describe("the settings", () => {
     expect(whyNotQueue(NO_AUTOMATION, project().statuses)).toMatch(/where agents work/);
     expect(whyNotQueue({ ...NO_AUTOMATION, machine: "gog", dir: "/w" }, [col(1)])).toMatch(/Queued/);
     expect(whyNotQueue({ ...NO_AUTOMATION, machine: "gog", dir: "/w" }, project().statuses)).toBe("");
+  });
+  it("keeps the save from what the server would refuse after the columns are saved", () => {
+    const at = { ...NO_AUTOMATION, machine: "gog", dir: "/w" };
+    expect(whyNotSave({ ...at, queue: true }, project().statuses)).toBe("");
+    expect(whyNotSave({ ...at, queue: true }, [col(1), col(3, { kind: "done" })])).toMatch(/column marked Queued/);
+    expect(whyNotSave({ ...NO_AUTOMATION, queue: true }, project().statuses)).toMatch(/machine and a repository/);
+    expect(whyNotSave(at, [col(1)])).toBe("");
+    expect(whyNotSave({ ...at, stages: [{ name: "T", agent: "codex", prompt: "x" }, { name: "R", agent: "claude", prompt: "  " }] }, [col(1)])).toBe("Stage 2 needs a prompt");
+    expect(whyNotSave({ ...at, stages: [{ name: "PR", agent: "claude", prompt: "", pr: true }] }, [col(1)])).toBe("");
   });
   it("offers a machine's repositories once each, never a linked worktree", () => {
     const machines = [

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
 import type { Span } from "./api";
 import { hourMarks, layout, spanWords, WIDTH, window } from "./strip";
 
@@ -56,5 +57,15 @@ describe("spanWords", () => {
     expect(spanWords({ state: "working", from: eight, to: eight + 46 * 60_000 })).toMatch(/^Working .+–.+, 46 min$/);
     expect(spanWords({ state: "waiting", from: eight, to: eight + 30_000 })).toMatch(/^Waiting for you .+, 30 s$/);
     expect(spanWords({ state: "idle", from: eight, to: eight + 2 * HOUR })).toMatch(/^Idle .+, 2 h$/);
+  });
+  it("speaks the page's language", () => {
+    setLang("ru");
+    try {
+      expect(spanWords({ state: "working", from: eight, to: eight + 46 * 60_000 })).toMatch(/^Работа .+–.+, 46 мин$/);
+      expect(spanWords({ state: "waiting", from: eight, to: eight + 30_000 })).toMatch(/^Ждёт вас .+, 30 с$/);
+      expect(spanWords({ state: "idle", from: eight, to: eight + 2 * HOUR })).toMatch(/^Простой .+, 2 ч$/);
+    } finally {
+      setLang("en");
+    }
   });
 });

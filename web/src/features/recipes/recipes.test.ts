@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLang } from "@/lib/i18n";
 import { CUSTOM, EMPTY_DRAFT } from "@/features/roster/startOptions";
 import type { Recipe } from "./api";
 import { draftOf, firstWords, folderFor, lastRecipeKey, machineFor, pickFirst, recipeDirKey, recipeOf, recipeWords, startRequest } from "./recipes";
@@ -60,6 +61,8 @@ describe("the words", () => {
     expect(recipeWords({ name: "p", agent: "codex", model: "gpt-5" }, agents)).toBe("Codex · gpt-5");
     expect(recipeWords({ name: "p", agent: "shell" }, agents)).toBe("Plain shell");
     expect(recipeWords({ name: "p", agent: "kimi" }, agents)).toBe("kimi");
+    setLang("ru");
+    expect(recipeWords({ name: "p", agent: "shell" }, agents)).toBe("Просто shell");
   });
 
   it("cut a prompt at a word", () => {
@@ -67,5 +70,8 @@ describe("the words", () => {
     expect(firstWords("one two three four", 9)).toBe("one two…");
     expect(firstWords("first line\nsecond", 40)).toBe("first line");
     expect(firstWords("averyveryverylongwordwithoutaspace", 10)).toBe("averyveryv…");
+    expect(firstWords(`a${"🚀".repeat(20)}`, 10)).toBe(`a${"🚀".repeat(4)}…`);
   });
 });
+
+afterEach(() => setLang("en"));

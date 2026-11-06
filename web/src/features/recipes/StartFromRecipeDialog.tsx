@@ -44,8 +44,8 @@ export default function StartFromRecipeDialog({ machineId, dir, onClose, onStart
   const folderRows = [...(listed || !folder || folder === OTHER_FOLDER ? folders : [{ value: folder, label: folder, icon: folderIcon }, ...folders]), { value: OTHER_FOLDER, label: t("Another folder…"), icon: folderIcon }];
   const where = folder === OTHER_FOLDER ? typed.trim() : folder;
   const submit = useSubmit(async () => {
-    if (!recipe) throw new Error("Pick a recipe");
-    if (!where) throw new Error("A folder is required");
+    if (!recipe) throw new Error(t("Pick a recipe"));
+    if (!where) throw new Error(t("A folder is required"));
     await onStart(startRequest(recipe, machine, where));
     writePref(recipeDirKey(recipe.id ?? ""), where);
     writePref(lastRecipeKey(machine, where), recipe.id ?? "");

@@ -6,10 +6,10 @@ export type Modifier = "ctrl" | "alt" | null;
 // herdr follows the smallest attached client, so fit on a phone squeezes the desktop's view.
 export type SizeMode = "fit" | "keep";
 
-// SearchApi is the find's hold on the screen: the match at a row of it (a character column and length) marked once
-// the repaint lands, with every other match on the screen decorated, and the marks cleared.
+// SearchApi is the find's hold on the screen: the match at a row of it (near a character column) marked once the
+// repaint lands, as long as the query is on that row, with every other match on the screen decorated, and the marks cleared.
 export type SearchApi = {
-  show: (query: string, expectedRow: number, col: number, length: number) => void;
+  show: (query: string, expectedRow: number, col: number) => void;
   clear: () => void;
 };
 

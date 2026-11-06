@@ -8,6 +8,7 @@ import { actions } from "@/app/store";
 import type { Machine } from "@/features/roster/api";
 import { DEFAULT_RADAR, displayOf, stateWords, type RadarPrefs } from "@/features/roster/radar";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import { usd } from "@/features/usage/format";
 import { usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
@@ -78,6 +79,7 @@ function LaneCard({ arena: a, lane, machines, onChanged, onOpen }: { arena: Aren
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const now = useNow(1000);
   const pane = paneOf(machines, lane);
+  const { machineLabel, redact } = useSharing(); // under the screen-sharing mode the machine and the folders by their neutral names
   const machine = machines.find((m) => m.id === lane.machine);
   const tone = laneTone(lane);
   const live = lane.state === "running" || lane.state === "starting";
@@ -107,7 +109,7 @@ function LaneCard({ arena: a, lane, machines, onChanged, onOpen }: { arena: Aren
         <Logo agent={lane.agent} />
         <b>{VENDOR_NAME[lane.agent] ?? lane.agent}</b>
         {lane.model && <span className="arena-model">{lane.model}</span>}
-        {machine && machine.id !== "local" && <span className="arena-machine">{machine.label}</span>}
+        {machine && machine.id !== "local" && <span className="arena-machine">{machineLabel(machine)}</span>}
       </div>
       <div className="arena-state">{state}</div>
       {words && (
@@ -119,8 +121,8 @@ function LaneCard({ arena: a, lane, machines, onChanged, onOpen }: { arena: Aren
         {[stat, seconds ? spent(seconds) : "", cost ? usd(cost) : ""].filter(Boolean).join(" · ")}
       </div>
       {lane.branch && (
-        <div className="arena-branch" title={lane.dir}>
-          <Icon name="git-branch" size={12} /> {lane.branch}
+        <div className="arena-branch" title={redact(lane.dir ?? "")}>
+          <Icon name="git-branch" size={12} /> {redact(lane.branch)}
         </div>
       )}
       {lane.patch && (

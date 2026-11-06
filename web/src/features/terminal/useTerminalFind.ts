@@ -52,7 +52,7 @@ export function useTerminalFind(api: TermApi | null, active: boolean, machineId:
         rows = scroll?.viewport_rows || rows;
         row = viewportRow(above, scroll?.offset_from_bottom ?? want, rows);
       }
-      api.search.show(q, row, match.col, match.len);
+      api.search.show(q, row, match.col);
     } catch (e) {
       if (id === run.current) actions.notify(errMsg(e), { error: true });
     }

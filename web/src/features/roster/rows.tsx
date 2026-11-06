@@ -211,7 +211,7 @@ function AgentLine({ machine: m, row: r, selected, prefs, step, now, onSelect, h
       tabIndex={0}
       onClick={open}
       onKeyDown={(e) => rowKey(e, open)}
-      title={`${p.agent || "shell"} · ${alert || stateWords(d, p.radar?.last_active, now, p.radar?.since)}\n${label}${words !== label ? `\n${words}` : ""}`}
+      title={`${p.agent || t("shell")} · ${alert || stateWords(d, p.radar?.last_active, now, p.radar?.since)}\n${label}${words !== label ? `\n${words}` : ""}`}
     >
       <span className="radar-mark" style={style}>
         {alert ? "!" : p.agent ? markOf(d, step) : "$"}

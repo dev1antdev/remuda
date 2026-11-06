@@ -21,9 +21,15 @@ func Failure(host shell.Shell, label, url string) (string, error) {
 	if perr != nil {
 		return "", answerError(out, err, perr)
 	}
+	repos := map[string]string{}
+	for _, c := range checks {
+		if id := c.RunID(); id != "" && repos[id] == "" {
+			repos[id] = c.RunRepo()
+		}
+	}
 	logs := map[string]string{}
 	for _, id := range FailedRuns(checks) {
-		log, _ := shell.Text(host, LogScript(id), LogTimeout)
+		log, _ := shell.Text(host, LogScript(repos[id], id), LogTimeout)
 		logs[id] = log
 	}
 	return FailureMessage(label, url, checks, logs)

@@ -338,7 +338,7 @@ func Run(ctx context.Context, o Options) error {
 		if err != nil {
 			return err
 		}
-		if err := input.Submit(client, events.PaneRef{Machine: machineID, Pane: paneID}, text); err != nil {
+		if err := input.SubmitToAgent(client, events.PaneRef{Machine: machineID, Pane: paneID}, text); err != nil {
 			return err
 		}
 		place, _ := planLimits.Pane(machineID, paneID)

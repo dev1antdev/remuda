@@ -11,6 +11,7 @@ import { Dialog, Notice } from "@/ui";
 import { t } from "@/lib/i18n";
 import { listLeftovers, removeLeftovers, type Machine } from "./api";
 import { leftoverWords, removable, removedWords, sizeWords } from "./tidy";
+import { useSharing } from "./useSharing";
 
 export default function LeftoversDialog({ machine, onClose }: { machine: Machine; onClose: () => void }) {
   const { data, error, loading, reload } = useQuery(() => listLeftovers(machine.id), [machine.id]);
@@ -43,22 +44,23 @@ export default function LeftoversDialog({ machine, onClose }: { machine: Machine
     }
   };
   const freed = chosen.reduce((sum, left) => sum + left.kb, 0);
+  const { machineLabel, redact } = useSharing(); // under the screen-sharing mode the machine and the folders by their neutral names
   return (
-    <Dialog title={t("Leftover worktrees on {machine}", { machine: machine.label })} icon="git-branch" size="md" onClose={onClose}>
-      <p className="modal-hint">{t("Worktrees under {root} that no workspace has open. A clean one goes with its branch once merged; one with uncommitted changes stays.", { root: data?.root ?? "~/.herdr/worktrees" })}</p>
-      {(error || failure) && <Notice tone="error">{failure || error}</Notice>}
+    <Dialog title={t("Leftover worktrees on {machine}", { machine: machineLabel(machine) })} icon="git-branch" size="md" onClose={onClose}>
+      <p className="modal-hint">{t("Worktrees under {root} that no workspace has open. A clean one goes with its branch once merged; one with uncommitted changes stays.", { root: redact(data?.root ?? "~/.herdr/worktrees") })}</p>
+      {(error || failure) && <Notice tone="error">{redact(failure || error || "")}</Notice>}
       {loading && !data && <Notice tone="hint">{t("Looking at the worktrees…")}</Notice>}
       {data && list.length === 0 && <Notice tone="success">{t("Nothing left behind: every worktree here has its workspace.")}</Notice>}
       {list.length > 0 && (
         <ul className="pick-list">
           {list.map((left) => (
             <li key={left.path}>
-              <label className="pick-row" title={left.path}>
+              <label className="pick-row" title={redact(left.path)}>
                 <input type="checkbox" checked={ticked.has(left.path) && removable(left)} disabled={!removable(left) || busy} onChange={() => toggle(left.path)} />
                 <span className="pick-name">
-                  {left.repo} › {left.name}
+                  {redact(left.repo)} › {redact(left.name)}
                 </span>
-                <span className="pick-hint">{leftoverWords(left)}</span>
+                <span className="pick-hint">{redact(leftoverWords(left))}</span>
               </label>
             </li>
           ))}

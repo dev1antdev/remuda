@@ -33,6 +33,12 @@ export function stillDismissed(dismissed: Dismissed | null, token: Token | null)
   return token.kind === dismissed.kind && token.start === dismissed.start ? dismissed : null;
 }
 
+// listFor is the token whose list shows: none while ↑ ↓ walk what was sent before — a recalled "/compact" would take the
+// arrows and Enter for its own list — and none for the token Esc closed
+export function listFor(token: Token | null, dismissed: Dismissed | null, browsing: boolean): Token | null {
+  return browsing || stillDismissed(dismissed, token) ? null : token;
+}
+
 // applyPick replaces the token and the rest of its word past the caret with the pick and a space (the one already there
 // kept), the caret landing after it
 export function applyPick(draft: string, token: Token, insert: string): { draft: string; caret: number } {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { setLang, t } from "@/lib/i18n";
 import { clamp, countWords, findRanges, MAX_MATCHES, revealDue, step } from "./find";
 
 describe("findRanges", () => {
@@ -50,6 +51,16 @@ describe("countWords", () => {
     expect(countWords(0, 0)).toBe("0 of 0");
     expect(countWords(2, 12)).toBe("3 of 12");
     expect(countWords(0, MAX_MATCHES)).toBe(`1 of ${MAX_MATCHES}+`);
+  });
+  it("counts in the page's language, as does the find toggle's own words", () => {
+    setLang("ru");
+    try {
+      expect(countWords(2, 12)).toBe("3 из 12");
+      expect(countWords(0, 0)).toBe("0 из 0");
+      expect(t("in this conversation")).toBe("в этом разговоре");
+    } finally {
+      setLang("en");
+    }
   });
 });
 

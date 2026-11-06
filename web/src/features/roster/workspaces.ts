@@ -67,11 +67,15 @@ export function repositoryOf(folder: Folder): Session | null {
   return inGit.find((s) => !s.worktree?.linked && (s.dir || "") === folder.path) ?? inGit[0] ?? null;
 }
 
-// folderCounts is what a folder's line says of its agents: how many work, ask and finished, and how many there are
+// folderCounts is what a folder's line says of its agents: how many work, ask and finished, and how many there are;
+// the fresh files once per checkout, since two workspaces on one folder carry the same review
 export function folderCounts(folder: Folder): { working: number; blocked: number; done: number; agents: number; fresh: number } {
   const n = { working: 0, blocked: 0, done: 0, agents: 0, fresh: 0 };
+  const reviewed = new Set<string>();
   for (const item of folder.items) {
-    n.fresh += item.session.review?.fresh ?? 0;
+    const checkout = item.session.dir || `workspace:${item.session.id}`;
+    if (!reviewed.has(checkout)) n.fresh += item.session.review?.fresh ?? 0;
+    reviewed.add(checkout);
     for (const r of item.rows) {
       if (!r.pane.agent) continue;
       n.agents++;

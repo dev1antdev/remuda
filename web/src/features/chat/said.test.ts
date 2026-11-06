@@ -32,6 +32,13 @@ describe("firstLine", () => {
     expect(firstLine("")).toBe("");
   });
 
+  it("reads a line of thousands of unclosed links, pictures, tags or marks in its length, not its square", () => {
+    const started = performance.now();
+    for (const line of ["[".repeat(100_000), "![".repeat(50_000), "[a](".repeat(25_000), "<".repeat(100_000), "- ".repeat(50_000)]) firstLine(line);
+    expect(performance.now() - started).toBeLessThan(500); // the square took seconds
+    expect(firstLine("see [the docs](https://x.io/a_(b)) and ![logo](l.png) <br> here")).toBe("see the docs) and logo here");
+  });
+
   it("cuts at a word with an ellipsis", () => {
     const got = firstLine("word ".repeat(40));
     expect(got.endsWith("…")).toBe(true);

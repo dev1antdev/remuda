@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { recall, remember } from "./history";
+import { leftAfterSend, recall, remember } from "./history";
 
 describe("remember", () => {
   it("puts the newest first, moves a repeat up and keeps the list short", () => {
@@ -9,6 +9,17 @@ describe("remember", () => {
     expect(remember(["a"], "  a  ")).toEqual(["a"]);
     expect(remember(["a"], "   ")).toEqual(["a"]);
     expect(remember(Array.from({ length: 50 }, (_, i) => `p${i}`), "new")).toHaveLength(50);
+  });
+});
+
+describe("leftAfterSend", () => {
+  it("empties a draft that did not change while the send was out", () => {
+    expect(leftAfterSend("fix the build ", "fix the build ")).toBe("");
+  });
+  it("keeps what was typed after the text sent, or the draft rewritten meanwhile whole", () => {
+    expect(leftAfterSend("fix the build\n\nand then the docs", "fix the build")).toBe("and then the docs");
+    expect(leftAfterSend("fix the tests", "fix the build")).toBe("fix the tests");
+    expect(leftAfterSend("", "fix the build")).toBe("");
   });
 });
 

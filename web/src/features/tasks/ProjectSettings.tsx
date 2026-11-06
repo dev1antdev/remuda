@@ -12,7 +12,7 @@ import Select from "@/ui/Select";
 import { Dialog, Notice, Tip, useDismiss, useSubmit } from "@/ui";
 import { t } from "@/lib/i18n";
 import { AgentsSettings } from "./AgentsSettings";
-import { automationOf, sameAutomation, saveable } from "./autonomy";
+import { automationOf, sameAutomation, saveable, whyNotSave } from "./autonomy";
 import { PipelineSettings } from "./PipelineSettings";
 import { moveTarget, movesOf, withKind, withMark, type Mark } from "./workflow";
 
@@ -91,13 +91,15 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
 
   const kept = rows.filter((r) => !r.removed);
   const survivors = kept.filter((r) => r.id !== 0); // where a removed column's tasks can go
+  const agentsBlocked = whyNotSave(automation, kept); // the columns are saved first: never half a save
   const ok =
     !!title.trim() &&
     kept.length > 0 &&
     kept.every((r) => r.title.trim()) &&
     kept.some((r) => r.kind === "done") &&
     kept.some((r) => r.kind !== "done") &&
-    frows.every((r) => r.title.trim());
+    frows.every((r) => r.title.trim()) &&
+    !agentsBlocked;
   const { busy, err, run } = useSubmit(async () => {
     if (title.trim() !== project.title || color !== project.hex_color) await patchProject(project.id, { title: title.trim(), hex_color: color });
     let saved = await putStatuses(
@@ -279,6 +281,7 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
 
       <AgentsSettings value={automation} onChange={setAutomation} machines={machines} agents={agents} recipes={recipes ?? []} statuses={kept} onAddQueued={addQueued} />
       <PipelineSettings stages={automation.stages} onChange={(stages) => setAutomation((a) => ({ ...a, stages }))} agents={agents} statuses={kept.filter((r) => r.id !== 0)} />
+      {agentsBlocked && <Notice tone="hint">{agentsBlocked}</Notice>}
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>

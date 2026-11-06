@@ -1,10 +1,10 @@
 // The board: a project's columns side by side, its tasks as cards — dragged on a desk, moved from a
 // ⋯ menu on a phone, shown in the order given: the server's, or the one the last drop made.
 
-import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import type { Project, Status, Task } from "@/features/tasks/api";
 import Icon from "@/ui/icons";
-import { Notice, Tip, useDismiss, useSubmit } from "@/ui";
+import { Menu, Notice, Tip, useSubmit } from "@/ui";
 import { queueWords } from "./autonomy";
 import { dropAfter, markerSlot } from "./drop";
 import { longPress } from "./press";
@@ -161,9 +161,6 @@ function Card({ task: t, statuses, selected, picked, selecting, dragging, before
   onDragEnd: () => void;
   chips: (t: Task) => ReactNode;
 }) {
-  const [menu, setMenu] = useState(false);
-  const closeMenu = useCallback(() => setMenu(false), []);
-  useDismiss(menu, closeMenu, [".board-card-menu"]);
   const elsewhere = statuses.filter((s) => s.id !== t.status_id);
   const pickRef = useRef(onPick);
   pickRef.current = onPick;
@@ -198,40 +195,16 @@ function Card({ task: t, statuses, selected, picked, selecting, dragging, before
       <div className="board-card-head">
         <span className="board-card-title">{t.title}</span>
         <span className="board-card-menu">
-          <Tip text={tr("Move to…")}>
-            <button
-              type="button"
-              className="icon-btn sm"
-              aria-label={tr("Move to another column")}
-              aria-haspopup="menu"
-              aria-expanded={menu}
-              disabled={elsewhere.length === 0}
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenu((m) => !m);
-              }}
-            >
-              <Icon name="more" size={14} />
-            </button>
-          </Tip>
-          {menu && (
-            <span className="row-menu" role="menu">
-              {elsewhere.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  role="menuitem"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenu(false);
-                    onMoveTo(s.id);
-                  }}
-                >
-                  <span className="tasks-dot" style={{ background: `#${s.hex_color || "888"}` }} /> {s.title}
-                </button>
-              ))}
-            </span>
-          )}
+          <Menu
+            label={tr("Move to another column")}
+            tip={tr("Move to…")}
+            items={() => elsewhere.map((s) => ({ label: s.title, onSelect: () => onMoveTo(s.id) }))}
+            trigger={
+              <button type="button" className="icon-btn sm" aria-label={tr("Move to another column")} disabled={elsewhere.length === 0} onClick={(e) => e.stopPropagation()}>
+                <Icon name="more" size={14} />
+              </button>
+            }
+          />
         </span>
       </div>
       <div className="board-card-chips">
