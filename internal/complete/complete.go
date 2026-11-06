@@ -101,9 +101,15 @@ func (s *Service) get(key string) (cached, bool) {
 	return c, true
 }
 
+// put keeps an answer and lets go of the ones past their minute: every worktree a task makes is a folder of its own.
 func (s *Service) put(key string, c cached) {
 	c.at = s.now()
 	s.mu.Lock()
+	for old, kept := range s.cache {
+		if c.at.Sub(kept.at) > CacheFor {
+			delete(s.cache, old)
+		}
+	}
 	s.cache[key] = c
 	s.mu.Unlock()
 }

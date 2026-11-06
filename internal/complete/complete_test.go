@@ -160,6 +160,28 @@ func TestFilesListTheFolderAndNoteACut(t *testing.T) {
 	}
 }
 
+func TestAnAnswerPastItsMinuteIsLetGo(t *testing.T) {
+	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
+	svc := New()
+	svc.now = func() time.Time { return now }
+	host := &shell.Fake{Name: "box", Answer: func(string) (string, error) { return "a.go\n", nil }}
+	for i := 0; i < 50; i++ {
+		if _, err := svc.Files(host, "/worktrees/task-"+strings.Repeat("x", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now = now.Add(CacheFor + time.Second)
+	if _, err := svc.Files(host, "/repo"); err != nil {
+		t.Fatal(err)
+	}
+	svc.mu.Lock()
+	kept := len(svc.cache)
+	svc.mu.Unlock()
+	if kept != 1 {
+		t.Fatalf("the lists of folders nobody asked for again stay in memory: %d kept", kept)
+	}
+}
+
 func TestFilesNameAFileOutsideASCIIAsItIs(t *testing.T) {
 	dir := t.TempDir()
 	run := func(args ...string) {
