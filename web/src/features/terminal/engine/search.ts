@@ -59,18 +59,19 @@ export function pickNear(found: Occurrence[], expectedRow: number, col: number):
   return best;
 }
 
-// cellSpan is a run of characters of a row as cells: a wide character fills two
+// cellSpan is a run of a row's text as cells — from and length in UTF-16 units of the row's text, as translateToString
+// gives it: a wide character fills two cells, a character of two units (an emoji, a surrogate pair) counts two units
 export function cellSpan(line: IBufferLine | undefined, from: number, length: number): { col: number; width: number } {
   if (!line) return { col: from, width: length };
   let chars = 0;
   let start = -1;
   let x = 0;
   for (; x < line.length; x++) {
-    const width = line.getCell(x)?.getWidth() ?? 1;
-    if (width === 0) continue;
+    const cell = line.getCell(x);
+    if (cell?.getWidth() === 0) continue;
     if (chars === from) start = x;
     if (chars === from + length) break;
-    chars++;
+    chars += (cell?.getChars() || " ").length;
   }
   if (start < 0) return { col: from, width: length };
   return { col: start, width: Math.max(1, x - start) };
