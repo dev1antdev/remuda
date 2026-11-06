@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine } from "@/features/roster/api";
 import { DEFAULT_RADAR } from "@/features/roster/radar";
-import { paneEntries, rank, type Entry } from "./rank";
+import { paneEntries, paneTitle, rank, tabName, type Entry } from "./rank";
 
 const entry = (title: string, keywords: string[] = []): Entry => ({ id: title, kind: "command", title, keywords, run: () => {} });
 const titles = (entries: Entry[]) => entries.map((e) => e.title);
@@ -75,6 +75,17 @@ describe("paneEntries", () => {
     expect(rank(entries, "gog").map((e) => e.id)).toEqual(["pane:gog|p4"]);
     expect(rank(entries, "deploy").map((e) => e.id)).toEqual(["pane:local|p3"]);
     expect(rank(entries, "site").map((e) => e.id)).toEqual(["pane:gog|p4", "pane:local|p2"]);
+  });
+  it("names a pane and a tab in a command's words, never by the person's own names while its folder is hidden", () => {
+    const deploy = machines[0]!.sessions[0]!.tabs[1]!;
+    const codex = deploy.panes[0]!;
+    const titled = { ...codex, title: "Migrating acme-billing to v2" };
+    expect(paneTitle(titled, deploy, "remuda", { ...DEFAULT_RADAR, rowLabel: "both" }, false)).toBe("deploy · Migrating acme-billing to v2");
+    expect(paneTitle(titled, deploy, "remuda", { ...DEFAULT_RADAR, rowLabel: "both" }, true)).toBe("Codex");
+    expect(paneTitle({ ...codex, agent: "" }, deploy, "remuda", DEFAULT_RADAR, true)).toBe("shell");
+    expect(tabName(deploy, false)).toBe("“deploy”");
+    expect(tabName(deploy, true)).toBe("1");
+    expect(tabName(machines[0]!.sessions[0]!.tabs[0]!, false)).toBe("1");
   });
   it("names a masked pane by its agent and the neutral names alone, and finds it by them only", () => {
     const entries = paneEntries(machines, DEFAULT_RADAR, now, 0, null, () => {}, (machine) => (machine.id === "gog" ? { folder: "Project A", machine: "Machine 2" } : null));
