@@ -2611,7 +2611,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the lane's own index never moves), one script per machine, at most
   every 15 s. `Service.Keep(arena, lane)` keeps one and closes the
   others: each one's whole work saved by `PatchScript` (a binary patch
-  `git apply` takes back on the base) to
+  `git apply` takes back on the base, through the plumbing `diff-index`, which no diff setting of the person's changes; a lane whose base was never read is kept) to
   `<state>/arenas/arena-<id>-lane-<n>-<agent>.patch`, 0600, then its
   workspace closed and its worktree and the lane's own branch removed
   with `worktrees.Discard` (`ownBranch`: never a branch the lane's agent
