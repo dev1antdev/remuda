@@ -398,6 +398,16 @@ func Run(ctx context.Context, o Options) error {
 			answer, _ := chats.LastAnswer(machine, pane)
 			return answer
 		},
+		Status: func(machine, pane string) string {
+			info, snap := chats.Pane(machine, pane)
+			switch {
+			case snap == nil:
+				return ""
+			case info == nil || info.Agent == "":
+				return events.Gone
+			}
+			return info.AgentStatus
+		},
 	}
 
 	// who hears what

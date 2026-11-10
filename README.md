@@ -282,7 +282,17 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   done, a push says what it answered, and the conversation stays
   readable through the search. A question the agent asks is yours:
   nothing closes while it waits. For the scout to create tasks, its
-  agent needs remuda's tasks MCP set up (see Tasks below).
+  agent needs remuda's tasks MCP set up (see Tasks below). **Every few
+  minutes, in working hours**: the "Every N minutes" preset runs a
+  schedule every 5, 10, 15, 20 or 30 minutes from one hour to another,
+  on weekdays only if you like — every 10 minutes from 9:00 until 17:00,
+  Monday to Friday, is `*/10 9-16 * * 1-5` — and under the When row the
+  form reads any cron back in words with its next three runs ("Mon–Fri,
+  every 10 min, 9:00–16:50 · next: 14:10, 14:20, 14:30"), naming the
+  host's clock when it is another zone than your device's. Nothing piles
+  up: a run is skipped, noted in quiet words and pushed nowhere, while the
+  agent it would reach — or the one the schedule's last run started — is
+  still working or waits for your answer.
 - **Tasks** — the **Agents | Wall | Tasks | Code | Review** switch in the top bar opens remuda's
   own task list: projects on the left, Today / Upcoming / All open /
   Proposed, quick add, done, due dates, priorities, labels, descriptions,

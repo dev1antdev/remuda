@@ -4,8 +4,10 @@ import { getJSON, sendJSON } from "@/lib/http";
 
 export type ScheduleKind = "prompt" | "digest" | "agent";
 export type DigestSince = "midnight" | "24h" | "7d" | "last";
+// why a run was skipped: the agent still works, waits for an answer, has not taken its prompt yet, its machine has not said, or the run before is still on its way
+export type SkipReason = "working" | "asking" | "starting" | "unsure" | "running";
 
-// Started is where an agent schedule's last run put its agent, while the schedule watches it for its answer
+// Started is where an agent schedule's last run put its agent, watched until it has answered: the next run waits for it
 export type Started = { machine: string; pane: string; tab: string; workspace: string; made_workspace: boolean; worked: boolean; at: string };
 
 export type Schedule = {
@@ -26,9 +28,12 @@ export type Schedule = {
   last_run?: string;
   last_result?: string;
   last_ok?: boolean;
+  skipped?: SkipReason; // set when the last run was skipped
   last_pane?: Started;
 };
 export const fetchSchedules = (): Promise<Schedule[]> => getJSON("/api/schedules");
 export const putSchedule = (s: Schedule): Promise<Schedule> => sendJSON("PUT", "/api/schedules", s);
 export const deleteSchedule = (id: string): Promise<void> => sendJSON("DELETE", `/api/schedules/${encodeURIComponent(id)}`);
+// fetchNext is a cron's next runs on the host's clock, for the form before it is saved; a cron the server cannot read throws its reason
+export const fetchNext = (cron: string): Promise<{ next: string[] }> => getJSON(`/api/schedules/next?cron=${encodeURIComponent(cron)}`);
 export const runSchedule = (id: string): Promise<Schedule> => sendJSON<Schedule>("POST", `/api/schedules/${encodeURIComponent(id)}/run`);

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { setLang } from "./i18n";
-import { ago, elapsed, spent, took } from "./time";
+import { ago, elapsed, spent, took, whenAhead } from "./time";
 
 afterEach(() => setLang("en"));
 
@@ -56,5 +56,18 @@ describe("took", () => {
     setLang("ru");
     expect(took(0.84)).toBe("0,8 с");
     expect(took(12.4)).toBe("12 с");
+  });
+});
+
+describe("whenAhead", () => {
+  const now = new Date(2026, 10, 13, 16, 35); // a Friday
+  const clock = (d: Date) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  it("says the time today, the weekday within the week, the date past it — always with the time", () => {
+    const today = new Date(2026, 10, 13, 16, 50);
+    const monday = new Date(2026, 10, 16, 9, 0);
+    const later = new Date(2026, 10, 30, 9, 0);
+    expect(whenAhead(today, now)).toBe(clock(today));
+    expect(whenAhead(monday, now)).toBe(`${monday.toLocaleDateString([], { weekday: "short" })} ${clock(monday)}`);
+    expect(whenAhead(later, now)).toBe(`${later.toLocaleDateString([], { day: "numeric", month: "short" })} ${clock(later)}`);
   });
 });

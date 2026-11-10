@@ -7,12 +7,14 @@ import { machineLabel } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
 import { useQuery } from "@/lib/query";
 import { basename, errMsg } from "@/lib/text";
-import { ago, whenShort } from "@/lib/time";
+import { ago, whenAhead } from "@/lib/time";
 import { Dialog, Icon, Logo, Notice, Tip } from "@/ui";
 import { agentWords, watchedWords } from "./agent";
 import { deleteSchedule, fetchSchedules, putSchedule, runSchedule, type Schedule } from "./api";
 import { NEVER } from "./cron";
+import { cronWords } from "./cronWords";
 import { kindOf, sinceWords } from "./digest";
+import { resultTone, resultWords } from "./runs";
 import { ScheduleEditor } from "./ScheduleEditor";
 import { t } from "@/lib/i18n";
 
@@ -54,7 +56,7 @@ export default function Schedules({ machines, onClose, ask }: {
     >
       <Notice tone="hint">
         {t(
-          "A prompt sent to the agent running in a folder, the standup pushed to your devices as a digest, or a fresh agent started in a folder with a prompt, on a timetable — in the remuda host's local time. A minute with no agent there, or an agent busy with a question, is skipped and noted.",
+          "A prompt sent to the agent running in a folder, the standup pushed to your devices as a digest, or a fresh agent started in a folder with a prompt, on a timetable — in the remuda host's local time. A run is skipped and noted while the agent it would reach — or the one its last run started — is still working or waits for an answer, so nothing piles up; a minute with no agent there is noted and pushed.",
         )}
       </Notice>
       {error && (
@@ -78,19 +80,19 @@ export default function Schedules({ machines, onClose, ask }: {
                 {s.label}
               </div>
               <div className="schedule-sub">
-                <code>{s.cron}</code> ·{" "}
+                {cronWords(s.cron) ?? <code>{s.cron}</code>} ·{" "}
                 {kindOf(s) === "digest"
                   ? t("to your devices · {since}", { since: sinceWords(s.since) })
                   : kindOf(s) === "agent"
                     ? agentWords(s, machineLabel(machines, s.machine), basename(s.dir), agentLabel(s.agent))
                     : `${machineLabel(machines, s.machine)} · ${basename(s.dir)}`}
                 {watchedWords(s) && <span> · {watchedWords(s)}</span>}
-                {s.enabled && s.next && s.next !== NEVER && <span> · {t("next {when}", { when: whenShort(s.next) })}</span>}
+                {s.enabled && s.next && s.next !== NEVER && <span> · {t("next {when}", { when: whenAhead(s.next) })}</span>}
                 {s.last_run && s.last_run !== NEVER && (
                   <>
                     {" · "}
-                    <span className={s.last_ok ? "ok" : "bad"}>
-                      {t("last {ago}: {result}", { ago: ago(s.last_run), result: s.last_result })}
+                    <span className={resultTone(s)}>
+                      {t("last {ago}: {result}", { ago: ago(s.last_run), result: resultWords(s) })}
                     </span>
                   </>
                 )}

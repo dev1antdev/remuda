@@ -20,6 +20,8 @@ type scoutDoor struct {
 	closeErr error
 	answer   string
 	pushed   []push.Payload
+	pane     string            // the pane the next start answers, w5:p2 unless set
+	status   map[string]string // each pane's agent status as the machine reports it; "" when it has not said
 }
 
 func (d *scoutDoor) agents() Agents {
@@ -31,7 +33,11 @@ func (d *scoutDoor) agents() Agents {
 			if d.startErr != nil {
 				return Started{}, d.startErr
 			}
-			return Started{Pane: "w5:p2", Tab: "w5:t2", Workspace: "w5"}, nil
+			pane := d.pane
+			if pane == "" {
+				pane = "w5:p2"
+			}
+			return Started{Pane: pane, Tab: strings.Replace(pane, ":p", ":t", 1), Workspace: "w5"}, nil
 		},
 		Close: func(run Started) error {
 			d.mu.Lock()
@@ -40,6 +46,11 @@ func (d *scoutDoor) agents() Agents {
 			return d.closeErr
 		},
 		Answer: func(machine, pane string) string { return d.answer },
+		Status: func(machine, pane string) string {
+			d.mu.Lock()
+			defer d.mu.Unlock()
+			return d.status[pane]
+		},
 	}
 }
 
@@ -177,19 +188,24 @@ func TestAgentScheduleIdleAfterWorkIsAnAnswerToo(t *testing.T) {
 	}
 }
 
+// Without Close the agent is still watched — the next run waits for it — and its answer noted, but its tab stays and nothing is pushed.
 func TestAgentScheduleWithoutCloseLeavesTheTab(t *testing.T) {
 	st, door := scoutStore(t, t.TempDir())
 	open := scout
 	open.Close = false
 	s, _ := st.Put(open)
 	got, _ := st.Run(s.ID)
-	if got.LastPane != nil {
-		t.Fatalf("watched without Close: %+v", got.LastPane)
+	if got.LastPane == nil || got.LastPane.Pane != "w5:p2" {
+		t.Fatalf("not watched without Close: %+v", got.LastPane)
 	}
+	st.OnStatus(status("w5:p2", "idle", "working"))
 	st.OnStatus(status("w5:p2", "working", "done"))
 	st.Wait()
-	if len(door.closed) != 0 {
-		t.Fatalf("closed: %+v", door.closed)
+	if len(door.closed) != 0 || len(door.pushed) != 0 {
+		t.Fatalf("closed %+v, pushed %+v", door.closed, door.pushed)
+	}
+	if after := st.List()[0]; after.LastPane != nil || after.LastResult != "answered: Made three tasks." {
+		t.Fatalf("after the answer: %+v", after)
 	}
 }
 

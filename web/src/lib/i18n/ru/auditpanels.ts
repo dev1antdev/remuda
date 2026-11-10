@@ -42,8 +42,6 @@ export const auditpanels: Dictionary = {
   "Machines saved in herdr appear on their own. This adds another: any host your":
     "Машины, сохранённые в herdr, появляются сами. Здесь добавляется ещё одна: любой хост, до которого ваш",
   "reaches with keys, with herdr running there.": "достаёт по ключам и где запущен herdr.",
-  "A prompt sent to the agent running in a folder, the standup pushed to your devices as a digest, or a fresh agent started in a folder with a prompt, on a timetable — in the remuda host's local time. A minute with no agent there, or an agent busy with a question, is skipped and noted.":
-    "Промпт агенту, работающему в папке, стендап дайджестом на ваши устройства или новый агент в папке с промптом — по расписанию, по местному времени хоста remuda. Минута, когда агента там нет или он занят вопросом, пропускается и отмечается.",
   "last {ago}: {result}": "последний запуск {ago}: {result}",
   you: "вы",
   "The issue is read with": "Issue читается через",
@@ -67,8 +65,6 @@ export const auditpanels: Dictionary = {
   "Workspace name (optional)": "Название пространства (необязательно)",
   "Label (optional)": "Имя (необязательно)",
   "(optional)": "(необязательно)",
-  "Each run opens a fresh tab in the folder's workspace (or a workspace on the folder) and hands the agent the prompt once it is up. A question the agent asks is yours to answer: nothing closes while it waits. The conversation stays readable through the search after the tab is gone.":
-    "Каждый запуск открывает новую вкладку в пространстве папки (или пространство на папке) и отдаёт агенту промпт, как только он поднимется. На вопрос агента отвечаете вы: пока он ждёт, ничего не закрывается. Разговор остаётся доступным через поиск и после того, как вкладки не станет.",
   "What the agents on each machine use to read and write your tasks through remuda mcp and remuda tasks, and to read who is doing what (the roster, a recap, the standup): never the rest. A revoked one is replaced when remuda next connects to that machine (this one at its next start).":
     "Ими агенты на каждой машине читают и пишут ваши задачи через remuda mcp и remuda tasks и смотрят, кто чем занят (список, сводка, стендап) — и ничего больше. Отозванный ключ заменяется, когда remuda в следующий раз подключится к той машине (к этой — при следующем запуске).",
   "Every key the page answers (also behind ?)": "Все клавиши, на которые отвечает страница (ещё за ?)",

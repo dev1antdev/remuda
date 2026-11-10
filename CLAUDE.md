@@ -2370,8 +2370,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   project stays), a five-field cron in the server's local time
   (`Parse`/`Matches`/`Next`, tested), the prompt, and a switch; delivery
   is `sessions.Input.SubmitToFolder` → the agent pane in that folder →
-  `Input.Submit`, the chat's own path (an agent busy with a question
-  refuses: noted, never queued). A **digest** schedule has no machine,
+  `Input.SubmitToAgent`: an agent at work (`ErrAgentWorking`) or busy
+  with a question (`ErrAgentBusy`) is never sent to — the run is
+  **skipped** (`noteSkip`: `Skipped` the reason, `SkipWorking` /
+  `SkipAsking`, `LastResult` "skipped: …", no push), never queued; a run
+  that comes while the schedule's previous one is still on its way (a
+  slow start, Run now beside a tick) is skipped as `SkipRunning`, any
+  kind. A **digest** schedule has no machine,
   folder or prompt (`Put` refuses them): at its cron it pushes the
   standup since its period — `Since` is `midnight` (default), `24h`,
   `7d` or `last` (its previous run; `digestSince`, tested) — through the
@@ -2383,35 +2388,60 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Model`, `Args` (split by `sessions.SplitArgs`), `Prompt`, `Close`;
   `checkAgent` refuses a shell, an unknown agent, no prompt, arguments
   that do not split. Firing goes through `Store.Agents` (`Start`, `Close`,
-  `Answer`, closures the app sets after `New` over
-  `sessions.Launcher`): a new tab of the folder's workspace, else a new
+  `Answer`, `Status`, closures the app sets after `New` over
+  `sessions.Launcher` and the watcher): a new tab of the folder's workspace, else a new
   workspace on the folder, the agent started with the model and
   arguments, the prompt handed over in the background (`FirstPrompt`;
-  not delivered → a push), `LastResult` "started in w5:p2". With `Close`
-  on, the place is kept as `LastPane` (`Started`, persisted in
-  `schedules.json` so a restart still watches it) and `Store.OnStatus`
+  not delivered → a push), `LastResult` "started in w5:p2". The place is
+  kept as `LastPane` (`Started`, persisted in `schedules.json` so a
+  restart still watches it) whatever `Close` says, and `Store.OnStatus`
   hears every `events.PaneStatus`: `done`, or `idle` after the pane was
-  seen `working`, takes the tab down — the workspace when it was made
-  for the run and holds no other tab by now — through `Close`, off the watcher's goroutine (the place
-  is let go of as the close is dispatched, so a further change of the
-  pane before it lands closes and pushes nothing twice), and notes
-  "answered: <first line of the last answer>" plus a push "Scout “…”
-  answered" (the session file stays, so the conversation is still found
-  by the search); `blocked` never closes (the person decides); a pane
-  gone on its own is forgotten; a finish that happened while remuda was
-  down is caught at the pane's next status change. `Tick` every 30s fires what
+  seen `working`, settles it (`settle`, off the watcher's goroutine; the
+  place is let go of as it is dispatched, so a further change of the pane
+  before it lands settles nothing twice) — "answered: <first line of the
+  last answer>" on the schedule and, with `Close` on, the tab taken down
+  — the workspace when it was made for the run and holds no other tab by
+  now — through `Close` and a push "Scout “…” answered" (the session file
+  stays, so the conversation is still found by the search); `blocked`
+  never closes (the person decides); a pane gone on its own is
+  forgotten. **The next run waits for it** (`previousRun`, tested in
+  `skip_test.go`): before a start the watched agent is looked at through
+  `Agents.Status` (the app's: herdr's `agent_status` off the watcher's
+  snapshot, `events.Gone` for a pane gone or an agent that left it, ""
+  for a machine with no snapshot) — working, blocked, no word yet, or at
+  rest without ever working and no answer within `startingFor` (the first
+  prompt's tries and a minute) skip the run (`SkipWorking`, `SkipAsking`,
+  `SkipUnsure`, `SkipStarting`), so a schedule every ten minutes never
+  piles agents up and a run never forgets the tab of the one before;
+  done, or at rest after working or with an answer to show, is a finish
+  nobody heard (remuda down at the time), settled then; gone, or past
+  `startingFor` without taking its prompt (the launcher pushed that; its
+  tab is left), is forgotten. `Tick` every 30s fires what
   matches the minute and was neither run nor started this minute (`firing`
   notes the dispatch, since a delivery waiting on a pane's lock or a slow
   remote can outlast the half minute). The schedules' pushes
   — a digest, a failed prompt run (`Kind: "schedule"`) — go through
   `push.Service.Broadcast`, every device whatever its watchdog pref: a
   schedule is the person's own word. `schedules.json` in the state dir;
-  routes `GET/PUT /api/schedules`, `DELETE /api/schedules/{id}`, `POST
+  routes `GET/PUT /api/schedules`, `GET /api/schedules/next?cron=` (the
+  next three runs on the host's clock, `Store.Upcoming`; a 400 with the
+  parser's reason), `DELETE /api/schedules/{id}`, `POST
   /api/schedules/{id}/run`. `features/schedules/Schedules.tsx` is the
-  panel behind the calendar button in the sidebar head (`cron.ts` the
-  presets and their parsing — "Every 3 hours" among them — `digest.ts`
+  panel behind the calendar button in the sidebar head (a row says its
+  cron in words, its next run through `whenAhead` in `lib/time.ts`, and a
+  skipped run quietly in the page's words — `runs.ts`; `cron.ts` the
+  presets and their parsing as a `When` — "Every 3 hours" and **"Every N
+  minutes"** among them: `STEPS` 5/10/15/20/30 from the hour `from` up to
+  the hour `until` (24 for midnight; the last run in the hour before it),
+  weekdays only or every day, `*/10 9-16 * * 1-5`; `cronWords.ts` any
+  cron in words, read as the server's parser reads it ("Mon–Fri, every
+  10 min, 9:00–16:50"), and `hostClockWords`, the host's UTC offset when
+  the next run's differs from this device's; `digest.ts`
   the periods and words, `agent.ts` the scout's suggested prompt and an
-  agent schedule's words, all tested, `ScheduleEditor.tsx` the form with
+  agent schedule's words, all tested; `WhenFields.tsx` the When row —
+  the preset, its time, minute or window, the cron by hand, and under it
+  the cron in words with `GET /api/schedules/next`'s runs;
+  `ScheduleEditor.tsx` the form with
   the kind switch at its top: the agent kind takes the machine, the
   folder — a known workspace or a path typed by hand — a recipe that
   fills the next four (`features/recipes`), the agent, its
