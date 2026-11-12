@@ -1,11 +1,14 @@
-// Package watch polls every machine's session snapshot, browser or not,
+// Package watch reads every machine's session snapshot, browser or not,
 // and turns what it sees into events. It is the only poller: handlers read
-// its cache and never ask herdr inline.
+// its cache and never ask herdr inline. herdr's own event stream (stream.go)
+// asks for a snapshot the moment something moves, and the poll goes on
+// behind it, slower while the stream stands, as the safety net.
 package watch
 
 import (
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/events"
@@ -14,10 +17,16 @@ import (
 )
 
 const (
-	localEvery     = 2 * time.Second
-	remoteEvery    = 4 * time.Second
 	discoverEvery  = 5 * time.Second
 	syncHerdrEvery = 30 * time.Second
+)
+
+// The poll's pace: without herdr's event stream as before, slower behind it; vars so tests can shrink them.
+var (
+	localEvery           = 2 * time.Second
+	remoteEvery          = 4 * time.Second
+	localStreamingEvery  = 15 * time.Second
+	remoteStreamingEvery = 20 * time.Second
 )
 
 type paneState struct {
@@ -36,14 +45,30 @@ type machineState struct {
 	panes   map[string]paneState
 	started bool
 	pollMu  sync.Mutex // one poll of this machine at a time: a snapshot never lands after a newer one
+
+	kick      chan struct{} // an event of the stream: a snapshot now
+	nudge     chan struct{} // an event that may wait a few seconds (a pane's title moved)
+	changed   chan struct{} // the subscriptions the stream should hold moved
+	streaming atomic.Bool   // herdr's event stream stands for the machine
+	polled    time.Time     // when the last poll of the loop began
+	wanted    *streamSet    // the subscriptions for the latest snapshot
+	refused   string        // the person's watches herdr refused, by their fingerprint: left out until they change
+
+	noStreamUntil time.Time // herdr refused the stream itself (one too old for it): the next try waits till then
 }
 
 type Watcher struct {
 	machines *machines.Manager
 	bus      *events.Bus
 
-	mu     sync.Mutex
-	states map[string]*machineState
+	// Outputs names the watches herdr keeps on a machine's panes' output, for its latest snapshot; nil for none.
+	Outputs func(machine string, snap *herdr.Snapshot) []Output
+	// Refused hears herdr refusing the person's own watches on a machine (nil once it takes them again).
+	Refused func(machine string, err error)
+
+	mu       sync.Mutex
+	states   map[string]*machineState
+	matchers sync.Map // an output watch's value → its matcher, compiled once
 }
 
 func New(m *machines.Manager, bus *events.Bus) *Watcher {
@@ -78,26 +103,48 @@ func (w *Watcher) Start() {
 func (w *Watcher) stateFor(id string) *machineState {
 	st := w.states[id]
 	if st == nil {
-		st = &machineState{panes: map[string]paneState{}}
+		st = &machineState{panes: map[string]paneState{}, kick: make(chan struct{}, 1), nudge: make(chan struct{}, 1), changed: make(chan struct{}, 1)}
 		w.states[id] = st
 	}
 	return st
 }
 
 func (w *Watcher) loop(mc *machines.Machine) {
-	every := remoteEvery
-	if mc.Local() {
-		every = localEvery
-	}
-	for !mc.Removed() {
-		w.poll(mc)
-		time.Sleep(every)
-	}
+	w.run(mc, nil)
 	// a removed machine: forget its state so re-adding the host starts clean
 	w.mu.Lock()
 	delete(w.states, mc.ID())
 	w.mu.Unlock()
 	events.Publish(w.bus, events.MachineRemoved{Machine: mc.ID()})
+}
+
+// run polls the machine, its event stream beside it, until it is removed or done closes.
+func (w *Watcher) run(mc *machines.Machine, done <-chan struct{}) {
+	w.mu.Lock()
+	st := w.stateFor(mc.ID())
+	w.mu.Unlock()
+	stop := make(chan struct{})
+	ended := make(chan struct{})
+	go func() {
+		defer close(ended)
+		w.stream(mc, st, stop)
+	}()
+	for !mc.Removed() && !closed(done) {
+		st.polled = time.Now()
+		w.poll(mc)
+		w.wait(st, mc.Local(), done)
+	}
+	close(stop)
+	<-ended
+}
+
+func closed(done <-chan struct{}) bool {
+	select {
+	case <-done:
+		return true
+	default:
+		return false
+	}
 }
 
 // poll fetches one snapshot and applies it; transport failures reach the machine through its client.
@@ -187,6 +234,7 @@ func (w *Watcher) apply(machineID string, snap *herdr.Snapshot) {
 		}
 		events.Publish(w.bus, change)
 	}
+	w.noteWanted(machineID, snap)
 }
 
 // Snapshot returns the machine's latest snapshot, or the error its last poll hit.
