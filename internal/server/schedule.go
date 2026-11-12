@@ -40,11 +40,13 @@ func (s *Server) handleSchedulePut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadRequest, err)
 		return
 	}
+	s.modelsMoved()
 	writeJSON(w, saved)
 }
 
 func (s *Server) handleScheduleDelete(w http.ResponseWriter, r *http.Request) {
 	s.Schedules.Delete(r.PathValue("id"))
+	s.modelsMoved()
 	writeJSON(w, map[string]any{"ok": true})
 }
 

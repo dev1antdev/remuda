@@ -218,6 +218,9 @@ type PaneInfo struct {
 	TitleStripped string        `json:"terminal_title_stripped"`
 	Focused       bool          `json:"focused"`
 	Scroll        Scroll        `json:"scroll"` // where the viewport stands; zero rows when herdr said nothing
+	// the display values clients reported for the pane (pane.report_metadata), every source's, the newest per name
+	Tokens      map[string]string `json:"tokens,omitempty"`
+	StateLabels map[string]string `json:"state_labels,omitempty"`
 }
 
 // Scroll is where a pane's viewport stands in its scrollback: rows above the bottom, the most it can be, and the
@@ -271,12 +274,13 @@ type WorktreeInfo struct {
 }
 
 type WorkspaceInfo struct {
-	WorkspaceID string        `json:"workspace_id"`
-	Label       string        `json:"label"`
-	AgentStatus string        `json:"agent_status"`
-	Focused     bool          `json:"focused"`
-	ActiveTabID string        `json:"active_tab_id"`
-	Worktree    *WorktreeInfo `json:"worktree"`
+	WorkspaceID string            `json:"workspace_id"`
+	Label       string            `json:"label"`
+	AgentStatus string            `json:"agent_status"`
+	Focused     bool              `json:"focused"`
+	ActiveTabID string            `json:"active_tab_id"`
+	Worktree    *WorktreeInfo     `json:"worktree"`
+	Tokens      map[string]string `json:"tokens,omitempty"` // workspace.report_metadata's values, every source's
 }
 
 type Rect struct {
@@ -296,6 +300,7 @@ type Layout struct {
 type Snapshot struct {
 	Version       string          `json:"version"`
 	FocusedPaneID string          `json:"focused_pane_id"`
+	FocusedTabID  string          `json:"focused_tab_id"`
 	Workspaces    []WorkspaceInfo `json:"workspaces"`
 	Tabs          []TabInfo       `json:"tabs"`
 	Panes         []PaneInfo      `json:"panes"`

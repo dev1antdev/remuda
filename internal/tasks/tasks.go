@@ -125,6 +125,7 @@ type Run struct {
 	Took    int     `json:"took,omitempty"`     // seconds from the start to the finish, 0 while the agent still works
 	PRURL   string  `json:"pr_url,omitempty"`   // the pull request the agent opened, once it named it
 	PRLabel string  `json:"pr_label,omitempty"` // "PR #15" / "MR !9"
+	Merged  string  `json:"merged,omitempty"`   // when gh or glab first read that request as merged
 
 	ByQueue  bool   `json:"by_queue,omitempty"` // started by the project's queue, not by the person
 	Stage    int    `json:"stage,omitempty"`    // the pipeline stage it runs: 0 the first agent's work, 1… the project's stages
@@ -343,7 +344,7 @@ CREATE TABLE IF NOT EXISTS task_fields (
 		"statuses":  {{"on_queue", "INTEGER NOT NULL DEFAULT 0"}},
 		"projects":  {{"automation", "TEXT NOT NULL DEFAULT ''"}},
 		"tasks":     {{"queue_refused", "TEXT NOT NULL DEFAULT ''"}},
-		"task_runs": {{"by_queue", "INTEGER NOT NULL DEFAULT 0"}, {"stage", "INTEGER NOT NULL DEFAULT 0"}, {"pipeline", "TEXT NOT NULL DEFAULT ''"}, {"expect_status", "INTEGER NOT NULL DEFAULT 0"}},
+		"task_runs": {{"by_queue", "INTEGER NOT NULL DEFAULT 0"}, {"stage", "INTEGER NOT NULL DEFAULT 0"}, {"pipeline", "TEXT NOT NULL DEFAULT ''"}, {"expect_status", "INTEGER NOT NULL DEFAULT 0"}, {"merged", "TEXT NOT NULL DEFAULT ''"}},
 	} {
 		for _, col := range cols {
 			if err := st.addColumn(table, col[0], col[1]); err != nil {
@@ -352,6 +353,9 @@ CREATE TABLE IF NOT EXISTS task_fields (
 		}
 	}
 	if _, err := st.db.Exec(`CREATE INDEX IF NOT EXISTS tasks_status ON tasks(project_id, status_id, position)`); err != nil {
+		return err
+	}
+	if err := st.backfillMerged(); err != nil {
 		return err
 	}
 	var n int
@@ -1570,11 +1574,11 @@ func (st *Store) List(q Query) ([]Task, int, error) {
 
 // ---- runs and comments ----
 
-const runCols = `id, task_id, machine, workspace, pane, dir, branch, agent, state, started, prompt_sent, finished, reported, error, cost, tokens, model, took, pr_url, pr_label, by_queue, stage, pipeline, expect_status`
+const runCols = `id, task_id, machine, workspace, pane, dir, branch, agent, state, started, prompt_sent, finished, reported, error, cost, tokens, model, took, pr_url, pr_label, by_queue, stage, pipeline, expect_status, merged`
 
 func scanRun(sc interface{ Scan(...any) error }) (Run, error) {
 	var r Run
-	err := sc.Scan(&r.ID, &r.TaskID, &r.Machine, &r.Workspace, &r.Pane, &r.Dir, &r.Branch, &r.Agent, &r.State, &r.Started, &r.PromptSent, &r.Finished, &r.Reported, &r.Error, &r.Cost, &r.Tokens, &r.Model, &r.Took, &r.PRURL, &r.PRLabel, &r.ByQueue, &r.Stage, &r.Pipeline, &r.Expect)
+	err := sc.Scan(&r.ID, &r.TaskID, &r.Machine, &r.Workspace, &r.Pane, &r.Dir, &r.Branch, &r.Agent, &r.State, &r.Started, &r.PromptSent, &r.Finished, &r.Reported, &r.Error, &r.Cost, &r.Tokens, &r.Model, &r.Took, &r.PRURL, &r.PRLabel, &r.ByQueue, &r.Stage, &r.Pipeline, &r.Expect, &r.Merged)
 	return r, err
 }
 
@@ -1703,6 +1707,21 @@ func (st *Store) OpenRuns() ([]Run, error) {
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// LiveTasks names, by pane, the task an open run on a machine is for: the newest run's where a pane had several.
+func (st *Store) LiveTasks(machine string) (map[string]int64, error) {
+	runs, err := st.OpenRuns()
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]int64{}
+	for _, r := range runs {
+		if r.Machine == machine {
+			out[r.Pane] = r.TaskID
+		}
+	}
+	return out, nil
 }
 
 // SetRun moves a run on to a state with its detail: the reported record for finished, else an error message.

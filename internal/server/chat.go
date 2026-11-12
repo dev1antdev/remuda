@@ -97,6 +97,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if len(tail.Plan) > 0 {
 		answer["plan"] = tail.Plan
 	}
+	if last == 0 { // the lens's notice of the calls Claude Code refused without asking; a tile shows none
+		if denied := transcript.DeniedAfter(tail.Turns, "").Calls; len(denied) > 0 {
+			answer["denied"] = denied
+		}
+	}
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "no-store")
 	answer["subagents"] = subagentsOf(conv)

@@ -36,9 +36,12 @@ type Report struct {
 	Herdr         string    `json:"herdr,omitempty"`
 	HerdrServer   string    `json:"herdr_server,omitempty"`
 	Remuda        string    `json:"remuda,omitempty"`
-	CodeServer    string    `json:"code_server,omitempty"` // the release under ~/.local/opt/code-server, as the installer links it
-	Running       bool      `json:"remuda_running"`        // a remuda answers on the machine's own port: terminals go through it
-	Statusline    bool      `json:"statusline,omitempty"`  // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
+	CodeServer    string    `json:"code_server,omitempty"`  // the release under ~/.local/opt/code-server, as the installer links it
+	Running       bool      `json:"remuda_running"`         // a remuda answers on the machine's own port: terminals go through it
+	Statusline    bool      `json:"statusline,omitempty"`   // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
+	ClaudeLogin   *Login    `json:"claude_login,omitempty"` // when Claude Code's stored sign-in there ends (claude.go), as last read
+	ClaudeModel   string    `json:"claude_model,omitempty"` // the default model Claude Code's user settings keep there
+	ClaudeFast    bool      `json:"claude_fast,omitempty"`  // fast mode saved on in those settings: every session there starts in it
 	DiskFreeGB    float64   `json:"disk_free_gb"`
 	DiskUsedPct   int       `json:"disk_used_pct"`
 	Load1         float64   `json:"load1"`
@@ -110,11 +113,15 @@ type Collector struct {
 	latest  Latest
 	release Release
 	locks   map[string]*sync.Mutex // one read of a machine at a time; a second waits for it
+	logins  map[string]loginRead   // each machine's Claude Code sign-in, read LoginEvery apart
+
+	// OnRead hears every machine's reading as it is kept, the sign-in carried over between its own reads
+	OnRead func(mc *machines.Machine, r Report)
 }
 
 // New makes a collector keeping its samples in dir ("" for none on disk).
 func New(dir string, m *machines.Manager, version string, check bool) *Collector {
-	return &Collector{dir: dir, machines: m, Version: version, Check: check, reports: map[string]*Report{}, history: loadHistory(dir), locks: map[string]*sync.Mutex{}}
+	return &Collector{dir: dir, machines: m, Version: version, Check: check, reports: map[string]*Report{}, history: loadHistory(dir), locks: map[string]*sync.Mutex{}, logins: map[string]loginRead{}}
 }
 
 // Start keeps every connected machine's report no older than interval and the versions fresh.
@@ -182,8 +189,13 @@ func (c *Collector) RefreshLatest(maxAge time.Duration) {
 	}
 }
 
-// Refresh reads one machine now; a read already running is waited for.
-func (c *Collector) Refresh(mc *machines.Machine) {
+// Refresh reads one machine now, its Claude Code sign-in once LoginEvery old; a read already running is waited for.
+func (c *Collector) Refresh(mc *machines.Machine) { c.read(mc, false) }
+
+// Recheck reads one machine now, its sign-in too: the person asked, perhaps having just signed in again.
+func (c *Collector) Recheck(mc *machines.Machine) { c.read(mc, true) }
+
+func (c *Collector) read(mc *machines.Machine, forceLogin bool) {
 	c.mu.Lock()
 	l := c.locks[mc.ID()]
 	if l == nil {
@@ -205,10 +217,19 @@ func (c *Collector) Refresh(mc *machines.Machine) {
 	if err == nil || peer != nil {
 		mc.SetPeer(peer) // a probe that failed outright says nothing about the peer
 	}
+	switch {
+	case r.Claude != "":
+		r.ClaudeLogin = c.readLogin(mc, forceLogin)
+	case err != nil:
+		r.ClaudeLogin = c.lastLogin(mc.ID()) // a machine that did not answer keeps what was known of its sign-in
+	}
 	c.mu.Lock()
 	c.reports[mc.ID()] = &r
 	c.mu.Unlock()
 	c.remember(mc.ID(), r)
+	if c.OnRead != nil {
+		c.OnRead(mc, r)
+	}
 }
 
 // Script prints the vitals, one "key=value" per line, every probe silent when its tool is missing.
@@ -225,7 +246,7 @@ echo "cores=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null)"
 if [ -x "$HOME/.local/bin/remuda" ]; then echo "remuda=$("$HOME/.local/bin/remuda" -version 2>/dev/null)"; fi
 cs=$(readlink "$HOME/.local/opt/code-server" 2>/dev/null); case "$cs" in *code-server-*) echo "code_server=${cs##*code-server-}";; esac
 grep -q 'remuda[^"]*statusline' "$HOME/.claude/settings.json" 2>/dev/null && echo "statusline=wrapped"
-echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
+` + SettingsScript + `echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
 echo "uptime=$(uptime 2>/dev/null)"
 ` + HostScript + `tf=""; for f in "$HOME/Library/Application Support/remuda/token" "$HOME/.config/remuda/token"; do [ -r "$f" ] && { tf="$f"; break; }; done
 if [ -n "$tf" ] && command -v curl >/dev/null 2>&1; then ph=$(curl -s -m 2 http://127.0.0.1:7317/api/health 2>/dev/null); case "$ph" in *'"ok":true'*) echo "peer=$ph"; echo "peer_token=$(cat "$tf")";; esac; fi
@@ -251,7 +272,7 @@ func Parse(out string) (Report, *machines.Peer) {
 			continue
 		}
 		v = strings.TrimSpace(v)
-		if host.parseHost(&r, k, v) {
+		if host.parseHost(&r, k, v) || parseClaude(&r, k, v) {
 			continue
 		}
 		switch k {

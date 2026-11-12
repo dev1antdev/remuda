@@ -25,6 +25,7 @@ type Display struct {
 	Updated int64   `json:"updated,omitempty"` // unix ms of the last response
 	Unknown bool    `json:"unknown,omitempty"` // a model with no price here
 	Partial bool    `json:"partial,omitempty"` // only a tail was read: the cost is a floor
+	Speed   string  `json:"speed,omitempty"`   // what the last response ran at, as the transcript says: "fast" in fast mode
 }
 
 // Files is where a machine's transcript bytes come from: a stat, a folder's stats, a read from an offset.
@@ -304,7 +305,7 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 	if d.Turns == 0 || last.At.IsZero() && last.MessageID == "" {
 		return Display{}, false
 	}
-	d.Model, d.Updated, d.Context = last.Model, last.At.UnixMilli(), tokensOf(last).Context()
+	d.Model, d.Updated, d.Context, d.Speed = last.Model, last.At.UnixMilli(), tokensOf(last).Context(), last.Speed
 	if m, ok := Lookup(last.Model); ok {
 		d.Model, d.Name, d.Window = m.ID, m.Name, m.Window
 	} else { // a model with no price here: named as the file names it, its window when the file says it (Codex does)

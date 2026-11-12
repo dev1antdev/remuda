@@ -21,10 +21,11 @@ export function useReviewKeys({ active, root, files, openFile, setOpenFile, onOp
   setOpenFile: (path: string | null) => void;
   onOpen: (path: string, line?: number) => void;
   toggleSplit: () => void;
-}): { loaded: (path: string) => void } {
+}): { loaded: (path: string) => void; reveal: (path: string, line: number) => void } {
   const live = useRef({ files, openFile, setOpenFile, onOpen, toggleSplit });
   live.current = { files, openFile, setOpenFile, onOpen, toggleSplit };
-  const wanted = useRef<string | null>(null); // a file opened by a key: its first line takes the focus once the diff is there
+  // a file opened by a key, or for a line: its first line, or that one, takes the focus once the diff is there
+  const wanted = useRef<{ path: string; line?: number } | null>(null);
   useEffect(() => {
     if (!active) return;
     const onKey = (event: KeyboardEvent) => {
@@ -49,7 +50,7 @@ export function useReviewKeys({ active, root, files, openFile, setOpenFile, onOp
           const index = openFile ? files.indexOf(openFile) : -1;
           const next = event.code === "KeyJ" ? files[index + 1] : index < 0 ? files[files.length - 1] : files[index - 1];
           if (!next) return;
-          wanted.current = next;
+          wanted.current = { path: next };
           setOpenFile(next);
           break;
         }
@@ -109,16 +110,31 @@ export function useReviewKeys({ active, root, files, openFile, setOpenFile, onOp
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [active, root]);
-  // the file a key opened: once its diff is on screen, its head scrolls into view and its first line takes the focus
+  // the file a key opened: once its diff is on screen, its head scrolls into view and its first line takes the focus;
+  // asked for a line (a secret the check found), that line's row comes into the middle and takes the focus instead
   const loaded = (path: string) => {
-    if (wanted.current !== path) return;
+    const asked = wanted.current;
+    if (asked?.path !== path) return;
     wanted.current = null;
     const box = root.current;
     if (!box) return;
+    if (asked.line) {
+      requestAnimationFrame(() => {
+        const row = box.querySelector<HTMLElement>(`.review-file.open .fv-line.secret[data-line="${asked.line}"]`) ?? box.querySelector<HTMLElement>(`.review-file.open .fv-line.walk[data-line="${asked.line}"]`);
+        row?.scrollIntoView({ block: "center" });
+        row?.focus({ preventScroll: true });
+      });
+      return;
+    }
     box.querySelector(".review-file.open .review-file-head")?.scrollIntoView({ block: "start" });
     rowsOf(box, null)[0]?.focus({ preventScroll: true });
   };
-  return { loaded };
+  const reveal = (path: string, line: number) => {
+    wanted.current = { path, line };
+    if (live.current.openFile === path) loaded(path);
+    else live.current.setOpenFile(path);
+  };
+  return { loaded, reveal };
 }
 
 // rowsOf is one element per line of the open diff, in order: every line in the one-column view; in two columns the cell

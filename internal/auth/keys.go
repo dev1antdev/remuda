@@ -39,7 +39,7 @@ var readRoutes = map[string]bool{"/api/roster": true, "/api/recap": true, "/api/
 var viewerRoutes = map[string]bool{
 	"/api/roster": true, "/api/chat": true, "/api/screen": true, "/api/scrollback": true, "/api/recap": true, "/api/standup": true,
 	"/api/feed": true, "/api/fs/file": true, "/api/fs/stat": true, "/api/health": true, "/api/push": true, "/api/question": true,
-	"/api/usage": true, "/ws/events": true, "/api/timelapse/recordings": true,
+	"/api/usage": true, "/api/scorecard": true, "/ws/events": true, "/api/timelapse/recordings": true,
 }
 
 // viewerPrefixes are the routes a viewer may GET under a path of their own: the folders' icon pictures by hash, and a

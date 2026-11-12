@@ -124,7 +124,7 @@ export default function Overlays() {
         <PreviewsDialog machineId={previewsOn.id} machineLabel={previewsOn.label} workspace={dialog.workspace} workspaceName={dialog.name} onClose={actions.closeDialog} />
       )}
       {dialog?.kind === "reopen" && <ReopenDialog onClose={actions.closeDialog} />}
-      {dialog?.kind === "arena" && <ArenaDialog taskId={dialog.taskId} title={dialog.title} prompt={dialog.prompt} at={dialog.at} onClose={actions.closeDialog} />}
+      {dialog?.kind === "arena" && <ArenaDialog taskId={dialog.taskId} title={dialog.title} prompt={dialog.prompt} at={dialog.at} lanes={dialog.lanes} onClose={actions.closeDialog} />}
       {dialog?.kind === "workspace" && (
         <NewWorkspaceDialog
           machines={machines}

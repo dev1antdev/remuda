@@ -12,23 +12,28 @@ import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { basename, errMsg, plural } from "@/lib/text";
 import { ago } from "@/lib/time";
-import { Icon, Notice, Tip, useTimedNotice } from "@/ui";
+import { Icon, Notice, useTimedNotice } from "@/ui";
 import { fetchReview, fetchReviewDiff, markReviewed, type Review as ReviewData, type ReviewFile, type Verdict } from "./api";
 import { FileRow, type NewComment } from "./Diff";
+import { DraftBar } from "./DraftBar";
 import { Note } from "./Hunk";
-import { KEYS, useReviewKeys } from "./keys";
+import { useReviewKeys } from "./keys";
 import { commentsMessage, place, verdictMessage, type DraftComment, type VerdictAsk } from "./draft";
 import { VerdictDialog } from "./VerdictDialog";
 import { subWords, type OpinionComment } from "./opinion";
 import { OpinionBlock } from "./OpinionBlock";
 import { OpinionDialog } from "./OpinionDialog";
+import { ReviewHead } from "./ReviewHead";
+import type { SecretFinding } from "./secrets";
 import { useOpinion } from "./useOpinion";
+import { useSecretCheck } from "./useSecretCheck";
 import { t } from "@/lib/i18n";
 
 export type { DraftComment } from "./draft";
 
 const NO_COMMENTS: DraftComment[] = []; // one empty list for every file without comments: a new array would redraw its hunks
 const NO_OPINION: OpinionComment[] = [];
+const NO_SECRETS: SecretFinding[] = [];
 
 export default function Review({ machineId, paneId, dir, agent, onSeen, active = true }: {
   machineId: string;
@@ -74,6 +79,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
   const where = () => place(dir, review);
   const listed = useMemo(() => (review?.files ?? []).map((file) => file.path), [review]);
   const second = useOpinion({ machineId, dir, look, active, files: listed, addComment, onError: setActionError });
+  const check = useSecretCheck(machineId, dir);
 
   const markReviewedSilently = async () => {
     setMarking(true);
@@ -108,6 +114,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
     await markReviewed(machineId, dir, verdict);
     setDraft([]);
     setOpenVerdict(null);
+    check.clear();
     setOpenFile(null);
     lookAgain();
     onSeen?.();
@@ -130,13 +137,17 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
     onOpen: (path, line) => onOpenFile(`${dir}/${path}`, line),
     toggleSplit: () => setSplit((on) => !on),
   });
+  // a finding clicked in the verdict dialog: the dialog gives way to its row, opened, in view and focused
+  const showFinding = (finding: SecretFinding) => {
+    setOpenVerdict(null);
+    if (unchangedFiles.some((file) => file.path === finding.file)) setShowUnchanged(true);
+    keys.reveal(finding.file, finding.line);
+  };
 
   if (review === null && !error) return <div className="empty">{t("Looking at the folder…")}</div>;
   if (review && !review.repo) return <div className="empty">{t("{folder} is not a git checkout — nothing to review.", { folder: basename(dir) })}</div>;
   const lastVerdict = review?.baseline?.verdict;
   const lastLookText = !lastLook ? t("not reviewed yet") : lastVerdict === "approved" ? t("approved {ago}", { ago: ago(lastLook) }) : lastVerdict === "changes" ? t("rejected {ago}", { ago: ago(lastLook) }) + (review?.baseline?.ready ? t(" · ready again") : "") : t("since you looked {ago}", { ago: ago(lastLook) });
-  const added = files.reduce((sum, file) => sum + file.added, 0);
-  const removed = files.reduce((sum, file) => sum + file.removed, 0);
   const orphanComments = draft.filter((comment) => !files.some((file) => file.path === comment.file));
   const hasAgentToTell = !!agent || agents.length > 0;
   const fileRow = (file: ReviewFile) => (
@@ -157,6 +168,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       reviewer={second.reviewer}
       onAdopt={second.adopt}
       onDismissOpinion={second.dismissOne}
+      secrets={check.marks.get(file.path) ?? NO_SECRETS}
       onOpen={(line) => onOpenFile(`${dir}/${file.path}`, line)}
       onCode={() => actions.openInCode(machineId, dir, `${dir.replace(/\/+$/, "")}/${file.path}`)}
     />
@@ -164,55 +176,18 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
 
   return (
     <div className="review" ref={rootRef}>
-      <div className="review-head">
-        <div className="review-title">
-          <span className="review-branch">
-            <Icon name="git-branch" size={12} /> {review?.branch || t("detached")}
-          </span>
-          <span className="review-sub">
-            {lastLookText}
-            {commits.length > 0 && ` · ${review?.commits_total ? t("the newest {n} of {total} commits", { n: commits.length, total: review.commits_total }) : plural(commits.length, "commit")}`}
-            {files.length > 0 && ` · ${t("{files} uncommitted +{added} −{removed}", { files: plural(files.length, "file"), added, removed })}`}
-            {subWords(second.opinion) && ` · ${subWords(second.opinion)}`}
-          </span>
-        </div>
-        <span className="review-keys" aria-hidden="true">
-          {KEYS.map(([first, second, what]) => (
-            <span key={what}>
-              <kbd>{first}</kbd>
-              {second && <kbd>{second}</kbd>} {t(what)}
-            </span>
-          ))}
-        </span>
-        <Tip text={split ? t("Two columns, the old file on the left (s)") : t("One column (s)")}>
-          <button type="button" className={`icon-btn${split ? " on" : ""}`} aria-pressed={split} aria-label={t("One column or two")} onClick={() => setSplit((on) => !on)}>
-            <Icon name="columns" size={14} />
-          </button>
-        </Tip>
-        <Tip text={t("Look again")}>
-          <button type="button" className="icon-btn" aria-label={t("Look again")} onClick={lookAgain}>
-            <Icon name="refresh-cw" size={14} />
-          </button>
-        </Tip>
-        <button
-          type="button"
-          className="btn review-ask-opinion"
-          disabled={(!files.length && !commits.length) || second.running}
-          onClick={() => second.setAsking(true)}
-          title={second.running ? t("A second opinion is on its way: wait for its answer, or close its tab") : t("Another agent reviews this without changing anything; its comments appear under the lines")}
-        >
-          <Icon name="message" size={14} /> {t("Second opinion")}
-        </button>
-        <button
-          type="button"
-          className="btn review-seen"
-          disabled={marking || (!files.length && !commits.length)}
-          onClick={() => void markReviewedSilently()}
-          title={t("The counts clear and the next look starts from now; the agent hears nothing")}
-        >
-          <Icon name="check" size={14} /> {t("Mark reviewed")}
-        </button>
-      </div>
+      <ReviewHead
+        review={review}
+        lastLookText={lastLookText}
+        opinionWords={subWords(second.opinion)}
+        split={split}
+        onSplit={() => setSplit((on) => !on)}
+        onLookAgain={lookAgain}
+        opinionRunning={second.running}
+        onAskOpinion={() => second.setAsking(true)}
+        marking={marking}
+        onMark={() => void markReviewedSilently()}
+      />
       {error && (
         <Notice tone="error" onDismiss={() => setActionError("")}>
           {error}
@@ -265,48 +240,16 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
         )}
       </div>
       {review && hasAgentToTell && (files.length > 0 || commits.length > 0 || draft.length > 0) && (
-        <div className="review-draft-bar">
-          <span className="review-draft-count">
-            {draft.length > 0 && (
-              <>
-                <Icon name="message" size={14} /> {plural(draft.length, "comment")}
-              </>
-            )}
-          </span>
-          {draft.length > 0 && (
-            <>
-              <button type="button" className="linkish" onClick={() => setDraft([])}>
-                {t("Clear")}
-              </button>
-              {agent ? (
-                <>
-                  <button type="button" className="btn" disabled={sending} title={t("Send the comments to {agent}, with no verdict", { agent })} onClick={() => sendComments({ machineId, paneId, agent }).catch((failure) => setActionError(errMsg(failure)))}>
-                    <Icon name="send" size={12} /> {t("Send")}
-                  </button>
-                  {agents.length > 1 && (
-                    <Tip text={t("Send the comments to another agent")}>
-                      <button type="button" className="icon-btn" aria-label={t("Send the comments to another agent")} disabled={sending} onClick={() => setPickingAgent(true)}>
-                        <Icon name="chevron-down" size={14} />
-                      </button>
-                    </Tip>
-                  )}
-                </>
-              ) : (
-                <button type="button" className="btn" disabled={sending} title={t("Send the comments to an agent, with no verdict")} onClick={() => setPickingAgent(true)}>
-                  <Icon name="send" size={12} /> {t("Send…")}
-                </button>
-              )}
-            </>
-          )}
-          <span className="review-verdicts">
-            <button type="button" className="btn" onClick={() => setOpenVerdict("changes")} title={t("Tell the agent what to change: the comments and a note go to it, and the next look starts from now")}>
-              <Icon name="x" size={12} /> {t("Reject")}
-            </button>
-            <button type="button" className="btn primary" onClick={() => setOpenVerdict("approved")} title={t("Tell the agent the changes are reviewed and it can carry on; the next look starts from now")}>
-              <Icon name="check" size={12} /> {t("Approve")}
-            </button>
-          </span>
-        </div>
+        <DraftBar
+          comments={draft.length}
+          agent={agent}
+          otherAgents={agents.length > 1}
+          sending={sending}
+          onClear={() => setDraft([])}
+          onSend={() => void sendComments({ machineId, paneId, agent }).catch((failure) => setActionError(errMsg(failure)))}
+          onPick={() => setPickingAgent(true)}
+          onVerdict={setOpenVerdict}
+        />
       )}
       {pickingAgent && (
         <SendToAgent
@@ -341,6 +284,9 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
           agents={agents}
           currentPane={currentPane}
           comments={draft.length}
+          check={check}
+          listed={listed}
+          onJump={showFinding}
           onClose={() => setOpenVerdict(null)}
           onSend={(target, note, ask) => sendVerdict(openVerdict, target, note, ask)}
         />

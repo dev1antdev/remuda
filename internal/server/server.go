@@ -34,6 +34,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/mirror"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/preview"
@@ -43,11 +44,14 @@ import (
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/recipes"
+	"github.com/dev1antdev/remuda/internal/retire"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
+	"github.com/dev1antdev/remuda/internal/scorecard"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sessions"
+	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/timelapse"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
@@ -97,6 +101,10 @@ type Server struct {
 	Previews  *preview.Service    // the machines' dev servers opened on the cockpit, nil without
 	SelfPort  int                 // the port of -addr, never offered as a preview
 	Opinions  *opinion.Service    // the second opinions another agent gave on a folder's changes
+	Subagents *subagents.Tracker  // how many subagents each Claude Code pane's conversation runs, for the Wall's zoo
+	Retire    *retire.Service     // what is set to a model or mode being retired, nil without
+	Scorecard *scorecard.Service  // which model does the work best, from the runs, reviews, requests and arenas
+	Mirror    *mirror.Service     // remuda's figures and alerts inside herdr itself
 	Timelapse *timelapse.Recorder // what the agents' screens did while they worked
 
 	streams   termStreams
@@ -150,6 +158,8 @@ func (s *Server) Handler() http.Handler {
 	s.leftoverRoutes(api)
 	s.previewRoutes(api)
 	s.opinionRoutes(api)
+	s.scorecardRoutes(api)
+	s.mirrorRoutes(api)
 	s.timelapseRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 

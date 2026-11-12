@@ -38,6 +38,8 @@ type Service struct {
 	Notify   func(push.Payload)
 	Dir      string // the state dir; the patches go under its arenas/
 	Now      func() time.Time
+	// ModelOf is the model the meter read a pane's answers from, "" when it read none: what a decided lane ran on
+	ModelOf func(machine, pane string) string
 
 	mu    sync.Mutex
 	stats map[int]statsRead   // by arena
@@ -306,6 +308,7 @@ func (s *Service) Keep(id, laneID int) (Arena, error) {
 	case kept.Dir == "":
 		return Arena{}, invalid("that lane has no worktree to keep")
 	}
+	models := s.lanesModels(a) // read while every lane's pane is still there
 	var saved []string
 	for _, lane := range a.Lanes {
 		if lane.ID == laneID || lane.State == LaneDiscarded {
@@ -340,7 +343,24 @@ func (s *Service) Keep(id, laneID int) (Arena, error) {
 		}
 		_, _ = s.Tasks.AddComment(a.TaskID, "remuda", msg)
 	}
+	if err == nil {
+		err = s.Store.Decide(out, models, s.now())
+	}
 	return out, err
+}
+
+// lanesModels is the model the meter read each lane's agent answering with, by lane; none without a meter.
+func (s *Service) lanesModels(a Arena) map[int]string {
+	models := map[int]string{}
+	if s.ModelOf == nil {
+		return models
+	}
+	for _, lane := range a.Lanes {
+		if lane.Pane != "" {
+			models[lane.ID] = s.ModelOf(lane.Machine, lane.Pane)
+		}
+	}
+	return models
 }
 
 func modelWords(model string) string {

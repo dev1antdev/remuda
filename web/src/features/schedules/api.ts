@@ -1,5 +1,6 @@
 // Schedules: prompts to an agent on a timetable, the standup pushed as a digest, or a fresh agent started in a folder.
 
+import type { Denial } from "@/features/agents/deny";
 import { getJSON, sendJSON } from "@/lib/http";
 
 export type ScheduleKind = "prompt" | "digest" | "agent";
@@ -23,6 +24,7 @@ export type Schedule = {
   model?: string; // the model as the agent's own CLI names it, "" for its default
   args?: string; // extra arguments, as typed
   close?: boolean; // take the tab down once the agent has answered
+  deny_prompts?: boolean; // its Claude Code denies what would wait on a permission prompt; absent on a record from before the switch (off)
   enabled: boolean;
   next?: string; // the coming run, filled in by the list
   last_run?: string;
@@ -30,6 +32,7 @@ export type Schedule = {
   last_ok?: boolean;
   skipped?: SkipReason; // set when the last run was skipped
   last_pane?: Started;
+  last_denied?: Denial[]; // the calls the last run's agent was denied without asking
 };
 export const fetchSchedules = (): Promise<Schedule[]> => getJSON("/api/schedules");
 export const putSchedule = (s: Schedule): Promise<Schedule> => sendJSON("PUT", "/api/schedules", s);

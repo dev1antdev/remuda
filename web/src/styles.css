@@ -4659,6 +4659,34 @@ body.is-resizing iframe {
   color: var(--red);
 }
 
+.schedule-denied {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
+}
+
+.deny-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-denied-list {
+  display: block;
+  margin: 4px 0;
+  padding-left: 16px;
+  font: var(--fs-12) var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.chat-denied-call {
+  display: list-item;
+  list-style: disc;
+}
+
 .schedule-editor {
   display: flex;
   flex-direction: column;
@@ -4903,6 +4931,140 @@ button.usage-row:hover {
   font-weight: 600;
   min-width: 56px;
   text-align: right;
+}
+
+/* ---- the models' scorecard (features/usage/ScorecardTab.tsx): the Usage panel's Models tab, a row per agent and model,
+   the best figure of a column in green, one that stands on too few runs faint; on a phone each row is a card ---- */
+
+.scorecard-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scorecard {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-13);
+}
+
+.score-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 2fr) repeat(7, minmax(0, 1fr)) var(--ctl-sm);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+}
+
+.score-row:nth-child(even) {
+  background: var(--bg-input);
+}
+
+.score-head {
+  align-items: end;
+  font-size: var(--fs-11);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--fg-faint);
+}
+
+.score-head > span:not(:first-child),
+.score-cell {
+  text-align: right;
+}
+
+.score-model {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.score-model-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.score-model-title,
+.score-runs {
+  overflow-wrap: anywhere;
+}
+
+.score-runs {
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.score-cell {
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.score-cell.is-few .score-figure {
+  color: var(--fg-faint);
+}
+
+.score-cell.is-best .score-figure {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.score-label {
+  display: none;
+}
+
+.score-try {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .score-head {
+    display: none;
+  }
+
+  .score-row {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 4px 16px;
+    padding: 10px;
+  }
+
+  .score-model {
+    grid-column: 1 / -1;
+    margin-bottom: 4px;
+    padding-right: calc(var(--ctl-sm) + 8px);
+  }
+
+  .score-try {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+  }
+
+  .score-cell {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .score-label {
+    display: inline;
+    min-width: 0;
+    color: var(--fg-dim);
+    font-size: var(--fs-12);
+    text-align: left;
+  }
+
+  .score-figure {
+    white-space: nowrap;
+  }
 }
 
 /* ---- the board: a project's columns side by side, its tasks as cards ---- */
@@ -6454,7 +6616,8 @@ button.usage-row:hover {
   color: var(--fg-dim);
 }
 
-.updates-cmd {
+.updates-cmd,
+.config-snippet {
   display: block;
   padding: 8px 10px;
   border-radius: var(--r-md);
@@ -7487,6 +7650,7 @@ body.popout {
   border-left: 1px solid var(--line);
 }
 .fv-pair > .fv-line.empty {
+  padding: 0; /* not the empty state's: a side with no line is as tall as the line beside it */
   background: var(--bg-input);
 }
 @container review-head (max-width: 1100px) {
@@ -9537,6 +9701,12 @@ body.popout {
   height: var(--ctl-sm);
 }
 
+.ps-deny {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* #11 Ready again: a rejected workspace whose agent says it is ready for another look, in the review queue */
 .queue-item.ready .queue-name {
   display: flex;
@@ -10597,8 +10767,38 @@ body.popout {
   color: var(--fg-dim);
 }
 
-/* ---- the zoo: every agent on the Wall as a little creature (app/Zoo.tsx, app/Creature.tsx). Its palette is mixed from
-   the vendor's hue (--zoo-skin, set per creature) and the flavour's tokens; its state reads from the pose and the sign ---- */
+/* ---- Inside herdr (features/settings/MirrorSection.tsx): remuda's figures and toasts in herdr, the config to paste ---- */
+.config-snippet {
+  margin: 0;
+  white-space: pre; /* a config's rows stay whole: a narrow box scrolls rather than breaking them */
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.mirror-outcomes {
+  margin: 0;
+  padding-left: 18px;
+}
+
+/* ---- the zoo: every agent on the Wall as a little creature (app/zoo). Its palette is mixed from the vendor's hue
+   (--zoo-skin, set per creature) and the flavour's tokens; its state reads from the pose and the sign; it stands in a
+   pen per machine under the sky of the viewer's hour ---- */
+.zoo {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.zoo > :not(.zoo-sky, .zoo-fireworks) {
+  position: relative;
+  z-index: 1;
+}
+
 .zoo-creature {
   --zoo-light: var(--ctp-text);
   --zoo-dark: var(--ctp-crust);
@@ -10622,15 +10822,145 @@ body.popout {
   --zoo-shadow: color-mix(in oklab, var(--ctp-overlay0) 45%, transparent);
 }
 
-.zoo-grid {
+/* the pens: one per machine, side by side as the width allows, each as wide as its creatures want */
+/* the pens stand under a strip of sky, where the sun or the moon and the stars are */
+.zoo-pens {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 14px;
+  padding: 44px 16px 18px;
+}
+
+.zoo-office {
+  padding-top: 44px;
+}
+
+.zoo-pen {
+  position: relative;
+  flex: 1 1 calc(var(--zoo-cell, 228px) * var(--pen-n, 1) + 40px);
+  min-width: min(calc(var(--zoo-cell, 228px) + 24px), 100%);
+  max-width: 100%;
+  padding: 10px 10px 26px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: color-mix(in oklab, var(--bg-raised) 72%, transparent);
+}
+
+/* the fence along the pen's foot: two rails and the pickets between them */
+.zoo-pen::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 7px;
+  height: 12px;
+  background:
+    linear-gradient(var(--line-strong), var(--line-strong)) 0 2px / 100% 2px no-repeat,
+    linear-gradient(var(--line-strong), var(--line-strong)) 0 8px / 100% 2px no-repeat,
+    repeating-linear-gradient(90deg, var(--line-strong) 0 3px, transparent 3px 15px);
+  border-radius: var(--r-xs);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.zoo-pen.is-warm {
+  background: color-mix(in oklab, var(--ctp-peach) 6%, var(--bg-raised));
+}
+
+.zoo-pen.is-hot {
+  border-color: color-mix(in oklab, var(--red) 40%, var(--line));
+  background: color-mix(in oklab, var(--ctp-red) 9%, var(--bg-raised));
+}
+
+.zoo-pen.is-dust {
+  background-image: radial-gradient(color-mix(in oklab, var(--fg-faint) 35%, transparent) 1px, transparent 1.5px);
+  background-size: 22px 22px;
+}
+
+/* a storm: the pen flickers now and then, softly */
+.zoo-pen.is-storm::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--amber);
+  opacity: 0;
+  pointer-events: none;
+  animation: zoo-flash 7s linear infinite;
+}
+
+.zoo-pen-sign {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin: 0 0 6px;
+  padding: 2px 10px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid hsl(var(--machine-hue) 55% 58%);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+
+.zoo-pen-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.zoo-pen-words {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.zoo-pen-marks {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.zoo-mark.is-warm,
+.zoo-mark.is-storm,
+.zoo-mark.is-lamp {
+  color: var(--amber);
+}
+
+.zoo-mark.is-hot {
+  color: var(--red);
+}
+
+.zoo-mark.is-boxes {
+  color: var(--ctp-peach);
+}
+
+.zoo-pen.is-lamp .zoo-mark.is-lamp {
+  filter: drop-shadow(0 0 3px color-mix(in oklab, var(--amber) 70%, transparent));
+}
+
+.zoo-boxes {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  width: 54px;
+  pointer-events: none;
+  fill: color-mix(in oklab, var(--ctp-peach) 30%, var(--bg-raised));
+  stroke: var(--line-strong);
+  stroke-width: 1.2;
+}
+
+.zoo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(var(--zoo-cell, 228px), 100%), 1fr));
   align-content: start;
-  gap: 22px 14px;
-  padding: 16px 16px 28px;
+  gap: 18px 12px;
 }
 
 .zoo-open.linkish {
@@ -10666,7 +10996,8 @@ body.popout {
 
 .cr-skin,
 .cr-tip,
-.cr-hand {
+.cr-hand,
+.cr-ear {
   fill: var(--zoo-skin);
 }
 
@@ -10689,8 +11020,35 @@ body.popout {
   stroke-width: 8;
 }
 
-.cr-belly {
+.cr-belly,
+.cr-sparkle {
   fill: var(--zoo-belly);
+}
+
+.cr-ear-in {
+  fill: var(--zoo-cheek);
+}
+
+.cr-moon,
+.cr-spots,
+.cr-freckles {
+  fill: var(--zoo-skin-dark);
+}
+
+.cr-spots {
+  opacity: 0.55;
+}
+
+.cr-led {
+  fill: var(--ctp-green);
+}
+
+.cr-led-2 {
+  fill: var(--ctp-yellow);
+}
+
+.cr-led-3 {
+  fill: var(--ctp-sky);
 }
 
 .cr-white,
@@ -10699,7 +11057,8 @@ body.popout {
 }
 
 .cr-pupil,
-.cr-mouth {
+.cr-mouth,
+.cr-mustache {
   fill: var(--zoo-dark);
 }
 
@@ -10725,6 +11084,226 @@ body.popout {
 
 .cr-code {
   fill: var(--zoo-skin);
+}
+
+/* the context's girth: the skin and the belly widen with it, slim again after a compaction */
+.cr-fat {
+  transform-origin: 60px 112px;
+  transform: scale(calc(1 + 0.22 * var(--zoo-girth, 0)), calc(1 + 0.04 * var(--zoo-girth, 0)));
+  transition: transform 1.4s var(--ease);
+}
+
+.cr-strap {
+  fill: color-mix(in oklab, var(--zoo-skin-dark) 50%, var(--zoo-dark));
+}
+
+.cr-buckle {
+  fill: none;
+  stroke: var(--ctp-yellow);
+  stroke-width: 1.8;
+}
+
+/* the eyes: a blink now and then, the pupils after the pointer (--gx, --gy from useGaze) */
+.cr-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: zoo-blink 5s ease-in-out infinite;
+  animation-delay: var(--zoo-blink, 0s);
+}
+
+.cr-gaze {
+  translate: calc(var(--gx, 0) * 1px) calc(var(--gy, 0) * 1px);
+  transition: translate 0.15s linear;
+}
+
+/* a model's little one stands a size smaller */
+.creature.is-small .cr-frame {
+  transform-origin: 60px 118px;
+  scale: 0.86;
+}
+
+.cr-hat.is-tophat .cr-hat-main {
+  fill: color-mix(in oklab, var(--zoo-dark) 82%, var(--zoo-skin));
+  stroke: var(--zoo-light);
+  stroke-width: 0.8;
+  stroke-opacity: 0.35;
+}
+
+.cr-hat.is-tophat .cr-hat-band {
+  fill: var(--zoo-skin);
+}
+
+.cr-hat.is-wizard .cr-hat-main {
+  fill: var(--ctp-mauve);
+}
+
+.cr-hat-star {
+  fill: var(--ctp-yellow);
+}
+
+.cr-hat.is-beret .cr-hat-main {
+  fill: var(--ctp-red);
+}
+
+.cr-hat-stalk {
+  fill: none;
+  stroke: var(--ctp-red);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.cr-hat.is-sprout .cr-hat-main,
+.cr-hat.is-laurel .cr-hat-main {
+  fill: var(--ctp-green);
+}
+
+.cr-hat.is-sprout .cr-hat-stalk,
+.cr-hat.is-laurel .cr-hat-stalk {
+  stroke: color-mix(in oklab, var(--ctp-green) 65%, var(--zoo-dark));
+}
+
+.cr-hat.is-cap .cr-hat-main {
+  fill: var(--ctp-blue);
+}
+
+.cr-hat-visor {
+  fill: color-mix(in oklab, var(--ctp-blue) 65%, var(--zoo-dark));
+}
+
+.cr-hat.is-cap .cr-hat-band {
+  fill: var(--zoo-light);
+}
+
+.cr-hat.is-crown .cr-hat-main {
+  fill: var(--ctp-yellow);
+  stroke: color-mix(in oklab, var(--ctp-yellow) 55%, var(--zoo-dark));
+  stroke-width: 1;
+}
+
+.cr-gem {
+  fill: var(--ctp-red);
+}
+
+.cr-gem.is-side {
+  fill: var(--ctp-sky);
+}
+
+.cr-glasses circle {
+  fill: color-mix(in oklab, var(--zoo-light) 16%, transparent);
+  stroke: var(--zoo-dark);
+  stroke-width: 2.2;
+}
+
+.cr-glasses path {
+  fill: none;
+  stroke: var(--zoo-dark);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.cr-bow {
+  fill: var(--ctp-pink);
+}
+
+.cr-scarf {
+  fill: var(--ctp-teal);
+}
+
+.cr-bowtie {
+  fill: var(--ctp-mauve);
+}
+
+.cr-coin {
+  fill: var(--ctp-yellow);
+}
+
+.cr-coin-edge {
+  fill: color-mix(in oklab, var(--ctp-yellow) 55%, var(--zoo-dark));
+}
+
+.cr-coins.is-amber .cr-coin {
+  fill: var(--ctp-peach);
+}
+
+.cr-coins.is-amber .cr-coin-edge {
+  fill: color-mix(in oklab, var(--ctp-peach) 55%, var(--zoo-dark));
+}
+
+.cr-coins.is-red .cr-coin {
+  fill: var(--ctp-red);
+}
+
+.cr-coins.is-red .cr-coin-edge {
+  fill: color-mix(in oklab, var(--ctp-red) 55%, var(--zoo-dark));
+}
+
+.cr-pole {
+  stroke: var(--zoo-metal);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.cr-cloth {
+  fill: var(--accent);
+}
+
+.cr-flag.is-pass .cr-cloth {
+  fill: var(--green);
+}
+
+.cr-flag.is-fail .cr-cloth {
+  fill: var(--red);
+}
+
+.cr-flag.is-pending .cr-cloth {
+  fill: var(--amber);
+}
+
+.cr-flag.is-draft .cr-cloth {
+  fill: var(--fg-faint);
+}
+
+.cr-mug {
+  fill: var(--zoo-light);
+  stroke: var(--zoo-dark);
+  stroke-width: 1.2;
+}
+
+.cr-mug-handle {
+  fill: none;
+  stroke: var(--zoo-dark);
+  stroke-width: 2.4;
+}
+
+.cr-steam {
+  fill: none;
+  stroke: var(--fg-faint);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.cr-sweat path {
+  fill: var(--ctp-sky);
+}
+
+.cr-puff circle {
+  fill: var(--zoo-light);
+  opacity: 0;
+}
+
+.cr-blanket-cloth {
+  fill: color-mix(in oklab, var(--ctp-blue) 55%, var(--zoo-dark));
+}
+
+.cr-blanket-hem {
+  fill: none;
+  stroke: var(--ctp-lavender);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+}
+
+.cr-babies-more {
+  fill: var(--fg-dim);
 }
 
 .cr-bit.is-yellow {
@@ -10770,6 +11349,20 @@ body.popout {
   fill: var(--violet);
 }
 
+.cr-battery {
+  fill: none;
+  stroke: var(--fg-dim);
+  stroke-width: 2;
+}
+
+.cr-battery-tip {
+  fill: var(--fg-dim);
+}
+
+.cr-battery-left {
+  fill: var(--red);
+}
+
 .cr-z {
   fill: var(--fg-faint);
 }
@@ -10792,6 +11385,7 @@ body.popout {
 .zoo-badge .radar-logo {
   width: 62%;
   height: 62%;
+  color: var(--zoo-dark); /* a mark that signs in ink (Codex's) draws in the badge's ink, not the page's */
 }
 
 .zoo-creature figcaption {
@@ -10837,7 +11431,8 @@ body.popout {
   color: var(--red);
 }
 
-.zoo-creature.is-worried .zoo-how {
+.zoo-creature.is-worried .zoo-how,
+.zoo-creature.is-drained .zoo-how {
   color: var(--amber);
 }
 
@@ -10856,15 +11451,23 @@ body.popout {
 }
 
 .zoo-bubble {
+  --zoo-bubble-line: var(--line-strong);
+  --zoo-bubble-fill: var(--bg-raised);
   position: relative;
   max-width: 100%;
   padding: 6px 10px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--zoo-bubble-line);
   border-radius: var(--r-lg);
-  background: var(--bg-raised);
+  background: var(--zoo-bubble-fill);
   color: var(--fg);
   line-height: 1.35;
   text-align: left;
+}
+
+/* what an asking creature holds up: the question, in the colour of a question */
+.zoo-bubble.is-question {
+  --zoo-bubble-line: color-mix(in oklab, var(--red) 55%, var(--line-strong));
+  --zoo-bubble-fill: color-mix(in oklab, var(--red) 9%, var(--bg-raised));
 }
 
 .zoo-bubble > span {
@@ -10881,9 +11484,9 @@ body.popout {
   bottom: -6px;
   width: 10px;
   height: 10px;
-  border-right: 1px solid var(--line-strong);
-  border-bottom: 1px solid var(--line-strong);
-  background: var(--bg-raised);
+  border-right: 1px solid var(--zoo-bubble-line);
+  border-bottom: 1px solid var(--zoo-bubble-line);
+  background: var(--zoo-bubble-fill);
   translate: -50% 0;
   rotate: 45deg;
 }
@@ -10898,6 +11501,11 @@ body.popout {
 }
 
 /* office mode: one creature large, the rest small beside their captions */
+.zoo-office {
+  flex: 1;
+  min-height: 0;
+}
+
 .zoo-featured {
   align-items: center;
   justify-content: center;
@@ -10970,6 +11578,151 @@ body.popout {
   padding: 10px;
 }
 
+/* the sky behind the zoo, of the viewer's hour: faint, so the creatures and their words stay first */
+.zoo-sky {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(to bottom, color-mix(in oklab, var(--ctp-sky) 10%, var(--bg)), var(--bg) 60%);
+}
+
+.zoo-sky.is-dawn {
+  background: linear-gradient(to bottom, color-mix(in oklab, var(--ctp-peach) 12%, var(--bg)), var(--bg) 60%);
+}
+
+.zoo-sky.is-dusk {
+  background: linear-gradient(to bottom, color-mix(in oklab, var(--ctp-mauve) 12%, var(--bg)), var(--bg) 60%);
+}
+
+.zoo-sky.is-night {
+  background: linear-gradient(to bottom, color-mix(in oklab, var(--ctp-blue) 9%, var(--ctp-crust)), var(--bg) 70%);
+}
+
+.zoo-sun {
+  position: absolute;
+  top: 8px;
+  right: 6%;
+  width: 26px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--ctp-yellow);
+  box-shadow: 0 0 18px 6px color-mix(in oklab, var(--ctp-yellow) 40%, transparent);
+  opacity: 0.75;
+}
+
+/* at dawn and dusk the sun sits low on the strip's horizon, half set */
+.zoo-sky.is-dawn .zoo-sun,
+.zoo-sky.is-dusk .zoo-sun {
+  top: 24px;
+  width: 34px;
+  background: var(--ctp-peach);
+  box-shadow: 0 0 22px 8px color-mix(in oklab, var(--ctp-peach) 40%, transparent);
+}
+
+.zoo-moon {
+  position: absolute;
+  top: 7px;
+  right: 6%;
+  width: 24px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow: -7px 4px 0 0 var(--ctp-yellow);
+  opacity: 0.8;
+}
+
+.zoo-star {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--ctp-text);
+  opacity: 0.45;
+  animation: zoo-twinkle 2.8s ease-in-out infinite;
+}
+
+/* the fireworks of a merge, over every pen */
+.zoo-fireworks {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.zoo-burst {
+  position: absolute;
+  width: 130px;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  opacity: 0;
+  fill: none;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  animation: zoo-burst 1.7s ease-out 2 both;
+}
+
+.zoo-burst.is-0 {
+  stroke: var(--ctp-yellow);
+}
+
+.zoo-burst.is-1 {
+  stroke: var(--ctp-pink);
+}
+
+.zoo-burst.is-2 {
+  stroke: var(--ctp-sky);
+}
+
+.zoo-burst.is-3 {
+  stroke: var(--ctp-green);
+}
+
+/* the foot: the day in a line, running along when it is longer than the screen, and the voices' switch */
+.zoo-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 8px 5px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+  flex-shrink: 0;
+}
+
+.zoo-ticker {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.zoo-ticker.is-quiet {
+  color: var(--fg-faint);
+}
+
+.zoo-ticker-track {
+  display: inline-flex;
+}
+
+.zoo-ticker.is-moving {
+  mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+}
+
+.zoo-ticker.is-moving .zoo-ticker-track {
+  animation-name: zoo-ticker;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.zoo-ticker.is-moving .zoo-ticker-copy {
+  padding-right: 4em;
+}
+
 /* a phone: the wall's bar wraps rather than push the page wider than the screen, and the zoo stands two abreast */
 @media (max-width: 920px) {
   .wall-bar {
@@ -10979,11 +11732,21 @@ body.popout {
 }
 
 @media (max-width: 600px) {
+  .zoo-pens {
+    gap: 10px;
+    padding: 34px 8px 14px;
+  }
+
+  .zoo-pen {
+    flex-basis: 100%;
+    padding: 8px 6px 24px;
+  }
+
   .zoo-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px 8px;
-    padding: 12px 10px 20px;
+    gap: 14px 6px;
   }
+
 }
 
 /* the motion: each pose's own, at the radar spinner's rhythm where it works */
@@ -11005,6 +11768,18 @@ body.popout {
 
 .zoo-creature.is-busy .cr-code-2 {
   animation-delay: 0.6s;
+}
+
+.zoo-creature.is-busy .cr-led {
+  animation: zoo-code 0.8s steps(2, jump-none) infinite;
+}
+
+.zoo-creature.is-busy .cr-led-2 {
+  animation-delay: 0.27s;
+}
+
+.zoo-creature.is-busy .cr-led-3 {
+  animation-delay: 0.53s;
 }
 
 .zoo-creature.is-asking .cr-arm-r {
@@ -11070,6 +11845,86 @@ body.popout {
 .zoo-creature.is-puzzled .cr-body {
   transform-origin: 60px 116px;
   animation: zoo-tilt 3s ease-in-out infinite;
+}
+
+/* drained: slumped where it sat, the battery's last bar blinking */
+.zoo-creature.is-drained .cr-body {
+  transform-origin: 60px 116px;
+  transform: translateY(3px) scale(1.03, 0.95);
+}
+
+.zoo-creature.is-drained .cr-battery-left {
+  animation: zoo-code 1.4s steps(2, jump-none) infinite;
+}
+
+/* the applause for another's finish: up from the rest, hands meeting */
+.zoo-creature.is-cheering .cr-body {
+  transform-origin: 60px 116px;
+  animation: zoo-bounce 0.34s ease-in-out infinite;
+}
+
+.zoo-creature.is-cheering .cr-hand-l {
+  animation: zoo-clap-l 0.17s ease-in-out infinite alternate;
+}
+
+.zoo-creature.is-cheering .cr-hand-r {
+  animation: zoo-clap-r 0.17s ease-in-out infinite alternate;
+}
+
+.cr-sparkle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: zoo-twinkle 2.6s ease-in-out infinite;
+}
+
+.cr-sparkle-2 {
+  animation-delay: 1.3s;
+}
+
+.cr-steam {
+  animation: zoo-steam 2s ease-in infinite;
+}
+
+.cr-steam-2 {
+  animation-delay: 1s;
+}
+
+.cr-sweat path {
+  animation: zoo-drop 1.6s ease-in infinite;
+}
+
+.cr-sweat .cr-drop-2 {
+  animation-delay: 0.8s;
+}
+
+.cr-puff circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: zoo-puff 1.6s ease-out both;
+}
+
+.cr-puff circle:nth-child(2n) {
+  animation-delay: 0.2s;
+}
+
+.cr-flag.is-pending .cr-cloth,
+.cr-flag.is-fail .cr-cloth {
+  transform-origin: 8px 58px;
+  animation: zoo-flutter 0.9s ease-in-out infinite alternate;
+}
+
+.cr-baby {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: zoo-hop 0.5s ease-in-out infinite alternate;
+}
+
+.cr-babies > g:nth-child(2) .cr-baby {
+  animation-delay: 0.17s;
+}
+
+.cr-babies > g:nth-child(3) .cr-baby {
+  animation-delay: 0.34s;
 }
 
 @keyframes zoo-bounce {
@@ -11196,10 +12051,298 @@ body.popout {
   }
 }
 
-/* reduced motion: every creature holds its pose; the sign and the pose still say the state */
+@keyframes zoo-blink {
+  0%,
+  94%,
+  100% {
+    transform: scaleY(1);
+  }
+  96.5% {
+    transform: scaleY(0.12);
+  }
+}
+
+@keyframes zoo-clap-l {
+  from {
+    transform: translateX(-2px);
+  }
+  to {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes zoo-clap-r {
+  from {
+    transform: translateX(2px);
+  }
+  to {
+    transform: translateX(-4px);
+  }
+}
+
+@keyframes zoo-steam {
+  0% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  40% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes zoo-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+}
+
+@keyframes zoo-puff {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  30% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+@keyframes zoo-flutter {
+  from {
+    transform: skewY(-6deg) scaleX(0.92);
+  }
+  to {
+    transform: skewY(5deg) scaleX(1);
+  }
+}
+
+@keyframes zoo-hop {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes zoo-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+
+@keyframes zoo-flash {
+  0%,
+  90%,
+  93%,
+  96%,
+  100% {
+    opacity: 0;
+  }
+  91.5%,
+  94.5% {
+    opacity: 0.09;
+  }
+}
+
+@keyframes zoo-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* reduced motion: every creature holds its pose, the sky stands still, no fireworks, and the day's line is cut rather
+   than run; the sign and the pose still say the state */
 @media (prefers-reduced-motion: reduce) {
+  .zoo,
+  .zoo *,
   .zoo-creature,
   .zoo-creature * {
     animation: none !important;
+    transition: none !important;
   }
+
+  .zoo-fireworks {
+    display: none;
+  }
+
+  .zoo-ticker.is-moving {
+    mask-image: none;
+    text-overflow: ellipsis;
+  }
+
+  .zoo-ticker.is-moving .zoo-ticker-track {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .zoo-ticker.is-moving .zoo-ticker-copy + .zoo-ticker-copy {
+    display: none;
+  }
+}
+
+/* ---- the secret check: the verdict dialog's findings, the diff rows they mark, the settings files' notes in the lens head ---- */
+.modal .secret-check {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-input);
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.modal .secret-check.is-found,
+.modal .secret-check.is-failed {
+  border-color: var(--amber-ring);
+  background: var(--amber-soft);
+  color: var(--fg);
+}
+
+.secret-check-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.secret-check-head > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.secret-check.is-found .secret-check-head > svg,
+.secret-check.is-failed .secret-check-head > svg {
+  color: var(--amber);
+}
+
+.secret-check.is-clean .secret-check-head > svg {
+  color: var(--green);
+}
+
+.secret-check-words {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.45;
+}
+
+/* .modal first: a dialog of size md is also .md, whose lists are the Markdown's, indented */
+.modal .secret-findings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 32vh;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.modal .secret-findings li {
+  margin: 0;
+}
+
+.linkish.secret-finding {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  text-align: left;
+  color: var(--fg);
+}
+
+.linkish.secret-finding:disabled {
+  cursor: default;
+  background: none;
+}
+
+.secret-finding-where {
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
+}
+
+.secret-finding-rule {
+  font-size: var(--fs-11);
+  color: var(--amber);
+}
+
+.secret-finding-excerpt {
+  flex-basis: 100%;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  font-weight: 400;
+  color: var(--fg-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.secret-check-note {
+  margin: 0;
+  color: var(--fg-dim);
+}
+
+/* Cancel, Send anyway… and the held approval: on a phone the three take two rows rather than run past the edge */
+.verdict-actions {
+  flex-wrap: wrap;
+}
+
+.review-diff .fv-line.secret {
+  background: var(--amber-soft);
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+
+.review-tag-secret {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.review-settings {
+  flex: 1 0 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.review-settings-fix {
+  opacity: 0.85;
 }

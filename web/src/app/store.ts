@@ -44,7 +44,7 @@ export type AppDialog =
   | { kind: "previews"; machineId: string; workspace?: string; name?: string } // what the machine's processes serve, the workspace's first, each opened on the cockpit
   | { kind: "update-everywhere" } // every connected machine's updates, one after another, the page's own host last
   | { kind: "reopen" } // the agents whose panes went away, each to be started again on its session
-  | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string } } // one prompt to several agents, each in a worktree of its own
+  | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string }; lanes?: { agent: string; model?: string }[] } // one prompt to several agents, each in a worktree of its own; lanes: the agents and models to start with
   | null;
 
 export type NoticeMsg = { text: string; error?: boolean; brief?: boolean };

@@ -26,7 +26,9 @@ export type Status = {
 export type Stage = { name: string; agent: string; model?: string; prompt: string; status_id?: number; pr?: boolean };
 
 // how a project's agents work: where, which agent, the queue's switch, the pipeline's stages
-export type Automation = { machine: string; dir: string; agent: string; model?: string; args?: string; queue: boolean; max: number; stages: Stage[] };
+// deny_prompts: the Claude Code agents the queue and the stages start deny what would wait on a permission prompt;
+// absent on settings saved before the switch (off)
+export type Automation = { machine: string; dir: string; agent: string; model?: string; args?: string; queue: boolean; max: number; stages: Stage[]; deny_prompts?: boolean };
 
 // what a project's queue does now, while its switch is on; the reason is the server's words
 export type QueueNote = { state: "idle" | "waiting" | "started"; reason?: string; next?: string; working: number; max: number; at: string };

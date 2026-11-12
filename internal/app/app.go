@@ -32,6 +32,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/mirror"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/preview"
@@ -45,15 +46,19 @@ import (
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
+	"github.com/dev1antdev/remuda/internal/scorecard"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/server"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/setup"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/signin"
 	"github.com/dev1antdev/remuda/internal/state"
+	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/timelapse"
+	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -76,9 +81,10 @@ type Options struct {
 	AuthKey       string // TS_AUTHKEY
 	VersionCheck  bool
 	Version       string
-	Door          bool // place the agents' door files here and on every remote (off for a scratch instance)
-	Record        bool // record the agents' timelapses (off for a scratch instance: the real one records)
-	Server        bool // serve the page only: the host is no machine of the fleet, its herdr neither needed nor kept
+	Door          bool   // place the agents' door files here and on every remote (off for a scratch instance)
+	Server        bool   // serve the page only: the host is no machine of the fleet, its herdr neither needed nor kept
+	MirrorClosed  string // why this remuda writes nothing into herdr (a scratch instance beside the real one); "" writes
+	Record        bool   // record the agents' timelapses (off for a scratch instance: the real one records)
 }
 
 // Run builds remuda and serves until ctx ends.
@@ -156,9 +162,13 @@ func Run(ctx context.Context, o Options) error {
 	})
 	defer hub.Close()
 	defer pushSvc.Sockets.Close() // the Mac app's alert stream ends with "remuda is stopping", as the page's events do
+	var mirrored *mirror.Service  // named here: an alert the feed records may pop up inside herdr too
 	pushSvc.OnAlert = func(p push.Payload) {
 		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body, Worked: p.Worked})
 		hub.RosterChanged() // the bell's dot rides on the roster
+		if mirrored != nil {
+			mirrored.Alert(p)
+		}
 	}
 	// a muted workspace: the pane's folder from the watcher's last snapshot, for the push service's silence check
 	pushSvc.Folder = func(machineID, paneID string) string {
@@ -216,6 +226,16 @@ func Run(ctx context.Context, o Options) error {
 		return mc, true
 	})
 	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
+	// how many subagents each Claude Code pane's live conversation runs, read while a page reads the roster, for the Wall's zoo
+	subagentCounts := subagents.New(chats.Subagents, func(machineID string) bool {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return false
+		}
+		_, _, err = mc.Ready()
+		return err == nil
+	})
+	subagentCounts.OnChange = hub.RosterChanged
 	reviews := review.New(o.Dir)
 	// the agents' turns as timelapses: a working pane's screen read every few seconds over its machine's herdr, the
 	// turn written once it ends; the turns still going are written as stopped when remuda stops
@@ -309,6 +329,10 @@ func Run(ctx context.Context, o Options) error {
 	input := sessions.NewInput(fleet, watcher)
 	health.PinnedCode = setup.CodeVersion
 	vitals := health.New(o.Dir, fleet, o.Version, o.VersionCheck)
+	// Claude Code's sign-in on each machine, read with the vitals: warned of three days before it ends, a day before, once ended
+	signins := signin.New(o.Dir)
+	signins.Notify = pushSvc.Notify
+	vitals.OnRead = signinWarnings(signins, fleet)
 	runner := jobs.New(bus)
 	restarter := restart.New(fleet)
 	restarter.Later = func(mc *machines.Machine, title string, fn func(say func(string)) error) {
@@ -403,18 +427,62 @@ func Run(ctx context.Context, o Options) error {
 	backups.Notify = func(title, body string) {
 		pushSvc.Broadcast(push.Payload{Kind: "backup", Title: title, Body: body, Tag: "backup"})
 	}
+	// what remuda knows of each agent, shown inside herdr itself: tokens on its panes and workspaces, and toasts
+	mirrored = mirror.New(o.Dir, mirror.Inputs{
+		Herdr: func(id string) (mirror.Herdr, bool) {
+			mc, err := fleet.Get(id)
+			if err != nil {
+				return nil, false
+			}
+			client, _, err := mc.Ready()
+			if err != nil {
+				return nil, false
+			}
+			return client, true
+		},
+		Machines: func() []mirror.Machine {
+			var out []mirror.Machine
+			for _, mc := range fleet.List() {
+				if state, _ := mc.State(); state == machines.StateConnected {
+					out = append(out, mirror.Machine{ID: mc.ID(), Label: mc.Label()})
+				}
+			}
+			return out
+		},
+		Snapshot: func(id string) *herdr.Snapshot {
+			snap, _ := watcher.Snapshot(id)
+			return snap
+		},
+		Radar: tracker.Display,
+		Usage: meter.Display,
+		Said:  sayings.Line,
+		Link:  sayings.Link,
+		PR:    requests.Status,
+		Limit: planLimits.PaneOf,
+		Review: func(machineID, dir string) (int, bool) {
+			badge, _ := reviews.Badge(machineID, dir)
+			return badge.Fresh, reviews.Ready(machineID, dir)
+		},
+		Tasks: taskStore.LiveTasks,
+	}, o.MirrorClosed)
+	defer mirrored.Close()
+	if o.MirrorClosed != "" {
+		log.Printf("remuda's figures and alerts stay out of herdr: %s", o.MirrorClosed)
+	}
 	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker}
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
 	})
+	cookbook := recipes.New(o.Dir)
+	retiring := retirements(cookbook, schedules, taskStore, fleet, watcher, meter, vitals)
 	scouts := &sessions.Launcher{Machines: fleet, Watch: watcher, Input: input, Notify: pushSvc.Broadcast}
 	schedules.Agents = schedule.Agents{
 		Start: func(s schedule.Schedule) (schedule.Started, error) {
-			args, err := sessions.SplitArgs(s.Args)
+			start, err := s.Start()
 			if err != nil {
 				return schedule.Started{}, err
 			}
-			place, err := scouts.StartInFolder(s.Machine, s.Dir, s.Label, s.Agent, sessions.Start{Model: s.Model, Args: args}, s.Prompt)
+			place, err := scouts.StartInFolder(s.Machine, s.Dir, s.Label, s.Agent, start, s.Prompt)
 			return schedule.Started{Pane: place.Pane, Tab: place.Tab, Workspace: place.Workspace, MadeWorkspace: place.MadeWorkspace}, err
 		},
 		Close: func(run schedule.Started) error {
@@ -424,6 +492,7 @@ func Run(ctx context.Context, o Options) error {
 			answer, _ := chats.LastAnswer(machine, pane)
 			return answer
 		},
+		Denied: func(machine, pane string) []transcript.Denial { return chats.Denied(machine, pane, "").Calls },
 		Status: func(machine, pane string) string {
 			info, snap := chats.Pane(machine, pane)
 			switch {
@@ -445,6 +514,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 	})
 	events.Subscribe(bus, func(e events.Snapshot) { sayings.Observe(e.Machine, e.Snap) })
+	events.Subscribe(bus, func(e events.Snapshot) { subagentCounts.Observe(e.Machine, e.Snap) })
 	events.Subscribe(bus, func(e events.Snapshot) { recorder.Observe(e.Machine, e.Snap, e.At) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { recorder.Forget(e.Machine) })
 	events.Subscribe(bus, func(e events.Snapshot) {
@@ -454,6 +524,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 	})
 	events.Subscribe(bus, restarter.Observe)
+	events.Subscribe(bus, mirrored.Observe)
 	events.Subscribe(bus, func(e events.Snapshot) { hub.RosterChanged() })
 	events.Subscribe(bus, func(e events.MachineRemoved) {
 		tracker.Forget(e.Machine)
@@ -463,11 +534,15 @@ func Run(ctx context.Context, o Options) error {
 		restarter.Memory.Forget(e.Machine)
 		planLimits.Forget(e.Machine)
 		opinions.ForgetMachine(e.Machine)
+		subagentCounts.Forget(e.Machine)
+		signins.Forget(e.Machine)
+		mirrored.Forget(e.Machine)
 	})
 	events.Subscribe(bus, opinions.OnStatus)
 	events.Subscribe(bus, opinions.Observe)
 	events.Subscribe(bus, pushSvc.OnStatus)
 	events.Subscribe(bus, sayings.OnStatus)
+	events.Subscribe(bus, subagentCounts.OnStatus)
 	events.Subscribe(bus, planLimits.OnStatus)
 	events.Subscribe(bus, requests.OnNamed)
 	events.Subscribe(bus, requests.OnStatus)
@@ -533,6 +608,7 @@ func Run(ctx context.Context, o Options) error {
 			return display.State, time.UnixMilli(display.Since), true
 		},
 		LastAnswer: chats.LastAnswer,
+		Denied:     chats.Denied,
 		Usage: func(machineID, paneID string) (float64, int64, string, bool) {
 			d, ok := meter.Display(machineID, paneID)
 			if !ok {
@@ -570,6 +646,11 @@ func Run(ctx context.Context, o Options) error {
 	go planLimits.Loop(30*time.Second, ctx.Done())
 	go backups.Loop(time.Minute, ctx.Done())
 
+	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
+		ModelOf: func(machineID, paneID string) string {
+			d, _ := meter.Display(machineID, paneID)
+			return d.Name
+		}}
 	srv = &server.Server{
 		Machines:  fleet,
 		Watch:     watcher,
@@ -590,7 +671,8 @@ func Run(ctx context.Context, o Options) error {
 		Review:    reviews,
 		Schedules: schedules,
 		Quick:     quick.New(o.Dir),
-		Recipes:   recipes.New(o.Dir),
+		Recipes:   cookbook,
+		Retire:    retiring,
 		Prefs:     prefs.New(o.Dir),
 		Code:      code.New(o.CodePort),
 		Complete:  complete.New(),
@@ -600,13 +682,16 @@ func Run(ctx context.Context, o Options) error {
 		Live:      hub,
 		Awake:     keepAwake,
 		Icons:     icons.New(o.Dir),
-		Arena:     &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir},
+		Arena:     arenas,
 		Limits:    planLimits,
 		Scratch:   shells,
 		Jira:      issues,
 		Backup:    backups,
 		SelfPort:  auth.PortOf(o.Addr),
 		Opinions:  opinions,
+		Subagents: subagentCounts,
+		Scorecard: &scorecard.Service{Tasks: taskStore, Review: reviews, Arenas: arenas.Store},
+		Mirror:    mirrored,
 		Timelapse: recorder,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}

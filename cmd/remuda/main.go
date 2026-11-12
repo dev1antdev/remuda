@@ -43,6 +43,7 @@ func main() {
 	noCheck := flag.Bool("no-version-check", false, "never ask npm and GitHub what the newest Claude Code, herdr and remuda are")
 	noDoor := flag.Bool("no-door", false, "keep the agents' door closed: no agent-key / agent-url files here or on a remote machine (a scratch instance beside the real one must not overwrite the real one's)")
 	withDoor := flag.Bool("door", false, "open the agents' door although REMUDA_STATE_DIR is set, which closes it by itself")
+	withMirror := flag.Bool("mirror", false, "write remuda's figures and alerts into herdr although REMUDA_STATE_DIR is set, which keeps them out by itself")
 	withRecord := flag.Bool("record", false, "record the agents' timelapses although REMUDA_STATE_DIR is set, which leaves them to the real instance")
 	serverOnly := flag.Bool("server", os.Getenv("REMUDA_SERVER") == "1", "serve the page only (also REMUDA_SERVER=1): this machine is no machine of the cockpit — no workspaces here, its herdr neither needed nor kept — and its vitals stand behind the Server place on the rail; without it (the default, a client of its own herdr) the machine remuda runs on is one of the cockpit's machines")
 	flag.Usage = help
@@ -74,9 +75,10 @@ func main() {
 		Addr: *addr, HerdrBin: *herdrBin, Socket: *socket, CodePort: *codePort,
 		Tailscale: *tailscale, TailscaleName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"),
 		VersionCheck: !*noCheck, Version: version,
-		Door:   doorOpen(*noDoor, *withDoor, os.Getenv("REMUDA_STATE_DIR") != ""),
-		Record: recordsHere(*withRecord, os.Getenv("REMUDA_STATE_DIR") != ""),
-		Server: *serverOnly,
+		Door:         doorOpen(*noDoor, *withDoor, os.Getenv("REMUDA_STATE_DIR") != ""),
+		MirrorClosed: mirrorClosed(*withMirror, os.Getenv("REMUDA_STATE_DIR") != ""),
+		Record:       recordsHere(*withRecord, os.Getenv("REMUDA_STATE_DIR") != ""),
+		Server:       *serverOnly,
 	})
 	if err != nil {
 		log.Print(err)
@@ -91,6 +93,15 @@ func doorOpen(noDoor, withDoor, scratch bool) bool {
 		return false
 	}
 	return !scratch || withDoor
+}
+
+// mirrorClosed says why this instance writes nothing into herdr, "" when it does: a scratch instance (REMUDA_STATE_DIR
+// set) beside the real one would fight it over the same panes and pop every toast twice, unless -mirror asks.
+func mirrorClosed(withMirror, scratch bool) string {
+	if scratch && !withMirror {
+		return "a scratch instance (REMUDA_STATE_DIR) leaves herdr to the real remuda; -mirror lets it write"
+	}
+	return ""
 }
 
 // recordsHere says whether this instance records the agents' timelapses: not a scratch instance (REMUDA_STATE_DIR set)
