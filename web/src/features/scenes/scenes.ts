@@ -176,7 +176,7 @@ export function runWords(run: Run): string {
     count("done") && t("{n} done", { n: count("done") }),
     count("refused") && t("{n} refused", { n: count("refused") }),
     count("away") && t("{n} away", { n: count("away") }),
-    count("skipped") && t("{n} skipped", { n: count("skipped") }),
+    count("skipped") && t("{n} left alone", { n: count("skipped") }),
   ].filter(Boolean);
   return parts.join(", ") || t("nothing to do");
 }

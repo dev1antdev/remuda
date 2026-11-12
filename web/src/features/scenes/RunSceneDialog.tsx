@@ -117,8 +117,10 @@ export default function RunSceneDialog({ id, onClose }: { id: string; onClose: (
                   <label className="pick-row">
                     <input type="checkbox" checked={picks.has(action.id)} onChange={() => toggle(action.id)} />
                     <Icon name={action.kind === "worktree" ? "git-branch" : action.kind === "compact" ? "zap" : "x"} size={14} />
-                    <span className="pick-name">{share.redact(actionWords(action, agents, now))}</span>
-                    <span className="pick-hint">{share.redact(machines.length > 1 ? [machines.find((m) => m.id === action.machine)?.label, actionHint(action)].filter(Boolean).join(" · ") : actionHint(action))}</span>
+                    <span className="pick-name">
+                      {share.redact(actionWords(action, agents, now))}
+                      <small>{share.redact(machines.length > 1 ? [machines.find((m) => m.id === action.machine)?.label, actionHint(action)].filter(Boolean).join(" · ") : actionHint(action))}</small>
+                    </span>
                   </label>
                 </li>
               ))}

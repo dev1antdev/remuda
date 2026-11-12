@@ -9560,6 +9560,8 @@ body.popout {
   text-align: left;
 }
 
+/* a column that starts its lines at the left keeps a long one to its own width, cut with an ellipsis */
+.scene-row-text .scene-words,
 .scene-step-text .scene-words {
   max-width: 100%;
 }
@@ -9703,6 +9705,7 @@ body.popout {
   cursor: default;
 }
 
+.scene-picks .pick-name small:not(:empty),
 .scene-outcome .pick-name small {
   display: block;
   font-size: var(--fs-12);

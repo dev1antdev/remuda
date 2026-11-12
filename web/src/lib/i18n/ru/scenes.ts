@@ -95,6 +95,7 @@ export const scenes: Dictionary = {
   "{n} started": "{n} запущено",
   "{n} done": "{n} сделано",
   "{n} away": "{n} недоступно",
+  "{n} left alone": "{n} оставлено как есть",
   "nothing to do": "делать нечего",
   "A scene needs a name.": "Сцене нужно имя.",
   "Pick at least one thing to tidy.": "Выберите хотя бы одно, что убирать.",

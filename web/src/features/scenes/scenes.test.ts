@@ -134,6 +134,7 @@ describe("the outcome", () => {
     const run: Run = { id: "r", scene: "s", name: "Morning", kind: "start", at: "", done: true, items: [{ index: 0, state: "started" }, { index: 1, state: "started" }, { index: 2, state: "away" }] };
     expect(runWords(run)).toBe("2 started, 1 away");
     expect(runWords({ ...run, items: [] })).toBe("nothing to do");
+    expect(runWords({ ...run, kind: "tidy", items: [{ index: 0, state: "done" }, { index: 1, state: "refused" }, { index: 2, state: "skipped" }] })).toBe("1 done, 1 refused, 1 left alone");
   });
 });
 

@@ -768,9 +768,12 @@ const mark = async (expression, attr) => {
 // sceneScreens are the Scenes dialog with the seeded morning and evening, each one's form, and a run of each: what it
 // will do first, then its outcome as the fake answers it
 async function sceneScreens() {
+  // a long line of a scene's words is cut at its column, never pushing the dialog into a sideways scroll
+  const flat = async () => check(await evaluate(`[...document.querySelectorAll(".modal")].every((m) => m.scrollWidth <= m.clientWidth + 1)`), "the dialog scrolls sideways");
   const openScenes = async () => {
     await palette("scenes");
     if (!(await until(async () => (await count(".modal .scene-row")) === 2, 10))) failed(`the scenes dialog lists ${await count(".modal .scene-row")} scenes, not 2`);
+    await flat();
   };
   await screen("scenes", { open: openScenes, expect: [".modal .scene-row"] });
   await screen("scene-morning", {
@@ -778,6 +781,7 @@ async function sceneScreens() {
       await openScenes();
       await tap(".modal .scene-row:nth-child(1) > .btn:nth-of-type(2)");
       check((await count(".modal .scene-step")) === 1, "the morning's second step is not listed under its open first one");
+      await flat();
     },
     expect: [".modal .scene-form", ".modal .scene-step-form", ".modal .scene-layout"],
   });
@@ -785,6 +789,7 @@ async function sceneScreens() {
     open: async () => {
       await openScenes();
       await tap(".modal .scene-row:nth-child(2) > .btn:nth-of-type(2)");
+      await flat();
     },
     expect: [".modal .scene-tidy", ".modal .scene-check .scene-number"],
   });
@@ -792,6 +797,7 @@ async function sceneScreens() {
     open: async () => {
       await palette(`scene:${morningScene}`);
       if (!(await until(async () => (await count(".modal .scene-picks .pick-row")) === 2, 10))) failed("the morning's run does not list its two steps");
+      await flat();
     },
     expect: [".modal .scene-picks", ".modal .modal-actions .btn.primary"],
   });
@@ -801,6 +807,7 @@ async function sceneScreens() {
       await until(async () => (await count(".modal .scene-picks .pick-row")) === 2, 10);
       await tap(".modal .modal-actions .btn.primary");
       if (!(await until(async () => (await count(".modal .scene-outcome.is-ok")) === 1 && (await count(".modal .scene-outcome.is-bad")) === 1, 10))) failed("the morning's outcome is not one started and one refused");
+      await flat();
     },
     expect: [".modal .scene-outcomes", ".modal .scene-outcome .btn"],
   });
@@ -808,6 +815,7 @@ async function sceneScreens() {
     open: async () => {
       await palette(`scene:${eveningScene}`);
       if (!(await until(async () => (await count(".modal .scene-picks .pick-row")) === 4, 10))) failed("the evening's plan does not list its four actions");
+      await flat();
     },
     expect: [".modal .scene-picks", ".modal .notice"],
   });
@@ -817,6 +825,7 @@ async function sceneScreens() {
       await until(async () => (await count(".modal .scene-picks .pick-row")) === 4, 10);
       await tap(".modal .modal-actions .btn.primary");
       if (!(await until(async () => (await count(".modal .scene-outcome")) === 4, 10))) failed("the evening's outcome does not list its four actions");
+      await flat();
     },
     expect: [".modal .scene-outcome.is-ok", ".modal .scene-outcome.is-bad", ".modal .scene-outcome.is-quiet"],
   });
