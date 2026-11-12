@@ -1336,7 +1336,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   per settings file worth a look (`settingsNotes`): a secret in either
   file (warn: where, and take it out and revoke it), a tracked
   `settings.local.json` (git rm --cached and .gitignore), one git does not
-  ignore. `secrets.ts` is the pure part, tested: `checkState`,
+  ignore; Dismiss sets them aside until they say something else.
+  `secrets.ts` is the pure part, tested: `checkState`,
   `heldBack`, `stateWords`, `sendAnywayAsk`, `ruleWords`, `whereWords`,
   `jumpable`, `skippedWords`, `onSecretRow`, `secretsByFile`,
   `settingsNotes`. The e2e display suite fakes `/api/review/secrets`

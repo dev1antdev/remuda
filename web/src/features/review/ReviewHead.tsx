@@ -1,6 +1,7 @@
 // The Changes lens's head: the branch, what changed since the last look, the keys, the view's switches and the
 // buttons that act on the whole folder, and under them what Claude Code's settings files there want looked at.
 
+import { useState } from "react";
 import { plural } from "@/lib/text";
 import { Icon, Notice, Tip } from "@/ui";
 import type { Review } from "./api";
@@ -26,6 +27,8 @@ export function ReviewHead({ review, lastLookText, opinionWords, split, onSplit,
   const removed = files.reduce((sum, file) => sum + file.removed, 0);
   const nothing = !files.length && !commits.length;
   const notes = settingsNotes(review?.settings);
+  const shown = notes.map((note) => note.text).join("\n");
+  const [dismissed, setDismissed] = useState(""); // what the person set aside: the notes come back once they say something else
   return (
     <div className="review-head">
       <div className="review-title">
@@ -69,10 +72,10 @@ export function ReviewHead({ review, lastLookText, opinionWords, split, onSplit,
       <button type="button" className="btn review-seen" disabled={marking || nothing} onClick={onMark} title={t("The counts clear and the next look starts from now; the agent hears nothing")}>
         <Icon name="check" size={14} /> {t("Mark reviewed")}
       </button>
-      {notes.length > 0 && (
+      {notes.length > 0 && dismissed !== shown && (
         <div className="review-settings">
           {notes.map((note) => (
-            <Notice key={note.path} tone={note.tone} icon="alert-triangle" className="review-settings-note">
+            <Notice key={note.path} tone={note.tone} icon="alert-triangle" className="review-settings-note" onDismiss={() => setDismissed(shown)}>
               {note.text} <span className="review-settings-fix">{note.fix}</span>
             </Notice>
           ))}
