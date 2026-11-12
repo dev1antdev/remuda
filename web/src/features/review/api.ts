@@ -24,7 +24,8 @@ export const markReviewed = (machineId: string, dir: string, verdict?: Verdict):
   sendJSON("POST", "/api/review/seen", { machine: machineId, dir, ...(verdict ? { verdict } : {}) });
 
 // the second opinion: another agent asked to review the folder in a tab of its own, its comments on the diff's lines
-export type OpinionAsk = { machine: string; pane: string; dir: string; agent: string; model?: string; close: boolean };
+// deny_prompts: a Claude Code reviewer denies what would wait on a permission prompt, since a review only reads
+export type OpinionAsk = { machine: string; pane: string; dir: string; agent: string; model?: string; close: boolean; deny_prompts: boolean };
 export type OpinionAsked = { opinion: Opinion; tab: string; pane: string; agent_error?: string };
 export const askOpinion = (req: OpinionAsk): Promise<OpinionAsked> => sendJSON("POST", "/api/opinion", req);
 export const fetchOpinion = (machineId: string, dir: string): Promise<Opinion | null> =>

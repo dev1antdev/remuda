@@ -15,6 +15,7 @@ import { whenShort } from "@/lib/time";
 import { Icon, Notice, Select, useTimedNotice } from "@/ui";
 import type { Subagent, Turn } from "./api";
 import Composer from "./Composer";
+import { DeniedNotice } from "./DeniedNotice";
 import { ALL_REVEALED, anchorsItself, hiddenCount, idle, nextReveal } from "./mount";
 import { isPinned, pinKey, pinOf, togglePin, type Pin } from "./pins";
 import { PlanBar } from "./PlanBar";
@@ -257,6 +258,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
         </Notice>
       )}
       {!readOnly && notice}
+      {!readOnly && <DeniedNotice machineId={machineId} session={chat?.session_id ?? ""} denied={chat?.denied} onTerminal={() => actions.setLens("terminal")} />}
       {error && (
         <Notice tone="error" className="chat-notice" onDismiss={() => setActionError(null)}>
           {error}

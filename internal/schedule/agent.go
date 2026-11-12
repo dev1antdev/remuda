@@ -12,6 +12,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/text"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 // Started is the place a run of an agent schedule made, watched until the agent has answered: the next run waits for it,
@@ -31,12 +32,13 @@ type Started struct {
 type Agents struct {
 	Start  func(s Schedule) (Started, error)
 	Close  func(run Started) error
-	Answer func(machine, pane string) string // the agent's last answer, "" for none
-	Status func(machine, pane string) string // herdr's agent status of the pane, events.Gone when no agent runs there now, "" when the machine has not said
+	Answer func(machine, pane string) string              // the agent's last answer, "" for none
+	Status func(machine, pane string) string              // herdr's agent status of the pane, events.Gone when no agent runs there now, "" when the machine has not said
+	Denied func(machine, pane string) []transcript.Denial // the calls its conversation was denied without asking
 }
 
-// checkAgent trims and checks an agent schedule: a machine and a folder, an agent that is not a shell, a prompt, arguments
-// that split, a model the agent's CLI takes.
+// checkAgent trims and checks an agent schedule: a machine and a folder, an agent that is not a shell, a prompt. Its
+// command line is checked once the switch is known (Start).
 func checkAgent(s *Schedule) error {
 	s.Agent, s.Model, s.Args = strings.TrimSpace(s.Agent), strings.TrimSpace(s.Model), strings.TrimSpace(s.Args)
 	if s.Machine == "" || !strings.HasPrefix(s.Dir, "/") {
@@ -47,14 +49,6 @@ func checkAgent(s *Schedule) error {
 	}
 	if s.Prompt == "" {
 		return errors.New("the prompt is empty")
-	}
-	if _, err := sessions.SplitArgs(s.Args); err != nil {
-		return err
-	}
-	if s.Model != "" {
-		if _, ok := sessions.ModelArgs(s.Agent, s.Model); !ok {
-			return errors.New(s.Agent + " takes no model flag")
-		}
 	}
 	s.Since = ""
 	if s.Label == "" {
@@ -92,7 +86,7 @@ func (st *Store) fireAgent(s *Schedule) {
 		st.mu.Unlock()
 		return
 	}
-	cur.LastRun, cur.Skipped = now, ""
+	cur.LastRun, cur.Skipped, cur.LastDenied = now, "", nil
 	if err != nil {
 		cur.LastOK, cur.LastResult = false, err.Error()
 	} else {
@@ -232,12 +226,16 @@ func answered(to, from string, worked bool) bool {
 	return false
 }
 
-// settle reads the answer of a run that is through and notes it on the schedule; with close, the place is taken down too and
-// a push says what the agent answered.
+// settle reads the answer of a run that is through, and the calls it was denied without asking, and notes them on the
+// schedule; with close, the place is taken down too and a push says what the agent answered.
 func (st *Store) settle(id, label string, run Started, close bool) {
 	answer := ""
 	if st.Agents.Answer != nil {
 		answer = text.FirstLine(st.Agents.Answer(run.Machine, run.Pane), 120)
+	}
+	var denied []transcript.Denial
+	if st.Agents.Denied != nil {
+		denied = st.Agents.Denied(run.Machine, run.Pane)
 	}
 	var err error
 	if close {
@@ -251,7 +249,7 @@ func (st *Store) settle(id, label string, run Started, close bool) {
 	// herdr's close makes the pane gone, which OnStatus may have heard (and cleared) before this lock: the outcome still goes on
 	// the schedule unless a newer run replaced the pane meanwhile
 	if ok && (cur.LastPane == nil || cur.LastPane.Pane == run.Pane) {
-		cur.LastPane, cur.Skipped = nil, ""
+		cur.LastPane, cur.Skipped, cur.LastDenied = nil, "", denied
 		switch {
 		case err != nil:
 			cur.LastOK, cur.LastResult = false, "answered, but the tab could not be closed: "+err.Error()
@@ -261,6 +259,9 @@ func (st *Store) settle(id, label string, run Started, close bool) {
 			cur.LastOK, cur.LastResult = true, "answered and closed"
 		default:
 			cur.LastOK, cur.LastResult = true, "answered"
+		}
+		if n := len(denied); n > 0 {
+			cur.LastResult += " · " + transcript.DeniedCount(n)
 		}
 		if serr := st.saveLocked(); serr != nil {
 			log.Printf("schedules: %v", serr)
@@ -273,6 +274,9 @@ func (st *Store) settle(id, label string, run Started, close bool) {
 	body := answer
 	if body == "" {
 		body = "The tab is closed"
+	}
+	if words := transcript.DeniedWords(denied, 3); words != "" {
+		body += " · " + words
 	}
 	st.notify(push.Payload{
 		Machine: run.Machine, Kind: "schedule",

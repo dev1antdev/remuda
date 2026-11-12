@@ -4659,6 +4659,34 @@ body.is-resizing iframe {
   color: var(--red);
 }
 
+.schedule-denied {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
+}
+
+.deny-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-denied-list {
+  display: block;
+  margin: 4px 0;
+  padding-left: 16px;
+  font: var(--fs-12) var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.chat-denied-call {
+  display: list-item;
+  list-style: disc;
+}
+
 .schedule-editor {
   display: flex;
   flex-direction: column;
@@ -9465,6 +9493,12 @@ body.popout {
 .ps-max input {
   width: 64px;
   height: var(--ctl-sm);
+}
+
+.ps-deny {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 /* #11 Ready again: a rejected workspace whose agent says it is ready for another look, in the review queue */

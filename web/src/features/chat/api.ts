@@ -1,5 +1,6 @@
 // The chat lens: a pane's conversation as the server reads it from the session file, and the saved quick prompts.
 
+import type { Denial } from "@/features/agents/deny";
 import { check, getJSON, sendJSON } from "@/lib/http";
 
 export type Part = {
@@ -53,7 +54,8 @@ export type PlanItem = {
   status: "pending" | "in_progress" | "completed";
 };
 
-export type ChatResponse = { session_id?: string; subagent?: string; sessions: SessionInfo[]; turns: Turn[]; plan?: PlanItem[]; subagents?: Subagent[] };
+// denied: the calls Claude Code refused without asking in the conversation, nobody being there to approve them (the lens's answer only)
+export type ChatResponse = { session_id?: string; subagent?: string; sessions: SessionInfo[]; turns: Turn[]; plan?: PlanItem[]; subagents?: Subagent[]; denied?: Denial[] };
 
 // fetchChat returns null when unchanged (304 via ETag).
 export async function fetchChat(

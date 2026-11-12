@@ -3,6 +3,8 @@
 // writes the cron, or cron by hand), and the kind's own fields.
 
 import { useEffect, useMemo, useState } from "react";
+import { denyDefault, whyNoDeny } from "@/features/agents/deny";
+import { DenySwitch } from "@/features/agents/DenySwitch";
 import { fetchRecipes, type Recipe } from "@/features/recipes/api";
 import { draftOf, recipeWords } from "@/features/recipes/recipes";
 import type { Machine } from "@/features/roster/api";
@@ -36,6 +38,8 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
   const [model, setModel] = useState(() => choiceFor(agent, value.model ?? ""));
   const [args, setArgs] = useState(value.args ?? "");
   const [close, setClose] = useState(value.close ?? true);
+  // an agent schedule saved before the switch keeps it off; a new one, or another kind made an agent one, starts on
+  const [deny, setDeny] = useState(() => denyDefault(!!value.id && kindOf(value) === "agent", value.deny_prompts));
   const recipes = useQuery(fetchRecipes, []);
   const [recipeId, setRecipeId] = useState("");
   // a recipe fills the agent's fields, which stay the person's to change
@@ -64,7 +68,7 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
       kind === "digest"
         ? digestSchedule({ id: value.id, label, cron, since, enabled: value.enabled })
         : kind === "agent"
-          ? agentSchedule({ id: value.id, machine, dir: folder, label, cron, prompt, agent, model: modelOf(agent, { ...EMPTY_DRAFT, ...model }), args, close, enabled: value.enabled })
+          ? agentSchedule({ id: value.id, machine, dir: folder, label, cron, prompt, agent, model: modelOf(agent, { ...EMPTY_DRAFT, ...model }), args, close, deny_prompts: deny, enabled: value.enabled })
           : { id: value.id, kind: "prompt", machine, dir: folder, label, cron, prompt, enabled: value.enabled ?? true },
     );
     onSaved();
@@ -215,6 +219,13 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
             <input type="checkbox" checked={close} onChange={(e) => setClose(e.target.checked)} />
             {t("Close the tab when the agent has answered")}
           </label>
+          <DenySwitch
+            checked={deny}
+            onChange={setDeny}
+            why={whyNoDeny([{ id: agent, label: agents.find((a) => a.id === agent)?.label ?? agent }])}
+            className="schedule-check"
+            hintClass="schedule-note"
+          />
           <p className="schedule-note">
             {t(
               "Each run opens a fresh tab in the folder's workspace (or a workspace on the folder) and hands the agent the prompt once it is up. While the agent the last run started still works or asks something, the next run is skipped. A question the agent asks is yours to answer: nothing closes while it waits. The conversation stays readable through the search after the tab is gone.",

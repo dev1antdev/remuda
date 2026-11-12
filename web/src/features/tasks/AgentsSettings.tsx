@@ -2,6 +2,8 @@
 // off), which agent with which model and arguments — a recipe fills them — and the queue's switch with how many of
 // its agents may work at once. The Start dialog starts from these too.
 
+import { whyNoDeny } from "@/features/agents/deny";
+import { DenySwitch } from "@/features/agents/DenySwitch";
 import type { AgentKind, Machine } from "@/features/roster/api";
 import type { Recipe } from "@/features/recipes/api";
 import Icon from "@/ui/icons";
@@ -10,7 +12,7 @@ import { Logo } from "@/ui";
 import RetiredNotice from "@/features/usage/RetiredNotice";
 import { t } from "@/lib/i18n";
 import type { Automation, Status } from "./api";
-import { MAX_QUEUED, repositories, whyNotQueue } from "./autonomy";
+import { denyCovers, MAX_QUEUED, repositories, whyNotQueue } from "./autonomy";
 
 export function AgentsSettings({ value, onChange, machines, agents, recipes, statuses, onAddQueued }: {
   value: Automation;
@@ -106,6 +108,14 @@ export function AgentsSettings({ value, onChange, machines, agents, recipes, sta
           </>
         )}
       </p>
+      <div className="ps-deny">
+        <DenySwitch
+          checked={!!value.deny_prompts}
+          onChange={(deny_prompts) => set({ deny_prompts })}
+          why={whyNoDeny(denyCovers(value).map((id) => ({ id, label: agents.find((a) => a.id === id)?.label ?? id })))}
+        />
+        <p className="modal-hint">{t("It covers the Claude Code agents the queue starts and every stage of the pipeline; an agent you start yourself from a task asks as usual.")}</p>
+      </div>
     </>
   );
 }

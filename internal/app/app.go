@@ -55,6 +55,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/tasks"
+	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -402,11 +403,11 @@ func Run(ctx context.Context, o Options) error {
 	scouts := &sessions.Launcher{Machines: fleet, Watch: watcher, Input: input, Notify: pushSvc.Broadcast}
 	schedules.Agents = schedule.Agents{
 		Start: func(s schedule.Schedule) (schedule.Started, error) {
-			args, err := sessions.SplitArgs(s.Args)
+			start, err := s.Start()
 			if err != nil {
 				return schedule.Started{}, err
 			}
-			place, err := scouts.StartInFolder(s.Machine, s.Dir, s.Label, s.Agent, sessions.Start{Model: s.Model, Args: args}, s.Prompt)
+			place, err := scouts.StartInFolder(s.Machine, s.Dir, s.Label, s.Agent, start, s.Prompt)
 			return schedule.Started{Pane: place.Pane, Tab: place.Tab, Workspace: place.Workspace, MadeWorkspace: place.MadeWorkspace}, err
 		},
 		Close: func(run schedule.Started) error {
@@ -416,6 +417,7 @@ func Run(ctx context.Context, o Options) error {
 			answer, _ := chats.LastAnswer(machine, pane)
 			return answer
 		},
+		Denied: func(machine, pane string) []transcript.Denial { return chats.Denied(machine, pane, "").Calls },
 		Status: func(machine, pane string) string {
 			info, snap := chats.Pane(machine, pane)
 			switch {
@@ -527,6 +529,7 @@ func Run(ctx context.Context, o Options) error {
 			return display.State, time.UnixMilli(display.Since), true
 		},
 		LastAnswer: chats.LastAnswer,
+		Denied:     chats.Denied,
 		Usage: func(machineID, paneID string) (float64, int64, string, bool) {
 			d, ok := meter.Display(machineID, paneID)
 			if !ok {

@@ -78,6 +78,7 @@ socket.onmessage = (message) => {
     const url = msg.params.request?.url ?? "";
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
+    else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
   }
   if (msg.method === "Runtime.exceptionThrown") consoleErrors.push(msg.params.exceptionDetails?.exception?.description ?? msg.params.exceptionDetails?.text ?? "exception");
@@ -511,6 +512,26 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(roster)).toString("base64") });
 }
 
+// DENIED is what the dressed Claude Code pane's conversation was denied without asking, for the chat lens's notice
+const DENIED = [
+  { tool: "Bash", what: "npm install --save-dev vitest", at: iso(now - 20 * 60e3), tool_id: "toolu_e2e_1" },
+  { tool: "Write", what: `${tmp}/display/app/src/new-screen.tsx`, at: iso(now - 18 * 60e3), tool_id: "toolu_e2e_2" },
+];
+
+// dressChat adds DENIED to the lens's answer for the dressed agent pane (a tile's tail, last=N, carries none)
+async function dressChat({ requestId, request, responseStatusCode, responseHeaders = [] }) {
+  const url = new URL(request.url);
+  const reply = responseStatusCode === 200 && url.searchParams.get("pane") === paneA1 && !url.searchParams.has("last") ? await send("Fetch.getResponseBody", { requestId }) : null;
+  if (!reply?.result) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const chat = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
+  chat.denied = DENIED;
+  const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(chat)).toString("base64") });
+}
+
 // FEED is the activity the browser is shown: an id far past the server's own, and the alert a screen puts in it
 const FEED = { id: 900000, entries: [] };
 
@@ -688,7 +709,7 @@ async function changesScreens() {
   });
   await screen("changes-opinion-dialog", {
     open: async () => tap(`${LENS} .review-ask-opinion`),
-    expect: [".modal .sel"],
+    expect: [".modal .sel", ".modal .deny-switch"],
   });
   await screen("changes-verdict", {
     open: async () => tap(`${LENS} .review-verdicts .btn:not(.primary)`),
@@ -964,6 +985,12 @@ async function runPass() {
   await screen("new-tab-menu", { open: async () => tap(".tab-add"), expect: [".menu"] });
   await screen("view-menu", { open: async () => tap(".view-btn"), expect: [".menu"] });
   await screen("chat-lens", { open: async () => palette("lens:chat"), expect: [".lens-pane:not([hidden]) .chat-log, .lens-pane:not([hidden]) .composer"], close: async () => palette("lens:terminal") });
+  // the calls the agent was denied without asking, over the composer, with the way to its terminal
+  await screen("chat-denied", {
+    open: async () => palette("lens:chat"),
+    expect: [".lens-pane:not([hidden]) .chat-denied .chat-denied-call", ".lens-pane:not([hidden]) .chat-denied .linkish"],
+    close: async () => palette("lens:terminal"),
+  });
   if (!pass.phone)
     await screen("split-view", {
       open: async () => palette("split"),
@@ -1024,6 +1051,12 @@ async function runPass() {
     expect: [".project-settings .ps-queue input[type=checkbox]:checked", ".project-settings .retired-notice"],
     close: async () => {},
   });
+  // the Inbox's agents were set up after the switch came, so their Claude Code does not wait for permissions
+  await screen("project-settings-deny", {
+    open: async () => evaluate(`document.querySelector('.project-settings .ps-deny')?.scrollIntoView({ block: "center" })`),
+    expect: [".project-settings .ps-deny input[type=checkbox]:checked"],
+    close: async () => {},
+  });
   await screen("project-settings-pipeline", {
     open: async () => evaluate(`[...document.querySelectorAll('.project-settings .ps-stage')].pop()?.scrollIntoView({ block: "center" })`),
     expect: [".project-settings .ps-stage textarea"],
@@ -1034,6 +1067,19 @@ async function runPass() {
   await screen("code", { open: async () => palette("mode:code"), expect: [".code-mode"] });
 
   for (const panel of ["standup", "usage", "schedules", "activity", "alerts", "arenas"]) await screen(`panel-${panel}`, { open: async () => palette(panel), expect: [".modal"], settle: 600 });
+  // a new agent schedule: Claude Code, its switch on, the words under it
+  await screen("schedule-agent", {
+    open: async () => {
+      await palette("schedules");
+      await tap(".modal.schedules .modal-head-controls .btn");
+      if (!(await until(() => present(".schedule-editor .schedule-kind button"), 4))) throw new Error("the schedule editor did not open");
+      await evaluate(`[...document.querySelectorAll('.schedule-editor .schedule-kind button')][2]?.click()`);
+      await sleep(200);
+      await evaluate(`document.querySelector('.schedule-editor .deny-switch')?.scrollIntoView({ block: "center" })`);
+    },
+    expect: [".schedule-editor .deny-switch input[type=checkbox]:checked", ".schedule-editor .deny-switch .schedule-note"],
+    settle: 500,
+  });
   await alertScreens();
   await screen("server-place", {
     open: async () => {
@@ -1098,6 +1144,7 @@ try {
     patterns: [
       { urlPattern: "*/api/roster*", requestStage: "Response" },
       { urlPattern: "*/api/feed*", requestStage: "Response" },
+      { urlPattern: "*/api/chat?*", requestStage: "Response" },
       { urlPattern: "*/api/opinion*", requestStage: "Request" },
     ],
   });
