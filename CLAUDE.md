@@ -4619,6 +4619,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   person wrote, like an agent schedule's — and only for cards the person
   put in the Queued column: an agent's key cannot queue a card, change a
   project's columns or its agents (403, `queueKept` in the tasks routes).
+  A plan limit's offer (`internal/limits` offers) starts the held card or
+  schedule on the other vendor's agent only when the person presses its
+  button — the toast, the Usage panel's row, the push's — never by itself,
+  and a viewer link or an agent's key can never press it.
 - **Terminal bytes go over WS binary frames**, control messages over JSON
   text frames. The attach PTY paints the screen on start; late joiners get
   a repaint (see attach.go), never a byte replay.
