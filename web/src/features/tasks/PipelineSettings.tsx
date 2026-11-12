@@ -5,15 +5,17 @@ import type { AgentKind } from "@/features/roster/api";
 import Icon from "@/ui/icons";
 import Select from "@/ui/Select";
 import { Logo, Tip } from "@/ui";
+import RetiredNotice from "@/features/usage/RetiredNotice";
 import { t } from "@/lib/i18n";
 import type { Stage, Status } from "./api";
 import { MAX_STAGES, newStage } from "./autonomy";
 
-export function PipelineSettings({ stages, onChange, agents, statuses }: {
+export function PipelineSettings({ stages, onChange, agents, statuses, machine = "" }: {
   stages: Stage[];
   onChange: (stages: Stage[]) => void;
   agents: AgentKind[];
   statuses: Status[]; // the saved columns a stage can move the card to
+  machine?: string; // the project's agents' machine, where every stage starts
 }) {
   const set = (i: number, patch: Partial<Stage>) => onChange(stages.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const shift = (i: number, dir: -1 | 1) => {
@@ -65,6 +67,7 @@ export function PipelineSettings({ stages, onChange, agents, statuses }: {
               placeholder={s.pr ? t("Anything to add before the pull request (optional)") : t("What this stage's agent does: Review the work on {branch}. The last stage said: {previous}")}
               onChange={(e) => set(i, { prompt: e.target.value })}
             />
+            <RetiredNotice agent={s.agent || "claude"} model={s.model ?? ""} machine={machine} onUse={(model) => set(i, { model })} />
             <label className="tasks-toggle">
               <input type="checkbox" checked={!!s.pr} onChange={(e) => set(i, { pr: e.target.checked })} /> {t("then commit, push and open a pull request")}
             </label>

@@ -43,6 +43,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/recipes"
+	"github.com/dev1antdev/remuda/internal/retire"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
@@ -96,6 +97,7 @@ type Server struct {
 	Previews  *preview.Service // the machines' dev servers opened on the cockpit, nil without
 	SelfPort  int              // the port of -addr, never offered as a preview
 	Opinions  *opinion.Service // the second opinions another agent gave on a folder's changes
+	Retire    *retire.Service  // what is set to a model or mode being retired, nil without
 
 	streams   termStreams
 	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is

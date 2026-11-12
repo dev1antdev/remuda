@@ -1,10 +1,13 @@
-// What a machine's vitals say wants a look: an agent, herdr or remuda behind the newest, a nearly full disk.
+// What a machine's vitals say wants a look: an agent, herdr or remuda behind the newest, a nearly full disk, Claude
+// Code's sign-in running out, something set to a model being retired.
 
 import { newer } from "@/lib/version";
 import { VENDOR_NAME } from "@/ui/brand";
 import type { Health, Latest, StoppedChat } from "./api";
 import { bodyConcerns } from "./body";
 import { stoppedNames, stoppedWords } from "./stopped";
+import { signinConcern } from "./signin";
+import { retiringConcerns, type RetiringHit } from "@/features/usage/retired";
 import { t } from "@/lib/i18n";
 
 export type Concern = { key: string; text: string; bad?: boolean; update?: string };
@@ -14,14 +17,22 @@ const isOut = (what: string, version: string, have: string): string => t("{what}
 
 // concerns lists what wants a look, each with the update that answers it; a viewer link's page reads the same words with
 // no update, since every one of them is a change the server refuses it
-export function concerns(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean, stopped: StoppedChat[] = [], viewOnly = false): Concern[] {
-  const out = found(h, latest, serverVersion, remote, stopped);
+export function concerns(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean, stopped: StoppedChat[] = [], viewOnly = false, more: More = {}): Concern[] {
+  const out = found(h, latest, serverVersion, remote, stopped, more);
   return viewOnly ? out.map(({ update: _offered, ...words }) => words) : out;
 }
 
-function found(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean, stopped: StoppedChat[]): Concern[] {
+// More is what the machine adds to its vitals: its name for the words, what is set there to a model being retired,
+// and the clock the sign-in is weighed by
+export type More = { machine?: string; retiring?: RetiringHit[]; now?: number };
+
+function found(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean, stopped: StoppedChat[], more: More = {}): Concern[] {
   const out: Concern[] = [];
+  const now = more.now ?? Date.now();
   if (stopped.length) out.push({ key: "stopped", text: `${stoppedWords(stopped.length)}: ${stoppedNames(stopped)}`, update: "recover" });
+  const signin = signinConcern(h?.claude_login, more.machine ?? "", now);
+  if (signin) out.push({ key: "signin", ...signin, update: "signin" });
+  out.push(...retiringConcerns(more.retiring, now));
   if (!h) return out;
   if (h.claude && latest?.claude && newer(h.claude, latest.claude)) out.push({ key: "claude", text: isOut("Claude Code", latest.claude, h.claude), update: "claude" });
   if (h.codex && latest?.codex && newer(h.codex, latest.codex)) out.push({ key: "codex", text: isOut("Codex", latest.codex, h.codex), update: "codex" });
@@ -45,7 +56,7 @@ function found(h: Health | undefined, latest: Latest | undefined, serverVersion:
 const bodyOrDisk = (key: string) => key === "disk" || key === "err" || key.startsWith("body-");
 
 // hostConcerns are what the Server place lists: the host's own release and what bodyOrDisk keeps — a herdr, its hooks or
-// an agent still installed there serve no workspace, so their versions are none of a server's business
+// an agent still installed there serve no workspace, so their versions and Claude Code's sign-in are none of a server's business
 export function hostConcerns(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, viewOnly = false): Concern[] {
   return concerns(h, latest, serverVersion, false, [], viewOnly).filter((c) => c.key === "release" || bodyOrDisk(c.key));
 }
@@ -65,4 +76,5 @@ function hookNames(hooks: { agent: string }[]): string {
 }
 
 // updateLabel is the button's word for what an update does
-export const updateLabel = (what: string) => (what === "remuda" ? t("Deploy") : what === "remuda-release" ? t("Download & install") : what === "recover" ? t("Resume") : what.startsWith("restart-") ? t("Restart") : t("Update"));
+export const updateLabel = (what: string) =>
+  what === "remuda" ? t("Deploy") : what === "remuda-release" ? t("Download & install") : what === "recover" ? t("Resume") : what === "signin" ? t("Open a shell there") : what.startsWith("restart-") ? t("Restart") : t("Update");

@@ -7,6 +7,7 @@ import type { Recipe } from "@/features/recipes/api";
 import Icon from "@/ui/icons";
 import Select from "@/ui/Select";
 import { Logo } from "@/ui";
+import RetiredNotice from "@/features/usage/RetiredNotice";
 import { t } from "@/lib/i18n";
 import type { Automation, Status } from "./api";
 import { MAX_QUEUED, repositories, whyNotQueue } from "./autonomy";
@@ -64,6 +65,7 @@ export function AgentsSettings({ value, onChange, machines, agents, recipes, sta
           <input value={value.args ?? ""} placeholder="--permission-mode plan" spellCheck={false} onChange={(e) => set({ args: e.target.value })} />
         </label>
       </div>
+      <RetiredNotice agent={value.agent || "claude"} model={value.model ?? ""} args={value.args ?? ""} machine={value.machine} onUse={(model) => set({ model })} />
       {usable.length > 0 && (
         <label>
           {t("Fill from a recipe")}
