@@ -53,6 +53,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/tasks"
+	"github.com/dev1antdev/remuda/internal/triggers"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -474,6 +475,41 @@ func Run(ctx context.Context, o Options) error {
 	defer close(absentDone)
 	go absent.Run(30*time.Second, absentDone)
 
+	// what the panes print: herdr watches each pane's rows on the machine's event stream, the triggers say what a
+	// match means — a dev server offered as a preview, failed tests a push, the person's own rules their action
+	paneTriggers := triggers.New(o.Dir)
+	paneTriggers.Notify = pushSvc.Notify
+	paneTriggers.Feed = func(machineID, paneID, title, body string) {
+		activity.Add(feed.Entry{Kind: "trigger", Machine: machineID, Pane: paneID, Title: title, Body: body})
+		hub.RosterChanged()
+	}
+	paneTriggers.MoveTask = func(machineID, paneID, column, why string) (string, bool, error) {
+		moved, err := taskStore.OnTrigger(machineID, paneID, column, why)
+		if err != nil || moved == nil {
+			return "", false, err
+		}
+		return "Task " + moved.Task.Identifier + " → " + moved.To.Title, true, nil
+	}
+	// someone looking at a pane's terminal through this remuda sees its tests fail: no push for it
+	paneTriggers.Viewed = func(machineID, paneID string) bool {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return false
+		}
+		_, attach, err := mc.Ready()
+		pane, _ := chats.Pane(machineID, paneID)
+		return err == nil && pane != nil && attach.Viewers(pane.TerminalID) > 0
+	}
+	// a dev server is offered only once the previews find its port listening; srv is set before any match comes
+	paneTriggers.Listening = func(machineID string, port int) (string, bool) { return srv.Listening(machineID, port) }
+	paneTriggers.Changed = hub.RosterChanged
+	paneTriggers.Resubscribe = watcher.Resubscribe
+	watcher.Outputs = paneTriggers.Watches
+	watcher.Refused = paneTriggers.Refused
+	events.Subscribe(bus, paneTriggers.Observe)
+	events.Subscribe(bus, paneTriggers.OnMatch)
+	events.Subscribe(bus, func(e events.MachineRemoved) { paneTriggers.Forget(e.Machine) })
+
 	// the loops
 	watcher.Start()
 	vitals.Start(15 * time.Minute)
@@ -579,6 +615,7 @@ func Run(ctx context.Context, o Options) error {
 		Backup:    backups,
 		SelfPort:  auth.PortOf(o.Addr),
 		Opinions:  opinions,
+		Triggers:  paneTriggers,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews
