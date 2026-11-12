@@ -29,10 +29,11 @@ export function viewerCommand(id: string): boolean {
 export type ViewerToast = { id: string; action?: unknown };
 
 // viewerToasts is what a viewer's corner shows: no Resume of stopped chats and no install of a release (the server would
-// refuse them), no dev server offered as a preview (the previews are the person's), and no Tailscale login, whose link
-// would put this cockpit on the tailnet of whoever follows it
+// refuse them), no dev server offered as a preview (the previews are the person's), no plan limit's offer to run held
+// work on the other vendor (only the person may), and no Tailscale login, whose link would put this cockpit on the
+// tailnet of whoever follows it
 export function viewerToasts<T extends ViewerToast>(toasts: T[]): T[] {
-  return toasts.filter((toast) => toast.id !== "tailscale" && !toast.id.startsWith("serves-")).map((toast) => (toast.id === "release" || toast.id.startsWith("recover-") ? { ...toast, action: undefined } : toast));
+  return toasts.filter((toast) => toast.id !== "tailscale" && !toast.id.startsWith("serves-") && !toast.id.startsWith("plan-offer-")).map((toast) => (toast.id === "release" || toast.id.startsWith("recover-") ? { ...toast, action: undefined } : toast));
 }
 
 // viewerMenu is the first group of a menu, up to its first separator: a pull request's Open, without the hand-offs to the agent

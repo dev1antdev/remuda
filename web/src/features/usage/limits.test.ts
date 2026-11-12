@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LimitWindow, Machine } from "@/features/roster/api";
-import { accountWindows, claudeUnread, gravest, limitTone, limitWords, resetForHit, resetTime } from "./limits";
+import { accountWindows, claudeUnread, forecastTone, forecastWords, gravest, limitLine, limitTone, limitWords, resetForHit, resetTime, runsOutEarly } from "./limits";
 
 const now = Date.parse("2026-11-04T10:00:00Z");
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ agent: "claude", name: "5h", used: 10, resets_at: "2026-11-04T14:00:00Z", at: "2026-11-04T09:00:00Z", ...over });
@@ -52,5 +52,30 @@ describe("claudeUnread", () => {
     expect(claudeUnread(machine("a", [], { health: { claude: "2.1.318" } } as Partial<Machine>))).toBe(true);
     expect(claudeUnread(machine("a", [], { health: { claude: "2.1.318", statusline: true } } as Partial<Machine>))).toBe(false);
     expect(claudeUnread(machine("a", [], { health: {} } as Partial<Machine>))).toBe(false);
+  });
+});
+
+describe("the forecast", () => {
+  it("says when a window runs out at this pace, or that it lasts, and nothing without a pace", () => {
+    const runOut = new Date(now);
+    runOut.setHours(13, 0, 0, 0);
+    const reset = new Date(runOut.getTime() + 3600e3);
+    const time = runOut.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    const early = win({ used: 70, resets_at: reset.toISOString(), forecast: { runs_out_at: runOut.toISOString(), pace: 12 } });
+    expect(forecastWords(early, runOut.getTime() - 3600e3)).toBe(`runs out ≈ ${time} at this pace`);
+    expect(runsOutEarly(early)).toBe(3600e3);
+    expect(forecastTone(early)).toBe("amber");
+    expect(limitLine(early, now)).toContain(" · runs out ≈ ");
+    const lasts = win({ forecast: { lasts: true, pace: 2 } });
+    expect(forecastWords(lasts, now)).toBe("lasts to its reset at this pace");
+    expect(forecastTone(lasts)).toBe("");
+    expect(forecastWords(win({}), now)).toBe("");
+    expect(limitLine(win({}), now)).toBe(limitWords(win({}), now));
+  });
+
+  it("is quiet for a run-out only minutes before the reset", () => {
+    const close = win({ resets_at: "2026-11-04T14:00:00Z", forecast: { runs_out_at: "2026-11-04T13:50:00Z", pace: 9 } });
+    expect(forecastTone(close)).toBe("");
+    expect(runsOutEarly(close)).toBe(10 * 60e3);
   });
 });

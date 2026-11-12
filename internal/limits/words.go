@@ -44,6 +44,24 @@ func Warning(w Window, level int, machine string, now time.Time) push.Payload {
 	return push.Payload{Kind: "limits", Title: title, Body: body, Tag: "limits|" + w.Agent + "|" + w.Name, Panel: "usage"}
 }
 
+// forecastEarly is how much earlier than its reset the window is forecast to run out, 0 when it is not.
+func forecastEarly(w Window) time.Duration {
+	if w.Forecast == nil || w.Forecast.RunsOutAt == nil {
+		return 0
+	}
+	return w.ResetsAt.Sub(*w.Forecast.RunsOutAt)
+}
+
+// ForecastWarning is the push for a window forecast to run out well before its reset.
+func ForecastWarning(w Window, machine string, now time.Time) push.Payload {
+	title := fmt.Sprintf("%s's %s limit runs out ≈ %s at this pace", AgentName(w.Agent), WindowName(w.Name), w.Forecast.RunsOutAt.Local().Format("15:04"))
+	body := Left(forecastEarly(w)) + " before it resets " + ResetWords(w.ResetsAt, now)
+	if machine != "" {
+		body += " · read on " + machine
+	}
+	return push.Payload{Kind: "limits", Title: title, Body: body, Tag: "limits-forecast|" + w.Agent + "|" + w.Name, Panel: "usage"}
+}
+
 // ResetWords says when a window resets, in this server's clock: "at 14:00, in 1 h 12 min", "Mon 09:00, in 3 days".
 func ResetWords(at, now time.Time) string {
 	local := at.Local()

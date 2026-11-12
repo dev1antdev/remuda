@@ -1,6 +1,7 @@
 // Usage: what the agents cost over a period, per machine; budgets: the limits on it.
 
 import { getJSON, sendJSON } from "@/lib/http";
+import type { PlanOffer } from "./offers";
 
 export type Period = "day" | "week" | "month";
 
@@ -45,6 +46,11 @@ export const bookContinue = (machine: string, pane: string, at: string): Promise
 
 // cancelContinue calls such a booking off
 export const cancelContinue = (machine: string, pane: string): Promise<unknown> => sendJSON("DELETE", "/api/limits/continue", { machine, pane });
+
+// the plan limits' open offers: a held card or schedule, to run once on the other vendor's agent, or let be
+export const fetchOffers = (): Promise<{ offers: PlanOffer[] }> => getJSON("/api/limits/offers");
+export const runOffer = (id: string): Promise<{ words: string }> => sendJSON("POST", `/api/limits/offers/${encodeURIComponent(id)}/run`, {});
+export const declineOffer = (id: string): Promise<unknown> => sendJSON("DELETE", `/api/limits/offers/${encodeURIComponent(id)}`);
 
 // Share is a count out of a whole; rate is there once the whole reaches the card's min_sample
 export type Share = { count: number; of: number; rate?: number };

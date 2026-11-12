@@ -16,6 +16,8 @@ export function resultWords(s: Pick<Schedule, "skipped" | "last_result">): strin
       return t("skipped: no word yet from its machine");
     case "running":
       return t("skipped: the previous run is still on its way");
+    case "limit":
+      return t("skipped: its agent's plan window is nearly spent");
     default:
       return s.last_result ?? "";
   }

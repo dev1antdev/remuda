@@ -53,7 +53,11 @@ const MaxPack = 256 << 20
 
 const inspectTimeout = 60 * time.Second
 
-// remoteScript prints the checkout's remote address: origin's, else the first remote's, else nothing.
+// RemoteScript prints the checkout's remote address, in the folder the script stands in: origin's, else the first
+// remote's, else nothing; the fleet queue reads the checkouts' repositories with it too (internal/placement).
+const RemoteScript = remoteScript
+
+// remoteScript is RemoteScript.
 const remoteScript = `{ git remote get-url origin 2>/dev/null || { r=$(git remote | head -n 1); [ -n "$r" ] && git remote get-url "$r"; }; } 2>/dev/null | head -n 1 | tr -d '\n'`
 
 // inspectScript reads a checkout in one line of fields; a folder outside git answers nothing.

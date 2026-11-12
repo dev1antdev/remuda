@@ -98,7 +98,7 @@ self.addEventListener("push", (event) => {
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
         actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
-        data: { machine: data.machine, pane: data.pane, panel: data.panel, choices: Array.isArray(data.choices) ? data.choices : [], dialog: data.dialog || "" },
+        data: { machine: data.machine, pane: data.pane, panel: data.panel, choices: Array.isArray(data.choices) ? data.choices : [], dialog: data.dialog || "", offer: data.offer || "" },
       });
       const onPage = focused && data.kind !== "test";
       if (onPage) for (const shown of await self.registration.getNotifications({ tag })) shown.close();
@@ -131,9 +131,15 @@ function notePush(note) {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const { machine, pane, panel, choices, dialog } = event.notification.data || {};
+  const { machine, pane, panel, choices, dialog, offer } = event.notification.data || {};
   event.waitUntil(
     (async () => {
+      // a plan limit's offer: the held card or schedule runs on the other vendor's agent; refused (taken, its window
+      // reset, the card moved) or unreachable, the page opens on the panel the push names, where the offers stand
+      if (event.action === "offer-run" && offer) {
+        const res = await fetch(`/api/limits/offers/${encodeURIComponent(offer)}/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => null);
+        if (res && res.ok) return;
+      }
       // a button on a watchdog notification: Esc goes straight to the pane; refused or unreachable, the page opens
       // on the pane instead, as for a choice, so the person sees it did not land
       if (event.action === "esc" && machine && pane) {

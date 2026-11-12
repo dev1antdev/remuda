@@ -121,6 +121,28 @@ describe("the notification's Esc", () => {
   });
 });
 
+describe("a plan limit's offer", () => {
+  const offer = { panel: "usage", offer: "a1b2", machine: "local", pane: "" };
+  it("runs the held work on the other vendor through the server, and opens nothing when it is taken", async () => {
+    const taken = worker({ ok: true, status: 200 });
+    await taken.click("offer-run", offer);
+    expect(taken.fetched).toEqual([{ url: "/api/limits/offers/a1b2/run", body: {} }]);
+    expect(taken.opened).toEqual([]);
+  });
+  it("opens the Usage panel, where the offers stand, when the server refuses it or cannot be reached", async () => {
+    for (const answer of [{ ok: false, status: 409 }, new Error("offline")]) {
+      const refused = worker(answer);
+      await refused.click("offer-run", offer);
+      expect(refused.opened).toEqual(["/?panel=usage"]);
+    }
+  });
+  it("keeps the offer's id on the notification, for its button", async () => {
+    const sw = worker({ ok: true, status: 200 });
+    await sw.push({ title: "Task #12 waits", kind: "limits", panel: "usage", offer: "a1b2", actions: [{ action: "offer-run", title: "Run on Codex" }] });
+    expect((sw.shown[0]!.options as unknown as { data: { offer: string } }).data.offer).toBe("a1b2");
+  });
+});
+
 describe("a notification's choice", () => {
   it("answers through the server, and opens the pane when the dialog moved", async () => {
     const taken = worker({ ok: true, status: 200 });

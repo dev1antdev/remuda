@@ -2,7 +2,7 @@
 // back for — the words of the ⓘ's rows and of the Server place, the thresholds of their sparklines, and the tone the
 // Server place's rail icon wears. Pure, so the rules are tested.
 
-import type { Health, Throttle } from "./api";
+import type { Battery, Health, Throttle } from "./api";
 import type { Threshold } from "./spark";
 import { t } from "@/lib/i18n";
 
@@ -53,6 +53,18 @@ export function throttleWords(throttle: Throttle): string {
   if (!throttle.word) return `${now} · ${t("under-voltage alarm only: the firmware's word needs root here (vcgencmd)")}`;
   return throttle.since?.length ? `${now} · ${t("since boot: {what}", { what: said(throttle.since) })}` : `${now} · ${t("none since boot")}`;
 }
+
+// LOW_BATTERY is where a machine on its battery stops taking a fleet queue's agents (internal/placement's own)
+export const LOW_BATTERY = 20;
+
+// batteryWords: "85 % · on battery", "92 % · charging", "100 % · on power"
+export function batteryWords(battery: Battery): string {
+  const state = battery.discharging ? t("on battery") : battery.charging ? t("charging") : t("on power");
+  return `${battery.percent} % · ${state}`;
+}
+
+// batteryLow says whether the machine runs on a battery nearly empty
+export const batteryLow = (battery: Battery): boolean => !!battery.discharging && battery.percent <= LOW_BATTERY;
 
 // WARM is where a CPU gets a look and HOT where it is a concern: a Raspberry Pi 4 starts capping its clock at 80 °C
 export const WARM = 75;

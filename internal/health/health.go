@@ -57,6 +57,7 @@ type Report struct {
 	FreqMHz       int       `json:"freq_mhz,omitempty"`    // the CPU's clock now and its top: a Pi held back runs below it
 	FreqMaxMHz    int       `json:"freq_max_mhz,omitempty"`
 	Throttle      *Throttle `json:"throttle,omitempty"`       // a Raspberry Pi's firmware word, or its under-voltage alarm alone
+	Battery       *Battery  `json:"battery,omitempty"`        // the machine's own battery (battery.go), none on a desktop
 	OutdatedHooks []Hook    `json:"outdated_hooks,omitempty"` // herdr's agent integrations behind what the installed herdr writes
 	Plugins       []Plugin  `json:"plugins,omitempty"`        // herdr plugins installed from GitHub, the ones `herdr plugin update` refreshes
 	Error         string    `json:"error,omitempty"`

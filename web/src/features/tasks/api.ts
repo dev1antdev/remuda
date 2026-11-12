@@ -27,11 +27,32 @@ export type Stage = { name: string; agent: string; model?: string; prompt: strin
 
 // how a project's agents work: where, which agent, the queue's switch, the pipeline's stages
 // deny_prompts: the Claude Code agents the queue and the stages start deny what would wait on a permission prompt;
-// absent on settings saved before the switch (off)
-export type Automation = { machine: string; dir: string; agent: string; model?: string; args?: string; queue: boolean; max: number; stages: Stage[]; deny_prompts?: boolean };
+// absent on settings saved before the switch (off); anywhere: the queue starts a card on whichever connected machine has
+// room and a checkout of the repository the machine and folder name
+export type Automation = { machine: string; dir: string; anywhere?: boolean; agent: string; model?: string; args?: string; queue: boolean; max: number; stages: Stage[]; deny_prompts?: boolean };
+
+// FleetMachine is a machine a fleet queue weighed: its figures, and why it has no room (out) when it has none; held and
+// budget are the server's words
+export type FleetMachine = {
+  machine: string;
+  label: string;
+  dir: string;
+  home?: boolean;
+  load_per_core: number;
+  temp_c?: number;
+  battery?: { percent: number; discharging?: boolean };
+  plan: number; // the agent's fullest window there, percent; -1 when none was read
+  held?: string;
+  working: number;
+  budget?: string;
+  out?: "load" | "hot" | "battery" | "plan" | "budget";
+};
+
+// Fleet is where a fleet queue's next card goes, and how the others stood
+export type Fleet = { pick?: FleetMachine; others?: FleetMachine[] };
 
 // what a project's queue does now, while its switch is on; the reason is the server's words
-export type QueueNote = { state: "idle" | "waiting" | "started"; reason?: string; next?: string; working: number; max: number; at: string };
+export type QueueNote = { state: "idle" | "waiting" | "started"; reason?: string; next?: string; working: number; max: number; at: string; fleet?: Fleet };
 
 // a project's own field: what its tasks carry besides what every task has
 export type FieldKind = "text" | "number" | "select" | "multi" | "date" | "check" | "link";

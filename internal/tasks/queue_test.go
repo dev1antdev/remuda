@@ -46,6 +46,7 @@ type queueHere struct {
 	startErr  error
 	states    map[string]string
 	starts    []StartRequest
+	on        []string // the machine each start went to
 	started   []int64
 	pushed    []push.Payload
 }
@@ -63,7 +64,7 @@ func newQueue(st *Store) *queueHere {
 		Spent:   func(machine, agent string) string { return h.spent },
 		Crossed: func(machine, dir string) string { return h.crossed },
 		Start: func(machine string, task Task, req StartRequest) error {
-			h.starts = append(h.starts, req)
+			h.starts, h.on = append(h.starts, req), append(h.on, machine)
 			if h.startErr != nil {
 				return h.startErr
 			}

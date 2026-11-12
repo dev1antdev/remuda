@@ -53,6 +53,26 @@ export function AgentsSettings({ value, onChange, machines, agents, recipes, sta
           />
         </label>
       </div>
+      <div className="schedule-row ps-where">
+        <label className="grow">
+          {t("The queue starts agents on")}
+          <Select
+            value={value.anywhere ? "any" : "one"}
+            onChange={(where) => set({ anywhere: where === "any" })}
+            options={[
+              { value: "one", label: t("This machine only"), icon: <Icon name="monitor" size={14} /> },
+              { value: "any", label: t("Any machine that has room"), icon: <Icon name="server" size={14} /> },
+            ]}
+          />
+        </label>
+      </div>
+      {value.anywhere && (
+        <p className="modal-hint">
+          {t(
+            "A queued card starts on the connected machine with the most room that has a workspace open on a checkout of this repository, matched by its remote: the lightest load per core, a cool CPU, on its charger, room on the agent's plan window, the fewest agents working. A hot machine, one on a nearly empty battery, one at two of load per core or over its budget is passed over; this remuda's own host never runs one when it only serves the page.",
+          )}
+        </p>
+      )}
       <div className="schedule-row">
         <label>
           {t("Agent")}
@@ -94,7 +114,7 @@ export function AgentsSettings({ value, onChange, machines, agents, recipes, sta
       </div>
       <p className="modal-hint">
         {t(
-          "The queue starts the top card of the Queued column once a slot is free, the machine is there, the agent's plan window is not spent and no budget over the folder is crossed — only cards you put there, and a refused one only once you move it again.",
+          "The queue starts the top card of the Queued column once a slot is free, the machine is there, the agent's plan window is not nearly spent and no budget over the folder is crossed — only cards you put there, and a refused one only once you move it again. A window at 95 %, or forecast to run out within half an hour, holds the card, and you are offered to run it now on the other vendor's agent.",
         )}
         {why && (
           <>

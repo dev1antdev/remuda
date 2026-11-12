@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Health } from "./api";
-import { bodyConcerns, clockWords, memUsedPct, memWords, tempWords, throttleWords } from "./body";
+import { batteryLow, batteryWords, bodyConcerns, clockWords, memUsedPct, memWords, tempWords, throttleWords } from "./body";
 import { concerns, hostConcerns, serverTone } from "./concerns";
 import { hostMachine, startOn } from "./server";
 
@@ -61,6 +61,19 @@ describe("a machine's body", () => {
     expect(keys).toEqual(["release", "body-0"]);
     expect(concerns(leftHerdr, latest, "v0.12.5", false).map((c) => c.key)).toContain("herdr");
     expect(hostConcerns(leftHerdr, latest, "v0.12.5", true).every((c) => !c.update)).toBe(true);
+  });
+});
+
+describe("a machine's battery", () => {
+  it("says how full it is and whether the machine runs on it", () => {
+    expect(batteryWords({ percent: 85, discharging: true })).toBe("85 % · on battery");
+    expect(batteryWords({ percent: 92, charging: true })).toBe("92 % · charging");
+    expect(batteryWords({ percent: 100 })).toBe("100 % · on power");
+  });
+  it("is low on its own power from 20 % down, never on the charger", () => {
+    expect(batteryLow({ percent: 20, discharging: true })).toBe(true);
+    expect(batteryLow({ percent: 21, discharging: true })).toBe(false);
+    expect(batteryLow({ percent: 5, charging: true })).toBe(false);
   });
 });
 

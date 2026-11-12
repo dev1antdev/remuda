@@ -1,5 +1,6 @@
-// The toasts in the corner: a close's agents offered back, offline, a newer server, a release out, a dev server a pane
-// announced offered as a preview, what happened while the page was away, Tailscale's state, the last notice.
+// The toasts in the corner: a close's agents offered back, offline, a newer server, a release out, a card or schedule
+// the plan limit holds offered on the other vendor, a dev server a pane announced offered as a preview, what happened
+// while the page was away, Tailscale's state, the last notice.
 
 import { useEffect, useRef } from "react";
 import { alertText, LINGER_MS, type OnPageAlert } from "@/features/alerts/onpage";
@@ -12,6 +13,8 @@ import { reopen } from "@/features/reopen/offer";
 import { previewServed } from "@/features/triggers/offer";
 import { offersToShow, offerWords, rememberOffer } from "@/features/triggers/triggers";
 import { useRoster } from "@/features/roster/useRoster";
+import { offersToShow as planOffersToShow, offerWords as planOfferWords, rememberOffer as rememberPlanOffer, runLabel } from "@/features/usage/offers";
+import { takeOffer, useOffers } from "@/features/usage/useOffers";
 import { useSharing } from "@/features/roster/useSharing";
 import type { ToastItem } from "@/ui";
 import { actions, app, type Panel } from "./store";
@@ -48,6 +51,8 @@ export function useToasts(): ToastItem[] {
   const [releaseSeen, setReleaseSeen] = usePref("release.seen", "");
   const [recoverSeen, setRecoverSeen] = usePref<string[]>("recover.seen", []);
   const [serveSeen, setServeSeen] = usePref<string[]>("serve.seen", []);
+  const [planSeen, setPlanSeen] = usePref<string[]>("limits.offers.seen", []);
+  const planOffers = useOffers();
   useEffect(() => {
     if (!notice || notice.error) return;
     const t = setTimeout(actions.clearNotice, notice.brief ? 2000 : 6000);
@@ -159,6 +164,28 @@ export function useToasts(): ToastItem[] {
         </button>
       ),
       onDismiss: () => setRecoverSeen(remember(recoverSeen, key)),
+    });
+  }
+  // a card or schedule the plan limit holds: offered once per device to run now on the other vendor's agent
+  for (const offered of planOffersToShow(planOffers, planSeen)) {
+    const seen = () => setPlanSeen(rememberPlanOffer(planSeen, offered.id));
+    toasts.push({
+      id: `plan-offer-${offered.id}`,
+      tone: "warn",
+      text: planOfferWords(offered),
+      action: (
+        <button
+          type="button"
+          className="btn sm primary"
+          onClick={() => {
+            seen();
+            void takeOffer(offered);
+          }}
+        >
+          {runLabel(offered)}
+        </button>
+      ),
+      onDismiss: seen,
     });
   }
   // a dev server a pane announced, found listening: offered once per device as a preview

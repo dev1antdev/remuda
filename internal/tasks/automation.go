@@ -21,14 +21,17 @@ const MaxQueued = 10
 
 // Automation is how a project's agents work.
 type Automation struct {
-	Machine string  `json:"machine"`         // the machine they run on
-	Dir     string  `json:"dir"`             // the repository folder their worktrees branch off
-	Agent   string  `json:"agent"`           // the agent kind, "" for Claude Code
-	Model   string  `json:"model,omitempty"` // as the agent's CLI names it, "" for its default
-	Args    string  `json:"args,omitempty"`  // extra arguments as the person typed them
-	Queue   bool    `json:"queue"`           // start the tasks in the Queued column by themselves
-	Max     int     `json:"max"`             // at most this many agents the queue started still working or asking
-	Stages  []Stage `json:"stages"`          // the pipeline after the first agent's work; none, no pipeline
+	Machine string `json:"machine"` // the machine they run on
+	Dir     string `json:"dir"`     // the repository folder their worktrees branch off
+	// Anywhere lets the queue start a card on whichever connected machine has room and a workspace open on a checkout
+	// of the same repository (internal/placement); Machine and Dir still name the repository, and stay its home
+	Anywhere bool    `json:"anywhere,omitempty"`
+	Agent    string  `json:"agent"`           // the agent kind, "" for Claude Code
+	Model    string  `json:"model,omitempty"` // as the agent's CLI names it, "" for its default
+	Args     string  `json:"args,omitempty"`  // extra arguments as the person typed them
+	Queue    bool    `json:"queue"`           // start the tasks in the Queued column by themselves
+	Max      int     `json:"max"`             // at most this many agents the queue started still working or asking
+	Stages   []Stage `json:"stages"`          // the pipeline after the first agent's work; none, no pipeline
 	// DenyPrompts has the Claude Code agents the queue and the pipeline start deny a call that would wait on a
 	// permission prompt and carry on; nil for settings saved before the switch, which read as off (Denies)
 	DenyPrompts *bool `json:"deny_prompts,omitempty"`

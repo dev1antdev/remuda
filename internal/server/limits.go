@@ -1,10 +1,13 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/dev1antdev/remuda/internal/limits"
 )
 
 // Limits: the person's booking to continue an agent a subscription limit stopped, at the moment the window resets —
@@ -14,6 +17,36 @@ import (
 func (s *Server) limitRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/limits/continue", s.handleLimitContinue)
 	api.HandleFunc("DELETE /api/limits/continue", s.handleLimitCancel)
+	// the offers to run a held card or schedule on the other vendor: the person's alone — a viewer link reads nothing
+	// here and an agent's key stays out of /api/limits
+	api.HandleFunc("GET /api/limits/offers", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"offers": s.Limits.Offers()})
+	})
+	api.HandleFunc("POST /api/limits/offers/{id}/run", s.handleOfferRun)
+	api.HandleFunc("DELETE /api/limits/offers/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if err := s.Limits.DeclineOffer(r.PathValue("id")); err != nil {
+			httpErr(w, offerStatus(err), err)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
+}
+
+func (s *Server) handleOfferRun(w http.ResponseWriter, r *http.Request) {
+	words, err := s.Limits.RunOffer(r.PathValue("id"))
+	if err != nil {
+		httpErr(w, offerStatus(err), err)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "words": words})
+}
+
+// offerStatus is the answer to an offer that could not run: gone, running already, or refused by what it would start.
+func offerStatus(err error) int {
+	if errors.Is(err, limits.ErrNoOffer) {
+		return http.StatusNotFound
+	}
+	return http.StatusConflict
 }
 
 type continueReq struct {

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/placement"
 	"github.com/dev1antdev/remuda/internal/push"
 )
 
@@ -25,6 +26,8 @@ type QueueNote struct {
 	Working int    `json:"working"`          // agents the queue started that still work or ask
 	Max     int    `json:"max"`
 	At      string `json:"at"`
+	// Fleet is where a project whose queue may use any machine sends its next card, and how the others stood
+	Fleet *placement.Result `json:"fleet,omitempty"`
 }
 
 func (st *Store) queueNote(projectID int64) *QueueNote {
@@ -60,8 +63,14 @@ type Queue struct {
 	Workspace func(machine, dir string) string
 	// PaneState is the radar's state of a pane (working | blocked | done | idle | unknown); ok is false once it is gone.
 	PaneState func(machine, pane string) (state string, ok bool)
-	// Spent is why the agent kind cannot start on the machine now — its plan's window spent — or "".
+	// Spent is why the agent kind cannot start on the machine now — its plan's window at 95 % or forecast to run out
+	// within the half hour (limits.Holding) — or "".
 	Spent func(machine, agent string) string
+	// Place is where a project whose queue may use any machine starts the agent kind next, and why (fleet.go).
+	Place func(a Automation, agent string) placement.Result
+	// Offer hands a card the plan window holds to the person, to run on the other vendor's agent; machine is "" for a
+	// project whose queue picks the machine.
+	Offer func(p Project, t Task, machine, agent, why string)
 	// Crossed is the budget over the machine and folder that is spent, in words, or "".
 	Crossed func(machine, dir string) string
 	// Start starts the agent on the task as the person's Start does.
@@ -117,6 +126,9 @@ func (q *Queue) step(p Project) QueueNote {
 	}
 	note.Next = next.Identifier
 	agent := agentOr(a.Agent)
+	if a.Anywhere && q.Place != nil {
+		return q.stepAnywhere(p, *next, agent, note)
+	}
 	if q.Unusable != nil {
 		if why := q.Unusable(a.Machine); why != "" {
 			note.Reason = why
@@ -133,6 +145,9 @@ func (q *Queue) step(p Project) QueueNote {
 	}
 	if why := q.Spent(a.Machine, agent); why != "" {
 		note.Reason = why
+		if q.Offer != nil {
+			q.Offer(p, *next, a.Machine, agent, why)
+		}
 		return note
 	}
 	if why := q.Crossed(a.Machine, a.Dir); why != "" {

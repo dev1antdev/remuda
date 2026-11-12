@@ -1,8 +1,9 @@
-// The body's rows of a machine's vitals — memory, temperature, the CPU's clock, a Raspberry Pi's throttling — with the
-// day's sparklines, inside the ⓘ's list and the Server place's. A row the machine does not report is not drawn.
+// The body's rows of a machine's vitals — memory, temperature, the CPU's clock, a Raspberry Pi's throttling, the
+// battery — with the day's sparklines, inside the ⓘ's list and the Server place's. A row the machine does not report is
+// not drawn.
 
 import type { Health } from "./api";
-import { clockWords, memUsedPct, memWords, MEM_THRESHOLDS, TEMP_THRESHOLDS, tempWords, throttleWords } from "./body";
+import { batteryLow, batteryWords, clockWords, memUsedPct, memWords, MEM_THRESHOLDS, TEMP_THRESHOLDS, tempWords, throttleWords } from "./body";
 import { Sparkline } from "./Sparkline";
 import { sparkTitle } from "./spark";
 import { t } from "@/lib/i18n";
@@ -45,6 +46,12 @@ export function BodyRows({ health: h, span }: { health: Health; span: string }) 
         <>
           <dt>{t("Throttling")}</dt>
           <dd className={h.throttle.now.length ? "health-body-warn" : undefined}>{throttleWords(h.throttle)}</dd>
+        </>
+      )}
+      {h.battery && (
+        <>
+          <dt>{t("Battery")}</dt>
+          <dd className={batteryLow(h.battery) ? "health-body-warn" : undefined}>{batteryWords(h.battery)}</dd>
         </>
       )}
     </>

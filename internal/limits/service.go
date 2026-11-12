@@ -63,14 +63,19 @@ type Service struct {
 	Check   func(machine, pane string) (Hit, bool)   // whether the pane's agent stopped on a limit, from its transcript
 	Submit  func(machine, pane, text string) error   // a booking's word, through the chat's own path
 	Pane    func(machine, pane string) (Place, bool) // the pane as the watcher last saw it
+	Run     func(o Offer) (string, error)            // an offer taken: the held card or schedule started on the other vendor
 
-	mu       sync.Mutex
-	readings map[string]Reading
-	sweeps   map[string]sweep
-	hits     map[string]Hit
-	checking map[string]bool
-	seeded   map[string]bool
-	kept     kept
+	mu        sync.Mutex
+	readings  map[string]Reading
+	sweeps    map[string]sweep
+	hits      map[string]Hit
+	checking  map[string]bool
+	seeded    map[string]bool
+	offering  map[string]bool // the offers being run now, by id
+	paces     map[string][]Sample
+	paceAt    time.Time // when the readings were last written
+	paceMoved bool      // the readings moved since
+	kept      kept
 }
 
 type sweep struct {
@@ -78,15 +83,18 @@ type sweep struct {
 	busy bool
 }
 
-// kept is what outlives a restart: the warnings given, by window and level, and the bookings, by machine|pane.
+// kept is what outlives a restart: the warnings given, by window and level, the forecasts pushed, by window, the
+// bookings, by machine|pane, and the offers, by card or schedule and window.
 type kept struct {
 	Alerted  map[string]int     `json:"alerted"`
+	Foreseen map[string]bool    `json:"foreseen,omitempty"`
 	Bookings map[string]Booking `json:"bookings"`
+	Offers   map[string]Offer   `json:"offers,omitempty"`
 }
 
 // New loads the warnings and bookings kept in dir.
 func New(dir string) *Service {
-	s := &Service{dir: dir, now: time.Now, readings: map[string]Reading{}, sweeps: map[string]sweep{}, hits: map[string]Hit{}, checking: map[string]bool{}, seeded: map[string]bool{}}
+	s := &Service{dir: dir, now: time.Now, readings: map[string]Reading{}, sweeps: map[string]sweep{}, hits: map[string]Hit{}, checking: map[string]bool{}, seeded: map[string]bool{}, offering: map[string]bool{}, paces: map[string][]Sample{}}
 	if err := state.LoadJSON(dir, stateFile, &s.kept); err != nil {
 		log.Printf("%s is unreadable (%v): no limit warning is remembered as given, no booking kept", stateFile, err)
 		s.kept = kept{}
@@ -97,10 +105,20 @@ func New(dir string) *Service {
 	if s.kept.Bookings == nil {
 		s.kept.Bookings = map[string]Booking{}
 	}
+	if s.kept.Foreseen == nil {
+		s.kept.Foreseen = map[string]bool{}
+	}
+	if s.kept.Offers == nil {
+		s.kept.Offers = map[string]Offer{}
+	}
+	if err := state.LoadJSON(dir, paceFile, &s.paces); err != nil || s.paces == nil {
+		s.paces = map[string][]Sample{} // the pace is read again within the quarter of an hour
+	}
 	return s
 }
 
-// Of is a machine's last reading, less the windows that have reset since: a machine away keeps its reading for good.
+// Of is a machine's last reading, less the windows that have reset since — a machine away keeps its reading for good —
+// each window with its forecast at the pace of every machine's recent readings of it.
 func (s *Service) Of(machine string) Reading {
 	now := s.now()
 	s.mu.Lock()
@@ -109,6 +127,9 @@ func (s *Service) Of(machine string) Reading {
 	var open []Window
 	for _, w := range r.Windows {
 		if w.ResetsAt.After(now) {
+			if outlook, ok := Forecast(s.paces[alertKey(w)], w, now); ok {
+				w.Forecast = &outlook
+			}
 			open = append(open, w)
 		}
 	}
@@ -166,18 +187,21 @@ func (s *Service) Read(host shell.Host, label string) {
 	if err != nil {
 		return
 	}
-	reading := Parse(out, s.now())
+	now := s.now()
+	reading := Parse(out, now)
 	s.mu.Lock()
 	moved := fmt.Sprint(s.readings[host.ID()]) != fmt.Sprint(reading)
 	s.readings[host.ID()] = reading
+	s.notePaceLocked(reading, now)
 	s.mu.Unlock()
-	s.warn(label, reading)
+	s.warn(label, s.Of(host.ID()))
 	if moved {
 		s.changed()
 	}
 }
 
-// warn pushes once per window and level: at 80 % and at the limit; the same window read on two machines warns once
+// warn pushes once per window and level: at 80 % and at the limit; the same window read on two machines warns once.
+// A window forecast to run out ForecastAhead or more before its reset is pushed once too.
 func (s *Service) warn(label string, r Reading) {
 	now := s.now()
 	var due []push.Payload
@@ -187,9 +211,18 @@ func (s *Service) warn(label string, r Reading) {
 			delete(s.kept.Alerted, key)
 		}
 	}
+	for key := range s.kept.Foreseen {
+		if resets, ok := keyResets(key); ok && !resets.After(now) {
+			delete(s.kept.Foreseen, key)
+		}
+	}
 	for _, w := range r.Windows {
 		level := Level(w.Used)
 		key := alertKey(w)
+		if level < 100 && forecastEarly(w) >= ForecastAhead && !s.kept.Foreseen[key] {
+			s.kept.Foreseen[key] = true
+			due = append(due, ForecastWarning(w, label, now))
+		}
 		if level == 0 || s.kept.Alerted[key] >= level {
 			continue
 		}
@@ -372,24 +405,26 @@ func (s *Service) Loop(every time.Duration, done <-chan struct{}) {
 }
 
 // Tick says every booking that is due: to the same conversation, resting and asking nothing; anything else calls it off.
+// The offers whose window reset go too.
 func (s *Service) Tick() {
 	now := s.now()
 	var due []Booking
 	s.mu.Lock()
+	expired := s.expireOffersLocked(now)
 	for key, b := range s.kept.Bookings {
 		if !b.At.After(now) {
 			due = append(due, b)
 			delete(s.kept.Bookings, key)
 		}
 	}
-	if len(due) > 0 {
+	if len(due) > 0 || expired {
 		s.saveLocked()
 	}
 	s.mu.Unlock()
 	for _, b := range due {
 		s.say(b)
 	}
-	if len(due) > 0 {
+	if len(due) > 0 || expired {
 		s.changed()
 	}
 }
