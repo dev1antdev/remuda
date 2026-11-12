@@ -49,3 +49,9 @@ func TestMirrorClosed(t *testing.T) {
 		t.Error("a scratch instance beside the real one writes into the person's herdr")
 	}
 }
+
+func TestOnlyTheRealServiceRecordsTimelapsesUnlessAsked(t *testing.T) {
+	if !recordsHere(false, false) || recordsHere(false, true) || !recordsHere(true, true) {
+		t.Fatal("the real service records, a scratch instance only with -record")
+	}
+}

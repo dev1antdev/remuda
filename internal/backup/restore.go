@@ -120,9 +120,11 @@ func Restore(archive []byte, dir string, now time.Time) (Manifest, string, error
 		}
 	}
 	if aside != "" {
-		if kept := filepath.Join(aside, "backups"); dirExists(kept) {
-			if err := os.Rename(kept, filepath.Join(dir, "backups")); err != nil {
-				return manifest, aside, fmt.Errorf("restored, but the backups kept here stayed at %s: %w", kept, err)
+		for _, folder := range keptHere {
+			if kept := filepath.Join(aside, folder); dirExists(kept) {
+				if err := os.Rename(kept, filepath.Join(dir, folder)); err != nil {
+					return manifest, aside, fmt.Errorf("restored, but the %s kept here stayed at %s: %w", folder, kept, err)
+				}
 			}
 		}
 	}

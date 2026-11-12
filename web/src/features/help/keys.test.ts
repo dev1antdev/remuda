@@ -22,6 +22,7 @@ describe("keyGroups", () => {
     expect(rows).toContain("Chat: ↑ ↓ ↵ Tab Esc");
     expect(rows).toContain("Chat: ↵ ⇧ ↵ Esc");
     expect(rows).toContain("Changes: ⌘ ↵");
+    expect(rows).toContain("Timelapse: Space");
   });
 
   it("says the caps that are words in the page's language", () => {

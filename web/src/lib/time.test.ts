@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { setLang } from "./i18n";
-import { ago, elapsed, spent, took, whenAhead } from "./time";
+import { ago, clockOf, elapsed, spent, took, whenAhead } from "./time";
 
 afterEach(() => setLang("en"));
 
@@ -69,5 +69,11 @@ describe("whenAhead", () => {
     expect(whenAhead(today, now)).toBe(clock(today));
     expect(whenAhead(monday, now)).toBe(`${monday.toLocaleDateString([], { weekday: "short" })} ${clock(monday)}`);
     expect(whenAhead(later, now)).toBe(`${later.toLocaleDateString([], { day: "numeric", month: "short" })} ${clock(later)}`);
+  });
+});
+
+describe("clockOf", () => {
+  it("reads a span as a player's clock does", () => {
+    expect([0, 7_400, 754_000, 3_723_000, -5].map(clockOf)).toEqual(["0:00", "0:07", "12:34", "1:02:03", "0:00"]);
   });
 });

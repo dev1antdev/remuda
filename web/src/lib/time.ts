@@ -79,3 +79,12 @@ export function fmtDay(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y!, m! - 1, d!).toLocaleDateString(tag(), { day: "numeric", month: "short" });
 }
+
+// clockOf is a span on a player's clock: "0:07", "12:34", "1:02:03"
+export function clockOf(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const two = (n: number) => String(n).padStart(2, "0");
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h ? `${h}:${two(m)}:${two(s % 60)}` : `${m}:${two(s % 60)}`;
+}

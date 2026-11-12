@@ -27,7 +27,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`mirrorClosed`, tested: a scratch instance with `REMUDA_STATE_DIR` set
   writes nothing into herdr — no tokens, no toasts — unless `-mirror`
   asks, which the e2e does on its throwaway herdr; `app.Options.MirrorClosed`
-  is the reason, a log line and the Settings section say it), `-server`
+  is the reason, a log line and the Settings section say it), `-record`
+  (`recordsHere`, tested: the agents' timelapses are recorded by the real
+  service, and by a scratch instance only when it asks, so a look beside
+  the real one never reads the person's screens into a folder of its own;
+  `app.Options.Record` → `timelapse.Recorder.Scratch`), `-server`
   (also `REMUDA_SERVER=1`; `app.Options.Server`, see "Server mode"
   below; without it the host is a machine of its own, there is no
   `-client` flag); subcommands
@@ -77,7 +81,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the server is writing, its WAL included), the `tailscale/` node state (so a restore on a new
   machine keeps the tsnet node, its address and every device's sign-in)
   without its `*.txt` logs; never `ssh/` (the masters' sockets),
-  `backups/` (the copies this machine keeps), `serve.lock`, a `-wal` /
+  `backups/` (the copies this machine keeps), `timelapse/` (the agents'
+  recordings, `internal/timelapse`: up to 200 MB of screens), `serve.lock`, a `-wal` /
   `-shm` / `-journal`, a `.log`, a file the atomic writer is still
   writing (`name.123456789`, a number of any length; the tailnet node's
   `name.tmp123456789`; `.partial`, `.new`); a `remuda-backup.json`
@@ -114,7 +119,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `..` names, folders and regular files only), confirms, and `Restore`
   moves the dir aside as `<dir>.before-restore-<time>`, unpacks into a
   fresh 0700 one (every file 0600 or tighter) and carries the aside dir's
-  `backups/` over; a failure puts the old dir back. A copy holds the
+  `backups/` and `timelapse/` over (`keptHere`: this machine's, not the
+  cockpit's); a failure puts the old dir back. A copy holds the
   state dir alone: the machine's own `~/.ssh` (its key, the hosts it
   reaches) is not in it, which `restore` says when it is done. The page: Settings ›
   Backups (`features/settings/BackupSection.tsx`, `backupApi.ts`,
@@ -536,10 +542,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   control — Find for the chat, the key bar switch for the terminal — and
   **the View menu** (`app/ViewMenu.tsx`): the lens's own rows
   (`useChatViewItems` in `chat/ChatTools.tsx`: the timeline, Recap…,
-  Export as Markdown; `useTerminalViewItems` in
+  Export as Markdown, Timelapse…; `useTerminalViewItems` in
   `terminal/TerminalLens.tsx`: the size mode, the minimum width,
   selection mode, smaller / larger text that keep the menu open, the key
-  bar) and then the page's: the files rail and full screen; the viewer
+  bar, then Timelapse… — `timelapseRows` in `terminal/timelapse/row.ts`,
+  which `PaneArea` adds) and then the page's: the files rail and full screen; the viewer
   bar has the same pair for a transcript on its own. Never a row of icons
   in the header. Transient status — offline,
   a newer server, errors, "Copied N" — is a toast in the bottom corner
@@ -1062,7 +1069,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   so many ms, for a counter on screen), `text.ts` (`errMsg`,
   `basename` / `dirname`, `plural`, `shellQuote`), `time.ts`, `paths.ts`,
   `host.ts` (`copyText`: Clipboard API, else execCommand; `saveText`: a
-  file for the browser to keep; `openUrl`: a
+  file for the browser to keep, `saveBlob` any other — a timelapse's GIF; `openUrl`: a
   new tab — nothing embeds remuda any more, the JetBrains plugin and its
   `window.herdrHost` bridge are gone), `transfer.ts` (`filesFrom`),
   `version.ts` (`newer`), `look.ts` (the text size, the density and the
@@ -1753,6 +1760,100 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   status transition (push, the restarts and the radar hear them); the
   first snapshot of a machine only seeds state — a reconnect must not
   replay a day of alerts.
+- `internal/timelapse/` — **forty minutes of an agent's work watched in
+  thirty seconds** (tested: the recorder on fake snapshots, screens and a
+  clock, inline readers; the store on temp dirs; a reader that blocks).
+  `Recorder.Observe` hears every `events.Snapshot`: an agent pane herdr
+  reports working gets a `take` (named `<start>-<6 hex>` by `newID`, its
+  workspace, `Dir` — `Snapshot.WorkspaceDir` — and `Folder`, the
+  sidebar's folder through `Inputs.Folder` = `server.FolderOf`, for the
+  screen-sharing mode — the agent kind, the title, the widest grid seen)
+  and a read of its screen every `Interval` (4 s, by the snapshots' own
+  clock, one waiting at a time), queued to the machine's own reader
+  goroutine (`dispatch` / `drain`: one per machine, in order, never on
+  the poll path) that calls `Inputs.Screen` — the app's
+  `herdr.Client.PaneScreen` over the machine's client, `pane.read` with
+  ANSI as the Wall's screen view reads it: no attach, no slot, no resize,
+  a remote's over its master — and keeps a frame only when the screen
+  moved (`take.add`: the rows that did not move shared with the frame
+  before, the moved ones `strings.Clone`d so the read is not kept alive;
+  a read past `MaxScreen` 256 KB dropped; past `MaxFrames` 900 every
+  other frame goes, the first and last staying, and the pace doubles —
+  `thin`). A pane that stops working is read once more (the screen it
+  stopped on) and, unless it works again within `Grace` (15 s: herdr's
+  blink through idle, a permission answered at once), written once with
+  the status it rested in as `Ended` (done, idle, blocked); a pane gone
+  or no longer an agent's is written at once as `gone`, a removed
+  machine's turns too (`Forget`), and `Close` — deferred in the app —
+  writes the turns still going as `stopped`. A turn still going is
+  written every `CheckpointEvery` (10 min) as `cut`, unlisted while it
+  lives (`isLive`), so a crash or a power cut loses at most that and
+  leaves a recording that reads "cut short"; the turn's end overwrites
+  it. A turn under `MinTurn` (1 min) or of one screen is not kept, its
+  checkpoint removed. The file (`store.go`) is
+  `<state>/timelapse/<machine>/<id>.json.gz` (`machineFolder`: the id when
+  it is a plain name, else `m-` and a hash), 0600 through
+  `state.WriteFile`: the `Recording` — `Meta` and `Frames`, each `{at` ms
+  after the start, `lines`, `rows` the ones that differ from the frame
+  before`}` — as gzipped JSON, the `Meta` also in the gzip header's extra
+  field (RFC 1952, subfield `RM`), so `Open` lists the folder by reading
+  headers alone (`readMeta`, a header that names another id ignored; the
+  atomic writer's leftover `….json.gz.<digits>` removed); after each
+  write `pruneLocked` keeps a pane's `KeepPerPane` (20) newest and the
+  folder within `MaxTotal` (200 MB), the oldest going first, never a turn
+  still going. The switch is `timelapse.json` in the state dir (`off`,
+  on by default, carried by the backups; `SetOn(false)` drops the turns
+  being recorded, their checkpoints with them); a scratch instance
+  (`REMUDA_STATE_DIR` without `-record`) is `Scratch()`: it records
+  nothing whatever the switch, `Stats.Scratch` says so to Settings, and
+  it still lists, plays and deletes what its folder holds. `internal/backup` leaves
+  the folder out and a restore carries it over. Routes
+  (`internal/server/timelapse.go`): `GET /api/timelapse` (`Stats`: on,
+  count, bytes, max), `PUT /api/timelapse {on}`, `DELETE /api/timelapse`
+  (every recording, the turns being recorded too, `{deleted, stats}`),
+  `GET /api/timelapse/recordings?machine&pane&dir` (the machine through
+  `machineFor`; the pane's and the folder's — every earlier pane that
+  worked in that `Dir` — newest first, and `on`), `GET
+  /api/timelapse/recordings/{id}` (the file as it is, `Content-Encoding:
+  gzip`, so a Pi spends nothing; unpacked for a client that takes no
+  gzip), `DELETE /api/timelapse/recordings/{id}`; a viewer link may GET
+  the two recordings routes (`viewerRoutes`, `viewerPrefixes`), an agent
+  key none. The page: `features/terminal/timelapse/` — `TimelapseDialog.tsx`
+  (dialog kind `timelapse`: "Timelapse…" in the chat's and the terminal's
+  View menu through `timelapseRows` in `row.ts`, the palette's "Timelapse
+  of this pane…", a viewer's too; the Wall's tile has no menu of its own
+  for it), the recordings in a `Select` — this pane's first, an earlier
+  pane's named — under the screen-sharing mode none of a hidden folder or
+  machine (`shownRecordings`), Delete behind a confirm, never for a
+  viewer; `Player.tsx`: the frames through the screen view's own
+  `parseAnsi` and `ScreenLines` (exported from `terminal/Screen.tsx` with
+  `useFitFont` and `widthOf`), the font fitting the pane's columns and
+  the box's height (`fitHeight`), playing at once, play / pause (Space),
+  ← → a frame, a scrub bar over the turn's own time with `clockOf` (in
+  `lib/time.ts`), 10× / 30× / 60× / By frame (pref `timelapse.speed`, per
+  device); `GifExport.tsx` → `raster.ts`, **Export as GIF** drawn in the
+  page a few frames at a time, its progress on the button, which calls it
+  off: every frame laid out in cells on a canvas in the flavour's
+  terminal colours (`cells.ts`: `cellsOf`, `charWidth` a wide character
+  two cells, a dim one mixed toward its ground, `rowKey`), only the rows
+  that moved drawn again and handed over as one band, each pixel its
+  cell's ink or ground (`isInk`, from `INK_FROM` 0.4 of the way), so the
+  palette (`palette.ts`: `Tally`, the ground and ink first then the most
+  used, at most 256, `indexer` the nearest past that) holds exactly the
+  colours the cells wear; `gif.ts` the GIF89a encoder — `lzwEncode` (the
+  table cleared at 4096 codes), `subBlocks`, `GifWriter` (a global
+  palette, the NETSCAPE loop, each frame a rectangle left in place over
+  the one before, its delay) — and `playback.ts` (`screensOf`, `frameAt`,
+  `advance`, `stepTo`, `gifDelays` the turn's gaps at the speed, rounded
+  on the running total, at least 2 hundredths, the last frame held 2 s),
+  `words.ts` (`recordingLabel`, `endedWords`, `gifName`), all pure ones
+  tested — the GIF read back through GIF's own decoder in the test. No
+  WebM: MediaRecorder records in real time, so a 40-minute turn at 30×
+  would take 80 s to export, and the GIF plays everywhere. Settings ›
+  Timelapse (`features/settings/TimelapseSection.tsx`, `timelapse.ts`
+  `keptWords`, tested): the switch, how much is kept, Delete all; never
+  for a viewer. The display suite fakes the recordings routes
+  (`fakeTimelapse`) and opens the player in every pass.
 - `internal/live/` — **the page's one event stream**, so the screens
   reload when something moved instead of polling for it. `Hub`:
   `Subscribe()` is one page's stream (`Events`, `Watch(keys)` — the
@@ -3139,7 +3240,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   none) by `machine|folder` — the folder the sidebar groups by, which
   the roster names as `session.folder`: the repository's main checkout
   (herdr's `repo_root`, else the folder holding the shared `.git` of
-  `repo_key`), else the workspace's own folder; `server.folderOf`.
+  `repo_key`), else the workspace's own folder; `server.FolderOf`.
   `Store.Of` / `SetEmoji` / `SetImage` / `Clear` / `Image`; an emoji is
   checked by `CheckEmoji` (at most 32 bytes, no letters, digits but a
   keycap's, no control characters), a picture by `ParseImage` (a
@@ -3663,7 +3764,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   workspaces", and a stat's `dir` and candidates are kept the same way),
   the health, the push public key, the question, the usage, the models'
   scorecard (`/api/scorecard`, its rows naming no task), the folders'
-  icon pictures (`/api/icons/…`, `viewerPrefixes`), and the
+  icon pictures (`/api/icons/…`, `viewerPrefixes`), a pane's timelapses
+  and one of them (`/api/timelapse/recordings`, `…/recordings/{id}`: a
+  screen as it was, as the screen itself is — never the switch or a
+  deletion), and the
   upgrade of `/ws/events` — or of the page itself and its files (anything outside
   `/api/`, `/ws/` and the code-server proxy `/code/`); never `/ws/pane`,
   a submit, a key, the tasks or any change: 403 "this link is for

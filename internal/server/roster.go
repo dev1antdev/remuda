@@ -122,10 +122,10 @@ type rosterServer struct {
 	Health *health.Report `json:"health,omitempty"`
 }
 
-// folderOf is the folder a workspace belongs to in the sidebar: its repository's main checkout — herdr's repo_root,
+// FolderOf is the folder a workspace belongs to in the sidebar: its repository's main checkout — herdr's repo_root,
 // else the folder holding the shared .git, else the root the review sweep read with git (a worktree made outside
-// herdr) — or, outside a repository, the workspace's own folder.
-func folderOf(worktree *herdr.WorktreeInfo, root, dir string) string {
+// herdr) — or, outside a repository, the workspace's own folder. A timelapse keeps it, for the screen-sharing mode.
+func FolderOf(worktree *herdr.WorktreeInfo, root, dir string) string {
 	if worktree != nil {
 		if worktree.RepoRoot != "" {
 			return worktree.RepoRoot
@@ -217,7 +217,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			}
 		}
 		session.Dir = snap.WorkspaceDir(&ws)
-		session.Folder = folderOf(ws.Worktree, s.Review.Root(machineID, session.Dir), session.Dir)
+		session.Folder = FolderOf(ws.Worktree, s.Review.Root(machineID, session.Dir), session.Dir)
 		if s.Icons != nil {
 			if icon, ok := s.Icons.Of(machineID, session.Folder); ok {
 				session.Icon = &icon
