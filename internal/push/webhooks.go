@@ -322,6 +322,8 @@ func HookKind(kind string) string {
 		return "finish"
 	case "stuck", "waiting", "loop":
 		return "watchdog"
+	case "collision":
+		return "review"
 	}
 	return kind
 }

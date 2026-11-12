@@ -42,7 +42,7 @@ func (s *Server) listeners(mc *machines.Machine) ([]preview.Listener, error) {
 	if snap, _ := s.Watch.Snapshot(mc.ID()); snap != nil {
 		for i := range snap.Workspaces {
 			ws := &snap.Workspaces[i]
-			if s.Scratch != nil && s.Scratch.Is(mc.ID(), ws.WorkspaceID) {
+			if s.ownWorkspace(mc.ID(), ws.WorkspaceID) {
 				continue
 			}
 			if dir := snap.WorkspaceDir(ws); dir != "" {

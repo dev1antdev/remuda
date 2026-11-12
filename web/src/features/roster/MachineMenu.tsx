@@ -26,6 +26,7 @@ export function MachineMenu({ machine: m, onRename, onRemove }: { machine: Machi
   const items = (): MenuItem[] => [
     { label: t("Rename…"), icon: "edit", onSelect: onRename },
     { label: t("Updates…"), icon: "refresh-cw", disabled: !connected, onSelect: () => setUpdates(true) },
+    { label: t("Fleet setup…"), icon: "columns", hint: t("every machine side by side"), onSelect: () => actions.openDialog({ kind: "fleet-setup" }) },
     { label: t("Keep awake while agents work"), icon: "sun", checked: !!m.awake?.on, disabled: !connected, onSelect: () => void act(setAwake(m.id, !m.awake?.on)) },
     ...(canWake(m) ? [{ label: t("Wake up"), icon: "zap" as const, onSelect: wake }] : []),
     { label: t("MAC address…"), icon: "plug", hint: m.mac, onSelect: () => setMac(true) },

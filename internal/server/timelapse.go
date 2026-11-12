@@ -7,14 +7,16 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/timelapse"
 )
 
 // Timelapses: what the agents' screens did while they worked, recorded on the cockpit. A viewer link may list and play
 // them, as it may read a screen (internal/auth viewerRoutes); the switch, the counts and every deletion are the
-// person's alone, and an agent's key reaches none of it.
+// person's alone, and an agent's key reaches none of it. The search over them is a viewer's too, as the recordings are.
 
 func (s *Server) timelapseRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/timelapse", s.handleTimelapse)
@@ -23,6 +25,36 @@ func (s *Server) timelapseRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/timelapse/recordings", s.handleRecordings)
 	api.HandleFunc("GET /api/timelapse/recordings/{id}", s.handleRecording)
 	api.HandleFunc("DELETE /api/timelapse/recordings/{id}", s.handleRecordingDelete)
+	api.HandleFunc("GET /api/timelapse/search", s.handleScreenSearch)
+}
+
+// handleScreenSearch is GET /api/timelapse/search?q&machine&pane&dir&days: where the text stood on the recorded screens
+// — every machine's, or the machine's, its pane's and folder's as the recordings route lists them — the newest first,
+// within the search's own bounds (timelapse.Search).
+func (s *Server) handleScreenSearch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	text := []rune(strings.TrimSpace(q.Get("q")))
+	if len(text) < timelapse.MinQuery {
+		httpErr(w, 400, errors.New("two characters or more"))
+		return
+	}
+	query := timelapse.SearchQuery{Text: string(text[:min(len(text), timelapse.MaxQuery)]), Pane: q.Get("pane"), Dir: q.Get("dir")}
+	if id := q.Get("machine"); id != "" && id != "all" {
+		mc, err := s.machineFor(r, "")
+		if err != nil {
+			httpErr(w, 404, err)
+			return
+		}
+		query.Machine = mc.ID()
+	} else if query.Pane != "" {
+		httpErr(w, 400, errors.New("a pane needs its machine"))
+		return
+	}
+	if days, _ := strconv.Atoi(q.Get("days")); days > 0 {
+		query.Since = time.Now().AddDate(0, 0, -days)
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, s.Timelapse.Search(r.Context(), query))
 }
 
 // handleTimelapse is GET /api/timelapse: whether turns are recorded, and how many recordings take how much.

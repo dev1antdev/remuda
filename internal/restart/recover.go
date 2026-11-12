@@ -49,6 +49,9 @@ type Memory struct {
 	dir string
 	// Note records what a recovery did, in the activity; nil logs only.
 	Note func(machineID, title, body string)
+	// Skip names a workspace remuda keeps for itself (the concierge's): its panes are never remembered, so neither a
+	// reboot nor a close of theirs is offered back.
+	Skip func(machineID, workspaceID string) bool
 
 	mu      sync.Mutex
 	chats   map[string]Chat      // machine|pane
@@ -102,6 +105,15 @@ func (m *Memory) Observe(e events.Snapshot) {
 		p := &e.Snap.Panes[i]
 		key := prefix + p.PaneID
 		seen[key] = true
+		if m.Skip != nil && m.Skip(e.Machine, p.WorkspaceID) {
+			if _, ok := m.chats[key]; ok {
+				delete(m.chats, key)
+				changed = true
+			}
+			delete(m.shells, key)
+			delete(m.faces, key)
+			continue
+		}
 		if _, known := agents[p.Agent]; known {
 			delete(m.shells, key)
 			if sid := sessionOf(p); sid != "" {

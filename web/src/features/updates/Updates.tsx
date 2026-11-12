@@ -22,6 +22,8 @@ function missingText(what: string): string {
       return tr("No newer release of remuda is known for this machine.");
     case "hooks":
       return tr("herdr's hooks there are current.");
+    case "integrations":
+      return tr("Every agent there has herdr's hooks.");
     case "plugins":
       return tr("No herdr plugin from GitHub is installed there, or herdr there is older than 0.9.4.");
   }
@@ -177,7 +179,7 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
           <div className="updates-list">
             {data?.map((u) => (
               <button key={u.what} type="button" className="updates-row" onClick={() => setPicked(u)}>
-                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "code" ? "code" : u.what === "mcp" ? "plug" : u.what === "statusline" ? "chart" : u.what === "herdr" || u.what === "hooks" || u.what === "plugins" || u.what.startsWith("remuda") ? "refresh-cw" : "sparkles"} size={14} />
+                <Icon name={u.what.startsWith("restart-") ? "play" : u.what === "code" ? "code" : u.what === "mcp" ? "plug" : u.what === "statusline" ? "chart" : u.what === "herdr" || u.what === "hooks" || u.what === "integrations" || u.what === "plugins" || u.what.startsWith("remuda") ? "refresh-cw" : "sparkles"} size={14} />
                 <span className="updates-row-text">
                   <span>{redact(u.title)}</span>
                   <span className="dim">{redact(u.note?.split(". ")[0] ?? "")}</span>
@@ -210,6 +212,16 @@ export default function UpdatesDialog({ machine, what, onClose, onDone }: {
               }}
             >
               {tr("Update everywhere…")}
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                onClose();
+                actions.openDialog({ kind: "fleet-setup" });
+              }}
+            >
+              {tr("Fleet setup…")}
             </button>
             <button type="button" className="btn" onClick={onClose}>
               {tr("Close")}

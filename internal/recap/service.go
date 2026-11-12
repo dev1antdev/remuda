@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/chat"
+	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/watch"
@@ -16,6 +17,13 @@ type Service struct {
 	Watch    *watch.Watcher
 	Chat     *chat.Service
 	Radar    *radar.Tracker
+	// Skip names a workspace remuda keeps for itself (the concierge's), whose agent's talk is no work to report.
+	Skip func(machineID, workspaceID string) bool
+}
+
+// reports says whether the standup reports on the pane: an agent's, outside remuda's own workspaces.
+func (s *Service) reports(machineID string, pane *herdr.PaneInfo) bool {
+	return pane.Agent != "" && (s.Skip == nil || !s.Skip(machineID, pane.WorkspaceID))
 }
 
 // Conversation is the recap of one conversation: a pane's live one, a session of its folder, or a transcript on its own.
@@ -54,7 +62,7 @@ func (s *Service) Standup(since time.Time) []Item {
 			defer wg.Done()
 			for j := range snap.Panes {
 				pane := &snap.Panes[j]
-				if pane.Agent == "" {
+				if !s.reports(mc.ID(), pane) {
 					continue
 				}
 				item := Item{Machine: mc.ID(), Label: mc.Label(), Workspace: snap.WorkspaceLabel(pane.WorkspaceID), Pane: pane.PaneID, Dir: pane.Dir(), Agent: pane.AgentName()}

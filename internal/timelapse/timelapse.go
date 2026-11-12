@@ -112,6 +112,10 @@ type Recorder struct {
 	keepPerPane int // KeepPerPane and MaxTotal, smaller in a test
 	maxTotal    int64
 
+	plain        *plainCache // the recordings as plain text, for the search; its own lock
+	searchBudget int64       // SearchBudget and SearchFor, smaller in a test
+	searchFor    time.Duration
+
 	mu      sync.Mutex
 	off     bool
 	scratch bool // a scratch instance: it plays and deletes what the folder holds, and records nothing
@@ -135,6 +139,7 @@ func Open(stateDir string, in Inputs) *Recorder {
 	r := &Recorder{
 		dir: filepath.Join(stateDir, Folder), state: stateDir, in: in, now: time.Now, run: func(fn func()) { go fn() },
 		keepPerPane: KeepPerPane, maxTotal: MaxTotal,
+		plain: newPlainCache(MaxPlain), searchBudget: SearchBudget, searchFor: SearchFor,
 		live: map[string]*take{}, queue: map[string][]job{}, running: map[string]bool{}, busy: map[string]job{}, index: map[string]*entry{}, failed: map[string]time.Time{},
 	}
 	var saved settings

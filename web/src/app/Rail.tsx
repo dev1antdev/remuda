@@ -26,6 +26,7 @@ const MODES: (Place & { mode: Mode; desk?: boolean })[] = [
   { mode: "review", label: t("Review"), icon: "circle-check", about: t("Every workspace with changes to review, in one list") },
 ];
 const PANELS: (Place & { panel: Panel })[] = [
+  { panel: "concierge", label: t("Concierge"), icon: "concierge", about: t("Ask what your agents are doing, in plain words; it can file a task for you") },
   { panel: "standup", label: t("Standup"), icon: "sun", about: t("What every agent did today, in one report") },
   { panel: "usage", label: t("Usage"), icon: "chart", about: t("What the agents cost, by day, project and session") },
   { panel: "schedules", label: t("Schedules"), short: tc("rail", "Schedules"), icon: "calendar", about: t("Prompts sent to agents on a timetable") },

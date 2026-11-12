@@ -9,7 +9,7 @@ import { KEYS } from "./keys";
 import { settingsNotes } from "./secrets";
 import { t } from "@/lib/i18n";
 
-export function ReviewHead({ review, lastLookText, opinionWords, split, onSplit, onLookAgain, opinionRunning, onAskOpinion, marking, onMark }: {
+export function ReviewHead({ review, lastLookText, opinionWords, split, onSplit, onLookAgain, opinionRunning, onAskOpinion, onUndo, marking, onMark }: {
   review: Review | null;
   lastLookText: string;
   opinionWords: string; // the second opinion's line, "" without one
@@ -18,6 +18,7 @@ export function ReviewHead({ review, lastLookText, opinionWords, split, onSplit,
   onLookAgain: () => void;
   opinionRunning: boolean;
   onAskOpinion: () => void;
+  onUndo?: () => void; // an agent's turn here taken back; none without a person's agent to undo
   marking: boolean;
   onMark: () => void;
 }) {
@@ -60,6 +61,13 @@ export function ReviewHead({ review, lastLookText, opinionWords, split, onSplit,
           <Icon name="refresh-cw" size={14} />
         </button>
       </Tip>
+      {onUndo && (
+        <Tip text={t("Put the files back as they were before an agent's turn: the last one, or one you pick")}>
+          <button type="button" className="icon-btn review-undo" aria-label={t("Undo a turn…")} onClick={onUndo}>
+            <Icon name="undo" size={14} />
+          </button>
+        </Tip>
+      )}
       <button
         type="button"
         className="btn review-ask-opinion"

@@ -1,8 +1,9 @@
 // Search across every transcript on every machine: a query, a machine, a
 // folder, a period — and the matching turns, newest first, each a jump to
-// its place in the conversation.
+// its place in the conversation; above them the Screens part, where the text
+// stood on the agents' recorded screens, each opening the player at that frame.
 
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { searchTranscripts, type SearchHit, type SearchResult } from "@/features/search/api";
 import type { Machine } from "@/features/roster/api";
 import { basename, errMsg } from "@/lib/text";
@@ -13,6 +14,9 @@ import Select from "@/ui/Select";
 import Icon from "@/ui/icons";
 import Logo from "@/ui/Logo";
 import { t } from "@/lib/i18n";
+import type { ScreenHit } from "@/features/terminal/timelapse/api";
+import { highlight } from "./highlight";
+import { ScreenHits, useScreenHits } from "./ScreenHits";
 
 const PERIODS = [
   { value: "0", label: t("Any time") },
@@ -21,7 +25,9 @@ const PERIODS = [
   { value: "30", label: t("Last 30 days") },
 ];
 
-export default function Search({ machines, initial = "", onClose, onOpen }: { machines: Machine[]; initial?: string; onClose: () => void; onOpen: (hit: SearchHit) => void }) {
+type Props = { machines: Machine[]; initial?: string; onClose: () => void; onOpen: (hit: SearchHit) => void; onOpenScreen: (hit: ScreenHit, query: string) => void };
+
+export default function Search({ machines, initial = "", onClose, onOpen, onOpenScreen }: Props) {
   const [q, setQ] = useState(initial);
   const [machine, setMachine] = useState("all");
   const [dir, setDir] = useState("");
@@ -32,6 +38,7 @@ export default function Search({ machines, initial = "", onClose, onOpen }: { ma
   const folders = useMemo(() => folderOptions(machines, machine), [machines, machine]);
   const query = q.trim();
   const short = [...query].length < 2;
+  const screens = useScreenHits(short ? "" : query, machines, { machine: machine === "all" ? "" : machine, dir, days: Number(days) || 0 });
 
   useEffect(() => {
     if (short) {
@@ -98,8 +105,9 @@ export default function Search({ machines, initial = "", onClose, onOpen }: { ma
               {machineLabel(machines, id)}: {msg}
             </Notice>
           ))}
-        {!res && !err && <div className="empty">{short ? t("What was said, by you or an agent, anywhere. Two characters to start.") : t("Searching…")}</div>}
-        {res && res.hits.length === 0 && <div className="empty">{t("Nothing matches.")}</div>}
+        <ScreenHits found={screens} machines={machines} onOpen={onOpenScreen} />
+        {!res && !err && <div className="empty">{short ? t("What was said, by you or an agent, and what stood on its screen, anywhere. Two characters to start.") : t("Searching…")}</div>}
+        {res && res.hits.length === 0 && <div className="empty">{screens.hits.length ? t("No conversation says it.") : t("Nothing matches.")}</div>}
         {res?.hits.map((h) => (
           <button key={`${h.machine}|${h.session}|${h.uuid}`} type="button" className="search-hit" title={h.dir} data-project={h.project} onClick={() => onOpen(h)}>
             <span className="search-hit-who">{h.role === "assistant" ? <Logo agent={h.agent || "claude"} /> : <Icon name="user" size={14} />}</span>
@@ -117,22 +125,4 @@ export default function Search({ machines, initial = "", onClose, onOpen }: { ma
       </div>
     </Dialog>
   );
-}
-
-// highlight marks the query's occurrences; none when lower-casing moved the offsets (a dotted İ grows), the snippet then shows plain
-function highlight(text: string, q: string) {
-  const lower = text.toLowerCase();
-  const needle = q.toLowerCase();
-  if (!needle || lower.length !== text.length) return text;
-  const out: (string | ReactElement)[] = [];
-  let i = 0;
-  let k = 0;
-  for (;;) {
-    const j = lower.indexOf(needle, i);
-    if (j < 0) break;
-    out.push(text.slice(i, j), <mark key={k++}>{text.slice(j, j + needle.length)}</mark>);
-    i = j + needle.length;
-  }
-  out.push(text.slice(i));
-  return out;
 }

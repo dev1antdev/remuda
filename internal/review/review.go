@@ -92,6 +92,9 @@ type Store struct {
 	roots     map[string]string     // the repository's main folder for each folder, a worktree's too
 	sweeps    map[string]badgeSweep // by machine
 	history   []Verdict             // every verdict given, the oldest first, at most HistoryKeep (review-verdicts.json)
+	works     map[string]work       // each folder's uncommitted work as the sweeps weigh it, for the queue's risk
+	remotes   map[string]string     // each folder's origin, which every checkout of one repository shares
+	scans     map[string]scanNote   // the last secret check of each folder
 }
 
 // badgeSweep is a machine's last Badges run: when it began, and whether it is still going.
@@ -104,7 +107,8 @@ func key(machineID, dir string) string { return machineID + "|" + dir }
 
 // New loads the baselines kept in dir.
 func New(dir string) *Store {
-	store := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}, branches: map[string]string{}, roots: map[string]string{}, sweeps: map[string]badgeSweep{}}
+	store := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}, branches: map[string]string{}, roots: map[string]string{}, sweeps: map[string]badgeSweep{},
+		works: map[string]work{}, remotes: map[string]string{}, scans: map[string]scanNote{}}
 	if err := state.LoadJSON(dir, baselineFile, &store.baselines); err != nil {
 		log.Printf("%s is unreadable (%v): every folder counts as never reviewed", baselineFile, err)
 	}
@@ -422,28 +426,35 @@ func (store *Store) RefreshBadges(host shell.Host, dirs []string) {
 	}()
 }
 
-// branchScript prints the branch checked out, or the short hash of a detached HEAD, then on a line of its own the
-// repository's main folder: for a linked worktree the parent of the common git dir it shares with its repository, else
-// the checkout's own top folder — a submodule's git dir sits under its parent's .git/modules, never beside it.
-const branchScript = `{ git symbolic-ref --short -q HEAD || git rev-parse --short HEAD; } 2>/dev/null; ` +
-	`gd=$(cd "$(git rev-parse --git-dir 2>/dev/null)" 2>/dev/null && pwd -P); ` +
+// branchScript prints three lines: the branch checked out, or the short hash of a detached HEAD; the repository's main
+// folder (MainFolderScript) — a submodule's git dir sits under its parent's .git/modules, never beside it; and the
+// address of its origin (remoteScript), "" for none.
+const branchScript = `b=$({ git symbolic-ref --short -q HEAD || git rev-parse --short HEAD; } 2>/dev/null); printf '%s\n' "$b"; ` +
+	`r=$(` + MainFolderScript + `); printf '%s\n' "$r"; ` + remoteScript
+
+// MainFolderScript prints, run inside a checkout, the repository's main folder: for a linked worktree the parent of the
+// common git dir it shares with its repository, else the checkout's own top folder.
+const MainFolderScript = `gd=$(cd "$(git rev-parse --git-dir 2>/dev/null)" 2>/dev/null && pwd -P); ` +
 	`common=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P); ` +
 	`if [ -n "$gd" ] && [ "$gd" = "$common" ]; then (cd "./$(git rev-parse --show-cdup 2>/dev/null)" 2>/dev/null && pwd); ` +
 	`elif [ -n "$common" ]; then (cd "$common/.." 2>/dev/null && pwd); fi`
 
-// Badges refreshes the roster's counts and branches for many folders of one machine in
-// a single round trip: per folder, the folder, the branch and the uncommitted blobs.
+// Badges refreshes the roster's counts and branches for many folders of one machine in a single round trip: per
+// folder, the folder, its branch, main folder and remote, the uncommitted blobs, git's line counts and the untracked
+// files' size — what the review queue's risk weighs.
 func (store *Store) Badges(host shell.Host, dirs []string) {
 	if len(dirs) == 0 {
 		return
 	}
+	began := time.Now()
 	var sweep strings.Builder
 	baselines := map[string]Baseline{}
 	for _, dir := range dirs {
 		baseline, _ := store.baseline(host.ID(), dir)
 		baselines[dir] = baseline
 		sweep.WriteString(`( ` + script.InRepo(dir) +
-			`printf '%s\036' ` + script.Quote(dir) + `; ` + branchScript + `; printf '\036'; ` + blobsScript() + `; printf '\035\n' ); `)
+			`printf '%s\036' ` + script.Quote(dir) + `; ` + branchScript + `; printf '\036'; ` + blobsScript() + `; printf '\036\n'; ` +
+			numstatScript + `; printf '\036\n'; ` + newBytesScript + `; printf '\035\n' ); `)
 	}
 	output, err := shell.Text(host, sweep.String(), 90*time.Second)
 	if err != nil {
@@ -455,18 +466,25 @@ func (store *Store) Badges(host shell.Host, dirs []string) {
 		if !ok {
 			continue
 		}
-		branch, blobLines, ok := strings.Cut(rest, "\x1e")
+		heads, rest, ok := strings.Cut(rest, "\x1e")
 		if !ok {
 			continue
 		}
+		sections := strings.Split(rest, "\x1e\n")
 		baseline, ok := baselines[dir]
-		if !ok {
+		if !ok || len(sections) < 3 {
 			continue
 		}
 		answered[dir] = true
-		branchLine, rootLine, _ := strings.Cut(strings.TrimRight(branch, "\n"), "\n")
-		store.setBranch(key(host.ID(), dir), strings.TrimSpace(branchLine))
-		store.setRoot(key(host.ID(), dir), strings.TrimSpace(rootLine))
+		storeKey := key(host.ID(), dir)
+		lines := strings.SplitN(strings.TrimRight(heads, "\n"), "\n", 3)
+		for len(lines) < 3 {
+			lines = append(lines, "")
+		}
+		store.setBranch(storeKey, strings.TrimSpace(lines[0]))
+		store.setRoot(storeKey, strings.TrimSpace(lines[1]))
+		store.setRemote(storeKey, strings.TrimSpace(lines[2]))
+		blobLines := sections[0]
 		hasBaseline := !baseline.At.IsZero()
 		badge := Badge{}
 		for _, line := range strings.Split(strings.TrimRight(blobLines, "\n"), "\n") {
@@ -479,15 +497,15 @@ func (store *Store) Badges(host shell.Host, dirs []string) {
 				badge.Fresh++
 			}
 		}
-		store.setBadge(key(host.ID(), dir), baseline, badge)
+		store.setBadge(storeKey, baseline, badge)
+		profile, fingerprint := readWork(blobLines, sections[1], sections[2])
+		store.setWork(storeKey, profile, fingerprint, began)
 	}
 	for _, dir := range dirs {
 		if !answered[dir] {
 			store.setBranch(key(host.ID(), dir), "") // no longer a repository: no branch or changes to show
 			store.setRoot(key(host.ID(), dir), "")
-			store.mu.Lock()
-			delete(store.badges, key(host.ID(), dir))
-			store.mu.Unlock()
+			store.forgetWork(key(host.ID(), dir))
 		}
 	}
 }

@@ -54,6 +54,26 @@ func TestAPaneThatWentAwayIsListedAsClosed(t *testing.T) {
 	}
 }
 
+func TestAWorkspaceRemudaKeepsForItselfIsNeverRemembered(t *testing.T) {
+	noGrace(t)
+	m := OpenMemory("")
+	m.Skip = func(machine, workspace string) bool { return machine == "gog" && workspace == "w1" }
+	observe(m, "gog", false, agentPane("w1:p1", "claude", "/state/concierge"))
+	observe(m, "gog", true, shellPane("w1:p1", "/state/concierge"))
+	if stopped := m.Stopped("gog"); len(stopped) != 0 {
+		t.Errorf("a reboot of the concierge offers nothing back: %+v", stopped)
+	}
+	observe(m, "gog", false)
+	if closed := m.Closed(); len(closed) != 0 {
+		t.Errorf("its close is not listed: %+v", closed)
+	}
+	observe(m, "local", false, agentPane("w1:p1", "claude", "/work/api"))
+	observe(m, "local", false)
+	if closed := m.Closed(); len(closed) != 1 || closed[0].Machine != "local" {
+		t.Errorf("another machine's agent is remembered as ever: %+v", closed)
+	}
+}
+
 func TestAShellOrAnExitIsNotAClose(t *testing.T) {
 	m := OpenMemory("")
 	observe(m, "local", false, agentPane("w1:p1", "claude", "/work/api"))

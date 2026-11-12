@@ -71,6 +71,7 @@ function allGroups(mac: boolean): KeyGroup[] {
       rows: [
         { keys: [t("Space")], what: t("play or pause the turn") },
         { keys: ["←", "→"], what: t("the frame before or after") },
+        { keys: ["↵", "⇧ ↵"], what: t("in the find: the next or previous place the text stood on screen") },
       ],
     },
     {

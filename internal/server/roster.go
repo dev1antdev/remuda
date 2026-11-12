@@ -11,6 +11,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/awake"
+	"github.com/dev1antdev/remuda/internal/collisions"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
@@ -21,6 +22,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/retire"
+	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/transcript"
@@ -73,9 +75,10 @@ type rosterTab struct {
 }
 
 type rosterReview struct {
-	Changed int  `json:"changed"`         // uncommitted files in the folder: changed against HEAD, or untracked
-	Fresh   int  `json:"fresh"`           // of those, moved since the reviewer looked
-	Ready   bool `json:"ready,omitempty"` // rejected at the last look, and the agent has said it is ready for another
+	Changed int          `json:"changed"`         // uncommitted files in the folder: changed against HEAD, or untracked
+	Fresh   int          `json:"fresh"`           // of those, moved since the reviewer looked
+	Ready   bool         `json:"ready,omitempty"` // rejected at the last look, and the agent has said it is ready for another
+	Risk    *review.Risk `json:"risk,omitempty"`  // how risky the review is, and why, for the Review mode's queue
 }
 
 type rosterWorktree struct {
@@ -99,7 +102,10 @@ type rosterSession struct {
 	Jira        []jira.Issue    `json:"jira,omitempty"`        // the Jira issues its branch and its agents name, as last read from the person's site
 	MutedUntil  *time.Time      `json:"muted_until,omitempty"` // the folder is silenced until then: no push, no webhook, no feed row
 	Scratch     bool            `json:"scratch,omitempty"`     // the floating terminal's own shell: the drawer shows it, the sidebar does not
-	Tabs        []rosterTab     `json:"tabs"`
+	// the other checkouts of its repository changing the same files against the main branch, the same lines first
+	Collisions []collisions.Collision `json:"collisions,omitempty"`
+	Concierge  bool                   `json:"concierge,omitempty"` // the concierge's own workspace: its place shows it, the sidebar, the wall and the pickers do not
+	Tabs       []rosterTab            `json:"tabs"`
 }
 
 type rosterMachine struct {
@@ -215,6 +221,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			ActiveTabID: ws.ActiveTabID,
 			Tabs:        tabs,
 			Scratch:     s.Scratch != nil && s.Scratch.Is(machineID, ws.WorkspaceID),
+			Concierge:   s.Concierge != nil && s.Concierge.Is(machineID, ws.WorkspaceID),
 		}
 		if ws.Worktree != nil {
 			session.Worktree = &rosterWorktree{
@@ -239,15 +246,43 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 		}
 		session.Jira = s.issuesOf(machineID, session)
 		if session.Dir != "" {
+			session.Collisions = s.Collisions.For(machineID, session.Dir)
 			badge, ok := s.Review.Badge(machineID, session.Dir)
 			ready := s.Review.Ready(machineID, session.Dir)
 			if (ok && badge.Changed > 0) || ready {
-				session.Review = &rosterReview{Changed: badge.Changed, Fresh: badge.Fresh, Ready: ready}
+				profile, _ := s.Review.Profile(machineID, session.Dir)
+				risk := review.RiskOf(profile, s.riskSignals(machineID, session))
+				session.Review = &rosterReview{Changed: badge.Changed, Fresh: badge.Fresh, Ready: ready, Risk: &risk}
 			}
 		}
 		out = append(out, session)
 	}
 	return out
+}
+
+// riskSignals are what the roster knows of a workspace's work beside its profile: the last secret check of this very
+// work, the open pull request its agents named, and the collision the radar read — the same lines first.
+func (s *Server) riskSignals(machineID string, session rosterSession) review.Signals {
+	signals := review.Signals{Secrets: s.Review.Secrets(machineID, session.Dir)}
+	for _, tab := range session.Tabs {
+		for _, pane := range tab.Panes {
+			if pane.PR == nil || pane.PR.Status == nil || pane.PR.Status.State != "OPEN" {
+				continue
+			}
+			status := pane.PR.Status
+			signals.ChecksFailed = max(signals.ChecksFailed, status.Checks.Fail)
+			signals.Conflicts = signals.Conflicts || status.Mergeable == "CONFLICTING"
+			signals.Changes = signals.Changes || status.Review == "CHANGES_REQUESTED"
+		}
+	}
+	if len(session.Collisions) > 0 {
+		first := session.Collisions[0]
+		signals.Collision, signals.CollidesWith = "file", first.With.Name
+		if first.Lines {
+			signals.Collision = "lines"
+		}
+	}
+	return signals
 }
 
 // issuesOf is the Jira issues a workspace is about — its branch's keys first, then its agents' — as last read; none

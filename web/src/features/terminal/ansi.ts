@@ -13,6 +13,7 @@ export type Span = {
   italic?: boolean;
   underline?: boolean;
   strike?: boolean;
+  mark?: boolean; // the text a search found, marked over its colours (timelapse/mark.ts)
 };
 export type Line = Span[];
 

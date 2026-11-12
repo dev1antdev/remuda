@@ -11,13 +11,14 @@ import (
 
 // Code mode: a machine's code-server behind the guard.
 
-// editorFolders are the folders the machine's workspaces live in, the floating terminal's own home-folder shell left out
+// editorFolders are the folders the machine's workspaces live in, remuda's own — the floating terminal's home-folder
+// shell, the concierge's folder — left out
 func (s *Server) editorFolders(machineID string, snap *herdr.Snapshot) []string {
 	var folders []string
 	seen := map[string]bool{}
 	for i := range snap.Workspaces {
 		ws := &snap.Workspaces[i]
-		if s.Scratch != nil && s.Scratch.Is(machineID, ws.WorkspaceID) {
+		if s.ownWorkspace(machineID, ws.WorkspaceID) {
 			continue
 		}
 		if dir := snap.WorkspaceDir(ws); dir != "" && !seen[dir] {
