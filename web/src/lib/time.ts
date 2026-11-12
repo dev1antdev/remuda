@@ -61,6 +61,16 @@ export function whenShort(d: When): string {
   return t.toLocaleDateString(tag(), { day: "numeric", month: "short", year: t.getFullYear() === now.getFullYear() ? undefined : "numeric" });
 }
 
+// whenAhead is a moment to come: the time if today, the weekday and time within a week, else the date and time.
+export function whenAhead(d: When, now = new Date()): string {
+  const at = toDate(d);
+  const time = at.toLocaleTimeString(tag(), { hour: "2-digit", minute: "2-digit" });
+  if (at.toDateString() === now.toDateString()) return time;
+  const days = (at.getTime() - now.getTime()) / 86400000;
+  if (days > 0 && days < 6) return `${at.toLocaleDateString(tag(), { weekday: "short" })} ${time}`;
+  return `${at.toLocaleDateString(tag(), { day: "numeric", month: "short" })} ${time}`;
+}
+
 // fmtDate: "7 Oct 2026".
 export const fmtDate = (d: When) => toDate(d).toLocaleDateString(tag(), { day: "numeric", month: "short", year: "numeric" });
 

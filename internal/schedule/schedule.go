@@ -2,7 +2,8 @@
 // workspace folder (panes come and go, the project stays), the standup as a
 // digest pushed to the person's devices, or a fresh agent started in a folder
 // with a prompt and taken down once it has answered; a five-field cron in
-// local time; a run is never queued or retried.
+// local time; a run is never queued or retried, and one that comes while the agent it would talk to (or the agent its
+// last run started) still works or asks is skipped and noted.
 package schedule
 
 import (
@@ -17,11 +18,22 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/text"
 )
 
 const file = "schedules.json"
+
+// Why a run was skipped: the agent still works, waits for the person, has not taken its prompt yet, its machine has not
+// said how it stands, or the run before is still on its way.
+const (
+	SkipWorking  = "working"
+	SkipAsking   = "asking"
+	SkipStarting = "starting"
+	SkipUnsure   = "unsure"
+	SkipRunning  = "running"
+)
 
 // The kinds of schedule: a prompt to an agent, the standup pushed as a digest, or a fresh agent started in a folder.
 const (
@@ -57,7 +69,8 @@ type Schedule struct {
 	LastRun    time.Time `json:"last_run,omitzero"`
 	LastResult string    `json:"last_result,omitempty"`
 	LastOK     bool      `json:"last_ok"`
-	LastPane   *Started  `json:"last_pane,omitempty"` // the agent the last run started, while it is watched for its answer
+	Skipped    string    `json:"skipped,omitempty"`   // why the last run was skipped (Skip…), "" when it ran
+	LastPane   *Started  `json:"last_pane,omitempty"` // the agent the last run started, until it has answered or gone
 }
 
 // Submit delivers a prompt to the agent in a folder and names the pane it went to.
@@ -77,11 +90,12 @@ type Store struct {
 	mu       sync.Mutex
 	items    map[string]*Schedule
 	firing   map[string]time.Time // the minute each schedule was last dispatched for, until its run has noted LastRun
+	running  map[string]bool      // the schedules whose run is on its way now
 	inflight sync.WaitGroup
 }
 
 func New(dir string, submit Submit, notify func(push.Payload), digest Digest) *Store {
-	st := &Store{dir: dir, submit: submit, notify: notify, digest: digest, now: time.Now, items: map[string]*Schedule{}, firing: map[string]time.Time{}}
+	st := &Store{dir: dir, submit: submit, notify: notify, digest: digest, now: time.Now, items: map[string]*Schedule{}, firing: map[string]time.Time{}, running: map[string]bool{}}
 	var list []*Schedule
 	if err := state.LoadJSON(dir, file, &list); err != nil {
 		log.Printf("%s is unreadable (%v): no schedules until it is fixed", file, err)
@@ -179,7 +193,7 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 	if s.ID == "" {
 		s.ID = state.NewID()
 	} else if old, ok := st.items[s.ID]; ok {
-		s.LastRun, s.LastResult, s.LastOK, s.LastPane = old.LastRun, old.LastResult, old.LastOK, old.LastPane
+		s.LastRun, s.LastResult, s.LastOK, s.Skipped, s.LastPane = old.LastRun, old.LastResult, old.LastOK, old.Skipped, old.LastPane
 	}
 	cp := s
 	st.items[s.ID] = &cp
@@ -197,7 +211,7 @@ func (st *Store) Delete(id string) error {
 	return st.saveLocked()
 }
 
-// Run fires one schedule now, whatever the clock says.
+// Run fires one schedule now, whatever the clock says; a run that would pile up on the last one is skipped all the same.
 func (st *Store) Run(id string) (Schedule, error) {
 	st.mu.Lock()
 	s, ok := st.items[id]
@@ -215,15 +229,36 @@ func (st *Store) Run(id string) (Schedule, error) {
 }
 
 func (st *Store) fire(s *Schedule) {
+	st.mu.Lock()
+	if st.running[s.ID] {
+		st.mu.Unlock()
+		st.noteSkip(s.ID, SkipRunning, "the previous run is still on its way")
+		return
+	}
+	st.running[s.ID] = true
+	st.mu.Unlock()
+	defer func() {
+		st.mu.Lock()
+		delete(st.running, s.ID)
+		st.mu.Unlock()
+	}()
 	switch s.Kind {
 	case KindDigest:
 		st.fireDigest(s)
-		return
 	case KindAgent:
 		st.fireAgent(s)
+	default:
+		st.firePrompt(s)
+	}
+}
+
+// firePrompt hands the prompt to the agent in the folder; one still at work or asking something skips the run.
+func (st *Store) firePrompt(s *Schedule) {
+	pane, err := st.submit(s.Machine, s.Dir, s.Prompt)
+	if why := skipOf(err); why != "" {
+		st.noteSkip(s.ID, why, promptSkipWords(why, pane))
 		return
 	}
-	pane, err := st.submit(s.Machine, s.Dir, s.Prompt)
 	st.mu.Lock()
 	// an edit saved while the submit ran replaced the pointer, and one deleted meanwhile is gone: the result goes on the schedule as it is now
 	cur, ok := st.items[s.ID]
@@ -231,7 +266,7 @@ func (st *Store) fire(s *Schedule) {
 		st.mu.Unlock()
 		return
 	}
-	cur.LastRun = st.now()
+	cur.LastRun, cur.Skipped = st.now(), ""
 	if err != nil {
 		cur.LastOK, cur.LastResult = false, err.Error()
 	} else {
@@ -271,7 +306,7 @@ func (st *Store) fireDigest(s *Schedule) {
 		st.mu.Unlock()
 		return
 	}
-	cur.LastRun = now
+	cur.LastRun, cur.Skipped = now, ""
 	switch {
 	case err != nil:
 		cur.LastOK, cur.LastResult = false, err.Error()
@@ -287,6 +322,44 @@ func (st *Store) fireDigest(s *Schedule) {
 	st.mu.Unlock()
 	if err == nil && !empty && st.notify != nil {
 		st.notify(push.Payload{Kind: KindDigest, Title: title, Body: body, Tag: "digest|" + id, Panel: "standup"})
+	}
+}
+
+// skipOf says why a prompt's refusal is a skipped run rather than a failed one: the agent works or asks; "" for any other.
+func skipOf(err error) string {
+	switch {
+	case errors.Is(err, sessions.ErrAgentWorking):
+		return SkipWorking
+	case errors.Is(err, sessions.ErrAgentBusy):
+		return SkipAsking
+	}
+	return ""
+}
+
+// promptSkipWords is what a skipped prompt run notes, naming the pane it would have gone to.
+func promptSkipWords(why, pane string) string {
+	agent := "the agent"
+	if pane != "" {
+		agent += " in " + pane
+	}
+	if why == SkipAsking {
+		return agent + " waits for an answer"
+	}
+	return agent + " is still working"
+}
+
+// noteSkip puts a skipped run on the schedule — when, why, the words — with no push: the agent it would have reached is at
+// work or waits for the person, who knows.
+func (st *Store) noteSkip(id, why, words string) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	cur, ok := st.items[id]
+	if !ok {
+		return
+	}
+	cur.LastRun, cur.LastOK, cur.Skipped, cur.LastResult = st.now(), true, why, "skipped: "+words
+	if err := st.saveLocked(); err != nil {
+		log.Printf("schedules: %v", err)
 	}
 }
 
@@ -338,6 +411,25 @@ func (st *Store) Tick() {
 			st.fire(s)
 		}(s)
 	}
+}
+
+// Upcoming is a cron's next n runs from now, for a form to show before it is saved; an expression Parse refuses is the error.
+func (st *Store) Upcoming(expr string, n int) ([]time.Time, error) {
+	c, err := Parse(expr)
+	if err != nil {
+		return nil, err
+	}
+	out := []time.Time{}
+	at := st.now()
+	for len(out) < n {
+		next, ok := c.Next(at)
+		if !ok {
+			break
+		}
+		out = append(out, next)
+		at = next
+	}
+	return out, nil
 }
 
 // Wait blocks until the deliveries a Tick started are done (tests).

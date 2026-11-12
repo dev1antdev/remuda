@@ -403,7 +403,11 @@ func (in *Input) SendKeys(client Prompter, ref events.PaneRef, keys []string) er
 	return client.PaneSendKeys(ref.Pane, keys)
 }
 
-// SubmitToFolder gives the text to the agent running in a machine's folder, the scheduler's door; the pane's title names where it went.
+// ErrAgentWorking: the agent is in the middle of a turn, and a schedule's prompt waits for its next run rather than piling up behind it.
+var ErrAgentWorking = errors.New("the agent is still working; nothing was sent")
+
+// SubmitToFolder gives the text to the agent running in a machine's folder, the scheduler's door: never while that agent
+// works (ErrAgentWorking) or asks something (ErrAgentBusy); the pane's title names where it went, or would have.
 func (in *Input) SubmitToFolder(machineID, dir, text string) (string, error) {
 	mc, err := in.Machines.Get(machineID)
 	if err != nil {
@@ -421,8 +425,11 @@ func (in *Input) SubmitToFolder(machineID, dir, text string) (string, error) {
 	if pane == nil {
 		return "", fmt.Errorf("no agent is running in %s on %s", dir, mc.Label())
 	}
+	if pane.AgentStatus == herdr.StatusWorking {
+		return pane.DisplayTitle(), ErrAgentWorking
+	}
 	if err := in.SubmitToAgent(client, events.PaneRef{Machine: machineID, Pane: pane.PaneID}, text); err != nil {
-		return "", err
+		return pane.DisplayTitle(), err
 	}
 	return pane.DisplayTitle(), nil
 }

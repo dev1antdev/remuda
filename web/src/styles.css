@@ -8355,6 +8355,10 @@ body.popout {
   line-height: 1.5;
 }
 
+.schedule-note.bad {
+  color: var(--red);
+}
+
 .schedule-label .schedule-digest-mark {
   margin-right: 5px;
   vertical-align: -1px;

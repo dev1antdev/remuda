@@ -1,6 +1,6 @@
 // The form that makes or edits a schedule: what runs — a prompt to the agent in a workspace folder, the standup as a
-// digest to the person's devices, or a fresh agent started in a folder with a prompt — when (a preset that writes the
-// cron, or cron by hand), and the kind's own fields.
+// digest to the person's devices, or a fresh agent started in a folder with a prompt — when (WhenFields: a preset that
+// writes the cron, or cron by hand), and the kind's own fields.
 
 import { useEffect, useMemo, useState } from "react";
 import { fetchRecipes, type Recipe } from "@/features/recipes/api";
@@ -13,8 +13,9 @@ import { useQuery } from "@/lib/query";
 import { Icon, Logo, Notice, Select, useSubmit } from "@/ui";
 import { agentSchedule, SCOUT_PROMPT } from "./agent";
 import { putSchedule, type DigestSince, type Schedule, type ScheduleKind } from "./api";
-import { cronFor, DEFAULT_CRON, minuteOnly, parseCron, PRESETS } from "./cron";
+import { cronFor, DEFAULT_CRON, parseCron, type When } from "./cron";
 import { digestSchedule, kindOf, SINCE_OPTIONS } from "./digest";
+import { WhenFields } from "./WhenFields";
 import { t } from "@/lib/i18n";
 
 const OTHER_FOLDER = "\u0000other"; // the folder Select's last row: a path typed by hand
@@ -46,19 +47,16 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
     setPrompt(filled.prompt);
   };
   const agentRecipes = (recipes.data ?? []).filter((r) => r.agent !== "" && r.agent !== "shell");
-  const [initial] = useState(() => parseCron(value.cron ?? DEFAULT_CRON));
-  const [preset, setPreset] = useState(initial.preset);
-  const [hh, setHH] = useState(initial.hh);
-  const [mm, setMM] = useState(initial.mm);
+  const [when, setWhen] = useState(() => parseCron(value.cron ?? DEFAULT_CRON));
+  const patchWhen = (patch: Partial<When>) => setWhen((was) => ({ ...was, ...patch }));
   const [cron, setCron] = useState(value.cron ?? DEFAULT_CRON);
   useEffect(() => {
     if (!dir && folders[0]) setDir(folders[0].value);
   }, [folders, dir]);
   useEffect(() => {
-    const written = cronFor(preset, hh, mm);
+    const written = cronFor(when);
     if (written) setCron(written);
-  }, [preset, hh, mm]);
-  const pad = (n: number) => String(n).padStart(2, "0");
+  }, [when]);
   const folder = dir === OTHER_FOLDER ? typedDir.trim() : dir;
   const { busy, err, run } = useSubmit(async () => {
     await putSchedule(
@@ -160,46 +158,15 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
           </label>
         </div>
       )}
-      <div className="schedule-row">
-        <label>
-          {t("When")}
-          <Select value={preset} onChange={setPreset} options={PRESETS.map((p) => ({ value: p.id, label: p.label }))} />
-        </label>
-        {!minuteOnly(preset) && preset !== "custom" && (
-          <label>
-            {t("At")}
-            <input
-              type="time"
-              value={`${pad(hh)}:${pad(mm)}`}
-              onChange={(e) => {
-                const [h, m] = e.target.value.split(":").map(Number);
-                if (h !== undefined && !Number.isNaN(h)) {
-                  setHH(h);
-                  setMM(m && !Number.isNaN(m) ? m : 0);
-                }
-              }}
-            />
-          </label>
-        )}
-        {minuteOnly(preset) && (
-          <label>
-            {t("Minute")}
-            <input type="number" min={0} max={59} value={mm} onChange={(e) => setMM(Math.max(0, Math.min(59, Number(e.target.value) || 0)))} />
-          </label>
-        )}
-        <label className="grow">
-          {t("Cron")}
-          <input
-            value={cron}
-            onChange={(e) => {
-              setCron(e.target.value);
-              setPreset("custom");
-            }}
-            placeholder={t("minute hour day month weekday")}
-            spellCheck={false}
-          />
-        </label>
-      </div>
+      <WhenFields
+        when={when}
+        onWhen={patchWhen}
+        cron={cron}
+        onCron={(typed) => {
+          setCron(typed);
+          patchWhen({ preset: "custom" });
+        }}
+      />
       {kind === "digest" ? (
         <div className="schedule-row">
           <label className="grow">
@@ -246,7 +213,7 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
           </label>
           <p className="schedule-note">
             {t(
-              "Each run opens a fresh tab in the folder's workspace (or a workspace on the folder) and hands the agent the prompt once it is up. A question the agent asks is yours to answer: nothing closes while it waits. The conversation stays readable through the search after the tab is gone.",
+              "Each run opens a fresh tab in the folder's workspace (or a workspace on the folder) and hands the agent the prompt once it is up. While the agent the last run started still works or asks something, the next run is skipped. A question the agent asks is yours to answer: nothing closes while it waits. The conversation stays readable through the search after the tab is gone.",
             )}
           </p>
         </>
