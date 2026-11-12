@@ -229,7 +229,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   for a watchdog note, dances over a finish you have not looked at,
   sleeps with a "z" when idle (dim when long idle, under a blanket at
   night), slumps under an empty battery when it hit its plan limit, and
-  tilts its head when its state is unknown — the pose and the sign say it
+  tilts its head when its state is unknown; press and hold one (or its
+  speaker under the pointer) and it tells you its day in its own voice —
+  "Today I answered 3 times and edited app.go. Now I'm waiting for your
+  answer." — high for Gemini, low for the Codex robot — the pose and the sign say it
   even without colour. Each vendor is a species of its own — a round
   critter with antennae for Claude Code, a robot for Codex, an egg
   between sparkles for Gemini CLI, a moon rabbit for Kimi Code — and
@@ -300,7 +303,21 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   conversation — the session on screen, or a transcript opened from the
   search — is the sun button beside the chat's export, and in the
   palette. All of it is read from the transcripts remuda already has;
-  nothing is sent anywhere. **A standup digest every morning**: in
+  nothing is sent anywhere. **Listen** (the headphones beside the period,
+  or "Listen to the day" in the palette) reads the day aloud on the way
+  to work, the way a colleague would tell it: "Good morning. Here is
+  your day so far. 3 agents did some work. Together they spent about
+  9 dollars at API prices. In web on GOG, Codex is waiting for your
+  answer…" — who waits for you first, who finished what and what it
+  cost, its last answer in its own words, the reviews waiting and a plan
+  limit near its end, then what is left; a few minutes at most, in the
+  page's language. Play, pause, back, skip to the next agent; the
+  sentence being said is on screen and the agent marked in the report,
+  and a phone's lock screen shows it with its buttons (Chrome on
+  Android goes on with the screen locked; Safari on an iPhone stops
+  when the screen locks, so keep it on). It is the browser's own voice,
+  the one picked under Read aloud, and nothing passes through remuda;
+  a recap has Listen too. **A standup digest every morning**: in
   Schedules, pick "Standup digest" instead of a prompt, a time ("Weekdays"
   at 9:00) and what it covers — since midnight, the last 24 hours, the
   last 7 days, or since the previous digest — and every device that gets
@@ -1097,7 +1114,8 @@ Settings…. Not in it: the pop-out and dictation, both browser APIs.
 says what an agent answered when it finishes ("api: Tests pass."), that
 one is waiting for you, or a watchdog note — while the page is open and
 in front, in the voice you pick, a Russian one for a Russian answer.
-Nothing passes through remuda; a reload says nothing.
+Nothing passes through remuda; a reload says nothing. The same voice
+reads the Standup aloud and gives the zoo's creatures theirs.
 
 **Webhooks** are the same panel's last section, for a phone without Web
 Push or a channel the team reads: a Telegram bot (its token and your chat
