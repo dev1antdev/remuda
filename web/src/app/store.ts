@@ -89,6 +89,7 @@ export type AppState = {
   taskAsked: { projectId: number; taskId: number; start: boolean; n: number } | null; // a task the Tasks mode is asked to open, once (one just made from an issue); start = the agent dialog on it too
   split: boolean; // the chat beside the terminal, asked for by a per-device pref; shown only on a wide screen with a mouse (app/split.ts)
   float: { machineId: string } | null; // the floating terminal's drawer, open on that machine's scratch shell; null while hidden
+  listen: boolean; // the standup panel is asked to read the day aloud once its report is in (the palette's Listen to the day)
 };
 
 const fromURL = readURL();
@@ -125,6 +126,7 @@ export const app = createStore<AppState>({
   taskAsked: null,
   split: readPref("split", false),
   float: null,
+  listen: false,
 });
 
 let jumps = linked ? 1 : 0;
@@ -297,6 +299,13 @@ export const actions = {
   },
   taskOpened() {
     app.set({ taskAsked: null });
+  },
+  // listenToDay opens the standup asking it to read the day aloud; the caller primed the voice inside its gesture
+  listenToDay() {
+    app.set({ panel: "standup", listen: true });
+  },
+  listened() {
+    app.set({ listen: false });
   },
   // the chat beside the terminal, on or off; a pref per device, since a width suits a screen
   toggleSplit() {
