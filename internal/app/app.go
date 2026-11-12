@@ -53,6 +53,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/signin"
 	"github.com/dev1antdev/remuda/internal/state"
+	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
@@ -215,6 +216,16 @@ func Run(ctx context.Context, o Options) error {
 		return mc, true
 	})
 	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
+	// how many subagents each Claude Code pane's live conversation runs, read while a page reads the roster, for the Wall's zoo
+	subagentCounts := subagents.New(chats.Subagents, func(machineID string) bool {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return false
+		}
+		_, _, err = mc.Ready()
+		return err == nil
+	})
+	subagentCounts.OnChange = hub.RosterChanged
 	reviews := review.New(o.Dir)
 	// a second opinion's reviewer, once it has answered, has its tab closed when the opinion asked for that
 	opinions := opinion.NewService(o.Dir)
@@ -426,6 +437,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 	})
 	events.Subscribe(bus, func(e events.Snapshot) { sayings.Observe(e.Machine, e.Snap) })
+	events.Subscribe(bus, func(e events.Snapshot) { subagentCounts.Observe(e.Machine, e.Snap) })
 	events.Subscribe(bus, func(e events.Snapshot) {
 		planLimits.Observe(e.Machine, e.Snap)
 		if mc, err := fleet.Get(e.Machine); err == nil {
@@ -442,12 +454,14 @@ func Run(ctx context.Context, o Options) error {
 		restarter.Memory.Forget(e.Machine)
 		planLimits.Forget(e.Machine)
 		opinions.ForgetMachine(e.Machine)
+		subagentCounts.Forget(e.Machine)
 		signins.Forget(e.Machine)
 	})
 	events.Subscribe(bus, opinions.OnStatus)
 	events.Subscribe(bus, opinions.Observe)
 	events.Subscribe(bus, pushSvc.OnStatus)
 	events.Subscribe(bus, sayings.OnStatus)
+	events.Subscribe(bus, subagentCounts.OnStatus)
 	events.Subscribe(bus, planLimits.OnStatus)
 	events.Subscribe(bus, requests.OnNamed)
 	events.Subscribe(bus, requests.OnStatus)
@@ -588,6 +602,7 @@ func Run(ctx context.Context, o Options) error {
 		Backup:    backups,
 		SelfPort:  auth.PortOf(o.Addr),
 		Opinions:  opinions,
+		Subagents: subagentCounts,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

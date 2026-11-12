@@ -221,14 +221,32 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   is taken; a click opens that terminal. **Zoo** turns every agent into a
   little creature in its vendor's colour, for the TV across the room: it
   bounces at a laptop while it works, raises a hand under a "?" when it
-  asks you something, holds up an amber "!" for a watchdog note, dances
-  over a finish you have not looked at, sleeps with a "z" when idle (dim
-  when long idle), and tilts its head when its state is unknown — the
-  pose and the sign say it even without colour — with its name, its
-  folder and how long under it and the first line of what it answered
-  in a speech bubble; a click opens it, a hover or a long press tells its
-  state in words, office mode and the pop-out show it large, and reduced
-  motion keeps every creature still in its pose. In Chrome a tile — or the agent on screen,
+  asks you something (and holds up what it asks), holds up an amber "!"
+  for a watchdog note, dances over a finish you have not looked at,
+  sleeps with a "z" when idle (dim when long idle, under a blanket at
+  night), slumps under an empty battery when it hit its plan limit, and
+  tilts its head when its state is unknown — the pose and the sign say it
+  even without colour. Each vendor is a species of its own — a round
+  critter with antennae for Claude Code, a robot for Codex, an egg
+  between sparkles for Gemini CLI, a moon rabbit for Kimi Code — and
+  wears its model's hat (a top hat for Opus, a wizard's for Fable, a
+  beret for Sonnet, a sprout for Haiku, a cap for OpenAI's models) and a
+  trinket of its own, so two agents of one kind tell apart; it grows
+  rounder as its context fills (a belt from 80 %, a puff and slim again
+  after a compaction), piles coins for what it cost (amber or red when a
+  budget runs short), flies its pull request's flag in its checks'
+  colour and wears a crown once it is merged, brings out coffee after
+  20 minutes of work and sweats after an hour, and its subagents at
+  work hop around it as babies. The creatures stand in a pen per
+  machine whose weather is the machine's body — sun and sweat when it
+  runs hot, a storm for under-voltage, boxes for a nearly full disk —
+  under the sky of your hour, and the day runs along the foot: answers,
+  waits, spend, merges, who worked longest. When an agent finishes the
+  resting ones clap, a merged pull request sets off fireworks, the eyes
+  follow your pointer, and with the voices switched on (off by default)
+  each chirps in its species' voice. A click opens it, a hover or a long
+  press tells its state in words, office mode and the pop-out show it
+  large, and reduced motion keeps every creature still in its pose. In Chrome a tile — or the agent on screen,
   from the header — **pops out** into a small window that stays above
   every other app (Document Picture-in-Picture): the agent keeps you
   company over your editor, and the line to answer it is right there.

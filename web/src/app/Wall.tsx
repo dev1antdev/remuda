@@ -19,7 +19,7 @@ import { escapeIsFree, overlayOpen } from "./escape";
 import { actions, app } from "./store";
 import { TileView } from "./Tile";
 import { useOffice } from "./useOffice";
-import { Zoo } from "./Zoo";
+import { Zoo } from "./zoo/Zoo";
 import { t, tn } from "@/lib/i18n";
 
 const VIEWS: { view: WallView; label: string; title: string }[] = [

@@ -25,6 +25,7 @@ export type Pane = {
   said?: string; // the first line of the agent's last answer, once it finished
   pr?: PullRequest; // the last pull or merge request the agent named, "PR #15" / "MR !9"
   limit?: PaneLimit; // a subscription limit the agent stopped on, and the person's booking to continue it after the reset
+  subagents?: { working?: number; quiet?: number; done?: number }; // a Claude Code conversation's subagents by state, for the zoo
 };
 
 // PaneLimit is when the agent stopped on a plan limit and the harness's words, and the moment a booking continues it

@@ -1,20 +1,24 @@
 // The zoo: every agent on the Wall as a little creature for the office TV. Its state reads from its pose and the sign over
 // its head as well as from colour — busy at a laptop while it works, a hand up and a "?" while it asks, an amber "!" for a
 // watchdog note, a dance for a finish nobody has looked at, asleep with a "z" when idle and dim when long idle, puzzled
-// when its state is unknown. The pure part; app/Zoo.tsx draws the creatures.
+// when its state is unknown, slumped under an empty battery when it stopped on its plan limit. The pure part; app/zoo
+// draws the creatures (what they wear: zooWear.ts, what their bodies say: zooBody.ts, their pens: zooPens.ts, what
+// happens between them: zooLife.ts).
 
 import { t } from "@/lib/i18n";
 import type { Pane } from "./api";
 import type { Display } from "./radar";
 import type { WallPrefs } from "./wall";
 
-export type Pose = "busy" | "asking" | "worried" | "dancing" | "asleep" | "puzzled";
-export type Sign = "?" | "!" | "z" | "…" | "";
+export type Pose = "busy" | "asking" | "worried" | "dancing" | "asleep" | "puzzled" | "drained";
+export type Sign = "?" | "!" | "z" | "…" | "battery" | "";
 export type Look = { pose: Pose; sign: Sign; dim: boolean };
 
-// lookOf is a creature's pose and sign for an agent's state; a watchdog note wins over the rest
-export function lookOf(display: Display, alert?: string): Look {
+// lookOf is a creature's pose and sign for an agent's state; a watchdog note wins over the rest, and an agent stopped on
+// its plan limit reads drained once it rests (one at work again, or asking, has carried on)
+export function lookOf(display: Display, alert?: string, limited = false): Look {
   if (alert) return { pose: "worried", sign: "!", dim: false };
+  if (limited && display !== "working" && display !== "blocked") return { pose: "drained", sign: "battery", dim: false };
   switch (display) {
     case "working":
       return { pose: "busy", sign: "", dim: false };
@@ -44,6 +48,8 @@ export function poseWord(pose: Pose): string {
       return t("finished");
     case "puzzled":
       return t("state unknown");
+    case "drained":
+      return t("on its plan limit");
     default:
       return t("asleep");
   }
@@ -59,14 +65,19 @@ export const cellMin = (size: WallPrefs["size"]) => CREATURE_SIZE[size] + 72;
 export const BUBBLE_MAX = 90;
 
 // bubbleOf is the speech bubble over a creature: the first line of what the agent answered, once it finished or rests,
-// cut at a word, never between the halves of a surrogate pair; nothing while it works, asks or carries a note
+// cut at a word; nothing while it works, asks or carries a note
 export function bubbleOf(pane: Pane, display: Display, alert?: string): string {
   if (alert || !pane.said) return "";
   if (display !== "done" && display !== "idle" && display !== "idle_fresh" && display !== "idle_stale") return "";
-  const text = pane.said.trim();
-  if (text.length <= BUBBLE_MAX) return text;
-  const space = text.slice(0, BUBBLE_MAX).lastIndexOf(" ");
-  let end = space > BUBBLE_MAX / 2 ? space : BUBBLE_MAX;
+  return cutAt(pane.said, BUBBLE_MAX);
+}
+
+// cutAt shortens a text to max characters at a word, never between the halves of a surrogate pair, with an ellipsis
+export function cutAt(raw: string, max: number): string {
+  const text = raw.trim();
+  if (text.length <= max) return text;
+  const space = text.slice(0, max).lastIndexOf(" ");
+  let end = space > max / 2 ? space : max;
   const code = text.charCodeAt(end - 1);
   if (code >= 0xd800 && code <= 0xdbff) end -= 1;
   return `${text.slice(0, end).trimEnd()}…`;
