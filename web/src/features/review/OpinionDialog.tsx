@@ -2,6 +2,8 @@
 // reviews without touching anything, and its comments come back under the diff's lines.
 
 import { useState } from "react";
+import { whyNoDeny } from "@/features/agents/deny";
+import { DenySwitch } from "@/features/agents/DenySwitch";
 import { useRoster } from "@/features/roster/useRoster";
 import { choiceFor, CUSTOM, EMPTY_DRAFT, hasModelFlag, lastModelKey, modelChoices, modelOf, modelPlaceholder, type Draft } from "@/features/roster/startOptions";
 import { readPref, writePref } from "@/lib/prefs";
@@ -11,6 +13,7 @@ import { askOpinion, type OpinionAsked } from "./api";
 import { reviewerFor } from "./opinion";
 
 const CLOSE_KEY = "opinion.close";
+const DENY_KEY = "opinion.deny";
 
 export function OpinionDialog({ machineId, paneId, dir, paneAgent, onClose, onAsked }: {
   machineId: string;
@@ -25,7 +28,9 @@ export function OpinionDialog({ machineId, paneId, dir, paneAgent, onClose, onAs
   const [kind, setKind] = useState(() => reviewerFor(paneAgent, kinds.map((agent) => agent.id)));
   const [draft, setDraft] = useState<Draft>(() => ({ ...EMPTY_DRAFT, ...choiceFor(kind, readPref(lastModelKey(kind), "")) }));
   const [close, setClose] = useState(() => readPref(CLOSE_KEY, true));
+  const [deny, setDeny] = useState(() => readPref(DENY_KEY, true));
   const label = kinds.find((agent) => agent.id === kind)?.label ?? kind;
+  const noDeny = whyNoDeny([{ id: kind, label }]);
   const pick = (next: string) => {
     setKind(next);
     setDraft((d) => ({ ...d, ...choiceFor(next, readPref(lastModelKey(next), "")) }));
@@ -35,7 +40,8 @@ export function OpinionDialog({ machineId, paneId, dir, paneAgent, onClose, onAs
     const model = modelOf(kind, draft);
     if (hasModelFlag(kind)) writePref(lastModelKey(kind), model);
     writePref(CLOSE_KEY, close);
-    const asked = await askOpinion({ machine: machineId, pane: paneId, dir, agent: kind, model: model || undefined, close });
+    if (!noDeny) writePref(DENY_KEY, deny);
+    const asked = await askOpinion({ machine: machineId, pane: paneId, dir, agent: kind, model: model || undefined, close, deny_prompts: deny && !noDeny });
     onAsked(asked, label);
   });
   const choices = modelChoices(kind);
@@ -69,6 +75,12 @@ export function OpinionDialog({ machineId, paneId, dir, paneAgent, onClose, onAs
         <input type="checkbox" checked={close} onChange={(e) => setClose(e.target.checked)} />
         {t("Close its tab once it has answered")}
       </label>
+      <DenySwitch
+        checked={deny}
+        onChange={setDeny}
+        why={noDeny}
+        hint={t("A review only reads: whatever Claude Code would ask your permission for is denied, and it goes on to its answer instead of waiting in its tab.")}
+      />
     </FormDialog>
   );
 }

@@ -28,6 +28,8 @@ func TestAnOpinionIsAskedOnlyOfAnAgentForAFolder(t *testing.T) {
 		"unknown agent": {`{"machine":"local","dir":"/w/app","agent":"rm -rf"}`, "unknown agent"},
 		"unread agent":  {`{"machine":"local","dir":"/w/app","agent":"kimi"}`, "reads the answers of"},
 		"bad arguments": {`{"machine":"local","dir":"/w/app","agent":"codex","args":"\"unclosed"}`, ""},
+		// a Claude Code reviewer denies prompts unless told otherwise, which a settings file of the person's cannot take
+		"a settings file": {`{"machine":"local","dir":"/w/app","agent":"claude","args":"--settings /w/s.json"}`, "/w/s.json"},
 	} {
 		code, out := taskCall(mux, "POST", "/api/opinion", "", c.body)
 		msg, _ := out["error"].(string)

@@ -62,16 +62,17 @@ type File struct {
 const maxCommits = 300
 
 type Summary struct {
-	Repo         string    `json:"repo,omitempty"`
-	Branch       string    `json:"branch,omitempty"`
-	Head         string    `json:"head,omitempty"`
-	Baseline     *Baseline `json:"baseline,omitempty"`
-	Commits      []Commit  `json:"commits"`
-	CommitsTotal int       `json:"commits_total,omitempty"` // every commit since the baseline, when more than the listed ones
-	Files        []File    `json:"files"`
-	Fresh        int       `json:"fresh"`
-	Error        string    `json:"error,omitempty"`
-	At           time.Time `json:"at"`
+	Repo         string          `json:"repo,omitempty"`
+	Branch       string          `json:"branch,omitempty"`
+	Head         string          `json:"head,omitempty"`
+	Baseline     *Baseline       `json:"baseline,omitempty"`
+	Commits      []Commit        `json:"commits"`
+	CommitsTotal int             `json:"commits_total,omitempty"` // every commit since the baseline, when more than the listed ones
+	Files        []File          `json:"files"`
+	Fresh        int             `json:"fresh"`
+	Settings     []SettingsAudit `json:"settings,omitempty"` // Claude Code's settings files there, audited for secrets and tracking
+	Error        string          `json:"error,omitempty"`
+	At           time.Time       `json:"at"`
 }
 
 // Badge is the roster's count for one workspace.
@@ -90,6 +91,7 @@ type Store struct {
 	branches  map[string]string     // the branch each folder has checked out, a short hash when detached
 	roots     map[string]string     // the repository's main folder for each folder, a worktree's too
 	sweeps    map[string]badgeSweep // by machine
+	history   []Verdict             // every verdict given, the oldest first, at most HistoryKeep (review-verdicts.json)
 }
 
 // badgeSweep is a machine's last Badges run: when it began, and whether it is still going.
@@ -106,6 +108,7 @@ func New(dir string) *Store {
 	if err := state.LoadJSON(dir, baselineFile, &store.baselines); err != nil {
 		log.Printf("%s is unreadable (%v): every folder counts as never reviewed", baselineFile, err)
 	}
+	store.loadHistory()
 	return store
 }
 
@@ -164,7 +167,7 @@ func (store *Store) setBranch(storeKey, branch string) {
 }
 
 // summaryScript gathers everything Summary needs in one shell, sections separated by a line of \x1e and fields by \x1f:
-// repo/branch/HEAD, the newest maxCommits first-parent commits since the baseline, the numstat against HEAD, the untracked files, every uncommitted file's blob, per commit the blobs it left (none for a merge) — one git log, never a process per commit: a repository pulled after weeks has hundreds — and how many commits there are in all.
+// repo/branch/HEAD, the newest maxCommits first-parent commits since the baseline, the numstat against HEAD, the untracked files, every uncommitted file's blob, per commit the blobs it left (none for a merge) — one git log, never a process per commit: a repository pulled after weeks has hundreds — how many commits there are in all, and Claude Code's settings files there (settingsScript).
 func summaryScript(dir, baselineHead string) string {
 	return script.InRepo(dir) +
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
@@ -174,7 +177,8 @@ func summaryScript(dir, baselineHead string) string {
 		`git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
 		blobsScript() + `; printf '\036\n'; ` +
 		`if [ "$base" != HEAD ]; then git -c core.quotepath=off log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --raw --no-renames --no-abbrev --relative --format='%H' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
-		`if [ "$base" != HEAD ]; then git rev-list --count --first-parent "$base"..HEAD 2>/dev/null; fi`
+		`if [ "$base" != HEAD ]; then git rev-list --count --first-parent "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
+		settingsScript
 }
 
 // blobsScript prints "<path>\x1f<blob hash>" per uncommitted file, one per line, "gone" for a deleted one.
@@ -296,6 +300,9 @@ func (store *Store) Summary(host shell.Host, dir string) Summary {
 			summary.Files = append(summary.Files, File{Path: path, Untracked: true, Fresh: isFresh(path)})
 		}
 	}
+	if len(sections) > 7 {
+		summary.Settings = readSettings(sections[7])
+	}
 	sort.Slice(summary.Files, func(i, j int) bool {
 		if summary.Files[i].Fresh != summary.Files[j].Fresh {
 			return summary.Files[i].Fresh
@@ -370,7 +377,7 @@ func Snapshot(host shell.Host, dir string) (string, map[string]string, error) {
 }
 
 // MarkSeen moves the folder's baseline to now: HEAD, the blob of every
-// uncommitted file, and the verdict the agent was told.
+// uncommitted file, and the verdict the agent was told, which the history keeps too.
 func (store *Store) MarkSeen(host shell.Host, dir, verdict string) (Baseline, error) {
 	if !VerdictOK(verdict) {
 		return Baseline{}, fmt.Errorf("no such verdict: %q", verdict)
@@ -384,9 +391,13 @@ func (store *Store) MarkSeen(host shell.Host, dir, verdict string) (Baseline, er
 	store.baselines[key(host.ID(), dir)] = baseline
 	store.badges[key(host.ID(), dir)] = Badge{}
 	err = store.save()
+	noted := store.noteVerdict(Verdict{Machine: host.ID(), Dir: dir, Verdict: verdict, At: baseline.At})
 	store.mu.Unlock()
 	if err != nil {
 		return baseline, fmt.Errorf("the baseline could not be kept: %w", err)
+	}
+	if noted != nil {
+		log.Printf("%s: the verdict could not be kept in %s: %v", dir, historyFile, noted)
 	}
 	return baseline, nil
 }

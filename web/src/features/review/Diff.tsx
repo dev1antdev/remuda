@@ -11,7 +11,8 @@ import { Hunk, Note, type NewComment } from "./Hunk";
 import { rowsOf, splitHunks, type DiffRow } from "./hunks";
 import { offRows, whereWords, type OpinionComment } from "./opinion";
 import { OpinionNote } from "./OpinionNote";
-import { t } from "@/lib/i18n";
+import type { SecretFinding } from "./secrets";
+import { t, tn } from "@/lib/i18n";
 
 export type { NewComment } from "./Hunk";
 
@@ -26,7 +27,7 @@ export type Opinions = {
   onDismiss: (id: number) => void;
 };
 
-export function FileRow({ file, open, split, onToggle, load, loadSource, onLoaded, canComment, draft, onComment, onRemove, onOpen, onCode, opinion, reviewer, onAdopt, onDismissOpinion }: {
+export function FileRow({ file, open, split, onToggle, load, loadSource, onLoaded, canComment, draft, onComment, onRemove, onOpen, onCode, opinion, reviewer, onAdopt, onDismissOpinion, secrets }: {
   file: ReviewFile;
   open: boolean;
   split: boolean;
@@ -44,6 +45,7 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
   reviewer: string;
   onAdopt: (comment: OpinionComment, row?: DiffRow) => void;
   onDismissOpinion: (id: number) => void;
+  secrets: SecretFinding[]; // what the secret check found on this file's lines, their rows marked
 }) {
   const opinions = useMemo<Opinions>(() => ({ comments: opinion, reviewer, onAdopt, onDismiss: onDismissOpinion }), [opinion, reviewer, onAdopt, onDismissOpinion]);
   const [attempt, setAttempt] = useState(0);
@@ -66,6 +68,11 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
           {draft.length > 0 && (
             <span className="review-tag review-tag-comments" title={t("{comments} in the draft", { comments: plural(draft.length, "comment") })}>
               {draft.length}
+            </span>
+          )}
+          {secrets.length > 0 && (
+            <span className="review-tag review-tag-secret" title={tn(secrets.length, "{n} line looks like it holds a secret", "{n} lines look like they hold secrets")}>
+              <Icon name="alert-triangle" size={12} /> {secrets.length}
             </span>
           )}
           {opinion.length > 0 && (
@@ -109,7 +116,7 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
         ) : diff === null ? (
           <div className="empty">{t("Loading…")}</div>
         ) : (
-          <Diff text={diff} split={split} canComment={canComment} draft={draft} file={file.path} loadSource={loadSource} onComment={onComment} onRemove={onRemove} opinions={opinions} />
+          <Diff text={diff} split={split} canComment={canComment} draft={draft} file={file.path} loadSource={loadSource} onComment={onComment} onRemove={onRemove} opinions={opinions} secrets={secrets} />
         ))}
     </div>
   );
@@ -121,7 +128,7 @@ type Unfolds = { forText: string; by: Record<number, Unfold>; lines: string[] | 
 const folded = (text: string): Unfolds => ({ forText: text, by: {}, lines: null, blocked: null });
 const FOLDED = folded("");
 
-function Diff({ text, split, canComment, draft, file, loadSource, onComment, onRemove, opinions }: {
+function Diff({ text, split, canComment, draft, file, loadSource, onComment, onRemove, opinions, secrets }: {
   text: string;
   split: boolean;
   canComment: boolean;
@@ -131,6 +138,7 @@ function Diff({ text, split, canComment, draft, file, loadSource, onComment, onR
   onComment: (file: string, comment: NewComment) => void;
   onRemove: (id: number) => void;
   opinions: Opinions;
+  secrets: SecretFinding[];
 }) {
   const hunks = useMemo(() => splitHunks(text), [text]);
   const [unfoldState, setUnfolds] = useState<Unfolds>(() => folded(text));
@@ -200,6 +208,7 @@ function Diff({ text, split, canComment, draft, file, loadSource, onComment, onR
           blocked={unfolds.blocked}
           onUnfold={onUnfold}
           opinions={opinions}
+          secrets={secrets}
         />
       ))}
       {strayOpinions.length > 0 && (

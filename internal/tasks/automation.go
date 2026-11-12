@@ -29,6 +29,14 @@ type Automation struct {
 	Queue   bool    `json:"queue"`           // start the tasks in the Queued column by themselves
 	Max     int     `json:"max"`             // at most this many agents the queue started still working or asking
 	Stages  []Stage `json:"stages"`          // the pipeline after the first agent's work; none, no pipeline
+	// DenyPrompts has the Claude Code agents the queue and the pipeline start deny a call that would wait on a
+	// permission prompt and carry on; nil for settings saved before the switch, which read as off (Denies)
+	DenyPrompts *bool `json:"deny_prompts,omitempty"`
+}
+
+// Denies says whether an agent of this kind the queue or a stage starts denies what would wait on a permission prompt.
+func (a Automation) Denies(kind string) bool {
+	return a.DenyPrompts != nil && *a.DenyPrompts && sessions.CanDenyPrompts(kind)
 }
 
 // Stage is one step of the pipeline: an agent in a new tab of the same worktree with its prompt, the card in its column.
@@ -49,11 +57,14 @@ func agentOr(kind string) string {
 	return kind
 }
 
-// readAutomation is the stored column: a project from before has none, and a damaged value reads as none too.
+// readAutomation is the stored column: a project from before has none, and a damaged value reads as none too. Settings
+// never saved start with the deny switch on, the way new ones do; saved ones without it keep it off.
 func readAutomation(raw string) Automation {
 	var a Automation
 	if raw != "" {
 		_ = json.Unmarshal([]byte(raw), &a)
+	} else {
+		a.DenyPrompts = denyOn()
 	}
 	if a.Max < 1 {
 		a.Max = 1
@@ -64,8 +75,13 @@ func readAutomation(raw string) Automation {
 	return a
 }
 
-// checkStart says why an agent kind with this model and these arguments cannot start, or nil.
-func checkStart(kind, model, args string) error {
+func denyOn() *bool {
+	on := true
+	return &on
+}
+
+// checkStart says why an agent kind with this model and these arguments, denying prompts or not, cannot start, or nil.
+func checkStart(kind, model, args string, deny bool) error {
 	if kind == "shell" || !sessions.KnownAgent(kind) {
 		return fmt.Errorf("an agent is needed, not %q", kind)
 	}
@@ -73,7 +89,7 @@ func checkStart(kind, model, args string) error {
 	if err != nil {
 		return err
 	}
-	_, err = sessions.StartArgs(kind, sessions.Start{Model: strings.TrimSpace(model), Args: split})
+	_, err = sessions.StartArgs(kind, sessions.Start{Model: strings.TrimSpace(model), Args: split, DenyPrompts: deny})
 	return err
 }
 
@@ -92,7 +108,7 @@ func (a *Automation) normalize(statuses []Status) error {
 	if (a.Machine == "") != (a.Dir == "") {
 		return invalid("where agents work needs both the machine and the repository folder")
 	}
-	if err := checkStart(agentOr(a.Agent), a.Model, a.Args); err != nil {
+	if err := checkStart(agentOr(a.Agent), a.Model, a.Args, a.Denies(agentOr(a.Agent))); err != nil {
 		return invalid("the project's agent: " + err.Error())
 	}
 	if a.Max < 1 {
@@ -124,7 +140,7 @@ func (a *Automation) normalize(statuses []Status) error {
 		if s.Prompt == "" && !s.PR {
 			return invalid(fmt.Sprintf("stage %q needs a prompt", s.Name))
 		}
-		if err := checkStart(agentOr(s.Agent), s.Model, ""); err != nil {
+		if err := checkStart(agentOr(s.Agent), s.Model, "", a.Denies(agentOr(s.Agent))); err != nil {
 			return invalid(fmt.Sprintf("stage %q: %s", s.Name, err))
 		}
 		if s.StatusID != 0 {
@@ -146,8 +162,12 @@ func (st *Store) SetAutomation(projectID int64, a Automation) (Project, error) {
 	if err != nil {
 		return Project{}, err
 	}
-	if _, err := st.Project(projectID); err != nil {
+	was, err := st.Project(projectID)
+	if err != nil {
 		return Project{}, err
+	}
+	if a.DenyPrompts == nil { // a page from before the switch: the project keeps what it had
+		a.DenyPrompts = was.Automation.DenyPrompts
 	}
 	if err := a.normalize(ss); err != nil {
 		return Project{}, err

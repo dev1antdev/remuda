@@ -28,6 +28,8 @@ type StartRequest struct {
 	Groom     bool   `json:"groom"`
 	Prompt    string `json:"prompt"`
 	Queued    bool   `json:"-"` // the project's queue starts it, not the person
+	// DenyPrompts: nobody watches the agent (the queue's start), so a call that would wait on a permission prompt is denied
+	DenyPrompts bool `json:"-"`
 }
 
 // Launcher starts an agent on a task: a worktree off a workspace, the agent in it, the prompt handed over in the background.
@@ -47,7 +49,7 @@ func (req *StartRequest) Normalize() error {
 		return invalid(fmt.Sprintf("an agent is required, not %q", req.Agent))
 	}
 	req.Model, req.Args = strings.TrimSpace(req.Model), strings.TrimSpace(req.Args)
-	if err := checkStart(req.Agent, req.Model, req.Args); err != nil {
+	if err := checkStart(req.Agent, req.Model, req.Args, req.DenyPrompts); err != nil {
 		return invalid(err.Error())
 	}
 	req.Branch, req.Base = strings.TrimSpace(req.Branch), strings.TrimSpace(req.Base)
@@ -73,7 +75,7 @@ func (l *Launcher) Start(mc *machines.Machine, client *herdr.Client, task Task, 
 	included, includeErr := worktrees.Include(mc, res.Worktree.Path)
 	pane := res.RootPane.PaneID
 	args, _ := sessions.SplitArgs(req.Args)
-	if err := sessions.StartAgentWith(client, pane, req.Agent, sessions.Start{Model: req.Model, Args: args}); err != nil {
+	if err := sessions.StartAgentWith(client, pane, req.Agent, sessions.Start{Model: req.Model, Args: args, DenyPrompts: req.DenyPrompts}); err != nil {
 		l.Watch.Refresh(mc)
 		return Task{}, fmt.Errorf("the worktree %s is there, but %w: %v", res.Worktree.Branch, ErrAgentStart, err)
 	}
@@ -103,24 +105,30 @@ func (l *Launcher) Start(mc *machines.Machine, client *herdr.Client, task Task, 
 	return l.Store.Get(task.ID)
 }
 
-// StartStage starts a pipeline's next stage: its agent in a new tab of the previous stage's worktree, the run
-// recorded and the card moved to the stage's column, the prompt handed over in the background as a start's is.
+// StartStage starts a pipeline's next stage: its agent in a new tab of the previous stage's worktree — nobody watching,
+// so denying what would wait on a permission prompt when the project's switch says so — the run recorded and the card
+// moved to the stage's column, the prompt handed over in the background as a start's is.
 func (l *Launcher) StartStage(mc *machines.Machine, client *herdr.Client, prev Run, index int, stage Stage, prompt string) (Run, error) {
+	task, err := l.Store.Get(prev.TaskID)
+	if err != nil {
+		return Run{}, err
+	}
+	project, err := l.Store.Project(task.ProjectID)
+	if err != nil {
+		return Run{}, err
+	}
 	tab, err := client.TabCreate(prev.Workspace, stage.Name)
 	if err != nil {
 		return Run{}, err
 	}
 	pane := tab.RootPane.PaneID
-	if err := sessions.StartAgentWith(client, pane, agentOr(stage.Agent), sessions.Start{Model: stage.Model}); err != nil {
+	kind := agentOr(stage.Agent)
+	if err := sessions.StartAgentWith(client, pane, kind, sessions.Start{Model: stage.Model, DenyPrompts: project.Automation.Denies(kind)}); err != nil {
 		l.Watch.Refresh(mc)
 		return Run{}, fmt.Errorf("%w: %v", ErrAgentStart, err)
 	}
 	l.Watch.Refresh(mc)
 	run, err := l.Store.StartStageRun(prev, index, stage, pane)
-	if err != nil {
-		return Run{}, err
-	}
-	task, err := l.Store.Get(prev.TaskID)
 	if err != nil {
 		return Run{}, err
 	}
