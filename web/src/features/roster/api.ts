@@ -119,6 +119,7 @@ export type Session = {
   collisions?: Collision[]; // the other checkouts of its repository changing the same files against the main branch, the same lines first
   muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row
   scratch?: boolean; // the floating terminal's own shell: the drawer shows it, the sidebar and the palette leave it out
+  concierge?: boolean; // the concierge's own workspace: the roster provider takes it out of the machines, its place shows it
   jira?: JiraIssue[]; // the Jira issues its branch and its agents name, once the person set a site
   tabs: Tab[];
 };

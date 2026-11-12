@@ -157,10 +157,18 @@ type Restarter struct {
 	Memory *Memory
 	// Typed hears every command this restarter types into a pane (an agent's exit or restart), for the activity; nil hears none.
 	Typed func(machineID, paneID, text string)
+	// Skip names a workspace remuda keeps for itself (the concierge's): its agent runs on arguments of remuda's own that
+	// a resume here would leave out, so no restart touches it; it starts again, on them, from its own place.
+	Skip func(machineID, workspaceID string) bool
 
 	mu      sync.Mutex
 	pending map[string]*booking  // machine|pane
 	last    map[string]time.Time // machine|pane → when it was last restarted
+}
+
+// own says whether the pane is in a workspace remuda keeps for itself, which no restart touches.
+func (r *Restarter) own(machineID string, p herdr.PaneInfo) bool {
+	return r.Skip != nil && r.Skip(machineID, p.WorkspaceID)
 }
 
 // typed tells the activity what was just typed into the pane the key names.
@@ -191,6 +199,10 @@ func (r *Restarter) Now(mc *machines.Machine, kinds []string, say func(string)) 
 	for i := range snap.Panes {
 		p := snap.Panes[i]
 		if !has(kinds, p.Agent) {
+			continue
+		}
+		if r.own(mc.ID(), p) {
+			say(fmt.Sprintf("· %s (%s): the concierge, left as it is — it runs the new version once it starts again", p.DisplayTitle(), p.PaneID))
 			continue
 		}
 		n++
@@ -279,6 +291,9 @@ func (r *Restarter) Pane(mc *machines.Machine, paneID string, say func(string)) 
 	}
 	if !found {
 		return fmt.Errorf("no pane %s there", paneID)
+	}
+	if r.own(mc.ID(), p) {
+		return fmt.Errorf("%s is the concierge's: it starts again from its own place", paneID)
 	}
 	kind, session, err := Resumable(p)
 	if err != nil {

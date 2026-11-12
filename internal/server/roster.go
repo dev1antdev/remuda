@@ -104,6 +104,7 @@ type rosterSession struct {
 	Scratch     bool            `json:"scratch,omitempty"`     // the floating terminal's own shell: the drawer shows it, the sidebar does not
 	// the other checkouts of its repository changing the same files against the main branch, the same lines first
 	Collisions []collisions.Collision `json:"collisions,omitempty"`
+	Concierge  bool                   `json:"concierge,omitempty"` // the concierge's own workspace: its place shows it, the sidebar, the wall and the pickers do not
 	Tabs       []rosterTab            `json:"tabs"`
 }
 
@@ -220,6 +221,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			ActiveTabID: ws.ActiveTabID,
 			Tabs:        tabs,
 			Scratch:     s.Scratch != nil && s.Scratch.Is(machineID, ws.WorkspaceID),
+			Concierge:   s.Concierge != nil && s.Concierge.Is(machineID, ws.WorkspaceID),
 		}
 		if ws.Worktree != nil {
 			session.Worktree = &rosterWorktree{

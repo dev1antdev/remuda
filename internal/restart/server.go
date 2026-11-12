@@ -11,6 +11,24 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 )
 
+// serverChat is a chat a restart of herdr's server brings back: its pane, agent, session and title.
+type serverChat struct{ pane, kind, session, title string }
+
+// serverChats are the panes a restart of herdr's server starts again on their sessions, in pane order: every agent remuda
+// can resume with a session id, the concierge's left to its own place.
+func (r *Restarter) serverChats(machineID string, snap *herdr.Snapshot) []serverChat {
+	var chats []serverChat
+	for i := range snap.Panes {
+		p := snap.Panes[i]
+		if _, ok := agents[p.Agent]; !ok || sessionOf(&p) == "" || r.own(machineID, p) {
+			continue
+		}
+		chats = append(chats, serverChat{p.PaneID, p.Agent, sessionOf(&p), p.DisplayTitle()})
+	}
+	sort.Slice(chats, func(i, j int) bool { return chats[i].pane < chats[j].pane })
+	return chats
+}
+
 // Server restarts herdr's server onto the installed binary and starts every
 // chat that came back as a bare shell again, its panes locked throughout.
 func (r *Restarter) Server(mc *machines.Machine, say func(string)) error {
@@ -26,16 +44,7 @@ func (r *Restarter) Server(mc *machines.Machine, say func(string)) error {
 	if err != nil {
 		return fmt.Errorf("read the session: %v", err)
 	}
-	type chat struct{ pane, kind, session, title string }
-	var chats []chat
-	for i := range snap.Panes {
-		p := snap.Panes[i]
-		if _, ok := agents[p.Agent]; !ok || sessionOf(&p) == "" {
-			continue
-		}
-		chats = append(chats, chat{p.PaneID, p.Agent, sessionOf(&p), p.DisplayTitle()})
-	}
-	sort.Slice(chats, func(i, j int) bool { return chats[i].pane < chats[j].pane })
+	chats := r.serverChats(mc.ID(), snap)
 	if r.Lock != nil {
 		var locks []sync.Locker
 		for _, c := range chats {

@@ -27,6 +27,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/collisions"
 	"github.com/dev1antdev/remuda/internal/complete"
+	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
@@ -114,6 +115,7 @@ type Server struct {
 	Drift      *drift.Service      // how every machine is set up, side by side
 	Collisions *collisions.Service // the workspaces of one repository changing the same files, nil without
 	Undo       *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
+	Concierge  *concierge.Service  // the Claude Code agent the person asks what the others are doing, on the machine they pick
 
 	streams   termStreams
 	relayed   relays   // the terminals piped to a machine's own remuda, which holds their attach
@@ -162,6 +164,7 @@ func (s *Server) Handler() http.Handler {
 	s.arenaRoutes(api)
 	s.limitRoutes(api)
 	s.scratchRoutes(api)
+	s.conciergeRoutes(api)
 	s.jiraRoutes(api)
 	s.backupRoutes(api)
 	s.leftoverRoutes(api)

@@ -559,7 +559,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   ends xterm's own drag; a click that never moves is left to xterm. The ⬚ selection layer (phone long-press) is screen-only.
 - **Nothing in a bar moves when state changes.** The page's places are
   **the rail** (`app/Rail.tsx`) down the left edge: the five modes, then
-  Standup, Usage, Schedules, Activity (a dot for news), Shell, in server
+  Concierge, Standup, Usage, Schedules, Activity (a dot for news), Shell, in server
   mode **Server** (panel `server`, `features/roster/ServerPanel.tsx`:
   the host's load, disk, memory, temperature, clock and throttling with
   the day's sparklines, its versions and tailnet address, what wants a
@@ -1007,7 +1007,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the user through the shell remuda already has on the machine.
 - **Chats follow an agent update** (`internal/restart`). When an update
   job changed an agent's version (the vitals re-read right after), every
-  pane running that agent is restarted onto it. **Claude Code restarts in
+  pane running that agent is restarted onto it — but the concierge's
+  (`Restarter.Skip`, see the concierge's bullet), which neither this nor
+  `Restarter.Server` nor a restart by hand touches. **Claude Code restarts in
   place**: `agent.prompt` with its own `/restart` (2.1.312, behind a flag
   of Claude Code's own, so not every build has it), which starts the
   installed version on the same session in the same process slot — herdr
@@ -1072,7 +1074,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   snapshot and on the first after its polls failed — and is forgotten
   when the person left the agent themselves, moved the shell elsewhere
   or closed the pane; `Restarter.Server` pauses the memory for its
-  machine while it restarts herdr itself. The roster carries
+  machine while it restarts herdr itself; a workspace `Memory.Skip`
+  names (the concierge's) is never remembered, so neither list offers
+  it back. The roster carries
   `machine.stopped [{pane, agent, title}]`: the ⓘ's first concern
   ("2 chats stopped with the reboot: Claude Code in api, Codex in web",
   `features/roster/stopped.ts`, tested) with a **Resume** button, and one
@@ -2191,6 +2195,104 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   ended" with Open a new one when its pane leaves the roster, and "…is
   not answering" while its machine is away (the roster lists no pane of
   a machine that is not connected; `shellView` in `float.ts`, tested).
+- **The concierge** (`internal/concierge`, tested;
+  `internal/server/concierge.go`; `web/src/features/concierge/`,
+  `app/Concierge.tsx`, `app/ConciergeChat.tsx`): the person asks the
+  cockpit "what is going on?" in plain words. remuda has no model: the
+  concierge is an ordinary Claude Code agent remuda starts and keeps,
+  one per cockpit, in `concierge/` under remuda's state dir on its
+  machine — this instance's own `-dir` on the cockpit's machine, the dir
+  remuda keeps there on a remote (`FolderScript` / `Service.Prepare`:
+  umask 077, its folder made, `Memory` written as its `CLAUDE.md` —
+  who it is, its nine tools, that a task it files lands in Proposed,
+  what it cannot do, to look before answering and to answer briefly in
+  the person's language — on every start, the folder printed). It is
+  held to reading and filing tasks by its command line (`Args`, after
+  any `--resume`): `--settings` (`Settings`, one line of JSON, the keys
+  read off Claude Code 2.1.322's settings schema — never by running its
+  CLI): `permissions.allow` the nine tools by name (`Tools`:
+  `mcp__remuda__agents_list`, `agent_recap`, `standup`, `tasks_list`,
+  `task_get`, `projects_list`, `labels_list`, `task_create`,
+  `task_comment`), `permissions.deny` `mcp__remuda__task_update` and
+  every built-in that runs a command, reads or writes a file, goes on
+  the web, starts another agent or schedules or publishes something (a
+  deny wins over an allow the person's own settings hold, and over any
+  mode), `defaultMode: "dontAsk"` (whatever was not allowed is denied,
+  over a person's own bypass or auto default) and
+  `denyInsteadOfPrompting`; then `--strict-mcp-config --mcp-config`
+  naming remuda's own server alone (`MCPConfig`: `{"mcpServers":
+  {"remuda": {"type": "stdio", "command": <bin>, "args": ["mcp"]}}}`,
+  `RemudaOn`: this very binary on the cockpit's machine, else
+  `~/.local/bin/remuda` there), so neither the person's other MCP
+  servers nor claude.ai's connectors load in it, and nothing depends on
+  `remuda mcp install` having registered the server. **Where it runs**
+  (`choose.go`, pure): `Candidate`s from `Manager.List` (a `-server` host
+  is never one) and the vitals; `Default` the first connected Mac (the
+  vitals' OS says macOS) with Claude Code, else the first connected
+  machine with it; `Chosen` the person's pick (`PUT /api/concierge
+  {machine}`, `concierge.json`) while the fleet has that machine, away
+  or not, else the default; `Hosts` the picker's machines; `Trouble`
+  why it cannot run there now and what to do — no machine with Claude
+  Code, the machine away, no Claude Code there, no remuda on a remote
+  (`remuda setup -host <host>`), "" while the vitals are not read (a
+  start tells). **Its places** (`Service`, `concierge.json`: the pick
+  and per machine `Place{Workspace, Session}`): `Ensure(Host)` under one
+  lock — the workspace kept while a fresh snapshot shows it with an
+  agent in its pane; its pane a bare shell (herdr restored it, the agent
+  left) gets the agent started again; else `workspace.create` on its
+  folder labelled "concierge" — the agent started through
+  `sessions.StartAgentWith` with `Args`, on the machine's kept session
+  (`--resume`) while `Host.Resumable` finds its file
+  (`Transcripts.ResolveSession`), else fresh and the session forgotten;
+  after a fresh start `answerTrust` reads the screen every
+  `TrustEvery` for up to `TrustWait` and answers Claude Code's trust
+  question for that very folder (`tasks.TrustPrompt`, down+enter under
+  the pane's lock), ending once herdr reads the agent idle or at work
+  past `TrustAtLeast`; `Observe` (every `events.Snapshot`) keeps the
+  session id herdr reports for its pane (`text.SessionID`), so a /clear
+  is followed; `Close(fresh)` closes its workspace and remembers the
+  closed id in `ended` (a snapshot read before the close still shows it
+  hidden), `fresh` forgetting the session (New conversation); `Is` is
+  the kept or an ended workspace; `Find` the one standing off a cached
+  snapshot; `Standing` the other machines still holding one, which a
+  start closes where reachable (`closeOtherConcierges`); `Forget` a
+  removed machine's. Routes (the person's only — no viewer route, no
+  agent key's): `GET /api/concierge` (`{machine, picked, machines,
+  trouble, running}`), `PUT` the pick (400 for a machine the fleet does
+  not have, or a `-server` host), `POST` a start (409 with the trouble),
+  `POST /api/concierge/new`, `DELETE` (closes it, the conversation
+  resumed next time). **Hidden everywhere else**: the roster marks its
+  workspace `session.concierge`; the page's `RosterProvider` takes those
+  out of `machines` (`splitConcierge` in `features/concierge/
+  concierge.ts`, tested) into `concierges`, so the sidebar, the Wall
+  and its zoo, the palette, the folder pickers, the badge, Alt+N and the
+  Mac app's menu never see it; the server leaves it out of the Code
+  mode's workspace file and the previews (`ownWorkspace`), of the
+  standup (`recap.Service.Skip`), of `agents_list` (`tasksapi`'s
+  `Workspace.Concierge`, `AgentPanes`), of the chats a reboot stopped
+  and the closed list (`restart.Memory.Skip`), of every restart —
+  after an update, of herdr's server, by hand — since a resume there
+  would start it without its own arguments (`Restarter.Skip`: it runs
+  a new Claude Code once it starts again, and a pane herdr brings back
+  a bare shell is started again by its place), and of every push, feed
+  row and webhook (`push.Service.Quiet`). The page: the rail's
+  **Concierge** (More on a phone; never for a viewer: `viewerPlaces`,
+  `viewerCommand`, the Overlays' guard) and the palette's "Ask the
+  concierge…" open panel `concierge` (`?panel=concierge` too):
+  `app/Concierge.tsx` — the machine's Select, New conversation, a ⋯
+  with Stop the concierge, the trouble as a notice; opening it, or a new
+  pick, starts it once (`startedFor`), and while it comes up it says
+  so (`comingUp`); `app/ConciergeChat.tsx` draws the conversation with
+  the chat lens's `useChat`, `TurnView`, `useFollowBottom` and the
+  `Composer` in its `bare` form (no attachments, no permission mode) —
+  what the person types goes through `/api/submit` like any chat; an
+  empty conversation offers `HINTS`, a click putting one in the box
+  (`Composer`'s `fill`), never sending it; after New conversation the
+  session it ended is not drawn (`shownTurns`), since the chat falls
+  back to the folder's newest file until the fresh one is written. The
+  e2e display suite dresses a shell workspace as the concierge's, fakes
+  `/api/concierge*` and its chat, checks it is in no sidebar, zoo or
+  palette, and opens the place and a new conversation.
 - `internal/watch/` — **the only poller**: every machine's
   `session.snapshot` whether or not a browser is open, **asked for the
   moment herdr says something moved** (`stream.go`, tested on a fake
@@ -2731,7 +2833,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   app wires it to the watcher's snapshot: the pane's workspace folder)
   before a scheduled alert fires, before `Notify` and before `Broadcast`:
   a muted folder's panes send no push, no webhook and add no feed row,
-  while the voice and the badge on the page go on reading the roster.
+  while the voice and the badge on the page go on reading the roster;
+  a pane `Service.Quiet` names (the concierge's, by its workspace) is
+  silenced the same way, always.
   Routes `GET/PUT/DELETE /api/mutes` (`internal/server/mutes.go`, tested:
   `{machine, dir, until}` RFC 3339, a past time or a machine the fleet
   does not know refused); the roster's `session.muted_until`; the page:
@@ -3206,7 +3310,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`recap.Conversation`: a heading, the period, the lines `recap.Lines`
   gives an agent's section of the standup, a note when a question is
   open), `GET /api/standup?tz[&since]` is
-  every agent pane on every connected machine (`Standup`, the machines
+  every agent pane on every connected machine but the concierge's
+  (`Service.Skip`) (`Standup`, the machines
   read side by side) with the radar's state and alert, since local
   midnight in `tz` unless `since` says, and the Markdown. **When each
   agent worked** (`spans.go`, tested): `Spans(turns, since, now)` lays a
@@ -4493,7 +4598,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   — `agents_list`, every agent pane on every connected machine as a
   table with its state and for how long (`agentState` from the roster's
   `radar`), the first line of its last answer, its PR link and its
-  conversation's cost, shells left out, the caller's own pane marked
+  conversation's cost, shells and the concierge (`Workspace.Concierge`)
+  left out, the caller's own pane marked
   "(you)" by `HERDR_PANE_ID`, a machine away named under the count;
   `agent_recap {machine, pane, since?}`, the pane found on the machine
   named by id or label, the recap route's `markdown` under a line saying
@@ -4966,6 +5072,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   opinion's review request (`opinion.Prompt`) — go only
   to the agent it just started in a new tab, and only because the person
   pressed that dialog's button; never to a pane that was already there.
+  The concierge (`internal/concierge`) is started when the person opens
+  its place or presses New conversation, with remuda's own MCP server
+  alone and settings that deny every tool but its reads, `task_create`
+  and `task_comment`; remuda answers Claude Code's trust question for
+  the concierge's own folder (remuda made it) and sends it nothing else:
+  every prompt it gets is what the person typed in its box.
   A project's queue and pipeline (`internal/tasks`) send prompts only once
   the person switched them on — the task's own prompt and the stages' the
   person wrote, like an agent schedule's — and only for cards the person
