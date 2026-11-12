@@ -2083,9 +2083,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   worked in that `Dir` — newest first, and `on`), `GET
   /api/timelapse/recordings/{id}` (the file as it is, `Content-Encoding:
   gzip`, so a Pi spends nothing; unpacked for a client that takes no
-  gzip), `DELETE /api/timelapse/recordings/{id}`; a viewer link may GET
-  the two recordings routes (`viewerRoutes`, `viewerPrefixes`), an agent
-  key none. The page: `features/terminal/timelapse/` — `TimelapseDialog.tsx`
+  gzip), `DELETE /api/timelapse/recordings/{id}`, `GET
+  /api/timelapse/search` (below); a viewer link may GET the two
+  recordings routes and the search (`viewerRoutes`, `viewerPrefixes`),
+  an agent key none. The page: `features/terminal/timelapse/` — `TimelapseDialog.tsx`
   (dialog kind `timelapse`: "Timelapse…" in the chat's and the terminal's
   View menu of an agent's pane through `timelapseRows` in `row.ts`, none
   for a shell, the palette's "Timelapse
@@ -2127,6 +2128,88 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `keptWords`, tested): the switch, how much is kept, Delete all; never
   for a viewer. The display suite fakes the recordings routes
   (`fakeTimelapse`) and opens the player in every pass.
+  **"When did it print `migration failed`?" — the search over the
+  screens** (`search.go`, `plain.go`, tested on temp dirs and a fake
+  clock): `Recorder.Search(ctx, SearchQuery{Text, Machine, Pane, Dir,
+  Since})` reads the finished recordings of the scope — a machine or
+  every one, the pane and the folder as `List` takes them (neither for
+  all), the ones that ended after `Since` — newest first, each as plain
+  text: `Plain` takes the escapes out exactly as the page's `parseAnsi`
+  does (CSI with its final character, OSC to BEL or ESC \, a charset
+  designation's byte, every control character but a tab, a whole rune
+  where a byte would split one), rows right-trimmed and lower-cased
+  beside (`plainOf`). The query is a literal, case-folded by
+  `strings.ToLower` (no regex: the conversation search beside it is
+  literal and one field drives both), `MinQuery` 2 to `MaxQuery` 200
+  runes; a match spanning two rows (a wrapped line) is none. `sight`
+  walks the frames keeping the screen and which rows hold the needle,
+  each moved row tested once: the text *appears* when a frame shows it
+  and the one before did not, and stays until a frame shows it nowhere
+  (a scroll that moves its row keeps it standing); a hit
+  (`ScreenHit`) is a recording's first appearance — `{frame, at, for,
+  line}`, the topmost row when several — the later ones (`Again`, at
+  most `MaxAgain` 20, `Times` counting all), and the excerpt at the
+  first: the row and `Context` 2 rows either side, blank ones at the
+  edges left out, every one cut to `ExcerptWidth` 120 characters around
+  the match (`Col` the column they start at, found through
+  `scrollback.Find`). The bounds: `SearchBudget` 64 MB of recordings
+  unpacked off the disk per query — counted out of the gzip
+  (`counted`), since a screen compresses thirty times over and the
+  unpacking and the JSON are the cost; the one that crosses it is read
+  whole, a recording in the cache costs nothing, and past the budget the
+  older ones the cache holds are still searched — `SearchFor` 3 s (the clock looked at between
+  recordings and every `checkEvery` 256 frames; a recording cut half way
+  is left unread, not half searched), `MaxHits` 100 recordings
+  (`More`); what went unread is `Unread` with `Cut` budget or time, and
+  the page's request going away (`ctx`) ends it too. The recorder's lock
+  is held only to list the scope (`scope`), never while a file is read,
+  so a turn being recorded or written never waits on a search (tested:
+  the lock free at every look at the clock). `plainCache` keeps
+  recordings read as plain text by id and file version (size and
+  modification time: a turn's end overwrites its checkpoint), at most
+  `MaxPlain` 32 MB, its own lock; room is made only out of what earlier
+  queries used, the one used longest ago first, and once a query's own
+  recordings fill it the next one is not kept (`begin`, `put(…, since)`:
+  a query scans newest first, so plain LRU would throw out, query after
+  query, the very recordings the next one reads first); a deletion, a
+  prune or Delete all drops their text — so the next letter typed reads
+  no file, and a query cut by the budget goes further the next time
+  (tested). Route: `GET /api/timelapse/search?q&machine&pane&dir&days`
+  (`machine` resolved through `machineFor`, "" or `all` for every
+  machine; a pane needs its machine; `Cache-Control: no-store`), a
+  viewer's as the recordings are (`viewerRoutes`), an agent key's never.
+  The page: `found.ts` (tested: `stepsOf` every appearance as a `Step`
+  through the recordings shown in their order, by time within each, none
+  of a recording not shown; `stepAt`, `stepFrom` round and round,
+  `stepWords` "3 of 12", `stayWords` "on screen for 8 min · appeared 2
+  times", `momentOf`, `unreadWords`, `excerptRows`), `mark.ts` (tested:
+  `markLines` splits the drawn spans at every case-folded occurrence,
+  their colours kept, `mark` on the pieces; a row whose lower-casing
+  moves its offsets left unmarked), `useScreenSearch.ts` (the query
+  settled 300 ms, the request before it aborted so the server stops),
+  `usePlayerFind.ts` and `ScreenFind.tsx` — **the player's find**: a
+  field under the recording picker searching the recordings the dialog
+  lists, "3 of 12", ↑ ↓ and Enter / Shift+Enter stepping, a step picking
+  its recording and taking the player to the frame, paused (`Player`'s
+  `jump`), the text marked on every frame that shows it (`.screen .m`,
+  the find bar's amber) and the row the step went to drawn apart
+  (`ScreenLines`' `current`, `.screen-line.is-current`); a new answer
+  moves to its first step on the recording on screen, else the first of
+  all; a recording picked by hand drops the step. **The search panel's
+  Screens part** (`features/search/ScreenHits.tsx`, `useScreenHits`):
+  above the conversations' hits, the screens' over every recording with
+  the panel's machine, folder and period — each recording's first
+  appearance, its excerpt the matching row marked (`highlight.tsx`, now
+  shared with the conversations' hits), when and for how long, three
+  shown and "Show N more", the unread note; a hidden folder's or
+  machine's left out under the screen-sharing mode (`shownRecordings`,
+  which now takes hits too), a machine the fleet no longer has left out;
+  a click closes the panel and opens the player at that frame with the
+  query in its find (dialog field `found`, `TimelapseFound`; Overlays
+  keys the dialog by it). The display suite fakes the search
+  (`fakeScreenSearch`, from the fake recording's own frames) and opens
+  the player's find, the panel's Screens part and a hit of it in every
+  pass.
 - `internal/live/` — **the page's one event stream**, so the screens
   reload when something moved instead of polling for it. `Hub`:
   `Subscribe()` is one page's stream (`Events`, `Watch(keys)` — the
@@ -3251,6 +3334,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   later mount of the pane starts at the bottom in its live session), else opens the transcript on
   its own: `GET /api/chat?dir=&session=` without a pane is read-only
   (`Turn.IDs` carry the record uuids; `sessionIDRe` guards the id).
+  Above the conversations' hits the panel lists the **Screens** part —
+  where the text stood on the recorded screens, `GET
+  /api/timelapse/search` (see `internal/timelapse`), each hit opening the
+  timelapse player at its frame; "No conversation says it." when only
+  the screens answer.
 - `internal/usage/` — the **cost and context meter**. `prices.go` is Claude
   Code's own baked model catalog (read from the installed 2.1.322: twelve
   price tiers, 26 models, 200k vs 1M windows — Fable 5.2 and Mythos 5.2 at
@@ -4171,10 +4259,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   workspaces", and a stat's `dir` and candidates are kept the same way),
   the health, the push public key, the question, the usage, the models'
   scorecard (`/api/scorecard`, its rows naming no task), the folders'
-  icon pictures (`/api/icons/…`, `viewerPrefixes`), a pane's timelapses
-  and one of them (`/api/timelapse/recordings`, `…/recordings/{id}`: a
-  screen as it was, as the screen itself is — never the switch or a
-  deletion), and the
+  icon pictures (`/api/icons/…`, `viewerPrefixes`), a pane's timelapses,
+  one of them and the search over them (`/api/timelapse/recordings`,
+  `…/recordings/{id}`, `/api/timelapse/search`: a screen as it was, as
+  the screen itself is — never the switch or a deletion), and the
   upgrade of `/ws/events` — or of the page itself and its files (anything outside
   `/api/`, `/ws/` and the code-server proxy `/code/`); never `/ws/pane`,
   a submit, a key, the tasks or any change: 403 "this link is for

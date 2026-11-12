@@ -874,6 +874,22 @@ viewer link plays them; under the screen-sharing mode a hidden folder's
 are not shown. A second remuda started beside the real one with
 `REMUDA_STATE_DIR` records nothing unless it is given `-record`.
 
+*When did it print `migration failed`?* The player has a **find** of its
+own: type a few words and it searches what stood on the screens of the
+pane's recordings and its folder's — case-folded, with the colours and
+cursor moves taken out — and takes you to the frame where the text first
+appeared, paused, the text marked and its row drawn apart; the arrows
+beside it (or Enter and Shift+Enter) step to the next place it stood, into
+the next recording too. The **Search** panel lists the same over every
+recording, above the conversations: each recording's first appearance with
+the rows around it, when, how long it stayed and how often it came back, a
+click opening the player right there. A search unpacks at most 64 MB of
+recordings off the disk and runs at most three seconds, the newest first,
+and says how many older ones it did not reach; what it read stays in memory
+as text (up to 32 MB), so the next letter you type reads no file and the
+same search again goes further. A text that wraps onto a second row is not
+found across the break.
+
 ## Agents and your tasks
 
 Any coding agent remuda runs — Claude Code, Codex, Gemini CLI, Kimi Code —
@@ -1475,7 +1491,9 @@ machine, Claude Code's and Codex's — what you or an agent said, never tool out
 machine, folder and period. A hit jumps to the turn in the running pane, or
 opens the old transcript read-only. No index, no database: each machine
 scans its own `~/.claude/projects` on demand (remuda's scanner where the
-binary is deployed, grep otherwise). Every turn of a pane's conversation
+binary is deployed, grep otherwise). Above the conversations, a **Screens**
+part lists where the words stood on the agents' recorded screens (see
+Timelapse). Every turn of a pane's conversation
 has a **Copy link** button of its own: the address opens remuda on that
 pane, in its chat, scrolled to that turn — for a note, a ticket or a
 teammate on the same tailnet. Beside it a **pin** keeps the turn: a
