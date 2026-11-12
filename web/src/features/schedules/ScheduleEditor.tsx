@@ -1,5 +1,5 @@
 // The form that makes or edits a schedule: what runs — a prompt to the agent in a workspace folder, the standup as a
-// digest to the person's devices, or a fresh agent started in a folder with a prompt — when (WhenFields: a preset that
+// digest to the person's devices, a fresh agent started in a folder with a prompt, or a scene — when (WhenFields: a preset that
 // writes the cron, or cron by hand), and the kind's own fields.
 
 import { useEffect, useMemo, useState } from "react";
@@ -18,6 +18,8 @@ import { agentSchedule, SCOUT_PROMPT } from "./agent";
 import { putSchedule, type DigestSince, type Schedule, type ScheduleKind } from "./api";
 import { cronFor, DEFAULT_CRON, parseCron, type When } from "./cron";
 import { digestSchedule, kindOf, SINCE_OPTIONS } from "./digest";
+import { SceneFields } from "./SceneFields";
+import { sceneSchedule } from "./scene";
 import { WhenFields } from "./WhenFields";
 import { t } from "@/lib/i18n";
 
@@ -38,6 +40,7 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
   const [model, setModel] = useState(() => choiceFor(agent, value.model ?? ""));
   const [args, setArgs] = useState(value.args ?? "");
   const [close, setClose] = useState(value.close ?? true);
+  const [scene, setScene] = useState(value.scene ?? "");
   // an agent schedule saved before the switch keeps it off; a new one, or another kind made an agent one, starts on
   const [deny, setDeny] = useState(() => denyDefault(!!value.id && kindOf(value) === "agent", value.deny_prompts));
   const recipes = useQuery(fetchRecipes, []);
@@ -65,11 +68,13 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
   const folder = dir === OTHER_FOLDER ? typedDir.trim() : dir;
   const { busy, err, run } = useSubmit(async () => {
     await putSchedule(
-      kind === "digest"
-        ? digestSchedule({ id: value.id, label, cron, since, enabled: value.enabled })
-        : kind === "agent"
-          ? agentSchedule({ id: value.id, machine, dir: folder, label, cron, prompt, agent, model: modelOf(agent, { ...EMPTY_DRAFT, ...model }), args, close, deny_prompts: deny, enabled: value.enabled })
-          : { id: value.id, kind: "prompt", machine, dir: folder, label, cron, prompt, enabled: value.enabled ?? true },
+      kind === "scene"
+        ? sceneSchedule({ id: value.id, label, cron, scene, enabled: value.enabled })
+        : kind === "digest"
+          ? digestSchedule({ id: value.id, label, cron, since, enabled: value.enabled })
+          : kind === "agent"
+            ? agentSchedule({ id: value.id, machine, dir: folder, label, cron, prompt, agent, model: modelOf(agent, { ...EMPTY_DRAFT, ...model }), args, close, deny_prompts: deny, enabled: value.enabled })
+            : { id: value.id, kind: "prompt", machine, dir: folder, label, cron, prompt, enabled: value.enabled ?? true },
     );
     onSaved();
   });
@@ -77,7 +82,7 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
   const folderRows = [...(folders.some((f) => f.value === dir) || !dir || dir === OTHER_FOLDER ? folders : [{ value: dir, label: dir, icon: folderIcon }, ...folders]), { value: OTHER_FOLDER, label: t("Another folder…"), icon: folderIcon }];
   const choices = modelChoices(agent);
   const typedModel = hasModelFlag(agent) && (choices.length === 0 || model.choice === CUSTOM);
-  const ready = kind === "digest" ? cron.trim() !== "" : !!folder && prompt.trim() !== "" && (kind !== "agent" || !!agent);
+  const ready = kind === "scene" ? !!scene && cron.trim() !== "" : kind === "digest" ? cron.trim() !== "" : !!folder && prompt.trim() !== "" && (kind !== "agent" || !!agent);
 
   return (
     <form
@@ -97,8 +102,11 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
         <button type="button" className={kind === "agent" ? "on" : ""} onClick={() => setKind("agent")}>
           <Icon name="play" size={14} /> {t("Start an agent")}
         </button>
+        <button type="button" className={kind === "scene" ? "on" : ""} onClick={() => setKind("scene")}>
+          <Icon name="layers" size={14} /> {t("Run a scene")}
+        </button>
       </nav>
-      {kind !== "digest" && (
+      {kind !== "digest" && kind !== "scene" && (
         <div className="schedule-row">
           {several && (
             <label>
@@ -175,7 +183,9 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
           patchWhen({ preset: "custom" });
         }}
       />
-      {kind === "digest" ? (
+      {kind === "scene" ? (
+        <SceneFields scene={scene} onScene={setScene} label={label} onLabel={setLabel} />
+      ) : kind === "digest" ? (
         <div className="schedule-row">
           <label className="grow">
             <span>
@@ -196,7 +206,7 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
           <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={kind === "agent" ? t("Scout") : t("Morning status")} />
         </label>
       )}
-      {kind === "digest" ? (
+      {kind === "scene" ? null : kind === "digest" ? (
         <p className="schedule-note">
           One push to every device that gets remuda's alerts: how many agents finished, how many wait for you, what it cost, and a line per agent. A tap
           opens the Standup. Quiet hours hold it; a period with nothing in it sends nothing.

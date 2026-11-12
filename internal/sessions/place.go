@@ -32,7 +32,7 @@ func StartIn(client Placer, snap *herdr.Snapshot, dir, label, kind string, start
 		return Place{}, fmt.Errorf("an agent is required, not %q", kind)
 	}
 	var place Place
-	if workspaceID := workspaceIn(snap, dir); workspaceID != "" {
+	if workspaceID := WorkspaceIn(snap, dir); workspaceID != "" {
 		res, err := client.TabCreate(workspaceID, label)
 		if err != nil {
 			return Place{}, err
@@ -51,8 +51,8 @@ func StartIn(client Placer, snap *herdr.Snapshot, dir, label, kind string, start
 	return place, nil
 }
 
-// workspaceIn is the id of the first workspace whose folder is dir, "" for none.
-func workspaceIn(snap *herdr.Snapshot, dir string) string {
+// WorkspaceIn is the id of the first workspace whose folder is dir, "" for none.
+func WorkspaceIn(snap *herdr.Snapshot, dir string) string {
 	if snap == nil {
 		return ""
 	}

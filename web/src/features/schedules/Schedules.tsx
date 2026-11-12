@@ -1,5 +1,5 @@
-// Schedules: prompts sent to an agent on a timetable, the standup pushed as a digest, or a fresh agent started in a
-// folder. A list with the next and last run, a switch per row, "Run now", and the editor.
+// Schedules: prompts sent to an agent on a timetable, the standup pushed as a digest, a fresh agent started in a
+// folder, or one of the scenes. A list with the next and last run, a switch per row, "Run now", and the editor.
 
 import { useState } from "react";
 import type { Machine } from "@/features/roster/api";
@@ -16,6 +16,8 @@ import { cronWords } from "./cronWords";
 import { kindOf, sinceWords } from "./digest";
 import { resultTone, resultWords } from "./runs";
 import { ScheduleEditor } from "./ScheduleEditor";
+import { sceneScheduleWords } from "./scene";
+import { useScenes } from "@/features/scenes/api";
 import { t } from "@/lib/i18n";
 
 export default function Schedules({ machines, onClose, ask }: {
@@ -24,6 +26,7 @@ export default function Schedules({ machines, onClose, ask }: {
   ask: (text: string, label: string, run: () => void) => void;
 }) {
   const { agents } = useRoster();
+  const scenes = useScenes(true);
   const agentLabel = (id: string | undefined) => agents.find((a) => a.id === id)?.label ?? id ?? "";
   const [actionError, setActionError] = useState("");
   const [editing, setEditing] = useState<Partial<Schedule> | null>(null);
@@ -56,7 +59,7 @@ export default function Schedules({ machines, onClose, ask }: {
     >
       <Notice tone="hint">
         {t(
-          "A prompt sent to the agent running in a folder, the standup pushed to your devices as a digest, or a fresh agent started in a folder with a prompt, on a timetable — in the remuda host's local time. A run is skipped and noted while the agent it would reach — or the one its last run started — is still working or waits for an answer, so nothing piles up; a minute with no agent there is noted and pushed.",
+          "A prompt sent to the agent running in a folder, the standup pushed to your devices as a digest, a fresh agent started in a folder with a prompt, or one of your scenes, on a timetable — in the remuda host's local time. A run is skipped and noted while the agent it would reach — or the one its last run started — is still working or waits for an answer, so nothing piles up; a minute with no agent there is noted and pushed.",
         )}
       </Notice>
       {error && (
@@ -72,6 +75,7 @@ export default function Schedules({ machines, onClose, ask }: {
             <div className="schedule-copy">
               <div className="schedule-label">
                 {kindOf(s) === "digest" && <Icon name="sun" size={12} className="schedule-digest-mark" aria-label={t("Standup digest")} />}
+                {kindOf(s) === "scene" && <Icon name="layers" size={12} className="schedule-digest-mark" aria-label={t("Runs a scene")} />}
                 {kindOf(s) === "agent" && (
                   <span className="schedule-agent-mark" aria-label={t("Starts {agent}", { agent: agentLabel(s.agent) })}>
                     <Logo agent={s.agent ?? ""} />
@@ -81,7 +85,9 @@ export default function Schedules({ machines, onClose, ask }: {
               </div>
               <div className="schedule-sub">
                 {cronWords(s.cron) ?? <code>{s.cron}</code>} ·{" "}
-                {kindOf(s) === "digest"
+                {kindOf(s) === "scene"
+                  ? sceneScheduleWords(s, scenes)
+                  : kindOf(s) === "digest"
                   ? t("to your devices · {since}", { since: sinceWords(s.since) })
                   : kindOf(s) === "agent"
                     ? agentWords(s, machineLabel(machines, s.machine), basename(s.dir), agentLabel(s.agent))

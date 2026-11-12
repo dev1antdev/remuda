@@ -3139,6 +3139,11 @@ body.is-resizing iframe {
   padding: 0;
 }
 
+/* outweighs .md ul, the Markdown lists' indent, which a dialog of the md size would otherwise give the list */
+ul.pick-list {
+  padding: 0;
+}
+
 .pick-list {
   max-height: 40vh;
   overflow-y: auto;
@@ -9516,6 +9521,220 @@ body.popout {
 
 .recipe-manage {
   align-self: flex-start;
+}
+
+/* Scenes (features/scenes): the list in the Scenes dialog, a scene's form with its steps or its tidy, a step's form,
+   and the run dialog's ticks and outcomes; the rows wear the recipes' card */
+.scene-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.scene-row,
+.scene-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+  min-width: 0;
+}
+
+.scene-row > svg {
+  flex: none;
+  color: var(--fg-dim);
+}
+
+.scene-row-text,
+.scene-step-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  text-align: left;
+}
+
+.scene-step-text .scene-words {
+  max-width: 100%;
+}
+
+.scene-row-text strong,
+.scene-step-text strong {
+  font-size: var(--fs-13);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.scene-words {
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.scene-form,
+.scene-step-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.scene-step-form {
+  background: var(--bg);
+}
+
+.scene-form label small,
+.scene-step-form label small,
+.scene-steps-head small {
+  font-size: var(--fs-11);
+  font-weight: 400;
+  color: var(--fg-faint);
+}
+
+.scene-step-form textarea {
+  min-height: 64px;
+}
+
+.scene-steps,
+.scene-tidy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scene-steps-head {
+  font-size: var(--fs-12);
+  font-weight: 500;
+  color: var(--fg-dim);
+}
+
+.scene-step {
+  gap: 6px;
+  padding: 4px 6px;
+}
+
+.scene-step-n {
+  flex: none;
+  width: 18px;
+  text-align: center;
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.scene-step-where {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 8px;
+}
+
+.scene-layout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.scene-layout > svg {
+  flex: none;
+  color: var(--fg-dim);
+}
+
+.scene-layout .scene-words {
+  flex: 1;
+}
+
+.scene-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modal label.scene-check {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.scene-check > input[type="checkbox"] {
+  margin-top: 2px;
+}
+
+.scene-check > span {
+  min-width: 0;
+}
+
+.scene-check small {
+  display: block;
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.scene-number {
+  width: 4.5em;
+  display: inline-block;
+}
+
+.scene-machines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.scene-picks .pick-name strong {
+  font-weight: 600;
+}
+
+.scene-outcome {
+  cursor: default;
+}
+
+.scene-outcome .pick-name small {
+  display: block;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+  white-space: normal;
+}
+
+.scene-outcome > svg {
+  flex: none;
+}
+
+.scene-outcome.is-ok > svg {
+  color: var(--green);
+}
+
+.scene-outcome.is-bad > svg,
+.scene-outcome.is-bad .pick-name small {
+  color: var(--red);
+}
+
+.scene-outcome.is-quiet > svg {
+  color: var(--fg-faint);
+}
+
+.scene-outcome.is-busy > svg {
+  color: var(--accent);
+}
+
+@media (max-width: 600px) {
+  .scene-step-where {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* #5 Proposed column: the triage of what agents filed — the line over the list, a row's Accept / Decline, the column's mark */

@@ -47,6 +47,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/retire"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
+	"github.com/dev1antdev/remuda/internal/scenes"
 	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/scorecard"
 	"github.com/dev1antdev/remuda/internal/scratch"
@@ -108,6 +109,7 @@ type Server struct {
 	Mirror    *mirror.Service     // remuda's figures and alerts inside herdr itself
 	Timelapse *timelapse.Recorder // what the agents' screens did while they worked
 	Triggers  *triggers.Service   // the person's rules on what a pane prints, and the dev servers offered as previews
+	Scenes    *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
 
 	streams   termStreams
 	relayed   relays   // the terminals piped to a machine's own remuda, which holds their attach
@@ -165,6 +167,7 @@ func (s *Server) Handler() http.Handler {
 	s.mirrorRoutes(api)
 	s.timelapseRoutes(api)
 	s.triggerRoutes(api)
+	s.sceneRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

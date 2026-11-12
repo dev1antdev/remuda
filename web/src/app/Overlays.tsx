@@ -35,6 +35,8 @@ import ImportIssueDialog from "@/features/tasks/ImportIssueDialog";
 import ImportJiraDialog from "@/features/tasks/ImportJiraDialog";
 import RecipesDialog from "@/features/recipes/RecipesDialog";
 import StartFromRecipeDialog from "@/features/recipes/StartFromRecipeDialog";
+import RunSceneDialog from "@/features/scenes/RunSceneDialog";
+import ScenesDialog from "@/features/scenes/ScenesDialog";
 import Standup from "@/features/standup/StandupPanel";
 import UpdatesDialog from "@/features/updates/Updates";
 import BudgetDialog from "@/features/usage/BudgetDialog";
@@ -228,6 +230,8 @@ export default function Overlays() {
       )}
       {dialog?.kind === "budget" && <BudgetDialog machines={machines} budget={dialog.budget} onClose={actions.closeDialog} onSaved={done} ask={actions.ask} />}
       {dialog?.kind === "recipes" && <RecipesDialog onClose={actions.closeDialog} />}
+      {dialog?.kind === "scenes" && <ScenesDialog onClose={actions.closeDialog} onRun={(id) => actions.openDialog({ kind: "scene-run", id })} />}
+      {dialog?.kind === "scene-run" && <RunSceneDialog id={dialog.id} onClose={actions.closeDialog} />}
       {dialog?.kind === "start-recipe" && (
         <StartFromRecipeDialog machineId={dialog.machineId} dir={dialog.dir} onClose={actions.closeDialog} onStart={async (req) => landOn(req.machine, await createSession(req))} />
       )}
