@@ -3194,6 +3194,39 @@ body.is-resizing iframe {
   color: var(--fg-dim);
 }
 
+/* ---- undoing a turn (features/undo): the files a row each, the commits to revert, the files in the way ---- */
+.undo-files .pick-row {
+  cursor: default;
+}
+
+.undo-commits {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.undo-commit-list,
+.undo-refused-files {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 24px;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+  overflow-wrap: anywhere;
+}
+
+.undo-refused-files {
+  padding: 4px 0 0;
+  font-family: var(--mono);
+  color: var(--fg);
+}
+
+.undo-commit-list code {
+  font-family: var(--mono);
+  color: var(--fg-faint);
+}
+
 /* ---- previews (features/preview): a machine's port a row, its number in the code face ---- */
 .preview-row {
   cursor: default;
@@ -6682,6 +6715,150 @@ button.usage-row:hover {
   color: var(--amber);
 }
 
+/* ---- Fleet setup (features/updates/FleetDialog.tsx): machines as columns, facts as rows, the odd one out marked ---- */
+.fleet-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.fleet-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-13);
+}
+
+.fleet-table th,
+.fleet-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.fleet-table tbody:last-child tr:last-child > * {
+  border-bottom: 0;
+}
+
+.fleet-table thead th {
+  background: var(--bg-raised);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.fleet-table thead th.is-away {
+  color: var(--fg-faint);
+}
+
+.fleet-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.fleet-col-state {
+  font-weight: 400;
+  color: var(--fg-faint);
+}
+
+.fleet-table th[scope="row"],
+.fleet-corner {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 130px;
+  max-width: 220px;
+  background: var(--bg-raised);
+  font-weight: 500;
+  color: var(--fg-dim);
+  overflow-wrap: break-word;
+}
+
+.fleet-section th {
+  position: sticky;
+  left: 0;
+  background: var(--bg-input);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--fg);
+  overflow-wrap: break-word;
+}
+
+.fleet-cell {
+  min-width: 84px;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
+}
+
+.fleet-cell.is-na {
+  color: var(--fg-faint);
+}
+
+.fleet-cell.is-odd {
+  background: var(--amber-soft);
+  box-shadow: inset 3px 0 var(--amber);
+}
+
+.fleet-cell.is-split {
+  box-shadow: inset 3px 0 var(--amber-ring);
+}
+
+.fleet-hash {
+  font: var(--fs-12) / 1.5 var(--mono);
+}
+
+.fleet-token {
+  white-space: nowrap;
+}
+
+.fleet-tip {
+  border-radius: var(--r-xs);
+  cursor: default;
+}
+
+.fleet-tip:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+.fleet-fixes h3 {
+  margin: 4px 0;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.fleet-fix-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fleet-fix-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fleet-hand {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-13);
+  color: var(--fg-dim);
+}
+
+.fleet-hand strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
 .updates-log {
   margin: 0;
   max-height: 44dvh;
@@ -7174,6 +7351,113 @@ button.usage-row:hover {
   min-width: 0;
   font-size: var(--fs-11);
   color: var(--fg-dim);
+}
+
+/* the player's find over the recorded screens: the field, "3 of 12", the steps; the text found marked on the screen
+   in the find bar's colours, the row a step went to drawn apart */
+.timelapse-find {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+.timelapse-find input {
+  flex: 1;
+  min-width: 0;
+  height: var(--ctl-sm);
+}
+
+.timelapse-find-icon {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  margin-right: 2px;
+}
+
+.timelapse-find-note {
+  margin: -4px 0 8px;
+  font-size: var(--fs-11);
+  color: var(--fg-dim);
+}
+
+.screen .m {
+  background: var(--amber-soft);
+  color: var(--fg);
+  border-radius: var(--r-xs);
+}
+
+.screen-line.is-current {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--amber);
+}
+
+.screen-line.is-current .m {
+  background: var(--amber);
+  color: var(--on-amber);
+}
+
+/* the search panel's Screens part: each recording's first appearance as a few rows of the screen, the matching one
+   marked */
+.search-screens {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.search-part-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 10px 2px;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.search-part-hint {
+  font-weight: 400;
+  color: var(--fg-faint);
+  min-width: 0;
+}
+
+.search-screen {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  line-height: 1.35;
+  color: var(--fg-faint);
+}
+
+.search-screen-row {
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-screen-row.is-match {
+  color: var(--fg);
+}
+
+.search-screen-row mark {
+  background: var(--amber-soft);
+  color: var(--fg);
+  border-radius: var(--r-xs);
+}
+
+.search-part-more {
+  align-self: flex-start;
+  margin: 0 10px;
+  font-size: var(--fs-12);
 }
 
 .composer.compact {
@@ -7921,6 +8205,69 @@ body.popout {
   margin: 0 0 8px;
   font-size: var(--fs-15);
   font-weight: 600;
+}
+
+.standup-item.is-reading {
+  border-color: var(--accent-ring);
+  box-shadow: 0 0 0 1px var(--accent-ring);
+}
+
+/* reading aloud: the bar over the report while the voice reads, the sentence being said under its part */
+.listen-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--accent-ring);
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+}
+
+.listen-controls {
+  display: flex;
+  gap: 2px;
+}
+
+.listen-now {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.listen-where {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-dim);
+  font-size: var(--fs-11);
+  line-height: 1.35;
+}
+
+.listen-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.listen-sentence {
+  color: var(--fg);
+  font-size: var(--fs-13-5);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.listen-bar.is-done .listen-sentence {
+  color: var(--fg-dim);
+}
+
+.listen-note {
+  grid-column: 1 / -1;
+}
+
+.listen-note.quiet {
+  color: var(--fg-dim);
+  font-size: var(--fs-11);
 }
 
 /* ---- the concierge (app/Concierge.tsx): the machine, New conversation, and its conversation filling the panel ---- */
@@ -8748,21 +9095,21 @@ body.popout {
   }
 }
 
-/* a head with a Jira chip or a PR, in a tile too narrow for them beside the title: the title and the tile's buttons keep
+/* a head with a Jira chip, a collision or a PR, in a tile too narrow for them beside the title: the title and the tile's buttons keep
    the first line, the chip, the PR and the usage go to a line of their own */
 @container (max-width: 800px) {
-  .tile-head:has(> .tile-jira, > .tile-pr-group) {
+  .tile-head:has(> .tile-jira, > .tile-pr-group, > .tile-collide) {
     flex-wrap: wrap;
     row-gap: 0;
   }
 
-  .tile-head:has(> .tile-jira, > .tile-pr-group)::before {
+  .tile-head:has(> .tile-jira, > .tile-pr-group, > .tile-collide)::before {
     content: "";
     order: 2;
     flex-basis: 100%;
   }
 
-  .tile-head:has(> .tile-jira, > .tile-pr-group) > :is(.tile-jira, .tile-pr-group, .tile-usage) {
+  .tile-head:has(> .tile-jira, > .tile-pr-group, > .tile-collide) > :is(.tile-jira, .tile-pr-group, .tile-collide, .tile-usage) {
     order: 3;
     margin: 0 0 4px;
   }
@@ -11491,7 +11838,35 @@ body.popout {
   min-width: 0;
 }
 
+.zoo-name-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Tell me: a creature says what its agent did today; revealed under the pointer, always there on a touch screen */
+.zoo-tell {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.zoo-creature:hover .zoo-tell,
+.zoo-creature:focus-within .zoo-tell,
+.zoo-tell.on {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  .zoo-tell {
+    opacity: 1;
+  }
+}
+
 .zoo-name {
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -11562,6 +11937,12 @@ body.popout {
 .zoo-bubble.is-question {
   --zoo-bubble-line: color-mix(in oklab, var(--red) 55%, var(--line-strong));
   --zoo-bubble-fill: color-mix(in oklab, var(--red) 9%, var(--bg-raised));
+}
+
+/* what a creature says of its day while it says it, in the accent */
+.zoo-bubble.is-telling {
+  --zoo-bubble-line: color-mix(in oklab, var(--accent) 55%, var(--line-strong));
+  --zoo-bubble-fill: color-mix(in oklab, var(--accent) 10%, var(--bg-raised));
 }
 
 .zoo-bubble > span {
@@ -12508,4 +12889,140 @@ body.popout {
   font-family: var(--mono);
   font-size: var(--fs-11);
   white-space: pre;
+}
+
+/* ---- the collision radar: another checkout of the repository changing the same files (features/roster/CollisionMark.tsx,
+   the lens's CollisionNotice.tsx, the zoo's Bolts.tsx) and the review queue's risk chip (features/review/risk.ts) ---- */
+.collide-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  max-width: 14ch;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+
+.collide-mark > svg {
+  flex-shrink: 0;
+}
+
+.collide-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.collide-mark.is-lines {
+  color: var(--amber);
+}
+
+.tile-collide {
+  font-size: var(--fs-12);
+}
+
+.queue-item:has(.queue-collide) .queue-name {
+  display: flex;
+  flex-direction: column;
+  white-space: normal;
+}
+
+.queue-collide {
+  max-width: 100%;
+}
+
+.risk-chip {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--bg-active);
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.risk-chip.is-medium {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.risk-chip.is-high {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.review-collisions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-collision-head,
+.review-collision-order {
+  display: block;
+}
+
+.review-collision-files {
+  margin: 3px 0;
+  padding-left: 18px;
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+
+.zoo-grid {
+  position: relative;
+  isolation: isolate; /* the lightning goes behind the creatures and their captions, not over them */
+}
+
+.zoo-bolts {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.zoo-bolts path {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+  animation: zoo-flicker 1.8s steps(2) infinite;
+}
+
+.zoo-bolts path.is-lines {
+  stroke-width: 3;
+  opacity: 0.95;
+}
+
+@keyframes zoo-flicker {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.zoo-bolt {
+  position: absolute;
+  left: 6%;
+  top: 6%;
+  display: grid;
+  place-items: center;
+  width: 20%;
+  aspect-ratio: 1;
+  border-radius: 99px;
+  background: var(--bg-raised);
+  box-shadow: 0 0 0 2px var(--line-strong);
+  color: var(--fg-dim);
+  pointer-events: none;
+}
+
+.zoo-bolt.is-lines {
+  box-shadow: 0 0 0 2px var(--amber);
+  color: var(--amber);
 }

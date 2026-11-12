@@ -1,6 +1,7 @@
 // The player: one recording's frames drawn as the Wall's screen view draws a pane — the same ANSI renderer, the font
 // fitted to the pane's columns — the clock run at 10×, 30× or 60× the turn's own time or a frame at a time, a scrub bar
-// over the turn, a step either way, and Export as GIF.
+// over the turn, a step either way, and Export as GIF. A find's step (jump) takes it to the frame the text appeared in,
+// paused, the row drawn apart; the text found is marked on whatever frame shows it.
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useFlavor } from "@/app/theme";
@@ -12,7 +13,9 @@ import { Icon, Tip } from "@/ui";
 import { parseAnsi } from "../ansi";
 import { ScreenLines, useFitFont, widthOf } from "../Screen";
 import type { Recording } from "./api";
+import type { Step } from "./found";
 import { GifExport } from "./GifExport";
+import { markLines } from "./mark";
 import { advance, DEFAULT_SPEED, frameAt, playerKey, screensOf, screenText, SPEEDS, stepTo, type Position, type Speed } from "./playback";
 import { durationOf, endedWords, speedWords } from "./words";
 
@@ -25,7 +28,7 @@ const SCREEN_SHARE = 0.56;
 // fitHeight is the largest font, in half pixels, at which the rows fit the room the window leaves the box
 const fitHeight = (rows: number) => Math.max(2, Math.floor(((window.innerHeight * SCREEN_SHARE - SCREEN_PAD) / (rows * LINE_HEIGHT)) * 2) / 2);
 
-export function Player({ recording }: { recording: Recording }) {
+export function Player({ recording, jump = null, marked = "" }: { recording: Recording; jump?: Step | null; marked?: string }) {
   const screens = useMemo(() => screensOf(recording.frames), [recording]);
   const times = useMemo(() => recording.frames.map((f) => f.at), [recording]);
   const duration = Math.max(durationOf(recording), times[times.length - 1] ?? 0);
@@ -35,16 +38,19 @@ export function Player({ recording }: { recording: Recording }) {
   const [playing, setPlaying] = useState(true);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    setPos({ t: 0, carry: 0 });
-    setPlaying(true);
-    box.current?.focus({ preventScroll: true }); // Space and the arrows are the player's from the start
-  }, [recording]);
+    setPos({ t: jump ? jump.at : 0, carry: 0 });
+    setPlaying(!jump);
+  }, [recording, jump]);
+  useEffect(() => {
+    if (!jump) box.current?.focus({ preventScroll: true }); // Space and the arrows are the player's from the start; a find keeps its field
+  }, [recording]); // eslint-disable-line react-hooks/exhaustive-deps
   usePlayback(playing, speed, times, duration, pos, setPos, () => setPlaying(false));
 
   const index = frameAt(times, pos.t);
   const flavor = useFlavor();
   const palette = useMemo(() => ansiPalette(flavor), [flavor]);
-  const lines = useMemo(() => parseAnsi(screenText(screens[index]), palette), [screens, index, palette]);
+  const drawn = useMemo(() => parseAnsi(screenText(screens[index]), palette), [screens, index, palette]);
+  const lines = useMemo(() => markLines(drawn, marked), [drawn, marked]);
   const rows = useMemo(() => Math.max(recording.rows, 1, ...recording.frames.map((f) => f.lines)), [recording]);
   // the whole screen in sight: as wide as the pane's columns allow, and no taller than the room the box has
   const fontSize = Math.min(useFitFont(box, widthOf(recording.cols, lines)), fitHeight(rows));
@@ -71,7 +77,7 @@ export function Player({ recording }: { recording: Recording }) {
   return (
     <div className="timelapse" onKeyDown={onKey}>
       <div className="screen timelapse-screen" ref={box} tabIndex={0} role="region" style={{ fontSize, height: `calc(${rows * LINE_HEIGHT}em + ${SCREEN_PAD}px)` }} aria-label={t("Frame {n} of {total}", { n: index + 1, total: times.length })}>
-        <ScreenLines lines={lines} />
+        <ScreenLines lines={lines} current={jump && jump.frame === index ? jump.line : -1} />
       </div>
       <div className="timelapse-bar">
         <Tip text={playing ? t("Pause (Space)") : t("Play (Space)")}>

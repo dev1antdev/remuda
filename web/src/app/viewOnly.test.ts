@@ -18,7 +18,7 @@ describe("viewerPlaces", () => {
 
 describe("viewerCommand", () => {
   it("keeps moving about, what a lens shows, the reports and the look", () => {
-    for (const id of ["next-needs", "mode:wall", "lens:chat", "find", "recap", "export", "timelapse", "wall-office", "full", "standup", "keys", "theme-dark", "flavor-mocha", "text-large", "lang-ru", "open-lens-chat"]) expect(viewerCommand(id), id).toBe(true);
+    for (const id of ["next-needs", "mode:wall", "lens:chat", "find", "recap", "export", "timelapse", "wall-office", "full", "standup", "listen-day", "keys", "theme-dark", "flavor-mocha", "text-large", "lang-ru", "open-lens-chat"]) expect(viewerCommand(id), id).toBe(true);
   });
   it("drops every command that types, starts, closes, renames or saves on the server", () => {
     for (const id of ["workspace:local", "tab", "worktree", "rename-workspace", "rename-tab", "restart-pane", "close-workspace", "handover", "model", "broadcast", "alerts", "start-recipe", "recipes", "schedules", "settings", "machine", "import-issue", "search", "mode:tasks", "mode:code", "mode:review", "lens:changes", "concierge"]) expect(viewerCommand(id), id).toBe(false);

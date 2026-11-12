@@ -40,7 +40,6 @@ export const webhooks: Dictionary = {
   "a finish": "завершение",
   "a limit at 80 % or crossed": "лимит на 80 % или превышен",
   "a question": "вопрос",
-  "a rejected workspace whose agent says it is ready again": "отклонённая рабочая папка, агент которой говорит, что снова готово",
   "a review": "ревью",
   "a schedule": "расписание",
   "a scheduled prompt that could not be delivered, a scout's answer": "промпт по расписанию, который не удалось доставить, ответ разведчика",

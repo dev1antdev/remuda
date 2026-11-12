@@ -8,6 +8,9 @@ import { useRoster } from "@/features/roster/useRoster";
 import { basename, plural } from "@/lib/text";
 import { Icon, Logo, PANELS, Resizer } from "@/ui";
 import { reviewQueue, type QueueItem } from "./queue";
+import { riskChip, riskHead, riskTip } from "./risk";
+import { CollisionMark } from "@/features/roster/CollisionMark";
+import { useSharing } from "@/features/roster/useSharing";
 import Review from "./Review";
 import { t } from "@/lib/i18n";
 
@@ -65,6 +68,8 @@ export default function ReviewQueue() {
 }
 
 function QueueRow({ item, on, machine, onPick }: { item: QueueItem; on: boolean; machine: boolean; onPick: () => void }) {
+  const hidden = useSharing().sessionHidden(item.machine.id, item.session); // the screen-sharing mode: no peer, no path
+  const tip = item.risk ? (hidden ? riskHead(item.risk) : riskTip(item.risk)) : "";
   const count = item.fresh || item.changed;
   const countWords = item.fresh ? t("{files} changed since you looked", { files: plural(item.fresh, "file") }) : item.changed ? t("{files} changed, all seen", { files: plural(item.changed, "file") }) : t("everything there is committed");
   return (
@@ -76,7 +81,13 @@ function QueueRow({ item, on, machine, onPick }: { item: QueueItem; on: boolean;
           {machine && <span className="queue-where"> · {item.machine.label}</span>}
         </span>
         {item.ready && <span className="queue-sub">{t("says it is ready again")}</span>}
+        {!hidden && item.session.collisions?.length ? <CollisionMark machineId={item.machine.id} session={item.session} className="queue-collide" /> : null}
       </span>
+      {item.risk && item.risk.score > 0 && (
+        <span className={`risk-chip is-${item.risk.level}`} title={tip} aria-label={tip}>
+          {riskChip(item.risk)}
+        </span>
+      )}
       {item.ready ? (
         <span className="badge ready" title={countWords}>
           {t("ready again")}

@@ -1,6 +1,7 @@
 // One turn of the transcript: its text as Markdown, its thinking and tool calls folded (each call with how long it took, a
 // failed one in red), an Edit's change under its call in the lens, a picture the agent read or wrote as a thumbnail, a foot
-// with what the answer spent and what went wrong, a forward button, a link to the turn and a pin that keeps it in the Pins list.
+// with what the answer spent and what went wrong, a forward button, Undo this turn for an answer whose changes the cockpit
+// kept, a link to the turn and a pin that keeps it in the Pins list.
 
 import { memo, useState, type ReactNode } from "react";
 import { fileUrl } from "@/features/files/api";
@@ -23,7 +24,7 @@ import { t } from "@/lib/i18n";
 
 // TurnView re-renders only when the turn's content changed, so a selection in the log survives the polls
 export const TurnView = memo(
-  function TurnView({ turn, machineId, onOpenFile, onForward, onLink, onPin, pinned, subagents, onOpenSubagent, diffs }: {
+  function TurnView({ turn, machineId, onOpenFile, onForward, onLink, onPin, pinned, subagents, onOpenSubagent, diffs, undo, onUndo }: {
     turn: Turn;
     machineId?: string;
     onOpenFile: OpenFile;
@@ -34,6 +35,8 @@ export const TurnView = memo(
     subagents?: Subagent[]; // the conversation's, drawn under the Agent calls that spawned them
     onOpenSubagent?: (s: Subagent) => void;
     diffs?: boolean; // an Edit's change drawn under its call, a mermaid fence drawn as its diagram: the lens, not a tile
+    undo?: string; // the kept turn of the folder this answer is, which its foot offers to undo
+    onUndo?: (turn: string) => void;
   }) {
     const cls = `turn ${turn.role === "user" ? "turn-user" : "turn-assistant"}${pinned ? " turn-pinned" : ""}`;
     const text = turn.parts
@@ -54,11 +57,16 @@ export const TurnView = memo(
           ))}
         </ErrorBoundary>
         {turn.role === "assistant" && <Spent turn={turn} />}
-        {(!!(onForward && text && turn.role === "assistant") || !!((onLink || onPin) && turn.ids?.length)) && (
+        {(!!(onForward && text && turn.role === "assistant") || !!((onLink || onPin) && turn.ids?.length) || !!(undo && onUndo)) && (
           <div className="turn-actions">
             {onForward && text && turn.role === "assistant" && (
               <button type="button" className="linkish turn-forward" title={t("Forward this to another agent")} onClick={() => onForward(text)}>
                 <Icon name="send" size={12} /> {t("forward")}
+              </button>
+            )}
+            {undo && onUndo && (
+              <button type="button" className="linkish turn-forward turn-undo" title={t("Put the files back as they were before this turn; you see what changes first")} onClick={() => onUndo(undo)}>
+                <Icon name="undo" size={12} /> {t("Undo this turn")}
               </button>
             )}
             {onLink && !!turn.ids?.length && (
@@ -89,6 +97,8 @@ export const TurnView = memo(
     a.pinned === b.pinned &&
     a.onOpenSubagent === b.onOpenSubagent &&
     a.diffs === b.diffs &&
+    a.undo === b.undo &&
+    a.onUndo === b.onUndo &&
     sameTurn(a.turn, b.turn) &&
     sameSubagents(subagentsOf(a.turn, a.subagents), subagentsOf(b.turn, b.subagents)),
 );

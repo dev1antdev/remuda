@@ -25,8 +25,10 @@ import (
 	"github.com/dev1antdev/remuda/internal/budget"
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
+	"github.com/dev1antdev/remuda/internal/collisions"
 	"github.com/dev1antdev/remuda/internal/complete"
 	"github.com/dev1antdev/remuda/internal/concierge"
+	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
@@ -57,6 +59,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/timelapse"
 	"github.com/dev1antdev/remuda/internal/triggers"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
+	"github.com/dev1antdev/remuda/internal/undo"
 	"github.com/dev1antdev/remuda/internal/updates"
 	"github.com/dev1antdev/remuda/internal/usage"
 	buildversion "github.com/dev1antdev/remuda/internal/version"
@@ -65,51 +68,54 @@ import (
 
 // Server holds the services the routes answer from; the app fills it in and hands out Handler.
 type Server struct {
-	Machines  *machines.Manager
-	Watch     *watch.Watcher
-	Input     *sessions.Input
-	Chat      *chat.Service
-	Updates   *updates.Service
-	Tasks     *tasks.Store
-	Launcher  *tasks.Launcher
-	Push      *push.Service
-	Feed      *feed.Service
-	Radar     *radar.Tracker
-	Said      *said.Tracker
-	PRs       *prstatus.Tracker
-	Recap     *recap.Service
-	Usage     *usage.Tracker
-	Budgets   *budget.Service
-	Health    *health.Collector
-	Review    *review.Store
-	Schedules *schedule.Store
-	Quick     *quick.Store
-	Recipes   *recipes.Store
-	Prefs     *prefs.Store
-	Code      *code.Service
-	Complete  *complete.Service // what the composer offers at a slash or an @
-	Tailscale func() tsnetx.Status
-	Guard     *auth.Guard
-	Keys      *auth.Keys // the agents' tasks-only keys, listed and revoked in Settings
-	UI        fs.FS
-	Live      *live.Hub           // the page's event stream, nil without one
-	Awake     *awake.Service      // the machines kept awake while their agents work
-	Icons     *icons.Store        // the icon the person gave each folder of the sidebar
-	Arena     *arena.Service      // one prompt to several agents side by side
-	Limits    *limits.Service     // the agents' subscription windows, the hits and the bookings to continue after a reset
-	Scratch   *scratch.Store      // the floating terminal's shell on each machine
-	Concierge *concierge.Service  // the Claude Code agent the person asks what the others are doing, on the machine they pick
-	Jira      *jira.Service       // the person's Jira site and the issues their agents' work names
-	Backup    *backup.Service     // the cockpit's state dir copied to another machine, nightly and on demand
-	Previews  *preview.Service    // the machines' dev servers opened on the cockpit, nil without
-	SelfPort  int                 // the port of -addr, never offered as a preview
-	Opinions  *opinion.Service    // the second opinions another agent gave on a folder's changes
-	Subagents *subagents.Tracker  // how many subagents each Claude Code pane's conversation runs, for the Wall's zoo
-	Retire    *retire.Service     // what is set to a model or mode being retired, nil without
-	Scorecard *scorecard.Service  // which model does the work best, from the runs, reviews, requests and arenas
-	Mirror    *mirror.Service     // remuda's figures and alerts inside herdr itself
-	Timelapse *timelapse.Recorder // what the agents' screens did while they worked
-	Triggers  *triggers.Service   // the person's rules on what a pane prints, and the dev servers offered as previews
+	Machines   *machines.Manager
+	Watch      *watch.Watcher
+	Input      *sessions.Input
+	Chat       *chat.Service
+	Updates    *updates.Service
+	Tasks      *tasks.Store
+	Launcher   *tasks.Launcher
+	Push       *push.Service
+	Feed       *feed.Service
+	Radar      *radar.Tracker
+	Said       *said.Tracker
+	PRs        *prstatus.Tracker
+	Recap      *recap.Service
+	Usage      *usage.Tracker
+	Budgets    *budget.Service
+	Health     *health.Collector
+	Review     *review.Store
+	Schedules  *schedule.Store
+	Quick      *quick.Store
+	Recipes    *recipes.Store
+	Prefs      *prefs.Store
+	Code       *code.Service
+	Complete   *complete.Service // what the composer offers at a slash or an @
+	Tailscale  func() tsnetx.Status
+	Guard      *auth.Guard
+	Keys       *auth.Keys // the agents' tasks-only keys, listed and revoked in Settings
+	UI         fs.FS
+	Live       *live.Hub           // the page's event stream, nil without one
+	Awake      *awake.Service      // the machines kept awake while their agents work
+	Icons      *icons.Store        // the icon the person gave each folder of the sidebar
+	Arena      *arena.Service      // one prompt to several agents side by side
+	Limits     *limits.Service     // the agents' subscription windows, the hits and the bookings to continue after a reset
+	Scratch    *scratch.Store      // the floating terminal's shell on each machine
+	Jira       *jira.Service       // the person's Jira site and the issues their agents' work names
+	Backup     *backup.Service     // the cockpit's state dir copied to another machine, nightly and on demand
+	Previews   *preview.Service    // the machines' dev servers opened on the cockpit, nil without
+	SelfPort   int                 // the port of -addr, never offered as a preview
+	Opinions   *opinion.Service    // the second opinions another agent gave on a folder's changes
+	Subagents  *subagents.Tracker  // how many subagents each Claude Code pane's conversation runs, for the Wall's zoo
+	Retire     *retire.Service     // what is set to a model or mode being retired, nil without
+	Scorecard  *scorecard.Service  // which model does the work best, from the runs, reviews, requests and arenas
+	Mirror     *mirror.Service     // remuda's figures and alerts inside herdr itself
+	Timelapse  *timelapse.Recorder // what the agents' screens did while they worked
+	Triggers   *triggers.Service   // the person's rules on what a pane prints, and the dev servers offered as previews
+	Drift      *drift.Service      // how every machine is set up, side by side
+	Collisions *collisions.Service // the workspaces of one repository changing the same files, nil without
+	Undo       *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
+	Concierge  *concierge.Service  // the Claude Code agent the person asks what the others are doing, on the machine they pick
 
 	streams   termStreams
 	relayed   relays   // the terminals piped to a machine's own remuda, which holds their attach
@@ -168,6 +174,8 @@ func (s *Server) Handler() http.Handler {
 	s.mirrorRoutes(api)
 	s.timelapseRoutes(api)
 	s.triggerRoutes(api)
+	s.driftRoutes(api)
+	s.undoRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

@@ -57,11 +57,12 @@ export const Screen = memo(function Screen({ machineId, paneId, cols, busy, acti
 });
 
 // ScreenLines draws a screen's parsed rows, each span in its colours and weight; the timelapse player draws with it too
-export function ScreenLines({ lines }: { lines: Line[] }) {
+// ScreenLines draws the rows; current is the row a search stepped to, drawn apart
+export function ScreenLines({ lines, current = -1 }: { lines: Line[]; current?: number }) {
   return lines.map((line, i) => (
-    <div key={i} className="screen-line">
+    <div key={i} className={i === current ? "screen-line is-current" : "screen-line"}>
       {line.map((span, j) => (
-        <span key={j} className={classOf(span)} style={span.fg || span.bg ? { color: span.fg, background: span.bg } : undefined}>
+        <span key={j} className={classOf(span)} style={styleOf(span)}>
           {span.text}
         </span>
       ))}
@@ -69,7 +70,10 @@ export function ScreenLines({ lines }: { lines: Line[] }) {
   ));
 }
 
-const classOf = (span: Span) => [span.bold && "b", span.dim && "d", span.italic && "i", span.underline && "u", span.strike && "s"].filter(Boolean).join(" ") || undefined;
+const classOf = (span: Span) => [span.bold && "b", span.dim && "d", span.italic && "i", span.underline && "u", span.strike && "s", span.mark && "m"].filter(Boolean).join(" ") || undefined;
+
+// styleOf is a span's own colours; a marked one wears the mark's, as the find bar's matches do
+const styleOf = (span: Span) => (!span.mark && (span.fg || span.bg) ? { color: span.fg, background: span.bg } : undefined);
 
 // widthOf is the columns a screen is drawn at: the pane's grid, or the longest row when there is none or a row runs past it
 export const widthOf = (cols: number, lines: Line[]) => Math.max(cols, 1, ...lines.map((line) => line.reduce((n, span) => n + span.text.length, 0)));

@@ -303,7 +303,7 @@ func TestLinkAndMasked(t *testing.T) {
 			t.Errorf("Masked(%q) = %q, want %q", raw, got, want)
 		}
 	}
-	for kind, want := range map[string]string{"input": "question", "done": "finish", "stuck": "watchdog", "waiting": "watchdog", "loop": "watchdog", "digest": "digest", "task": "task"} {
+	for kind, want := range map[string]string{"input": "question", "done": "finish", "stuck": "watchdog", "waiting": "watchdog", "loop": "watchdog", "digest": "digest", "task": "task", "collision": "review"} {
 		if got := HookKind(kind); got != want {
 			t.Errorf("HookKind(%q) = %q, want %q", kind, got, want)
 		}

@@ -80,6 +80,28 @@ export type Tab = {
 // FolderIconRef is a folder's icon as the roster carries it: an emoji, or a picture served at /api/icons/<image>
 export type FolderIconRef = { emoji?: string; image?: string };
 
+// Overlap is one file two checkouts of a repository both change against its main branch: whether their hunks touch
+// the same lines (or lines side by side), and where in the base, from..to; no from is the whole file
+export type Overlap = { path: string; lines: boolean; from?: number; to?: number };
+
+// Collision is what a workspace's work shares with another checkout of its repository, and which of the two should
+// land first and why: a pull request open, its agents at rest, the smaller change, else the name
+export type Collision = {
+  with: { machine: string; workspace: string; name: string; dir: string; branch?: string };
+  files: Overlap[];
+  more?: number; // files past the ones named
+  lines: boolean;
+  first: boolean;
+  why: "pr" | "rest" | "smaller" | "name";
+  main: string; // the branch both were read against
+};
+
+// RiskReason is one thing that makes a review riskier and the points it adds, out of the score's 100
+export type RiskReason = { kind: string; points: number; count?: number; lines?: number; paths?: string[]; same?: boolean; with?: string };
+
+// Risk is a review's score out of 100, its level and its reasons, the weightiest first
+export type Risk = { score: number; level: "low" | "medium" | "high"; reasons: RiskReason[] };
+
 // JiraIssue is an issue a workspace's branch or agents name, as last read from the person's Jira site
 export type JiraIssue = { key: string; summary: string; status: string; category: string; assignee?: string; url: string };
 
@@ -93,7 +115,8 @@ export type Session = {
   branch?: string; // the branch the folder has checked out, a short hash when detached; none outside git
   folder?: string; // the folder the sidebar groups by: the repository's main folder for a checkout, else the workspace's
   icon?: FolderIconRef; // the folder's icon, the person's own
-  review?: { changed: number; fresh: number; ready?: boolean }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another
+  review?: { changed: number; fresh: number; ready?: boolean; risk?: Risk }; // uncommitted files; fresh = moved since the reviewer looked; ready = rejected at the last look and the agent says it is ready for another; risk = how risky its review is, and why
+  collisions?: Collision[]; // the other checkouts of its repository changing the same files against the main branch, the same lines first
   muted_until?: string; // the folder is silenced until then: no push, no webhook, no feed row
   scratch?: boolean; // the floating terminal's own shell: the drawer shows it, the sidebar and the palette leave it out
   concierge?: boolean; // the concierge's own workspace: the roster provider takes it out of the machines, its place shows it

@@ -8,6 +8,7 @@ import { clamp, step } from "@/features/chat/find";
 import type { FolderIconRef, Machine, Session } from "@/features/roster/api";
 import type { FileTarget } from "@/features/files/target";
 import type { SearchHit } from "@/features/search/api";
+import type { TimelapseFound } from "@/features/terminal/timelapse/found";
 import type { BudgetStatus } from "@/features/usage/api";
 import { keepNewest, type OnPageAlert } from "@/features/alerts/onpage";
 import { readURL } from "./url";
@@ -37,13 +38,15 @@ export type AppDialog =
   | { kind: "start-recipe"; machineId?: string; dir?: string } // an agent started from a recipe, in the folder at hand unless the recipe has its own
   | { kind: "pins"; machineId: string; paneId: string; dir: string; shown: string | null; title: string } // the turns pinned in a folder's conversations; shown = the session on screen, whose pins name no session
   | { kind: "model"; machineId: string; paneId: string; current?: string } // a Claude Code pane's model switched through its own /model; current = what the meter last saw it answer with
-  | { kind: "timelapse"; machineId: string; paneId: string; dir: string; title: string } // the pane's recorded turns, and its folder's earlier panes', played back fast
+  | { kind: "timelapse"; machineId: string; paneId: string; dir: string; title: string; found?: TimelapseFound } // the pane's recorded turns, and its folder's earlier panes', played back fast; found: a search's hit to open at
+  | { kind: "undo-turn"; machineId: string; dir: string; turn?: string } // an agent's turn taken back in its folder: the newest one, or the one named
   | { kind: "teleport"; machineId: string; paneId: string; tabId: string; workspace: string; agent: string } // the pane's work moved to another machine, an agent carrying on there
   | { kind: "folder-icon"; machineId: string; folder: string; name: string; icon?: FolderIconRef } // a folder's icon: an emoji, a site's favicon or a picture
   | { kind: "leftovers"; machineId: string } // the machine's worktrees no workspace has open, the clean ones to remove
   | { kind: "previews"; machineId: string; workspace?: string; name?: string } // what the machine's processes serve, the workspace's first, each opened on the cockpit
   | { kind: "triggers"; machineId?: string; dir?: string; workspace?: string; name?: string } // what a pane prints and what it sets off: the rules a folder sees, or every rule
   | { kind: "update-everywhere" } // every connected machine's updates, one after another, the page's own host last
+  | { kind: "fleet-setup" } // how every machine is set up, side by side, the odd one out marked
   | { kind: "reopen" } // the agents whose panes went away, each to be started again on its session
   | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string }; lanes?: { agent: string; model?: string }[] } // one prompt to several agents, each in a worktree of its own; lanes: the agents and models to start with
   | null;
@@ -81,6 +84,7 @@ export type AppState = {
   chatLive: string | null; // the pane's own session id while its chat lens is mounted, so the pins list can tell its pins from an older session's
   reviewAsked: { machineId: string; dir: string } | null; // a folder the Review mode is asked to pick, once (a task's run)
   lastFile: { machineId: string; path: string } | null; // the file last opened in the viewer: what {file} means in a quick prompt
+  undone: number; // the undos made from this page: a lens showing the folder reads it again
   full: boolean; // the lens takes the whole screen: no header, no sidebar, no rail (app/full.tsx)
   find: Find | null; // the find bar over the chat lens or the transcript viewer, null while closed
   away: string | null; // what the agents did while the page was away, one toast line until it is dismissed or followed
@@ -89,6 +93,7 @@ export type AppState = {
   taskAsked: { projectId: number; taskId: number; start: boolean; n: number } | null; // a task the Tasks mode is asked to open, once (one just made from an issue); start = the agent dialog on it too
   split: boolean; // the chat beside the terminal, asked for by a per-device pref; shown only on a wide screen with a mouse (app/split.ts)
   float: { machineId: string } | null; // the floating terminal's drawer, open on that machine's scratch shell; null while hidden
+  listen: boolean; // the standup panel is asked to read the day aloud once its report is in (the palette's Listen to the day)
 };
 
 const fromURL = readURL();
@@ -117,6 +122,7 @@ export const app = createStore<AppState>({
   chatLive: null,
   reviewAsked: null,
   lastFile: null,
+  undone: 0,
   full: false,
   find: null,
   away: null,
@@ -125,6 +131,7 @@ export const app = createStore<AppState>({
   taskAsked: null,
   split: readPref("split", false),
   float: null,
+  listen: false,
 });
 
 let jumps = linked ? 1 : 0;
@@ -179,6 +186,10 @@ export const actions = {
   },
   closeDialog() {
     app.set({ dialog: null });
+  },
+  // an undo changed a folder: the Changes lens and the chat's undo buttons read it again
+  noteUndone() {
+    app.set({ undone: app.get().undone + 1 });
   },
   openPanel(panel: Panel) {
     app.set({ panel });
@@ -297,6 +308,13 @@ export const actions = {
   },
   taskOpened() {
     app.set({ taskAsked: null });
+  },
+  // listenToDay opens the standup asking it to read the day aloud; the caller primed the voice inside its gesture
+  listenToDay() {
+    app.set({ panel: "standup", listen: true });
+  },
+  listened() {
+    app.set({ listen: false });
   },
   // the chat beside the terminal, on or off; a pref per device, since a width suits a screen
   toggleSplit() {
