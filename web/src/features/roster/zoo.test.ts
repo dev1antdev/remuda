@@ -15,6 +15,14 @@ describe("lookOf", () => {
     expect(lookOf("unknown")).toEqual({ pose: "puzzled", sign: "…", dim: false });
   });
 
+  it("slumps an agent stopped on its plan limit once it rests", () => {
+    expect(lookOf("done", undefined, true)).toEqual({ pose: "drained", sign: "battery", dim: false });
+    expect(lookOf("idle_stale", undefined, true).pose).toBe("drained");
+    expect(lookOf("working", undefined, true).pose).toBe("busy");
+    expect(lookOf("blocked", undefined, true).pose).toBe("asking");
+    expect(lookOf("done", "stuck", true).pose).toBe("worried");
+  });
+
   it("puts a watchdog note above every other state", () => {
     expect(lookOf("working", "stuck for 20 min")).toEqual({ pose: "worried", sign: "!", dim: false });
     expect(lookOf("idle_stale", "the same call six times").sign).toBe("!");
@@ -49,7 +57,7 @@ describe("bubbleOf", () => {
 
 describe("poseWord", () => {
   it("names every pose in a word of its own", () => {
-    const poses: Pose[] = ["busy", "asking", "worried", "dancing", "asleep", "puzzled"];
+    const poses: Pose[] = ["busy", "asking", "worried", "dancing", "asleep", "puzzled", "drained"];
     const words = poses.map(poseWord);
     expect(new Set(words).size).toBe(poses.length);
     expect(poseWord("asking")).toBe("asking you");

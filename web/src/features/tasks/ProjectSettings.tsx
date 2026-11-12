@@ -280,7 +280,7 @@ export default function ProjectSettings({ project, onClose, onSaved }: { project
       </div>
 
       <AgentsSettings value={automation} onChange={setAutomation} machines={machines} agents={agents} recipes={recipes ?? []} statuses={kept} onAddQueued={addQueued} />
-      <PipelineSettings stages={automation.stages} onChange={(stages) => setAutomation((a) => ({ ...a, stages }))} agents={agents} statuses={kept.filter((r) => r.id !== 0)} />
+      <PipelineSettings stages={automation.stages} onChange={(stages) => setAutomation((a) => ({ ...a, stages }))} agents={agents} statuses={kept.filter((r) => r.id !== 0)} machine={automation.machine} />
       {agentsBlocked && <Notice tone="hint">{agentsBlocked}</Notice>}
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">

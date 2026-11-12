@@ -7,6 +7,7 @@ import { setRosterRefresh } from "@/app/act";
 import { startLive, useLive, useLiveConnected } from "@/lib/live";
 import { useQuery } from "@/lib/query";
 import type { BudgetStatus } from "@/features/usage/api";
+import type { Retirement } from "@/features/usage/retired";
 import { fetchRoster, type AgentKind, type Latest, type Machine, type Roster, type Tailscale } from "./api";
 import { hostMachine } from "./server";
 
@@ -21,13 +22,14 @@ export type RosterState = {
   jiraSite?: string; // the person's Jira site, when one is set: a task can then come from a Jira issue
   server?: Machine; // the host of a remuda serving the page only (remuda -server), no machine of the fleet: the Server place's
   host?: Machine; // the machine that serves the page, in the fleet or not: its own updates (a release) are offered on it
+  retirements: Retirement[]; // the models and modes being retired, the server's table, for a form that edits a model
   offline: boolean;
   stale: string | null; // the server's version when this page is older
   viewOnly: boolean; // a viewer link signed this page in: it draws, and hides every control that would type or change
   refresh: () => void;
 };
 
-const empty: RosterState = { machines: [], agents: [], offline: false, stale: null, viewOnly: false, refresh: () => {} };
+const empty: RosterState = { machines: [], agents: [], retirements: [], offline: false, stale: null, viewOnly: false, refresh: () => {} };
 const RosterContext = createContext<RosterState>(empty);
 
 export function RosterProvider({ children }: { children: ReactNode }) {
@@ -65,6 +67,7 @@ export function RosterProvider({ children }: { children: ReactNode }) {
       feed: data?.feed,
       budgets: data?.budgets,
       jiraSite: data?.jira,
+      retirements: data?.retirements ?? [],
       offline: !!error,
       stale,
       viewOnly,

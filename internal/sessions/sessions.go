@@ -59,12 +59,14 @@ type Starter interface {
 	AgentStartWith(paneID, kind, name string, args []string, timeout time.Duration) error
 }
 
-// Start is the person's choices for an agent about to start: an earlier conversation to come back to, a model, arguments of their own.
+// Start is the person's choices for an agent about to start: an earlier conversation to come back to, a model, arguments
+// of their own, and whether it denies what would wait on a permission prompt (an agent nobody watches).
 type Start struct {
-	Resume string   // a session id of the folder's, "" for a fresh conversation
-	Fork   bool     // with Resume: start on a copy of that conversation, the original left as it is
-	Model  string   // the model as the agent's own CLI names it, "" for its default
-	Args   []string // extra arguments, as the person wrote them
+	Resume      string   // a session id of the folder's, "" for a fresh conversation
+	Fork        bool     // with Resume: start on a copy of that conversation, the original left as it is
+	Model       string   // the model as the agent's own CLI names it, "" for its default
+	Args        []string // extra arguments, as the person wrote them
+	DenyPrompts bool     // a call that would wait on a permission prompt is denied and the turn carries on (CanDenyPrompts)
 }
 
 // StartAgent starts an agent in a pane whose shell may still be coming up, retrying herdr's busy answer for a few seconds.
@@ -113,7 +115,8 @@ func UniqueName(kind, paneID string) string {
 	return strings.TrimRight(n, "-")
 }
 
-// StartArgs is the command line a Start comes to for a kind, nil when it asks for nothing beyond the agent's defaults.
+// StartArgs is the command line a Start comes to for a kind, nil when it asks for nothing beyond the agent's defaults:
+// the resume arguments, the model's, then the person's own with the deny setting merged in (withDenySetting).
 func StartArgs(kind string, start Start) ([]string, error) {
 	var args []string
 	switch {
@@ -139,7 +142,17 @@ func StartArgs(kind string, start Start) ([]string, error) {
 		}
 		args = append(args, model...)
 	}
-	args = append(args, start.Args...)
+	own := start.Args
+	if start.DenyPrompts {
+		if !CanDenyPrompts(kind) {
+			return nil, fmt.Errorf("%s cannot be told to deny what would wait on a permission prompt", kind)
+		}
+		var err error
+		if own, err = withDenySetting(own); err != nil {
+			return nil, err
+		}
+	}
+	args = append(args, own...)
 	return args, nil
 }
 

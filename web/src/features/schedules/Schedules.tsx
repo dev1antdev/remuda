@@ -9,7 +9,7 @@ import { useQuery } from "@/lib/query";
 import { basename, errMsg } from "@/lib/text";
 import { ago, whenAhead } from "@/lib/time";
 import { Dialog, Icon, Logo, Notice, Tip } from "@/ui";
-import { agentWords, watchedWords } from "./agent";
+import { agentWords, deniedWords, watchedWords } from "./agent";
 import { deleteSchedule, fetchSchedules, putSchedule, runSchedule, type Schedule } from "./api";
 import { NEVER } from "./cron";
 import { cronWords } from "./cronWords";
@@ -97,6 +97,11 @@ export default function Schedules({ machines, onClose, ask }: {
                   </>
                 )}
               </div>
+              {deniedWords(s) && (
+                <div className="schedule-denied">
+                  <Icon name="alert-triangle" size={12} /> {deniedWords(s)}
+                </div>
+              )}
             </div>
             <Tip text={t("Run now")}>
               <button type="button" className="icon-btn" aria-label={t("Run now")} onClick={() => void runSchedule(s.id ?? "").then(reload, fail)}>

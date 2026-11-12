@@ -79,6 +79,7 @@ socket.onmessage = (message) => {
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
     else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
+    else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
   }
   if (msg.method === "Runtime.exceptionThrown") consoleErrors.push(msg.params.exceptionDetails?.exception?.description ?? msg.params.exceptionDetails?.text ?? "exception");
@@ -362,6 +363,8 @@ async function seed() {
       machine: "local",
       dir: appDir,
       agent: "claude",
+      model: "claude-opus-4-8", // fast mode on Opus 4.8 goes on 30 Nov 2026: the settings say so, and so does the machine's ⓘ
+      args: `--settings '{"fastMode":true}'`,
       queue: true,
       max: 2,
       stages: [
@@ -510,6 +513,8 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
   }
   for (const machine of roster.machines ?? []) {
     if (machine.id !== "local") continue;
+    // Claude Code's sign-in there ends in a day and a half: a red concern with a shell to sign in again from
+    machine.health = { ...(machine.health ?? { at: iso(now), disk_free_gb: 120, disk_used_pct: 30, load1: 0.4 }), claude_login: { expires: iso(now + 36 * 3600e3), at: iso(now) } };
     machine.limits = {
       wrapped: true,
       windows: [
@@ -530,6 +535,26 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
   roster.server = SERVER_HOST; // the Server place a remuda -server draws: its host's vitals, the readings a Raspberry Pi gives
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(roster)).toString("base64") });
+}
+
+// DENIED is what the dressed Claude Code pane's conversation was denied without asking, for the chat lens's notice
+const DENIED = [
+  { tool: "Bash", what: "npm install --save-dev vitest", at: iso(now - 20 * 60e3), tool_id: "toolu_e2e_1" },
+  { tool: "Write", what: `${tmp}/display/app/src/new-screen.tsx`, at: iso(now - 18 * 60e3), tool_id: "toolu_e2e_2" },
+];
+
+// dressChat adds DENIED to the lens's answer for the dressed agent pane (a tile's tail, last=N, carries none)
+async function dressChat({ requestId, request, responseStatusCode, responseHeaders = [] }) {
+  const url = new URL(request.url);
+  const reply = responseStatusCode === 200 && url.searchParams.get("pane") === paneA1 && !url.searchParams.has("last") ? await send("Fetch.getResponseBody", { requestId }) : null;
+  if (!reply?.result) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const chat = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
+  chat.denied = DENIED;
+  const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(chat)).toString("base64") });
 }
 
 // FEED is the activity the browser is shown: an id far past the server's own, and the alert a screen puts in it
@@ -709,7 +734,7 @@ async function changesScreens() {
   });
   await screen("changes-opinion-dialog", {
     open: async () => tap(`${LENS} .review-ask-opinion`),
-    expect: [".modal .sel"],
+    expect: [".modal .sel", ".modal .deny-switch"],
   });
   await screen("changes-verdict", {
     open: async () => tap(`${LENS} .review-verdicts .btn:not(.primary)`),
@@ -926,8 +951,10 @@ async function runPass() {
     open: async () => {
       await sidebarOpen();
       await tapUntil('[data-health-btn="local"]', ".health-pop");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".health-pop .health-list li")].some((li) => li.textContent.includes("claude auth login"))`), 6))) failed("the vitals say nothing of the sign-in ending");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".health-pop .health-list li")].some((li) => li.textContent.includes("Opus 4.8"))`), 6))) failed("the vitals say nothing of the project's agents on fast Opus 4.8");
     },
-    expect: [".health-pop"],
+    expect: [".health-pop", ".health-pop .health-list li.bad"],
   });
   await screen("tab-strip", { open: () => onAgents(), expect: [".tabstrip .tab", ".lens-pane:not([hidden]) .xterm-screen"] });
   await screen("shell-tab", {
@@ -983,6 +1010,12 @@ async function runPass() {
   await screen("new-tab-menu", { open: async () => tap(".tab-add"), expect: [".menu"] });
   await screen("view-menu", { open: async () => tap(".view-btn"), expect: [".menu"] });
   await screen("chat-lens", { open: async () => palette("lens:chat"), expect: [".lens-pane:not([hidden]) .chat-log, .lens-pane:not([hidden]) .composer"], close: async () => palette("lens:terminal") });
+  // the calls the agent was denied without asking, over the composer, with the way to its terminal
+  await screen("chat-denied", {
+    open: async () => palette("lens:chat"),
+    expect: [".lens-pane:not([hidden]) .chat-denied .chat-denied-call", ".lens-pane:not([hidden]) .chat-denied .linkish"],
+    close: async () => palette("lens:terminal"),
+  });
   if (!pass.phone)
     await screen("split-view", {
       open: async () => palette("split"),
@@ -1040,7 +1073,13 @@ async function runPass() {
   await screen("project-settings", { open: async () => tap(".tasks-settings-btn"), expect: [".project-settings .ps-queue"], settle: 500, close: async () => {} });
   await screen("project-settings-agents", {
     open: async () => evaluate(`document.querySelector('.project-settings .ps-queue')?.scrollIntoView({ block: "center" })`),
-    expect: [".project-settings .ps-queue input[type=checkbox]:checked"],
+    expect: [".project-settings .ps-queue input[type=checkbox]:checked", ".project-settings .retired-notice"],
+    close: async () => {},
+  });
+  // the Inbox's agents were set up after the switch came, so their Claude Code does not wait for permissions
+  await screen("project-settings-deny", {
+    open: async () => evaluate(`document.querySelector('.project-settings .ps-deny')?.scrollIntoView({ block: "center" })`),
+    expect: [".project-settings .ps-deny input[type=checkbox]:checked"],
     close: async () => {},
   });
   await screen("project-settings-pipeline", {
@@ -1053,6 +1092,19 @@ async function runPass() {
   await screen("code", { open: async () => palette("mode:code"), expect: [".code-mode"] });
 
   for (const panel of ["standup", "usage", "schedules", "activity", "alerts", "arenas"]) await screen(`panel-${panel}`, { open: async () => palette(panel), expect: [".modal"], settle: 600 });
+  // a new agent schedule: Claude Code, its switch on, the words under it
+  await screen("schedule-agent", {
+    open: async () => {
+      await palette("schedules");
+      await tap(".modal.schedules .modal-head-controls .btn");
+      if (!(await until(() => present(".schedule-editor .schedule-kind button"), 4))) throw new Error("the schedule editor did not open");
+      await evaluate(`[...document.querySelectorAll('.schedule-editor .schedule-kind button')][2]?.click()`);
+      await sleep(200);
+      await evaluate(`document.querySelector('.schedule-editor .deny-switch')?.scrollIntoView({ block: "center" })`);
+    },
+    expect: [".schedule-editor .deny-switch input[type=checkbox]:checked", ".schedule-editor .deny-switch .schedule-note"],
+    settle: 500,
+  });
   await screen("usage-scorecard", {
     open: async () => {
       await palette("scorecard");
@@ -1139,6 +1191,7 @@ try {
     patterns: [
       { urlPattern: "*/api/roster*", requestStage: "Response" },
       { urlPattern: "*/api/feed*", requestStage: "Response" },
+      { urlPattern: "*/api/chat?*", requestStage: "Response" },
       { urlPattern: "*/api/opinion*", requestStage: "Request" },
       { urlPattern: "*/api/scorecard*", requestStage: "Request" },
     ],
