@@ -80,6 +80,8 @@ func (c *Collector) remember(id string, r Report) {
 	}
 	c.mu.Lock()
 	c.history[id] = note(c.history[id], s)
+	c.historySeq++
+	seq := c.historySeq
 	snapshot := make(history, len(c.history))
 	for k, v := range c.history {
 		snapshot[k] = append([]Sample(nil), v...)
@@ -88,7 +90,14 @@ func (c *Collector) remember(id string, r Report) {
 	if c.dir == "" {
 		return
 	}
+	c.historyWrite.Lock()
+	defer c.historyWrite.Unlock()
+	if seq < c.historyWritten { // two machines' probes at once: a newer copy is on disk already
+		return
+	}
 	if err := state.SaveJSON(c.dir, HistoryFile, snapshot); err != nil {
 		log.Printf("health: %s not written: %v", HistoryFile, err)
+		return
 	}
+	c.historyWritten = seq
 }
