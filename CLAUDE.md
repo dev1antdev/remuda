@@ -28,10 +28,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   writes nothing into herdr — no tokens, no toasts — unless `-mirror`
   asks, which the e2e does on its throwaway herdr; `app.Options.MirrorClosed`
   is the reason, a log line and the Settings section say it), `-record`
-  (`recordsHere`, tested: the agents' timelapses are recorded by the real
-  service, and by a scratch instance only when it asks, so a look beside
-  the real one never reads the person's screens into a folder of its own;
-  `app.Options.Record` → `timelapse.Recorder.Scratch`), `-server`
+  (`recordsHere`, tested: the agents' timelapses are recorded, and their
+  turns' checkpoints taken to be undone, by the real service, and by a
+  scratch instance only when it asks, so a look beside the real one never
+  reads the person's screens or work into a folder of its own;
+  `app.Options.Record` → `timelapse.Recorder.Scratch` and
+  `undo.Tracker.Scratch`), `-server`
   (also `REMUDA_SERVER=1`; `app.Options.Server`, see "Server mode"
   below; without it the host is a machine of its own, there is no
   `-client` flag); subcommands
@@ -84,7 +86,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   machine keeps the tsnet node, its address and every device's sign-in)
   without its `*.txt` logs; never `ssh/` (the masters' sockets),
   `backups/` (the copies this machine keeps), `timelapse/` (the agents'
-  recordings, `internal/timelapse`: up to 200 MB of screens), `serve.lock`, a `-wal` /
+  recordings, `internal/timelapse`: up to 200 MB of screens), `undo/` (the
+  turns kept to be undone, `internal/undo`: up to 200 MB of patches), `serve.lock`, a `-wal` /
   `-shm` / `-journal`, a `.log`, a file the atomic writer is still
   writing (`name.123456789`, a number of any length; the tailnet node's
   `name.tmp123456789`; `.partial`, `.new`); a `remuda-backup.json`
@@ -121,7 +124,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `..` names, folders and regular files only), confirms, and `Restore`
   moves the dir aside as `<dir>.before-restore-<time>`, unpacks into a
   fresh 0700 one (every file 0600 or tighter) and carries the aside dir's
-  `backups/` and `timelapse/` over (`keptHere`: this machine's, not the
+  `backups/`, `timelapse/` and `undo/` over (`keptHere`: this machine's, not the
   cockpit's); a failure puts the old dir back. A copy holds the
   state dir alone: the machine's own `~/.ssh` (its key, the hosts it
   reaches) is not in it, which `restore` says when it is done. The page: Settings ›
@@ -477,8 +480,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `file` ×≤4, 25MB each → `<pane dir>/.remuda/uploads/<time>-<tag>-<name>`,
   stem and extension sanitized separately, remote via `sshx.Conn.Put`).
   `.remuda/.gitignore` (`*`) is written alongside so uploads never reach
-  a commit. Uploads are one of the two things remuda writes into a project;
-  the other is a new worktree's `.worktreeinclude` files (`internal/worktrees`).
+  a commit. Uploads are one of the three things remuda writes into a project;
+  the others are a new worktree's `.worktreeinclude` files (`internal/worktrees`)
+  and an agent's turn undone at the person's word (`internal/undo`).
 - `web/src/features/chat/attachments.ts` — `useAttachments` (upload at
   once, chips with thumbnails); `lib/transfer.ts` has `filesFrom`
   (drop/paste → files; a pasted screenshot gets a name), `lib/text.ts`
@@ -1621,6 +1625,131 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and webhooks, a key's body stepped over once —
   no regexp; `TestALineIsReadInTimeLinearInItsLength` feeds 2 MB lines
   built to make a scan that restarts at every position quadratic.
+- `internal/undo/` — **an agent's turn undone, any agent, Codex
+  included** (tested on real temp repositories through `shell.Local`:
+  a modified file the person had changed before the turn, a new file,
+  a staged one, a deleted one, a binary one, a rename, a mode change,
+  paths git quotes, a commit in the turn, a merge, a file changed or
+  committed after the turn, a commit of other files after it, staged
+  work in the way of a revert, a pushed branch, an agent at work, the
+  caps, and nothing written into the repository by a checkpoint — its
+  object count, index and stash list compared; the tracker on fake
+  snapshots: a turn kept, a blink through idle the same turn, a folder
+  outside git, two agents in one folder, a turn picked up after a
+  restart; the store's bounds). **The checkpoints**: `Tracker.Observe`
+  hears every `events.Snapshot`; an agent pane herdr reports working
+  begins a turn in its workspace's folder (`Snapshot.WorkspaceDir`; a
+  question it waits on keeps the turn going, a pane first seen asking
+  begins none, nor one already at work in its machine's first snapshot —
+  `events.Snapshot.First`, `unwatched` until it rests: its start was not
+  watched), and `readScript` reads the folder at once on its
+  machine, one script, at the repository's root: HEAD, the branch, a
+  merge / rebase / cherry-pick / revert in progress, the uncommitted
+  work as git's raw diff (`-z`) and as a binary patch, the untracked
+  files git does not ignore included — through a throwaway index
+  (`GIT_INDEX_FILE`, the person's index copied in first so git's stat
+  cache and a sparse checkout's skipped files stand, else `read-tree
+  HEAD`) and a throwaway object folder (`GIT_OBJECT_DIRECTORY` in the
+  machine's temp dir, the repository's objects borrowed through
+  `GIT_ALTERNATE_OBJECT_DIRECTORIES`), so no object, stash or index of
+  the repository moves; `diff-index` is plumbing, so no diff setting of
+  the person's changes the patch; submodules left out. The start's
+  patch is forward (HEAD → work), kept on the cockpit under
+  `<state>/undo/open/<id>.json` and `.patch` while the turn goes (open.go), so a
+  restart of remuda mid-turn picks it up again when the pane still
+  works (`NewTracker` loads them; a pane at rest, elsewhere, or a
+  machine's first snapshot without it drops them; `MaxOpen` 12 h). A
+  pane at rest for `Settle` (2 s) gets the end's read — against the
+  start's HEAD: whether it is still in HEAD's history, the paths the
+  commits since changed (`diff-tree`), those commits on the first-parent
+  line (`MaxCommits` 50, a merge marked) — with the patch reversed
+  (work → HEAD); a pane working again within `Grace` (5 s) is the same
+  turn, its earlier end read stale (`gen`); a pane closed ends the
+  turn on the end's read. Every read runs in the machine's own reader (reader.go)
+  goroutine, in order, one at a time, never on the poll's path; `Loop`
+  moves the timers between snapshots every `TickEvery` 2 s. A folder
+  outside git or a machine away makes the turn dead: watched until it
+  rests, never kept. **The delta** (`Delta`, turn.go): every path whose
+  mode or content moved between the start's working tree and the end's,
+  and every path the turn's commits changed, each `File` with its start,
+  end and HEAD side, what the turn did (`added`, `deleted`, `changed`,
+  `mode`, `committed` for one only the commits carry), whether it was
+  uncommitted at the start and at the end; and only the sections the
+  undo needs: the end's reversed patch for what was uncommitted at the
+  end, the start's for what was uncommitted at the start (`sections`
+  cuts a patch by path, both prefixes and git's C quoting read,
+  `headerPath`). A turn that moved nothing is not kept; one that
+  switched branches, rewrote history (`Since` not linear), made more
+  than 50 commits, brought in commits committed before it began by the
+  machine's own clock (a pull, a fast-forward: `broughtIn` over `Read.At`,
+  the start's `date +%s` there), ran into a merge in progress, read a checkpoint cut
+  at `MaxCheckpoint` (32 MB read per checkpoint) or weighs past
+  `MaxDelta` (16 MB of kept patches) is kept without its patches, its
+  `Why` saying so. **The store** (store.go): `<state>/undo/turns/<id>.json`
+  with `<id>.start.patch` and `<id>.end.patch`, all 0600 through
+  `state.WriteFile`; the newest `KeepPerFolder` (10) turns per machine
+  and folder, at most `MaxTotal` (200 MB) of patches in all, the oldest
+  going first; a removed machine's dropped; ids `<UTC start>-<6 hex>`
+  (`NewID`, `validID` guarding a file name). The folder is left out of
+  the backups and carried over by a restore like `timelapse/`
+  (`internal/backup`). A scratch instance (`REMUDA_STATE_DIR` without
+  `-record`) takes no checkpoints (`Tracker.Scratch`; `recording` false
+  on the list, which the dialog says), as it records no timelapse.
+  **The undo** (`Service`, wired in `internal/app/undo.go`): `Plan(machine,
+  id)` refuses a turn undone already or with its `Why`, while an agent
+  works or asks in the folder (`Working`: the watcher's snapshot) or a
+  turn is going or still ending there (`Tracker.Going`), then reads the
+  folder with the same script against the turn's end HEAD and refuses
+  another repository, an operation in progress, another branch, a
+  history rewritten since, and — naming them — every file that no longer
+  holds what the turn left: changed in the working tree, or committed by
+  a commit after the turn's (a commit of other files after it is
+  fine, `HeadMoved`); it answers what goes back (`Uncommitted`), the
+  files only the reverts can put back (`LeftAsIs`: committed in the turn
+  and uncommitted before it, which only a revert can tell from the work
+  that was there), why the commits cannot be reverted now (`RevertWhy`:
+  changes staged outside the turn's files) and the remote-tracking
+  branches that hold its oldest commit (`Pushed`). `Undo(machine, id,
+  revert)` runs the plan again (one undo per folder at a time) and then
+  one script (`applyScript`, the patches and HEAD's index entries put on
+  the machine as one file through `PutFile`): without the reverts, the
+  end's sections and the start's checked whole with `git apply --check`
+  and applied (whitespace settings neutral), the files a commit changed
+  taken back to the commit only when the turn found them clean; with
+  them, the end's sections taken out, the turn's paths unstaged, `git
+  revert --no-edit` per commit newest first (`-m 1` for a merge; one git
+  stops on is aborted and, before any went through, the files put back
+  as the turn left them), then the start's sections put back; every file
+  put back is unstaged to HEAD's entry (`git update-index -z
+  --index-info`). Never a reset, never a force, never a stash. The turn
+  is marked `Undone` (when, the files, the revert commits); the agent is
+  told nothing. Routes (`internal/server/undo.go`, the person's only — no
+  viewer link, no agent key): `GET /api/undo?machine&dir` (the folder's
+  turns newest first, their files counted — `Listing`, a chat on screen
+  reads it every 15 s — and `recording`), `GET /api/undo/{id}/plan?machine`
+  (the plan, refusals as fields), `POST /api/undo/{id} {machine,
+  revert}` (409 with the reason and the files, 404 for a turn not
+  kept, 502 with git's words; then the folder's badge read again and the
+  roster moved). The page: `features/undo/` — `UndoDialog.tsx` (dialog
+  kind `undo-turn` {machineId, dir, turn?}: the turn picked, the newest
+  undoable by default; each file and what happens to it; the commits
+  with "Also revert the N commits it made" ticked unless `revert_why`;
+  a pushed branch and an agent sharing the folder said in amber; the
+  refusal with the files named; Undo this turn as the danger button; a
+  toast after, `actions.noteUndone` so the Changes lens looks again —
+  store field `undone`), `undo.ts` the pure part, tested: `undoable`,
+  `defaultTurn`, `turnLabel` (the vendor's name, `VENDOR_NAME`),
+  `turnHint`, `fileWords`, `canRevert`, `nothingToDo`, `undoneWords`,
+  `pushedWords`, `sentence`, `matchTurns` (a kept turn goes to the last
+  answer of the pane's conversation that ended within it, `SLACK_MS`
+  30 s either side, an answer's end its prompt's time plus `took`). The
+  Changes lens's head has the undo icon (`.review-undo`, a `Tip`); the
+  chat lens's answers carry **Undo this turn** on their foot
+  (`chat/useUndoTurns.ts` reads the folder's turns while the lens is on,
+  every 15 s and when the agent starts or stops; `TurnView`'s `undo` /
+  `onUndo`; never in the viewer or for a viewer link). The display suite
+  fakes `/api/undo` (`fakeUndo`) and opens the dialog from the lens and
+  from an answer's foot.
 - `internal/opinion/` — **the second opinion** (tested): another agent asked
   to review what the Changes lens shows of a folder, without touching it.
   The lens head's **Second opinion** button opens `OpinionDialog.tsx` —
@@ -4500,6 +4629,22 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   person wrote, like an agent schedule's — and only for cards the person
   put in the Queued column: an agent's key cannot queue a card, change a
   project's columns or its agents (403, `queueKept` in the tasks routes).
+- **remuda writes into a project's working tree only at the person's
+  word** (the person agreed to this on 2026-11-12, `internal/undo`): an
+  agent's turn is undone only when the person presses Undo this turn and
+  confirms in its dialog — never by itself, never from a schedule, a
+  queue, a key or a viewer link. The undo puts back the uncommitted files
+  the turn changed and unstages them, and offers each commit the turn
+  made as `git revert --no-edit` (newest first, `-m 1` for a merge, a
+  pushed branch said so before) — never `git reset` of a branch, never a
+  force, never a stash, never `git checkout` of another branch; it is
+  refused while an agent works or a turn is ending in the folder, and
+  refused, the files named, when any of them changed after the turn
+  (in the working tree, or committed since). The checkpoints write
+  nothing into the repository: a throwaway index and object folder in the
+  machine's temp dir, the repository's objects only borrowed. The agent
+  is told nothing. Uploads and a new worktree's `.worktreeinclude` files
+  are the other two writes.
 - **Terminal bytes go over WS binary frames**, control messages over JSON
   text frames. The attach PTY paints the screen on start; late joiners get
   a repaint (see attach.go), never a byte replay.

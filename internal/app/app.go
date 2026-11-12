@@ -262,6 +262,9 @@ func Run(ctx context.Context, o Options) error {
 		recorder.Scratch()
 		log.Print("the agents' timelapses are left to the real instance: this one records none (-record records)")
 	}
+	// every agent turn in a git folder, kept so the person can undo it: a checkpoint at its start and at its rest
+	turns := turnUndo(o.Dir, fleet, watcher, o.Record)
+	defer turns.Tracker.Close()
 	// a second opinion's reviewer, once it has answered, has its tab closed when the opinion asked for that
 	opinions := opinion.NewService(o.Dir)
 	opinions.Read = func(op opinion.Opinion) (opinion.Reply, bool) {
@@ -524,6 +527,8 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.Snapshot) { subagentCounts.Observe(e.Machine, e.Snap) })
 	events.Subscribe(bus, func(e events.Snapshot) { recorder.Observe(e.Machine, e.Snap, e.At) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { recorder.Forget(e.Machine) })
+	events.Subscribe(bus, func(e events.Snapshot) { turns.Tracker.Observe(e.Machine, e.Snap, e.At, e.First) })
+	events.Subscribe(bus, func(e events.MachineRemoved) { turns.Tracker.Forget(e.Machine) })
 	events.Subscribe(bus, func(e events.Snapshot) {
 		planLimits.Observe(e.Machine, e.Snap)
 		if mc, err := fleet.Get(e.Machine); err == nil {
@@ -693,6 +698,7 @@ func Run(ctx context.Context, o Options) error {
 	go planLimits.Loop(30*time.Second, ctx.Done())
 	go backups.Loop(time.Minute, ctx.Done())
 	go recorder.Loop(ctx.Done()) // a working pane's screen at the recorder's own pace, between the stream's snapshots
+	go turns.Tracker.Loop(ctx.Done())
 
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {
@@ -742,6 +748,7 @@ func Run(ctx context.Context, o Options) error {
 		Mirror:    mirrored,
 		Timelapse: recorder,
 		Triggers:  paneTriggers,
+		Undo:      turns,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

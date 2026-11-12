@@ -19,6 +19,7 @@ import Activity from "@/features/activity/Activity";
 import BroadcastDialog from "@/features/agents/BroadcastDialog";
 import PinsDialog from "@/features/chat/PinsDialog";
 import TimelapseDialog from "@/features/terminal/timelapse/TimelapseDialog";
+import UndoDialog from "@/features/undo/UndoDialog";
 import KeysDialog from "@/features/help/KeysDialog";
 import SettingsDialog from "@/features/settings/SettingsDialog";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
@@ -233,6 +234,7 @@ export default function Overlays() {
       )}
       {dialog?.kind === "pins" && <PinsDialog machineId={dialog.machineId} paneId={dialog.paneId} dir={dialog.dir} shown={dialog.shown} title={dialog.title} onClose={actions.closeDialog} />}
       {dialog?.kind === "timelapse" && <TimelapseDialog machineId={dialog.machineId} paneId={dialog.paneId} dir={dialog.dir} title={dialog.title} onClose={actions.closeDialog} />}
+      {dialog?.kind === "undo-turn" && <UndoDialog machineId={dialog.machineId} dir={dialog.dir} turn={dialog.turn} onClose={actions.closeDialog} />}
       {dialog?.kind === "machine" && (
         <AddMachineDialog
           onClose={actions.closeDialog}

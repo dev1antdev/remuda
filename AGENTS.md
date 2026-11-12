@@ -114,12 +114,19 @@ not style.
   GitHub owner's avatar, each fetched once only when the person asks for
   it in the icon dialog (`internal/icons`), and the person's own Jira site
   once they set it in Settings (`internal/jira`: the issues their work
-  names, read only while a page is open). No sudo anywhere. remuda writes two things into a
-  project: the uploads folder `<pane dir>/.remuda/uploads`, and into a
+  names, read only while a page is open). No sudo anywhere. remuda writes three things into a
+  project: the uploads folder `<pane dir>/.remuda/uploads`; into a
   worktree remuda itself just made, the ignored files the repository's own
   `.worktreeinclude` lists, copied from its main checkout — never a tracked
   file, never over one already there, nothing outside the repository
-  (`internal/worktrees/include.go`).
+  (`internal/worktrees/include.go`); and **an agent's turn undone**, only
+  when the person presses Undo this turn and confirms (`internal/undo`):
+  the files the turn changed put back as it found them, unstaged, and the
+  commits it made reverted with `git revert --no-edit`, a new commit each
+  — never a reset of a branch, never a force, never a stash; refused
+  while an agent works in the folder, and refused, naming them, when a
+  file changed after the turn. Taking a turn's checkpoints writes nothing
+  into the repository: a throwaway index and object folder, never its own.
 - **One design system** (`web/src/styles.css`): every `<button>` carries a
   family class, radii and type sizes come from the scales, icons are
   `icons.tsx` (never an emoji), an icon-only button says what it does

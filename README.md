@@ -857,6 +857,35 @@ viewer link plays them; under the screen-sharing mode a hidden folder's
 are not shown. A second remuda started beside the real one with
 `REMUDA_STATE_DIR` records nothing unless it is given `-record`.
 
+## Undo — an agent's turn taken back
+
+The agent rewrote the wrong file, or the whole approach was a dead end:
+**Undo this turn** on the foot of its answer in the chat — or the undo
+button in the Changes lens's head, which offers the folder's last turn
+and the ones before it — puts the folder back as the turn found it. It
+works for any agent, Codex and Gemini CLI as much as Claude Code, since
+remuda watches the folder, not the agent: when herdr says an agent pane
+starts working remuda reads the folder's git state on its machine, and
+again when the pane comes to rest, and keeps what moved in between on
+the cockpit. Reading writes nothing into your repository — no stash, no
+object, your index untouched.
+
+The dialog shows each file and what happens to it — put back, brought
+back, removed because the turn made it — and the commits the turn made,
+offered as reverts: `git revert`, a new commit each, newest first, so
+nothing is lost, and said plainly when the branch was pushed already.
+Your own uncommitted work from before the turn stays as it was. The
+undo is refused while an agent is working in the folder, and refused,
+naming the files, when anyone changed one of them after the turn — in
+the editor, by hand, or with a commit since. The agent is told nothing;
+it finds the files as they are next time it looks.
+
+Each folder keeps its last 10 turns, and the cockpit at most 200 MB of
+them in all, the oldest going first; a turn whose changes weigh over
+16 MB is listed but cannot be undone. The turns are not in the nightly
+backups. A second remuda beside the real one keeps none unless it is
+given `-record`.
+
 ## Agents and your tasks
 
 Any coding agent remuda runs — Claude Code, Codex, Gemini CLI, Kimi Code —
@@ -955,6 +984,10 @@ once, then "Add to Home Screen" — it installs as a PWA.
 - Cross-origin mutations rejected (`Sec-Fetch-Site`).
 - Anyone with the token can type into your terminals — treat it like an SSH
   key.
+- remuda changes your project's files only when you press **Undo this
+  turn** and confirm: the files the turn changed are put back and its
+  commits reverted with new commits — never a reset, never a force. Taking
+  the turns' checkpoints writes nothing into the repository.
 
 A second copy beside the real one (to try `-tailscale`, say) gets its own
 token, tasks and push subscriptions with `REMUDA_STATE_DIR=/some/dir`, and
@@ -963,7 +996,8 @@ agents keep talking to the real one (`-door` opens it anyway, `-no-door`
 closes it for any instance). It also writes nothing into herdr — no
 figures in its sidebar, no toasts, so the two never fight over the same
 panes (`-mirror` writes anyway) — and records no timelapses of your
-screens (`-record` records anyway).
+screens and keeps none of the agents' turns to undo (`-record` does both
+anyway).
 
 ## Development
 

@@ -3194,6 +3194,39 @@ body.is-resizing iframe {
   color: var(--fg-dim);
 }
 
+/* ---- undoing a turn (features/undo): the files a row each, the commits to revert, the files in the way ---- */
+.undo-files .pick-row {
+  cursor: default;
+}
+
+.undo-commits {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.undo-commit-list,
+.undo-refused-files {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 24px;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+  overflow-wrap: anywhere;
+}
+
+.undo-refused-files {
+  padding: 4px 0 0;
+  font-family: var(--mono);
+  color: var(--fg);
+}
+
+.undo-commit-list code {
+  font-family: var(--mono);
+  color: var(--fg-faint);
+}
+
 /* ---- previews (features/preview): a machine's port a row, its number in the code face ---- */
 .preview-row {
   cursor: default;
