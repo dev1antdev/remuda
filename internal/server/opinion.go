@@ -32,6 +32,8 @@ type opinionReq struct {
 	Model   string `json:"model"`
 	Args    string `json:"args"`
 	Close   *bool  `json:"close"` // the reviewer's tab closes once it has answered; true when unsaid
+	// DenyPrompts: a Claude Code reviewer denies what would wait on a permission prompt, since a review only reads; true when unsaid
+	DenyPrompts *bool `json:"deny_prompts"`
 }
 
 // handleOpinionAsk is POST /api/opinion: a tab "<Agent> review" in the folder's workspace, the reviewer started there
@@ -57,6 +59,11 @@ func (s *Server) handleOpinionAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	start, err := (&createReq{Agent: req.Agent, Model: req.Model, Args: req.Args}).start()
 	if err != nil {
+		httpErr(w, 400, err)
+		return
+	}
+	start.DenyPrompts = (req.DenyPrompts == nil || *req.DenyPrompts) && sessions.CanDenyPrompts(req.Agent)
+	if _, err := sessions.StartArgs(req.Agent, start); err != nil {
 		httpErr(w, 400, err)
 		return
 	}

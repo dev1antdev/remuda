@@ -281,7 +281,22 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the agent has answered" on, the tab goes by itself once the agent is
   done, a push says what it answered, and the conversation stays
   readable through the search. A question the agent asks is yours:
-  nothing closes while it waits. For the scout to create tasks, its
+  nothing closes while it waits. **A scout that runs at 3 am does not
+  stand at a permission prompt until morning**: with "Don't wait for
+  permissions: deny and carry on" (on for a new schedule, Claude Code
+  only) the agent is started with Claude Code's own
+  `permissions.denyInsteadOfPrompting` for that run — any call that
+  would wait for your approval is denied at once and the turn goes on —
+  and once it has answered the schedule's last result says how many
+  calls were denied ("answered: … · 2 calls denied") and names them, so
+  does the push, and the chat lens of its tab lists them over the
+  composer with *Open in the terminal*. In Claude Code's default mode
+  every edit asks first, so a scout that should change files wants
+  `--permission-mode acceptEdits` (or `auto`) in its extra arguments, or
+  allow rules in its settings; a `--settings` you pass yourself as JSON
+  gets the setting merged in, one naming a file is refused with what to
+  put in it. Schedules saved before the switch keep asking, as they did,
+  until you turn it on. For the scout to create tasks, its
   agent needs remuda's tasks MCP set up (see Tasks below). **Every few
   minutes, in working hours**: the "Every N minutes" preset runs a
   schedule every 5, 10, 15, 20 or 30 minutes from one hour to another,
@@ -335,7 +350,14 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   `STAGE DONE`, the next starts in a new tab of the same worktree with the
   previous answer in its prompt and the card in its column; an answer
   without the line (a question in the agent's own words too) or a card you
-  move stops it there, while a permission prompt only waits for you.
+  move stops it there, while a permission prompt only waits for you —
+  unless the project's agents **don't wait for permissions** (on for
+  agents you set up now, Claude Code only, off for settings saved
+  before): then the queue's Claude Code and every stage's deny what
+  would wait for your approval and carry on, and a comment by remuda on
+  the task lists the calls each run was denied; a run that stops on
+  them is reported so and stops the pipeline, the card left where it
+  is. An agent you start on a task yourself asks as usual.
   Agents can propose tasks, but only you queue them.
   When the agent opens a pull request and names it (the Review mode's
   *Approve & open PR* asks for exactly that), the task notes the link, moves
@@ -1024,7 +1046,10 @@ answer one finding a line. Its comments come back under the lines they
 name, blue beside your own, with how much each matters; *Add to my
 review* takes one into your draft, *Add all* every one, *Dismiss* sets it
 aside, and the ones on lines the diff no longer shows are listed apart.
-Its tab closes once it has answered, unless you say otherwise.
+Its tab closes once it has answered, unless you say otherwise; a Claude
+Code reviewer denies whatever would wait for your permission and goes on
+to its answer (a review only reads), unless you switch that off in the
+dialog.
 
 **Activity** (the bell in the header) is what happened while you were
 away: every finish, question, watchdog note, failed schedule, task

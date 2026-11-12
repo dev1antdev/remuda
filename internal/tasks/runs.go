@@ -7,6 +7,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/text"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 // RunWatch follows the agents started on tasks: every finish of the agent comes back to the task as a comment and a push; a pane that is no more closes the run.
@@ -26,7 +27,10 @@ type RunWatch struct {
 	// Advance starts a pipeline's next stage after the previous run's agent said it is done: the agent in a new tab of
 	// the worktree with the prompt, the run recorded (Launcher.StartStage).
 	Advance func(prev Run, index int, stage Stage, prompt string) error
-	Now     func() time.Time
+	// Denied is what the pane's conversation was denied without asking after a record ("" for all of it), and whether
+	// its latest turn stopped on such a call.
+	Denied func(machine, pane, after string) transcript.Denials
+	Now    func() time.Time
 
 	missing map[int64]time.Time
 }
@@ -82,22 +86,43 @@ func (w *RunWatch) Sweep() {
 		if state == "working" || state == "unknown" {
 			continue
 		}
-		// a fresh session has no turn before the prompt, so any turn ending in text and not yet reported is a finish
+		// a fresh session has no turn before the prompt, so any turn ending in text and not yet reported is a finish, and
+		// so is one at rest that stopped on calls it was denied without asking
 		answer, id := w.LastAnswer(r.Machine, r.Pane)
 		answer = strings.TrimSpace(answer)
-		if answer == "" || id == "" || id == r.Reported {
+		if id == "" || id == r.Reported {
+			continue
+		}
+		var denied transcript.Denials
+		if w.Denied != nil && (answer != "" || state == "done" || state == "idle") {
+			denied = w.Denied(r.Machine, r.Pane, r.Reported)
+		}
+		if answer == "" && !denied.EndsTurn {
 			continue
 		}
 		if rs := []rune(answer); len(rs) > 6000 {
 			answer = "…" + string(rs[len(rs)-6000:]) // the end is the answer
 		}
-		_, _ = w.Store.AddComment(r.TaskID, "agent", answer)
+		if answer != "" {
+			_, _ = w.Store.AddComment(r.TaskID, "agent", answer)
+		}
+		if len(denied.Calls) > 0 {
+			_, _ = w.Store.AddComment(r.TaskID, "remuda", deniedComment(r.Agent, denied))
+		}
 		// the pipeline's step before the answer is noted as reported: a restart in between hears the answer again and
 		// takes the step, where the other order would leave the pipeline on for good
 		var stage string
 		var moved *Status
 		handled := false
-		if r.Pipeline == PipelineOn {
+		switch {
+		case answer == "": // stopped on its denied calls: nothing to hand on, nor a finish to move the card for
+			handled = true
+			if r.Pipeline == PipelineOn {
+				why := "the agent stopped on calls it was denied without asking"
+				_ = w.Store.StopPipeline(r.ID, why)
+				stage = "the pipeline stops: " + why
+			}
+		case r.Pipeline == PipelineOn:
 			stage, moved, handled = w.onStageAnswer(r, answer)
 		}
 		_ = w.Store.SetRun(r.ID, RunFinished, id)
@@ -109,16 +134,24 @@ func (w *RunWatch) Sweep() {
 		if w.Notify != nil {
 			t, _ := w.Store.Get(r.TaskID)
 			title := fmt.Sprintf("Task %s: %s finished", t.Identifier, r.Agent)
+			said := firstLine(answer)
+			if answer == "" {
+				title = fmt.Sprintf("Task %s: %s stopped", t.Identifier, r.Agent)
+				said = "it stopped on calls it was denied"
+			}
 			if stage != "" {
 				title += ", " + stage
 			}
 			if moved != nil {
 				title += " → " + moved.Title
 			}
+			if n := len(denied.Calls); n > 0 {
+				said += " · " + transcript.DeniedCount(n)
+			}
 			w.Notify(push.Payload{
 				Machine: r.Machine, Pane: r.Pane, Kind: "task",
 				Title:   title,
-				Body:    firstLine(t.Title) + " — " + firstLine(answer),
+				Body:    firstLine(t.Title) + " — " + said,
 				Tag:     fmt.Sprintf("task|%d", r.TaskID),
 				Actions: []push.Action{{Action: "open", Title: "Open"}},
 			})

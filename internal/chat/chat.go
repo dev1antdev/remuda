@@ -216,6 +216,16 @@ func (c *Service) RateLimited(machineID, paneID string) (time.Time, string, bool
 	return transcript.RateLimited(tail)
 }
 
+// Denied is what Claude Code refused without asking in the pane's conversation after a record ("" for all of it): the
+// calls nobody was there to approve, and whether the latest turn stopped on one.
+func (c *Service) Denied(machineID, paneID, after string) transcript.Denials {
+	turns, ok := c.paneTurns(machineID, paneID)
+	if !ok {
+		return transcript.Denials{}
+	}
+	return transcript.DeniedAfter(turns, after)
+}
+
 // LastAnswer is the text the assistant's latest turn ended with and the id of its last record; "" when the turn ends in a tool call.
 func (c *Service) LastAnswer(machineID, paneID string) (string, string) {
 	last, ok := c.LastTurn(machineID, paneID)
