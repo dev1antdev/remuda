@@ -48,6 +48,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sessions"
+	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
@@ -85,17 +86,18 @@ type Server struct {
 	Guard     *auth.Guard
 	Keys      *auth.Keys // the agents' tasks-only keys, listed and revoked in Settings
 	UI        fs.FS
-	Live      *live.Hub        // the page's event stream, nil without one
-	Awake     *awake.Service   // the machines kept awake while their agents work
-	Icons     *icons.Store     // the icon the person gave each folder of the sidebar
-	Arena     *arena.Service   // one prompt to several agents side by side
-	Limits    *limits.Service  // the agents' subscription windows, the hits and the bookings to continue after a reset
-	Scratch   *scratch.Store   // the floating terminal's shell on each machine
-	Jira      *jira.Service    // the person's Jira site and the issues their agents' work names
-	Backup    *backup.Service  // the cockpit's state dir copied to another machine, nightly and on demand
-	Previews  *preview.Service // the machines' dev servers opened on the cockpit, nil without
-	SelfPort  int              // the port of -addr, never offered as a preview
-	Opinions  *opinion.Service // the second opinions another agent gave on a folder's changes
+	Live      *live.Hub          // the page's event stream, nil without one
+	Awake     *awake.Service     // the machines kept awake while their agents work
+	Icons     *icons.Store       // the icon the person gave each folder of the sidebar
+	Arena     *arena.Service     // one prompt to several agents side by side
+	Limits    *limits.Service    // the agents' subscription windows, the hits and the bookings to continue after a reset
+	Scratch   *scratch.Store     // the floating terminal's shell on each machine
+	Jira      *jira.Service      // the person's Jira site and the issues their agents' work names
+	Backup    *backup.Service    // the cockpit's state dir copied to another machine, nightly and on demand
+	Previews  *preview.Service   // the machines' dev servers opened on the cockpit, nil without
+	SelfPort  int                // the port of -addr, never offered as a preview
+	Opinions  *opinion.Service   // the second opinions another agent gave on a folder's changes
+	Subagents *subagents.Tracker // how many subagents each Claude Code pane's conversation runs, for the Wall's zoo
 
 	streams   termStreams
 	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is

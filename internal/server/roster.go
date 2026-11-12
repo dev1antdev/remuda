@@ -21,6 +21,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/sessions"
+	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/usage"
 	buildversion "github.com/dev1antdev/remuda/internal/version"
@@ -48,6 +49,8 @@ type rosterPane struct {
 	PR    *rosterPR      `json:"pr,omitempty"`   // the last pull or merge request the agent named
 	// a subscription limit the agent stopped on, and the person's booking to continue it after the reset
 	Limit *limits.PaneLimit `json:"limit,omitempty"`
+	// how many of its live conversation's subagents work, sit quiet or are done, for the Wall's zoo; nil for none
+	Subagents *subagents.Count `json:"subagents,omitempty"`
 }
 
 // rosterPR is the request the agent named and, once gh on the machine read it, how it stands.
@@ -168,6 +171,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			if s.Limits != nil {
 				entry.Limit = s.Limits.PaneOf(machineID, pane.PaneID)
 			}
+			entry.Subagents = s.Subagents.Count(machineID, pane.PaneID)
 		}
 		panesByTab[pane.TabID] = append(panesByTab[pane.TabID], entry)
 		if pane.Agent != "" {
@@ -257,8 +261,9 @@ func (s *Server) issuesOf(machineID string, session rosterSession) []jira.Issue 
 
 // handleRoster serves every machine from the watcher's cache, with an ETag so an unchanged roster is a 304.
 func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
-	s.PRs.Touch()  // somebody is looking: the pull requests named are worth reading again
-	s.Jira.Touch() // and the Jira issues the workspaces name
+	s.PRs.Touch()       // somebody is looking: the pull requests named are worth reading again
+	s.Jira.Touch()      // and the Jira issues the workspaces name
+	s.Subagents.Touch() // and the subagents the conversations run
 	body, etag := s.rosterBody()
 	w.Header().Set("X-Remuda-Version", buildversion.Build) // a page older than the server offers a reload
 	if auth.IsViewer(r.Context()) {
