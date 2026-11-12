@@ -2,8 +2,8 @@
 // of its own, its pose, girth, coins, flag and babies saying what it does — standing in a pen per machine whose weather
 // is the machine's body, under the sky of the viewer's hour, with the day told along the foot. Between readings the
 // resting ones clap for a finish, a merge sets off fireworks, a compaction puffs, the eyes follow the pointer, and with
-// the voices on each calls out. A grid of pens that fills the screen, or office mode's one large beside a column of
-// small ones; the pop-out shows one large.
+// the voices on each calls out; asked (a long press, its Tell me), a creature says what its agent did today. A grid of
+// pens that fills the screen, or office mode's one large beside a column of small ones; the pop-out shows one large.
 
 import { useMemo, useRef, type CSSProperties } from "react";
 import { displayOf, type RadarPrefs } from "@/features/roster/radar";
@@ -25,6 +25,7 @@ import { ZooCreature, type Life } from "./ZooCreature";
 import { ZooFoot, useDay } from "./ZooFoot";
 import { useGaze } from "./useGaze";
 import { useQuestions } from "./useQuestions";
+import { useTell } from "./useTell";
 import { useZooLife } from "./useZooLife";
 import { useVoices, wakeVoices } from "./voices";
 
@@ -40,6 +41,7 @@ export function Zoo({ shown, size, radar, now, office }: { shown: Tile[]; size: 
   const hiddenTile = (tile: Tile) => share.sessionHidden(tile.machine.id, tile.session);
   const askers = shown.filter((tile) => !hiddenTile(tile) && displayOf(tile.pane, radar, now) === "blocked").map((tile) => ({ key: tile.key, machine: tile.machine.id, pane: tile.pane.id }));
   const questions = useQuestions(askers);
+  const { telling, tell } = useTell(share.redact);
   const day = useDay();
   const night = skyOf(new Date(now).getHours()) === "night";
   const folderName = (tile: Tile) => {
@@ -60,9 +62,11 @@ export function Zoo({ shown, size, radar, now, office }: { shown: Tile[]; size: 
       puff: life.puffs.has(tile.key),
       question: questions.get(tile.key),
       night,
+      telling: !hiddenTile(tile) && telling?.key === tile.key ? telling.text : undefined,
+      onTell: hiddenTile(tile) ? undefined : (pose) => tell(tile, pose),
     };
   };
-  const talks = (tile: Tile) => !hiddenTile(tile) && (questions.has(tile.key) || bubbleOf(tile.pane, displayOf(tile.pane, radar, now), tile.pane.radar?.alert) !== "");
+  const talks = (tile: Tile) => !hiddenTile(tile) && (telling?.key === tile.key || questions.has(tile.key) || bubbleOf(tile.pane, displayOf(tile.pane, radar, now), tile.pane.radar?.alert) !== "");
   const toggleVoices = () => {
     if (!voices) wakeVoices();
     setVoices(!voices);

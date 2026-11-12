@@ -168,6 +168,7 @@ func (r *Recorder) write(rec Recording) error {
 	r.mu.Unlock()
 	for _, victim := range victims {
 		os.Remove(victim)
+		r.plain.drop(strings.TrimSuffix(filepath.Base(victim), suffix))
 	}
 	return nil
 }
@@ -213,6 +214,7 @@ func (r *Recorder) remove(id string) {
 	e := r.index[id]
 	delete(r.index, id)
 	r.mu.Unlock()
+	r.plain.drop(id)
 	if e != nil {
 		os.Remove(e.path)
 	}
@@ -295,6 +297,7 @@ func (r *Recorder) DeleteAll() (int, error) {
 	}
 	r.index = map[string]*entry{}
 	r.mu.Unlock()
+	r.plain.clear()
 	if err := os.RemoveAll(r.dir); err != nil {
 		return 0, err
 	}

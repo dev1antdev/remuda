@@ -79,7 +79,9 @@ socket.onmessage = (message) => {
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
     else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
     else if (url.includes("/api/review/secrets")) void fakeSecrets(msg.params);
-    else if (url.includes("/api/timelapse/recordings")) void fakeTimelapse(msg.params);
+    else if (url.includes("/api/timelapse/recordings") || url.includes("/api/timelapse/search")) void fakeTimelapse(msg.params);
+    else if (url.includes("/api/standup")) void fakeStandup(msg.params);
+    else if (url.includes("/api/recap")) void fakeRecap(msg.params);
     else if (url.includes("/api/fleet-setup")) void fakeFleet(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
@@ -560,13 +562,98 @@ function fakeRecording() {
   });
   return { id: TIMELAPSE_ID, machine: "local", pane: paneA1, workspace: "app", dir: appDir, folder: appDir, agent: "claude", title: "Draw every screen", cols: 60, rows: 14, start: iso(start), end: iso(start + 44 * 60e3), count: frames.length, ended: "done", size: 4096, frames };
 }
+const earlierOf = (meta) => ({ ...meta, id: "20261111T090000Z-e2e0bb", pane: "w9:p1", agent: "codex", start: iso(now - 26 * 3600e3), end: iso(now - 25 * 3600e3) });
 async function fakeTimelapse({ requestId, request }) {
   const recording = fakeRecording();
   const { frames, ...meta } = recording;
-  const earlier = { ...meta, id: "20261111T090000Z-e2e0bb", pane: "w9:p1", agent: "codex", start: iso(now - 26 * 3600e3), end: iso(now - 25 * 3600e3) };
-  const path = new URL(request.url).pathname;
-  const [code, body] = request.method !== "GET" ? [403, { error: "the e2e deletes no recording" }] : path.endsWith("/recordings") ? [200, { recordings: [meta, earlier], on: true }] : path.endsWith(TIMELAPSE_ID) ? [200, recording] : [200, { ...earlier, frames }];
+  const earlier = earlierOf(meta);
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const [code, body] =
+    request.method !== "GET"
+      ? [403, { error: "the e2e deletes no recording" }]
+      : path.endsWith("/search")
+        ? [200, fakeScreenSearch(url, recording)]
+        : path.endsWith("/recordings")
+          ? [200, { recordings: [meta, earlier], on: true }]
+          : path.endsWith(TIMELAPSE_ID)
+            ? [200, recording]
+            : [200, { ...earlier, frames }];
   await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// a recap as the server sums one up, with what the case at hand says
+const recapOf = (over) => ({ prompts: 0, answers: 0, took: 0, tokens: 0, cost: 0, calls: 0, tools: {}, failed: 0, commands: [], edited: [], read: [], subagents: 0, questions: 0, asking: false, ...over });
+
+// fakeStandup answers the standup with the dressed agents' day — the Codex asking, the Claude Code that finished with its
+// files and its last answer, the one at work — so the panel, the zoo's foot and the voice have something to tell
+async function fakeStandup({ requestId }) {
+  const items = [
+    { machine: "local", label: "This machine", workspace: "app", pane: Object.keys(DRESS).find((id) => DRESS[id].status === "input"), dir: appDir, agent: "codex", state: "blocked", recap: recapOf({ prompts: 1, answers: 1, took: 95, calls: 3, tools: { exec_command: 3 }, commands: ["go build ./..."], asking: true, cost: 0.4 }) },
+    { machine: "local", label: "This machine", workspace: "feature-x", pane: Object.keys(DRESS).find((id) => DRESS[id].status === "done"), dir: appDir, agent: "claude", state: "done", recap: recapOf({ prompts: 4, answers: 4, took: 26 * 60, tokens: 182000, cost: 3.1, calls: 31, tools: { Edit: 12, Read: 14, Bash: 5 }, edited: [`${appDir}/src/flag.go`, `${appDir}/src/flag_test.go`, `${appDir}/NOTES.md`], read: [`${appDir}/src/app.go`], commands: ["go test ./...", "make web"], said: DRESS[Object.keys(DRESS).find((id) => DRESS[id].status === "done")]?.said }) },
+    { machine: "local", label: "This machine", workspace: "app", pane: paneA1, dir: appDir, agent: "claude", state: "working", recap: recapOf({ prompts: 2, answers: 1, took: 12 * 60, cost: 4.2, calls: 18, tools: { Edit: 6, Bash: 4 }, edited: [`${appDir}/src/screen0.tsx`], commands: ["npm test"], said: "Every screen draws at both widths." }) },
+  ];
+  const body = { since: iso(new Date(new Date(now).setHours(0, 0, 0, 0)).getTime()), items, markdown: "# Standup\n" };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// fakeRecap answers one conversation's recap, the zoo's creature telling its day among them
+async function fakeRecap({ requestId }) {
+  const body = { since: "", recap: recapOf({ prompts: 3, answers: 3, took: 18 * 60, cost: 2.2, calls: 12, tools: { Edit: 4, Bash: 2 }, edited: [`${appDir}/src/app.go`, `${appDir}/README.md`], commands: ["go test ./..."] }), markdown: "" };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// FAKE_VOICE puts a stand-in voice where the browser's is: headless Chrome says nothing, so this one keeps what it is
+// handed, starts each queue's first line and never ends it, and the screens are checked on what the page shows
+const FAKE_VOICE = `(() => {
+  if (window.__fakeVoice) return;
+  const real = Object.getOwnPropertyDescriptor(window, "speechSynthesis");
+  const said = [];
+  const queue = [];
+  const voice = {
+    get speaking() { return queue.length > 0; },
+    get pending() { return queue.length > 1; },
+    paused: false,
+    speak(line) { queue.push(line); said.push(line.text); if (queue.length === 1) setTimeout(() => queue[0] === line && line.onstart?.(), 0); },
+    cancel() { for (const line of queue.splice(0)) line.onerror?.({ error: "interrupted" }); },
+    getVoices() { return []; },
+    pause() {}, resume() {}, addEventListener() {}, removeEventListener() {},
+  };
+  Object.defineProperty(window, "speechSynthesis", { configurable: true, value: voice });
+  window.__fakeVoice = { said, real };
+})()`;
+const REAL_VOICE = `(() => {
+  const fake = window.__fakeVoice;
+  if (!fake) return;
+  delete window.speechSynthesis;
+  if (fake.real) Object.defineProperty(window, "speechSynthesis", fake.real);
+  delete window.__fakeVoice;
+})()`;
+const sentence = () => evaluate(`document.querySelector('.listen-bar .listen-sentence')?.textContent ?? ""`);
+
+// fakeScreenSearch answers the search over the screens as the server would for the two fake recordings, which show the
+// same frames: where the query first stood, the rows around it, how long it stayed; the panel's search, over every
+// recording, says older ones went unread
+function fakeScreenSearch(url, recording) {
+  const query = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+  const plain = (text) => text.replace(/\x1b\[[0-?]*[ -\/]*[@-~]/g, "").trimEnd();
+  let screen = [];
+  let first = null;
+  let rows = [];
+  recording.frames.forEach((frame, index) => {
+    screen = screen.slice(0, frame.lines);
+    while (screen.length < frame.lines) screen.push("");
+    for (const row of frame.rows) screen[row.line] = plain(row.text);
+    const line = screen.findIndex((text) => text.toLowerCase().includes(query));
+    if (!first && line >= 0) [first, rows] = [{ frame: index, at: frame.at, for: 0, line }, [...screen]];
+    else if (first && !first.for && line < 0) first.for = frame.at - first.at;
+  });
+  const unread = url.searchParams.get("pane") ? { unread: 0 } : { unread: 3, cut: "budget" };
+  if (!first) return { hits: [], searched: 2, more: false, ...unread };
+  if (!first.for) first.for = 44 * 60e3 - first.at;
+  const { frames, ...meta } = recording;
+  const hitOf = (m) => ({ recording: m.id, machine: m.machine, pane: m.pane, workspace: m.workspace, dir: m.dir, folder: m.folder, agent: m.agent, title: m.title, start: m.start, first, times: 1, before: rows.slice(Math.max(0, first.line - 2), first.line), row: rows[first.line], after: rows.slice(first.line + 1, first.line + 3), col: 0 });
+  return { hits: [hitOf(meta), hitOf(earlierOf(meta))], searched: 2, more: false, ...unread };
 }
 
 // fakeFleet answers Fleet setup with four machines: this one, GOG lagging in every way the table tells — an older
@@ -1229,6 +1316,18 @@ async function runPass() {
   await screen("wall-chat", { open: async () => palette("mode:wall"), expect: [".wall-bar", ".tile"] });
   await screen("wall-screen", { open: async () => palette("wall-view"), expect: [".wall-bar", ".tile"] });
   await screen("wall-zoo", { open: async () => palette("wall-zoo"), expect: [".zoo-grid .zoo-creature"] });
+  // a creature asked about its day says it in its bubble, in its own voice
+  await screen("zoo-tell", {
+    open: async () => {
+      await evaluate(FAKE_VOICE);
+      await tap(".zoo-grid .zoo-creature .zoo-tell");
+      const telling = `(() => { const bubble = document.querySelector('.zoo-bubble.is-telling'); return !!bubble && bubble.textContent.trim().length > 3; })()`;
+      if (!(await until(() => evaluate(telling), 6))) failed("a creature asked about its day shows nothing in its bubble");
+      check(await evaluate(`(window.__fakeVoice?.said ?? []).some((text) => /^(Today I|Сегодня я)/.test(text))`), "the creature's voice was handed nothing about its day");
+    },
+    expect: [".zoo-bubble.is-telling"],
+    close: async () => evaluate(REAL_VOICE),
+  });
   if (!pass.phone) await screen("wall-office", { open: async () => palette("wall-office"), expect: [".wall-office"], close: async () => palette("wall-office") });
 
   await screen("tasks-board", { open: async () => palette("mode:tasks"), expect: [".board", ".board-col-note"] });
@@ -1254,6 +1353,41 @@ async function runPass() {
   await screen("code", { open: async () => palette("mode:code"), expect: [".code-mode"] });
 
   for (const panel of ["standup", "usage", "schedules", "activity", "alerts", "arenas"]) await screen(`panel-${panel}`, { open: async () => palette(panel), expect: [".modal"], settle: 600 });
+  // the day read aloud: Listen in the standup, the sentence being said under its agent, skip and pause, the lock screen
+  await screen("standup-listen", {
+    open: async () => {
+      await palette("standup");
+      if (!(await until(() => present(".standup-item"), 8))) return failed("the standup lists none of the agents it was given");
+      await evaluate(FAKE_VOICE);
+      await tap(".listen-start");
+      if (!(await until(async () => (await sentence()).length > 3, 4))) return failed("Listen shows no sentence being said");
+      const first = await sentence();
+      check((await count(".listen-bar .listen-controls .icon-btn")) === 3 && (await present(".listen-bar .listen-stop")), "the Listen bar lacks its play, back, skip or stop");
+      await tap(".listen-bar .listen-skip");
+      if (!(await until(async () => (await sentence()) !== first && (await sentence()).length > 3, 4))) failed("skipping to the next agent moved nothing");
+      check(await present(".standup-item.is-reading"), "the agent being told of is not marked in the report");
+      check(await evaluate(`(() => { const title = (navigator.mediaSession?.metadata?.title ?? "").replace(/…$/, ""); return title.length > 3 && (document.querySelector('.listen-sentence')?.textContent ?? "").startsWith(title); })()`), "the lock screen does not name the sentence being said");
+      await tap(".listen-bar .listen-toggle");
+      check(await present(".listen-bar.is-paused"), "pause does not pause");
+    },
+    expect: [".modal .listen-bar .listen-sentence"],
+    close: async () => {
+      await evaluate(REAL_VOICE);
+      await closeAll();
+    },
+  });
+  await screen("listen-day", {
+    open: async () => {
+      await evaluate(FAKE_VOICE);
+      await palette("listen-day");
+      if (!(await until(async () => (await sentence()).length > 3, 8))) failed("Listen to the day opens the standup reading nothing");
+    },
+    expect: [".modal .listen-bar"],
+    close: async () => {
+      await evaluate(REAL_VOICE);
+      await closeAll();
+    },
+  });
   // a new agent schedule: Claude Code, its switch on, the words under it
   await screen("schedule-agent", {
     open: async () => {
@@ -1386,6 +1520,24 @@ async function runPass() {
     ["broadcast", "broadcast"],
   ])
     await screen(`dialog-${name}`, { open: async () => palette(id), expect: [".modal", ...(notice ? [notice] : [])], settle: 700 });
+  // the dressed agent's conversation recapped and read aloud a line at a time
+  await screen("recap-listen", {
+    open: async () => {
+      await evaluate(FAKE_VOICE);
+      await palette("recap");
+      if (!(await until(() => present(".modal .listen-start:not(:disabled)"), 6))) return failed("the recap's Listen never comes ready");
+      await tap(".modal .listen-start");
+      if (!(await until(async () => (await sentence()).length > 3, 4))) return failed("the recap's Listen shows no sentence being said");
+      const first = await sentence();
+      await tap(".listen-bar .listen-skip");
+      if (!(await until(async () => (await sentence()) !== first, 4))) failed("skipping a line of the recap moved nothing");
+    },
+    expect: [".modal .listen-bar .listen-sentence"],
+    close: async () => {
+      await evaluate(REAL_VOICE);
+      await closeAll();
+    },
+  });
   await screen("timelapse", {
     open: async () => {
       await palette("timelapse");
@@ -1400,6 +1552,43 @@ async function runPass() {
       check(await present(".timelapse-speeds .btn.on:last-child"), "By frame is not picked");
     },
     expect: [".modal .timelapse-screen", ".timelapse-scrub", ".timelapse-export"],
+    settle: 500,
+  });
+  // the find over the recorded screens: the text marked where it first stood, then a step to the earlier recording
+  await screen("timelapse-find", {
+    open: async () => {
+      await palette("timelapse");
+      if (!(await until(async () => (await count(".timelapse-screen .screen-line")) >= 6, 6))) failed("the timelapse player draws no frame");
+      await tap(".timelapse-find input");
+      await send("Input.insertText", { text: "screen3" });
+      if (!(await until(() => present(".timelapse-screen .screen-line.is-current .m"), 6))) failed("the player does not mark the row the text first stood in");
+      const at = await evaluate(`document.querySelector('.timelapse-clock')?.textContent ?? ""`);
+      check(at.startsWith("16:00"), `the player is not at the frame the text appeared in: ${at}`);
+      await key("Enter", "Enter");
+      if (!(await until(async () => (await evaluate(`document.querySelector('.timelapse-find .find-count')?.textContent ?? ""`)).startsWith("2"), 6))) failed("Enter in the find does not step to the next place");
+    },
+    expect: [".timelapse-find input", ".timelapse-screen .screen-line.is-current"],
+    settle: 500,
+  });
+  // the search panel's Screens part, and a hit of it opening the player at its frame
+  await screen("search-screens", {
+    open: async () => {
+      await palette("search");
+      if (!(await until(() => present(".search-head input"), 4))) throw new Error("the search did not open");
+      await send("Input.insertText", { text: "screen3" });
+    },
+    expect: [".search-screens .search-screen-hit .search-screen-row.is-match mark", ".search-screens .search-part-head", ".search-screens .notice"],
+    settle: 600,
+  });
+  await screen("search-screen-open", {
+    open: async () => {
+      await palette("search");
+      if (!(await until(() => present(".search-head input"), 4))) throw new Error("the search did not open");
+      await send("Input.insertText", { text: "screen3" });
+      if (!(await until(() => present(".search-screen-hit"), 6))) throw new Error("no screen hit to open");
+      await tap(".search-screen-hit");
+    },
+    expect: [".modal .timelapse-screen .screen-line.is-current .m", ".timelapse-find input"],
     settle: 500,
   });
 }
@@ -1420,6 +1609,9 @@ try {
       { urlPattern: "*/api/scorecard*", requestStage: "Request" },
       { urlPattern: "*/api/review/secrets*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/recordings*", requestStage: "Request" },
+      { urlPattern: "*/api/standup*", requestStage: "Request" },
+      { urlPattern: "*/api/recap*", requestStage: "Request" },
+      { urlPattern: "*/api/timelapse/search*", requestStage: "Request" },
       { urlPattern: "*/api/fleet-setup*", requestStage: "Request" },
     ],
   });

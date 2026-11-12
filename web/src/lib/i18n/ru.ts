@@ -64,7 +64,9 @@ import { scorecard } from "./ru/scorecard";
 import { secretguard } from "./ru/secretguard";
 import { mirror } from "./ru/mirror";
 import { timelapse } from "./ru/timelapse";
+import { screensearch } from "./ru/screensearch";
 import { triggers } from "./ru/triggers";
+import { podcast } from "./ru/podcast";
 import { fleet } from "./ru/fleet";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...wake, ...activity, ...viewonly, ...splitview, ...shellwords, ...sidebar, ...worktreeinclude, ...quote, ...reopen, ...forkchat, ...autoicon, ...gitlab, ...teleport, ...arena, ...limits, ...floatterm, ...screenshare, ...jira, ...mermaid, ...zoo, ...auditchat, ...sidebarmenus, ...auditpanels, ...tidy, ...notify, ...backup, ...preview, ...opinion, ...autonomy, ...server, ...audit3transcripts, ...audit3webpanels, ...audit3webchat, ...audit3alerts, ...audit3webcore, ...schedulewindow, ...signin, ...unattended, ...scorecard, ...secretguard, ...mirror, ...timelapse, ...triggers, ...fleet };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...wake, ...activity, ...viewonly, ...splitview, ...shellwords, ...sidebar, ...worktreeinclude, ...quote, ...reopen, ...forkchat, ...autoicon, ...gitlab, ...teleport, ...arena, ...limits, ...floatterm, ...screenshare, ...jira, ...mermaid, ...zoo, ...auditchat, ...sidebarmenus, ...auditpanels, ...tidy, ...notify, ...backup, ...preview, ...opinion, ...autonomy, ...server, ...audit3transcripts, ...audit3webpanels, ...audit3webchat, ...audit3alerts, ...audit3webcore, ...schedulewindow, ...signin, ...unattended, ...scorecard, ...secretguard, ...mirror, ...timelapse, ...triggers, ...podcast, ...screensearch, ...fleet };

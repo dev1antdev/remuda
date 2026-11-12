@@ -41,6 +41,10 @@ import UpdatesDialog from "@/features/updates/Updates";
 import BudgetDialog from "@/features/usage/BudgetDialog";
 import Usage from "@/features/usage/Usage";
 import { encodePath, type SearchHit } from "@/features/search/api";
+import type { ScreenHit } from "@/features/terminal/timelapse/api";
+import { firstStep } from "@/features/terminal/timelapse/found";
+import { timelapseTitle } from "@/features/terminal/timelapse/row";
+import { machineLabel } from "@/features/roster/options";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import CommandPalette from "./commands";
 import { useAllPanes } from "./current";
@@ -81,6 +85,12 @@ export default function Overlays() {
     if (pick) actions.selectPane(pick.machine.id, pick.pane.id);
     else actions.openViewer(hit);
   };
+  // a screen's hit opens the player on the recording's pane and folder, at the frame the text first stood in
+  const openScreenHit = (hit: ScreenHit, query: string) => {
+    actions.closePanel();
+    const title = timelapseTitle({ machineId: hit.machine, workspace: hit.workspace, machine: machineLabel(machines, hit.machine) });
+    actions.openDialog({ kind: "timelapse", machineId: hit.machine, paneId: hit.pane, dir: hit.dir, title, found: { ...firstStep(hit), query } });
+  };
 
   return (
     <>
@@ -92,7 +102,7 @@ export default function Overlays() {
       {panel === "alerts" && <AlertsPanel onClose={actions.closePanel} />}
       {panel === "activity" && <Activity onClose={actions.closePanel} />}
       {panel === "schedules" && <Schedules machines={machines} onClose={actions.closePanel} ask={actions.ask} />}
-      {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} />}
+      {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} onOpenScreen={openScreenHit} />}
       {panel === "standup" && <Standup onClose={actions.closePanel} />}
       {panel === "arena" && <ArenaPanel onClose={actions.closePanel} />}
       {panel === "usage" && (
@@ -234,7 +244,17 @@ export default function Overlays() {
         <StartFromRecipeDialog machineId={dialog.machineId} dir={dialog.dir} onClose={actions.closeDialog} onStart={async (req) => landOn(req.machine, await createSession(req))} />
       )}
       {dialog?.kind === "pins" && <PinsDialog machineId={dialog.machineId} paneId={dialog.paneId} dir={dialog.dir} shown={dialog.shown} title={dialog.title} onClose={actions.closeDialog} />}
-      {dialog?.kind === "timelapse" && <TimelapseDialog machineId={dialog.machineId} paneId={dialog.paneId} dir={dialog.dir} title={dialog.title} onClose={actions.closeDialog} />}
+      {dialog?.kind === "timelapse" && (
+        <TimelapseDialog
+          key={dialog.found ? `${dialog.found.recording}@${dialog.found.frame}` : `${dialog.machineId}|${dialog.paneId}`}
+          machineId={dialog.machineId}
+          paneId={dialog.paneId}
+          dir={dialog.dir}
+          title={dialog.title}
+          found={dialog.found}
+          onClose={actions.closeDialog}
+        />
+      )}
       {dialog?.kind === "machine" && (
         <AddMachineDialog
           onClose={actions.closeDialog}
