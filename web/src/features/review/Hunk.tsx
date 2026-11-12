@@ -14,13 +14,14 @@ import { draftOnRow, type DraftComment } from "./draft";
 import { changedSpan, pairRows, partners, rowsOf, rowTokens, type DiffHunk, type DiffRow } from "./hunks";
 import { onRow } from "./opinion";
 import { OpinionNote } from "./OpinionNote";
+import { onSecretRow, type SecretFinding } from "./secrets";
 import { t } from "@/lib/i18n";
 
 export type NewComment = Omit<DraftComment, "id" | "file">;
 
 type Side = "old" | "new" | "both"; // the column a row is drawn in; both = the one-column view
 
-export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComment, draft, file, onComment, onRemove, unfold, lines, blocked, onUnfold, opinions }: {
+export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComment, draft, file, onComment, onRemove, unfold, lines, blocked, onUnfold, opinions, secrets }: {
   hunk: DiffHunk;
   prev: DiffHunk | null;
   next: DiffHunk | null;
@@ -36,6 +37,7 @@ export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComm
   blocked: string | null; // why the file's lines cannot be had, when they cannot
   onUnfold: (index: number, side: "above" | "below", count: number) => void;
   opinions: Opinions; // the second opinion's open comments on this file, drawn under their rows
+  secrets: SecretFinding[]; // what the secret check found in this file: its rows marked
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [composingAt, setComposingAt] = useState<string | null>(null);
@@ -69,11 +71,12 @@ export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComm
     const walkable = row.kind !== "meta"; // the arrow keys stop here, with or without an agent to comment to
     const commentable = canComment && walkable;
     const line = side === "old" ? row.oldLine : (row.newLine ?? row.oldLine);
+    const secret = side !== "old" && secrets.some((finding) => onSecretRow(finding, row));
     return (
       <div
         key={key}
         data-key={key}
-        className={`fv-line ${row.kind}${walkable ? " walk" : ""}${commentable ? " commentable" : ""}${composingAt === key ? " composing" : ""}`}
+        className={`fv-line ${row.kind}${walkable ? " walk" : ""}${commentable ? " commentable" : ""}${composingAt === key ? " composing" : ""}${secret ? " secret" : ""}`}
         role={commentable ? "button" : undefined}
         aria-expanded={commentable ? composingAt === key : undefined}
         tabIndex={walkable ? 0 : undefined}
@@ -90,7 +93,7 @@ export const Hunk = memo(function Hunk({ hunk, prev, next, index, split, canComm
               }
             : undefined
         }
-        title={commentable ? t("Comment on this line") : undefined}
+        title={secret ? t("This line looks like it holds a secret") : commentable ? t("Comment on this line") : undefined}
       >
         <span className="fv-ln">{line ?? ""}</span>
         <Source row={row} partner={partnerOf.get(row) ?? null} marker={side === "both"} tokens={tokensOf.get(row)} />

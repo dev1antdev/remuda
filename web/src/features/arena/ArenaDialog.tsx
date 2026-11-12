@@ -9,18 +9,19 @@ import { useRoster } from "@/features/roster/useRoster";
 import { Dialog, Icon, Logo, Notice, Select, Tip, useSubmit } from "@/ui";
 import { t } from "@/lib/i18n";
 import { startArena } from "./api";
-import { MAX_LANES, defaultLanes, repositories, requestOf, whyNot, type LaneDraft } from "./arena";
+import { MAX_LANES, defaultLanes, prefilled, repositories, requestOf, whyNot, type AskedLane, type LaneDraft } from "./arena";
 
-export default function ArenaDialog({ taskId, title, prompt: initial, at, onClose }: {
+export default function ArenaDialog({ taskId, title, prompt: initial, at, lanes: asked, onClose }: {
   taskId?: number;
   title?: string; // the task's identifier and title, when it is a task's arena
   prompt?: string;
   at?: { machineId: string; workspaceId: string }; // the repository on screen, the lanes' first guess
+  lanes?: AskedLane[]; // the agents and models to start with: the models' scorecard's pair
   onClose: () => void;
 }) {
   const { machines, agents, refresh } = useRoster();
   const [prompt, setPrompt] = useState(initial ?? "");
-  const [lanes, setLanes] = useState<LaneDraft[]>(() => defaultLanes(machines, agents, at));
+  const [lanes, setLanes] = useState<LaneDraft[]>(() => prefilled(defaultLanes(machines, agents, at), asked ?? []));
   const connected = machines.filter((m) => m.state === "connected" && repositories(machines, m.id).length > 0);
   const kinds = agents.filter((a) => a.id !== "shell");
   const problem = whyNot(prompt, lanes);

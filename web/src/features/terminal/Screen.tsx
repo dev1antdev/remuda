@@ -7,7 +7,7 @@ import { useFlavor } from "@/app/theme";
 import { useQuery } from "@/lib/query";
 import { ansiPalette } from "@/lib/theme";
 import { Notice } from "@/ui";
-import { parseAnsi, type Span } from "./ansi";
+import { parseAnsi, type Line, type Span } from "./ansi";
 import { fetchScreen } from "./api";
 import { thumbFont } from "./engine/geometry";
 import { t } from "@/lib/i18n";
@@ -40,7 +40,7 @@ export const Screen = memo(function Screen({ machineId, paneId, cols, busy, acti
   const palette = useMemo(() => ansiPalette(flavor), [flavor]);
   const lines = useMemo(() => (text === null ? [] : parseAnsi(text, palette)), [text, palette]);
   // the pane's grid, or the longest row when the roster has none or a row runs past it (a remote's grid can lag)
-  const width = Math.max(cols, 1, ...lines.map((line) => line.reduce((n, span) => n + span.text.length, 0)));
+  const width = widthOf(cols, lines);
   const box = useRef<HTMLDivElement>(null);
   const fontSize = useFitFont(box, width);
   return (
@@ -51,24 +51,32 @@ export const Screen = memo(function Screen({ machineId, paneId, cols, busy, acti
           {error}
         </Notice>
       )}
-      {lines.map((line, i) => (
-        <div key={i} className="screen-line">
-          {line.map((span, j) => (
-            <span key={j} className={classOf(span)} style={span.fg || span.bg ? { color: span.fg, background: span.bg } : undefined}>
-              {span.text}
-            </span>
-          ))}
-        </div>
-      ))}
+      <ScreenLines lines={lines} />
     </div>
   );
 });
 
+// ScreenLines draws a screen's parsed rows, each span in its colours and weight; the timelapse player draws with it too
+export function ScreenLines({ lines }: { lines: Line[] }) {
+  return lines.map((line, i) => (
+    <div key={i} className="screen-line">
+      {line.map((span, j) => (
+        <span key={j} className={classOf(span)} style={span.fg || span.bg ? { color: span.fg, background: span.bg } : undefined}>
+          {span.text}
+        </span>
+      ))}
+    </div>
+  ));
+}
+
 const classOf = (span: Span) => [span.bold && "b", span.dim && "d", span.italic && "i", span.underline && "u", span.strike && "s"].filter(Boolean).join(" ") || undefined;
+
+// widthOf is the columns a screen is drawn at: the pane's grid, or the longest row when there is none or a row runs past it
+export const widthOf = (cols: number, lines: Line[]) => Math.max(cols, 1, ...lines.map((line) => line.reduce((n, span) => n + span.text.length, 0)));
 
 // useFitFont is the font size at which cols columns fill the box's width, measured in the box's own document (the
 // pop-out has one of its own) and followed as the box resizes
-function useFitFont(box: RefObject<HTMLDivElement | null>, cols: number): number {
+export function useFitFont(box: RefObject<HTMLDivElement | null>, cols: number): number {
   const [avail, setAvail] = useState(0);
   const [cell, setCell] = useState(0);
   useLayoutEffect(() => {

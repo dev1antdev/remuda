@@ -12,7 +12,7 @@ import { useAllPanes } from "./current";
 import { popOutWindow } from "./pip";
 import { app, type Selection } from "./store";
 import { TileView } from "./Tile";
-import { ZooCreature } from "./Zoo";
+import { ZooCreature } from "./zoo/ZooCreature";
 import { t } from "@/lib/i18n";
 
 export default function PopOut() {

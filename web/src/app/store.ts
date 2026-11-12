@@ -37,6 +37,7 @@ export type AppDialog =
   | { kind: "start-recipe"; machineId?: string; dir?: string } // an agent started from a recipe, in the folder at hand unless the recipe has its own
   | { kind: "pins"; machineId: string; paneId: string; dir: string; shown: string | null; title: string } // the turns pinned in a folder's conversations; shown = the session on screen, whose pins name no session
   | { kind: "model"; machineId: string; paneId: string; current?: string } // a Claude Code pane's model switched through its own /model; current = what the meter last saw it answer with
+  | { kind: "timelapse"; machineId: string; paneId: string; dir: string; title: string } // the pane's recorded turns, and its folder's earlier panes', played back fast
   | { kind: "teleport"; machineId: string; paneId: string; tabId: string; workspace: string; agent: string } // the pane's work moved to another machine, an agent carrying on there
   | { kind: "folder-icon"; machineId: string; folder: string; name: string; icon?: FolderIconRef } // a folder's icon: an emoji, a site's favicon or a picture
   | { kind: "leftovers"; machineId: string } // the machine's worktrees no workspace has open, the clean ones to remove
@@ -44,7 +45,7 @@ export type AppDialog =
   | { kind: "triggers"; machineId?: string; dir?: string; workspace?: string; name?: string } // what a pane prints and what it sets off: the rules a folder sees, or every rule
   | { kind: "update-everywhere" } // every connected machine's updates, one after another, the page's own host last
   | { kind: "reopen" } // the agents whose panes went away, each to be started again on its session
-  | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string } } // one prompt to several agents, each in a worktree of its own
+  | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string }; lanes?: { agent: string; model?: string }[] } // one prompt to several agents, each in a worktree of its own; lanes: the agents and models to start with
   | null;
 
 export type NoticeMsg = { text: string; error?: boolean; brief?: boolean };

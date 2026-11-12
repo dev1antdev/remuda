@@ -144,7 +144,7 @@ func (q *Queue) step(p Project) QueueNote {
 		note.Reason = "no workspace is open on " + a.Dir + " to branch off"
 		return note
 	}
-	req := StartRequest{Workspace: workspace, Branch: BranchFor(*next), Agent: agent, Model: a.Model, Args: a.Args, Queued: true}
+	req := StartRequest{Workspace: workspace, Branch: BranchFor(*next), Agent: agent, Model: a.Model, Args: a.Args, Queued: true, DenyPrompts: a.Denies(agent)}
 	if err := q.Start(a.Machine, *next, req); err != nil {
 		q.refuse(*next, err)
 		note.Reason = fmt.Sprintf("%s could not start: %s", next.Identifier, err)

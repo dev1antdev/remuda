@@ -8,6 +8,19 @@ import (
 	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
+func TestByNameIsTheWayBackToAnID(t *testing.T) {
+	for name, id := range map[string]string{"Opus 4.5": "claude-opus-4-5", "Fable 5.1": "claude-fable-5-1", "Sonnet 4": "claude-sonnet-4-0"} {
+		if m, ok := ByName(name); !ok || m.ID != id {
+			t.Errorf("%q → %q %v, want %q", name, m.ID, ok, id)
+		}
+	}
+	for _, unknown := range []string{"", "gpt-6.1-sol", "opus"} {
+		if _, ok := ByName(unknown); ok {
+			t.Errorf("%q found", unknown)
+		}
+	}
+}
+
 func TestLookupSpellings(t *testing.T) {
 	cases := map[string]string{
 		"claude-fable-5-1":                             "claude-fable-5-1",

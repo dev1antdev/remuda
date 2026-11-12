@@ -45,3 +45,32 @@ export const bookContinue = (machine: string, pane: string, at: string): Promise
 
 // cancelContinue calls such a booking off
 export const cancelContinue = (machine: string, pane: string): Promise<unknown> => sendJSON("DELETE", "/api/limits/continue", { machine, pane });
+
+// Share is a count out of a whole; rate is there once the whole reaches the card's min_sample
+export type Share = { count: number; of: number; rate?: number };
+// Mean is an average over the runs that measured it; few under the card's min_sample: shown, never compared
+export type Mean = { value?: number; n: number; few?: boolean };
+export type TryLane = { agent: string; model?: string; model_id?: string };
+// ScoreTry is a past task to hand to an arena: the model that ran it first, then the row's own
+export type ScoreTry = { task_id: number; identifier: string; title: string; project_id: number; machine: string; dir: string; ran: string; lanes: TryLane[] };
+// ScoreRow is one agent kind and model over the period (internal/scorecard)
+export type ScoreRow = {
+  agent: string;
+  model: string; // "" when the meter never read one
+  model_id?: string;
+  runs: number;
+  finished: Share;
+  first_approved: Share;
+  rejected: number;
+  approved: number;
+  merged: Share;
+  kept: Share;
+  cost_per_run: Mean;
+  cost_per_approved: Mean;
+  minutes_per_run: Mean;
+  last: string;
+  try?: ScoreTry;
+};
+export type Scorecard = { since: string; days: number; min_sample: number; rows: ScoreRow[]; verdicts: number; unplaced: number };
+
+export const fetchScorecard = (days: number, tz: string): Promise<Scorecard> => getJSON(`/api/scorecard?${new URLSearchParams({ days: String(days), tz })}`);

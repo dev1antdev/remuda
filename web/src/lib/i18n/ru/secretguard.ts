@@ -1,0 +1,75 @@
+// The Russian words of the secret check: the verdict dialog's findings before a commit or a pull request, the rows
+// they mark, and the notes on Claude Code's settings files in the Changes lens.
+
+import type { Dictionary } from "../../i18n";
+
+export const secretguard: Dictionary = {
+  "Private key": "Закрытый ключ",
+  "AWS access key": "Ключ доступа AWS",
+  "GitHub token": "Токен GitHub",
+  "GitHub fine-grained token": "Детальный токен GitHub",
+  "GitLab token": "Токен GitLab",
+  "Slack token": "Токен Slack",
+  "Slack webhook": "Вебхук Slack",
+  "Stripe live key": "Боевой ключ Stripe",
+  "Anthropic API key": "Ключ API Anthropic",
+  "OpenAI API key": "Ключ API OpenAI",
+  "Google API key": "Ключ API Google",
+  "Telegram bot token": "Токен Telegram-бота",
+  "npm token": "Токен npm",
+  "JSON Web Token": "JSON Web Token",
+  "Authorization header": "Заголовок Authorization",
+  "Secret value": "Секретное значение",
+  "Keystore file": "Файл хранилища ключей",
+  "Looking for secrets in what the commit and the push would carry…": "Ищем секреты в том, что унесут коммит и push…",
+  "Looking for secrets in what the commit would carry…": "Ищем секреты в том, что унесёт коммит…",
+  "{n} things here look like secrets. Take them out, or send anyway once you have looked.": [
+    "{n} место здесь похоже на секрет. Уберите его — или отправьте всё равно, когда посмотрите.",
+    "{n} места здесь похожи на секреты. Уберите их — или отправьте всё равно, когда посмотрите.",
+    "{n} мест здесь похожи на секреты. Уберите их — или отправьте всё равно, когда посмотрите.",
+  ],
+  "No secrets in the {n} files the commit would carry.": ["Секретов нет в {n} файле, который унесёт коммит.", "Секретов нет в {n} файлах, которые унесёт коммит.", "Секретов нет в {n} файлах, которые унесёт коммит."],
+  "Nothing for the commit to carry.": "Коммиту нечего уносить.",
+  "The {n} commits not pushed yet hold none either.": ["В {n} ещё не отправленном коммите их тоже нет.", "В {n} ещё не отправленных коммитах их тоже нет.", "В {n} ещё не отправленных коммитах их тоже нет."],
+  "The secret check did not finish, so nothing is known about secrets in what the agent would commit and push. Approve and ask for the pull request anyway?":
+    "Проверка на секреты не завершилась, и о секретах в том, что агент закоммитит и отправит, ничего не известно. Всё равно одобрить и попросить pull request?",
+  "The secret check did not finish, so nothing is known about secrets in what the agent would commit. Approve and ask for the commit anyway?":
+    "Проверка на секреты не завершилась, и о секретах в том, что агент закоммитит, ничего не известно. Всё равно одобрить и попросить коммит?",
+  "{n} possible secrets are in what the agent would commit and push. Approve and ask for the pull request anyway?": [
+    "В том, что агент закоммитит и отправит, {n} возможный секрет. Всё равно одобрить и попросить pull request?",
+    "В том, что агент закоммитит и отправит, {n} возможных секрета. Всё равно одобрить и попросить pull request?",
+    "В том, что агент закоммитит и отправит, {n} возможных секретов. Всё равно одобрить и попросить pull request?",
+  ],
+  "{n} possible secrets are in what the agent would commit. Approve and ask for the commit anyway?": [
+    "В том, что агент закоммитит, {n} возможный секрет. Всё равно одобрить и попросить коммит?",
+    "В том, что агент закоммитит, {n} возможных секрета. Всё равно одобрить и попросить коммит?",
+    "В том, что агент закоммитит, {n} возможных секретов. Всё равно одобрить и попросить коммит?",
+  ],
+  "{n} binary files": ["{n} двоичный файл", "{n} двоичных файла", "{n} двоичных файлов"],
+  "{n} files over 1 MB": ["{n} файл больше 1 МБ", "{n} файла больше 1 МБ", "{n} файлов больше 1 МБ"],
+  "the end of {n} changes over 1 MB": ["конец {n} изменения больше 1 МБ", "конец {n} изменений больше 1 МБ", "конец {n} изменений больше 1 МБ"],
+  "{n} files past the 8 MB read in all": ["{n} файл сверх 8 МБ на всё", "{n} файла сверх 8 МБ на всё", "{n} файлов сверх 8 МБ на всё"],
+  "{n} more untracked files": ["ещё {n} неотслеживаемый файл", "ещё {n} неотслеживаемых файла", "ещё {n} неотслеживаемых файлов"],
+  "Not read: {what}.": "Не прочитано: {what}.",
+  "Untrack it with git rm --cached {path} and add it to .gitignore.": "Уберите его из git командой git rm --cached {path} и добавьте в .gitignore.",
+  "{what} at line {line}": "{what} в строке {line}",
+  "{path} holds {n} things that look like secrets ({where}): an allowed command can carry a token.": [
+    "В {path} {n} место похоже на секрет ({where}): разрешённая команда может нести токен.",
+    "В {path} {n} места похожи на секреты ({where}): разрешённая команда может нести токен.",
+    "В {path} {n} мест похожи на секреты ({where}): разрешённая команда может нести токен.",
+  ],
+  "Take it out of the file and revoke it where it was issued.": "Уберите его из файла и отзовите там, где его выдали.",
+  "{path} is tracked by git: Claude Code keeps your own approvals there, and an allowed command can carry a token.":
+    "{path} отслеживается git: Claude Code хранит там ваши разрешения, а разрешённая команда может нести токен.",
+  "{path} is not ignored by git: a commit of everything would carry your own approvals.": "{path} не игнорируется git: коммит всего подряд унесёт ваши разрешения.",
+  "Add it to .gitignore.": "Добавьте его в .gitignore.",
+  "The secret check could not run: {error}": "Проверка на секреты не запустилась: {error}",
+  "Show this line in the diff": "Показать эту строку в диффе",
+  "…and {n} more the list leaves out.": ["…и ещё {n}, которого нет в списке.", "…и ещё {n}, которых нет в списке.", "…и ещё {n}, которых нет в списке."],
+  "Nothing is known about secrets in this work: Send anyway asks you first.": "О секретах в этой работе ничего не известно: «Отправить всё равно» сначала спросит вас.",
+  "Send anyway": "Отправить всё равно",
+  "Send anyway…": "Отправить всё равно…",
+  "Checking for secrets…": "Ищем секреты…",
+  "{n} lines look like they hold secrets": ["{n} строка похожа на секрет", "{n} строки похожи на секреты", "{n} строк похожи на секреты"],
+  "This line looks like it holds a secret": "Эта строка похожа на секрет",
+};

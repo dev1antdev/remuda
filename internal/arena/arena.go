@@ -135,14 +135,16 @@ func BranchOf(arenaID, laneID int) string { return fmt.Sprintf("arena-%d-%d", ar
 type Store struct {
 	dir string
 
-	mu     sync.Mutex
-	arenas []Arena // oldest first
-	next   int
+	mu      sync.Mutex
+	arenas  []Arena // oldest first
+	next    int
+	history []Outcome // every decided arena's lanes, the oldest first: kept when an arena is forgotten
 }
 
 type file struct {
-	Next   int     `json:"next"`
-	Arenas []Arena `json:"arenas"`
+	Next    int       `json:"next"`
+	Arenas  []Arena   `json:"arenas"`
+	History []Outcome `json:"history,omitempty"`
 }
 
 // Open reads the arenas kept in dir; a damaged file is an empty list, said once.
@@ -154,15 +156,21 @@ func Open(dir string) *Store {
 		return st
 	}
 	st.arenas = f.Arenas
+	st.history = f.History
 	st.next = max(f.Next, 1)
 	for _, a := range st.arenas {
 		st.next = max(st.next, a.ID+1)
+	}
+	if st.backfillOutcomes() {
+		if err := st.save(); err != nil {
+			log.Printf("%s: the decided arenas' lanes could not be kept: %v", fileName, err)
+		}
 	}
 	return st
 }
 
 func (st *Store) save() error {
-	return state.SaveJSON(st.dir, fileName, file{Next: st.next, Arenas: st.arenas})
+	return state.SaveJSON(st.dir, fileName, file{Next: st.next, Arenas: st.arenas, History: st.history})
 }
 
 // Create keeps a new arena with its lanes starting, and gives it its id.

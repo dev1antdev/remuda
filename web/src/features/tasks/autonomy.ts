@@ -10,10 +10,19 @@ import type { Automation, Project, Run, Stage, Status } from "./api";
 export const MAX_STAGES = 8;
 export const MAX_QUEUED = 10;
 
-export const NO_AUTOMATION: Automation = { machine: "", dir: "", agent: "", model: "", args: "", queue: false, max: 1, stages: [] };
+export const NO_AUTOMATION: Automation = { machine: "", dir: "", agent: "", model: "", args: "", queue: false, max: 1, stages: [], deny_prompts: true };
 
-// automationOf is a project's settings, the defaults for one from before them
-export const automationOf = (p?: Project): Automation => ({ ...NO_AUTOMATION, ...(p?.automation ?? {}), stages: p?.automation?.stages ?? [] });
+// automationOf is a project's settings, the defaults for one from before them; the deny switch is what the server says
+// (on for settings never saved), off for settings saved before it
+export const automationOf = (p?: Project): Automation => ({
+  ...NO_AUTOMATION,
+  ...(p?.automation ?? {}),
+  stages: p?.automation?.stages ?? [],
+  deny_prompts: p?.automation ? p.automation.deny_prompts === true : true,
+});
+
+// denyCovers is every agent kind the deny switch speaks for: the project's agent and each stage's
+export const denyCovers = (a: Automation): string[] => [a.agent || "claude", ...a.stages.map((s) => s.agent || "claude")];
 
 // queueColumn is the project's Queued column, if it marks one
 export const queueColumn = (statuses: Status[]): Status | undefined => statuses.find((s) => s.on_queue);
@@ -78,6 +87,7 @@ const normalized = (a: Automation) => ({
   args: a.args || "",
   queue: a.queue,
   max: a.max || 1,
+  deny_prompts: !!a.deny_prompts,
   stages: a.stages.map((s) => ({ name: s.name, agent: s.agent || "", model: s.model || "", prompt: s.prompt, status_id: s.status_id || 0, pr: !!s.pr })),
 });
 

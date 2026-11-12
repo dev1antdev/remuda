@@ -21,6 +21,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/text"
+	"github.com/dev1antdev/remuda/internal/transcript"
 )
 
 const file = "schedules.json"
@@ -63,14 +64,18 @@ type Schedule struct {
 	Model   string `json:"model,omitempty"` // the model as the agent's own CLI names it, "" for its default
 	Args    string `json:"args,omitempty"`  // extra arguments, as the person wrote them
 	Close   bool   `json:"close,omitempty"` // take the tab down once the agent has answered
-	Enabled bool   `json:"enabled"`
+	// DenyPrompts has an agent schedule's Claude Code deny a call that would wait on a permission prompt and carry on;
+	// nil for a record from before the switch, which reads as off (Denies)
+	DenyPrompts *bool `json:"deny_prompts,omitempty"`
+	Enabled     bool  `json:"enabled"`
 
-	Next       time.Time `json:"next,omitzero"` // the coming run, filled in by List
-	LastRun    time.Time `json:"last_run,omitzero"`
-	LastResult string    `json:"last_result,omitempty"`
-	LastOK     bool      `json:"last_ok"`
-	Skipped    string    `json:"skipped,omitempty"`   // why the last run was skipped (Skip…), "" when it ran
-	LastPane   *Started  `json:"last_pane,omitempty"` // the agent the last run started, until it has answered or gone
+	Next       time.Time           `json:"next,omitzero"` // the coming run, filled in by List
+	LastRun    time.Time           `json:"last_run,omitzero"`
+	LastResult string              `json:"last_result,omitempty"`
+	LastOK     bool                `json:"last_ok"`
+	Skipped    string              `json:"skipped,omitempty"`     // why the last run was skipped (Skip…), "" when it ran
+	LastPane   *Started            `json:"last_pane,omitempty"`   // the agent the last run started, until it has answered or gone
+	LastDenied []transcript.Denial `json:"last_denied,omitempty"` // the calls the last run's agent was denied without asking
 }
 
 // Submit delivers a prompt to the agent in a folder and names the pane it went to.
@@ -190,10 +195,19 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 	}
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	old := st.items[s.ID]
+	if s.Kind == KindAgent {
+		s.DenyPrompts = denyPromptsOf(s.DenyPrompts, old)
+		if _, err := s.Start(); err != nil {
+			return s, err
+		}
+	} else {
+		s.DenyPrompts = nil
+	}
 	if s.ID == "" {
 		s.ID = state.NewID()
-	} else if old, ok := st.items[s.ID]; ok {
-		s.LastRun, s.LastResult, s.LastOK, s.Skipped, s.LastPane = old.LastRun, old.LastResult, old.LastOK, old.Skipped, old.LastPane
+	} else if old != nil {
+		s.LastRun, s.LastResult, s.LastOK, s.Skipped, s.LastPane, s.LastDenied = old.LastRun, old.LastResult, old.LastOK, old.Skipped, old.LastPane, old.LastDenied
 	}
 	cp := s
 	st.items[s.ID] = &cp
@@ -357,7 +371,7 @@ func (st *Store) noteSkip(id, why, words string) {
 	if !ok {
 		return
 	}
-	cur.LastRun, cur.LastOK, cur.Skipped, cur.LastResult = st.now(), true, why, "skipped: "+words
+	cur.LastRun, cur.LastOK, cur.Skipped, cur.LastResult, cur.LastDenied = st.now(), true, why, "skipped: "+words, nil
 	if err := st.saveLocked(); err != nil {
 		log.Printf("schedules: %v", err)
 	}

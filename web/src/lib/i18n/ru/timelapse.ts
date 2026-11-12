@@ -1,0 +1,53 @@
+// The Russian words of the timelapses: the player, the GIF export, the View menu's row, the palette and Settings.
+
+import type { Dictionary } from "../../i18n";
+
+export const timelapse: Dictionary = {
+  Timelapse: "Таймлапс",
+  "Timelapse…": "Таймлапс…",
+  "Timelapse of this pane…": "Таймлапс этой панели…",
+  "its turns as they looked on screen, played back in seconds; export as GIF": "его ходы так, как они выглядели на экране, за считаные секунды; экспорт в GIF",
+  "Frame {n} of {total}": "Кадр {n} из {total}",
+  "Pause (Space)": "Пауза (пробел)",
+  "Play (Space)": "Воспроизвести (пробел)",
+  Pause: "Пауза",
+  Play: "Воспроизвести",
+  "The frame before (←)": "Предыдущий кадр (←)",
+  "The frame before": "Предыдущий кадр",
+  "The frame after (→)": "Следующий кадр (→)",
+  "The frame after": "Следующий кадр",
+  "Where in the turn": "Место в ходе",
+  Space: "Пробел",
+  "play or pause the turn": "воспроизвести ход или поставить на паузу",
+  "the frame before or after": "предыдущий или следующий кадр",
+  "Recorded at {when}": "Записано в {when}",
+  Speed: "Скорость",
+  "{n} frames": ["{n} кадр", "{n} кадра", "{n} кадров"],
+  "By frame": "По кадрам",
+  "pane {pane}": "панель {pane}",
+  "came to rest": "остановился",
+  "asked you something": "задал вам вопрос",
+  "its pane closed": "его панель закрылась",
+  "remuda stopped while it worked": "remuda остановилась, пока он работал",
+  "cut short: remuda went down while it worked": "оборвано: remuda упала, пока он работал",
+  "Export as GIF": "Экспорт в GIF",
+  "Drawing the GIF… {pct} %": "Рисую GIF… {pct} %",
+  "Saved the timelapse as a GIF": "Таймлапс сохранён как GIF",
+  "This browser cannot draw the GIF: it has no canvas": "Этот браузер не может нарисовать GIF: в нём нет canvas",
+  "Delete this recording? The turn's conversation stays as it is.": "Удалить эту запись? Разговор этого хода останется как есть.",
+  "This folder is hidden while you share the screen.": "Эта папка скрыта, пока вы показываете экран.",
+  "No recording of this pane or its folder yet. A turn is recorded while the agent works, and kept once it has worked a minute or more.":
+    "Записей этой панели и её папки пока нет. Ход записывается, пока агент работает, и сохраняется, если он проработал минуту или дольше.",
+  "Recording is off: turn it on in Settings › Timelapse.": "Запись выключена: включите её в Настройки › Таймлапс.",
+  "Record the agents' turns": "Записывать ходы агентов",
+  "While an agent works, the cockpit reads its screen every 4 s — with no page open too — and keeps the turn once it ends, if it lasted a minute. The recordings stay on this machine, out of the nightly backups.":
+    "Пока агент работает, кабина читает его экран каждые 4 с — и когда ни одна страница не открыта — и сохраняет ход, когда он закончится, если он длился минуту. Записи остаются на этой машине и не попадают в ночные резервные копии.",
+  "This remuda runs beside the real one (REMUDA_STATE_DIR is set) and records nothing: the real one does. Started with -\u2060record, it records too.":
+    "Эта remuda работает рядом с настоящей (задан REMUDA_STATE_DIR) и ничего не записывает: записывает настоящая. Запущенная с -\u2060record, она тоже записывает.",
+  Kept: "Хранится",
+  "Nothing kept yet; at most {max}, the oldest going first": "Пока ничего; не больше {max}, старые удаляются первыми",
+  "{n} recordings, {size} of at most {max}; the oldest go first": ["{n} запись, {size} из не более чем {max}; старые удаляются первыми", "{n} записи, {size} из не более чем {max}; старые удаляются первыми", "{n} записей, {size} из не более чем {max}; старые удаляются первыми"],
+  "Delete every timelapse recording? The conversations stay as they are.": "Удалить все записи таймлапсов? Разговоры останутся как есть.",
+  "Delete all": "Удалить все",
+  "Deleted {n} recordings": ["Удалена {n} запись", "Удалены {n} записи", "Удалено {n} записей"],
+};

@@ -22,6 +22,7 @@ import { canFork, forkLabel } from "@/features/chat/fork";
 import { forkPane } from "@/features/chat/forkPane";
 import { keyWords } from "@/features/terminal/float/float";
 import { toggleFloat } from "@/features/terminal/float/useFloatKey";
+import { openTimelapse } from "@/features/terminal/timelapse/row";
 import { setSharingAll, toggleSharing, toggleSharingFolder, toggleSharingMachine, useSharing } from "@/features/roster/useSharing";
 import { markedFolder, markedMachine } from "@/features/roster/sharing";
 import { SHARING_KEY_NAME } from "./sharingKey";
@@ -31,6 +32,7 @@ import { folderOf, useCurrent } from "./current";
 import { enterFull, leaveFull } from "./full";
 import { NEXT_KEY, useNextNeedingMe } from "./next";
 import { REOPEN_KEY } from "@/features/reopen/closed";
+import { USAGE_TAB_KEY, type UsageTab } from "@/features/usage/scorecard";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
 import { setDarkFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, useTextSize, useThemePref } from "./theme";
@@ -146,6 +148,7 @@ function useCommands(): (query: string) => Entry[] {
         if (popOutSupported) command("popout", t("Pop out this agent"), () => void popOut(selection!), { hint: t("a small window above every other app"), icon: "pip", keywords: ["picture", "window", "float"] });
         if (current.pane.agent) command("export", t("Export this conversation as Markdown"), () => void exportConversation(machine.id, current.pane.id, chatSession, folderOf(current), { agent: current.pane.agent, workspace: session.name, machine: machine.label }).catch(toastError), { hint: t("the session shown, as a file"), icon: "download", keywords: ["save", "download", "markdown", "transcript", "share", "file"] });
         if (current.pane.agent) command("recap", t("Recap this conversation"), () => actions.openDialog({ kind: "recap", machineId: machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), title: titled }), { hint: t("prompts, answers, tools, files, cost — Copy as Markdown"), icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest", "what happened"] });
+        if (current.pane.agent) command("timelapse", t("Timelapse of this pane…"), () => openTimelapse({ machineId: machine.id, paneId: current.pane.id, dir: folderOf(current), agent: current.pane.agent, workspace: session.name, machine: machine.label }), { hint: t("its turns as they looked on screen, played back in seconds; export as GIF"), icon: "film", keywords: ["timelapse", "replay", "recording", "record", "screen", "gif", "video", "playback", "fast"] });
         if (canFork(current.pane.agent)) command("fork", forkLabel(current.pane.agent), () => void forkPane(machine.id, current.pane.id, current.pane.agent, chatSession), { hint: t("the same history in a new tab, a second path; this one goes on as it is"), icon: "columns", keywords: ["fork", "copy", "branch", "try", "another way", "duplicate", "conversation"] });
         if (current.pane.agent) command("handover", t("Continue this conversation with another agent"), () => actions.openDialog({ kind: "handover", machineId: machine.id, paneId: current.pane.id, session: chatSession, agent: current.pane.agent, workspace: titled }), { hint: t("a new tab here with Codex, Gemini or a fresh Claude, the gist of this conversation as its first prompt"), icon: "arrow-right", keywords: ["handover", "hand over", "continue", "switch", "codex", "gemini", "kimi", "another agent", "model", "cheaper", "stuck"] });
         command("teleport", t("Move the work in {workspace} to another machine…", { workspace: named }), () => actions.openDialog({ kind: "teleport", machineId: machine.id, paneId: current.pane.id, tabId: tab.id, workspace: session.name, agent: current.pane.agent }), { hint: t("its branch, commits and uncommitted changes to a clone there, an agent carrying on"), icon: "send", keywords: ["teleport", "move", "machine", "transfer", "worktree", "laptop"] });
@@ -206,7 +209,12 @@ function useCommands(): (query: string) => Entry[] {
       command("recipes", t("Recipes…"), () => actions.openDialog({ kind: "recipes" }), { hint: t("the saved ways to start an agent: agent, model, arguments, first prompt"), icon: "sparkles", keywords: ["recipe", "recipes", "preset", "template", "saved", "manage"] });
       command("triggers", t("Triggers…"), () => actions.openDialog({ kind: "triggers" }), { hint: t("a line a pane prints, and what it sets off: a push, a preview, a task moved"), icon: "zap", keywords: ["trigger", "triggers", "rule", "output", "match", "regex", "pattern", "watch", "tests", "dev server"] });
       command("schedules", t("Schedules"), () => actions.openPanel("schedules"), { hint: t("prompts sent to agents on a timetable"), icon: "calendar", keywords: ["cron", "timer", "prompt"] });
-      command("usage", t("Usage report"), () => actions.openPanel("usage"), { hint: t("what the agents cost, by day, project and session"), icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
+      const usageOn = (tab: UsageTab) => () => {
+        writePref(USAGE_TAB_KEY, tab);
+        actions.openPanel("usage");
+      };
+      command("usage", t("Usage report"), usageOn("spend"), { hint: t("what the agents cost, by day, project and session"), icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
+      command("scorecard", t("Models scorecard"), usageOn("models"), { hint: t("which model does your work best: finished runs, first-time approvals, merged pull requests, arenas kept, cost and time"), icon: "chart", keywords: ["model", "models", "compare", "best", "score", "quality", "approve", "merge", "opus", "sonnet", "fable", "gpt", "codex"] });
       command("standup", t("Standup: what every agent did today"), () => actions.openPanel("standup"), { hint: t("one report over every machine, ready to paste as Markdown"), icon: "sun", keywords: ["standup", "report", "today", "summary", "recap", "daily", "digest", "morning"] });
       command("arena-new", t("Arena: one prompt to several agents…"), () => actions.openDialog({ kind: "arena", at: current ? { machineId: current.machine.id, workspaceId: current.session.id } : undefined }), { hint: t("each in a worktree of its own, their work side by side, the best kept"), icon: "columns", keywords: ["arena", "compare", "best", "race", "parallel", "agents", "worktree", "versus"] });
       command("arenas", t("Arenas"), () => actions.openPanel("arena"), { hint: t("the lanes of every arena: how each agent stands, its changes, keep the best"), icon: "columns", keywords: ["arena", "compare", "lanes", "keep"] });
@@ -224,7 +232,7 @@ function useCommands(): (query: string) => Entry[] {
         keywords: ["terminal", "shell", "float", "scratch", "console", "quake", "drawer"],
       });
       command("machine", t("Add a PC…"), () => actions.openDialog({ kind: "machine" }), { hint: t("a remote machine over SSH"), icon: "monitor", keywords: ["machine", "remote", "ssh", "host"] });
-      command("budgets", t("Budgets…"), () => actions.openPanel("usage"), { hint: t("a spending limit per day, week or month, with a push when it is near"), icon: "chart", keywords: ["budget", "limit", "cost", "spend", "money"] });
+      command("budgets", t("Budgets…"), usageOn("spend"), { hint: t("a spending limit per day, week or month, with a push when it is near"), icon: "chart", keywords: ["budget", "limit", "cost", "spend", "money"] });
       if (current && !viewer && current.pane.agent === "claude") command("model", t("Switch this agent's model…"), () => actions.openDialog({ kind: "model", machineId: current.machine.id, paneId: current.pane.id, current: current.pane.usage?.name }), { hint: t("Opus, Sonnet, Haiku or an id, through Claude Code's own /model"), icon: "sparkles", keywords: ["model", "opus", "sonnet", "haiku", "switch", "cheaper", "faster"] });
       for (const flavor of DARK_FLAVORS) {
         command(`flavor-${flavor}`, t("Dark flavour: {flavor}", { flavor: FLAVOR_NAMES[flavor] }), () => setDarkFlavorPref(flavor), { hint: `${darkFlavor === flavor ? t("now · ") : ""}${t("Catppuccin {flavor} whenever the theme is dark", { flavor: FLAVOR_NAMES[flavor] })}`, icon: "moon", keywords: ["theme", "dark", "flavour", "flavor", "catppuccin", flavor] });

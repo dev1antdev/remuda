@@ -20,7 +20,9 @@ import (
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/restart"
+	"github.com/dev1antdev/remuda/internal/retire"
 	"github.com/dev1antdev/remuda/internal/sessions"
+	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/triggers"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -49,6 +51,8 @@ type rosterPane struct {
 	PR    *rosterPR      `json:"pr,omitempty"`   // the last pull or merge request the agent named
 	// a subscription limit the agent stopped on, and the person's booking to continue it after the reset
 	Limit *limits.PaneLimit `json:"limit,omitempty"`
+	// how many of its live conversation's subagents work, sit quiet or are done, for the Wall's zoo; nil for none
+	Subagents *subagents.Count `json:"subagents,omitempty"`
 	// a dev server the pane announced and the previews found listening, offered as a preview
 	Serves *triggers.Offer `json:"serves,omitempty"`
 }
@@ -107,10 +111,11 @@ type rosterMachine struct {
 	Error    string            `json:"error,omitempty"`
 	Sessions []rosterSession   `json:"sessions"`
 	Health   *health.Report    `json:"health,omitempty"`
-	Awake    *awake.Status     `json:"awake,omitempty"`   // the keep-awake switch and whether the hold stands
-	Stopped  []restart.Stopped `json:"stopped,omitempty"` // the chats a reboot stopped: their panes are bare shells again, a Resume brings them back
-	MAC      string            `json:"mac,omitempty"`     // the address a wake-up packet names, when the person set one
-	Limits   *limits.Reading   `json:"limits,omitempty"`  // the agents' subscription windows as the machine last reported them
+	Awake    *awake.Status     `json:"awake,omitempty"`    // the keep-awake switch and whether the hold stands
+	Stopped  []restart.Stopped `json:"stopped,omitempty"`  // the chats a reboot stopped: their panes are bare shells again, a Resume brings them back
+	MAC      string            `json:"mac,omitempty"`      // the address a wake-up packet names, when the person set one
+	Limits   *limits.Reading   `json:"limits,omitempty"`   // the agents' subscription windows as the machine last reported them
+	Retiring []retire.Hit      `json:"retiring,omitempty"` // what starts or runs there on a model or mode being retired
 }
 
 // rosterServer is the host of a remuda serving the page only: its name and vitals, for the Server place, never a machine of the fleet.
@@ -120,10 +125,10 @@ type rosterServer struct {
 	Health *health.Report `json:"health,omitempty"`
 }
 
-// folderOf is the folder a workspace belongs to in the sidebar: its repository's main checkout — herdr's repo_root,
+// FolderOf is the folder a workspace belongs to in the sidebar: its repository's main checkout — herdr's repo_root,
 // else the folder holding the shared .git, else the root the review sweep read with git (a worktree made outside
-// herdr) — or, outside a repository, the workspace's own folder.
-func folderOf(worktree *herdr.WorktreeInfo, root, dir string) string {
+// herdr) — or, outside a repository, the workspace's own folder. A timelapse keeps it, for the screen-sharing mode.
+func FolderOf(worktree *herdr.WorktreeInfo, root, dir string) string {
 	if worktree != nil {
 		if worktree.RepoRoot != "" {
 			return worktree.RepoRoot
@@ -174,6 +179,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			if s.Limits != nil {
 				entry.Limit = s.Limits.PaneOf(machineID, pane.PaneID)
 			}
+			entry.Subagents = s.Subagents.Count(machineID, pane.PaneID)
 		}
 		panesByTab[pane.TabID] = append(panesByTab[pane.TabID], entry)
 		if pane.Agent != "" {
@@ -217,7 +223,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			}
 		}
 		session.Dir = snap.WorkspaceDir(&ws)
-		session.Folder = folderOf(ws.Worktree, s.Review.Root(machineID, session.Dir), session.Dir)
+		session.Folder = FolderOf(ws.Worktree, s.Review.Root(machineID, session.Dir), session.Dir)
 		if s.Icons != nil {
 			if icon, ok := s.Icons.Of(machineID, session.Folder); ok {
 				session.Icon = &icon
@@ -263,8 +269,9 @@ func (s *Server) issuesOf(machineID string, session rosterSession) []jira.Issue 
 
 // handleRoster serves every machine from the watcher's cache, with an ETag so an unchanged roster is a 304.
 func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
-	s.PRs.Touch()  // somebody is looking: the pull requests named are worth reading again
-	s.Jira.Touch() // and the Jira issues the workspaces name
+	s.PRs.Touch()       // somebody is looking: the pull requests named are worth reading again
+	s.Jira.Touch()      // and the Jira issues the workspaces name
+	s.Subagents.Touch() // and the subagents the conversations run
 	body, etag := s.rosterBody()
 	w.Header().Set("X-Remuda-Version", buildversion.Build) // a page older than the server offers a reload
 	if auth.IsViewer(r.Context()) {
@@ -314,6 +321,9 @@ func (s *Server) rosterBody() ([]byte, string) {
 			entry.Stopped = s.Updates.Restart.Stopped(mc.ID())
 		}
 		entry.MAC = s.Machines.MAC(mc.ID())
+		if s.Retire != nil {
+			entry.Retiring = s.Retire.On(mc.ID())
+		}
 		if s.Limits != nil {
 			if reading := s.Limits.Of(mc.ID()); len(reading.Windows) > 0 || reading.Wrapped {
 				entry.Limits = &reading
@@ -321,7 +331,7 @@ func (s *Server) rosterBody() ([]byte, string) {
 		}
 		out = append(out, entry)
 	}
-	roster := map[string]any{"machines": out, "agents": sessions.Agents, "version": buildversion.Build, "latest": s.Health.Latest()}
+	roster := map[string]any{"machines": out, "agents": sessions.Agents, "version": buildversion.Build, "latest": s.Health.Latest(), "retirements": retire.Table}
 	if s.Machines.Server() {
 		if host, err := s.Machines.Get(machines.LocalID); err == nil {
 			roster["server"] = rosterServer{ID: host.ID(), Label: host.Label(), Health: s.Health.Report(host.ID())} // the Server place: no machine of the fleet, only its vitals
@@ -342,6 +352,15 @@ func (s *Server) rosterBody() ([]byte, string) {
 	body, _ := json.Marshal(roster)
 	sum := sha256.Sum256(body)
 	return body, `"` + hex.EncodeToString(sum[:12]) + `"`
+}
+
+// modelsMoved is a recipe, a schedule or a project's agents changed: what is set to a model being retired is looked
+// for again, and the page told
+func (s *Server) modelsMoved() {
+	if s.Retire != nil {
+		s.Retire.Moved()
+	}
+	s.rosterMoved()
 }
 
 // tabNamed says whether the person named a tab: herdr labels an unnamed one by a number, and after a close it may

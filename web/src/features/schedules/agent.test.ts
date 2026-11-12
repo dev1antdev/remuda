@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentSchedule, agentWords, SCOUT_PROMPT, watchedWords } from "./agent";
+import { agentSchedule, agentWords, deniedWords, SCOUT_PROMPT, watchedWords } from "./agent";
 import { kindOf } from "./digest";
 
 describe("agent schedules", () => {
@@ -12,6 +12,16 @@ describe("agent schedules", () => {
     expect(agentSchedule({ machine: "local", dir: "/x", agent: "codex", prompt: "hi", close: false, model: "gpt-5" })).toMatchObject({ close: false, model: "gpt-5" });
     expect(kindOf(s)).toBe("agent");
     expect(kindOf({ kind: undefined })).toBe("prompt");
+  });
+
+  it("deny prompts unless told otherwise, and say so for Claude Code alone", () => {
+    expect(agentSchedule({ machine: "local", dir: "/x", agent: "claude", prompt: "hi" }).deny_prompts).toBe(true);
+    expect(agentSchedule({ machine: "local", dir: "/x", agent: "claude", prompt: "hi", deny_prompts: false }).deny_prompts).toBe(false);
+    expect(agentWords({ close: false, deny_prompts: true, agent: "claude" }, "GOG", "remuda", "Claude Code")).toBe("GOG · remuda · Claude Code · denies instead of asking");
+    expect(agentWords({ close: false, deny_prompts: true, agent: "codex" }, "GOG", "remuda", "Codex")).toBe("GOG · remuda · Codex");
+    expect(agentWords({ close: false, agent: "claude" }, "GOG", "remuda", "Claude Code")).toBe("GOG · remuda · Claude Code");
+    expect(deniedWords({ last_denied: [{ tool: "Bash", what: "touch x" }, { tool: "Write", what: "/w/a.txt" }] })).toBe("2 calls denied: Bash · touch x; Write · /w/a.txt");
+    expect(deniedWords({})).toBe("");
   });
 
   it("say where the agent runs and whether it goes", () => {

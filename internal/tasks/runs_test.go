@@ -247,3 +247,31 @@ func TestRunUsageIsKept(t *testing.T) {
 		t.Fatalf("the list carries the sum: %+v", list)
 	}
 }
+
+func TestLiveTasksNamesTheTaskOfEachOpenRunByPane(t *testing.T) {
+	st := open(t)
+	inbox, _ := st.Projects()
+	first, _ := st.Create(inbox[0].ID, Patch{Title: str("First")})
+	second, _ := st.Create(inbox[0].ID, Patch{Title: str("Second")})
+	gone, _ := st.Create(inbox[0].ID, Patch{Title: str("Gone")})
+	if _, err := st.StartRun(Run{TaskID: first.ID, Machine: "studio", Pane: "w1:p1", Agent: "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.StartRun(Run{TaskID: second.ID, Machine: "studio", Pane: "w1:p1", Agent: "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	ended, _ := st.StartRun(Run{TaskID: gone.ID, Machine: "studio", Pane: "w2:p1", Agent: "claude"})
+	if err := st.SetRun(ended.ID, RunGone, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.StartRun(Run{TaskID: first.ID, Machine: "gog", Pane: "w3:p1", Agent: "codex"}); err != nil {
+		t.Fatal(err)
+	}
+	live, err := st.LiveTasks("studio")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(live) != 1 || live["w1:p1"] != second.ID {
+		t.Fatalf("live tasks on studio: %v (the newest run on a pane names it, a gone run and another machine's do not)", live)
+	}
+}

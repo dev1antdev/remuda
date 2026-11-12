@@ -33,17 +33,18 @@ const ScopeViewer = "viewer"
 // so an agent sees who is on what before it files or takes a task. Nothing there is written.
 var readRoutes = map[string]bool{"/api/roster": true, "/api/recap": true, "/api/standup": true}
 
-// viewerRoutes is what a viewer may GET: the roster, the conversations, the screens, the reports and the event stream
-// the page draws from, and the folders' icons (viewerPrefixes); the pane's terminal socket, every submit and key, the
-// tasks and every change stay out.
+// viewerRoutes is what a viewer may GET: the roster, the conversations, the screens and their timelapses, the reports
+// and the event stream the page draws from, and the folders' icons (viewerPrefixes); the pane's terminal socket, every
+// submit and key, the tasks, the timelapses' switch and every change stay out.
 var viewerRoutes = map[string]bool{
 	"/api/roster": true, "/api/chat": true, "/api/screen": true, "/api/scrollback": true, "/api/recap": true, "/api/standup": true,
 	"/api/feed": true, "/api/fs/file": true, "/api/fs/stat": true, "/api/health": true, "/api/push": true, "/api/question": true,
-	"/api/usage": true, "/ws/events": true,
+	"/api/usage": true, "/api/scorecard": true, "/ws/events": true, "/api/timelapse/recordings": true,
 }
 
-// viewerPrefixes are the routes a viewer may GET under a path of their own: the folders' icon pictures by hash.
-var viewerPrefixes = []string{"/api/icons/"}
+// viewerPrefixes are the routes a viewer may GET under a path of their own: the folders' icon pictures by hash, and a
+// timelapse by its id (a screen as it was, which a viewer may read as it is).
+var viewerPrefixes = []string{"/api/icons/", "/api/timelapse/recordings/"}
 
 // Key is one agent key: only the sha256 of the key itself is kept, with the machine it was placed on as its name.
 type Key struct {

@@ -77,7 +77,11 @@ socket.onmessage = (message) => {
   if (msg.method === "Fetch.requestPaused") {
     const url = msg.params.request?.url ?? "";
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
+    else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
+    else if (url.includes("/api/review/secrets")) void fakeSecrets(msg.params);
+    else if (url.includes("/api/timelapse/recordings")) void fakeTimelapse(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
+    else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
   }
   if (msg.method === "Runtime.exceptionThrown") consoleErrors.push(msg.params.exceptionDetails?.exception?.description ?? msg.params.exceptionDetails?.text ?? "exception");
@@ -305,7 +309,13 @@ writeFileSync(`${appDir}/README.md`, "# app\n");
 writeFileSync(`${appDir}/src/app.go`, goLines("hello", 41));
 writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\n");
 writeFileSync(`${appDir}/old.txt`, "an old file\n");
+// Claude Code's own approvals committed by mistake, one of them carrying a token: the lens head warns of it. The token
+// is made here, its letters in another order, so no secret sits in this file
+const shuffledKey = (n) => Array.from({ length: n }, (_, i) => "Zq8vK2mWp4Lr7Tb9Xs3Nd6Hc1JyQe5Gu0"[(i * 7 + 3) % 33]).join("");
+mkdirSync(`${appDir}/.claude`, { recursive: true });
+writeFileSync(`${appDir}/.claude/settings.local.json`, `${JSON.stringify({ permissions: { allow: ["Bash(npm test)", `Bash(curl -H 'Authorization: Bearer ${shuffledKey(40)}' https://deploy.internal)`] } }, null, 2)}\n`);
 git(appDir, "add", "-A");
+git(appDir, "add", "-f", ".claude/settings.local.json"); // past an excludes file that ignores it, as Claude Code sets one up
 git(appDir, "commit", "-q", "-m", "init");
 writeFileSync(`${appDir}/src/app.go`, goLines("hello, world", 42));
 writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\nA second note, staged.\n");
@@ -330,7 +340,7 @@ const made = [];
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
-let app, tree, notes, inbox, paneA1, paneN;
+let app, tree, notes, inbox, drawTask, paneA1, paneN;
 let DRESS = {};
 
 // seed makes the workspaces the screens draw — the repository with two tabs and a linked worktree, a plain folder —
@@ -361,7 +371,7 @@ async function seed() {
   if (!taken.path?.startsWith(`${tmp}/`) || !existsSync(taken.path) || !(taken.size > 0) || !(taken.files > 0)) failed(`a backup now answered ${JSON.stringify(taken)}`);
   const projects = await api("GET", "/api/tasks/projects");
   inbox = (projects.find?.((p) => /inbox/i.test(p.title)) ?? projects[0])?.id;
-  await api("POST", "/api/tasks", { project_id: inbox, title: "Draw every screen", markdown: "Every **screen** at two widths.\n\n- [ ] the desk\n- [ ] the phone" });
+  drawTask = (await api("POST", "/api/tasks", { project_id: inbox, title: "Draw every screen", markdown: "Every **screen** at two widths.\n\n- [ ] the desk\n- [ ] the phone" })).id;
   // the Inbox's agents set up: a Queued column, kept empty so the queue (on) starts nothing, and a two-stage pipeline
   const inboxProject = projects.find((p) => p.id === inbox);
   const columns = inboxProject.statuses.flatMap((s) => (s.on_new ? [s, { id: 0, project_id: inbox, title: "Queued", hex_color: "f1c40f", kind: "open", position: 0, on_queue: true }] : [s]));
@@ -372,6 +382,8 @@ async function seed() {
       machine: "local",
       dir: appDir,
       agent: "claude",
+      model: "claude-opus-4-8", // fast mode on Opus 4.8 goes on 30 Nov 2026: the settings say so, and so does the machine's ⓘ
+      args: `--settings '{"fastMode":true}'`,
       queue: true,
       max: 2,
       stages: [
@@ -480,6 +492,82 @@ async function fakeOpinion({ requestId, request }) {
   await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
 
+// fakeScorecard answers the Models tab with four models: two that compare (one best of a column each, a tie), one on too
+// few runs, one whose model was never read; the first two offer the seeded task to try them on, in the app repository
+async function fakeScorecard({ requestId }) {
+  const share = (count, of) => ({ count, of, ...(of >= 5 ? { rate: count / of } : {}) });
+  const mean = (value, n) => ({ ...(value === undefined ? {} : { value }), n, ...(n < 5 ? { few: true } : {}) });
+  const tryOn = (lanes) => ({ task_id: drawTask, identifier: `#${drawTask}`, title: "Draw every screen", project_id: inbox, machine: "local", dir: `${tmp}/.herdr/worktrees/app/task-${drawTask}`, ran: iso(now - 86400e3), lanes });
+  const opus = { agent: "claude", model: "Opus 4.5", model_id: "claude-opus-4-5" };
+  const fable = { agent: "claude", model: "Fable 5.1", model_id: "claude-fable-5-1" };
+  const body = {
+    since: iso(now - 30 * 86400e3),
+    days: 30,
+    min_sample: 5,
+    verdicts: 12,
+    unplaced: 2,
+    rows: [
+      { ...opus, runs: 7, finished: share(6, 7), first_approved: share(4, 5), rejected: 1, approved: 5, merged: share(2, 3), kept: share(1, 2), cost_per_run: mean(2.4, 7), cost_per_approved: mean(3.1, 5), minutes_per_run: mean(18.2, 6), last: iso(now - 3600e3), try: tryOn([fable, opus]) },
+      { ...fable, runs: 5, finished: share(5, 5), first_approved: share(4, 5), rejected: 1, approved: 4, merged: share(3, 5), kept: share(2, 2), cost_per_run: mean(3.9, 5), cost_per_approved: mean(4.6, 4), minutes_per_run: mean(11, 5), last: iso(now - 600e3), try: tryOn([opus, fable]) },
+      { agent: "codex", model: "gpt-6.1-sol", model_id: "gpt-6.1-sol", runs: 2, finished: share(2, 2), first_approved: share(1, 2), rejected: 1, approved: 1, merged: share(0, 0), kept: share(1, 2), cost_per_run: mean(undefined, 0), cost_per_approved: mean(undefined, 1), minutes_per_run: mean(7, 2), last: iso(now - 7200e3) },
+      { agent: "claude", model: "", runs: 1, finished: share(0, 1), first_approved: share(0, 0), rejected: 0, approved: 0, merged: share(0, 0), kept: share(0, 0), cost_per_run: mean(0.4, 1), cost_per_approved: mean(undefined, 0), minutes_per_run: mean(undefined, 0), last: iso(now - 86400e3) },
+    ],
+  };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// fakeSecrets answers the secret check for the repository with what it would find in work holding secrets: a token on
+// src/app.go's changed greeting, which the lens can open at its row, and a keystore it cannot; other folders go through
+async function fakeSecrets({ requestId, request }) {
+  if (!(new URL(request.url).searchParams.get("dir") ?? "").replace(/\/+$/, "").endsWith("/display/app")) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const body = {
+    findings: [
+      { file: "src/app.go", line: 6, rule: "github-token", excerpt: 'fmt.Println("ghp_••••••••a1B2")' },
+      { file: "certs/release.p12", line: 0, rule: "key-file", excerpt: "release.p12" },
+    ],
+    skipped: [{ path: "assets/logo.png", why: "binary" }],
+    files: 4,
+    at: iso(now),
+  };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// fakeTimelapse answers the player's reads with a recording of the seeded agent's pane — forty minutes of a Claude Code
+// screen at work, its spinner and its tool calls moving — and of an earlier pane of the folder; no recording is deleted
+const TIMELAPSE_ID = "20261112T120000Z-e2e0aa";
+function fakeRecording() {
+  const start = now - 45 * 60e3;
+  const rows = (i) => [
+    "\x1b[38;2;215;119;87m╭" + "─".repeat(58) + "╮\x1b[0m",
+    "\x1b[38;2;215;119;87m│\x1b[0m \x1b[1m✻ Welcome to Claude Code\x1b[0m" + " ".repeat(32) + " \x1b[38;2;215;119;87m│\x1b[0m",
+    "\x1b[38;2;215;119;87m╰" + "─".repeat(58) + "╯\x1b[0m",
+    "",
+    "> Draw every screen of the page at two widths",
+    ...Array.from({ length: Math.min(6, i) }, (_, n) => `\x1b[32m⏺\x1b[0m \x1b[1mEdit\x1b[0m(src/screen${n}.tsx)`),
+    "",
+    i < 11 ? `\x1b[38;2;215;119;87m${"✻✽✶✳"[i % 4]} Drawing… \x1b[0m\x1b[2m(${i * 4} min · esc to interrupt)\x1b[0m` : "\x1b[32m⏺\x1b[0m Every screen draws at both widths.",
+  ];
+  let previous = [];
+  const frames = Array.from({ length: 12 }, (_, i) => {
+    const screen = rows(i);
+    const changed = screen.flatMap((text, line) => (previous[line] === text ? [] : [{ line, text }]));
+    previous = screen;
+    return { at: i * 4 * 60e3, lines: screen.length, rows: changed };
+  });
+  return { id: TIMELAPSE_ID, machine: "local", pane: paneA1, workspace: "app", dir: appDir, folder: appDir, agent: "claude", title: "Draw every screen", cols: 60, rows: 14, start: iso(start), end: iso(start + 44 * 60e3), count: frames.length, ended: "done", size: 4096, frames };
+}
+async function fakeTimelapse({ requestId, request }) {
+  const recording = fakeRecording();
+  const { frames, ...meta } = recording;
+  const earlier = { ...meta, id: "20261111T090000Z-e2e0bb", pane: "w9:p1", agent: "codex", start: iso(now - 26 * 3600e3), end: iso(now - 25 * 3600e3) };
+  const path = new URL(request.url).pathname;
+  const [code, body] = request.method !== "GET" ? [403, { error: "the e2e deletes no recording" }] : path.endsWith("/recordings") ? [200, { recordings: [meta, earlier], on: true }] : path.endsWith(TIMELAPSE_ID) ? [200, recording] : [200, { ...earlier, frames }];
+  await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
   const reply = await send("Fetch.getResponseBody", { requestId });
   if (responseStatusCode !== 200 || !reply.result) {
@@ -496,6 +584,8 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
   }
   for (const machine of roster.machines ?? []) {
     if (machine.id !== "local") continue;
+    // Claude Code's sign-in there ends in a day and a half: a red concern with a shell to sign in again from
+    machine.health = { ...(machine.health ?? { at: iso(now), disk_free_gb: 120, disk_used_pct: 30, load1: 0.4 }), claude_login: { expires: iso(now + 36 * 3600e3), at: iso(now) } };
     machine.limits = {
       wrapped: true,
       windows: [
@@ -516,6 +606,26 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
   roster.server = SERVER_HOST; // the Server place a remuda -server draws: its host's vitals, the readings a Raspberry Pi gives
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(roster)).toString("base64") });
+}
+
+// DENIED is what the dressed Claude Code pane's conversation was denied without asking, for the chat lens's notice
+const DENIED = [
+  { tool: "Bash", what: "npm install --save-dev vitest", at: iso(now - 20 * 60e3), tool_id: "toolu_e2e_1" },
+  { tool: "Write", what: `${tmp}/display/app/src/new-screen.tsx`, at: iso(now - 18 * 60e3), tool_id: "toolu_e2e_2" },
+];
+
+// dressChat adds DENIED to the lens's answer for the dressed agent pane (a tile's tail, last=N, carries none)
+async function dressChat({ requestId, request, responseStatusCode, responseHeaders = [] }) {
+  const url = new URL(request.url);
+  const reply = responseStatusCode === 200 && url.searchParams.get("pane") === paneA1 && !url.searchParams.has("last") ? await send("Fetch.getResponseBody", { requestId }) : null;
+  if (!reply?.result) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const chat = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
+  chat.denied = DENIED;
+  const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(chat)).toString("base64") });
 }
 
 // FEED is the activity the browser is shown: an id far past the server's own, and the alert a screen puts in it
@@ -695,11 +805,50 @@ async function changesScreens() {
   });
   await screen("changes-opinion-dialog", {
     open: async () => tap(`${LENS} .review-ask-opinion`),
-    expect: [".modal .sel"],
+    expect: [".modal .sel", ".modal .deny-switch"],
   });
   await screen("changes-verdict", {
     open: async () => tap(`${LENS} .review-verdicts .btn:not(.primary)`),
     expect: [".modal textarea"],
+  });
+  await screen("changes-secrets", {
+    open: async () => {
+      check(await present(`${LENS} .review-settings .notice.warn`), "the lens head does not warn of the token in .claude/settings.local.json");
+      await tap(`${LENS} .review-verdicts .btn.primary`);
+      if (!(await until(() => present(".modal .verdict-ask"), 3))) throw new Error("the approval offers no commit");
+      await tap(await mark(`document.querySelectorAll('.modal .verdict-ask')[1]`, "ask-commit"));
+      if (!(await until(() => present(".modal .secret-check.is-found"), 6))) throw new Error("the secret check did not report its findings");
+      check((await count(".modal .secret-finding")) === 2, `the dialog lists ${await count(".modal .secret-finding")} findings, not 2`);
+      check(await evaluate(`document.querySelector('.modal button[type=submit]')?.disabled === true`), "Approve & commit is not held back by the findings");
+      check(await present(".modal .review-send-anyway"), "no Send anyway beside the held button");
+      check(await evaluate(`document.querySelectorAll('.modal .secret-finding:disabled').length === 1`), "the keystore, which has no row, is offered as a jump");
+      const inside = `(() => { const box = document.querySelector('.modal').getBoundingClientRect(); return [...document.querySelectorAll('.modal .modal-actions .btn')].every((b) => { const r = b.getBoundingClientRect(); return r.left >= box.left - 1 && r.right <= box.right + 1; }); })()`;
+      check(await evaluate(inside), "Cancel, Send anyway and the held approval run past the dialog's edge");
+    },
+    expect: [".modal .secret-check"],
+    close: async () => {},
+  });
+  // Send anyway asks first, naming how many: the confirm is only looked at, never answered — nothing is sent
+  await screen("changes-send-anyway", {
+    open: async () => {
+      await tap(".modal .review-send-anyway");
+      if (!(await until(() => present(".confirm-text"), 3))) throw new Error("Send anyway went without a confirm");
+      check(/\b2\b/.test(await evaluate(`document.querySelector('.confirm-text')?.textContent ?? ""`)), "the confirm does not say how many findings");
+    },
+    expect: [".confirm-text"],
+    close: async () => {
+      await tap(await mark(`[...document.querySelectorAll('.modal')].pop()?.querySelector('.modal-actions .btn:not(.danger)')`, "confirm-cancel"));
+      if (!(await until(async () => !(await present(".confirm-text")), 3))) failed("Cancel did not close the confirm");
+    },
+  });
+  await screen("changes-secret-row", {
+    open: async () => {
+      await tap(".modal .secret-finding:not(:disabled)");
+      if (!(await until(async () => !(await present(".modal")), 3))) failed("a finding's click did not give the dialog's place to its row");
+      if (!(await until(() => present(`${LENS} .review-file.open .fv-line.secret`), 6))) failed("the finding's row is not marked in the diff");
+      check(await present(`${LENS} .review-tag-secret`), "the file's row does not count its secret");
+    },
+    expect: [`${LENS} .fv-line.secret`],
   });
   await screen("changes-file", {
     open: async () => {
@@ -912,8 +1061,10 @@ async function runPass() {
     open: async () => {
       await sidebarOpen();
       await tapUntil('[data-health-btn="local"]', ".health-pop");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".health-pop .health-list li")].some((li) => li.textContent.includes("claude auth login"))`), 6))) failed("the vitals say nothing of the sign-in ending");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".health-pop .health-list li")].some((li) => li.textContent.includes("Opus 4.8"))`), 6))) failed("the vitals say nothing of the project's agents on fast Opus 4.8");
     },
-    expect: [".health-pop"],
+    expect: [".health-pop", ".health-pop .health-list li.bad"],
   });
   await screen("tab-strip", { open: () => onAgents(), expect: [".tabstrip .tab", ".lens-pane:not([hidden]) .xterm-screen"] });
   await screen("shell-tab", {
@@ -969,6 +1120,12 @@ async function runPass() {
   await screen("new-tab-menu", { open: async () => tap(".tab-add"), expect: [".menu"] });
   await screen("view-menu", { open: async () => tap(".view-btn"), expect: [".menu"] });
   await screen("chat-lens", { open: async () => palette("lens:chat"), expect: [".lens-pane:not([hidden]) .chat-log, .lens-pane:not([hidden]) .composer"], close: async () => palette("lens:terminal") });
+  // the calls the agent was denied without asking, over the composer, with the way to its terminal
+  await screen("chat-denied", {
+    open: async () => palette("lens:chat"),
+    expect: [".lens-pane:not([hidden]) .chat-denied .chat-denied-call", ".lens-pane:not([hidden]) .chat-denied .linkish"],
+    close: async () => palette("lens:terminal"),
+  });
   if (!pass.phone)
     await screen("split-view", {
       open: async () => palette("split"),
@@ -1036,7 +1193,13 @@ async function runPass() {
   await screen("project-settings", { open: async () => tap(".tasks-settings-btn"), expect: [".project-settings .ps-queue"], settle: 500, close: async () => {} });
   await screen("project-settings-agents", {
     open: async () => evaluate(`document.querySelector('.project-settings .ps-queue')?.scrollIntoView({ block: "center" })`),
-    expect: [".project-settings .ps-queue input[type=checkbox]:checked"],
+    expect: [".project-settings .ps-queue input[type=checkbox]:checked", ".project-settings .retired-notice"],
+    close: async () => {},
+  });
+  // the Inbox's agents were set up after the switch came, so their Claude Code does not wait for permissions
+  await screen("project-settings-deny", {
+    open: async () => evaluate(`document.querySelector('.project-settings .ps-deny')?.scrollIntoView({ block: "center" })`),
+    expect: [".project-settings .ps-deny input[type=checkbox]:checked"],
     close: async () => {},
   });
   await screen("project-settings-pipeline", {
@@ -1049,6 +1212,41 @@ async function runPass() {
   await screen("code", { open: async () => palette("mode:code"), expect: [".code-mode"] });
 
   for (const panel of ["standup", "usage", "schedules", "activity", "alerts", "arenas"]) await screen(`panel-${panel}`, { open: async () => palette(panel), expect: [".modal"], settle: 600 });
+  // a new agent schedule: Claude Code, its switch on, the words under it
+  await screen("schedule-agent", {
+    open: async () => {
+      await palette("schedules");
+      await tap(".modal.schedules .modal-head-controls .btn");
+      if (!(await until(() => present(".schedule-editor .schedule-kind button"), 4))) throw new Error("the schedule editor did not open");
+      await evaluate(`[...document.querySelectorAll('.schedule-editor .schedule-kind button')][2]?.click()`);
+      await sleep(200);
+      await evaluate(`document.querySelector('.schedule-editor .deny-switch')?.scrollIntoView({ block: "center" })`);
+    },
+    expect: [".schedule-editor .deny-switch input[type=checkbox]:checked", ".schedule-editor .deny-switch .schedule-note"],
+    settle: 500,
+  });
+  await screen("usage-scorecard", {
+    open: async () => {
+      await palette("scorecard");
+      if (!(await until(async () => (await count(".scorecard .score-row:not(.score-head)")) === 4, 6))) failed(`the Models tab draws ${await count(".scorecard .score-row:not(.score-head)")} rows, not the four models`);
+      check((await count(".scorecard .score-cell.is-best")) >= 4, "the Models tab marks no best figure of a column");
+      check((await count(".scorecard .score-cell.is-few")) >= 2, "a figure from too few runs is not told apart");
+      check(await present(".usage-tabs button.on"), "the Usage panel's tabs say none is on");
+    },
+    expect: [".scorecard"],
+    settle: 500,
+    close: async () => {},
+  });
+  await screen("usage-scorecard-try", {
+    open: async () => {
+      await tap(".scorecard .score-try .icon-btn");
+      if (!(await until(() => present(".arena-new"), 6))) return failed("Try it on a past task opens no arena");
+      check((await count(".arena-new .arena-lane-row")) === 2, "the arena does not start with the two models side by side");
+      check((await evaluate(`document.querySelector('.arena-new textarea')?.value ?? ""`)).includes("Draw every screen"), "the arena does not carry the past task's prompt");
+    },
+    expect: [".arena-new"],
+    settle: 500,
+  });
   await alertScreens();
   await screen("server-place", {
     open: async () => {
@@ -1078,6 +1276,18 @@ async function runPass() {
     expect: [".backup-settings"],
     close: async () => {},
   });
+  await screen("settings-herdr", {
+    open: async () => {
+      await evaluate(`document.querySelector('.settings-dialog .mirror-settings')?.scrollIntoView({ block: "start" })`);
+      check(await evaluate(`[...document.querySelectorAll('.mirror-settings .settings-row input[type=checkbox]')].map((box) => box.checked).join()`) === "true,false", "Inside herdr does not start with the figures on and the toasts off");
+      check(await evaluate(`document.querySelector('.mirror-settings .config-snippet')?.textContent.includes("$remuda_cost")`), "Inside herdr shows no snippet naming remuda's tokens");
+      await tap(".mirror-settings .backup-actions .btn:not(.sm)");
+      if (!(await until(async () => (await count(".mirror-settings .mirror-outcomes li")) >= 1, 8))) failed("the test toast says nothing of how it went on the machine");
+      check(await evaluate(`document.querySelector('.mirror-settings .mirror-outcomes')?.textContent.includes("ui.toast.delivery")`), "the test toast does not say that the throwaway herdr keeps its toasts off");
+    },
+    expect: [".mirror-settings .config-snippet"],
+    close: async () => {},
+  });
   await closeAll();
   await screen("palette", {
     open: async () => {
@@ -1100,6 +1310,22 @@ async function runPass() {
     ["broadcast", "broadcast"],
   ])
     await screen(`dialog-${name}`, { open: async () => palette(id), expect: [".modal"], settle: 700 });
+  await screen("timelapse", {
+    open: async () => {
+      await palette("timelapse");
+      if (!(await until(async () => (await count(".timelapse-screen .screen-line")) >= 6, 6))) failed("the timelapse player draws no frame");
+      const clock = () => evaluate(`document.querySelector('.timelapse-clock')?.textContent ?? ""`);
+      const before = await clock();
+      await sleep(900);
+      check((await clock()) !== before, `the timelapse does not play: its clock stays at ${before}`);
+      check((await count(".timelapse-pick .sel")) === 1 && (await count(".timelapse-speeds .btn")) === 4, "the player has no recording picker or not its four speeds");
+      await tap(".timelapse-bar .icon-btn");
+      await tap(".timelapse-speeds .btn:last-child");
+      check(await present(".timelapse-speeds .btn.on:last-child"), "By frame is not picked");
+    },
+    expect: [".modal .timelapse-screen", ".timelapse-scrub", ".timelapse-export"],
+    settle: 500,
+  });
 }
 
 let code = 0;
@@ -1113,7 +1339,11 @@ try {
     patterns: [
       { urlPattern: "*/api/roster*", requestStage: "Response" },
       { urlPattern: "*/api/feed*", requestStage: "Response" },
+      { urlPattern: "*/api/chat?*", requestStage: "Response" },
       { urlPattern: "*/api/opinion*", requestStage: "Request" },
+      { urlPattern: "*/api/scorecard*", requestStage: "Request" },
+      { urlPattern: "*/api/review/secrets*", requestStage: "Request" },
+      { urlPattern: "*/api/timelapse/recordings*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });

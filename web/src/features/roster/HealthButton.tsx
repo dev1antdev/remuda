@@ -8,12 +8,13 @@ import { ago } from "@/lib/time";
 import { newer } from "@/lib/version";
 import { Icon, Popover, Tip } from "@/ui";
 import { useSharing } from "./useSharing";
-import { app } from "@/app/store";
+import { actions, app } from "@/app/store";
 import { refreshHealth, type Health, type Latest, type Machine } from "./api";
 import { awakeBad, awakeWords } from "./awake";
 import { resumeStopped } from "@/features/updates/recover";
 import { limitTone, limitWords } from "@/features/usage/limits";
 import { concerns, updateLabel } from "./concerns";
+import { loginWords } from "./signin";
 import { BodyRows } from "./BodyRows";
 import { Sparkline } from "./Sparkline";
 import { DISK_THRESHOLDS, loadThresholds, rangeOf, sparkTitle, spanWords } from "./spark";
@@ -38,7 +39,7 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
   const l = fresh?.latest ?? latest;
   // while sharing, a stopped chat goes by its pane rather than its title, and the rest by the neutral names
   const stopped = share.on ? m.stopped?.map((chat) => ({ ...chat, title: "" })) : m.stopped;
-  const list = concerns(h, l, serverVersion, m.id !== "local", stopped, viewOnly).map((c) => ({ ...c, text: share.redact(c.text) }));
+  const list = concerns(h, l, serverVersion, m.id !== "local", stopped, viewOnly, { machine: name, retiring: m.retiring }).map((c) => ({ ...c, text: share.redact(c.text) }));
   const worst = list.some((c) => c.bad) ? "bad" : list.length ? "warn" : "";
   if (!h && m.state !== "connected") return null;
   const refresh = async () => {
@@ -61,6 +62,10 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
     setOpen(false);
     if (what === "recover") {
       void resumeStopped(m.id, m.stopped?.length ?? 0); // the chats a reboot stopped: a job followed by toasts, no dialog
+      return;
+    }
+    if (what === "signin") {
+      actions.openFloat(m.id); // a shell there for `claude auth login`: remuda never signs in for the person
       return;
     }
     setUpdateWhat(what);
@@ -102,6 +107,12 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
               {h.claude ?? "—"}
               {h.claude && l?.claude && newer(h.claude, l.claude) ? <span className="health-new"> → {l.claude}</span> : null}
             </dd>
+            {h.claude_login && (
+              <>
+                <dt>{t("Claude sign-in")}</dt>
+                <dd>{loginWords(h.claude_login, Date.now())}</dd>
+              </>
+            )}
             {h.codex && (
               <>
                 <dt>{t("Codex")}</dt>
