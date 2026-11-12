@@ -77,6 +77,7 @@ socket.onmessage = (message) => {
   if (msg.method === "Fetch.requestPaused") {
     const url = msg.params.request?.url ?? "";
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
+    else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else void dressRoster(msg.params);
   }
@@ -330,7 +331,7 @@ const made = [];
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
-let app, tree, notes, inbox, paneA1, paneN;
+let app, tree, notes, inbox, drawTask, paneA1, paneN;
 let DRESS = {};
 
 // seed makes the workspaces the screens draw — the repository with two tabs and a linked worktree, a plain folder —
@@ -350,7 +351,7 @@ async function seed() {
   if (!taken.path?.startsWith(`${tmp}/`) || !existsSync(taken.path) || !(taken.size > 0) || !(taken.files > 0)) failed(`a backup now answered ${JSON.stringify(taken)}`);
   const projects = await api("GET", "/api/tasks/projects");
   inbox = (projects.find?.((p) => /inbox/i.test(p.title)) ?? projects[0])?.id;
-  await api("POST", "/api/tasks", { project_id: inbox, title: "Draw every screen", markdown: "Every **screen** at two widths.\n\n- [ ] the desk\n- [ ] the phone" });
+  drawTask = (await api("POST", "/api/tasks", { project_id: inbox, title: "Draw every screen", markdown: "Every **screen** at two widths.\n\n- [ ] the desk\n- [ ] the phone" })).id;
   // the Inbox's agents set up: a Queued column, kept empty so the queue (on) starts nothing, and a two-stage pipeline
   const inboxProject = projects.find((p) => p.id === inbox);
   const columns = inboxProject.statuses.flatMap((s) => (s.on_new ? [s, { id: 0, project_id: inbox, title: "Queued", hex_color: "f1c40f", kind: "open", position: 0, on_queue: true }] : [s]));
@@ -467,6 +468,30 @@ async function fakeOpinion({ requestId, request }) {
     if (request.method === "DELETE") fakeOpinionState = null;
   }
   await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// fakeScorecard answers the Models tab with four models: two that compare (one best of a column each, a tie), one on too
+// few runs, one whose model was never read; the first two offer the seeded task to try them on, in the app repository
+async function fakeScorecard({ requestId }) {
+  const share = (count, of) => ({ count, of, ...(of >= 5 ? { rate: count / of } : {}) });
+  const mean = (value, n) => ({ ...(value === undefined ? {} : { value }), n, ...(n < 5 ? { few: true } : {}) });
+  const tryOn = (lanes) => ({ task_id: drawTask, identifier: `#${drawTask}`, title: "Draw every screen", project_id: inbox, machine: "local", dir: `${tmp}/.herdr/worktrees/app/task-${drawTask}`, ran: iso(now - 86400e3), lanes });
+  const opus = { agent: "claude", model: "Opus 4.5", model_id: "claude-opus-4-5" };
+  const fable = { agent: "claude", model: "Fable 5.1", model_id: "claude-fable-5-1" };
+  const body = {
+    since: iso(now - 30 * 86400e3),
+    days: 30,
+    min_sample: 5,
+    verdicts: 12,
+    unplaced: 2,
+    rows: [
+      { ...opus, runs: 7, finished: share(6, 7), first_approved: share(4, 5), rejected: 1, approved: 5, merged: share(2, 3), kept: share(1, 2), cost_per_run: mean(2.4, 7), cost_per_approved: mean(3.1, 5), minutes_per_run: mean(18.2, 6), last: iso(now - 3600e3), try: tryOn([fable, opus]) },
+      { ...fable, runs: 5, finished: share(5, 5), first_approved: share(4, 5), rejected: 1, approved: 4, merged: share(3, 5), kept: share(2, 2), cost_per_run: mean(3.9, 5), cost_per_approved: mean(4.6, 4), minutes_per_run: mean(11, 5), last: iso(now - 600e3), try: tryOn([opus, fable]) },
+      { agent: "codex", model: "gpt-6.1-sol", model_id: "gpt-6.1-sol", runs: 2, finished: share(2, 2), first_approved: share(1, 2), rejected: 1, approved: 1, merged: share(0, 0), kept: share(1, 2), cost_per_run: mean(undefined, 0), cost_per_approved: mean(undefined, 1), minutes_per_run: mean(7, 2), last: iso(now - 7200e3) },
+      { agent: "claude", model: "", runs: 1, finished: share(0, 1), first_approved: share(0, 0), rejected: 0, approved: 0, merged: share(0, 0), kept: share(0, 0), cost_per_run: mean(0.4, 1), cost_per_approved: mean(undefined, 0), minutes_per_run: mean(undefined, 0), last: iso(now - 86400e3) },
+    ],
+  };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
 
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
@@ -1028,6 +1053,28 @@ async function runPass() {
   await screen("code", { open: async () => palette("mode:code"), expect: [".code-mode"] });
 
   for (const panel of ["standup", "usage", "schedules", "activity", "alerts", "arenas"]) await screen(`panel-${panel}`, { open: async () => palette(panel), expect: [".modal"], settle: 600 });
+  await screen("usage-scorecard", {
+    open: async () => {
+      await palette("scorecard");
+      if (!(await until(async () => (await count(".scorecard .score-row:not(.score-head)")) === 4, 6))) failed(`the Models tab draws ${await count(".scorecard .score-row:not(.score-head)")} rows, not the four models`);
+      check((await count(".scorecard .score-cell.is-best")) >= 4, "the Models tab marks no best figure of a column");
+      check((await count(".scorecard .score-cell.is-few")) >= 2, "a figure from too few runs is not told apart");
+      check(await present(".usage-tabs button.on"), "the Usage panel's tabs say none is on");
+    },
+    expect: [".scorecard"],
+    settle: 500,
+    close: async () => {},
+  });
+  await screen("usage-scorecard-try", {
+    open: async () => {
+      await tap(".scorecard .score-try .icon-btn");
+      if (!(await until(() => present(".arena-new"), 6))) return failed("Try it on a past task opens no arena");
+      check((await count(".arena-new .arena-lane-row")) === 2, "the arena does not start with the two models side by side");
+      check((await evaluate(`document.querySelector('.arena-new textarea')?.value ?? ""`)).includes("Draw every screen"), "the arena does not carry the past task's prompt");
+    },
+    expect: [".arena-new"],
+    settle: 500,
+  });
   await alertScreens();
   await screen("server-place", {
     open: async () => {
@@ -1093,6 +1140,7 @@ try {
       { urlPattern: "*/api/roster*", requestStage: "Response" },
       { urlPattern: "*/api/feed*", requestStage: "Response" },
       { urlPattern: "*/api/opinion*", requestStage: "Request" },
+      { urlPattern: "*/api/scorecard*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
