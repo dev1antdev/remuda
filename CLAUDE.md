@@ -649,9 +649,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   get_throttled` or sysfs's `get_throttled`, decoded by `ParseThrottle`
   (bits 0–3 now, 16–19 since boot: under-voltage, frequency capped,
   throttled, soft temperature limit), else — Ubuntu keeps `/dev/vcio`
-  root's — the `rpi_volt` hwmon's `in0_lcrit_alarm` alone, now only; no
+  root's — the `rpi_volt` hwmon's `in0_lcrit_alarm` alone, now only; and
+  the machine's own battery (`battery.go`, tested on pmset's recorded
+  lines and a stand-in power supply folder: `pmset -g batt` on a Mac —
+  "drawing from 'Battery Power'" is on battery whatever the status says —
+  `/sys/class/power_supply/*` on Linux, a device's own battery, `scope`
+  Device, left out; `Report.Battery{percent, discharging, charging}`, none
+  on a desktop, a Pi or a Mac mini); no
   sudo anywhere; the page's `features/roster/body.ts` (tested) words
-  them, `BodyRows.tsx` draws them in a machine's ⓘ and the Server place,
+  them (`batteryWords` "64 % · on battery", `batteryLow` on battery at
+  20 % or less), `BodyRows.tsx` draws them in a machine's ⓘ and the Server place,
   and `bodyConcerns` (under-voltage and heat from 85 °C bad, a capped
   clock, 75 °C and tight memory a look) join the ⓘ's concerns)
   from one POSIX script per machine through `shell.Text`, every 15
@@ -2870,7 +2877,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `actions.openPane`, which the Mac app's `select`, an Activity row and
   Alt+N use too; the sidebar, the tabs and the Wall keep their own ways — a push naming a `panel` (a
   digest) → `open-panel` or `openWindow(/?panel=standup)` instead, which
-  `Shell.tsx` and `url.ts` answer; `pushsubscriptionchange`
+  `Shell.tsx` and `url.ts` answer; a plan limit's offer (`offer` on the
+  notification's data) has its `offer-run` button post `POST
+  /api/limits/offers/{id}/run` — refused or unreachable, the Usage panel
+  opens, where the offers stand; `pushsubscriptionchange`
   re-subscribes. `web/src/features/alerts/push.ts` is single-flight and re-registers on every
   load with permission granted — subscribing anew, the old endpoint named as
   `old_endpoint`, when the browser's subscription was made under another key
@@ -3480,7 +3490,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   HEAD, a merge, rebase or cherry-pick in progress, conflicts.
   `Checkouts(host, dirs, src)` lists a machine's checkouts among its
   workspaces' folders, the same repository's first (`SameRepository`
-  over `RemoteKey`: the ssh and https spellings of one remote agree).
+  over `RemoteKey`: the ssh and https spellings of one remote agree;
+  `RemoteScript`, the remote's reader, serves `internal/placement` too).
   `Move{Source, SourceDir, Target, TargetDir, Start}.Run(say)` is the
   whole way, every step told to the job's log: `Fits` (the target folder
   holds the same remote, or, where either has none, the source's root
@@ -3620,6 +3631,27 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the quiet hours, Send a test toast and how it went on each machine;
   never for a viewer. The display suite opens it (`settings-herdr`) and
   presses the test against the e2e's own herdr, whose toasts are off.
+- `internal/placement/` — **the machine with room** for a project whose
+  queue may use any (`tasks.Automation.Anywhere`; tested). `Choose`
+  (pure) takes the candidates — each a connected machine of the fleet,
+  never a `-server` host, with a workspace on the project's own folder or
+  a checkout of the same repository (`internal/app/fleet.go`: `pickDir`,
+  `checkoutDirs` leaving linked worktrees out) — and leaves out, with the
+  reason (`Out…`), one the agent's plan window holds (`Held`, the words of
+  `limits.Holding`), one over its budget, a CPU from `Hot` 85 °C, one on a
+  battery at `LowBattery` 20 % or less, one at `MaxPerCore` 2 of load per
+  core; the rest by `Score`, lowest first: 40 a load of one per core, 25
+  for a CPU from `Warm` 75 °C, 30 on battery, 0.3 a percent of the plan
+  window spent, 15 an agent already working there, 5 back for the home
+  machine (a tie, else the order given). `Result{Pick, Others}` rides on
+  the queue's note; `PlanOnly` (every one out on the plan alone) is when
+  the other vendor is offered; `Facts`, `OutWords`, `NoRoom` the server's
+  words. `Remotes` (`remotes.go`, tested on real temp checkouts) knows
+  each machine's workspace folders' repositories (`teleport.RemoteKey` of
+  `teleport.RemoteScript`), one script per machine at most every
+  `RemotesEvery` 10 min or for a folder never read, kept in
+  `remotes.json` so a project whose own machine is away still knows its
+  repository; a removed machine's are forgotten.
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥
@@ -3718,7 +3750,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   done, or at rest after working or with an answer to show, is a finish
   nobody heard (remuda down at the time), settled then; gone, or past
   `startingFor` without taking its prompt (the launcher pushed that; its
-  tab is left), is forgotten. `Tick` every 30s fires what
+  tab is left), is forgotten. **The plan window holds it too**
+  (`hold_test.go`): `Agents.Hold` (`limits.Holding` on the schedule's
+  machine and agent: 95 %, or forecast to run out within half an hour)
+  skips the run as `SkipLimit` with the hold's words, and `Agents.Offer`
+  offers it once per episode to run on the other vendor (`internal/limits`
+  offers); `RunAs(id, Swap{Agent, Model})` is the taken offer — the run
+  once with that agent, its arguments dropped (they were the other
+  agent's), "… with Codex, for the plan limit" on its result, the saved
+  schedule unchanged, a swap held too skipped without another offer.
+  `Tick` every 30s fires what
   matches the minute and was neither run nor started this minute (`firing`
   notes the dispatch, since a delivery waiting on a pane's lock or a slow
   remote can outlast the half minute). The schedules' pushes
@@ -3962,6 +4003,46 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   80 % and at the limit once per window — keyed by agent, window and
   reset minute, so one account read on three machines warns once, kept
   in `limits.json` across restarts and dropped once the window resets.
+  **The limits seen coming** (`forecast.go`, tested): every reading's
+  windows join their recent readings (`notePaceLocked`: by the window's
+  own key, whichever machine read it, once by the moment the agent
+  reported it, a reading closer than a six-hundredth of the window to
+  the one before taking its place, at most 200, kept in
+  `limits-pace.json`, written at most every 10 minutes once they moved); `Forecast` is
+  the slope of a least-squares line through the readings of the last
+  fifth of the window (an hour of the 5 hours, a day and a third of the
+  week), projected from the newest to 100 % — `Outlook{runs_out_at |
+  lasts, pace}` on each window `Of` hands out, so the roster carries it
+  — and none from fewer than `MinSamples` 4 readings, readings covering
+  less than a twentieth of the window, a rise under a point (a flat line),
+  readings gone quiet for a tenth of it, a spent window or one of no known
+  length; a window forecast to run out `ForecastAhead` 30 min or more
+  before its reset is pushed once (`ForecastWarning`, kind `limits`, tag
+  `limits-forecast|…`, kept as `foreseen` in `limits.json`). **A new
+  start is held** (`hold.go`): `Holding(machine, agent)` — the machine's
+  own windows of the agent, else the freshest reading of any machine's
+  (one subscription, one account) — holds at `HoldAt` 95 % or when the
+  forecast runs out within `RunAhead` 30 min (the run would stop half
+  way), with the words and the window's key as its episode; the queue and
+  the agent schedules ask it. **The offers** (`offers.go`, tested): a
+  start so held is offered to the person, once per card or schedule and
+  episode, to run now on the other vendor (`Other`: Claude Code ↔ Codex,
+  no other agent's limits are read) — `Offer` keeps it in `limits.json`
+  and pushes `OfferPush` (kind `limits`, panel usage, one button
+  `push.ActionOffer` "Run on Codex", `Payload.Offer` its id); `RunOffer`
+  claims it (one run at a time, `ErrOfferRunning`), runs it through `Run`
+  (the app's `planOffers.Run`) and marks it taken, a failure leaving it
+  open; `DeclineOffer` lets it be for every device; `Tick` drops the ones
+  whose window reset. The app (`internal/app/offers.go`) offers only when
+  the other agent is on the machine (the vitals) and its own windows hold
+  nothing, with the model a recipe of that agent names for the folder (or
+  any folder), else its default; the run is `tasks.Queue.RunOffered` or
+  `schedule.Store.RunAs`, nothing saved changing. Routes (the person's
+  only: not a viewer route, and an agent's key never reaches
+  `/api/limits`): `GET /api/limits/offers`, `POST
+  /api/limits/offers/{id}/run` (404 gone, 409 refused with why), `DELETE
+  /api/limits/offers/{id}`; the roster carries `offers`, the open ids
+  alone, so a viewer's page never reads a task's title through it.
   **An agent stopped on a limit**: `chat.Service.RateLimited` reads the
   last 64 KB of the pane's live file for `transcript.RateLimited` — the
   conversation's last record an assistant one with `isApiErrorMessage`
@@ -3982,10 +4063,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `limitTone` amber from 80 % / red at the limit, `gravest`,
   `limitWords` "Claude 5 h: 62 %, resets 14:00", `resetForHit` the reset
   a stopped agent waits on — the latest of its windows at the limit, since
-  a full week still blocks once the 5 hours come back — `claudeUnread`), the Plan limits section at
-  the top of the Usage panel (a bar per window, and on a machine whose
+  a full week still blocks once the 5 hours come back — `claudeUnread`,
+  `forecastWords` "runs out ≈ 15:40 at this pace" / "lasts to its reset
+  at this pace", `forecastTone` amber for a run-out 30 min or more early,
+  `limitLine` a window and its forecast for a tooltip), `offers.ts` (pure,
+  tested: `holdWords` the held window in the page's words — an offer carries
+  its `window`, `used` and, held on its forecast, `runs_out_at`, `Hold.Offer` —
+  `offerWords`, `runLabel` "Run on Codex", `modelWords`,
+  `offersToShow` / `rememberOffer` for pref `limits.offers.seen`) and
+  `useOffers.ts` (`GET /api/limits/offers` whenever the roster's ids move,
+  never for a viewer; `takeOffer`, `letOfferBe`), the Plan limits section at
+  the top of the Usage panel (a bar per window with its forecast under its
+  name, `.limit-forecast`, each open offer as a `.limit-offer` row with
+  "Run on Codex" and "Let it wait", and on a machine whose
   Claude Code nobody reads, where to switch it on), the usage pill's tone
-  and tooltip, the machine's ⓘ rows, `LimitNotice.tsx` over the chat's
+  and tooltip (with the forecasts), the machine's ⓘ rows (with the
+  forecasts, amber for an early run-out), one toast per offer and device
+  (`plan-offer-<id>`, its button the run, none for a viewer —
+  `viewerToasts`), `LimitNotice.tsx` over the chat's
   composer (`Chat`'s `notice`, composed by `PaneArea`) with "Continue
   after the reset" / "Call it off", and the sidebar card's amber
   "stopped on its plan limit" (`limited` in `workspaces.ts`).
@@ -4664,15 +4759,36 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   than `Max` of the project's tasks the queue started still work or ask
   (`queueWorking`: a start under way, or a pane the radar reads working,
   blocked or unknown; a pipeline's passed stage counts through the next),
-  the agent kind's plan window is not at its limit (`limits.Level`), no
+  the agent kind's plan window holds nothing (`limits.Holding`: under
+  95 % and not forecast to run out within half an hour — held, the card
+  is offered once to the person to run now on the other vendor, `Offer`,
+  see `internal/limits`), no
   budget over the machine and folder is spent, and a workspace is open on
   the repository folder to branch off; one start per project per sweep.
   A refused start notes `tasks.queue_refused` with a comment and a push
   and is not tried again until the card moves (`Update` clears it). What
   the queue does is `Project.queue` (`QueueNote{State idle | waiting |
-  started, Reason, Next, Working, Max}`, kept in the store's memory);
+  started, Reason, Next, Working, Max, Fleet}`, kept in the store's memory);
   the board draws it under the Queued column's head (`QueueLine`,
   `.board-col-note`, the clock mark), a refused card a warning chip.
+  **Any machine that has room** (`fleet.go`, tested with fakes;
+  `Automation.Anywhere`, the settings' "The queue starts agents on: Any
+  machine that has room"): the project's machine and folder still name
+  the repository, and `Queue.Place` (`internal/app/fleet.go` over
+  `internal/placement`) weighs every connected machine of the fleet —
+  never a `-server` host — holding a workspace on that very folder (on
+  the home machine) or on a checkout of the same repository by its remote
+  (`placement.Remotes`); the pick starts the card on its own workspace,
+  `QueueNote.Fleet` says where the next one goes and how the others stood
+  (the page's words in `features/tasks/fleet.ts`, tested), a slot taken
+  still saying where next; none with room is a wait with every reason
+  (`placement.NoRoom`), and when every one was out on the plan window
+  alone the card is offered on the other vendor (machine ""). A project
+  with a fixed machine never asks where. `RunOffered(project, task,
+  agent, model)` is the offer's run: the card still in Queued with no
+  agent on it, started as the queue would on the other agent (its own
+  window must hold nothing), on the project's machine or the one with room
+  for that agent; nothing saved changes.
   **The pipeline** (`pipeline.go`, tested): `Stage{Name, Agent, Model,
   Prompt, StatusID, PR}` after the first agent's work; a run started while
   the project has stages is `pipeline: on`, and every prompt of it ends
@@ -4710,7 +4826,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   queue starts it once until it moves; the queue's `Unusable` says why the
   host of a `-server` remuda runs no agents. The page:
   `ProjectSettings.tsx` holds `AgentsSettings.tsx` (machine, repository —
-  `repositories`, the machine's own checkouts — agent, model, arguments,
+  `repositories`, the machine's own checkouts — "The queue starts agents
+  on" this machine only or any machine that has room, `.ps-where`, with
+  the rule in words under it, agent, model, arguments,
   a recipe's fill, the queue's switch with "At most N working at once",
   "Add a Queued column", the deny switch, `.ps-deny`, disabled with the
   reason when neither the project's agent nor a stage's is Claude Code)
@@ -5146,7 +5264,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   1 s → 30 s, the endpoint kept per server address so going back to a
   remuda finds its device and prefs again), `Notifier` (`UNUserNotificationCenter`: a category per
   set of buttons and their words, so a question's buttons read its own
-  choices, the newest 32 kept, Esc → `/api/keys`, a choice → `/api/question/answer`, else
+  choices, the newest 32 kept, Esc → `/api/keys`, a choice → `/api/question/answer`, a plan
+  limit's offer-run → `/api/limits/offers/{id}/run`, else
   the window on the pane; refused outside a bundle), `Hotkey` (Carbon
   `RegisterEventHotKey`, `opt+cmd+r` by default; the one before is let
   go before the next registers, a refusal said in Settings), `Settings` (the
@@ -5219,6 +5338,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   person wrote, like an agent schedule's — and only for cards the person
   put in the Queued column: an agent's key cannot queue a card, change a
   project's columns or its agents (403, `queueKept` in the tasks routes).
+  A plan limit's offer (`internal/limits` offers) starts the held card or
+  schedule on the other vendor's agent only when the person presses its
+  button — the toast, the Usage panel's row, the push's — never by itself,
+  and a viewer link or an agent's key can never press it.
 - **remuda writes into a project's working tree only at the person's
   word** (the person agreed to this on 2026-11-12, `internal/undo`): an
   agent's turn is undone only when the person presses Undo this turn and

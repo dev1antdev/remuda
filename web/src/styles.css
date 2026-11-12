@@ -9362,6 +9362,39 @@ body.popout {
   white-space: nowrap;
 }
 
+/* a plan window's forecast under its name, amber when it runs out well before its reset */
+.limit-forecast {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.limit-forecast.is-amber {
+  color: var(--amber);
+}
+
+/* a card or schedule the plan limit holds, offered on the other vendor */
+.limit-offer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--amber-ring);
+  border-radius: var(--r-sm);
+  background: var(--amber-soft);
+  font-size: var(--fs-13);
+}
+
+.limit-offer-words {
+  flex: 1 1 240px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .budget-fields {
   display: flex;
   gap: 10px;

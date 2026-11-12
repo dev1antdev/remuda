@@ -13,7 +13,7 @@ import { actions, app } from "@/app/store";
 import { refreshHealth, type Health, type Latest, type Machine } from "./api";
 import { awakeBad, awakeWords } from "./awake";
 import { resumeStopped } from "@/features/updates/recover";
-import { limitTone, limitWords } from "@/features/usage/limits";
+import { forecastTone, limitLine, limitTone } from "@/features/usage/limits";
 import { concerns, updateLabel } from "./concerns";
 import { loginWords } from "./signin";
 import { BodyRows } from "./BodyRows";
@@ -198,8 +198,8 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
                 <dt>{t("Plan limits")}</dt>
                 <dd>
                   {m.limits!.windows!.map((w) => (
-                    <div key={`${w.agent}|${w.name}`} className={limitTone(w.used) ? `health-limit is-${limitTone(w.used)}` : "health-limit"}>
-                      {limitWords(w, Date.now())}
+                    <div key={`${w.agent}|${w.name}`} className={limitTone(w.used) || forecastTone(w) ? `health-limit is-${limitTone(w.used) || forecastTone(w)}` : "health-limit"}>
+                      {limitLine(w, Date.now())}
                     </div>
                   ))}
                 </dd>

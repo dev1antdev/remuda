@@ -65,6 +65,7 @@ type Payload struct {
 	Choices []string `json:"choices,omitempty"` // a question's choices in full, the words behind its choice-N actions
 	Dialog  string   `json:"dialog,omitempty"`  // the question's dialog key, sent back with a choice so no later dialog is answered
 	Worked  int64    `json:"worked,omitempty"`  // a finish: the turn's seconds, so a page can apply a device's "long turns" itself
+	Offer   string   `json:"offer,omitempty"`   // a plan limit's offer to run the held work on the other vendor, its ActionOffer button's
 }
 
 // Delivery is the last push handed to a device: when, what, and what its push service answered ("" = taken).
@@ -75,9 +76,12 @@ type Delivery struct {
 	Error string    `json:"error,omitempty"`
 }
 
+// ActionOffer is the button that runs a plan limit's offer (Payload.Offer) on the other vendor's agent.
+const ActionOffer = "offer-run"
+
 // Action is a button on the notification; the service worker performs it.
 type Action struct {
-	Action string `json:"action"` // open | esc | choice-0 | choice-1
+	Action string `json:"action"` // open | esc | choice-0 | choice-1 | offer-run
 	Title  string `json:"title"`
 }
 

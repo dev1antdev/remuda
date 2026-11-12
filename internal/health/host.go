@@ -17,7 +17,7 @@ f=/sys/devices/system/cpu/cpu0/cpufreq; [ -r "$f/scaling_cur_freq" ] && echo "cp
 m=$(tr -d '\000' 2>/dev/null < /proc/device-tree/model); [ -n "$m" ] || m=$(sysctl -n hw.model 2>/dev/null); [ -n "$m" ] && echo "model=$m"
 t=$(vcgencmd get_throttled 2>/dev/null); case "$t" in throttled=*) echo "throttled=${t#throttled=}";; *) [ -r /sys/devices/platform/soc/soc:firmware/get_throttled ] && echo "throttled=0x$(cat /sys/devices/platform/soc/soc:firmware/get_throttled)";; esac
 for h in /sys/class/hwmon/hwmon*; do [ "$(cat "$h/name" 2>/dev/null)" = rpi_volt ] && echo "undervolt=$(cat "$h/in0_lcrit_alarm" 2>/dev/null)"; done
-`
+` + BatteryScript
 
 // Throttle is what a Raspberry Pi's firmware held the board back for: now, and since it booted when the firmware's
 // word was readable (vcgencmd); else the under-voltage alarm alone, now.
@@ -53,6 +53,8 @@ type body struct {
 	pageSize, pagesFree, memsize float64
 	sawVM                        bool
 	zone                         thermalZone
+	battery                      *Battery
+	onBattery                    bool // a Mac's pmset says it draws from the battery
 }
 
 type thermalZone struct {
@@ -144,6 +146,10 @@ func (b *body) parseHost(r *Report, k, v string) bool {
 		if t, ok := ParseThrottle(v); ok {
 			r.Throttle = t
 		}
+	case "batt":
+		b.parseBatt(v)
+	case "psu":
+		b.parsePSU(v)
 	case "undervolt":
 		if r.Throttle == nil && strings.TrimSpace(v) != "" {
 			r.Throttle = &Throttle{Now: []string{}}
@@ -169,6 +175,7 @@ func (b *body) finish(r *Report) {
 		r.TempC = float64(int(b.zone.temp*10)) / 10
 		r.TempCritC = b.zone.crit
 	}
+	b.finishBattery(r)
 }
 
 // swapField reads "used = 1024.00M" out of macOS's vm.swapusage, in MB

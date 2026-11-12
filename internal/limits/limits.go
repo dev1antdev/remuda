@@ -15,11 +15,12 @@ import (
 
 // Window is one of an agent's subscription windows as the agent last reported it.
 type Window struct {
-	Agent    string    `json:"agent"`     // claude | codex
-	Name     string    `json:"name"`      // 5h | week, or the window's length in minutes for one of another size
-	Used     float64   `json:"used"`      // percent of the window spent, 0..100, above when exceeded
-	ResetsAt time.Time `json:"resets_at"` // when the window starts afresh
-	At       time.Time `json:"at"`        // when the agent reported it
+	Agent    string    `json:"agent"`              // claude | codex
+	Name     string    `json:"name"`               // 5h | week, or the window's length in minutes for one of another size
+	Used     float64   `json:"used"`               // percent of the window spent, 0..100, above when exceeded
+	ResetsAt time.Time `json:"resets_at"`          // when the window starts afresh
+	At       time.Time `json:"at"`                 // when the agent reported it
+	Forecast *Outlook  `json:"forecast,omitempty"` // when it runs out at the pace of its recent readings (forecast.go), set by Service.Of
 }
 
 // Reading is what one machine says of the limits: the windows, and whether Claude Code's status line is wrapped to report them.

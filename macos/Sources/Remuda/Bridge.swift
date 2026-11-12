@@ -68,6 +68,7 @@ struct Alert {
     let panel: String
     let choices: [String]
     let dialog: String // the question's dialog key, sent back with a choice so only that very dialog is answered
+    let offer: String // a plan limit's offer to run the held work on the other vendor, its offer-run button's
 
     init?(json: Data) {
         guard let d = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any] else { return nil }
@@ -84,6 +85,7 @@ struct Alert {
         panel = d["panel"] as? String ?? ""
         choices = d["choices"] as? [String] ?? []
         dialog = d["dialog"] as? String ?? ""
+        offer = d["offer"] as? String ?? ""
     }
 }
 

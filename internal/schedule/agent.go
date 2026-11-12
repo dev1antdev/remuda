@@ -36,6 +36,17 @@ type Agents struct {
 	Status func(machine, pane string) string // herdr's agent status of the pane, events.Gone when no agent runs there now, "" when the machine has not said
 	// Denied is the calls its conversation was denied without asking, and whether its latest turn stopped on them
 	Denied func(machine, pane string) transcript.Denials
+	// Hold is why the schedule's agent kind should not start on its machine now — its plan window at 95 % or forecast
+	// to run out within the half hour (limits.Holding) — or "".
+	Hold func(s Schedule) string
+	// Offer hands a run the plan window held to the person, to run on the other vendor's agent.
+	Offer func(s Schedule, why string)
+}
+
+// Swap is the agent a run starts instead of the schedule's own — an offer the person took — the saved schedule unchanged.
+type Swap struct {
+	Agent string
+	Model string // "" for the agent's default
 }
 
 // checkAgent trims and checks an agent schedule: a machine and a folder, an agent that is not a shell, a prompt. Its
@@ -59,8 +70,10 @@ func checkAgent(s *Schedule) error {
 }
 
 // fireAgent starts the agent through the app's Start and keeps the place to watch it, unless the agent the last run started
-// is still at it: then the run is skipped, so a schedule every few minutes never piles agents up.
-func (st *Store) fireAgent(s *Schedule) {
+// is still at it — then the run is skipped, so a schedule every few minutes never piles agents up — or the agent's plan
+// window holds the start: then it is skipped too, and the person offered to run it on the other vendor. A swap starts
+// another agent kind this once.
+func (st *Store) fireAgent(s *Schedule, swap *Swap) {
 	st.mu.Lock()
 	cur, ok := st.items[s.ID]
 	if !ok {
@@ -72,6 +85,18 @@ func (st *Store) fireAgent(s *Schedule) {
 	if cp.LastPane != nil {
 		if why, words := st.previousRun(cp, *cp.LastPane); why != "" {
 			st.noteSkip(cp.ID, why, words)
+			return
+		}
+	}
+	if swap != nil {
+		cp.Agent, cp.Model, cp.Args = swap.Agent, swap.Model, "" // the arguments were the other agent's
+	}
+	if st.Agents.Hold != nil {
+		if why := st.Agents.Hold(cp); why != "" {
+			st.noteSkip(cp.ID, SkipLimit, why)
+			if swap == nil && st.Agents.Offer != nil {
+				st.Agents.Offer(cp, why)
+			}
 			return
 		}
 	}
@@ -92,6 +117,9 @@ func (st *Store) fireAgent(s *Schedule) {
 		cur.LastOK, cur.LastResult = false, err.Error()
 	} else {
 		cur.LastOK, cur.LastResult = true, "started in "+started.Pane
+		if swap != nil {
+			cur.LastResult += " with " + agentLabel(swap.Agent) + ", for the plan limit"
+		}
 		started.Machine, started.At = cur.Machine, now
 		cur.LastPane = &started
 	}
@@ -108,6 +136,16 @@ func (st *Store) fireAgent(s *Schedule) {
 			Tag:   "schedule|" + s.ID,
 		})
 	}
+}
+
+// agentLabel is an agent kind as the page names it, "Codex" for codex.
+func agentLabel(kind string) string {
+	for _, a := range sessions.Agents {
+		if a.ID == kind {
+			return a.Label
+		}
+	}
+	return kind
 }
 
 // startingFor is how long an agent that has not worked yet counts as coming up: the first prompt's tries and a minute more.

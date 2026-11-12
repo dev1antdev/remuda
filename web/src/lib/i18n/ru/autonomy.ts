@@ -34,8 +34,8 @@ export const autonomy: Dictionary = {
   "Start queued tasks by themselves": "Запускать задачи из очереди сами",
   "At most": "Не больше",
   "working at once": "одновременно",
-  "The queue starts the top card of the Queued column once a slot is free, the machine is there, the agent's plan window is not spent and no budget over the folder is crossed — only cards you put there, and a refused one only once you move it again.":
-    "Очередь запускает верхнюю карточку колонки «В очереди», когда есть свободное место, машина на связи, окно подписки агента не исчерпано и бюджет на папку не превышен, — только карточки, которые положили туда вы, а отказанную — лишь после того, как вы её снова передвинете.",
+  "The queue starts the top card of the Queued column once a slot is free, the machine is there, the agent's plan window is not nearly spent and no budget over the folder is crossed — only cards you put there, and a refused one only once you move it again. A window at 95 %, or forecast to run out within half an hour, holds the card, and you are offered to run it now on the other vendor's agent.":
+    "Очередь запускает верхнюю карточку колонки «В очереди», когда есть свободное место, машина на связи, окно подписки агента ещё не на исходе и бюджет на папку не превышен, — только карточки, которые положили туда вы, а отказанную — лишь после того, как вы её снова передвинете. Окно на 95 % или с прогнозом исчерпания в ближайшие полчаса придерживает карточку, и вам предлагают запустить её сейчас на агенте другого вендора.",
   "Add a Queued column": "Добавить колонку «В очереди»",
   Pipeline: "Конвейер",
   "Stages after the first agent's work, one after another: every prompt asks the agent to end with a line reading":

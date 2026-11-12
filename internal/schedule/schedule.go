@@ -27,7 +27,7 @@ import (
 const file = "schedules.json"
 
 // Why a run was skipped: the agent still works, waits for the person, has not taken its prompt yet, its machine has not
-// said how it stands, or the run before is still on its way.
+// said how it stands, the run before is still on its way, or the agent's plan window holds a new start.
 const (
 	SkipWorking  = "working"
 	SkipAsking   = "asking"
@@ -35,6 +35,7 @@ const (
 	SkipUnsure   = "unsure"
 	SkipRunning  = "running"
 	SkipAtWork   = "at-work" // a scene's tidy while an agent works or asks on a machine it covers
+	SkipLimit    = "limit"
 )
 
 // The kinds of schedule: a prompt to an agent, the standup pushed as a digest, or a fresh agent started in a folder.
@@ -243,7 +244,7 @@ func (st *Store) Run(id string) (Schedule, error) {
 	if !ok {
 		return Schedule{}, errors.New("no such schedule")
 	}
-	st.fire(s)
+	st.fire(s, nil)
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if cur, ok := st.items[id]; ok {
@@ -252,7 +253,35 @@ func (st *Store) Run(id string) (Schedule, error) {
 	return *s, nil
 }
 
-func (st *Store) fire(s *Schedule) {
+// RunAs fires an agent schedule now with another agent kind this once — an offer the person took when the plan limit
+// held its own — the saved schedule unchanged; the result says whether it started.
+func (st *Store) RunAs(id string, swap Swap) (Schedule, error) {
+	st.mu.Lock()
+	s, ok := st.items[id]
+	st.mu.Unlock()
+	if !ok {
+		return Schedule{}, errors.New("no such schedule")
+	}
+	if s.Kind != KindAgent {
+		return Schedule{}, errors.New("only an agent schedule starts an agent")
+	}
+	if !sessions.KnownAgent(swap.Agent) || swap.Agent == "shell" {
+		return Schedule{}, fmt.Errorf("an agent is needed, not %q", swap.Agent)
+	}
+	st.fire(s, &swap)
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	cur, ok := st.items[id]
+	if !ok {
+		return *s, errors.New("the schedule was removed meanwhile")
+	}
+	if cur.Skipped != "" || !cur.LastOK {
+		return *cur, errors.New(strings.TrimPrefix(cur.LastResult, "skipped: "))
+	}
+	return *cur, nil
+}
+
+func (st *Store) fire(s *Schedule, swap *Swap) {
 	st.mu.Lock()
 	if st.running[s.ID] {
 		st.mu.Unlock()
@@ -270,7 +299,7 @@ func (st *Store) fire(s *Schedule) {
 	case KindDigest:
 		st.fireDigest(s)
 	case KindAgent:
-		st.fireAgent(s)
+		st.fireAgent(s, swap)
 	case KindScene:
 		st.fireScene(s)
 	default:
@@ -434,7 +463,7 @@ func (st *Store) Tick() {
 		st.inflight.Add(1)
 		go func(s *Schedule) { // one slow delivery must not hold the others past their minute
 			defer st.inflight.Done()
-			st.fire(s)
+			st.fire(s, nil)
 		}(s)
 	}
 }

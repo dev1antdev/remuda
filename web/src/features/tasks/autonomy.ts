@@ -6,6 +6,7 @@
 import type { Machine } from "@/features/roster/api";
 import { t } from "@/lib/i18n";
 import type { Automation, Project, Run, Stage, Status } from "./api";
+import { nextWords, noRoomWords } from "./fleet";
 
 export const MAX_STAGES = 8;
 export const MAX_QUEUED = 10;
@@ -34,10 +35,18 @@ export function queueWords(p: Project): { text: string; tone: "dim" | "amber" | 
   const note = p.queue;
   if (!note) return { text: t("The queue looks here every half minute"), tone: "dim" };
   const slots = t("{working} of {max} working", { working: note.working, max: note.max });
-  if (note.state === "idle") return { text: t("Starts the next card put here · {slots}", { slots }), tone: "dim" };
-  if (note.state === "started") return { text: t("Just started {task} · {slots}", { task: note.next || "", slots }), tone: "green" };
-  const why = note.reason ?? "";
-  return { text: note.next ? t("{task} waits: {why}", { task: note.next, why }) : t("Waits: {why}", { why }), tone: why.startsWith("every slot is taken") ? "dim" : "amber" };
+  if (note.state === "idle") return { text: a.anywhere ? t("Starts the next card put here on the machine with room · {slots}", { slots }) : t("Starts the next card put here · {slots}", { slots }), tone: "dim" };
+  const fleet = note.fleet;
+  const agent = a.agent || "claude";
+  if (note.state === "started") {
+    const where = fleet?.pick ? t("Just started {task} on {machine} · {slots}", { task: note.next || "", machine: fleet.pick.label, slots }) : t("Just started {task} · {slots}", { task: note.next || "", slots });
+    return { text: where, tone: "green" };
+  }
+  const slotsTaken = (note.reason ?? "").startsWith("every slot is taken");
+  const why = fleet && !fleet.pick && !slotsTaken ? noRoomWords(fleet) : (note.reason ?? "");
+  const text = note.next ? t("{task} waits: {why}", { task: note.next, why }) : t("Waits: {why}", { why });
+  const next = nextWords(fleet, agent);
+  return { text: next ? `${text} · ${next}` : text, tone: slotsTaken ? "dim" : "amber" };
 }
 
 // stageWords is a run's place in its pipeline, "" outside one
@@ -82,6 +91,7 @@ export const sameAutomation = (a: Automation, b: Automation): boolean => JSON.st
 const normalized = (a: Automation) => ({
   machine: a.machine,
   dir: a.dir,
+  anywhere: !!a.anywhere,
   agent: a.agent || "",
   model: a.model || "",
   args: a.args || "",

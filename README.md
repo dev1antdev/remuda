@@ -421,7 +421,20 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   top first, as many at once as you allow, once the machine is there, the
   agent's plan window has room and no budget over the folder is crossed;
   the column's head says what the next card waits for, and a start that
-  was refused waits until you move the card again. A **pipeline** adds
+  was refused waits until you move the card again. A window at 95 %, or
+  forecast to run out within half an hour, holds the card — and you are
+  offered, once, to run that very card now on the other vendor's agent
+  (Claude Code ↔ Codex, on its default model unless a recipe of yours
+  names one): a toast and a push with the button, nothing switched by
+  itself and nothing in the project changed. Set the queue to start
+  agents on **any machine that has room** and a card goes to the
+  connected machine with a workspace open on a checkout of the same
+  repository (matched by its remote) that has the most room: the
+  lightest load per core, a cool CPU, its charger in, room on the
+  agent's plan, the fewest agents already at work; a hot machine, one on
+  a nearly empty battery, one loaded at two per core or over its budget
+  is passed over, and the column's head says where the next card would
+  go and why. A **pipeline** adds
   stages after the first agent's work — say Codex running the tests, then
   Claude opening the pull request: each agent ends its answer with
   `STAGE DONE`, the next starts in a new tab of the same worktree with the
@@ -778,7 +791,9 @@ it is. A herdr already installed there stays, unused; its Updates offer
 remuda's own release alone.
 
 Every machine's ⓘ shows the same body now (memory, temperature, clock,
-throttling), and **Update everywhere** in Updates runs every connected
+throttling, and a laptop's battery — how full, on battery or on its
+charger, read with `pmset` on a Mac and the power supply class on Linux,
+no sudo), and **Update everywhere** in Updates runs every connected
 machine's pending updates one after another — herdr, the agents,
 code-server, remuda's release — each command shown first, the cockpit
 itself last.
@@ -1587,8 +1602,15 @@ measure, not a bill.
 **Plan limits:** what a subscription really runs out of — Claude's and
 Codex's 5-hour and weekly windows — at the very top of the report, in
 the usage pill's tooltip (its colour turns amber at 80 %) and in each
-machine's ⓘ: "Claude 5 h: 62 %, resets 14:00". A push comes at 80 % and
-when a window is used up, once per window. Codex writes its limits into
+machine's ⓘ: "Claude 5 h: 62 %, resets 14:00". Each window is **seen
+coming**: from its recent readings remuda says when it runs out at this
+pace — "runs out ≈ 15:40 at this pace", amber when that is well before
+the reset, or "lasts to its reset" — with no guess from too few readings
+or a flat line. A push comes at 80 %, when a window is used up, and once
+when it is forecast to run out half an hour or more before its reset.
+An agent schedule whose agent's window is nearly spent skips its run
+and offers it on the other vendor the same way the queue does (see
+Tasks). Codex writes its limits into
 its own files, so they show by themselves. Claude Code hands them only to
 its status line: Updates in a machine's ⓘ offers "Show Claude Code's
 plan limits", which puts remuda in front of your status line in

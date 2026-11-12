@@ -36,6 +36,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/mirror"
 	"github.com/dev1antdev/remuda/internal/opinion"
+	"github.com/dev1antdev/remuda/internal/placement"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/preview"
 	"github.com/dev1antdev/remuda/internal/prstatus"
@@ -501,6 +502,11 @@ func Run(ctx context.Context, o Options) error {
 	cookbook := recipes.New(o.Dir)
 	retiring := retirements(cookbook, schedules, taskStore, fleet, watcher, meter, vitals)
 	scouts := &sessions.Launcher{Machines: fleet, Watch: watcher, Input: input, Notify: pushSvc.Broadcast}
+	// a start the plan window holds is offered on the other vendor, and run once when the person takes it
+	offers := &planOffers{limits: planLimits, vitals: vitals, recipes: cookbook, schedules: schedules}
+	planLimits.Run = offers.Run
+	// a project whose queue may use any machine: the one with room among those holding a checkout of its repository
+	placer := &fleetPlacer{fleet: fleet, watcher: watcher, vitals: vitals, limits: planLimits, budgets: budgets, remotes: placement.OpenRemotes(o.Dir)}
 	schedules.Agents = schedule.Agents{
 		Start: func(s schedule.Schedule) (schedule.Started, error) {
 			start, err := s.Start()
@@ -518,6 +524,8 @@ func Run(ctx context.Context, o Options) error {
 			return answer
 		},
 		Denied: func(machine, pane string) transcript.Denials { return chats.Denied(machine, pane, "") },
+		Hold:   offers.Hold,
+		Offer:  offers.Schedule,
 		Status: func(machine, pane string) string {
 			info, snap := chats.Pane(machine, pane)
 			switch {
@@ -560,6 +568,7 @@ func Run(ctx context.Context, o Options) error {
 		requests.Forget(e.Machine)
 		restarter.Memory.Forget(e.Machine)
 		planLimits.Forget(e.Machine)
+		placer.remotes.Forget(e.Machine)
 		opinions.ForgetMachine(e.Machine)
 		subagentCounts.Forget(e.Machine)
 		signins.Forget(e.Machine)
@@ -706,7 +715,8 @@ func Run(ctx context.Context, o Options) error {
 		return err
 	}
 	go runWatch.Loop(15 * time.Second)
-	go taskQueue(taskStore, fleet, watcher, launcher, tracker, chats, planLimits, budgets, pushSvc.Notify).Loop(30 * time.Second)
+	offers.queue = taskQueue(taskStore, fleet, watcher, launcher, tracker, chats, planLimits, budgets, placer, offers, pushSvc.Notify)
+	go offers.queue.Loop(30 * time.Second)
 	events.Subscribe(bus, func(e events.PullRequestNamed) { runWatch.OnPullRequest(e.Pane.Machine, e.Pane.Pane, e.URL, e.Label) })
 	events.Subscribe(bus, func(e events.PullRequestState) {
 		runWatch.OnPullRequestState(e.Pane.Machine, e.Pane.Pane, e.URL, e.State)

@@ -36,8 +36,12 @@ export type ServeOffer = { port: number; url?: string; label?: string; by?: stri
 // PaneLimit is when the agent stopped on a plan limit and the harness's words, and the moment a booking continues it
 export type PaneLimit = { hit_at?: string; text?: string; continue_at?: string };
 
-// LimitWindow is one of an agent's subscription windows as it last reported it: claude | codex, 5h | week
-export type LimitWindow = { agent: string; name: string; used: number; resets_at: string; at: string };
+// LimitWindow is one of an agent's subscription windows as it last reported it: claude | codex, 5h | week; its forecast
+// is when it runs out at the pace of its recent readings, or that it lasts to its reset, when the readings say a pace
+export type LimitWindow = { agent: string; name: string; used: number; resets_at: string; at: string; forecast?: LimitForecast };
+
+// LimitForecast: runs_out_at before the reset, or lasts; pace is percent of the window an hour
+export type LimitForecast = { runs_out_at?: string; lasts?: boolean; pace: number };
 
 // MachineLimits is what a machine says of the plan limits: the windows read there, and whether Claude Code's status line is wrapped to report them
 export type MachineLimits = { windows?: LimitWindow[]; wrapped?: boolean };
@@ -172,7 +176,11 @@ export type Health = {
   freq_mhz?: number;
   freq_max_mhz?: number;
   throttle?: Throttle;
+  battery?: Battery; // the machine's own, none on a desktop
 };
+
+// Battery is a machine's own battery: how full, and whether it runs on it (the charger away) or charges
+export type Battery = { percent: number; discharging?: boolean; charging?: boolean };
 
 // the newest versions out there; remuda is its own newest release on GitHub
 export type Latest = { at: string; claude?: string; codex?: string; gemini?: string; kimi?: string; herdr?: string; remuda?: string; code?: string }; // code: the code-server this remuda installs
@@ -206,7 +214,7 @@ export type AgentKind = { id: string; label: string };
 // ServerHost is the host of a remuda serving the page only (remuda -server): no machine of the fleet, its vitals behind the Server place
 export type ServerHost = { id: string; label: string; health?: Health };
 
-export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[]; jira?: string; server?: ServerHost; retirements?: Retirement[] }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far; jira: the Jira site, when set; retirements: the models and modes being retired
+export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[]; jira?: string; server?: ServerHost; retirements?: Retirement[]; offers?: string[] }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far; jira: the Jira site, when set; retirements: the models and modes being retired; offers: the plan limits' open offers, by id
 
 // fetchRoster returns null when the roster is unchanged (304 via ETag); viewOnly says a viewer link signed this page in.
 export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null; viewOnly: boolean }> {

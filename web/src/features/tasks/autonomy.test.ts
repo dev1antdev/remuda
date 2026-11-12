@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Machine } from "@/features/roster/api";
-import type { Project, Run, Status } from "./api";
+import type { FleetMachine, Project, Run, Status } from "./api";
 import { automationOf, denyCovers, queueWords, repositories, saveable, sameAutomation, stageWords, whyNotQueue, whyNotSave, NO_AUTOMATION } from "./autonomy";
 
 const col = (id: number, more: Partial<Status> = {}): Status => ({ id, project_id: 1, title: `c${id}`, hex_color: "", kind: "open", position: id, on_new: false, on_start: false, on_finish: false, on_agent: false, ...more });
@@ -33,6 +33,18 @@ describe("queueWords", () => {
     expect(queueWords(project({ automation: on, queue: { state: "waiting", next: "#13", reason: "GOG is away", working: 0, max: 2, at: "" } }))).toEqual({ text: "#13 waits: GOG is away", tone: "amber" });
     expect(queueWords(project({ automation: on, queue: { state: "waiting", next: "#13", reason: "every slot is taken: 2 of 2 working", working: 2, max: 2, at: "" } })).tone).toBe("dim");
     expect(queueWords(project({ automation: on, queue: { state: "waiting", reason: "no column is marked Queued", working: 0, max: 2, at: "" } })).text).toBe("Waits: no column is marked Queued");
+  });
+
+  it("says where a queue free to use any machine sends its next card, and why none has room", () => {
+    const any = { ...NO_AUTOMATION, machine: "mac", dir: "/w/app", anywhere: true, queue: true, max: 2 };
+    const gog: FleetMachine = { machine: "gog", label: "GOG", dir: "/srv/app", load_per_core: 0.32, plan: 40, working: 1 };
+    expect(queueWords(project({ automation: any, queue: { state: "idle", working: 0, max: 2, at: "" } })).text).toBe("Starts the next card put here on the machine with room · 0 of 2 working");
+    expect(queueWords(project({ automation: any, queue: { state: "started", next: "#12", working: 1, max: 2, at: "", fleet: { pick: gog } } })).text).toBe("Just started #12 on GOG · 1 of 2 working");
+    const taken = queueWords(project({ automation: any, queue: { state: "waiting", next: "#13", reason: "every slot is taken: 2 of 2 working", working: 2, max: 2, at: "", fleet: { pick: gog } } }));
+    expect(taken).toEqual({ text: "#13 waits: every slot is taken: 2 of 2 working · next on GOG: load 0.3 per core, 1 agent working, Claude at 40 %", tone: "dim" });
+    const hot: FleetMachine = { ...gog, temp_c: 88, out: "hot" };
+    const none = queueWords(project({ automation: any, queue: { state: "waiting", next: "#13", reason: "no machine has room: GOG: hot at 88 °C", working: 0, max: 2, at: "", fleet: { others: [hot] } } }));
+    expect(none).toEqual({ text: "#13 waits: no machine has room: GOG: hot at 88 °C", tone: "amber" });
   });
 });
 

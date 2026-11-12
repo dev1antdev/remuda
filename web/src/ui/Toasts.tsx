@@ -14,7 +14,7 @@ export function Toasts({ items }: { items: ToastItem[] }) {
   return createPortal(
     <div className="toasts" role="status" aria-live="polite">
       {items.map((t) => (
-        <div key={t.id} className={`toast ${t.tone}`}>
+        <div key={t.id} className={`toast ${t.tone}`} data-toast={t.id}>
           {t.busy && <span className="spinner" aria-hidden="true" />}
           <span className="toast-text">{t.text}</span>
           {t.action}

@@ -65,6 +65,33 @@ export function limitWords(w: LimitWindow, now: number): string {
   return t("{agent} {window}: {used} %, resets {time}", { agent: agentName(w.agent), window: windowName(w.name), used: Math.floor(w.used), time: resetTime(w.resets_at, now) });
 }
 
+// FORECAST_AHEAD_MS is how much earlier than its reset a run-out is a concern, the server's push's threshold
+export const FORECAST_AHEAD_MS = 30 * 60e3;
+
+// runsOutEarly is how much earlier than its reset the window is forecast to run out, 0 when it is not
+export function runsOutEarly(w: LimitWindow): number {
+  const out = w.forecast?.runs_out_at;
+  return out ? Math.max(0, Date.parse(w.resets_at) - Date.parse(out)) : 0;
+}
+
+// forecastWords is the window's forecast in words — "runs out ≈ 15:40 at this pace", "lasts to its reset at this pace" —
+// "" when its readings say no pace
+export function forecastWords(w: LimitWindow, now: number): string {
+  const f = w.forecast;
+  if (f?.runs_out_at) return t("runs out ≈ {time} at this pace", { time: resetTime(f.runs_out_at, now) });
+  if (f?.lasts) return t("lasts to its reset at this pace");
+  return "";
+}
+
+// forecastTone is the colour of the forecast: amber for a run-out well before the reset, quiet otherwise
+export const forecastTone = (w: LimitWindow): LimitTone => (runsOutEarly(w) >= FORECAST_AHEAD_MS ? "amber" : "");
+
+// limitLine is one window and its forecast in a line, for a tooltip or the machine's ⓘ
+export function limitLine(w: LimitWindow, now: number): string {
+  const forecast = forecastWords(w, now);
+  return forecast ? `${limitWords(w, now)} · ${forecast}` : limitWords(w, now);
+}
+
 // resetForHit is the moment an agent stopped on a limit can carry on: once every window of its at the limit has reset —
 // the latest of their resets, since a full week still blocks after the 5 hours come back — else the latest of the
 // windows at 95 % or more; none when no window says so

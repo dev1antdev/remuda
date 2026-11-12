@@ -372,6 +372,11 @@ func (s *Server) rosterBody() ([]byte, string) {
 			roster["server"] = rosterServer{ID: host.ID(), Label: host.Label(), Health: s.Health.Report(host.ID())} // the Server place: no machine of the fleet, only its vitals
 		}
 	}
+	if s.Limits != nil {
+		if ids := s.Limits.OfferIDs(); len(ids) > 0 {
+			roster["offers"] = ids // the plan limits' open offers, by id alone: the person's page reads them, a viewer's never
+		}
+	}
 	if s.Feed != nil {
 		roster["feed"] = s.Feed.LastID() // the newest activity entry: the bell knows there is news without asking
 	}

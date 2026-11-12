@@ -9,26 +9,32 @@ import { ago } from "@/lib/time";
 import { Icon, Tip } from "@/ui";
 import type { BudgetStatus } from "./api";
 import { budgetTone, budgetWords, missingWords, ratio, scopeWords } from "./budgets";
-import { accountWindows, agentName, claudeUnread, limitTone, resetTime, windowName } from "./limits";
+import { accountWindows, agentName, claudeUnread, forecastTone, forecastWords, limitTone, resetTime, windowName } from "./limits";
+import { holdWords, modelWords, offerWords, runLabel } from "./offers";
+import { letOfferBe, takeOffer, useOffers } from "./useOffers";
 
-// PlanLimits is the panel's first section: each agent's subscription windows, as full as their latest reading says, and
-// where Claude Code runs with nobody reading its limits, the way to have them read (not for a viewer, who cannot)
+// PlanLimits is the panel's first section: each agent's subscription windows, as full as their latest reading says and
+// when each runs out at this pace, the held cards and schedules offered on the other vendor (useOffers, none for a
+// viewer), and where Claude Code runs with nobody reading its limits, the way to have them read (not for a viewer)
 export function PlanLimits({ machines, viewOnly }: { machines: Machine[]; viewOnly: boolean }) {
   const now = useNow(30_000);
   const windows = accountWindows(machines, now);
   const unread = viewOnly ? [] : machines.filter(claudeUnread);
-  if (windows.length === 0 && unread.length === 0) return null;
+  const offers = useOffers();
+  if (windows.length === 0 && unread.length === 0 && offers.length === 0) return null;
   return (
     <section className="budgets plan-limits">
       <h3>{t("Plan limits")}</h3>
       {windows.length === 0 && <div className="empty">{t("No plan limits read yet: Codex reports its own after its next answer.")}</div>}
       {windows.map((w) => {
         const tone = limitTone(w.used);
+        const forecast = forecastWords(w, now);
         return (
           <div key={`${w.agent}|${w.name}`} className={`budget-row${tone ? ` is-${tone}` : ""}`} title={t("Read on {machine}, {ago}", { machine: w.machineLabel, ago: ago(w.at) })}>
             <span className="budget-scope">
               {agentName(w.agent)} · {windowName(w.name)}
               <span className="usage-row-sub"> · {t("resets {time}", { time: resetTime(w.resets_at, now) })}</span>
+              {forecast && <span className={`limit-forecast${forecastTone(w) ? ` is-${forecastTone(w)}` : ""}`}>{forecast}</span>}
             </span>
             <span className="budget-bar" aria-hidden="true">
               <span style={{ width: `${Math.min(100, w.used)}%` }} />
@@ -37,6 +43,23 @@ export function PlanLimits({ machines, viewOnly }: { machines: Machine[]; viewOn
           </div>
         );
       })}
+      {offers.map((o) => (
+        <div key={o.id} className="limit-offer">
+          <div className="limit-offer-words">
+            {offerWords(o)}
+            <span className="usage-row-sub">
+              {" "}
+              {holdWords(o, now)} · {modelWords(o)}
+            </span>
+          </div>
+          <button type="button" className="btn sm primary" onClick={() => void takeOffer(o)}>
+            {runLabel(o)}
+          </button>
+          <button type="button" className="btn sm ghost" onClick={() => void letOfferBe(o)}>
+            {t("Let it wait")}
+          </button>
+        </div>
+      ))}
       {unread.length > 0 && (
         <div className="empty">
           {t("Claude Code shows its plan limits to its status line alone, and remuda reads them there once you let it. Not set up yet on {machines}: the machine's ⓘ → Updates → “Show Claude Code's plan limits”.", { machines: unread.map((m) => m.label).join(", ") })}

@@ -86,6 +86,7 @@ socket.onmessage = (message) => {
     else if (url.includes("/api/recap")) void fakeRecap(msg.params);
     else if (url.includes("/api/fleet-setup")) void fakeFleet(msg.params);
     else if (url.includes("/api/undo")) void fakeUndo(msg.params);
+    else if (url.includes("/api/limits/offers")) void fakeOffers(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
@@ -420,6 +421,7 @@ async function seed() {
     automation: {
       machine: "local",
       dir: appDir,
+      anywhere: true, // the queue may start a card on whichever machine has room
       agent: "claude",
       model: "claude-opus-4-8", // fast mode on Opus 4.8 goes on 30 Nov 2026: the settings say so, and so does the machine's ⓘ
       args: `--settings '{"fastMode":true}'`,
@@ -532,6 +534,20 @@ async function fakeOpinion({ requestId, request }) {
     if (request.method === "DELETE") fakeOpinionState = null;
   }
   await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// PLAN_OFFER is a queued card Claude's 5-hour window holds at 96 %, offered to run now on Codex
+const PLAN_OFFER = { id: "e2e-offer-1", kind: "task", project: 1, task: 12, ref: "#12", title: "Draw every screen", machine: "local", from: "claude", to: "codex", why: "Claude's 5 h window is at 96 % until 16:50", window: "5h", used: 96, resets_at: iso(now + 2 * 3600e3), at: iso(now - 60e3) };
+let planOfferRuns = 0;
+
+// fakeOffers answers the plan limits' offers: the one open, and its run, which the server would start on Codex
+async function fakeOffers({ requestId, request }) {
+  let body = { offers: [PLAN_OFFER] };
+  if (request.method === "POST") {
+    planOfferRuns++;
+    body = { ok: true, words: "started #12 on this machine with Codex" };
+  } else if (request.method === "DELETE") body = { ok: true };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
 
 // fakeScorecard answers the Models tab with four models: two that compare (one best of a column each, a tie), one on too
@@ -810,12 +826,14 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
     // Claude Code's sign-in there ends in a day and a half at the latest, so it may end at any time: a red concern with a shell to sign in again from;
     // its settings keep fast mode on Opus 4.8 as the default, so every dialog that starts Claude Code on its default model says it goes on 30 Nov
     const health = machine.health ?? { at: iso(now), disk_free_gb: 120, disk_used_pct: 30, load1: 0.4 };
-    machine.health = { ...health, claude: health.claude || "2.1.322", claude_model: "claude-opus-4-8", claude_fast: true, claude_login: { expires: iso(now + 36 * 3600e3), at: iso(now) } };
+    // and it runs on a battery more than half full, which the ⓘ says
+    machine.health = { ...health, claude: health.claude || "2.1.322", claude_model: "claude-opus-4-8", claude_fast: true, claude_login: { expires: iso(now + 36 * 3600e3), at: iso(now) }, battery: { percent: 64, discharging: true } };
+    // Claude's 5 hours run out at this pace fifty minutes before they reset; its week lasts
     machine.limits = {
       wrapped: true,
       windows: [
-        { agent: "claude", name: "5h", used: 62, resets_at: iso(now + 2 * 3600e3), at: iso(now) },
-        { agent: "claude", name: "week", used: 86, resets_at: iso(now + 3 * 86400e3), at: iso(now) },
+        { agent: "claude", name: "5h", used: 62, resets_at: iso(now + 2 * 3600e3), at: iso(now), forecast: { runs_out_at: iso(now + 70 * 60e3), pace: 32.6 } },
+        { agent: "claude", name: "week", used: 86, resets_at: iso(now + 3 * 86400e3), at: iso(now), forecast: { lasts: true, pace: 0.2 } },
         { agent: "codex", name: "week", used: 31, resets_at: iso(now + 5 * 86400e3), at: iso(now) },
       ],
     };
@@ -830,6 +848,7 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
     }
   }
   roster.feed = FEED.id; // the activity's newest id as this run sets it: a page that saw an older one reads the feed
+  roster.offers = [PLAN_OFFER.id]; // a queued card Claude's plan limit holds, offered on Codex (fakeOffers answers it)
   roster.server = SERVER_HOST; // the Server place a remuda -server draws: its host's vitals, the readings a Raspberry Pi gives
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(roster)).toString("base64") });
@@ -1370,6 +1389,18 @@ async function runPass() {
   if ((await evaluate(`matchMedia("(pointer: coarse)").matches`)) !== pass.phone) failed(`the browser does not take itself for a ${pass.phone ? "phone" : "desk"}: (pointer: coarse) says otherwise`);
   where = pass.name;
 
+  // the card Claude's plan limit holds is offered on Codex in the corner, once: dismissed, it stays gone on this device
+  await screen("plan-offer-toast", {
+    open: async () => {
+      if (!(await until(() => present('[data-toast^="plan-offer-"] .btn.primary'), 10))) failed("no toast offers the held card on the other vendor");
+      check(await evaluate(`/Codex/.test(document.querySelector('[data-toast^="plan-offer-"] .btn.primary')?.textContent ?? "")`), "the offer's button does not name Codex");
+    },
+    expect: ['[data-toast^="plan-offer-"]'],
+    close: async () => {
+      await tap('[data-toast^="plan-offer-"] .icon-btn');
+      if (!(await until(async () => !(await present('[data-toast^="plan-offer-"]')), 3))) failed("the offer's toast stays once dismissed");
+    },
+  });
   await screen("sidebar", {
     open: async () => {
       await sidebarOpen();
@@ -1432,6 +1463,8 @@ async function runPass() {
       await tapUntil('[data-health-btn="local"]', ".health-pop");
       if (!(await until(() => evaluate(`[...document.querySelectorAll(".health-pop .health-list li")].some((li) => li.textContent.includes("claude auth login"))`), 6))) failed("the vitals say nothing of the sign-in ending");
       if (!(await until(() => evaluate(`[...document.querySelectorAll(".health-pop .health-list li")].some((li) => li.textContent.includes("Opus 4.8"))`), 6))) failed("the vitals say nothing of the project's agents on fast Opus 4.8");
+      check(await evaluate(`[...document.querySelectorAll(".health-pop dd")].some((dd) => dd.textContent.startsWith("64 % · "))`), "the vitals say nothing of the battery");
+      check(await evaluate(`[...document.querySelectorAll(".health-pop .health-limit.is-amber")].some((row) => row.textContent.includes("≈"))`), "the vitals do not say Claude's 5 hours run out early at this pace");
     },
     expect: [".health-pop", ".health-pop .health-list li.bad"],
   });
@@ -1599,6 +1632,12 @@ async function runPass() {
     expect: [".project-settings .ps-queue input[type=checkbox]:checked", ".project-settings .retired-notice"],
     close: async () => {},
   });
+  // the Inbox's queue may use any machine that has room: the choice, and the words of how it picks one
+  await screen("project-settings-fleet", {
+    open: async () => evaluate(`document.querySelector('.project-settings .ps-where')?.scrollIntoView({ block: "center" })`),
+    expect: [".project-settings .ps-where .sel", ".project-settings .ps-where + .modal-hint"],
+    close: async () => {},
+  });
   // the Inbox's agents were set up after the switch came, so their Claude Code does not wait for permissions
   await screen("project-settings-deny", {
     open: async () => evaluate(`document.querySelector('.project-settings .ps-deny')?.scrollIntoView({ block: "center" })`),
@@ -1666,6 +1705,24 @@ async function runPass() {
     },
     expect: [".concierge-hint"],
     settle: 400,
+  });
+
+  // the plan limits seen coming: the 5 hours' run-out in amber, the week lasting, the held card's offer — and its run
+  await screen("usage-plan-limits", {
+    open: async () => {
+      await palette("usage");
+      if (!(await until(() => present(".plan-limits .limit-offer .btn.primary"), 6))) failed("the Usage panel does not offer the held card on the other vendor");
+      check((await count(".plan-limits .limit-forecast")) >= 2, "the plan limits say nothing of when their windows run out");
+      check(await present(".plan-limits .limit-forecast.is-amber"), "a window that runs out well before its reset is not told apart");
+    },
+    expect: [".plan-limits .limit-forecast"],
+    close: async () => {
+      const before = planOfferRuns;
+      await tap(".plan-limits .limit-offer .btn.primary");
+      if (!(await until(() => planOfferRuns > before, 4))) failed("the offer's button ran nothing");
+      if (!(await until(() => present('[data-toast="notice"]'), 4))) failed("the offer's run says nothing");
+      await closeAll();
+    },
   });
   // a new agent schedule: Claude Code, its switch on, the words under it
   await screen("schedule-agent", {
@@ -1897,6 +1954,7 @@ try {
       { urlPattern: "*/api/timelapse/search*", requestStage: "Request" },
       { urlPattern: "*/api/fleet-setup*", requestStage: "Request" },
       { urlPattern: "*/api/undo*", requestStage: "Request" },
+      { urlPattern: "*/api/limits/offers*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });

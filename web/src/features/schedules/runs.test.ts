@@ -6,6 +6,7 @@ describe("a schedule's last run", () => {
     expect(resultWords({ skipped: "working", last_result: "skipped: its previous agent (w5:p2) is still working" })).toBe("skipped: the agent is still working");
     expect(resultWords({ skipped: "asking" })).toBe("skipped: the agent waits for an answer");
     expect(resultWords({ skipped: "running" })).toBe("skipped: the previous run is still on its way");
+    expect(resultWords({ skipped: "limit", last_result: "skipped: Codex's 5 h window is at 97 % until Nov 12 16:50" })).toBe("skipped: its agent's plan window is nearly spent");
     expect(resultWords({ last_result: "sent to api · w3:p1" })).toBe("sent to api · w3:p1");
     expect(resultWords({})).toBe("");
   });

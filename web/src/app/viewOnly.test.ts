@@ -26,10 +26,11 @@ describe("viewerCommand", () => {
 });
 
 describe("viewerToasts", () => {
-  it("takes the Resume and the install off their toasts and leaves out the Tailscale login and the previews", () => {
+  it("takes the Resume and the install off their toasts and leaves out the Tailscale login, the previews and the plan limits' offers", () => {
     const toasts = [
       { id: "offline" },
       { id: "serves-gog|w1:p1|5173|2026-11-12T13:58:00Z", action: "Preview" },
+      { id: "plan-offer-a1b2", action: "Run on Codex" },
       { id: "release", action: "Download & install" },
       { id: "recover-gog", action: "Resume" },
       { id: "away", action: "Standup" },
