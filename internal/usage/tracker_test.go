@@ -108,3 +108,18 @@ func TestAForkedSubagentsCopyOfItsSpawningResponseCountsOnce(t *testing.T) {
 		t.Fatalf("display %+v %v, want m1, m2 and the fork's own f1, each once", d, ok)
 	}
 }
+
+func TestTheMeterSaysTheSpeedOfTheLastResponse(t *testing.T) {
+	fast := strings.Replace(rec("m2", "claude-opus-4-8", "2026-11-20T10:01:00Z", 20), `"cache_creation_input_tokens":0`, `"cache_creation_input_tokens":0,"speed":"fast"`, 1)
+	files := memFiles{liveFile: []byte(rec("m1", "claude-opus-4-8", "2026-11-20T10:00:00Z", 10) + fast)}
+	tr := NewTracker()
+	tr.Observe("m", files, "p1", []string{liveFile})
+	if d, ok := tr.Display("m", "p1"); !ok || d.Speed != "fast" || d.Model != "claude-opus-4-8" {
+		t.Fatalf("display %+v", d)
+	}
+	standard := NewTracker()
+	standard.Observe("m", memFiles{liveFile: []byte(fast + rec("m3", "claude-opus-4-8", "2026-11-20T10:02:00Z", 30))}, "p1", []string{liveFile})
+	if d, _ := standard.Display("m", "p1"); d.Speed != "" {
+		t.Fatalf("fast mode turned off since: %+v", d)
+	}
+}

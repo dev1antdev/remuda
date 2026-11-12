@@ -13,7 +13,8 @@ import type { AgentKind, Machine, Session, StartExtras } from "./api";
 import FolderPicker from "./FolderPicker";
 import { machineOptions } from "./options";
 import { useSharing } from "./useSharing";
-import { choiceFor, CUSTOM, EMPTY_DRAFT, hasModelFlag, hasOptions, lastModelKey, modelChoices, modelPlaceholder, optionsFor, type Draft } from "./startOptions";
+import { choiceFor, CUSTOM, EMPTY_DRAFT, hasModelFlag, hasOptions, lastModelKey, modelChoices, modelOf, modelPlaceholder, optionsFor, type Draft } from "./startOptions";
+import RetiredNotice from "@/features/usage/RetiredNotice";
 import { t } from "@/lib/i18n";
 
 const ADJ = ["clear", "quiet", "amber", "brisk", "calm", "early", "fresh", "keen", "mild", "swift"];
@@ -68,8 +69,9 @@ function useStart(initial: string) {
 }
 
 // StartOptionsFields is the recipe pick and the folded "Options" under the agent — the model, extra arguments, a first
-// prompt, and at the fold's end the ways to save them as a recipe and to manage the recipes; a shell keeps the pick alone
-function StartOptionsFields({ kind, draft, agents, onChange, onRecipe }: { kind: string; draft: Draft; agents: AgentKind[]; onChange: (d: Draft) => void; onRecipe: (r: Recipe) => void }) {
+// prompt, and at the fold's end the ways to save them as a recipe and to manage the recipes; a shell keeps the pick alone.
+// A model or mode being retired is said above the fold, folded or not.
+function StartOptionsFields({ kind, draft, agents, machine = "", onChange, onRecipe }: { kind: string; draft: Draft; agents: AgentKind[]; machine?: string; onChange: (d: Draft) => void; onRecipe: (r: Recipe) => void }) {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState("");
   const [managing, setManaging] = useState<{ initial?: Recipe } | null>(null);
@@ -107,6 +109,7 @@ function StartOptionsFields({ kind, draft, agents, onChange, onRecipe }: { kind:
         {t("Options")}
         {!open && hasOptions(kind, draft) ? t(" · set") : ""}
       </button>
+      <RetiredNotice agent={kind} model={modelOf(kind, draft)} args={draft.args} machine={machine} onUse={(model) => set({ choice: CUSTOM, custom: model })} />
       {open && (
         <>
           {hasModelFlag(kind) && choices.length > 0 && (
@@ -217,7 +220,7 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, defaultDi
         <input autoFocus={!!defaultDir} value={name} placeholder="checkout-api" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
-      <StartOptionsFields kind={agent} draft={draft} agents={agents} onChange={setDraft} onRecipe={applyRecipe} />
+      <StartOptionsFields kind={agent} draft={draft} agents={agents} machine={machine} onChange={setDraft} onRecipe={applyRecipe} />
     </FormDialog>
   );
 }

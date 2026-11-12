@@ -51,6 +51,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/setup"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/signin"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/tasks"
@@ -294,6 +295,10 @@ func Run(ctx context.Context, o Options) error {
 	input := sessions.NewInput(fleet, watcher)
 	health.PinnedCode = setup.CodeVersion
 	vitals := health.New(o.Dir, fleet, o.Version, o.VersionCheck)
+	// Claude Code's sign-in on each machine, read with the vitals: warned of three days before it ends, a day before, once ended
+	signins := signin.New(o.Dir)
+	signins.Notify = pushSvc.Notify
+	vitals.OnRead = signinWarnings(signins, fleet)
 	runner := jobs.New(bus)
 	restarter := restart.New(fleet)
 	restarter.Later = func(mc *machines.Machine, title string, fn func(say func(string)) error) {
@@ -392,6 +397,8 @@ func Run(ctx context.Context, o Options) error {
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
 	})
+	cookbook := recipes.New(o.Dir)
+	retiring := retirements(cookbook, schedules, taskStore, fleet, watcher, meter, vitals)
 	scouts := &sessions.Launcher{Machines: fleet, Watch: watcher, Input: input, Notify: pushSvc.Broadcast}
 	schedules.Agents = schedule.Agents{
 		Start: func(s schedule.Schedule) (schedule.Started, error) {
@@ -448,6 +455,7 @@ func Run(ctx context.Context, o Options) error {
 		planLimits.Forget(e.Machine)
 		opinions.ForgetMachine(e.Machine)
 		subagentCounts.Forget(e.Machine)
+		signins.Forget(e.Machine)
 	})
 	events.Subscribe(bus, opinions.OnStatus)
 	events.Subscribe(bus, opinions.Observe)
@@ -576,7 +584,8 @@ func Run(ctx context.Context, o Options) error {
 		Review:    reviews,
 		Schedules: schedules,
 		Quick:     quick.New(o.Dir),
-		Recipes:   recipes.New(o.Dir),
+		Recipes:   cookbook,
+		Retire:    retiring,
 		Prefs:     prefs.New(o.Dir),
 		Code:      code.New(o.CodePort),
 		Complete:  complete.New(),

@@ -5,8 +5,9 @@
 import { useEffect, useState } from "react";
 import type { Machine } from "@/features/roster/api";
 import { connected, machineOptions } from "@/features/roster/options";
-import { CUSTOM, EMPTY_DRAFT, hasModelFlag, modelChoices, modelPlaceholder, type Draft } from "@/features/roster/startOptions";
+import { CUSTOM, EMPTY_DRAFT, hasModelFlag, modelChoices, modelOf, modelPlaceholder, type Draft } from "@/features/roster/startOptions";
 import { useRoster } from "@/features/roster/useRoster";
+import RetiredNotice from "@/features/usage/RetiredNotice";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { Dialog, Icon, Logo, Notice, Select } from "@/ui";
@@ -185,6 +186,15 @@ function RecipeForm({ form, agents, machines, onChange, onDone, onRemove }: {
           {t("Extra arguments")}
           <input value={form.draft.args} placeholder={t("--permission-mode plan")} spellCheck={false} onChange={(e) => setDraft({ args: e.target.value })} />
         </label>
+      )}
+      {!shell && (
+        <RetiredNotice
+          agent={form.agent}
+          model={modelOf(form.agent, form.draft)}
+          args={form.draft.args}
+          machine={form.dir.trim() ? form.machine || connected(machines)[0]?.id || "" : ""}
+          onUse={(model) => setDraft({ choice: CUSTOM, custom: model })}
+        />
       )}
       {!shell && (
         <label>

@@ -23,5 +23,6 @@ func (s *Server) handleRecipesPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadRequest, err)
 		return
 	}
+	s.modelsMoved()
 	writeJSON(w, out)
 }

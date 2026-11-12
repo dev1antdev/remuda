@@ -1,6 +1,8 @@
 // The roster: every machine with herdr's hierarchy, and what changes it — workspaces, tabs and worktrees made and closed, machines added and named.
 
 import type { BudgetStatus } from "@/features/usage/api";
+import type { Retirement, RetiringHit } from "@/features/usage/retired";
+import type { Login } from "./signin";
 import { check, getJSON, sendJSON, withMachine } from "@/lib/http";
 import { t } from "@/lib/i18n";
 import { includedWords, type Included } from "./included";
@@ -58,6 +60,7 @@ export type PaneUsage = {
   tokens: { input: number; output: number; cache_read: number; cache_write: number; cache_write_1h?: number; web_search?: number };
   updated?: number;
   unknown?: boolean;
+  speed?: string; // what the last response ran at: "fast" in fast mode
 };
 
 export type Tab = {
@@ -127,6 +130,9 @@ export type Health = {
   error?: string;
   code_server?: string; // the release linked under ~/.local/opt/code-server
   statusline?: boolean; // remuda's wrapper stands before Claude Code's status line there, keeping its plan limits
+  claude_login?: Login; // when Claude Code's stored sign-in there ends, as `claude auth status` last said
+  claude_model?: string; // the default model Claude Code's user settings keep there
+  claude_fast?: boolean; // fast mode saved on in those settings: every session there starts in it
   model?: string; // the board or the computer: "Raspberry Pi 4 Model B Rev 1.5", "Mac16,1"
   mem_total_mb?: number;
   mem_avail_mb?: number; // what a new program could have without swapping
@@ -160,6 +166,7 @@ export type Machine = {
   stopped?: StoppedChat[]; // the chats a reboot stopped there: their panes are bare shells again, one Resume brings them back
   mac?: string; // the address a wake-up packet names, when the person set one
   limits?: MachineLimits; // the agents' plan limits as the machine last reported them
+  retiring?: RetiringHit[]; // what starts or runs there on a model or mode being retired
 };
 
 // StoppedChat is a chat whose pane came back from a reboot as a bare shell: the agent it ran and the pane's title
@@ -170,7 +177,7 @@ export type AgentKind = { id: string; label: string };
 // ServerHost is the host of a remuda serving the page only (remuda -server): no machine of the fleet, its vitals behind the Server place
 export type ServerHost = { id: string; label: string; health?: Health };
 
-export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[]; jira?: string; server?: ServerHost }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far; jira: the Jira site, when set
+export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[]; jira?: string; server?: ServerHost; retirements?: Retirement[] }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far; jira: the Jira site, when set; retirements: the models and modes being retired
 
 // fetchRoster returns null when the roster is unchanged (304 via ETag); viewOnly says a viewer link signed this page in.
 export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null; viewOnly: boolean }> {

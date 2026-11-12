@@ -990,7 +990,7 @@ Push or a channel the team reads: a Telegram bot (its token and your chat
 id), a Slack incoming webhook, an ntfy topic, or any address that takes
 JSON. Each one hears the kinds you tick — a question, a finish, a
 watchdog note, the digest, a schedule, a task, a budget, a review, a
-machine away or back — with
+machine away or back, a backup that failed, a sign-in running out — with
 the title, the body and a link back to the pane, built from the address
 you set at the top of the section (your tailnet's is offered when there
 is one). A Test button on each sends one; the row says when the last one
@@ -1195,6 +1195,27 @@ drawn as dashed lines, so a disk filling up or a load that never drops
 is visible as a trend, not a number. It turns amber when an update
 is out (with the right command for how it was installed), a remote
 remuda is behind this one, or the disk is nearly full.
+
+**Before something quietly stops working:** a scout at three in the
+morning or a queued task dies on an expired login. Claude Code says when
+its stored sign-in ends (`claude auth status`, 2.1.318 and up); the
+vitals read it every six hours and whenever you press *Read again* —
+only the end of the sign-in leaves the machine, never the account's
+e-mail or organization. From ten days before, the machine's ⓘ says
+"Claude Code's sign-in on GOG ends in 6 days", red from two days and
+once it has ended, with *Open a shell there* for `claude auth login`
+(remuda never signs in for you); a push comes three days before, a day
+before and once it ends, one each, never twice across a restart. The
+same ⓘ warns of a model or mode being retired: fast mode on Opus 4.8 is
+removed on 30 November 2026 (Claude Code 2.1.316: its requests then fail
+and do not fall back), so a recipe, an agent schedule, a project's
+agents or a pipeline stage set to it — by its model and `--settings
+'{"fastMode":true}'`, or by the default model and fast mode saved in
+Claude Code's settings on that machine — and a running agent whose last
+answer came in fast mode on it are counted there ("set for 1 recipe and
+2 running agents here: move to Opus 5.5"), red once the day has come.
+Every form that edits a model says the same as you type, with a button
+that puts Opus 5.5 in the field.
 
 **Keep awake while agents work:** a laptop that falls asleep in the
 middle of a task leaves a dead chat for the morning. The row of that

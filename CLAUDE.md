@@ -544,7 +544,22 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and `bodyConcerns` (under-voltage and heat from 85 °C bad, a capped
   clock, 75 °C and tight memory a look) join the ⓘ's concerns)
   from one POSIX script per machine through `shell.Text`, every 15
-  minutes and on demand (`POST /api/machines/{id}/health`). **The day's
+  minutes and on demand (`POST /api/machines/{id}/health`, `Recheck`).
+  **Claude Code's sign-in and settings** (`claude.go`, tested on a
+  `claude` stand-in first on a bare PATH): `LoginScript` runs `claude
+  auth status --json` (2.1.318's `loginExpiresAt`) in a call of its own
+  (20 s, a failure keeps the last answer) at most every `LoginEvery` 6
+  hours — it starts Claude Code, which counts the call in its own
+  analytics — and on demand, never on a `-server` host; its `sed` passes
+  on `login_expires=` alone, so the account's e-mail and organization
+  never leave the machine; `ParseLogin` → `Report.ClaudeLogin {expires,
+  at}`, carried between reads and through a probe that failed
+  (`lastLogin`); `SettingsScript` in the probe reads the top-level
+  `"model"` of `~/.claude/settings.json` (`Report.ClaudeModel`) and
+  `claude_fast=on` when `fastMode` is saved on and not reset per session
+  (`Report.ClaudeFast`), what `internal/retire` weighs a setting without a
+  model on; `Collector.OnRead` hears every reading as it is kept (the
+  sign-in warnings, wired in `internal/app`). **The day's
   vitals are kept** (`history.go`, tested): every probe that read the
   machine adds a `Sample{At, Load, DiskFree %, MemUsed %, Temp °C}` (the
   last two where read; sparklines of them in `BodyRows`) to the machine's history
@@ -653,7 +668,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   check").
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
   (`features/roster/HealthButton.tsx`; the rules in `concerns.ts`) turns amber on an update, a lagging
-  remote remuda, or a nearly full disk.
+  remote remuda, a nearly full disk, Claude Code's sign-in running out (`internal/signin`) or a
+  setting there on a model being retired (`internal/retire`; `concerns(…, more)` takes the
+  machine's name, its `retiring` and the clock).
 - **The machine stays awake while its agents work** (`internal/awake`,
   tested): a switch per machine, off by default, kept in `awake.json` in
   the state dir (`PATCH /api/machines/{id}/awake {on}`, the row "Keep
@@ -1736,8 +1753,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   alert `record` hands to the feed goes to each enabled webhook whose
   `Kinds` include its `HookKind` (input → question, done → finish, the
   watchdog's three → watchdog, the rest by name: digest, schedule, task,
-  budget, limits, review, machine, backup — `HookKinds` is the one list, the page's
-  picker must match it) outside its own quiet hours — a question 10 s after
+  budget, limits, review, machine, backup, signin — `HookKinds` is the one list, the page's
+  picker must match it, `webhooks.test.ts` reads it off the Go file) outside its own quiet hours — a question 10 s after
   the block, called off when answered at the desk, every finish 10 s
   after, as the feed hears them — in a goroutine each, one try and one
   more on a network error or a 5xx, a 10 s timeout; the outcome
@@ -2530,7 +2547,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   in-flight read per machine, and a first read over 64 MB takes the tail
   only, `partial`);
   the roster pane carries `usage{model,name,context,window,cost,turns,
-  tokens}` — context = the last response's input + cache tokens.
+  tokens,speed}` — context = the last response's input + cache tokens,
+  speed what it ran at ("fast" in fast mode, `internal/retire`'s word on a
+  live pane).
   The live session's `<session>/subagents/*.jsonl` (listed in one round
   trip, `Reader.DirVersions`) and sidechain records count toward the pane
   too, less the copy of the parent's response a fork's file opens with
@@ -2646,6 +2665,59 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   composer (`Chat`'s `notice`, composed by `PaneArea`) with "Continue
   after the reset" / "Call it off", and the sidebar card's amber
   "stopped on its plan limit" (`limited` in `workspaces.ts`).
+- `internal/signin/` — **warned before Claude Code's sign-in on a machine
+  runs out** (tested): `Service.Observe(machine, label, expires)` hears
+  every vitals reading (`health.Collector.OnRead` through
+  `signinWarnings` in `internal/app/retire.go`; the `-server` host never)
+  and pushes through `push.Notify` (kind `signin`, tag `signin|<machine>`,
+  the webhooks' kind `signin`, the activity's Machines family, a warning
+  toast on the page) once per `Level`: `Soon` three days before, `Day` a
+  day before, `Ended` — a machine first seen past two hears the graver
+  alone, a later end (a new sign-in) starts afresh, a zero end says
+  nothing; the warnings given are kept by machine in `<state>/signin.json`
+  so a restart never warns twice (a damaged file reads as none given),
+  `Forget` drops a removed machine. `Warning` / `Left` are the push's
+  words: how long is left, or that it ended, and to run `claude auth
+  login` on the machine — remuda never signs in for the person. The page:
+  `features/roster/signin.ts` (tested: `signinConcern` amber from
+  `LOOK_DAYS` 10 before the end, bad from `BAD_DAYS` 2 and once ended,
+  `loginWords` the ⓘ's "Claude sign-in" row) — the ⓘ's first concern
+  after the stopped chats, its button *Open a shell there*
+  (`update: "signin"`: `actions.openFloat` on that machine), none in the
+  Server place (`hostConcerns`).
+- `internal/retire/` — **models and modes being retired** (tested): `Table`
+  is every `Retirement{Agent, Model, Name, Mode, On, Replacement,
+  ReplacementName, Source}` remuda knows — fast mode on Opus 4.8, removed
+  on 2026-11-30 (Claude Code 2.1.316: its requests then error and do not
+  fall back; Opus 5.5 keeps the speedup); `Failing` from the start of its
+  day in UTC; `Applies(agent, model, fast)` over `Canonical` (a provider's
+  prefix, `[1m]`, a Vertex `@date`, Bedrock's `-v1:0` and a date dropped;
+  an alias such as `opus` names the newest and never matches). `Find`
+  weighs every `Setting` — `Recipes`, the agent `Schedules` switched on,
+  `Projects` (the agents of every project not archived that set one up,
+  and each pipeline stage, with no arguments of its own) — by its model (a
+  `--model` in its arguments, its own, else the machine's `Defaults.Model`,
+  `health.Report.ClaudeModel`) and fast mode (`FastIn`: a `--settings`
+  JSON's `"fastMode"` in its arguments, the last word winning, else the
+  machine's `Defaults.Fast`), a setting for any machine on each machine
+  with Claude Code, and every live agent `Pane` by its meter's model and
+  `speed`; a `Hit` carries no names (kind, id, machine, failing), so a
+  viewer link reads no recipe's or project's. `Service.On(machine)` (the
+  hits looked for at most every `Every` 30 s, and at the next look after
+  a recipe, a schedule or a project's agents changed — `Moved`, which
+  those routes call through `modelsMoved`; its inputs closures set in
+  `internal/app/retire.go`) is the roster's `machine.retiring`, and the
+  roster carries `retirements` (the table). The page:
+  `features/usage/retired.ts` (tested, the server's rule again:
+  `canonical`, `fastIn`, `modelIn`, `applies`, `failingOn`, `retiredFor`
+  with which field set it and the machines it would fail on,
+  `defaultsOf`, `noticeWords`, `retiringConcerns` — one ⓘ concern per
+  retirement counting by kind what is set to it there, bad once its day
+  came) and `RetiredNotice.tsx`, a shared piece: the notice (warn, error
+  past the day) with *Use Opus 5.5* in the recipes dialog, the start
+  dialogs' Options (above the fold), the agent schedule editor, a
+  project's Agents and each pipeline stage. `internal/usage/prices.go` is
+  not where it lives: the price catalog says nothing of retirements.
 - `internal/quick/` — saved prompts (`quick.json`, `GET/PUT /api/quick`,
   the list replaced whole), each for every folder or one `dir`; the chat
   composer offers them under ⚡ and edits them in a dialog; a text may
@@ -3584,7 +3656,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   folder per lens or panel, its server calls in its own `api.ts`) →
   `app/`; a dependency points down that list, and a feature never imports
   another feature's screens (its `api.ts` and pure modules, and the few
-  shared pieces `agents/SendToAgent`, `files/target`, are fine; from
+  shared pieces `agents/SendToAgent`, `files/target`, `usage/RetiredNotice`, are fine; from
   `app/` a feature takes only `store`, `current`, `act`, `pip`, `theme`).
   `features/terminal/engine/` is the terminal outside React (`engine.ts`
   wires `transport`, `modes`, `mouse`, `pointer`, `selection`, `layer`,

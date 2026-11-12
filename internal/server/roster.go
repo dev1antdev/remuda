@@ -20,6 +20,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/restart"
+	"github.com/dev1antdev/remuda/internal/retire"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/transcript"
@@ -107,10 +108,11 @@ type rosterMachine struct {
 	Error    string            `json:"error,omitempty"`
 	Sessions []rosterSession   `json:"sessions"`
 	Health   *health.Report    `json:"health,omitempty"`
-	Awake    *awake.Status     `json:"awake,omitempty"`   // the keep-awake switch and whether the hold stands
-	Stopped  []restart.Stopped `json:"stopped,omitempty"` // the chats a reboot stopped: their panes are bare shells again, a Resume brings them back
-	MAC      string            `json:"mac,omitempty"`     // the address a wake-up packet names, when the person set one
-	Limits   *limits.Reading   `json:"limits,omitempty"`  // the agents' subscription windows as the machine last reported them
+	Awake    *awake.Status     `json:"awake,omitempty"`    // the keep-awake switch and whether the hold stands
+	Stopped  []restart.Stopped `json:"stopped,omitempty"`  // the chats a reboot stopped: their panes are bare shells again, a Resume brings them back
+	MAC      string            `json:"mac,omitempty"`      // the address a wake-up packet names, when the person set one
+	Limits   *limits.Reading   `json:"limits,omitempty"`   // the agents' subscription windows as the machine last reported them
+	Retiring []retire.Hit      `json:"retiring,omitempty"` // what starts or runs there on a model or mode being retired
 }
 
 // rosterServer is the host of a remuda serving the page only: its name and vitals, for the Server place, never a machine of the fleet.
@@ -313,6 +315,9 @@ func (s *Server) rosterBody() ([]byte, string) {
 			entry.Stopped = s.Updates.Restart.Stopped(mc.ID())
 		}
 		entry.MAC = s.Machines.MAC(mc.ID())
+		if s.Retire != nil {
+			entry.Retiring = s.Retire.On(mc.ID())
+		}
 		if s.Limits != nil {
 			if reading := s.Limits.Of(mc.ID()); len(reading.Windows) > 0 || reading.Wrapped {
 				entry.Limits = &reading
@@ -320,7 +325,7 @@ func (s *Server) rosterBody() ([]byte, string) {
 		}
 		out = append(out, entry)
 	}
-	roster := map[string]any{"machines": out, "agents": sessions.Agents, "version": buildversion.Build, "latest": s.Health.Latest()}
+	roster := map[string]any{"machines": out, "agents": sessions.Agents, "version": buildversion.Build, "latest": s.Health.Latest(), "retirements": retire.Table}
 	if s.Machines.Server() {
 		if host, err := s.Machines.Get(machines.LocalID); err == nil {
 			roster["server"] = rosterServer{ID: host.ID(), Label: host.Label(), Health: s.Health.Report(host.ID())} // the Server place: no machine of the fleet, only its vitals
@@ -341,6 +346,15 @@ func (s *Server) rosterBody() ([]byte, string) {
 	body, _ := json.Marshal(roster)
 	sum := sha256.Sum256(body)
 	return body, `"` + hex.EncodeToString(sum[:12]) + `"`
+}
+
+// modelsMoved is a recipe, a schedule or a project's agents changed: what is set to a model being retired is looked
+// for again, and the page told
+func (s *Server) modelsMoved() {
+	if s.Retire != nil {
+		s.Retire.Moved()
+	}
+	s.rosterMoved()
 }
 
 // tabNamed says whether the person named a tab: herdr labels an unnamed one by a number, and after a close it may
