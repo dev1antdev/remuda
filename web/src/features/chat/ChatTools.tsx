@@ -1,6 +1,7 @@
 // The chat lens's tools: Find stays in the tab strip's slot as the one control; the timeline, the recap, the export,
-// the pins and the handover to another agent are rows of the View menu (useChatViewItems), for the pane's conversation
-// and — but for the handover, which needs a pane — for a transcript on its own.
+// the timelapse of the pane's screen, the pins and the handover to another agent are rows of the View menu
+// (useChatViewItems), for the pane's conversation and — but for the timelapse and the handover, which need a pane — for
+// a transcript on its own.
 
 import { actions, app } from "@/app/store";
 import { useRoster } from "@/features/roster/useRoster";
@@ -13,6 +14,7 @@ import { forkPane } from "./forkPane";
 import { FindTool } from "./FindBar";
 import { pinKey, type Pin } from "./pins";
 import { useTimelineShown } from "./TimelineBar";
+import { timelapseRows } from "@/features/terminal/timelapse/row";
 import { t } from "@/lib/i18n";
 
 export type ChatPlace = { machineId: string; paneId: string; session: string | null; dir: string; agent: string; workspace: string; machine: string; model?: string };
@@ -35,6 +37,7 @@ export function useChatViewItems(place: ChatPlace): MenuItem[] {
     { sep: true },
     { label: t("Recap this conversation…"), icon: "sun", hint: t("prompts, answers, tools, files, cost"), disabled: !agent, onSelect: () => actions.openDialog({ kind: "recap", machineId, paneId, session, dir, title }) },
     { label: t("Export as Markdown"), icon: "download", hint: t("the conversation shown, as a file"), disabled: !agent, onSelect: save },
+    ...(paneId ? timelapseRows(place).slice(1) : []),
     // a viewer link may read but not start anything: no handover, no fork, no model switch
     ...(viewOnly
       ? []

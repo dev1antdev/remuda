@@ -27,7 +27,12 @@ export function openUrl(url: string): void {
 
 // saveText hands the browser a text file to keep, named; the download goes through a link the page never shows.
 export function saveText(name: string, text: string, type = "text/plain"): void {
-  const url = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
+  saveBlob(name, new Blob([text], { type: `${type};charset=utf-8` }));
+}
+
+// saveBlob hands the browser any file to keep, named: a timelapse's GIF
+export function saveBlob(name: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = name;

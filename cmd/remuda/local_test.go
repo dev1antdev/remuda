@@ -40,3 +40,9 @@ func TestDoorOpen(t *testing.T) {
 		}
 	}
 }
+
+func TestOnlyTheRealServiceRecordsTimelapsesUnlessAsked(t *testing.T) {
+	if !recordsHere(false, false) || recordsHere(false, true) || !recordsHere(true, true) {
+		t.Fatal("the real service records, a scratch instance only with -record")
+	}
+}

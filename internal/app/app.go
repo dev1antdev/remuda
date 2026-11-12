@@ -53,6 +53,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/tasks"
+	"github.com/dev1antdev/remuda/internal/timelapse"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -76,6 +77,7 @@ type Options struct {
 	VersionCheck  bool
 	Version       string
 	Door          bool // place the agents' door files here and on every remote (off for a scratch instance)
+	Record        bool // record the agents' timelapses (off for a scratch instance: the real one records)
 	Server        bool // serve the page only: the host is no machine of the fleet, its herdr neither needed nor kept
 }
 
@@ -215,6 +217,30 @@ func Run(ctx context.Context, o Options) error {
 	})
 	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
 	reviews := review.New(o.Dir)
+	// the agents' turns as timelapses: a working pane's screen read every few seconds over its machine's herdr, the
+	// turn written once it ends; the turns still going are written as stopped when remuda stops
+	recorder := timelapse.Open(o.Dir, timelapse.Inputs{
+		Screen: func(machineID, paneID string) (string, error) {
+			mc, err := fleet.Get(machineID)
+			if err != nil {
+				return "", err
+			}
+			client, _, err := mc.Ready()
+			if err != nil {
+				return "", err
+			}
+			screen, err := client.PaneScreen(paneID)
+			return screen.Text, err
+		},
+		Folder: func(machineID, dir string, ws *herdr.WorkspaceInfo) string {
+			return server.FolderOf(ws.Worktree, reviews.Root(machineID, dir), dir)
+		},
+	})
+	defer recorder.Close()
+	if !o.Record {
+		recorder.Scratch()
+		log.Print("the agents' timelapses are left to the real instance: this one records none (-record records)")
+	}
 	// a second opinion's reviewer, once it has answered, has its tab closed when the opinion asked for that
 	opinions := opinion.NewService(o.Dir)
 	opinions.Read = func(op opinion.Opinion) (string, bool) {
@@ -419,6 +445,8 @@ func Run(ctx context.Context, o Options) error {
 		}
 	})
 	events.Subscribe(bus, func(e events.Snapshot) { sayings.Observe(e.Machine, e.Snap) })
+	events.Subscribe(bus, func(e events.Snapshot) { recorder.Observe(e.Machine, e.Snap, e.At) })
+	events.Subscribe(bus, func(e events.MachineRemoved) { recorder.Forget(e.Machine) })
 	events.Subscribe(bus, func(e events.Snapshot) {
 		planLimits.Observe(e.Machine, e.Snap)
 		if mc, err := fleet.Get(e.Machine); err == nil {
@@ -579,6 +607,7 @@ func Run(ctx context.Context, o Options) error {
 		Backup:    backups,
 		SelfPort:  auth.PortOf(o.Addr),
 		Opinions:  opinions,
+		Timelapse: recorder,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

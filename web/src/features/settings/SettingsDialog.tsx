@@ -1,10 +1,12 @@
 // Settings: the few things the page keeps per device, in one place — the theme, its flavour and accent, the text size,
 // the density and the monospace font, how the sidebar reads, the panels' widths, whether those follow the person to
-// their other devices, the way to the alerts and the keys, which remuda this is, and the devices signed in to it.
+// their other devices, the way to the alerts and the keys, which remuda this is, and the devices signed in to it; and,
+// kept on the cockpit, the Jira site, the backups and the agents' timelapses.
 
 import { setAccentPref, setDarkFlavorPref, setDensityPref, setMonoPref, setTextSizePref, setThemePref, useAccent, useDarkFlavorPref, useDensity, useFlavor, useMono, useTextSize, useThemePref } from "@/app/theme";
 import { actions } from "@/app/store";
 import BackupSection from "./BackupSection";
+import TimelapseSection from "./TimelapseSection";
 import DevicesSection from "./DevicesSection";
 import JiraSection from "@/features/jira/JiraSection";
 import { useRoster } from "@/features/roster/useRoster";
@@ -182,6 +184,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
       </section>
       {!viewOnly && <JiraSection />}
       {!viewOnly && <BackupSection />}
+      {!viewOnly && <TimelapseSection />}
       <DevicesSection />
     </Dialog>
   );

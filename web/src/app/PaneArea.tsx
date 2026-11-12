@@ -21,6 +21,7 @@ import Chat from "@/features/chat/Chat";
 import FilesRail from "@/features/chat/FilesRail";
 import Review from "@/features/review/Review";
 import { TerminalLens, TerminalTools, useTerminalViewItems } from "@/features/terminal/TerminalLens";
+import { timelapseRows } from "@/features/terminal/timelapse/row";
 import { Screen } from "@/features/terminal/Screen";
 import { LimitNotice } from "@/features/usage/LimitNotice";
 import { accountWindows } from "@/features/usage/limits";
@@ -96,7 +97,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
       ? { machineId: current.machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), agent: current.pane.agent, workspace: current.session.name, machine: current.machine.label, model: current.pane.usage?.name }
       : { machineId: "", paneId: "", session: null, dir: "", agent: "", workspace: "", machine: "" };
   const chatItems = useChatViewItems(place);
-  const terminalItems = useTerminalViewItems(current?.pane ?? { cols: 0, rows: 0 } as Located["pane"]);
+  const terminalItems = [...useTerminalViewItems(current?.pane ?? { cols: 0, rows: 0 } as Located["pane"]), ...timelapseRows(place)];
 
   if (viewer) {
     const sub = viewer.subagent;

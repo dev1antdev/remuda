@@ -55,12 +55,12 @@ func TestViewerKeyReadsAndNeverTypes(t *testing.T) {
 	if code, body, _ := call(h, "GET", "/api/roster", nil, key); code != 200 || body != "device= viewer=yes" {
 		t.Fatalf("roster with the key: %d %s", code, body)
 	}
-	for _, try := range []struct{ method, path string }{{"POST", "/api/keys"}, {"POST", "/api/submit"}, {"GET", "/ws/pane"}, {"GET", "/api/tasks"}, {"GET", "/api/devices"}, {"DELETE", "/api/sessions/w1"}, {"GET", "/code/local/"}, {"POST", "/"}} {
+	for _, try := range []struct{ method, path string }{{"POST", "/api/keys"}, {"POST", "/api/submit"}, {"GET", "/ws/pane"}, {"GET", "/api/tasks"}, {"GET", "/api/devices"}, {"DELETE", "/api/sessions/w1"}, {"GET", "/code/local/"}, {"POST", "/"}, {"GET", "/api/timelapse"}, {"PUT", "/api/timelapse"}, {"DELETE", "/api/timelapse/recordings/20261112T140000Z-abcdef"}} {
 		if code, body, _ := call(h, try.method, try.path, nil, key); code != 403 || body != "this link is for viewing only" {
 			t.Fatalf("%s %s with the key: %d %s", try.method, try.path, code, body)
 		}
 	}
-	for _, path := range []string{"/api/chat", "/api/screen", "/api/scrollback", "/api/feed", "/api/standup", "/ws/events", "/", "/assets/index-abc.js", "/icons/icon-512.png", "/api/icons/" + strings.Repeat("a", 64)} {
+	for _, path := range []string{"/api/chat", "/api/screen", "/api/scrollback", "/api/feed", "/api/standup", "/ws/events", "/", "/assets/index-abc.js", "/icons/icon-512.png", "/api/icons/" + strings.Repeat("a", 64), "/api/timelapse/recordings", "/api/timelapse/recordings/20261112T140000Z-abcdef"} {
 		if code, _, _ := call(h, "GET", path, nil, key); code != 200 {
 			t.Fatalf("GET %s with the key: %d", path, code)
 		}

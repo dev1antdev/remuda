@@ -77,6 +77,7 @@ socket.onmessage = (message) => {
   if (msg.method === "Fetch.requestPaused") {
     const url = msg.params.request?.url ?? "";
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
+    else if (url.includes("/api/timelapse/recordings")) void fakeTimelapse(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else void dressRoster(msg.params);
   }
@@ -466,6 +467,39 @@ async function fakeOpinion({ requestId, request }) {
     body = request.method === "DELETE" ? { ok: true } : { opinion: fakeOpinionState };
     if (request.method === "DELETE") fakeOpinionState = null;
   }
+  await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// fakeTimelapse answers the player's reads with a recording of the seeded agent's pane — forty minutes of a Claude Code
+// screen at work, its spinner and its tool calls moving — and of an earlier pane of the folder; no recording is deleted
+const TIMELAPSE_ID = "20261112T120000Z-e2e0aa";
+function fakeRecording() {
+  const start = now - 45 * 60e3;
+  const rows = (i) => [
+    "\x1b[38;2;215;119;87m╭" + "─".repeat(58) + "╮\x1b[0m",
+    "\x1b[38;2;215;119;87m│\x1b[0m \x1b[1m✻ Welcome to Claude Code\x1b[0m" + " ".repeat(32) + " \x1b[38;2;215;119;87m│\x1b[0m",
+    "\x1b[38;2;215;119;87m╰" + "─".repeat(58) + "╯\x1b[0m",
+    "",
+    "> Draw every screen of the page at two widths",
+    ...Array.from({ length: Math.min(6, i) }, (_, n) => `\x1b[32m⏺\x1b[0m \x1b[1mEdit\x1b[0m(src/screen${n}.tsx)`),
+    "",
+    i < 11 ? `\x1b[38;2;215;119;87m${"✻✽✶✳"[i % 4]} Drawing… \x1b[0m\x1b[2m(${i * 4} min · esc to interrupt)\x1b[0m` : "\x1b[32m⏺\x1b[0m Every screen draws at both widths.",
+  ];
+  let previous = [];
+  const frames = Array.from({ length: 12 }, (_, i) => {
+    const screen = rows(i);
+    const changed = screen.flatMap((text, line) => (previous[line] === text ? [] : [{ line, text }]));
+    previous = screen;
+    return { at: i * 4 * 60e3, lines: screen.length, rows: changed };
+  });
+  return { id: TIMELAPSE_ID, machine: "local", pane: paneA1, workspace: "app", dir: appDir, folder: appDir, agent: "claude", title: "Draw every screen", cols: 60, rows: 14, start: iso(start), end: iso(start + 44 * 60e3), count: frames.length, ended: "done", size: 4096, frames };
+}
+async function fakeTimelapse({ requestId, request }) {
+  const recording = fakeRecording();
+  const { frames, ...meta } = recording;
+  const earlier = { ...meta, id: "20261111T090000Z-e2e0bb", pane: "w9:p1", agent: "codex", start: iso(now - 26 * 3600e3), end: iso(now - 25 * 3600e3) };
+  const path = new URL(request.url).pathname;
+  const [code, body] = request.method !== "GET" ? [403, { error: "the e2e deletes no recording" }] : path.endsWith("/recordings") ? [200, { recordings: [meta, earlier], on: true }] : path.endsWith(TIMELAPSE_ID) ? [200, recording] : [200, { ...earlier, frames }];
   await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
 
@@ -1079,6 +1113,22 @@ async function runPass() {
     ["broadcast", "broadcast"],
   ])
     await screen(`dialog-${name}`, { open: async () => palette(id), expect: [".modal"], settle: 700 });
+  await screen("timelapse", {
+    open: async () => {
+      await palette("timelapse");
+      if (!(await until(async () => (await count(".timelapse-screen .screen-line")) >= 6, 6))) failed("the timelapse player draws no frame");
+      const clock = () => evaluate(`document.querySelector('.timelapse-clock')?.textContent ?? ""`);
+      const before = await clock();
+      await sleep(900);
+      check((await clock()) !== before, `the timelapse does not play: its clock stays at ${before}`);
+      check((await count(".timelapse-pick .sel")) === 1 && (await count(".timelapse-speeds .btn")) === 4, "the player has no recording picker or not its four speeds");
+      await tap(".timelapse-bar .icon-btn");
+      await tap(".timelapse-speeds .btn:last-child");
+      check(await present(".timelapse-speeds .btn.on:last-child"), "By frame is not picked");
+    },
+    expect: [".modal .timelapse-screen", ".timelapse-scrub", ".timelapse-export"],
+    settle: 500,
+  });
 }
 
 let code = 0;
@@ -1093,6 +1143,7 @@ try {
       { urlPattern: "*/api/roster*", requestStage: "Response" },
       { urlPattern: "*/api/feed*", requestStage: "Response" },
       { urlPattern: "*/api/opinion*", requestStage: "Request" },
+      { urlPattern: "*/api/timelapse/recordings*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });

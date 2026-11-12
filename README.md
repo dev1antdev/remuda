@@ -572,7 +572,7 @@ files. Settings › Devices lists the keys, one per machine, with a Revoke each.
 **Viewer links** sign a screen in to look only. Make one in Settings ›
 Devices under a name — "the office TV", a colleague's — and open it where
 the viewing happens: that browser gets the Wall, the sidebar, the chats,
-the screens, the standup, the usage and Activity, and nothing that types or
+the screens and their timelapses, the standup, the usage and Activity, and nothing that types or
 changes — no composer, no keys, no question buttons, no Changes lens, no
 tasks; the terminal lens shows the pane's screen as the Wall does, without
 attaching, and the file viewer opens only files inside the machines'
@@ -623,7 +623,9 @@ own machine, and nowhere else. It holds remuda's state dir alone: the
 machine's own `~/.ssh` — its key and the hosts it reaches — is not in
 it, so a cockpit restored on a new machine needs that machine's key let
 in on your other machines again. A server (`-server`, below) keeps no
-copies on its own disk; pick one of its machines.
+copies on its own disk; pick one of its machines. The agents' timelapses
+(below) stay out of the copies, and a restore on the same machine keeps
+them.
 
 ### A server that only serves the page
 
@@ -743,6 +745,30 @@ reaches through a forward of its own. Only the browser signed in to remuda
 gets in — a viewer link does not — and remuda's cookie never reaches the
 app. Nothing is listened on by itself: a preview opens at your Open and
 closes after half an hour unused.
+
+## Timelapse — forty minutes of an agent's work in thirty seconds
+
+While an agent works, the cockpit reads its screen every 4 seconds — the
+way the Wall's screen view does, without attaching, so the pane is never
+resized and no terminal slot is taken — on every machine, whether or not a
+page is open, and keeps a frame only when the screen moved. When the turn
+ends (the agent at rest, asking you something, its pane closed) the
+recording is written once, gzipped, under the cockpit's state dir in
+`timelapse/<machine>/`; a turn still going is written again every ten
+minutes, so a power cut loses no more than that. **Timelapse…** in the
+View menu of the chat and the terminal (or *Timelapse of this pane…* in the
+⌘K palette) plays it back: 10×, 30× or 60× the turn's own time, or a frame
+at a time, a scrub bar over the turn, ← → a frame either way, Space to
+pause, the pane's recordings and those of the earlier panes in its folder
+to pick from — and **Export as GIF**, drawn in the page in your theme's
+terminal colours. A turn under a minute is not kept, a recording holds at
+most 900 frames (a longer turn is thinned evenly), each pane keeps its 20
+newest and the folder 200 MB, the oldest going first. The recordings are
+not in the nightly backups. **Settings › Timelapse** turns recording off
+and says how much is kept, with *Delete all*; the player deletes one. A
+viewer link plays them; under the screen-sharing mode a hidden folder's
+are not shown. A second remuda started beside the real one with
+`REMUDA_STATE_DIR` records nothing unless it is given `-record`.
 
 ## Agents and your tasks
 

@@ -43,6 +43,7 @@ func main() {
 	noCheck := flag.Bool("no-version-check", false, "never ask npm and GitHub what the newest Claude Code, herdr and remuda are")
 	noDoor := flag.Bool("no-door", false, "keep the agents' door closed: no agent-key / agent-url files here or on a remote machine (a scratch instance beside the real one must not overwrite the real one's)")
 	withDoor := flag.Bool("door", false, "open the agents' door although REMUDA_STATE_DIR is set, which closes it by itself")
+	withRecord := flag.Bool("record", false, "record the agents' timelapses although REMUDA_STATE_DIR is set, which leaves them to the real instance")
 	serverOnly := flag.Bool("server", os.Getenv("REMUDA_SERVER") == "1", "serve the page only (also REMUDA_SERVER=1): this machine is no machine of the cockpit — no workspaces here, its herdr neither needed nor kept — and its vitals stand behind the Server place on the rail; without it (the default, a client of its own herdr) the machine remuda runs on is one of the cockpit's machines")
 	flag.Usage = help
 	flag.Parse()
@@ -74,6 +75,7 @@ func main() {
 		Tailscale: *tailscale, TailscaleName: *tsName, AuthKey: os.Getenv("TS_AUTHKEY"),
 		VersionCheck: !*noCheck, Version: version,
 		Door:   doorOpen(*noDoor, *withDoor, os.Getenv("REMUDA_STATE_DIR") != ""),
+		Record: recordsHere(*withRecord, os.Getenv("REMUDA_STATE_DIR") != ""),
 		Server: *serverOnly,
 	})
 	if err != nil {
@@ -89,6 +91,12 @@ func doorOpen(noDoor, withDoor, scratch bool) bool {
 		return false
 	}
 	return !scratch || withDoor
+}
+
+// recordsHere says whether this instance records the agents' timelapses: not a scratch instance (REMUDA_STATE_DIR set)
+// unless -record asks, so a second remuda beside the real one never reads the person's screens into a folder of its own.
+func recordsHere(withRecord, scratch bool) bool {
+	return !scratch || withRecord
 }
 
 // help is `remuda -h`: the server's flags, and the commands a person with nothing but the binary needs to know are there.

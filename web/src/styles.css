@@ -6943,6 +6943,76 @@ button.usage-row:hover {
   margin: auto 0;
 }
 
+/* the timelapse player: the pane's screen as it was, drawn as the screen view draws it, the transport under it */
+.timelapse {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.timelapse-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+.timelapse-pick .sel {
+  flex: 1;
+  min-width: 0;
+}
+
+.screen.timelapse-screen {
+  flex: none;
+  justify-content: flex-start;
+  max-height: 56vh;
+  overflow: auto;
+  cursor: default;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.screen.timelapse-screen:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+.timelapse-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.timelapse-scrub {
+  flex: 1 1 160px;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.timelapse-clock {
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.timelapse-speeds {
+  display: flex;
+  gap: 4px;
+}
+
+.timelapse-meta {
+  flex: 1 1 160px;
+  min-width: 0;
+  font-size: var(--fs-11);
+  color: var(--fg-dim);
+}
+
 .composer.compact {
   padding: 6px 8px;
   gap: 6px;

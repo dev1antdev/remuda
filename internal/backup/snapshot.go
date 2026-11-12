@@ -34,9 +34,14 @@ type Manifest struct {
 	Files   int       `json:"files"`
 }
 
-// skippedDirs are the state dir's folders a snapshot leaves out: the ssh masters' sockets, and the backups this machine
-// keeps for others (and for itself).
-var skippedDirs = map[string]bool{"ssh": true, "backups": true}
+// skippedDirs are the state dir's folders a snapshot leaves out: the ssh masters' sockets, the backups this machine
+// keeps for others (and for itself), and the agents' timelapse recordings (internal/timelapse: up to 200 MB of
+// screens, which would crowd out the night's copies of what matters).
+var skippedDirs = map[string]bool{"ssh": true, "backups": true, "timelapse": true}
+
+// keptHere are the skipped folders that belong to this machine rather than to the cockpit: a restore carries them
+// over from the state dir it moved aside.
+var keptHere = []string{"backups", "timelapse"}
 
 // tempName is a file the atomic writer is still writing, "tasks.json.123456789" (os.CreateTemp's number has any length),
 // the tailnet node's own, "tailscaled.state.tmp123456789", and an upload's partial copy

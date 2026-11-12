@@ -67,6 +67,13 @@ function allGroups(mac: boolean): KeyGroup[] {
       ],
     },
     {
+      title: t("Timelapse"),
+      rows: [
+        { keys: [t("Space")], what: t("play or pause the turn") },
+        { keys: ["←", "→"], what: t("the frame before or after") },
+      ],
+    },
+    {
       title: t("Wall"),
       rows: [
         { keys: ["Esc"], what: t("back to the grid from a focused tile, or out of office mode") },

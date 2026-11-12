@@ -158,6 +158,11 @@ func TestGuardLetsAKeyReachTasksOnly(t *testing.T) {
 	if code, _ := withKey(h, "/api/agent-keys", key); code != 403 {
 		t.Fatalf("the keys with a key: %d", code)
 	}
+	for _, path := range []string{"/api/timelapse", "/api/timelapse/recordings?machine=local&pane=w1:p1", "/api/timelapse/recordings/20261112T140000Z-abcdef"} {
+		if code, _ := withKey(h, path, key); code != 403 {
+			t.Fatalf("%s with a key: %d", path, code)
+		}
+	}
 	if code, _ := withKey(h, "/api/tasks", KeyPrefix+strings.Repeat("f", 48)); code != 401 {
 		t.Fatalf("a wrong key: %d", code)
 	}
