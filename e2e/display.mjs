@@ -1057,6 +1057,18 @@ async function runPass() {
     expect: [".backup-settings"],
     close: async () => {},
   });
+  await screen("settings-herdr", {
+    open: async () => {
+      await evaluate(`document.querySelector('.settings-dialog .mirror-settings')?.scrollIntoView({ block: "start" })`);
+      check(await evaluate(`[...document.querySelectorAll('.mirror-settings .settings-row input[type=checkbox]')].map((box) => box.checked).join()`) === "true,false", "Inside herdr does not start with the figures on and the toasts off");
+      check(await evaluate(`document.querySelector('.mirror-settings .config-snippet')?.textContent.includes("$remuda_cost")`), "Inside herdr shows no snippet naming remuda's tokens");
+      await tap(".mirror-settings .backup-actions .btn:not(.sm)");
+      if (!(await until(async () => (await count(".mirror-settings .mirror-outcomes li")) >= 1, 8))) failed("the test toast says nothing of how it went on the machine");
+      check(await evaluate(`document.querySelector('.mirror-settings .mirror-outcomes')?.textContent.includes("ui.toast.delivery")`), "the test toast does not say that the throwaway herdr keeps its toasts off");
+    },
+    expect: [".mirror-settings .config-snippet"],
+    close: async () => {},
+  });
   await closeAll();
   await screen("palette", {
     open: async () => {

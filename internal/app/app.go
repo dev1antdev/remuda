@@ -32,6 +32,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/mirror"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/preview"
@@ -75,8 +76,9 @@ type Options struct {
 	AuthKey       string // TS_AUTHKEY
 	VersionCheck  bool
 	Version       string
-	Door          bool // place the agents' door files here and on every remote (off for a scratch instance)
-	Server        bool // serve the page only: the host is no machine of the fleet, its herdr neither needed nor kept
+	Door          bool   // place the agents' door files here and on every remote (off for a scratch instance)
+	Server        bool   // serve the page only: the host is no machine of the fleet, its herdr neither needed nor kept
+	MirrorClosed  string // why this remuda writes nothing into herdr (a scratch instance beside the real one); "" writes
 }
 
 // Run builds remuda and serves until ctx ends.
@@ -154,9 +156,13 @@ func Run(ctx context.Context, o Options) error {
 	})
 	defer hub.Close()
 	defer pushSvc.Sockets.Close() // the Mac app's alert stream ends with "remuda is stopping", as the page's events do
+	var mirrored *mirror.Service  // named here: an alert the feed records may pop up inside herdr too
 	pushSvc.OnAlert = func(p push.Payload) {
 		activity.Add(feed.Entry{Kind: p.Kind, Machine: p.Machine, Pane: p.Pane, Title: p.Title, Body: p.Body, Worked: p.Worked})
 		hub.RosterChanged() // the bell's dot rides on the roster
+		if mirrored != nil {
+			mirrored.Alert(p)
+		}
 	}
 	// a muted workspace: the pane's folder from the watcher's last snapshot, for the push service's silence check
 	pushSvc.Folder = func(machineID, paneID string) string {
@@ -377,6 +383,48 @@ func Run(ctx context.Context, o Options) error {
 	backups.Notify = func(title, body string) {
 		pushSvc.Broadcast(push.Payload{Kind: "backup", Title: title, Body: body, Tag: "backup"})
 	}
+	// what remuda knows of each agent, shown inside herdr itself: tokens on its panes and workspaces, and toasts
+	mirrored = mirror.New(o.Dir, mirror.Inputs{
+		Herdr: func(id string) (mirror.Herdr, bool) {
+			mc, err := fleet.Get(id)
+			if err != nil {
+				return nil, false
+			}
+			client, _, err := mc.Ready()
+			if err != nil {
+				return nil, false
+			}
+			return client, true
+		},
+		Machines: func() []mirror.Machine {
+			var out []mirror.Machine
+			for _, mc := range fleet.List() {
+				if state, _ := mc.State(); state == machines.StateConnected {
+					out = append(out, mirror.Machine{ID: mc.ID(), Label: mc.Label()})
+				}
+			}
+			return out
+		},
+		Snapshot: func(id string) *herdr.Snapshot {
+			snap, _ := watcher.Snapshot(id)
+			return snap
+		},
+		Radar: tracker.Display,
+		Usage: meter.Display,
+		Said:  sayings.Line,
+		Link:  sayings.Link,
+		PR:    requests.Status,
+		Limit: planLimits.PaneOf,
+		Review: func(machineID, dir string) (int, bool) {
+			badge, _ := reviews.Badge(machineID, dir)
+			return badge.Fresh, reviews.Ready(machineID, dir)
+		},
+		Tasks: taskStore.LiveTasks,
+	}, o.MirrorClosed)
+	defer mirrored.Close()
+	if o.MirrorClosed != "" {
+		log.Printf("remuda's figures and alerts stay out of herdr: %s", o.MirrorClosed)
+	}
 	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker}
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
@@ -426,6 +474,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 	})
 	events.Subscribe(bus, restarter.Observe)
+	events.Subscribe(bus, mirrored.Observe)
 	events.Subscribe(bus, func(e events.Snapshot) { hub.RosterChanged() })
 	events.Subscribe(bus, func(e events.MachineRemoved) {
 		tracker.Forget(e.Machine)
@@ -435,6 +484,7 @@ func Run(ctx context.Context, o Options) error {
 		restarter.Memory.Forget(e.Machine)
 		planLimits.Forget(e.Machine)
 		opinions.ForgetMachine(e.Machine)
+		mirrored.Forget(e.Machine)
 	})
 	events.Subscribe(bus, opinions.OnStatus)
 	events.Subscribe(bus, opinions.Observe)
@@ -579,6 +629,7 @@ func Run(ctx context.Context, o Options) error {
 		Backup:    backups,
 		SelfPort:  auth.PortOf(o.Addr),
 		Opinions:  opinions,
+		Mirror:    mirrored,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

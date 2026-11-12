@@ -40,3 +40,12 @@ func TestDoorOpen(t *testing.T) {
 		}
 	}
 }
+
+func TestMirrorClosed(t *testing.T) {
+	if mirrorClosed(false, false) != "" || mirrorClosed(true, true) != "" {
+		t.Error("the real service, and a scratch instance that asked, write into herdr")
+	}
+	if mirrorClosed(false, true) == "" {
+		t.Error("a scratch instance beside the real one writes into the person's herdr")
+	}
+}
