@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { baseChoices, checkDraft, DEFAULT_KINDS, draftOf, emptyDraft, hookOf, hookWords, outcomeWords, toggleKind, type Webhook } from "./webhooks";
+import serverHooks from "../../../../internal/push/webhooks.go?raw";
+import { baseChoices, checkDraft, DEFAULT_KINDS, draftOf, emptyDraft, hookKindOptions, hookOf, hookWords, outcomeWords, toggleKind, type Webhook } from "./webhooks";
 
 const quiet = { from: "22:00", to: "07:00" };
 
@@ -61,5 +62,15 @@ describe("the draft", () => {
   it("toggles a kind keeping the panel's order", () => {
     expect(toggleKind(["watchdog"], "question", true)).toEqual(["question", "watchdog"]);
     expect(toggleKind(["question", "watchdog"], "question", false)).toEqual(["watchdog"]);
+  });
+});
+
+describe("the kinds", () => {
+  it("are the server's HookKinds, in its order, the sign-ins' among them", () => {
+    const line = serverHooks.match(/var HookKinds = \[\]string\{([^}]*)\}/)?.[1] ?? "";
+    const server = [...line.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect(hookKindOptions().map((o) => o.value)).toEqual(server);
+    expect(server).toContain("signin");
+    expect(DEFAULT_KINDS).toContain("signin");
   });
 });

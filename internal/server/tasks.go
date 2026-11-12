@@ -40,11 +40,18 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 			return
 		}
 		out, err := s.Tasks.UpdateProject(id, p)
+		if err == nil {
+			s.modelsMoved() // an archived project's agents start no more
+		}
 		s.taskReply(w, out, err)
 	})
 	api.HandleFunc("DELETE /api/tasks/projects/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if id, ok := pathID(w, r, "id"); ok {
-			s.taskReply(w, map[string]bool{"ok": true}, s.Tasks.DeleteProject(id))
+			err := s.Tasks.DeleteProject(id)
+			if err == nil {
+				s.modelsMoved()
+			}
+			s.taskReply(w, map[string]bool{"ok": true}, err)
 		}
 	})
 	// the workflow, replaced whole: {statuses: [...], moves: {"<old id>": <new id>}}
@@ -105,6 +112,9 @@ func (s *Server) tasksRoutes(api *http.ServeMux) {
 			return
 		}
 		p, err := s.Tasks.SetAutomation(id, req.Automation)
+		if err == nil {
+			s.modelsMoved()
+		}
 		s.taskReply(w, p, err)
 	})
 	api.HandleFunc("GET /api/tasks/labels", func(w http.ResponseWriter, r *http.Request) {

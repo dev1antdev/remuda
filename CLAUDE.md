@@ -558,7 +558,22 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and `bodyConcerns` (under-voltage and heat from 85 °C bad, a capped
   clock, 75 °C and tight memory a look) join the ⓘ's concerns)
   from one POSIX script per machine through `shell.Text`, every 15
-  minutes and on demand (`POST /api/machines/{id}/health`). **The day's
+  minutes and on demand (`POST /api/machines/{id}/health`, `Recheck`).
+  **Claude Code's sign-in and settings** (`claude.go`, tested on a
+  `claude` stand-in first on a bare PATH): `LoginScript` runs `claude
+  auth status --json` (2.1.318's `loginExpiresAt`) in a call of its own
+  (20 s, a failure keeps the last answer) at most every `LoginEvery` 6
+  hours — it starts Claude Code, which counts the call in its own
+  analytics — and on demand, never on a `-server` host; its `sed` passes
+  on `login_expires=` alone, so the account's e-mail and organization
+  never leave the machine; `ParseLogin` → `Report.ClaudeLogin {expires,
+  at}`, carried between reads and through a probe that failed
+  (`lastLogin`); `SettingsScript` in the probe reads the top-level
+  `"model"` of `~/.claude/settings.json` (`Report.ClaudeModel`) and
+  `claude_fast=on` when `fastMode` is saved on and not reset per session
+  (`Report.ClaudeFast`), what `internal/retire` weighs a setting without a
+  model on; `Collector.OnRead` hears every reading as it is kept (the
+  sign-in warnings, wired in `internal/app`). **The day's
   vitals are kept** (`history.go`, tested): every probe that read the
   machine adds a `Sample{At, Load, DiskFree %, MemUsed %, Temp °C}` (the
   last two where read; sparklines of them in `BodyRows`) to the machine's history
@@ -667,7 +682,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   check").
   The roster carries `health` per machine and `latest`; the sidebar's ⓘ
   (`features/roster/HealthButton.tsx`; the rules in `concerns.ts`) turns amber on an update, a lagging
-  remote remuda, or a nearly full disk.
+  remote remuda, a nearly full disk, Claude Code's sign-in running out (`internal/signin`) or a
+  setting there on a model being retired (`internal/retire`; `concerns(…, more)` takes the
+  machine's name, its `retiring` and the clock).
 - **The machine stays awake while its agents work** (`internal/awake`,
   tested): a switch per machine, off by default, kept in `awake.json` in
   the state dir (`PATCH /api/machines/{id}/awake {on}`, the row "Keep
@@ -1136,7 +1153,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   "Hide idle", the idle ones past the radar's fresh tier, and with **Needs me** (pref `needsMe`, `needsMe` in wall.ts) everyone but the agents waiting for the person — a question open, a watchdog note, a finish not looked at — "Nobody needs you right now" when that leaves none; a tile that needs one wears a pulsing ring (red for a question, amber for a note), a finished one a green edge; the two filters and the view are palette commands too, and **Alt+N** (`app/next.ts`, by key code — never over the terminal, nor over a field on a Mac, where Option+N is the tilde's dead key: `nextKey.ts`, tested; the palette row "Go to the next agent that needs you") walks the agents that need the person in the roster's order, round and round (`nextNeedingMe` in wall.ts, tested): on the Wall the tile takes the wall, a tile hidden by hand passed over, elsewhere the pane opens on its chat, a toast when nobody needs one; pref `wall` holds
   the size S/M/L (`TILE_MIN` 360/460/600 px, an auto-fill grid) and the idle
   switch; no sidebar in the mode, "+ Agent" opens the New workspace
-  dialog; **the zoo** is the third view (`view` = `zoo`, the bar's Zoo, the palette's "Zoo on the Wall", allowed to a viewer): `app/Zoo.tsx` draws every shown tile as a creature — `app/Creature.tsx`, one SVG (viewBox units, the signs' sizes as its own attributes) in the vendor's hue (`--zoo-skin` from `brandColor`, the rest of its palette mixed from it and the flavour's tokens in styles.css, Latte's light and dark swapped), a pose per state from `features/roster/zoo.ts` (tested: `lookOf` — working → busy at a laptop at the spinner's rhythm, blocked → a hand up under a pulsing "?", a watchdog note → worried under an amber "!" board, done → dancing with confetti, idle → asleep with "z", idle_stale → asleep and dim, unknown → puzzled under "…" — `poseWord` the caption's word, `stateSince`, `bubbleOf` the answer's first line in a speech bubble once it finished or rests, cut at `BUBBLE_MAX`, `CREATURE_SIZE` / `cellMin` per S/M/L), the vendor's logo as a badge, its name (`rowLabel`), folder (with its icon) and "working · 6 min" under it; a click is `actions.openPane` (the open.lens rule), a hover is a `Tip` with `stateWords`, a long press (`ui/press.ts`) shows them under it for 3 s; the grid keeps a row for bubbles only while one creature talks, two abreast under 600 px; office mode shows the featured one large beside small ones whose click pins, the pop-out shows the popped agent large; `prefers-reduced-motion` stops every animation and the poses stay; the tile itself is `Tile.tsx`, `TileView`; a tile shows the chat or, in the **Screen** view (`view` in pref `wall`: the Chat | Screen pair in the wall's bar, "Wall of screens" in the palette, the pop-out follows it), the pane's terminal as it is — `features/terminal/Screen.tsx` reads `GET /api/screen?machine&pane` (`internal/server/screen.go` → `herdr.Client.PaneScreen`, `pane.read` with `format: ansi`, read from herdr on demand at the tiles' pace, 3 s / 15 s, an ETag over the text so an unchanged screen is a 304; no attach, so no slot is taken and the shared pane is never resized) and draws the rows through `features/terminal/ansi.ts` (`parseAnsi`, tested: SGR colours in xterm's palette, 256 and true colour, bold / dim / italic / underline / inverse, every other escape dropped) at the font that fits the pane's columns in the tile's width (`thumbFont`, `engine/geometry.ts`), the bottom rows kept when the height runs out; a click opens the terminal lens, the head the lens of the view; `TailAnswer` (chat/Tail.tsx) is the foot under either view — the keys for a question and the compact composer; under the head a **state line** that is always there, `TileState` in `chat/Tail.tsx` — `stateWords` with how long the state has lasted (`radar.since`, `elapsed` in `lib/time.ts`) and, while the agent works in the chat view, what it does this second from the end of its tail (`features/chat/doing.ts`, tested: the tool call still without a result through `toolLabel`, now in `footprint.ts`, and how long it has run — `Running` in `Tail.tsx`, a second at a time through `useNow` in `lib/clock.ts`, amber past `LONG_CALL` 60 s — else thinking or writing; an Agent call without its result reads as waiting on its subagents, and the line says how many of the conversation's still work, "2 subagents working", from the answer's `subagents`), while its plan has open items how far it is, "3/7" (`progressWords` in `chat/plan.ts`, from the tail's `plan`), and once it has finished or sits idle, **what it answered**: the first line of the text its last turn ended with, in the quiet colour — the chat view reads it from the tail (`features/chat/said.ts`, tested: marks stripped, cut at a word by 120 characters), the screen view and the strip from the roster's `pane.said` (`internal/said`, the same cut)), **the pop-out**
+  dialog; **the zoo** is the third view (`view` = `zoo`, the bar's Zoo, the palette's "Zoo on the Wall", allowed to a viewer): `app/zoo/` — `Zoo.tsx` stands every shown tile as a creature in a **pen per machine** (`pensOf` in `features/roster/zooPens.ts`, tested; a `section.zoo-pen` with a sign — the machine's name (`useSharing().machineLabel`), its hue on the sign's edge, its weather as icons and words (`weatherOf` / `weatherWords`: warm from 75 °C, hot from 85 °C — the vitals' `WARM` / `HOT` — a storm for under-voltage now, boxes under 10 % disk free, dust past one load per core, a lamp while kept awake), a fence along its foot; the pens side by side as wide as their creatures want, each its own `.zoo-grid`, a bubbles' row only while one of its creatures talks) under **the sky of the viewer's hour** (`skyOf`: dawn, day, dusk, night; `Sky.tsx` — the gradient behind, the sun or the moon and stars in a strip over the pens) and over **the foot** (`ZooFoot.tsx`: `tickerFacts` in `features/roster/zooLife.ts`, tested — answers, waits, spend, merges, who worked longest by `recap.took` — from `GET /api/standup` since this device's midnight, read every minute while in view (`useDay`), running along like a ticker only when longer than the screen; the voices' `icon-btn` beside it, pref `zoo.voices`, off, per device: `voices.ts` synthesizes a species' chirp through WebAudio — `voiceOf`, `TUNES` — for a question, a finish, a merge, the audio context made inside the switch's click); `ZooCreature.tsx` is one figure, `Creature.tsx` the SVG in 120 × 128 units assembled from `bodies.tsx` (the species, `speciesOf` in `features/roster/zooWear.ts`: Claude Code a round critter with antennae, Codex a boxy robot with an aerial and a panel of LEDs, Gemini CLI an egg between two sparkles, Kimi Code a moon rabbit, any other agent a tufted blob; the skin and belly in `.cr-fat`, widened by `--zoo-girth`), `face.tsx` (a face and arms per pose; an `Eye` blinks at a seeded moment and its pupils follow the pointer — `useGaze.ts`, a fine pointer only, `gaze` sets `--gx` / `--gy` once a frame), `wear.tsx` (`hatOf` the model's family — Opus a top hat, Fable a wizard's, Sonnet a beret, Haiku a sprout and a size smaller (`smallModel`), Mythos a laurel, OpenAI's models a cap — a crown once its pull request is merged; a trinket each — glasses, a bow, a scarf, a bow tie, freckles, a mustache, spots — `outfits` giving no two creatures of a species the same one while there are some left, by `seedOf` its key in the roster's order) and `props.tsx` (the laptop, confetti, the sign — "?", the "!" board, z's, "…", an empty battery — at the top right clear of the hats, and what `features/roster/zooBody.ts` (tested) reads off the roster: `girthOf` the context's share, a belt from `BELT_AT` 0.8; `coinsOf` the cost as up to six coins, tinted amber or red by the tightest budget over its machine and folder; `flagOf` its pull request's flag — failed, running, passed, a draft, open — and the crown; `workExtras` a mug after `COFFEE_AFTER` 20 min of work, sweat after `SWEAT_AFTER` an hour or in a hot pen; `drainedUntil` when an agent stopped on its plan limit carries on, its booked continue or the reset `resetForHit` names, in the caption; `babiesOf` its subagents at work from the roster's `pane.subagents` (`internal/subagents`), up to `MAX_BABIES` 3 hopping at its feet at little laptops and the rest counted — a quiet one is no baby, it may never finish); a pose per state from `features/roster/zoo.ts` (tested: `lookOf` — working → busy at a laptop at the spinner's rhythm, blocked → a hand up under a pulsing "?", a watchdog note → worried under an amber "!" board, done → dancing with confetti, idle → asleep with "z" (under a blanket at night), idle_stale → asleep and dim, unknown → puzzled under "…", a plan limit hit and at rest → drained, slumped under an empty battery — `poseWord` the caption's word, `stateSince`, `bubbleOf` the answer's first line in a speech bubble once it finished or rests, cut at `BUBBLE_MAX` by `cutAt`, `CREATURE_SIZE` / `cellMin` per S/M/L); an asking creature's bubble holds what it asks (`useQuestions.ts`: `GET /api/question` for the asking ones alone, at most `MAX_ASKING` 8, every 10 s while in view; `questionBubble`, a red-edged `zoo-bubble is-question`); the vendor's logo as a badge, its name (`rowLabel`), folder (with its icon) and "working · 6 min" under it, its model, cost, context, flag and babies in its tooltip; **between readings** (`useZooLife.ts` over `happenings` in `zooLife.ts`, tested: only moves seen on this page — the first reading seeds) a finish has the resting and the puzzled ones clap (`joinsApplause`, `CHEER_MS`), a merge sets off `Fireworks` over the zoo (`FIREWORKS_MS`), a compaction puffs (`compacted`, `PUFF_MS`); a click is `actions.openPane` (the open.lens rule), a hover is a `Tip` with `stateWords`, a long press (`ui/press.ts`) shows them under it for 3 s; two abreast under 600 px; under the screen-sharing mode a hidden folder's creature flies no flag, holds up no question and the ticker names it by the neutral name; office mode shows the featured one large beside small ones whose click pins, under the same sky and over the same foot, the pop-out shows the popped agent large; `prefers-reduced-motion` stops every animation, the ticker is cut rather than run, no fireworks, and the poses stay; the tile itself is `Tile.tsx`, `TileView`; a tile shows the chat or, in the **Screen** view (`view` in pref `wall`: the Chat | Screen pair in the wall's bar, "Wall of screens" in the palette, the pop-out follows it), the pane's terminal as it is — `features/terminal/Screen.tsx` reads `GET /api/screen?machine&pane` (`internal/server/screen.go` → `herdr.Client.PaneScreen`, `pane.read` with `format: ansi`, read from herdr on demand at the tiles' pace, 3 s / 15 s, an ETag over the text so an unchanged screen is a 304; no attach, so no slot is taken and the shared pane is never resized) and draws the rows through `features/terminal/ansi.ts` (`parseAnsi`, tested: SGR colours in xterm's palette, 256 and true colour, bold / dim / italic / underline / inverse, every other escape dropped) at the font that fits the pane's columns in the tile's width (`thumbFont`, `engine/geometry.ts`), the bottom rows kept when the height runs out; a click opens the terminal lens, the head the lens of the view; `TailAnswer` (chat/Tail.tsx) is the foot under either view — the keys for a question and the compact composer; under the head a **state line** that is always there, `TileState` in `chat/Tail.tsx` — `stateWords` with how long the state has lasted (`radar.since`, `elapsed` in `lib/time.ts`) and, while the agent works in the chat view, what it does this second from the end of its tail (`features/chat/doing.ts`, tested: the tool call still without a result through `toolLabel`, now in `footprint.ts`, and how long it has run — `Running` in `Tail.tsx`, a second at a time through `useNow` in `lib/clock.ts`, amber past `LONG_CALL` 60 s — else thinking or writing; an Agent call without its result reads as waiting on its subagents, and the line says how many of the conversation's still work, "2 subagents working", from the answer's `subagents`), while its plan has open items how far it is, "3/7" (`progressWords` in `chat/plan.ts`, from the tail's `plan`), and once it has finished or sits idle, **what it answered**: the first line of the text its last turn ended with, in the quiet colour — the chat view reads it from the tail (`features/chat/said.ts`, tested: marks stripped, cut at a word by 120 characters), the screen view and the strip from the roster's `pane.said` (`internal/said`, the same cut)), **the pop-out**
   (`pip.ts` owns the one small window Chrome's Document
   Picture-in-Picture gives — `popOut(selection)` from the click itself,
   the page's stylesheets copied in, `pagehide` clears the store; one
@@ -1758,8 +1775,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   alert `record` hands to the feed goes to each enabled webhook whose
   `Kinds` include its `HookKind` (input → question, done → finish, the
   watchdog's three → watchdog, the rest by name: digest, schedule, task,
-  budget, limits, review, machine, backup — `HookKinds` is the one list, the page's
-  picker must match it) outside its own quiet hours — a question 10 s after
+  budget, limits, review, machine, backup, signin — `HookKinds` is the one list, the page's
+  picker must match it, `webhooks.test.ts` reads it off the Go file) outside its own quiet hours — a question 10 s after
   the block, called off when answered at the desk, every finish 10 s
   after, as the feed hears them — in a goroutine each, one try and one
   more on a network error or a 5xx, a 10 s timeout; the outcome
@@ -2059,6 +2076,32 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   tile's head, in the sidebar row's tooltip, and "Open PR #15" in the
   workspace's ⋯ menu; a link first seen or changed goes on the bus as
   `events.PullRequestNamed`.
+- `internal/subagents/` — **how many subagents each Claude Code agent
+  runs**, for the Wall's zoo (tested on fakes: the cadence, the watched
+  window, forgetting, one sweep per machine, a failed read): `Tracker`
+  hears every `events.Snapshot` (`Observe`: the Claude Code panes and
+  whether herdr reports each working, a pane gone or no longer Claude
+  Code's dropped), `events.PaneStatus` to `Gone` and
+  `events.MachineRemoved` (`Forget`), and reads through
+  `chat.Service.Subagents` — `Reader.Subagents` over the pane's live
+  session file, `SessionFile` followed through compactions as the chat
+  finds it, one stat round trip, a script over ssh on a remote — summed
+  by `CountOf` into `Count{Working, Quiet, Done}` by the transcript's
+  `SubagentWorking` / `SubagentQuiet` / `SubagentDone`. A pane herdr
+  reports working, or a resting one whose last count had a subagent
+  working (subagents run on while the parent rests), at most every
+  `WorkingEvery` (10 s), until none is; any other agent pane — one with
+  a quiet subagent too, which may never finish — every `RestingEvery`
+  (60 s);
+  one sweep in flight per machine, off the watcher's goroutine, a machine
+  not `Ready()` skipped; nothing read unless the roster handler's `Touch`
+  came within `WatchedFor` (a minute), so a page nobody reads costs
+  nothing, and a Touch reads what is due at once. A failed read keeps the
+  last count and is logged once an hour per machine (`ComplainEvery`); a
+  read whose pane was forgotten meanwhile writes nothing. A count that
+  moved calls `OnChange` (the live hub's `RosterChanged`). The roster's
+  `pane.subagents {working, quiet, done}` (each left out at zero, the
+  field nil for none or nothing read yet).
 - `internal/prstatus/` — **the state of the pull request** an agent
   named: `Tracker` hears `events.PullRequestNamed` and, for a GitHub one
   (`/pull/`), runs `gh pr view <url> --json state,isDraft,mergeable,
@@ -2512,10 +2555,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   its own: `GET /api/chat?dir=&session=` without a pane is read-only
   (`Turn.IDs` carry the record uuids; `sessionIDRe` guards the id).
 - `internal/usage/` — the **cost and context meter**. `prices.go` is Claude
-  Code's own baked model catalog (read from the installed 2.1.285: nine
-  price tiers, 21 models, 200k vs 1M windows) and its cost formula (the 1h
-  cache tier, fast mode (`usage.speed`) from its own table, ×1.1 when
-  `inference_geo` is "us" — not on web search); `transcript.UsageOf` reads
+  Code's own baked model catalog (read from the installed 2.1.322: twelve
+  price tiers, 26 models, 200k vs 1M windows — Fable 5.2 and Mythos 5.2 at
+  $8/$40, Haiku 5.5 with its long-prompt rates past 100k prompt tokens,
+  `LongPrompt`, Sonnet 5.5's $0.10 cache reads; a newer id is listed before
+  the older one its prefix matches, tested in `prices_test.go`) and its
+  cost formula (the 1h cache tier, fast mode (`usage.speed`) from its own
+  table, a prompt past a tier's long-prompt size priced whole at its long
+  rates, ×1.1 when `inference_geo` is "us" — not on web search); `transcript.UsageOf` reads
   an assistant record's `message.usage` (`<synthetic>` records and
   `isApiErrorMessage` ones are skipped: no API call behind them), and
   `transcript.NewUsageScanner(path)` is the same for every format — a
@@ -2542,7 +2589,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   in-flight read per machine, and a first read over 64 MB takes the tail
   only, `partial`);
   the roster pane carries `usage{model,name,context,window,cost,turns,
-  tokens}` — context = the last response's input + cache tokens.
+  tokens,speed}` — context = the last response's input + cache tokens,
+  speed what it ran at ("fast" in fast mode, `internal/retire`'s word on a
+  live pane).
   The live session's `<session>/subagents/*.jsonl` (listed in one round
   trip, `Reader.DirVersions`) and sidechain records count toward the pane
   too, less the copy of the parent's response a fork's file opens with
@@ -2658,6 +2707,59 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   composer (`Chat`'s `notice`, composed by `PaneArea`) with "Continue
   after the reset" / "Call it off", and the sidebar card's amber
   "stopped on its plan limit" (`limited` in `workspaces.ts`).
+- `internal/signin/` — **warned before Claude Code's sign-in on a machine
+  runs out** (tested): `Service.Observe(machine, label, expires)` hears
+  every vitals reading (`health.Collector.OnRead` through
+  `signinWarnings` in `internal/app/retire.go`; the `-server` host never)
+  and pushes through `push.Notify` (kind `signin`, tag `signin|<machine>`,
+  the webhooks' kind `signin`, the activity's Machines family, a warning
+  toast on the page) once per `Level`: `Soon` three days before, `Day` a
+  day before, `Ended` — a machine first seen past two hears the graver
+  alone, a later end (a new sign-in) starts afresh, a zero end says
+  nothing; the warnings given are kept by machine in `<state>/signin.json`
+  so a restart never warns twice (a damaged file reads as none given),
+  `Forget` drops a removed machine. `Warning` / `Left` are the push's
+  words: how long is left, or that it ended, and to run `claude auth
+  login` on the machine — remuda never signs in for the person. The page:
+  `features/roster/signin.ts` (tested: `signinConcern` amber from
+  `LOOK_DAYS` 10 before the end, bad from `BAD_DAYS` 2 and once ended,
+  `loginWords` the ⓘ's "Claude sign-in" row) — the ⓘ's first concern
+  after the stopped chats, its button *Open a shell there*
+  (`update: "signin"`: `actions.openFloat` on that machine), none in the
+  Server place (`hostConcerns`).
+- `internal/retire/` — **models and modes being retired** (tested): `Table`
+  is every `Retirement{Agent, Model, Name, Mode, On, Replacement,
+  ReplacementName, Source}` remuda knows — fast mode on Opus 4.8, removed
+  on 2026-11-30 (Claude Code 2.1.316: its requests then error and do not
+  fall back; Opus 5.5 keeps the speedup); `Failing` from the start of its
+  day in UTC; `Applies(agent, model, fast)` over `Canonical` (a provider's
+  prefix, `[1m]`, a Vertex `@date`, Bedrock's `-v1:0` and a date dropped;
+  an alias such as `opus` names the newest and never matches). `Find`
+  weighs every `Setting` — `Recipes`, the agent `Schedules` switched on,
+  `Projects` (the agents of every project not archived that set one up,
+  and each pipeline stage, with no arguments of its own) — by its model (a
+  `--model` in its arguments, its own, else the machine's `Defaults.Model`,
+  `health.Report.ClaudeModel`) and fast mode (`FastIn`: a `--settings`
+  JSON's `"fastMode"` in its arguments, the last word winning, else the
+  machine's `Defaults.Fast`), a setting for any machine on each machine
+  with Claude Code, and every live agent `Pane` by its meter's model and
+  `speed`; a `Hit` carries no names (kind, id, machine, failing), so a
+  viewer link reads no recipe's or project's. `Service.On(machine)` (the
+  hits looked for at most every `Every` 30 s, and at the next look after
+  a recipe, a schedule or a project's agents changed — `Moved`, which
+  those routes call through `modelsMoved`; its inputs closures set in
+  `internal/app/retire.go`) is the roster's `machine.retiring`, and the
+  roster carries `retirements` (the table). The page:
+  `features/usage/retired.ts` (tested, the server's rule again:
+  `canonical`, `fastIn`, `modelIn`, `applies`, `failingOn`, `retiredFor`
+  with which field set it and the machines it would fail on,
+  `defaultsOf`, `noticeWords`, `retiringConcerns` — one ⓘ concern per
+  retirement counting by kind what is set to it there, bad once its day
+  came) and `RetiredNotice.tsx`, a shared piece: the notice (warn, error
+  past the day) with *Use Opus 5.5* in the recipes dialog, the start
+  dialogs' Options (above the fold), the agent schedule editor, a
+  project's Agents and each pipeline stage. `internal/usage/prices.go` is
+  not where it lives: the price catalog says nothing of retirements.
 - `internal/quick/` — saved prompts (`quick.json`, `GET/PUT /api/quick`,
   the list replaced whole), each for every folder or one `dir`; the chat
   composer offers them under ⚡ and edits them in a dialog; a text may
@@ -3638,7 +3740,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   folder per lens or panel, its server calls in its own `api.ts`) →
   `app/`; a dependency points down that list, and a feature never imports
   another feature's screens (its `api.ts` and pure modules, and the few
-  shared pieces `agents/SendToAgent`, `files/target`, are fine; from
+  shared pieces `agents/SendToAgent`, `files/target`, `usage/RetiredNotice`, are fine; from
   `app/` a feature takes only `store`, `current`, `act`, `pip`, `theme`).
   `features/terminal/engine/` is the terminal outside React (`engine.ts`
   wires `transport`, `modes`, `mouse`, `pointer`, `selection`, `layer`,

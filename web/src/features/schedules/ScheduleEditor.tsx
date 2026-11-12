@@ -11,6 +11,7 @@ import type { Machine } from "@/features/roster/api";
 import { connected, folderOptions, machineOptions } from "@/features/roster/options";
 import { choiceFor, CUSTOM, EMPTY_DRAFT, hasModelFlag, modelChoices, modelOf, modelPlaceholder } from "@/features/roster/startOptions";
 import { useRoster } from "@/features/roster/useRoster";
+import RetiredNotice from "@/features/usage/RetiredNotice";
 import { useQuery } from "@/lib/query";
 import { Icon, Logo, Notice, Select, useSubmit } from "@/ui";
 import { agentSchedule, SCOUT_PROMPT } from "./agent";
@@ -161,6 +162,9 @@ export function ScheduleEditor({ machines, value, onClose, onSaved }: { machines
             <input value={args} placeholder={t("--permission-mode plan")} spellCheck={false} onChange={(e) => setArgs(e.target.value)} />
           </label>
         </div>
+      )}
+      {kind === "agent" && (
+        <RetiredNotice agent={agent} model={modelOf(agent, { ...EMPTY_DRAFT, ...model })} args={args} machine={machine} onUse={(id) => setModel({ choice: CUSTOM, custom: id })} />
       )}
       <WhenFields
         when={when}

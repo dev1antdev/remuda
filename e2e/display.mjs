@@ -362,6 +362,8 @@ async function seed() {
       machine: "local",
       dir: appDir,
       agent: "claude",
+      model: "claude-opus-4-8", // fast mode on Opus 4.8 goes on 30 Nov 2026: the settings say so, and so does the machine's ⓘ
+      args: `--settings '{"fastMode":true}'`,
       queue: true,
       max: 2,
       stages: [
@@ -486,6 +488,8 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
   }
   for (const machine of roster.machines ?? []) {
     if (machine.id !== "local") continue;
+    // Claude Code's sign-in there ends in a day and a half: a red concern with a shell to sign in again from
+    machine.health = { ...(machine.health ?? { at: iso(now), disk_free_gb: 120, disk_used_pct: 30, load1: 0.4 }), claude_login: { expires: iso(now + 36 * 3600e3), at: iso(now) } };
     machine.limits = {
       wrapped: true,
       windows: [
@@ -922,8 +926,10 @@ async function runPass() {
     open: async () => {
       await sidebarOpen();
       await tapUntil('[data-health-btn="local"]', ".health-pop");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".health-pop .health-list li")].some((li) => li.textContent.includes("claude auth login"))`), 6))) failed("the vitals say nothing of the sign-in ending");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".health-pop .health-list li")].some((li) => li.textContent.includes("Opus 4.8"))`), 6))) failed("the vitals say nothing of the project's agents on fast Opus 4.8");
     },
-    expect: [".health-pop"],
+    expect: [".health-pop", ".health-pop .health-list li.bad"],
   });
   await screen("tab-strip", { open: () => onAgents(), expect: [".tabstrip .tab", ".lens-pane:not([hidden]) .xterm-screen"] });
   await screen("shell-tab", {
@@ -1042,7 +1048,7 @@ async function runPass() {
   await screen("project-settings", { open: async () => tap(".tasks-settings-btn"), expect: [".project-settings .ps-queue"], settle: 500, close: async () => {} });
   await screen("project-settings-agents", {
     open: async () => evaluate(`document.querySelector('.project-settings .ps-queue')?.scrollIntoView({ block: "center" })`),
-    expect: [".project-settings .ps-queue input[type=checkbox]:checked"],
+    expect: [".project-settings .ps-queue input[type=checkbox]:checked", ".project-settings .retired-notice"],
     close: async () => {},
   });
   // the Inbox's agents were set up after the switch came, so their Claude Code does not wait for permissions
