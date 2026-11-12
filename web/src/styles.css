@@ -4933,6 +4933,140 @@ button.usage-row:hover {
   text-align: right;
 }
 
+/* ---- the models' scorecard (features/usage/ScorecardTab.tsx): the Usage panel's Models tab, a row per agent and model,
+   the best figure of a column in green, one that stands on too few runs faint; on a phone each row is a card ---- */
+
+.scorecard-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scorecard {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-13);
+}
+
+.score-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 2fr) repeat(7, minmax(0, 1fr)) var(--ctl-sm);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+}
+
+.score-row:nth-child(even) {
+  background: var(--bg-input);
+}
+
+.score-head {
+  align-items: end;
+  font-size: var(--fs-11);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--fg-faint);
+}
+
+.score-head > span:not(:first-child),
+.score-cell {
+  text-align: right;
+}
+
+.score-model {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.score-model-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.score-model-title,
+.score-runs {
+  overflow-wrap: anywhere;
+}
+
+.score-runs {
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.score-cell {
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.score-cell.is-few .score-figure {
+  color: var(--fg-faint);
+}
+
+.score-cell.is-best .score-figure {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.score-label {
+  display: none;
+}
+
+.score-try {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .score-head {
+    display: none;
+  }
+
+  .score-row {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 4px 16px;
+    padding: 10px;
+  }
+
+  .score-model {
+    grid-column: 1 / -1;
+    margin-bottom: 4px;
+    padding-right: calc(var(--ctl-sm) + 8px);
+  }
+
+  .score-try {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+  }
+
+  .score-cell {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .score-label {
+    display: inline;
+    min-width: 0;
+    color: var(--fg-dim);
+    font-size: var(--fs-12);
+    text-align: left;
+  }
+
+  .score-figure {
+    white-space: nowrap;
+  }
+}
+
 /* ---- the board: a project's columns side by side, its tasks as cards ---- */
 
 .board-host {

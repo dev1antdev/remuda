@@ -105,6 +105,16 @@ func Lookup(model string) (Model, bool) {
 	return Model{}, false
 }
 
+// ByName finds a model of the catalog by the name the meter shows for it, "Opus 4.5": the way back to an id.
+func ByName(name string) (Model, bool) {
+	for _, c := range models {
+		if c.name == name {
+			return Model{ID: c.id, Name: c.name, Rates: tiers[c.tier], Window: c.window}, true
+		}
+	}
+	return Model{}, false
+}
+
 // FastRates are what Claude Code charges in fast mode (its z9e table).
 func FastRates(m Model) Rates {
 	switch m.ID {

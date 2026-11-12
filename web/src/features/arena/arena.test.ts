@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentKind, Machine, Pane, Session } from "@/features/roster/api";
 import { CUSTOM } from "@/features/roster/startOptions";
 import type { Lane } from "./api";
-import { defaultLanes, keepWords, modelOf, paneOf, repositories, requestOf, runSeconds, statWords, whyNot, type LaneDraft } from "./arena";
+import { defaultLanes, keepWords, modelOf, paneOf, prefilled, repositories, repositoryOf, requestOf, runSeconds, statWords, whyNot, type LaneDraft } from "./arena";
 
 const pane = (id: string, over: Partial<Pane> = {}): Pane => ({ id, title: "", agent: "claude", cwd: "/x", focused: false, status: "idle", cols: 80, rows: 24, ...over }) as Pane;
 const session = (id: string, over: Partial<Session> = {}): Session => ({ id, name: id, status: "idle", active_tab_id: "", tabs: [], ...over }) as Session;
@@ -79,5 +79,45 @@ describe("a lane's card", () => {
     expect(keepWords(lanes, 1)).toContain("close the other 2");
     expect(keepWords([lane({ id: 1 }), lane({ id: 2, dir: "/w/2" })], 1)).toContain("close the other one");
     expect(keepWords([lane({ id: 1 })], 1)).toBe("Keep this lane? No other lane is open.");
+  });
+});
+
+describe("prefilled", () => {
+  const base: LaneDraft[] = [
+    { machine: "local", workspace: "w1", agent: "claude", choice: "", custom: "" },
+    { machine: "local", workspace: "w1", agent: "codex", choice: "", custom: "" },
+  ];
+
+  it("lays the agents and models asked for over the first guess's repository", () => {
+    expect(prefilled(base, [{ agent: "claude", model: "claude-fable-5-1" }, { agent: "codex", model: "gpt-6.1-sol" }])).toEqual([
+      { machine: "local", workspace: "w1", agent: "claude", choice: CUSTOM, custom: "claude-fable-5-1" },
+      { machine: "local", workspace: "w1", agent: "codex", choice: CUSTOM, custom: "gpt-6.1-sol" },
+    ]);
+  });
+
+  it("picks a known name as its choice and the default for no model", () => {
+    expect(prefilled(base, [{ agent: "claude", model: "opus" }, { agent: "claude" }]).map((l) => `${l.choice}|${l.custom}`)).toEqual(["opus|", "|"]);
+  });
+
+  it("puts another agent beside a single lane, and leaves the guess alone when nothing is asked", () => {
+    expect(prefilled(base, [{ agent: "codex", model: "gpt-6.1-sol" }]).map((l) => l.agent)).toEqual(["codex", "claude"]);
+    expect(prefilled(base, [])).toBe(base);
+  });
+});
+
+describe("repositoryOf", () => {
+  const repo = session("w1", { dir: "/home/me/app" });
+  const other = session("w2", { dir: "/home/me/api" });
+  const treeDir = "/home/me/.herdr/worktrees/app/task-12";
+
+  it("finds the repository through the worktree's own workspace while it is open", () => {
+    const tree = session("w7", { dir: treeDir, folder: "/home/me/app", worktree: { repo_key: "/home/me/app/.git", repo_name: "app", linked: true, checkout_path: treeDir } });
+    expect(repositoryOf([machine("local", [other, repo, tree])], "local", `${treeDir}/`)).toEqual({ machineId: "local", workspaceId: "w1" });
+  });
+
+  it("reads the repository's name off herdr's worktree folder once that workspace is gone", () => {
+    expect(repositoryOf([machine("local", [other, repo])], "local", treeDir)).toEqual({ machineId: "local", workspaceId: "w1" });
+    expect(repositoryOf([machine("local", [other, repo])], "local", "/tmp/elsewhere")).toBeUndefined();
+    expect(repositoryOf([machine("local", [other, repo])], "gog", treeDir)).toBeUndefined();
   });
 });

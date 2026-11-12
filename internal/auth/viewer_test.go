@@ -60,7 +60,7 @@ func TestViewerKeyReadsAndNeverTypes(t *testing.T) {
 			t.Fatalf("%s %s with the key: %d %s", try.method, try.path, code, body)
 		}
 	}
-	for _, path := range []string{"/api/chat", "/api/screen", "/api/scrollback", "/api/feed", "/api/standup", "/ws/events", "/", "/assets/index-abc.js", "/icons/icon-512.png", "/api/icons/" + strings.Repeat("a", 64)} {
+	for _, path := range []string{"/api/chat", "/api/screen", "/api/scrollback", "/api/feed", "/api/standup", "/api/scorecard", "/ws/events", "/", "/assets/index-abc.js", "/icons/icon-512.png", "/api/icons/" + strings.Repeat("a", 64)} {
 		if code, _, _ := call(h, "GET", path, nil, key); code != 200 {
 			t.Fatalf("GET %s with the key: %d", path, code)
 		}

@@ -3,20 +3,20 @@
 // from Claude Code's own catalog; on a subscription a measure, not a bill.
 
 import { useMemo, useState } from "react";
-import { actions } from "@/app/store";
-import { fetchUsage, type BudgetStatus, type UsageTotals } from "@/features/usage/api";
+import { fetchUsage, type UsageTotals } from "@/features/usage/api";
 import type { Machine } from "@/features/roster/api";
 import { useRoster } from "@/features/roster/useRoster";
 import { basename } from "@/lib/text";
 import { connected, machineLabel, machineOptions } from "@/features/roster/options";
 import { ago, fmtDay } from "@/lib/time";
-import { Dialog, Icon, Notice, Tip } from "@/ui";
+import { Dialog, Notice } from "@/ui";
 import { useQuery } from "@/lib/query";
+import { usePref } from "@/lib/prefs";
 import Select from "@/ui/Select";
-import { budgetTone, budgetWords, missingWords, ratio, scopeWords } from "./budgets";
-import { accountWindows, agentName, claudeUnread, limitTone, resetTime, windowName } from "./limits";
-import { useNow } from "@/lib/clock";
-import { t, tn } from "@/lib/i18n";
+import { t } from "@/lib/i18n";
+import ScorecardTab from "./ScorecardTab";
+import { DEFAULT_SCORE_PERIOD, SCORE_PERIOD_KEY, SCORE_PERIODS, USAGE_TAB_KEY, periodOf, type UsageTab } from "./scorecard";
+import { Budgets, PlanLimits } from "./UsageSections";
 
 const PERIODS = [
   { value: "1", label: t("Today") },
@@ -35,9 +35,12 @@ export default function Usage({ machines, onClose, onOpenSession }: {
 }) {
   const [days, setDays] = useState("7");
   const [machine, setMachine] = useState("all");
+  const [tab, setTab] = usePref<UsageTab>(USAGE_TAB_KEY, "spend");
+  const [scoreDays, setScoreDays] = usePref<number>(SCORE_PERIOD_KEY, DEFAULT_SCORE_PERIOD);
   const { budgets, viewOnly } = useRoster();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const { data, error, loading } = useQuery(() => fetchUsage(Number(days), machine === "all" ? "" : machine, tz), [days, machine, tz], { keep: true });
+  const spend = tab !== "models";
+  const { data, error, loading } = useQuery(() => fetchUsage(Number(days), machine === "all" ? "" : machine, tz), [days, machine, tz], { keep: true, enabled: spend });
   const several = connected(machines).length > 1;
 
   const sum = useMemo(() => {
@@ -105,6 +108,35 @@ export default function Usage({ machines, onClose, onOpenSession }: {
   const maxDay = Math.max(1e-9, ...sum.days.map((d) => d.cost));
   const read = sum.total.input + sum.total.cache_read + sum.total.cache_write;
   const who = (id: string) => (sum.perMachine.length > 1 ? ` · ${machineLabel(machines, id)}` : "");
+  const tabs = (
+    <div className="fv-tabs usage-tabs" role="tablist" aria-label={t("What the panel shows")}>
+      <button type="button" role="tab" aria-selected={spend} className={spend ? "on" : ""} onClick={() => setTab("spend")}>
+        {t("Spend")}
+      </button>
+      <button type="button" role="tab" aria-selected={!spend} className={spend ? "" : "on"} onClick={() => setTab("models")}>
+        {t("Models")}
+      </button>
+    </div>
+  );
+
+  if (!spend)
+    return (
+      <Dialog
+        title={t("Usage")}
+        icon="chart"
+        size="lg"
+        className="usage"
+        onClose={onClose}
+        controls={
+          <>
+            {tabs}
+            <Select value={String(periodOf(scoreDays))} onChange={(value) => setScoreDays(Number(value))} options={SCORE_PERIODS.map((n) => PERIODS.find((p) => p.value === String(n))!)} />
+          </>
+        }
+      >
+        <ScorecardTab days={periodOf(scoreDays)} machines={machines} viewOnly={viewOnly} />
+      </Dialog>
+    );
 
   return (
     <Dialog
@@ -115,6 +147,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
       onClose={onClose}
       controls={
         <>
+          {tabs}
           <Select value={days} onChange={setDays} options={PERIODS} />
           {several && <Select value={machine} onChange={setMachine} options={machineOptions(machines, { all: t("All machines") })} />}
           {loading && <span className="search-busy" />}
@@ -221,85 +254,5 @@ export default function Usage({ machines, onClose, onOpenSession }: {
         </section>
       </div>
     </Dialog>
-  );
-}
-
-// PlanLimits is the panel's first section: each agent's subscription windows, as full as their latest reading says, and
-// where Claude Code runs with nobody reading its limits, the way to have them read (not for a viewer, who cannot)
-function PlanLimits({ machines, viewOnly }: { machines: Machine[]; viewOnly: boolean }) {
-  const now = useNow(30_000);
-  const windows = accountWindows(machines, now);
-  const unread = viewOnly ? [] : machines.filter(claudeUnread);
-  if (windows.length === 0 && unread.length === 0) return null;
-  return (
-    <section className="budgets plan-limits">
-      <h3>{t("Plan limits")}</h3>
-      {windows.length === 0 && <div className="empty">{t("No plan limits read yet: Codex reports its own after its next answer.")}</div>}
-      {windows.map((w) => {
-        const tone = limitTone(w.used);
-        return (
-          <div key={`${w.agent}|${w.name}`} className={`budget-row${tone ? ` is-${tone}` : ""}`} title={t("Read on {machine}, {ago}", { machine: w.machineLabel, ago: ago(w.at) })}>
-            <span className="budget-scope">
-              {agentName(w.agent)} · {windowName(w.name)}
-              <span className="usage-row-sub"> · {t("resets {time}", { time: resetTime(w.resets_at, now) })}</span>
-            </span>
-            <span className="budget-bar" aria-hidden="true">
-              <span style={{ width: `${Math.min(100, w.used)}%` }} />
-            </span>
-            <span className="budget-words">{Math.floor(w.used)} %</span>
-          </div>
-        );
-      })}
-      {unread.length > 0 && (
-        <div className="empty">
-          {t("Claude Code shows its plan limits to its status line alone, and remuda reads them there once you let it. Not set up yet on {machines}: the machine's ⓘ → Updates → “Show Claude Code's plan limits”.", { machines: unread.map((m) => m.label).join(", ") })}
-        </div>
-      )}
-    </section>
-  );
-}
-
-// Budgets is the panel's second section: every limit with a thin bar of its period's spend, and the way to add or edit one
-// where the screen may change them (a viewer link's screen sees the limits only, and nothing when there are none)
-function Budgets({ budgets, machines, editable }: { budgets: BudgetStatus[]; machines: Machine[]; editable: boolean }) {
-  const label = (id: string) => machineLabel(machines, id);
-  if (!editable && budgets.length === 0) return null;
-  return (
-    <section className="budgets">
-      <h3>
-        {t("Budgets")}
-        {editable && (
-          <button type="button" className="btn sm" onClick={() => actions.openDialog({ kind: "budget", budget: null })}>
-            <Icon name="plus" size={12} /> {t("Add a budget")}
-          </button>
-        )}
-      </h3>
-      {budgets.length === 0 && <div className="empty">{t("No budgets yet: a limit per day, week or month, on everything or one machine or folder. The usage pill turns amber at 80 %, a push comes at 80 % and at the limit.")}</div>}
-      {budgets.map((b) => {
-        const r = ratio(b);
-        const tone = budgetTone(r);
-        const missing = missingWords(b, label);
-        return (
-          <div key={b.id} className={`budget-row${tone ? ` is-${tone}` : ""}`} title={missing || undefined}>
-            <span className="budget-scope">
-              {scopeWords(b, label)}
-              {b.note && <span className="usage-row-sub"> · {b.note}</span>}
-              {missing && <span className="usage-row-sub"> · {tn(b.missing?.length ?? 0, "{n} machine not counted", "{n} machines not counted")}</span>}
-            </span>
-            <span className="budget-bar" aria-hidden="true">
-              <span style={{ width: `${Math.min(100, 100 * r)}%` }} />
-            </span>
-            <span className="budget-words">{budgetWords(b)}</span>
-            {editable && (
-              <Tip text={t("Edit this budget")}>
-                <button type="button" className="icon-btn sm" aria-label={t("Edit this budget")} onClick={() => actions.openDialog({ kind: "budget", budget: b })}>
-                  <Icon name="edit" size={14} />
-                </button>
-              </Tip>
-            )}
-          </div>
-        );
-      })}
-    </section>
   );
 }

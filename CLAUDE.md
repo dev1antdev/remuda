@@ -1225,7 +1225,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   files a merge of staging carried in. A baseline per `machine|folder`
   (`review.json`: HEAD then, blob hashes of the files dirty then, and the
   verdict the agent was told, if any) is set by `POST /api/review/seen
-  {dir, verdict?}`; `GET /api/review?dir=` runs one shell (`shell.Text` on
+  {dir, verdict?}` — and since the baseline keeps only the last word, every
+  verdict (approved or changes, never a silent look) is also appended to
+  `review-verdicts.json` (`history.go`, tested: `Verdict{machine, dir,
+  verdict, at}`, the newest `HistoryKeep` 1000, a store from before
+  starting it with each baseline's verdict, written at once so a later
+  silent look takes nothing away; `Store.Verdicts(since)`), which the
+  models' scorecard reads (`internal/scorecard`); `GET /api/review?dir=` runs one shell (`shell.Text` on
   the machine: local `sh -c` or over ssh) for branch, HEAD, the commits
   `baseline..HEAD` along the first parent (a merge is one line, not the
   history it brought; the newest `maxCommits` 300 listed and the rest
@@ -2608,7 +2614,53 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   its width unchanged) and on radar rows from 50% up
   (amber 70%, red 90%), Chat's compaction notice from 80% with "Compact
   now" (`/compact` through submit). Prices are API-equivalent: on a
-  subscription a measure, not a bill.
+  subscription a measure, not a bill. The panel has two tabs, the pref
+  `usage.tab` per device: **Spend** (all of the above, its plan limits
+  and budgets in `UsageSections.tsx`) and **Models**, the scorecard below;
+  `ByName` is the catalog's way back from a name to an id.
+- `internal/scorecard/` — **which model does the work best**, from the
+  cockpit's own records (tested on built records and on the real stores):
+  `Build(Records{Runs, Verdicts, Lanes}, since)` is a `Row` per agent kind
+  and model (the meter's name, a catalog id read as its name, `model_id`
+  what `--model` takes: the catalog's id for a name, an id as read) over
+  the task runs started since (`tasks.Store.RunsSince`), the review
+  verdicts (`review.Store.Verdicts`) and the decided arena lanes
+  (`arena.Store.Outcomes`): `finished` of the runs, `first_approved` of
+  the work runs reviewed with `rejected` and `approved` (at any review),
+  `merged` of the pull requests opened, `kept` of the decided lanes, and
+  the means `cost_per_run`, `cost_per_approved` (what the reviewed runs
+  cost over the approved ones) and `minutes_per_run`. **Attribution**: a
+  verdict goes to the work run of the folder it was given on — the last
+  run started on that machine and worktree folder before it (`workAt`;
+  a verdict on a folder no run of the period worked in is `unplaced`,
+  counted for no model) — and the first verdict decides approved at the
+  first review or rejected before an approval; a pipeline's later stages
+  are runs of their own model but never take the work's verdicts or its
+  pull request (credited to the stage-0 run of the worktree, `creditPRs`:
+  a request counted once, merged when any run naming it saw the merge —
+  `tasks.Run.Merged`, set by `OnPullRequestMerged`); a lane that was a
+  task run goes by the run's model. **Thresholds**: `MinSample` 5 — a
+  `Share` carries its `rate` only from five behind it, a `Mean` is `few`
+  under five, and only such figures compete for a column's best on the
+  page. The period is `Since(days, now)`, local midnight `days-1` days
+  back in the viewer's zone, as the usage report cuts it. Every row gets
+  a `Try` — the newest finished task another model did, the two side by
+  side, else its own newest beside the model most recently at work.
+  `GET /api/scorecard?days&tz` (`internal/server/scorecard.go`, the
+  person's; a viewer link reads it like the usage report, its card
+  `WithoutTasks`, since the tasks are not a viewer's). The page:
+  `features/usage/ScorecardTab.tsx` (the Usage panel's Models tab, its
+  period 7 / 30 / 90 days in pref `scorecard.period`, the palette's
+  "Models scorecard"; a row per model — the model, its agent and runs,
+  finished, approved first time, PRs merged, kept in arenas, $ per run,
+  $ per approved, minutes per run, the best of a column green, a few-run
+  figure faint, a card per row on a phone — and, never for a viewer, the
+  row's Try button: the task fetched, its prompt composed by
+  `tasks/prompt.ts`, the Arena dialog opened with the two lanes on its
+  repository), `scorecard.ts` the pure part, tested: `shareWords` ("80 %",
+  "2 of 3"), `costWords`, `minutesWords`, `figureOf`, `bestOf` (two
+  comparable rows at least, ties all best; `bestByColumn` every column), `rowName`, `reviewWords`,
+  `fewWords`, `tryLanes`, `tryWords`.
 - `internal/budget/` — **budgets**: a spending limit per day, week
   (from Monday) or month on everything, one machine or one folder of it
   (`budgets.json` in the state dir, `GET/PUT /api/budgets`, the list
@@ -2844,6 +2896,21 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   one not made yet never is (`stillStarting`); the throwaway index's
   folder is removed only when `mktemp` made one; a task's
   arena gets a comment saying what was kept and where the patches are.
+  **What was decided outlives the arena** (`outcomes.go`, tested): the
+  first Keep notes every lane that ran an agent as an `Outcome{arena,
+  lane, agent, model, kept, run_id, task_id, at}` in the file's `history`
+  (the newest `HistoryKeep` 300, kept when the arena is forgotten;
+  arenas decided before it are read in at `Open` with the models they
+  asked for), the model the meter read off each lane's pane just before
+  the others close (`Service.ModelOf`, the app's `usage.Tracker.Display`
+  name), else the one asked for; `Store.Outcomes(since)` is what the
+  models' scorecard counts. `prefilled` and `repositoryOf` in `arena.ts`
+  (tested) let the dialog start with the lanes another screen asks for
+  (dialog kind `arena` with `lanes [{agent, model}]`: a known name as its
+  choice, an id as a typed one, another agent beside a single one) on the
+  repository a past run's worktree branched off (its workspace's
+  `folder` while it is open, else the `<repository>` of herdr's
+  `~/.herdr/worktrees/<repository>/<name>`).
   Routes (`internal/server/arena.go`): `GET /api/arenas` (the newest
   five with each lane's `stats`), `POST /api/arenas`, `POST
   /api/arenas/{id}/keep {lane}`, `DELETE /api/arenas/{id}` (forgets the
@@ -3190,7 +3257,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`prstatus.Tracker.TouchPane`) to read the request a live run names
   again when its last read is old, and every `events.PullRequestState`
   goes to `RunWatch.OnPullRequestState` → `Store.OnPullRequestMerged`,
-  which, for MERGED and a live run naming that very address, adds the
+  which, for MERGED and a live run naming that very address, keeps the
+  moment on the run (`merged`, which the models' scorecard counts; a run
+  from before the column reads it back from that comment at every open,
+  `backfillMerged` in `past.go`, where `RunsSince` lists a period's runs
+  with their tasks' titles), adds the
   comment "PR #15 merged" by "remuda" (once: a read after a restart
   finds the comment and stops), moves the task to the done column while
   it still sits in the start or finish column (`onMerged`; a card the
@@ -3385,7 +3456,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   tested: the token file, a key or an ssh key read through the file
   viewer would open what the link must not; 403 "the file is outside the
   workspaces", and a stat's `dir` and candidates are kept the same way),
-  the health, the push public key, the question, the usage, the folders'
+  the health, the push public key, the question, the usage, the models'
+  scorecard (`/api/scorecard`, its rows naming no task), the folders'
   icon pictures (`/api/icons/…`, `viewerPrefixes`), and the
   upgrade of `/ws/events` — or of the page itself and its files (anything outside
   `/api/`, `/ws/` and the code-server proxy `/code/`); never `/ws/pane`,

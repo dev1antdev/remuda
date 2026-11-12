@@ -47,6 +47,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
+	"github.com/dev1antdev/remuda/internal/scorecard"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/subagents"
@@ -101,6 +102,8 @@ type Server struct {
 	Subagents *subagents.Tracker // how many subagents each Claude Code pane's conversation runs, for the Wall's zoo
 	Retire    *retire.Service    // what is set to a model or mode being retired, nil without
 
+	Scorecard *scorecard.Service // which model does the work best, from the runs, reviews, requests and arenas
+
 	streams   termStreams
 	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
 }
@@ -152,6 +155,7 @@ func (s *Server) Handler() http.Handler {
 	s.leftoverRoutes(api)
 	s.previewRoutes(api)
 	s.opinionRoutes(api)
+	s.scorecardRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

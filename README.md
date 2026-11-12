@@ -265,6 +265,18 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   lane's work — commits and uncommitted changes — is saved as a patch in
   remuda's state folder first, then its agent stops and its worktree and
   branch go.
+- **Models scorecard** — which model actually does your work best, from
+  remuda's own records: the Usage panel's Models tab (or "Models
+  scorecard" in the palette) has a row per agent and model over the last
+  7, 30 or 90 days — how many of its task runs finished, how many were
+  approved at your first review in the Changes lens rather than rejected
+  first, how many of the pull requests they opened merged, how many of its
+  arena lanes you kept, and what a run, and an approved one, cost and how
+  long a run took. A share needs five runs behind it before it becomes a
+  percentage (before that it says "2 of 3"), and only such figures compete
+  for the quiet green mark of a column's best. The button at the end of a
+  row opens an arena on a recent task with two models side by side: the
+  one that ran it and the row's own.
 - **Standup** — the sun button in the sidebar head (or "Standup" in the
   palette) is one report over every agent on every machine: what each
   did since midnight — prompts and answers, how long and what it cost,
