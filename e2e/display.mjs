@@ -80,6 +80,7 @@ socket.onmessage = (message) => {
     else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
     else if (url.includes("/api/review/secrets")) void fakeSecrets(msg.params);
     else if (url.includes("/api/timelapse/recordings")) void fakeTimelapse(msg.params);
+    else if (url.includes("/api/fleet-setup")) void fakeFleet(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
@@ -566,6 +567,45 @@ async function fakeTimelapse({ requestId, request }) {
   const path = new URL(request.url).pathname;
   const [code, body] = request.method !== "GET" ? [403, { error: "the e2e deletes no recording" }] : path.endsWith("/recordings") ? [200, { recordings: [meta, earlier], on: true }] : path.endsWith(TIMELAPSE_ID) ? [200, recording] : [200, { ...earlier, frames }];
   await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// fakeFleet answers Fleet setup with four machines: this one, GOG lagging in every way the table tells — an older
+// Claude Code with its update, remuda's MCP missing, a CLAUDE.md of its own, a checkout behind — a Pi alike but for its
+// default model, and a box away; this machine's own Claude Code is offered its update, so Run… opens its Updates
+async function fakeFleet({ requestId }) {
+  const hash = (c) => c.repeat(64);
+  const at = Math.round(now / 1000);
+  const update = (what, title) => ({ what, title, command: `PATH=…; ${what === "claude" ? "claude update && claude --version" : '"$HOME/.local/bin/remuda" mcp install'}` });
+  const body = {
+    at: iso(now - 20e3),
+    machines: [{ id: "local", label: "This machine · e2e" }, { id: "gog", label: "GOG" }, { id: "pi", label: "Pi" }, { id: "box", label: "Box", away: true }],
+    sections: [
+      {
+        id: "agents",
+        rows: [
+          { id: "agent.version", arg: "claude", kind: "version", state: "odd", norm: "2.1.322", cells: { local: { value: "2.1.320", mark: "odd", action: update("claude", "Update Claude Code") }, gog: { value: "2.1.322" }, pi: { value: "2.1.322" } } },
+          { id: "agent.via", arg: "claude", kind: "via", state: "same", norm: "native", cells: { local: { value: "native" }, gog: { value: "native" }, pi: { value: "native" } } },
+          { id: "agent.version", arg: "codex", kind: "version", state: "odd", norm: "0.80.0", cells: { local: { value: "0.80.0" }, gog: { value: "0.80.0" }, pi: { value: "", mark: "odd" } }, hand: ["pi"] },
+        ],
+      },
+      { id: "herdr", rows: [{ id: "herdr.hooks", arg: "claude", kind: "hook", state: "same", norm: "current", cells: { local: { value: "current" }, gog: { value: "current" }, pi: { value: "current" } } }] },
+      { id: "remuda", rows: [{ id: "mcp", arg: "claude", kind: "flag", state: "odd", norm: "yes", cells: { local: { value: "yes" }, gog: { value: "no", mark: "odd", action: update("mcp", "Connect the agents to your tasks (MCP)") }, pi: { value: "yes" } } }] },
+      { id: "claude", rows: [{ id: "claude.model", kind: "model", state: "odd", norm: "claude-opus-4-8", cells: { local: { value: "claude-opus-4-8" }, gog: { value: "claude-opus-4-8" }, pi: { value: "default", mark: "odd" } }, hand: ["pi"] }] },
+      { id: "instructions", rows: [{ id: "instructions", arg: "claude", kind: "hash", state: "odd", norm: hash("a"), cells: { local: { value: hash("a"), at: at - 86400 }, gog: { value: hash("b"), mark: "odd", at: at - 7200 }, pi: { value: hash("a"), at: at - 3 * 86400 } }, hand: ["gog"] }] },
+      {
+        id: "repo",
+        name: "owner/app",
+        folders: { local: appDir, gog: "/home/someone/app" },
+        rows: [
+          { id: "repo.branch", kind: "text", state: "same", norm: "main", cells: { local: { value: "main" }, gog: { value: "main" } } },
+          { id: "repo.behind", kind: "behind", state: "odd", norm: "0", cells: { local: { value: "0", at: at - 600, note: "origin/main" }, gog: { value: "3", mark: "odd", at: at - 5 * 3600, note: "origin/main" } }, hand: ["gog"] },
+          { id: "repo.file", arg: "CLAUDE.md", kind: "hash", state: "split", cells: { local: { value: hash("c"), mark: "split", at: at - 3600 }, gog: { value: hash("d"), mark: "split", at: at - 30 * 3600 } }, hand: ["local", "gog"] },
+        ],
+      },
+    ],
+    single: [{ name: "owner/notes", machine: "pi", folder: "/home/someone/notes" }],
+  };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
 
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
@@ -1261,6 +1301,40 @@ async function runPass() {
     expect: [".server-panel"],
   });
   await screen("update-everywhere", { open: async () => palette("update-everywhere"), expect: [".modal.everywhere, .everywhere"], settle: 800 });
+  await screen("fleet-setup", {
+    open: async () => {
+      await palette("fleet-setup");
+      if (!(await until(() => present(".fleet-setup .fleet-table"), 6))) return failed("Fleet setup draws no table");
+      check((await count(".fleet-setup thead th")) === 5, "Fleet setup does not lay the four machines out as columns");
+      check((await count(".fleet-cell.is-odd")) === 6, `Fleet setup marks ${await count(".fleet-cell.is-odd")} cells off the norm, not the six that differ`);
+      check((await count(".fleet-cell.is-split")) === 2, "a file two machines hold in two copies is not marked as having no norm");
+      check((await count(".fleet-setup .fleet-fix")) === 2, "Fleet setup does not offer the two updates that bring a machine in line");
+      check((await count(".fleet-setup .fleet-hand li")) === 5, `Fleet setup leaves ${await count(".fleet-setup .fleet-hand li")} things to do by hand, not five`);
+      check(await evaluate(`[...document.querySelectorAll(".fleet-setup tbody tr:not(.fleet-section)")].every((tr) => tr.querySelector(".is-odd, .is-split"))`), "a row in line shows before Show every fact");
+    },
+    expect: [".fleet-setup .fleet-table"],
+    settle: 500,
+  });
+  await screen("fleet-setup-every-fact", {
+    open: async () => {
+      await palette("fleet-setup");
+      if (!(await until(() => present(".fleet-setup .fleet-table"), 6))) return failed("Fleet setup draws no table");
+      const shown = await count(".fleet-setup tbody tr:not(.fleet-section)");
+      await tap(".fleet-setup .modal-actions .btn[aria-pressed]");
+      if (!(await until(async () => (await count(".fleet-setup tbody tr:not(.fleet-section)")) === shown + 3, 4))) failed("Show every fact does not add the three rows in line");
+    },
+    expect: [".fleet-setup .fleet-table"],
+  });
+  await screen("fleet-setup-bring-in-line", {
+    open: async () => {
+      await palette("fleet-setup");
+      if (!(await until(() => present(".fleet-setup .fleet-fix .btn:not(:disabled)"), 6))) return failed("Fleet setup offers no update to run here");
+      check((await count(".fleet-setup .fleet-fix .btn:disabled")) === 1, "an update on a machine the roster does not list can be run");
+      await tap(".fleet-setup .fleet-fix .btn:not(:disabled)");
+      if (!(await until(() => evaluate(`!!document.querySelector(".modal.updates:not(.fleet-setup)") && !document.querySelector(".fleet-setup")`), 6))) failed("Run… does not open the machine's Updates on it");
+    },
+    expect: [".modal.updates"],
+  });
   await screen("settings", { open: async () => palette("settings"), expect: [".settings-dialog .settings-section"], close: async () => {} });
   const sections = (await evaluate(`document.querySelectorAll('.settings-dialog .settings-section').length`)) ?? 0;
   for (let i = 1; i < sections; i++)
@@ -1346,6 +1420,7 @@ try {
       { urlPattern: "*/api/scorecard*", requestStage: "Request" },
       { urlPattern: "*/api/review/secrets*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/recordings*", requestStage: "Request" },
+      { urlPattern: "*/api/fleet-setup*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });

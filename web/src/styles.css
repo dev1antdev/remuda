@@ -6682,6 +6682,146 @@ button.usage-row:hover {
   color: var(--amber);
 }
 
+/* ---- Fleet setup (features/updates/FleetDialog.tsx): machines as columns, facts as rows, the odd one out marked ---- */
+.fleet-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.fleet-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-13);
+}
+
+.fleet-table th,
+.fleet-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.fleet-table tbody:last-child tr:last-child > * {
+  border-bottom: 0;
+}
+
+.fleet-table thead th {
+  background: var(--bg-raised);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.fleet-table thead th.is-away {
+  color: var(--fg-faint);
+}
+
+.fleet-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.fleet-col-state {
+  font-weight: 400;
+  color: var(--fg-faint);
+}
+
+.fleet-table th[scope="row"],
+.fleet-corner {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 130px;
+  max-width: 220px;
+  background: var(--bg-raised);
+  font-weight: 500;
+  color: var(--fg-dim);
+  overflow-wrap: break-word;
+}
+
+.fleet-section th {
+  position: sticky;
+  left: 0;
+  background: var(--bg-input);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--fg);
+  overflow-wrap: break-word;
+}
+
+.fleet-cell {
+  min-width: 84px;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
+}
+
+.fleet-cell.is-na {
+  color: var(--fg-faint);
+}
+
+.fleet-cell.is-odd {
+  background: var(--amber-soft);
+  box-shadow: inset 3px 0 var(--amber);
+}
+
+.fleet-cell.is-split {
+  box-shadow: inset 3px 0 var(--amber-ring);
+}
+
+.fleet-hash {
+  font: var(--fs-12) / 1.5 var(--mono);
+}
+
+.fleet-tip {
+  border-radius: var(--r-xs);
+  cursor: default;
+}
+
+.fleet-tip:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+.fleet-fixes h3 {
+  margin: 4px 0;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.fleet-fix-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fleet-fix-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fleet-hand {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-13);
+  color: var(--fg-dim);
+}
+
+.fleet-hand strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
 .updates-log {
   margin: 0;
   max-height: 44dvh;

@@ -543,6 +543,29 @@ the server is restarted — herdr restores the workspaces and panes, and
 remuda starts every chat again with its session resumed ("Restart
 herdr's server" is offered whenever the server lags the binary).
 
+**Fleet setup shows how every machine is set up, side by side** (the
+Updates dialog, the machine's ⋯ menu, the Server place, or the palette):
+a column per machine and a row per fact — each agent's version and how
+it was installed, herdr and its hooks for each agent, its plugins,
+remuda and code-server, whether remuda's MCP server is registered with
+each agent, Claude Code's status line, default model and fast mode, the
+global `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` and
+`~/.gemini/GEMINI.md`, and for every repository checked out on two
+machines or more its branch, how far it is behind its upstream as of the
+last fetch, and its `CLAUDE.md`, `AGENTS.md` and `.claude/settings.json`.
+The value most machines share is the norm and the one that differs is
+marked; a row's tooltip says what it is. Only the rows that differ show
+until you ask for every fact. What an update remuda already has can fix
+— an agent or herdr update, herdr's hooks (missing ones too), `remuda mcp
+install`, `remuda statusline install`, code-server — is listed under
+**Bring in line** with its command, and Run… opens that machine's Updates
+on it; the rest (another CLAUDE.md, another default model, a checkout
+behind) is said as what to do by hand. Reading it changes nothing: one
+script per machine greps the agents' own config files (`~/.claude.json`,
+Codex's `config.toml`, Gemini CLI's `settings.json`) and hashes the
+files, no agent is started, and no file's content leaves the machine —
+names, versions, hashes and flags only.
+
 **After a reboot the chats come back too.** herdr restores the
 workspaces and panes, but every pane is a bare shell again. remuda
 remembers which agent and which session each pane ran, so when a

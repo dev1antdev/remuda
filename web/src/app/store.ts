@@ -44,6 +44,7 @@ export type AppDialog =
   | { kind: "previews"; machineId: string; workspace?: string; name?: string } // what the machine's processes serve, the workspace's first, each opened on the cockpit
   | { kind: "triggers"; machineId?: string; dir?: string; workspace?: string; name?: string } // what a pane prints and what it sets off: the rules a folder sees, or every rule
   | { kind: "update-everywhere" } // every connected machine's updates, one after another, the page's own host last
+  | { kind: "fleet-setup" } // how every machine is set up, side by side, the odd one out marked
   | { kind: "reopen" } // the agents whose panes went away, each to be started again on its session
   | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string }; lanes?: { agent: string; model?: string }[] } // one prompt to several agents, each in a worktree of its own; lanes: the agents and models to start with
   | null;

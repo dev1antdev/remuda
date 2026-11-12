@@ -79,6 +79,30 @@ func TestHooksAndPluginsPlans(t *testing.T) {
 	}
 }
 
+func TestMissingIntegrationsArePlannedForTheAgentsInstalled(t *testing.T) {
+	r := &health.Report{Herdr: "0.9.5", Claude: "2.1.300", Gemini: "0.9.0", Integrations: map[string]string{"claude": "missing", "codex": "missing", "gemini": "current", "pi": "missing"}}
+	u, err := Plan("integrations", r)
+	if err != nil || !strings.HasSuffix(u.Command, "; herdr integration install claude") || !strings.HasPrefix(u.Note, "claude: installed there without") {
+		t.Fatalf("integrations: %+v %v", u, err)
+	}
+	r.Codex = "0.80.0"
+	if u, _ := Plan("integrations", r); !strings.HasSuffix(u.Command, "herdr integration install claude && herdr integration install codex") {
+		t.Fatalf("an installed Codex without its hooks is not planned: %s", u.Command)
+	}
+	for _, none := range []*health.Report{nil, {Claude: "2.1.300", Integrations: map[string]string{"claude": "missing"}}, {Herdr: "0.9.5", Integrations: map[string]string{"claude": "missing"}}, {Herdr: "0.9.5", Claude: "2.1.300"}} {
+		if _, err := Plan("integrations", none); err == nil {
+			t.Fatalf("hooks were planned with no herdr, no agent or nothing missing: %+v", none)
+		}
+	}
+	var whats []string
+	for _, u := range Offered(r, health.Latest{}) {
+		whats = append(whats, u.What)
+	}
+	if strings.Join(whats, " ") != "herdr claude codex gemini integrations" {
+		t.Fatalf("offered: %v", whats)
+	}
+}
+
 func TestAssetName(t *testing.T) {
 	for _, c := range []struct{ os, arch, want string }{
 		{"macOS 26.6.2", "arm64", "remuda-darwin-arm64"},

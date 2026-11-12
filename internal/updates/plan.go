@@ -46,6 +46,20 @@ func arrow(want string) string {
 	return " → " + want
 }
 
+// MissingIntegrations are the agents installed on the machine whose herdr integration herdr reports not installed.
+func MissingIntegrations(r *health.Report) []string {
+	if r == nil || r.Herdr == "" {
+		return nil
+	}
+	var missing []string
+	for _, agent := range restart.Kinds("agents") {
+		if agentVersion(r, agent) != "" && r.Integrations[agent] == "missing" {
+			missing = append(missing, agent)
+		}
+	}
+	return missing
+}
+
 // Plan is the update for one thing on a machine with this report, run as the user and never with sudo.
 func Plan(what string, r *health.Report) (Update, error) {
 	path := script.PATH + "; "
@@ -82,6 +96,17 @@ func Plan(what string, r *health.Report) (Update, error) {
 		}
 		return Update{What: what, Title: "Update herdr's agent hooks", Command: path + strings.Join(steps, " && "),
 			Note: strings.Join(versions, ", ") + ". The hooks are what tell herdr, and so remuda, what an agent is doing; an agent already running picks the new ones up once it is restarted."}, nil
+	case "integrations":
+		missing := MissingIntegrations(r)
+		if len(missing) == 0 {
+			return Update{}, fmt.Errorf("every agent there has herdr's hooks")
+		}
+		var steps []string
+		for _, agent := range missing {
+			steps = append(steps, "herdr integration install "+agent)
+		}
+		return Update{What: what, Title: "Install herdr's agent hooks", Command: path + strings.Join(steps, " && "),
+			Note: strings.Join(missing, ", ") + ": installed there without herdr's hooks, as remuda setup installs them. The hooks are what tell herdr, and so remuda, what an agent is doing; an agent already running picks them up once it is restarted."}, nil
 	case "plugins":
 		if r == nil || len(r.Plugins) == 0 {
 			return Update{}, fmt.Errorf("no herdr plugin from GitHub is installed there")
@@ -206,7 +231,7 @@ func Offered(r *health.Report, l health.Latest) []Update {
 		}
 		out = append(out, u)
 	}
-	for _, what := range []string{"hooks", "plugins"} {
+	for _, what := range []string{"hooks", "integrations", "plugins"} {
 		if u, err := Plan(what, r); err == nil {
 			out = append(out, u)
 		}
