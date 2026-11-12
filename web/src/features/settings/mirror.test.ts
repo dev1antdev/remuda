@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { setLang } from "@/lib/i18n";
-import { outcomesTone, outcomeTone, outcomeWords, quietZone, withQuiet } from "./mirror";
+import { elsewhereWords, outcomesTone, outcomeTone, outcomeWords, quietZone, withQuiet } from "./mirror";
 import type { ToastOutcome } from "./mirrorApi";
 
 afterEach(() => setLang("en"));
@@ -19,6 +19,15 @@ describe("Inside herdr's toasts", () => {
     expect(outcomeWords(outcome({ label: "", error: "the machine is not connected" }))).toBe("gog-id: herdr was not reached — the machine is not connected");
     setLang("ru");
     expect(outcomeWords(outcome({ shown: true }))).toBe("GOG: показано");
+  });
+
+  it("says which remuda writes into a machine's herdr when this one stays out", () => {
+    expect(elsewhereWords({ machine: "gog-id", label: "GOG", writer: "rp-orange:7317" })).toBe(
+      "On GOG the remuda at rp-orange:7317 writes into herdr and pops its toasts, so this one stays out there.",
+    );
+    expect(elsewhereWords({ machine: "gog-id", label: "", writer: "" })).toBe("On gog-id another remuda writes into herdr and pops its toasts, so this one stays out there.");
+    setLang("ru");
+    expect(elsewhereWords({ machine: "gog-id", label: "GOG", writer: "rp-orange:7317" })).toBe("На GOG в herdr пишет и показывает тосты remuda на rp-orange:7317, поэтому этот туда не вмешивается.");
   });
 
   it("weighs a test's answers by the gravest", () => {

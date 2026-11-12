@@ -48,6 +48,16 @@ out=${E2E_OUT:-$tmp/shots}
 mkdir -p "$home" "$tmp/ws" "$tmp/state" "$tmp/chrome" "$out"
 export HERDR_SOCKET_PATH=$sock HERDR_SOCKET=$sock
 
+# The agents' CLIs are stand-ins, first on every PATH the run's scripts build ($HOME/.local/bin leads remuda's own PATH
+# line): the vitals probe runs `claude --version` and `claude auth status`, and the person's real Claude Code would
+# reach their account through the macOS keychain, which no throwaway HOME hides — nor may a real codex, gemini or kimi run.
+mkdir -p "$home/.local/bin"
+for agent in claude codex gemini kimi; do
+  printf '#!/bin/sh\n# the e2e stand-in for %s: a version, nothing else\n[ "$1" = --version ] && echo "0.0.0 (e2e stand-in)"\nexit 0\n' "$agent" >"$home/.local/bin/$agent"
+  chmod +x "$home/.local/bin/$agent"
+done
+export PATH="$home/.local/bin:$PATH"
+
 stop() {
   status=$?
   trap - EXIT INT TERM

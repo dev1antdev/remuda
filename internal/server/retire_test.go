@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/dev1antdev/remuda/internal/machines"
@@ -33,5 +34,8 @@ func TestTheRosterCarriesTheRetirementsAndWhatIsOnTheirWay(t *testing.T) {
 	}
 	if len(roster.Machines) != 1 || len(roster.Machines[0].Retiring) != 1 || roster.Machines[0].Retiring[0].Kind != "schedule" || roster.Machines[0].Retiring[0].Mode != "fast" {
 		t.Fatalf("the machine's hits: %s", body)
+	}
+	if n := strings.Count(string(body), retire.Table[0].Source); n != 1 {
+		t.Fatalf("a hit names its retirement by its key, the table says the rest once: the source %d times", n)
 	}
 }

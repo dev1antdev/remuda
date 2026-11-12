@@ -12,7 +12,7 @@ import { folderOf as sessionFolder } from "@/features/roster/workspaces";
 import { bubbleOf, lookOf, poseWord, stateSince, zooFace } from "@/features/roster/zoo";
 import { BELT_AT, babiesOf, broodWords, coinsOf, drainedUntil, flagOf, flagWords, girthOf, workExtras } from "@/features/roster/zooBody";
 import { weatherOf } from "@/features/roster/zooPens";
-import { outfits, type Outfit } from "@/features/roster/zooWear";
+import { outfits, wearersOf, type Outfit } from "@/features/roster/zooWear";
 import { budgetTone, budgetsFor, ratio, tightest } from "@/features/usage/budgets";
 import { usd } from "@/features/usage/format";
 import { t } from "@/lib/i18n";
@@ -41,7 +41,7 @@ export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false
   life?: Life;
 }) {
   const { machine, session, tab, pane } = tile;
-  const { budgets } = useRoster();
+  const { budgets, machines: roster } = useRoster();
   const share = useSharing();
   const hidden = share.sessionHidden(machine.id, session);
   const display = displayOf(pane, radar, now);
@@ -65,7 +65,7 @@ export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false
     hidden,
   );
   const dress = useMemo<Dress>(() => {
-    const outfit = life.outfit ?? outfits([{ key: tile.key, agent: pane.agent, model: pane.usage?.model }]).get(tile.key)!;
+    const outfit = life.outfit ?? outfits(wearersOf(roster)).get(tile.key) ?? outfits([{ key: tile.key, agent: pane.agent, model: pane.usage?.model }]).get(tile.key)!;
     const girth = girthOf(pane.usage);
     const budget = tightest(budgetsFor(budgets, machine.id, session.dir || pane.cwd));
     const tone = budget ? budgetTone(ratio(budget)) : "";
@@ -85,7 +85,7 @@ export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false
       puff: !!life.puff,
       night: !!life.night,
     };
-  }, [life.outfit, life.cheer, life.puff, life.night, tile.key, pane, budgets, machine, session.dir, display, since, now, hidden]);
+  }, [life.outfit, life.cheer, life.puff, life.night, tile.key, pane, budgets, roster, machine, session.dir, display, since, now, hidden]);
   const extras = [
     pane.usage?.name,
     pane.usage?.cost ? usd(pane.usage.cost) : "",

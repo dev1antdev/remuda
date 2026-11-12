@@ -14,12 +14,13 @@ import { BUBBLE_MAX, cutAt, type Pose } from "./zoo";
 import { compacted } from "./zooBody";
 import type { Species } from "./zooWear";
 
-// Seen is what the page noted of a creature at one reading
-export type Seen = { display: Display; pr: string; usage?: Pick<PaneUsage, "context" | "window"> };
+// Seen is what the page noted of a creature at one reading: pr is its request's state ("" while unknown), url the request
+export type Seen = { display: Display; pr: string; url?: string; usage?: Pick<PaneUsage, "context" | "window"> };
 
 export type Happenings = { finished: string[]; asked: string[]; merged: string[]; compacted: string[] };
 
-// happenings are the moves between two readings, by creature key; a creature new at the second reading moved nowhere
+// happenings are the moves between two readings, by creature key; a creature new at the second reading moved nowhere,
+// and a merge counts only for a request the page saw open, never for one whose state it did not know yet
 export function happenings(before: Map<string, Seen>, after: Map<string, Seen>): Happenings {
   const out: Happenings = { finished: [], asked: [], merged: [], compacted: [] };
   for (const [key, now] of after) {
@@ -27,10 +28,23 @@ export function happenings(before: Map<string, Seen>, after: Map<string, Seen>):
     if (!was) continue;
     if (was.display === "working" && now.display === "done") out.finished.push(key);
     if (was.display !== "blocked" && now.display === "blocked") out.asked.push(key);
-    if (was.pr !== "MERGED" && now.pr === "MERGED") out.merged.push(key);
+    if (was.pr && was.pr !== "MERGED" && now.pr === "MERGED" && was.url === now.url) out.merged.push(key);
     if (compacted(was.usage, now.usage)) out.compacted.push(key);
   }
   return out;
+}
+
+// carried is a reading with the state of each creature's request kept from the reading before wherever this one knows
+// none for the same request: a remuda just restarted names a request before gh has read it again, and its next reading
+// is no merge
+export function carried(before: Map<string, Seen> | null, after: Map<string, Seen>): Map<string, Seen> {
+  if (!before) return after;
+  return new Map(
+    [...after].map(([key, now]) => {
+      const was = before.get(key);
+      return [key, now.pr || !was || was.url !== now.url ? now : { ...now, pr: was.pr }];
+    }),
+  );
 }
 
 // joinsApplause says whether a creature in a pose claps for another's finish: the resting and the puzzled wake for it,
@@ -41,6 +55,13 @@ export const joinsApplause = (pose: Pose): boolean => pose === "asleep" || pose 
 export const CHEER_MS = 2600;
 export const PUFF_MS = 2400;
 export const FIREWORKS_MS = 5200;
+
+// withPuffs is the puffs going after a reading at at: the ones still on, and a fresh one for each creature that compacted
+export function withPuffs(was: Map<string, number>, compactedKeys: string[], at: number): Map<string, number> {
+  const out = new Map([...was].filter(([, until]) => until > at));
+  for (const key of compactedKeys) out.set(key, at + PUFF_MS);
+  return out;
+}
 
 // GAZE_MAX is how far a pupil moves off the eye's centre, in the creature's own units
 export const GAZE_MAX = 2.2;
@@ -64,6 +85,20 @@ export function questionBubble(question: Question | null | undefined): string {
   const text = head ? (first ? `${head} · ${first}` : head) : ask;
   return cutAt(text, BUBBLE_MAX);
 }
+
+// sameQuestions says whether two readings of what the asking creatures hold up say the same, so an unchanged one draws nothing
+export function sameQuestions(a: Map<string, string>, b: Map<string, string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [key, text] of a) if (b.get(key) !== text) return false;
+  return true;
+}
+
+// DAY_EVERY is how often the day along the foot is read: the standup reads every agent's conversation on every machine,
+// too much for a line that moves slowly, on a cockpit as small as a Raspberry Pi
+export const DAY_EVERY = 5 * 60_000;
+
+// dayDue says whether the day is due a reading: never read (or the last reading failed, readAt 0), or read DAY_EVERY ago
+export const dayDue = (readAt: number, now: number): boolean => !readAt || now - readAt >= DAY_EVERY;
 
 // tickerFacts are the day along the zoo's foot: answers, waits, spend, merges and who worked longest, each when it says
 // something; nameOf gives the creature's name as the zoo shows it, or null for one it does not show

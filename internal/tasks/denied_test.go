@@ -194,8 +194,21 @@ func TestARunThatStoppedOnItsDeniedCallsIsReported(t *testing.T) {
 }
 
 func TestDeniedCommentFencesPastBackticks(t *testing.T) {
-	got := deniedComment("claude", transcript.Denials{Calls: []transcript.Denial{{Tool: "Bash", What: "echo `date`"}, {Tool: "WebSearch"}}})
+	got := deniedComment(Run{Agent: "claude"}, transcript.Denials{Calls: []transcript.Denial{{Tool: "Bash", What: "echo `date`"}, {Tool: "WebSearch"}}})
 	if !strings.Contains(got, "- Bash: `` echo `date` ``") || !strings.Contains(got, "- WebSearch\n") {
 		t.Errorf("comment: %q", got)
+	}
+}
+
+// A stage starts with its agent and model alone, so the project's extra arguments — a permission mode among them —
+// never reach it: the comment points at the settings files instead.
+func TestDeniedCommentOfAStageNamesWhatReachesIt(t *testing.T) {
+	calls := transcript.Denials{Calls: []transcript.Denial{{Tool: "Bash", What: "git push"}}}
+	if first := deniedComment(Run{Agent: "claude"}, calls); !strings.Contains(first, "permission mode in the project's agent settings") {
+		t.Errorf("the first run: %q", first)
+	}
+	stage := deniedComment(Run{Agent: "claude", Stage: 2}, calls)
+	if strings.Contains(stage, "permission mode") || !strings.Contains(stage, ".claude/settings.json") {
+		t.Errorf("a stage: %q", stage)
 	}
 }

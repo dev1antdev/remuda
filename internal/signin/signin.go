@@ -1,7 +1,8 @@
 // Package signin warns before Claude Code's sign-in on a machine runs out, since an agent started after the end — a
-// scout at three in the morning, a queued task — cannot reach Claude: one push per machine three days before, one a
-// day before and one once it has ended, kept across restarts so a restart never warns twice. remuda never signs in
-// for the person; the words say where to run `claude auth login`.
+// scout at three in the morning, a queued task — cannot reach Claude. Claude Code names the latest moment the sign-in
+// ends and says it may end up to EarlyBy before it, so the warnings count to that earliest moment: one push per
+// machine three days before it, one a day before and one once it may end at any time, kept across restarts so a
+// restart never warns twice. remuda never signs in for the person; the words say where to run `claude auth login`.
 package signin
 
 import (
@@ -19,20 +20,28 @@ const stateFile = "signin.json"
 
 // The warnings, in the order they come.
 const (
-	Soon  = 1 // three days or less left
-	Day   = 2 // a day or less left
-	Ended = 3
+	Soon  = 1 // three days or less to the earliest end
+	Day   = 2 // a day or less to it
+	Ended = 3 // it may end at any time now, or has ended
 )
 
-// SoonBefore and DayBefore are how long before the end the first two warnings come.
+// SoonBefore and DayBefore are how long before the earliest end the first two warnings come.
 var (
 	SoonBefore = 72 * time.Hour
 	DayBefore  = 24 * time.Hour
 )
 
-// Level is the warning an end earns at now: Ended once it has passed, Day within a day, Soon within three days, else 0.
+// EarlyBy is how long before the end `claude auth status` names the sign-in may already end: Claude Code says it
+// "ends between" that day and the end, and that renewing it moves neither (2.1.318's loginExpiresAt).
+var EarlyBy = 72 * time.Hour
+
+// Earliest is the first moment a sign-in that ends by expires may end.
+func Earliest(expires time.Time) time.Time { return expires.Add(-EarlyBy) }
+
+// Level is the warning an end earns at now, counted to the earliest moment it may come: Ended once that has passed,
+// Day within a day of it, Soon within three days, else 0.
 func Level(expires, now time.Time) int {
-	left := expires.Sub(now)
+	left := Earliest(expires).Sub(now)
 	switch {
 	case left <= 0:
 		return Ended
@@ -115,16 +124,21 @@ func (s *Service) Forget(machine string) {
 	}
 }
 
-// Warning is the push for a level: how long is left or that it has ended, and what to run where.
+// Warning is the push for a level: how long is left to the earliest end and to the latest, that it may end at any
+// time, or that it has ended, and what to run where.
 func Warning(machine, label string, expires, now time.Time, level int) push.Payload {
 	p := push.Payload{Machine: machine, Kind: "signin", Tag: "signin|" + machine}
-	if level == Ended {
+	switch {
+	case !now.Before(expires):
 		p.Title = fmt.Sprintf("Claude Code's sign-in on %s has ended", label)
 		p.Body = fmt.Sprintf("Its agents cannot reach Claude until you sign in again: run claude auth login on %s.", label)
-		return p
+	case level == Ended:
+		p.Title = fmt.Sprintf("Claude Code's sign-in on %s may end at any time now", label)
+		p.Body = fmt.Sprintf("It ends within %s at the latest, and its agents cannot reach Claude after that: run claude auth login on %s now.", Left(expires.Sub(now)), label)
+	default:
+		p.Title = fmt.Sprintf("Claude Code's sign-in on %s may end in %s", label, Left(Earliest(expires).Sub(now)))
+		p.Body = fmt.Sprintf("It ends within %s at the latest; an agent started after it cannot reach Claude: run claude auth login on %s before then.", Left(expires.Sub(now)), label)
 	}
-	p.Title = fmt.Sprintf("Claude Code's sign-in on %s ends in %s", label, Left(expires.Sub(now)))
-	p.Body = fmt.Sprintf("An agent started after that cannot reach Claude: run claude auth login on %s before it ends.", label)
 	return p
 }
 

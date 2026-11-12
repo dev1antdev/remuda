@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,6 +98,31 @@ func TestSubagentsReadTheFolderBesideTheSession(t *testing.T) {
 	}
 }
 
+func TestRecentSubagentsReadOnlyTheOnesThatMovedWithinQuietAfter(t *testing.T) {
+	session, dir := sessionWithSubagent(t, metaOpen, forkRef, subTool)
+	old := filepath.Join(dir, "agent-old.jsonl")
+	for _, file := range []string{old, filepath.Join(dir, "agent-old.meta.json")} {
+		if err := os.WriteFile(file, []byte(forkRef+"\n"+subTool+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(file, time.Now().Add(-time.Hour), time.Now().Add(-time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reader := NewReader(shell.Local{})
+
+	subs, err := reader.RecentSubagents(session, time.Now())
+	if err != nil || len(subs) != 1 || subs[0].ID != "agent-a1" || subs[0].Status != SubagentWorking {
+		t.Fatalf("recent subagents = %+v, %v", subs, err)
+	}
+	if _, read := reader.subagents[old]; read {
+		t.Error("a subagent silent past QuietAfter was read: it can only be quiet or done")
+	}
+	if all, _, _ := reader.Subagents(session, time.Now()); len(all) != 2 {
+		t.Errorf("the chat still lists every subagent: %+v", all)
+	}
+}
+
 func TestSubagentTurnsKeepTheSidechainRecords(t *testing.T) {
 	session, dir := sessionWithSubagent(t, metaOpen, forkRef, subTool, subResult, subReport)
 	reader := NewReader(shell.Local{})
@@ -123,5 +149,22 @@ func TestSubagentIDNamesOnlyAFileStem(t *testing.T) {
 		if got := SubagentID(id); got != want {
 			t.Errorf("SubagentID(%q) = %v", id, got)
 		}
+	}
+}
+
+func TestTheSubagentCacheLetsGoOfTheSummaryAskedForLongestAgo(t *testing.T) {
+	r := NewReader(shell.Local{})
+	v := Version{Size: 1, MTime: 1}
+	for i := 0; i < SubagentsKept; i++ {
+		r.subagents[fmt.Sprintf("/s/agent-%d.jsonl", i)] = &subagentEntry{version: v, used: uint64(i + 1)}
+	}
+	r.subagentUses = SubagentsKept
+	r.subagentEntry("/s/agent-0.jsonl", "agent-0", v, "/s/agent-0.meta.json", Version{}) // asked for again: now the newest
+	r.subagentEntry("/s/agent-new.jsonl", "agent-new", v, "/s/agent-new.meta.json", Version{})
+	if len(r.subagents) != SubagentsKept {
+		t.Fatalf("%d summaries kept, not %d", len(r.subagents), SubagentsKept)
+	}
+	if r.subagents["/s/agent-0.jsonl"] == nil || r.subagents["/s/agent-1.jsonl"] != nil || r.subagents["/s/agent-new.jsonl"] == nil {
+		t.Fatal("the summary asked for longest ago goes, the one just asked for again stays")
 	}
 }

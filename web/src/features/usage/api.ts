@@ -59,6 +59,7 @@ export type ScoreRow = {
   model: string; // "" when the meter never read one
   model_id?: string;
   runs: number;
+  under_way?: number; // runs whose agent has not answered yet: counted in runs, not in the shares or means
   finished: Share;
   first_approved: Share;
   rejected: number;

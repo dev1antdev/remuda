@@ -1,10 +1,12 @@
 package review
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/secrets"
@@ -60,6 +62,13 @@ func TestTheSecretCheckReadsTheScriptsAnswer(t *testing.T) {
 		"Binary files /dev/null and b/creds/store.p12 differ",
 		"diff --git a/logo.png b/logo.png",
 		"Binary files /dev/null and b/logo.png differ",
+		"diff --git a/art/cats and dogs.jks b/art/cats and dogs.jks",
+		"Binary files a/art/cats and dogs.jks and b/art/cats and dogs.jks differ",
+		"diff --git a/conf/with space.env b/conf/with space.env",
+		"--- a/conf/with space.env",
+		"+++ b/conf/with space.env\t",
+		"@@ -1,0 +2 @@",
+		"+SECRET_KEY=" + fakeKey(6, 40),
 		script.RS + "large dump.sql",
 		`diff --git "a/notes/new \303\251.md" "b/notes/new \303\251.md"`,
 		"new file mode 100644",
@@ -76,6 +85,25 @@ func TestTheSecretCheckReadsTheScriptsAnswer(t *testing.T) {
 		"+fine",
 		script.RS + "partly",
 		script.RS + "budget b/after.txt",
+		script.RS + "untracked",
+		script.RS + "file b/q\"uote.env",
+		"+NAME=app",
+		"+DB_PASSWORD=" + fakeKey(7, 24),
+		script.RS + "binary keys/new.p12",
+		script.RS + "binary photo.jpg",
+		script.RS + "unread later.txt",
+		script.RS + "staged",
+		"diff --git a/src/server.go b/src/server.go",
+		"+++ b/src/server.go",
+		"@@ -3 +3 @@",
+		"+const ghToken = \"" + "ghp_" + fakeKey(2, 36) + "\"",
+		"diff --git a/logo.png b/logo.png",
+		"Binary files /dev/null and b/logo.png differ",
+		"diff --git a/.env b/.env",
+		"+++ b/.env",
+		"@@ -0,0 +1 @@",
+		"+STRIPE=" + "sk_live_" + fakeKey(8, 24),
+		script.RS + "older 5",
 		script.RS + "commit abc1234",
 		"",
 		"diff --git a/deploy.sh b/deploy.sh",
@@ -89,6 +117,7 @@ func TestTheSecretCheckReadsTheScriptsAnswer(t *testing.T) {
 		"+++ /dev/null",
 		"@@ -1 +0,0 @@",
 		"-export GH=" + "ghp_" + fakeKey(5, 36),
+		script.RS + "end",
 		"",
 	}, "\n")
 	host := &shell.Fake{Name: "box", Remote: true, Answer: func(string) (string, error) { return answer, nil }}
@@ -109,7 +138,12 @@ func TestTheSecretCheckReadsTheScriptsAnswer(t *testing.T) {
 		{"config/app.yml", secrets.RuleAssigned, "", 12},
 		{"src/server.go", secrets.RuleGitHub, "", 3},
 		{"creds/store.p12", secrets.RuleKeyFile, "", 0},
+		{"art/cats and dogs.jks", secrets.RuleKeyFile, "", 0},
+		{"conf/with space.env", secrets.RuleAssigned, "", 2},
 		{"notes/new é.md", secrets.RuleGitLab, "", 3},
+		{"b/q\"uote.env", secrets.RuleAssigned, "", 2},
+		{"keys/new.p12", secrets.RuleKeyFile, "", 0},
+		{".env", secrets.RuleStripe, secrets.Staged, 1},
 		{"deploy.sh", secrets.RuleNPM, "abc1234", 5},
 	}
 	if len(got) != len(want) {
@@ -120,18 +154,19 @@ func TestTheSecretCheckReadsTheScriptsAnswer(t *testing.T) {
 			t.Errorf("finding %d: %+v, want %+v", i, got[i], want[i])
 		}
 	}
-	skipped := map[string]string{}
+	skipped, counted := map[string]string{}, map[string]int{}
 	for _, skip := range scan.Skipped {
 		skipped[skip.Path] = skip.Why
-		if skip.Why == SkipMany && skip.Count != 7 {
-			t.Errorf("the untracked files past the cap: %+v", skip)
+		if skip.Path == "" {
+			counted[skip.Why] = skip.Count
 		}
 	}
-	if len(scan.Skipped) != 5 || skipped["creds/store.p12"] != "" || skipped["logo.png"] != SkipBinary || skipped["dump.sql"] != SkipLarge ||
-		skipped["huge.txt"] != SkipPartly || skipped["after.txt"] != SkipBudget || skipped[""] != SkipMany {
+	if len(scan.Skipped) != 8 || skipped["creds/store.p12"] != "" || skipped["logo.png"] != SkipBinary || skipped["dump.sql"] != SkipLarge ||
+		skipped["huge.txt"] != SkipPartly || skipped["after.txt"] != SkipBudget || skipped["photo.jpg"] != SkipBinary || skipped["later.txt"] != SkipBudget ||
+		counted[SkipMany] != 7 || counted[SkipOlder] != 5 {
 		t.Errorf("skipped: %+v", scan.Skipped)
 	}
-	if scan.Files != 4 || scan.Commits != 1 || !scan.Push {
+	if scan.Files != 6 || scan.Commits != 1 || !scan.Push {
 		t.Errorf("read %d files, %d commits, push %v", scan.Files, scan.Commits, scan.Push)
 	}
 	scripts := host.Scripts()
@@ -210,6 +245,122 @@ func TestTheSecretCheckOnARealCheckoutChangesNothing(t *testing.T) {
 	after, _ := os.ReadFile(filepath.Join(dir, ".git", "index"))
 	if status() != before || string(after) != string(index) {
 		t.Error("the check changed the checkout or its index")
+	}
+}
+
+// TestAStreamThatFailedOrStoppedIsNoCleanCheck: a folder git cannot read, a git that failed half way and a script cut
+// off all answered "nothing found" once, and the approval went out with its commit unchecked.
+func TestAStreamThatFailedOrStoppedIsNoCleanCheck(t *testing.T) {
+	for answer, want := range map[string]string{
+		"":                                "it stopped before it had read everything",
+		script.RS + "failed repository\n": "the folder is not a git checkout",
+		script.RS + "failed folder\n":     "the folder is not there",
+		"diff --git a/x b/x\n+++ b/x\n@@ -0,0 +1 @@\n+one\n": "it stopped before it had read everything",
+		script.RS + "failed work\n" + script.RS + "end\n":    "git could not read the changes",
+		script.RS + "failed commits\n" + script.RS + "end\n": "git could not read the commits not pushed yet",
+	} {
+		host := &shell.Fake{Name: "box", Answer: func(string) (string, error) { return answer, nil }}
+		if _, err := ScanWork(host, "/repo", true); err == nil || err.Error() != want {
+			t.Errorf("%q: %v, want %q", answer, err, want)
+		}
+	}
+
+	ownGitConfig(t)
+	if _, err := ScanWork(shell.Local{Name: "local"}, t.TempDir(), false); err == nil || err.Error() != "the folder is not a git checkout" {
+		t.Errorf("a folder outside git: %v", err)
+	}
+}
+
+// TestTheCheckReadsEveryUntrackedFileByItsOwnName: a name with a blank, a quote, a tab or a leading dash is read, a
+// link is not followed out of the checkout, and a push's commits are read whole, outside the folder too.
+func TestTheCheckReadsEveryUntrackedFileByItsOwnName(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	_ = os.Mkdir(filepath.Join(dir, "app"), 0o755)
+	write("app/main.go", "package main\n")
+	write("README.md", "hi\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("shared.env", "DEPLOY_TOKEN="+fakeKey(40, 30)+"\n")
+	git("add", "shared.env")
+	git("commit", "-qm", "a token outside the app's folder")
+	names := []string{"app/with space.env", `app/q"uote.env`, "app/tab\there.env", "app/-dash.env", "app/ünï.env"}
+	for i, name := range names {
+		write(name, "NAME=app\nSERVICE_PASSWORD="+fakeKey(uint32(41+i), 24)+"\n")
+	}
+	outside := filepath.Join(t.TempDir(), "elsewhere.env")
+	_ = os.WriteFile(outside, []byte("TOKEN="+"ghp_"+fakeKey(50, 36)+"\n"), 0o644)
+	_ = os.Symlink(outside, filepath.Join(dir, "app", "link.env"))
+
+	scan, err := ScanWork(shell.Local{Name: "local"}, filepath.Join(dir, "app"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]string{}
+	for _, finding := range scan.Findings {
+		found[finding.File] = finding.Commit
+		if finding.Line != 2 && finding.Commit == "" || finding.Line != 1 && finding.Commit != "" {
+			t.Errorf("the line: %+v", finding)
+		}
+	}
+	for _, name := range names {
+		if commit, ok := found[strings.TrimPrefix(name, "app/")]; !ok || commit != "" {
+			t.Errorf("%q is not read: %+v", name, scan.Findings)
+		}
+	}
+	if commit, ok := found["shared.env"]; !ok || commit == "" {
+		t.Errorf("the commit's file outside the folder is not read: %+v", scan.Findings)
+	}
+	if _, ok := found["link.env"]; ok || len(scan.Findings) != len(names)+1 || scan.Files != len(names) {
+		t.Errorf("a link is followed, or more is read: %d files, %+v", scan.Files, scan.Findings)
+	}
+}
+
+// TestWhatIsStagedIsReadToo: git commit carries the index, and a secret staged then taken out of the file, or a staged
+// file deleted since, went out unread when only the files were.
+func TestWhatIsStagedIsReadToo(t *testing.T) {
+	ownGitConfig(t)
+	dir, git, write := scratchCheckout(t)
+	write("app.txt", "hi\n")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+	write("deploy.env", "REGION=eu\nDEPLOY_TOKEN="+fakeKey(70, 30)+"\n")
+	write("gone.env", "API_SECRET="+fakeKey(71, 30)+"\n")
+	write("kept.env", "DB_PASSWORD="+fakeKey(72, 24)+"\n")
+	git("add", "deploy.env", "gone.env", "kept.env")
+	write("deploy.env", "REGION=eu\nDEPLOY_TOKEN=\n")
+	_ = os.Remove(filepath.Join(dir, "gone.env"))
+
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]secrets.Finding{}
+	for _, finding := range scan.Findings {
+		found[finding.File] = finding
+	}
+	if len(scan.Findings) != 3 || found["deploy.env"].Commit != secrets.Staged || found["deploy.env"].Line != 2 ||
+		found["gone.env"].Commit != secrets.Staged || found["kept.env"].Commit != "" {
+		t.Errorf("findings: %+v", scan.Findings)
+	}
+}
+
+// TestManyUntrackedFilesAreReadInSeconds: one git process per untracked file took twenty seconds for two thousand
+// on a Mac, more than the check's bound on a slower machine.
+func TestManyUntrackedFilesAreReadInSeconds(t *testing.T) {
+	ownGitConfig(t)
+	dir, _, write := scratchCheckout(t)
+	for i := range scanUntracked + 10 {
+		write(fmt.Sprintf("f%04d.txt", i), "hello\n")
+	}
+	write("zz.env", "API_TOKEN="+fakeKey(60, 30)+"\n")
+	start := time.Now()
+	scan, err := ScanWork(shell.Local{Name: "local"}, dir, false)
+	if took := time.Since(start); err != nil || took > 5*time.Second {
+		t.Fatalf("%d untracked files took %s: %v", scanUntracked+11, took, err)
+	}
+	if scan.Files != scanUntracked || len(scan.Skipped) != 1 || scan.Skipped[0].Why != SkipMany || scan.Skipped[0].Count != 11 {
+		t.Errorf("read %d files, skipped %+v", scan.Files, scan.Skipped)
 	}
 }
 

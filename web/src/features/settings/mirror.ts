@@ -3,7 +3,7 @@
 
 import type { Quiet } from "@/features/alerts/push";
 import { t } from "@/lib/i18n";
-import type { MirrorSettings, ToastOutcome } from "./mirrorApi";
+import type { MirrorSettings, ToastOutcome, Yield } from "./mirrorApi";
 
 export type OutcomeTone = "success" | "warn" | "error";
 
@@ -23,6 +23,13 @@ export function outcomeWords(outcome: ToastOutcome): string {
       return t("{machine}: another toast was still up there", { machine });
   }
   return t("{machine}: not shown ({reason})", { machine, reason: outcome.reason || "?" });
+}
+
+// elsewhereWords is a machine whose herdr another remuda writes into: the cockpit reaching it, so this one stays out.
+export function elsewhereWords(where: Yield): string {
+  const machine = where.label || where.machine;
+  if (!where.writer) return t("On {machine} another remuda writes into herdr and pops its toasts, so this one stays out there.", { machine });
+  return t("On {machine} the remuda at {writer} writes into herdr and pops its toasts, so this one stays out there.", { machine, writer: where.writer });
 }
 
 export function outcomeTone(outcome: ToastOutcome): OutcomeTone {

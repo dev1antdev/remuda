@@ -39,4 +39,11 @@ func TestATriggerMovesTheTaskWhoseAgentRunsInThePane(t *testing.T) {
 	if moved, _ := st.OnTrigger("studio", "wX:p1", "Queued", "trigger “QA”"); moved != nil {
 		t.Fatal("the Queued column takes only the person's own moves")
 	}
+
+	if _, err := st.Update(tk.ID, Patch{Done: boolp(true)}); err != nil {
+		t.Fatal(err)
+	}
+	if moved, _ := st.OnTrigger("studio", "wX:p1", "Testing", "trigger “QA”"); moved != nil {
+		t.Fatalf("a task the person marked done stays done: %+v", moved.To)
+	}
 }

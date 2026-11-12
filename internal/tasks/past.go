@@ -29,14 +29,23 @@ func (st *Store) RunsSince(since time.Time) ([]RunRecord, error) {
 	var out []RunRecord
 	for rows.Next() {
 		var rec RunRecord
-		r := &rec.Run
-		if err := rows.Scan(&r.ID, &r.TaskID, &r.Machine, &r.Workspace, &r.Pane, &r.Dir, &r.Branch, &r.Agent, &r.State, &r.Started, &r.PromptSent, &r.Finished, &r.Reported, &r.Error, &r.Cost, &r.Tokens, &r.Model, &r.Took, &r.PRURL, &r.PRLabel, &r.ByQueue, &r.Stage, &r.Pipeline, &r.Expect, &r.Merged, &rec.Title, &rec.ProjectID); err != nil {
+		run, err := scanRun(withTask{rows, []any{&rec.Title, &rec.ProjectID}})
+		if err != nil {
 			return nil, err
 		}
+		rec.Run = run
 		out = append(out, rec)
 	}
 	return out, rows.Err()
 }
+
+// withTask scans a run's columns as scanRun reads them, then the task's columns after them into task.
+type withTask struct {
+	row  interface{ Scan(...any) error }
+	task []any
+}
+
+func (w withTask) Scan(dest ...any) error { return w.row.Scan(append(dest, w.task...)...) }
 
 // backfillMerged gives a run from before the merged column its merge: the "PR #15 merged" comment remuda wrote on its task.
 func (st *Store) backfillMerged() error {

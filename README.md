@@ -276,7 +276,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   approved at your first review in the Changes lens rather than rejected
   first, how many of the pull requests they opened merged, how many of its
   arena lanes you kept, and what a run, and an approved one, cost and how
-  long a run took. A share needs five runs behind it before it becomes a
+  long a run took; a run whose agent has not answered yet counts in those
+  figures once it has. A share needs five runs behind it before it becomes a
   percentage (before that it says "2 of 3"), and only such figures compete
   for the quiet green mark of a column's best. The button at the end of a
   row opens an arena on a recent task with two models side by side: the
@@ -324,14 +325,19 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   and once it has answered the schedule's last result says how many
   calls were denied ("answered: … · 2 calls denied") and names them, so
   does the push, and the chat lens of its tab lists them over the
-  composer with *Open in the terminal*. In Claude Code's default mode
+  composer with *Open in the terminal*; a run Claude Code stopped after a
+  string of refusals, before it answered, says it stopped. In Claude Code's default mode
   every edit asks first, so a scout that should change files wants
   `--permission-mode acceptEdits` (or `auto`) in its extra arguments, or
   allow rules in its settings; a `--settings` you pass yourself as JSON
   gets the setting merged in, one naming a file is refused with what to
   put in it. Schedules saved before the switch keep asking, as they did,
   until you turn it on. For the scout to create tasks, its
-  agent needs remuda's tasks MCP set up (see Tasks below). **Every few
+  agent needs remuda's tasks MCP set up (see Tasks below) — and, while it
+  denies instead of asking, those tools allowed: Claude Code asks before
+  it uses an MCP tool no rule allows, so put `mcp__remuda__*` in
+  `permissions.allow` in its settings (or in a `--settings` JSON of its
+  extra arguments), or its tasks are denied with the rest. **Every few
   minutes, in working hours**: the "Every N minutes" preset runs a
   schedule every 5, 10, 15, 20 or 30 minutes from one hour to another,
   on weekdays only if you like — every 10 minutes from 9:00 until 17:00,
@@ -818,7 +824,11 @@ then not again for half an hour. **Triggers…** in a workspace's ⋯ menu (or t
 expression — everywhere, on one machine or in one folder, and what it does: a
 push, a row in the activity, a preview offered, or the task whose agent runs
 in that pane moved to a column (`ready for QA` → Testing). Test tries a rule
-on a pane's last 500 rows before you save it. The webhooks hear them as
+on a pane's last 500 rows before you save it. A regular expression is read the
+way herdr reads it — `\w`, `\d` and `\b` know every alphabet, Cyrillic too —
+and one herdr would refuse or read otherwise (`\<`, `\12`, a bare `{`) is
+refused when you save it, with what to write instead. A muted workspace's
+triggers stay quiet, though a task still moves. The webhooks hear them as
 "tests that failed" and "a trigger of yours".
 
 ## Timelapse — forty minutes of an agent's work in thirty seconds
@@ -827,7 +837,8 @@ While an agent works, the cockpit reads its screen every 4 seconds — the
 way the Wall's screen view does, without attaching, so the pane is never
 resized and no terminal slot is taken — on every machine, whether or not a
 page is open, and keeps a frame only when the screen moved. When the turn
-ends (the agent at rest, asking you something, its pane closed) the
+ends (the agent at rest, asking you something, its pane closed, its
+machine out of reach for two minutes — a laptop asleep) the
 recording is written once, gzipped, under the cockpit's state dir in
 `timelapse/<machine>/`; a turn still going is written again every ten
 minutes, so a power cut loses no more than that. **Timelapse…** in the
@@ -837,7 +848,8 @@ at a time, a scrub bar over the turn, ← → a frame either way, Space to
 pause, the pane's recordings and those of the earlier panes in its folder
 to pick from — and **Export as GIF**, drawn in the page in your theme's
 terminal colours. A turn under a minute is not kept, a recording holds at
-most 900 frames (a longer turn is thinned evenly), each pane keeps its 20
+most 900 frames and 8 MB of screens while it is recorded (a longer turn,
+or one whose screen scrolls, is thinned evenly), each pane keeps its 20
 newest and the folder 200 MB, the oldest going first. The recordings are
 not in the nightly backups. **Settings › Timelapse** turns recording off
 and says how much is kept, with *Delete all*; the player deletes one. A
@@ -948,7 +960,10 @@ A second copy beside the real one (to try `-tailscale`, say) gets its own
 token, tasks and push subscriptions with `REMUDA_STATE_DIR=/some/dir`, and
 places no agent door of its own, here or on your other machines, so the
 agents keep talking to the real one (`-door` opens it anyway, `-no-door`
-closes it for any instance).
+closes it for any instance). It also writes nothing into herdr — no
+figures in its sidebar, no toasts, so the two never fight over the same
+panes (`-mirror` writes anyway) — and records no timelapses of your
+screens (`-record` records anyway).
 
 ## Development
 
@@ -1102,15 +1117,21 @@ default; the values are written only when they move and again before
 herdr's five-minute TTL runs out, so they vanish by themselves once
 remuda stops, and turning the switch off clears them at once. herdr shows
 a token only where a sidebar row of its `config.toml` names it: the
-section shows rows to paste (a row with nothing to say disappears), then
-`herdr server reload-config`. A second switch, off by default, also pops
+section shows rows to paste (a row with nothing to say disappears) — in
+place of a `[ui.sidebar.agents]` or `[ui.sidebar.spaces]` your config
+already has, since herdr ignores a config with a table written twice —
+then `herdr config check` and `herdr server reload-config`. A second switch, off by default, also pops
 remuda's alerts — a question with its words, a finish after a turn over
 a minute, a watchdog note — as herdr's own toast on the machine the
 agent runs on, never over the tab herdr has in front, never for a muted
 workspace and not inside the quiet hours you set there. One switch for
 every machine; herdr shows a toast only where its config turns its
-toasts on (`[ui.toast] delivery = "herdr"`), and *Send a test toast*
-says, machine by machine, whether it did.
+toasts on (`delivery = "herdr"` under its `[ui.toast]`), and *Send a test toast*
+says, machine by machine, whether it did. A machine that runs its own
+remuda beside the cockpit gets one writer, not two: the cockpit, which
+knows your tasks, writes into that herdr and pops its toasts, and the
+machine's own stays out there while the cockpit does — its Settings
+section says so.
 
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
@@ -1145,9 +1166,12 @@ the pull request and remuda first reads exactly what the commit would
 carry — every changed line, staged or not, and every new file git does not
 ignore; for a pull request also the commits not pushed yet — for private
 keys, AWS, GitHub, GitLab, Slack, Stripe, Anthropic, OpenAI, Google,
-Telegram and npm tokens, JWTs, Bearer and Basic credentials, and long
-random values given to a name like `API_KEY` or `password`, leaving
-placeholders such as `<your-key>`, `changeme` or `xxxx` alone. Anything
+Telegram, npm, Hugging Face, Groq, xAI, OpenRouter, SendGrid, Vault,
+DigitalOcean, Docker Hub, PyPI, Shopify, Linear, Atlassian and age keys
+and tokens, JWTs, Bearer and Basic credentials, passwords in addresses
+such as `postgres://app:…@db`, and long random values given to a name
+like `API_KEY` or `password`, leaving placeholders such as `<your-key>`,
+`changeme` or `xxxx` alone. Anything
 it finds holds the button back: the dialog lists each one by file and
 line with the secret masked, a click shows its row in the diff, marked,
 and **Send anyway…** goes only after a confirm that says how many. A check
@@ -1170,7 +1194,8 @@ aside, and the ones on lines the diff no longer shows are listed apart.
 Its tab closes once it has answered, unless you say otherwise; a Claude
 Code reviewer denies whatever would wait for your permission and goes on
 to its answer (a review only reads), unless you switch that off in the
-dialog.
+dialog. Should it stop on what it was denied before answering, the block
+says so and its tab stays, the denied calls listed there.
 
 **Activity** (the bell in the header) is what happened while you were
 away: every finish, question, watchdog note, failed schedule, task
@@ -1329,11 +1354,15 @@ morning or a queued task dies on an expired login. Claude Code says when
 its stored sign-in ends (`claude auth status`, 2.1.318 and up); the
 vitals read it every six hours and whenever you press *Read again* —
 only the end of the sign-in leaves the machine, never the account's
-e-mail or organization. From ten days before, the machine's ⓘ says
-"Claude Code's sign-in on GOG ends in 6 days", red from two days and
-once it has ended, with *Open a shell there* for `claude auth login`
-(remuda never signs in for you); a push comes three days before, a day
-before and once it ends, one each, never twice across a restart. The
+e-mail or organization. Claude Code also says the sign-in may end up to
+three days before that day, and that renewing it moves neither, so
+remuda counts to the earlier one: from ten days before the end, the
+machine's ⓘ says "Claude Code's sign-in on GOG may end in 6 days, by
+21 Nov 2026 at the latest", red from two days before the earliest end
+and from then on, with *Open a shell there* for `claude auth login`
+(remuda never signs in for you); a push comes three days before the
+earliest end, a day before it and once it may end at any time, one each,
+never twice across a restart. The
 same ⓘ warns of a model or mode being retired: fast mode on Opus 4.8 is
 removed on 30 November 2026 (Claude Code 2.1.316: its requests then fail
 and do not fall back), so a recipe, an agent schedule, a project's

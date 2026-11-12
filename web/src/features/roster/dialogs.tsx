@@ -225,8 +225,9 @@ export function NewWorkspaceDialog({ machines, agents, defaultMachine, defaultDi
   );
 }
 
-export function NewTabDialog({ session, agents, onCreate, onClose }: {
+export function NewTabDialog({ session, machine, agents, onCreate, onClose }: {
   session: Session;
+  machine: string; // the workspace's machine, where the agent starts
   agents: AgentKind[];
   onCreate: (name: string, agent: string, extras: StartExtras) => Promise<void>;
   onClose: () => void;
@@ -242,13 +243,14 @@ export function NewTabDialog({ session, agents, onCreate, onClose }: {
         <input autoFocus value={name} placeholder="tests" onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
-      <StartOptionsFields kind={agent} draft={draft} agents={agents} onChange={setDraft} onRecipe={applyRecipe} />
+      <StartOptionsFields kind={agent} draft={draft} agents={agents} machine={machine} onChange={setDraft} onRecipe={applyRecipe} />
     </FormDialog>
   );
 }
 
-export function NewWorktreeDialog({ session, agents, onCreate, onClose }: {
+export function NewWorktreeDialog({ session, machine, agents, onCreate, onClose }: {
   session: Session;
+  machine: string; // the repository's machine, where the agent starts
   agents: AgentKind[];
   onCreate: (branch: string, base: string, name: string, agent: string, extras: StartExtras) => Promise<void>;
   onClose: () => void;
@@ -285,7 +287,7 @@ export function NewWorktreeDialog({ session, agents, onCreate, onClose }: {
         <input value={name} placeholder={t("defaults to the branch")} onChange={(e) => setName(e.target.value)} />
       </label>
       <AgentSelect agents={agents} value={agent} onChange={pickAgent} />
-      <StartOptionsFields kind={agent} draft={draft} agents={agents} onChange={setDraft} onRecipe={applyRecipe} />
+      <StartOptionsFields kind={agent} draft={draft} agents={agents} machine={machine} onChange={setDraft} onRecipe={applyRecipe} />
     </FormDialog>
   );
 }

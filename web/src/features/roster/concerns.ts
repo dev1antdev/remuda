@@ -7,7 +7,7 @@ import type { Health, Latest, StoppedChat } from "./api";
 import { bodyConcerns } from "./body";
 import { stoppedNames, stoppedWords } from "./stopped";
 import { signinConcern } from "./signin";
-import { retiringConcerns, type RetiringHit } from "@/features/usage/retired";
+import { retiringConcerns, type Retirement, type RetiringHit } from "@/features/usage/retired";
 import { t } from "@/lib/i18n";
 
 export type Concern = { key: string; text: string; bad?: boolean; update?: string };
@@ -22,9 +22,9 @@ export function concerns(h: Health | undefined, latest: Latest | undefined, serv
   return viewOnly ? out.map(({ update: _offered, ...words }) => words) : out;
 }
 
-// More is what the machine adds to its vitals: its name for the words, what is set there to a model being retired,
-// and the clock the sign-in is weighed by
-export type More = { machine?: string; retiring?: RetiringHit[]; now?: number };
+// More is what the machine adds to its vitals: its name for the words, what is set there to a model being retired
+// with the roster's table of retirements its hits name, and the clock the sign-in is weighed by
+export type More = { machine?: string; retiring?: RetiringHit[]; retirements?: Retirement[]; now?: number };
 
 function found(h: Health | undefined, latest: Latest | undefined, serverVersion: string | undefined, remote: boolean, stopped: StoppedChat[], more: More = {}): Concern[] {
   const out: Concern[] = [];
@@ -32,7 +32,7 @@ function found(h: Health | undefined, latest: Latest | undefined, serverVersion:
   if (stopped.length) out.push({ key: "stopped", text: `${stoppedWords(stopped.length)}: ${stoppedNames(stopped)}`, update: "recover" });
   const signin = signinConcern(h?.claude_login, more.machine ?? "", now);
   if (signin) out.push({ key: "signin", ...signin, update: "signin" });
-  out.push(...retiringConcerns(more.retiring, now));
+  out.push(...retiringConcerns(more.retiring, more.retirements ?? [], now));
   if (!h) return out;
   if (h.claude && latest?.claude && newer(h.claude, latest.claude)) out.push({ key: "claude", text: isOut("Claude Code", latest.claude, h.claude), update: "claude" });
   if (h.codex && latest?.codex && newer(h.codex, latest.codex)) out.push({ key: "codex", text: isOut("Codex", latest.codex, h.codex), update: "codex" });

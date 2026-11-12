@@ -50,6 +50,8 @@ func (s *Service) toastOf(p push.Payload, now time.Time) (herdr.Toast, bool) {
 		return herdr.Toast{}, false
 	case settings.Quiet != nil && settings.Quiet.Covers(now):
 		return herdr.Toast{}, false
+	case s.outranked(p.Machine): // another remuda writes there and pops its own
+		return herdr.Toast{}, false
 	case s.inFront(p.Machine, p.Pane):
 		return herdr.Toast{}, false
 	}

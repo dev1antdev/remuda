@@ -29,7 +29,7 @@ const (
 // PaneTokens are every name remuda may write on a pane, WorkspaceTokens on a workspace.
 var (
 	PaneTokens      = []string{TokenCost, TokenContext, TokenModel, TokenPR, TokenTask, TokenAlert, TokenSaid}
-	WorkspaceTokens = []string{TokenCost, TokenPR, TokenReview}
+	WorkspaceTokens = []string{TokenCost, TokenPR, TokenReview, TokenBy}
 )
 
 // Figures are the display values of one pane or workspace: tokens by name and, for a pane, a label per herdr state.

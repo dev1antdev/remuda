@@ -110,6 +110,7 @@ type Server struct {
 	Triggers  *triggers.Service   // the person's rules on what a pane prints, and the dev servers offered as previews
 
 	streams   termStreams
+	relayed   relays   // the terminals piped to a machine's own remuda, which holds their attach
 	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
 }
 

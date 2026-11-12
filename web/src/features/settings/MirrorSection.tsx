@@ -10,7 +10,7 @@ import { t } from "@/lib/i18n";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { Notice } from "@/ui";
-import { outcomesTone, outcomeWords, quietZone, withQuiet } from "./mirror";
+import { elsewhereWords, outcomesTone, outcomeWords, quietZone, withQuiet } from "./mirror";
 import { fetchMirror, saveMirror, testMirror, type MirrorSettings, type ToastOutcome } from "./mirrorApi";
 
 export default function MirrorSection() {
@@ -60,6 +60,11 @@ export default function MirrorSection() {
     <section className="settings-section mirror-settings">
       <h3>{t("Inside herdr")}</h3>
       {status.closed && <Notice tone="info">{t("This remuda is a scratch instance beside the real one: it writes nothing into herdr, so the two never fight over the same panes.")}</Notice>}
+      {(status.elsewhere ?? []).map((where) => (
+        <Notice key={where.machine} tone="info">
+          {elsewhereWords(where)}
+        </Notice>
+      ))}
       <label className="settings-row">
         <span>
           {t("Show remuda's figures in herdr")}
@@ -71,7 +76,11 @@ export default function MirrorSection() {
         </span>
         <input type="checkbox" checked={settings.figures} onChange={(e) => void save({ ...settings, figures: e.target.checked })} />
       </label>
-      <p className="backup-hint">{t("herdr shows a token only where a sidebar row of its config.toml names it, and a row whose tokens have no value disappears. Add these rows there, then run herdr server reload-config:")}</p>
+      <p className="backup-hint">
+        {t(
+          "herdr shows a token only where a sidebar row of its config.toml names it, and a row whose tokens have no value disappears. Put these rows there — in place of the rows of a [ui.sidebar.agents] or [ui.sidebar.spaces] it already has, since a table written twice makes herdr ignore the whole file — check it with herdr config check, then run herdr server reload-config:",
+        )}
+      </p>
       <pre className="config-snippet">{status.snippet}</pre>
       <div className="backup-actions">
         <button type="button" className="btn sm" onClick={() => copy(status.snippet)}>
@@ -90,6 +99,9 @@ export default function MirrorSection() {
         </span>
         <input type="checkbox" checked={settings.toasts} onChange={(e) => void save({ ...settings, toasts: e.target.checked })} />
       </label>
+      <p className="backup-hint">
+        {t("Set delivery under the [ui.toast] its config.toml may already have — a second one makes herdr ignore the whole file — or add the table where there is none:")}
+      </p>
       <pre className="config-snippet">{status.toast_snippet}</pre>
       <label className="alerts-opt">
         <input type="checkbox" checked={!!settings.quiet} onChange={(e) => void save(withQuiet(settings, e.target.checked, quietWindow, zone))} />

@@ -1,6 +1,7 @@
 package review
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -27,7 +28,7 @@ type SecretScan struct {
 type Skipped struct {
 	Path  string `json:"path,omitempty"`
 	Why   string `json:"why"`
-	Count int    `json:"count,omitempty"` // the untracked files past the cap, for SkipMany
+	Count int    `json:"count,omitempty"` // the untracked files past the cap for SkipMany, the commits for SkipOlder
 }
 
 // Why a file was not read.
@@ -37,6 +38,7 @@ const (
 	SkipPartly = "partly" // its changes ran past scanPerFile: the first part read
 	SkipBudget = "budget" // past scanTotal in all, not read
 	SkipMany   = "many"   // untracked files past scanUntracked
+	SkipOlder  = "older"  // commits not pushed yet past scanCommits, for a push
 )
 
 // The bounds of one check: what crosses from a remote machine stays a few megabytes, and the person waits seconds.
@@ -45,43 +47,9 @@ const (
 	scanTotal     = 8 << 20
 	scanUntracked = 2000
 	scanCommits   = 200
+	countCommits  = 100000 // how far the commits past scanCommits are counted
 	scanTimeout   = 45 * time.Second
 )
-
-// gitDiff is git's diff as the check reads it: no colour, no external driver or textconv, no renames, no context.
-const gitDiff = `git -c core.quotepath=off -c color.ui=never diff --no-ext-diff --no-textconv --no-renames -U0`
-
-// capScript cuts the stream of diffs on its way out: each file's at scanPerFile (a line "\036partly" says where), and
-// every file once scanTotal is spent (each named on a line "\036budget <path>"); remuda's own lines pass.
-var capScript = `LC_ALL=C awk -v per=` + strconv.Itoa(scanPerFile) + ` -v total=` + strconv.Itoa(scanTotal) + ` '
-/^\036/ { print; next }
-/^diff --git / { header = 1; n = 0; cut = 0; over = (sum > total); if (!over) print; next }
-/^@@/ { header = 0 }
-over { if (header && /^\+\+\+ /) print "\036budget " substr($0, 5); next }
-cut { next }
-{ size = length($0) + 1; n += size; sum += size; if (n > per) { cut = 1; print "\036partly"; next }; print }'`
-
-// secretScript prints, in one stream through capScript, the diff of the work against HEAD (the empty tree before the
-// first commit) with only the lines added, every untracked file git does not ignore as a diff from nothing, and, for a
-// push, the commits on no remote-tracking branch with their patches, each after a line "\036commit <short sha>".
-func secretScript(dir string, push bool) string {
-	commits := ""
-	if push {
-		commits = `git -c core.quotepath=off -c color.ui=never log --no-merges -n ` + strconv.Itoa(scanCommits) +
-			` -p -U0 --no-ext-diff --no-textconv --no-renames --relative --format='%x1ecommit %h' HEAD --not --remotes 2>/dev/null; `
-	}
-	return script.InRepo(dir) +
-		`base=HEAD; git rev-parse -q --verify HEAD >/dev/null 2>&1 || base=$(git hash-object -t tree /dev/null); ` +
-		`{ ` + gitDiff + ` --relative "$base" 2>/dev/null; ` +
-		`u=$(git ls-files --others --exclude-standard 2>/dev/null | wc -l | tr -d ' '); ` +
-		`if [ "${u:-0}" -gt ` + strconv.Itoa(scanUntracked) + ` ]; then printf '\036many %s\n' "$((u - ` + strconv.Itoa(scanUntracked) + `))"; fi; ` +
-		`git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null | head -n ` + strconv.Itoa(scanUntracked) + ` | ` +
-		`while IFS= read -r f; do [ -f "$f" ] && [ ! -L "$f" ] || continue; ` +
-		`s=$(wc -c < "$f" 2>/dev/null | tr -d ' '); ` +
-		`if [ "${s:-0}" -gt ` + strconv.Itoa(scanPerFile) + ` ]; then printf '\036large %s\n' "$f"; continue; fi; ` +
-		gitDiff + ` --no-index -- /dev/null "$f" 2>/dev/null; done; ` +
-		commits + `} | ` + capScript
-}
 
 // ScanWork runs the secret check on a folder of the machine, in one round trip; push reads the unpushed commits too.
 func ScanWork(host shell.Host, dir string, push bool) (SecretScan, error) {
@@ -92,20 +60,44 @@ func ScanWork(host shell.Host, dir string, push bool) (SecretScan, error) {
 	if err != nil {
 		return SecretScan{}, err
 	}
-	return readScan(output, push), nil
+	return readScan(output, push)
 }
 
-// readScan reads secretScript's stream: the lines each diff adds go to the scanner with their numbers in the new file.
-func readScan(output string, push bool) SecretScan {
+// failures are the words of a stream's "\036failed <what>": a check git could not finish is no clean one.
+var failures = map[string]string{
+	"folder":     "the folder is not there",
+	"repository": "the folder is not a git checkout",
+	"work":       "git could not read the changes",
+	"commits":    "git could not read the commits not pushed yet",
+}
+
+// errUnfinished is a stream that stopped before its end: a script cut off, or one that never ran.
+var errUnfinished = errors.New("it stopped before it had read everything")
+
+// readScan reads secretScript's stream: the lines each diff adds, and every line of an untracked file, go to the
+// scanner with their numbers in the new file. A stream that says git failed, or that never reached its end, is an
+// error, never a scan that found nothing.
+func readScan(output string, push bool) (SecretScan, error) {
 	scan := SecretScan{Push: push, At: time.Now()}
 	collector := secrets.NewCollector()
 	read := map[string]bool{}
 	var file, commit string
 	var number int
-	header := false
+	header, ended := false, false
+	skipped := map[Skipped]bool{} // a file the work and the index both carry is said once
 	skip := func(path, why string) {
-		if path != "" {
-			scan.Skipped = append(scan.Skipped, Skipped{Path: path, Why: why})
+		if entry := (Skipped{Path: path, Why: why}); path != "" && !skipped[entry] {
+			skipped[entry] = true
+			scan.Skipped = append(scan.Skipped, entry)
+		}
+	}
+	binary := func(path string) {
+		if path == "" {
+			return
+		}
+		collector.Binary(path, commit)
+		if (commit == "" || commit == secrets.Staged) && !secrets.KeyFile(path) { // a keystore is a finding, not a file left unread
+			skip(path, SkipBinary)
 		}
 	}
 	for rest := output; rest != ""; {
@@ -118,16 +110,32 @@ func readScan(output string, push bool) SecretScan {
 			case "commit":
 				commit, file, header = value, "", false
 				scan.Commits++
+			case secrets.Staged: // the index's lines follow: what the work already showed is said once
+				commit, file, header = secrets.Staged, "", false
+			case "file": // an untracked file's lines follow, numbered from the first
+				file, header, number = value, false, 1
+				read[file] = true
+			case "binary":
+				binary(value)
 			case SkipPartly:
 				skip(file, SkipPartly)
 				file = ""
 			case SkipBudget:
 				skip(pathOf(value), SkipBudget)
+			case "unread":
+				skip(value, SkipBudget)
 			case SkipLarge:
 				skip(value, SkipLarge)
-			case SkipMany:
+			case SkipMany, SkipOlder:
 				count, _ := strconv.Atoi(value)
-				scan.Skipped = append(scan.Skipped, Skipped{Why: SkipMany, Count: count})
+				scan.Skipped = append(scan.Skipped, Skipped{Why: word, Count: count})
+			case "failed":
+				if why, known := failures[value]; known {
+					return SecretScan{}, errors.New(why)
+				}
+				return SecretScan{}, errUnfinished
+			case "end":
+				ended = true
 			}
 		case strings.HasPrefix(line, "diff --git "):
 			file, header = "", true
@@ -139,13 +147,7 @@ func readScan(output string, push bool) SecretScan {
 				read[file] = true
 			}
 		case header && strings.HasPrefix(line, "Binary files ") && strings.HasSuffix(line, " differ"):
-			path := pathOf(line[strings.LastIndex(line, " and ")+len(" and ") : len(line)-len(" differ")])
-			if path != "" {
-				collector.Binary(path, commit)
-				if commit == "" && !secrets.KeyFile(path) { // a keystore is a finding, not a file left unread
-					skip(path, SkipBinary)
-				}
-			}
+			binary(binaryPath(line))
 		case !header && file != "" && strings.HasPrefix(line, "+"):
 			collector.Line(file, number, line[1:], commit)
 			number++
@@ -153,12 +155,17 @@ func readScan(output string, push bool) SecretScan {
 			number++
 		}
 	}
+	if !ended {
+		return SecretScan{}, errUnfinished
+	}
 	scan.Findings, scan.More, scan.Files = collector.Findings(), collector.More(), len(read)
-	return scan
+	return scan, nil
 }
 
-// pathOf is the file a diff header names, C-quoted by git when it holds an odd byte; "" for /dev/null.
+// pathOf is the file a diff header names, C-quoted by git when it holds an odd byte and followed by a tab when it
+// holds a blank; "" for /dev/null.
 func pathOf(named string) string {
+	named = strings.TrimSuffix(named, "\t")
 	if strings.HasPrefix(named, `"`) {
 		if unquoted, err := strconv.Unquote(named); err == nil {
 			named = unquoted
@@ -168,6 +175,19 @@ func pathOf(named string) string {
 		return ""
 	}
 	return strings.TrimPrefix(named, "b/")
+}
+
+// binaryPath is the new file git's "Binary files a/x and b/x differ" names: with no renames both sides name the same
+// path, so the second starts halfway, whatever " and " the path itself holds; "" for a file deleted.
+func binaryPath(line string) string {
+	pair := strings.TrimSuffix(strings.TrimPrefix(line, "Binary files "), " differ")
+	if added, ok := strings.CutPrefix(pair, "/dev/null and "); ok {
+		return pathOf(added)
+	}
+	if strings.HasSuffix(pair, " and /dev/null") {
+		return ""
+	}
+	return pathOf(pair[(len(pair)+len(" and "))/2:])
 }
 
 // newStart is the first line of the new file a hunk header names: "@@ -12,3 +14,5 @@" is 14.

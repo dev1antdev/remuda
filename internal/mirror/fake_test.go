@@ -14,6 +14,7 @@ type fakeHerdr struct {
 	toasts []herdr.Toast
 	held   map[string]map[string]string // by pane or workspace id
 	err    error
+	refuse map[string]error // by pane: herdr refusing that pane's values alone
 	shown  herdr.Shown
 }
 
@@ -21,6 +22,9 @@ func (f *fakeHerdr) PaneReportMetadata(m herdr.PaneMetadata) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.panes = append(f.panes, m)
+	if err := f.refuse[m.Pane]; err != nil {
+		return err
+	}
 	if f.err == nil {
 		f.apply(m.Pane, m.Tokens)
 	}

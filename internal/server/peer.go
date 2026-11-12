@@ -71,7 +71,7 @@ func attachRefused(mc *machines.Machine, err error) string {
 }
 
 // relayPaneWS pipes the viewer's socket to the peer's /ws/pane for the same pane, both ways.
-func (s *Server) relayPaneWS(w http.ResponseWriter, r *http.Request, pc *peerClient, paneID string, cols, rows int) {
+func (s *Server) relayPaneWS(w http.ResponseWriter, r *http.Request, pc *peerClient, machineID, paneID string, cols, rows int) {
 	ctx := r.Context()
 	wsURL := strings.Replace(pc.base, "http://", "ws://", 1) + "/ws/pane?" + url.Values{"machine": {"local"}, "id": {paneID}, "cols": {fmt.Sprint(cols)}, "rows": {fmt.Sprint(rows)}}.Encode()
 	dctx, dcancel := context.WithTimeout(ctx, 15*time.Second)
@@ -98,6 +98,7 @@ func (s *Server) relayPaneWS(w http.ResponseWriter, r *http.Request, pc *peerCli
 	}
 	defer c.CloseNow()
 	c.SetReadLimit(1 << 20)
+	defer s.relayed.hold(machineID, paneID)()
 
 	rctx, rcancel := context.WithCancel(ctx)
 	defer rcancel()

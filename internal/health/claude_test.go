@@ -1,6 +1,7 @@
 package health
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -112,5 +113,77 @@ func TestSettingsScriptReadsTheDefaultModelAndFastMode(t *testing.T) {
 	}
 	if !strings.Contains(Script(), SettingsScript) {
 		t.Fatal("the probe does not read the settings")
+	}
+}
+
+// asker is a stand-in for asking Claude Code on a machine: the answers it gives in turn, and how often it was asked
+type asker struct {
+	answers []error
+	asked   int
+}
+
+func (a *asker) ask() (string, error) {
+	a.asked++
+	if a.asked <= len(a.answers) && a.answers[a.asked-1] != nil {
+		return "", a.answers[a.asked-1]
+	}
+	return "login_expires=2026-12-05T16:18:16.555Z\nlogin_read=1\n", nil
+}
+
+func TestTheSignInIsReadSixHoursApartAndKeptAcrossARestart(t *testing.T) {
+	dir := t.TempDir()
+	c := New(dir, nil, "v1", false)
+	a := &asker{}
+	if login := c.signIn("gog", false, a.ask); login == nil || a.asked != 1 {
+		t.Fatalf("the first read asks: %+v, asked %d", login, a.asked)
+	}
+	if login := c.signIn("gog", false, a.ask); login == nil || a.asked != 1 {
+		t.Fatalf("a probe soon after keeps the answer: asked %d", a.asked)
+	}
+	restarted := New(dir, nil, "v1", false)
+	if login := restarted.signIn("gog", false, a.ask); login == nil || !login.Expires.Equal(time.Date(2026, 12, 5, 16, 18, 16, 555e6, time.UTC)) || a.asked != 1 {
+		t.Fatalf("a restart asked Claude Code again: %+v, asked %d", login, a.asked)
+	}
+	if restarted.signIn("gog", true, a.ask); a.asked != 2 {
+		t.Fatal("Read again asks whatever the age")
+	}
+	old := restarted.logins["gog"]
+	old.At, old.Tried = time.Now().Add(-LoginEvery), time.Now().Add(-LoginEvery)
+	restarted.logins["gog"] = old
+	if restarted.signIn("gog", false, a.ask); a.asked != 3 {
+		t.Fatal("an answer six hours old is asked for again")
+	}
+	ahead := restarted.logins["gog"]
+	ahead.At, ahead.Tried = time.Now().Add(48*time.Hour), time.Now().Add(48*time.Hour)
+	restarted.logins["gog"] = ahead
+	if restarted.signIn("gog", false, a.ask); a.asked != 4 {
+		t.Fatal("a read the clock was set back from counts as old")
+	}
+	if err := os.WriteFile(filepath.Join(dir, LoginsFile), []byte("{nope"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if broken := New(dir, nil, "v1", false); len(broken.logins) != 0 {
+		t.Fatal("a damaged file reads as no sign-in known")
+	}
+}
+
+func TestAReadThatFailsKeepsTheLastAnswerAndWaitsAnHour(t *testing.T) {
+	c := New("", nil, "v1", false)
+	a := &asker{answers: []error{nil, errors.New("timed out"), nil}}
+	c.signIn("gog", false, a.ask)
+	read := c.logins["gog"]
+	read.At, read.Tried = time.Now().Add(-LoginEvery), time.Now().Add(-LoginEvery)
+	c.logins["gog"] = read
+	if login := c.signIn("gog", false, a.ask); login == nil || a.asked != 2 {
+		t.Fatalf("a failed read keeps the last answer: %+v, asked %d", login, a.asked)
+	}
+	if c.signIn("gog", false, a.ask); a.asked != 2 {
+		t.Fatal("a read that failed was asked again at the next probe")
+	}
+	failed := c.logins["gog"]
+	failed.Tried = time.Now().Add(-LoginRetry)
+	c.logins["gog"] = failed
+	if login := c.signIn("gog", false, a.ask); login == nil || a.asked != 3 || time.Since(c.logins["gog"].At) > time.Minute {
+		t.Fatalf("an hour after the failure it is asked again: %+v, asked %d", login, a.asked)
 	}
 }

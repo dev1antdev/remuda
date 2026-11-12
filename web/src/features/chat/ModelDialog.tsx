@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { submitPrompt } from "@/features/roster/api";
 import { choiceFor, CUSTOM, EMPTY_DRAFT, modelChoices, modelOf, modelPlaceholder, type Draft } from "@/features/roster/startOptions";
+import RetiredNotice from "@/features/usage/RetiredNotice";
 import { usePref } from "@/lib/prefs";
 import { FormDialog, Select, useSubmit } from "@/ui";
 import { modelCommand } from "./complete";
@@ -49,6 +50,7 @@ export default function ModelDialog({ machineId, paneId, current, onClose, onDon
           <input value={draft.custom} placeholder={modelPlaceholder(KIND)} spellCheck={false} autoFocus onChange={(e) => setDraft({ ...draft, custom: e.target.value })} />
         </label>
       )}
+      <RetiredNotice agent={KIND} model={modelOf(KIND, draft)} machine={machineId} onUse={(model) => setDraft({ ...draft, choice: CUSTOM, custom: model })} />
     </FormDialog>
   );
 }

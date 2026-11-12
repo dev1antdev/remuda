@@ -35,6 +35,8 @@ type Inputs struct {
 	Limit    func(machineID, paneID string) *limits.PaneLimit
 	Review   func(machineID, dir string) (fresh int, ready bool)
 	Tasks    func(machineID string) (map[string]int64, error) // by pane, the task its live run is for
+	Self     string                                           // this remuda's host and port, its claim on a herdr
+	Local    func(machineID string) bool                      // the machine remuda runs on, not one it reaches over ssh
 }
 
 // figures are the values every agent pane and every workspace of a snapshot should carry; a shell carries none.

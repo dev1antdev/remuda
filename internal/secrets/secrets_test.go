@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"encoding/base64"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -67,6 +68,25 @@ func TestEveryRuleFindsItsShape(t *testing.T) {
 		{RuleAssigned, `"Bash(SENTRY_AUTH_TOKEN=`, random(26, hex, 64), ` npx sentry-cli releases new)"`, ""},
 		{RuleAssigned, "secret_key := `", random(27, alnum, 32), "`", ""},
 		{RuleAssigned, "--api-key=", random(28, alnum, 32), "", ""},
+		{RuleAssigned, "DISCORD_TOKEN=", "MT" + random(29, alnum, 24) + "." + random(30, alnum, 6) + "." + random(32, alnum, 38), "", ""},
+		{RuleOpenAI, "OPENAI_API_KEY=", "sk-None-" + random(33, alnum, 20) + openAIMarker + random(34, alnum, 20), "", "sk-"},
+		{RuleHuggingFace, "model = load(token='", "hf_" + random(35, alnum[:52], 34), "')", "hf_"},
+		{RuleGroq, "GROQ=", "gsk_" + random(36, alnum, 52), "", "gsk_"},
+		{RuleXAI, "XAI=", "xai-" + random(37, alnum, 80), "", "xai-"},
+		{RuleOpenRouter, "OR=", "sk-or-v1-" + random(38, hex, 64), "", "sk-or-v1-"},
+		{RuleSendGrid, "sg.setApiKey('", "SG." + random(39, word, 22) + "." + random(76, word, 43), "')", "SG."},
+		{RuleDigitalOcean, "client = Client('", "dop_v1_" + random(77, hex, 64), "')", "dop_v1_"},
+		{RuleDocker, "echo ", "dckr_pat_" + random(78, word, 27), " | docker login", "dckr_pat_"},
+		{RulePyPI, "password = ", "pypi-AgEIcHlwaS5vcmc" + random(79, word, 60), "", "pypi-AgEIcHlwaS5vcmc"},
+		{RuleGoogleOAuth, `secret('`, "GOCSPX-" + random(80, word, 28), `')`, "GOCSPX-"},
+		{RuleShopify, "X-Shopify-Access-Token: ", "shpat_" + random(81, hex, 32), "", "shpat_"},
+		{RuleLinear, "LINEAR=", "lin_api_" + random(82, alnum, 40), "", "lin_api_"},
+		{RuleAtlassian, "JIRA=", "ATATT3" + random(83, word, 180), "", "ATATT3"},
+		{RuleAge, "# ", "AGE-SECRET-KEY-1" + random(84, upperAlnum, 58), "", "AGE-SECRET-KEY-1"},
+		{RuleVault, "VAULT=", "hvs." + random(85, word, 95), "", "hvs."},
+		{RuleURLPassword, "DATABASE_URL=postgres://admin:", random(86, alnum, 20), "@db.prod.internal:5432/app", ""},
+		{RuleURLPassword, `uri = "mongodb+srv://app:`, random(87, alnum, 18) + "!", `@cluster0.abcde.mongodb.net/db"`, ""},
+		{RuleURLPassword, "REDIS_URL=redis://:", random(88, alnum, 24), "@cache:6379", ""},
 	}
 	for _, c := range cases {
 		line := c.before + c.secret + c.after
@@ -84,6 +104,19 @@ func TestEveryRuleFindsItsShape(t *testing.T) {
 		body := c.secret[len(c.prefix):]
 		if !strings.Contains(found[0].Excerpt, c.prefix+bullets) || strings.Contains(found[0].Excerpt, body[:8]) || strings.Contains(found[0].Excerpt, body[len(body)/2-4:len(body)/2+4]) {
 			t.Errorf("%s: the excerpt %q shows more than the prefix %q of the secret", c.rule, found[0].Excerpt, c.prefix)
+		}
+	}
+}
+
+// TestThePageNamesEveryRule: a rule the page has no words for reads as a bare "Secret value" in the dialog.
+func TestThePageNamesEveryRule(t *testing.T) {
+	page, err := os.ReadFile("../../web/src/features/review/secrets.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range Rules {
+		if rule != RuleAssigned && !strings.Contains(string(page), `"`+rule+`": t(`) && !strings.Contains(string(page), "  "+rule+": t(") {
+			t.Errorf("the page has no words for %s", rule)
 		}
 	}
 }
@@ -126,6 +159,19 @@ func TestPlaceholdersAndCodeStayQuiet(t *testing.T) {
 		"-----BEGIN CERTIFICATE-----",
 		"-----BEGIN PUBLIC KEY-----",
 		"the time was 1234567890:" + random(55, word, 35)[:10],
+		"DATABASE_URL=postgres://postgres:postgres@db:5432/dev",
+		"DATABASE_URL=postgres://app:" + random(56, alnum, 20) + "@localhost:5432/dev",
+		"DATABASE_URL=postgres://app:" + random(57, alnum, 20) + "@127.0.0.1/dev",
+		"DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/app",
+		"DATABASE_URL=postgres://app:development@db/app",
+		"REDIS_URL=redis://:changeme123@cache:6379",
+		"amqp://guest:guest@rabbit:5672",
+		"MONGO_URL=mongodb://admin:Admin2024@mongo:27017",
+		"see https://example.com/docs:" + random(58, alnum, 20) + " and mail me@there",
+		"hf_" + "downloadmodelsfromthehubwithcaches",
+		"token = this.settings.apiTokenForTheService2024",
+		"VAULT=hvs." + random(59, word, 20),
+		"SG.abc.def",
 	} {
 		if found := Scan("f", line); len(found) != 0 {
 			t.Errorf("%q: %+v", line, found)
@@ -166,12 +212,37 @@ func TestTheExcerptMasksEverySecretInIt(t *testing.T) {
 	if !strings.Contains(found[0].Excerpt, "ghp_"+bullets+first[len(first)-4:]) {
 		t.Errorf("a long secret's last four bytes tell it apart: %q", found[0].Excerpt)
 	}
-	if got := mask("AKIA"+random(62, upperAlnum, 16), 4); got != "AKIA"+bullets {
+	if got := mask("AKIA"+random(62, upperAlnum, 16), 4, false); got != "AKIA"+bullets {
 		t.Errorf("a short body shows nothing past its prefix: %q", got)
 	}
 	tabbed := Scan("f", "\tpassword:\t"+random(63, alnum, 20)+"\x1b[0m")
 	if len(tabbed) != 1 || strings.ContainsAny(tabbed[0].Excerpt, "\t\x1b") {
 		t.Errorf("control characters stay out of an excerpt: %+v", tabbed)
+	}
+}
+
+// TestAKeyOnOneLineShowsNoneOfItsBody: a service account's JSON or an environment variable keeps a private key on its
+// header's line, and the forty bytes after the header held most of an EC key's secret.
+func TestAKeyOnOneLineShowsNoneOfItsBody(t *testing.T) {
+	header, footer := "-----BEGIN "+"EC PRIVATE"+" KEY-----", "-----END "+"EC PRIVATE"+" KEY-----"
+	body := "MHcCAQEEI" + random(64, alnum+"+/", 120)
+	for _, line := range []string{
+		`  "private_key": "` + header + `\n` + body[:64] + `\n` + body[64:] + `\n` + footer + `\n",`,
+		`PRIVATE_KEY="` + header + ` ` + body[:64] + ` ` + body[64:] + ` ` + footer + `"`,
+		`PRIVATE_KEY="` + header + `\r\n` + body,
+	} {
+		found := Scan("service-account.json", line)
+		if len(found) != 1 || found[0].Rule != RulePrivateKey {
+			t.Fatalf("%q: %+v", line, found)
+		}
+		for at := 0; at+6 <= len(body); at++ {
+			if strings.Contains(found[0].Excerpt, body[at:at+6]) {
+				t.Fatalf("the excerpt %q shows the key's body %q", found[0].Excerpt, body[at:at+6])
+			}
+		}
+		if !strings.Contains(found[0].Excerpt, header+bullets) {
+			t.Errorf("the excerpt %q names the key's kind", found[0].Excerpt)
+		}
 	}
 }
 
@@ -228,6 +299,11 @@ func TestALineIsReadInTimeLinearInItsLength(t *testing.T) {
 		"dashes":          repeat("-"),
 		"base64":          random(300, alnum+"+/", size),
 		"assignments":     repeat("API_KEY=" + random(301, alnum, 24) + ";"),
+		"schemes":         repeat("a://b:"),
+		"addresses":       repeat("postgres://u:" + random(302, alnum, 20) + "@db "),
+		"open addresses":  "x://" + repeat("u:p"),
+		"keys with body":  repeat("-----BEGIN PRIVATE" + " KEY----- MII "),
+		"dotted parts":    repeat("SG.abc.hvs."),
 	}
 	for name, line := range lines {
 		start := time.Now()

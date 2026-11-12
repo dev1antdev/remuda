@@ -14,9 +14,22 @@ type shape struct {
 	exact    int      // the whole token's length, for a kind that has one
 	body     func(byte) bool
 	digit    bool // the body holds a digit
+	cases    bool // the body holds a capital and a small letter: a random one, never a name in the code
 }
 
 var shapes = []shape{
+	{rule: RuleHuggingFace, prefixes: []string{"hf_"}, exact: 37, body: isAlnum, cases: true},
+	{rule: RuleGroq, prefixes: []string{"gsk_"}, exact: 56, body: isAlnum, digit: true},
+	{rule: RuleXAI, prefixes: []string{"xai-"}, exact: 84, body: isAlnum, digit: true},
+	{rule: RuleOpenRouter, prefixes: []string{"sk-or-v1-"}, exact: 73, body: isHex},
+	{rule: RuleDigitalOcean, prefixes: []string{"dop_v1_", "doo_v1_", "dor_v1_"}, exact: 71, body: isHex},
+	{rule: RuleDocker, prefixes: []string{"dckr_pat_", "dckr_oat_"}, min: 24, body: isWord},
+	{rule: RulePyPI, prefixes: []string{"pypi-AgEIcHlwaS5vcmc"}, min: 50, body: isWord},
+	{rule: RuleGoogleOAuth, prefixes: []string{"GOCSPX-"}, exact: 35, body: isWord},
+	{rule: RuleShopify, prefixes: []string{"shpat_", "shpca_", "shppa_", "shpss_"}, exact: 38, body: isHex},
+	{rule: RuleLinear, prefixes: []string{"lin_api_"}, exact: 48, body: isAlnum},
+	{rule: RuleAtlassian, prefixes: []string{"ATATT3"}, min: 100, body: isWord},
+	{rule: RuleAge, prefixes: []string{"AGE-SECRET-KEY-1"}, exact: 74, body: isUpperAlnum},
 	{rule: RuleAWS, prefixes: []string{"AKIA", "ASIA", "ABIA", "ACCA"}, exact: 20, body: isUpperAlnum},
 	{rule: RuleGitHubFine, prefixes: []string{"github_pat_"}, min: 22, body: isAlnumUnderscore},
 	{rule: RuleGitHub, prefixes: []string{"ghp_", "gho_", "ghu_", "ghs_", "ghr_"}, min: 36, body: isAlnum},
@@ -48,6 +61,9 @@ func tokens(line string, hits []hit) []hit {
 		if !ok {
 			found, ok = assigned(line, i, end)
 		}
+		if !ok {
+			found, ok = urlPassword(line, i, end)
+		}
 		if ok {
 			hits = append(hits, found)
 			i = max(found.end, end)
@@ -71,18 +87,61 @@ func shaped(line string, start, end int) (hit, bool) {
 			continue
 		}
 		body := word[len(prefix):]
-		if kind.exact > 0 && len(word) != kind.exact || len(body) < kind.min || !every(body, kind.body) || kind.digit && !strings.ContainsAny(body, "0123456789") || placeholder(body) {
+		if kind.exact > 0 && len(word) != kind.exact || len(body) < kind.min || !every(body, kind.body) || kind.digit && !strings.ContainsAny(body, "0123456789") ||
+			kind.cases && !(strings.ContainsAny(body, upperLetters) && strings.ContainsAny(body, lowerLetters)) || placeholder(body) {
 			return hit{}, false
 		}
 		return hit{start: start, end: end, rule: kind.rule, keep: len(prefix)}, true
 	}
-	if strings.HasPrefix(word, "sk-") && len(word) >= 40 && strings.Contains(word, openAIMarker) && every(word[3:], isAlnum) && !placeholder(word[3:]) {
+	// OpenAI's keys of every kind but the newest prefixes, sk-None- among them, carry the marker
+	if strings.HasPrefix(word, "sk-") && len(word) >= 40 && strings.Contains(word, openAIMarker) && !placeholder(word[3:]) {
 		return hit{start: start, end: end, rule: RuleOpenAI, keep: 3}, true
 	}
 	if found, ok := jwt(line, start, end); ok {
 		return found, true
 	}
+	if found, ok := dotted(line, start, end); ok {
+		return found, true
+	}
 	return telegram(line, start, end)
+}
+
+const (
+	upperLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	lowerLetters = "abcdefghijklmnopqrstuvwxyz"
+)
+
+// dotted is a token whose parts dots join: SendGrid's SG.<22>.<43>, and Vault's hvs., hvb. or hvr. and 90 bytes or more.
+func dotted(line string, start, end int) (hit, bool) {
+	switch line[start:end] {
+	case "SG":
+		first, ok := dottedPart(line, end, 22, 22)
+		if !ok {
+			return hit{}, false
+		}
+		second, ok := dottedPart(line, first, 43, 43)
+		if !ok || placeholder(line[end+1:second]) {
+			return hit{}, false
+		}
+		return hit{start: start, end: second, rule: RuleSendGrid, keep: 3}, true
+	case "hvs", "hvb", "hvr":
+		token, ok := dottedPart(line, end, 90, MaxValue)
+		if !ok || placeholder(line[end+1:token]) {
+			return hit{}, false
+		}
+		return hit{start: start, end: token, rule: RuleVault, keep: 4}, true
+	}
+	return hit{}, false
+}
+
+// dottedPart is where the word after the dot at i ends, when there is a dot and the word runs between least and most bytes.
+func dottedPart(line string, i, least, most int) (int, bool) {
+	if i >= len(line) || line[i] != '.' {
+		return 0, false
+	}
+	end := wordEnd(line, i+1)
+	length := end - (i + 1)
+	return end, length >= least && length <= most
 }
 
 // jwt is a JSON Web Token: a header and a payload that are base64 of JSON objects, and a signature.
@@ -143,8 +202,24 @@ func privateKeys(line string, hits []hit) []hit {
 			continue
 		}
 		end += len("-----")
-		hits = append(hits, hit{start: start, end: end, rule: RulePrivateKey, keep: end - start})
+		body := keyBodyEnd(line, end)
+		hits = append(hits, hit{start: start, end: body, rule: RulePrivateKey, keep: end - start, noTail: true})
+		from = max(from, body)
 	}
+}
+
+// keyBodyEnd is where the body of a key whose header ends at i stops on the header's own line — a key kept on one
+// line, in a JSON string or an environment variable, with its line breaks escaped or turned into blanks — up to its
+// END marker; the blanks after it are not the key's.
+func keyBodyEnd(line string, i int) int {
+	end := i
+	for end < len(line) && (isAlnum(line[end]) || strings.IndexByte("+/=\\ \t", line[end]) >= 0) {
+		end++
+	}
+	for end > i && (line[end-1] == ' ' || line[end-1] == '\t') {
+		end--
+	}
+	return end
 }
 
 // slackWebhooks are Slack's incoming webhooks, whose path is the secret.

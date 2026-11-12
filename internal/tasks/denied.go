@@ -9,10 +9,11 @@ import (
 )
 
 // deniedComment is remuda's comment on a task after a run's agent was denied calls nobody was there to approve: each
-// call, whether the agent stopped on them, and what the person can do.
-func deniedComment(kind string, denied transcript.Denials) string {
+// call, whether the agent stopped on them, and what the person can do — a pipeline's stage takes no arguments of the
+// project's, so only permission rules in a settings file let its calls through.
+func deniedComment(r Run, denied transcript.Denials) string {
 	var b strings.Builder
-	agent := agentLabel(kind)
+	agent := agentLabel(r.Agent)
 	if len(denied.Calls) == 1 {
 		fmt.Fprintf(&b, "%s was denied a call that would have waited for your permission, since nobody was there to answer:\n\n", agent)
 	} else {
@@ -28,7 +29,11 @@ func deniedComment(kind string, denied transcript.Denials) string {
 	if denied.EndsTurn {
 		b.WriteString("\nIt stopped there, before writing an answer.")
 	}
-	b.WriteString("\nIf the work needs them, run them yourself in its terminal, or allow them with a permission rule or a permission mode in the project's agent settings.")
+	if r.Stage > 0 {
+		b.WriteString("\nIf the work needs them, run them yourself in its terminal, or allow them with permission rules in the repository's .claude/settings.json or your own: a stage takes no extra arguments.")
+	} else {
+		b.WriteString("\nIf the work needs them, run them yourself in its terminal, or allow them with a permission rule or a permission mode in the project's agent settings.")
+	}
 	return b.String()
 }
 

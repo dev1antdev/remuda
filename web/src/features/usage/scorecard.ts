@@ -105,3 +105,9 @@ export function fewWords(n: number, minSample: number): string {
   if (n === 0 || n >= minSample) return "";
   return tn(n, "from {n} run only", "from {n} runs only");
 }
+
+// finishedWords is the Finished cell's tooltip: how few runs it stands on, and the runs still at work it leaves out
+export function finishedWords(row: Pick<ScoreRow, "finished" | "under_way">, minSample: number): string {
+  const working = row.under_way ? tn(row.under_way, "{n} run still at work, not counted yet", "{n} runs still at work, not counted yet") : "";
+  return [fewWords(row.finished.of, minSample), working].filter(Boolean).join(" · ");
+}

@@ -55,6 +55,7 @@ type machineState struct {
 	refused   string        // the person's watches herdr refused, by their fingerprint: left out until they change
 
 	noStreamUntil time.Time // herdr refused the stream itself (one too old for it): the next try waits till then
+	said          string    // the refusal the log told last, so a herdr refusing every few minutes is told once
 }
 
 type Watcher struct {

@@ -13,7 +13,8 @@ type Moved struct {
 
 // OnTrigger moves the task whose live run is in the pane to the column one of the person's triggers names — by its
 // title, in the task's own project — with a comment by remuda saying why. Never into the Queued column, which takes
-// only the person's own moves; never a card a pipeline holds while it runs; nil when nothing moved.
+// only the person's own moves; never a card a pipeline holds while it runs; never a task done back open, since a
+// line the agent prints again is no undo of the person's word; nil when nothing moved.
 func (st *Store) OnTrigger(machine, pane, column, why string) (*Moved, error) {
 	r, err := scanRun(st.db.QueryRow(`SELECT `+runCols+` FROM task_runs WHERE machine = ? AND pane = ? AND state IN (?, ?, ?) ORDER BY id DESC LIMIT 1`,
 		machine, pane, RunStarting, RunRunning, RunFinished))
@@ -35,7 +36,7 @@ func (st *Store) OnTrigger(machine, pane, column, why string) (*Moved, error) {
 		return nil, err
 	}
 	to := statusByTitle(ss, column)
-	if to == nil || to.OnQueue || to.ID == t.StatusID {
+	if to == nil || to.OnQueue || to.ID == t.StatusID || t.Done && to.Kind != KindDone {
 		return nil, nil
 	}
 	tx, err := st.db.Begin()

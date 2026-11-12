@@ -21,7 +21,7 @@ export function OpinionBlock({ opinion, reviewer, asking, apart, moved, onAdopt,
 }) {
   const open = openComments(opinion).length;
   const running = opinion.state === "running";
-  const tabOpen = running || opinion.state === "unreadable" || !opinion.close;
+  const tabOpen = running || opinion.state === "unreadable" || opinion.state === "stopped" || !opinion.close;
   return (
     <section className={`opinion-block${running ? " running" : ""}`} aria-label={t("Second opinion")}>
       <div className="opinion-head">

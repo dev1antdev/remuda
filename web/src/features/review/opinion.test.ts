@@ -62,6 +62,7 @@ describe("the words", () => {
     expect(asksPerson({ status: "done", radar: { state: "done" } })).toBe(false);
     expect(asksPerson(undefined)).toBe(false);
     expect(headWords(opinion({ state: "unreadable" }), "Codex")).toMatch(/could not be read/);
+    expect(headWords(opinion({ state: "stopped" }), "Claude Code")).toBe("Claude Code stopped on calls it was denied without asking; they are listed in its tab");
     expect(headWords(opinion({ state: "gone", note: "the reviewer did not start: x" }), "Codex")).toBe("the reviewer did not start: x");
     expect(headWords(opinion(), "Codex")).toBe("Codex found nothing to comment on");
     expect(headWords(opinion({ comments: [comment(1, "a", 1), comment(2, "a", 2)] }), "Codex")).toBe("2 comments");
@@ -73,6 +74,7 @@ describe("the words", () => {
     expect(subWords(opinion({ comments: [comment(1, "a", 1), comment(2, "a", 2), comment(3, "a", 3, { dismissed: true })] }))).toBe("second opinion: 2 comments");
     expect(subWords(opinion({ comments: [comment(1, "a", 1, { dismissed: true })] }))).toBe("");
     expect(subWords(opinion({ state: "unreadable" }))).toBe("");
+    expect(subWords(opinion({ state: "stopped" }))).toBe("");
   });
   it("mark an adopted comment with its severity and its reviewer", () => {
     expect(adoptedText(comment(1, "a.go", 3, { severity: "high", text: "a race" }), "Codex")).toBe("[high] a race — second opinion of Codex");

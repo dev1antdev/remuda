@@ -3,6 +3,7 @@ package opinion
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -124,7 +125,7 @@ func TestASnapshotReadsAReviewerAtRestAndNotesOneGone(t *testing.T) {
 	op := svc.Begin(Opinion{Machine: "gog", Dir: "/a", Pane: "w1:p2", Tab: "w1:t2"})
 	gone := svc.Begin(Opinion{Machine: "gog", Dir: "/b", Pane: "w2:p2", Tab: "w2:t2"})
 	reads := 0
-	svc.Read = func(asked Opinion) (string, bool) {
+	svc.Read = func(asked Opinion) (Reply, bool) {
 		reads++
 		return Answered(turnsOf(Prompt(Scope{}, op.Ref), "FINDINGS\na.go:1: x"), asked)
 	}
@@ -219,10 +220,10 @@ func TestAReviewerAtRestIsReadWhenItsConversationIsTheRequest(t *testing.T) {
 		"w3:p2": {Prompt(Scope{}, refs["w3:p2"]), ""},                       // not answered yet
 		"w4:p2": {Prompt(Scope{}, "an-earlier-one"), "FINDINGS\nc.go:3: z"}, // an earlier request's conversation in the folder
 	}
-	svc.Read = func(op Opinion) (string, bool) {
+	svc.Read = func(op Opinion) (Reply, bool) {
 		read, ok := reads[op.Pane]
 		if !ok {
-			return "", false
+			return Reply{}, false
 		}
 		return Answered(turnsOf(read[0], read[1]), op)
 	}
@@ -275,6 +276,58 @@ func TestTheReviewersTabClosesOnlyAfterAReadableAnswer(t *testing.T) {
 	store.now = func() time.Time { return time.Unix(100, 0) }
 	if op := asked(store, "p"); !op.Asked.Equal(time.Unix(100, 0)) {
 		t.Fatalf("asked at %v", op.Asked)
+	}
+}
+
+// A Claude Code reviewer started to deny what would wait for a permission stops after a run of refusals with no answer:
+// the opinion says so, the tab stays, and an answer it gives once the person has taken it on in the tab still counts.
+func TestAReviewerThatStoppedOnDeniedCallsIsNotLeftReviewing(t *testing.T) {
+	svc := NewService(t.TempDir())
+	svc.retry = time.Millisecond
+	var mu sync.Mutex
+	var closed []string
+	svc.Close = func(machine, tab, pane string) error {
+		mu.Lock()
+		defer mu.Unlock()
+		closed = append(closed, tab)
+		return nil
+	}
+	op := svc.Begin(Opinion{Machine: "gog", Dir: "/a", Agent: "claude", Tab: "w1:t2", Pane: "w1:p2", Close: true})
+	denied := transcript.Part{Type: "tool", ToolName: "Bash", IsError: true,
+		Output: "Permission for this tool use was denied. It requires approval, and this session has no approval surface — nobody can answer a permission prompt here."}
+	conversation := turnsOf(Prompt(Scope{}, op.Ref), "")
+	conversation = append(conversation, transcript.Turn{Role: "assistant", Parts: []transcript.Part{{Type: "text", Text: "Running the tests first."}, denied, denied, denied}})
+	svc.Read = func(asked Opinion) (Reply, bool) {
+		mu.Lock()
+		defer mu.Unlock()
+		return Answered(conversation, asked)
+	}
+	settle := func(want string) (Opinion, int) {
+		t.Helper()
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			svc.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "gog", Pane: "w1:p2"}, To: "done"})
+			time.Sleep(5 * time.Millisecond)
+			got, _ := svc.Get("gog", "/a")
+			mu.Lock()
+			n := len(closed)
+			mu.Unlock()
+			if got.State == want || time.Now().After(deadline) {
+				return got, n
+			}
+		}
+	}
+	if got, n := settle(Stopped); got.State != Stopped || got.Note == "" || n != 0 || !svc.Waiting("gog", "w1:p2") {
+		t.Fatalf("a reviewer stopped on its denied calls: %+v, %d closed", got, n)
+	}
+	mu.Lock()
+	conversation = turnsOf(Prompt(Scope{}, op.Ref), "FINDINGS\na.go:1: x")
+	mu.Unlock()
+	if got, n := settle(Done); got.State != Done || got.Open() != 1 || got.Note != "" || n != 1 {
+		t.Fatalf("its answer once taken on in the tab: %+v, %d closed", got, n)
+	}
+	if _, reply := PromptAndReply(turnsOf("hi", "")); reply.Stopped {
+		t.Error("a conversation the person's turn ends stopped nowhere")
 	}
 }
 

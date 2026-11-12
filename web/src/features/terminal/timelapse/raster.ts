@@ -8,24 +8,34 @@ import { parseAnsi } from "../ansi";
 import { cellsOf, rgbOf, rowKey, type Cell, type Defaults } from "./cells";
 import { GifWriter } from "./gif";
 import { indexer, isInk, Tally } from "./palette";
-import { gifDelays, type Speed } from "./playback";
+import { gifDelays, screenText, type ScreenRows, type Speed } from "./playback";
+import { Slicer } from "./slice";
 
 const FONT_PX = 12;
 const LINE = 15;
 const PAD = 8;
 export const MAX_COLS = 400;
 export const MAX_ROWS = 200;
-const YIELD_EVERY = 8;
 
-export type GifSource = { screens: string[]; times: number[]; cols: number };
+export type GifSource = { screens: ScreenRows[]; times: number[]; cols: number };
 
 // grid is a screen as rows of cells, as many rows as the canvas has
-function grid(screen: string, palette: AnsiPalette, defaults: Defaults, rows: number): Cell[][] {
-  const lines = parseAnsi(screen, palette);
+function grid(screen: ScreenRows, palette: AnsiPalette, defaults: Defaults, rows: number): Cell[][] {
+  const lines = parseAnsi(screenText(screen), palette);
   return Array.from({ length: rows }, (_, r) => (r < lines.length ? cellsOf(lines[r]!, defaults) : []));
 }
 
-const pause = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+// pause gives the page its turn through a message to itself, never a timer, which a tab in the background holds back a
+// second or more at a time: an export left drawing behind another tab would take hours
+const pause = () =>
+  new Promise<void>((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      resolve();
+    };
+    channel.port2.postMessage(null);
+  });
 
 // exportGif draws the recording as a looping GIF at the speed picked; onProgress hears each frame drawn
 export async function exportGif(source: GifSource, palette: AnsiPalette, font: string, speed: Speed, onProgress: (done: number, total: number) => void, signal?: AbortSignal): Promise<Blob> {
@@ -34,8 +44,9 @@ export async function exportGif(source: GifSource, palette: AnsiPalette, font: s
   let rows = 1;
   let cols = Math.max(20, source.cols);
   const tally = new Tally();
+  const slice = new Slicer(() => performance.now());
   for (let i = 0; i < screens.length; i++) {
-    const lines = parseAnsi(screens[i]!, palette);
+    const lines = parseAnsi(screenText(screens[i]), palette);
     rows = Math.max(rows, lines.length);
     for (const line of lines) {
       const cells = cellsOf(line, defaults);
@@ -45,7 +56,10 @@ export async function exportGif(source: GifSource, palette: AnsiPalette, font: s
         if (cell.ch.trim()) tally.add(cell.fg);
       }
     }
-    if (i % (YIELD_EVERY * 8) === 0) await pause();
+    if (slice.due) {
+      await pause();
+      slice.restart();
+    }
   }
   rows = Math.min(rows, MAX_ROWS);
   cols = Math.min(cols, MAX_COLS);
@@ -85,9 +99,10 @@ export async function exportGif(source: GifSource, palette: AnsiPalette, font: s
     const band = ctx.getImageData(0, top, canvas.width, bottom - top);
     if (pending) gif.add(pending);
     pending = { x: 0, y: top, width: canvas.width, height: bottom - top, indices: quantize(band, top, cells, cellW, defaults, indexOf), delay: delays[i]! };
-    if (i % YIELD_EVERY === 0) {
+    if (slice.due) {
       onProgress(i + 1, screens.length);
       await pause();
+      slice.restart();
     }
   }
   if (pending) gif.add(pending);

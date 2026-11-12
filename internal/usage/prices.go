@@ -95,11 +95,7 @@ func Lookup(model string) (Model, bool) {
 	m = dateSuffix.ReplaceAllString(m, "")
 	for _, c := range models {
 		if m == c.id || strings.HasPrefix(m, c.id+"-") || strings.HasPrefix(m, c.id+"@") {
-			model := Model{ID: c.id, Name: c.name, Rates: tiers[c.tier], Window: c.window}
-			if long, ok := longPrompts[c.tier]; ok {
-				model.Long = &long
-			}
-			return model, true
+			return modelOf(c.id, c.name, c.tier, c.window), true
 		}
 	}
 	return Model{}, false
@@ -109,21 +105,34 @@ func Lookup(model string) (Model, bool) {
 func ByName(name string) (Model, bool) {
 	for _, c := range models {
 		if c.name == name {
-			return Model{ID: c.id, Name: c.name, Rates: tiers[c.tier], Window: c.window}, true
+			return modelOf(c.id, c.name, c.tier, c.window), true
 		}
 	}
 	return Model{}, false
 }
 
-// FastRates are what Claude Code charges in fast mode (its z9e table).
-func FastRates(m Model) Rates {
-	switch m.ID {
-	case "claude-opus-5-5":
-		return Rates{8, 40, 10, 16, 0.4, 0.01}
-	case "claude-opus-4-8", "claude-opus-5":
-		return Rates{10, 50, 12.5, 20, 1, 0.01}
+func modelOf(id, name, tier string, window int) Model {
+	model := Model{ID: id, Name: name, Rates: tiers[tier], Window: window}
+	if long, ok := longPrompts[tier]; ok {
+		model.Long = &long
 	}
-	return Rates{30, 150, 37.5, 60, 3, 0.01}
+	return model
+}
+
+// FastRates are what Claude Code charges in fast mode for the models its table names (2.1.322's); false for any other,
+// which Claude Code prices at its usual rates whatever the record's speed says.
+func FastRates(m Model) (Rates, bool) {
+	switch m.ID {
+	case "claude-fable-5-2", "claude-mythos-5-2":
+		return Rates{16, 80, 20, 32, 0.4, 0.01}, true
+	case "claude-opus-5-5":
+		return Rates{8, 40, 10, 16, 0.4, 0.01}, true
+	case "claude-opus-4-8", "claude-opus-5":
+		return Rates{10, 50, 12.5, 20, 1, 0.01}, true
+	case "claude-opus-4-6", "claude-opus-4-7":
+		return Rates{30, 150, 37.5, 60, 3, 0.01}, true
+	}
+	return Rates{}, false
 }
 
 // Tokens are one record's or a sum's counts.
@@ -148,12 +157,12 @@ func (t *Tokens) Add(o Tokens) {
 // Context is what the record's prompt held: everything the model read.
 func (t Tokens) Context() int64 { return t.Input + t.CacheRead + t.CacheWrite5m + t.CacheWrite1h }
 
-// Cost prices one record the way Claude Code does: a prompt past a model's long-prompt size at its long rates, the
-// US-geo tenth on tokens, not on web search.
+// Cost prices one record the way Claude Code does: fast mode from its own table, a prompt past a model's long-prompt
+// size at its long rates, the US-geo tenth on tokens, not on web search.
 func Cost(m Model, t Tokens, geo, speed string) float64 {
 	r := m.Rates
-	if speed == "fast" {
-		r = FastRates(m)
+	if fast, ok := FastRates(m); ok && speed == "fast" {
+		r = fast
 	} else if m.Long != nil && t.Context() > m.Long.Above {
 		r = m.Long.Rates
 	}

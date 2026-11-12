@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"log"
 	"path"
-	"regexp"
 	"strings"
 	"sync"
 	"unicode/utf8"
 
+	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -48,7 +48,7 @@ type Rule struct {
 }
 
 // Check trims a rule and says what is wrong with it; herdr reads the regex in Rust's dialect, so what Go's reads and
-// Rust's does not is refused here, before it could refuse the machine's whole stream.
+// Rust's does not, or reads otherwise, is refused here, before it could refuse the person's watches on a machine.
 func Check(r *Rule) error {
 	r.Name, r.Pattern, r.Column = strings.TrimSpace(r.Name), strings.TrimRight(r.Pattern, "\r\n"), strings.TrimSpace(r.Column)
 	r.Machine, r.Dir = strings.TrimSpace(r.Machine), strings.TrimSpace(r.Dir)
@@ -98,14 +98,11 @@ func Check(r *Rule) error {
 	return nil
 }
 
-// checkRegex is Go's reading of the pattern less what herdr's Rust regex refuses, and never one every line matches.
+// checkRegex is the pattern as herdr and Go both read it, and never one every line matches.
 func checkRegex(pattern string) error {
-	if strings.Contains(pattern, `\Q`) {
-		return errors.New(`\Q…\E is not in herdr's regex: escape the characters one by one`)
-	}
-	re, err := regexp.Compile(pattern)
+	re, err := herdr.CompileRegex(pattern)
 	if err != nil {
-		return fmt.Errorf("the regex does not read: %v", strings.TrimPrefix(err.Error(), "error parsing regexp: "))
+		return err
 	}
 	if re.MatchString("") {
 		return errors.New("the regex matches an empty line, so every line")

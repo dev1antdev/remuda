@@ -584,8 +584,10 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
   }
   for (const machine of roster.machines ?? []) {
     if (machine.id !== "local") continue;
-    // Claude Code's sign-in there ends in a day and a half: a red concern with a shell to sign in again from
-    machine.health = { ...(machine.health ?? { at: iso(now), disk_free_gb: 120, disk_used_pct: 30, load1: 0.4 }), claude_login: { expires: iso(now + 36 * 3600e3), at: iso(now) } };
+    // Claude Code's sign-in there ends in a day and a half at the latest, so it may end at any time: a red concern with a shell to sign in again from;
+    // its settings keep fast mode on Opus 4.8 as the default, so every dialog that starts Claude Code on its default model says it goes on 30 Nov
+    const health = machine.health ?? { at: iso(now), disk_free_gb: 120, disk_used_pct: 30, load1: 0.4 };
+    machine.health = { ...health, claude: health.claude || "2.1.322", claude_model: "claude-opus-4-8", claude_fast: true, claude_login: { expires: iso(now + 36 * 3600e3), at: iso(now) } };
     machine.limits = {
       wrapped: true,
       windows: [
@@ -1298,18 +1300,18 @@ async function runPass() {
   await screen("keys-sheet", { open: async () => palette("keys"), expect: [".modal"] });
 
   await onAgents();
-  for (const [name, id] of [
-    ["new-workspace", "workspace:local"],
+  for (const [name, id, notice] of [
+    ["new-workspace", "workspace:local", ".modal .retired-notice"],
     ["import-issue", "import-issue"],
     ["import-jira", "import-jira"],
-    ["arena", "arena-new"],
+    ["arena", "arena-new", ".arena-new .retired-notice"],
     ["teleport", "teleport"],
     ["reopen", "reopen"],
     ["recipes", "recipes"],
     ["budget", "budgets"],
     ["broadcast", "broadcast"],
   ])
-    await screen(`dialog-${name}`, { open: async () => palette(id), expect: [".modal"], settle: 700 });
+    await screen(`dialog-${name}`, { open: async () => palette(id), expect: [".modal", ...(notice ? [notice] : [])], settle: 700 });
   await screen("timelapse", {
     open: async () => {
       await palette("timelapse");

@@ -35,6 +35,7 @@ describe("a recording's words", () => {
     expect(["done", "blocked", "gone", "cut", "odd"].map(endedWords)).toEqual(["finished", "asked you something", "its pane closed", "cut short: remuda went down while it worked", "odd"]);
     setLang("ru");
     expect(endedWords("idle")).toBe("остановился");
+    expect(endedWords("away")).toBe("оборвано: его машина пропала из связи, пока он работал");
     expect(speedWords("frame")).toBe("По кадрам");
     expect(speedWords(60)).toBe("60×");
   });

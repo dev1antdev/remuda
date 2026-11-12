@@ -2,6 +2,7 @@ package mirror
 
 import (
 	"maps"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -76,7 +77,7 @@ func value(m map[string]*string, name string) string {
 func TestAWriteOnlyWhenAFigureMovesAndAgainBeforeTheTTL(t *testing.T) {
 	r := newRig(t)
 	r.costs["w1:p1"] = 4.2
-	w := newWriter("gog", r.svc)
+	w := r.writer()
 	r.sync(w, snapshot())
 	panes, spaces := r.herdr.take()
 	if len(panes) != 1 || panes[0].Pane != "w1:p1" || panes[0].Source != Source || panes[0].TTL != TTL {
@@ -117,7 +118,7 @@ func TestAWriteOnlyWhenAFigureMovesAndAgainBeforeTheTTL(t *testing.T) {
 func TestAnAgentThatLeftHasItsTokensClearedAndAGonePaneIsForgotten(t *testing.T) {
 	r := newRig(t)
 	r.costs["w1:p1"] = 1
-	w := newWriter("gog", r.svc)
+	w := r.writer()
 	r.sync(w, snapshot())
 	r.herdr.take()
 
@@ -134,8 +135,8 @@ func TestAnAgentThatLeftHasItsTokensClearedAndAGonePaneIsForgotten(t *testing.T)
 			t.Errorf("%s set to %q on a shell", name, *v)
 		}
 	}
-	if _, ok := w.panes["w1:p1"]; ok {
-		t.Error("a cleared pane stays in the writer's memory")
+	if left := w.panes["w1:p1"]; !left.figures.empty() {
+		t.Errorf("a cleared pane is remembered with figures: %+v", left)
 	}
 
 	r.sync(w, snapshot())
@@ -143,15 +144,18 @@ func TestAnAgentThatLeftHasItsTokensClearedAndAGonePaneIsForgotten(t *testing.T)
 	snap = snapshot()
 	snap.Panes = snap.Panes[1:]
 	r.sync(w, snap)
-	if panes, _ := r.herdr.take(); len(panes) != 0 || len(w.panes) != 0 {
-		t.Fatalf("a closed pane is forgotten without a write: %+v, %v", panes, w.panes)
+	if _, kept := w.panes["w1:p1"]; kept {
+		t.Fatalf("a closed pane is still remembered: %v", w.panes)
+	}
+	if panes, _ := r.herdr.take(); len(panes) != 0 {
+		t.Fatalf("a closed pane is forgotten without a write: %+v", panes)
 	}
 }
 
 func TestAPlaceHerdrLostIsWrittenAgainAndLeftoversOfAnEarlierRunAreCleared(t *testing.T) {
 	r := newRig(t)
 	r.costs["w1:p1"] = 1
-	w := newWriter("gog", r.svc)
+	w := r.writer()
 	r.sync(w, snapshot())
 	r.herdr.take()
 
@@ -174,7 +178,7 @@ func TestAPlaceHerdrLostIsWrittenAgainAndLeftoversOfAnEarlierRunAreCleared(t *te
 	fresh := newRig(t)
 	snap := snapshot()
 	snap.Panes[0].Tokens = map[string]string{TokenSaid: "an old answer", "someone_elses": "kept"}
-	newWriter("gog", fresh.svc).sync(snap, fresh.clock)
+	fresh.writer().sync(snap, fresh.clock)
 	panes, _ = fresh.herdr.take()
 	if len(panes) != 1 {
 		t.Fatalf("the leftover is cleared in one write: %+v", panes)
@@ -191,7 +195,7 @@ func TestTurningTheFiguresOffClearsEverythingRemudaWrote(t *testing.T) {
 	r := newRig(t)
 	r.costs["w1:p1"] = 2
 	r.notes["w1:p1"] = "waiting for your answer for 20 min"
-	w := newWriter("gog", r.svc)
+	w := r.writer()
 	r.sync(w, snapshot())
 	panes, _ := r.herdr.take()
 	if len(panes) != 1 || panes[0].Labels[herdr.StatusWorking] != "waiting 20 min" {
@@ -233,7 +237,7 @@ func TestWritesArePacedAndARefusalHoldsTheMachineOff(t *testing.T) {
 		snap.Panes = append(snap.Panes, herdr.PaneInfo{PaneID: id, WorkspaceID: "w1", Agent: "claude"})
 		r.costs[id] = 1
 	}
-	w := newWriter("gog", r.svc)
+	w := r.writer()
 	r.sync(w, snap)
 	panes, spaces := r.herdr.take()
 	if len(panes) != 6 || len(spaces) != 1 {
@@ -269,8 +273,13 @@ func TestWritesArePacedAndARefusalHoldsTheMachineOff(t *testing.T) {
 func TestObserveHandsTheSnapshotToTheMachinesOwnWriter(t *testing.T) {
 	r := newRig(t)
 	r.svc.sleep = func(time.Duration) {}
+	var past atomic.Int64 // the writer's own goroutine reads the clock: moved on atomically
+	start := r.clock
+	r.svc.now = func() time.Time { return start.Add(time.Duration(past.Load())) }
 	r.costs["w1:p1"] = 1
-	r.svc.Observe(events.Snapshot{Machine: "gog", Snap: snapshot(), At: r.clock})
+	r.svc.Observe(events.Snapshot{Machine: "gog", Snap: snapshot(), At: start})
+	past.Store(int64(warmUp))
+	r.svc.Observe(events.Snapshot{Machine: "gog", Snap: snapshot(), At: start.Add(warmUp)})
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		r.herdr.mu.Lock()

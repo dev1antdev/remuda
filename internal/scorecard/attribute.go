@@ -16,6 +16,11 @@ type run struct {
 	verdicts []string // the verdicts its work got, the first first
 }
 
+// underWay says the run's agent has not answered yet and may still: its prompt on its way, or delivered and unanswered.
+func (r *run) underWay() bool {
+	return r.Finished == "" && (r.State == tasks.RunStarting || r.State == tasks.RunRunning)
+}
+
 // runsFrom are the runs started from since on, the oldest first; a run with no readable start is left out.
 func runsFrom(records []tasks.RunRecord, since time.Time) []*run {
 	var out []*run
@@ -93,7 +98,8 @@ type prCredit struct {
 }
 
 // creditPRs counts each request once, for the work run of the worktree that named it first — a pipeline's request
-// stage opens it for the first agent's work — merged when any run naming it saw it merged.
+// stage opens it for the first agent's work, and one carrying on work begun before the period credits nobody —
+// merged when any run naming it saw it merged.
 func creditPRs(folders map[string][]*run, runs []*run) []*prCredit {
 	byURL := map[string]*prCredit{}
 	var out []*prCredit
@@ -105,8 +111,8 @@ func creditPRs(folders map[string][]*run, runs []*run) []*prCredit {
 		if credit == nil {
 			work := r
 			if r.Stage > 0 {
-				if found := workAt(folders, r.Machine, r.Dir, r.started); found != nil {
-					work = found
+				if work = workAt(folders, r.Machine, r.Dir, r.started); work == nil {
+					continue
 				}
 			}
 			credit = &prCredit{run: work}

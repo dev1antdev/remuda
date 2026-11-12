@@ -33,9 +33,12 @@ type Defaults struct {
 }
 
 // Hit is a setting or a pane on a retirement's way, on a machine; no names, so a viewer link reads no recipe's or
-// project's — the page names a pane by its workspace, and a form says its own.
+// project's — the page names a pane by its workspace, and a form says its own. The retirement goes by its key, its
+// agent, model and mode, which the roster's table answers.
 type Hit struct {
-	Retirement
+	Agent   string `json:"agent"`
+	Model   string `json:"model"`
+	Mode    string `json:"mode,omitempty"`
 	Kind    string `json:"kind"` // recipe | schedule | project | stage | pane
 	ID      string `json:"id"`   // the setting's id, or the pane's
 	Machine string `json:"machine"`
@@ -59,7 +62,7 @@ func Find(table []Retirement, settings []Setting, panes []Pane, defaults map[str
 		for _, machine := range where {
 			for _, r := range table {
 				if r.Applies(s.Agent, settingModel(s, defaults[machine]), settingFast(s, defaults[machine])) {
-					hits = append(hits, Hit{Retirement: r, Kind: s.Kind, ID: s.ID, Machine: machine, Failing: r.Failing(now)})
+					hits = append(hits, r.hit(s.Kind, s.ID, machine, now))
 				}
 			}
 		}
@@ -67,11 +70,16 @@ func Find(table []Retirement, settings []Setting, panes []Pane, defaults map[str
 	for _, p := range panes {
 		for _, r := range table {
 			if r.Applies(p.Agent, p.Model, p.Speed == "fast") {
-				hits = append(hits, Hit{Retirement: r, Kind: "pane", ID: p.Pane, Machine: p.Machine, Failing: r.Failing(now)})
+				hits = append(hits, r.hit("pane", p.Pane, p.Machine, now))
 			}
 		}
 	}
 	return hits
+}
+
+// hit is what of a kind is on the retirement's way on a machine, the retirement named by its key
+func (r Retirement) hit(kind, id, machine string, now time.Time) Hit {
+	return Hit{Agent: r.Agent, Model: r.Model, Mode: r.Mode, Kind: kind, ID: id, Machine: machine, Failing: r.Failing(now)}
 }
 
 // settingModel is the model a setting starts on there: a --model of its arguments, its own, else the machine's default

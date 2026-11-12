@@ -1,34 +1,41 @@
 // The zoo's foot: a line telling the day — answers, waits, spend, merges, who worked longest, from the standup since
-// midnight read every minute while the zoo is in view — running along when it is longer than the screen is wide, and the
-// switch of the creatures' voices beside it.
+// midnight read every DAY_EVERY while the zoo is in view and on coming back into view — running along when it is longer
+// than the screen is wide, and the switch of the creatures' voices beside it.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { dayDue } from "@/features/roster/zooLife";
 import { fetchStandup, type Standup } from "@/features/standup/api";
 import { t } from "@/lib/i18n";
-import { pageVisible } from "@/lib/visibility";
+import { pageVisible, watchVisibility } from "@/lib/visibility";
 import { Icon, Tip } from "@/ui";
 
-// DAY_EVERY is how often the day's figures are read again
-export const DAY_EVERY = 60_000;
+// LOOK_EVERY is how often the foot looks whether the day is due a reading
+const LOOK_EVERY = 60_000;
 
 // useDay is the standup since this device's midnight, kept fresh while the page is in view
 export function useDay(): Standup | null {
   const [day, setDay] = useState<Standup | null>(null);
   useEffect(() => {
     let stopped = false;
+    let readAt = 0;
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const read = () => {
-      if (!pageVisible()) return;
+      if (!pageVisible() || !dayDue(readAt, Date.now())) return;
+      readAt = Date.now();
       fetchStandup(undefined, tz).then(
         (standup) => !stopped && setDay(standup),
-        () => undefined,
+        () => {
+          readAt = 0;
+        },
       );
     };
     read();
-    const id = setInterval(read, DAY_EVERY);
+    const id = setInterval(read, LOOK_EVERY);
+    const unwatch = watchVisibility(read);
     return () => {
       stopped = true;
       clearInterval(id);
+      unwatch();
     };
   }, []);
   return day;

@@ -7,7 +7,7 @@ import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { useRoster } from "@/features/roster/useRoster";
 import { PortalHost } from "@/ui";
-import { DEFAULT_WALL, tileKey, type WallPrefs } from "@/features/roster/wall";
+import { DEFAULT_WALL, spinsFor, tileKey, type WallPrefs } from "@/features/roster/wall";
 import { useAllPanes } from "./current";
 import { popOutWindow } from "./pip";
 import { app, type Selection } from "./store";
@@ -35,7 +35,7 @@ function Popped({ popout }: { popout: Selection }) {
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const [wall] = usePref<WallPrefs>("wall", DEFAULT_WALL);
   const now = useClock(machines);
-  const step = useSpinner(moving(machines));
+  const step = useSpinner(spinsFor(wall.view, moving(machines)));
   const located = panes.find((x) => x.machine.id === popout.machineId && x.pane.id === popout.paneId);
   return (
     <div className="popout-body">

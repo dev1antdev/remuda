@@ -1,7 +1,6 @@
 package timelapse
 
 import (
-	"log"
 	"sync"
 	"time"
 
@@ -12,11 +11,13 @@ import (
 type take struct {
 	meta      Meta
 	frames    []frame
+	held      int           // bytes of the frames' rows, a row shared between frames counted once
 	every     time.Duration // the pace, Interval doubled at every thinning
-	askedAt   time.Time     // the snapshot the last read was asked at: the pace goes by the snapshots' clock
+	askedAt   time.Time     // when the last read was asked for
 	queued    bool          // a read of the screen waits in the machine's queue
 	restingAt time.Time     // when the pane stopped working; zero while it works
 	restedAs  string        // the status it rests in
+	seenAt    time.Time     // when the last snapshot that showed the pane was taken
 	savedAt   time.Time     // the last checkpoint, else the start
 	written   bool          // the recording is on the disk, or dropped: nothing more lands in it
 	writing   sync.Mutex    // one write of the take at a time, taken before the recorder's own lock
@@ -33,7 +34,6 @@ const (
 // job is one thing a machine's reader does for a take: read its screen, write what it has so far, or write it whole.
 type job struct {
 	kind   jobKind
-	pane   string
 	take   *take
 	reason string // a finish's: why the turn ended
 }
@@ -42,17 +42,32 @@ func key(machineID, paneID string) string { return machineID + "|" + paneID }
 
 // Observe hears every snapshot: a working agent pane is recorded — a read of its screen queued when one is due — and
 // a recorded one that stopped is read once more and, unless it works again within Grace, written; a pane gone or no
-// longer an agent's is written at once. Nothing here waits on a machine: the reads run in the machine's own reader.
+// longer an agent's is written at once, and so is one last seen Away before this snapshot (its machine was out of
+// reach), the pane at work again starting a turn of its own. Nothing here waits on a machine: the reads run in the
+// machine's own reader. The snapshot is kept for Tick, which goes on reading between snapshots (tick.go).
 func (r *Recorder) Observe(machineID string, snap *herdr.Snapshot, at time.Time) {
 	if snap == nil {
 		return
 	}
-	var jobs []job
 	r.mu.Lock()
-	if r.off || r.scratch || r.closed {
-		r.mu.Unlock()
-		return
+	if r.seen == nil {
+		r.seen = map[string]seenSnap{}
 	}
+	last := seenSnap{snap: snap, at: at}
+	r.seen[machineID] = last
+	jobs := r.observeLocked(machineID, last, at)
+	r.mu.Unlock()
+	r.dispatch(jobs)
+}
+
+// observeLocked is the work on a machine's last snapshot as it stands at at, answering the jobs for its reader; r.mu
+// held.
+func (r *Recorder) observeLocked(machineID string, last seenSnap, at time.Time) []job {
+	if r.off || r.scratch || r.closed {
+		return nil
+	}
+	snap := last.snap
+	var jobs []job
 	seen := map[string]bool{}
 	for i := range snap.Panes {
 		pane := &snap.Panes[i]
@@ -62,44 +77,70 @@ func (r *Recorder) Observe(machineID string, snap *herdr.Snapshot, at time.Time)
 		k := key(machineID, pane.PaneID)
 		seen[k] = true
 		tk := r.live[k]
+		if tk != nil && last.at.Sub(tk.seenAt) >= Away {
+			delete(r.live, k)
+			jobs = append(jobs, job{kind: finishJob, take: tk, reason: EndedAway})
+			tk = nil
+		}
 		if pane.AgentStatus == herdr.StatusWorking {
 			if tk == nil {
 				tk = r.begin(machineID, snap, pane, at)
 				r.live[k] = tk
 			}
+			tk.seenAt = last.at
 			tk.restingAt = time.Time{}
 			tk.grow(snap.PaneSize(pane.PaneID))
 			if !tk.queued && at.Sub(tk.askedAt) >= tk.every-time.Second {
 				tk.queued, tk.askedAt = true, at
-				jobs = append(jobs, job{kind: sampleJob, pane: pane.PaneID, take: tk})
+				jobs = append(jobs, job{kind: sampleJob, take: tk})
 			}
 			if at.Sub(tk.savedAt) >= CheckpointEvery {
 				tk.savedAt = at
-				jobs = append(jobs, job{kind: checkpointJob, pane: pane.PaneID, take: tk})
+				jobs = append(jobs, job{kind: checkpointJob, take: tk})
 			}
 			continue
 		}
 		if tk == nil {
 			continue
 		}
+		tk.seenAt = last.at
 		tk.restedAs = pane.AgentStatus
 		switch {
 		case tk.restingAt.IsZero():
 			tk.restingAt = at
-			jobs = append(jobs, job{kind: sampleJob, pane: pane.PaneID, take: tk}) // the screen it stopped on
+			jobs = append(jobs, job{kind: sampleJob, take: tk}) // the screen it stopped on
 		case at.Sub(tk.restingAt) >= Grace:
 			delete(r.live, k)
-			jobs = append(jobs, job{kind: finishJob, pane: pane.PaneID, take: tk, reason: tk.restedAs})
+			jobs = append(jobs, job{kind: finishJob, take: tk, reason: tk.restedAs})
 		}
 	}
 	for k, tk := range r.live {
 		if tk.meta.Machine == machineID && !seen[k] {
 			delete(r.live, k)
-			jobs = append(jobs, job{kind: finishJob, pane: tk.meta.Pane, take: tk, reason: EndedGone})
+			jobs = append(jobs, job{kind: finishJob, take: tk, reason: EndedGone})
 		}
 	}
-	r.mu.Unlock()
-	r.dispatch(machineID, jobs)
+	return jobs
+}
+
+// awayLocked writes the turns of a machine not heard from for Away, as they were when it was last seen: a recording
+// never spans the machine's absence, nor waits in memory for its return; r.mu held.
+func (r *Recorder) awayLocked(machineID string) []job {
+	if r.off || r.scratch || r.closed {
+		return nil
+	}
+	var jobs []job
+	for k, tk := range r.live {
+		if tk.meta.Machine == machineID {
+			delete(r.live, k)
+			reason := EndedAway
+			if !tk.restingAt.IsZero() {
+				reason = tk.restedAs
+			}
+			jobs = append(jobs, job{kind: finishJob, take: tk, reason: reason})
+		}
+	}
+	return jobs
 }
 
 // begin is a new take of a pane seen working, named after the moment.
@@ -117,7 +158,7 @@ func (r *Recorder) begin(machineID string, snap *herdr.Snapshot, pane *herdr.Pan
 		meta.Dir = clip(pane.Dir())
 		meta.Folder = meta.Dir
 	}
-	return &take{meta: meta, every: Interval, savedAt: at}
+	return &take{meta: meta, every: Interval, savedAt: at, seenAt: at}
 }
 
 // grow keeps the widest grid the pane had, so no frame is drawn narrower than it was
@@ -126,127 +167,77 @@ func (tk *take) grow(cols, rows int) {
 	tk.meta.Rows = max(tk.meta.Rows, rows)
 }
 
-// dispatch hands the jobs to the machine's reader, starting it when none runs: one reader per machine, in order.
-func (r *Recorder) dispatch(machineID string, jobs []job) {
-	if len(jobs) == 0 {
-		return
-	}
-	r.mu.Lock()
-	r.queue[machineID] = append(r.queue[machineID], jobs...)
-	start := !r.running[machineID]
-	r.running[machineID] = true
-	r.mu.Unlock()
-	if start {
-		r.run(func() { r.drain(machineID) })
-	}
-}
-
-func (r *Recorder) drain(machineID string) {
-	for {
-		r.mu.Lock()
-		waiting := r.queue[machineID]
-		if len(waiting) == 0 {
-			r.running[machineID] = false
-			r.mu.Unlock()
-			return
-		}
-		next := waiting[0]
-		r.queue[machineID] = waiting[1:]
-		r.mu.Unlock()
-		switch next.kind {
-		case sampleJob:
-			r.sample(machineID, next)
-		case checkpointJob:
-			r.save(next.take, EndedCut, false)
-		case finishJob:
-			r.save(next.take, next.reason, true)
-		}
-	}
-}
-
-// sample reads the pane's screen and keeps it as a frame when it changed; a failed read is logged once a minute per machine
-func (r *Recorder) sample(machineID string, jb job) {
-	text, err := r.in.Screen(machineID, jb.pane)
-	now := r.now()
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	tk := jb.take
-	tk.queued = false
-	if err != nil {
-		if now.Sub(r.failed[machineID]) >= time.Minute {
-			r.failed[machineID] = now
-			log.Printf("timelapse: reading %s on %s: %v", jb.pane, machineID, err)
-		}
-		return
-	}
-	if tk.written || len(text) > MaxScreen {
-		return
-	}
-	tk.add(now, text)
-}
-
-// save writes the take: a checkpoint of what it has so far, or the turn whole once it ended — dropped, with any
-// checkpoint, when it was shorter than MinTurn or holds a single screen
-func (r *Recorder) save(tk *take, reason string, final bool) {
-	tk.writing.Lock()
-	defer tk.writing.Unlock()
-	r.mu.Lock()
-	if tk.written {
-		r.mu.Unlock()
-		return
-	}
-	end := tk.restingAt
-	if end.IsZero() || !final {
-		end = r.now()
-	}
-	frames := tk.frames
-	if n := len(frames); n > 0 && frames[n-1].at.After(end) {
-		end = frames[n-1].at
-	}
-	meta := tk.meta
-	if final {
-		tk.written = true
-	}
-	r.mu.Unlock()
-	meta.End, meta.Ended, meta.Count = end, reason, len(frames)
-	if len(frames) < 2 || end.Sub(meta.Start) < MinTurn {
-		if final {
-			r.remove(meta.ID)
-		}
-		return
-	}
-	if err := r.write(Recording{Meta: meta, Frames: encode(frames, meta.Start)}); err != nil {
-		log.Printf("timelapse: writing %s: %v", meta.ID, err)
-	}
-}
-
 // Forget writes the turns a removed machine's panes were in: the machine is gone, what they did stays.
 func (r *Recorder) Forget(machineID string) {
 	var jobs []job
 	r.mu.Lock()
+	delete(r.seen, machineID)
 	for k, tk := range r.live {
 		if tk.meta.Machine == machineID {
 			delete(r.live, k)
-			jobs = append(jobs, job{kind: finishJob, pane: tk.meta.Pane, take: tk, reason: EndedGone})
+			jobs = append(jobs, job{kind: finishJob, take: tk, reason: EndedGone})
 		}
 	}
 	r.mu.Unlock()
-	r.dispatch(machineID, jobs)
+	r.dispatch(jobs)
 }
 
-// Close writes every turn still going as stopped, and records nothing more: remuda is stopping.
+// Close writes every turn still going as stopped, and every one that ended and waits in a reader's queue — or is being
+// written that moment — as it ended, since a reader's goroutine does not outlive the process; then it records nothing
+// more, and leaves the readers nothing more to read: remuda is stopping.
 func (r *Recorder) Close() {
 	r.mu.Lock()
 	r.closed = true
-	takes := make([]*take, 0, len(r.live))
+	var finals []job
 	for k, tk := range r.live {
-		takes = append(takes, tk)
+		finals = append(finals, job{kind: finishJob, take: tk, reason: EndedStopped})
 		delete(r.live, k)
 	}
-	r.mu.Unlock()
-	for _, tk := range takes {
-		r.save(tk, EndedStopped, true)
+	for machineID, waiting := range r.queue {
+		for _, jb := range waiting {
+			if jb.kind == finishJob {
+				finals = append(finals, jb)
+			}
+		}
+		delete(r.queue, machineID)
 	}
+	for _, jb := range r.busy {
+		if jb.kind == finishJob {
+			finals = append(finals, jb) // save waits for the write under way, then finds the take written
+		}
+	}
+	r.mu.Unlock()
+	for _, jb := range finals {
+		r.save(jb.take, jb.reason, true)
+	}
+}
+
+// dropLocked takes every turn off the recorder — those going, those waiting in a reader's queue and the one each reader
+// is busy with — so nothing more of them lands on the disk, and answers each once; r.mu is held
+func (r *Recorder) dropLocked() []*take {
+	var dropped []*take
+	once := map[*take]bool{}
+	drop := func(tk *take) {
+		if !once[tk] {
+			once[tk] = true
+			tk.written = true
+			dropped = append(dropped, tk)
+		}
+	}
+	for k, tk := range r.live {
+		drop(tk)
+		delete(r.live, k)
+	}
+	for machineID, waiting := range r.queue {
+		for _, jb := range waiting {
+			drop(jb.take)
+		}
+		delete(r.queue, machineID)
+	}
+	for _, jb := range r.busy {
+		drop(jb.take)
+	}
+	return dropped
 }
 
 // isLive says whether a recording is a turn still going, whose checkpoint no listing shows; r.mu is held

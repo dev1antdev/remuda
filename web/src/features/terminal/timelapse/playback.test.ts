@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advance, FRAME_MS, frameAt, gifDelays, HOLD_MS, MIN_DELAY, playedFor, screensOf, stepTo } from "./playback";
+import { advance, FRAME_MS, frameAt, gifDelays, HOLD_MS, MIN_DELAY, playedFor, playerKey, screensOf, screenText, stepTo } from "./playback";
 
 const times = [0, 4000, 8000, 60_000, 64_000];
 
@@ -11,7 +11,14 @@ describe("screensOf", () => {
       { at: 8000, lines: 2, rows: [] },
       { at: 9000, lines: 4, rows: [{ line: 3, text: "tail" }, { line: 9, text: "past the screen" }] },
     ]);
-    expect(screens).toEqual(["\x1b[1mhead\x1b[0m\nstep 1\n> ", "\x1b[1mhead\x1b[0m\nstep 2\n> ", "\x1b[1mhead\x1b[0m\nstep 2", "\x1b[1mhead\x1b[0m\nstep 2\n\ntail"]);
+    expect(screens.map(screenText)).toEqual(["\x1b[1mhead\x1b[0m\nstep 1\n> ", "\x1b[1mhead\x1b[0m\nstep 2\n> ", "\x1b[1mhead\x1b[0m\nstep 2", "\x1b[1mhead\x1b[0m\nstep 2\n\ntail"]);
+    expect(screenText(undefined)).toBe("");
+  });
+  it("keeps a row once however many frames show it", () => {
+    const wide = "x".repeat(10_000);
+    const screens = screensOf(Array.from({ length: 50 }, (_, i) => ({ at: i * 4000, lines: 2, rows: i === 0 ? [{ line: 0, text: wide }, { line: 1, text: "0" }] : [{ line: 1, text: String(i) }] })));
+    expect(screens.every((rows) => rows[0] === wide && rows.length === 2)).toBe(true);
+    expect(screens.every((rows) => typeof rows !== "string")).toBe(true);
   });
 });
 
@@ -56,5 +63,16 @@ describe("gifDelays and playedFor", () => {
   it("says how long a play lasts", () => {
     expect(playedFor(times, 60_000, 30)).toBe(2000);
     expect(playedFor(times, 60_000, "frame")).toBe(4 * FRAME_MS);
+  });
+});
+
+describe("playerKey", () => {
+  it("plays, pauses and steps on the screen, a button keeping its Space and a field every key", () => {
+    expect([" ", "ArrowLeft", "ArrowRight", "k"].map((key) => playerKey(key, false, "screen"))).toEqual(["toggle", -1, 1, null]);
+    expect([" ", "ArrowLeft"].map((key) => playerKey(key, false, "button"))).toEqual([null, -1]);
+    expect([" ", "ArrowRight"].map((key) => playerKey(key, false, "field"))).toEqual([null, null]);
+  });
+  it("leaves a key held with Alt, Ctrl or ⌘ to the browser", () => {
+    expect([" ", "ArrowLeft", "ArrowRight"].map((key) => playerKey(key, true, "screen"))).toEqual([null, null, null]);
   });
 });

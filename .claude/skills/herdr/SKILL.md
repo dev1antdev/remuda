@@ -44,7 +44,10 @@ A refusal comes back as `{"error":{"code":"…","message":"…"}}` — a
 Methods remuda uses: `ping`, `session.snapshot`, `events.subscribe`, `agent.start`,
 `agent.prompt`, `pane.read`, `pane.send_text`, `pane.send_keys`,
 `workspace.create`, `workspace.close`, `workspace.rename`,
-`tab.create`, `tab.close`, `tab.rename`, `worktree.create`. The pane
+`tab.create`, `tab.close`, `tab.rename`, `worktree.create`, and the
+writes into herdr's own UI (`internal/mirror`, source `remuda`):
+`pane.report_metadata`, `workspace.report_metadata`,
+`notification.show`. The pane
 fields that matter are in `herdr.PaneInfo` (`agent_status`:
 blocked | done | idle | unknown | working; `agent_session` for the
 transcript). Error codes remuda handles by name: `agent_blocked` (a menu

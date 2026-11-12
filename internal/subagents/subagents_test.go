@@ -137,9 +137,9 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 	t.Fatalf("waited in vain for %s", what)
 }
 
-func TestCountOfSumsByStatus(t *testing.T) {
+func TestCountOfCountsTheOnesAtWork(t *testing.T) {
 	got := CountOf(agents(transcript.SubagentWorking, transcript.SubagentDone, transcript.SubagentWorking, transcript.SubagentQuiet, "odd"))
-	if got != (Count{Working: 2, Quiet: 1, Done: 1}) {
+	if got != (Count{Working: 2}) {
 		t.Fatalf("count: %+v", got)
 	}
 	if CountOf(nil) != (Count{}) {
@@ -312,13 +312,18 @@ func TestOnChangeOnlyWhenACountMoves(t *testing.T) {
 	}
 	f.set("local|w1:p1", agents(transcript.SubagentWorking, transcript.SubagentDone)...)
 	read()
-	if changes() != 2 || *tr.Count("local", "w1:p1") != (Count{Working: 1, Done: 1}) {
+	if changes() != 2 || *tr.Count("local", "w1:p1") != (Count{Working: 1}) {
 		t.Fatalf("a subagent finishing moves the count: %d %+v", changes(), tr.Count("local", "w1:p1"))
+	}
+	f.set("local|w1:p1", agents(transcript.SubagentDone, transcript.SubagentQuiet)...)
+	read()
+	if changes() != 3 || tr.Count("local", "w1:p1") != nil {
+		t.Fatalf("a conversation with none at work reads as nil: %d %+v", changes(), tr.Count("local", "w1:p1"))
 	}
 	f.set("local|w1:p1")
 	read()
-	if changes() != 3 || tr.Count("local", "w1:p1") != nil {
-		t.Fatalf("a conversation with none left reads as nil: %d %+v", changes(), tr.Count("local", "w1:p1"))
+	if changes() != 3 {
+		t.Fatalf("none listed is the same nil count: %d", changes())
 	}
 }
 
@@ -327,7 +332,7 @@ func TestAFailedReadKeepsTheLastCountAndComplainsOnceAnHour(t *testing.T) {
 	log.SetOutput(&logged)
 	defer log.SetOutput(os.Stderr)
 	f := newFiles()
-	f.set("gog|w1:p1", agents(transcript.SubagentQuiet)...)
+	f.set("gog|w1:p1", agents(transcript.SubagentWorking)...)
 	tr, c, changes := tracker(f)
 	read := func(d time.Duration) {
 		c.pass(d)
@@ -342,7 +347,7 @@ func TestAFailedReadKeepsTheLastCountAndComplainsOnceAnHour(t *testing.T) {
 	f.mu.Unlock()
 	read(WorkingEvery)
 	read(WorkingEvery)
-	if got := tr.Count("gog", "w1:p1"); got == nil || *got != (Count{Quiet: 1}) || changes() != 1 {
+	if got := tr.Count("gog", "w1:p1"); got == nil || *got != (Count{Working: 1}) || changes() != 1 {
 		t.Fatalf("a failed read lost the count: %+v, %d changes", got, changes())
 	}
 	if n := strings.Count(logged.String(), "cannot be read"); n != 1 {
@@ -357,7 +362,7 @@ func TestAFailedReadKeepsTheLastCountAndComplainsOnceAnHour(t *testing.T) {
 func TestAClosedPaneAndARemovedMachineAreForgotten(t *testing.T) {
 	f := newFiles()
 	f.set("local|w1:p1", agents(transcript.SubagentWorking)...)
-	f.set("gog|w2:p1", agents(transcript.SubagentDone)...)
+	f.set("gog|w2:p1", agents(transcript.SubagentWorking)...)
 	tr, c, _ := tracker(f)
 	tr.Touch()
 	tr.Observe("local", snapshot(claude("w1:p1", herdr.StatusWorking)))
@@ -386,7 +391,7 @@ func TestAClosedPaneAndARemovedMachineAreForgotten(t *testing.T) {
 
 func TestAPaneNoLongerClaudeCodesIsDropped(t *testing.T) {
 	f := newFiles()
-	f.set("local|w1:p1", agents(transcript.SubagentDone)...)
+	f.set("local|w1:p1", agents(transcript.SubagentWorking)...)
 	tr, _, _ := tracker(f)
 	tr.Touch()
 	tr.Observe("local", snapshot(claude("w1:p1", herdr.StatusIdle)))

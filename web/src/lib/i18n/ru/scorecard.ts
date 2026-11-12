@@ -10,11 +10,12 @@ export const scorecard: Dictionary = {
     "какая модель лучше справляется с вашей работой: завершённые прогоны, одобрения с первого раза, слитые pull request’ы, оставленные на арене, цена и время",
   "From remuda's own records: the agents started on tasks and in arenas, the verdicts you gave in the Changes lens on their worktrees, the pull requests they opened and whether those merged. A share becomes a percentage from {n} runs on; before that it says how many, and no best is marked.":
     "По собственным записям remuda: агенты, запущенные на задачах и на аренах, вердикты, которые вы вынесли в линзе изменений на их worktree, открытые ими pull request’ы и слиты ли они. Доля становится процентом начиная с {n} прогонов; до того показано, сколько из скольких, и лучший не отмечается.",
-  "{n} verdicts of the period were given on folders no task run worked in: they count for no model.": [
-    "{n} вердикт за период вынесен в папке, где не работал ни один прогон задачи: он не засчитан ни одной модели.",
-    "{n} вердикта за период вынесены в папках, где не работал ни один прогон задачи: они не засчитаны ни одной модели.",
-    "{n} вердиктов за период вынесены в папках, где не работал ни один прогон задачи: они не засчитаны ни одной модели.",
+  "{n} verdicts of the period were given on folders no task run of the period worked in: they count for no model.": [
+    "{n} вердикт за период вынесен в папке, где не работал ни один прогон задачи за этот период: он не засчитан ни одной модели.",
+    "{n} вердикта за период вынесены в папках, где не работал ни один прогон задачи за этот период: они не засчитаны ни одной модели.",
+    "{n} вердиктов за период вынесены в папках, где не работал ни один прогон задачи за этот период: они не засчитаны ни одной модели.",
   ],
+  "{n} runs still at work, not counted yet": ["{n} прогон ещё в работе и пока не засчитан", "{n} прогона ещё в работе и пока не засчитаны", "{n} прогонов ещё в работе и пока не засчитаны"],
   "No agent was started on a task or in an arena in this period. Start one from a task, or run an arena, and its model shows here.":
     "За этот период ни один агент не запускался на задаче или на арене. Запустите агента из задачи или устройте арену — и его модель появится здесь.",
   "Approved first time": "Одобрены с первого раза",

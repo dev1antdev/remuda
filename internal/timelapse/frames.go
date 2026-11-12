@@ -3,6 +3,7 @@ package timelapse
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"slices"
 	"strings"
 	"time"
 )
@@ -14,8 +15,9 @@ type frame struct {
 }
 
 // add keeps the screen when it differs from the last frame, its unchanged rows shared with that frame's and the changed
-// ones copied out of the read (a row cut from it would keep the whole read alive); past MaxFrames every other frame
-// goes, the first and the last staying, and the pace halves
+// ones copied out of the read (a row cut from it would keep the whole read alive); past MaxFrames, or MaxHeld bytes
+// held — a screen that scrolls moves every row — every other frame goes, the first and the last staying, and the pace
+// halves
 func (tk *take) add(at time.Time, text string) {
 	rows := strings.Split(text, "\n")
 	var prev []string
@@ -30,19 +32,22 @@ func (tk *take) add(at time.Time, text string) {
 		}
 		same = false
 		rows[i] = strings.Clone(row)
+		tk.held += len(row)
 	}
 	if same {
 		return
 	}
 	tk.frames = append(tk.frames, frame{at: at, rows: rows})
-	if len(tk.frames) > MaxFrames {
-		tk.frames = thin(tk.frames)
+	if len(tk.frames) > MaxFrames || tk.held > MaxHeld {
+		tk.frames, tk.held = thin(tk.frames)
 		tk.every *= 2
 	}
 }
 
-// thin keeps every other frame, the first and the last always
-func thin(frames []frame) []frame {
+// thin keeps every other frame, the first and the last always, and answers the bytes they hold: a kept row equal to
+// the one in its place a kept frame before is shared with it again (a screen flipping between two looks kept a copy
+// per frame), in rows of the frame's own, since a checkpoint may be reading the old ones that moment
+func thin(frames []frame) ([]frame, int) {
 	kept := make([]frame, 0, len(frames)/2+2)
 	for i := 0; i < len(frames); i += 2 {
 		kept = append(kept, frames[i])
@@ -50,7 +55,21 @@ func thin(frames []frame) []frame {
 	if last := frames[len(frames)-1]; kept[len(kept)-1].at != last.at {
 		kept = append(kept, last)
 	}
-	return kept
+	held := 0
+	var prev []string
+	for i := range kept {
+		rows := slices.Clone(kept[i].rows)
+		for line, row := range rows {
+			if line < len(prev) && prev[line] == row {
+				rows[line] = prev[line]
+				continue
+			}
+			held += len(row)
+		}
+		kept[i].rows = rows
+		prev = rows
+	}
+	return kept, held
 }
 
 // encode turns the frames into the file's: each the rows that differ from the frame before

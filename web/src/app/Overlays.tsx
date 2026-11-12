@@ -140,6 +140,7 @@ export default function Overlays() {
       {dialog?.kind === "tab" && (
         <NewTabDialog
           session={dialog.session}
+          machine={dialog.machineId}
           agents={agents}
           onClose={actions.closeDialog}
           onCreate={async (name, agent, extras) => landOn(dialog.machineId, await createTab({ machine: dialog.machineId, workspace: dialog.session.id, name, agent, ...extras }))}
@@ -148,6 +149,7 @@ export default function Overlays() {
       {dialog?.kind === "worktree" && (
         <NewWorktreeDialog
           session={dialog.session}
+          machine={dialog.machineId}
           agents={agents}
           onClose={actions.closeDialog}
           onCreate={async (branch, base, name, agent, extras) =>

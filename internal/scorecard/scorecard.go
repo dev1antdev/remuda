@@ -39,12 +39,13 @@ type Row struct {
 	Model           string    `json:"model"`              // the meter's name for it, "Opus 4.5"; "" when none was read
 	ModelID         string    `json:"model_id,omitempty"` // what the agent's --model takes for it, "" when not known
 	Runs            int       `json:"runs"`
-	Finished        Share     `json:"finished"`       // runs whose agent answered, of the runs
-	FirstApproved   Share     `json:"first_approved"` // approved at the first review, of the work runs reviewed
-	Rejected        int       `json:"rejected"`       // rejected at the first review, approved later or not
-	Approved        int       `json:"approved"`       // approved at any review
-	Merged          Share     `json:"merged"`         // pull requests merged, of the ones its runs opened
-	Kept            Share     `json:"kept"`           // arena lanes kept, of its lanes in decided arenas
+	UnderWay        int       `json:"under_way,omitempty"` // runs whose agent has not answered yet: in Runs alone, not in the shares or means
+	Finished        Share     `json:"finished"`            // runs whose agent answered, of the runs no longer under way
+	FirstApproved   Share     `json:"first_approved"`      // approved at the first review, of the work runs reviewed
+	Rejected        int       `json:"rejected"`            // rejected at the first review, approved later or not
+	Approved        int       `json:"approved"`            // approved at any review
+	Merged          Share     `json:"merged"`              // pull requests merged, of the ones its runs opened
+	Kept            Share     `json:"kept"`                // arena lanes kept, of its lanes in decided arenas
 	CostPerRun      Mean      `json:"cost_per_run"`
 	CostPerApproved Mean      `json:"cost_per_approved"` // what the reviewed runs cost, over the approved ones
 	MinutesPerRun   Mean      `json:"minutes_per_run"`
@@ -74,7 +75,7 @@ type rowKey struct{ agent, model string }
 // tally sums one row while the records are read.
 type tally struct {
 	key                      rowKey
-	runs, finished           int
+	runs, underWay, finished int
 	cost                     float64
 	costed                   int
 	took, timed              int
@@ -103,6 +104,11 @@ func Build(rec Records, since time.Time) Card {
 	for _, r := range runs {
 		t := of(r.Agent, r.Model)
 		t.runs++
+		t.last = later(t.last, r.started)
+		if r.underWay() {
+			t.underWay++
+			continue
+		}
 		if r.Finished != "" {
 			t.finished++
 		}
@@ -114,7 +120,6 @@ func Build(rec Records, since time.Time) Card {
 			t.took += r.Took
 			t.timed++
 		}
-		t.last = later(t.last, r.started)
 	}
 	folders := workRuns(runs)
 	card.Verdicts, card.Unplaced = placeVerdicts(folders, rec.Verdicts, since)
@@ -198,7 +203,8 @@ func (t *tally) row() Row {
 	return Row{
 		Agent: t.key.agent, Model: t.key.model, ModelID: cliModel(t.key.model),
 		Runs:            t.runs,
-		Finished:        share(t.finished, t.runs),
+		UnderWay:        t.underWay,
+		Finished:        share(t.finished, t.runs-t.underWay),
 		FirstApproved:   share(t.firstApproved, t.reviewed),
 		Rejected:        t.rejected,
 		Approved:        t.approved,

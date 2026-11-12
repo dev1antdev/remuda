@@ -11,13 +11,14 @@ const excerptContext = 40
 // bullets stand in for a secret's body.
 const bullets = "••••••••"
 
-// mask is a secret as an excerpt shows it: the kind's prefix, bullets, and the last four bytes of a long one.
-func mask(secret string, keep int) string {
+// mask is a secret as an excerpt shows it: the kind's prefix, bullets, and the last four bytes of a long one unless
+// noTail says its end is the secret's too (a private key's body).
+func mask(secret string, keep int, noTail bool) string {
 	if keep >= len(secret) {
 		return secret // a private key's header, which gives the key away but holds none of it
 	}
 	tail := ""
-	if len(secret)-keep >= 32 {
+	if len(secret)-keep >= 32 && !noTail {
 		tail = secret[len(secret)-4:]
 	}
 	return secret[:keep] + bullets + tail
@@ -49,7 +50,7 @@ func excerpt(line string, hits []hit, focus int) string {
 			continue
 		}
 		middle.WriteString(line[at:other.start])
-		middle.WriteString(mask(line[other.start:other.end], other.keep))
+		middle.WriteString(mask(line[other.start:other.end], other.keep, other.noTail))
 		at = other.end
 	}
 	middle.WriteString(line[at:to])

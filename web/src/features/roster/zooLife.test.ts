@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Standup } from "@/features/standup/api";
-import { GAZE_MAX, TUNES, gaze, happenings, joinsApplause, questionBubble, tickerFacts, voiceOf, workedWords, type Seen } from "./zooLife";
+import { DAY_EVERY, GAZE_MAX, PUFF_MS, TUNES, carried, dayDue, gaze, happenings, joinsApplause, questionBubble, sameQuestions, tickerFacts, voiceOf, withPuffs, workedWords, type Seen } from "./zooLife";
 
 const seen = (entries: [string, Seen][]) => new Map(entries);
 
@@ -28,6 +28,24 @@ describe("happenings", () => {
   it("takes a question asked again for no new one", () => {
     const blocked = seen([["b", { display: "blocked", pr: "" }]]);
     expect(happenings(blocked, blocked).asked).toEqual([]);
+  });
+
+  it("sets off no fireworks for an old merge when remuda restarts and reads the request again", () => {
+    const url = "https://github.com/o/r/pull/15";
+    const merged = seen([["c", { display: "idle", pr: "MERGED", url }]]);
+    const unread = carried(merged, seen([["c", { display: "idle", pr: "", url }]]));
+    expect(unread.get("c")?.pr).toBe("MERGED");
+    expect(happenings(unread, carried(unread, seen([["c", { display: "idle", pr: "MERGED", url }]]))).merged).toEqual([]);
+
+    // the link itself gone a moment, or a page that never knew the state: a merge read later is none it saw happen
+    const nameless = carried(merged, seen([["c", { display: "idle", pr: "" }]]));
+    const named = carried(nameless, seen([["c", { display: "idle", pr: "", url }]]));
+    expect(happenings(named, carried(named, seen([["c", { display: "idle", pr: "MERGED", url }]]))).merged).toEqual([]);
+
+    // a request seen open and then merged, whatever came between
+    const open = seen([["c", { display: "working", pr: "OPEN", url }]]);
+    const between = carried(open, seen([["c", { display: "working", pr: "", url }]]));
+    expect(happenings(between, carried(between, seen([["c", { display: "idle", pr: "MERGED", url }]]))).merged).toEqual(["c"]);
   });
 });
 
@@ -100,5 +118,34 @@ describe("voiceOf", () => {
     const voices = (["claude", "codex", "gemini", "kimi", "other"] as const).map(voiceOf).map((v) => `${v.wave}@${v.base}`);
     expect(new Set(voices).size).toBe(voices.length);
     expect(TUNES.merge.length).toBeGreaterThan(TUNES.finish.length);
+  });
+});
+
+describe("dayDue", () => {
+  it("reads the day at once, then not again for minutes: the standup reads every agent's whole conversation", () => {
+    expect(DAY_EVERY).toBeGreaterThanOrEqual(5 * 60_000);
+    expect(dayDue(0, 1_000)).toBe(true);
+    expect(dayDue(1_000, 1_000 + 60_000)).toBe(false);
+    expect(dayDue(1_000, 1_000 + DAY_EVERY)).toBe(true);
+  });
+});
+
+describe("sameQuestions", () => {
+  it("tells an unchanged reading of the questions from a new one", () => {
+    const a = new Map([["local|w1:p1", "Bash command · rm -rf build"]]);
+    expect(sameQuestions(a, new Map(a))).toBe(true);
+    expect(sameQuestions(a, new Map([["local|w1:p1", "Bash command · ls"]]))).toBe(false);
+    expect(sameQuestions(a, new Map())).toBe(false);
+    expect(sameQuestions(new Map(), new Map())).toBe(true);
+  });
+});
+
+describe("withPuffs", () => {
+  it("adds a puff for each compaction and lets the ones over go, so a zoo on all week holds only the puffs on", () => {
+    const first = withPuffs(new Map(), ["a"], 1_000);
+    expect([...first]).toEqual([["a", 1_000 + PUFF_MS]]);
+    const later = withPuffs(first, ["b"], 1_000 + PUFF_MS + 1);
+    expect([...later.keys()]).toEqual(["b"]);
+    expect(withPuffs(later, ["b"], 1_000 + PUFF_MS + 2).get("b")).toBe(1_000 + 2 * PUFF_MS + 2);
   });
 });

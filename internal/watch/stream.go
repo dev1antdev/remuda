@@ -9,7 +9,6 @@ import (
 	"errors"
 	"log"
 	"net"
-	"regexp"
 	"strings"
 	"time"
 
@@ -38,9 +37,12 @@ type liveStream struct {
 func (ls *liveStream) close() { ls.stream.Close() }
 
 // stream keeps the machine's event stream open until stop, one at a time — two for a moment while a socket's is
-// swapped for the next, never for the `nc -U` bridge, whose every connection is a session of the ssh master.
+// swapped for the next, never for the `nc -U` bridge, whose every connection is a session of the ssh master. Every
+// stream that opens is followed by a snapshot, so what moved before it stood is not missed; a stream that ended is
+// closed here too, whatever ended it, and the next carries its watches: a row that stood through the gap is the same
+// row, one that came in it is news.
 func (w *Watcher) stream(mc *machines.Machine, st *machineState, stop <-chan struct{}) {
-	var cur *liveStream
+	var cur, last *liveStream // the stream standing; the one before it, while none stands
 	defer func() {
 		if cur != nil {
 			cur.close()
@@ -48,19 +50,19 @@ func (w *Watcher) stream(mc *machines.Machine, st *machineState, stop <-chan str
 		st.streaming.Store(false)
 	}()
 	backoff := streamRetry
-	pause := func(d time.Duration) bool {
+	pause := func(d time.Duration) bool { // a wait the set moving cuts short: the next try takes the new one
 		timer := time.NewTimer(d)
 		defer timer.Stop()
 		select {
 		case <-stop:
 			return false
 		case <-st.changed:
-			signal(st.changed)
 			return true
 		case <-timer.C:
 			return true
 		}
 	}
+	var retry <-chan time.Time // a swap that could not open, tried again then
 	for {
 		select {
 		case <-stop:
@@ -68,26 +70,28 @@ func (w *Watcher) stream(mc *machines.Machine, st *machineState, stop <-chan str
 		default:
 		}
 		if cur == nil {
-			next, retry := w.connect(mc, st, nil)
+			next, wait := w.connect(mc, st, last)
 			if next == nil {
-				if !pause(retry) {
+				if !pause(max(wait, backoff)) { // a bridged remote's every try is an ssh session: patience while it fails
 					return
 				}
+				backoff = min(backoff*2, streamBackoff)
 				continue
 			}
-			cur = next
+			cur, last, retry = next, nil, nil
 			st.streaming.Store(true)
-			signal(st.kick) // a stream opened: what moved before it is in the next snapshot
+			signal(st.kick)
 			continue
 		}
 		select {
 		case <-stop:
 			return
 		case err := <-cur.ended:
+			cur.close()
 			if time.Since(cur.started) > time.Minute {
 				backoff = streamRetry // it stood a while: no flapping to be patient with
 			}
-			cur = nil
+			cur, last, retry = nil, cur, nil
 			st.streaming.Store(false)
 			signal(st.kick)
 			if herdr.IsCode(err, herdr.ErrEventsLost) {
@@ -99,35 +103,52 @@ func (w *Watcher) stream(mc *machines.Machine, st *machineState, stop <-chan str
 				return
 			}
 			backoff = min(backoff*2, streamBackoff)
+		case <-retry:
+			retry = nil
+			signal(st.changed)
 		case <-st.changed:
-			w.mu.Lock()
-			wanted := st.wanted
-			w.mu.Unlock()
-			if wanted == nil || wanted.key == cur.set.key {
+			next, wait := w.swap(mc, st, cur)
+			if wait > 0 {
+				retry = time.After(wait)
+			}
+			if next == cur {
 				continue
 			}
-			client, _, err := mc.Ready()
-			if err != nil {
-				continue // the stream on the old connection ends with it
+			if next == nil {
+				last = cur
+				st.streaming.Store(false) // the bridge's new stream did not open: the loop above tries at its pace
 			}
-			if client.Bridged() {
-				cur.close()
-				prev := cur
-				cur = nil
-				if next, _ := w.connect(mc, st, prev); next != nil {
-					cur = next
-				} else {
-					st.streaming.Store(false)
-					signal(st.kick)
-				}
-				continue
-			}
-			if next, _ := w.connect(mc, st, cur); next != nil {
-				cur.close()
-				cur = next
-			}
+			cur, retry = next, nil
+			signal(st.kick)
 		}
 	}
+}
+
+// swap opens a stream on the wanted set in place of cur when the set moved: the new one first on a socket, cur closed
+// first through the bridge. It answers the stream that stands now — cur when nothing moved or a socket's new stream
+// could not open (then how long until it is tried again), else the new one, or nil when the bridge's did not open.
+func (w *Watcher) swap(mc *machines.Machine, st *machineState, cur *liveStream) (*liveStream, time.Duration) {
+	w.mu.Lock()
+	wanted := st.wanted
+	w.mu.Unlock()
+	if wanted == nil || wanted.key == cur.set.key {
+		return cur, 0
+	}
+	client, _, err := mc.Ready()
+	if err != nil || client == nil {
+		return cur, 2 * streamRetry
+	}
+	if client.Bridged() {
+		cur.close()
+		next, _ := w.connect(mc, st, cur)
+		return next, 0
+	}
+	next, wait := w.connect(mc, st, cur)
+	if next == nil {
+		return cur, max(wait, streamRetry)
+	}
+	cur.close()
+	return next, 0
 }
 
 // connect opens a stream on the wanted set, answering how long to wait before the next try when it could not.
@@ -147,8 +168,10 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 		return nil, 2 * streamRetry
 	}
 	stream, err := client.Subscribe(set.subs)
-	if err != nil && set.person != "" && refusesWatches(err) {
-		log.Printf("%s: herdr refused the triggers' watches: %v", mc.ID(), err)
+	if err != nil && set.holds && refusesWatches(err) {
+		if w.sayOnce(st, "refused", err) {
+			log.Printf("%s: herdr refused the triggers' watches: %v", mc.ID(), err)
+		}
 		w.mu.Lock()
 		st.refused = set.person
 		set = buildSet(st.snap, set.all, st.refused)
@@ -158,8 +181,8 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 			w.Refused(mc.ID(), err)
 		}
 		stream, err = client.Subscribe(set.subs)
-	} else if err == nil && set.person != "" && w.Refused != nil {
-		w.Refused(mc.ID(), nil)
+	} else if err == nil && set.holds && w.Refused != nil {
+		w.Refused(mc.ID(), nil) // taken again: herdr reads the person's watches as they stand now
 	}
 	if err != nil {
 		var he *herdr.Error
@@ -168,7 +191,9 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 			signal(st.kick) // the pane set moved under the subscription: the next snapshot tells the new one
 			return nil, streamRetry
 		case errors.As(err, &he):
-			log.Printf("%s: herdr keeps no event stream for remuda (%v); polling at the usual pace", mc.ID(), err)
+			if w.sayOnce(st, "unsupported", err) {
+				log.Printf("%s: herdr keeps no event stream for remuda (%v); polling at the usual pace, asking again every %s", mc.ID(), err, unsupportedRetry)
+			}
 			w.mu.Lock()
 			st.noStreamUntil = time.Now().Add(unsupportedRetry)
 			w.mu.Unlock()
@@ -176,11 +201,14 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 		}
 		return nil, 2 * streamRetry
 	}
+	w.mu.Lock()
+	st.said = "" // a refusal after this one stood is news again
+	w.mu.Unlock()
 	ls := &liveStream{stream: stream, set: set, started: time.Now(), carried: map[string]bool{}, ended: make(chan error, 1)}
 	if prev != nil {
 		for pane, outputs := range prev.set.outputs {
 			for _, o := range outputs {
-				ls.carried[pane+"|"+o.Key] = true
+				ls.carried[carryKey(pane, o)] = true
 			}
 		}
 	}
@@ -200,10 +228,25 @@ func (w *Watcher) connect(mc *machines.Machine, st *machineState, prev *liveStre
 	return ls, 0
 }
 
-// refusesWatches is herdr refusing a set for its output watches rather than for a pane that went.
-func refusesWatches(err error) bool {
-	var he *herdr.Error
-	return errors.As(err, &he) && he.Code != "pane_not_found"
+// sayOnce says whether a refusal of the stream is news for the log: not the same words as the try before.
+func (w *Watcher) sayOnce(st *machineState, what string, err error) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	words := what + ": " + err.Error()
+	if st.said == words {
+		return false
+	}
+	st.said = words
+	return true
+}
+
+// refusesWatches is herdr refusing a set for a regex of its output watches; any other refusal is of the stream itself
+// (one too old for it answers invalid_request) or of a pane that went.
+func refusesWatches(err error) bool { return herdr.IsCode(err, "invalid_regex") }
+
+// carryKey names a watch on a pane by what it looks for too: a rule edited to look for something else is a new watch.
+func carryKey(pane string, o Output) string {
+	return pane + "|" + o.Key + "|" + o.Match.Type + "|" + o.Match.Value
 }
 
 // heard is one event of a stream: an output match goes on the bus for every watch its row matches, anything else
@@ -218,7 +261,7 @@ func (w *Watcher) heard(machineID string, st *machineState, ls *liveStream, even
 			}
 			events.Publish(w.bus, events.OutputMatched{
 				Pane: events.PaneRef{Machine: machineID, Pane: event.PaneID}, Watch: o.Key, Line: event.MatchedLine, Text: event.Text,
-				Fresh: now.Sub(ls.started) < freshFor, Carried: ls.carried[event.PaneID+"|"+o.Key], At: now,
+				Fresh: now.Sub(ls.started) < freshFor, Carried: ls.carried[carryKey(event.PaneID, o)], At: now,
 			})
 		}
 	case lazyKind, "pane_updated":
@@ -228,15 +271,15 @@ func (w *Watcher) heard(machineID string, st *machineState, ls *liveStream, even
 	}
 }
 
-// matches says whether a row matches a watch, as herdr would: a substring as it is, a regex a line at a time.
+// matches says whether a row matches a watch, as herdr would: a substring as it is, a regex in herdr's dialect.
 func (w *Watcher) matches(m herdr.OutputMatch, line string) bool {
 	if m.Type != "regex" {
 		return strings.Contains(line, m.Value)
 	}
 	if re, ok := w.matchers.Load(m.Value); ok {
-		return re.(*regexp.Regexp) != nil && re.(*regexp.Regexp).MatchString(line)
+		return re.(*herdr.Regexp) != nil && re.(*herdr.Regexp).MatchString(line)
 	}
-	re, err := regexp.Compile(m.Value)
+	re, err := herdr.CompileRegex(m.Value)
 	if err != nil {
 		re = nil
 	}

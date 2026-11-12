@@ -7,6 +7,7 @@ import { errMsg } from "@/lib/text";
 import { ago } from "@/lib/time";
 import { newer } from "@/lib/version";
 import { Icon, Popover, Tip } from "@/ui";
+import { useRoster } from "./useRoster";
 import { useSharing } from "./useSharing";
 import { actions, app } from "@/app/store";
 import { refreshHealth, type Health, type Latest, type Machine } from "./api";
@@ -27,6 +28,7 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
   const [fresh, setFresh] = useState<{ health: Health | null; latest: Latest } | null>(null);
   const [updateWhat, setUpdateWhat] = useState<string | null>(null);
   const share = useSharing();
+  const { retirements } = useRoster();
   const name = share.machineLabel(m);
   // a manual read stands until the collector's next one
   useEffect(() => setFresh(null), [m.health?.at]);
@@ -39,7 +41,7 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
   const l = fresh?.latest ?? latest;
   // while sharing, a stopped chat goes by its pane rather than its title, and the rest by the neutral names
   const stopped = share.on ? m.stopped?.map((chat) => ({ ...chat, title: "" })) : m.stopped;
-  const list = concerns(h, l, serverVersion, m.id !== "local", stopped, viewOnly, { machine: name, retiring: m.retiring }).map((c) => ({ ...c, text: share.redact(c.text) }));
+  const list = concerns(h, l, serverVersion, m.id !== "local", stopped, viewOnly, { machine: name, retiring: m.retiring, retirements }).map((c) => ({ ...c, text: share.redact(c.text) }));
   const worst = list.some((c) => c.bad) ? "bad" : list.length ? "warn" : "";
   if (!h && m.state !== "connected") return null;
   const refresh = async () => {

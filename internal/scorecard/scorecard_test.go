@@ -1,6 +1,7 @@
 package scorecard
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -136,6 +137,19 @@ func TestAPipelinesWorkIsItsFirstAgents(t *testing.T) {
 	}
 }
 
+// A request stage of the period carrying on work begun before it credits the request to nobody: the work, its verdicts
+// and its request belong to the period it began in, never to the stage's own model.
+func TestARequestOnWorkBegunBeforeThePeriodIsNobodys(t *testing.T) {
+	work := runOf(1, "claude", "Opus 4.5", -5, "/w/x")
+	request := runOf(2, "claude", "Sonnet 4.5", 2, "/w/x")
+	request.TaskID, request.Stage, request.PRURL, request.Merged = 1, 2, "https://github.com/o/r/pull/9", at(4).Format(time.RFC3339)
+	card := Build(Records{Runs: []tasks.RunRecord{work, request}, Verdicts: []review.Verdict{verdict("/w/x", review.VerdictApproved, 3)}}, day)
+	sonnet := rowOf(t, card, "claude", "Sonnet 4.5")
+	if sonnet.Runs != 1 || sonnet.Merged.Of != 0 || sonnet.FirstApproved.Of != 0 || card.Unplaced != 1 || len(card.Rows) != 1 {
+		t.Fatalf("the stage took the earlier work's request: %+v (rows %d, unplaced %d)", sonnet, len(card.Rows), card.Unplaced)
+	}
+}
+
 func TestAPullRequestIsCountedOnceAndMergedWhenAnyRunSawIt(t *testing.T) {
 	a := runOf(1, "claude", "Opus 4.5", 1, "/w/a")
 	a.PRURL = "https://github.com/o/r/pull/1"
@@ -194,6 +208,30 @@ func TestCostAndTimePerRun(t *testing.T) {
 	gpt := rowOf(t, card, "codex", "gpt-6.1-sol")
 	if gpt.CostPerRun.Value != nil || gpt.CostPerApproved.Value != nil || *gpt.MinutesPerRun.Value != 2 {
 		t.Fatalf("an unpriced model: %+v", gpt)
+	}
+}
+
+// A run whose agent has not answered yet may still: it counts among the runs, but neither against the finished share
+// nor in the means with what it has cost so far.
+func TestARunStillAtWorkCountsInRunsAlone(t *testing.T) {
+	var runs []tasks.RunRecord
+	for i := range MinSample {
+		r := runOf(int64(i+1), "claude", "Opus 4.5", float64(i), "/w/"+string(rune('a'+i)))
+		r.Cost = 2
+		runs = append(runs, r)
+	}
+	starting := runOf(8, "claude", "Opus 4.5", 7, "/w/s")
+	starting.Finished, starting.State = "", tasks.RunStarting
+	working := runOf(9, "claude", "Opus 4.5", 8, "/w/w")
+	working.Finished, working.State, working.Cost = "", tasks.RunRunning, 0.1
+	gone := runOf(10, "claude", "Opus 4.5", 9, "/w/g") // closed before it answered: an outcome, a run that did not finish
+	gone.Finished, gone.State, gone.Cost = "", tasks.RunGone, 1
+	row := Build(Records{Runs: append(runs, starting, working, gone)}, day).Rows[0]
+	if row.Runs != 8 || row.UnderWay != 2 || row.Finished.Count != 5 || row.Finished.Of != 6 {
+		t.Fatalf("the runs still at work weighed on the finished share: %+v", row)
+	}
+	if row.CostPerRun.N != 6 || math.Abs(*row.CostPerRun.Value-11.0/6) > 1e-9 {
+		t.Fatalf("a run's cost so far went into the mean: %+v", row.CostPerRun)
 	}
 }
 

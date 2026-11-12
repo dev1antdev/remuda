@@ -228,7 +228,7 @@ func Run(ctx context.Context, o Options) error {
 	})
 	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
 	// how many subagents each Claude Code pane's live conversation runs, read while a page reads the roster, for the Wall's zoo
-	subagentCounts := subagents.New(chats.Subagents, func(machineID string) bool {
+	subagentCounts := subagents.New(chats.RecentSubagents, func(machineID string) bool {
 		mc, err := fleet.Get(machineID)
 		if err != nil {
 			return false
@@ -264,15 +264,15 @@ func Run(ctx context.Context, o Options) error {
 	}
 	// a second opinion's reviewer, once it has answered, has its tab closed when the opinion asked for that
 	opinions := opinion.NewService(o.Dir)
-	opinions.Read = func(op opinion.Opinion) (string, bool) {
+	opinions.Read = func(op opinion.Opinion) (opinion.Reply, bool) {
 		mc, err := fleet.Get(op.Machine)
 		if err != nil {
-			return "", false
+			return opinion.Reply{}, false
 		}
 		if conv, err := chats.Open(mc, op.Pane, "", "", true); err == nil && conv.Path != "" {
 			if turns, err := conv.Turns(); err == nil {
-				if answer, ok := opinion.Answered(turns, op); ok {
-					return answer, true
+				if reply, ok := opinion.Answered(turns, op); ok {
+					return reply, true
 				}
 			}
 		}
@@ -465,6 +465,12 @@ func Run(ctx context.Context, o Options) error {
 			return badge.Fresh, reviews.Ready(machineID, dir)
 		},
 		Tasks: taskStore.LiveTasks,
+		// its claim on a herdr: the cockpit reaching a machine over ssh writes there, the machine's own remuda yields
+		Self: fmt.Sprintf("%s:%d", hostname, auth.PortOf(o.Addr)),
+		Local: func(id string) bool {
+			mc, err := fleet.Get(id)
+			return err == nil && mc.Local()
+		},
 	}, o.MirrorClosed)
 	defer mirrored.Close()
 	if o.MirrorClosed != "" {
@@ -493,7 +499,7 @@ func Run(ctx context.Context, o Options) error {
 			answer, _ := chats.LastAnswer(machine, pane)
 			return answer
 		},
-		Denied: func(machine, pane string) []transcript.Denial { return chats.Denied(machine, pane, "").Calls },
+		Denied: func(machine, pane string) transcript.Denials { return chats.Denied(machine, pane, "") },
 		Status: func(machine, pane string) string {
 			info, snap := chats.Pane(machine, pane)
 			switch {
@@ -582,6 +588,7 @@ func Run(ctx context.Context, o Options) error {
 	// match means — a dev server offered as a preview, failed tests a push, the person's own rules their action
 	paneTriggers := triggers.New(o.Dir)
 	paneTriggers.Notify = pushSvc.Notify
+	paneTriggers.Muted = pushSvc.Muted
 	paneTriggers.Feed = func(machineID, paneID, title, body string) {
 		activity.Add(feed.Entry{Kind: "trigger", Machine: machineID, Pane: paneID, Title: title, Body: body})
 		hub.RosterChanged()
@@ -593,8 +600,12 @@ func Run(ctx context.Context, o Options) error {
 		}
 		return "Task " + moved.Task.Identifier + " → " + moved.To.Title, true, nil
 	}
-	// someone looking at a pane's terminal through this remuda sees its tests fail: no push for it
+	// someone looking at a pane's terminal through this remuda, or through the machine's own one it relays to, sees its
+	// tests fail: no push for it
 	paneTriggers.Viewed = func(machineID, paneID string) bool {
+		if srv.Relaying(machineID, paneID) {
+			return true
+		}
 		mc, err := fleet.Get(machineID)
 		if err != nil {
 			return false
@@ -681,6 +692,7 @@ func Run(ctx context.Context, o Options) error {
 	go budgets.Loop(5 * time.Minute)
 	go planLimits.Loop(30*time.Second, ctx.Done())
 	go backups.Loop(time.Minute, ctx.Done())
+	go recorder.Loop(ctx.Done()) // a working pane's screen at the recorder's own pace, between the stream's snapshots
 
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {

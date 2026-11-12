@@ -6,10 +6,12 @@ import { t, tn } from "@/lib/i18n";
 import type { DiffRow } from "./hunks";
 import type { VerdictAsk } from "./draft";
 
-// SecretFinding is one thing that looks like a secret: line 0 is the file as a whole (a keystore); the excerpt is masked
+// SecretFinding is one thing that looks like a secret: line 0 is the file as a whole (a keystore); the excerpt is masked;
+// commit is the commit that adds it, or STAGED when only the index holds it (what git commit carries all the same)
 export type SecretFinding = { file: string; line: number; rule: string; excerpt: string; commit?: string };
-export type SkipReason = "binary" | "large" | "partly" | "budget" | "many";
-export type SkippedFile = { path?: string; why: SkipReason; count?: number };
+export const STAGED = "staged";
+export type SkipReason = "binary" | "large" | "partly" | "budget" | "many" | "older";
+export type SkippedFile = { path?: string; why: SkipReason; count?: number }; // count: the untracked files past the cap, or the commits
 // SecretScan is the server's answer: the findings, what it did not read, how many files and commits it read
 export type SecretScan = { findings: SecretFinding[]; more?: number; skipped?: SkippedFile[]; files: number; commits?: number; push?: boolean; at: string };
 // SettingsAudit is one of Claude Code's settings files in the folder or its repository's root
@@ -29,8 +31,23 @@ const RULES: Record<string, string> = {
   "google-api-key": t("Google API key"),
   "telegram-bot-token": t("Telegram bot token"),
   "npm-token": t("npm token"),
+  "huggingface-token": t("Hugging Face token"),
+  "groq-key": t("Groq API key"),
+  "xai-key": t("xAI API key"),
+  "openrouter-key": t("OpenRouter API key"),
+  "sendgrid-key": t("SendGrid API key"),
+  "digitalocean-token": t("DigitalOcean token"),
+  "docker-token": t("Docker Hub token"),
+  "pypi-token": t("PyPI token"),
+  "google-oauth-secret": t("Google OAuth client secret"),
+  "shopify-token": t("Shopify token"),
+  "linear-key": t("Linear API key"),
+  "atlassian-token": t("Atlassian API token"),
+  "age-key": t("age secret key"),
+  "vault-token": t("Vault token"),
   jwt: t("JSON Web Token"),
   "auth-header": t("Authorization header"),
+  "url-password": t("Password in an address"),
   "assigned-secret": t("Secret value"),
   "key-file": t("Keystore file"),
 };
@@ -77,8 +94,11 @@ export function sendAnywayAsk(state: CheckState, scan: SecretScan | null, ask: V
     : tn(n, "{n} possible secret is in what the agent would commit. Approve and ask for the commit anyway?", "{n} possible secrets are in what the agent would commit. Approve and ask for the commit anyway?");
 }
 
-// whereWords is a finding's place: the commit that adds it, the file and its line, or the file alone
-export const whereWords = (finding: SecretFinding): string => `${finding.commit ? `${finding.commit} · ` : ""}${finding.line > 0 ? `${finding.file}:${finding.line}` : finding.file}`;
+// whereWords is a finding's place: the commit that adds it (or "staged"), the file and its line, or the file alone
+export function whereWords(finding: SecretFinding): string {
+  const commit = finding.commit === STAGED ? t("staged") : finding.commit;
+  return `${commit ? `${commit} · ` : ""}${finding.line > 0 ? `${finding.file}:${finding.line}` : finding.file}`;
+}
 
 // jumpable: a finding the lens can open at its row, one of the work's on a line of a file it lists
 export const jumpable = (finding: SecretFinding, listed: string[]): boolean => !finding.commit && finding.line > 0 && listed.includes(finding.file);
@@ -89,13 +109,16 @@ const SKIPS: { why: SkipReason; words: (n: number) => string }[] = [
   { why: "partly", words: (n) => tn(n, "the end of {n} change over 1 MB", "the end of {n} changes over 1 MB") },
   { why: "budget", words: (n) => tn(n, "{n} file past the 8 MB read in all", "{n} files past the 8 MB read in all") },
   { why: "many", words: (n) => tn(n, "{n} more untracked file", "{n} more untracked files") },
+  { why: "older", words: (n) => tn(n, "{n} older commit not pushed yet", "{n} older commits not pushed yet") },
 ];
+
+const COUNTED: SkipReason[] = ["many", "older"]; // skips that count many at once
 
 // skippedWords says what the check did not read, "" when it read everything
 export function skippedWords(skipped: SkippedFile[] | undefined): string {
   if (!skipped?.length) return "";
   const parts = SKIPS.map(({ why, words }) => {
-    const n = skipped.filter((skip) => skip.why === why).reduce((sum, skip) => sum + (why === "many" ? (skip.count ?? 0) : 1), 0);
+    const n = skipped.filter((skip) => skip.why === why).reduce((sum, skip) => sum + (COUNTED.includes(why) ? (skip.count ?? 0) : 1), 0);
     return n > 0 ? words(n) : "";
   }).filter(Boolean);
   return parts.length ? t("Not read: {what}.", { what: parts.join(", ") }) : "";

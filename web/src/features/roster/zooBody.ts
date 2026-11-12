@@ -64,7 +64,7 @@ export function drainedUntil(limit: PaneLimit | undefined, windows: LimitWindow[
   return limit.continue_at || resetForHit(windows, agent);
 }
 
-export type Brood = { working?: number; quiet?: number; done?: number };
+export type Brood = { working?: number };
 
 // MAX_BABIES is how many babies stand by a creature; the rest are counted
 export const MAX_BABIES = 3;

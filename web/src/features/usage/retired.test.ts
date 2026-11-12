@@ -22,6 +22,8 @@ describe("reading a model the way the server does", () => {
     expect(fastIn(FAST)).toBe(true);
     expect(fastIn(`${FAST} --settings '{"fastMode" : false}'`)).toBe(false);
     expect(fastIn("--permission-mode plan")).toBeUndefined();
+    expect(fastIn('--settings "{\\"fastMode\\": true}"')).toBe(true); // double quotes, its own escaped
+    expect(modelIn('--model \\"claude-opus-4-8\\"')).toBe("claude-opus-4-8");
     expect(modelIn("--model claude-opus-4-8 --verbose")).toBe("claude-opus-4-8");
     expect(modelIn("--verbose")).toBe("");
   });
@@ -79,25 +81,27 @@ describe("the words", () => {
     );
   });
 
-  const hit = (kind: RetiringHit["kind"], id: string): RetiringHit => ({ ...FAST_48, kind, id, machine: "gog", failing: false });
+  // hit is what the roster carries: the retirement by its key alone, the table says the rest
+  const hit = (kind: RetiringHit["kind"], id: string): RetiringHit => ({ agent: "claude", model: "claude-opus-4-8", mode: "fast", kind, id, machine: "gog", failing: false });
 
   it("the ⓘ counts what is set to it by kind, one concern per retirement, bad once its day came", () => {
     const hits = [hit("recipe", "r1"), hit("schedule", "s1"), hit("schedule", "s2"), hit("project", "3"), hit("stage", "3/1"), hit("pane", "w1:p2")];
-    expect(retiringConcerns(hits, before)).toEqual([
+    expect(retiringConcerns(hits, [FAST_48], before)).toEqual([
       {
         key: "retiring-claude-opus-4-8|fast",
         text: `Fast mode on Opus 4.8 ends on ${DATE}, set for 1 recipe, 2 agent schedules, the agents of 1 project, 1 pipeline stage and 1 running agent here: move to Opus 5.5`,
         bad: false,
       },
     ]);
-    expect(retiringConcerns([hit("pane", "w1:p2"), hit("pane", "w1:p2")], after)).toEqual([
+    expect(retiringConcerns([hit("pane", "w1:p2"), hit("pane", "w1:p2")], [FAST_48], after)).toEqual([
       { key: "retiring-claude-opus-4-8|fast", text: `Fast mode on Opus 4.8 was removed on ${DATE} and is still set for 1 running agent here: their requests fail now — move to Opus 5.5`, bad: true },
     ]);
-    expect(retiringConcerns(undefined, before)).toEqual([]);
+    expect(retiringConcerns(undefined, [FAST_48], before)).toEqual([]);
+    expect(retiringConcerns([hit("pane", "w1:p2")], [], before)).toEqual([]); // a key the table no longer holds says nothing
   });
 
   it("stands among the machine's concerns", () => {
-    const list = concerns(undefined, undefined, "v0.13.0", true, [], false, { machine: "GOG", retiring: [hit("schedule", "s1")], now: before });
+    const list = concerns(undefined, undefined, "v0.13.0", true, [], false, { machine: "GOG", retiring: [hit("schedule", "s1")], retirements: [FAST_48], now: before });
     expect(list.map((c) => c.key)).toEqual(["retiring-claude-opus-4-8|fast"]);
   });
 });

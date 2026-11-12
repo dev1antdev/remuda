@@ -25,7 +25,7 @@ export type Pane = {
   said?: string; // the first line of the agent's last answer, once it finished
   pr?: PullRequest; // the last pull or merge request the agent named, "PR #15" / "MR !9"
   limit?: PaneLimit; // a subscription limit the agent stopped on, and the person's booking to continue it after the reset
-  subagents?: { working?: number; quiet?: number; done?: number }; // a Claude Code conversation's subagents by state, for the zoo
+  subagents?: { working?: number }; // how many of a Claude Code conversation's subagents work, for the zoo
   serves?: ServeOffer; // a dev server the pane announced and the previews found listening, offered as a preview
 };
 

@@ -243,11 +243,26 @@ func reference(value string) bool {
 		return false
 	}
 	for _, part := range strings.Split(value, ".") {
-		if part == "" || isDigit(part[0]) || !every(part, isAlnumUnderscore) {
+		if part == "" || isDigit(part[0]) || !every(part, isAlnumUnderscore) || randomPart(part) {
 			return false
 		}
 	}
 	return true
+}
+
+// randomPart says whether a part of a dotted value is a token's rather than a name's: long, with its digits in two
+// runs or more, where a name in the code keeps them together (v2, oauth2, the year at its end) — a Discord bot's token.
+func randomPart(part string) bool {
+	if len(part) < 20 {
+		return false
+	}
+	runs := 0
+	for i := 0; i < len(part); i++ {
+		if isDigit(part[i]) && (i == 0 || !isDigit(part[i-1])) {
+			runs++
+		}
+	}
+	return runs >= 2
 }
 
 // constantName says whether a value is a SCREAMING_SNAKE name: the name of another setting, not its value.

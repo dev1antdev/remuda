@@ -42,6 +42,26 @@ func TestRunsSinceListsTheRunsOfThePeriodWithTheirTasks(t *testing.T) {
 	}
 }
 
+// A run whose agent goes on to name another request holds that one now: the merge of the one before is not its merge.
+func TestANewRequestOnTheRunIsNotMergedByTheOneBefore(t *testing.T) {
+	st := open(t)
+	inbox, _ := st.Projects()
+	tk, _ := st.Create(inbox[0].ID, Patch{Title: str("Two requests")})
+	run, _ := st.StartRun(Run{TaskID: tk.ID, Machine: "studio", Workspace: "w1", Pane: "w1:p1", Dir: "/w/x", Agent: "claude"})
+	if _, err := st.OnPullRequest("studio", "w1:p1", "https://github.com/o/r/pull/15", "PR #15"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.OnPullRequestMerged("studio", "w1:p1", "https://github.com/o/r/pull/15"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.OnPullRequest("studio", "w1:p1", "https://github.com/o/r/pull/16", "PR #16"); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := st.Run(run.ID); r.PRURL != "https://github.com/o/r/pull/16" || r.Merged != "" {
+		t.Fatalf("the run's new request reads as merged: %+v", r)
+	}
+}
+
 func TestAMergeIsKeptOnTheRunAndReadBackFromTheComment(t *testing.T) {
 	dir := t.TempDir()
 	st, err := Open(dir)

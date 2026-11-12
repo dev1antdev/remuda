@@ -29,6 +29,7 @@ type Service struct {
 	Listening   func(machine string, port int) (label string, ok bool) // the port found listening by the previews
 	MoveTask    func(machine, pane, column, why string) (string, bool, error)
 	Viewed      func(machine, pane string) bool // someone has the pane's terminal open through this remuda now
+	Muted       func(machine, pane string) bool // the pane's folder is muted now: no row in the activity, as no push
 	Changed     func()                          // an offer came: the roster moved
 	Resubscribe func()                          // the rules moved: the streams' watches with them
 
@@ -183,7 +184,7 @@ func (s *Service) do(rule Rule, machine, paneID string, pane paneView, row strin
 			s.Notify(push.Payload{Machine: machine, Pane: paneID, Kind: "trigger", Title: title, Body: line, Tag: "trigger|" + rule.ID + "|" + key(machine, paneID)})
 		}
 	case ActionFeed:
-		if s.Feed != nil {
+		if s.Feed != nil && !s.muted(machine, paneID) {
 			s.Feed(machine, paneID, title, line)
 		}
 	case ActionPreview:
@@ -193,12 +194,14 @@ func (s *Service) do(rule Rule, machine, paneID string, pane paneView, row strin
 			return
 		}
 		words, moved, err := s.MoveTask(machine, paneID, rule.Column, "trigger “"+rule.Name+"”: the pane printed "+line)
-		if err != nil || !moved || s.Feed == nil {
-			return
+		if err != nil || !moved || s.Feed == nil || s.muted(machine, paneID) {
+			return // a muted folder's task still moves: the person's rule is work, the row only news
 		}
 		s.Feed(machine, paneID, words, "Trigger “"+rule.Name+"”: "+line)
 	}
 }
+
+func (s *Service) muted(machine, pane string) bool { return s.Muted != nil && s.Muted(machine, pane) }
 
 // spell says whether the watch may act on the pane now, and notes it when it may.
 func (s *Service) spell(e events.OutputMatched, quiet time.Duration) bool {

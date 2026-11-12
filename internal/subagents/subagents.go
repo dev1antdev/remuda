@@ -1,6 +1,6 @@
-// Package subagents keeps how many of every Claude Code agent's subagents work, sit quiet or are done in its live
-// conversation, for the roster and so the Wall's zoo: read off the request path, one pane at a time per machine, and
-// only while a page keeps reading the roster.
+// Package subagents keeps how many of every Claude Code agent's subagents are at work in its live conversation, for the
+// roster and so the Wall's zoo: read off the request path, one pane at a time per machine, only the subagents that moved
+// lately (a long session's finished ones are never read), and only while a page keeps reading the roster.
 package subagents
 
 import (
@@ -26,30 +26,25 @@ var (
 	ComplainEvery = time.Hour
 )
 
-// Count is how many of a conversation's subagents stand in each state.
+// Count is how many of a conversation's subagents are at work: the zoo's babies. The quiet and the finished ones are
+// not counted, since telling them apart would mean reading every subagent a long session ever spawned.
 type Count struct {
 	Working int `json:"working,omitempty"`
-	Quiet   int `json:"quiet,omitempty"`
-	Done    int `json:"done,omitempty"`
 }
 
-// CountOf sums a conversation's subagents up by their status.
+// CountOf counts the subagents at work.
 func CountOf(list []transcript.Subagent) Count {
 	var count Count
 	for _, agent := range list {
-		switch agent.Status {
-		case transcript.SubagentWorking:
+		if agent.Status == transcript.SubagentWorking {
 			count.Working++
-		case transcript.SubagentQuiet:
-			count.Quiet++
-		case transcript.SubagentDone:
-			count.Done++
 		}
 	}
 	return count
 }
 
-// Read lists the subagents of a pane's live conversation as they stand at now; none when the pane has no conversation file.
+// Read lists the subagents of a pane's live conversation that may be at work at now (transcript.Reader's
+// RecentSubagents); none when the pane has no conversation file.
 type Read func(machineID, paneID string, now time.Time) ([]transcript.Subagent, error)
 
 // Ready says whether a machine is connected, so its files can be read.
@@ -97,7 +92,7 @@ func New(read Read, ready Ready) *Tracker {
 	return &Tracker{read: read, ready: ready, now: time.Now, panes: map[events.PaneRef]*pane{}, sweeping: map[string]bool{}, complained: map[string]time.Time{}}
 }
 
-// Count is the pane's subagents by state as last read; nil when it has none or nothing was read yet.
+// Count is the pane's subagents at work as last read; nil when none works or nothing was read yet.
 func (t *Tracker) Count(machineID, paneID string) *Count {
 	if t == nil {
 		return nil

@@ -32,9 +32,10 @@ type Started struct {
 type Agents struct {
 	Start  func(s Schedule) (Started, error)
 	Close  func(run Started) error
-	Answer func(machine, pane string) string              // the agent's last answer, "" for none
-	Status func(machine, pane string) string              // herdr's agent status of the pane, events.Gone when no agent runs there now, "" when the machine has not said
-	Denied func(machine, pane string) []transcript.Denial // the calls its conversation was denied without asking
+	Answer func(machine, pane string) string // the agent's last answer, "" for none
+	Status func(machine, pane string) string // herdr's agent status of the pane, events.Gone when no agent runs there now, "" when the machine has not said
+	// Denied is the calls its conversation was denied without asking, and whether its latest turn stopped on them
+	Denied func(machine, pane string) transcript.Denials
 }
 
 // checkAgent trims and checks an agent schedule: a machine and a folder, an agent that is not a shell, a prompt. Its
@@ -227,15 +228,21 @@ func answered(to, from string, worked bool) bool {
 }
 
 // settle reads the answer of a run that is through, and the calls it was denied without asking, and notes them on the
-// schedule; with close, the place is taken down too and a push says what the agent answered.
+// schedule — a turn that stopped on those calls answered nothing, and is said to have stopped; with close, the place is
+// taken down too and a push says what the agent answered.
 func (st *Store) settle(id, label string, run Started, close bool) {
 	answer := ""
 	if st.Agents.Answer != nil {
 		answer = text.FirstLine(st.Agents.Answer(run.Machine, run.Pane), 120)
 	}
-	var denied []transcript.Denial
+	var denied transcript.Denials
 	if st.Agents.Denied != nil {
 		denied = st.Agents.Denied(run.Machine, run.Pane)
+	}
+	outcome := "answered"
+	stopped := answer == "" && denied.EndsTurn
+	if stopped {
+		outcome = "stopped on calls it was denied without asking"
 	}
 	var err error
 	if close {
@@ -249,10 +256,12 @@ func (st *Store) settle(id, label string, run Started, close bool) {
 	// herdr's close makes the pane gone, which OnStatus may have heard (and cleared) before this lock: the outcome still goes on
 	// the schedule unless a newer run replaced the pane meanwhile
 	if ok && (cur.LastPane == nil || cur.LastPane.Pane == run.Pane) {
-		cur.LastPane, cur.Skipped, cur.LastDenied = nil, "", denied
+		cur.LastPane, cur.Skipped, cur.LastDenied = nil, "", denied.Calls
 		switch {
 		case err != nil:
-			cur.LastOK, cur.LastResult = false, "answered, but the tab could not be closed: "+err.Error()
+			cur.LastOK, cur.LastResult = false, outcome+", but the tab could not be closed: "+err.Error()
+		case stopped:
+			cur.LastOK, cur.LastResult = false, outcome
 		case answer != "":
 			cur.LastOK, cur.LastResult = true, "answered: "+answer
 		case close:
@@ -260,7 +269,7 @@ func (st *Store) settle(id, label string, run Started, close bool) {
 		default:
 			cur.LastOK, cur.LastResult = true, "answered"
 		}
-		if n := len(denied); n > 0 {
+		if n := len(denied.Calls); n > 0 {
 			cur.LastResult += " · " + transcript.DeniedCount(n)
 		}
 		if serr := st.saveLocked(); serr != nil {
@@ -275,12 +284,16 @@ func (st *Store) settle(id, label string, run Started, close bool) {
 	if body == "" {
 		body = "The tab is closed"
 	}
-	if words := transcript.DeniedWords(denied, 3); words != "" {
+	if words := transcript.DeniedWords(denied.Calls, 3); words != "" {
 		body += " · " + words
+	}
+	title := "Scout “" + label + "” answered"
+	if stopped {
+		title = "Scout “" + label + "” stopped on calls it was denied"
 	}
 	st.notify(push.Payload{
 		Machine: run.Machine, Kind: "schedule",
-		Title: "Scout “" + label + "” answered",
+		Title: title,
 		Body:  body + " · the conversation stays readable through the search",
 		Tag:   "schedule|" + id,
 	})

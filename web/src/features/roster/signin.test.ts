@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { concerns, hostConcerns, updateLabel } from "./concerns";
-import { BAD_DAYS, LOOK_DAYS, loginWords, signinConcern } from "./signin";
+import { BAD_DAYS, EARLY_DAYS, LOOK_DAYS, loginWords, signinConcern } from "./signin";
 import type { Health } from "./api";
 
 const DAY = 86_400_000;
@@ -15,14 +15,16 @@ describe("signinConcern", () => {
     expect(signinConcern({ expires: "soon", at: "" }, "GOG", now)).toBeNull();
   });
 
-  it("is a look from ten days, bad from two, and says where to sign in again", () => {
-    expect(signinConcern(endingIn(6 * DAY), "GOG", now)).toEqual({ text: "Claude Code's sign-in on GOG ends in 6 days: run claude auth login there before then", bad: false });
-    expect(signinConcern(endingIn(BAD_DAYS * DAY + 3_600_000), "GOG", now)?.bad).toBe(false);
-    expect(signinConcern(endingIn(BAD_DAYS * DAY), "GOG", now)?.bad).toBe(true);
-    expect(signinConcern(endingIn(20 * 3_600_000), "GOG", now)?.text).toBe("Claude Code's sign-in on GOG ends in 20 h: run claude auth login there before then");
+  it("counts to the earliest end, three days before the one named: a look from ten days, bad from two before it", () => {
+    const early = EARLY_DAYS * DAY;
+    expect(signinConcern(endingIn(9 * DAY), "GOG", now)).toEqual({ text: expect.stringMatching(/^Claude Code's sign-in on GOG may end in 6 days, by .* at the latest: run claude auth login there before then$/), bad: false });
+    expect(signinConcern(endingIn(early + BAD_DAYS * DAY + 3_600_000), "GOG", now)?.bad).toBe(false);
+    expect(signinConcern(endingIn(early + BAD_DAYS * DAY), "GOG", now)?.bad).toBe(true);
+    expect(signinConcern(endingIn(early + 20 * 3_600_000), "GOG", now)?.text).toMatch(/^Claude Code's sign-in on GOG may end in 20 h, by /);
   });
 
-  it("is bad once it has ended", () => {
+  it("is bad within the three days it may end at any time, and once it has ended", () => {
+    expect(signinConcern(endingIn(2 * DAY), "GOG", now)).toEqual({ text: expect.stringMatching(/^Claude Code's sign-in on GOG may end at any time now, by .* at the latest: run claude auth login there$/), bad: true });
     expect(signinConcern(endingIn(-3 * 3_600_000), "GOG", now)).toEqual({ text: "Claude Code's sign-in on GOG ended 3 h ago: its agents cannot reach Claude until you run claude auth login there", bad: true });
   });
 });
@@ -43,8 +45,9 @@ describe("the sign-in among a machine's concerns", () => {
 });
 
 describe("loginWords", () => {
-  it("says the day and how long is left, or that it ended", () => {
-    expect(loginWords(endingIn(23 * DAY), now)).toMatch(/^ends .*2026 · in 23 days$/);
+  it("says the days it ends between and how long is left to the first, that it may end any time, or that it ended", () => {
+    expect(loginWords(endingIn(23 * DAY), now)).toMatch(/^ends .*2.*5.*2026 · in 20 days at the earliest$/);
+    expect(loginWords(endingIn(DAY), now)).toMatch(/^may end any time now · by .*2026$/);
     expect(loginWords(endingIn(-DAY), now)).toMatch(/^ended .*2026$/);
     expect(loginWords(undefined, now)).toBe("");
   });

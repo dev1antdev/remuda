@@ -22,10 +22,12 @@ import (
 const (
 	Interval        = 4 * time.Second  // a working pane's screen is read at most this often
 	MaxFrames       = 900              // frames one recording holds; past it every other one goes and the pace halves
+	MaxHeld         = 8 << 20          // bytes of screens one turn holds in memory; past it, as past MaxFrames
 	KeepPerPane     = 20               // recordings kept per pane, the newest
 	MaxTotal        = 200 << 20        // bytes the folder holds at most; the oldest recordings go first
 	MinTurn         = time.Minute      // a shorter turn is not worth keeping
 	Grace           = 15 * time.Second // a pane at work again this soon after it stopped is still the same turn
+	Away            = 2 * time.Minute  // a pane unseen this long — its machine out of reach — ends its turn
 	CheckpointEvery = 10 * time.Minute // a turn still going is written this often
 	MaxScreen       = 256 << 10        // a screen read larger than this is no frame
 )
@@ -41,6 +43,7 @@ const (
 	EndedGone    = "gone"    // the pane closed, or its agent left it
 	EndedStopped = "stopped" // remuda stopped while the agent worked
 	EndedCut     = "cut"     // the last checkpoint of a turn remuda never saw end (a crash, a power cut)
+	EndedAway    = "away"    // its machine went out of reach while it worked
 )
 
 // Meta is what a recording is of; it travels in the file's gzip header, so a listing reads no frame.
@@ -116,8 +119,10 @@ type Recorder struct {
 	live    map[string]*take // machine|pane → the turn being recorded
 	queue   map[string][]job // machine → the reads and writes waiting for its reader
 	running map[string]bool
+	busy    map[string]job    // machine → what its reader is doing now
 	index   map[string]*entry // id → a recording on the disk
 	failed  map[string]time.Time
+	seen    map[string]seenSnap // machine → its last snapshot, which Tick observes again between snapshots
 }
 
 type settings struct {
@@ -130,7 +135,7 @@ func Open(stateDir string, in Inputs) *Recorder {
 	r := &Recorder{
 		dir: filepath.Join(stateDir, Folder), state: stateDir, in: in, now: time.Now, run: func(fn func()) { go fn() },
 		keepPerPane: KeepPerPane, maxTotal: MaxTotal,
-		live: map[string]*take{}, queue: map[string][]job{}, running: map[string]bool{}, index: map[string]*entry{}, failed: map[string]time.Time{},
+		live: map[string]*take{}, queue: map[string][]job{}, running: map[string]bool{}, busy: map[string]job{}, index: map[string]*entry{}, failed: map[string]time.Time{},
 	}
 	var saved settings
 	if err := state.LoadJSON(stateDir, settingsFile, &saved); err != nil {
@@ -162,11 +167,7 @@ func (r *Recorder) SetOn(on bool) error {
 	r.off = !on
 	var dropped []*take
 	if !on {
-		for k, tk := range r.live {
-			tk.written = true
-			dropped = append(dropped, tk)
-			delete(r.live, k)
-		}
+		dropped = r.dropLocked()
 	}
 	r.mu.Unlock()
 	for _, tk := range dropped {

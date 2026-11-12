@@ -111,8 +111,8 @@ func TestAnAgentSchedulesOwnSettingsFileIsRefusedWhileTheSwitchIsOn(t *testing.T
 
 func TestASettledRunSaysWhatItWasDenied(t *testing.T) {
 	st, door := scoutStore(t, t.TempDir())
-	st.Agents.Denied = func(machine, pane string) []transcript.Denial {
-		return []transcript.Denial{{Tool: "Bash", What: "touch probe.txt"}, {Tool: "Write", What: "/home/me/remuda/notes.txt"}}
+	st.Agents.Denied = func(machine, pane string) transcript.Denials {
+		return transcript.Denials{Calls: []transcript.Denial{{Tool: "Bash", What: "touch probe.txt"}, {Tool: "Write", What: "/home/me/remuda/notes.txt"}}}
 	}
 	s, err := st.Put(claudeScout)
 	if err != nil {
@@ -133,5 +133,32 @@ func TestASettledRunSaysWhatItWasDenied(t *testing.T) {
 	}
 	if again, _ := st.Run(s.ID); again.LastDenied != nil {
 		t.Errorf("a new run starts with nothing denied: %+v", again.LastDenied)
+	}
+}
+
+// Claude Code stops a turn after a run of refusals with nothing done between them: the scout answered nothing, and the
+// schedule and its push say it stopped rather than that it answered.
+func TestARunThatStoppedOnItsDeniedCallsIsNotCalledAnswered(t *testing.T) {
+	st, door := scoutStore(t, t.TempDir())
+	door.answer = ""
+	st.Agents.Denied = func(machine, pane string) transcript.Denials {
+		return transcript.Denials{Calls: []transcript.Denial{{Tool: "Bash", What: "go test ./..."}, {Tool: "Bash", What: "make check"}, {Tool: "Bash", What: "npm test"}}, EndsTurn: true}
+	}
+	s, err := st.Put(claudeScout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Run(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	st.OnStatus(status("w5:p2", "idle", "working"))
+	st.OnStatus(status("w5:p2", "working", "done"))
+	st.Wait()
+	after := st.List()[0]
+	if after.LastOK || after.LastResult != "stopped on calls it was denied without asking · 3 calls denied" || len(after.LastDenied) != 3 {
+		t.Fatalf("after the stop: %v %q %+v", after.LastOK, after.LastResult, after.LastDenied)
+	}
+	if len(door.pushed) != 1 || door.pushed[0].Title != "Scout “Look for what could be better” stopped on calls it was denied" || !strings.Contains(door.pushed[0].Body, "3 calls denied: Bash go test ./...") {
+		t.Fatalf("pushed %+v", door.pushed)
 	}
 }

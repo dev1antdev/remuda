@@ -54,13 +54,13 @@ func (s *Server) handlePaneWS(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 502, err)
 		return
 	} else if pc != nil {
-		s.relayPaneWS(w, r, pc, pane.PaneID, cols, rows)
+		s.relayPaneWS(w, r, pc, mc.ID(), pane.PaneID, cols, rows)
 		return
 	}
 	ch, cancel, err := attach.Subscribe(pane.TerminalID, cols, rows)
 	if err != nil {
 		if pc := s.peerAfterRefusal(mc, err); pc != nil {
-			s.relayPaneWS(w, r, pc, pane.PaneID, cols, rows)
+			s.relayPaneWS(w, r, pc, mc.ID(), pane.PaneID, cols, rows)
 			return
 		}
 	}

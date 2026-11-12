@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // The built-in watches every pane gets, by their keys: a dev server saying where it serves, and tests that failed.
@@ -32,17 +34,25 @@ const TestsPattern = `^(--- FAIL: |FAIL\s+\S+\s+(\d|\[)|Tests:\s+\d+ failed|\s*T
 	`|FAILED \S+::|test result: FAILED|\s+\d+ failing\s*$|\d+ examples?, [1-9]\d* failures?|# fail [1-9])`
 
 var (
-	serveRe = regexp.MustCompile(ServePattern)
-	testsRe = regexp.MustCompile(TestsPattern)
+	serveRe = mustRegex(ServePattern)
+	testsRe = mustRegex(TestsPattern)
 	urlRe   = regexp.MustCompile(`https?://(\[[0-9a-fA-F:]+\]|[^\s/:\[\]]+)(:(\d{1,5}))?[^\s]*`)
 	portRe  = regexp.MustCompile(`(?i)\bport\s+(\d{2,5})\b`)
 	colonRe = regexp.MustCompile(`:(\d{2,5})\b`)
 )
 
-// Serves says whether a row is a dev server announcing itself.
+func mustRegex(pattern string) *herdr.Regexp {
+	re, err := herdr.CompileRegex(pattern)
+	if err != nil {
+		panic(err)
+	}
+	return re
+}
+
+// Serves says whether a row is a dev server announcing itself, as herdr reads it.
 func Serves(line string) bool { return serveRe.MatchString(line) }
 
-// TestsFailed says whether a row sums up a failed test run.
+// TestsFailed says whether a row sums up a failed test run, as herdr reads it.
 func TestsFailed(line string) bool { return testsRe.MatchString(line) }
 
 // ServedAt reads the port a row names — its address's, else "port 8000", else ":3000" — and the address as printed;

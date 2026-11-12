@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Pane, Session } from "./api";
 import { DEFAULT_RADAR } from "./radar";
-import { DEFAULT_WALL, OFFICE_ROTATE, featured, isIdle, needsMe, neighbour, nextNeedingMe, rotates, tileKey, tiles, withFocus } from "./wall";
+import { DEFAULT_WALL, OFFICE_ROTATE, featured, isIdle, needsMe, neighbour, nextNeedingMe, rotates, spinsFor, tileKey, tiles, withFocus } from "./wall";
 
 const NOW = 1_700_000_000_000;
 const MIN = 60_000;
@@ -167,5 +167,14 @@ describe("featured", () => {
     expect(neighbour(calm, "", 1)).toBe("local|w");
     expect(neighbour(calm, "", -1)).toBe("gog|o");
     expect(neighbour([], "local|w", 1)).toBe("");
+  });
+});
+
+describe("spinsFor", () => {
+  it("ticks for the tiles while something moves, never for the zoo, whose creatures move by CSS alone", () => {
+    expect(spinsFor("chat", true)).toBe(true);
+    expect(spinsFor("screen", true)).toBe(true);
+    expect(spinsFor("chat", false)).toBe(false);
+    expect(spinsFor("zoo", true)).toBe(false);
   });
 });

@@ -9,11 +9,11 @@ import { errMsg } from "@/lib/text";
 import type { AnsiPalette } from "@/lib/theme";
 import { Icon } from "@/ui";
 import type { Recording } from "./api";
-import type { Speed } from "./playback";
+import type { ScreenRows, Speed } from "./playback";
 import { exportGif } from "./raster";
 import { gifName } from "./words";
 
-export function GifExport({ recording, screens, times, speed, palette }: { recording: Recording; screens: string[]; times: number[]; speed: Speed; palette: AnsiPalette }) {
+export function GifExport({ recording, screens, times, speed, palette }: { recording: Recording; screens: ScreenRows[]; times: number[]; speed: Speed; palette: AnsiPalette }) {
   const [progress, setProgress] = useState<number | null>(null); // 0..1 while it draws
   const running = useRef<AbortController | null>(null);
   useEffect(() => () => running.current?.abort(), []);

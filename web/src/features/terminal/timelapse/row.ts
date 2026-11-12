@@ -15,7 +15,9 @@ export function openTimelapse(place: TimelapsePlace) {
   actions.openDialog({ kind: "timelapse", machineId: place.machineId, paneId: place.paneId, dir: place.dir, title: timelapseTitle(place) });
 }
 
-// timelapseRows is the row that opens it: none to open for a shell or a transcript on its own
+// timelapseRows is the row that opens it, after a separator: none for a shell, whose View menu keeps only what a
+// terminal does, nor for a transcript on its own
 export function timelapseRows(place: TimelapsePlace): MenuItem[] {
-  return [{ sep: true }, { label: t("Timelapse…"), icon: "film", hint: t("its turns as they looked on screen, played back in seconds; export as GIF"), disabled: !place.agent || !place.paneId, onSelect: () => openTimelapse(place) }];
+  if (!place.agent || !place.paneId) return [];
+  return [{ sep: true }, { label: t("Timelapse…"), icon: "film", hint: t("its turns as they looked on screen, played back in seconds; export as GIF"), onSelect: () => openTimelapse(place) }];
 }

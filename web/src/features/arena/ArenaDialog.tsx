@@ -1,15 +1,16 @@
 // A new arena: one prompt — a task's, or written here — and two to six lanes, each an agent and its model on a
 // repository of a machine; every lane starts in a fresh worktree, and the Arenas panel shows them side by side.
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { actions } from "@/app/store";
 import { machineOptions } from "@/features/roster/options";
 import { CUSTOM, modelChoices, modelPlaceholder } from "@/features/roster/startOptions";
 import { useRoster } from "@/features/roster/useRoster";
+import RetiredNotice from "@/features/usage/RetiredNotice";
 import { Dialog, Icon, Logo, Notice, Select, Tip, useSubmit } from "@/ui";
 import { t } from "@/lib/i18n";
 import { startArena } from "./api";
-import { MAX_LANES, defaultLanes, prefilled, repositories, requestOf, whyNot, type AskedLane, type LaneDraft } from "./arena";
+import { MAX_LANES, defaultLanes, modelOf, prefilled, repositories, requestOf, whyNot, type AskedLane, type LaneDraft } from "./arena";
 
 export default function ArenaDialog({ taskId, title, prompt: initial, at, lanes: asked, onClose }: {
   taskId?: number;
@@ -57,29 +58,32 @@ export default function ArenaDialog({ taskId, title, prompt: initial, at, lanes:
           const models = modelChoices(lane.agent);
           const repos = repositories(machines, lane.machine).map((r) => ({ ...r, icon: <Icon name="folder" size={14} /> }));
           return (
-            <div key={i} className="arena-lane-row">
-              <span className="arena-lane-n">{i + 1}</span>
-              <Select value={lane.agent} onChange={(agent) => change(i, { agent, choice: "", custom: "" })} options={kinds.map((a) => ({ value: a.id, label: a.label, icon: <Logo agent={a.id} /> }))} />
-              {models.length > 0 ? (
-                <Select value={lane.choice} onChange={(choice) => change(i, { choice })} options={models} />
-              ) : (
-                <input className="sm" value={lane.custom} placeholder={modelPlaceholder(lane.agent) || t("default model")} spellCheck={false} onChange={(e) => change(i, { choice: e.target.value ? CUSTOM : "", custom: e.target.value })} />
-              )}
-              {models.length > 0 && lane.choice === CUSTOM && <input className="sm" value={lane.custom} placeholder={modelPlaceholder(lane.agent)} spellCheck={false} onChange={(e) => change(i, { custom: e.target.value })} />}
-              {connected.length > 1 && (
-                <Select
-                  value={lane.machine}
-                  onChange={(machine) => change(i, { machine, workspace: repositories(machines, machine)[0]?.value ?? "" })}
-                  options={machineOptions(connected, { onlyConnected: false })}
-                />
-              )}
-              <Select value={lane.workspace} onChange={(workspace) => change(i, { workspace })} placeholder={t("Pick a repository")} options={repos} />
-              <Tip text={t("Remove this lane")}>
-                <button type="button" className="icon-btn sm" aria-label={t("Remove this lane")} disabled={lanes.length <= 2} onClick={() => setLanes((ls) => ls.filter((_, j) => j !== i))}>
-                  <Icon name="x" size={14} />
-                </button>
-              </Tip>
-            </div>
+            <Fragment key={i}>
+              <div className="arena-lane-row">
+                <span className="arena-lane-n">{i + 1}</span>
+                <Select value={lane.agent} onChange={(agent) => change(i, { agent, choice: "", custom: "" })} options={kinds.map((a) => ({ value: a.id, label: a.label, icon: <Logo agent={a.id} /> }))} />
+                {models.length > 0 ? (
+                  <Select value={lane.choice} onChange={(choice) => change(i, { choice })} options={models} />
+                ) : (
+                  <input className="sm" value={lane.custom} placeholder={modelPlaceholder(lane.agent) || t("default model")} spellCheck={false} onChange={(e) => change(i, { choice: e.target.value ? CUSTOM : "", custom: e.target.value })} />
+                )}
+                {models.length > 0 && lane.choice === CUSTOM && <input className="sm" value={lane.custom} placeholder={modelPlaceholder(lane.agent)} spellCheck={false} onChange={(e) => change(i, { custom: e.target.value })} />}
+                {connected.length > 1 && (
+                  <Select
+                    value={lane.machine}
+                    onChange={(machine) => change(i, { machine, workspace: repositories(machines, machine)[0]?.value ?? "" })}
+                    options={machineOptions(connected, { onlyConnected: false })}
+                  />
+                )}
+                <Select value={lane.workspace} onChange={(workspace) => change(i, { workspace })} placeholder={t("Pick a repository")} options={repos} />
+                <Tip text={t("Remove this lane")}>
+                  <button type="button" className="icon-btn sm" aria-label={t("Remove this lane")} disabled={lanes.length <= 2} onClick={() => setLanes((ls) => ls.filter((_, j) => j !== i))}>
+                    <Icon name="x" size={14} />
+                  </button>
+                </Tip>
+              </div>
+              <RetiredNotice agent={lane.agent} model={modelOf(lane)} machine={lane.machine} onUse={(model) => change(i, { choice: CUSTOM, custom: model })} />
+            </Fragment>
           );
         })}
       </div>

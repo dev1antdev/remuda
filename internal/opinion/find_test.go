@@ -79,9 +79,9 @@ func TestTheRequestIsFoundWithoutTheSessionAndFollowedThroughACompaction(t *test
 	record(t, filepath.Join(project, movedID+".jsonl"),
 		`{"parentUuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1","isCompactSummary":true,"type":"user","uuid":"m1","timestamp":"2026-11-05T10:02:01Z","message":{"role":"user","content":"This session is being continued from a previous conversation."}}`,
 		answerLine("m2", "m1", "FINDINGS\napp.go:12: [medium] the moved conversation's answer\nSUMMARY\nok"))
-	answer, ok := Request(host, transcript.NewReader(host), op)
-	if !ok || !strings.Contains(answer, "the moved conversation's answer") {
-		t.Fatalf("the request's answer: %q %v", answer, ok)
+	reply, ok := Request(host, transcript.NewReader(host), op)
+	if !ok || !strings.Contains(reply.Answer, "the moved conversation's answer") || reply.Stopped {
+		t.Fatalf("the request's answer: %+v %v", reply, ok)
 	}
 	if _, ok := Request(host, transcript.NewReader(host), Opinion{Agent: "claude", Dir: dir, Ref: "ref-never-asked"}); ok {
 		t.Fatal("a request no conversation opens with was answered")
