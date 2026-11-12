@@ -9,6 +9,7 @@ import PreviewsDialog from "@/features/preview/PreviewsDialog";
 import TriggersDialog from "@/features/triggers/TriggersDialog";
 import ServerPanel from "@/features/roster/ServerPanel";
 import EverywhereDialog from "@/features/updates/EverywhereDialog";
+import FleetDialog from "@/features/updates/FleetDialog";
 import ReopenDialog from "@/features/reopen/ReopenDialog";
 import ArenaDialog from "@/features/arena/ArenaDialog";
 import ArenaPanel from "@/features/arena/ArenaPanel";
@@ -97,6 +98,7 @@ export default function Overlays() {
       {panel === "release" && host && <UpdatesDialog machine={host} what="remuda-release" onClose={actions.closePanel} />}
       {panel === "server" && server && <ServerPanel server={server} onClose={actions.closePanel} />}
       {dialog?.kind === "update-everywhere" && <EverywhereDialog onClose={actions.closeDialog} />}
+      {dialog?.kind === "fleet-setup" && <FleetDialog onClose={actions.closeDialog} />}
       {panel === "alerts" && <AlertsPanel onClose={actions.closePanel} />}
       {panel === "activity" && <Activity onClose={actions.closePanel} />}
       {panel === "schedules" && <Schedules machines={machines} onClose={actions.closePanel} ask={actions.ask} />}

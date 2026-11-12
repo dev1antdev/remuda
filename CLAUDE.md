@@ -559,7 +559,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   mode **Server** (panel `server`, `features/roster/ServerPanel.tsx`:
   the host's load, disk, memory, temperature, clock and throttling with
   the day's sparklines, its versions and tailnet address, what wants a
-  look, Read again, Updates…, Update everywhere…; an amber or red dot
+  look, Read again, Updates…, Fleet setup…, Update everywhere…; an amber or red dot
   from `serverTone` in `concerns.ts`, tested; the palette's "Server ·
   <name>", a viewer's too) and Settings,
   each an icon with its name under it and a tooltip (the name whole: a
@@ -623,7 +623,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `internal/health` — each machine's vitals (Claude Code / herdr /
   remuda versions, how Claude Code was installed, herdr's agent hooks
   that lag the installed herdr (`OutdatedHooks`, the shell behind
-  `Report.OutdatedHooks`) and its plugins from GitHub (`GitHubPlugins` →
+  `Report.OutdatedHooks`), every integration herdr reports with its
+  state (`Integrations` → `Report.Integrations {agent: current | outdated
+  | missing}`, "not installed" read as missing) and its plugins from GitHub (`GitHubPlugins` →
   `Report.Plugins`), disk, load, the core count, uptime, and **the body**
   (`host.go`, tested on rp-orange's and a Mac's recorded answers):
   `HostScript` prints raw lines that Go parses — memory from
@@ -684,7 +686,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `release.go`: the newest release with its assets (`Collector.Release`).
   **`internal/updates`** turns all of that into what the page offers:
   `Plan(what, report)` / `Offered(report, latest)` are the commands for
-  herdr and the agents (and `what = mcp`, "Connect the agents to your
+  herdr and the agents (`what = integrations`, "Install herdr's agent
+  hooks": `herdr integration install <agent>` for every agent installed
+  there whose integration herdr reports not installed, `MissingIntegrations`,
+  as `remuda setup` installs them — not a step of Update everywhere; `what = mcp`, "Connect the agents to your
   tasks": `remuda mcp install` on every machine with a remuda, see
   `internal/mcp`; `what = statusline`, "Show Claude Code's plan limits":
   `remuda statusline install`, see `internal/limits`), `ReleaseUpdate(have, os, arch, rel, local)` offers
@@ -759,7 +764,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the Tasks board, list and detail, Review, Code, every panel, each
   section of Settings, the palette, the keys sheet and the dialogs (new
   workspace, the two imports, arena, teleport, reopen, recipes, budget,
-  broadcast, the triggers with a rule's form) — the palette by its rows' `data-entry` ids, so either
+  broadcast, the triggers with a rule's form, Fleet setup with every fact
+  and its Run… into Updates) — the palette by its rows' `data-entry` ids, so either
   language finds them; every screen checked for a sideways scroll, a
   menu, popover, dialog, toast or drawer past the screen's edge, text
   squeezed to nothing, content under the rail or the header, its
@@ -776,6 +782,90 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   remote remuda, a nearly full disk, Claude Code's sign-in running out (`internal/signin`) or a
   setting there on a model being retired (`internal/retire`; `concerns(…, more)` takes the
   machine's name, its `retiring`, the roster's `retirements` its hits name and the clock).
+- `internal/drift/` — **Fleet setup: how every machine is set up, side
+  by side, the odd one out marked** (tested: the script on this
+  machine's sh, awk, sed and git in a temp HOME with anonymized config
+  files, a herdr stand-in and a repository with a linked worktree one
+  commit behind; `Parse` on fixture lines; `Build` on a fleet of
+  fixtures). `Script(dirs)` is one read-only POSIX script per machine,
+  no agent run: remuda's MCP server in each agent's own config —
+  `~/.claude.json`'s top-level `mcpServers` (`serversAwk`: the names one
+  indent under the top level of a pretty-printed JSON file, so a
+  project's own servers deeper in it never count), Codex's
+  `${CODEX_HOME:-~/.codex}/config.toml` `[mcp_servers.remuda]`, Gemini
+  CLI's `~/.gemini/settings.json`, Kimi's `~/.kimi/mcp.json` only when
+  there is one (else unread, no cell); the global instruction files
+  (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`)
+  as sha256 and mtime (`sha256sum`, else `shasum -a 256`, else openssl);
+  `herdr plugin list` (a GitHub plugin by `github:owner/repo`, a local
+  one by its kind alone, its path being the machine's own); and for the
+  watcher's workspace folders the main checkout of each
+  (`review.MainFolderScript`, the folder `pwd -P`'d so a worktree and its
+  repository count once): the origin without a user or token in it
+  (`sed` strips `scheme://user:token@`), the root commit when there is no
+  origin, the branch, the upstream and `rev-list --left-right --count
+  HEAD...@{u}` as of the last fetch (no fetch: `FETCH_HEAD`'s mtime is
+  when), and `RepoFiles` (CLAUDE.md, AGENTS.md, .claude/settings.json)
+  hashed. Only names, versions, hashes, flags and times leave the
+  machine. `Build(machines, at)` is the `Table`: `Column`s, `Section`s
+  agents (`agent.version`, `agent.via` per agent), herdr (`herdr.version`,
+  `herdr.server`, `herdr.hooks` per agent installed, `herdr.plugin` per
+  plugin seen), remuda (`remuda.version`, `code.version`, `mcp` per
+  agent installed, `statusline`), claude (`claude.model`, `claude.fast`),
+  instructions, and a `repo` section per repository on two machines or
+  more (`repoKey`: `teleport.RemoteKey` of the origin, else `root:<first
+  commit>`; named owner/repo, `folders` by machine for the sharing mode;
+  `repo.branch`, `repo.behind`, `repo.file` per RepoFiles), the rest as
+  `single`; a row holding nothing anywhere is left out, a machine away or
+  whose read failed has no cell (the vitals' rows still stand for a failed
+  script). `settle` is the rule: the norm is the value most cells share; a
+  tie goes to the better value where the row ranks them (`newer` versions
+  over older and installed over not, `hookRank` current › outdated ›
+  missing, `yes` for a flag remuda installs, `present`, `fewer` behind),
+  else the row is `split` and every cell marked so; a cell off the norm is
+  `odd`; one cell is `single`. **Bring in line** only through updates
+  remuda already has: on a row that differs, every cell below the row's
+  best gets the machine's own offered `updates.Update` as its `Action`
+  when it offers it (`agent.version` → the agent, `herdr.version` →
+  herdr, `herdr.server` → restart-herdr, outdated hooks → hooks, missing
+  → integrations, `remuda.version` → remuda-release else remuda,
+  `code.version` → code, `mcp` → mcp, `statusline` → statusline); the
+  machines below the best with no such update, and every other marked
+  cell not at the best value (each of them in a row that ranks nothing:
+  a hash, a model, a branch), are the row's `hand`, the page's to say by
+  hand — a machine ahead of the rest is never told to do anything. `Service.Table(fresh)` reads every
+  connected machine of `Manager.List()` side by side (a `-server` host
+  is no column), each read standing `FreshFor` a minute, one at a time per
+  machine, `ReadTimeout` 30 s; fresh reads at once and `Health.Refresh`es
+  the vitals too; `Forget` on `events.MachineRemoved`. Route `GET
+  /api/fleet-setup[?fresh=1]` (`internal/server/drift.go`; not a viewer's
+  nor an agent key's). The page: `features/updates/FleetDialog.tsx`
+  (dialog kind `fleet-setup`: "Fleet setup…" in the Updates dialog's
+  foot, the machine's ⋯ menu, the Server place and the palette; never
+  for a viewer) over `FleetGrid.tsx` — a column per machine (away or not
+  read said under its name, the error in its Tip), a `<tbody>` per
+  section, the row's label a `Tip` with `rowExplain`, an `odd` cell amber
+  (`.fleet-cell.is-odd`) and a `split` one edged, each marked cell's Tip
+  saying the norm, a hash or a behind cell's the full hash and when it
+  changed or the upstream and the last fetch; the table scrolls sideways
+  inside `.fleet-scroll` with the labels sticky, the page never — and only
+  the rows that differ until "Show every fact"; **Bring in line** lists
+  each update once per machine with the rows it fixes and its command in
+  a `<details>`, Run… swaps the dialog for that machine's `UpdatesDialog`
+  opened on that `what` (the command again before Run, then the job's
+  log; its close comes back, its finish reads the table afresh), Run…
+  disabled for a machine the roster does not list; **By hand** says what
+  to do on the row's `hand` machines (`handWords`: install
+  the agent, `herdr integration install`, `/model` or settings.json for
+  the model, copy the instruction file — naming whose copy changed last
+  — commit and pull a repository's file, pull a checkout behind; remuda
+  never writes the agents' configs); `fleet.ts` the pure part, tested:
+  `sectionTitle`, `rowLabel`, `rowExplain`, `valueWords`, `cellTip`,
+  `differs`, `shownSections`, `summaryWords`, `bringInLine`, `byHand`,
+  `handWords`. Under the screen-sharing mode the machines go by their
+  neutral names and a repository with a hidden folder by its project's.
+  The e2e display suite fakes the route (`fakeFleet`) and checks the
+  marks, the filter, the two updates and Run… opening Updates.
 - **The machine stays awake while its agents work** (`internal/awake`,
   tested): a switch per machine, off by default, kept in `awake.json` in
   the state dir (`PATCH /api/machines/{id}/awake {on}`, the row "Keep
