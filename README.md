@@ -261,7 +261,27 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   with uncommitted work, the ones with changes since you last looked
   first, and opens the Changes lens of the one you pick beside the list:
   approve, reject or comment from one place instead of visiting each
-  pane.
+  pane. Within those groups the **riskiest work comes first**: each row
+  wears a small "risk 45" chip whose tooltip says why — a big change,
+  code changed with no test beside it, a migration, a lockfile, CI
+  config, sign-in or permissions code, possible secrets the last secret
+  check found in this very work, failing checks or conflicts on its pull
+  request, or another workspace changing the same lines.
+- **Collision radar** — two agents on one repository, in different
+  worktrees or clones on different machines, are told apart before the
+  merge does it for you. Once a minute remuda reads each checkout's work
+  against the repository's main branch (its branch's own commits and
+  what is still uncommitted) and compares them: a quiet bolt on the
+  sidebar card, and on the wall tile and the review row beside the other
+  workspace's name — amber when the same lines (or lines side by side)
+  change, quiet when only the same files do — and its tooltip lists the files,
+  where they touch, and which of the two should land first: the one with
+  a pull request open, else the one whose agent has finished, else the
+  smaller change. The Changes lens says it in a notice, the zoo draws a
+  lightning between the two creatures (a small bolt on each when they
+  stand in different pens), and a new overlap of the same lines is one
+  push — to the workspace that should wait and rebase — respecting your
+  mutes and quiet hours.
 - **Arena** — one prompt to several agents at once: "Arena…" in a task's
   Start dialog, or "Arena: one prompt to several agents…" in the palette.
   Pick two to six lanes — an agent and its model on a repository of any

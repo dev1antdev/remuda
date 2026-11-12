@@ -31,6 +31,7 @@ func (s *Server) handleReviewSecrets(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 502, err) // the reason alone: the page says it is the secret check's
 		return
 	}
+	s.Review.NoteScan(mc.ID(), dir, scan) // the review queue's risk reads it while the work stays as it was read
 	writeJSON(w, scan)
 }
 

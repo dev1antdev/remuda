@@ -8976,21 +8976,21 @@ body.popout {
   }
 }
 
-/* a head with a Jira chip or a PR, in a tile too narrow for them beside the title: the title and the tile's buttons keep
+/* a head with a Jira chip, a collision or a PR, in a tile too narrow for them beside the title: the title and the tile's buttons keep
    the first line, the chip, the PR and the usage go to a line of their own */
 @container (max-width: 800px) {
-  .tile-head:has(> .tile-jira, > .tile-pr-group) {
+  .tile-head:has(> .tile-jira, > .tile-pr-group, > .tile-collide) {
     flex-wrap: wrap;
     row-gap: 0;
   }
 
-  .tile-head:has(> .tile-jira, > .tile-pr-group)::before {
+  .tile-head:has(> .tile-jira, > .tile-pr-group, > .tile-collide)::before {
     content: "";
     order: 2;
     flex-basis: 100%;
   }
 
-  .tile-head:has(> .tile-jira, > .tile-pr-group) > :is(.tile-jira, .tile-pr-group, .tile-usage) {
+  .tile-head:has(> .tile-jira, > .tile-pr-group, > .tile-collide) > :is(.tile-jira, .tile-pr-group, .tile-collide, .tile-usage) {
     order: 3;
     margin: 0 0 4px;
   }
@@ -12770,4 +12770,140 @@ body.popout {
   font-family: var(--mono);
   font-size: var(--fs-11);
   white-space: pre;
+}
+
+/* ---- the collision radar: another checkout of the repository changing the same files (features/roster/CollisionMark.tsx,
+   the lens's CollisionNotice.tsx, the zoo's Bolts.tsx) and the review queue's risk chip (features/review/risk.ts) ---- */
+.collide-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  max-width: 14ch;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+}
+
+.collide-mark > svg {
+  flex-shrink: 0;
+}
+
+.collide-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.collide-mark.is-lines {
+  color: var(--amber);
+}
+
+.tile-collide {
+  font-size: var(--fs-12);
+}
+
+.queue-item:has(.queue-collide) .queue-name {
+  display: flex;
+  flex-direction: column;
+  white-space: normal;
+}
+
+.queue-collide {
+  max-width: 100%;
+}
+
+.risk-chip {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--bg-active);
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.risk-chip.is-medium {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.risk-chip.is-high {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.review-collisions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-collision-head,
+.review-collision-order {
+  display: block;
+}
+
+.review-collision-files {
+  margin: 3px 0;
+  padding-left: 18px;
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+
+.zoo-grid {
+  position: relative;
+  isolation: isolate; /* the lightning goes behind the creatures and their captions, not over them */
+}
+
+.zoo-bolts {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.zoo-bolts path {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+  animation: zoo-flicker 1.8s steps(2) infinite;
+}
+
+.zoo-bolts path.is-lines {
+  stroke-width: 3;
+  opacity: 0.95;
+}
+
+@keyframes zoo-flicker {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.zoo-bolt {
+  position: absolute;
+  left: 6%;
+  top: 6%;
+  display: grid;
+  place-items: center;
+  width: 20%;
+  aspect-ratio: 1;
+  border-radius: 99px;
+  background: var(--bg-raised);
+  box-shadow: 0 0 0 2px var(--line-strong);
+  color: var(--fg-dim);
+  pointer-events: none;
+}
+
+.zoo-bolt.is-lines {
+  box-shadow: 0 0 0 2px var(--amber);
+  color: var(--amber);
 }

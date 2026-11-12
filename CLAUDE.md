@@ -1458,9 +1458,33 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   worktree made outside herdr still joins its repository's folder in the
   sidebar — git names a linked worktree's repository by its real path —
   else the checkout's own top folder, since a submodule's git dir sits
-  under its parent's `.git/modules`), and the roster carries `session.dir`, `session.branch`
-  and `session.review {changed, fresh}` for the sidebar's card, beside
-  `session.folder` and `session.icon` (`internal/icons`).
+  under its parent's `.git/modules`), the address of its origin, else its
+  first remote (`Store.Remote`, what every checkout of one repository
+  shares, for `internal/collisions`), and for the review queue's risk the
+  work's **profile** (`work.go`, `profile.go`: git's `--numstat HEAD`, the
+  untracked files' size through `wc -c` — read off the inode, never the
+  file — and every uncommitted path classified: `Store.Profile`); and the roster carries `session.dir`, `session.branch`
+  and `session.review {changed, fresh, ready, risk}` for the sidebar's card, beside
+  `session.folder` and `session.icon` (`internal/icons`). **The risk**
+  (`risk.go`, `profile.go`, tested on real checkouts): `RiskOf(profile,
+  signals)` sums points for what makes a review risky and caps them at
+  100 — the size (`profile.Lines()`: git's lines and the new files' bytes
+  as forty a line; big from 500 lines or 25 files 25, sizeable from 150 or
+  10 10), source files changed with no test changed beside them (in their
+  folder, or a test carrying their name: `testedBy`; 5 each, 20 at most),
+  a migration or schema 15, sign-in / permissions / secrets / crypto
+  paths by their words 15 (`sensitiveKind`, `pathWords`), CI config 10, a
+  lockfile 5, the secret check's findings 40, an open pull request's
+  failed checks 20, conflicts 15, changes requested 10 (off the roster's
+  `pane.pr.status`), another checkout changing the same lines 20 or the
+  same files 8 (`internal/collisions`) — high from 50, medium from 20,
+  each `Reason{kind, points, count, lines, paths, same, with}` the
+  weightiest first; `server.riskSignals` gathers the signals. **The secret
+  check's answer is kept** (`NoteScan`, by the route) and counts while the
+  work is the one it read: `Secrets` drops it once a sweep sees the
+  uncommitted blobs move after it (the work's fingerprint, `movedAfter`:
+  the start of the sweep before the one that saw the change) — no scan
+  ever runs for the queue.
   `features/review/Review.tsx` draws it (`Diff.tsx` the file rows,
   `Hunk.tsx` a hunk's rows in one column or two with a comment box under
   the tapped row, `hunks.ts` the parsing — `splitHunks`, `rowsOf`,
@@ -1509,7 +1533,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `?mode=review`): every workspace with uncommitted work in one list —
   `queue.ts` (`reviewQueue`, tested) reads the roster's `session.dir` and
   `session.review`, the ones ready again first, then the ones with
-  changes since the last look — and
+  changes since the last look, the riskiest first within each (`scoreOf`)
+  — each row with a `risk-chip` ("risk 45", amber medium, red high, the
+  reasons in its tooltip: `features/review/risk.ts`, tested — `reasonWords`,
+  `riskTip`, `riskChip`, `levelWords`, `pathsWords`) and the collision mark
+  under its name — and
   the Changes lens of the picked one beside it, its pane the workspace's
   first agent pane (a shell when none runs there, comments then go to any
   agent), `onSeen` the roster's refresh; under 920 px the list and the
@@ -1714,6 +1742,78 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and webhooks, a key's body stepped over once —
   no regexp; `TestALineIsReadInTimeLinearInItsLength` feeds 2 MB lines
   built to make a scan that restarts at every position quadratic.
+- `internal/collisions/` — **the collision radar** (tested on real clones
+  and worktrees through `shell.Local`): agents in different checkouts of
+  one repository — worktrees of a machine, clones on several — told they
+  change the same files before the merge says so. `Groups` takes every
+  connected machine's workspaces (`WorkspacesOf` off the watcher's
+  snapshot; `internal/app/collisions.go` wires the lookups) by `RepoKey` —
+  the origin's address through `teleport.RemoteKey`, so ssh and https
+  agree, else the main folder on its machine (`review.Store.Root` /
+  `Remote`, read by the badge sweep) — and keeps a repository only while
+  two or more *active* folders share it (an agent pane runs there, or
+  work waits uncommitted); a folder two workspaces share is one checkout,
+  and two folders inside one checkout one work (`membersOf`, by the
+  checkout's top). Only those folders are read: **one script per
+  machine** (`Script`, side by side across machines, 60 s each) a minute
+  apart (`Every`, `Service.Loop`, never two sweeps at once). The base is
+  **the merge base with the repository's main branch**: origin's default
+  branch (`refs/remotes/origin/HEAD`), else origin/main, origin/master,
+  main or master — and the local branch of that name when it holds the
+  remote's (`mainScript`: a main ahead of origin, with commits every
+  branch off it shares, would make every worktree collide with every
+  other); the work is `git diff -U0 --no-ext-diff --no-textconv
+  --no-renames --full-index <merge base>` from the checkout's top — the
+  branch's own commits and the uncommitted work alike — summed up by an
+  awk (`diffAwk`: a file's new blob, binaries, each hunk's old and new
+  range, at most `maxLines` 6000 lines, a header's `---` told from a
+  removed `-- comment` by where it stands) plus the untracked files
+  (`maxUntracked` 2000, each a change of the whole file). `Compare` is
+  what two works both change: nothing for a file both left as the same
+  blob or both deleted (`Gone`), the same lines when two hunks touch —
+  the same lines or lines side by side, which a merge counts as one
+  conflict, in half-lines so an insertion sits between two lines
+  (`halves`) — or either changed it whole (binary, new), with the region
+  in the base's lines; else the file only. **Which lands first**
+  (`Order`): the one with a pull request still open (named and read OPEN
+  or not read yet), else the one whose agents have finished, else the
+  smaller change, else by name — the other rebases on it. Each side's
+  `Collision{with {machine, workspace, name, dir, branch}, files (the
+  same lines first, at most `MaxFiles` 20, `more`), lines, first, why,
+  main}` is kept by folder (`Service.For`, the roster's
+  `session.collisions`; `Changed` wakes the live hub when it moved); a
+  machine that did not answer, or a removed one (`Forget`), takes its
+  collisions out. **One push per new overlap of the same lines**
+  (`Words`; `Notify`, kind `collision` — the webhooks' and the
+  activity's review family — to the workspace that lands second, so the
+  quiet hours hold, and none while either folder is muted): an episode
+  per pair of checkouts, kept in `collisions.json` so a restart tells no
+  standing overlap again, ended only when both were read and no longer
+  touch (a machine away keeps it, so its return is no news). The page:
+  `features/roster/collide.ts` (tested: `whereWords`, `markWords`,
+  `orderWords`, `collisionWords`, `gravest`), `CollisionMark.tsx` (the
+  `zap` alone on the sidebar card's first line beside its badges
+  (`compact`; `markWords` joins the card's tooltip, its second line left
+  to the branch, the issue and the agent's words), the `zap` and the
+  other's name in the wall tile's head — `.tile-collide` wraps with the
+  chips under 800 px — and under the review row's name, amber for the
+  same lines, the story in its title; `usePeerName` the neutral names while screen sharing hides
+  the other, and nothing on a hidden folder's own card or tile),
+  `features/review/CollisionNotice.tsx` (a notice per collision at the top
+  of the Changes lens's body, scrolling with the files, warn for the same lines, dismissed until it says
+  something else), and the zoo: `features/roster/zooBolts.ts` (tested:
+  `zooBolts` — a lightning between the first creatures of two colliding
+  workspaces in one pen, a small `zoo-bolt` on every creature whose peer
+  stands in another pen or not on the wall; `between` from one body's
+  edge to the other's, `boltPath`, `boltKey`) drawn by `app/zoo/Bolts.tsx`,
+  an SVG behind the creatures in the pen's grid (`isolation: isolate`,
+  `z-index: -1`) measured off them (`data-zoo-key`) and again whenever the
+  grid changes size — the grid handed down as state by `PenGrid`, since a
+  parent's ref is set only after its children's layout effects ran;
+  office mode marks every colliding creature. The e2e display suite
+  dresses the roster with a collision between the repository and its
+  worktree, one with a clone on a machine not on the wall, and their
+  risks, and expects every mark.
 - `internal/opinion/` — **the second opinion** (tested): another agent asked
   to review what the Changes lens shows of a folder, without touching it.
   The lens head's **Second opinion** button opens `OpinionDialog.tsx` —
@@ -2471,7 +2571,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   built from: `Link` → `?machine=&pane=`, `?panel=` for a digest). Every
   alert `record` hands to the feed goes to each enabled webhook whose
   `Kinds` include its `HookKind` (input → question, done → finish, the
-  watchdog's three → watchdog, the rest by name: digest, schedule, task,
+  watchdog's three → watchdog, a collision (`internal/collisions`) → review, the rest by name: digest, schedule, task,
   budget, limits, review, machine, backup, signin, tests (a pane's failed tests), trigger (one of
   the person's triggers, `internal/triggers`) — `HookKinds` is the one list, the page's
   picker must match it, `webhooks.test.ts` reads it off the Go file) outside its own quiet hours — a question 10 s after
@@ -2586,7 +2686,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   opens its pane, the alert settings at its foot; the palette has it too.
   **Filters** (`filter.ts`, tested; `FilterBar.tsx`): a chip per family
   of kinds — questions, finished, watchdog, tasks, schedules, budgets,
-  review, machines, triggers (failed tests and the person's triggers), sent, other for a handover, a recovery, a test or a
+  review (a collision too), machines, triggers (failed tests and the person's triggers), sent, other for a handover, a recovery, a test or a
   kind the page does not know — with its count for the machine chosen,
   a Select for the machine, Show everything; the pref `activity.filter`
   (per device, not synced), and the bell's tooltip says what is on.

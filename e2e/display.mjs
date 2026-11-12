@@ -728,6 +728,7 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
       if (session.id === app.id) {
         session.jira = [{ key: "APP-12", summary: "Draw every screen", status: "In Review", category: "indeterminate", url: "https://example.atlassian.net/browse/APP-12" }];
       }
+      dressCollisions(session);
       for (const tab of session.tabs ?? []) for (const pane of tab.panes ?? []) Object.assign(pane, DRESS[pane.id] ?? {});
     }
   }
@@ -735,6 +736,31 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
   roster.server = SERVER_HOST; // the Server place a remuda -server draws: its host's vitals, the readings a Raspberry Pi gives
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(roster)).toString("base64") });
+}
+
+// dressCollisions has the repository and its worktree change the same lines of src/app.go — a lightning between their
+// creatures in the zoo — and the repository the same file as a clone on a machine not on the wall, a bolt on its
+// creatures; each with a risk the Review mode's queue sorts and draws
+function dressCollisions(session) {
+  const peer = (other, name) => ({ machine: "local", workspace: other.id, name, dir: other.id === app.id ? appDir : `${appDir}-feature-x` });
+  const files = [{ path: "src/app.go", lines: true, from: 6, to: 12 }, { path: "README.md", lines: false }];
+  if (session.id === app.id) {
+    session.collisions = [
+      { with: peer(tree, "feature-x"), files, lines: true, first: true, why: "pr", main: "main" },
+      { with: { machine: "gog", workspace: "w9", name: "api", dir: "/srv/app" }, files: [{ path: "go.mod", lines: false }], lines: false, first: false, why: "smaller", main: "origin/main" },
+    ];
+    const reasons = [
+      { kind: "checks", points: 20, count: 1 },
+      { kind: "collision", points: 20, same: true, with: "feature-x" },
+      { kind: "migration", points: 15, count: 1, paths: ["db/migrations/0042_users.sql"] },
+      { kind: "untested", points: 5, count: 1, paths: ["src/app.go"] },
+    ];
+    session.review = { ...(session.review ?? { changed: 4, fresh: 4 }), risk: { score: 60, level: "high", reasons } };
+  }
+  if (session.id === tree.id) {
+    session.collisions = [{ with: peer(app, "app"), files, lines: true, first: false, why: "pr", main: "main" }];
+    session.review = { ...(session.review ?? { changed: 2, fresh: 2 }), risk: { score: 20, level: "medium", reasons: [{ kind: "collision", points: 20, same: true, with: "app" }] } };
+  }
 }
 
 // DENIED is what the dressed Claude Code pane's conversation was denied without asking, for the chat lens's notice
@@ -864,7 +890,7 @@ async function changesScreens() {
       check((await count(`${LENS} .review-file.fresh`)) === CHANGED.length, "a file never looked at is not marked fresh");
       check(await evaluate(`(() => { const sub = document.querySelector('${LENS} .review-sub'); return !!sub && sub.scrollWidth <= sub.clientWidth + 1 && /4/.test(sub.textContent); })()`), "the line under the branch does not say the 4 files whole");
     },
-    expect: [`${LENS} .review-head`],
+    expect: [`${LENS} .review-head`, `${LENS} .review-collision`],
     close: async () => {},
   });
   await screen("changes-diff", {
@@ -1137,7 +1163,7 @@ async function runPass() {
   if ((await evaluate(`matchMedia("(pointer: coarse)").matches`)) !== pass.phone) failed(`the browser does not take itself for a ${pass.phone ? "phone" : "desk"}: (pointer: coarse) says otherwise`);
   where = pass.name;
 
-  await screen("sidebar", { open: sidebarOpen, expect: [".ws-folder-head", ".ws-item", ".machine-head"], close: async () => {} });
+  await screen("sidebar", { open: sidebarOpen, expect: [".ws-folder-head", ".ws-item", ".machine-head", ".ws-item .collide-mark.is-lines"], close: async () => {} });
   await screen("folder-folded", {
     open: async () => {
       await sidebarOpen();
@@ -1313,9 +1339,9 @@ async function runPass() {
       close: async () => (i === 3 ? closeAll() : undefined),
     });
 
-  await screen("wall-chat", { open: async () => palette("mode:wall"), expect: [".wall-bar", ".tile"] });
+  await screen("wall-chat", { open: async () => palette("mode:wall"), expect: [".wall-bar", ".tile", ".tile .collide-mark"] });
   await screen("wall-screen", { open: async () => palette("wall-view"), expect: [".wall-bar", ".tile"] });
-  await screen("wall-zoo", { open: async () => palette("wall-zoo"), expect: [".zoo-grid .zoo-creature"] });
+  await screen("wall-zoo", { open: async () => palette("wall-zoo"), expect: [".zoo-grid .zoo-creature", ".zoo-bolts path.is-lines", ".zoo-bolt"] });
   // a creature asked about its day says it in its bubble, in its own voice
   await screen("zoo-tell", {
     open: async () => {
@@ -1349,7 +1375,7 @@ async function runPass() {
   });
   await screen("tasks-list", { open: async () => evaluate(`document.querySelector('.tasks-view button')?.click()`), expect: [".tasks-list .tasks-row"] });
   await screen("task-detail", { open: async () => tap(".tasks-row"), expect: [".tasks-detail"] });
-  await screen("review", { open: async () => palette("mode:review"), expect: [".queue-head"] });
+  await screen("review", { open: async () => palette("mode:review"), expect: [".queue-head", ".queue-item .risk-chip.is-high", ".queue-item .collide-mark"] });
   await screen("code", { open: async () => palette("mode:code"), expect: [".code-mode"] });
 
   for (const panel of ["standup", "usage", "schedules", "activity", "alerts", "arenas"]) await screen(`panel-${panel}`, { open: async () => palette(panel), expect: [".modal"], settle: 600 });
