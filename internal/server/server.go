@@ -27,6 +27,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/collisions"
 	"github.com/dev1antdev/remuda/internal/complete"
+	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
@@ -109,6 +110,7 @@ type Server struct {
 	Mirror     *mirror.Service     // remuda's figures and alerts inside herdr itself
 	Timelapse  *timelapse.Recorder // what the agents' screens did while they worked
 	Triggers   *triggers.Service   // the person's rules on what a pane prints, and the dev servers offered as previews
+	Drift      *drift.Service      // how every machine is set up, side by side
 	Collisions *collisions.Service // the workspaces of one repository changing the same files, nil without
 
 	streams   termStreams
@@ -167,6 +169,7 @@ func (s *Server) Handler() http.Handler {
 	s.mirrorRoutes(api)
 	s.timelapseRoutes(api)
 	s.triggerRoutes(api)
+	s.driftRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

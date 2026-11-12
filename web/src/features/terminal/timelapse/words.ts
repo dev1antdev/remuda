@@ -48,7 +48,8 @@ export function gifName(meta: RecordingMeta, speed: Speed): string {
   return `${place}-${stamp}-${speed === "frame" ? "frames" : `${speed}x`}.gif`;
 }
 
-// shownRecordings leaves out what the screen-sharing mode hides: a hidden machine's, a hidden folder's
-export function shownRecordings(list: RecordingMeta[], hidden: { machine: (id: string) => boolean; folder: (machineId: string, folder: string) => boolean }): RecordingMeta[] {
+// shownRecordings leaves out what the screen-sharing mode hides: a hidden machine's, a hidden folder's — recordings, or
+// the search's hits in them
+export function shownRecordings<T extends Pick<RecordingMeta, "machine" | "folder" | "dir">>(list: T[], hidden: { machine: (id: string) => boolean; folder: (machineId: string, folder: string) => boolean }): T[] {
   return list.filter((meta) => !hidden.machine(meta.machine) && !hidden.folder(meta.machine, meta.folder || meta.dir));
 }

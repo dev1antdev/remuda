@@ -94,8 +94,22 @@ func TestProbeReadsHerdrsHooksAndPlugins(t *testing.T) {
 	if got := run(GitHubPlugins); got != "herdr.push dcolinmorgan/herdr-push\n" {
 		t.Fatalf("github plugins: %q", got)
 	}
-	if probe := Script(); !strings.Contains(probe, OutdatedHooks+" | sed 's/^/hook=/'") || !strings.Contains(probe, GitHubPlugins+" | sed 's/^/plugin=/'") {
-		t.Fatal("the probe does not print them as hook= and plugin= lines")
+	states := run(Integrations)
+	if states != "pi not installed\nclaude outdated\ncodex current\nantigravity-cli outdated\nletta outdated\n" {
+		t.Fatalf("integrations: %q", states)
+	}
+	if probe := Script(); !strings.Contains(probe, OutdatedHooks+" | sed 's/^/hook=/'") || !strings.Contains(probe, GitHubPlugins+" | sed 's/^/plugin=/'") || !strings.Contains(probe, Integrations+" | sed 's/^/integration=/'") {
+		t.Fatal("the probe does not print them as hook=, plugin= and integration= lines")
+	}
+	r, _ := Parse("integration=" + strings.ReplaceAll(strings.TrimSpace(states), "\n", "\nintegration=") + "\nintegration=$(id) current\nintegration=gemini broken\n")
+	want := map[string]string{"pi": "missing", "claude": "outdated", "codex": "current", "antigravity-cli": "outdated", "letta": "outdated"}
+	if len(r.Integrations) != len(want) {
+		t.Fatalf("integrations read: %v", r.Integrations)
+	}
+	for agent, state := range want {
+		if r.Integrations[agent] != state {
+			t.Fatalf("integrations read: %v", r.Integrations)
+		}
 	}
 }
 

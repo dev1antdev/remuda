@@ -99,6 +99,9 @@ export default function ServerPanel({ server, onClose }: { server: Machine; onCl
           <button type="button" className="btn" onClick={() => setUpdates(true)}>
             {t("Updates…")}
           </button>
+          <button type="button" className="btn" onClick={() => actions.openDialog({ kind: "fleet-setup" })}>
+            {t("Fleet setup…")}
+          </button>
           <button type="button" className="btn primary" onClick={() => actions.openDialog({ kind: "update-everywhere" })}>
             {t("Update everywhere…")}
           </button>

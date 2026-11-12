@@ -22,6 +22,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/complete"
+	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
@@ -698,6 +699,14 @@ func Run(ctx context.Context, o Options) error {
 	go radarOfCollisions.Loop(ctx.Done())
 	events.Subscribe(bus, func(e events.MachineRemoved) { radarOfCollisions.Forget(e.Machine) })
 
+	updater := &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet}
+	fleetSetup := &drift.Service{Fleet: fleet, Health: vitals, Updates: updater, Dirs: func(machineID string) []string {
+		if snap, _ := watcher.Snapshot(machineID); snap != nil {
+			return snap.WorkspaceDirs()
+		}
+		return nil
+	}}
+	events.Subscribe(bus, func(e events.MachineRemoved) { fleetSetup.Forget(e.Machine) })
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {
 			d, _ := meter.Display(machineID, paneID)
@@ -708,7 +717,7 @@ func Run(ctx context.Context, o Options) error {
 		Watch:     watcher,
 		Input:     input,
 		Chat:      chats,
-		Updates:   &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet},
+		Updates:   updater,
 		Tasks:     taskStore,
 		Launcher:  launcher,
 		Push:      pushSvc,
@@ -746,6 +755,7 @@ func Run(ctx context.Context, o Options) error {
 		Mirror:    mirrored,
 		Timelapse: recorder,
 		Triggers:  paneTriggers,
+		Drift:     fleetSetup,
 
 		Collisions: radarOfCollisions,
 	}

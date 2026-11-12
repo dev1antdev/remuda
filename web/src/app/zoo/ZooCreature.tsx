@@ -1,7 +1,8 @@
 // ZooCreature is one agent of the zoo: the creature (./Creature) dressed off the roster, the speech bubble over it — the
-// first line of its answer, or what it asks while it asks — and its name, folder and how long under it; a click opens
-// it in Agents, a hover or a long press tells its state in words. In the grid with room for its bubble, large (office
-// mode's featured one, the pop-out), or small beside its caption (office mode's column, where a click pins it).
+// first line of its answer, or what it asks while it asks, or what it says of its day while it says it — and its name,
+// folder and how long under it; a click opens it in Agents, a hover or a long press tells its state in words, and a
+// long press or its Tell me has it say what it did today. In the grid with room for its bubble, large (office mode's
+// featured one, the pop-out), or small beside its caption (office mode's column, where a click pins it).
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { displayOf, rowLabel, stateWords, type RadarPrefs } from "@/features/roster/radar";
@@ -9,7 +10,7 @@ import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
 import type { Tile } from "@/features/roster/wall";
 import { folderOf as sessionFolder } from "@/features/roster/workspaces";
-import { bubbleOf, lookOf, poseWord, stateSince, zooFace } from "@/features/roster/zoo";
+import { bubbleOf, lookOf, poseWord, stateSince, zooFace, type Pose } from "@/features/roster/zoo";
 import { BELT_AT, babiesOf, broodWords, coinsOf, drainedUntil, flagOf, flagWords, girthOf, workExtras } from "@/features/roster/zooBody";
 import { weatherOf } from "@/features/roster/zooPens";
 import { outfits, wearersOf, type Outfit } from "@/features/roster/zooWear";
@@ -27,9 +28,10 @@ import { Creature, type Dress } from "./Creature";
 // PEEK_MS is how long a long press keeps the state in words under a creature
 const PEEK_MS = 3000;
 
-// Life is what the zoo around a creature gives it: its outfit among the others, the applause, a puff, what it asks, and
-// the bolt it wears while its workspace collides with one in another pen (true when the lines touch) with the words
-export type Life = { outfit?: Outfit; cheer?: boolean; puff?: boolean; question?: string; night?: boolean; bolt?: boolean; collision?: string };
+// Life is what the zoo around a creature gives it: its outfit among the others, the applause, a puff, what it asks, what
+// it says of its day while it says it, and the way to ask it (none for a folder hidden under the screen-sharing mode),
+// and the bolt it wears while its workspace collides with one in another pen (true when the lines touch) with the words
+export type Life = { outfit?: Outfit; cheer?: boolean; puff?: boolean; question?: string; night?: boolean; telling?: string; onTell?: (pose: Pose) => void; bolt?: boolean; collision?: string };
 
 export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false, pinned = false, onPick, life = {} }: {
   tile: Tile;
@@ -55,13 +57,15 @@ export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false
   const realFolder = basename(sessionFolder(session)) || session.name;
   const folder = hidden ? share.folderName(machine.id, sessionFolder(session), realFolder) : realFolder;
   const asking = look.pose === "asking" && !!life.question && !hidden && mode !== "small";
+  const telling = mode !== "small" && !hidden ? life.telling : undefined;
+  const onTell = mode !== "small" && !hidden ? life.onTell : undefined;
   const { name, where, bubble, icon } = zooFace(
     {
       label: rowLabel(pane, tab, session.name, radar),
       kind: VENDOR_NAME[pane.agent] ?? pane.agent,
       folder,
       machine: machine.id !== "local" ? share.machineLabel(machine) : null,
-      bubble: mode === "small" ? "" : asking ? life.question! : bubbleOf(pane, display, alert),
+      bubble: mode === "small" ? "" : telling ? telling : asking ? life.question! : bubbleOf(pane, display, alert),
     },
     hidden,
   );
@@ -97,12 +101,17 @@ export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false
   const [peek, setPeek] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
+  const tellRef = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    tellRef.current = onTell ? () => onTell(look.pose) : undefined;
+  }, [onTell, look.pose]);
   const press = useMemo(
     () =>
       longPress(() => {
         setPeek(true);
         clearTimeout(timer.current);
         timer.current = setTimeout(() => setPeek(false), PEEK_MS);
+        tellRef.current?.();
       }),
     [],
   );
@@ -115,7 +124,7 @@ export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false
       {(bubbleRow || bubble) && (
         <div className="zoo-bubble-slot">
           {bubble && (
-            <div className={`zoo-bubble${asking ? " is-question" : ""}`}>
+            <div className={`zoo-bubble${telling ? " is-telling" : asking ? " is-question" : ""}`} aria-live={telling ? "polite" : undefined}>
               <span>{bubble}</span>
             </div>
           )}
@@ -135,7 +144,16 @@ export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false
         </button>
       </Tip>
       <figcaption>
-        <span className="zoo-name">{name}</span>
+        <span className="zoo-name-row">
+          <span className="zoo-name">{name}</span>
+          {onTell && (
+            <Tip text={t("Tell me what you did today")}>
+              <button type="button" className={`icon-btn sm zoo-tell${telling ? " on" : ""}`} aria-label={t("Tell me what you did today")} aria-pressed={!!telling} onClick={() => onTell(look.pose)}>
+                <Icon name="volume" size={12} />
+              </button>
+            </Tip>
+          )}
+        </span>
         <span className="zoo-where">
           <FolderIcon icon={icon ? session.icon : undefined} name={folder} size={12} />
           <span>{where}</span>
