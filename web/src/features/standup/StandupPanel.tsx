@@ -1,8 +1,9 @@
 // The standup panel: what every agent on every machine did since midnight (or over the last day or week), the ones that
-// need the person first — a row each with its numbers, its files and its last answer — and the report as Markdown to paste.
+// need the person first — a row each with its numbers, its files and its last answer — the report as Markdown to paste,
+// and Listen, the day read aloud with the agent being told of marked.
 
-import { useMemo } from "react";
-import { actions } from "@/app/store";
+import { useEffect, useMemo } from "react";
+import { actions, app } from "@/app/store";
 import { copyText } from "@/lib/host";
 import { usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
@@ -10,8 +11,11 @@ import { plural } from "@/lib/text";
 import { usd } from "@/features/usage/format";
 import { Dialog, Icon, Logo, Notice, Select } from "@/ui";
 import { fetchStandup, type Item } from "./api";
+import { ListenBar, ListenButton } from "./ListenBar";
 import { RecapBody } from "./RecapBody";
 import { order, PERIODS, quiet, sinceFor, stateLabel, where, type Period } from "./standup";
+import { useDayScript } from "./useDayScript";
+import { useListen } from "./useListen";
 import { t } from "@/lib/i18n";
 
 export default function Standup({ onClose }: { onClose: () => void }) {
@@ -21,6 +25,17 @@ export default function Standup({ onClose }: { onClose: () => void }) {
   const items = useMemo(() => order(data?.items ?? []), [data]);
   const busy = items.filter((item) => item.error || !quiet(item.recap));
   const idle = items.filter((item) => !item.error && quiet(item.recap));
+  const listening = useListen(t("remuda · Standup"));
+  const script = useDayScript(data, period);
+  const asked = app.use((s) => s.listen);
+  const { start } = listening;
+  useEffect(() => {
+    if (!asked || !data) return;
+    actions.listened();
+    start(script());
+  }, [asked, data, script, start]);
+  useEffect(() => () => actions.listened(), []);
+  const reading = listening.state && listening.state.status !== "idle" ? listening.parts[listening.state.part]?.key : undefined;
 
   const open = (item: Item) => {
     actions.selectPane(item.machine, item.pane);
@@ -50,15 +65,17 @@ export default function Standup({ onClose }: { onClose: () => void }) {
       controls={
         <>
           <Select value={period} onChange={setPeriod} options={PERIODS} />
+          <ListenButton listening={listening} script={script} ready={!!data} what={t("Listen to the day: who did what, who waits for you, what it cost")} />
           {loading && <span className="search-busy" />}
         </>
       }
     >
+      <ListenBar listening={listening} back={t("Back to the start of this agent")} skip={t("Skip to the next agent")} />
       {error && <Notice tone="error">{error}</Notice>}
       {data && items.length === 0 && <Notice tone="hint">{t("No agent is running on a connected machine.")}</Notice>}
       {data && items.length > 0 && busy.length === 0 && <Notice tone="hint">{t("Nothing happened {period}: no prompt, no answer, no tool call from any agent.", { period: periodWords })}</Notice>}
       {busy.map((item) => (
-        <article key={`${item.machine}|${item.pane}`} className="standup-item">
+        <article key={`${item.machine}|${item.pane}`} className={`standup-item${reading === `${item.machine}|${item.pane}` ? " is-reading" : ""}`}>
           <button type="button" className="linkish standup-open" onClick={() => open(item)} title={`${item.dir}\n${t("Open this agent's chat")}`}>
             <Logo agent={item.agent} />
             <span className="standup-where">
