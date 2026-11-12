@@ -2824,7 +2824,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   none) by `machine|folder` — the folder the sidebar groups by, which
   the roster names as `session.folder`: the repository's main checkout
   (herdr's `repo_root`, else the folder holding the shared `.git` of
-  `repo_key`), else the workspace's own folder; `server.folderOf`.
+  `repo_key`), else the workspace's own folder; `server.FolderOf`.
   `Store.Of` / `SetEmoji` / `SetImage` / `Clear` / `Image`; an emoji is
   checked by `CheckEmoji` (at most 32 bytes, no letters, digits but a
   keycap's, no control characters), a picture by `ParseImage` (a
