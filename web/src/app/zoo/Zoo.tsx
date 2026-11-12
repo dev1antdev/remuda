@@ -2,10 +2,10 @@
 // of its own, its pose, girth, coins, flag and babies saying what it does — standing in a pen per machine whose weather
 // is the machine's body, under the sky of the viewer's hour, with the day told along the foot. Between readings the
 // resting ones clap for a finish, a merge sets off fireworks, a compaction puffs, the eyes follow the pointer, and with
-// the voices on each calls out. A grid of pens that fills the screen, or office mode's one large beside a column of
-// small ones; the pop-out shows one large.
+// the voices on each calls out; asked (a long press, its Tell me), a creature says what its agent did today. A grid of
+// pens that fills the screen, or office mode's one large beside a column of small ones; the pop-out shows one large.
 
-import { useMemo, useRef, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { displayOf, type RadarPrefs } from "@/features/roster/radar";
 import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
@@ -15,16 +15,20 @@ import { CREATURE_SIZE, bubbleOf, cellMin, lookOf } from "@/features/roster/zoo"
 import { joinsApplause, tickerFacts } from "@/features/roster/zooLife";
 import { pensOf, skyOf, weatherOf, weatherWords } from "@/features/roster/zooPens";
 import { outfits, wearersOf } from "@/features/roster/zooWear";
+import { zooBolts, type Bolt } from "@/features/roster/zooBolts";
+import { collisionTip, usePeerName } from "@/features/roster/CollisionMark";
 import { hueStyle } from "@/features/roster/hue";
 import { t } from "@/lib/i18n";
 import { usePref } from "@/lib/prefs";
 import { basename } from "@/lib/text";
 import type { Office } from "../useOffice";
+import { Bolts } from "./Bolts";
 import { Boxes, Fireworks, Sky, WeatherMarks } from "./Sky";
 import { ZooCreature, type Life } from "./ZooCreature";
 import { ZooFoot, useDay } from "./ZooFoot";
 import { useGaze } from "./useGaze";
 import { useQuestions } from "./useQuestions";
+import { useTell } from "./useTell";
 import { useZooLife } from "./useZooLife";
 import { useVoices, wakeVoices } from "./voices";
 
@@ -40,6 +44,7 @@ export function Zoo({ shown, size, radar, now, office }: { shown: Tile[]; size: 
   const hiddenTile = (tile: Tile) => share.sessionHidden(tile.machine.id, tile.session);
   const askers = shown.filter((tile) => !hiddenTile(tile) && displayOf(tile.pane, radar, now) === "blocked").map((tile) => ({ key: tile.key, machine: tile.machine.id, pane: tile.pane.id }));
   const questions = useQuestions(askers);
+  const { telling, tell } = useTell(share.redact);
   const day = useDay();
   const night = skyOf(new Date(now).getHours()) === "night";
   const folderName = (tile: Tile) => {
@@ -51,18 +56,27 @@ export function Zoo({ shown, size, radar, now, office }: { shown: Tile[]; size: 
     const tile = shown.find((candidate) => candidate.machine.id === machine && candidate.pane.id === pane);
     return tile ? folderName(tile) : null;
   });
+  // the collision radar: a lightning between two creatures of one pen, a bolt on each when they stand apart (or on
+  // every colliding one in office mode, which has no pens); a hidden folder collides with nothing on screen
+  const collide = useMemo(() => zooBolts(shown.map((tile) => (hiddenTile(tile) ? { ...tile, session: { ...tile.session, collisions: undefined } } : tile))), [shown, share]); // eslint-disable-line react-hooks/exhaustive-deps
+  const peerName = usePeerName();
   const lifeOf = (tile: Tile): Life => {
     const display = displayOf(tile.pane, radar, now);
     const pose = lookOf(display, tile.pane.radar?.alert, !!tile.pane.limit?.hit_at).pose;
+    const collisions = hiddenTile(tile) ? [] : (tile.session.collisions ?? []);
     return {
+      bolt: office ? (collisions.length ? collisions.some((collision) => collision.lines) : undefined) : collide.marked.get(tile.key),
+      collision: collisions.length ? collisionTip(collisions, tile.machine.id, peerName) : undefined,
       outfit: dressed.get(tile.key),
       cheer: life.cheering !== null && life.cheering !== tile.key && joinsApplause(pose),
       puff: life.puffs.has(tile.key),
       question: questions.get(tile.key),
       night,
+      telling: !hiddenTile(tile) && telling?.key === tile.key ? telling.text : undefined,
+      onTell: hiddenTile(tile) ? undefined : (pose) => tell(tile, pose),
     };
   };
-  const talks = (tile: Tile) => !hiddenTile(tile) && (questions.has(tile.key) || bubbleOf(tile.pane, displayOf(tile.pane, radar, now), tile.pane.radar?.alert) !== "");
+  const talks = (tile: Tile) => !hiddenTile(tile) && (telling?.key === tile.key || questions.has(tile.key) || bubbleOf(tile.pane, displayOf(tile.pane, radar, now), tile.pane.radar?.alert) !== "");
   const toggleVoices = () => {
     if (!voices) wakeVoices();
     setVoices(!voices);
@@ -101,11 +115,11 @@ export function Zoo({ shown, size, radar, now, office }: { shown: Tile[]; size: 
                   <WeatherMarks weather={weather} />
                   {words && <span className="zoo-pen-words">{words}</span>}
                 </header>
-                <div className="zoo-grid">
+                <PenGrid bolts={collide.bolts.filter((bolt) => pen.tiles.some((tile) => tile.key === bolt.from))}>
                   {pen.tiles.map((tile) => (
                     <ZooCreature key={tile.key} tile={tile} radar={radar} now={now} bubbleRow={talking} life={lifeOf(tile)} />
                   ))}
-                </div>
+                </PenGrid>
                 {weather.boxes && <Boxes />}
               </section>
             );
@@ -114,6 +128,18 @@ export function Zoo({ shown, size, radar, now, office }: { shown: Tile[]; size: 
       )}
       {life.fireworks && <Fireworks />}
       <ZooFoot facts={facts} voices={voices} onVoices={toggleVoices} />
+    </div>
+  );
+}
+
+// PenGrid is a pen's creatures, and the lightning between the ones whose workspaces collide; the grid is held as state,
+// since a parent's ref is set only after its children's layout effects have run
+function PenGrid({ bolts, children }: { bolts: Bolt[]; children: ReactNode }) {
+  const [grid, setGrid] = useState<HTMLDivElement | null>(null);
+  return (
+    <div className="zoo-grid" ref={setGrid}>
+      {children}
+      <Bolts grid={grid} bolts={bolts} />
     </div>
   );
 }

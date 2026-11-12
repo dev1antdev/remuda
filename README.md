@@ -229,7 +229,10 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   for a watchdog note, dances over a finish you have not looked at,
   sleeps with a "z" when idle (dim when long idle, under a blanket at
   night), slumps under an empty battery when it hit its plan limit, and
-  tilts its head when its state is unknown — the pose and the sign say it
+  tilts its head when its state is unknown; press and hold one (or its
+  speaker under the pointer) and it tells you its day in its own voice —
+  "Today I answered 3 times and edited app.go. Now I'm waiting for your
+  answer." — high for Gemini, low for the Codex robot — the pose and the sign say it
   even without colour. Each vendor is a species of its own — a round
   critter with antennae for Claude Code, a robot for Codex, an egg
   between sparkles for Gemini CLI, a moon rabbit for Kimi Code — and
@@ -258,7 +261,27 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   with uncommitted work, the ones with changes since you last looked
   first, and opens the Changes lens of the one you pick beside the list:
   approve, reject or comment from one place instead of visiting each
-  pane.
+  pane. Within those groups the **riskiest work comes first**: each row
+  wears a small "risk 45" chip whose tooltip says why — a big change,
+  code changed with no test beside it, a migration, a lockfile, CI
+  config, sign-in or permissions code, possible secrets the last secret
+  check found in this very work, failing checks or conflicts on its pull
+  request, or another workspace changing the same lines.
+- **Collision radar** — two agents on one repository, in different
+  worktrees or clones on different machines, are told apart before the
+  merge does it for you. Once a minute remuda reads each checkout's work
+  against the repository's main branch (its branch's own commits and
+  what is still uncommitted) and compares them: a quiet bolt on the
+  sidebar card, and on the wall tile and the review row beside the other
+  workspace's name — amber when the same lines (or lines side by side)
+  change, quiet when only the same files do — and its tooltip lists the files,
+  where they touch, and which of the two should land first: the one with
+  a pull request open, else the one whose agent has finished, else the
+  smaller change. The Changes lens says it in a notice, the zoo draws a
+  lightning between the two creatures (a small bolt on each when they
+  stand in different pens), and a new overlap of the same lines is one
+  push — to the workspace that should wait and rebase — respecting your
+  mutes and quiet hours.
 - **Arena** — one prompt to several agents at once: "Arena…" in a task's
   Start dialog, or "Arena: one prompt to several agents…" in the palette.
   Pick two to six lanes — an agent and its model on a repository of any
@@ -300,7 +323,21 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   conversation — the session on screen, or a transcript opened from the
   search — is the sun button beside the chat's export, and in the
   palette. All of it is read from the transcripts remuda already has;
-  nothing is sent anywhere. **A standup digest every morning**: in
+  nothing is sent anywhere. **Listen** (the headphones beside the period,
+  or "Listen to the day" in the palette) reads the day aloud on the way
+  to work, the way a colleague would tell it: "Good morning. Here is
+  your day so far. 3 agents did some work. Together they spent about
+  9 dollars at API prices. In web on GOG, Codex is waiting for your
+  answer…" — who waits for you first, who finished what and what it
+  cost, its last answer in its own words, the reviews waiting and a plan
+  limit near its end, then what is left; a few minutes at most, in the
+  page's language. Play, pause, back, skip to the next agent; the
+  sentence being said is on screen and the agent marked in the report,
+  and a phone's lock screen shows it with its buttons (Chrome on
+  Android goes on with the screen locked; Safari on an iPhone stops
+  when the screen locks, so keep it on). It is the browser's own voice,
+  the one picked under Read aloud, and nothing passes through remuda;
+  a recap has Listen too. **A standup digest every morning**: in
   Schedules, pick "Standup digest" instead of a prompt, a time ("Weekdays"
   at 9:00) and what it covers — since midnight, the last 24 hours, the
   last 7 days, or since the previous digest — and every device that gets
@@ -556,6 +593,29 @@ the server is restarted — herdr restores the workspaces and panes, and
 remuda starts every chat again with its session resumed ("Restart
 herdr's server" is offered whenever the server lags the binary).
 
+**Fleet setup shows how every machine is set up, side by side** (the
+Updates dialog, the machine's ⋯ menu, the Server place, or the palette):
+a column per machine and a row per fact — each agent's version and how
+it was installed, herdr and its hooks for each agent, its plugins,
+remuda and code-server, whether remuda's MCP server is registered with
+each agent, Claude Code's status line, default model and fast mode, the
+global `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` and
+`~/.gemini/GEMINI.md`, and for every repository checked out on two
+machines or more its branch, how far it is behind its upstream as of the
+last fetch, and its `CLAUDE.md`, `AGENTS.md` and `.claude/settings.json`.
+The value most machines share is the norm and the one that differs is
+marked; a row's tooltip says what it is. Only the rows that differ show
+until you ask for every fact. What an update remuda already has can fix
+— an agent or herdr update, herdr's hooks (missing ones too), `remuda mcp
+install`, `remuda statusline install`, code-server — is listed under
+**Bring in line** with its command, and Run… opens that machine's Updates
+on it; the rest (another CLAUDE.md, another default model, a checkout
+behind) is said as what to do by hand. Reading it changes nothing: one
+script per machine greps the agents' own config files (`~/.claude.json`,
+Codex's `config.toml`, Gemini CLI's `settings.json`) and hashes the
+files, no agent is started, and no file's content leaves the machine —
+names, versions, hashes and flags only.
+
 **After a reboot the chats come back too.** herdr restores the
 workspaces and panes, but every pane is a bare shell again. remuda
 remembers which agent and which session each pane ran, so when a
@@ -672,7 +732,7 @@ Logs: `~/Library/Logs/remuda.log` (macOS) or `journalctl --user -u remuda`.
 ### Backups of the cockpit
 
 Everything the cockpit keeps lives in its state dir: your tasks, the
-schedules, budgets, recipes, webhooks and settings, the signed-in devices,
+schedules, budgets, recipes, scenes, webhooks and settings, the signed-in devices,
 the agents' keys, the token, the push keys and its Tailscale node. On a
 Raspberry Pi that is an SD card. **Settings › Backups** copies it every
 night (at a time you pick, in the cockpit's own zone) to another machine
@@ -872,6 +932,51 @@ viewer link plays them; under the screen-sharing mode a hidden folder's
 are not shown. A second remuda started beside the real one with
 `REMUDA_STATE_DIR` records nothing unless it is given `-record`.
 
+*When did it print `migration failed`?* The player has a **find** of its
+own: type a few words and it searches what stood on the screens of the
+pane's recordings and its folder's — case-folded, with the colours and
+cursor moves taken out — and takes you to the frame where the text first
+appeared, paused, the text marked and its row drawn apart; the arrows
+beside it (or Enter and Shift+Enter) step to the next place it stood, into
+the next recording too. The **Search** panel lists the same over every
+recording, above the conversations: each recording's first appearance with
+the rows around it, when, how long it stayed and how often it came back, a
+click opening the player right there. A search unpacks at most 64 MB of
+recordings off the disk and runs at most three seconds, the newest first,
+and says how many older ones it did not reach; what it read stays in memory
+as text (up to 32 MB), so the next letter you type reads no file and the
+same search again goes further. A text that wraps onto a second row is not
+found across the break.
+
+## Undo — an agent's turn taken back
+
+The agent rewrote the wrong file, or the whole approach was a dead end:
+**Undo this turn** on the foot of its answer in the chat — or the undo
+button in the Changes lens's head, which offers the folder's last turn
+and the ones before it — puts the folder back as the turn found it. It
+works for any agent, Codex and Gemini CLI as much as Claude Code, since
+remuda watches the folder, not the agent: when herdr says an agent pane
+starts working remuda reads the folder's git state on its machine, and
+again when the pane comes to rest, and keeps what moved in between on
+the cockpit. Reading writes nothing into your repository — no stash, no
+object, your index untouched.
+
+The dialog shows each file and what happens to it — put back, brought
+back, removed because the turn made it — and the commits the turn made,
+offered as reverts: `git revert`, a new commit each, newest first, so
+nothing is lost, and said plainly when the branch was pushed already.
+Your own uncommitted work from before the turn stays as it was. The
+undo is refused while an agent is working in the folder, and refused,
+naming the files, when anyone changed one of them after the turn — in
+the editor, by hand, or with a commit since. The agent is told nothing;
+it finds the files as they are next time it looks.
+
+Each folder keeps its last 10 turns, and the cockpit at most 200 MB of
+them in all, the oldest going first; a turn whose changes weigh over
+16 MB is listed but cannot be undone. The turns are not in the nightly
+backups. A second remuda beside the real one keeps none unless it is
+given `-record`.
+
 ## Agents and your tasks
 
 Any coding agent remuda runs — Claude Code, Codex, Gemini CLI, Kimi Code —
@@ -922,6 +1027,33 @@ Codex's `~/.codex/config.toml`:
     command = "/Users/you/.local/bin/remuda"
     args = ["mcp"]
 
+## The concierge — ask what is going on
+
+**Concierge** in the rail (More on a phone, or the palette's *Ask the
+concierge…*) is a conversation with the cockpit itself: *"What did the
+agents finish today?"*, *"Who is working on auth?"*, *"File a task for the
+flaky web tests."* remuda has no model of its own — the concierge is an
+ordinary Claude Code agent remuda starts and keeps in a folder of its own
+(`concierge/` in remuda's state dir on the machine, with a short `CLAUDE.md`
+saying who it is and to answer briefly in your language). It runs on your
+Mac when one is connected, else on the first connected machine with Claude
+Code (never a `-server` host); the picker at the top of its panel moves it.
+
+It can only read and file: it starts with `--strict-mcp-config` and remuda's
+own MCP server alone, so none of your other MCP servers or claude.ai
+connectors are there, and with settings that allow `agents_list`,
+`agent_recap`, `standup`, `tasks_list`, `task_get`, `projects_list`,
+`labels_list`, `task_create` and `task_comment`, deny every tool that reads
+or writes a file, runs a command, goes on the web or starts another agent,
+and deny instead of asking — so it never waits on a prompt. A task it files
+lands in **Proposed**, like any agent's; it cannot move one. What it is sent
+is what you type in its box, nothing else; opening its place starts it
+(answering Claude Code's trust question for its own folder), and its
+conversation comes back after a restart. **New conversation** starts a fresh
+one, and its workspace never shows in the sidebar, on the Wall or in a
+folder picker. A remote machine needs remuda installed for it (`remuda setup
+-host <host>`); the panel says so when it is not.
+
 ## From your phone
 
 The simplest way: let remuda join your tailnet by itself.
@@ -970,6 +1102,10 @@ once, then "Add to Home Screen" — it installs as a PWA.
 - Cross-origin mutations rejected (`Sec-Fetch-Site`).
 - Anyone with the token can type into your terminals — treat it like an SSH
   key.
+- remuda changes your project's files only when you press **Undo this
+  turn** and confirm: the files the turn changed are put back and its
+  commits reverted with new commits — never a reset, never a force. Taking
+  the turns' checkpoints writes nothing into the repository.
 
 A second copy beside the real one (to try `-tailscale`, say) gets its own
 token, tasks and push subscriptions with `REMUDA_STATE_DIR=/some/dir`, and
@@ -978,7 +1114,8 @@ agents keep talking to the real one (`-door` opens it anyway, `-no-door`
 closes it for any instance). It also writes nothing into herdr — no
 figures in its sidebar, no toasts, so the two never fight over the same
 panes (`-mirror` writes anyway) — and records no timelapses of your
-screens (`-record` records anyway).
+screens and keeps none of the agents' turns to undo (`-record` does both
+anyway).
 
 ## Development
 
@@ -1096,7 +1233,8 @@ Settings…. Not in it: the pop-out and dictation, both browser APIs.
 says what an agent answered when it finishes ("api: Tests pass."), that
 one is waiting for you, or a watchdog note — while the page is open and
 in front, in the voice you pick, a Russian one for a Russian answer.
-Nothing passes through remuda; a reload says nothing.
+Nothing passes through remuda; a reload says nothing. The same voice
+reads the Standup aloud and gives the zoo's creatures theirs.
 
 **Webhooks** are the same panel's last section, for a phone without Web
 Push or a channel the team reads: a Telegram bot (its token and your chat
@@ -1346,6 +1484,32 @@ recipe also fills the "Start an agent" kind of schedule. Recipes are
 kept on this remuda and shared by every device that uses it;
 "Recipes…" in the palette edits the list.
 
+**Scenes** are the morning set-up in one press and the evening tidy in
+another. A *set-up* is a list of steps across your machines: a folder,
+what runs there — an agent with its model, arguments and first prompt, a
+recipe, or a plain shell — the tab's name, and if you like the layout of
+a workspace's tab as you arranged it in herdr ("Capture this workspace's
+layout": its splits, their sizes, each pane's folder, label and command,
+the agent in the pane it ran in). "Add the workspaces open now" makes a
+step of every workspace you have open. Pressing it shows the steps first
+— the ones whose machine is away, or whose agent already runs there,
+unticked — then starts them one after another: a new tab of the
+workspace on that folder, else a new workspace, the first prompt handed
+over once the agent is up, and says how each went (started, refused and
+why, machine away), with Open on each new pane. A *tidy* is what you
+pick of four: close the shells sitting at their prompt, close agents
+idle for so many hours (their sessions stay — "Reopen a closed agent"
+brings any one back), send `/compact` to idle Claude Codes past a share
+of their context, remove the clean leftover worktrees; on every machine
+or the ones you name. Pressing it lists every action it would take now,
+each with its own tick, and runs only what is ticked, after a fresh look
+— never an agent that works, asks you something, or has a finish you
+have not looked at. Scenes open from "Scenes…" in the palette and the
+sidebar's + menu, each one as "Scene: Morning…" too, and a schedule of
+the "Run a scene" kind runs one on a timetable: a set-up as you saved
+it, a tidy only while nobody's agent on its machines works or asks (else
+the run is skipped and noted). Kept on this remuda like the recipes.
+
 **Several remuda at once:** each machine may run its own (the phone on
 the studio Mac's, the desk on its own). herdr lets one client attach to a terminal
 at a time, so when a remote machine's own remuda is running (and
@@ -1479,7 +1643,9 @@ machine, Claude Code's and Codex's — what you or an agent said, never tool out
 machine, folder and period. A hit jumps to the turn in the running pane, or
 opens the old transcript read-only. No index, no database: each machine
 scans its own `~/.claude/projects` on demand (remuda's scanner where the
-binary is deployed, grep otherwise). Every turn of a pane's conversation
+binary is deployed, grep otherwise). Above the conversations, a **Screens**
+part lists where the words stood on the agents' recorded screens (see
+Timelapse). Every turn of a pane's conversation
 has a **Copy link** button of its own: the address opens remuda on that
 pane, in its chat, scrolled to that turn — for a note, a ticket or a
 teammate on the same tailnet. Beside it a **pin** keeps the turn: a

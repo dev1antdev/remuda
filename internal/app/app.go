@@ -22,6 +22,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/complete"
+	"github.com/dev1antdev/remuda/internal/concierge"
+	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
@@ -263,6 +265,9 @@ func Run(ctx context.Context, o Options) error {
 		recorder.Scratch()
 		log.Print("the agents' timelapses are left to the real instance: this one records none (-record records)")
 	}
+	// every agent turn in a git folder, kept so the person can undo it: a checkpoint at its start and at its rest
+	turns := turnUndo(o.Dir, fleet, watcher, o.Record)
+	defer turns.Tracker.Close()
 	// a second opinion's reviewer, once it has answered, has its tab closed when the opinion asked for that
 	opinions := opinion.NewService(o.Dir)
 	opinions.Read = func(op opinion.Opinion) (opinion.Reply, bool) {
@@ -346,6 +351,19 @@ func Run(ctx context.Context, o Options) error {
 	restarter.Memory.Note = func(machineID, title, body string) {
 		activity.Add(feed.Entry{Kind: "recover", Machine: machineID, Title: title, Body: body})
 		hub.RosterChanged()
+	}
+	// the concierge: remuda's own Claude Code agent the person asks what the others are doing; the panes of its
+	// workspace are no chat to bring back, no work to report and no alert to send
+	conciergeAgent := concierge.Open(o.Dir)
+	restarter.Memory.Skip = conciergeAgent.Is
+	restarter.Skip = conciergeAgent.Is // its own arguments would be lost on a resume: it starts again from its own place
+	pushSvc.Quiet = func(machineID, paneID string) bool {
+		snap, _ := watcher.Snapshot(machineID)
+		if snap == nil {
+			return false
+		}
+		pane := snap.Pane(paneID)
+		return pane != nil && conciergeAgent.Is(machineID, pane.WorkspaceID)
 	}
 	// what the restarts type by themselves is a quiet activity row too, like anything a device sends
 	restarter.Typed = func(machineID, paneID, text string) {
@@ -477,7 +495,7 @@ func Run(ctx context.Context, o Options) error {
 	if o.MirrorClosed != "" {
 		log.Printf("remuda's figures and alerts stay out of herdr: %s", o.MirrorClosed)
 	}
-	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker}
+	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker, Skip: conciergeAgent.Is}
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
 	})
@@ -532,6 +550,8 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.Snapshot) { subagentCounts.Observe(e.Machine, e.Snap) })
 	events.Subscribe(bus, func(e events.Snapshot) { recorder.Observe(e.Machine, e.Snap, e.At) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { recorder.Forget(e.Machine) })
+	events.Subscribe(bus, func(e events.Snapshot) { turns.Tracker.Observe(e.Machine, e.Snap, e.At, e.First) })
+	events.Subscribe(bus, func(e events.MachineRemoved) { turns.Tracker.Forget(e.Machine) })
 	events.Subscribe(bus, func(e events.Snapshot) {
 		planLimits.Observe(e.Machine, e.Snap)
 		if mc, err := fleet.Get(e.Machine); err == nil {
@@ -578,6 +598,10 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.MachineRemoved) { keepAwake.Forget(e.Machine) })
 	shells := scratch.Open(o.Dir) // the floating terminal's shell on each machine
 	events.Subscribe(bus, func(e events.MachineRemoved) { shells.Forget(e.Machine) })
+	events.Subscribe(bus, func(e events.Snapshot) { conciergeAgent.Observe(e.Machine, e.Snap) })
+	events.Subscribe(bus, func(e events.MachineRemoved) { conciergeAgent.Forget(e.Machine) })
+	sceneSet := sceneRunner(o.Dir, cookbook, fleet, watcher, input, tracker, meter, shells, pushSvc.Notify, activity)
+	schedules.Scenes = sceneSchedules(sceneSet)
 
 	// a remote that stays unreachable, and one that answers again: the machines publish every move, the tracker says when it matters
 	absent := away.New(away.AwayAfter, func(n away.Notice) {
@@ -703,7 +727,20 @@ func Run(ctx context.Context, o Options) error {
 	go planLimits.Loop(30*time.Second, ctx.Done())
 	go backups.Loop(time.Minute, ctx.Done())
 	go recorder.Loop(ctx.Done()) // a working pane's screen at the recorder's own pace, between the stream's snapshots
+	// the checkouts of one repository changing the same files, read a minute apart against the main branch
+	radarOfCollisions := collisionRadar(o.Dir, fleet, watcher, reviews, sayings, requests, pushSvc, hub.RosterChanged)
+	go radarOfCollisions.Loop(ctx.Done())
+	events.Subscribe(bus, func(e events.MachineRemoved) { radarOfCollisions.Forget(e.Machine) })
+	go turns.Tracker.Loop(ctx.Done())
 
+	updater := &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet}
+	fleetSetup := &drift.Service{Fleet: fleet, Health: vitals, Updates: updater, Dirs: func(machineID string) []string {
+		if snap, _ := watcher.Snapshot(machineID); snap != nil {
+			return snap.WorkspaceDirs()
+		}
+		return nil
+	}}
+	events.Subscribe(bus, func(e events.MachineRemoved) { fleetSetup.Forget(e.Machine) })
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {
 			d, _ := meter.Display(machineID, paneID)
@@ -714,7 +751,7 @@ func Run(ctx context.Context, o Options) error {
 		Watch:     watcher,
 		Input:     input,
 		Chat:      chats,
-		Updates:   &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet},
+		Updates:   updater,
 		Tasks:     taskStore,
 		Launcher:  launcher,
 		Push:      pushSvc,
@@ -743,6 +780,7 @@ func Run(ctx context.Context, o Options) error {
 		Arena:     arenas,
 		Limits:    planLimits,
 		Scratch:   shells,
+		Concierge: conciergeAgent,
 		Jira:      issues,
 		Backup:    backups,
 		SelfPort:  auth.PortOf(o.Addr),
@@ -752,6 +790,11 @@ func Run(ctx context.Context, o Options) error {
 		Mirror:    mirrored,
 		Timelapse: recorder,
 		Triggers:  paneTriggers,
+		Drift:     fleetSetup,
+
+		Collisions: radarOfCollisions,
+		Undo:       turns,
+		Scenes:     sceneSet,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

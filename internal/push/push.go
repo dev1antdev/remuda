@@ -109,6 +109,8 @@ type Service struct {
 	// Mutes are the workspace folders the person silenced for a while; Folder names a pane's folder for the check.
 	Mutes  *Mutes
 	Folder func(machine, pane string) string
+	// Quiet names a pane whose alerts go nowhere at all: the concierge's, which the person reads in its own place.
+	Quiet func(machine, pane string) bool
 }
 
 // Delays are variables so tests can shrink them.

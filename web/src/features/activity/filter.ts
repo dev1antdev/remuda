@@ -20,7 +20,7 @@ export const FAMILIES: Family[] = [
   { key: "tasks", label: "Tasks", icon: "list", kinds: ["task"] },
   { key: "schedules", label: "Schedules", icon: "calendar", kinds: ["schedule", "digest"] },
   { key: "budgets", label: "Budgets & limits", icon: "chart", kinds: ["budget", "limits"] },
-  { key: "review", label: "Review", icon: "eye", kinds: ["review"] },
+  { key: "review", label: "Review", icon: "eye", kinds: ["review", "collision"] },
   { key: "machines", label: "Machines", icon: "monitor", kinds: ["machine", "backup", "signin"] },
   { key: "triggers", label: "Triggers", icon: "zap", kinds: ["tests", "trigger"] },
   { key: "sent", label: "Sent", icon: "send", kinds: ["sent"] },

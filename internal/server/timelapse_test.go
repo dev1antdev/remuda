@@ -135,3 +135,28 @@ func TestTheSwitchAndTheDeletionsArePutAndCounted(t *testing.T) {
 		t.Fatalf("delete everything: %d %s", rec.Code, rec.Body)
 	}
 }
+
+func TestTheRecordedScreensAreSearchedForWhereATextStood(t *testing.T) {
+	_, api, meta := recordedServer(t)
+	var found timelapse.ScreenResult
+	for _, path := range []string{"/api/timelapse/search?q=STEP+2", "/api/timelapse/search?q=step%202&machine=all&days=1", "/api/timelapse/search?q=step+2&machine=local&pane=w1:p1&dir=/repo/app"} {
+		rec := ask(api, "GET", path, "")
+		if err := json.Unmarshal(rec.Body.Bytes(), &found); err != nil || rec.Code != 200 || rec.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("%s: %d %s", path, rec.Code, rec.Body)
+		}
+		if len(found.Hits) != 1 || found.Hits[0].Recording != meta.ID || found.Hits[0].First.Frame != 1 || found.Hits[0].Row != "step 2" || found.Searched != 1 {
+			t.Fatalf("%s: %+v", path, found)
+		}
+	}
+	if rec := ask(api, "GET", "/api/timelapse/search?q=step&machine=local&pane=w9:p9", ""); !strings.Contains(rec.Body.String(), `"hits":[]`) {
+		t.Fatalf("another pane's: %s", rec.Body)
+	}
+	for _, try := range []struct {
+		path string
+		code int
+	}{{"/api/timelapse/search?q=s", 400}, {"/api/timelapse/search?q=+step+&pane=w1:p1", 400}, {"/api/timelapse/search?q=step&machine=nowhere", 404}} {
+		if rec := ask(api, "GET", try.path, ""); rec.Code != try.code {
+			t.Fatalf("%s: %d, want %d", try.path, rec.Code, try.code)
+		}
+	}
+}

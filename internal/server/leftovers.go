@@ -24,16 +24,7 @@ func (s *Server) openFolders(machineID string) ([]string, error) {
 		}
 		return nil, err
 	}
-	open := snap.WorkspaceDirs()
-	for i := range snap.Workspaces {
-		if tree := snap.Workspaces[i].Worktree; tree != nil && tree.CheckoutPath != "" {
-			open = append(open, tree.CheckoutPath)
-		}
-	}
-	for i := range snap.Panes {
-		open = append(open, snap.Panes[i].CWD, snap.Panes[i].ForegroundCWD)
-	}
-	return open, nil
+	return worktrees.OpenFolders(snap), nil
 }
 
 // handleLeftovers is GET /api/machines/{id}/leftovers: the worktrees no workspace has open, each with its branch, its

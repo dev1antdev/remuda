@@ -11,7 +11,7 @@ export const SINCE_OPTIONS: { value: DigestSince; label: string }[] = [
 ];
 
 // kindOf reads a schedule's kind, prompt for a record from before the kinds
-export const kindOf = (s: Pick<Schedule, "kind">): ScheduleKind => (s.kind === "digest" || s.kind === "agent" ? s.kind : "prompt");
+export const kindOf = (s: Pick<Schedule, "kind">): ScheduleKind => (s.kind === "digest" || s.kind === "agent" || s.kind === "scene" ? s.kind : "prompt");
 
 // sinceWords says what period a digest covers, as its row reads, in the page's language
 export function sinceWords(since: DigestSince | undefined): string {

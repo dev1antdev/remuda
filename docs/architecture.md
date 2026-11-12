@@ -22,7 +22,7 @@ Three rings, and a dependency may only point inwards.
 │  updates    what a machine can update, and running it as a job       │
 │  tasks      the task list, and starting an agent on a task           │
 │  health · jobs · restart · watch · radar · watchdog · push ·         │
-│  schedule · search · usage · quick · recipes · code                  │
+│  schedule · search · usage · quick · recipes · scenes · code         │
 ├─ the floor ──────────────────────────────────────────────────────────┤
 │  machines   the registry; a Machine is a shell.Host with herdr on it │
 │  herdr      the RPC client, the attach PTYs, the snapshot questions  │
@@ -43,13 +43,14 @@ The contexts are the bounded contexts of the product, in its own words:
 | Sessions | workspaces, tabs, panes; what reaches an agent | `sessions`, `watch`, `radar`, `watchdog`, `handover` |
 | Live | the page's one event stream: the roster moved, a transcript grew | `live` |
 | Transcripts | what an agent said, read-only | `transcript`, `chat`, `search`, `usage` |
-| Review | a folder's uncommitted work since the last look, and the secret check before its commit | `review`, `secrets` |
+| Review | a folder's uncommitted work since the last look, its risk, the secret check before its commit, and the checkouts of one repository changing the same files | `review`, `secrets`, `collisions` |
 | Updates | updating herdr, the agents, remuda; the restarts after | `updates`, `jobs`, `restart` |
 | Tasks | remuda's own list, and an agent started on a task | `tasks` |
 | Alerts | pushes to the phone | `push` |
 | Inside herdr | remuda's figures as herdr's sidebar tokens, its alerts as herdr's toasts | `mirror` |
 | Schedules | prompts on a timetable | `schedule` |
 | Recipes | the saved ways to start an agent | `recipes` |
+| Scenes | the morning set-up in one press, the evening tidy in another | `scenes` |
 
 ## The rules
 
@@ -103,7 +104,7 @@ down through, and one folder per lens.
 ├─ features ───────────────────────────────────────────────────────────┤
 │  roster · chat · terminal · review · tasks · updates · usage ·       │
 │  search · schedules · alerts · files · code · agents · quick ·       │
-│  recipes                                                             │
+│  recipes · scenes                                                    │
 │  one folder each: api.ts (its routes), pure modules with their       │
 │  tests, the screen in pieces                                         │
 ├─ ui ─────────────────────────────────────────────────────────────────┤

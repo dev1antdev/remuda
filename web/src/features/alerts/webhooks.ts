@@ -49,7 +49,7 @@ export const hookKindOptions = (): { value: string; label: string; hint: string 
   { value: "task", label: t("a task"), hint: t("an agent's run on a task finished or opened a pull request") },
   { value: "budget", label: t("a budget"), hint: t("a limit at 80 % or crossed") },
   { value: "limits", label: t("a plan limit"), hint: t("Claude's or Codex's 5-hour or weekly window at 80 % or reached, and what a booked continue did") },
-  { value: "review", label: t("a review"), hint: t("a rejected workspace whose agent says it is ready again") },
+  { value: "review", label: t("a review"), hint: t("a rejected workspace ready again, or two workspaces changing the same lines") },
   { value: "machine", label: t("a machine away"), hint: t("a remote unreachable for two minutes, and back again after that") },
   { value: "backup", label: t("a backup that failed"), hint: t("the nightly copy of the cockpit's state, or Back up now, could not be made") },
   { value: "signin", label: t("a sign-in running out"), hint: t("Claude Code's sign-in on a machine may end in three days, in a day, or at any time now") },

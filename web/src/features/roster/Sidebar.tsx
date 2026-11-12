@@ -1,4 +1,4 @@
-// The machines sidebar, radar-style: its head with a + menu (a workspace, a PC) and a ⋯ menu (message several agents,
+// The machines sidebar, radar-style: its head with a + menu (a workspace, a recipe, a scene, a PC) and a ⋯ menu (message several agents,
 // fold or open every folder, the order, the settings); then every machine with its vitals, its menu and its folders.
 
 import { act } from "@/app/act";
@@ -17,12 +17,14 @@ import { hueStyle } from "./hue";
 import { moving, useClock, useSpinner } from "./useClocks";
 import { NO_MACHINES } from "./server";
 import { useRoster } from "./useRoster";
+import { useScenes } from "@/features/scenes/api";
 import { t } from "@/lib/i18n";
 
 export type { Current } from "./rows";
 
 export default function Sidebar() {
   const { machines, latest, viewOnly, server } = useRoster();
+  const scenes = useScenes(!viewOnly);
   const serverVersion = __REMUDA_VERSION__ === "dev" ? undefined : __REMUDA_VERSION__;
   const located = useCurrent();
   const current: Current = located ? { machineId: located.machine.id, sessionId: located.session.id, paneId: located.pane.id } : null;
@@ -54,7 +56,7 @@ export default function Sidebar() {
           <Menu
             label={t("New")}
             align="end"
-            tip={t("New: a workspace on a machine, or a PC")}
+            tip={t("New: a workspace on a machine, a scene, or a PC")}
             trigger={
               <button type="button" className="icon-btn" aria-label={t("New")}>
                 <Icon name="plus" size={14} />
@@ -63,6 +65,8 @@ export default function Sidebar() {
             items={[
               ...machines.filter((m) => m.state === "connected").map((m) => ({ label: t("New workspace on {machine}…", { machine: share.machineLabel(m) }), icon: "terminal" as const, onSelect: () => actions.openDialog({ kind: "workspace", machineId: m.id }) })),
               { label: t("Agent from recipe…"), icon: "sparkles", hint: t("a saved agent, model, arguments and first prompt"), onSelect: () => actions.openDialog({ kind: "start-recipe" }) },
+              ...scenes.flatMap((scene) => (scene.id ? [{ label: t("Scene: {name}…", { name: scene.name }), icon: scene.kind === "tidy" ? ("moon" as const) : ("sun" as const), onSelect: () => actions.openDialog({ kind: "scene-run", id: scene.id ?? "" }) }] : [])),
+              { label: t("Scenes…"), icon: "sun", hint: t("a morning set-up, an evening tidy"), onSelect: () => actions.openDialog({ kind: "scenes" }) },
               { sep: true },
               { label: t("Add a PC…"), icon: "monitor", hint: t("a remote machine over SSH"), onSelect: () => actions.openDialog({ kind: "machine" }) },
             ]}

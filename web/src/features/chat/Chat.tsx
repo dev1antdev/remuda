@@ -29,6 +29,7 @@ import { useChat } from "./useChat";
 import { useFind } from "./useFind";
 import { useFollowBottom } from "./useFollowBottom";
 import { useQuote } from "./useQuote";
+import { useUndoTurns } from "./useUndoTurns";
 import { t } from "@/lib/i18n";
 
 export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session, viewOnly = false, focused = true, notice }: {
@@ -117,6 +118,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
     logRef.current?.ownerDocument.getSelection()?.removeAllRanges();
   }, []);
   const quotePop = useQuote(logRef, !readOnly && !viewOnly && active && focused, onQuote);
+  const undo = useUndoTurns({ machineId, paneId, dir, turns, status, enabled: active && !readOnly && !viewOnly });
 
   // a search hit: scroll to its turn once that session is on screen, or say it is older than the loaded tail
   const pendingTurn = useRef<string | null>(jump?.turn ?? null);
@@ -247,6 +249,8 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
             subagents={chat?.subagents}
             onOpenSubagent={onOpenSubagent}
             diffs
+            undo={t.ids?.[0] ? undo.byAnswer.get(t.ids[0]) : undefined}
+            onUndo={undo.onUndo}
           />
         ))}
       </div>

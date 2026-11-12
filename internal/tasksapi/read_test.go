@@ -14,7 +14,9 @@ func TestRosterReadsTheAgentPanes(t *testing.T) {
 		w.Write([]byte(`{"version":"v0.8.4","machines":[
 		  {"id":"local","label":"This Mac","state":"connected","sessions":[{"id":"w1","name":"remuda","dir":"/Users/me/remuda","tabs":[{"id":"t1","label":"1","panes":[
 		    {"id":"w1:p1","title":"remuda","agent":"claude","cwd":"/Users/me/remuda","status":"run","radar":{"state":"working","since":1700000000000},"usage":{"model":"claude-opus-4-1","name":"Opus","cost":4.2},"pr":{"url":"https://github.com/o/r/pull/15","label":"PR #15"}},
-		    {"id":"w1:p2","title":"zsh","agent":"","cwd":"/Users/me/remuda","status":"shell"}]}]}]},
+		    {"id":"w1:p2","title":"zsh","agent":"","cwd":"/Users/me/remuda","status":"shell"}]}]},
+		    {"id":"w9","name":"concierge","dir":"/Users/me/Library/Application Support/remuda/concierge","concierge":true,"tabs":[{"id":"t9","label":"1","panes":[
+		    {"id":"w9:p1","title":"concierge","agent":"claude","cwd":"/Users/me/Library/Application Support/remuda/concierge","status":"idle"}]}]}]},
 		  {"id":"gog","label":"GOG","state":"connecting","sessions":[]}]}`))
 	}))
 	defer srv.Close()
@@ -28,7 +30,7 @@ func TestRosterReadsTheAgentPanes(t *testing.T) {
 	}
 	agents := roster.Machines[0].AgentPanes()
 	if len(agents) != 1 || agents[0].Pane.ID != "w1:p1" || agents[0].Workspace.Name != "remuda" || agents[0].Pane.Radar.State != "working" || agents[0].Pane.Usage.Cost != 4.2 || agents[0].Pane.PR.Label != "PR #15" {
-		t.Errorf("the agent panes, shells left out: %+v", agents)
+		t.Errorf("the agent panes, shells and the concierge left out: %+v", agents)
 	}
 	if len(roster.Machines[1].AgentPanes()) != 0 || roster.Machines[1].State != "connecting" {
 		t.Errorf("a machine without panes: %+v", roster.Machines[1])

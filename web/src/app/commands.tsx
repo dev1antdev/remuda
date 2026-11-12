@@ -33,6 +33,9 @@ import { enterFull, leaveFull } from "./full";
 import { NEXT_KEY, useNextNeedingMe } from "./next";
 import { REOPEN_KEY } from "@/features/reopen/closed";
 import { USAGE_TAB_KEY, type UsageTab } from "@/features/usage/scorecard";
+import { holdLockScreen } from "@/features/standup/lockScreen";
+import { primeSpeech, speechSupported } from "@/lib/speech";
+import { useScenes } from "@/features/scenes/api";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
 import { setDarkFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, useTextSize, useThemePref } from "./theme";
@@ -91,6 +94,7 @@ function useCommands(): (query: string) => Entry[] {
   const now = useClock(machines);
   const goNext = useNextNeedingMe();
   const share = useSharing();
+  const scenes = useScenes(!viewOnly);
   return useCallback(
     (query: string) => {
       const selection = current ? { machineId: current.machine.id, paneId: current.pane.id } : null;
@@ -106,6 +110,7 @@ function useCommands(): (query: string) => Entry[] {
       command("next-needs", t("Go to the next agent that needs you"), goNext, { hint: `${NEXT_KEY} · ${t("a question open, a watchdog note, a finish not looked at")}`, icon: "arrow-right", keywords: ["next", "needs", "attention", "waiting", "blocked", "question", "done", "jump"] });
       for (const m of MODES) if (m.mode !== mode) command(`mode:${m.mode}`, m.title, () => actions.setMode(m.mode), { hint: m.hint, icon: m.icon, keywords: ["mode", m.mode] });
       command("update-everywhere", t("Update everywhere…"), () => actions.openDialog({ kind: "update-everywhere" }), { hint: t("every connected machine's pending updates, one after another"), icon: "refresh-cw", keywords: ["update", "upgrade", "all", "machines", "herdr", "claude", "codex", "release"] });
+      command("fleet-setup", t("Fleet setup…"), () => actions.openDialog({ kind: "fleet-setup" }), { hint: t("how every machine is set up, side by side, the odd one out marked"), icon: "columns", keywords: ["fleet", "setup", "config", "drift", "compare", "machines", "mcp", "hooks", "claude.md", "agents.md"] });
       if (server) command("server", t("Server · {name}", { name: server.label }), () => actions.togglePanel("server"), { hint: t("its load, memory, temperature and throttling"), icon: "server", keywords: ["server", "host", "pi", "raspberry", "vitals", "temperature", "memory", "throttle"] });
       command("reopen", t("Reopen a closed agent…"), () => actions.openDialog({ kind: "reopen" }), { hint: `${REOPEN_KEY} · ${t("an agent whose tab or workspace closed, back on its own session")}`, icon: "refresh-cw", keywords: ["reopen", "undo", "closed", "restore", "tab", "back", "resume"] });
       if (current && !viewer) {
@@ -207,6 +212,11 @@ function useCommands(): (query: string) => Entry[] {
       command("alerts", t("Alerts on this device"), () => actions.openPanel("alerts"), { hint: t("which pushes to get here"), icon: "bell", keywords: ["push", "notifications"] });
       command("start-recipe", t("New agent from recipe…"), () => actions.openDialog({ kind: "start-recipe", machineId: here, dir: current ? folderOf(current) : "" }), { hint: t("a saved agent with its model, arguments and first prompt, in a folder"), icon: "sparkles", keywords: ["recipe", "start", "agent", "saved", "preset", "template", "new"] });
       command("recipes", t("Recipes…"), () => actions.openDialog({ kind: "recipes" }), { hint: t("the saved ways to start an agent: agent, model, arguments, first prompt"), icon: "sparkles", keywords: ["recipe", "recipes", "preset", "template", "saved", "manage"] });
+      command("scenes", t("Scenes…"), () => actions.openDialog({ kind: "scenes" }), { hint: t("your morning set-up and your evening tidy, each in one press"), icon: "sun", keywords: ["scene", "scenes", "morning", "evening", "setup", "tidy", "cleanup", "layout", "workspaces", "routine"] });
+      for (const scene of scenes) {
+        const id = scene.id;
+        if (id) command(`scene:${id}`, t("Scene: {name}…", { name: scene.name }), () => actions.openDialog({ kind: "scene-run", id }), { hint: scene.kind === "tidy" ? t("a tidy, each action shown before it runs") : t("a set-up, its steps shown before they run"), icon: scene.kind === "tidy" ? "moon" : "sun", keywords: ["scene", scene.kind === "tidy" ? "evening" : "morning", "run"] });
+      }
       command("triggers", t("Triggers…"), () => actions.openDialog({ kind: "triggers" }), { hint: t("a line a pane prints, and what it sets off: a push, a preview, a task moved"), icon: "zap", keywords: ["trigger", "triggers", "rule", "output", "match", "regex", "pattern", "watch", "tests", "dev server"] });
       command("schedules", t("Schedules"), () => actions.openPanel("schedules"), { hint: t("prompts sent to agents on a timetable"), icon: "calendar", keywords: ["cron", "timer", "prompt"] });
       const usageOn = (tab: UsageTab) => () => {
@@ -216,6 +226,19 @@ function useCommands(): (query: string) => Entry[] {
       command("usage", t("Usage report"), usageOn("spend"), { hint: t("what the agents cost, by day, project and session"), icon: "chart", keywords: ["cost", "tokens", "context", "money"] });
       command("scorecard", t("Models scorecard"), usageOn("models"), { hint: t("which model does your work best: finished runs, first-time approvals, merged pull requests, arenas kept, cost and time"), icon: "chart", keywords: ["model", "models", "compare", "best", "score", "quality", "approve", "merge", "opus", "sonnet", "fable", "gpt", "codex"] });
       command("standup", t("Standup: what every agent did today"), () => actions.openPanel("standup"), { hint: t("one report over every machine, ready to paste as Markdown"), icon: "sun", keywords: ["standup", "report", "today", "summary", "recap", "daily", "digest", "morning"] });
+      // the voice is primed and the lock screen held here, inside the pick, the gesture a phone waits for before it speaks
+      if (speechSupported())
+        command(
+          "listen-day",
+          t("Listen to the day"),
+          () => {
+            primeSpeech();
+            holdLockScreen();
+            actions.listenToDay();
+          },
+          { hint: t("the standup read aloud: who did what, who waits for you, what it cost"), icon: "headphones", keywords: ["listen", "read aloud", "speak", "voice", "podcast", "audio", "standup", "day", "morning", "summary"] },
+        );
+      command("concierge", t("Ask the concierge…"), () => actions.openPanel("concierge"), { hint: t("what the agents are doing, in plain words; it can file a task for you"), icon: "concierge", keywords: ["concierge", "ask", "question", "who", "what", "status", "assistant", "help", "chat", "консьерж"] });
       command("arena-new", t("Arena: one prompt to several agents…"), () => actions.openDialog({ kind: "arena", at: current ? { machineId: current.machine.id, workspaceId: current.session.id } : undefined }), { hint: t("each in a worktree of its own, their work side by side, the best kept"), icon: "columns", keywords: ["arena", "compare", "best", "race", "parallel", "agents", "worktree", "versus"] });
       command("arenas", t("Arenas"), () => actions.openPanel("arena"), { hint: t("the lanes of every arena: how each agent stands, its changes, keep the best"), icon: "columns", keywords: ["arena", "compare", "lanes", "keep"] });
       command("open-lens-terminal", t("Notifications open: the terminal"), () => writePref(OPEN_LENS_KEY, "terminal"), { hint: `${openLens === "terminal" ? t("now · ") : ""}${t("a tapped notification, the Mac app's menu, an Activity row or Alt+N shows the pane's terminal")}`, icon: "terminal", keywords: ["notification", "alert", "open", "terminal", "lens"] });
@@ -263,6 +286,6 @@ function useCommands(): (query: string) => Entry[] {
       const shown = share.on ? commands.map((entry) => ({ ...entry, title: share.redact(entry.title), hint: entry.hint && share.redact(entry.hint) })) : commands;
       return [...panes, ...(viewOnly ? shown.filter((entry) => viewerCommand(entry.id)) : shown)];
     },
-    [machines, viewOnly, jiraSite, server, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
+    [machines, viewOnly, jiraSite, server, scenes, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
   );
 }

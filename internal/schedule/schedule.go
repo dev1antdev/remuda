@@ -1,7 +1,7 @@
 // Package schedule runs things on a timetable: a prompt to the agent in a
 // workspace folder (panes come and go, the project stays), the standup as a
 // digest pushed to the person's devices, or a fresh agent started in a folder
-// with a prompt and taken down once it has answered; a five-field cron in
+// with a prompt and taken down once it has answered, or one of the person's scenes; a five-field cron in
 // local time; a run is never queued or retried, and one that comes while the agent it would talk to (or the agent its
 // last run started) still works or asks is skipped and noted.
 package schedule
@@ -34,6 +34,7 @@ const (
 	SkipStarting = "starting"
 	SkipUnsure   = "unsure"
 	SkipRunning  = "running"
+	SkipAtWork   = "at-work" // a scene's tidy while an agent works or asks on a machine it covers
 	SkipLimit    = "limit"
 )
 
@@ -54,7 +55,7 @@ const (
 
 type Schedule struct {
 	ID      string `json:"id"`
-	Kind    string `json:"kind"` // prompt (the default) | digest | agent
+	Kind    string `json:"kind"` // prompt (the default) | digest | agent | scene
 	Machine string `json:"machine"`
 	Dir     string `json:"dir"`
 	Label   string `json:"label"`
@@ -65,6 +66,7 @@ type Schedule struct {
 	Model   string `json:"model,omitempty"` // the model as the agent's own CLI names it, "" for its default
 	Args    string `json:"args,omitempty"`  // extra arguments, as the person wrote them
 	Close   bool   `json:"close,omitempty"` // take the tab down once the agent has answered
+	Scene   string `json:"scene,omitempty"` // a scene schedule's scene, by its id
 	// DenyPrompts has an agent schedule's Claude Code deny a call that would wait on a permission prompt and carry on;
 	// nil for a record from before the switch, which reads as off (Denies)
 	DenyPrompts *bool `json:"deny_prompts,omitempty"`
@@ -91,6 +93,7 @@ type Store struct {
 	notify func(push.Payload)
 	digest Digest
 	Agents Agents // the app's way to start, close and read an agent schedule's agent; set after New
+	Scenes Scenes // the app's way to a scene schedule's scene; set after New
 	now    func() time.Time
 
 	mu       sync.Mutex
@@ -188,8 +191,15 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 		if err := checkAgent(&s); err != nil {
 			return s, err
 		}
+	case KindScene:
+		if err := st.checkScene(&s); err != nil {
+			return s, err
+		}
 	default:
-		return s, errors.New("a schedule is a prompt, a digest or an agent")
+		return s, errors.New("a schedule is a prompt, a digest, an agent or a scene")
+	}
+	if s.Kind != KindScene {
+		s.Scene = ""
 	}
 	if _, err := Parse(s.Cron); err != nil {
 		return s, err
@@ -290,6 +300,8 @@ func (st *Store) fire(s *Schedule, swap *Swap) {
 		st.fireDigest(s)
 	case KindAgent:
 		st.fireAgent(s, swap)
+	case KindScene:
+		st.fireScene(s)
 	default:
 		st.firePrompt(s)
 	}

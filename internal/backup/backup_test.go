@@ -38,6 +38,7 @@ func stateDir(t *testing.T) (string, *sql.DB) {
 	write(t, filepath.Join(dir, "ssh", "ctl-gog"), "socket")
 	write(t, filepath.Join(dir, "backups", "rp", "remuda-20260101T000000Z.tar.gz"), "old")
 	write(t, filepath.Join(dir, "timelapse", "local", "20261104T120000Z-abcdef.json.gz"), "a recording")
+	write(t, filepath.Join(dir, "undo", "turns", "20261104T120000Z-abcdef.end.patch"), "a turn")
 	write(t, filepath.Join(dir, "review.json.123456789"), "half written")
 	write(t, filepath.Join(dir, "serve.lock"), "")
 	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "tasks.db")+"?_pragma=journal_mode(WAL)&_pragma=wal_autocheckpoint(0)")
@@ -251,6 +252,7 @@ func TestARestoreSetsTheOldDirAsideAndKeepsTheBackupsHere(t *testing.T) {
 	write(t, filepath.Join(dir, "token"), "another token\n")
 	write(t, filepath.Join(dir, "backups", "mac", "remuda-20261101T000000Z.tar.gz"), "kept")
 	write(t, filepath.Join(dir, "timelapse", "local", "20261104T120000Z-abcdef.json.gz"), "a recording")
+	write(t, filepath.Join(dir, "undo", "turns", "20261104T120000Z-abcdef.end.patch"), "a turn")
 	at := time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)
 	_, aside, err := Restore(archive, dir, at)
 	if err != nil {
@@ -270,6 +272,9 @@ func TestARestoreSetsTheOldDirAsideAndKeepsTheBackupsHere(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "timelapse", "local", "20261104T120000Z-abcdef.json.gz")); err != nil {
 		t.Fatalf("the recordings kept here did not come along: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "undo", "turns", "20261104T120000Z-abcdef.end.patch")); err != nil {
+		t.Fatalf("the turns kept here did not come along: %v", err)
 	}
 	if info, _ := os.Stat(filepath.Join(dir, "tailscale", "tailscaled.state")); info == nil || info.Mode().Perm()&0o077 != 0 {
 		t.Fatalf("a restored file is not private: %v", info)

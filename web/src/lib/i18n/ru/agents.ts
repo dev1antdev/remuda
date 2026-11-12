@@ -66,7 +66,7 @@ export const agents: Dictionary = {
   "New workspace on {machine}": "Новое пространство на {machine}",
   "New workspace on {machine}…": "Новое пространство на {machine}…",
   "New worktree of {repo}": "Новый worktree от {repo}",
-  "New: a workspace on a machine, or a PC": "Новое: пространство на машине или компьютер",
+  "New: a workspace on a machine, a scene, or a PC": "Новое: пространство на машине, сцена или компьютер",
   "No agent is running.": "Ни один агент не запущен.",
   "No other agent is running.": "Других запущенных агентов нет.",
   "No recipes yet.": "Рецептов пока нет.",

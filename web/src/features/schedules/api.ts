@@ -1,13 +1,14 @@
-// Schedules: prompts to an agent on a timetable, the standup pushed as a digest, or a fresh agent started in a folder.
+// Schedules: prompts to an agent on a timetable, the standup pushed as a digest, a fresh agent started in a folder, or one of the scenes.
 
 import type { Denial } from "@/features/agents/deny";
 import { getJSON, sendJSON } from "@/lib/http";
 
-export type ScheduleKind = "prompt" | "digest" | "agent";
+export type ScheduleKind = "prompt" | "digest" | "agent" | "scene";
 export type DigestSince = "midnight" | "24h" | "7d" | "last";
 // why a run was skipped: the agent still works, waits for an answer, has not taken its prompt yet, its machine has not said,
-// the run before is still on its way, or its agent's plan window holds a new start (an offer to run it on the other vendor goes out)
-export type SkipReason = "working" | "asking" | "starting" | "unsure" | "running" | "limit";
+// the run before is still on its way, a scene's tidy found an agent at work, or its agent's plan window holds a new start
+// (an offer to run it on the other vendor goes out)
+export type SkipReason = "working" | "asking" | "starting" | "unsure" | "running" | "at-work" | "limit";
 
 // Started is where an agent schedule's last run put its agent, watched until it has answered: the next run waits for it
 export type Started = { machine: string; pane: string; tab: string; workspace: string; made_workspace: boolean; worked: boolean; at: string };
@@ -25,6 +26,7 @@ export type Schedule = {
   model?: string; // the model as the agent's own CLI names it, "" for its default
   args?: string; // extra arguments, as typed
   close?: boolean; // take the tab down once the agent has answered
+  scene?: string; // a scene schedule's scene, by its id
   deny_prompts?: boolean; // its Claude Code denies what would wait on a permission prompt; absent on a record from before the switch (off)
   enabled: boolean;
   next?: string; // the coming run, filled in by the list
