@@ -1017,6 +1017,26 @@ marked *ready again*, and a push says so; both take a note and carry
 your comments, and both start the next look from now. The comments can also go on their own,
 to this agent or any other. "Mark reviewed" just clears the counts — the
 agent hears nothing.
+**No secret leaves through a commit you asked for.** Pick the commit or
+the pull request and remuda first reads exactly what the commit would
+carry — every changed line, staged or not, and every new file git does not
+ignore; for a pull request also the commits not pushed yet — for private
+keys, AWS, GitHub, GitLab, Slack, Stripe, Anthropic, OpenAI, Google,
+Telegram and npm tokens, JWTs, Bearer and Basic credentials, and long
+random values given to a name like `API_KEY` or `password`, leaving
+placeholders such as `<your-key>`, `changeme` or `xxxx` alone. Anything
+it finds holds the button back: the dialog lists each one by file and
+line with the secret masked, a click shows its row in the diff, marked,
+and **Send anyway…** goes only after a confirm that says how many. A check
+that cannot run says so, and Send anyway is the way past it too; a plain
+Approve, Reject and Mark reviewed never wait. A line ending in
+`gitleaks:allow` (or `remuda:allow-secret`) is let through, so a test
+fixture can say it is one. The lens head also warns when Claude Code's
+`.claude/settings.local.json` — where its "don't ask again" approvals
+go, tokens in the commands included — is tracked by git or not ignored,
+or when either settings file holds what looks like a secret, and says
+what to do. remuda writes nothing into the repository or `.claude` for
+any of it.
 **Second opinion** asks another agent — Codex for work Claude Code did,
 Claude Code for the rest, or whichever you pick — to review the same
 changes in a new tab of the workspace, told to change nothing and to

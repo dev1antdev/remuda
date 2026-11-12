@@ -7417,6 +7417,7 @@ body.popout {
   border-left: 1px solid var(--line);
 }
 .fv-pair > .fv-line.empty {
+  padding: 0; /* not the empty state's: a side with no line is as tall as the line beside it */
   background: var(--bg-input);
 }
 @container review-head (max-width: 1100px) {
@@ -11132,4 +11133,143 @@ body.popout {
   .zoo-creature * {
     animation: none !important;
   }
+}
+
+/* ---- the secret check: the verdict dialog's findings, the diff rows they mark, the settings files' notes in the lens head ---- */
+.modal .secret-check {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-input);
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.modal .secret-check.is-found,
+.modal .secret-check.is-failed {
+  border-color: var(--amber-ring);
+  background: var(--amber-soft);
+  color: var(--fg);
+}
+
+.secret-check-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.secret-check-head > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.secret-check.is-found .secret-check-head > svg,
+.secret-check.is-failed .secret-check-head > svg {
+  color: var(--amber);
+}
+
+.secret-check.is-clean .secret-check-head > svg {
+  color: var(--green);
+}
+
+.secret-check-words {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.45;
+}
+
+/* .modal first: a dialog of size md is also .md, whose lists are the Markdown's, indented */
+.modal .secret-findings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 32vh;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.modal .secret-findings li {
+  margin: 0;
+}
+
+.linkish.secret-finding {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  text-align: left;
+  color: var(--fg);
+}
+
+.linkish.secret-finding:disabled {
+  cursor: default;
+  background: none;
+}
+
+.secret-finding-where {
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
+}
+
+.secret-finding-rule {
+  font-size: var(--fs-11);
+  color: var(--amber);
+}
+
+.secret-finding-excerpt {
+  flex-basis: 100%;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  font-weight: 400;
+  color: var(--fg-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.secret-check-note {
+  margin: 0;
+  color: var(--fg-dim);
+}
+
+/* Cancel, Send anyway… and the held approval: on a phone the three take two rows rather than run past the edge */
+.verdict-actions {
+  flex-wrap: wrap;
+}
+
+.review-diff .fv-line.secret {
+  background: var(--amber-soft);
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+
+.review-tag-secret {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.review-settings {
+  flex: 1 0 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.review-settings-fix {
+  opacity: 0.85;
 }

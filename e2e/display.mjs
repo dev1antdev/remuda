@@ -77,6 +77,7 @@ socket.onmessage = (message) => {
   if (msg.method === "Fetch.requestPaused") {
     const url = msg.params.request?.url ?? "";
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
+    else if (url.includes("/api/review/secrets")) void fakeSecrets(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else void dressRoster(msg.params);
   }
@@ -305,7 +306,13 @@ writeFileSync(`${appDir}/README.md`, "# app\n");
 writeFileSync(`${appDir}/src/app.go`, goLines("hello", 41));
 writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\n");
 writeFileSync(`${appDir}/old.txt`, "an old file\n");
+// Claude Code's own approvals committed by mistake, one of them carrying a token: the lens head warns of it. The token
+// is made here, its letters in another order, so no secret sits in this file
+const shuffledKey = (n) => Array.from({ length: n }, (_, i) => "Zq8vK2mWp4Lr7Tb9Xs3Nd6Hc1JyQe5Gu0"[(i * 7 + 3) % 33]).join("");
+mkdirSync(`${appDir}/.claude`, { recursive: true });
+writeFileSync(`${appDir}/.claude/settings.local.json`, `${JSON.stringify({ permissions: { allow: ["Bash(npm test)", `Bash(curl -H 'Authorization: Bearer ${shuffledKey(40)}' https://deploy.internal)`] } }, null, 2)}\n`);
 git(appDir, "add", "-A");
+git(appDir, "add", "-f", ".claude/settings.local.json"); // past an excludes file that ignores it, as Claude Code sets one up
 git(appDir, "commit", "-q", "-m", "init");
 writeFileSync(`${appDir}/src/app.go`, goLines("hello, world", 42));
 writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\nA second note, staged.\n");
@@ -467,6 +474,25 @@ async function fakeOpinion({ requestId, request }) {
     if (request.method === "DELETE") fakeOpinionState = null;
   }
   await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// fakeSecrets answers the secret check for the repository with what it would find in work holding secrets: a token on
+// src/app.go's changed greeting, which the lens can open at its row, and a keystore it cannot; other folders go through
+async function fakeSecrets({ requestId, request }) {
+  if (!(new URL(request.url).searchParams.get("dir") ?? "").replace(/\/+$/, "").endsWith("/display/app")) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const body = {
+    findings: [
+      { file: "src/app.go", line: 6, rule: "github-token", excerpt: 'fmt.Println("ghp_••••••••a1B2")' },
+      { file: "certs/release.p12", line: 0, rule: "key-file", excerpt: "release.p12" },
+    ],
+    skipped: [{ path: "assets/logo.png", why: "binary" }],
+    files: 4,
+    at: iso(now),
+  };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
 
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
@@ -689,6 +715,45 @@ async function changesScreens() {
   await screen("changes-verdict", {
     open: async () => tap(`${LENS} .review-verdicts .btn:not(.primary)`),
     expect: [".modal textarea"],
+  });
+  await screen("changes-secrets", {
+    open: async () => {
+      check(await present(`${LENS} .review-settings .notice.warn`), "the lens head does not warn of the token in .claude/settings.local.json");
+      await tap(`${LENS} .review-verdicts .btn.primary`);
+      if (!(await until(() => present(".modal .verdict-ask"), 3))) throw new Error("the approval offers no commit");
+      await tap(await mark(`document.querySelectorAll('.modal .verdict-ask')[1]`, "ask-commit"));
+      if (!(await until(() => present(".modal .secret-check.is-found"), 6))) throw new Error("the secret check did not report its findings");
+      check((await count(".modal .secret-finding")) === 2, `the dialog lists ${await count(".modal .secret-finding")} findings, not 2`);
+      check(await evaluate(`document.querySelector('.modal button[type=submit]')?.disabled === true`), "Approve & commit is not held back by the findings");
+      check(await present(".modal .review-send-anyway"), "no Send anyway beside the held button");
+      check(await evaluate(`document.querySelectorAll('.modal .secret-finding:disabled').length === 1`), "the keystore, which has no row, is offered as a jump");
+      const inside = `(() => { const box = document.querySelector('.modal').getBoundingClientRect(); return [...document.querySelectorAll('.modal .modal-actions .btn')].every((b) => { const r = b.getBoundingClientRect(); return r.left >= box.left - 1 && r.right <= box.right + 1; }); })()`;
+      check(await evaluate(inside), "Cancel, Send anyway and the held approval run past the dialog's edge");
+    },
+    expect: [".modal .secret-check"],
+    close: async () => {},
+  });
+  // Send anyway asks first, naming how many: the confirm is only looked at, never answered — nothing is sent
+  await screen("changes-send-anyway", {
+    open: async () => {
+      await tap(".modal .review-send-anyway");
+      if (!(await until(() => present(".confirm-text"), 3))) throw new Error("Send anyway went without a confirm");
+      check(/\b2\b/.test(await evaluate(`document.querySelector('.confirm-text')?.textContent ?? ""`)), "the confirm does not say how many findings");
+    },
+    expect: [".confirm-text"],
+    close: async () => {
+      await tap(await mark(`[...document.querySelectorAll('.modal')].pop()?.querySelector('.modal-actions .btn:not(.danger)')`, "confirm-cancel"));
+      if (!(await until(async () => !(await present(".confirm-text")), 3))) failed("Cancel did not close the confirm");
+    },
+  });
+  await screen("changes-secret-row", {
+    open: async () => {
+      await tap(".modal .secret-finding:not(:disabled)");
+      if (!(await until(async () => !(await present(".modal")), 3))) failed("a finding's click did not give the dialog's place to its row");
+      if (!(await until(() => present(`${LENS} .review-file.open .fv-line.secret`), 6))) failed("the finding's row is not marked in the diff");
+      check(await present(`${LENS} .review-tag-secret`), "the file's row does not count its secret");
+    },
+    expect: [`${LENS} .fv-line.secret`],
   });
   await screen("changes-file", {
     open: async () => {
@@ -1093,6 +1158,7 @@ try {
       { urlPattern: "*/api/roster*", requestStage: "Response" },
       { urlPattern: "*/api/feed*", requestStage: "Response" },
       { urlPattern: "*/api/opinion*", requestStage: "Request" },
+      { urlPattern: "*/api/review/secrets*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
