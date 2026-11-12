@@ -2,6 +2,7 @@ package scenes
 
 import (
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
@@ -148,37 +149,61 @@ func planWorktrees(machine string, list []worktrees.Leftover) []Action {
 }
 
 // Plan is what the tidy would do now on the machines it covers, every pane read afresh.
+// The machines are looked at side by side (a remote's shells are a call each, its worktrees a du), each machine's part
+// kept in the fleet's order.
 func (s *Service) Plan(t Tidy, now time.Time) Plan {
-	plan := Plan{Actions: []Action{}, Unread: []Unread{}}
+	var covered []Machine
 	for _, mc := range s.Machines() {
-		if !t.Covers(mc.ID()) {
-			continue
-		}
-		client, err := mc.Herdr()
-		if err != nil {
-			plan.Unread = append(plan.Unread, Unread{Machine: mc.ID(), Label: mc.Label(), Why: err.Error()})
-			continue
-		}
-		snap := mc.Snapshot()
-		if snap == nil {
-			plan.Unread = append(plan.Unread, Unread{Machine: mc.ID(), Label: mc.Label(), Why: "no snapshot of the machine yet"})
-			continue
-		}
-		atPrompt := func(pane string) bool {
-			at, err := client.PaneAtPrompt(pane)
-			return err == nil && at
-		}
-		plan.Actions = append(plan.Actions, planPanes(t, mc.ID(), snap, atPrompt, s.Readings, now)...)
-		if t.Worktrees {
-			list, err := mc.Leftovers(worktrees.OpenFolders(snap))
-			if err != nil {
-				plan.Unread = append(plan.Unread, Unread{Machine: mc.ID(), Label: mc.Label(), Why: "its worktrees could not be read: " + err.Error()})
-				continue
-			}
-			plan.Actions = append(plan.Actions, planWorktrees(mc.ID(), list)...)
+		if t.Covers(mc.ID()) {
+			covered = append(covered, mc)
 		}
 	}
+	parts := make([]Plan, len(covered))
+	var wg sync.WaitGroup
+	for i, mc := range covered {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			parts[i] = s.planMachine(t, mc, now)
+		}()
+	}
+	wg.Wait()
+	plan := Plan{Actions: []Action{}, Unread: []Unread{}}
+	for _, part := range parts {
+		plan.Actions = append(plan.Actions, part.Actions...)
+		plan.Unread = append(plan.Unread, part.Unread...)
+	}
 	sort.SliceStable(plan.Actions, func(i, j int) bool { return actOrder[plan.Actions[i].Kind] < actOrder[plan.Actions[j].Kind] })
+	return plan
+}
+
+// planMachine is the tidy's part on one machine, or why it could not look there.
+func (s *Service) planMachine(t Tidy, mc Machine, now time.Time) Plan {
+	var plan Plan
+	unread := func(why string) Plan {
+		plan.Unread = append(plan.Unread, Unread{Machine: mc.ID(), Label: mc.Label(), Why: why})
+		return plan
+	}
+	client, err := mc.Herdr()
+	if err != nil {
+		return unread(err.Error())
+	}
+	snap := mc.Snapshot()
+	if snap == nil {
+		return unread("no snapshot of the machine yet")
+	}
+	atPrompt := func(pane string) bool {
+		at, err := client.PaneAtPrompt(pane)
+		return err == nil && at
+	}
+	plan.Actions = planPanes(t, mc.ID(), snap, atPrompt, s.Readings, now)
+	if t.Worktrees {
+		list, err := mc.Leftovers(worktrees.OpenFolders(snap))
+		if err != nil {
+			return unread("its worktrees could not be read: " + err.Error())
+		}
+		plan.Actions = append(plan.Actions, planWorktrees(mc.ID(), list)...)
+	}
 	return plan
 }
 

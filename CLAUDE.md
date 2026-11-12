@@ -2575,7 +2575,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   neutral names, and so do every confirm and the dialogs the menus and the
   palette open — leftovers, MAC address, Updates, Update everywhere, the
   move to another machine, a new workspace, tab or worktree, the folder
-  picker, the arenas, Message several agents and Send to agent (a hidden
+  picker, the arenas, the scenes and their runs, Message several agents and Send to agent (a hidden
   folder's agent by the neutral name and its kind, `targetWords` in
   `agents/targets.ts`) — (`sharingDialogs.test.ts`; a rename's field keeps
   the name it changes). Nothing sent to or kept by the server changes; pushes,
@@ -3578,7 +3578,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   /api/scene-runs/{id}`. **A tidy** (`tidy.go`, `tidyrun.go`):
   `Tidy{Shells, Idle, IdleHours (8, 1–168), Compact, CompactAt (70, 10–
   95 %), Worktrees, Machines}`; `Plan(tidy, now)` (`GET /api/scenes/{id}/
-  plan`) looks at every machine it covers (`Covers`: every one when it
+  plan`) looks at every machine it covers side by side (`Covers`: every one when it
   names none), a machine away or without a snapshot an `Unread` with
   why, and `planPanes` makes the actions — a shell at its prompt
   (`PaneAtPrompt`) `close-shell`; an agent the radar reads `idle` (herdr

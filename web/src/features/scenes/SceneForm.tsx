@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { Recipe } from "@/features/recipes/api";
 import { connected } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import { Icon, Tip } from "@/ui";
 import type { Scene, Step } from "./api";
 import StepForm from "./StepForm";
@@ -14,6 +15,7 @@ import { t } from "@/lib/i18n";
 
 export default function SceneForm({ scene, recipes, onChange, onDone, onRemove }: { scene: Scene; recipes: Recipe[]; onChange: (s: Scene) => void; onDone: () => void; onRemove: () => void }) {
   const { machines, agents } = useRoster();
+  const share = useSharing(); // under the screen-sharing mode the hidden machines and folders by their neutral names
   const steps = scene.steps ?? [];
   const [open, setOpen] = useState<number | null>(steps.length === 0 ? null : 0);
   const setSteps = (next: Step[]) => onChange({ ...scene, steps: next });
@@ -53,8 +55,8 @@ export default function SceneForm({ scene, recipes, onChange, onDone, onRemove }
               <div key={i} className="scene-step">
                 <span className="scene-step-n">{i + 1}</span>
                 <button type="button" className="linkish scene-step-text" onClick={() => setOpen(i)}>
-                  <strong>{stepWhere(step, machines)}</strong>
-                  <span className="scene-words">{stepWords(step, agents, recipes)}</span>
+                  <strong>{share.redact(stepWhere(step, machines))}</strong>
+                  <span className="scene-words">{share.redact(stepWords(step, agents, recipes))}</span>
                 </button>
                 <Tip text={t("Earlier")}>
                   <button type="button" className="icon-btn sm" aria-label={t("Earlier")} disabled={i === 0} onClick={() => move(i, -1)}>

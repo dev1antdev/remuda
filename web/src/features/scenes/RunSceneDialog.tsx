@@ -4,6 +4,7 @@
 import { useMemo, useState } from "react";
 import { fetchRecipes } from "@/features/recipes/api";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import { useQuery } from "@/lib/query";
 import { Dialog, Icon, Notice, useSubmit } from "@/ui";
 import { fetchPlan, fetchRun, fetchScenes, runScene, type Run } from "./api";
@@ -13,6 +14,7 @@ import { t } from "@/lib/i18n";
 
 export default function RunSceneDialog({ id, onClose }: { id: string; onClose: () => void }) {
   const { machines, agents } = useRoster();
+  const share = useSharing(); // under the screen-sharing mode the hidden machines and folders by their neutral names
   const scenes = useQuery(fetchScenes, []);
   const recipes = useQuery(fetchRecipes, []).data ?? [];
   const scene = scenes.data?.find((s) => s.id === id) ?? null;
@@ -64,6 +66,7 @@ export default function RunSceneDialog({ id, onClose }: { id: string; onClose: (
       }}
     >
       {scenes.error && <Notice tone="error">{scenes.error}</Notice>}
+      {scenes.loading && <Notice tone="hint">{t("Loading…")}</Notice>}
       {scenes.data && !scene && <Notice tone="error">{t("That scene is gone.")}</Notice>}
       {run ? (
         <>
@@ -87,7 +90,7 @@ export default function RunSceneDialog({ id, onClose }: { id: string; onClose: (
                   <label className={`pick-row${away ? " failed" : ""}`}>
                     <input type="checkbox" checked={picks.has(String(i))} disabled={away} onChange={() => toggle(String(i))} />
                     <span className="pick-name">
-                      <strong>{stepWhere(step, machines)}</strong> · {stepWords(step, agents, recipes)}
+                      <strong>{share.redact(stepWhere(step, machines))}</strong> · {share.redact(stepWords(step, agents, recipes))}
                     </span>
                     <span className="pick-hint">{away ? t("machine away") : there ? t("runs there already") : ""}</span>
                   </label>
@@ -103,7 +106,7 @@ export default function RunSceneDialog({ id, onClose }: { id: string; onClose: (
           {plan.error && <Notice tone="error">{plan.error}</Notice>}
           {(plan.data?.unread ?? []).map((u) => (
             <Notice key={u.machine + u.why} tone="warn">
-              {t("{machine}: nothing looked at — {why}", { machine: u.label, why: u.why })}
+              {share.redact(t("{machine}: nothing looked at — {why}", { machine: u.label, why: u.why }))}
             </Notice>
           ))}
           {plan.data && actions.length === 0 && <Notice tone="success">{t("Nothing to tidy right now.")}</Notice>}
@@ -114,8 +117,8 @@ export default function RunSceneDialog({ id, onClose }: { id: string; onClose: (
                   <label className="pick-row">
                     <input type="checkbox" checked={picks.has(action.id)} onChange={() => toggle(action.id)} />
                     <Icon name={action.kind === "worktree" ? "git-branch" : action.kind === "compact" ? "zap" : "x"} size={14} />
-                    <span className="pick-name">{actionWords(action, agents, now)}</span>
-                    <span className="pick-hint">{machines.length > 1 ? [machines.find((m) => m.id === action.machine)?.label, actionHint(action)].filter(Boolean).join(" · ") : actionHint(action)}</span>
+                    <span className="pick-name">{share.redact(actionWords(action, agents, now))}</span>
+                    <span className="pick-hint">{share.redact(machines.length > 1 ? [machines.find((m) => m.id === action.machine)?.label, actionHint(action)].filter(Boolean).join(" · ") : actionHint(action))}</span>
                   </label>
                 </li>
               ))}

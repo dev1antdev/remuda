@@ -92,8 +92,12 @@ func (s *Service) Start(sceneID string, steps []int, actions []string, by string
 		if len(actions) == 0 {
 			return Run{}, errors.New("pick what to tidy")
 		}
-		for i := range actions {
-			run.Items = append(run.Items, Item{Index: i, Action: &Action{ID: actions[i]}, State: StateWaiting})
+		seen := map[string]bool{}
+		for _, id := range actions {
+			if !seen[id] {
+				seen[id] = true
+				run.Items = append(run.Items, Item{Index: len(run.Items), Action: &Action{ID: id}, State: StateWaiting})
+			}
 		}
 	} else {
 		picked, err := pickSteps(scene.Steps, steps)

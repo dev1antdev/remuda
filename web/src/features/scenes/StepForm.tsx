@@ -7,6 +7,7 @@ import { draftOf, recipeWords } from "@/features/recipes/recipes";
 import { folderOptions, machineOptions } from "@/features/roster/options";
 import { CUSTOM, hasModelFlag, modelChoices, modelOf, modelPlaceholder, type Draft } from "@/features/roster/startOptions";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import RetiredNotice from "@/features/usage/RetiredNotice";
 import { errMsg } from "@/lib/text";
 import { Icon, Logo, Notice, Select } from "@/ui";
@@ -18,6 +19,7 @@ const OTHER_FOLDER = "\u0000other"; // the folder Select's last row: a path type
 
 export default function StepForm({ step, recipes, onChange, onDone }: { step: Step; recipes: Recipe[]; onChange: (s: Step) => void; onDone: () => void }) {
   const { machines, agents } = useRoster();
+  const share = useSharing(); // under the screen-sharing mode the hidden machines and folders by their neutral names
   const kind = step.recipe || !step.agent ? "" : step.agent;
   const [draft, setDraft] = useState<Draft>(() => draftOf({ name: "", agent: kind, model: step.model, args: step.args, prompt: step.prompt }));
   const [typing, setTyping] = useState(false);
@@ -34,9 +36,9 @@ export default function StepForm({ step, recipes, onChange, onDone }: { step: St
     ...recipes.map((r) => ({ value: `recipe:${r.id}`, label: t("Recipe: {name}", { name: r.name }), hint: recipeWords(r, agents), icon: <Icon name="sparkles" size={14} /> })),
     { value: SHELL, label: t("Plain shell"), icon: <Icon name="terminal" size={14} /> },
   ];
-  const folders = useMemo(() => folderOptions(machines, step.machine), [machines, step.machine]);
+  const folders = useMemo(() => folderOptions(machines, step.machine).map((f) => ({ ...f, label: share.redact(f.label), hint: f.hint && share.redact(f.hint) })), [machines, step.machine, share]);
   const listed = folders.some((f) => f.value === step.dir);
-  const folderRows = [...(listed || !step.dir ? folders : [{ value: step.dir, label: step.dir, icon: <Icon name="folder" size={14} /> }, ...folders]), { value: OTHER_FOLDER, label: t("Another folder…"), icon: <Icon name="folder" size={14} /> }];
+  const folderRows = [...(listed || !step.dir ? folders : [{ value: step.dir, label: share.redact(step.dir), icon: <Icon name="folder" size={14} /> }, ...folders]), { value: OTHER_FOLDER, label: t("Another folder…"), icon: <Icon name="folder" size={14} /> }];
   // the workspace open on the step's folder, whose active tab a capture reads
   const open = machines.find((m) => m.id === step.machine)?.sessions.find((s) => s.dir === step.dir && !s.scratch);
   const capture = () => {
@@ -54,7 +56,7 @@ export default function StepForm({ step, recipes, onChange, onDone }: { step: St
       <div className="scene-step-where">
         <label>
           {t("Machine")}
-          <Select value={step.machine} onChange={(machine) => set({ machine, layout: undefined })} options={machineOptions(machines, { onlyConnected: false })} />
+          <Select value={step.machine} onChange={(machine) => set({ machine, layout: undefined })} options={machineOptions(machines, { onlyConnected: false, label: share.machineLabel })} />
         </label>
         <label>
           {t("Folder")}

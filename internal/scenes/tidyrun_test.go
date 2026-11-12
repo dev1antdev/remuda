@@ -35,7 +35,8 @@ func TestATidyDoesWhatWasPickedAfterAFreshLook(t *testing.T) {
 	if _, err := svc.Start(id, nil, nil, "iPhone"); err == nil {
 		t.Fatal("a tidy with nothing picked ran")
 	}
-	picked := []string{"compact|local|w2:p4", "close-shell|local|w1:p2", "worktree|local|/home/me/.herdr/worktrees/api/old", "close-agent|local|w2:p1"}
+	// the first one picked twice: it runs once
+	picked := []string{"compact|local|w2:p4", "close-shell|local|w1:p2", "worktree|local|/home/me/.herdr/worktrees/api/old", "close-agent|local|w2:p1", "compact|local|w2:p4"}
 	started, err := svc.Start(id, nil, picked, "iPhone")
 	if err != nil {
 		t.Fatal(err)

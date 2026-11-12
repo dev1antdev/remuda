@@ -2,6 +2,7 @@
 // action by action, before anything runs.
 
 import type { Machine } from "@/features/roster/api";
+import { useSharing } from "@/features/roster/useSharing";
 import type { Tidy } from "./api";
 import { DEFAULT_COMPACT_AT, DEFAULT_IDLE_HOURS } from "./scenes";
 import { t } from "@/lib/i18n";
@@ -14,6 +15,7 @@ const numberIn = (text: string, min: number, max: number, fallback: number) => {
 
 export default function TidyForm({ tidy, machines, onChange }: { tidy: Tidy; machines: Machine[]; onChange: (t: Tidy) => void }) {
   const set = (patch: Partial<Tidy>) => onChange({ ...tidy, ...patch });
+  const share = useSharing(); // under the screen-sharing mode the hidden machines by their neutral names
   const picked = new Set(tidy.machines ?? []);
   const toggleMachine = (id: string) => {
     const next = new Set(picked);
@@ -76,7 +78,7 @@ export default function TidyForm({ tidy, machines, onChange }: { tidy: Tidy; mac
             {machines.map((m) => (
               <label key={m.id} className="scene-check">
                 <input type="checkbox" checked={picked.has(m.id)} onChange={() => toggleMachine(m.id)} />
-                <span>{m.label}</span>
+                <span>{share.machineLabel(m)}</span>
               </label>
             ))}
           </div>

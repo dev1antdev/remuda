@@ -3,17 +3,20 @@
 
 import { useEffect, useState } from "react";
 import { fetchRecipes } from "@/features/recipes/api";
+import { connected } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
+import { useSharing } from "@/features/roster/useSharing";
 import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { Dialog, Icon, Notice, Tip } from "@/ui";
 import { fetchScenes, saveScenes, type Scene } from "./api";
 import SceneForm from "./SceneForm";
-import { newStartScene, newTidyScene, sceneWords, whyNotSave } from "./scenes";
+import { freshStep, newStartScene, newTidyScene, sceneWords, whyNotSave } from "./scenes";
 import { t } from "@/lib/i18n";
 
 export default function ScenesDialog({ onClose, onRun }: { onClose: () => void; onRun: (id: string) => void }) {
   const { machines, agents } = useRoster();
+  const share = useSharing(); // under the screen-sharing mode the hidden machines and folders by their neutral names
   // the save replaces the list whole, so nothing is saved until the current one has loaded
   const loaded = useQuery(fetchScenes, []);
   const recipes = useQuery(fetchRecipes, []).data ?? [];
@@ -92,7 +95,7 @@ export default function ScenesDialog({ onClose, onRun }: { onClose: () => void; 
               <Icon name={scene.kind === "tidy" ? "moon" : "sun"} size={16} />
               <span className="scene-row-text">
                 <strong>{scene.name || t("Unnamed")}</strong>
-                <span className="scene-words">{sceneWords(scene, agents, recipes, machines)}</span>
+                <span className="scene-words">{share.redact(sceneWords(scene, agents, recipes, machines))}</span>
               </span>
               <Tip text={dirty ? t("Saves the list, then shows what it will do") : t("Shows what it will do, then runs it")}>
                 <button type="button" className="btn sm" disabled={busy || (dirty && !!blocked)} onClick={() => void run(i)}>
@@ -113,7 +116,7 @@ export default function ScenesDialog({ onClose, onRun }: { onClose: () => void; 
         {list && list.length === 0 && <Notice tone="hint">{t("No scenes yet: a morning that starts your agents, an evening that tidies after them.")}</Notice>}
       </div>
       <div className="scene-add">
-        <button type="button" className="btn sm" disabled={!list} onClick={() => add(newStartScene())}>
+        <button type="button" className="btn sm" disabled={!list} onClick={() => add({ ...newStartScene(), steps: [freshStep(connected(machines)[0]?.id ?? "local", agents)] })}>
           <Icon name="sun" size={12} /> {t("Add a set-up")}
         </button>
         <button type="button" className="btn sm" disabled={!list} onClick={() => add(newTidyScene())}>
