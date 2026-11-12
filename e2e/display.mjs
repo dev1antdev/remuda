@@ -79,6 +79,7 @@ socket.onmessage = (message) => {
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
     else if (url.includes("/api/concierge")) void fakeConcierge(msg.params);
     else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
+    else if (/\/api\/(scenes\/|scene-runs\/)/.test(url)) void fakeScenes(msg.params);
     else if (url.includes("/api/review/secrets")) void fakeSecrets(msg.params);
     else if (url.includes("/api/timelapse/recordings") || url.includes("/api/timelapse/search")) void fakeTimelapse(msg.params);
     else if (url.includes("/api/standup")) void fakeStandup(msg.params);
@@ -153,6 +154,8 @@ async function palette(id) {
   await evaluate(`(() => { const el = document.activeElement; if (el instanceof HTMLIFrameElement || el?.closest?.(".xterm")) el.blur(); })()`);
   await key("k", "KeyK", CMD);
   if (!(await until(() => present(".palette-row"), 4))) throw new Error("the palette did not open");
+  // a row the palette reads from the server (a scene) comes a moment after the palette itself
+  await until(() => evaluate(`!!document.querySelector('.palette-row[data-entry=${JSON.stringify(id)}]')`), 3);
   const ran = await evaluate(`(() => { const row = document.querySelector('.palette-row[data-entry=${JSON.stringify(id)}]'); if (!row) return false; row.scrollIntoView({ block: "nearest" }); row.click(); return true; })()`);
   if (!ran) {
     await key("Escape", "Escape");
@@ -353,8 +356,10 @@ const made = [];
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
-let app, tree, notes, desk, inbox, drawTask, paneA1, paneN, paneDesk;
+let app, tree, notes, desk, inbox, drawTask, paneA1, paneN, paneDesk, morningScene, eveningScene;
 let DRESS = {};
+// the morning's first step lays its tab out as two panes, the agent on the left and a dev server on the right
+const SCENE_LAYOUT = { agent: 0, root: { type: "split", direction: "right", ratio: 0.6, first: { type: "pane" }, second: { type: "pane", dir: "src", command: ["npm", "run", "dev"] } } };
 
 // seed makes the workspaces the screens draw — the repository with two tabs and a linked worktree, a plain folder —
 // a task, a Jira site nobody answers at, and the agents the browser's roster will wear
@@ -378,6 +383,25 @@ async function seed() {
   if (rules.rules?.length !== 2) failed(`the triggers answered ${JSON.stringify(rules)}`);
   await api("PUT", "/api/triggers", [{ name: "Ahead", match: "regex", pattern: "(?=x)", action: "push", enabled: true }]).then(
     () => failed("a look-ahead herdr cannot read was kept"),
+    () => {},
+  );
+  // a morning set-up with a captured layout and an evening tidy, saved through the real route; a run of either and the
+  // tidy's plan are answered in the browser (fakeScenes), so nothing starts or closes
+  const scenes = await api("PUT", "/api/scenes", [
+    {
+      name: "Morning",
+      kind: "start",
+      steps: [
+        { machine: "local", dir: appDir, agent: "claude", model: "opus", prompt: "Read the overnight pull requests and sum them up", tab: "planner", layout: SCENE_LAYOUT },
+        { machine: "local", dir: notesDir, agent: "shell", tab: "notes" },
+      ],
+    },
+    { name: "Evening", kind: "tidy", tidy: { shells: true, idle: true, idle_hours: 8, compact: true, compact_at: 70, worktrees: true } },
+  ]);
+  [morningScene, eveningScene] = [scenes[0]?.id, scenes[1]?.id];
+  if (!morningScene || !eveningScene || scenes[0].steps[0].dir !== appDir) failed(`the scenes answered ${JSON.stringify(scenes)}`);
+  await api("PUT", "/api/scenes", [{ name: "Elsewhere", kind: "start", steps: [{ machine: "gog", dir: appDir, agent: "claude" }] }]).then(
+    () => failed("a scene on a machine the fleet lacks was kept"),
     () => {},
   );
   // a backup of this instance's own state dir onto this machine, so the Settings section has a run and a copy to show
@@ -531,6 +555,38 @@ async function fakeScorecard({ requestId }) {
       { agent: "claude", model: "", runs: 1, finished: share(0, 1), first_approved: share(0, 0), rejected: 0, approved: 0, merged: share(0, 0), kept: share(0, 0), cost_per_run: mean(0.4, 1), cost_per_approved: mean(undefined, 0), minutes_per_run: mean(undefined, 0), last: iso(now - 86400e3) },
     ],
   };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// fakeScenes answers a scene's run and the tidy's plan as a busy evening would: the morning's agent started and its
+// shell refused; four things to tidy, a machine not looked at, and their outcomes each way; a capture goes through
+async function fakeScenes({ requestId, request }) {
+  const path = new URL(request.url).pathname;
+  if (path.endsWith("/capture")) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const actions = [
+    { id: `compact|local|${paneA1}`, kind: "compact", machine: "local", pane: paneA1, workspace: "app", agent: "claude", context: 82 },
+    { id: "close-agent|local|w9:p1", kind: "close-agent", machine: "local", pane: "w9:p1", workspace: "app", tab: "review", agent: "codex", since: now - 11 * 3600e3, closes: "tab" },
+    { id: `close-shell|local|${paneN}`, kind: "close-shell", machine: "local", pane: paneN, workspace: "notes", closes: "workspace" },
+    { id: `worktree|local|${tmp}/.herdr/worktrees/app/old-idea`, kind: "worktree", machine: "local", path: `${tmp}/.herdr/worktrees/app/old-idea`, branch: "old-idea", kb: 18432 },
+  ];
+  const morning = (state) => [
+    { index: 0, step: { machine: "local", dir: appDir, agent: "claude", model: "opus", tab: "planner", layout: SCENE_LAYOUT }, state: state ?? "started", pane: paneA1 },
+    { index: 1, step: { machine: "local", dir: notesDir, agent: "shell", tab: "notes" }, state: state ?? "refused", note: "herdr says the folder is gone" },
+  ];
+  const evening = (state) => [
+    { index: 0, action: actions[0], state: state ?? "done" },
+    { index: 1, action: actions[1], state: state ?? "done" },
+    { index: 2, action: actions[2], state: state ?? "skipped", note: "it works now" },
+    { index: 3, action: actions[3], state: state ?? "refused", note: "uncommitted changes (M notes.md)" },
+  ];
+  const run = (scene, done) => ({ id: `run-${scene}`, scene, name: scene === eveningScene ? "Evening" : "Morning", kind: scene === eveningScene ? "tidy" : "start", at: iso(now), done, items: scene === eveningScene ? evening(done ? undefined : "waiting") : morning(done ? undefined : "waiting") });
+  let body;
+  if (path.endsWith("/plan")) body = { actions, unread: [{ machine: "gog", label: "GOG", why: "not connected" }] };
+  else if (path.endsWith("/run")) body = run(path.split("/").at(-2), false);
+  else body = run(path.split("/").at(-1).replace(/^run-/, ""), true);
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
 
@@ -936,6 +992,72 @@ const mark = async (expression, attr) => {
   return `[data-e2e="${attr}"]`;
 };
 // onAgents comes back to the Agents mode on the seeded agent's pane
+// sceneScreens are the Scenes dialog with the seeded morning and evening, each one's form, and a run of each: what it
+// will do first, then its outcome as the fake answers it
+async function sceneScreens() {
+  // a long line of a scene's words is cut at its column, never pushing the dialog into a sideways scroll
+  const flat = async () => check(await evaluate(`[...document.querySelectorAll(".modal")].every((m) => m.scrollWidth <= m.clientWidth + 1)`), "the dialog scrolls sideways");
+  const openScenes = async () => {
+    await palette("scenes");
+    if (!(await until(async () => (await count(".modal .scene-row")) === 2, 10))) failed(`the scenes dialog lists ${await count(".modal .scene-row")} scenes, not 2`);
+    await flat();
+  };
+  await screen("scenes", { open: openScenes, expect: [".modal .scene-row"] });
+  await screen("scene-morning", {
+    open: async () => {
+      await openScenes();
+      await tap(".modal .scene-row:nth-child(1) > .btn:nth-of-type(2)");
+      check((await count(".modal .scene-step")) === 1, "the morning's second step is not listed under its open first one");
+      await flat();
+    },
+    expect: [".modal .scene-form", ".modal .scene-step-form", ".modal .scene-layout"],
+  });
+  await screen("scene-evening", {
+    open: async () => {
+      await openScenes();
+      await tap(".modal .scene-row:nth-child(2) > .btn:nth-of-type(2)");
+      await flat();
+    },
+    expect: [".modal .scene-tidy", ".modal .scene-check .scene-number"],
+  });
+  await screen("scene-run-morning", {
+    open: async () => {
+      await palette(`scene:${morningScene}`);
+      if (!(await until(async () => (await count(".modal .scene-picks .pick-row")) === 2, 10))) failed("the morning's run does not list its two steps");
+      await flat();
+    },
+    expect: [".modal .scene-picks", ".modal .modal-actions .btn.primary"],
+  });
+  await screen("scene-run-morning-outcome", {
+    open: async () => {
+      await palette(`scene:${morningScene}`);
+      await until(async () => (await count(".modal .scene-picks .pick-row")) === 2, 10);
+      await tap(".modal .modal-actions .btn.primary");
+      if (!(await until(async () => (await count(".modal .scene-outcome.is-ok")) === 1 && (await count(".modal .scene-outcome.is-bad")) === 1, 10))) failed("the morning's outcome is not one started and one refused");
+      await flat();
+    },
+    expect: [".modal .scene-outcomes", ".modal .scene-outcome .btn"],
+  });
+  await screen("scene-run-evening", {
+    open: async () => {
+      await palette(`scene:${eveningScene}`);
+      if (!(await until(async () => (await count(".modal .scene-picks .pick-row")) === 4, 10))) failed("the evening's plan does not list its four actions");
+      await flat();
+    },
+    expect: [".modal .scene-picks", ".modal .notice"],
+  });
+  await screen("scene-run-evening-outcome", {
+    open: async () => {
+      await palette(`scene:${eveningScene}`);
+      await until(async () => (await count(".modal .scene-picks .pick-row")) === 4, 10);
+      await tap(".modal .modal-actions .btn.primary");
+      if (!(await until(async () => (await count(".modal .scene-outcome")) === 4, 10))) failed("the evening's outcome does not list its four actions");
+      await flat();
+    },
+    expect: [".modal .scene-outcome.is-ok", ".modal .scene-outcome.is-bad", ".modal .scene-outcome.is-quiet"],
+  });
+}
+
 const onAgents = async () => {
   if (await present(".tabstrip")) return;
   await palette("mode:herdr");
@@ -1413,6 +1535,7 @@ async function runPass() {
     },
     expect: [".modal .trigger-form", ".modal .trigger-try"],
   });
+  await sceneScreens();
   await screen("float-terminal", {
     open: async () => {
       await key("`", "Backquote", 2);
@@ -1765,6 +1888,8 @@ try {
       { urlPattern: "*/api/opinion*", requestStage: "Request" },
       { urlPattern: "*/api/concierge*", requestStage: "Request" },
       { urlPattern: "*/api/scorecard*", requestStage: "Request" },
+      { urlPattern: "*/api/scenes/*", requestStage: "Request" },
+      { urlPattern: "*/api/scene-runs/*", requestStage: "Request" },
       { urlPattern: "*/api/review/secrets*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/recordings*", requestStage: "Request" },
       { urlPattern: "*/api/standup*", requestStage: "Request" },

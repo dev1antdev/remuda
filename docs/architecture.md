@@ -22,7 +22,7 @@ Three rings, and a dependency may only point inwards.
 │  updates    what a machine can update, and running it as a job       │
 │  tasks      the task list, and starting an agent on a task           │
 │  health · jobs · restart · watch · radar · watchdog · push ·         │
-│  schedule · search · usage · quick · recipes · code                  │
+│  schedule · search · usage · quick · recipes · scenes · code         │
 ├─ the floor ──────────────────────────────────────────────────────────┤
 │  machines   the registry; a Machine is a shell.Host with herdr on it │
 │  herdr      the RPC client, the attach PTYs, the snapshot questions  │
@@ -50,6 +50,7 @@ The contexts are the bounded contexts of the product, in its own words:
 | Inside herdr | remuda's figures as herdr's sidebar tokens, its alerts as herdr's toasts | `mirror` |
 | Schedules | prompts on a timetable | `schedule` |
 | Recipes | the saved ways to start an agent | `recipes` |
+| Scenes | the morning set-up in one press, the evening tidy in another | `scenes` |
 
 ## The rules
 
@@ -103,7 +104,7 @@ down through, and one folder per lens.
 ├─ features ───────────────────────────────────────────────────────────┤
 │  roster · chat · terminal · review · tasks · updates · usage ·       │
 │  search · schedules · alerts · files · code · agents · quick ·       │
-│  recipes                                                             │
+│  recipes · scenes                                                    │
 │  one folder each: api.ts (its routes), pure modules with their       │
 │  tests, the screen in pieces                                         │
 ├─ ui ─────────────────────────────────────────────────────────────────┤

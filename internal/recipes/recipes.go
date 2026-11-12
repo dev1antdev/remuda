@@ -90,24 +90,31 @@ func Check(r Recipe) (Recipe, error) {
 	if r.Agent == "" {
 		return r, fmt.Errorf("recipe %q names no agent", r.Name)
 	}
-	if !sessions.KnownAgent(r.Agent) {
-		return r, fmt.Errorf("recipe %q: %q is not an agent herdr knows", r.Name, r.Agent)
-	}
-	if r.Agent == "shell" {
-		if r.Model != "" || r.Args != "" || r.Prompt != "" {
-			return r, fmt.Errorf("recipe %q: a plain shell takes no model, arguments or prompt", r.Name)
-		}
-	} else {
-		args, err := sessions.SplitArgs(r.Args)
-		if err != nil {
-			return r, fmt.Errorf("recipe %q: %w", r.Name, err)
-		}
-		if _, err := sessions.StartArgs(r.Agent, sessions.Start{Model: r.Model, Args: args}); err != nil {
-			return r, fmt.Errorf("recipe %q: %w", r.Name, err)
-		}
+	if err := CheckStart(r.Agent, r.Model, r.Args, r.Prompt); err != nil {
+		return r, fmt.Errorf("recipe %q: %w", r.Name, err)
 	}
 	if r.Machine != "" && r.Dir == "" {
 		return r, fmt.Errorf("recipe %q names a machine but no folder", r.Name)
 	}
 	return r, nil
+}
+
+// CheckStart refuses an agent with its model, arguments and first prompt where the create routes would: an agent herdr
+// does not know, extras on a plain shell, arguments a shell could not split, a model for a kind without a model flag.
+func CheckStart(agent, model, args, prompt string) error {
+	if !sessions.KnownAgent(agent) {
+		return fmt.Errorf("%q is not an agent herdr knows", agent)
+	}
+	if agent == "" || agent == "shell" {
+		if model != "" || args != "" || prompt != "" {
+			return errors.New("a plain shell takes no model, arguments or prompt")
+		}
+		return nil
+	}
+	split, err := sessions.SplitArgs(args)
+	if err != nil {
+		return err
+	}
+	_, err = sessions.StartArgs(agent, sessions.Start{Model: model, Args: split})
+	return err
 }

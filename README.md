@@ -719,7 +719,7 @@ Logs: `~/Library/Logs/remuda.log` (macOS) or `journalctl --user -u remuda`.
 ### Backups of the cockpit
 
 Everything the cockpit keeps lives in its state dir: your tasks, the
-schedules, budgets, recipes, webhooks and settings, the signed-in devices,
+schedules, budgets, recipes, scenes, webhooks and settings, the signed-in devices,
 the agents' keys, the token, the push keys and its Tailscale node. On a
 Raspberry Pi that is an SD card. **Settings › Backups** copies it every
 night (at a time you pick, in the cockpit's own zone) to another machine
@@ -1468,6 +1468,32 @@ folder you last started it in, else the one you are looking at. A
 recipe also fills the "Start an agent" kind of schedule. Recipes are
 kept on this remuda and shared by every device that uses it;
 "Recipes…" in the palette edits the list.
+
+**Scenes** are the morning set-up in one press and the evening tidy in
+another. A *set-up* is a list of steps across your machines: a folder,
+what runs there — an agent with its model, arguments and first prompt, a
+recipe, or a plain shell — the tab's name, and if you like the layout of
+a workspace's tab as you arranged it in herdr ("Capture this workspace's
+layout": its splits, their sizes, each pane's folder, label and command,
+the agent in the pane it ran in). "Add the workspaces open now" makes a
+step of every workspace you have open. Pressing it shows the steps first
+— the ones whose machine is away, or whose agent already runs there,
+unticked — then starts them one after another: a new tab of the
+workspace on that folder, else a new workspace, the first prompt handed
+over once the agent is up, and says how each went (started, refused and
+why, machine away), with Open on each new pane. A *tidy* is what you
+pick of four: close the shells sitting at their prompt, close agents
+idle for so many hours (their sessions stay — "Reopen a closed agent"
+brings any one back), send `/compact` to idle Claude Codes past a share
+of their context, remove the clean leftover worktrees; on every machine
+or the ones you name. Pressing it lists every action it would take now,
+each with its own tick, and runs only what is ticked, after a fresh look
+— never an agent that works, asks you something, or has a finish you
+have not looked at. Scenes open from "Scenes…" in the palette and the
+sidebar's + menu, each one as "Scene: Morning…" too, and a schedule of
+the "Run a scene" kind runs one on a timetable: a set-up as you saved
+it, a tidy only while nobody's agent on its machines works or asks (else
+the run is skipped and noted). Kept on this remuda like the recipes.
 
 **Several remuda at once:** each machine may run its own (the phone on
 the studio Mac's, the desk on its own). herdr lets one client attach to a terminal

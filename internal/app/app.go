@@ -591,6 +591,8 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.MachineRemoved) { shells.Forget(e.Machine) })
 	events.Subscribe(bus, func(e events.Snapshot) { conciergeAgent.Observe(e.Machine, e.Snap) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { conciergeAgent.Forget(e.Machine) })
+	sceneSet := sceneRunner(o.Dir, cookbook, fleet, watcher, input, tracker, meter, shells, pushSvc.Notify, activity)
+	schedules.Scenes = sceneSchedules(sceneSet)
 
 	// a remote that stays unreachable, and one that answers again: the machines publish every move, the tracker says when it matters
 	absent := away.New(away.AwayAfter, func(n away.Notice) {
@@ -782,6 +784,7 @@ func Run(ctx context.Context, o Options) error {
 
 		Collisions: radarOfCollisions,
 		Undo:       turns,
+		Scenes:     sceneSet,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

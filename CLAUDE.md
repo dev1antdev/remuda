@@ -174,7 +174,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   reads it as the character, herdr refuses it). The watcher reads herdr's matches again with it,
   and the triggers check and try a rule with it. Not caught: Rust's
   compiled-size limit (`\w{1000}\w{1000}`), which herdr refuses as
-  `invalid_regex` and the watcher handles as a refusal. `attach.go`: ref-counted
+  `invalid_regex` and the watcher handles as a refusal. `layout.go`
+  (tested on a throwaway herdr): `LayoutExport(tab)` is a tab's pane
+  tree — splits with their direction and share, each pane's folder,
+  label and command — `LayoutApply(workspace, tab, label, tree)` lays a
+  tree out as a new tab of the workspace or, with a tab id, in place of
+  that tab (its panes, and what ran in them, go; the focus stays),
+  `PaneClose` (herdr closes the tab with its last pane and the workspace
+  with its last tab) and `PaneAtPrompt` (`pane.process_info`: the shell's
+  own process group holds the terminal). `attach.go`: ref-counted
   `herdr terminal attach` PTYs (creack/pty), one per terminal shared by all
   viewers, 45s linger after the last viewer leaves. **No byte replay** for a
   viewer joining a live attach: TUIs draw with relative cursor moves, so a
@@ -3016,7 +3024,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   workspace's folder at once and shows it, its terminal alone, Agent…
   the New tab dialog; a shell's tab shows its terminal (`lensOn`), the
   lens asked for kept for the agents' tabs. (`HealthButton.tsx`, `MachineMenu.tsx`; its head is a + menu — a
-  workspace on a connected machine, an agent from a recipe, a PC — and a ⋯ menu — message
+  workspace on a connected machine, an agent from a recipe, each scene and "Scenes…", a PC — and a ⋯ menu — message
   several agents, the order, Sidebar settings; `RadarSettings.tsx` is
   `RadarFields`, the order, the row label, the idle tiers and the
   shells switch, shown by **Settings** (`features/settings/
@@ -3077,7 +3085,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   neutral names, and so do every confirm and the dialogs the menus and the
   palette open — leftovers, MAC address, Updates, Update everywhere, the
   move to another machine, a new workspace, tab or worktree, the folder
-  picker, the arenas, Message several agents and Send to agent (a hidden
+  picker, the arenas, the scenes and their runs, Message several agents and Send to agent (a hidden
   folder's agent by the neutral name and its kind, `targetWords` in
   `agents/targets.ts`) — (`sharingDialogs.test.ts`; a rename's field keeps
   the name it changes). Nothing sent to or kept by the server changes; pushes,
@@ -3245,7 +3253,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   palette, dialog kind `leftovers` → `LeftoversDialog.tsx`): `GET
   /api/machines/{id}/leftovers` lists, in one script (`LeftoversScript`:
   du for the size), every folder two levels under the root that no
-  workspace's folder or pane's cwd is in (`Leftovers`; a link there is none), with its branch,
+  workspace's folder or pane's cwd is in (`OpenFolders` of the snapshot, `Leftovers`; a link there is none), with its branch,
   its first uncommitted change, or why git cannot read it (a folder with
   no linked worktree's `.git` file is only named); `POST
   …/leftovers/remove {paths}` takes each one still a leftover down with
@@ -3630,8 +3638,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a note in a few words for a narrow place, herdr's sidebar
   (`internal/mirror`): "stuck 25 min", "loop: Bash", "waiting 20 min",
   tested on the notes a sweep writes.
-- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either, a day field that starts with `*` — `*/2` too — is unrestricted; a minute the hour a clock falls back repeats does not run again, `wallMinute`, and `Next` says so) — things on a timetable, three **kinds**
-  (`Kind`, `prompt` for a record from before the field). A **prompt**
+- `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either, a day field that starts with `*` — `*/2` too — is unrestricted; a minute the hour a clock falls back repeats does not run again, `wallMinute`, and `Next` says so) — things on a timetable, four **kinds**
+  (`Kind`, `prompt` for a record from before the field). A **scene**
+  schedule (`scene.go`, tested) names one of the person's scenes
+  (`Schedule.Scene`, no machine, folder, prompt or agent of its own, the
+  label the scene's name by default, `Store.Scenes` — `Name`, `Run` —
+  closures the app sets in `internal/app/scenes.go`): at its cron a start
+  scene's every step runs as it was saved, a tidy's whole plan only while
+  no agent on the machines it covers works or asks (`scenes.Service.
+  AtWork`; else skipped as `SkipAtWork`, "skipped: an agent works or asks
+  there", the run on its way already `SkipRunning`), the outcome
+  `scenes.Summary`'s line ("3 started, 1 away") and a refusal a push
+  (kind `schedule`); the page's editor has "Run a scene" with the scene
+  picked from the list (`features/schedules/SceneFields.tsx`, `scene.ts`
+  tested: `sceneSchedule`, `sceneScheduleWords`). A **prompt**
   schedule names a machine and a **folder** (panes come and go; the
   project stays), a five-field cron in the server's local time
   (`Parse`/`Matches`/`Next`, tested), the prompt, and a switch; delivery
@@ -4060,7 +4080,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (tested) refuses what the create routes would — no name, an agent
   herdr does not know (`sessions.KnownAgent`), arguments `SplitArgs`
   cannot read, a model for a kind without a model flag (`StartArgs`),
-  extras on a plain shell, a machine without a folder. The page:
+  extras on a plain shell, a machine without a folder; `CheckStart(agent,
+  model, args, prompt)` is the part a scene's step is checked with too.
+  The page:
   `features/recipes/` — `api.ts`, `recipes.ts` (pure, tested: `draftOf`
   a recipe as the Options fold's `Draft`, `recipeOf` the way back with
   only what says something, `startRequest` what the create route takes,
@@ -4086,6 +4108,119 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   row) and "Manage recipes…"; the schedule editor's agent kind has the
   same pick, filling agent, model, arguments and prompt (shell recipes
   left out: a schedule starts no shell).
+- `internal/scenes/` — **the morning set-up in one press, the evening
+  tidy in another** (tested on paper: a `fakeHerdr`, a `fakeMachine`).
+  `scenes.json` in the state dir (0600, `Store`, the list replaced whole
+  like the recipes, a damaged file read as none): `Scene{ID, Name, Kind
+  start | tidy, Steps, Tidy}`, checked by `Check` — a name of at most 60
+  runes, one to `MaxSteps` 12 steps, or a tidy with at least one choice.
+  A **step** (`Step{Machine, Dir, Agent | Recipe, Model, Args, Prompt,
+  Tab, Layout}`) is refused by `CheckStep` where a recipe would be
+  (`recipes.CheckStart`), and for no machine, a relative folder, both an
+  agent and a recipe (a recipe brings its own agent, model, arguments
+  and prompt, read when the step runs, `launchOf`), a recipe the
+  cookbook lacks, a tab name past 40 runes; `PUT /api/scenes` refuses a
+  machine the fleet does not list (`fleetKnows`: under `-server` the host
+  too). A **layout** (`layout.go`) is a tab's pane tree as `Capture`
+  keeps it from herdr's `layout.export` — no pane ids, no environment,
+  each folder inside the step's own kept relative to it so the step's
+  folder may move, the agent's pane found by its id (`Layout.Agent`, the
+  first when none ran there) — and `Tree(dir)` lays it out again
+  absolute; `checkLayout` refuses past `MaxPanes` 8, a split not right or
+  down or outside 5–95 %, a folder climbing out (`../`), a NUL in a
+  command, and an agent pane that runs a command of its own. `POST
+  /api/scenes/capture {machine, workspace}` is the workspace's active tab
+  (`Service.Capture`: the layout, the folder, the agent in that tab).
+  **A run of a start scene** (`start.go`, `run.go`): `Service.Start(id,
+  steps, actions, by)` answers at once (`Run{ID, Scene, Kind, At, Done,
+  Items}`, an `Item` per step with its `State` waiting | running |
+  started | refused | away | skipped, its `Note`, its new `Pane`,
+  `MadeWorkspace`) and goes on in the background, one run of a scene at a
+  time (`ErrBusy`, 409), the steps picked by index (none for every one)
+  in the scene's order, one after another (`runStep`): the machine
+  reached (`Machine.Herdr()`, else `away` with why), the folder checked
+  there (`Machine.Folder`, `ResolvePath`: herdr opens a folder that is
+  not there in the home folder instead, so the step is `refused`), then
+  `placeStep` — a new tab of the workspace open on the folder
+  (`sessions.WorkspaceIn`, `TabCreate` under the tab's name), else a new
+  workspace (`WorkspaceCreate`, its first tab renamed); with a layout,
+  `LayoutApply` as a new tab of the open workspace, or in place of the new
+  workspace's first tab, the agent's pane picked off the laid-out tree
+  (`Layout.AgentPane`) — the agent through `sessions.StartAgentWith` (a
+  refusal is `refused` with the tab's pane to open), the first prompt
+  handed over in the background through `Input.FirstPrompt` (not
+  delivered: a push of kind `input` with the pane to open), the watcher
+  refreshed. The runs stay in memory, the newest `KeepRuns` 8, `GET
+  /api/scene-runs/{id}`. **A tidy** (`tidy.go`, `tidyrun.go`):
+  `Tidy{Shells, Idle, IdleHours (8, 1–168), Compact, CompactAt (70, 10–
+  95 %), Worktrees, Machines}`; `Plan(tidy, now)` (`GET /api/scenes/{id}/
+  plan`) looks at every machine it covers side by side (`Covers`: every one when it
+  names none), a machine away or without a snapshot an `Unread` with
+  why, and `planPanes` makes the actions — a shell at its prompt
+  (`PaneAtPrompt`) `close-shell`; an agent the radar reads `idle` (herdr
+  idle or done-and-seen) with a session remuda can follow (`resumable`,
+  so "Reopen a closed agent" brings it back: `restart.Memory` notes the
+  pane gone) and its last work (`LastActive`, else `Since`) `IdleHours`
+  ago `close-agent`; else a Claude Code at rest whose meter reads its
+  last answer at `CompactAt` % of the window or more `compact` — never an
+  agent that works, asks, has a finish nobody looked at or that herdr
+  cannot say, never the floating terminal's shell (`Readings.Scratch`),
+  each with what it takes along (`closes`: the tab, or the workspace when
+  the pane is its last) — then the clean leftover worktrees
+  (`planWorktrees` over `worktrees.Leftovers`, `worktrees.OpenFolders`
+  of the snapshot) `worktree`; in that order, the compacts first. An
+  action's id is `kind|machine|pane-or-folder` (`parseID`). A run takes
+  the ids the person ticked (none is a 400: nothing runs untold) and
+  looks again first: an action the fresh plan no longer holds is
+  `skipped` with why (`staleWhy`: gone already, it works now, it asks you
+  something now, a finish not looked at, something runs in the shell
+  now), the rest done in turn — `PaneClose`; `/compact` (`CompactText`)
+  through `Input.SubmitToAgent`, the one text remuda types here and only
+  because the person pressed the scene, a quiet "sent" row of the
+  activity (`Sent`, `sent.Entry` with who pressed it); `worktrees.Tidy`
+  (never `--force`: an uncommitted change keeps it, `refused` with why).
+  `RunNow(id, by)` is a schedule's run, synchronous, every step or the
+  whole plan; `AtWork(tidy)` names a covered machine where an agent works
+  or asks; `Summary(run)` the line, an error naming the first refusal.
+  The app's side (`internal/app/scenes.go`): `sceneMachine` adapts a
+  `*machines.Machine` and the watcher (`Herdr`, `Snapshot`, `Refresh`,
+  `Leftovers`, `Tidy`, `Folder`), the readings are the radar's `Display`,
+  the meter's share of the window and `scratch.Store.Is`. Routes
+  (`internal/server/scenes.go`, the person's only: a viewer link and an
+  agent key reach none): `GET/PUT /api/scenes`, `POST
+  /api/scenes/capture`, `GET /api/scenes/{id}/plan`, `POST
+  /api/scenes/{id}/run {steps?, actions?}` (404, 409 busy, 400), `GET
+  /api/scene-runs/{id}`. The page: `features/scenes/` — `api.ts` (the
+  calls, `useScenes(enabled)`: the list for a menu, read again after
+  every save through a counter store), `scenes.ts` (pure, tested:
+  `newStartScene` / `newTidyScene` — shells, agents idle 8 h and clean
+  worktrees on, compacts off — `freshStep`, `sourceOf` / `withSource` the
+  step's "Runs" Select (`agent:<kind>`, `recipe:<id>`, `shell`),
+  `stepWhat`, `stepWhere`, `layoutWords`, `stepWords`, `tidyChoices`,
+  `tidyWords`, `sceneWords`, `actionWords`, `actionHint`, `worktreeName`,
+  `itemWords`, `itemTone`, `runWords`, `stepAway`, `stepKind`,
+  `alreadyRuns` — that agent already in a workspace on the folder —
+  `firstPicks` the steps ticked at first, `stepsOfWorkspaces` a step per
+  open workspace, `whyNotSave`, `moveStep`), `ScenesDialog.tsx` (dialog
+  kind `scenes`: the list, Run… — saving first when it changed — Edit,
+  Remove, "Add a set-up", "Add a tidy", Save whole), `SceneForm.tsx`
+  (the name; the steps, one open at a time, moved up and down, "Add a
+  step", "Add the workspaces open now"), `StepForm.tsx` (machine, folder
+  or a path typed, Runs — an agent, a recipe, a plain shell — the model
+  as the start dialogs offer it, arguments, the first prompt, the tab's
+  name, `RetiredNotice`, "Capture this workspace's layout" while a
+  workspace stands on the folder, "Remove the layout"), `TidyForm.tsx`
+  (the four choices with their numbers, the machines), `RunSceneDialog.tsx`
+  (dialog kind `scene-run`: a set-up's steps with ticks — a machine away
+  disabled, "runs there already" unticked — or the tidy's plan, each
+  action its own tick with what goes with it and the machines not looked
+  at; Start N / Tidy N; then the run read every second until done,
+  `RunItems.tsx` each item's mark and outcome, Open for a new pane
+  through `actions.openPane`). Opened from the palette ("Scenes…", and
+  "Scene: <name>…" per scene, `scene:<id>`) and the sidebar head's +
+  menu; never for a viewer. The e2e display suite saves a morning and an
+  evening through the real route and fakes the runs and the plan
+  (`fakeScenes`).
 - `internal/arena/` — **one prompt to several agents side by side**
   (tested): an arena is a prompt — written, or a task's through
   `tasks.Prompt` — and 2–6 lanes, each an agent kind and its model on a
@@ -4795,7 +4930,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `SubmitToAgent` (`agent.prompt` alone: a pane whose agent left is
   `ErrNoAgent`, never typed into its shell — the schedules, the pull
   requests' hand-offs and a booked continue), `SubmitToFolder` (the
-  scheduler's door, through it); `StartIn(client, snap, dir,
+  scheduler's door, through it); `WorkspaceIn(snap, dir)` the first
+  workspace on a folder; `StartIn(client, snap, dir,
   label, kind, start)` (place.go, tested) starts an agent in a folder —
   a new tab of the folder's workspace when the snapshot has one, else a
   new workspace on the folder — and answers a `Place` (pane, tab,

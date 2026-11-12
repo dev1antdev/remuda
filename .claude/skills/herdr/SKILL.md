@@ -44,7 +44,8 @@ A refusal comes back as `{"error":{"code":"…","message":"…"}}` — a
 Methods remuda uses: `ping`, `session.snapshot`, `events.subscribe`, `agent.start`,
 `agent.prompt`, `pane.read`, `pane.send_text`, `pane.send_keys`,
 `workspace.create`, `workspace.close`, `workspace.rename`,
-`tab.create`, `tab.close`, `tab.rename`, `worktree.create`, and the
+`tab.create`, `tab.close`, `tab.rename`, `worktree.create`, `layout.export`,
+`layout.apply`, `pane.close`, `pane.process_info` (the scenes), and the
 writes into herdr's own UI (`internal/mirror`, source `remuda`):
 `pane.report_metadata`, `workspace.report_metadata`,
 `notification.show`. The pane

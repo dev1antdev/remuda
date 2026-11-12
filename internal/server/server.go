@@ -50,6 +50,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/retire"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
+	"github.com/dev1antdev/remuda/internal/scenes"
 	"github.com/dev1antdev/remuda/internal/schedule"
 	"github.com/dev1antdev/remuda/internal/scorecard"
 	"github.com/dev1antdev/remuda/internal/scratch"
@@ -116,6 +117,7 @@ type Server struct {
 	Collisions *collisions.Service // the workspaces of one repository changing the same files, nil without
 	Undo       *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
 	Concierge  *concierge.Service  // the Claude Code agent the person asks what the others are doing, on the machine they pick
+	Scenes     *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
 
 	streams   termStreams
 	relayed   relays   // the terminals piped to a machine's own remuda, which holds their attach
@@ -176,6 +178,7 @@ func (s *Server) Handler() http.Handler {
 	s.triggerRoutes(api)
 	s.driftRoutes(api)
 	s.undoRoutes(api)
+	s.sceneRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
@@ -140,4 +141,18 @@ func Leftovers(host shell.Host, open []string) ([]Leftover, error) {
 		return nil, errors.New(lastLine(out, err.Error()))
 	}
 	return ParseLeftovers(root, out, open), nil
+}
+
+// OpenFolders is every folder a workspace or pane of the snapshot has open: what Leftovers leaves out.
+func OpenFolders(snap *herdr.Snapshot) []string {
+	open := snap.WorkspaceDirs()
+	for i := range snap.Workspaces {
+		if tree := snap.Workspaces[i].Worktree; tree != nil && tree.CheckoutPath != "" {
+			open = append(open, tree.CheckoutPath)
+		}
+	}
+	for i := range snap.Panes {
+		open = append(open, snap.Panes[i].CWD, snap.Panes[i].ForegroundCWD)
+	}
+	return open
 }
