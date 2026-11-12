@@ -43,7 +43,7 @@ The contexts are the bounded contexts of the product, in its own words:
 | Sessions | workspaces, tabs, panes; what reaches an agent | `sessions`, `watch`, `radar`, `watchdog`, `handover` |
 | Live | the page's one event stream: the roster moved, a transcript grew | `live` |
 | Transcripts | what an agent said, read-only | `transcript`, `chat`, `search`, `usage` |
-| Review | a folder's uncommitted work since the last look | `review` |
+| Review | a folder's uncommitted work since the last look, and the secret check before its commit | `review`, `secrets` |
 | Updates | updating herdr, the agents, remuda; the restarts after | `updates`, `jobs`, `restart` |
 | Tasks | remuda's own list, and an agent started on a task | `tasks` |
 | Alerts | pushes to the phone | `push` |

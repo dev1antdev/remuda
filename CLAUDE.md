@@ -1346,6 +1346,41 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   agent hears nothing. The subtitle says "approved" / "rejected" / "since
   you looked" from the baseline's verdict, "rejected · ready again" once
   the agent has said so. Nothing goes until one of those buttons.
+  **An approval that asks for the commit or the pull request waits for
+  the secret check** (below): picking either choice runs it
+  (`useSecretCheck.ts`: a `useQuery` keyed by a round — a new one at
+  every open and every change of the choice, read again each minute while
+  the dialog stays, kept once it closes so the rows stay marked, dropped
+  once the approval went; each answer — a scan or why there is none —
+  carries its round, and `stateFor` reads "checking" until the round of
+  the choice on screen answers, so no render shows the last round's
+  findings as this one's); `SecretsCheck.tsx` under the choices says where
+  it stands — looking, "No secrets in the 4 files the commit would
+  carry" (and in the commits not pushed yet, for a pull request), the
+  findings, or that it could not run with Check again — each finding
+  `file:line`, its rule in words and the masked excerpt, a click closing
+  the dialog onto its row (`keys.reveal`: the file opened, folded files
+  unfolded, the row in the middle and focused); what it did not read is
+  said under them. With findings or a failed check the primary button is
+  disabled and **Send anyway…** (`btn danger`) asks first through the
+  page's confirm, naming how many findings or that nothing is known
+  (`sendAnywayAsk`); while it looks the button reads "Checking for
+  secrets…", the server's 45 s bound ending that; Approve alone, Reject
+  and Mark reviewed never wait. The finding's rows wear `.fv-line.secret`
+  (amber, `onSecretRow`: the new side's line, never a removed one) and the
+  file's row a count (`.review-tag-secret`). **The lens head**
+  (`ReviewHead.tsx`, the draft bar now `DraftBar.tsx`) carries a notice
+  per settings file worth a look (`settingsNotes`): a secret in either
+  file (warn: where, and take it out and revoke it), a tracked
+  `settings.local.json` (git rm --cached and .gitignore), one git does not
+  ignore; Dismiss sets them aside until they say something else.
+  `secrets.ts` is the pure part, tested: `checkState`,
+  `heldBack`, `stateWords`, `sendAnywayAsk`, `ruleWords`, `whereWords`,
+  `jumpable`, `skippedWords`, `onSecretRow`, `secretsByFile`,
+  `settingsNotes`. The e2e display suite fakes `/api/review/secrets`
+  (`fakeSecrets`) and checks the held dialog and the marked row; its
+  repository commits a `settings.local.json` carrying a made-up token, so
+  the head's warning is the real audit's.
   **Ready again** (`ready.go`, tested): the baseline of a rejected folder
   notes `ready` when the agent's finish answer says the work is ready —
   `ReadyWords`: the `Marker` line `READY FOR REVIEW` on a line of its own
@@ -1362,6 +1397,88 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   lists the workspace even with nothing uncommitted, since the agent may
   have committed its fixes); the queue sorts such a workspace first with
   a green "ready again" badge and "says it is ready again" under its name.
+  **The secret check** (`secrets.go`, tested on `shell.Fake` and on real
+  checkouts, which it leaves byte for byte as they were, the index too):
+  no secret leaves the machine through an Approve & commit or an Approve
+  & open PR. `ScanWork(host, dir, push)` is one script on the folder's
+  machine (`secretScript`, through `capScript`'s awk): `git diff -U0
+  --no-ext-diff --no-textconv --no-renames --relative` against HEAD (the
+  empty tree before the first commit), staged or not, then every
+  untracked file git does not ignore as `git diff --no-index` from
+  `/dev/null` — exactly what the lens lists, symlinks and files over
+  `scanPerFile` 1 MB left out (`\036large`), past `scanUntracked` 2000
+  files counted (`\036many N`) — and, for a pull request (`push`), the
+  patches of the commits on no remote-tracking branch (`git log -p
+  --no-merges -n 200 HEAD --not --remotes`, each after `\036commit
+  <sha>`): what the push would send. The awk cuts each file's diff at 1 MB
+  (`\036partly`) and the stream at `scanTotal` 8 MB (`\036budget <path>`
+  for the rest), so a remote sends megabytes at most; `readScan` feeds
+  only the added lines, with their numbers in the new file, to
+  `secrets.Collector`; a binary file is skipped (`binary`), or is a
+  finding of its own when its name says keystore (`key-file`, line 0);
+  45 s at most (`scanTimeout`, said as "it took longer than 45s", never
+  ssh's quoting of the script). `SecretScan{findings, more, skipped
+  [{path, why, count}], files, commits, push, at}`. Route: `GET
+  /api/review/secrets?machine&dir&push=1` (`internal/server/review.go`;
+  a 502 carries the reason alone), the person's only — in neither
+  `viewerRoutes` nor `readRoutes`, so a viewer link and an agent key get a
+  403 (tested). **The settings audit** (`settings.go`, tested): the
+  summary's last section (`settingsScript`) reads `.claude/settings.local.json`
+  and `.claude/settings.json` in the folder and, when the folder is
+  inside the repository, at its root (an absolute path then): whether git
+  tracks it (`ls-files --error-unmatch`), whether it ignores it
+  (`check-ignore`, the person's excludes file too — Claude Code puts
+  `**/.claude/settings.local.json` in it), and its first 64 KB through
+  `secrets.Scan`: `Summary.Settings [{path, local, tracked, ignored,
+  findings}]`. Nothing is written into the repository or `.claude`.
+- `internal/secrets/` — **what looks like a credential in text** (pure,
+  tested hard): `Collector.Line(file, number, text, commit)` / `Text` /
+  `Binary`, `Scan(file, text)`; a `Finding{file, line, rule, excerpt,
+  commit}` whose excerpt is the line around the secret, 40 bytes either
+  side, with **every** secret in that window masked (`mask`: the kind's
+  prefix, `••••••••`, the last four bytes of one of 32 or more; a
+  secret the window would cut is taken in whole), control characters
+  blanked — the secret itself never leaves the server. Rules (`Rules`,
+  `rules.go`): private key headers (PEM, OpenSSH, PGP: the header alone,
+  between `-----BEGIN` and `PRIVATE KEY-----` only capitals and spaces),
+  AWS access key ids (AKIA/ASIA/ABIA/ACCA + 16), GitHub classic
+  (ghp_/gho_/ghu_/ghs_/ghr_ + 36) and fine-grained (`github_pat_`),
+  GitLab (glpat- and the other gl…- kinds), Slack tokens (xox?-, xapp-,
+  a digit in the body) and incoming webhooks (`hooks.slack.com/services/
+  …`), Stripe live keys (sk_live_/rk_live_; a publishable or test key is
+  none), Anthropic (sk-ant-) and OpenAI (sk-proj-, sk-svcacct-,
+  sk-admin-, the older sk-…T3BlbkFJ…) keys, Google API keys (AIza + 35),
+  Telegram bot tokens (8–10 digits:35), npm tokens (npm_ + 36), JWTs
+  (eyJ….eyJ….signature), an `Authorization: Bearer <random>` or `Basic
+  <base64 of user:password>` (`auth-header`), and **a value assigned to
+  a secret's name** (`assigned`, `values.go`): a name whose last word is
+  password, passwd, passphrase, secret, token or credential(s), or whose
+  last two words make apikey, accesskey, secretkey, privatekey and the
+  like (`nameWords` cuts at `_ - .` and case changes: "dbPassword",
+  "AWS_SECRET_ACCESS_KEY", "x-api-key"; never a bare key, a public one,
+  or past 64 bytes), then `=`, `:=`, `=>` or a colon (never `==`, `::`),
+  quoted or bare (a bare value stops at blanks, quotes, brackets, `=`
+  and `:`, so no read overlaps the next; one followed by `(` is a call),
+  and the value 16–1024 bytes of letters and digits with no blank and an
+  entropy of 3.5 bits a byte (3.0 for hex) — never a reference (`$`, `%`,
+  a path, `://`, `scheme:`, a dotted name), a SCREAMING_SNAKE name, or a
+  value naming itself (secret, token, password, value). **Allowances**
+  (`placeholder`, applied to every rule's body): xxxx, ****, changeme,
+  replace_me, placeholder, example (so AWS's documented key), dummy,
+  sample, your, fake, mock, test, redacted, `<…>`, `{{`, `${`, one
+  character throughout, six in a row (123456, abcdef); a line carrying
+  `gitleaks:allow`, `pragma: allowlist secret` or `remuda:allow-secret`
+  is let through — **a test fixture is not skipped by its path**: a real
+  token pasted into a test is pushed all the same, so the repository's
+  own fixtures are kept quiet by those markers and those words. Caps:
+  `MaxPerLine` 4, `MaxPerFile` 20, `MaxFindings` 100, the rest counted;
+  a secret a commit adds that the work already showed in the file is
+  said once. **Linear in the input**: one walk over a line's words
+  (`tokens`), each tried by prefix, a JWT's and a Telegram token's parts
+  read at most three times, a value read bounded and never overlapping
+  the next one's, `strings.Index` loops for the headers and webhooks —
+  no regexp; `TestALineIsReadInTimeLinearInItsLength` feeds 2 MB lines
+  built to make a scan that restarts at every position quadratic.
 - `internal/opinion/` — **the second opinion** (tested): another agent asked
   to review what the Changes lens shows of a folder, without touching it.
   The lens head's **Second opinion** button opens `OpinionDialog.tsx` —
@@ -3902,6 +4019,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   repository and tag (`releaseURLOK`) and are shell-quoted. Uploads refuse
   a `.remuda`/`uploads` that is a symlink and write with `O_EXCL|O_NOFOLLOW`.
   The review diff refuses a path starting with `-` and passes `--` to git.
+  The secret check (`internal/secrets`, `review.ScanWork`) answers masked
+  excerpts only — a secret's prefix and at most its last four bytes, every
+  other secret in the window masked too — and keeps the secrets it saw only
+  while one scan runs; it reads with `--no-ext-diff --no-textconv` (no
+  driver of the repository's runs), writes nothing (no index, no object,
+  nothing under `.claude`), is capped at 1 MB a file, 8 MB in all and 45 s,
+  is linear in its input (no regexp, tested on 2 MB lines), and answers the
+  person alone: a viewer link and an agent key are refused. An approval
+  asking for a commit or a pull request goes past its findings, or past a
+  check that failed, only through Send anyway and its confirm.
   Branch/base names for a worktree go through `sessions.RefOK`. ssh control sockets
   live under `<state>/ssh` (`sshx.SocketDir`) while the path keeps
   within 86 bytes, a unix sockaddr's 104 less the 17-byte suffix

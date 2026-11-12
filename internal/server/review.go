@@ -15,6 +15,23 @@ func (s *Server) reviewRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/review", s.handleReview)
 	api.HandleFunc("GET /api/review/diff", s.handleReviewDiff)
 	api.HandleFunc("POST /api/review/seen", s.handleReviewSeen)
+	api.HandleFunc("GET /api/review/secrets", s.handleReviewSecrets)
+}
+
+// handleReviewSecrets answers GET /api/review/secrets?machine=&dir=&push=1 with the secret check of the folder's work —
+// what a commit of it would carry, and with push the commits a push would send; never a viewer's or an agent key's.
+func (s *Server) handleReviewSecrets(w http.ResponseWriter, r *http.Request) {
+	dir := r.URL.Query().Get("dir")
+	mc, ok := s.reviewTarget(w, r, "", dir)
+	if !ok {
+		return
+	}
+	scan, err := review.ScanWork(mc, dir, r.URL.Query().Get("push") == "1")
+	if err != nil {
+		httpErr(w, 502, err) // the reason alone: the page says it is the secret check's
+		return
+	}
+	writeJSON(w, scan)
 }
 
 // reviewTarget resolves the request's machine and insists on an absolute folder.

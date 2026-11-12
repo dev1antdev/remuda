@@ -2,6 +2,7 @@
 
 import { getJSON, sendJSON, withMachine } from "@/lib/http";
 import type { Opinion } from "./opinion";
+import type { SecretScan, SettingsAudit } from "./secrets";
 
 export type ReviewFile = { path: string; added: number; removed: number; untracked?: boolean; fresh: boolean };
 export type ReviewCommit = { sha: string; subject: string; when: number; seen?: boolean }; // seen: a commit of work already reviewed
@@ -15,6 +16,7 @@ export type Review = {
   commits_total?: number; // every commit since the last look, when more than the ones listed
   files: ReviewFile[];
   fresh: number;
+  settings?: SettingsAudit[]; // Claude Code's settings files there, audited for secrets and for git tracking them
   error?: string;
 };
 export const fetchReview = (machineId: string, dir: string): Promise<Review> => getJSON(withMachine(`/api/review?dir=${encodeURIComponent(dir)}`, machineId));
@@ -22,6 +24,9 @@ export const fetchReviewDiff = (machineId: string, dir: string, path: string): P
   getJSON<{ diff: string }>(withMachine(`/api/review/diff?dir=${encodeURIComponent(dir)}&path=${encodeURIComponent(path)}`, machineId)).then((d) => d.diff);
 export const markReviewed = (machineId: string, dir: string, verdict?: Verdict): Promise<void> =>
   sendJSON("POST", "/api/review/seen", { machine: machineId, dir, ...(verdict ? { verdict } : {}) });
+// the secret check of what a commit of the work would carry, and with push of the commits a push would send
+export const fetchSecrets = (machineId: string, dir: string, push: boolean): Promise<SecretScan> =>
+  getJSON(withMachine(`/api/review/secrets?dir=${encodeURIComponent(dir)}${push ? "&push=1" : ""}`, machineId));
 
 // the second opinion: another agent asked to review the folder in a tab of its own, its comments on the diff's lines
 // deny_prompts: a Claude Code reviewer denies what would wait on a permission prompt, since a review only reads

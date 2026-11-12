@@ -62,16 +62,17 @@ type File struct {
 const maxCommits = 300
 
 type Summary struct {
-	Repo         string    `json:"repo,omitempty"`
-	Branch       string    `json:"branch,omitempty"`
-	Head         string    `json:"head,omitempty"`
-	Baseline     *Baseline `json:"baseline,omitempty"`
-	Commits      []Commit  `json:"commits"`
-	CommitsTotal int       `json:"commits_total,omitempty"` // every commit since the baseline, when more than the listed ones
-	Files        []File    `json:"files"`
-	Fresh        int       `json:"fresh"`
-	Error        string    `json:"error,omitempty"`
-	At           time.Time `json:"at"`
+	Repo         string          `json:"repo,omitempty"`
+	Branch       string          `json:"branch,omitempty"`
+	Head         string          `json:"head,omitempty"`
+	Baseline     *Baseline       `json:"baseline,omitempty"`
+	Commits      []Commit        `json:"commits"`
+	CommitsTotal int             `json:"commits_total,omitempty"` // every commit since the baseline, when more than the listed ones
+	Files        []File          `json:"files"`
+	Fresh        int             `json:"fresh"`
+	Settings     []SettingsAudit `json:"settings,omitempty"` // Claude Code's settings files there, audited for secrets and tracking
+	Error        string          `json:"error,omitempty"`
+	At           time.Time       `json:"at"`
 }
 
 // Badge is the roster's count for one workspace.
@@ -166,7 +167,7 @@ func (store *Store) setBranch(storeKey, branch string) {
 }
 
 // summaryScript gathers everything Summary needs in one shell, sections separated by a line of \x1e and fields by \x1f:
-// repo/branch/HEAD, the newest maxCommits first-parent commits since the baseline, the numstat against HEAD, the untracked files, every uncommitted file's blob, per commit the blobs it left (none for a merge) — one git log, never a process per commit: a repository pulled after weeks has hundreds — and how many commits there are in all.
+// repo/branch/HEAD, the newest maxCommits first-parent commits since the baseline, the numstat against HEAD, the untracked files, every uncommitted file's blob, per commit the blobs it left (none for a merge) — one git log, never a process per commit: a repository pulled after weeks has hundreds — how many commits there are in all, and Claude Code's settings files there (settingsScript).
 func summaryScript(dir, baselineHead string) string {
 	return script.InRepo(dir) +
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
@@ -176,7 +177,8 @@ func summaryScript(dir, baselineHead string) string {
 		`git -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null; printf '\036\n'; ` +
 		blobsScript() + `; printf '\036\n'; ` +
 		`if [ "$base" != HEAD ]; then git -c core.quotepath=off log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --raw --no-renames --no-abbrev --relative --format='%H' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
-		`if [ "$base" != HEAD ]; then git rev-list --count --first-parent "$base"..HEAD 2>/dev/null; fi`
+		`if [ "$base" != HEAD ]; then git rev-list --count --first-parent "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
+		settingsScript
 }
 
 // blobsScript prints "<path>\x1f<blob hash>" per uncommitted file, one per line, "gone" for a deleted one.
@@ -297,6 +299,9 @@ func (store *Store) Summary(host shell.Host, dir string) Summary {
 		if path = strings.TrimSpace(path); path != "" {
 			summary.Files = append(summary.Files, File{Path: path, Untracked: true, Fresh: isFresh(path)})
 		}
+	}
+	if len(sections) > 7 {
+		summary.Settings = readSettings(sections[7])
 	}
 	sort.Slice(summary.Files, func(i, j int) bool {
 		if summary.Files[i].Fresh != summary.Files[j].Fresh {
