@@ -76,9 +76,13 @@ func Canonical(model string) string {
 	return dateTail.ReplaceAllString(m, "")
 }
 
+// unescaped is the arguments with a backslash before a double quote dropped, as a shell drops it inside double quotes:
+// --settings "{\"fastMode\":true}" says what --settings '{"fastMode":true}' says
+func unescaped(args string) string { return strings.ReplaceAll(args, `\"`, `"`) }
+
 // FastIn reads what the extra arguments say of fast mode: on or off through a --settings JSON, or nothing (set false).
 func FastIn(args string) (fast, said bool) {
-	m := fastSetting.FindAllStringSubmatch(args, -1)
+	m := fastSetting.FindAllStringSubmatch(unescaped(args), -1)
 	if len(m) == 0 {
 		return false, false
 	}
@@ -87,7 +91,7 @@ func FastIn(args string) (fast, said bool) {
 
 // ModelIn is a model the extra arguments name with --model, which comes after remuda's own and wins; "" for none.
 func ModelIn(args string) string {
-	m := modelOverArg.FindAllStringSubmatch(args, -1)
+	m := modelOverArg.FindAllStringSubmatch(unescaped(args), -1)
 	if len(m) == 0 {
 		return ""
 	}

@@ -49,11 +49,19 @@ func FindScript(home, agent, dir, ref string) string {
 	return script.PATH + "\nline=" + script.Quote(refLine(ref)) + "\n" + strings.Join(finds, "\n") + "\ntrue\n"
 }
 
-// PromptAndAnswer is a conversation's first prompt and the text its last turn ended with, "" while the person's turn
-// is the last.
-func PromptAndAnswer(turns []transcript.Turn) (prompt, answer string) {
+// Reply is what a reviewer's conversation came to: the text its last turn ended with, or — Claude Code having refused
+// call after call nobody was there to approve, under the second opinion's deny switch — that the turn stopped on them
+// with no answer on its way.
+type Reply struct {
+	Answer  string
+	Stopped bool
+}
+
+// PromptAndReply is a conversation's first prompt and what its last turn came to, no reply while the person's turn is
+// the last.
+func PromptAndReply(turns []transcript.Turn) (prompt string, reply Reply) {
 	if len(turns) == 0 {
-		return "", ""
+		return "", Reply{}
 	}
 	if turns[0].Role == "user" {
 		for _, part := range turns[0].Parts {
@@ -63,40 +71,41 @@ func PromptAndAnswer(turns []transcript.Turn) (prompt, answer string) {
 		}
 	}
 	if last := turns[len(turns)-1]; last.Role == "assistant" {
-		answer = last.Answer()
+		reply.Answer = last.Answer()
+		reply.Stopped = reply.Answer == "" && len(last.Parts) > 0 && transcript.IsDenied(last.Parts[len(last.Parts)-1])
 	}
-	return prompt, answer
+	return prompt, reply
 }
 
-// Answered is the answer a conversation's turns end with, when the conversation opens with the opinion's request;
-// false for any other conversation of the folder — the person's own agent, an earlier request's reviewer.
-func Answered(turns []transcript.Turn, op Opinion) (string, bool) {
-	prompt, answer := PromptAndAnswer(turns)
+// Answered is what a conversation's turns came to, when the conversation opens with the opinion's request; false for
+// any other conversation of the folder — the person's own agent, an earlier request's reviewer.
+func Answered(turns []transcript.Turn, op Opinion) (Reply, bool) {
+	prompt, reply := PromptAndReply(turns)
 	if !IsRequest(prompt, op.Ref) {
-		return "", false
+		return Reply{}, false
 	}
-	return answer, true
+	return reply, true
 }
 
-// conversation reads one session file's first prompt and last answer at its present version.
-func conversation(reader *transcript.Reader, path string) (prompt, answer string, ok bool) {
+// conversation reads one session file's first prompt and what its last turn came to, at its present version.
+func conversation(reader *transcript.Reader, path string) (prompt string, reply Reply, ok bool) {
 	version, err := reader.Version(path)
 	if err != nil {
-		return "", "", false
+		return "", Reply{}, false
 	}
 	turns, err := reader.Turns(path, version)
 	if err != nil {
-		return "", "", false
+		return "", Reply{}, false
 	}
-	prompt, answer = PromptAndAnswer(turns)
-	return prompt, answer, true
+	prompt, reply = PromptAndReply(turns)
+	return prompt, reply, true
 }
 
-// Request is the reviewer's answer read from the conversation that opens with the opinion's request, wherever it
-// lives on the machine: found by its ref line, then followed to the file a compaction moved it to.
-func Request(host shell.Host, reader *transcript.Reader, op Opinion) (string, bool) {
+// Request is the reviewer's reply read from the conversation that opens with the opinion's request, wherever it lives
+// on the machine: found by its ref line, then followed to the file a compaction moved it to.
+func Request(host shell.Host, reader *transcript.Reader, op Opinion) (Reply, bool) {
 	if op.Ref == "" {
-		return "", false
+		return Reply{}, false
 	}
 	out, _ := shell.Text(host, FindScript(host.Home(), op.Agent, op.Dir, op.Ref), findTimeout)
 	for _, path := range script.Lines(out) {
@@ -107,8 +116,8 @@ func Request(host shell.Host, reader *transcript.Reader, op Opinion) (string, bo
 		if !ok || !IsRequest(prompt, op.Ref) {
 			continue
 		}
-		_, answer, ok := conversation(reader, reader.Live(path))
-		return answer, ok
+		_, reply, ok := conversation(reader, reader.Live(path))
+		return reply, ok
 	}
-	return "", false
+	return Reply{}, false
 }

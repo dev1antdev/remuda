@@ -27,6 +27,7 @@ const (
 	staleAfter      = 3 * time.Second // a snapshot read this long after a write shows it, or herdr lost it
 	refusedPause    = 10 * time.Minute
 	tasksEvery      = 15 * time.Second
+	warmUp          = 30 * time.Second // a writer just made waits it out: the services it reads are still reading
 )
 
 const settingsFile = "mirror.json"
@@ -46,7 +47,8 @@ type Status struct {
 	Tokens       []string  `json:"tokens"`
 	Snippet      string    `json:"snippet"`
 	ToastSnippet string    `json:"toast_snippet"`
-	Last         []Outcome `json:"last,omitempty"` // the newest toast on each machine
+	Last         []Outcome `json:"last,omitempty"`      // the newest toast on each machine
+	Elsewhere    []Yield   `json:"elsewhere,omitempty"` // the machines another remuda writes into herdr on
 }
 
 // Service is the mirror: the switches, a writer per machine, the toasts' outcomes.
@@ -117,9 +119,16 @@ func (s *Service) Status() Status {
 		if outcome, ok := s.last[m.ID]; ok {
 			st.Last = append(st.Last, outcome)
 		}
+		if w := s.writers[m.ID]; w != nil {
+			if other := w.yielding(); other != "" {
+				st.Elsewhere = append(st.Elsewhere, Yield{Machine: m.ID, Label: m.Label, Writer: writerName(other)})
+			}
+		}
 	}
 	return st
 }
+
+func (s *Service) local(machineID string) bool { return s.in.Local != nil && s.in.Local(machineID) }
 
 func (s *Service) machines() []Machine {
 	if s.in.Machines == nil {

@@ -12190,6 +12190,8 @@ body.popout {
 @media (prefers-reduced-motion: reduce) {
   .zoo,
   .zoo *,
+  .zoo *::before,
+  .zoo *::after,
   .zoo-creature,
   .zoo-creature * {
     animation: none !important;

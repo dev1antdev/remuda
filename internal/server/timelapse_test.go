@@ -39,7 +39,7 @@ func recordedServer(t *testing.T) (*Server, *http.ServeMux, timelapse.Meta) {
 	for i, step := range []struct {
 		after  time.Duration
 		status string
-	}{{0, herdr.StatusWorking}, {time.Minute, herdr.StatusWorking}, {3 * time.Minute, herdr.StatusDone}, {3*time.Minute + timelapse.Grace, herdr.StatusDone}} {
+	}{{0, herdr.StatusWorking}, {time.Minute, herdr.StatusWorking}, {2 * time.Minute, herdr.StatusDone}, {2*time.Minute + timelapse.Grace, herdr.StatusDone}} {
 		recorder.Observe(machines.LocalID, pane(step.status), start.Add(step.after))
 		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline) && int(reads.Load()) < min(i+1, 3); time.Sleep(5 * time.Millisecond) {
 		}

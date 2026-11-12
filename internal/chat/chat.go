@@ -113,8 +113,9 @@ func (c *Service) ConversationVersion(machineID, paneID string) (string, bool) {
 	return version.String(), true
 }
 
-// Subagents is what the pane's live conversation spawned, as it stands at now; none when the pane has no session file.
-func (c *Service) Subagents(machineID, paneID string, now time.Time) ([]transcript.Subagent, error) {
+// RecentSubagents is what the pane's live conversation spawned that may still be at work at now (transcript.Reader's
+// RecentSubagents: the ones silent past QuietAfter are not read); none when the pane has no session file.
+func (c *Service) RecentSubagents(machineID, paneID string, now time.Time) ([]transcript.Subagent, error) {
 	pane, _ := c.Pane(machineID, paneID)
 	if pane == nil {
 		return nil, nil
@@ -123,8 +124,7 @@ func (c *Service) Subagents(machineID, paneID string, now time.Time) ([]transcri
 	if !ok {
 		return nil, nil
 	}
-	list, _, err := mc.Transcripts.Subagents(path, now)
-	return list, err
+	return mc.Transcripts.RecentSubagents(path, now)
 }
 
 // LastWriteOfPane is LastWrite by pane id, for the watchdog.

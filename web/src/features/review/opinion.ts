@@ -10,7 +10,8 @@ export type Severity = "high" | "medium" | "low";
 // OpinionComment is one finding the reviewer gave, numbered within its opinion
 export type OpinionComment = { id: number; path: string; line: number; severity?: Severity; text: string; dismissed?: boolean };
 
-export type OpinionState = "running" | "done" | "unreadable" | "gone";
+// stopped: a Claude Code reviewer denied what would wait for a permission and stopped on those calls before any answer
+export type OpinionState = "running" | "done" | "unreadable" | "stopped" | "gone";
 
 // Opinion is the folder's newest second opinion, as the server keeps it
 export type Opinion = {
@@ -107,6 +108,8 @@ export function headWords(opinion: Opinion, reviewer: string, asking = false): s
       return t("{agent} is reviewing — the comments appear here when it answers", { agent: reviewer });
     case "unreadable":
       return t("{agent} answered in a form that could not be read; its answer is in its tab", { agent: reviewer });
+    case "stopped":
+      return t("{agent} stopped on calls it was denied without asking; they are listed in its tab", { agent: reviewer });
     case "gone":
       return opinion.note || t("the reviewer's tab closed before it answered");
   }

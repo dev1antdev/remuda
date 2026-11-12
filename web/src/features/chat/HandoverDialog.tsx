@@ -4,6 +4,7 @@
 import { useState } from "react";
 import type { AgentKind } from "@/features/roster/api";
 import { choiceFor, CUSTOM, EMPTY_DRAFT, hasModelFlag, lastModelKey, modelChoices, modelOf, modelPlaceholder, type Draft } from "@/features/roster/startOptions";
+import RetiredNotice from "@/features/usage/RetiredNotice";
 import { readPref, writePref } from "@/lib/prefs";
 import { FormDialog, Icon, Logo, Select, useSubmit } from "@/ui";
 import { handOver, type HandedOver } from "./api";
@@ -63,6 +64,7 @@ export default function HandoverDialog({ machineId, paneId, session, agent, work
           <input value={draft.custom} placeholder={modelPlaceholder(kind)} spellCheck={false} onChange={(e) => setDraft({ ...draft, custom: e.target.value })} />
         </label>
       )}
+      <RetiredNotice agent={kind} model={modelOf(kind, draft)} args={draft.args} machine={machineId} onUse={(model) => setDraft({ ...draft, choice: CUSTOM, custom: model })} />
       <label>
         {t("In full")}
         <Select value={turns} onChange={setTurns} options={turnOptions()} />

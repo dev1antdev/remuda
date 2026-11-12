@@ -30,6 +30,7 @@ export const timelapse: Dictionary = {
   "its pane closed": "его панель закрылась",
   "remuda stopped while it worked": "remuda остановилась, пока он работал",
   "cut short: remuda went down while it worked": "оборвано: remuda упала, пока он работал",
+  "cut short: its machine went out of reach while it worked": "оборвано: его машина пропала из связи, пока он работал",
   "Export as GIF": "Экспорт в GIF",
   "Drawing the GIF… {pct} %": "Рисую GIF… {pct} %",
   "Saved the timelapse as a GIF": "Таймлапс сохранён как GIF",

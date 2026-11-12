@@ -18,18 +18,23 @@ func clocked(dir string, now *time.Time) (*Service, *[]push.Payload) {
 	return s, &sent
 }
 
-func TestLevel(t *testing.T) {
+func TestLevelCountsToTheEarliestEnd(t *testing.T) {
 	expires := time.Date(2026, 12, 5, 16, 0, 0, 0, time.UTC)
+	if !Earliest(expires).Equal(time.Date(2026, 12, 2, 16, 0, 0, 0, time.UTC)) {
+		t.Fatalf("the earliest end of a sign-in Claude Code says ends by %v: %v", expires, Earliest(expires))
+	}
 	cases := []struct {
-		before time.Duration
+		before time.Duration // before the end Claude Code names
 		want   int
 	}{
 		{10 * 24 * time.Hour, 0},
-		{72*time.Hour + time.Minute, 0},
-		{72 * time.Hour, Soon},
-		{25 * time.Hour, Soon},
-		{24 * time.Hour, Day},
-		{time.Minute, Day},
+		{EarlyBy + 72*time.Hour + time.Minute, 0},
+		{EarlyBy + 72*time.Hour, Soon},
+		{EarlyBy + 25*time.Hour, Soon},
+		{EarlyBy + 24*time.Hour, Day},
+		{EarlyBy + time.Minute, Day},
+		{EarlyBy, Ended},
+		{72 * time.Hour, Ended}, // three days before the end named: it may end at any time already
 		{0, Ended},
 		{-48 * time.Hour, Ended},
 	}
@@ -43,17 +48,20 @@ func TestLevel(t *testing.T) {
 func TestOneWarningPerThresholdKeptAcrossARestart(t *testing.T) {
 	dir := t.TempDir()
 	expires := time.Date(2026, 12, 5, 16, 0, 0, 0, time.UTC)
-	now := expires.Add(-5 * 24 * time.Hour)
+	now := expires.Add(-8 * 24 * time.Hour)
 	s, sent := clocked(dir, &now)
 	s.Observe("gog", "GOG", expires)
 	if len(*sent) != 0 {
-		t.Fatalf("five days ahead is no push yet: %+v", *sent)
+		t.Fatalf("eight days ahead is no push yet: %+v", *sent)
 	}
-	now = expires.Add(-70 * time.Hour)
+	now = expires.Add(-EarlyBy - 70*time.Hour)
 	s.Observe("gog", "GOG", expires)
 	s.Observe("gog", "GOG", expires)
-	if len(*sent) != 1 || (*sent)[0].Title != "Claude Code's sign-in on GOG ends in 3 days" || (*sent)[0].Kind != "signin" || (*sent)[0].Machine != "gog" || (*sent)[0].Tag != "signin|gog" {
-		t.Fatalf("three days: %+v", *sent)
+	if len(*sent) != 1 || (*sent)[0].Title != "Claude Code's sign-in on GOG may end in 3 days" || (*sent)[0].Kind != "signin" || (*sent)[0].Machine != "gog" || (*sent)[0].Tag != "signin|gog" {
+		t.Fatalf("three days to the earliest end: %+v", *sent)
+	}
+	if (*sent)[0].Body != "It ends within 6 days at the latest; an agent started after it cannot reach Claude: run claude auth login on GOG before then." {
+		t.Fatalf("the body: %q", (*sent)[0].Body)
 	}
 
 	restarted, again := clocked(dir, &now)
@@ -61,34 +69,39 @@ func TestOneWarningPerThresholdKeptAcrossARestart(t *testing.T) {
 	if len(*again) != 0 {
 		t.Fatalf("a restart warned again: %+v", *again)
 	}
-	now = expires.Add(-20 * time.Hour)
+	now = expires.Add(-EarlyBy - 20*time.Hour)
+	restarted.Observe("gog", "GOG", expires)
+	now = expires.Add(-EarlyBy + time.Hour)
+	restarted.Observe("gog", "GOG", expires)
 	restarted.Observe("gog", "GOG", expires)
 	now = expires.Add(time.Hour)
 	restarted.Observe("gog", "GOG", expires)
-	restarted.Observe("gog", "GOG", expires)
-	if len(*again) != 2 || (*again)[0].Title != "Claude Code's sign-in on GOG ends in 20 hours" || (*again)[1].Title != "Claude Code's sign-in on GOG has ended" {
-		t.Fatalf("a day, then the end: %+v", *again)
+	if len(*again) != 2 || (*again)[0].Title != "Claude Code's sign-in on GOG may end in 20 hours" || (*again)[1].Title != "Claude Code's sign-in on GOG may end at any time now" {
+		t.Fatalf("a day, then any time now, and nothing more once the end named has passed: %+v", *again)
+	}
+	if (*again)[1].Body != "It ends within 3 days at the latest, and its agents cannot reach Claude after that: run claude auth login on GOG now." {
+		t.Fatalf("any time now: %q", (*again)[1].Body)
 	}
 }
 
 func TestANewSignInStartsAfreshAndAMachineFirstSeenLateHearsTheGraverAlone(t *testing.T) {
 	expires := time.Date(2026, 12, 5, 16, 0, 0, 0, time.UTC)
-	now := expires.Add(-2 * time.Hour)
+	now := expires.Add(-EarlyBy - 2*time.Hour)
 	s, sent := clocked("", &now)
 	s.Observe("gog", "GOG", expires)
-	if len(*sent) != 1 || (*sent)[0].Title != "Claude Code's sign-in on GOG ends in 2 hours" {
-		t.Fatalf("first seen two hours before: %+v", *sent)
+	if len(*sent) != 1 || (*sent)[0].Title != "Claude Code's sign-in on GOG may end in 2 hours" {
+		t.Fatalf("first seen two hours before the earliest end: %+v", *sent)
 	}
 	renewed := expires.Add(30 * 24 * time.Hour)
 	s.Observe("gog", "GOG", renewed)
-	now = renewed.Add(-60 * time.Hour)
+	now = renewed.Add(-EarlyBy - 60*time.Hour)
 	s.Observe("gog", "GOG", renewed)
-	if len(*sent) != 2 || (*sent)[1].Title != "Claude Code's sign-in on GOG ends in 3 days" {
+	if len(*sent) != 2 || (*sent)[1].Title != "Claude Code's sign-in on GOG may end in 3 days" {
 		t.Fatalf("the new sign-in's own warning: %+v", *sent)
 	}
 	s.Observe("gog", "GOG", time.Time{})
 	s.Observe("pi", "Pi", now.Add(-time.Hour))
-	if len(*sent) != 3 || (*sent)[2].Machine != "pi" || (*sent)[2].Body != "Its agents cannot reach Claude until you sign in again: run claude auth login on Pi." {
+	if len(*sent) != 3 || (*sent)[2].Machine != "pi" || (*sent)[2].Title != "Claude Code's sign-in on Pi has ended" || (*sent)[2].Body != "Its agents cannot reach Claude until you sign in again: run claude auth login on Pi." {
 		t.Fatalf("no end known says nothing, an ended one on another machine its own: %+v", *sent)
 	}
 }

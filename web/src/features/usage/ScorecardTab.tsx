@@ -14,7 +14,7 @@ import { ago } from "@/lib/time";
 import { t, tn } from "@/lib/i18n";
 import { Icon, Logo, Notice, Tip } from "@/ui";
 import { fetchScorecard, type ScoreRow, type ScoreTry, type Share } from "./api";
-import { agentLabel, bestByColumn, costWords, fewWords, minutesWords, modelName, reviewWords, rowKey, rowName, shareWords, tryLanes, tryWords, type Column } from "./scorecard";
+import { agentLabel, bestByColumn, costWords, fewWords, finishedWords, minutesWords, modelName, reviewWords, rowKey, rowName, shareWords, tryLanes, tryWords, type Column } from "./scorecard";
 
 // openTry fetches the past task and opens the arena on it with the two models side by side
 async function openTry(pick: ScoreTry, machines: Machine[]) {
@@ -50,7 +50,7 @@ export default function ScorecardTab({ days, machines, viewOnly }: { days: numbe
       </Notice>
       {error && <Notice tone="error">{error}</Notice>}
       {data && data.unplaced > 0 && (
-        <Notice tone="hint">{tn(data.unplaced, "{n} verdict of the period was given on a folder no task run worked in: it counts for no model.", "{n} verdicts of the period were given on folders no task run worked in: they count for no model.")}</Notice>
+        <Notice tone="hint">{tn(data.unplaced, "{n} verdict of the period was given on a folder no task run of the period worked in: it counts for no model.", "{n} verdicts of the period were given on folders no task run of the period worked in: they count for no model.")}</Notice>
       )}
       {data && rows.length === 0 && <div className="empty">{t("No agent was started on a task or in an arena in this period. Start one from a task, or run an arena, and its model shows here.")}</div>}
       {rows.length > 0 && (
@@ -80,7 +80,7 @@ export default function ScorecardTab({ days, machines, viewOnly }: { days: numbe
                     </span>
                   </span>
                 </span>
-                {shareCell(t("Finished"), row.finished, "finished")}
+                {shareCell(t("Finished"), row.finished, "finished", finishedWords(row, minSample))}
                 {shareCell(t("Approved first time"), row.first_approved, "first_approved", reviewWords(row))}
                 {shareCell(t("PRs merged"), row.merged, "merged", row.merged.of === 0 ? t("Its runs opened no pull request") : tn(row.merged.of, "{n} pull request opened", "{n} pull requests opened"))}
                 {shareCell(t("Kept in arenas"), row.kept, "kept", row.kept.of === 0 ? t("In no decided arena") : tn(row.kept.of, "{n} lane in decided arenas", "{n} lanes in decided arenas"))}

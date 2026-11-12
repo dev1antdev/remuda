@@ -17,7 +17,7 @@ export type RecordingMeta = {
   start: string;
   end: string;
   count: number; // frames
-  ended: string; // done, idle, blocked, gone, stopped, cut
+  ended: string; // done, idle, blocked, gone, stopped, cut, away
   size: number;
 };
 // a frame is the screen `at` ms after the start: `lines` rows, of which `rows` are the ones that moved (every one in the first)

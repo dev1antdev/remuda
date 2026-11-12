@@ -23,15 +23,32 @@ const (
 	RuleGoogle       = "google-api-key"
 	RuleTelegram     = "telegram-bot-token"
 	RuleNPM          = "npm-token"
+	RuleHuggingFace  = "huggingface-token"
+	RuleGroq         = "groq-key"
+	RuleXAI          = "xai-key"
+	RuleOpenRouter   = "openrouter-key"
+	RuleSendGrid     = "sendgrid-key"
+	RuleDigitalOcean = "digitalocean-token"
+	RuleDocker       = "docker-token"
+	RulePyPI         = "pypi-token"
+	RuleGoogleOAuth  = "google-oauth-secret"
+	RuleShopify      = "shopify-token"
+	RuleLinear       = "linear-key"
+	RuleAtlassian    = "atlassian-token"
+	RuleAge          = "age-key"
+	RuleVault        = "vault-token"
 	RuleJWT          = "jwt"
 	RuleAuthHeader   = "auth-header"
+	RuleURLPassword  = "url-password"
 	RuleAssigned     = "assigned-secret"
 	RuleKeyFile      = "key-file"
 )
 
 // Rules is every rule, in the order the page lists their words.
 var Rules = []string{RulePrivateKey, RuleAWS, RuleGitHub, RuleGitHubFine, RuleGitLab, RuleSlack, RuleSlackWebhook, RuleStripe,
-	RuleAnthropic, RuleOpenAI, RuleGoogle, RuleTelegram, RuleNPM, RuleJWT, RuleAuthHeader, RuleAssigned, RuleKeyFile}
+	RuleAnthropic, RuleOpenAI, RuleGoogle, RuleTelegram, RuleNPM, RuleHuggingFace, RuleGroq, RuleXAI, RuleOpenRouter, RuleSendGrid,
+	RuleDigitalOcean, RuleDocker, RulePyPI, RuleGoogleOAuth, RuleShopify, RuleLinear, RuleAtlassian, RuleAge, RuleVault, RuleJWT,
+	RuleAuthHeader, RuleURLPassword, RuleAssigned, RuleKeyFile}
 
 // Finding is one thing that looks like a secret: where it is, which rule saw it, and the line around it with every
 // secret on it masked.
@@ -40,8 +57,12 @@ type Finding struct {
 	Line    int    `json:"line"`
 	Rule    string `json:"rule"`
 	Excerpt string `json:"excerpt"`
-	Commit  string `json:"commit,omitempty"` // the commit that adds it, for one a push would carry
+	Commit  string `json:"commit,omitempty"` // the commit that adds it, for one a push would carry; Staged for the index's
 }
+
+// Staged is the Commit of a finding only the index holds: staged, then changed or gone in the file, it is what git
+// commit carries all the same.
+const Staged = "staged"
 
 // The caps on what one scan reports: a file of a thousand keys says so once.
 const (
@@ -55,6 +76,7 @@ type hit struct {
 	start, end int
 	rule       string
 	keep       int
+	noTail     bool // the mask shows none of its last bytes: a private key's body
 }
 
 // allowMarkers are the comments that let a line through: gitleaks' and detect-secrets' own, and remuda's.

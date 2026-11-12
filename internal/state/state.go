@@ -53,6 +53,12 @@ func WriteFile(path string, data []byte) error {
 		os.Remove(tmp)
 		return err
 	}
+	// on disk before the rename: a power cut on a Raspberry Pi's SD card must not leave the name on an empty file
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
 	if err := f.Close(); err != nil {
 		os.Remove(tmp)
 		return err
@@ -61,7 +67,16 @@ func WriteFile(path string, data []byte) error {
 		os.Remove(tmp)
 		return err
 	}
+	syncDir(filepath.Dir(path))
 	return nil
+}
+
+// syncDir puts a rename in the folder on disk too, where the system allows it; a folder that cannot be synced is no error.
+func syncDir(dir string) {
+	if d, err := os.Open(dir); err == nil {
+		d.Sync()
+		d.Close()
+	}
 }
 
 // LoadJSON reads <dir>/<name> into v; a missing file is no error, a damaged one is.

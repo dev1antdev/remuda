@@ -31,6 +31,8 @@ export function endedWords(ended: string): string {
       return t("remuda stopped while it worked");
     case "cut":
       return t("cut short: remuda went down while it worked");
+    case "away":
+      return t("cut short: its machine went out of reach while it worked");
   }
   return ended;
 }

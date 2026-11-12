@@ -6,6 +6,7 @@ import { whyNoDeny } from "@/features/agents/deny";
 import { DenySwitch } from "@/features/agents/DenySwitch";
 import { useRoster } from "@/features/roster/useRoster";
 import { choiceFor, CUSTOM, EMPTY_DRAFT, hasModelFlag, lastModelKey, modelChoices, modelOf, modelPlaceholder, type Draft } from "@/features/roster/startOptions";
+import RetiredNotice from "@/features/usage/RetiredNotice";
 import { readPref, writePref } from "@/lib/prefs";
 import { FormDialog, Logo, Select, useSubmit } from "@/ui";
 import { t } from "@/lib/i18n";
@@ -71,6 +72,7 @@ export function OpinionDialog({ machineId, paneId, dir, paneAgent, onClose, onAs
           <input value={draft.custom} placeholder={modelPlaceholder(kind)} spellCheck={false} onChange={(e) => setDraft({ ...draft, custom: e.target.value })} />
         </label>
       )}
+      <RetiredNotice agent={kind} model={modelOf(kind, draft)} machine={machineId} onUse={(model) => setDraft({ ...draft, choice: CUSTOM, custom: model })} />
       <label className="check-row">
         <input type="checkbox" checked={close} onChange={(e) => setClose(e.target.checked)} />
         {t("Close its tab once it has answered")}

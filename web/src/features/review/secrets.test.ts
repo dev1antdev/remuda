@@ -60,22 +60,27 @@ describe("the check's words", () => {
     expect(sendAnywayAsk("failed", null, "commit")).toMatch(/^The secret check did not finish/);
   });
   it("name every rule, and a rule the page does not know as a secret value", () => {
-    for (const rule of ["private-key", "aws-access-key", "github-token", "github-fine-grained-token", "gitlab-token", "slack-token", "slack-webhook", "stripe-live-key", "anthropic-key", "openai-key", "google-api-key", "telegram-bot-token", "npm-token", "jwt", "auth-header", "assigned-secret", "key-file"]) {
-      expect(ruleWords(rule)).not.toBe("");
-    }
+    const rules = ["private-key", "aws-access-key", "github-token", "github-fine-grained-token", "gitlab-token", "slack-token", "slack-webhook", "stripe-live-key", "anthropic-key", "openai-key",
+      "google-api-key", "telegram-bot-token", "npm-token", "huggingface-token", "groq-key", "xai-key", "openrouter-key", "sendgrid-key", "digitalocean-token", "docker-token", "pypi-token",
+      "google-oauth-secret", "shopify-token", "linear-key", "atlassian-token", "age-key", "vault-token", "jwt", "auth-header", "url-password", "key-file"];
+    for (const rule of rules) expect(ruleWords(rule), rule).not.toBe(ruleWords("something-new"));
+    expect(new Set(rules.map(ruleWords)).size).toBe(rules.length);
     expect(ruleWords("github-token")).toBe("GitHub token");
+    expect(ruleWords("url-password")).toBe("Password in an address");
     expect(ruleWords("something-new")).toBe("Secret value");
   });
   it("place a finding by its commit, its file and its line", () => {
     expect(whereWords(finding())).toBe("config/app.yml:12");
     expect(whereWords(finding({ commit: "abc1234" }))).toBe("abc1234 · config/app.yml:12");
     expect(whereWords(finding({ line: 0, file: "certs/store.p12" }))).toBe("certs/store.p12");
+    expect(whereWords(finding({ commit: "staged", file: ".env", line: 2 }))).toBe("staged · .env:2");
   });
   it("say what was not read, by reason", () => {
     expect(skippedWords(undefined)).toBe("");
     expect(skippedWords([{ path: "a.png", why: "binary" }, { path: "b.png", why: "binary" }, { path: "dump.sql", why: "large" }, { why: "many", count: 12 }])).toBe(
       "Not read: 2 binary files, 1 file over 1 MB, 12 more untracked files.",
     );
+    expect(skippedWords([{ why: "older", count: 340 }])).toBe("Not read: 340 older commits not pushed yet.");
   });
 });
 
@@ -86,6 +91,7 @@ describe("the rows a finding marks", () => {
     expect(onSecretRow(finding(), row({ kind: "del", newLine: null, oldLine: 12 }))).toBe(false);
     expect(onSecretRow(finding(), row({ newLine: 11 }))).toBe(false);
     expect(onSecretRow(finding({ commit: "abc1234" }), row({}))).toBe(false);
+    expect(onSecretRow(finding({ commit: "staged" }), row({}))).toBe(false); // the index's line, which the file may no longer hold
     expect(onSecretRow(finding({ line: 0 }), row({ newLine: 0 }))).toBe(false);
   });
   it("groups the work's findings by file, and jumps only to a listed file's line", () => {

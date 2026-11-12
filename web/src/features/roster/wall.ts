@@ -15,6 +15,10 @@ export type Tiles = { shown: Tile[]; hidden: number; idle: number; calm: number 
 
 export const tileKey = (machineId: string, paneId: string) => `${machineId}|${paneId}`;
 
+// spinsFor says whether the wall's spinner ticks: the chat and screen tiles draw its frames while an agent works or asks,
+// while the zoo's creatures move by CSS alone — a tick there would draw every creature again several times a second
+export const spinsFor = (view: WallView, moving: boolean): boolean => moving && view !== "zoo";
+
 // tiles lists every agent pane on a connected machine in a stable order — the machines as the roster has them, the panes as
 // herdr has them — so no tile jumps when a status changes; the ones hidden by hand and, when asked, the idle ones past the
 // fresh tier or the ones that need nobody are left out and counted

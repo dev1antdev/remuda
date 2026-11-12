@@ -29,6 +29,7 @@ type Reader struct {
 	predecessor  map[string]string       // session file -> the file it continues ("" when none)
 	subTails     map[string]*cachedTail  // remote subagent files by path
 	subagents    map[string]*subagentEntry
+	subagentUses uint64                // the use count behind subagentEntry.used
 	subDirs      map[string]dirListing // a remote session's subagent folder, as listed a moment ago
 }
 

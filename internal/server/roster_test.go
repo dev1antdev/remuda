@@ -22,10 +22,11 @@ func TestATabNamedByDigitsIsHerdrs(t *testing.T) {
 	}
 }
 
-// An agent pane carries its conversation's subagents by state; a pane with none carries no field at all.
+// An agent pane carries how many of its conversation's subagents work; a pane with none at work carries no field at all.
 func TestRosterCarriesThePanesSubagents(t *testing.T) {
 	lists := map[string][]transcript.Subagent{
 		"w1:p1": {{ID: "agent-a", Status: transcript.SubagentWorking}, {ID: "agent-b", Status: transcript.SubagentWorking}, {ID: "agent-c", Status: transcript.SubagentDone}},
+		"w1:p2": {{ID: "agent-d", Status: transcript.SubagentDone}},
 	}
 	counts := subagents.New(func(_, paneID string, _ time.Time) ([]transcript.Subagent, error) {
 		return lists[paneID], nil
@@ -54,10 +55,10 @@ func TestRosterCarriesThePanesSubagents(t *testing.T) {
 		}
 		panes[pane.ID] = string(body)
 	}
-	if !strings.Contains(panes["w1:p1"], `"subagents":{"working":2,"done":1}`) {
+	if !strings.Contains(panes["w1:p1"], `"subagents":{"working":2}`) {
 		t.Fatalf("the pane with subagents: %s", panes["w1:p1"])
 	}
 	if strings.Contains(panes["w1:p2"], `"subagents"`) {
-		t.Fatalf("a pane with none carries the field: %s", panes["w1:p2"])
+		t.Fatalf("a pane with none at work carries the field: %s", panes["w1:p2"])
 	}
 }

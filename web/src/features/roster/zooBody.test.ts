@@ -97,15 +97,15 @@ describe("drainedUntil", () => {
 
 describe("babiesOf", () => {
   it("stands the working subagents by the creature and counts the rest", () => {
-    expect(babiesOf({ working: 2, quiet: 1, done: 5 })).toEqual({ babies: 2, more: 0 });
+    expect(babiesOf({ working: 2 })).toEqual({ babies: 2, more: 0 });
     expect(babiesOf({ working: 5 })).toEqual({ babies: 3, more: 2 });
     expect(babiesOf(undefined)).toEqual({ babies: 0, more: 0 });
     expect(MAX_BABIES).toBe(3);
   });
 
-  it("leaves the quiet ones out: silent for long without a finish, they would stand there for good", () => {
-    expect(babiesOf({ quiet: 11, done: 129 })).toEqual({ babies: 0, more: 0 });
-    expect(broodWords({ quiet: 11, done: 129 })).toBe("");
-    expect(broodWords({ working: 2, quiet: 1, done: 4 })).toBe("2 subagents working");
+  it("has none while no subagent works: the roster counts only the ones at work", () => {
+    expect(babiesOf({})).toEqual({ babies: 0, more: 0 });
+    expect(broodWords({})).toBe("");
+    expect(broodWords({ working: 2 })).toBe("2 subagents working");
   });
 });

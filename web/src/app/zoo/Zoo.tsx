@@ -7,13 +7,14 @@
 
 import { useMemo, useRef, type CSSProperties } from "react";
 import { displayOf, type RadarPrefs } from "@/features/roster/radar";
+import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
 import type { Tile, WallPrefs } from "@/features/roster/wall";
 import { folderOf as sessionFolder } from "@/features/roster/workspaces";
 import { CREATURE_SIZE, bubbleOf, cellMin, lookOf } from "@/features/roster/zoo";
 import { joinsApplause, tickerFacts } from "@/features/roster/zooLife";
 import { pensOf, skyOf, weatherOf, weatherWords } from "@/features/roster/zooPens";
-import { outfits } from "@/features/roster/zooWear";
+import { outfits, wearersOf } from "@/features/roster/zooWear";
 import { hueStyle } from "@/features/roster/hue";
 import { t } from "@/lib/i18n";
 import { usePref } from "@/lib/prefs";
@@ -25,15 +26,17 @@ import { ZooFoot, useDay } from "./ZooFoot";
 import { useGaze } from "./useGaze";
 import { useQuestions } from "./useQuestions";
 import { useZooLife } from "./useZooLife";
-import { wakeVoices } from "./voices";
+import { useVoices, wakeVoices } from "./voices";
 
 export function Zoo({ shown, size, radar, now, office }: { shown: Tile[]; size: WallPrefs["size"]; radar: RadarPrefs; now: number; office: Office | null }) {
   const share = useSharing();
   const root = useRef<HTMLDivElement>(null);
   useGaze(root);
   const [voices, setVoices] = usePref<boolean>("zoo.voices", false);
+  useVoices(voices);
   const life = useZooLife(shown, radar, now, voices);
-  const dressed = useMemo(() => outfits(shown.map((tile) => ({ key: tile.key, agent: tile.pane.agent, model: tile.pane.usage?.model }))), [shown]);
+  const { machines } = useRoster();
+  const dressed = useMemo(() => outfits(wearersOf(machines)), [machines]);
   const hiddenTile = (tile: Tile) => share.sessionHidden(tile.machine.id, tile.session);
   const askers = shown.filter((tile) => !hiddenTile(tile) && displayOf(tile.pane, radar, now) === "blocked").map((tile) => ({ key: tile.key, machine: tile.machine.id, pane: tile.pane.id }));
   const questions = useQuestions(askers);

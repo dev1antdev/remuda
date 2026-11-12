@@ -5,12 +5,15 @@ package health
 // names the account; the probe passes on the end of the sign-in alone, so no e-mail or organization leaves the machine.
 
 import (
+	"log"
+	"maps"
 	"strings"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/state"
 )
 
 // Login is when Claude Code's stored sign-in on a machine ends, and when that was read.
@@ -69,17 +72,53 @@ func ParseLogin(out string, at time.Time) (*Login, bool) {
 	return login, read
 }
 
-// loginRead is a machine's sign-in as last read, and when.
+// LoginRetry is how soon a read that failed is tried again: a `claude auth status` that outran its 20 s is not started
+// once more at every probe.
+var LoginRetry = time.Hour
+
+// LoginsFile keeps every machine's sign-in as last read, so a restart of remuda does not ask Claude Code again.
+const LoginsFile = "claude-logins.json"
+
+// loginRead is a machine's sign-in as last read, when it was read, and when it was last asked for, answered or not.
 type loginRead struct {
-	login *Login
-	at    time.Time
+	Login *Login    `json:"login,omitempty"`
+	At    time.Time `json:"at"`
+	Tried time.Time `json:"tried"`
+}
+
+// due says whether the sign-in is asked for again at now: the person asked, the last answer is LoginEvery old, and
+// no ask failed in the last LoginRetry; a moment ahead of the clock (it was set back) is old.
+func (r loginRead) due(now time.Time, force bool) bool {
+	if force {
+		return true
+	}
+	fresh := func(at time.Time, within time.Duration) bool {
+		age := now.Sub(at)
+		return !at.IsZero() && age >= 0 && age < within
+	}
+	return !fresh(r.At, LoginEvery) && !fresh(r.Tried, LoginRetry)
+}
+
+// loadLogins reads the sign-ins kept from before; a damaged file is none, said once.
+func loadLogins(dir string) map[string]loginRead {
+	logins := map[string]loginRead{}
+	if dir == "" {
+		return logins
+	}
+	if err := state.LoadJSON(dir, LoginsFile, &logins); err != nil || logins == nil {
+		if err != nil {
+			log.Printf("health: %s is not readable (%v); the sign-ins are read afresh", LoginsFile, err)
+		}
+		return map[string]loginRead{}
+	}
+	return logins
 }
 
 // lastLogin is a machine's sign-in as last read, nil before the first read.
 func (c *Collector) lastLogin(id string) *Login {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.logins[id].login
+	return c.logins[id].Login
 }
 
 // readLogin asks Claude Code on the machine when its sign-in ends when the last answer is LoginEvery old, or now when
@@ -88,22 +127,43 @@ func (c *Collector) readLogin(mc *machines.Machine, force bool) *Login {
 	if mc.Local() && c.machines.Server() {
 		return nil
 	}
+	return c.signIn(mc.ID(), force, func() (string, error) {
+		return shell.Text(mc, script.PATH+"\n"+LoginScript, 20*time.Second)
+	})
+}
+
+// signIn is a machine's sign-in: the last answer while it is not due, else what ask brings back, kept on disk; an ask
+// that fails or is cut short keeps the last answer and waits LoginRetry.
+func (c *Collector) signIn(id string, force bool, ask func() (string, error)) *Login {
 	c.mu.Lock()
-	last, seen := c.logins[mc.ID()]
+	last := c.logins[id]
 	c.mu.Unlock()
-	if seen && !force && time.Since(last.at) < LoginEvery {
-		return last.login
+	if !last.due(time.Now(), force) {
+		return last.Login
 	}
-	out, err := shell.Text(mc, script.PATH+"\n"+LoginScript, 20*time.Second)
-	if err != nil {
-		return last.login
+	out, err := ask()
+	now := time.Now()
+	login, read := ParseLogin(out, now)
+	if err == nil && read {
+		last = loginRead{Login: login, At: now}
 	}
-	login, read := ParseLogin(out, time.Now())
-	if !read {
-		return last.login
-	}
+	last.Tried = now
+	c.keepLogin(id, last)
+	return last.Login
+}
+
+// keepLogin notes a machine's read and writes every machine's out, one write at a time so an older copy never lands last.
+func (c *Collector) keepLogin(id string, read loginRead) {
+	c.loginsSaving.Lock()
+	defer c.loginsSaving.Unlock()
 	c.mu.Lock()
-	c.logins[mc.ID()] = loginRead{login: login, at: time.Now()}
+	c.logins[id] = read
+	snapshot := maps.Clone(c.logins)
 	c.mu.Unlock()
-	return login
+	if c.dir == "" {
+		return
+	}
+	if err := state.SaveJSON(c.dir, LoginsFile, snapshot); err != nil {
+		log.Printf("health: %s not written: %v", LoginsFile, err)
+	}
 }

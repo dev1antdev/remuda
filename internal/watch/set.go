@@ -37,6 +37,7 @@ type streamSet struct {
 	outputs map[string][]Output // by pane, the ones held
 	key     string              // the whole set as one string, to tell a move
 	person  string              // the person's own watches as one string, "" for none
+	holds   bool                // the person's watches are in it: herdr has not refused them as they stand
 }
 
 // buildSet is the subscriptions for a snapshot: the global kinds, each pane's agent status, the output watches but
@@ -64,6 +65,7 @@ func buildSet(snap *herdr.Snapshot, outputs []Output, refused string) *streamSet
 		}
 	}
 	set.person = fingerprint(person)
+	set.holds = set.person != "" && set.person != refused
 	for _, o := range outputs {
 		if !known[o.Pane] || o.Person && set.person == refused {
 			continue

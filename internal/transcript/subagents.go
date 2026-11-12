@@ -64,7 +64,12 @@ type subagentEntry struct {
 	metaVersion Version
 	meta        subagentMeta
 	summary     Subagent
+	used        uint64 // the reader's use count when it was last asked for, so the least used goes first
 }
+
+// SubagentsKept is how many subagents' summaries a reader keeps: a few long sessions on one machine hold hundreds each,
+// and an evicted summary costs its whole transcript again over ssh
+const SubagentsKept = 4096
 
 type dirListing struct {
 	at       time.Time
@@ -106,15 +111,9 @@ func (r *Reader) Subagents(sessionPath string, now time.Time) ([]Subagent, strin
 	}
 	var out []Subagent
 	for path, version := range versions {
-		if !strings.HasSuffix(path, ".jsonl") {
-			continue
+		if strings.HasSuffix(path, ".jsonl") {
+			out = append(out, r.subagentAt(path, version, versions, now))
 		}
-		id := strings.TrimSuffix(filepath.Base(path), ".jsonl")
-		metaPath := strings.TrimSuffix(path, ".jsonl") + ".meta.json"
-		entry := r.subagentEntry(path, id, version, metaPath, versions[metaPath])
-		summary := entry.summary
-		summary.settle(entry.meta.Finished, entry.summary.Report != "" && entry.summary.Doing == nil, version.Time(), now)
-		out = append(out, summary)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Started != out[j].Started {
@@ -123,6 +122,36 @@ func (r *Reader) Subagents(sessionPath string, now time.Time) ([]Subagent, strin
 		return out[i].ID < out[j].ID
 	})
 	return out, stamp(versions), nil
+}
+
+// RecentSubagents is a session's subagents whose transcript moved within QuietAfter of now, each with what it is at:
+// the only ones that can be at work, since one silent for longer reads quiet or done. Only their files are read, the
+// folder listed in one round trip, so the hundreds a long session spawned and left cost nothing more, here or over ssh.
+func (r *Reader) RecentSubagents(sessionPath string, now time.Time) ([]Subagent, error) {
+	if FormatOf(sessionPath) != Claude {
+		return nil, nil
+	}
+	versions, err := r.subagentFiles(SubagentsDir(sessionPath), now)
+	if err != nil {
+		return nil, err
+	}
+	var out []Subagent
+	for path, version := range versions {
+		if strings.HasSuffix(path, ".jsonl") && now.Sub(version.Time()) <= QuietAfter {
+			out = append(out, r.subagentAt(path, version, versions, now))
+		}
+	}
+	return out, nil
+}
+
+// subagentAt is one subagent's summary as its files stand in the folder's listing, settled at now.
+func (r *Reader) subagentAt(path string, version Version, versions map[string]Version, now time.Time) Subagent {
+	id := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	metaPath := strings.TrimSuffix(path, ".jsonl") + ".meta.json"
+	entry := r.subagentEntry(path, id, version, metaPath, versions[metaPath])
+	summary := entry.summary
+	summary.settle(entry.meta.Finished, entry.summary.Report != "" && entry.summary.Doing == nil, version.Time(), now)
+	return summary
 }
 
 // SubagentTurns is one subagent's conversation, for the viewer: its own records kept (they are all sidechain ones).
@@ -143,6 +172,10 @@ func (r *Reader) SubagentTurns(sessionPath, id string) ([]Turn, Version, error) 
 func (r *Reader) subagentEntry(path, id string, version Version, metaPath string, metaVersion Version) *subagentEntry {
 	r.mu.Lock()
 	entry := r.subagents[path]
+	if entry != nil {
+		r.subagentUses++
+		entry.used = r.subagentUses
+	}
 	r.mu.Unlock()
 	if entry != nil && entry.version == version && entry.metaVersion == metaVersion {
 		return entry
@@ -170,15 +203,25 @@ func (r *Reader) subagentEntry(path, id string, version Version, metaPath string
 		fresh.summary.Model = fresh.meta.Model
 	}
 	r.mu.Lock()
-	if len(r.subagents) >= 512 {
-		for k := range r.subagents {
-			delete(r.subagents, k)
-			break
-		}
+	if _, kept := r.subagents[path]; !kept && len(r.subagents) >= SubagentsKept {
+		r.forgetLeastUsedSubagent()
 	}
+	r.subagentUses++
+	fresh.used = r.subagentUses
 	r.subagents[path] = fresh
 	r.mu.Unlock()
 	return fresh
+}
+
+// forgetLeastUsedSubagent drops the summary asked for longest ago; the lock is held.
+func (r *Reader) forgetLeastUsedSubagent() {
+	oldest, at := "", uint64(0)
+	for path, entry := range r.subagents {
+		if oldest == "" || entry.used < at {
+			oldest, at = path, entry.used
+		}
+	}
+	delete(r.subagents, oldest)
 }
 
 // subagentFile parses a subagent's transcript at a version: in process here, from the delta-grown tail on a remote.

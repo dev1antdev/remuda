@@ -10,8 +10,13 @@ import { fmtDate } from "@/lib/time";
 export type Retirement = { agent: string; model: string; name: string; mode?: string; on: string; replacement: string; replacement_name: string; source: string };
 
 // RetiringHit is what is set to a retirement on a machine: a recipe, an agent schedule, a project's agents, one of
-// its stages, or a pane whose meter read it; no names, the forms say their own
-export type RetiringHit = Retirement & { kind: "recipe" | "schedule" | "project" | "stage" | "pane"; id: string; machine: string; failing: boolean };
+// its stages, or a pane whose meter read it; no names, the forms say their own. The retirement goes by its key, its
+// agent, model and mode, which the roster's table answers.
+export type RetiringHit = { agent: string; model: string; mode?: string; kind: "recipe" | "schedule" | "project" | "stage" | "pane"; id: string; machine: string; failing: boolean };
+
+// retirementOf is the table's entry a hit names, undefined for one the table no longer holds
+const retirementOf = (table: Retirement[], hit: RetiringHit): Retirement | undefined =>
+  table.find((r) => r.agent === hit.agent && r.model === hit.model && (r.mode ?? "") === (hit.mode ?? ""));
 
 // Defaults is Claude Code's choice on a machine for a session that names none, as its vitals read the user settings
 export type Defaults = { model?: string; fast?: boolean };
@@ -34,15 +39,18 @@ export function canonical(model: string): string {
   return m.replace(/-v\d+(:\d+)?$/, "").replace(/-\d{8}$/, "");
 }
 
+// unescaped is the arguments with a backslash before a double quote dropped, as a shell drops it inside double quotes
+const unescaped = (args: string): string => args.replaceAll('\\"', '"');
+
 // fastIn is what the extra arguments say of fast mode through a --settings JSON, the last word winning; undefined for nothing
 export function fastIn(args: string): boolean | undefined {
-  const said = [...args.matchAll(/"fastMode"\s*:\s*(true|false)/g)];
+  const said = [...unescaped(args).matchAll(/"fastMode"\s*:\s*(true|false)/g)];
   return said.length ? said[said.length - 1]![1] === "true" : undefined;
 }
 
 // modelIn is a model the extra arguments name with --model, which comes after remuda's own and wins; "" for none
 export function modelIn(args: string): string {
-  const named = [...args.matchAll(/--model(?:=|\s+)["']?([^\s"']+)/g)];
+  const named = [...unescaped(args).matchAll(/--model(?:=|\s+)["']?([^\s"']+)/g)];
   return named.length ? named[named.length - 1]![1]! : "";
 }
 
@@ -117,14 +125,17 @@ const KINDS: { kind: RetiringHit["kind"]; words: (n: number) => string }[] = [
 
 // retiringConcerns are a machine's hits as the ⓘ's concerns, one per retirement: what is set to it there, counted by
 // kind, and what to move to; bad once its day has come
-export function retiringConcerns(hits: RetiringHit[] | undefined, now: number): { key: string; text: string; bad: boolean }[] {
-  const groups = new Map<string, RetiringHit[]>();
+export function retiringConcerns(hits: RetiringHit[] | undefined, table: Retirement[], now: number): { key: string; text: string; bad: boolean }[] {
+  const groups = new Map<string, { r: Retirement; group: RetiringHit[] }>();
   for (const hit of hits ?? []) {
+    const r = retirementOf(table, hit);
+    if (!r) continue;
     const key = `${hit.model}|${hit.mode ?? ""}`;
-    groups.set(key, [...(groups.get(key) ?? []), hit]);
+    const entry = groups.get(key) ?? { r, group: [] };
+    entry.group.push(hit);
+    groups.set(key, entry);
   }
-  return [...groups.entries()].map(([key, group]) => {
-    const r = group[0]!;
+  return [...groups.entries()].map(([key, { r, group }]) => {
     const counts = KINDS.map(({ kind, words }) => ({ n: new Set(group.filter((h) => h.kind === kind).map((h) => h.id)).size, words })).filter((c) => c.n > 0);
     const vars = { what: whatGoes(r), date: fmtDate(endsOn(r)), set: listWords(counts.map((c) => c.words(c.n))), replacement: r.replacement_name };
     const bad = failingOn(r, now);

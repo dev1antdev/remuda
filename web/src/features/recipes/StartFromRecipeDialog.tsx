@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { connected, folderOptions, machineOptions } from "@/features/roster/options";
 import { useRoster } from "@/features/roster/useRoster";
+import RetiredNotice from "@/features/usage/RetiredNotice";
 import { readPref, writePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { FormDialog, Icon, Notice, Select, useSubmit } from "@/ui";
@@ -89,6 +90,7 @@ export default function StartFromRecipeDialog({ machineId, dir, onClose, onStart
           <input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="/home/me/project" spellCheck={false} />
         </label>
       )}
+      {recipe && <RetiredNotice agent={recipe.agent} model={recipe.model ?? ""} args={recipe.args ?? ""} machine={machine} />}
       <button type="button" className="linkish recipe-manage" onClick={() => setManaging(true)}>
         <Icon name="sliders" size={12} /> {t("Manage recipes…")}
       </button>

@@ -3,6 +3,9 @@
 // rabbit for Kimi Code, a tufted blob for the rest), a hat by the model it runs on, and a trinket of its own — no two
 // creatures of a species on the wall share one while there are trinkets left. The pure part; app/zoo draws them.
 
+import type { Machine } from "./api";
+import { tileKey } from "./wall";
+
 export type Species = "claude" | "codex" | "gemini" | "kimi" | "other";
 
 const SPECIES: Record<string, Species> = { claude: "claude", codex: "codex", gemini: "gemini", kimi: "kimi" };
@@ -46,6 +49,17 @@ export function seedOf(key: string): number {
 export type Outfit = { species: Species; hat: Hat; small: boolean; trinket: Trinket; seed: number };
 
 export type Wearer = { key: string; agent: string; model?: string };
+
+// wearersOf is every agent of the roster in its order, whether the wall shows it or not: dressed over them all, a
+// creature keeps its trinket when another is hidden, filtered out or popped out alone
+export function wearersOf(machines: Machine[]): Wearer[] {
+  const out: Wearer[] = [];
+  for (const machine of machines)
+    for (const session of machine.sessions)
+      for (const tab of session.tabs)
+        for (const pane of tab.panes) if (pane.agent) out.push({ key: tileKey(machine.id, pane.id), agent: pane.agent, model: pane.usage?.model });
+  return out;
+}
 
 // outfits dresses the wall in the order given (the roster's, stable): each creature takes the trinket its seed names,
 // or, when another of its species already wears that one, the next one free; past the last free one they repeat

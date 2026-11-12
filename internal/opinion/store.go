@@ -12,11 +12,13 @@ import (
 const file = "opinions.json"
 
 // The states of an opinion: asked and not answered yet, answered and read, answered in a form Parse could not read,
-// and the reviewer's pane gone before it answered.
+// stopped on calls Claude Code denied without asking before any answer, and the reviewer's pane gone before it
+// answered.
 const (
 	Running    = "running"
 	Done       = "done"
 	Unreadable = "unreadable"
+	Stopped    = "stopped"
 	Gone       = "gone"
 )
 
@@ -51,9 +53,12 @@ type Opinion struct {
 	Moved []string `json:"moved,omitempty"`
 }
 
-// listening says whether the opinion still takes an answer from its reviewer: one asked and not answered, or one
-// answered in a form that could not be read — a question in plain words, say — whose reviewer may answer again
-func (op Opinion) listening() bool { return op.State == Running || op.State == Unreadable }
+// listening says whether the opinion still takes an answer from its reviewer: one asked and not answered, one answered
+// in a form that could not be read — a question in plain words, say — or one stopped on denied calls, whose reviewer
+// may answer once the person has taken it on in its tab
+func (op Opinion) listening() bool {
+	return op.State == Running || op.State == Unreadable || op.State == Stopped
+}
 
 // Open is how many comments are neither added to the person's review nor dismissed.
 func (op Opinion) Open() int {
@@ -134,6 +139,26 @@ func (store *Store) Answer(machine, pane, text string) (Opinion, bool) {
 		} else {
 			op.State, op.Note = Unreadable, "the reviewer did not answer in the path:line form; its answer is in its tab"
 		}
+		store.ops[k] = op
+		store.save()
+		return op, true
+	}
+	return Opinion{}, false
+}
+
+// Stop notes that the reviewer in that pane stopped on calls Claude Code denied without asking, before it answered:
+// no answer is on its way, the tab stays for the person to see them, and an answer the reviewer gives later is heard.
+func (store *Store) Stop(machine, pane string) (Opinion, bool) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	for k, op := range store.ops {
+		if op.Machine != machine || op.Pane != pane || !op.listening() {
+			continue
+		}
+		if op.State == Stopped {
+			return op, true
+		}
+		op.State, op.Note, op.Answered = Stopped, "the reviewer stopped on calls it was denied without asking; they are listed in its tab", store.now()
 		store.ops[k] = op
 		store.save()
 		return op, true

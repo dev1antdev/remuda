@@ -46,4 +46,11 @@ func TestTheSnippetNamesRemudasTokensAndHerdrTakesIt(t *testing.T) {
 	if out, err := check(strings.Replace(Snippet, `fg = "#e78284"`, `fg = "pinkish"`, 1)); err == nil {
 		t.Fatalf("herdr took a broken colour, so its check proves nothing: %s", out)
 	}
+	// what the Settings section warns of: pasted under a config with tables of the same names, herdr drops the file
+	if out, err := check("[ui.toast]\ndelay_seconds = 1\n\n" + ToastSnippet); err == nil || !strings.Contains(out, "duplicate") {
+		t.Fatalf("herdr took a second [ui.toast], so the section's warning is wrong: %v\n%s", err, out)
+	}
+	if out, err := check("[ui.sidebar.agents]\nrows = [[\"agent\"]]\n\n" + Snippet); err == nil || !strings.Contains(out, "duplicate") {
+		t.Fatalf("herdr took a second [ui.sidebar.agents], so the section's warning is wrong: %v\n%s", err, out)
+	}
 }

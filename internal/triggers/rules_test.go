@@ -20,6 +20,8 @@ func TestCheckRefusesWhatHerdrCouldNotWatch(t *testing.T) {
 		"the regex does not read":        {Name: "n", Match: "regex", Pattern: "(", Action: ActionPush},
 		`\Q…\E is not in herdr's regex`:  {Name: "n", Match: "regex", Pattern: `\Qa.b\E`, Action: ActionPush},
 		"matches an empty line":          {Name: "n", Match: "regex", Pattern: `.*`, Action: ActionPush},
+		"octal escape":                   {Name: "n", Match: "regex", Pattern: `exit \12`, Action: ActionPush},
+		"a word's start":                 {Name: "n", Match: "regex", Pattern: `\<error\>`, Action: ActionPush},
 		"unknown action":                 {Name: "n", Match: "substring", Pattern: "x", Action: "shell"},
 		"name the column":                {Name: "n", Match: "substring", Pattern: "x", Action: ActionTask},
 		"the folder is an absolute path": {Name: "n", Match: "substring", Pattern: "x", Action: ActionPush, Machine: "local", Dir: "src"},
@@ -115,6 +117,10 @@ func TestTryRunsARuleOverAPanesRows(t *testing.T) {
 	}
 	if _, err := Try(Rule{Match: "regex", Pattern: "(", Action: ActionPush}, text); err == nil {
 		t.Fatal("a bad pattern is said so")
+	}
+	russian := "сборка: ошибка в модуле\nготово\n٣ failed\n"
+	if got, err := Try(Rule{Match: "regex", Pattern: `\bошибка\b|^\d failed`, Action: ActionPush}, russian); err != nil || got.Count != 2 {
+		t.Fatalf("a rule finds the rows herdr matches in any alphabet: %+v %v", got, err)
 	}
 	many := strings.Repeat("hit\n", MaxShown+5)
 	if got, _ := Try(Rule{Match: "substring", Pattern: "hit", Action: ActionFeed}, many); got.Count != MaxShown+5 || len(got.Lines) != MaxShown {

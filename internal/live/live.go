@@ -126,7 +126,8 @@ func (s *Subscription) Close() {
 	close(s.ch)
 }
 
-// RosterChanged books a check of the roster's fingerprint; calls within the debounce share one check.
+// RosterChanged books a check of the roster's fingerprint; calls within the debounce share one check, and with no page
+// connected none is made: every snapshot of every machine asks, and the fingerprint is the whole roster built.
 func (h *Hub) RosterChanged() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -141,8 +142,12 @@ func (h *Hub) checkRoster() {
 	h.mu.Lock()
 	h.pending = nil
 	closed := h.closed
+	idle := len(h.subs) == 0
+	if idle {
+		h.roster = "" // no page hears it: the roster is not built, and the next page hears the first move it sees
+	}
 	h.mu.Unlock()
-	if closed || h.in.Fingerprint == nil {
+	if closed || idle || h.in.Fingerprint == nil {
 		return
 	}
 	fingerprint := h.in.Fingerprint()

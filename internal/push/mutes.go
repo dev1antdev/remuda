@@ -129,6 +129,11 @@ func (m *Mutes) saveLocked() error {
 	return state.SaveJSON(m.dir, mutesFile, list)
 }
 
+// Muted says whether the pane's folder is muted now: what else tells of a pane (a trigger's activity row) asks too.
+func (s *Service) Muted(machine, pane string) bool {
+	return s.silenced(Payload{Machine: machine, Pane: pane})
+}
+
 // silenced says whether an alert about a pane falls in a muted folder: the folder is asked of the watcher at that
 // moment, so a mute set after the alert was scheduled still holds.
 func (s *Service) silenced(p Payload) bool {

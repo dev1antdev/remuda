@@ -36,10 +36,10 @@ func (st *Store) OnPullRequest(machine, pane, url, label string) (*PRNote, error
 	if label == "" {
 		label = "a pull request"
 	}
-	if _, err := st.db.Exec(`UPDATE task_runs SET pr_url = ?, pr_label = ? WHERE id = ?`, url, label, r.ID); err != nil {
+	if _, err := st.db.Exec(`UPDATE task_runs SET pr_url = ?, pr_label = ?, merged = '' WHERE id = ?`, url, label, r.ID); err != nil {
 		return nil, err
 	}
-	r.PRURL, r.PRLabel = url, label
+	r.PRURL, r.PRLabel, r.Merged = url, label, ""
 	if _, err := st.AddComment(r.TaskID, "agent", "Opened "+label+": "+url); err != nil {
 		return nil, err
 	}

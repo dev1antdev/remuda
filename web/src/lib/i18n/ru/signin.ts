@@ -5,13 +5,17 @@ import type { Dictionary } from "../../i18n";
 export const signin: Dictionary = {
   "Claude Code's sign-in on {machine} ended {ago}: its agents cannot reach Claude until you run claude auth login there":
     "Вход Claude Code на {machine} закончился {ago}: его агенты не смогут обратиться к Claude, пока вы не выполните там claude auth login",
-  "Claude Code's sign-in on {machine} ends in {left}: run claude auth login there before then": "Вход Claude Code на {machine} закончится через {left}: выполните там claude auth login до этого",
+  "Claude Code's sign-in on {machine} may end in {left}, by {date} at the latest: run claude auth login there before then":
+    "Вход Claude Code на {machine} может закончиться через {left}, не позднее {date}: выполните там claude auth login до этого",
+  "Claude Code's sign-in on {machine} may end at any time now, by {date} at the latest: run claude auth login there":
+    "Вход Claude Code на {machine} может закончиться в любой момент, не позднее {date}: выполните там claude auth login",
   "ended {date}": "закончился {date}",
-  "ends {date} · in {left}": "заканчивается {date} · через {left}",
+  "may end any time now · by {date}": "может закончиться в любой момент · не позднее {date}",
+  "ends {days} · in {left} at the earliest": "заканчивается {days} · не раньше чем через {left}",
   "Claude sign-in": "Вход в Claude",
   "Open a shell there": "Открыть там оболочку",
   "a sign-in running out": "заканчивающийся вход",
-  "Claude Code's sign-in on a machine ends in three days, in a day, or has ended": "вход Claude Code на машине закончится через три дня, через день или уже закончился",
+  "Claude Code's sign-in on a machine may end in three days, in a day, or at any time now": "вход Claude Code на машине может закончиться через три дня, через день или в любой момент",
 
   "Fast mode on {model}": "Быстрый режим {model}",
   "{what} was removed on {date}: its requests fail now and do not fall back.": "{what} отключён {date}: его запросы теперь завершаются ошибкой, без перехода на запасной вариант.",

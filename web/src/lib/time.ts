@@ -74,6 +74,9 @@ export function whenAhead(d: When, now = new Date()): string {
 // fmtDate: "7 Oct 2026".
 export const fmtDate = (d: When) => toDate(d).toLocaleDateString(tag(), { day: "numeric", month: "short", year: "numeric" });
 
+// fmtDateSpan: "2–5 Dec 2026", two days as the language writes a span of them.
+export const fmtDateSpan = (from: When, to: When) => new Intl.DateTimeFormat(tag(), { day: "numeric", month: "short", year: "numeric" }).formatRange(toDate(from), toDate(to));
+
 // fmtDay: "7 Oct" from a YYYY-MM-DD key.
 export function fmtDay(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);

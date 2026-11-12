@@ -25,6 +25,8 @@ type fakeHerdr struct {
 	streams   []net.Conn // open streams
 	most      int        // the most streams open at once, once the watcher had a moment to close the one before
 	started   int        // streams answered
+	answers   []time.Time
+	asks      int // events.subscribe requests, refused or not
 	asked     chan []herdr.Subscription
 	refuse    func([]herdr.Subscription) string // a refusal's code for a subscription set, "" to take it
 }
@@ -95,8 +97,12 @@ func (f *fakeHerdr) serve(conn net.Conn) {
 		answer(map[string]any{"id": req.ID, "result": map[string]any{"type": "session_snapshot", "snapshot": snap}})
 		conn.Close()
 	case "events.subscribe":
-		f.asked <- req.Params.Subscriptions
+		select {
+		case f.asked <- req.Params.Subscriptions:
+		default: // a test that reads none of them
+		}
 		f.mu.Lock()
+		f.asks++
 		refuse := f.refuse
 		f.mu.Unlock()
 		if refuse != nil {
@@ -116,6 +122,7 @@ func (f *fakeHerdr) serve(conn net.Conn) {
 		f.mu.Lock()
 		f.streams = append(f.streams, conn)
 		f.started++
+		f.answers = append(f.answers, time.Now())
 		f.mu.Unlock()
 		reader.ReadBytes('\n') // until the watcher closes it
 		f.mu.Lock()
@@ -156,6 +163,23 @@ func (f *fakeHerdr) answered() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.started
+}
+
+// lastAnswer is when the newest stream was answered.
+func (f *fakeHerdr) lastAnswer() time.Time {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.answers) == 0 {
+		return time.Time{}
+	}
+	return f.answers[len(f.answers)-1]
+}
+
+// subscribes is how many events.subscribe came, refused or not.
+func (f *fakeHerdr) subscribes() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.asks
 }
 
 func (f *fakeHerdr) open() int {

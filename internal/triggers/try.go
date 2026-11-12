@@ -1,8 +1,9 @@
 package triggers
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/dev1antdev/remuda/internal/herdr"
 )
 
 // MaxShown is how many matching rows a test answers.
@@ -16,7 +17,7 @@ type Tried struct {
 	Port  int      `json:"port,omitempty"`
 }
 
-// Try checks the rule and runs it over text a line at a time, as herdr would.
+// Try checks the rule and runs it over text a line at a time, as herdr would read it.
 func Try(rule Rule, text string) (Tried, error) {
 	rule.Name = strings.TrimSpace(rule.Name)
 	if rule.Name == "" {
@@ -27,7 +28,10 @@ func Try(rule Rule, text string) (Tried, error) {
 	}
 	match := func(line string) bool { return strings.Contains(line, rule.Pattern) }
 	if rule.Match == "regex" {
-		re := regexp.MustCompile(rule.Pattern) // Check read it
+		re, err := herdr.CompileRegex(rule.Pattern)
+		if err != nil {
+			return Tried{}, err
+		}
 		match = re.MatchString
 	}
 	out := Tried{Lines: []string{}}

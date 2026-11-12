@@ -5,10 +5,11 @@ import (
 )
 
 // offer keeps a dev server the row names as an offer to preview once the previews find its port listening; a few
-// tries, since a server may say where it serves a moment before it does.
+// tries, since a server may say where it serves a moment before it does. A server saying it again while its offer
+// stands — one that restarts on every save — is that offer: no new one for the page to put up, no look at the ports.
 func (s *Service) offer(machine, paneID, row, by string) {
 	port, url, ok := ServedAt(row)
-	if !ok || s.Listening == nil {
+	if !ok || s.Listening == nil || s.offered(machine, paneID, port) {
 		return
 	}
 	for _, wait := range listenTries {
@@ -29,6 +30,14 @@ func (s *Service) offer(machine, paneID, row, by string) {
 		}
 		return
 	}
+}
+
+// offered says whether the pane's offer of the port stands.
+func (s *Service) offered(machine, paneID string, port int) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	o, ok := s.offers[key(machine, paneID)]
+	return ok && o.Port == port && time.Since(o.At) <= OfferKeep
 }
 
 // OfferOf is the preview a pane's dev server is offered as, while it stands; nil for none.

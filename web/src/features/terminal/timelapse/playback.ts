@@ -14,16 +14,22 @@ export const HOLD_MS = 2000;
 // MIN_DELAY is the shortest GIF delay a browser keeps, in hundredths of a second (shorter ones it draws at a tenth)
 export const MIN_DELAY = 2;
 
-// screensOf is every frame's text: the frame before's rows, cut or padded to the frame's count, the moved ones laid over
-export function screensOf(frames: RecordingFrame[]): string[] {
-  const out: string[] = [];
-  let rows: string[] = [];
+// ScreenRows is one frame's screen as its rows, each row shared with the frames around it that show it too; joined
+// with newlines (screenText) only for the frame drawn, since nine hundred whole screens would hold a hundred megabytes
+export type ScreenRows = string[];
+
+export const screenText = (rows: ScreenRows | undefined): string => (rows ?? []).join("\n");
+
+// screensOf is every frame's rows: the frame before's, cut or padded to the frame's count, the moved ones laid over
+export function screensOf(frames: RecordingFrame[]): ScreenRows[] {
+  const out: ScreenRows[] = [];
+  let rows: ScreenRows = [];
   for (const frame of frames) {
     const next = rows.slice(0, frame.lines);
     while (next.length < frame.lines) next.push("");
     for (const row of frame.rows ?? []) if (row.line >= 0 && row.line < frame.lines) next[row.line] = row.text;
     rows = next;
-    out.push(rows.join("\n"));
+    out.push(rows);
   }
   return out;
 }
@@ -78,6 +84,20 @@ export function gifDelays(times: number[], speed: Speed): number[] {
     const to = Math.round(times[i + 1]! / speed / 10);
     return Math.max(MIN_DELAY, Math.min(0xffff, to - from));
   });
+}
+
+// KeyPlace is where a key was pressed in the player: a field (the scrub bar, a select) whose keys are its own, a
+// button whose Space is its own click, or the screen itself
+export type KeyPlace = "field" | "button" | "screen";
+
+// playerKey is what a key does in the player: Space plays or pauses, ← → step a frame either way; never in a field,
+// never Space on a button, and never a key held with Alt, Ctrl or ⌘, which is the browser's or the system's
+export function playerKey(key: string, modified: boolean, place: KeyPlace): "toggle" | 1 | -1 | null {
+  if (modified || place === "field") return null;
+  if (key === " ") return place === "button" ? null : "toggle";
+  if (key === "ArrowLeft") return -1;
+  if (key === "ArrowRight") return 1;
+  return null;
 }
 
 // playedFor is how long the recording plays at a speed, in the person's milliseconds

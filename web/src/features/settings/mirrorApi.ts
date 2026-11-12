@@ -5,7 +5,8 @@ import { getJSON, sendJSON } from "@/lib/http";
 
 export type MirrorSettings = { figures: boolean; toasts: boolean; quiet?: Quiet };
 export type ToastOutcome = { machine: string; label: string; at: string; title: string; shown: boolean; reason?: string; error?: string };
-export type MirrorStatus = MirrorSettings & { closed?: string; tokens: string[]; snippet: string; toast_snippet: string; last?: ToastOutcome[] };
+export type Yield = { machine: string; label: string; writer: string };
+export type MirrorStatus = MirrorSettings & { closed?: string; tokens: string[]; snippet: string; toast_snippet: string; last?: ToastOutcome[]; elsewhere?: Yield[] };
 
 export const fetchMirror = (): Promise<MirrorStatus> => getJSON("/api/mirror");
 export const saveMirror = (settings: MirrorSettings): Promise<MirrorStatus> => sendJSON("PUT", "/api/mirror", settings);

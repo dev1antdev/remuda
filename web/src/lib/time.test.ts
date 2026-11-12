@@ -1,8 +1,16 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { setLang } from "./i18n";
-import { ago, clockOf, elapsed, spent, took, whenAhead } from "./time";
+import { ago, clockOf, elapsed, fmtDateSpan, spent, took, whenAhead } from "./time";
 
 afterEach(() => setLang("en"));
+
+describe("fmtDateSpan", () => {
+  it("writes two days of one month as one span, the year once", () => {
+    const span = fmtDateSpan(new Date(2026, 11, 2, 12), new Date(2026, 11, 5, 12));
+    expect(span).toMatch(/2.*5/);
+    expect(span.match(/2026/g)).toHaveLength(1);
+  });
+});
 
 describe("ago", () => {
   const now = Date.UTC(2026, 9, 13, 12, 0, 0);

@@ -113,7 +113,9 @@ type Collector struct {
 	latest  Latest
 	release Release
 	locks   map[string]*sync.Mutex // one read of a machine at a time; a second waits for it
-	logins  map[string]loginRead   // each machine's Claude Code sign-in, read LoginEvery apart
+	logins  map[string]loginRead   // each machine's Claude Code sign-in, read LoginEvery apart, kept in LoginsFile
+
+	loginsSaving sync.Mutex // one write of LoginsFile at a time
 
 	// OnRead hears every machine's reading as it is kept, the sign-in carried over between its own reads
 	OnRead func(mc *machines.Machine, r Report)
@@ -121,7 +123,7 @@ type Collector struct {
 
 // New makes a collector keeping its samples in dir ("" for none on disk).
 func New(dir string, m *machines.Manager, version string, check bool) *Collector {
-	return &Collector{dir: dir, machines: m, Version: version, Check: check, reports: map[string]*Report{}, history: loadHistory(dir), locks: map[string]*sync.Mutex{}, logins: map[string]loginRead{}}
+	return &Collector{dir: dir, machines: m, Version: version, Check: check, reports: map[string]*Report{}, history: loadHistory(dir), locks: map[string]*sync.Mutex{}, logins: loadLogins(dir)}
 }
 
 // Start keeps every connected machine's report no older than interval and the versions fresh.

@@ -16,9 +16,9 @@ type Service struct {
 	// Close takes down the reviewer's tab, only while it still holds the reviewer's pane; set by the app, nil keeps
 	// every tab
 	Close func(machine, tab, pane string) error
-	// Read is the reviewer's answer: the text the conversation opening with the opinion's request ended with, its pane's
-	// own session read first, else the conversation found by the request; set by the app, nil reads nothing
-	Read      func(op Opinion) (answer string, ok bool)
+	// Read is the reviewer's reply: what the conversation opening with the opinion's request came to, its pane's own
+	// session read first, else the conversation found by the request; set by the app, nil reads nothing
+	Read      func(op Opinion) (reply Reply, ok bool)
 	retry     time.Duration
 	readEvery time.Duration // how often a reviewer at rest is read again when no status move told of its finish
 
@@ -94,7 +94,8 @@ func (svc *Service) start(machine, pane string, every time.Duration) bool {
 	return true
 }
 
-// readAnswer reads the reviewer's answer, a few seconds apart while the file catches up with the finish
+// readAnswer reads the reviewer's answer, a few seconds apart while the file catches up with the finish; a turn that
+// stopped on denied calls has none coming, and is noted so rather than left reviewing for good
 func (svc *Service) readAnswer(machine, pane string) {
 	defer func() {
 		svc.mu.Lock()
@@ -109,9 +110,13 @@ func (svc *Service) readAnswer(machine, pane string) {
 		if !waiting {
 			return
 		}
-		answer, ok := svc.Read(op)
-		if ok && strings.TrimSpace(answer) != "" {
-			svc.Hear(machine, pane, answer)
+		reply, ok := svc.Read(op)
+		if ok && strings.TrimSpace(reply.Answer) != "" {
+			svc.Hear(machine, pane, reply.Answer)
+			return
+		}
+		if ok && reply.Stopped {
+			svc.Stop(machine, pane)
 			return
 		}
 	}

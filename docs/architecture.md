@@ -66,7 +66,8 @@ The contexts are the bounded contexts of the product, in its own words:
    cut by. `review`, `jobs`, `search` and `usage` are written this way;
    their tests run on a `shell.Fake` with a recorded answer.
 3. **Packages hear each other through the bus.** `watch` publishes
-   `events.Snapshot` and `events.PaneStatus`; `jobs` publishes
+   `events.Snapshot`, `events.PaneStatus` and, off herdr's event stream,
+   `events.OutputMatched`; `jobs` publishes
    `events.JobDone`; the rest subscribe. Nothing holds a reference to
    its listeners, and the full list of subscriptions is in
    `internal/app/app.go`, so "who reacts to a pane going done" is one

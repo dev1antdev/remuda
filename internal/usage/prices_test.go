@@ -28,6 +28,33 @@ func TestTheCatalogKnowsClaudeCodes2_1_322Models(t *testing.T) {
 	}
 }
 
+// Claude Code 2.1.322 prices fast mode from its own table for the models it names, and any other model at its usual
+// rates whatever the record's speed says.
+func TestFastModeIsPricedFromClaudeCodesTable(t *testing.T) {
+	million := Tokens{Output: 1_000_000}
+	for id, want := range map[string]float64{
+		"claude-fable-5-2":  80,
+		"claude-mythos-5-2": 80,
+		"claude-opus-5-5":   40,
+		"claude-opus-4-8":   50,
+		"claude-opus-5":     50,
+		"claude-opus-4-6":   150,
+		"claude-opus-4-7":   150,
+		"claude-sonnet-5-5": 10,
+		"claude-fable-5-1":  50,
+		"claude-haiku-4-5":  5,
+	} {
+		m, _ := Lookup(id)
+		if got := Cost(m, million, "", "fast"); math.Abs(got-want) > 1e-9 {
+			t.Errorf("a million output tokens of %s in fast mode: $%v, want $%v", id, got, want)
+		}
+	}
+	haiku, _ := Lookup("claude-haiku-5-5")
+	if got := Cost(haiku, Tokens{Input: 200_000}, "", "fast"); math.Abs(got-0.1) > 1e-12 {
+		t.Errorf("a model with no fast rates keeps its long-prompt rule in fast mode: %v", got)
+	}
+}
+
 func TestALongPromptIsPricedWholeAtTheLongRates(t *testing.T) {
 	m, _ := Lookup("claude-haiku-5-5")
 	short := Tokens{Input: 1000, CacheRead: 99_000, Output: 1_000_000}

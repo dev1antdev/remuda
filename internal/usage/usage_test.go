@@ -19,6 +19,9 @@ func TestByNameIsTheWayBackToAnID(t *testing.T) {
 			t.Errorf("%q found", unknown)
 		}
 	}
+	if byName, _ := ByName("Haiku 5.5"); byName.Long == nil || byName.Long.Above != 100_000 {
+		t.Errorf("a model found by its name lost its long-prompt rates: %+v", byName)
+	}
 }
 
 func TestLookupSpellings(t *testing.T) {
@@ -69,8 +72,8 @@ func TestCostMatchesClaudeCode(t *testing.T) {
 	if fast := Cost(opus, Tokens{Output: 1000}, "", "fast"); math.Abs(fast-0.04) > 1e-9 {
 		t.Fatalf("opus 5.5 fast %f", fast)
 	}
-	if fast := Cost(m, Tokens{Output: 1000}, "", "fast"); math.Abs(fast-0.15) > 1e-9 {
-		t.Fatalf("fable fast (the dearest table) %f", fast)
+	if fast := Cost(m, Tokens{Output: 1000}, "", "fast"); math.Abs(fast-0.05) > 1e-9 {
+		t.Fatalf("fable 5.1 has no fast rates: its usual ones, %f", fast)
 	}
 }
 

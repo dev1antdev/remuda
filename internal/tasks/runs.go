@@ -107,7 +107,7 @@ func (w *RunWatch) Sweep() {
 			_, _ = w.Store.AddComment(r.TaskID, "agent", answer)
 		}
 		if len(denied.Calls) > 0 {
-			_, _ = w.Store.AddComment(r.TaskID, "remuda", deniedComment(r.Agent, denied))
+			_, _ = w.Store.AddComment(r.TaskID, "remuda", deniedComment(r, denied))
 		}
 		// the pipeline's step before the answer is noted as reported: a restart in between hears the answer again and
 		// takes the step, where the other order would leave the pipeline on for good

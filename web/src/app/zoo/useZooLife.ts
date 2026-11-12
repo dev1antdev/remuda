@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { displayOf, type RadarPrefs } from "@/features/roster/radar";
 import type { Tile } from "@/features/roster/wall";
-import { CHEER_MS, FIREWORKS_MS, PUFF_MS, happenings, type Seen } from "@/features/roster/zooLife";
+import { CHEER_MS, FIREWORKS_MS, carried, happenings, withPuffs, type Seen } from "@/features/roster/zooLife";
 import { speciesOf } from "@/features/roster/zooWear";
 import { sing } from "./voices";
 
@@ -19,15 +19,15 @@ export function useZooLife(shown: Tile[], radar: RadarPrefs, now: number, voices
   const [clock, setClock] = useState(() => Date.now());
 
   useEffect(() => {
-    const after = new Map<string, Seen>(shown.map((tile) => [tile.key, { display: displayOf(tile.pane, radar, now), pr: tile.pane.pr?.status?.state ?? "", usage: tile.pane.usage }]));
     const before = seen.current;
+    const after = carried(before, new Map<string, Seen>(shown.map((tile) => [tile.key, { display: displayOf(tile.pane, radar, now), pr: tile.pane.pr?.status?.state ?? "", url: tile.pane.pr?.url, usage: tile.pane.usage }])));
     seen.current = after;
     if (!before) return;
     const moves = happenings(before, after);
     const at = Date.now();
     if (moves.finished.length) setCheer({ by: moves.finished[0]!, until: at + CHEER_MS });
     if (moves.merged.length) setFireworksUntil(at + FIREWORKS_MS);
-    if (moves.compacted.length) setPuffs((was) => new Map([...was, ...moves.compacted.map((key) => [key, at + PUFF_MS] as const)]));
+    if (moves.compacted.length) setPuffs((was) => withPuffs(was, moves.compacted, at));
     if (!voices) return;
     const agentOf = (key: string) => shown.find((tile) => tile.key === key)?.pane.agent ?? "";
     if (moves.merged.length) sing(speciesOf(agentOf(moves.merged[0]!)), "merge");

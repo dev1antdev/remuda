@@ -77,6 +77,12 @@ func TestWhatTheArgumentsSay(t *testing.T) {
 	if _, said := FastIn("--permission-mode plan"); said {
 		t.Fatal("arguments that say nothing of it")
 	}
+	if fast, said := FastIn(`--settings "{\"fastMode\": true}"`); !fast || !said {
+		t.Fatal("fast mode through --settings in double quotes, its own quotes escaped")
+	}
+	if ModelIn(`--model \"claude-opus-4-8\"`) != "claude-opus-4-8" {
+		t.Fatal("a --model in escaped quotes")
+	}
 	if ModelIn("--model claude-opus-4-8 --verbose") != "claude-opus-4-8" || ModelIn(`--model="claude-opus-4-8[1m]"`) != "claude-opus-4-8[1m]" || ModelIn("--verbose") != "" {
 		t.Fatal("a --model in the arguments")
 	}

@@ -64,7 +64,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   subscribe — in `internal/app`.
 - `internal/state/` — the one state dir (`<user config dir>/remuda`, 0700,
   or `REMUDA_STATE_DIR` for a second instance beside the real one)
-  and the one atomic 0600 writer; token, machines.json, vapid.json and
+  and the one atomic 0600 writer (the file synced to disk before its
+  rename and the folder after it, so a power cut on a Raspberry Pi's SD
+  card leaves no name on an empty file); token, machines.json, vapid.json and
   push-subscriptions.json all live there. A serving remuda holds the dir's
   lock (`Hold` / `Held` in `lock.go`, a flock on `serve.lock` that goes
   with the process however it ends, tested) so `remuda restore` can refuse.
@@ -152,7 +154,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   test, its socket and its `HOME` both temporary. `Client.Bridged` says
   the client dials through a command (`nc -U` over ssh) rather than a
   socket; `AttachManager.Viewers(terminal)` is how many of this remuda's
-  viewers have a terminal open. `attach.go`: ref-counted
+  viewers have a terminal open. **An output watch's regex is herdr's
+  Rust dialect** (`regex.go`, tested on what a throwaway herdr 0.9.5
+  refused and matched, through `events.subscribe` and
+  `pane.wait_for_output`): `CompileRegex` reads it in Go as herdr does —
+  `\d`, `\w`, `\s` and their negations spelled out as Unicode classes
+  (herdr matches `\bошибка\b`, `ошибка:\s+\w+` and `٣ failed`; Go's own
+  are ASCII), `\b` / `\B` left out on a row outside ASCII, where Go's
+  word boundary is ASCII's alone (a row herdr matched is never missed,
+  one it would not have may count) — and refuses what Go reads and herdr
+  does not or reads otherwise: an octal escape or backreference (`\12`),
+  `\Q…\E`, `\<` / `\>` and `\b{…}` (a word's start or end to herdr, a
+  character to Go), a `[` inside a class (a class of its own) and `&&`,
+  `--`, `~~` there (herdr's set operations), a range from a class
+  (`[\d-z]`), a `{` that counts nothing (`a{b}`, `{"ok":1}`, `x{,n}`; Go
+  reads it as the character, herdr refuses it). The watcher reads herdr's matches again with it,
+  and the triggers check and try a rule with it. Not caught: Rust's
+  compiled-size limit (`\w{1000}\w{1000}`), which herdr refuses as
+  `invalid_regex` and the watcher handles as a refusal. `attach.go`: ref-counted
   `herdr terminal attach` PTYs (creack/pty), one per terminal shared by all
   viewers, 45s linger after the last viewer leaves. **No byte replay** for a
   viewer joining a live attach: TUIs draw with relative cursor moves, so a
@@ -231,7 +250,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   leaves it out, so the roster's `machines`, the watcher (no local poll,
   so no `LocalHerdrDown` and no keeper), the search, the usage, the
   recap and standup, teleport's targets and the budgets' hosts never see
-  it, while `All` (the vitals collector, `Close`) still has it; its
+  it — nor the mirror, the timelapse recorder, the triggers, the
+  subagents' counts or the retirements' look, which go by the watcher's
+  snapshots and that list, and its Claude Code sign-in is neither read
+  nor warned of (`readLogin`, `signinWarnings` in `internal/app`) —
+  while `All` (the vitals collector, `Close`) still has it; its
   `Ready()` is `ErrServerHost`, so a route naming it says why; the app
   neither needs nor starts its herdr (`herdr.FindBinary` may fail),
   places no door for its own agents (the remotes still get theirs), and
@@ -367,13 +390,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   live at `<session>/subagents/agent-<id>.jsonl`, a `.meta.json` beside
   each (`toolUseId`, `agentType`, `description`, `finished`);
   `Reader.Subagents(path, now)` lists the folder in one stat round trip
-  (kept 5 s on a remote) and re-reads only a file that moved, summing
+  (kept 5 s on a remote) and re-reads only a file that moved — the
+  summaries of up to `SubagentsKept` 4096 kept, the one asked for longest
+  ago going first, since an evicted one costs its whole transcript again
+  over ssh — summing
   each up as a `Subagent` — its tool calls, the one still running
   (`Doing`), the start of its last answer (`Report`), its span, and
   `working` / `quiet` (nothing written for `QuietAfter`) / `done` (the
   meta's finish, or an answer that stood for `ReportedAfter`: the finish
   is not written for every kind of agent) — with a stamp of the folder's versions for the chat's
-  ETag; `Reader.SubagentTurns(path, id)` is one agent's own conversation
+  ETag; `Reader.RecentSubagents(path, now)` the same for the ones written
+  within `QuietAfter` alone, the others never read (the zoo's count, see
+  `internal/subagents`); `Reader.SubagentTurns(path, id)` is one agent's own conversation
   (`SubagentID` guards the id). Their records are sidechain ones, which
   `Parse` drops from the parent file (`parseRecords(r, keepSidechain)`). `Turn.Answer`,
   `Turn.ToolCalls` and `Turn.LastID` say what a turn ended with; a tool
@@ -571,8 +599,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Export as Markdown, Timelapse…; `useTerminalViewItems` in
   `terminal/TerminalLens.tsx`: the size mode, the minimum width,
   selection mode, smaller / larger text that keep the menu open, the key
-  bar, then Timelapse… — `timelapseRows` in `terminal/timelapse/row.ts`,
-  which `PaneArea` adds) and then the page's: the files rail and full screen; the viewer
+  bar, then for an agent's pane Timelapse… — `timelapseRows` in
+  `terminal/timelapse/row.ts`, which `PaneArea` adds) and then the page's: the files rail and full screen; the viewer
   bar has the same pair for a transcript on its own. Never a row of icons
   in the header. Transient status — offline,
   a newer server, errors, "Copied N" — is a toast in the bottom corner
@@ -617,9 +645,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   **Claude Code's sign-in and settings** (`claude.go`, tested on a
   `claude` stand-in first on a bare PATH): `LoginScript` runs `claude
   auth status --json` (2.1.318's `loginExpiresAt`) in a call of its own
-  (20 s, a failure keeps the last answer) at most every `LoginEvery` 6
+  (20 s, a failure keeps the last answer and is tried again only after
+  `LoginRetry` 1 hour) at most every `LoginEvery` 6
   hours — it starts Claude Code, which counts the call in its own
-  analytics — and on demand, never on a `-server` host; its `sed` passes
+  analytics — and on demand, never on a `-server` host; the reads are
+  kept in `<state>/claude-logins.json` (`signIn`, `due`: a restart asks
+  nothing new, a read the clock was set back from counts as old, a
+  damaged file is none); its `sed` passes
   on `login_expires=` alone, so the account's e-mail and organization
   never leave the machine; `ParseLogin` → `Report.ClaudeLogin {expires,
   at}`, carried between reads and through a probe that failed
@@ -701,7 +733,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   release and every pull request, and on `release` (and by hand,
   `workflow_dispatch`) the end-to-end smoke too: `make e2e` is
   `scripts/e2e.sh` — a throwaway herdr server on a socket and HOME of its
-  own (`HERDR_SOCKET_PATH`, stopped the same way), a remuda on it with its
+  own (`HERDR_SOCKET_PATH`, stopped the same way), the agents' CLIs (`claude`, `codex`, `gemini`, `kimi`) stand-ins
+  first on its PATH — the vitals probe runs `claude --version` and `claude
+  auth status`, and the person's real Claude Code would reach their account
+  through the macOS keychain, which no throwaway HOME hides, a remuda on it with its
   own state dir and `-mirror` (it writes its figures into that herdr),
   headless Chrome — driving `e2e/smoke.mjs` over the
   DevTools protocol with no dependency: sign in, a scratch shell
@@ -740,7 +775,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`features/roster/HealthButton.tsx`; the rules in `concerns.ts`) turns amber on an update, a lagging
   remote remuda, a nearly full disk, Claude Code's sign-in running out (`internal/signin`) or a
   setting there on a model being retired (`internal/retire`; `concerns(…, more)` takes the
-  machine's name, its `retiring` and the clock).
+  machine's name, its `retiring`, the roster's `retirements` its hits name and the clock).
 - **The machine stays awake while its agents work** (`internal/awake`,
   tested): a switch per machine, off by default, kept in `awake.json` in
   the state dir (`PATCH /api/machines/{id}/awake {on}`, the row "Keep
@@ -893,7 +928,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Code without the command, leave and come back: `agent.prompt` with the
   agent's own `/exit` (Ctrl-C twice if it lingers), a wait for the shell
   prompt, then `agent.start` with `--resume <session id>` (`codex resume`,
-  `gemini --resume`, `kimi --session`) from the snapshot's `agent_session`. Idle/done chats
+  `gemini --resume`, `kimi --session`) from the snapshot's `agent_session`
+  — the resume arguments alone: the model, the person's own arguments and
+  the deny setting of an agent remuda started with nobody watching
+  (`sessions.Start`) are not carried, since herdr's snapshot names no
+  arguments and remuda keeps none; the pane is at rest by then and what
+  it is sent next is the person's (a booked "continue" too). Idle/done chats
   go at once; working/blocked/unknown ones are booked and restarted after
   the watcher sees them settle (`events.PaneStatus` → `Restarter.OnStatus`,
   a 25 s timer, then its own job via `Restarter.Later`). A pane without a session id
@@ -1215,7 +1255,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   "Hide idle", the idle ones past the radar's fresh tier, and with **Needs me** (pref `needsMe`, `needsMe` in wall.ts) everyone but the agents waiting for the person — a question open, a watchdog note, a finish not looked at — "Nobody needs you right now" when that leaves none; a tile that needs one wears a pulsing ring (red for a question, amber for a note), a finished one a green edge; the two filters and the view are palette commands too, and **Alt+N** (`app/next.ts`, by key code — never over the terminal, nor over a field on a Mac, where Option+N is the tilde's dead key: `nextKey.ts`, tested; the palette row "Go to the next agent that needs you") walks the agents that need the person in the roster's order, round and round (`nextNeedingMe` in wall.ts, tested): on the Wall the tile takes the wall, a tile hidden by hand passed over, elsewhere the pane opens on its chat, a toast when nobody needs one; pref `wall` holds
   the size S/M/L (`TILE_MIN` 360/460/600 px, an auto-fill grid) and the idle
   switch; no sidebar in the mode, "+ Agent" opens the New workspace
-  dialog; **the zoo** is the third view (`view` = `zoo`, the bar's Zoo, the palette's "Zoo on the Wall", allowed to a viewer): `app/zoo/` — `Zoo.tsx` stands every shown tile as a creature in a **pen per machine** (`pensOf` in `features/roster/zooPens.ts`, tested; a `section.zoo-pen` with a sign — the machine's name (`useSharing().machineLabel`), its hue on the sign's edge, its weather as icons and words (`weatherOf` / `weatherWords`: warm from 75 °C, hot from 85 °C — the vitals' `WARM` / `HOT` — a storm for under-voltage now, boxes under 10 % disk free, dust past one load per core, a lamp while kept awake), a fence along its foot; the pens side by side as wide as their creatures want, each its own `.zoo-grid`, a bubbles' row only while one of its creatures talks) under **the sky of the viewer's hour** (`skyOf`: dawn, day, dusk, night; `Sky.tsx` — the gradient behind, the sun or the moon and stars in a strip over the pens) and over **the foot** (`ZooFoot.tsx`: `tickerFacts` in `features/roster/zooLife.ts`, tested — answers, waits, spend, merges, who worked longest by `recap.took` — from `GET /api/standup` since this device's midnight, read every minute while in view (`useDay`), running along like a ticker only when longer than the screen; the voices' `icon-btn` beside it, pref `zoo.voices`, off, per device: `voices.ts` synthesizes a species' chirp through WebAudio — `voiceOf`, `TUNES` — for a question, a finish, a merge, the audio context made inside the switch's click); `ZooCreature.tsx` is one figure, `Creature.tsx` the SVG in 120 × 128 units assembled from `bodies.tsx` (the species, `speciesOf` in `features/roster/zooWear.ts`: Claude Code a round critter with antennae, Codex a boxy robot with an aerial and a panel of LEDs, Gemini CLI an egg between two sparkles, Kimi Code a moon rabbit, any other agent a tufted blob; the skin and belly in `.cr-fat`, widened by `--zoo-girth`), `face.tsx` (a face and arms per pose; an `Eye` blinks at a seeded moment and its pupils follow the pointer — `useGaze.ts`, a fine pointer only, `gaze` sets `--gx` / `--gy` once a frame), `wear.tsx` (`hatOf` the model's family — Opus a top hat, Fable a wizard's, Sonnet a beret, Haiku a sprout and a size smaller (`smallModel`), Mythos a laurel, OpenAI's models a cap — a crown once its pull request is merged; a trinket each — glasses, a bow, a scarf, a bow tie, freckles, a mustache, spots — `outfits` giving no two creatures of a species the same one while there are some left, by `seedOf` its key in the roster's order) and `props.tsx` (the laptop, confetti, the sign — "?", the "!" board, z's, "…", an empty battery — at the top right clear of the hats, and what `features/roster/zooBody.ts` (tested) reads off the roster: `girthOf` the context's share, a belt from `BELT_AT` 0.8; `coinsOf` the cost as up to six coins, tinted amber or red by the tightest budget over its machine and folder; `flagOf` its pull request's flag — failed, running, passed, a draft, open — and the crown; `workExtras` a mug after `COFFEE_AFTER` 20 min of work, sweat after `SWEAT_AFTER` an hour or in a hot pen; `drainedUntil` when an agent stopped on its plan limit carries on, its booked continue or the reset `resetForHit` names, in the caption; `babiesOf` its subagents at work from the roster's `pane.subagents` (`internal/subagents`), up to `MAX_BABIES` 3 hopping at its feet at little laptops and the rest counted — a quiet one is no baby, it may never finish); a pose per state from `features/roster/zoo.ts` (tested: `lookOf` — working → busy at a laptop at the spinner's rhythm, blocked → a hand up under a pulsing "?", a watchdog note → worried under an amber "!" board, done → dancing with confetti, idle → asleep with "z" (under a blanket at night), idle_stale → asleep and dim, unknown → puzzled under "…", a plan limit hit and at rest → drained, slumped under an empty battery — `poseWord` the caption's word, `stateSince`, `bubbleOf` the answer's first line in a speech bubble once it finished or rests, cut at `BUBBLE_MAX` by `cutAt`, `CREATURE_SIZE` / `cellMin` per S/M/L); an asking creature's bubble holds what it asks (`useQuestions.ts`: `GET /api/question` for the asking ones alone, at most `MAX_ASKING` 8, every 10 s while in view; `questionBubble`, a red-edged `zoo-bubble is-question`); the vendor's logo as a badge, its name (`rowLabel`), folder (with its icon) and "working · 6 min" under it, its model, cost, context, flag and babies in its tooltip; **between readings** (`useZooLife.ts` over `happenings` in `zooLife.ts`, tested: only moves seen on this page — the first reading seeds) a finish has the resting and the puzzled ones clap (`joinsApplause`, `CHEER_MS`), a merge sets off `Fireworks` over the zoo (`FIREWORKS_MS`), a compaction puffs (`compacted`, `PUFF_MS`); a click is `actions.openPane` (the open.lens rule), a hover is a `Tip` with `stateWords`, a long press (`ui/press.ts`) shows them under it for 3 s; two abreast under 600 px; under the screen-sharing mode a hidden folder's creature flies no flag, holds up no question and the ticker names it by the neutral name; office mode shows the featured one large beside small ones whose click pins, under the same sky and over the same foot, the pop-out shows the popped agent large; `prefers-reduced-motion` stops every animation, the ticker is cut rather than run, no fireworks, and the poses stay; the tile itself is `Tile.tsx`, `TileView`; a tile shows the chat or, in the **Screen** view (`view` in pref `wall`: the Chat | Screen pair in the wall's bar, "Wall of screens" in the palette, the pop-out follows it), the pane's terminal as it is — `features/terminal/Screen.tsx` reads `GET /api/screen?machine&pane` (`internal/server/screen.go` → `herdr.Client.PaneScreen`, `pane.read` with `format: ansi`, read from herdr on demand at the tiles' pace, 3 s / 15 s, an ETag over the text so an unchanged screen is a 304; no attach, so no slot is taken and the shared pane is never resized) and draws the rows through `features/terminal/ansi.ts` (`parseAnsi`, tested: SGR colours in xterm's palette, 256 and true colour, bold / dim / italic / underline / inverse, every other escape dropped) at the font that fits the pane's columns in the tile's width (`thumbFont`, `engine/geometry.ts`), the bottom rows kept when the height runs out; a click opens the terminal lens, the head the lens of the view; `TailAnswer` (chat/Tail.tsx) is the foot under either view — the keys for a question and the compact composer; under the head a **state line** that is always there, `TileState` in `chat/Tail.tsx` — `stateWords` with how long the state has lasted (`radar.since`, `elapsed` in `lib/time.ts`) and, while the agent works in the chat view, what it does this second from the end of its tail (`features/chat/doing.ts`, tested: the tool call still without a result through `toolLabel`, now in `footprint.ts`, and how long it has run — `Running` in `Tail.tsx`, a second at a time through `useNow` in `lib/clock.ts`, amber past `LONG_CALL` 60 s — else thinking or writing; an Agent call without its result reads as waiting on its subagents, and the line says how many of the conversation's still work, "2 subagents working", from the answer's `subagents`), while its plan has open items how far it is, "3/7" (`progressWords` in `chat/plan.ts`, from the tail's `plan`), and once it has finished or sits idle, **what it answered**: the first line of the text its last turn ended with, in the quiet colour — the chat view reads it from the tail (`features/chat/said.ts`, tested: marks stripped, cut at a word by 120 characters), the screen view and the strip from the roster's `pane.said` (`internal/said`, the same cut)), **the pop-out**
+  dialog; **the zoo** is the third view (`view` = `zoo`, the bar's Zoo, the palette's "Zoo on the Wall", allowed to a viewer): `app/zoo/` — `Zoo.tsx` stands every shown tile as a creature in a **pen per machine** (`pensOf` in `features/roster/zooPens.ts`, tested; a `section.zoo-pen` with a sign — the machine's name (`useSharing().machineLabel`), its hue on the sign's edge, its weather as icons and words (`weatherOf` / `weatherWords`: warm from 75 °C, hot from 85 °C — the vitals' `WARM` / `HOT` — a storm for under-voltage now, boxes under 10 % disk free, dust past one load per core, a lamp while kept awake), a fence along its foot; the pens side by side as wide as their creatures want, each its own `.zoo-grid`, a bubbles' row only while one of its creatures talks) under **the sky of the viewer's hour** (`skyOf`: dawn, day, dusk, night; `Sky.tsx` — the gradient behind, the sun or the moon and stars in a strip over the pens) and over **the foot** (`ZooFoot.tsx`: `tickerFacts` in `features/roster/zooLife.ts`, tested — answers, waits, spend, merges, who worked longest by `recap.took` — from `GET /api/standup` since this device's midnight, read every `DAY_EVERY` (5 min: the standup reads every agent's conversation on every machine) while in view and on coming back into view (`useDay`, `dayDue`), running along like a ticker only when longer than the screen; the voices' `icon-btn` beside it, pref `zoo.voices`, off, per device: `voices.ts` synthesizes a species' chirp through WebAudio — `voiceOf`, `TUNES` — for a question, a finish, a merge, the audio context made inside the switch's click, or after a reload with them on at the page's next click or key, and suspended while they are off or the zoo is not on screen: `armVoices` / `useVoices`, tested on a stand-in context); `ZooCreature.tsx` is one figure, `Creature.tsx` the SVG in 120 × 128 units assembled from `bodies.tsx` (the species, `speciesOf` in `features/roster/zooWear.ts`: Claude Code a round critter with antennae, Codex a boxy robot with an aerial and a panel of LEDs, Gemini CLI an egg between two sparkles, Kimi Code a moon rabbit, any other agent a tufted blob; the skin and belly in `.cr-fat`, widened by `--zoo-girth`), `face.tsx` (a face and arms per pose; an `Eye` blinks at a seeded moment and its pupils follow the pointer — `useGaze.ts`, a fine pointer only and never under reduced motion, `gaze` sets `--gx` / `--gy` once a frame, every box measured before any is written so a frame lays the page out once), `wear.tsx` (`hatOf` the model's family — Opus a top hat, Fable a wizard's, Sonnet a beret, Haiku a sprout and a size smaller (`smallModel`), Mythos a laurel, OpenAI's models a cap — a crown once its pull request is merged; a trinket each — glasses, a bow, a scarf, a bow tie, freckles, a mustache, spots — `outfits` giving no two creatures of a species the same one while there are some left, by `seedOf` its key in the roster's order, dressed over every agent of the roster (`wearersOf`, tested) so a filter, a tile hidden by hand or the pop-out never changes a creature's trinket) and `props.tsx` (the laptop, confetti, the sign — "?", the "!" board, z's, "…", an empty battery — at the top right clear of the hats, and what `features/roster/zooBody.ts` (tested) reads off the roster: `girthOf` the context's share, a belt from `BELT_AT` 0.8; `coinsOf` the cost as up to six coins, tinted amber or red by the tightest budget over its machine and folder; `flagOf` its pull request's flag — failed, running, passed, a draft, open — and the crown; `workExtras` a mug after `COFFEE_AFTER` 20 min of work, sweat after `SWEAT_AFTER` an hour or in a hot pen; `drainedUntil` when an agent stopped on its plan limit carries on, its booked continue or the reset `resetForHit` names, in the caption; `babiesOf` its subagents at work from the roster's `pane.subagents` (`internal/subagents`), up to `MAX_BABIES` 3 hopping at its feet at little laptops and the rest counted — a quiet one is no baby, it may never finish); a pose per state from `features/roster/zoo.ts` (tested: `lookOf` — working → busy at a laptop at the spinner's rhythm, blocked → a hand up under a pulsing "?", a watchdog note → worried under an amber "!" board, done → dancing with confetti, idle → asleep with "z" (under a blanket at night), idle_stale → asleep and dim, unknown → puzzled under "…", a plan limit hit and at rest → drained, slumped under an empty battery — `poseWord` the caption's word, `stateSince`, `bubbleOf` the answer's first line in a speech bubble once it finished or rests, cut at `BUBBLE_MAX` by `cutAt`, `CREATURE_SIZE` / `cellMin` per S/M/L); an asking creature's bubble holds what it asks (`useQuestions.ts`: `GET /api/question` for the asking ones alone, at most `MAX_ASKING` 8, every 10 s while in view, a round never begun while the last is out, an unchanged reading drawing nothing (`sameQuestions`); `questionBubble`, a red-edged `zoo-bubble is-question`); the vendor's logo as a badge, its name (`rowLabel`), folder (with its icon) and "working · 6 min" under it, its model, cost, context, flag and babies in its tooltip; **between readings** (`useZooLife.ts` over `happenings` in `zooLife.ts`, tested: only moves seen on this page — the first reading seeds — and a merge only of a request it saw open, its state kept while a remuda just restarted has not read it again (`carried`), so a restart sets off no fireworks for an old merge) a finish has the resting and the puzzled ones clap (`joinsApplause`, `CHEER_MS`), a merge sets off `Fireworks` over the zoo (`FIREWORKS_MS`), a compaction puffs (`compacted`, `PUFF_MS`); a click is `actions.openPane` (the open.lens rule), a hover is a `Tip` with `stateWords`, a long press (`ui/press.ts`) shows them under it for 3 s; two abreast under 600 px; under the screen-sharing mode a hidden folder's creature flies no flag, holds up no question and the ticker names it by the neutral name; office mode shows the featured one large beside small ones whose click pins, under the same sky and over the same foot, the pop-out shows the popped agent large; `prefers-reduced-motion` stops every animation, a pen's storm flash (a pseudo-element) too (`zooMotion.test.ts`), the ticker is cut rather than run, no fireworks, and the poses stay; the wall's spinner does not tick while the zoo is shown (`spinsFor` in wall.ts, tested), since every creature would be drawn again several times a second for nothing; the tile itself is `Tile.tsx`, `TileView`; a tile shows the chat or, in the **Screen** view (`view` in pref `wall`: the Chat | Screen pair in the wall's bar, "Wall of screens" in the palette, the pop-out follows it), the pane's terminal as it is — `features/terminal/Screen.tsx` reads `GET /api/screen?machine&pane` (`internal/server/screen.go` → `herdr.Client.PaneScreen`, `pane.read` with `format: ansi`, read from herdr on demand at the tiles' pace, 3 s / 15 s, an ETag over the text so an unchanged screen is a 304; no attach, so no slot is taken and the shared pane is never resized) and draws the rows through `features/terminal/ansi.ts` (`parseAnsi`, tested: SGR colours in xterm's palette, 256 and true colour, bold / dim / italic / underline / inverse, every other escape dropped) at the font that fits the pane's columns in the tile's width (`thumbFont`, `engine/geometry.ts`), the bottom rows kept when the height runs out; a click opens the terminal lens, the head the lens of the view; `TailAnswer` (chat/Tail.tsx) is the foot under either view — the keys for a question and the compact composer; under the head a **state line** that is always there, `TileState` in `chat/Tail.tsx` — `stateWords` with how long the state has lasted (`radar.since`, `elapsed` in `lib/time.ts`) and, while the agent works in the chat view, what it does this second from the end of its tail (`features/chat/doing.ts`, tested: the tool call still without a result through `toolLabel`, now in `footprint.ts`, and how long it has run — `Running` in `Tail.tsx`, a second at a time through `useNow` in `lib/clock.ts`, amber past `LONG_CALL` 60 s — else thinking or writing; an Agent call without its result reads as waiting on its subagents, and the line says how many of the conversation's still work, "2 subagents working", from the answer's `subagents`), while its plan has open items how far it is, "3/7" (`progressWords` in `chat/plan.ts`, from the tail's `plan`), and once it has finished or sits idle, **what it answered**: the first line of the text its last turn ended with, in the quiet colour — the chat view reads it from the tail (`features/chat/said.ts`, tested: marks stripped, cut at a word by 120 characters), the screen view and the strip from the roster's `pane.said` (`internal/said`, the same cut)), **the pop-out**
   (`pip.ts` owns the one small window Chrome's Document
   Picture-in-Picture gives — `popOut(selection)` from the click itself,
   the page's stylesheets copied in, `pagehide` clears the store; one
@@ -1463,24 +1503,43 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   checkouts, which it leaves byte for byte as they were, the index too):
   no secret leaves the machine through an Approve & commit or an Approve
   & open PR. `ScanWork(host, dir, push)` is one script on the folder's
-  machine (`secretScript`, through `capScript`'s awk): `git diff -U0
-  --no-ext-diff --no-textconv --no-renames --relative` against HEAD (the
-  empty tree before the first commit), staged or not, then every
-  untracked file git does not ignore as `git diff --no-index` from
-  `/dev/null` — exactly what the lens lists, symlinks and files over
-  `scanPerFile` 1 MB left out (`\036large`), past `scanUntracked` 2000
-  files counted (`\036many N`) — and, for a pull request (`push`), the
-  patches of the commits on no remote-tracking branch (`git log -p
-  --no-merges -n 200 HEAD --not --remotes`, each after `\036commit
-  <sha>`): what the push would send. The awk cuts each file's diff at 1 MB
-  (`\036partly`) and the stream at `scanTotal` 8 MB (`\036budget <path>`
-  for the rest), so a remote sends megabytes at most; `readScan` feeds
-  only the added lines, with their numbers in the new file, to
-  `secrets.Collector`; a binary file is skipped (`binary`), or is a
-  finding of its own when its name says keystore (`key-file`, line 0);
-  45 s at most (`scanTimeout`, said as "it took longer than 45s", never
-  ssh's quoting of the script). `SecretScan{findings, more, skipped
-  [{path, why, count}], files, commits, push, at}`. Route: `GET
+  machine (`secretscript.go`: `secretScript`, through `capScript`'s awk):
+  `git diff -U0 --no-ext-diff --no-textconv --no-renames --relative`
+  against HEAD (the empty tree before the first commit), staged or not,
+  then the untracked files git does not ignore (`untrackedScript`) —
+  exactly what the lens lists — **all in one `git grep --untracked -n -z
+  -e ''`**, never a process per file (two thousand took twenty seconds on
+  a Mac, past the bound on a Pi): the names from `ls-files -z`, NUL-
+  separated through `find` and `xargs -0 -r` (a blank, a quote, a tab or
+  a leading dash in a name is no trouble, `--literal-pathspecs`; only a
+  line break is lost), links and folders passed over (`find -type f`),
+  files over `scanPerFile` 1 MB named and left out (`\036large`), past
+  `scanUntracked` 2000 counted (`\036many N`), git grep's "Binary file x
+  matches" turned into `\036binary`, its lines into `\036file <path>`
+  and added lines — then, after `\036staged`, the index's own diff against
+  HEAD (`--cached`: what `git commit` carries, though a staged file may
+  have changed or gone since; a line the work already showed is said
+  once, the rest with `commit: "staged"`, "staged · .env:2" on the page,
+  never a row to jump to) — and, for a pull request (`push`), the whole patches of
+  the commits on no remote-tracking branch (`git log -p --no-merges -n 200
+  HEAD --not --remotes`, each after `\036commit <sha>`, outside the folder
+  too, paths the repository's: a push sends whole commits; the ones past
+  200 counted, `\036older N`): what the push would send. The awk cuts each
+  file at 1 MB (`\036partly`) and the stream at `scanTotal` 8 MB
+  (`\036budget <path>` / `\036unread <path>` for the rest), so a remote
+  sends megabytes at most; `readScan` feeds the added lines, with their
+  numbers in the new file, to `secrets.Collector` (a path git ends with a
+  tab for its blank read without it, `pathOf`; a binary pair's new side by
+  halves, `binaryPath`); a binary file is skipped (`binary`), or is a
+  finding of its own when its name says keystore (`key-file`, line 0).
+  **A check that did not finish is no clean one**: the stream ends with
+  `\036end`, and `\036failed folder|repository|work|commits` says git
+  could not read it — either is an error (a 502, the dialog's failed state
+  and Send anyway), never "nothing found" (a folder outside git, a git
+  that failed and a cut-off script once all read as clean); 45 s at most
+  (`scanTimeout`, said as "it took longer than 45s", never ssh's quoting
+  of the script). `SecretScan{findings, more, skipped [{path, why,
+  count}], files, commits, push, at}`. Route: `GET
   /api/review/secrets?machine&dir&push=1` (`internal/server/review.go`;
   a 502 carries the reason alone), the person's only — in neither
   `viewerRoutes` nor `readRoutes`, so a viewer link and an agent key get a
@@ -1501,18 +1560,35 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   prefix, `••••••••`, the last four bytes of one of 32 or more; a
   secret the window would cut is taken in whole), control characters
   blanked — the secret itself never leaves the server. Rules (`Rules`,
-  `rules.go`): private key headers (PEM, OpenSSH, PGP: the header alone,
-  between `-----BEGIN` and `PRIVATE KEY-----` only capitals and spaces),
+  `rules.go`; the page names each one, `TestThePageNamesEveryRule`):
+  private key headers (PEM, OpenSSH, PGP: the header, between `-----BEGIN`
+  and `PRIVATE KEY-----` only capitals and spaces, and the body a key kept
+  on one line carries after it — a service account's JSON, an environment
+  variable — masked whole with no last bytes, `keyBodyEnd`: the forty bytes
+  after the header held most of an EC key's secret),
   AWS access key ids (AKIA/ASIA/ABIA/ACCA + 16), GitHub classic
   (ghp_/gho_/ghu_/ghs_/ghr_ + 36) and fine-grained (`github_pat_`),
   GitLab (glpat- and the other gl…- kinds), Slack tokens (xox?-, xapp-,
   a digit in the body) and incoming webhooks (`hooks.slack.com/services/
   …`), Stripe live keys (sk_live_/rk_live_; a publishable or test key is
   none), Anthropic (sk-ant-) and OpenAI (sk-proj-, sk-svcacct-,
-  sk-admin-, the older sk-…T3BlbkFJ…) keys, Google API keys (AIza + 35),
-  Telegram bot tokens (8–10 digits:35), npm tokens (npm_ + 36), JWTs
+  sk-admin-, and any sk-…T3BlbkFJ…, sk-None- among them) keys, Google API
+  keys (AIza + 35), Telegram bot tokens (8–10 digits:35), npm tokens (npm_
+  + 36), Hugging Face (hf_ + 34, both cases), Groq (gsk_ + 52), xAI (xai-
+  + 80), OpenRouter (sk-or-v1- + 64 hex), SendGrid (SG.22.43) and Vault
+  (hvs./hvb./hvr. + 90, `dotted`), DigitalOcean (dop_/doo_/dor_v1_ + 64
+  hex), Docker Hub (dckr_pat_/dckr_oat_), PyPI (pypi-AgEIcHlwaS5vcmc…),
+  Google OAuth client secrets (GOCSPX- + 28), Shopify (shpat_ and its
+  kinds + 32 hex), Linear (lin_api_ + 40), Atlassian (ATATT3…) and age
+  (AGE-SECRET-KEY-1 + 58) keys, JWTs
   (eyJ….eyJ….signature), an `Authorization: Bearer <random>` or `Basic
-  <base64 of user:password>` (`auth-header`), and **a value assigned to
+  <base64 of user:password>` (`auth-header`), **a password in an address**
+  (`url-password`, `address.go`: scheme://user:password@host, a
+  database's, a queue's, a cache's — never one under 8 bytes, a
+  placeholder or a reference, one made of the user's name ("admin123"),
+  one of a single kind of byte (a word), or one for localhost, 127.*,
+  [::1] or 0.0.0.0; a token of a known shape there is said by its own
+  rule), and **a value assigned to
   a secret's name** (`assigned`, `values.go`): a name whose last word is
   password, passwd, passphrase, secret, token or credential(s), or whose
   last two words make apikey, accesskey, secretkey, privatekey and the
@@ -1523,7 +1599,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and `:`, so no read overlaps the next; one followed by `(` is a call),
   and the value 16–1024 bytes of letters and digits with no blank and an
   entropy of 3.5 bits a byte (3.0 for hex) — never a reference (`$`, `%`,
-  a path, `://`, `scheme:`, a dotted name), a SCREAMING_SNAKE name, or a
+  a path, `://`, `scheme:`, a dotted name — though not one with a part of
+  20 bytes or more whose digits run in two places or more, `randomPart`:
+  a Discord bot's token), a SCREAMING_SNAKE name, or a
   value naming itself (secret, token, password, value). **Allowances**
   (`placeholder`, applied to every rule's body): xxxx, ****, changeme,
   replace_me, placeholder, example (so AWS's documented key), dummy,
@@ -1536,9 +1614,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `MaxPerLine` 4, `MaxPerFile` 20, `MaxFindings` 100, the rest counted;
   a secret a commit adds that the work already showed in the file is
   said once. **Linear in the input**: one walk over a line's words
-  (`tokens`), each tried by prefix, a JWT's and a Telegram token's parts
-  read at most three times, a value read bounded and never overlapping
-  the next one's, `strings.Index` loops for the headers and webhooks —
+  (`tokens`), each tried by prefix, a JWT's, a dotted token's and a
+  Telegram token's parts read at most three times, a value read bounded
+  and never overlapping the next one's (an address's user and password
+  stop at the next scheme's `/`), `strings.Index` loops for the headers
+  and webhooks, a key's body stepped over once —
   no regexp; `TestALineIsReadInTimeLinearInItsLength` feeds 2 MB lines
   built to make a scan that restarts at every position quadratic.
 - `internal/opinion/` — **the second opinion** (tested): another agent asked
@@ -1615,7 +1695,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (findings, or an explicit none) is `done` with its comments numbered,
   any other `unreadable` with a note and its tab kept — and still heard:
   a reviewer that asked something in plain words and then answered in the
-  form is read again; the reviewer's tab
+  form is read again; a Claude Code reviewer whose turn stopped on calls
+  it was denied without asking, no answer written (`Reply.Stopped`:
+  `PromptAndReply` reads the last turn ending on a `transcript.IsDenied`
+  call; Claude Code ends a turn after a run of refusals with nothing done
+  between them, a reviewer trying the tests three ways, say), is
+  `stopped` (`Store.Stop`) with its tab kept and still heard, the block
+  saying so, rather than reviewing for good; the reviewer's tab
   closes once the answer is read when the opinion asked for it
   (`Service.Close`, app.go over the machine's herdr `TabClose`, only while
   that tab still holds the reviewer's pane); a
@@ -1634,8 +1720,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `OpinionBlock.tsx` at the top of the lens — "Second opinion · Codex",
   `headWords` ("4 comments", "Codex is reviewing…", "Codex is asking you
   something in its tab" while its pane waits on the person — `asksPerson`
-  off the roster, a folder Codex was never trusted in asks first — why
-  there are none), the summary, Open its tab, Add all / Dismiss all, the
+  off the roster, a folder Codex was never trusted in asks first — "Claude
+  Code stopped on calls it was denied without asking; they are listed in
+  its tab", why there are none), the summary, Open its tab, Add all / Dismiss all, the
   comments on files the lens does not list (`unlisted`); each comment as
   an `OpinionNote.tsx` — blue, dashed, its severity on the left edge in
   red or amber — under the diff row whose new line it names (`onRow`,
@@ -1785,7 +1872,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `internal/watch/` — **the only poller**: every machine's
   `session.snapshot` whether or not a browser is open, **asked for the
   moment herdr says something moved** (`stream.go`, tested on a fake
-  socket in `stream_test.go`): one `events.subscribe` connection per
+  socket in `stream_test.go`, `stream_fail_test.go` and
+  `stream_quiet_test.go`, and against a throwaway herdr: `herdr_test.go`
+  hears every status of a new pane's agent with the poll a minute apart,
+  `triggers_herdr_test.go` has a trigger fire once through new streams):
+  one `events.subscribe` connection per
   machine (`herdr.Client.Subscribe`) holding the global kinds — a
   workspace, tab, worktree or pane made, closed, renamed, moved or
   focused, an agent detected, a pane exited, a layout updated
@@ -1795,7 +1886,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   connection's subscriptions, so a pane made or gone, or a rule changed
   (`Resubscribe`), is a new connection — opened before the old one closes
   on a socket, after it through the `nc -U` bridge (`Client.Bridged`: a
-  session of the ssh master each) — never more than two. Any event asks
+  session of the ssh master each) — never more than two; every stream
+  that opens is followed by a snapshot, so what moved before it stood —
+  a new pane's agent already at work, anything in the bridge's gap — is
+  not missed, and a new stream that could not open while the old one
+  stands is tried again (`swap`), never left holding the old set until
+  the panes move once more. Any event asks
   the loop for a snapshot (`pace.go`): `eventDebounce` 150 ms for the rest
   of its burst, never closer than `localGap` 500 ms / `remoteGap` 1 s to
   the last; `pane.updated`, which an agent's spinner fires several times a
@@ -1803,20 +1899,31 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the stream stands the poll is the safety net, every
   `localStreamingEvery` 15 s / `remoteStreamingEvery` 20 s; without it,
   today's 2 s local and 4 s remote, the moment it ends. A stream that
-  ends, a reconnect, or herdr's `events_lost` is a snapshot now and a new
-  stream (backoff `streamRetry` 1 s → 30 s, reset by one that stood a
-  minute); `pane_not_found` (a pane gone under the subscription) a
-  snapshot and a retry; herdr refusing the person's watches
-  (`invalid_regex`) the set again without them, told to `Watcher.Refused`
-  and left out until they change; a herdr that refuses the stream itself
-  keeps today's pace, tried again every 5 min. A stream's error that is no
-  herdr refusal goes to the client's `OnTransportError`, so a dead remote
-  is noticed at once, and the reader goroutine ends with its connection.
+  ends, a reconnect, or herdr's `events_lost` (herdr closes the
+  connection after it) is a snapshot now and a new stream, the old one
+  closed here whatever ended it — a bridge's ssh session and process go
+  with it — and the next one carrying its watches (`Carried`), so a row
+  that stood through the gap is no news and one that came in it is; a
+  stream that cannot be opened, or one that ends, is tried
+  again `streamRetry` 1 s → 30 s apart (a bridged remote's every try is a
+  session of the master), reset by one that stood a minute, a set that
+  moved trying at once — never sooner than that, never in a loop; a
+  `pane_not_found` (a pane gone under the subscription) is a snapshot
+  too; herdr refusing the person's watches (`invalid_regex` alone) the set
+  again without them, told to `Watcher.Refused` and left out until they
+  change, the refusal standing while they are; a herdr that refuses the
+  stream itself (`invalid_request`, one too old for it) keeps today's
+  pace, asked again every 5 min, said once in the log. A stream's error
+  that is no herdr refusal goes to the client's `OnTransportError`, so a
+  dead remote is noticed at once, and the reader goroutine ends with its
+  connection.
   An output match goes on the bus as `events.OutputMatched` for every
   watch whose pattern the row matches (herdr names no subscription), with
   `Fresh` (within `freshFor` 2 s of its stream's start: herdr tells a match
   already standing on the screen when a watch begins) and `Carried` (the
-  stream before held that watch too). Handlers read its cache
+  stream before held that watch too, looking for the same thing: a rule
+  edited is a new watch), the row read again in herdr's dialect
+  (`herdr.CompileRegex`). Handlers read its cache
   (`Snapshot` returns the last good snapshot plus the last error) and never
   ask herdr inline; mutations call `Refresh`.
   It publishes `events.Snapshot` — once the snapshot is in its cache, so
@@ -1842,8 +1949,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `ServedAt` its port (none under 1024) → once the previews find the port
   listening (`Listening`, the server's own `listeners`, tried at 0, 1.5 and
   4 s) an `Offer{port, url, label, by, at}` on the roster as `pane.serves`
-  for `OfferKeep` 15 min, which the page offers once per device in the
-  corner — "web serves on :5173 (vite) · Preview", `features/triggers/
+  for `OfferKeep` 15 min — a server saying it again while its offer of
+  that port stands (one that restarts on every save) is the same offer,
+  no new toast and no look at the ports — which the page offers once per
+  device in the corner — "web serves on :5173 (vite) · Preview", `features/triggers/
   offer.ts` opening it through `/api/previews/open`, which opens only a
   port it finds listening; nothing opens by itself, a viewer gets no such
   toast. `TestsPattern`, a run that failed (go test's `--- FAIL:` and
@@ -1851,7 +1960,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   vitest, pytest, cargo test, mocha, rspec, node's runner) → one
   `push.Notify` of kind `tests` ("Tests failed in api") per pane, never
   while its agent works (it is on it), never while a viewer has the pane's
-  terminal open through this remuda (`AttachManager.Viewers`), then quiet
+  terminal open through this remuda (`AttachManager.Viewers`) or through
+  the machine's own remuda this one relays it to (`Server.Relaying`, the
+  WebSocket relays counted in `internal/server/relays.go`; the HTTP
+  transport's relayed streams are not), then quiet
   for `TestsQuiet` 30 min. **The person's rules** (`rules.go`,
   `triggers.json` in the state dir, 0600, replaced whole, at most
   `MaxRules` 50): `Rule{name, machine, dir, match substring|regex,
@@ -1859,13 +1971,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   every folder of a machine, or a folder and what is under it (`Covers`:
   the pane's workspace folder or its shell's); `Check` refuses a pattern
   with a line break, a regex Go cannot read or herdr's Rust one would not
-  (`\Q…\E`), one every line matches, a task action without a column;
+  or reads otherwise (`herdr.CompileRegex`: octal escapes, `\Q…\E`, `\<`,
+  nested classes and the rest), one every line matches, a task action
+  without a column; `Try` and the built-in patterns read rows the way
+  herdr does, Unicode classes and all;
   the actions push (kind `trigger`, so the feed and the webhooks hear it),
   a row in the activity alone (kind `trigger`), a preview offered as the
   built-in one does, or the task whose live run is in the pane moved to the
   column of that title (`tasks.Store.OnTrigger`: a comment by remuda,
-  never into the Queued column, never a card a pipeline holds), each at
-  most once a `RuleQuiet` minute per pane. **What is news** (`OnMatch`):
+  never into the Queued column, never a card a pipeline holds, never a
+  task done back open — a line printed again is no undo), each at
+  most once a `RuleQuiet` minute per pane; in a muted folder
+  (`Service.Muted` = `push.Service.Muted`) a push is silenced as any push
+  is and no row goes into the activity, while a task still moves (the
+  person's rule is work; its comment on the task says so). **What is news** (`OnMatch`):
   the same row again a moment after a stream opened, or through two
   streams at once (`dupWindow` 3 s), is that row again; a row standing
   when a watch began on a pane that was there before (`Fresh` and not
@@ -1889,30 +2008,46 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   activity's Triggers family.
 - `internal/timelapse/` — **forty minutes of an agent's work watched in
   thirty seconds** (tested: the recorder on fake snapshots, screens and a
-  clock, inline readers; the store on temp dirs; a reader that blocks).
+  clock, inline readers and queued ones; the memory a scrolling or a
+  flipping screen keeps, by the bytes really held; the store on temp
+  dirs; a reader that blocks).
   `Recorder.Observe` hears every `events.Snapshot`: an agent pane herdr
   reports working gets a `take` (named `<start>-<6 hex>` by `newID`, its
   workspace, `Dir` — `Snapshot.WorkspaceDir` — and `Folder`, the
   sidebar's folder through `Inputs.Folder` = `server.FolderOf`, for the
   screen-sharing mode — the agent kind, the title, the widest grid seen)
-  and a read of its screen every `Interval` (4 s, by the snapshots' own
-  clock, one waiting at a time), queued to the machine's own reader
-  goroutine (`dispatch` / `drain`: one per machine, in order, never on
-  the poll path) that calls `Inputs.Screen` — the app's
-  `herdr.Client.PaneScreen` over the machine's client, `pane.read` with
-  ANSI as the Wall's screen view reads it: no attach, no slot, no resize,
-  a remote's over its master — and keeps a frame only when the screen
-  moved (`take.add`: the rows that did not move shared with the frame
-  before, the moved ones `strings.Clone`d so the read is not kept alive;
-  a read past `MaxScreen` 256 KB dropped; past `MaxFrames` 900 every
-  other frame goes, the first and last staying, and the pace doubles —
-  `thin`). A pane that stops working is read once more (the screen it
+  and a read of its screen every `Interval` (4 s, one waiting at a time;
+  between snapshots — herdr's stream brings one only when something
+  moved, the poll behind it every 15–20 s — `Recorder.Loop` ticks every
+  `TickEvery` 2 s and `Tick` observes each machine's last snapshot again,
+  one no older than `TickFor` a minute, `tick.go`, tested), queued to the machine's own reader
+  goroutine (`reader.go`: `dispatch` / `drain`, one per machine, in
+  order, never on the poll path) that calls `Inputs.Screen` — the
+  app's `herdr.Client.PaneScreen` over the machine's client, `pane.read`
+  with ANSI as the Wall's screen view reads it: no attach, no slot, no
+  resize, a remote's over its master — and keeps a frame only when the
+  screen moved (`take.add`: the rows that did not move shared with the
+  frame before, the moved ones `strings.Clone`d so the read is not kept
+  alive; a read past `MaxScreen` 256 KB dropped; past `MaxFrames` 900,
+  or `MaxHeld` 8 MB of rows held — a screen that scrolls moves every row,
+  so a wall of agents stays within a few dozen megabytes — every other
+  frame goes, the first and last staying, and the pace doubles — `thin`,
+  which shares a kept row with the same one a kept frame before again,
+  in rows of the frame's own, since a checkpoint may be reading the old
+  ones). A pane that stops working is read once more (the screen it
   stopped on) and, unless it works again within `Grace` (15 s: herdr's
   blink through idle, a permission answered at once), written once with
   the status it rested in as `Ended` (done, idle, blocked); a pane gone
   or no longer an agent's is written at once as `gone`, a removed
-  machine's turns too (`Forget`), and `Close` — deferred in the app —
-  writes the turns still going as `stopped`. A turn still going is
+  machine's turns too (`Forget`), and those of a machine not heard from
+  for `Away` (2 min: out of reach, a laptop asleep; `awayLocked` from
+  `Tick`, or the first snapshot after it) as `away` — or as they rested —
+  ending where the last snapshot saw them (`seenAt` is the snapshot's own
+  time, never a tick's), so no recording spans the absence and the pane
+  at work again starts a turn of its own; `Close` — deferred in the app —
+  writes the turns still going as `stopped`, and the ones that ended and
+  still wait in a reader's queue, or are being written, as they ended,
+  leaving the readers nothing more to read. A turn still going is
   written every `CheckpointEvery` (10 min) as `cut`, unlisted while it
   lives (`isLive`), so a crash or a power cut loses at most that and
   leaves a recording that reads "cut short"; the turn's end overwrites
@@ -1930,7 +2065,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   folder within `MaxTotal` (200 MB), the oldest going first, never a turn
   still going. The switch is `timelapse.json` in the state dir (`off`,
   on by default, carried by the backups; `SetOn(false)` drops the turns
-  being recorded, their checkpoints with them); a scratch instance
+  being recorded, their checkpoints with them, and those waiting in a
+  reader's queue — `dropLocked`, which `DeleteAll` shares, waiting for a
+  write under way so nothing lands afterwards); a scratch instance
   (`REMUDA_STATE_DIR` without `-record`) is `Scratch()`: it records
   nothing whatever the switch, `Stats.Scratch` says so to Settings, and
   it still lists, plays and deletes what its folder holds. `internal/backup` leaves
@@ -1947,7 +2084,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the two recordings routes (`viewerRoutes`, `viewerPrefixes`), an agent
   key none. The page: `features/terminal/timelapse/` — `TimelapseDialog.tsx`
   (dialog kind `timelapse`: "Timelapse…" in the chat's and the terminal's
-  View menu through `timelapseRows` in `row.ts`, the palette's "Timelapse
+  View menu of an agent's pane through `timelapseRows` in `row.ts`, none
+  for a shell, the palette's "Timelapse
   of this pane…", a viewer's too; the Wall's tile has no menu of its own
   for it), the recordings in a `Select` — this pane's first, an earlier
   pane's named — under the screen-sharing mode none of a hidden folder or
@@ -1956,11 +2094,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `parseAnsi` and `ScreenLines` (exported from `terminal/Screen.tsx` with
   `useFitFont` and `widthOf`), the font fitting the pane's columns and
   the box's height (`fitHeight`), playing at once, play / pause (Space),
-  ← → a frame, a scrub bar over the turn's own time with `clockOf` (in
-  `lib/time.ts`), 10× / 30× / 60× / By frame (pref `timelapse.speed`, per
-  device); `GifExport.tsx` → `raster.ts`, **Export as GIF** drawn in the
-  page a few frames at a time, its progress on the button, which calls it
-  off: every frame laid out in cells on a canvas in the flavour's
+  ← → a frame (`playerKey`: never in a field, Space never on a button,
+  nothing with Alt, Ctrl or ⌘), a scrub bar over the turn's own time with
+  `clockOf` (in `lib/time.ts`), 10× / 30× / 60× / By frame (pref
+  `timelapse.speed`, per device), each frame kept as its rows, shared
+  with the frames around it, and joined only to be drawn (`screensOf` /
+  `screenText`); `GifExport.tsx` → `raster.ts`, **Export as GIF** drawn
+  in the page in slices of `SLICE_MS` 30 ms (`slice.ts`, `Slicer`), the
+  page's turn between them a message to itself rather than a timer, which
+  a tab in the background would hold back, its progress on the button,
+  which calls it off: every frame laid out in cells on a canvas in the flavour's
   terminal colours (`cells.ts`: `cellsOf`, `charWidth` a wide character
   two cells, a dim one mixed toward its ground, `rowKey`), only the rows
   that moved drawn again and handed over as one band, each pixel its
@@ -1988,7 +2131,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `RosterChanged()` books a check of the roster's fingerprint
   (`Inputs.Fingerprint` = `server.RosterETag`, the roster as served,
   hashed) at most every `Debounce` 300 ms and announces `{topic:
-  "roster"}` only when it moved — app.go calls it on every
+  "roster"}` only when it moved, and builds nothing while no page is
+  connected (the first page to come hears the first check, tested) —
+  app.go calls it on every
   `events.Snapshot`, `JobDone`, `MachineRemoved` and alert (`OnAlert`),
   so the sidebar, the badges, the meters, the vitals and the bell's dot
   all ride on it; `PaneChanged(machine, pane)` (every `events.PaneStatus`)
@@ -2460,11 +2605,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   whether herdr reports each working, a pane gone or no longer Claude
   Code's dropped), `events.PaneStatus` to `Gone` and
   `events.MachineRemoved` (`Forget`), and reads through
-  `chat.Service.Subagents` — `Reader.Subagents` over the pane's live
-  session file, `SessionFile` followed through compactions as the chat
-  finds it, one stat round trip, a script over ssh on a remote — summed
-  by `CountOf` into `Count{Working, Quiet, Done}` by the transcript's
-  `SubagentWorking` / `SubagentQuiet` / `SubagentDone`. A pane herdr
+  `chat.Service.RecentSubagents` — `Reader.RecentSubagents` over the
+  pane's live session file, `SessionFile` followed through compactions
+  as the chat finds it: the folder listed in one stat round trip, a
+  script over ssh on a remote, and only the subagents whose transcript
+  moved within `QuietAfter` read (tested), since one silent longer is
+  quiet or done, so the hundreds a long session spawned and left are
+  never fetched — counted by `CountOf` into `Count{Working}` (the quiet
+  and the finished ones are not counted: telling them apart would mean
+  reading every one). A pane herdr
   reports working, or a resting one whose last count had a subagent
   working (subagents run on while the parent rests), at most every
   `WorkingEvery` (10 s), until none is; any other agent pane — one with
@@ -2477,8 +2626,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   last count and is logged once an hour per machine (`ComplainEvery`); a
   read whose pane was forgotten meanwhile writes nothing. A count that
   moved calls `OnChange` (the live hub's `RosterChanged`). The roster's
-  `pane.subagents {working, quiet, done}` (each left out at zero, the
-  field nil for none or nothing read yet).
+  `pane.subagents {working}` (nil while none works or nothing was read
+  yet).
 - `internal/prstatus/` — **the state of the pull request** an agent
   named: `Tracker` hears `events.PullRequestNamed` and, for a GitHub one
   (`/pull/`), runs `gh pr view <url> --json state,isDraft,mergeable,
@@ -2819,10 +2968,44 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   gone is forgotten; a snapshot read `staleAfter` after a write that lacks
   one of its tokens (herdr restarted, a TTL ran out) writes it again, and a
   place first seen in a run starts from the `remuda_*` tokens herdr still
-  holds, so an earlier run's leftovers are cleared; `pane_not_found` drops
-  the place, any other refusal of herdr's (one too old for the method)
-  holds the machine off `refusedPause` (10 min), a failure is logged once
-  an hour per machine. The `-server` host has no snapshots, so no writer.
+  holds, so an earlier run's leftovers are cleared — once: a place is
+  remembered from its first look, nothing to show and all, since herdr's
+  tokens are one value per name whoever wrote it, and a second remuda on
+  the same herdr (a machine's own beside a cockpit) cleared on every
+  snapshot would rewrite, raise `pane_updated`, and be cleared again; a
+  writer just made waits `warmUp` (30 s) before its first sync, while
+  herdr still holds what the run before wrote and the meter, the said
+  tracker and the rest have read nothing yet, so a restart blanks no row;
+  every write raises herdr's `pane_updated` (a label's
+  `pane.agent_status_changed`), which the watcher's stream turns into a
+  snapshot, so a write is due only on a move or the refresh — never on
+  a snapshot alone; `pane_not_found` / `workspace_not_found` drops the
+  place, a refusal of one place's values (`metadata_token_limit`: another
+  reporter filled the pane's 32 tokens; an `invalid_metadata_*`,
+  `invalid_state_label`) leaves that place alone until its figures move or
+  the refresh, any other refusal (`invalid_request`: one too old for the
+  method) holds the machine off `refusedPause` (10 min); an ended writer
+  (its machine removed, remuda stopping) writes nothing more, mid-sync
+  too; a failure is logged once an hour per machine. The `-server` host
+  has no snapshots, so no writer. **One herdr, one writer** (`claim.go`,
+  tested on fakes): a machine running its own remuda beside a cockpit
+  that reaches it over ssh (a `Machine.Peer()`) would get two mirrors
+  under one source, the tasks, reviews and notes each instance's own,
+  the values flipping and every toast popped twice; so a remuda that
+  mirrors anything (figures or toasts on) claims the herdr with the token
+  `remuda_by` on each workspace — `remote <host:port>` from a cockpit
+  reaching the machine, `local <host:port>` from the machine's own
+  (`Inputs.Self` / `Local`, set by the app), written as herdr stores it
+  (`claimOf`), no snippet row names it — and reads the claims back
+  before every sync: a remote one outranks a local one (the cockpit
+  knows the person's tasks), two of a kind go by name (`outranks`); the
+  remuda outranked yields there (`yieldTo`: no write, no toast, what it
+  wrote left for the other to overwrite or lapse), says so once in the
+  log and in the section (`Status.Elsewhere`), and takes the herdr back
+  once the other's claim lapses with its TTL; a claim not its own is
+  never seeded as a leftover nor cleared, and a held claim that is not
+  its own makes its own due again. A peer too old for the mirror writes
+  nothing and claims nothing.
   **The toasts** (`toasts.go`): `Service.Alert` hears what `push.Service`
   records (`OnAlert`, beside the feed: past its delay, called off when
   answered at the desk, never for a muted folder) and, with the switch on,
@@ -2831,7 +3014,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   request) as `notification.show` on the agent's machine — never inside
   the toasts' own quiet hours (`push.Quiet`, set by the device that set
   them, in its zone), never for a pane in the tab herdr has in front
-  (`FocusedTabID`, herdr's own rule for its toasts); the newest outcome per
+  (`FocusedTabID`, herdr's own rule for its toasts), never where another
+  remuda's claim outranks this one's in the machine's latest snapshot
+  (`outranked`: from the first read, a warm-up or not); the newest outcome per
   machine is kept for the section; `Test` pops one on every connected
   machine at once whatever the switches. **The switches** (`service.go`,
   `mirror.json` in the state dir): `Settings{figures, toasts, quiet}`, the
@@ -2842,12 +3027,17 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   nothing. Routes (`internal/server/mirror.go`, the person's only): `GET
   /api/mirror` (the switches, `closed`, the token names, `Snippet` and
   `ToastSnippet` — the rows for herdr's `config.toml`, each fitting its
-  default 26-column sidebar — and the last toasts), `PUT /api/mirror`,
+  default 26-column sidebar, in place of the person's own
+  `[ui.sidebar.agents]` / `[ui.sidebar.spaces]` and the key under their
+  own `[ui.toast]`, since herdr reads a config with a table written twice
+  as no config at all, which the section says and `snippet_test.go`
+  checks — and the last toasts), `PUT /api/mirror`,
   `POST /api/mirror/test` (409 from a scratch instance). The page:
   Settings › Inside herdr (`features/settings/MirrorSection.tsx`,
   `mirrorApi.ts`, `mirror.ts` tested: `outcomeWords` in plain words of
-  herdr's reasons, `outcomesTone`, `withQuiet`, `quietZone`) — the two
-  switches, the snippet in a `.config-snippet` with Copy, the toast one,
+  herdr's reasons, `outcomesTone`, `withQuiet`, `quietZone`,
+  `elsewhereWords`) — which remuda writes on a machine where this one
+  stays out, the two switches, the snippet in a `.config-snippet` with Copy, the toast one,
   the quiet hours, Send a test toast and how it went on each machine;
   never for a viewer. The display suite opens it (`settings-herdr`) and
   presses the test against the e2e's own herdr, whose toasts are off.
@@ -2916,9 +3106,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   conversation holds calls Claude Code refused without asking
   (`Agents.Denied`, `chat.Service.Denied`, read before the tab closes;
   kept as `LastDenied`, cleared by the next run or skip, the row's
-  quiet line under its result) and, with `Close` on, the tab taken down
+  quiet line under its result) — a turn that stopped on those calls with
+  no answer (`Denials.EndsTurn`) is "stopped on calls it was denied
+  without asking", not ok — and, with `Close` on, the tab taken down
   — the workspace when it was made for the run and holds no other tab by
-  now — through `Close` and a push "Scout “…” answered", the denied calls
+  now — through `Close` and a push "Scout “…” answered" (or "… stopped on
+  calls it was denied"), the denied calls
   named in its body (`transcript.DeniedWords`; the session file
   stays, so the conversation is still found by the search); `blocked`
   never closes (the person decides); a pane gone on its own is
@@ -3001,7 +3194,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `LongPrompt`, Sonnet 5.5's $0.10 cache reads; a newer id is listed before
   the older one its prefix matches, tested in `prices_test.go`) and its
   cost formula (the 1h cache tier, fast mode (`usage.speed`) from its own
-  table, a prompt past a tier's long-prompt size priced whole at its long
+  table — `FastRates`, for the models it names alone: Fable 5.2 and Mythos
+  5.2 at $16/$80, Opus 5.5 at $8/$40, Opus 4.8 and 5 at $10/$50, Opus 4.6
+  and 4.7 at $30/$150; any other model at its usual rates whatever the
+  record's speed says — a prompt past a tier's long-prompt size priced whole at its long
   rates, ×1.1 when `inference_geo` is "us" — not on web search); `transcript.UsageOf` reads
   an assistant record's `message.usage` (`<synthetic>` records and
   `isApiErrorMessage` ones are skipped: no API call behind them), and
@@ -3059,7 +3255,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   what `--model` takes: the catalog's id for a name, an id as read) over
   the task runs started since (`tasks.Store.RunsSince`), the review
   verdicts (`review.Store.Verdicts`) and the decided arena lanes
-  (`arena.Store.Outcomes`): `finished` of the runs, `first_approved` of
+  (`arena.Store.Outcomes`): `finished` of the runs no longer under way —
+  a run whose agent has not answered yet, starting or running with no
+  finish, is `under_way`, counted in `runs` alone and in no share or mean
+  with what it has cost so far — `first_approved` of
   the work runs reviewed with `rejected` and `approved` (at any review),
   `merged` of the pull requests opened, `kept` of the decided lanes, and
   the means `cost_per_run`, `cost_per_approved` (what the reviewed runs
@@ -3070,8 +3269,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   counted for no model) — and the first verdict decides approved at the
   first review or rejected before an approval; a pipeline's later stages
   are runs of their own model but never take the work's verdicts or its
-  pull request (credited to the stage-0 run of the worktree, `creditPRs`:
-  a request counted once, merged when any run naming it saw the merge —
+  pull request (credited to the stage-0 run of the worktree, `creditPRs`,
+  and to nobody when that run began before the period, its verdicts
+  unplaced too: a request counted once, merged when any run naming it saw the merge —
   `tasks.Run.Merged`, set by `OnPullRequestMerged`); a lane that was a
   task run goes by the run's model. **Thresholds**: `MinSample` 5 — a
   `Share` carries its `rate` only from five behind it, a `Mean` is `few`
@@ -3094,7 +3294,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   repository), `scorecard.ts` the pure part, tested: `shareWords` ("80 %",
   "2 of 3"), `costWords`, `minutesWords`, `figureOf`, `bestOf` (two
   comparable rows at least, ties all best; `bestByColumn` every column), `rowName`, `reviewWords`,
-  `fewWords`, `tryLanes`, `tryWords`.
+  `fewWords`, `finishedWords` (the runs still at work the share leaves out), `tryLanes`, `tryWords`.
 - `internal/budget/` — **budgets**: a spending limit per day, week
   (from Monday) or month on everything, one machine or one folder of it
   (`budgets.json` in the state dir, `GET/PUT /api/budgets`, the list
@@ -3199,17 +3399,23 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `signinWarnings` in `internal/app/retire.go`; the `-server` host never)
   and pushes through `push.Notify` (kind `signin`, tag `signin|<machine>`,
   the webhooks' kind `signin`, the activity's Machines family, a warning
-  toast on the page) once per `Level`: `Soon` three days before, `Day` a
-  day before, `Ended` — a machine first seen past two hears the graver
+  toast on the page) once per `Level`, counted to the **earliest** end
+  (`Earliest`: `EarlyBy` 3 days before the `loginExpiresAt` Claude Code
+  names, since Claude Code itself says the sign-in "ends between" the two
+  and that renewing it moves neither): `Soon` three days before it, `Day`
+  a day before, `Ended` once it may end at any time — a machine first seen past two hears the graver
   alone, a later end (a new sign-in) starts afresh, a zero end says
   nothing; the warnings given are kept by machine in `<state>/signin.json`
   so a restart never warns twice (a damaged file reads as none given),
   `Forget` drops a removed machine. `Warning` / `Left` are the push's
-  words: how long is left, or that it ended, and to run `claude auth
+  words: how long is left to the earliest end and to the latest, that it
+  may end at any time, or that it ended, and to run `claude auth
   login` on the machine — remuda never signs in for the person. The page:
   `features/roster/signin.ts` (tested: `signinConcern` amber from
-  `LOOK_DAYS` 10 before the end, bad from `BAD_DAYS` 2 and once ended,
-  `loginWords` the ⓘ's "Claude sign-in" row) — the ⓘ's first concern
+  `LOOK_DAYS` 10 before the end named (where Claude Code starts warning),
+  bad from `BAD_DAYS` 2 before the earliest end (`EARLY_DAYS` 3 before
+  it) and from then on, `loginWords` the ⓘ's "Claude sign-in" row: the
+  days it ends between) — the ⓘ's first concern
   after the stopped chats, its button *Open a shell there*
   (`update: "signin"`: `actions.openFloat` on that machine), none in the
   Server place (`hostConcerns`).
@@ -3226,11 +3432,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and each pipeline stage, with no arguments of its own) — by its model (a
   `--model` in its arguments, its own, else the machine's `Defaults.Model`,
   `health.Report.ClaudeModel`) and fast mode (`FastIn`: a `--settings`
-  JSON's `"fastMode"` in its arguments, the last word winning, else the
+  JSON's `"fastMode"` in its arguments, the last word winning, a `\"`
+  read as the quote a shell leaves of it, else the
   machine's `Defaults.Fast`), a setting for any machine on each machine
   with Claude Code, and every live agent `Pane` by its meter's model and
   `speed`; a `Hit` carries no names (kind, id, machine, failing), so a
-  viewer link reads no recipe's or project's. `Service.On(machine)` (the
+  viewer link reads no recipe's or project's, and names its retirement by
+  its key alone (agent, model, mode), the roster's table saying the rest
+  once. `Service.On(machine)` (the
   hits looked for at most every `Every` 30 s, and at the next look after
   a recipe, a schedule or a project's agents changed — `Moved`, which
   those routes call through `modelsMoved`; its inputs closures set in
@@ -3243,8 +3452,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   retirement counting by kind what is set to it there, bad once its day
   came) and `RetiredNotice.tsx`, a shared piece: the notice (warn, error
   past the day) with *Use Opus 5.5* in the recipes dialog, the start
-  dialogs' Options (above the fold), the agent schedule editor, a
-  project's Agents and each pipeline stage. `internal/usage/prices.go` is
+  dialogs' Options (above the fold; a new tab's and a new worktree's
+  weighed on their workspace's machine), the agent schedule editor, a
+  project's Agents, each pipeline stage, the handover, the second
+  opinion, the model switch and each arena lane, and without the button
+  in New agent from recipe. `internal/usage/prices.go` is
   not where it lives: the price catalog says nothing of retirements.
 - `internal/quick/` — saved prompts (`quick.json`, `GET/PUT /api/quick`,
   the list replaced whole), each for every folder or one `dir`; the chat
@@ -3657,7 +3869,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   finish reads, through `RunWatch.Denied` (`chat.Service.Denied`), the
   calls Claude Code refused without asking after the record reported
   last, and a comment by "remuda" lists them (`deniedComment`: each tool
-  and what it named as inline code, what the person can do) with the
+  and what it named as inline code, what the person can do — for a
+  stage, which starts with its agent and model alone, permission rules in
+  a settings file, the project's extra arguments never reaching it) with the
   count in the push's body; a turn at rest (done or idle, never blocked)
   that ends on such a call — a run of refusals stops Claude Code before
   it writes an answer — is a finish too: the comment says it stopped
@@ -3692,7 +3906,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   again when its last read is old, and every `events.PullRequestState`
   goes to `RunWatch.OnPullRequestState` → `Store.OnPullRequestMerged`,
   which, for MERGED and a live run naming that very address, keeps the
-  moment on the run (`merged`, which the models' scorecard counts; a run
+  moment on the run (`merged`, which the models' scorecard counts, cleared
+  when the run's agent names another request; a run
   from before the column reads it back from that comment at every open,
   `backfillMerged` in `past.go`, where `RunsSince` lists a period's runs
   with their tasks' titles), adds the
@@ -4340,15 +4555,18 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a `.remuda`/`uploads` that is a symlink and write with `O_EXCL|O_NOFOLLOW`.
   The review diff refuses a path starting with `-` and passes `--` to git.
   The secret check (`internal/secrets`, `review.ScanWork`) answers masked
-  excerpts only — a secret's prefix and at most its last four bytes, every
-  other secret in the window masked too — and keeps the secrets it saw only
-  while one scan runs; it reads with `--no-ext-diff --no-textconv` (no
-  driver of the repository's runs), writes nothing (no index, no object,
-  nothing under `.claude`), is capped at 1 MB a file, 8 MB in all and 45 s,
-  is linear in its input (no regexp, tested on 2 MB lines), and answers the
-  person alone: a viewer link and an agent key are refused. An approval
-  asking for a commit or a pull request goes past its findings, or past a
-  check that failed, only through Send anyway and its confirm.
+  excerpts only — a secret's prefix and at most its last four bytes, none
+  of a private key's body, every other secret in the window masked too —
+  and keeps the secrets it saw only while one scan runs; it reads with
+  `--no-ext-diff --no-textconv` (no driver of the repository's runs),
+  writes nothing (no index, no object, nothing under `.claude`), follows
+  no link out of the checkout, is capped at 1 MB a file, 8 MB in all and
+  45 s, is linear in its input (no regexp, tested on 2 MB lines), and
+  answers the person alone: a viewer link and an agent key are refused. A
+  check that failed or did not reach its end is a failure, never a clean
+  one. An approval asking for a commit or a pull request goes past its
+  findings, or past a check that failed, only through Send anyway and its
+  confirm.
   Branch/base names for a worktree go through `sessions.RefOK`. ssh control sockets
   live under `<state>/ssh` (`sshx.SocketDir`) while the path keeps
   within 86 bytes, a unix sockaddr's 104 less the 17-byte suffix

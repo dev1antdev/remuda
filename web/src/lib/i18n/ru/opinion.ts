@@ -8,6 +8,8 @@ export const opinion: Dictionary = {
   low: "мелочь",
   "{agent} is reviewing — the comments appear here when it answers": "{agent} смотрит изменения — комментарии появятся здесь, когда он ответит",
   "{agent} answered in a form that could not be read; its answer is in its tab": "{agent} ответил не в том виде, который можно разобрать; ответ — в его табе",
+  "{agent} stopped on calls it was denied without asking; they are listed in its tab":
+    "{agent} остановился на вызовах, в которых ему отказали без вопроса; они перечислены в его табе",
   "{agent} is asking you something in its tab": "{agent} что-то спрашивает у вас в своём табе",
   "the reviewer's tab closed before it answered": "таб ревьюера закрылся раньше, чем он ответил",
   "{agent} found nothing to comment on": "{agent} не нашёл, что прокомментировать",

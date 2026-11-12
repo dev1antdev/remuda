@@ -13,7 +13,7 @@ import { parseAnsi } from "../ansi";
 import { ScreenLines, useFitFont, widthOf } from "../Screen";
 import type { Recording } from "./api";
 import { GifExport } from "./GifExport";
-import { advance, DEFAULT_SPEED, frameAt, screensOf, SPEEDS, stepTo, type Position, type Speed } from "./playback";
+import { advance, DEFAULT_SPEED, frameAt, playerKey, screensOf, screenText, SPEEDS, stepTo, type Position, type Speed } from "./playback";
 import { durationOf, endedWords, speedWords } from "./words";
 
 const SPEED_PREF = "timelapse.speed";
@@ -44,7 +44,7 @@ export function Player({ recording }: { recording: Recording }) {
   const index = frameAt(times, pos.t);
   const flavor = useFlavor();
   const palette = useMemo(() => ansiPalette(flavor), [flavor]);
-  const lines = useMemo(() => parseAnsi(screens[index] ?? "", palette), [screens, index, palette]);
+  const lines = useMemo(() => parseAnsi(screenText(screens[index]), palette), [screens, index, palette]);
   const rows = useMemo(() => Math.max(recording.rows, 1, ...recording.frames.map((f) => f.lines)), [recording]);
   // the whole screen in sight: as wide as the pane's columns allow, and no taller than the room the box has
   const fontSize = Math.min(useFitFont(box, widthOf(recording.cols, lines)), fitHeight(rows));
@@ -59,14 +59,14 @@ export function Player({ recording }: { recording: Recording }) {
     setPos({ t: stepTo(times, pos.t, by), carry: 0 });
   };
   const onKey = (e: KeyboardEvent) => {
-    const field = e.target instanceof HTMLElement && e.target.closest("button, input, select, textarea, [role=listbox]");
-    if (e.key === " " && !field) {
-      e.preventDefault();
-      toggle();
-    } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !(e.target instanceof HTMLInputElement)) {
-      e.preventDefault();
-      step(e.key === "ArrowLeft" ? -1 : 1);
-    }
+    if (e.defaultPrevented) return;
+    const target = e.target instanceof HTMLElement ? e.target : null;
+    const place = target?.closest("input, select, textarea, [role=listbox], [contenteditable=true]") ? "field" : target?.closest("button") ? "button" : "screen";
+    const action = playerKey(e.key, e.altKey || e.ctrlKey || e.metaKey, place);
+    if (action === null) return;
+    e.preventDefault();
+    if (action === "toggle") toggle();
+    else step(action);
   };
   return (
     <div className="timelapse" onKeyDown={onKey}>

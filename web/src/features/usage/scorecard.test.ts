@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Mean, ScoreRow, ScoreTry, Share } from "./api";
-import { bestByColumn, bestOf, costWords, fewWords, figureOf, minutesWords, modelName, periodOf, reviewWords, rowKey, rowName, shareWords, tryLanes, tryWords } from "./scorecard";
+import { bestByColumn, bestOf, costWords, fewWords, figureOf, finishedWords, minutesWords, modelName, periodOf, reviewWords, rowKey, rowName, shareWords, tryLanes, tryWords } from "./scorecard";
 
 const share = (count: number, of: number, rate?: number): Share => ({ count, of, rate });
 const mean = (value: number | undefined, n: number): Mean => ({ value, n, few: n < 5 });
@@ -87,6 +87,12 @@ describe("a row's words", () => {
   it("says what the reviews came to", () => {
     expect(reviewWords(row())).toBe("3 approved at the first review, 2 rejected before an approval, 1 of them approved later");
     expect(reviewWords(row({ first_approved: share(0, 0), rejected: 0, approved: 0 }))).toBe("No run of this model was reviewed in the Changes lens yet");
+  });
+
+  it("says the runs still at work are left out of the finished share", () => {
+    expect(finishedWords(row(), 5)).toBe("");
+    expect(finishedWords(row({ finished: share(2, 3), under_way: 1 }), 5)).toBe("from 3 runs only · 1 run still at work, not counted yet");
+    expect(finishedWords(row({ under_way: 2 }), 5)).toBe("2 runs still at work, not counted yet");
   });
 
   it("keeps a stored period to the ones offered", () => {

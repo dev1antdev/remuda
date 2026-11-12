@@ -42,6 +42,29 @@ func TestRosterChangedAnnouncesOnceWhenTheFingerprintMoved(t *testing.T) {
 	}
 }
 
+func TestNoPageNoRosterBuilt(t *testing.T) {
+	var calls atomic.Int32
+	hub := New(Inputs{Fingerprint: func() string { calls.Add(1); return "fp" }})
+	hub.Debounce = 5 * time.Millisecond
+	for i := 0; i < 3; i++ {
+		hub.RosterChanged() // a snapshot with no page connected
+		time.Sleep(20 * time.Millisecond)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("with no page the roster is built for nobody: %d fingerprints", calls.Load())
+	}
+	page := hub.Subscribe()
+	defer page.Close()
+	hub.RosterChanged()
+	if ev, ok := receive(t, page, time.Second); !ok || ev.Topic != "roster" {
+		t.Fatalf("the first page hears the first check, whatever was seen before it came: %+v %v", ev, ok)
+	}
+	hub.RosterChanged()
+	if ev, ok := receive(t, page, 50*time.Millisecond); ok {
+		t.Fatalf("an unchanged roster is not announced again, got %+v", ev)
+	}
+}
+
 func TestTickAnnouncesAVersionChangeToThePanesWatchers(t *testing.T) {
 	versions := map[string]string{"local|w1:p1": "1-1", "local|w2:p1": "7-7"}
 	var stats atomic.Int32

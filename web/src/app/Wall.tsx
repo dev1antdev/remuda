@@ -10,7 +10,7 @@ import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
 import { NO_MACHINES, startOn } from "@/features/roster/server";
 import { useRoster } from "@/features/roster/useRoster";
-import { DEFAULT_WALL, TILE_MIN, tiles, withFocus, type Tile, type WallPrefs, type WallView } from "@/features/roster/wall";
+import { DEFAULT_WALL, TILE_MIN, spinsFor, tiles, withFocus, type Tile, type WallPrefs, type WallView } from "@/features/roster/wall";
 import { usePref } from "@/lib/prefs";
 import { Icon } from "@/ui";
 import { enterFull, leaveFull } from "./full";
@@ -40,7 +40,7 @@ export default function Wall() {
   const [hidden, setHidden] = usePref<string[]>("wall.hidden", []);
   const [radar] = usePref<RadarPrefs>("radar", DEFAULT_RADAR);
   const now = useClock(machines);
-  const step = useSpinner(moving(machines));
+  const step = useSpinner(spinsFor(prefs.view, moving(machines)));
   const list = useMemo(() => tiles(machines, hidden, prefs, radar, now), [machines, hidden, prefs, radar, now]);
   const [focus, setFocus] = usePref<string>("wall.focus", "");
   const { big, rest } = useMemo(() => withFocus(list.shown, focus), [list.shown, focus]);

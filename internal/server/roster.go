@@ -51,7 +51,7 @@ type rosterPane struct {
 	PR    *rosterPR      `json:"pr,omitempty"`   // the last pull or merge request the agent named
 	// a subscription limit the agent stopped on, and the person's booking to continue it after the reset
 	Limit *limits.PaneLimit `json:"limit,omitempty"`
-	// how many of its live conversation's subagents work, sit quiet or are done, for the Wall's zoo; nil for none
+	// how many of its live conversation's subagents work, for the Wall's zoo; nil for none
 	Subagents *subagents.Count `json:"subagents,omitempty"`
 	// a dev server the pane announced and the previews found listening, offered as a preview
 	Serves *triggers.Offer `json:"serves,omitempty"`
