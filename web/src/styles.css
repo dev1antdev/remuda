@@ -6777,6 +6777,10 @@ button.usage-row:hover {
   font: var(--fs-12) / 1.5 var(--mono);
 }
 
+.fleet-token {
+  white-space: nowrap;
+}
+
 .fleet-tip {
   border-radius: var(--r-xs);
   cursor: default;

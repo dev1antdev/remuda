@@ -16,7 +16,11 @@ function markWords(row: FleetRow, cell: FleetCell): string {
 
 function Cell({ row, cell, redact }: { row: FleetRow; cell?: FleetCell; redact: (text: string) => string }) {
   if (!cell) return <td className="fleet-cell is-na">—</td>;
-  const value = <span className={row.kind === "hash" && cell.value && cell.value !== "present" ? "fleet-value fleet-hash" : "fleet-value"}>{redact(valueWords(row, cell))}</span>;
+  const words = valueWords(row, cell);
+  const hash = row.kind === "hash" && !!cell.value && cell.value !== "present";
+  // a version, a model id, a branch or a hash is one token: never broken at its hyphens, the table scrolls instead
+  const token = hash || words === cell.value;
+  const value = <span className={`fleet-value${hash ? " fleet-hash" : ""}${token ? " fleet-token" : ""}`}>{redact(words)}</span>;
   const tip = [markWords(row, cell), redact(cellTip(row, cell))].filter(Boolean).join(" · ");
   return (
     <td className={`fleet-cell${cell.mark ? ` is-${cell.mark}` : ""}`}>
