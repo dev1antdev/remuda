@@ -107,13 +107,16 @@ type Collector struct {
 
 	dir string // the state dir, where the day's samples are kept; "" keeps them in memory only
 
-	mu      sync.Mutex
-	reports map[string]*Report
-	history history
-	latest  Latest
-	release Release
-	locks   map[string]*sync.Mutex // one read of a machine at a time; a second waits for it
-	logins  map[string]loginRead   // each machine's Claude Code sign-in, read LoginEvery apart, kept in LoginsFile
+	mu             sync.Mutex
+	reports        map[string]*Report
+	history        history
+	historySeq     uint64     // moves at every sample, under mu: a copy older than the one on disk is never written over it
+	historyWrite   sync.Mutex // one write of vitals.json at a time
+	historyWritten uint64     // the historySeq of the copy on disk, under historyWrite
+	latest         Latest
+	release        Release
+	locks          map[string]*sync.Mutex // one read of a machine at a time; a second waits for it
+	logins         map[string]loginRead   // each machine's Claude Code sign-in, read LoginEvery apart, kept in LoginsFile
 
 	loginsSaving sync.Mutex // one write of LoginsFile at a time
 
