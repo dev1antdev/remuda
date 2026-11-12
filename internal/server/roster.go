@@ -99,6 +99,7 @@ type rosterSession struct {
 	Jira        []jira.Issue    `json:"jira,omitempty"`        // the Jira issues its branch and its agents name, as last read from the person's site
 	MutedUntil  *time.Time      `json:"muted_until,omitempty"` // the folder is silenced until then: no push, no webhook, no feed row
 	Scratch     bool            `json:"scratch,omitempty"`     // the floating terminal's own shell: the drawer shows it, the sidebar does not
+	Concierge   bool            `json:"concierge,omitempty"`   // the concierge's own workspace: its place shows it, the sidebar, the wall and the pickers do not
 	Tabs        []rosterTab     `json:"tabs"`
 }
 
@@ -215,6 +216,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			ActiveTabID: ws.ActiveTabID,
 			Tabs:        tabs,
 			Scratch:     s.Scratch != nil && s.Scratch.Is(machineID, ws.WorkspaceID),
+			Concierge:   s.Concierge != nil && s.Concierge.Is(machineID, ws.WorkspaceID),
 		}
 		if ws.Worktree != nil {
 			session.Worktree = &rosterWorktree{

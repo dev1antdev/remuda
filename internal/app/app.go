@@ -22,6 +22,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/complete"
+	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
@@ -346,6 +347,19 @@ func Run(ctx context.Context, o Options) error {
 		activity.Add(feed.Entry{Kind: "recover", Machine: machineID, Title: title, Body: body})
 		hub.RosterChanged()
 	}
+	// the concierge: remuda's own Claude Code agent the person asks what the others are doing; the panes of its
+	// workspace are no chat to bring back, no work to report and no alert to send
+	conciergeAgent := concierge.Open(o.Dir)
+	restarter.Memory.Skip = conciergeAgent.Is
+	restarter.Skip = conciergeAgent.Is // its own arguments would be lost on a resume: it starts again from its own place
+	pushSvc.Quiet = func(machineID, paneID string) bool {
+		snap, _ := watcher.Snapshot(machineID)
+		if snap == nil {
+			return false
+		}
+		pane := snap.Pane(paneID)
+		return pane != nil && conciergeAgent.Is(machineID, pane.WorkspaceID)
+	}
 	// what the restarts type by themselves is a quiet activity row too, like anything a device sends
 	restarter.Typed = func(machineID, paneID, text string) {
 		workspace := ""
@@ -476,7 +490,7 @@ func Run(ctx context.Context, o Options) error {
 	if o.MirrorClosed != "" {
 		log.Printf("remuda's figures and alerts stay out of herdr: %s", o.MirrorClosed)
 	}
-	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker}
+	recaps := &recap.Service{Machines: fleet, Watch: watcher, Chat: chats, Radar: tracker, Skip: conciergeAgent.Is}
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
 	})
@@ -569,6 +583,8 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.MachineRemoved) { keepAwake.Forget(e.Machine) })
 	shells := scratch.Open(o.Dir) // the floating terminal's shell on each machine
 	events.Subscribe(bus, func(e events.MachineRemoved) { shells.Forget(e.Machine) })
+	events.Subscribe(bus, func(e events.Snapshot) { conciergeAgent.Observe(e.Machine, e.Snap) })
+	events.Subscribe(bus, func(e events.MachineRemoved) { conciergeAgent.Forget(e.Machine) })
 
 	// a remote that stays unreachable, and one that answers again: the machines publish every move, the tracker says when it matters
 	absent := away.New(away.AwayAfter, func(n away.Notice) {
@@ -733,6 +749,7 @@ func Run(ctx context.Context, o Options) error {
 		Arena:     arenas,
 		Limits:    planLimits,
 		Scratch:   shells,
+		Concierge: conciergeAgent,
 		Jira:      issues,
 		Backup:    backups,
 		SelfPort:  auth.PortOf(o.Addr),

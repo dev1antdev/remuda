@@ -36,6 +36,7 @@ import ImportJiraDialog from "@/features/tasks/ImportJiraDialog";
 import RecipesDialog from "@/features/recipes/RecipesDialog";
 import StartFromRecipeDialog from "@/features/recipes/StartFromRecipeDialog";
 import Standup from "@/features/standup/StandupPanel";
+import Concierge from "./Concierge";
 import UpdatesDialog from "@/features/updates/Updates";
 import BudgetDialog from "@/features/usage/BudgetDialog";
 import Usage from "@/features/usage/Usage";
@@ -53,7 +54,7 @@ export default function Overlays() {
   const search = app.use((s) => s.search);
   const confirm = app.use((s) => s.confirm);
   const file = app.use((s) => s.file);
-  const { machines, agents, refresh, host, server } = useRoster();
+  const { machines, agents, refresh, host, server, viewOnly } = useRoster();
   const share = useSharing(); // a confirm names what it acts on: under the screen-sharing mode, by its neutral name
   const panes = useAllPanes();
   const leftoversOn = dialog?.kind === "leftovers" ? machines.find((m) => m.id === dialog.machineId) : undefined;
@@ -93,6 +94,7 @@ export default function Overlays() {
       {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} />}
       {panel === "standup" && <Standup onClose={actions.closePanel} />}
       {panel === "arena" && <ArenaPanel onClose={actions.closePanel} />}
+      {panel === "concierge" && !viewOnly && <Concierge onClose={actions.closePanel} />}
       {panel === "usage" && (
         <Usage machines={machines} onClose={actions.closePanel} onOpenSession={(machine, project, session, dir) => openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" })} />
       )}

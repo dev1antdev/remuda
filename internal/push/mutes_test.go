@@ -61,6 +61,28 @@ func TestUnmuteEndsTheSilenceNow(t *testing.T) {
 	}
 }
 
+func TestAQuietPaneSendsNothingAndRecordsNothing(t *testing.T) {
+	shrinkDelays(t)
+	s, sent := newTestService(t)
+	var mu sync.Mutex
+	var recorded []string
+	s.OnAlert = func(p Payload) {
+		mu.Lock()
+		recorded = append(recorded, p.Title)
+		mu.Unlock()
+	}
+	s.Quiet = func(machine, pane string) bool { return machine == "gog" && pane == "w9:p1" }
+	s.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "gog", Pane: "w9:p1"}, Workspace: "concierge", Agent: "claude", From: "working", To: "done", Worked: 2 * time.Minute})
+	s.Notify(Payload{Machine: "gog", Pane: "w9:p1", Kind: "stuck", Title: "the concierge looks stuck", Tag: "stuck"})
+	s.Notify(Payload{Machine: "local", Pane: "w9:p1", Kind: "stuck", Title: "another machine's pane", Tag: "stuck"})
+	time.Sleep(80 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(sent.get()) != 1 || len(recorded) != 1 || recorded[0] != "another machine's pane" {
+		t.Fatalf("sent %d, recorded %v: the quiet pane's alerts go nowhere", len(sent.get()), recorded)
+	}
+}
+
 func TestAMutedFolderSendsNothingAndRecordsNothing(t *testing.T) {
 	shrinkDelays(t)
 	s, sent := newTestService(t)

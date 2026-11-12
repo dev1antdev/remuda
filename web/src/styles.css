@@ -7923,6 +7923,92 @@ body.popout {
   font-weight: 600;
 }
 
+/* ---- the concierge (app/Concierge.tsx): the machine, New conversation, and its conversation filling the panel ---- */
+.modal.concierge {
+  height: min(84dvh, 780px);
+  overflow: hidden;
+}
+
+.concierge-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.concierge-machine .sel {
+  min-width: 150px;
+}
+
+.concierge-about {
+  flex: 1 1 200px;
+  min-width: 0;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.modal.concierge > .concierge-chat,
+.modal.concierge > .concierge-waiting {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.concierge-chat {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.concierge-chat .composer {
+  padding-bottom: 10px;
+}
+
+.concierge-hints {
+  margin: auto;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+  color: var(--fg-dim);
+}
+
+.concierge-hints p {
+  margin: 0;
+}
+
+.concierge-hint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn.concierge-hint {
+  height: auto;
+  min-height: var(--ctl);
+  padding: 6px 12px;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+}
+
+.concierge-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+.concierge-coming {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* ---- the agent's plan: the bar over the chat, a plan tool's call in a turn, the count on a tile ---- */
 .plan-bar {
   flex-shrink: 0;

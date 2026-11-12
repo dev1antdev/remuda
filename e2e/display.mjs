@@ -77,6 +77,7 @@ socket.onmessage = (message) => {
   if (msg.method === "Fetch.requestPaused") {
     const url = msg.params.request?.url ?? "";
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
+    else if (url.includes("/api/concierge")) void fakeConcierge(msg.params);
     else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
     else if (url.includes("/api/review/secrets")) void fakeSecrets(msg.params);
     else if (url.includes("/api/timelapse/recordings")) void fakeTimelapse(msg.params);
@@ -154,6 +155,12 @@ async function palette(id) {
     throw new Error(`the palette has no row ${id}`);
   }
   await sleep(250);
+}
+
+// conciergeHidden fails the screen when the concierge's workspace shows in the place given: its own place draws it alone
+async function conciergeHidden(selector) {
+  const shown = await evaluate(`[...document.querySelectorAll(${JSON.stringify(selector)})].some((el) => el.textContent.includes("concierge-e2e"))`);
+  if (shown) failed(`the concierge's workspace shows in ${selector}`);
 }
 
 // closeAll puts the page back to no overlay: Esc until nothing is open, the sidebar drawer shut
@@ -282,8 +289,10 @@ async function screen(name, { open, expect = [], close = closeAll, settle = 350 
 const git = (cwd, ...args) => execFileSync("git", ["-c", "user.email=e2e@remuda.invalid", "-c", "user.name=e2e", ...args], { cwd, stdio: "pipe" });
 const appDir = `${tmp}/display/app`;
 const notesDir = `${tmp}/display/notes`;
+const deskDir = `${tmp}/display/concierge-e2e`; // the concierge's folder: a shell workspace the browser's roster marks as the concierge's
 mkdirSync(appDir, { recursive: true });
 mkdirSync(notesDir, { recursive: true });
+mkdirSync(deskDir, { recursive: true });
 git(appDir, "init", "-q", "-b", "main");
 // the repository holds work of every kind for the Changes lens: a file edited in two places far apart, a staged
 // edit, a deleted file and a new one
@@ -340,7 +349,7 @@ const made = [];
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
-let app, tree, notes, inbox, drawTask, paneA1, paneN;
+let app, tree, notes, desk, inbox, drawTask, paneA1, paneN, paneDesk;
 let DRESS = {};
 
 // seed makes the workspaces the screens draw — the repository with two tabs and a linked worktree, a plain folder —
@@ -353,6 +362,8 @@ async function seed() {
   made.push(tree.id);
   notes = await api("POST", "/api/sessions", { machine: "local", dir: notesDir, name: "notes", agent: "shell" });
   made.push(notes.id);
+  desk = await api("POST", "/api/sessions", { machine: "local", dir: deskDir, name: "concierge-e2e", agent: "shell" });
+  made.push(desk.id);
   await api("PUT", "/api/jira", { site: "http://127.0.0.1:9", account: "", token: "e2e" }).catch((error) => failed(`a Jira site: ${error.message}`));
   // the person's own triggers, one everywhere and one on the repository's folder, for the triggers dialog; a regex
   // herdr could not read is refused before it reaches a machine's stream
@@ -397,11 +408,13 @@ async function seed() {
     const a = list.find((s) => s.id === app.id);
     const b = list.find((s) => s.id === tree.id);
     const n = list.find((s) => s.id === notes.id);
-    return a?.tabs.length >= 2 && b && n?.tabs[0]?.panes[0] ? { a, b, n } : null;
+    const d = list.find((s) => s.id === desk.id);
+    return a?.tabs.length >= 2 && b && n?.tabs[0]?.panes[0] && d?.tabs[0]?.panes[0] ? { a, b, n, d } : null;
   }, 20);
   if (!ready) throw new Error("the seeded workspaces did not reach the roster");
   paneA1 = ready.a.tabs[0].panes[0].id;
   paneN = ready.n.tabs[0].panes[0].id;
+  paneDesk = ready.d.tabs[0].panes[0].id;
   const paneA2 = ready.a.tabs[1].panes[0].id;
   const paneB = ready.b.tabs[0].panes[0].id;
   DRESS = {
@@ -421,6 +434,7 @@ async function seed() {
       radar: { state: "done", last_active: now - 10 * 60e3 },
       said: "The flag is renamed in all twelve places, the tests pass and the release notes say so.",
     },
+    [paneDesk]: { agent: "claude", status: "idle", title: "concierge", radar: { state: "idle", last_active: now - 60e3 } },
   };
   say(`seeded: app ${app.id} (two tabs), its worktree ${tree.id}, notes ${notes.id}, the Inbox ${inbox}`);
 }
@@ -598,6 +612,7 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
     };
     for (const session of machine.sessions ?? []) {
       if (session.id === app.id || session.id === tree.id) session.icon = { emoji: "🦊" }; // the icon is the folder's, the worktree's too
+      if (session.id === desk?.id) session.concierge = true; // the page shows it in the concierge's place alone
       if (session.id === app.id) {
         session.jira = [{ key: "APP-12", summary: "Draw every screen", status: "In Review", category: "indeterminate", url: "https://example.atlassian.net/browse/APP-12" }];
       }
@@ -619,6 +634,10 @@ const DENIED = [
 // dressChat adds DENIED to the lens's answer for the dressed agent pane (a tile's tail, last=N, carries none)
 async function dressChat({ requestId, request, responseStatusCode, responseHeaders = [] }) {
   const url = new URL(request.url);
+  if (url.searchParams.get("pane") === paneDesk) {
+    await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(conciergeChat())).toString("base64") });
+    return;
+  }
   const reply = responseStatusCode === 200 && url.searchParams.get("pane") === paneA1 && !url.searchParams.has("last") ? await send("Fetch.getResponseBody", { requestId }) : null;
   if (!reply?.result) {
     await send("Fetch.continueRequest", { requestId });
@@ -629,6 +648,34 @@ async function dressChat({ requestId, request, responseStatusCode, responseHeade
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(chat)).toString("base64") });
 }
+
+// fakeConcierge answers the concierge's place as if Claude Code ran in the concierge-e2e workspace on this machine, a
+// Mac: where it runs, a start, a new conversation; no agent is asked anything
+async function fakeConcierge({ requestId, request }) {
+  const running = { machine: "local", workspace: desk.id, pane: paneDesk, dir: deskDir, started: false };
+  const path = new URL(request.url).pathname;
+  const view = { machine: "local", machines: [{ id: "local", label: "This Mac · e2e", connected: true, mac: true }], running };
+  const body = request.method === "GET" || request.method === "PUT" ? view : request.method === "DELETE" ? { ok: true } : path.endsWith("/new") ? { ...running, started: true } : running;
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// conciergeChat is the concierge's conversation: a question, the tool it looked through, the answer
+const conciergeChat = () => ({
+  session_id: "0e2e0000-1111-2222-3333-444455556666",
+  sessions: [],
+  turns: [
+    { role: "user", ts: iso(now - 120e3), ids: ["e2e-c1"], parts: [{ type: "text", text: "What did the agents finish today?" }] },
+    {
+      role: "assistant",
+      ts: iso(now - 100e3),
+      ids: ["e2e-c2"],
+      parts: [
+        { type: "tool", tool_name: "mcp__remuda__standup", tool_id: "toolu_e2e_c1", at: iso(now - 115e3), took: 1.2, input: { since: "midnight" }, output: "# Standup" },
+        { type: "text", text: "Two finished today:\n\n- **feature-x** on this Mac renamed the flag everywhere it is read; the tests pass.\n- **app** opened PR #15, one check failing.\n\nA Codex in **app** waits for your answer." },
+      ],
+    },
+  ],
+});
 
 // FEED is the activity the browser is shown: an id far past the server's own, and the alert a screen puts in it
 const FEED = { id: 900000, entries: [] };
@@ -1010,7 +1057,14 @@ async function runPass() {
   if ((await evaluate(`matchMedia("(pointer: coarse)").matches`)) !== pass.phone) failed(`the browser does not take itself for a ${pass.phone ? "phone" : "desk"}: (pointer: coarse) says otherwise`);
   where = pass.name;
 
-  await screen("sidebar", { open: sidebarOpen, expect: [".ws-folder-head", ".ws-item", ".machine-head"], close: async () => {} });
+  await screen("sidebar", {
+    open: async () => {
+      await sidebarOpen();
+      await conciergeHidden(".sidebar");
+    },
+    expect: [".ws-folder-head", ".ws-item", ".machine-head"],
+    close: async () => {},
+  });
   await screen("folder-folded", {
     open: async () => {
       await sidebarOpen();
@@ -1188,7 +1242,13 @@ async function runPass() {
 
   await screen("wall-chat", { open: async () => palette("mode:wall"), expect: [".wall-bar", ".tile"] });
   await screen("wall-screen", { open: async () => palette("wall-view"), expect: [".wall-bar", ".tile"] });
-  await screen("wall-zoo", { open: async () => palette("wall-zoo"), expect: [".zoo-grid .zoo-creature"] });
+  await screen("wall-zoo", {
+    open: async () => {
+      await palette("wall-zoo");
+      await conciergeHidden(".wall");
+    },
+    expect: [".zoo-grid .zoo-creature"],
+  });
   if (!pass.phone) await screen("wall-office", { open: async () => palette("wall-office"), expect: [".wall-office"], close: async () => palette("wall-office") });
 
   await screen("tasks-board", { open: async () => palette("mode:tasks"), expect: [".board", ".board-col-note"] });
@@ -1214,6 +1274,22 @@ async function runPass() {
   await screen("code", { open: async () => palette("mode:code"), expect: [".code-mode"] });
 
   for (const panel of ["standup", "usage", "schedules", "activity", "alerts", "arenas"]) await screen(`panel-${panel}`, { open: async () => palette(panel), expect: [".modal"], settle: 600 });
+  // the concierge: its conversation in its place (its workspace in no sidebar, wall or palette row: conciergeHidden);
+  // a new conversation offers the questions to start with
+  await screen("concierge", {
+    open: async () => palette("concierge"),
+    expect: [".modal.concierge", ".concierge-chat .turn-assistant", ".concierge-chat .composer textarea"],
+    settle: 600,
+  });
+  await screen("concierge-new", {
+    open: async () => {
+      await palette("concierge");
+      if (!(await until(() => present(".concierge-chat .turn-assistant"), 6))) throw new Error("the concierge's conversation did not show");
+      await tap(".concierge-bar .btn.sm");
+    },
+    expect: [".concierge-hint"],
+    settle: 400,
+  });
   // a new agent schedule: Claude Code, its switch on, the words under it
   await screen("schedule-agent", {
     open: async () => {
@@ -1294,6 +1370,7 @@ async function runPass() {
   await screen("palette", {
     open: async () => {
       await key("k", "KeyK", CMD);
+      if (await until(() => present(".palette .palette-row"), 4)) await conciergeHidden(".palette");
     },
     expect: [".palette .palette-row"],
   });
@@ -1343,6 +1420,7 @@ try {
       { urlPattern: "*/api/feed*", requestStage: "Response" },
       { urlPattern: "*/api/chat?*", requestStage: "Response" },
       { urlPattern: "*/api/opinion*", requestStage: "Request" },
+      { urlPattern: "*/api/concierge*", requestStage: "Request" },
       { urlPattern: "*/api/scorecard*", requestStage: "Request" },
       { urlPattern: "*/api/review/secrets*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/recordings*", requestStage: "Request" },

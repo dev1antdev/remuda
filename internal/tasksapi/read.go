@@ -23,12 +23,13 @@ type Machine struct {
 	Sessions []Workspace `json:"sessions"`
 }
 
-// Workspace is one of herdr's workspaces with its tabs.
+// Workspace is one of herdr's workspaces with its tabs; the concierge's is remuda's own, the one asking about the others.
 type Workspace struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Dir  string `json:"dir,omitempty"`
-	Tabs []Tab  `json:"tabs"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Dir       string `json:"dir,omitempty"`
+	Concierge bool   `json:"concierge,omitempty"`
+	Tabs      []Tab  `json:"tabs"`
 }
 
 // Tab is one tab with its panes.
@@ -125,10 +126,14 @@ func (c *Client) Standup(since time.Time, tz string) (Standup, error) {
 	return out, c.do("GET", "/api/standup?"+v.Encode(), nil, &out)
 }
 
-// AgentPanes is every agent pane of a machine with its place, in the roster's order; a shell is left out.
+// AgentPanes is every agent pane of a machine with its place, in the roster's order; a shell is left out, and so is the
+// concierge, which works on nothing.
 func (m Machine) AgentPanes() []AgentPane {
 	var out []AgentPane
 	for _, ws := range m.Sessions {
+		if ws.Concierge {
+			continue
+		}
 		for _, tab := range ws.Tabs {
 			for _, pane := range tab.Panes {
 				if pane.Agent != "" {

@@ -142,3 +142,20 @@ func TestOutcomeReadsTheScreenPastTheNewestEcho(t *testing.T) {
 		t.Errorf("version without a banner: %q", v)
 	}
 }
+
+func TestNoRestartTouchesTheConcierge(t *testing.T) {
+	r := New(nil)
+	r.Skip = func(machine, workspace string) bool { return machine == "gog" && workspace == "w9" }
+	concierge := herdr.PaneInfo{PaneID: "w9:p1", WorkspaceID: "w9", Agent: "claude", AgentStatus: "idle", AgentSession: &herdr.AgentSession{Kind: "id", Value: sid}}
+	api := herdr.PaneInfo{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", AgentStatus: "idle", AgentSession: &herdr.AgentSession{Kind: "id", Value: sid}}
+	snap := &herdr.Snapshot{Panes: []herdr.PaneInfo{concierge, api}}
+	if chats := r.serverChats("gog", snap); len(chats) != 1 || chats[0].pane != "w1:p1" {
+		t.Errorf("a restart of herdr's server leaves the concierge to its own place: %+v", chats)
+	}
+	if chats := r.serverChats("local", snap); len(chats) != 2 {
+		t.Errorf("another machine's workspace w9 is no concierge: %+v", chats)
+	}
+	if !r.own("gog", concierge) || r.own("gog", api) || (&Restarter{}).own("gog", concierge) {
+		t.Error("own is the Skip's word alone")
+	}
+}

@@ -907,6 +907,33 @@ Codex's `~/.codex/config.toml`:
     command = "/Users/you/.local/bin/remuda"
     args = ["mcp"]
 
+## The concierge — ask what is going on
+
+**Concierge** in the rail (More on a phone, or the palette's *Ask the
+concierge…*) is a conversation with the cockpit itself: *"What did the
+agents finish today?"*, *"Who is working on auth?"*, *"File a task for the
+flaky web tests."* remuda has no model of its own — the concierge is an
+ordinary Claude Code agent remuda starts and keeps in a folder of its own
+(`concierge/` in remuda's state dir on the machine, with a short `CLAUDE.md`
+saying who it is and to answer briefly in your language). It runs on your
+Mac when one is connected, else on the first connected machine with Claude
+Code (never a `-server` host); the picker at the top of its panel moves it.
+
+It can only read and file: it starts with `--strict-mcp-config` and remuda's
+own MCP server alone, so none of your other MCP servers or claude.ai
+connectors are there, and with settings that allow `agents_list`,
+`agent_recap`, `standup`, `tasks_list`, `task_get`, `projects_list`,
+`labels_list`, `task_create` and `task_comment`, deny every tool that reads
+or writes a file, runs a command, goes on the web or starts another agent,
+and deny instead of asking — so it never waits on a prompt. A task it files
+lands in **Proposed**, like any agent's; it cannot move one. What it is sent
+is what you type in its box, nothing else; opening its place starts it
+(answering Claude Code's trust question for its own folder), and its
+conversation comes back after a restart. **New conversation** starts a fresh
+one, and its workspace never shows in the sidebar, on the Wall or in a
+folder picker. A remote machine needs remuda installed for it (`remuda setup
+-host <host>`); the panel says so when it is not.
+
 ## From your phone
 
 The simplest way: let remuda join your tailnet by itself.

@@ -8,11 +8,13 @@ import { startLive, useLive, useLiveConnected } from "@/lib/live";
 import { useQuery } from "@/lib/query";
 import type { BudgetStatus } from "@/features/usage/api";
 import type { Retirement } from "@/features/usage/retired";
+import { splitConcierge, type ConciergeEntry } from "@/features/concierge/concierge";
 import { fetchRoster, type AgentKind, type Latest, type Machine, type Roster, type Tailscale } from "./api";
 import { hostMachine } from "./server";
 
 export type RosterState = {
-  machines: Machine[];
+  machines: Machine[]; // the fleet without the concierge's workspace, which its place alone reads
+  concierges: ConciergeEntry[]; // the concierge's workspace on each machine where one stands
   agents: AgentKind[];
   latest?: Latest;
   tailscale?: Tailscale;
@@ -29,7 +31,7 @@ export type RosterState = {
   refresh: () => void;
 };
 
-const empty: RosterState = { machines: [], agents: [], retirements: [], offline: false, stale: null, viewOnly: false, refresh: () => {} };
+const empty: RosterState = { machines: [], concierges: [], agents: [], retirements: [], offline: false, stale: null, viewOnly: false, refresh: () => {} };
 const RosterContext = createContext<RosterState>(empty);
 
 export function RosterProvider({ children }: { children: ReactNode }) {
@@ -56,10 +58,12 @@ export function RosterProvider({ children }: { children: ReactNode }) {
   useLive("roster", reload);
   const value = useMemo<RosterState>(() => {
     const server = data?.server ? hostMachine(data.server) : undefined;
+    const { machines, concierges } = splitConcierge(data?.machines ?? []);
     return {
       server,
-      host: data?.machines.find((m) => m.id === "local") ?? server,
-      machines: data?.machines ?? [],
+      host: machines.find((m) => m.id === "local") ?? server,
+      machines,
+      concierges,
       agents: data?.agents ?? [],
       latest: data?.latest,
       tailscale: data?.tailscale,

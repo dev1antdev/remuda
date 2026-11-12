@@ -26,6 +26,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/complete"
+	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
@@ -97,6 +98,7 @@ type Server struct {
 	Arena     *arena.Service      // one prompt to several agents side by side
 	Limits    *limits.Service     // the agents' subscription windows, the hits and the bookings to continue after a reset
 	Scratch   *scratch.Store      // the floating terminal's shell on each machine
+	Concierge *concierge.Service  // the Claude Code agent the person asks what the others are doing, on the machine they pick
 	Jira      *jira.Service       // the person's Jira site and the issues their agents' work names
 	Backup    *backup.Service     // the cockpit's state dir copied to another machine, nightly and on demand
 	Previews  *preview.Service    // the machines' dev servers opened on the cockpit, nil without
@@ -156,6 +158,7 @@ func (s *Server) Handler() http.Handler {
 	s.arenaRoutes(api)
 	s.limitRoutes(api)
 	s.scratchRoutes(api)
+	s.conciergeRoutes(api)
 	s.jiraRoutes(api)
 	s.backupRoutes(api)
 	s.leftoverRoutes(api)

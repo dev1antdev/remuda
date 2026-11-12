@@ -134,9 +134,12 @@ func (s *Service) Muted(machine, pane string) bool {
 	return s.silenced(Payload{Machine: machine, Pane: pane})
 }
 
-// silenced says whether an alert about a pane falls in a muted folder: the folder is asked of the watcher at that
-// moment, so a mute set after the alert was scheduled still holds.
+// silenced says whether an alert about a pane falls in a muted folder, or is about a quiet pane: the folder is asked of
+// the watcher at that moment, so a mute set after the alert was scheduled still holds.
 func (s *Service) silenced(p Payload) bool {
+	if p.Pane != "" && s.Quiet != nil && s.Quiet(p.Machine, p.Pane) {
+		return true
+	}
 	if s.Folder == nil || s.Mutes == nil || p.Pane == "" {
 		return false
 	}
