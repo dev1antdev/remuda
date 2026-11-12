@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Machine, Pane, Session } from "@/features/roster/api";
+import type { Machine, Pane, Risk, Session } from "@/features/roster/api";
 import { reviewQueue } from "./queue";
 
 const pane = (id: string, agent: string): Pane => ({ id, title: id, agent, cwd: `/w/${id}`, focused: false, status: agent ? "idle" : "shell", cols: 80, rows: 24 });
@@ -25,6 +25,23 @@ describe("reviewQueue", () => {
       [1, 5],
       [0, 3],
     ]);
+  });
+
+  it("puts the riskiest first within each group, ready again still first of all", () => {
+    const risk = (score: number): Risk => ({ score, level: score >= 50 ? "high" : score >= 20 ? "medium" : "low", reasons: [] });
+    const machines = [
+      machine("local", [
+        session("calm", { changed: 2, fresh: 2, risk: risk(5) }, [pane("a", "claude")]),
+        session("risky", { changed: 2, fresh: 2, risk: risk(70) }, [pane("b", "claude")]),
+        session("seen", { changed: 9, fresh: 0, risk: risk(95) }, [pane("c", "claude")]),
+        session("back", { changed: 1, fresh: 1, ready: true, risk: risk(0) }, [pane("d", "claude")]),
+        session("unread", { changed: 3, fresh: 3 }, [pane("e", "claude")]),
+        session("middle", { changed: 3, fresh: 3, risk: risk(30) }, [pane("f", "claude")]),
+      ]),
+    ];
+    const queue = reviewQueue(machines);
+    expect(queue.map((item) => item.key)).toEqual(["local|back", "local|risky", "local|middle", "local|calm", "local|unread", "local|seen"]);
+    expect(queue[1]?.risk?.score).toBe(70);
   });
 
   it("is empty when nothing is dirty anywhere", () => {

@@ -693,6 +693,10 @@ func Run(ctx context.Context, o Options) error {
 	go planLimits.Loop(30*time.Second, ctx.Done())
 	go backups.Loop(time.Minute, ctx.Done())
 	go recorder.Loop(ctx.Done()) // a working pane's screen at the recorder's own pace, between the stream's snapshots
+	// the checkouts of one repository changing the same files, read a minute apart against the main branch
+	radarOfCollisions := collisionRadar(o.Dir, fleet, watcher, reviews, sayings, requests, pushSvc, hub.RosterChanged)
+	go radarOfCollisions.Loop(ctx.Done())
+	events.Subscribe(bus, func(e events.MachineRemoved) { radarOfCollisions.Forget(e.Machine) })
 
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {
@@ -742,6 +746,8 @@ func Run(ctx context.Context, o Options) error {
 		Mirror:    mirrored,
 		Timelapse: recorder,
 		Triggers:  paneTriggers,
+
+		Collisions: radarOfCollisions,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

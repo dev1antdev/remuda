@@ -18,7 +18,7 @@ import { usd } from "@/features/usage/format";
 import { t } from "@/lib/i18n";
 import { basename } from "@/lib/text";
 import { elapsed, whenAhead } from "@/lib/time";
-import { FolderIcon, Logo, Tip } from "@/ui";
+import { FolderIcon, Icon, Logo, Tip } from "@/ui";
 import { VENDOR_NAME, brandColor } from "@/ui/brand";
 import { longPress } from "@/ui/press";
 import { actions } from "../store";
@@ -27,8 +27,9 @@ import { Creature, type Dress } from "./Creature";
 // PEEK_MS is how long a long press keeps the state in words under a creature
 const PEEK_MS = 3000;
 
-// Life is what the zoo around a creature gives it: its outfit among the others, the applause, a puff, what it asks
-export type Life = { outfit?: Outfit; cheer?: boolean; puff?: boolean; question?: string; night?: boolean };
+// Life is what the zoo around a creature gives it: its outfit among the others, the applause, a puff, what it asks, and
+// the bolt it wears while its workspace collides with one in another pen (true when the lines touch) with the words
+export type Life = { outfit?: Outfit; cheer?: boolean; puff?: boolean; question?: string; night?: boolean; bolt?: boolean; collision?: string };
 
 export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false, pinned = false, onPick, life = {} }: {
   tile: Tile;
@@ -107,10 +108,10 @@ export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false
   );
   const open = onPick ?? (() => actions.openPane(machine.id, pane.id));
   const action = onPick ? t("Click to feature this agent and keep it there (pin)") : t("Click to open it in Agents");
-  const tip = `${name} — ${words}.${extras.length ? ` ${extras.join(" · ")}.` : ""} ${action}`;
+  const tip = `${name} — ${words}.${extras.length ? ` ${extras.join(" · ")}.` : ""}${life.collision ? ` ${life.collision.replace(/\n/g, " ")} ` : " "}${action}`;
   const classes = `zoo-creature zoo-as-${mode} is-${look.pose}${look.dim ? " dim" : ""}${pinned ? " is-pinned" : ""}${dress.cheer ? " is-cheering" : ""}`;
   return (
-    <figure className={classes} style={{ "--zoo-skin": brandColor(pane.agent) } as CSSProperties}>
+    <figure className={classes} style={{ "--zoo-skin": brandColor(pane.agent) } as CSSProperties} data-zoo-key={tile.key}>
       {(bubbleRow || bubble) && (
         <div className="zoo-bubble-slot">
           {bubble && (
@@ -126,6 +127,11 @@ export function ZooCreature({ tile, radar, now, mode = "grid", bubbleRow = false
           <span className="zoo-badge">
             <Logo agent={pane.agent} />
           </span>
+          {life.bolt !== undefined && (
+            <span className={`zoo-bolt${life.bolt ? " is-lines" : ""}`}>
+              <Icon name="zap" size={14} />
+            </span>
+          )}
         </button>
       </Tip>
       <figcaption>
