@@ -149,6 +149,23 @@ func allSame(xs []string) bool {
 	return true
 }
 
+// Brief is one of the watchdog's notes in a few words, for a narrow place such as herdr's sidebar: "stuck 25 min",
+// "loop: Bash", "waiting 20 min"; a note it does not know stays as it is.
+func Brief(note string) string {
+	if rest, ok := strings.CutPrefix(note, "quiet for "); ok {
+		quiet, _, _ := strings.Cut(rest, " — ")
+		return "stuck " + quiet
+	}
+	if rest, ok := strings.CutPrefix(note, "looping — the same "); ok {
+		name, _, _ := strings.Cut(rest, " call ")
+		return "loop: " + name
+	}
+	if rest, ok := strings.CutPrefix(note, "waiting for your answer for "); ok {
+		return "waiting " + rest
+	}
+	return note
+}
+
 func minutes(d time.Duration) string {
 	m := int(d.Round(time.Minute) / time.Minute)
 	if m < 60 {

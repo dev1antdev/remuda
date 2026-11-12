@@ -1041,6 +1041,28 @@ with the time left in its tooltip — and the menu row reads *Unmute · 42
 min left*. The mute ends by itself; the page's badge and read-aloud go on
 as before, since they read the roster rather than the alerts.
 
+**Inside herdr** (Settings): the terminal at the desk says what the phone
+says. remuda writes what it knows of each agent into herdr itself, as
+display tokens on its pane — `$remuda_cost` ("$4.20"), `$remuda_context`
+("62%"), `$remuda_model`, `$remuda_pr` ("PR #15 ✓"), `$remuda_task`
+("#42"), `$remuda_alert` ("! stuck 25 min", "! plan limit") and
+`$remuda_said`, the first line of its last answer — and on each workspace
+`$remuda_review` ("3 files to review") and `$remuda_cost`. The watchdog's
+note also replaces the word in herdr's `state_text`. This is on by
+default; the values are written only when they move and again before
+herdr's five-minute TTL runs out, so they vanish by themselves once
+remuda stops, and turning the switch off clears them at once. herdr shows
+a token only where a sidebar row of its `config.toml` names it: the
+section shows rows to paste (a row with nothing to say disappears), then
+`herdr server reload-config`. A second switch, off by default, also pops
+remuda's alerts — a question with its words, a finish after a turn over
+a minute, a watchdog note — as herdr's own toast on the machine the
+agent runs on, never over the tab herdr has in front, never for a muted
+workspace and not inside the quiet hours you set there. One switch for
+every machine; herdr shows a toast only where its config turns its
+toasts on (`[ui.toast] delivery = "herdr"`), and *Send a test toast*
+says, machine by machine, whether it did.
+
 **Changes:** a third lens next to Chat and Terminal shows the workspace's
 uncommitted work — what `git diff` shows, plus new files — with what moved
 since you last looked marked, and the commits made since. A merge or a

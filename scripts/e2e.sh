@@ -82,7 +82,7 @@ while ! up; do
 done
 
 say "starting remuda on 127.0.0.1:$port"
-HOME=$home REMUDA_STATE_DIR=$tmp/state "$bin" -addr "127.0.0.1:$port" -socket "$sock" -herdr-bin "$herdr" -code-port "$codeport" -no-version-check >"$tmp/remuda.log" 2>&1 &
+HOME=$home REMUDA_STATE_DIR=$tmp/state "$bin" -addr "127.0.0.1:$port" -socket "$sock" -herdr-bin "$herdr" -code-port "$codeport" -no-version-check -mirror >"$tmp/remuda.log" 2>&1 &
 rpid=$!
 i=0
 while ! curl -sf "http://127.0.0.1:$port/api/health" >/dev/null 2>&1; do

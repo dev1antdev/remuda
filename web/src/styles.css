@@ -6616,7 +6616,8 @@ button.usage-row:hover {
   color: var(--fg-dim);
 }
 
-.updates-cmd {
+.updates-cmd,
+.config-snippet {
   display: block;
   padding: 8px 10px;
   border-radius: var(--r-md);
@@ -10694,6 +10695,19 @@ body.popout {
 
 .backup-size {
   color: var(--fg-dim);
+}
+
+/* ---- Inside herdr (features/settings/MirrorSection.tsx): remuda's figures and toasts in herdr, the config to paste ---- */
+.config-snippet {
+  margin: 0;
+  white-space: pre; /* a config's rows stay whole: a narrow box scrolls rather than breaking them */
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.mirror-outcomes {
+  margin: 0;
+  padding-left: 18px;
 }
 
 /* ---- the zoo: every agent on the Wall as a little creature (app/zoo). Its palette is mixed from the vendor's hue

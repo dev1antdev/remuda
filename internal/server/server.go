@@ -34,6 +34,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/mirror"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/preview"
@@ -101,8 +102,8 @@ type Server struct {
 	Opinions  *opinion.Service   // the second opinions another agent gave on a folder's changes
 	Subagents *subagents.Tracker // how many subagents each Claude Code pane's conversation runs, for the Wall's zoo
 	Retire    *retire.Service    // what is set to a model or mode being retired, nil without
-
 	Scorecard *scorecard.Service // which model does the work best, from the runs, reviews, requests and arenas
+	Mirror    *mirror.Service    // remuda's figures and alerts inside herdr itself
 
 	streams   termStreams
 	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
@@ -156,6 +157,7 @@ func (s *Server) Handler() http.Handler {
 	s.previewRoutes(api)
 	s.opinionRoutes(api)
 	s.scorecardRoutes(api)
+	s.mirrorRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

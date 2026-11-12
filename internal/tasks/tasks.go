@@ -1709,6 +1709,21 @@ func (st *Store) OpenRuns() ([]Run, error) {
 	return out, rows.Err()
 }
 
+// LiveTasks names, by pane, the task an open run on a machine is for: the newest run's where a pane had several.
+func (st *Store) LiveTasks(machine string) (map[string]int64, error) {
+	runs, err := st.OpenRuns()
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]int64{}
+	for _, r := range runs {
+		if r.Machine == machine {
+			out[r.Pane] = r.TaskID
+		}
+	}
+	return out, nil
+}
+
 // SetRun moves a run on to a state with its detail: the reported record for finished, else an error message.
 func (st *Store) SetRun(id int64, state string, detail string) error {
 	now := st.stamp()

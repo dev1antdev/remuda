@@ -263,7 +263,7 @@ func FirstLine(text string) string {
 			continue
 		}
 		if line = Plain(cells(line)); line != "" {
-			return cut(line, Max)
+			return Cut(line, Max)
 		}
 	}
 	return ""
@@ -303,8 +303,8 @@ func Plain(line string) string {
 	return strings.TrimSpace(spaces.ReplaceAllString(line, " "))
 }
 
-// cut keeps at most max characters, at a word when one sits past the first two thirds, with an ellipsis.
-func cut(line string, max int) string {
+// Cut keeps at most max characters, at a word when one sits past the first two thirds, with an ellipsis.
+func Cut(line string, max int) string {
 	if utf8.RuneCountInString(line) <= max {
 		return line
 	}

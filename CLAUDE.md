@@ -23,7 +23,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   real service only — never with `-no-door`, and not by a scratch
   instance with `REMUDA_STATE_DIR` set unless `-door` asks, so a look or
   the e2e beside the real one never overwrites its door on a remote;
-  `app.Options.Door`, one log line when it stays closed), `-server`
+  `app.Options.Door`, one log line when it stays closed), `-mirror`
+  (`mirrorClosed`, tested: a scratch instance with `REMUDA_STATE_DIR` set
+  writes nothing into herdr — no tokens, no toasts — unless `-mirror`
+  asks, which the e2e does on its throwaway herdr; `app.Options.MirrorClosed`
+  is the reason, a log line and the Settings section say it), `-server`
   (also `REMUDA_SERVER=1`; `app.Options.Server`, see "Server mode"
   below; without it the host is a machine of its own, there is no
   `-client` flag); subcommands
@@ -148,7 +152,25 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `PaneInfo.Scroll` is where it stands. `PaneInfo` has
   `Dir()`, `AgentName()`, `DisplayTitle()`; status vocabularies are the
   `Status*`/`UI*` constants with `UIStatus(status, hasAgent)` as the one
-  mapping.
+  mapping. **What a client writes into herdr's own UI** (`metadata.go`,
+  protocol 22, tested on a throwaway server in `metadata_test.go`: written,
+  read back off the snapshot, cleared, a TTL lapsed, a toast herdr's
+  default config refuses): `PaneReportMetadata(PaneMetadata{Pane, Source,
+  Tokens, Labels, ClearLabels, TTL})` is `pane.report_metadata` — a token
+  set by name, a nil value clears it, a name left out stays; `Labels`
+  replace the source's whole set of state labels (herdr keeps one per
+  source, the newest source's label of a state wins, and refuses a set and
+  a clear in one call), `ClearLabels` drops them; a report with nothing to
+  set or clear is refused — `WorkspaceReportMetadata` the same for a
+  workspace's tokens, `NotificationShow(Toast{Title, Body, Sound})` is
+  `notification.show`, answered `Shown{Shown, Reason}` (`disabled` while
+  `ui.toast.delivery` is off, herdr's default, `no_foreground_client`,
+  `rate_limited`, `busy`); `DisplayText(s, n)` is a value as herdr stores
+  it (control characters gone, trimmed, `MaxValueRunes` 80), so what was
+  written reads back the same. The snapshot carries them back:
+  `PaneInfo.Tokens` / `StateLabels`, `WorkspaceInfo.Tokens` (every
+  source's, the newest per name) and `Snapshot.FocusedTabID`. Never
+  `title` or `display_agent`: remuda reads both back as the pane's own.
 - `internal/sshx/` — one OpenSSH `ControlMaster` per host (BatchMode: fail,
   never prompt), with socket and port forwarding (`-O forward -L`; a
   socket forward the master already holds is cancelled first, since
@@ -647,7 +669,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `workflow_dispatch`) the end-to-end smoke too: `make e2e` is
   `scripts/e2e.sh` — a throwaway herdr server on a socket and HOME of its
   own (`HERDR_SOCKET_PATH`, stopped the same way), a remuda on it with its
-  own state dir, headless Chrome — driving `e2e/smoke.mjs` over the
+  own state dir and `-mirror` (it writes its figures into that herdr),
+  headless Chrome — driving `e2e/smoke.mjs` over the
   DevTools protocol with no dependency: sign in, a scratch shell
   workspace through the API, a command typed into the terminal lens and
   read back through `/api/screen`, the shell's lens switch vacant (a
@@ -1767,7 +1790,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (remuda's own start reports nothing), a removed machine is forgotten;
   `Words` is the push's text.
 - `internal/push/` — Web Push (RFC 8291/8292 via webpush-go); `OnAlert` hands
-  every alert to the activity feed as it fires. VAPID keys at
+  every alert to the activity feed as it fires, and to the herdr toasts
+  of `internal/mirror` (wired in `internal/app`). VAPID keys at
   `<config>/remuda/vapid.json` (a damaged file is an error, never a silent
   rotation — rotating orphans every device); subscriptions in
   `push-subscriptions.json`, 404/410 from the push service drops one. The
@@ -2116,7 +2140,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and a palette row: the theme, the language (`lib/i18n`), the text
   size, the density, the monospace font, the panels' widths, the switch that syncs
   those between devices (`internal/prefs`), the sidebar, the way to the
-  alerts and the keys, the version, the signed-in devices and, under
+  alerts and the keys, the version, what remuda shows inside herdr
+  (`internal/mirror`), the signed-in devices and, under
   them, the agents' tasks-only keys with a Revoke each);
   one spinner clock for
   the braille frames and the pulsing question). A finished or
@@ -2537,6 +2562,66 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   full; then the job's log, Open it there and Close the agent here…;
   `teleport.ts` the pure part, tested: `firstTarget`, `folderChoices`,
   `firstFolder`, `folderOf`, `whyNot`, `targetHint`).
+- `internal/mirror/` — **what remuda knows, shown inside herdr itself**,
+  so the terminal at the desk says what the phone says (tested on a fake
+  herdr and clock; `snippet_test.go` runs the config through `herdr config
+  check`). **The figures**: per agent pane, under the source `remuda`,
+  the tokens `remuda_cost` ("$4.20", the page's `usd`), `remuda_context`
+  ("62%"), `remuda_model`, `remuda_pr` ("PR #15 ✓", ✗ a failed check, …
+  some running, then draft / conflicts / changes requested / approved,
+  merged or closed alone), `remuda_task` ("#42", `tasks.Store.LiveTasks`),
+  `remuda_alert` ("! " and the watchdog's note in its `watchdog.Brief`,
+  else "! plan limit"), `remuda_said` (the last answer's first line,
+  `said.Cut` to 80, never while the agent works); the watchdog's note is
+  also the label of the herdr state it is about (`state_text` reads
+  "stuck 25 min"), a plan limit the idle and done labels; per workspace
+  `remuda_review` ("3 files to review", "ready for review"), `remuda_cost`
+  (its agents summed) and `remuda_pr` (its first agent's) — `words.go`,
+  `PaneFigures` / `WorkspaceFigures`, from `facts.go`'s `Inputs` (the
+  radar, the meter, the said tracker, the requests, the limits, the review
+  badges, the tasks; wired in `internal/app`). **The writer** (`writer.go`):
+  every `events.Snapshot` is offered to its machine's own goroutine, which
+  takes the newest one waiting (off the watcher's path, one writer per
+  machine, every write paced to `WritesPerSecond` 5); a place is written
+  only when its figures moved (`due`) or are `Refresh` (3 min) old, every
+  token with `TTL` (5 min), so what remuda wrote lapses by itself within
+  five minutes once it stops; a name no longer wanted is cleared, a shell
+  or a pane whose agent left gets its tokens cleared, a pane or workspace
+  gone is forgotten; a snapshot read `staleAfter` after a write that lacks
+  one of its tokens (herdr restarted, a TTL ran out) writes it again, and a
+  place first seen in a run starts from the `remuda_*` tokens herdr still
+  holds, so an earlier run's leftovers are cleared; `pane_not_found` drops
+  the place, any other refusal of herdr's (one too old for the method)
+  holds the machine off `refusedPause` (10 min), a failure is logged once
+  an hour per machine. The `-server` host has no snapshots, so no writer.
+  **The toasts** (`toasts.go`): `Service.Alert` hears what `push.Service`
+  records (`OnAlert`, beside the feed: past its delay, called off when
+  answered at the desk, never for a muted folder) and, with the switch on,
+  pops a question (`input`, sound request), a finish of a turn of a minute
+  or more (sound done) and the watchdog's stuck / loop / waiting (sound
+  request) as `notification.show` on the agent's machine — never inside
+  the toasts' own quiet hours (`push.Quiet`, set by the device that set
+  them, in its zone), never for a pane in the tab herdr has in front
+  (`FocusedTabID`, herdr's own rule for its toasts); the newest outcome per
+  machine is kept for the section; `Test` pops one on every connected
+  machine at once whatever the switches. **The switches** (`service.go`,
+  `mirror.json` in the state dir): `Settings{figures, toasts, quiet}`, the
+  figures on and the toasts off for a new cockpit, one for every machine
+  (herdr's own `ui.toast.delivery` is already per machine); `Put` wakes
+  every writer, so off clears what remuda wrote at once. A scratch
+  instance (`closed`, `-mirror` in `cmd/remuda`) starts no writer and pops
+  nothing. Routes (`internal/server/mirror.go`, the person's only): `GET
+  /api/mirror` (the switches, `closed`, the token names, `Snippet` and
+  `ToastSnippet` — the rows for herdr's `config.toml`, each fitting its
+  default 26-column sidebar — and the last toasts), `PUT /api/mirror`,
+  `POST /api/mirror/test` (409 from a scratch instance). The page:
+  Settings › Inside herdr (`features/settings/MirrorSection.tsx`,
+  `mirrorApi.ts`, `mirror.ts` tested: `outcomeWords` in plain words of
+  herdr's reasons, `outcomesTone`, `withQuiet`, `quietZone`) — the two
+  switches, the snippet in a `.config-snippet` with Copy, the toast one,
+  the quiet hours, Send a test toast and how it went on each machine;
+  never for a viewer. The display suite opens it (`settings-herdr`) and
+  presses the test against the e2e's own herdr, whose toasts are off.
 - `internal/watchdog/` — notices agents that need a person: **stuck**
   (working ≥ 20 min with no transcript write for 20 min), **loop** (the
   last 6 tool calls of the current turn identical), **waiting** (blocked ≥
@@ -2551,7 +2636,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the service worker posts to `/api/keys` itself — refused or unreachable,
   it opens the page on the pane instead, as a choice does
   (`app/serviceWorker.test.ts` runs `sw.js` on stand-ins) — (a question's push
-  carries its choices the same way, see `internal/push`).
+  carries its choices the same way, see `internal/push`). `Brief(note)` is
+  a note in a few words for a narrow place, herdr's sidebar
+  (`internal/mirror`): "stuck 25 min", "loop: Bash", "waiting 20 min",
+  tested on the notes a sweep writes.
 - `internal/schedule/` (cron as in Vixie: a restricted day-of-month and day-of-week fire on either, a day field that starts with `*` — `*/2` too — is unrestricted; a minute the hour a clock falls back repeats does not run again, `wallMinute`, and `Next` says so) — things on a timetable, three **kinds**
   (`Kind`, `prompt` for a record from before the field). A **prompt**
   schedule names a machine and a **folder** (panes come and go; the

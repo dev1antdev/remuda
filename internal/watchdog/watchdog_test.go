@@ -98,3 +98,25 @@ func TestLongWaitIsReminded(t *testing.T) {
 		t.Fatalf("note %q fired %d", h.notes["p1"], len(w.fired))
 	}
 }
+
+// TestBriefReadsEveryNoteTheSweepWrites keeps the short words in step with the notes: each kind is swept for real.
+func TestBriefReadsEveryNoteTheSweepWrites(t *testing.T) {
+	h, w := newHarness()
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "stuck", State: herdr.StatusWorking, Since: h.now.Add(-30 * time.Minute)}}
+	h.write = h.now.Add(-25 * time.Minute)
+	w.Sweep()
+	h.write = h.now
+	h.tools = []string{"Bash\x00{}", "Bash\x00{}", "Bash\x00{}", "Bash\x00{}", "Bash\x00{}", "Bash\x00{}"}
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "loop", State: herdr.StatusWorking, Since: h.now.Add(-30 * time.Minute)}}
+	w.Sweep()
+	h.episodes = []radar.Episode{{Machine: "m", Pane: "waiting", State: herdr.StatusBlocked, Since: h.now.Add(-80 * time.Minute)}}
+	w.Sweep()
+	for pane, want := range map[string]string{"stuck": "stuck 25 min", "loop": "loop: Bash", "waiting": "waiting 1h 20m"} {
+		if got := Brief(h.notes[pane]); got != want {
+			t.Errorf("Brief(%q) = %q, want %q", h.notes[pane], got, want)
+		}
+	}
+	if Brief("") != "" || Brief("something else") != "something else" {
+		t.Error("a note Brief does not know must stay as it is")
+	}
+}
