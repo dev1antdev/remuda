@@ -2470,10 +2470,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   its own: `GET /api/chat?dir=&session=` without a pane is read-only
   (`Turn.IDs` carry the record uuids; `sessionIDRe` guards the id).
 - `internal/usage/` — the **cost and context meter**. `prices.go` is Claude
-  Code's own baked model catalog (read from the installed 2.1.285: nine
-  price tiers, 21 models, 200k vs 1M windows) and its cost formula (the 1h
-  cache tier, fast mode (`usage.speed`) from its own table, ×1.1 when
-  `inference_geo` is "us" — not on web search); `transcript.UsageOf` reads
+  Code's own baked model catalog (read from the installed 2.1.322: twelve
+  price tiers, 26 models, 200k vs 1M windows — Fable 5.2 and Mythos 5.2 at
+  $8/$40, Haiku 5.5 with its long-prompt rates past 100k prompt tokens,
+  `LongPrompt`, Sonnet 5.5's $0.10 cache reads; a newer id is listed before
+  the older one its prefix matches, tested in `prices_test.go`) and its
+  cost formula (the 1h cache tier, fast mode (`usage.speed`) from its own
+  table, a prompt past a tier's long-prompt size priced whole at its long
+  rates, ×1.1 when `inference_geo` is "us" — not on web search); `transcript.UsageOf` reads
   an assistant record's `message.usage` (`<synthetic>` records and
   `isApiErrorMessage` ones are skipped: no API call behind them), and
   `transcript.NewUsageScanner(path)` is the same for every format — a
