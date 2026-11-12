@@ -263,6 +263,9 @@ func Run(ctx context.Context, o Options) error {
 		recorder.Scratch()
 		log.Print("the agents' timelapses are left to the real instance: this one records none (-record records)")
 	}
+	// every agent turn in a git folder, kept so the person can undo it: a checkpoint at its start and at its rest
+	turns := turnUndo(o.Dir, fleet, watcher, o.Record)
+	defer turns.Tracker.Close()
 	// a second opinion's reviewer, once it has answered, has its tab closed when the opinion asked for that
 	opinions := opinion.NewService(o.Dir)
 	opinions.Read = func(op opinion.Opinion) (opinion.Reply, bool) {
@@ -525,6 +528,8 @@ func Run(ctx context.Context, o Options) error {
 	events.Subscribe(bus, func(e events.Snapshot) { subagentCounts.Observe(e.Machine, e.Snap) })
 	events.Subscribe(bus, func(e events.Snapshot) { recorder.Observe(e.Machine, e.Snap, e.At) })
 	events.Subscribe(bus, func(e events.MachineRemoved) { recorder.Forget(e.Machine) })
+	events.Subscribe(bus, func(e events.Snapshot) { turns.Tracker.Observe(e.Machine, e.Snap, e.At, e.First) })
+	events.Subscribe(bus, func(e events.MachineRemoved) { turns.Tracker.Forget(e.Machine) })
 	events.Subscribe(bus, func(e events.Snapshot) {
 		planLimits.Observe(e.Machine, e.Snap)
 		if mc, err := fleet.Get(e.Machine); err == nil {
@@ -698,6 +703,7 @@ func Run(ctx context.Context, o Options) error {
 	radarOfCollisions := collisionRadar(o.Dir, fleet, watcher, reviews, sayings, requests, pushSvc, hub.RosterChanged)
 	go radarOfCollisions.Loop(ctx.Done())
 	events.Subscribe(bus, func(e events.MachineRemoved) { radarOfCollisions.Forget(e.Machine) })
+	go turns.Tracker.Loop(ctx.Done())
 
 	updater := &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet}
 	fleetSetup := &drift.Service{Fleet: fleet, Health: vitals, Updates: updater, Dirs: func(machineID string) []string {
@@ -758,6 +764,7 @@ func Run(ctx context.Context, o Options) error {
 		Drift:     fleetSetup,
 
 		Collisions: radarOfCollisions,
+		Undo:       turns,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

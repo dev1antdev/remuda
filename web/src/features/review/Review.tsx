@@ -3,7 +3,7 @@
 // that goes to the pane's agent, on its own or under a verdict.
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { actions } from "@/app/store";
+import { actions, app } from "@/app/store";
 import SendToAgent from "@/features/agents/SendToAgent";
 import { useAgentTargets } from "@/features/agents/useAgentTargets";
 import { fsText } from "@/features/files/api";
@@ -56,6 +56,12 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
   const [openFile, setOpenFile] = useState<string | null>(null);
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [look, setLook] = useState(0); // a new look remounts the rows, which re-read their diffs
+  const undone = app.use((s) => s.undone); // an undo from the page changed a folder: this one is looked at again
+  const [undoneSeen, setUndoneSeen] = useState(undone);
+  if (undone !== undoneSeen) {
+    setUndoneSeen(undone);
+    setLook((count) => count + 1);
+  }
   const [marking, setMarking] = useState(false);
   const [sending, setSending] = useState(false);
   const [notice, showNotice] = useTimedNotice(5000);
@@ -186,6 +192,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
         onLookAgain={lookAgain}
         opinionRunning={second.running}
         onAskOpinion={() => second.setAsking(true)}
+        onUndo={() => actions.openDialog({ kind: "undo-turn", machineId, dir })}
         marking={marking}
         onMark={() => void markReviewedSilently()}
       />

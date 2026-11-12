@@ -58,6 +58,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/timelapse"
 	"github.com/dev1antdev/remuda/internal/triggers"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
+	"github.com/dev1antdev/remuda/internal/undo"
 	"github.com/dev1antdev/remuda/internal/updates"
 	"github.com/dev1antdev/remuda/internal/usage"
 	buildversion "github.com/dev1antdev/remuda/internal/version"
@@ -112,6 +113,7 @@ type Server struct {
 	Triggers   *triggers.Service   // the person's rules on what a pane prints, and the dev servers offered as previews
 	Drift      *drift.Service      // how every machine is set up, side by side
 	Collisions *collisions.Service // the workspaces of one repository changing the same files, nil without
+	Undo       *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
 
 	streams   termStreams
 	relayed   relays   // the terminals piped to a machine's own remuda, which holds their attach
@@ -170,6 +172,7 @@ func (s *Server) Handler() http.Handler {
 	s.timelapseRoutes(api)
 	s.triggerRoutes(api)
 	s.driftRoutes(api)
+	s.undoRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

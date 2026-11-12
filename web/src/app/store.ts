@@ -39,6 +39,7 @@ export type AppDialog =
   | { kind: "pins"; machineId: string; paneId: string; dir: string; shown: string | null; title: string } // the turns pinned in a folder's conversations; shown = the session on screen, whose pins name no session
   | { kind: "model"; machineId: string; paneId: string; current?: string } // a Claude Code pane's model switched through its own /model; current = what the meter last saw it answer with
   | { kind: "timelapse"; machineId: string; paneId: string; dir: string; title: string; found?: TimelapseFound } // the pane's recorded turns, and its folder's earlier panes', played back fast; found: a search's hit to open at
+  | { kind: "undo-turn"; machineId: string; dir: string; turn?: string } // an agent's turn taken back in its folder: the newest one, or the one named
   | { kind: "teleport"; machineId: string; paneId: string; tabId: string; workspace: string; agent: string } // the pane's work moved to another machine, an agent carrying on there
   | { kind: "folder-icon"; machineId: string; folder: string; name: string; icon?: FolderIconRef } // a folder's icon: an emoji, a site's favicon or a picture
   | { kind: "leftovers"; machineId: string } // the machine's worktrees no workspace has open, the clean ones to remove
@@ -83,6 +84,7 @@ export type AppState = {
   chatLive: string | null; // the pane's own session id while its chat lens is mounted, so the pins list can tell its pins from an older session's
   reviewAsked: { machineId: string; dir: string } | null; // a folder the Review mode is asked to pick, once (a task's run)
   lastFile: { machineId: string; path: string } | null; // the file last opened in the viewer: what {file} means in a quick prompt
+  undone: number; // the undos made from this page: a lens showing the folder reads it again
   full: boolean; // the lens takes the whole screen: no header, no sidebar, no rail (app/full.tsx)
   find: Find | null; // the find bar over the chat lens or the transcript viewer, null while closed
   away: string | null; // what the agents did while the page was away, one toast line until it is dismissed or followed
@@ -120,6 +122,7 @@ export const app = createStore<AppState>({
   chatLive: null,
   reviewAsked: null,
   lastFile: null,
+  undone: 0,
   full: false,
   find: null,
   away: null,
@@ -183,6 +186,10 @@ export const actions = {
   },
   closeDialog() {
     app.set({ dialog: null });
+  },
+  // an undo changed a folder: the Changes lens and the chat's undo buttons read it again
+  noteUndone() {
+    app.set({ undone: app.get().undone + 1 });
   },
   openPanel(panel: Panel) {
     app.set({ panel });

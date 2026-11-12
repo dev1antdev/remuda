@@ -83,6 +83,7 @@ socket.onmessage = (message) => {
     else if (url.includes("/api/standup")) void fakeStandup(msg.params);
     else if (url.includes("/api/recap")) void fakeRecap(msg.params);
     else if (url.includes("/api/fleet-setup")) void fakeFleet(msg.params);
+    else if (url.includes("/api/undo")) void fakeUndo(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
@@ -695,6 +696,31 @@ async function fakeFleet({ requestId }) {
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
 
+// fakeUndo answers the page's undo routes with a kept turn of the dressed pane that edited, added, deleted and committed,
+// and a plan of it already pushed: the dialog shows every kind of file and the revert, and the e2e undoes nothing
+const UNDO_ID = "20261112T100000Z-e2e0cc";
+const UNDO_CHAT = [
+  { role: "user", ts: iso(now - 12 * 60e3), ids: ["e2e-undo-prompt"], parts: [{ type: "text", text: "Draw the missing screens." }] },
+  { role: "assistant", ts: iso(now - 11 * 60e3), ids: ["e2e-undo-answer"], parts: [{ type: "text", text: "Drew them, and committed the screens." }], took: 150 },
+];
+let undoChat = false;
+function fakeUndoTurn() {
+  const file = (path, was, extra = {}) => ({ path, was, dirty_at: false, dirty_to: true, ...extra });
+  return {
+    id: UNDO_ID, machine: "local", dir: appDir, root: appDir, pane: paneA1, agent: "Claude Code", started: iso(now - 12 * 60e3), ended: iso(now - 9.5 * 60e3), branch: "main", size: 2048,
+    files: [file("src/app.go", "changed"), file("src/screens/new-screen.tsx", "added"), file("docs/old-notes.md", "deleted"), file("web/public/logo.png", "changed", { binary: true }), file("src/screens/index.ts", "changed", { committed: true, dirty_to: false })],
+    commits: [{ sha: "4f2c9a1d0b7e6f5a4c3b2a1908f7e6d5c4b3a291", subject: "Draw the missing screens", when: Math.floor((now - 10 * 60e3) / 1000) }],
+  };
+}
+async function fakeUndo({ requestId, request }) {
+  const path = new URL(request.url).pathname;
+  const turn = fakeUndoTurn();
+  const older = { ...turn, id: "20261112T080000Z-e2e0cd", started: iso(now - 3 * 3600e3), ended: iso(now - 2.9 * 3600e3), commits: [], undone: { at: iso(now - 2 * 3600e3), files: 2 } };
+  const [code, body] =
+    request.method !== "GET" ? [403, { error: "the e2e undoes nothing" }] : path.endsWith("/plan") ? [200, { turn, uncommitted: 4, pushed: ["origin/main"], left_as_is: [] }] : [200, { turns: [turn, older].map((one) => ({ ...one, files: one.files.length })), recording: true }];
+  await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
   const reply = await send("Fetch.getResponseBody", { requestId });
   if (responseStatusCode !== 200 || !reply.result) {
@@ -779,6 +805,7 @@ async function dressChat({ requestId, request, responseStatusCode, responseHeade
   }
   const chat = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
   chat.denied = DENIED;
+  if (undoChat) chat.turns = [...(chat.turns ?? []), ...UNDO_CHAT];
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(chat)).toString("base64") });
 }
@@ -961,6 +988,17 @@ async function changesScreens() {
   await screen("changes-opinion-dialog", {
     open: async () => tap(`${LENS} .review-ask-opinion`),
     expect: [".modal .sel", ".modal .deny-switch"],
+  });
+  // undoing the agent's last turn: every kind of file, the commit offered as a revert, the push it already went out in
+  await screen("changes-undo", {
+    open: async () => {
+      await tap(`${LENS} .review-undo`);
+      if (!(await until(async () => (await count(".modal .undo-files .pick-row")) === 5, 6))) failed(`the undo lists ${await count(".modal .undo-files .pick-row")} files, not 5`);
+      check(await present(".modal .undo-revert input:checked"), "the turn's commit is not offered as a revert");
+      check(await present(".modal .notice.warn"), "the dialog does not say the commit was pushed already");
+      check(await evaluate(`document.querySelector('.modal .btn.danger')?.disabled === false`), "Undo this turn is held back");
+    },
+    expect: [".modal .undo-files", ".modal .undo-commit-list"],
   });
   await screen("changes-verdict", {
     open: async () => tap(`${LENS} .review-verdicts .btn:not(.primary)`),
@@ -1280,6 +1318,21 @@ async function runPass() {
     open: async () => palette("lens:chat"),
     expect: [".lens-pane:not([hidden]) .chat-denied .chat-denied-call", ".lens-pane:not([hidden]) .chat-denied .linkish"],
     close: async () => palette("lens:terminal"),
+  });
+  // an answer whose changes the cockpit kept offers Undo this turn on its foot, which opens the undo on that very turn
+  await screen("chat-undo", {
+    open: async () => {
+      undoChat = true;
+      await palette("lens:chat");
+      if (!(await until(() => present(".lens-pane:not([hidden]) .turn-undo"), 20))) throw new Error("the answer's foot offers no Undo this turn");
+      await tap(".lens-pane:not([hidden]) .turn-undo");
+    },
+    expect: [".modal .undo-files"],
+    close: async () => {
+      undoChat = false;
+      await closeAll();
+      await palette("lens:terminal");
+    },
   });
   if (!pass.phone)
     await screen("split-view", {
@@ -1639,6 +1692,7 @@ try {
       { urlPattern: "*/api/recap*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/search*", requestStage: "Request" },
       { urlPattern: "*/api/fleet-setup*", requestStage: "Request" },
+      { urlPattern: "*/api/undo*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
