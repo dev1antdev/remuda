@@ -53,6 +53,28 @@ func (s *Server) listeners(mc *machines.Machine) ([]preview.Listener, error) {
 	return preview.Match(list, folders), nil
 }
 
+// Listening says whether a process of the person's listens on the machine's port now — what the previews would offer —
+// and what it is (vite, next…, else the process's name): a dev server a pane announced is offered only then.
+func (s *Server) Listening(machineID string, port int) (string, bool) {
+	mc, err := s.Machines.Get(machineID)
+	if err != nil {
+		return "", false
+	}
+	list, err := s.listeners(mc)
+	if err != nil {
+		return "", false
+	}
+	for _, l := range list {
+		if l.Port == port {
+			if l.Label != "" {
+				return l.Label, true
+			}
+			return l.Command, true
+		}
+	}
+	return "", false
+}
+
 // handlePreviews is GET /api/previews?machine=: the machine's listeners and the previews open on it now.
 func (s *Server) handlePreviews(w http.ResponseWriter, r *http.Request) {
 	if s.Previews == nil {

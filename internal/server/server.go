@@ -54,6 +54,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/timelapse"
+	"github.com/dev1antdev/remuda/internal/triggers"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -106,6 +107,7 @@ type Server struct {
 	Scorecard *scorecard.Service  // which model does the work best, from the runs, reviews, requests and arenas
 	Mirror    *mirror.Service     // remuda's figures and alerts inside herdr itself
 	Timelapse *timelapse.Recorder // what the agents' screens did while they worked
+	Triggers  *triggers.Service   // the person's rules on what a pane prints, and the dev servers offered as previews
 
 	streams   termStreams
 	teleports sync.Map // the moves of work to another machine, by job id: where the agent carrying on is
@@ -161,6 +163,7 @@ func (s *Server) Handler() http.Handler {
 	s.scorecardRoutes(api)
 	s.mirrorRoutes(api)
 	s.timelapseRoutes(api)
+	s.triggerRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

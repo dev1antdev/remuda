@@ -26,7 +26,7 @@ import (
 const webhooksFile = "webhooks.json"
 
 // HookKinds are the kinds a webhook can take, as the panel offers them; HookKind maps a payload's kind to one.
-var HookKinds = []string{"question", "finish", "watchdog", "digest", "schedule", "task", "budget", "limits", "review", "machine", "backup", "signin"}
+var HookKinds = []string{"question", "finish", "watchdog", "digest", "schedule", "task", "budget", "limits", "review", "machine", "backup", "signin", "tests", "trigger"}
 
 // WebhookKinds are the kinds of webhook.
 var WebhookKinds = []string{"telegram", "slack", "ntfy", "generic"}

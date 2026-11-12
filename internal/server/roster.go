@@ -24,6 +24,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/transcript"
+	"github.com/dev1antdev/remuda/internal/triggers"
 	"github.com/dev1antdev/remuda/internal/usage"
 	buildversion "github.com/dev1antdev/remuda/internal/version"
 )
@@ -52,6 +53,8 @@ type rosterPane struct {
 	Limit *limits.PaneLimit `json:"limit,omitempty"`
 	// how many of its live conversation's subagents work, sit quiet or are done, for the Wall's zoo; nil for none
 	Subagents *subagents.Count `json:"subagents,omitempty"`
+	// a dev server the pane announced and the previews found listening, offered as a preview
+	Serves *triggers.Offer `json:"serves,omitempty"`
 }
 
 // rosterPR is the request the agent named and, once gh on the machine read it, how it stands.
@@ -156,6 +159,9 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			Status:  herdr.UIStatus(pane.AgentStatus, pane.Agent != ""),
 			Cols:    cols,
 			Rows:    rows,
+		}
+		if s.Triggers != nil {
+			entry.Serves = s.Triggers.OfferOf(machineID, pane.PaneID)
 		}
 		if pane.Agent != "" {
 			display := s.Radar.Display(machineID, pane)

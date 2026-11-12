@@ -85,6 +85,7 @@ export function workspaceMenuItems(m: Machine, session: Session, shown: Shown): 
     if (canRemoveWorktree(session, pr)) rows.push({ label: t("Remove the worktree and its branch…"), icon: "trash", danger: true, onSelect: () => askRemoveWorktree(m, session) });
   }
   rows.push({ sep: true }, { label: t("Previews…"), icon: "external-link", hint: t("what its agents serve, opened in a tab of this browser"), disabled: !connected, onSelect: () => actions.openDialog({ kind: "previews", machineId: m.id, workspace: session.id, name: shown.masked ? shown.name : session.name }) });
+  rows.push({ label: t("Triggers…"), icon: "zap", hint: t("what its panes print, and what that sets off"), onSelect: () => actions.openDialog({ kind: "triggers", machineId: m.id, dir: session.dir ?? folder ?? "", workspace: session.id, name: shown.masked ? shown.name : session.name }) });
   const pane = chat ?? tab?.panes[0];
   if (chat || pane) rows.push({ sep: true });
   if (chat && canFork(chat.agent)) rows.push({ label: forkLabel(chat.agent), icon: "copy", disabled: !connected, onSelect: () => void forkPane(m.id, chat.id, chat.agent) });

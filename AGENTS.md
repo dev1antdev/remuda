@@ -90,7 +90,12 @@ not style.
   server_test.go` is the pattern. An agent working inside a herdr pane
   already has `HERDR_SOCKET_PATH` and `HERDR_SOCKET` in its environment,
   naming the person's real server: a test sets both itself and never
-  counts on them being unset.
+  counts on them being unset. **And a `HOME` of its own beside them**:
+  herdr restores the saved session of the `HOME` it runs under — the
+  person's workspaces, their agents resumed with `--resume` — and saves
+  its own over it; a throwaway on the person's `HOME` once resumed a live
+  Claude Code session in a hidden pane. `internal/herdr/herdrtest.Server`
+  sets all three.
 - **Never run the uninstall for real on the person's machine.** `remuda
   uninstall` and `scripts/uninstall.sh run` stop the service, and with
   `-herdr` the server and every agent in it. To look, use `-n` (the plan

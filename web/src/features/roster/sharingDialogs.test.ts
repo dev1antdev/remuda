@@ -4,6 +4,8 @@ import broadcast from "@/features/agents/BroadcastDialog.tsx?raw";
 import send from "@/features/agents/SendToAgent.tsx?raw";
 import arena from "@/features/arena/ArenaPanel.tsx?raw";
 import teleport from "@/features/teleport/TeleportDialog.tsx?raw";
+import triggerForm from "@/features/triggers/TriggerForm.tsx?raw";
+import triggers from "@/features/triggers/TriggersDialog.tsx?raw";
 import everywhere from "@/features/updates/EverywhereDialog.tsx?raw";
 import updates from "@/features/updates/Updates.tsx?raw";
 import dialogs from "./dialogs.tsx?raw";
@@ -16,7 +18,7 @@ const making = dialogs.slice(dialogs.indexOf("export function NewWorkspaceDialog
 
 // the dialogs and the confirm the sidebar's menus, the ⓘ and the palette open — the menus already saying the neutral
 // names under the screen-sharing mode — and what in them would say a real one straight off the roster or the server
-const SOURCES = { overlays, broadcast, send, arena, teleport, everywhere, updates, making, picker, leftovers, mac };
+const SOURCES = { overlays, broadcast, send, arena, teleport, everywhere, updates, making, picker, leftovers, mac, triggers, triggerForm };
 const RAW_NAMES = [
   /(?<!redact\()\b(?:machine|target|group|chosen\?|x)\.label\b/, // a machine's own label, not through the mode
   /\{ workspace \}\)|workspace: session\.name\b/, // a workspace's own name in the words

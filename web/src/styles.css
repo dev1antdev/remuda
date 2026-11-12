@@ -9422,14 +9422,16 @@ body.popout {
 
 /* ---- #6 Recipes: the saved ways to start an agent (features/recipes) — the list in the Recipes dialog, a row's form,
    the recipe pick and the save/manage links in a "make something" dialog's Options, the words under the pick ---- */
-.recipe-list {
+.recipe-list,
+.trigger-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin: 6px 0;
 }
 
-.recipe-row {
+.recipe-row,
+.trigger-row {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -9446,7 +9448,8 @@ body.popout {
   height: 16px;
 }
 
-.recipe-row-text {
+.recipe-row-text,
+.trigger-row-text {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -9454,12 +9457,14 @@ body.popout {
   gap: 2px;
 }
 
-.recipe-row-text strong {
+.recipe-row-text strong,
+.trigger-row-text strong {
   font-size: var(--fs-13);
   font-weight: 600;
 }
 
-.recipe-words {
+.recipe-words,
+.trigger-words {
   color: var(--fg-dim);
   font-size: var(--fs-12);
   white-space: nowrap;
@@ -9467,7 +9472,8 @@ body.popout {
   text-overflow: ellipsis;
 }
 
-.recipe-form {
+.recipe-form,
+.trigger-form {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -9477,7 +9483,8 @@ body.popout {
   background: var(--bg-raised);
 }
 
-.recipe-form label small {
+.recipe-form label small,
+.trigger-form label small {
   font-size: var(--fs-11);
   font-weight: 400;
   color: var(--fg-faint);
@@ -9498,7 +9505,8 @@ body.popout {
   margin-top: -2px;
 }
 
-.recipes-dialog > .btn {
+.recipes-dialog > .btn,
+.triggers-dialog > .btn {
   align-self: flex-start;
 }
 
@@ -12345,4 +12353,71 @@ body.popout {
 
 .review-settings-fix {
   opacity: 0.85;
+}
+
+/* Triggers: a rule switched off, its fields side by side, the pattern in the monospace face, what a test matched */
+.trigger-row.is-off .trigger-row-text strong {
+  color: var(--fg-dim);
+}
+
+.trigger-row > input[type="checkbox"] {
+  flex: none;
+}
+
+.modal .trigger-form label.trigger-on {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  cursor: pointer;
+}
+
+.trigger-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.trigger-fields > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.trigger-fields > label.grow {
+  flex: 1 1 200px;
+}
+
+.trigger-form input.trigger-pattern {
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+
+.trigger-try {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.trigger-tried {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.trigger-tried pre {
+  margin: 0;
+  max-height: 160px;
+  overflow: auto;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  white-space: pre;
 }

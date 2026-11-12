@@ -24,7 +24,7 @@ const ALWAYS = new Set(["schedule", "digest", "backup", "test"]);
 // the activity's rows that tell of the person's own doing, not of anything that needs them
 const NOT_ALERTS = new Set(["sent", "recover", "handover", "teleport"]);
 
-const WARNING = new Set(["input", "stuck", "waiting", "loop", "budget", "limits", "machine", "backup", "signin"]);
+const WARNING = new Set(["input", "stuck", "waiting", "loop", "budget", "limits", "machine", "backup", "signin", "tests"]);
 
 // the panel Open goes to for an alert that names no pane
 const PANEL_OF: Record<string, string> = { digest: "standup", budget: "usage", limits: "usage" };

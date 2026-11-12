@@ -41,7 +41,7 @@ A refusal comes back as `{"error":{"code":"…","message":"…"}}` — a
 `*herdr.Error` in Go; a failure to reach the socket is a transport error
 (`Client.OnTransportError`, which marks a remote machine dead).
 
-Methods remuda uses: `ping`, `session.snapshot`, `agent.start`,
+Methods remuda uses: `ping`, `session.snapshot`, `events.subscribe`, `agent.start`,
 `agent.prompt`, `pane.read`, `pane.send_text`, `pane.send_keys`,
 `workspace.create`, `workspace.close`, `workspace.rename`,
 `tab.create`, `tab.close`, `tab.rename`, `worktree.create`. The pane
@@ -67,16 +67,36 @@ with --takeover" into the PTY and exits — remuda surfaces that
 
 herdr ignores `HOME` for its socket. A throwaway server is addressed by
 `HERDR_SOCKET_PATH` in every command that touches it — start, status,
-stop — or the stop lands on the person's real server.
+stop — or the stop lands on the person's real server. It needs a `HOME`
+of its own too: herdr restores the saved session of the `HOME` it runs
+under (`~/.config/herdr/session.json` — the person's workspaces, their
+agents started again with `--resume`) and saves its own over it. remuda
+on it gets the same `HOME`, or it mirrors the person's saved remote
+machines (`herdr machine list`) and dials them.
 
 ```sh
 D=$(mktemp -d /tmp/hs.XXXX)                          # short: a unix socket path has ~100 bytes
-export HERDR_SOCKET_PATH=$D/herdr.sock HERDR_SOCKET=$D/herdr.sock
-herdr server &                                       # headless
+export HOME=$D HERDR_SOCKET_PATH=$D/herdr.sock HERDR_SOCKET=$D/herdr.sock
+unset HERDR_PANE_ID HERDR_ENV                        # an agent in a herdr pane has the real server's
+(cd $D && herdr server > $D/herdr.out 2>&1 &)        # headless
 herdr status server
 REMUDA_STATE_DIR=$D/remuda ./bin/remuda -addr 127.0.0.1:7417 -socket $D/herdr.sock
-HERDR_SOCKET_PATH=$D/herdr.sock herdr server stop    # when done
+HOME=$D HERDR_SOCKET_PATH=$D/herdr.sock herdr server stop    # when done
 ```
+
+## Its event stream
+
+`events.subscribe {subscriptions: [{type}, …]}` keeps the connection open:
+`subscription_started`, then one event a line — the global kinds as
+`{"event":"pane_created","data":{…}}`, the per-pane ones (bound to a
+`pane_id`) as `{"event":"pane.agent_status_changed",…}` and
+`pane.output_matched` (`source` recent, `lines`, `match` substring or
+regex in Rust's dialect, a line at a time; told when a match appears, and
+once at subscribe for one already standing). A connection's subscriptions
+are fixed: a second subscribe on it closes it. A gone pane refuses the
+whole request (`pane_not_found`), so does an unreadable regex
+(`invalid_regex`); a slow reader gets `events_lost` or a closed
+connection. The watcher holds one per machine (`internal/watch/stream.go`).
 
 In Go, `herdr.EnsureServer(bin, socket)` does the start and
 `internal/herdr/server_test.go` is the whole pattern, including the stop

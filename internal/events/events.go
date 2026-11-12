@@ -40,6 +40,19 @@ type Snapshot struct {
 	First   bool // the machine's first snapshot, or the first after its polls failed: what changed in between was not watched happening
 }
 
+// OutputMatched says a pane's rows matched one of the watches herdr keeps on its output (pane.output_matched). herdr
+// tells the moment a match appears in the rows it reads, and once more for a match already standing there when a watch
+// begins: Fresh is a match within moments of its stream's start, Carried a watch the stream before it held too.
+type OutputMatched struct {
+	Pane    PaneRef
+	Watch   string // the watch's key, as the one who asked for it named it
+	Line    string // the first row that matched
+	Text    string // the rows herdr read
+	Fresh   bool
+	Carried bool
+	At      time.Time
+}
+
 // MachineRemoved says a machine left the registry and its watcher loop ended.
 type MachineRemoved struct{ Machine string }
 

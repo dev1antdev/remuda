@@ -1,5 +1,5 @@
-// The toasts in the corner: a close's agents offered back, offline, a newer server, a release out, what happened while
-// the page was away, Tailscale's state, the last notice.
+// The toasts in the corner: a close's agents offered back, offline, a newer server, a release out, a dev server a pane
+// announced offered as a preview, what happened while the page was away, Tailscale's state, the last notice.
 
 import { useEffect, useRef } from "react";
 import { alertText, LINGER_MS, type OnPageAlert } from "@/features/alerts/onpage";
@@ -9,6 +9,8 @@ import { newer } from "@/lib/version";
 import { episodeKey, remember, stoppedWords } from "@/features/roster/stopped";
 import { resumeStopped } from "@/features/updates/recover";
 import { reopen } from "@/features/reopen/offer";
+import { previewServed } from "@/features/triggers/offer";
+import { offersToShow, offerWords, rememberOffer } from "@/features/triggers/triggers";
 import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
 import type { ToastItem } from "@/ui";
@@ -45,6 +47,7 @@ export function useToasts(): ToastItem[] {
   useAlertLinger(alerts);
   const [releaseSeen, setReleaseSeen] = usePref("release.seen", "");
   const [recoverSeen, setRecoverSeen] = usePref<string[]>("recover.seen", []);
+  const [serveSeen, setServeSeen] = usePref<string[]>("serve.seen", []);
   useEffect(() => {
     if (!notice || notice.error) return;
     const t = setTimeout(actions.clearNotice, notice.brief ? 2000 : 6000);
@@ -156,6 +159,28 @@ export function useToasts(): ToastItem[] {
         </button>
       ),
       onDismiss: () => setRecoverSeen(remember(recoverSeen, key)),
+    });
+  }
+  // a dev server a pane announced, found listening: offered once per device as a preview
+  for (const offered of offersToShow(machines, serveSeen, Date.now())) {
+    const seen = () => setServeSeen(rememberOffer(serveSeen, offered.key));
+    toasts.push({
+      id: `serves-${offered.key}`,
+      tone: "info",
+      text: offerWords(offered),
+      action: (
+        <button
+          type="button"
+          className="btn sm primary"
+          onClick={() => {
+            seen();
+            void previewServed(offered.machine, offered.offer.port);
+          }}
+        >
+          {t("Preview")}
+        </button>
+      ),
+      onDismiss: seen,
     });
   }
   if (away)

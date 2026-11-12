@@ -335,3 +335,22 @@ func (m *AttachManager) Resize(termID string, cols, rows int) error {
 	}
 	return pty.Setsize(a.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 }
+
+// Viewers is how many viewers of this remuda have the terminal open now: none when it is not attached here.
+func (m *AttachManager) Viewers(termID string) int {
+	if m == nil {
+		return 0
+	}
+	m.mu.Lock()
+	a := m.attaches[termID]
+	m.mu.Unlock()
+	if a == nil {
+		return 0
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.dead {
+		return 0
+	}
+	return len(a.subs)
+}
