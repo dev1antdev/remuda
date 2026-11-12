@@ -5,6 +5,7 @@
 import Tail, { TailAnswer, TileState } from "@/features/chat/Tail";
 import { displayOf, markOf, rowLabel, stateWords, type RadarPrefs } from "@/features/roster/radar";
 import { hueStyle } from "@/features/roster/hue";
+import { CollisionMark } from "@/features/roster/CollisionMark";
 import { IssueChip } from "@/features/roster/IssueChip";
 import { muteWords, mutedUntil } from "@/features/roster/mute";
 import { prMenuItems } from "@/features/roster/prMenu";
@@ -88,6 +89,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           )}
         </button>
         {!hidden && session.jira?.[0] && <IssueChip issue={session.jira[0]} className="tile-jira" />}
+        {!hidden && <CollisionMark machineId={machine.id} session={session} className="tile-collide" />}
         {pr && (
           <span className="tile-pr-group">
             <button type="button" className="linkish tile-pr" title={`${pr.url}${pr.status ? `\n${prWords(pr.status)}` : ""}\n${t("Open in a new tab")}`} onClick={() => openUrl(pr.url)}>

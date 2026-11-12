@@ -1,8 +1,10 @@
 // The review queue: every workspace with uncommitted work — the ones rejected at the last look whose agent says it is
 // ready again first (listed even with everything committed), then the ones with changes since the reviewer looked,
-// in the roster's order otherwise. Pure over the roster, tested; ReviewQueue.tsx draws it.
+// then the rest; within each, the riskiest first, and the roster's order otherwise. Pure over the roster, tested;
+// ReviewQueue.tsx draws it.
 
-import type { Machine, Pane, Session } from "@/features/roster/api";
+import type { Machine, Pane, Risk, Session } from "@/features/roster/api";
+import { scoreOf } from "./risk";
 
 export type QueueItem = {
   key: string; // machine|workspace
@@ -13,6 +15,7 @@ export type QueueItem = {
   fresh: number; // files moved since the last look
   changed: number; // files changed against HEAD, untracked ones too
   ready: boolean; // rejected at the last look, and the agent says it is ready for another
+  risk?: Risk; // how risky the review is, and why
 };
 
 export function reviewQueue(machines: Machine[]): QueueItem[] {
@@ -22,8 +25,8 @@ export function reviewQueue(machines: Machine[]): QueueItem[] {
     for (const session of machine.sessions) {
       if (!session.dir || !session.review || (session.review.changed === 0 && !session.review.ready)) continue;
       const panes = session.tabs.flatMap((tab) => tab.panes);
-      items.push({ key: `${machine.id}|${session.id}`, machine, session, dir: session.dir, pane: panes.find((pane) => pane.agent) ?? panes[0] ?? null, fresh: session.review.fresh, changed: session.review.changed, ready: Boolean(session.review.ready) });
+      items.push({ key: `${machine.id}|${session.id}`, machine, session, dir: session.dir, pane: panes.find((pane) => pane.agent) ?? panes[0] ?? null, fresh: session.review.fresh, changed: session.review.changed, ready: Boolean(session.review.ready), risk: session.review.risk });
     }
   }
-  return items.sort((a, b) => Number(b.ready) - Number(a.ready) || Number(b.fresh > 0) - Number(a.fresh > 0));
+  return items.sort((a, b) => Number(b.ready) - Number(a.ready) || Number(b.fresh > 0) - Number(a.fresh > 0) || scoreOf(b.risk) - scoreOf(a.risk));
 }

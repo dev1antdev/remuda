@@ -24,6 +24,7 @@ import { subWords, type OpinionComment } from "./opinion";
 import { OpinionBlock } from "./OpinionBlock";
 import { OpinionDialog } from "./OpinionDialog";
 import { ReviewHead } from "./ReviewHead";
+import { CollisionNotice } from "./CollisionNotice";
 import type { SecretFinding } from "./secrets";
 import { useOpinion } from "./useOpinion";
 import { useSecretCheck } from "./useSecretCheck";
@@ -202,6 +203,7 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       )}
       {notice && <Notice tone="success">{notice}</Notice>}
       <div className="review-body">
+        <CollisionNotice machineId={machineId} dir={dir} />
         {second.opinion && (
           <OpinionBlock
             opinion={second.opinion}

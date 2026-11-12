@@ -8,6 +8,8 @@ import { FolderIcon, Icon, Logo, Menu, Tip, type MenuItem } from "@/ui";
 import { VENDOR_NAME, brandColor } from "@/ui/brand";
 import type { Machine, Session } from "./api";
 import { branchNamesIssue } from "@/features/jira/jira";
+import { CollisionMark, usePeerName } from "./CollisionMark";
+import { gravest, markWords } from "./collide";
 import { IssueChip } from "./IssueChip";
 import { muteWords, mutedUntil } from "./mute";
 import { prWords } from "./prStatus";
@@ -130,6 +132,8 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
   const selected = current?.machineId === m.id && current.sessionId === s.id;
   const several = item.rows.length > 1;
   const hidden = share.sessionHidden(m.id, s);
+  const peerName = usePeerName();
+  const collision = gravest(s.collisions);
   // a hidden folder's card goes by what runs in it, the folder's neutral name standing above it
   const title = hidden ? (group ? (agent ? (VENDOR_NAME[agent] ?? agent) : t("terminal")) : share.folderName(m.id, folderOf(s), s.name)) : itemTitle(item, group);
   const branch = hidden ? "" : branchShown(item, title);
@@ -148,6 +152,7 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
         state,
         !several && pane?.said ? pane.said : "",
         pane?.pr ? `${pane.pr.label}${pane.pr.status ? ` · ${prWords(pane.pr.status)}` : ""} · ${pane.pr.url}` : "",
+        collision ? markWords(collision, peerName(collision, m.id).full) : "",
         folder,
       ].filter(Boolean).join("\n");
   return (
@@ -164,6 +169,7 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
               {s.review.fresh}
             </span>
           ) : null}
+          {!hidden && <CollisionMark machineId={m.id} session={s} className="ws-collide" compact />}
           <MutedMark session={s} />
           {fill >= 0.5 && usage && (
             <span className={`radar-ctx${fillClass(fill)}`} title={t("Context {pct}% full · {model} · ${cost}", { pct: Math.round(100 * fill), model: usage.name, cost: usage.cost.toFixed(2) })}>

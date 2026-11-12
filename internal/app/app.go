@@ -22,6 +22,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/chat"
 	"github.com/dev1antdev/remuda/internal/code"
 	"github.com/dev1antdev/remuda/internal/complete"
+	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
 	"github.com/dev1antdev/remuda/internal/health"
@@ -698,8 +699,20 @@ func Run(ctx context.Context, o Options) error {
 	go planLimits.Loop(30*time.Second, ctx.Done())
 	go backups.Loop(time.Minute, ctx.Done())
 	go recorder.Loop(ctx.Done()) // a working pane's screen at the recorder's own pace, between the stream's snapshots
+	// the checkouts of one repository changing the same files, read a minute apart against the main branch
+	radarOfCollisions := collisionRadar(o.Dir, fleet, watcher, reviews, sayings, requests, pushSvc, hub.RosterChanged)
+	go radarOfCollisions.Loop(ctx.Done())
+	events.Subscribe(bus, func(e events.MachineRemoved) { radarOfCollisions.Forget(e.Machine) })
 	go turns.Tracker.Loop(ctx.Done())
 
+	updater := &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet}
+	fleetSetup := &drift.Service{Fleet: fleet, Health: vitals, Updates: updater, Dirs: func(machineID string) []string {
+		if snap, _ := watcher.Snapshot(machineID); snap != nil {
+			return snap.WorkspaceDirs()
+		}
+		return nil
+	}}
+	events.Subscribe(bus, func(e events.MachineRemoved) { fleetSetup.Forget(e.Machine) })
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {
 			d, _ := meter.Display(machineID, paneID)
@@ -710,7 +723,7 @@ func Run(ctx context.Context, o Options) error {
 		Watch:     watcher,
 		Input:     input,
 		Chat:      chats,
-		Updates:   &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet},
+		Updates:   updater,
 		Tasks:     taskStore,
 		Launcher:  launcher,
 		Push:      pushSvc,
@@ -748,7 +761,10 @@ func Run(ctx context.Context, o Options) error {
 		Mirror:    mirrored,
 		Timelapse: recorder,
 		Triggers:  paneTriggers,
-		Undo:      turns,
+		Drift:     fleetSetup,
+
+		Collisions: radarOfCollisions,
+		Undo:       turns,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

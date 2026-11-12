@@ -26,3 +26,21 @@ export const everywherePlan = (): Promise<Step[]> => getJSON<{ steps: Step[] }>(
 // the steps shown go back as they were: one that moved since is refused, and nothing runs
 export const startEverywhere = (steps: Step[]): Promise<Batch> => sendJSON("POST", "/api/updates/everywhere", { steps });
 export const fetchEverywhere = (id: string): Promise<Batch> => getJSON(`/api/updates/everywhere/${encodeURIComponent(id)}`);
+
+// Fleet setup: every machine side by side, a row per fact, the norm most machines share and the odd one out marked
+export type FleetAction = { what: string; title: string; command: string };
+export type FleetCell = { value: string; mark?: "odd" | "split"; at?: number; note?: string; action?: FleetAction };
+export type FleetRow = {
+  id: string;
+  arg?: string;
+  kind: "version" | "via" | "flag" | "hook" | "plugin" | "model" | "hash" | "text" | "behind";
+  state: "same" | "odd" | "split" | "single";
+  norm?: string;
+  cells: Record<string, FleetCell>; // by machine id; a machine without one is a machine the row does not apply to
+  hand?: string[]; // the machines off the row's best that no update brings in line: theirs to do by hand
+};
+export type FleetSection = { id: "agents" | "herdr" | "remuda" | "claude" | "instructions" | "repo"; name?: string; folders?: Record<string, string>; rows: FleetRow[] };
+export type FleetColumn = { id: string; label: string; away?: boolean; error?: string };
+export type FleetTable = { at: string; machines: FleetColumn[]; sections: FleetSection[]; single?: { name: string; machine: string; folder: string }[] };
+// fresh reads every machine at once, its vitals too; otherwise a read stands a minute
+export const fleetSetup = (fresh = false): Promise<FleetTable> => getJSON(`/api/fleet-setup${fresh ? "?fresh=1" : ""}`);

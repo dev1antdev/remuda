@@ -9,6 +9,7 @@ import PreviewsDialog from "@/features/preview/PreviewsDialog";
 import TriggersDialog from "@/features/triggers/TriggersDialog";
 import ServerPanel from "@/features/roster/ServerPanel";
 import EverywhereDialog from "@/features/updates/EverywhereDialog";
+import FleetDialog from "@/features/updates/FleetDialog";
 import ReopenDialog from "@/features/reopen/ReopenDialog";
 import ArenaDialog from "@/features/arena/ArenaDialog";
 import ArenaPanel from "@/features/arena/ArenaPanel";
@@ -41,6 +42,10 @@ import UpdatesDialog from "@/features/updates/Updates";
 import BudgetDialog from "@/features/usage/BudgetDialog";
 import Usage from "@/features/usage/Usage";
 import { encodePath, type SearchHit } from "@/features/search/api";
+import type { ScreenHit } from "@/features/terminal/timelapse/api";
+import { firstStep } from "@/features/terminal/timelapse/found";
+import { timelapseTitle } from "@/features/terminal/timelapse/row";
+import { machineLabel } from "@/features/roster/options";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import CommandPalette from "./commands";
 import { useAllPanes } from "./current";
@@ -81,6 +86,12 @@ export default function Overlays() {
     if (pick) actions.selectPane(pick.machine.id, pick.pane.id);
     else actions.openViewer(hit);
   };
+  // a screen's hit opens the player on the recording's pane and folder, at the frame the text first stood in
+  const openScreenHit = (hit: ScreenHit, query: string) => {
+    actions.closePanel();
+    const title = timelapseTitle({ machineId: hit.machine, workspace: hit.workspace, machine: machineLabel(machines, hit.machine) });
+    actions.openDialog({ kind: "timelapse", machineId: hit.machine, paneId: hit.pane, dir: hit.dir, title, found: { ...firstStep(hit), query } });
+  };
 
   return (
     <>
@@ -88,10 +99,11 @@ export default function Overlays() {
       {panel === "release" && host && <UpdatesDialog machine={host} what="remuda-release" onClose={actions.closePanel} />}
       {panel === "server" && server && <ServerPanel server={server} onClose={actions.closePanel} />}
       {dialog?.kind === "update-everywhere" && <EverywhereDialog onClose={actions.closeDialog} />}
+      {dialog?.kind === "fleet-setup" && <FleetDialog onClose={actions.closeDialog} />}
       {panel === "alerts" && <AlertsPanel onClose={actions.closePanel} />}
       {panel === "activity" && <Activity onClose={actions.closePanel} />}
       {panel === "schedules" && <Schedules machines={machines} onClose={actions.closePanel} ask={actions.ask} />}
-      {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} />}
+      {panel === "search" && <Search machines={machines} initial={search} onClose={actions.closePanel} onOpen={openHit} onOpenScreen={openScreenHit} />}
       {panel === "standup" && <Standup onClose={actions.closePanel} />}
       {panel === "arena" && <ArenaPanel onClose={actions.closePanel} />}
       {panel === "usage" && (
@@ -233,7 +245,17 @@ export default function Overlays() {
         <StartFromRecipeDialog machineId={dialog.machineId} dir={dialog.dir} onClose={actions.closeDialog} onStart={async (req) => landOn(req.machine, await createSession(req))} />
       )}
       {dialog?.kind === "pins" && <PinsDialog machineId={dialog.machineId} paneId={dialog.paneId} dir={dialog.dir} shown={dialog.shown} title={dialog.title} onClose={actions.closeDialog} />}
-      {dialog?.kind === "timelapse" && <TimelapseDialog machineId={dialog.machineId} paneId={dialog.paneId} dir={dialog.dir} title={dialog.title} onClose={actions.closeDialog} />}
+      {dialog?.kind === "timelapse" && (
+        <TimelapseDialog
+          key={dialog.found ? `${dialog.found.recording}@${dialog.found.frame}` : `${dialog.machineId}|${dialog.paneId}`}
+          machineId={dialog.machineId}
+          paneId={dialog.paneId}
+          dir={dialog.dir}
+          title={dialog.title}
+          found={dialog.found}
+          onClose={actions.closeDialog}
+        />
+      )}
       {dialog?.kind === "undo-turn" && <UndoDialog machineId={dialog.machineId} dir={dialog.dir} turn={dialog.turn} onClose={actions.closeDialog} />}
       {dialog?.kind === "machine" && (
         <AddMachineDialog
