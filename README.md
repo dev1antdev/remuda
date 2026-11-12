@@ -114,7 +114,11 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   sidebar, the wall and the chat redraw within about a second instead of
   on the next poll, and the polls themselves slow down to a safety net:
   fewer requests, less battery on a phone. Without the socket (an old
-  proxy, a hiccup) everything polls as before.
+  proxy, a hiccup) everything polls as before. remuda itself hears herdr
+  the same way: one event stream per machine, so a question or a finish
+  is on the page, the Wall and your phone about a quarter of a second
+  after the agent stopped, and herdr is asked for its state every 15–20 s
+  instead of every 2–4 while the stream stands.
 - **The address follows you** — `?machine=&pane=&mode=&lens=` is what you
   are looking at, so a link, a reload or a notification lands on the same
   pane in the same lens.
@@ -743,6 +747,25 @@ reaches through a forward of its own. Only the browser signed in to remuda
 gets in — a viewer link does not — and remuda's cookie never reaches the
 app. Nothing is listened on by itself: a preview opens at your Open and
 closes after half an hour unused.
+
+When a pane announces a dev server itself — Vite's `Local: http://localhost:5173/`,
+Next's, `python3 -m http.server`'s, uvicorn's, a plain `listening on :3000` —
+the corner says so once ("web serves on :5173 · Preview") as soon as the port
+really listens; Preview opens it the same way. Nothing opens by itself.
+
+## Triggers — what a pane prints
+
+herdr itself watches what every pane prints and tells remuda the moment a
+line matches. Built in: the dev servers above, and **tests that failed** —
+go test, jest, vitest, pytest, cargo, mocha, rspec — one push per pane, never
+while its agent is still at work on them or while you have its terminal open,
+then not again for half an hour. **Triggers…** in a workspace's ⋯ menu (or the
+⌘K palette) adds your own: a line to look for — text as written or a regular
+expression — everywhere, on one machine or in one folder, and what it does: a
+push, a row in the activity, a preview offered, or the task whose agent runs
+in that pane moved to a column (`ready for QA` → Testing). Test tries a rule
+on a pane's last 500 rows before you save it. The webhooks hear them as
+"tests that failed" and "a trigger of yours".
 
 ## Agents and your tasks
 

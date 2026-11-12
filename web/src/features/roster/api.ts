@@ -23,7 +23,12 @@ export type Pane = {
   said?: string; // the first line of the agent's last answer, once it finished
   pr?: PullRequest; // the last pull or merge request the agent named, "PR #15" / "MR !9"
   limit?: PaneLimit; // a subscription limit the agent stopped on, and the person's booking to continue it after the reset
+  serves?: ServeOffer; // a dev server the pane announced and the previews found listening, offered as a preview
 };
+
+// ServeOffer is a dev server a pane announced: its port on the machine, the address as printed, what serves it, the
+// trigger that offered it when it was one of the person's, and when
+export type ServeOffer = { port: number; url?: string; label?: string; by?: string; at: string };
 
 // PaneLimit is when the agent stopped on a plan limit and the harness's words, and the moment a booking continues it
 export type PaneLimit = { hit_at?: string; text?: string; continue_at?: string };

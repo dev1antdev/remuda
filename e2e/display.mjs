@@ -344,6 +344,17 @@ async function seed() {
   notes = await api("POST", "/api/sessions", { machine: "local", dir: notesDir, name: "notes", agent: "shell" });
   made.push(notes.id);
   await api("PUT", "/api/jira", { site: "http://127.0.0.1:9", account: "", token: "e2e" }).catch((error) => failed(`a Jira site: ${error.message}`));
+  // the person's own triggers, one everywhere and one on the repository's folder, for the triggers dialog; a regex
+  // herdr could not read is refused before it reaches a machine's stream
+  const rules = await api("PUT", "/api/triggers", [
+    { name: "Deployed", match: "substring", pattern: "DEPLOYED", action: "push", enabled: true },
+    { name: "Ready for QA", machine: "local", dir: appDir, match: "regex", pattern: "^ready for qa$", action: "task", column: "Testing", enabled: true },
+  ]);
+  if (rules.rules?.length !== 2) failed(`the triggers answered ${JSON.stringify(rules)}`);
+  await api("PUT", "/api/triggers", [{ name: "Ahead", match: "regex", pattern: "(?=x)", action: "push", enabled: true }]).then(
+    () => failed("a look-ahead herdr cannot read was kept"),
+    () => {},
+  );
   // a backup of this instance's own state dir onto this machine, so the Settings section has a run and a copy to show
   await api("PUT", "/api/backups", { machine: "local", at: "03:30", keep: 3 });
   const taken = await api("POST", "/api/backups/run");
@@ -972,6 +983,16 @@ async function runPass() {
       if (!(await until(() => evaluate(`[...document.querySelectorAll(".modal .preview-row")].some((r) => r.textContent.includes("${devPort}"))`), 20))) failed(`the previews dialog does not list the dev server's port ${devPort}`);
     },
     expect: [".modal .preview-row"],
+  });
+  await screen("triggers", {
+    open: async () => {
+      await onAgents();
+      await palette("triggers-here");
+      if (!(await until(async () => (await count(".modal .trigger-row")) === 2, 15))) failed(`the triggers dialog lists ${await count(".modal .trigger-row")} rules for the folder, not 2`);
+      await tap(".modal .trigger-row .btn");
+      if (!(await until(() => present(".modal .trigger-form"), 5))) failed("a trigger's form did not open");
+    },
+    expect: [".modal .trigger-form", ".modal .trigger-try"],
   });
   await screen("float-terminal", {
     open: async () => {

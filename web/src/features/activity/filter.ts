@@ -22,6 +22,7 @@ export const FAMILIES: Family[] = [
   { key: "budgets", label: "Budgets & limits", icon: "chart", kinds: ["budget", "limits"] },
   { key: "review", label: "Review", icon: "eye", kinds: ["review"] },
   { key: "machines", label: "Machines", icon: "monitor", kinds: ["machine", "backup"] },
+  { key: "triggers", label: "Triggers", icon: "zap", kinds: ["tests", "trigger"] },
   { key: "sent", label: "Sent", icon: "send", kinds: ["sent"] },
   { key: OTHER, label: "Other", icon: "bell", kinds: [] },
 ];

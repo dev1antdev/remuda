@@ -121,7 +121,28 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   up now, the copies there; never for a viewer.
 - `internal/herdr/` — everything herdr. `client.go`: newline-JSON RPC over
   the Unix socket, **one request = one connection** (herdr closes the socket
-  after each response; never pool). `attach.go`: ref-counted
+  after each response; never pool). **The one connection that stays**:
+  `events.go`, `Client.Subscribe(subs)` — herdr's `events.subscribe`,
+  answered `subscription_started` and then one event a line on the same
+  connection, the deadline cleared; its subscriptions are fixed for the
+  connection's life (a second subscribe on it closes it), a pane it names
+  that is gone refuses the whole request (`pane_not_found`), as does a
+  regex herdr cannot read (`invalid_regex`); `Stream.Next` reads an
+  `Event{Kind, PaneID, AgentStatus, MatchedLine, Text}` — herdr names the
+  global kinds with an underscore (`pane_created`) and the per-pane ones
+  with a dot (`pane.agent_status_changed`, `pane.output_matched`) — or
+  herdr's error frame mid-stream (`events_lost` for a reader that fell
+  behind; with the buffer full herdr may just close), a broken or ended
+  stream told to `OnTransportError`, one closed here answering
+  `net.ErrClosed`; a line is 16 MB at most. Tested on a fake socket
+  (`events_test.go`) and against a throwaway herdr (`events_herdr_test.go`:
+  a pane made, its agent's status through `pane.report_agent`, an output
+  match, both refusals). `herdrtest.Server` (package
+  `internal/herdr/herdrtest`) starts that throwaway for any package's
+  test, its socket and its `HOME` both temporary. `Client.Bridged` says
+  the client dials through a command (`nc -U` over ssh) rather than a
+  socket; `AttachManager.Viewers(terminal)` is how many of this remuda's
+  viewers have a terminal open. `attach.go`: ref-counted
   `herdr terminal attach` PTYs (creack/pty), one per terminal shared by all
   viewers, 45s linger after the last viewer leaves. **No byte replay** for a
   viewer joining a live attach: TUIs draw with relative cursor moves, so a
@@ -234,7 +255,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   log line, not a failure of the connection. **Two RPC
   transports**: a forwarded unix socket when the sshd allows streamlocal
   forwarding, else one `ssh host nc -U <sock>` exec per request
-  (one sshd on :2222 answers "unknown channel type"). Remote
+  (one sshd on :2222 answers "unknown channel type"). The watcher's event
+  stream rides the same one as a connection that stays: through the
+  forwarded socket like any request, or as one long-lived `nc -U` exec, a
+  session of the master for as long as it stands, its dial deadline cleared
+  once herdr answered (`sshx/exec_stream_test.go`), swapped for the next
+  one only after it closed. Remote
   transcripts are fetched by `stat` + `tail -c` delta into a per-machine
   byte cache (`transcript.Reader.Turns` hides local vs remote; the last
   8 MB of a file, 128 MB of tails in all and 64 MB of subagents', the
@@ -639,7 +665,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the Tasks board, list and detail, Review, Code, every panel, each
   section of Settings, the palette, the keys sheet and the dialogs (new
   workspace, the two imports, arena, teleport, reopen, recipes, budget,
-  broadcast) — the palette by its rows' `data-entry` ids, so either
+  broadcast, the triggers with a rule's form) — the palette by its rows' `data-entry` ids, so either
   language finds them; every screen checked for a sideways scroll, a
   menu, popover, dialog, toast or drawer past the screen's edge, text
   squeezed to nothing, content under the rail or the header, its
@@ -708,10 +734,16 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the bearer token and no Origin, so csrfGuard lets them through. Never
   `--takeover`.
 - **A throwaway herdr server for a test needs `HERDR_SOCKET_PATH`, never a
-  changed `HOME`.** herdr ignores `HOME` for its socket: `HOME=/tmp/x herdr
+  changed `HOME` alone.** herdr ignores `HOME` for its socket: `HOME=/tmp/x herdr
   server stop` stops the user's real server (it happened). The env var is
   what `herdr server`, `status server` and `server stop` all honour;
-  `internal/herdr/server_test.go` is the pattern.
+  `internal/herdr/server_test.go` is the pattern. **And a `HOME` of its
+  own beside it**: herdr restores the saved session of the `HOME` it runs
+  under — `~/.config/herdr/session.json`, the person's workspaces, their
+  agents started again with `--resume` — and saves its own over it, so a
+  throwaway on the person's `HOME` resumed a live Claude Code session in a
+  hidden pane and wrote its probe workspace into their session file (it
+  happened, 2026-11-12). `internal/herdr/herdrtest.Server` sets both.
 - **Installing and uninstalling need no checkout** (`internal/setup`: six
   embedded POSIX scripts, and `setup_test.go` drives them in a temp HOME
   with stand-ins for launchctl, systemctl, herdr, brew and ssh first on
@@ -1559,15 +1591,110 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   not answering" while its machine is away (the roster lists no pane of
   a machine that is not connected; `shellView` in `float.ts`, tested).
 - `internal/watch/` — **the only poller**: every machine's
-  `session.snapshot` (2s local, 4s remote) whether or not a browser is
-  open. Handlers read its cache (`Snapshot` returns the last good snapshot
-  plus the last error) and never ask herdr inline; mutations call `Refresh`.
+  `session.snapshot` whether or not a browser is open, **asked for the
+  moment herdr says something moved** (`stream.go`, tested on a fake
+  socket in `stream_test.go`): one `events.subscribe` connection per
+  machine (`herdr.Client.Subscribe`) holding the global kinds — a
+  workspace, tab, worktree or pane made, closed, renamed, moved or
+  focused, an agent detected, a pane exited, a layout updated
+  (`urgentKinds`) — every pane's `pane.agent_status_changed` (herdr binds
+  that one to a pane, so the set follows the panes) and the output watches
+  `Watcher.Outputs` names (`internal/triggers`); herdr fixes a
+  connection's subscriptions, so a pane made or gone, or a rule changed
+  (`Resubscribe`), is a new connection — opened before the old one closes
+  on a socket, after it through the `nc -U` bridge (`Client.Bridged`: a
+  session of the ssh master each) — never more than two. Any event asks
+  the loop for a snapshot (`pace.go`): `eventDebounce` 150 ms for the rest
+  of its burst, never closer than `localGap` 500 ms / `remoteGap` 1 s to
+  the last; `pane.updated`, which an agent's spinner fires several times a
+  second through its title, only within `lazyGap` 5 s of the last. While
+  the stream stands the poll is the safety net, every
+  `localStreamingEvery` 15 s / `remoteStreamingEvery` 20 s; without it,
+  today's 2 s local and 4 s remote, the moment it ends. A stream that
+  ends, a reconnect, or herdr's `events_lost` is a snapshot now and a new
+  stream (backoff `streamRetry` 1 s → 30 s, reset by one that stood a
+  minute); `pane_not_found` (a pane gone under the subscription) a
+  snapshot and a retry; herdr refusing the person's watches
+  (`invalid_regex`) the set again without them, told to `Watcher.Refused`
+  and left out until they change; a herdr that refuses the stream itself
+  keeps today's pace, tried again every 5 min. A stream's error that is no
+  herdr refusal goes to the client's `OnTransportError`, so a dead remote
+  is noticed at once, and the reader goroutine ends with its connection.
+  An output match goes on the bus as `events.OutputMatched` for every
+  watch whose pattern the row matches (herdr names no subscription), with
+  `Fresh` (within `freshFor` 2 s of its stream's start: herdr tells a match
+  already standing on the screen when a watch begins) and `Carried` (the
+  stream before held that watch too). Handlers read its cache
+  (`Snapshot` returns the last good snapshot plus the last error) and never
+  ask herdr inline; mutations call `Refresh`.
   It publishes `events.Snapshot` — once the snapshot is in its cache, so
   an ear asking `Snapshot` about the panes is told of the same one (tested)
   — and one `events.PaneStatus` per pane
   status transition (push, the restarts and the radar hear them); the
   first snapshot of a machine only seeds state — a reconnect must not
-  replay a day of alerts.
+  replay a day of alerts. A status move reaches the roster in about a
+  quarter of a second (measured on a throwaway herdr), where the 2 s poll
+  took up to two.
+- `internal/triggers/` — **what a pane prints, and what it sets off**
+  (tested: the built-in patterns on recorded lines, the rules, the dedupe,
+  the actions on fakes, and herdr itself running both built-in patterns on
+  a throwaway server). herdr watches the rows (`pane.output_matched`, its
+  Rust regex a line at a time, the last `lines` 40 rows of `recent`, a
+  match told when it appears and once more when a watch begins with one
+  standing); `Service.Watches` is the set for a machine's snapshot — the
+  person's rules where they look, then two built-in ones on every pane, at
+  most `MaxWatches` 200 a machine (the rest left out, logged once an
+  hour). **Built in**: `ServePattern`, a dev server announcing its address
+  (Vite, Next.js, CRA, Astro, webpack-dev-server, http.server, uvicorn,
+  Flask, Django, Rails, Hugo, Jekyll, php -S, "listening on :3000"),
+  `ServedAt` its port (none under 1024) → once the previews find the port
+  listening (`Listening`, the server's own `listeners`, tried at 0, 1.5 and
+  4 s) an `Offer{port, url, label, by, at}` on the roster as `pane.serves`
+  for `OfferKeep` 15 min, which the page offers once per device in the
+  corner — "web serves on :5173 (vite) · Preview", `features/triggers/
+  offer.ts` opening it through `/api/previews/open`, which opens only a
+  port it finds listening; nothing opens by itself, a viewer gets no such
+  toast. `TestsPattern`, a run that failed (go test's `--- FAIL:` and
+  `FAIL  pkg  0.2s` — a tab is spaces by the time herdr reads it — jest,
+  vitest, pytest, cargo test, mocha, rspec, node's runner) → one
+  `push.Notify` of kind `tests` ("Tests failed in api") per pane, never
+  while its agent works (it is on it), never while a viewer has the pane's
+  terminal open through this remuda (`AttachManager.Viewers`), then quiet
+  for `TestsQuiet` 30 min. **The person's rules** (`rules.go`,
+  `triggers.json` in the state dir, 0600, replaced whole, at most
+  `MaxRules` 50): `Rule{name, machine, dir, match substring|regex,
+  pattern, action push|feed|preview|task, column, enabled}` — everywhere,
+  every folder of a machine, or a folder and what is under it (`Covers`:
+  the pane's workspace folder or its shell's); `Check` refuses a pattern
+  with a line break, a regex Go cannot read or herdr's Rust one would not
+  (`\Q…\E`), one every line matches, a task action without a column;
+  the actions push (kind `trigger`, so the feed and the webhooks hear it),
+  a row in the activity alone (kind `trigger`), a preview offered as the
+  built-in one does, or the task whose live run is in the pane moved to the
+  column of that title (`tasks.Store.OnTrigger`: a comment by remuda,
+  never into the Queued column, never a card a pipeline holds), each at
+  most once a `RuleQuiet` minute per pane. **What is news** (`OnMatch`):
+  the same row again a moment after a stream opened, or through two
+  streams at once (`dupWindow` 3 s), is that row again; a row standing
+  when a watch began on a pane that was there before (`Fresh` and not
+  `Carried`, the pane first seen in a machine's first snapshot or more
+  than `newFor` a minute ago) is where things stood — a pane born while
+  watched prints its first rows as news. Routes
+  (`internal/server/triggers.go`, the person's only): `GET /api/triggers`
+  (the rules, herdr's refusals by machine, the built-in patterns, the
+  cap), `PUT /api/triggers` (a rule's machine one the fleet knows), `POST
+  /api/triggers/try {machine, pane, rule}` (`Try`: the rows of the pane's
+  last `TryRows` 500 the rule matches, the last `MaxShown` 20, a preview's
+  port). The page: `features/triggers/` — `TriggersDialog.tsx` (dialog
+  kind `triggers`: "Triggers…" in the workspace's ⋯ menu with its folder,
+  listing the rules that look at it, and the palette's "Triggers…" for
+  every rule and "Triggers in “x”…"), `TriggerForm.tsx` (the fields and a
+  Test on a pane of the workspace, else of any machine), `triggers.ts` the
+  pure part, tested: `ruleWords`, `scopeOf`, `looksAt`, `withScope`,
+  `draftCheck`, `offersToShow`, `offerWords`, `rememberOffer` (pref
+  `serve.seen`, the newest 30, an offer older than `OFFER_FRESH` 10 min
+  never toasted). The webhooks' kinds `tests` and `trigger`, the
+  activity's Triggers family.
 - `internal/live/` — **the page's one event stream**, so the screens
   reload when something moved instead of polling for it. `Hub`:
   `Subscribe()` is one page's stream (`Events`, `Watch(keys)` — the
@@ -1736,7 +1863,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   alert `record` hands to the feed goes to each enabled webhook whose
   `Kinds` include its `HookKind` (input → question, done → finish, the
   watchdog's three → watchdog, the rest by name: digest, schedule, task,
-  budget, limits, review, machine, backup — `HookKinds` is the one list, the page's
+  budget, limits, review, machine, backup, tests (a pane's failed tests), trigger (one of the
+  person's triggers, `internal/triggers`) — `HookKinds` is the one list, the page's
   picker must match it) outside its own quiet hours — a question 10 s after
   the block, called off when answered at the desk, every finish 10 s
   after, as the feed hears them — in a goroutine each, one try and one
@@ -1849,7 +1977,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   opens its pane, the alert settings at its foot; the palette has it too.
   **Filters** (`filter.ts`, tested; `FilterBar.tsx`): a chip per family
   of kinds — questions, finished, watchdog, tasks, schedules, budgets,
-  review, machines, sent, other for a handover, a recovery, a test or a
+  review, machines, triggers (failed tests and the person's triggers), sent, other for a handover, a recovery, a test or a
   kind the page does not know — with its count for the machine chosen,
   a Select for the machine, Show everything; the pref `activity.filter`
   (per device, not synced), and the bell's tooltip says what is on.
