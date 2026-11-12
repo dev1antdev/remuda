@@ -45,14 +45,18 @@ import (
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
 	"github.com/dev1antdev/remuda/internal/schedule"
+	"github.com/dev1antdev/remuda/internal/scorecard"
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/server"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/setup"
 	"github.com/dev1antdev/remuda/internal/shell"
+	"github.com/dev1antdev/remuda/internal/signin"
 	"github.com/dev1antdev/remuda/internal/state"
+	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/tasks"
+	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/tsnetx"
 	"github.com/dev1antdev/remuda/internal/updates"
 	"github.com/dev1antdev/remuda/internal/usage"
@@ -214,6 +218,16 @@ func Run(ctx context.Context, o Options) error {
 		return mc, true
 	})
 	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
+	// how many subagents each Claude Code pane's live conversation runs, read while a page reads the roster, for the Wall's zoo
+	subagentCounts := subagents.New(chats.Subagents, func(machineID string) bool {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return false
+		}
+		_, _, err = mc.Ready()
+		return err == nil
+	})
+	subagentCounts.OnChange = hub.RosterChanged
 	reviews := review.New(o.Dir)
 	// a second opinion's reviewer, once it has answered, has its tab closed when the opinion asked for that
 	opinions := opinion.NewService(o.Dir)
@@ -283,6 +297,10 @@ func Run(ctx context.Context, o Options) error {
 	input := sessions.NewInput(fleet, watcher)
 	health.PinnedCode = setup.CodeVersion
 	vitals := health.New(o.Dir, fleet, o.Version, o.VersionCheck)
+	// Claude Code's sign-in on each machine, read with the vitals: warned of three days before it ends, a day before, once ended
+	signins := signin.New(o.Dir)
+	signins.Notify = pushSvc.Notify
+	vitals.OnRead = signinWarnings(signins, fleet)
 	runner := jobs.New(bus)
 	restarter := restart.New(fleet)
 	restarter.Later = func(mc *machines.Machine, title string, fn func(say func(string)) error) {
@@ -381,14 +399,16 @@ func Run(ctx context.Context, o Options) error {
 	schedules := schedule.New(o.Dir, input.SubmitToFolder, pushSvc.Broadcast, func(since time.Time) (string, string, bool) {
 		return recap.Digest(recaps.Standup(since), since, time.Now())
 	})
+	cookbook := recipes.New(o.Dir)
+	retiring := retirements(cookbook, schedules, taskStore, fleet, watcher, meter, vitals)
 	scouts := &sessions.Launcher{Machines: fleet, Watch: watcher, Input: input, Notify: pushSvc.Broadcast}
 	schedules.Agents = schedule.Agents{
 		Start: func(s schedule.Schedule) (schedule.Started, error) {
-			args, err := sessions.SplitArgs(s.Args)
+			start, err := s.Start()
 			if err != nil {
 				return schedule.Started{}, err
 			}
-			place, err := scouts.StartInFolder(s.Machine, s.Dir, s.Label, s.Agent, sessions.Start{Model: s.Model, Args: args}, s.Prompt)
+			place, err := scouts.StartInFolder(s.Machine, s.Dir, s.Label, s.Agent, start, s.Prompt)
 			return schedule.Started{Pane: place.Pane, Tab: place.Tab, Workspace: place.Workspace, MadeWorkspace: place.MadeWorkspace}, err
 		},
 		Close: func(run schedule.Started) error {
@@ -398,6 +418,7 @@ func Run(ctx context.Context, o Options) error {
 			answer, _ := chats.LastAnswer(machine, pane)
 			return answer
 		},
+		Denied: func(machine, pane string) []transcript.Denial { return chats.Denied(machine, pane, "").Calls },
 		Status: func(machine, pane string) string {
 			info, snap := chats.Pane(machine, pane)
 			switch {
@@ -419,6 +440,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 	})
 	events.Subscribe(bus, func(e events.Snapshot) { sayings.Observe(e.Machine, e.Snap) })
+	events.Subscribe(bus, func(e events.Snapshot) { subagentCounts.Observe(e.Machine, e.Snap) })
 	events.Subscribe(bus, func(e events.Snapshot) {
 		planLimits.Observe(e.Machine, e.Snap)
 		if mc, err := fleet.Get(e.Machine); err == nil {
@@ -435,11 +457,14 @@ func Run(ctx context.Context, o Options) error {
 		restarter.Memory.Forget(e.Machine)
 		planLimits.Forget(e.Machine)
 		opinions.ForgetMachine(e.Machine)
+		subagentCounts.Forget(e.Machine)
+		signins.Forget(e.Machine)
 	})
 	events.Subscribe(bus, opinions.OnStatus)
 	events.Subscribe(bus, opinions.Observe)
 	events.Subscribe(bus, pushSvc.OnStatus)
 	events.Subscribe(bus, sayings.OnStatus)
+	events.Subscribe(bus, subagentCounts.OnStatus)
 	events.Subscribe(bus, planLimits.OnStatus)
 	events.Subscribe(bus, requests.OnNamed)
 	events.Subscribe(bus, requests.OnStatus)
@@ -505,6 +530,7 @@ func Run(ctx context.Context, o Options) error {
 			return display.State, time.UnixMilli(display.Since), true
 		},
 		LastAnswer: chats.LastAnswer,
+		Denied:     chats.Denied,
 		Usage: func(machineID, paneID string) (float64, int64, string, bool) {
 			d, ok := meter.Display(machineID, paneID)
 			if !ok {
@@ -542,6 +568,11 @@ func Run(ctx context.Context, o Options) error {
 	go planLimits.Loop(30*time.Second, ctx.Done())
 	go backups.Loop(time.Minute, ctx.Done())
 
+	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
+		ModelOf: func(machineID, paneID string) string {
+			d, _ := meter.Display(machineID, paneID)
+			return d.Name
+		}}
 	srv = &server.Server{
 		Machines:  fleet,
 		Watch:     watcher,
@@ -562,7 +593,8 @@ func Run(ctx context.Context, o Options) error {
 		Review:    reviews,
 		Schedules: schedules,
 		Quick:     quick.New(o.Dir),
-		Recipes:   recipes.New(o.Dir),
+		Recipes:   cookbook,
+		Retire:    retiring,
 		Prefs:     prefs.New(o.Dir),
 		Code:      code.New(o.CodePort),
 		Complete:  complete.New(),
@@ -572,13 +604,15 @@ func Run(ctx context.Context, o Options) error {
 		Live:      hub,
 		Awake:     keepAwake,
 		Icons:     icons.New(o.Dir),
-		Arena:     &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir},
+		Arena:     arenas,
 		Limits:    planLimits,
 		Scratch:   shells,
 		Jira:      issues,
 		Backup:    backups,
 		SelfPort:  auth.PortOf(o.Addr),
 		Opinions:  opinions,
+		Subagents: subagentCounts,
+		Scorecard: &scorecard.Service{Tasks: taskStore, Review: reviews, Arenas: arenas.Store},
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

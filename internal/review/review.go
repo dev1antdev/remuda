@@ -91,6 +91,7 @@ type Store struct {
 	branches  map[string]string     // the branch each folder has checked out, a short hash when detached
 	roots     map[string]string     // the repository's main folder for each folder, a worktree's too
 	sweeps    map[string]badgeSweep // by machine
+	history   []Verdict             // every verdict given, the oldest first, at most HistoryKeep (review-verdicts.json)
 }
 
 // badgeSweep is a machine's last Badges run: when it began, and whether it is still going.
@@ -107,6 +108,7 @@ func New(dir string) *Store {
 	if err := state.LoadJSON(dir, baselineFile, &store.baselines); err != nil {
 		log.Printf("%s is unreadable (%v): every folder counts as never reviewed", baselineFile, err)
 	}
+	store.loadHistory()
 	return store
 }
 
@@ -375,7 +377,7 @@ func Snapshot(host shell.Host, dir string) (string, map[string]string, error) {
 }
 
 // MarkSeen moves the folder's baseline to now: HEAD, the blob of every
-// uncommitted file, and the verdict the agent was told.
+// uncommitted file, and the verdict the agent was told, which the history keeps too.
 func (store *Store) MarkSeen(host shell.Host, dir, verdict string) (Baseline, error) {
 	if !VerdictOK(verdict) {
 		return Baseline{}, fmt.Errorf("no such verdict: %q", verdict)
@@ -389,9 +391,13 @@ func (store *Store) MarkSeen(host shell.Host, dir, verdict string) (Baseline, er
 	store.baselines[key(host.ID(), dir)] = baseline
 	store.badges[key(host.ID(), dir)] = Badge{}
 	err = store.save()
+	noted := store.noteVerdict(Verdict{Machine: host.ID(), Dir: dir, Verdict: verdict, At: baseline.At})
 	store.mu.Unlock()
 	if err != nil {
 		return baseline, fmt.Errorf("the baseline could not be kept: %w", err)
+	}
+	if noted != nil {
+		log.Printf("%s: the verdict could not be kept in %s: %v", dir, historyFile, noted)
 	}
 	return baseline, nil
 }

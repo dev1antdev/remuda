@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine } from "@/features/roster/api";
 import type { Project, Run, Status } from "./api";
-import { automationOf, queueWords, repositories, saveable, sameAutomation, stageWords, whyNotQueue, whyNotSave, NO_AUTOMATION } from "./autonomy";
+import { automationOf, denyCovers, queueWords, repositories, saveable, sameAutomation, stageWords, whyNotQueue, whyNotSave, NO_AUTOMATION } from "./autonomy";
 
 const col = (id: number, more: Partial<Status> = {}): Status => ({ id, project_id: 1, title: `c${id}`, hex_color: "", kind: "open", position: id, on_new: false, on_start: false, on_finish: false, on_agent: false, ...more });
 const project = (more: Partial<Project> = {}): Project => ({
@@ -52,6 +52,15 @@ describe("the settings", () => {
   it("fills the defaults in for a project from before them", () => {
     expect(automationOf(project())).toEqual(NO_AUTOMATION);
     expect(automationOf(project({ automation: { ...NO_AUTOMATION, queue: true, stages: undefined as never } })).stages).toEqual([]);
+  });
+  it("keeps the deny switch the server says: on for settings never saved, off for ones saved before it", () => {
+    expect(automationOf(project()).deny_prompts).toBe(true);
+    expect(automationOf(project({ automation: { ...NO_AUTOMATION, deny_prompts: true } })).deny_prompts).toBe(true);
+    const before = { machine: "gog", dir: "/w", agent: "claude", queue: false, max: 1, stages: [] };
+    expect(automationOf(project({ automation: before })).deny_prompts).toBe(false);
+    expect(sameAutomation(before, { ...before, deny_prompts: false })).toBe(true);
+    expect(sameAutomation(before, { ...before, deny_prompts: true })).toBe(false);
+    expect(denyCovers({ ...NO_AUTOMATION, agent: "codex", stages: [{ name: "T", agent: "", prompt: "x" }, { name: "R", agent: "gemini", prompt: "y" }] })).toEqual(["codex", "claude", "gemini"]);
   });
   it("lets go of a stage's column the edit removed, and compares what the settings say", () => {
     const a = { ...NO_AUTOMATION, stages: [{ name: "T", agent: "codex", prompt: "x", status_id: 9 }, { name: "R", agent: "claude", prompt: "y", status_id: 2 }] };

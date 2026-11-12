@@ -221,14 +221,32 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   is taken; a click opens that terminal. **Zoo** turns every agent into a
   little creature in its vendor's colour, for the TV across the room: it
   bounces at a laptop while it works, raises a hand under a "?" when it
-  asks you something, holds up an amber "!" for a watchdog note, dances
-  over a finish you have not looked at, sleeps with a "z" when idle (dim
-  when long idle), and tilts its head when its state is unknown — the
-  pose and the sign say it even without colour — with its name, its
-  folder and how long under it and the first line of what it answered
-  in a speech bubble; a click opens it, a hover or a long press tells its
-  state in words, office mode and the pop-out show it large, and reduced
-  motion keeps every creature still in its pose. In Chrome a tile — or the agent on screen,
+  asks you something (and holds up what it asks), holds up an amber "!"
+  for a watchdog note, dances over a finish you have not looked at,
+  sleeps with a "z" when idle (dim when long idle, under a blanket at
+  night), slumps under an empty battery when it hit its plan limit, and
+  tilts its head when its state is unknown — the pose and the sign say it
+  even without colour. Each vendor is a species of its own — a round
+  critter with antennae for Claude Code, a robot for Codex, an egg
+  between sparkles for Gemini CLI, a moon rabbit for Kimi Code — and
+  wears its model's hat (a top hat for Opus, a wizard's for Fable, a
+  beret for Sonnet, a sprout for Haiku, a cap for OpenAI's models) and a
+  trinket of its own, so two agents of one kind tell apart; it grows
+  rounder as its context fills (a belt from 80 %, a puff and slim again
+  after a compaction), piles coins for what it cost (amber or red when a
+  budget runs short), flies its pull request's flag in its checks'
+  colour and wears a crown once it is merged, brings out coffee after
+  20 minutes of work and sweats after an hour, and its subagents at
+  work hop around it as babies. The creatures stand in a pen per
+  machine whose weather is the machine's body — sun and sweat when it
+  runs hot, a storm for under-voltage, boxes for a nearly full disk —
+  under the sky of your hour, and the day runs along the foot: answers,
+  waits, spend, merges, who worked longest. When an agent finishes the
+  resting ones clap, a merged pull request sets off fireworks, the eyes
+  follow your pointer, and with the voices switched on (off by default)
+  each chirps in its species' voice. A click opens it, a hover or a long
+  press tells its state in words, office mode and the pop-out show it
+  large, and reduced motion keeps every creature still in its pose. In Chrome a tile — or the agent on screen,
   from the header — **pops out** into a small window that stays above
   every other app (Document Picture-in-Picture): the agent keeps you
   company over your editor, and the line to answer it is right there.
@@ -247,6 +265,18 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   lane's work — commits and uncommitted changes — is saved as a patch in
   remuda's state folder first, then its agent stops and its worktree and
   branch go.
+- **Models scorecard** — which model actually does your work best, from
+  remuda's own records: the Usage panel's Models tab (or "Models
+  scorecard" in the palette) has a row per agent and model over the last
+  7, 30 or 90 days — how many of its task runs finished, how many were
+  approved at your first review in the Changes lens rather than rejected
+  first, how many of the pull requests they opened merged, how many of its
+  arena lanes you kept, and what a run, and an approved one, cost and how
+  long a run took. A share needs five runs behind it before it becomes a
+  percentage (before that it says "2 of 3"), and only such figures compete
+  for the quiet green mark of a column's best. The button at the end of a
+  row opens an arena on a recent task with two models side by side: the
+  one that ran it and the row's own.
 - **Standup** — the sun button in the sidebar head (or "Standup" in the
   palette) is one report over every agent on every machine: what each
   did since midnight — prompts and answers, how long and what it cost,
@@ -281,7 +311,22 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the agent has answered" on, the tab goes by itself once the agent is
   done, a push says what it answered, and the conversation stays
   readable through the search. A question the agent asks is yours:
-  nothing closes while it waits. For the scout to create tasks, its
+  nothing closes while it waits. **A scout that runs at 3 am does not
+  stand at a permission prompt until morning**: with "Don't wait for
+  permissions: deny and carry on" (on for a new schedule, Claude Code
+  only) the agent is started with Claude Code's own
+  `permissions.denyInsteadOfPrompting` for that run — any call that
+  would wait for your approval is denied at once and the turn goes on —
+  and once it has answered the schedule's last result says how many
+  calls were denied ("answered: … · 2 calls denied") and names them, so
+  does the push, and the chat lens of its tab lists them over the
+  composer with *Open in the terminal*. In Claude Code's default mode
+  every edit asks first, so a scout that should change files wants
+  `--permission-mode acceptEdits` (or `auto`) in its extra arguments, or
+  allow rules in its settings; a `--settings` you pass yourself as JSON
+  gets the setting merged in, one naming a file is refused with what to
+  put in it. Schedules saved before the switch keep asking, as they did,
+  until you turn it on. For the scout to create tasks, its
   agent needs remuda's tasks MCP set up (see Tasks below). **Every few
   minutes, in working hours**: the "Every N minutes" preset runs a
   schedule every 5, 10, 15, 20 or 30 minutes from one hour to another,
@@ -335,7 +380,14 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   `STAGE DONE`, the next starts in a new tab of the same worktree with the
   previous answer in its prompt and the card in its column; an answer
   without the line (a question in the agent's own words too) or a card you
-  move stops it there, while a permission prompt only waits for you.
+  move stops it there, while a permission prompt only waits for you —
+  unless the project's agents **don't wait for permissions** (on for
+  agents you set up now, Claude Code only, off for settings saved
+  before): then the queue's Claude Code and every stage's deny what
+  would wait for your approval and carry on, and a comment by remuda on
+  the task lists the calls each run was denied; a run that stops on
+  them is reported so and stops the pipeline, the card left where it
+  is. An agent you start on a task yourself asks as usual.
   Agents can propose tasks, but only you queue them.
   When the agent opens a pull request and names it (the Review mode's
   *Approve & open PR* asks for exactly that), the task notes the link, moves
@@ -972,7 +1024,7 @@ Push or a channel the team reads: a Telegram bot (its token and your chat
 id), a Slack incoming webhook, an ntfy topic, or any address that takes
 JSON. Each one hears the kinds you tick — a question, a finish, a
 watchdog note, the digest, a schedule, a task, a budget, a review, a
-machine away or back — with
+machine away or back, a backup that failed, a sign-in running out — with
 the title, the body and a link back to the pane, built from the address
 you set at the top of the section (your tailnet's is offered when there
 is one). A Test button on each sends one; the row says when the last one
@@ -1044,7 +1096,10 @@ answer one finding a line. Its comments come back under the lines they
 name, blue beside your own, with how much each matters; *Add to my
 review* takes one into your draft, *Add all* every one, *Dismiss* sets it
 aside, and the ones on lines the diff no longer shows are listed apart.
-Its tab closes once it has answered, unless you say otherwise.
+Its tab closes once it has answered, unless you say otherwise; a Claude
+Code reviewer denies whatever would wait for your permission and goes on
+to its answer (a review only reads), unless you switch that off in the
+dialog.
 
 **Activity** (the bell in the header) is what happened while you were
 away: every finish, question, watchdog note, failed schedule, task
@@ -1197,6 +1252,27 @@ drawn as dashed lines, so a disk filling up or a load that never drops
 is visible as a trend, not a number. It turns amber when an update
 is out (with the right command for how it was installed), a remote
 remuda is behind this one, or the disk is nearly full.
+
+**Before something quietly stops working:** a scout at three in the
+morning or a queued task dies on an expired login. Claude Code says when
+its stored sign-in ends (`claude auth status`, 2.1.318 and up); the
+vitals read it every six hours and whenever you press *Read again* —
+only the end of the sign-in leaves the machine, never the account's
+e-mail or organization. From ten days before, the machine's ⓘ says
+"Claude Code's sign-in on GOG ends in 6 days", red from two days and
+once it has ended, with *Open a shell there* for `claude auth login`
+(remuda never signs in for you); a push comes three days before, a day
+before and once it ends, one each, never twice across a restart. The
+same ⓘ warns of a model or mode being retired: fast mode on Opus 4.8 is
+removed on 30 November 2026 (Claude Code 2.1.316: its requests then fail
+and do not fall back), so a recipe, an agent schedule, a project's
+agents or a pipeline stage set to it — by its model and `--settings
+'{"fastMode":true}'`, or by the default model and fast mode saved in
+Claude Code's settings on that machine — and a running agent whose last
+answer came in fast mode on it are counted there ("set for 1 recipe and
+2 running agents here: move to Opus 5.5"), red once the day has come.
+Every form that edits a model says the same as you type, with a button
+that puts Opus 5.5 in the field.
 
 **Keep awake while agents work:** a laptop that falls asleep in the
 middle of a task leaves a dead chat for the morning. The row of that

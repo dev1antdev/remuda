@@ -75,9 +75,10 @@ func (w *RunWatch) OnPullRequest(machine, pane, url, label string) {
 	})
 }
 
-// OnPullRequestMerged notes that the request a pane's live run names was merged: a comment by "remuda", and the task
-// moves to the project's done column when it still sits in the start or finish column (a card the person moved stays).
-// Nil when no live run on the pane names that request, or the merge was noted before.
+// OnPullRequestMerged notes that the request a pane's live run names was merged: the run keeps when (the models'
+// scorecard counts it), a comment by "remuda", and the task moves to the project's done column when it still sits in
+// the start or finish column (a card the person moved stays). Nil when no live run on the pane names that request, or
+// the merge was noted before.
 func (st *Store) OnPullRequestMerged(machine, pane, url string) (*PRNote, error) {
 	if url == "" {
 		return nil, nil
@@ -89,6 +90,11 @@ func (st *Store) OnPullRequestMerged(machine, pane, url string) (*PRNote, error)
 	}
 	if err != nil {
 		return nil, err
+	}
+	if r.Merged == "" {
+		if _, err := st.db.Exec(`UPDATE task_runs SET merged = ? WHERE id = ?`, st.stamp(), r.ID); err != nil {
+			return nil, err
+		}
 	}
 	note := r.PRLabel + " merged"
 	var noted int

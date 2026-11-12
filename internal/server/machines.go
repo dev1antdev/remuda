@@ -82,6 +82,6 @@ func (s *Server) handleMachineHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Health.RefreshLatest(5 * time.Minute)
-	s.Health.Refresh(mc)
+	s.Health.Recheck(mc) // the sign-in too: the person may have just signed in again
 	writeJSON(w, map[string]any{"health": s.Health.Report(mc.ID()), "latest": s.Health.Latest()})
 }

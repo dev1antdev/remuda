@@ -1,8 +1,9 @@
 // The arena's pure part: the lanes a new arena starts with, why one cannot start yet, and what a lane's card says.
 
 import type { AgentKind, Machine, Pane } from "@/features/roster/api";
-import { CUSTOM } from "@/features/roster/startOptions";
+import { CUSTOM, modelChoices } from "@/features/roster/startOptions";
 import { t, tn } from "@/lib/i18n";
+import { basename } from "@/lib/text";
 import type { Lane, LaneRequest, Stat } from "./api";
 
 export const MIN_LANES = 2;
@@ -28,6 +29,35 @@ export function defaultLanes(machines: Machine[], agents: AgentKind[], at?: { ma
   const first = kinds.includes("claude") ? "claude" : (kinds[0] ?? "claude");
   const second = kinds.find((id) => id !== first) ?? first;
   return [first, second].map((agent) => ({ machine, workspace, agent, choice: "", custom: "" }));
+}
+
+// AskedLane is a lane another screen asks for: an agent and the id its --model takes, "" or none for its default
+export type AskedLane = { agent: string; model?: string };
+
+// prefilled are the dialog's first lanes with the agents and models asked for laid over them, on the repository the
+// first guess picked, and a lane of another agent beside a single one, since an arena has two at least
+export function prefilled(base: LaneDraft[], asked: AskedLane[]): LaneDraft[] {
+  if (asked.length === 0 || base.length === 0) return base;
+  const lanes = asked.slice(0, MAX_LANES).map((lane): LaneDraft => {
+    const model = lane.model?.trim() ?? "";
+    const named = model !== "" && modelChoices(lane.agent).some((c) => c.value === model && c.value !== CUSTOM);
+    return { ...base[0]!, agent: lane.agent, choice: named ? model : model ? CUSTOM : "", custom: named ? "" : model };
+  });
+  if (lanes.length < MIN_LANES) lanes.push(base.find((l) => l.agent !== lanes[0]!.agent) ?? base[base.length - 1]!);
+  return lanes;
+}
+
+// repositoryOf is the repository workspace a past run's worktree branched off, as far as the roster still tells: the
+// worktree's own workspace names its main folder, else herdr's ~/.herdr/worktrees/<repository>/<name> names it by its
+// folder's name; nothing when neither does
+export function repositoryOf(machines: Machine[], machineId: string, dir: string): { machineId: string; workspaceId: string } | undefined {
+  const sessions = machines.find((m) => m.id === machineId)?.sessions ?? [];
+  const repos = sessions.filter((s) => s.dir && !s.worktree?.linked);
+  const trim = (path: string) => path.replace(/\/+$/, "");
+  const main = sessions.find((s) => s.dir && trim(s.dir) === trim(dir))?.folder;
+  const name = /\/\.herdr\/worktrees\/([^/]+)\/[^/]+$/.exec(trim(dir))?.[1];
+  const found = (main ? repos.find((s) => trim(s.dir!) === trim(main)) : undefined) ?? (name ? repos.find((s) => basename(s.dir!) === name || s.worktree?.repo_name === name) : undefined);
+  return found ? { machineId, workspaceId: found.id } : undefined;
 }
 
 // modelOf is the model a lane asks for, "" for the agent's own default
