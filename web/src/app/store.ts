@@ -8,6 +8,7 @@ import { clamp, step } from "@/features/chat/find";
 import type { FolderIconRef, Machine, Session } from "@/features/roster/api";
 import type { FileTarget } from "@/features/files/target";
 import type { SearchHit } from "@/features/search/api";
+import type { TimelapseFound } from "@/features/terminal/timelapse/found";
 import type { BudgetStatus } from "@/features/usage/api";
 import { keepNewest, type OnPageAlert } from "@/features/alerts/onpage";
 import { readURL } from "./url";
@@ -37,7 +38,7 @@ export type AppDialog =
   | { kind: "start-recipe"; machineId?: string; dir?: string } // an agent started from a recipe, in the folder at hand unless the recipe has its own
   | { kind: "pins"; machineId: string; paneId: string; dir: string; shown: string | null; title: string } // the turns pinned in a folder's conversations; shown = the session on screen, whose pins name no session
   | { kind: "model"; machineId: string; paneId: string; current?: string } // a Claude Code pane's model switched through its own /model; current = what the meter last saw it answer with
-  | { kind: "timelapse"; machineId: string; paneId: string; dir: string; title: string } // the pane's recorded turns, and its folder's earlier panes', played back fast
+  | { kind: "timelapse"; machineId: string; paneId: string; dir: string; title: string; found?: TimelapseFound } // the pane's recorded turns, and its folder's earlier panes', played back fast; found: a search's hit to open at
   | { kind: "teleport"; machineId: string; paneId: string; tabId: string; workspace: string; agent: string } // the pane's work moved to another machine, an agent carrying on there
   | { kind: "folder-icon"; machineId: string; folder: string; name: string; icon?: FolderIconRef } // a folder's icon: an emoji, a site's favicon or a picture
   | { kind: "leftovers"; machineId: string } // the machine's worktrees no workspace has open, the clean ones to remove

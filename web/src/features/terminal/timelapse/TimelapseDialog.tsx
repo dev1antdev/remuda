@@ -1,6 +1,8 @@
 // Timelapse: what the pane's screen did while its agent worked, recorded on the cockpit every few seconds and played
 // back in seconds. The recordings of this pane come first, then those of the earlier panes that worked in its folder;
-// under the screen-sharing mode a hidden folder's are not shown. Delete is the person's; a viewer link only plays.
+// under the screen-sharing mode a hidden folder's are not shown. The find over their screens steps from one place the
+// text stood to the next; the search panel opens the player at one (found). Delete is the person's; a viewer link only
+// plays and finds.
 
 import { useEffect, useState } from "react";
 import { actions } from "@/app/store";
@@ -11,20 +13,26 @@ import { useQuery } from "@/lib/query";
 import { errMsg } from "@/lib/text";
 import { Dialog, Icon, Notice, Select } from "@/ui";
 import { deleteRecording, fetchRecording, listRecordings } from "./api";
+import type { TimelapseFound } from "./found";
 import { Player } from "./Player";
+import { ScreenFind } from "./ScreenFind";
+import { usePlayerFind } from "./usePlayerFind";
 import { recordingLabel, shownRecordings } from "./words";
 
-export default function TimelapseDialog({ machineId, paneId, dir, title, onClose }: { machineId: string; paneId: string; dir: string; title: string; onClose: () => void }) {
+type Props = { machineId: string; paneId: string; dir: string; title: string; found?: TimelapseFound; onClose: () => void };
+
+export default function TimelapseDialog({ machineId, paneId, dir, title, found, onClose }: Props) {
   const { viewOnly } = useRoster();
   const share = useSharing();
   const { data: listed, error, reload } = useQuery(() => listRecordings(machineId, paneId, dir), [machineId, paneId, dir]);
   const recordings = shownRecordings(listed?.recordings ?? [], { machine: share.machineHidden, folder: share.folderHidden });
   const hiddenAll = (listed?.recordings.length ?? 0) > 0 && recordings.length === 0;
-  const [picked, setPicked] = useState("");
+  const [picked, setPicked] = useState(found?.recording ?? "");
   const chosen = recordings.find((r) => r.id === picked) ?? recordings.find((r) => r.pane === paneId) ?? recordings[0];
   useEffect(() => {
     if (chosen && chosen.id !== picked) setPicked(chosen.id);
   }, [chosen, picked]);
+  const find = usePlayerFind({ machineId, paneId, dir, shown: recordings.map((r) => r.id), chosen: chosen?.id ?? "", found, pick: setPicked });
   const { data: recording, error: playError } = useQuery(() => (chosen ? fetchRecording(chosen.id) : Promise.resolve(null)), [chosen?.id], { enabled: !!chosen });
 
   const remove = () => {
@@ -54,15 +62,27 @@ export default function TimelapseDialog({ machineId, paneId, dir, title, onClose
       {recordings.length > 0 && chosen && (
         <>
           <div className="timelapse-pick">
-            <Select value={chosen.id} onChange={setPicked} options={recordings.map((r) => ({ value: r.id, label: recordingLabel(r, paneId) }))} />
+            <Select
+              value={chosen.id}
+              onChange={(id) => {
+                setPicked(id);
+                find.forget();
+              }}
+              options={recordings.map((r) => ({ value: r.id, label: recordingLabel(r, paneId) }))}
+            />
             {!viewOnly && (
               <button type="button" className="btn sm danger" onClick={remove}>
                 <Icon name="trash" size={14} /> {t("Delete")}
               </button>
             )}
           </div>
+          <ScreenFind text={find.text} onText={find.setText} at={find.at} total={find.steps.length} busy={find.busy} note={find.note} onStep={find.step} />
           {playError && <Notice tone="error">{playError}</Notice>}
-          {recording && recording.id === chosen.id ? <Player recording={recording} /> : !playError && <div className="empty chat-empty">{t("Loading…")}</div>}
+          {recording && recording.id === chosen.id ? (
+            <Player recording={recording} jump={find.jump?.recording === recording.id ? find.jump : null} marked={find.marked} />
+          ) : (
+            !playError && <div className="empty chat-empty">{t("Loading…")}</div>
+          )}
         </>
       )}
     </Dialog>

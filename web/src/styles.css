@@ -7176,6 +7176,113 @@ button.usage-row:hover {
   color: var(--fg-dim);
 }
 
+/* the player's find over the recorded screens: the field, "3 of 12", the steps; the text found marked on the screen
+   in the find bar's colours, the row a step went to drawn apart */
+.timelapse-find {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+.timelapse-find input {
+  flex: 1;
+  min-width: 0;
+  height: var(--ctl-sm);
+}
+
+.timelapse-find-icon {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  margin-right: 2px;
+}
+
+.timelapse-find-note {
+  margin: -4px 0 8px;
+  font-size: var(--fs-11);
+  color: var(--fg-dim);
+}
+
+.screen .m {
+  background: var(--amber-soft);
+  color: var(--fg);
+  border-radius: var(--r-xs);
+}
+
+.screen-line.is-current {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--amber);
+}
+
+.screen-line.is-current .m {
+  background: var(--amber);
+  color: var(--on-amber);
+}
+
+/* the search panel's Screens part: each recording's first appearance as a few rows of the screen, the matching one
+   marked */
+.search-screens {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.search-part-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 10px 2px;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+.search-part-hint {
+  font-weight: 400;
+  color: var(--fg-faint);
+  min-width: 0;
+}
+
+.search-screen {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  line-height: 1.35;
+  color: var(--fg-faint);
+}
+
+.search-screen-row {
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-screen-row.is-match {
+  color: var(--fg);
+}
+
+.search-screen-row mark {
+  background: var(--amber-soft);
+  color: var(--fg);
+  border-radius: var(--r-xs);
+}
+
+.search-part-more {
+  align-self: flex-start;
+  margin: 0 10px;
+  font-size: var(--fs-12);
+}
+
 .composer.compact {
   padding: 6px 8px;
   gap: 6px;

@@ -143,7 +143,7 @@ export const panels: Dictionary = {
   Weekdays: "По будням",
   "What runs": "Что запускается",
   "What this budget is for": "На что этот бюджет",
-  "What was said, by you or an agent, anywhere. Two characters to start.": "Что говорили вы или агент, где угодно. Хватит двух символов.",
+  "What was said, by you or an agent, and what stood on its screen, anywhere. Two characters to start.": "Что говорили вы или агент и что было на его экране, где угодно. Хватит двух символов.",
   When: "Когда",
   "When the agent worked, waited and sat idle": "Когда агент работал, ждал и простаивал",
   "cost per day": "расходы по дням",
