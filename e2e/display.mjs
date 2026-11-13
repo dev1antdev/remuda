@@ -1142,7 +1142,7 @@ async function changesScreens() {
       check(JSON.stringify(groups) === JSON.stringify({ staged: 2, unstaged: 1, untracked: 1 }), `the groups hold ${JSON.stringify(groups)}`);
       check((await count(`${LENS} .review-group.is-outgoing .review-outgoing`)) === 1, "the commit not on origin/main is not listed");
       // the agent dressed at work in the repository holds every write back, and the commit box says why
-      check(await evaluate(`(() => { const acts = [...document.querySelectorAll('${LENS} .review-act')]; return acts.length > 0 && acts.every((b) => b.disabled); })()`), "a write is offered while the agent works there");
+      check(await evaluate(`(() => { const acts = [...document.querySelectorAll('${LENS} .review-act')]; return acts.length > 0 && acts.every((b) => b.getAttribute("aria-disabled") === "true"); })()`), "a write is offered while the agent works there");
       check(/Claude Code/.test(await evaluate(`document.querySelector('${LENS} .commit-hint')?.textContent ?? ""`)), "the commit box does not name the agent at work");
     },
     expect: [`${LENS} .review-head`, `${LENS} .review-collision`, `${LENS} .commit-box`],
@@ -1357,7 +1357,7 @@ async function stagingScreens() {
       open: async () => {
         await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=changes` });
         if (!(await until(async () => (await inGroup("unstaged")) === 1, 15))) throw new Error("the lens did not come back on the repository's work");
-        if (!(await until(() => evaluate(`document.querySelector(${JSON.stringify(actionOf("unstaged:src/app.go", "stage"))})?.disabled === false`), 6))) throw new Error("Stage is held back with no agent at work");
+        if (!(await until(() => evaluate(`(() => { const button = document.querySelector(${JSON.stringify(actionOf("unstaged:src/app.go", "stage"))}); return !!button && button.getAttribute("aria-disabled") !== "true"; })()`), 6))) throw new Error("Stage is held back with no agent at work");
         await pressRow("unstaged:src/app.go", "stage");
         if (!(await until(async () => (await inGroup("staged")) === 3 && !(await present(`${LENS} .review-group.is-unstaged`)), 8))) failed("src/app.go did not move to Staged");
         check(/^M {2}src\/app\.go$/m.test(gitStatus()), `git does not have src/app.go staged: ${gitStatus()}`);
@@ -1370,11 +1370,12 @@ async function stagingScreens() {
     });
     await screen("changes-commit", {
       open: async () => {
-        await tap(`${LENS} .commit-message`);
+        await evaluate(`document.querySelector('${LENS} .commit-message')?.focus()`); // the toast of the stage just undone may still lie over the box on a phone
         await send("Input.insertText", { text: "Say hello to the world" });
         if (!(await until(() => present(`${LENS} .commit-box .secret-check.is-found`), 8))) failed("the secret check does not stand before the commit");
         check(await evaluate(`document.querySelector('${LENS} .commit-go')?.disabled === true`), "Commit is not held back by the findings");
         check(await present(`${LENS} .commit-anyway`), "no Commit anyway… beside the held button");
+        await evaluate(`document.querySelector('${LENS} .commit-box')?.scrollIntoView({ block: "center" })`);
       },
       expect: [`${LENS} .commit-box .secret-check`],
       close: async () => {
@@ -1394,6 +1395,7 @@ async function stagingScreens() {
         if (!(await until(() => present(`${LENS} .conflict-view .fv-line.yours`), 6))) failed("the conflict's blocks are not drawn");
         check(await present(`${LENS} .conflict-view .fv-line.marker`), "the markers are not on their band");
         check((await count(`${LENS} .conflict-view.columns`)) === (pass.phone ? 0 : 1), "yours and incoming are not side by side at a desk");
+        await evaluate(`document.querySelector('${LENS} .conflict-view')?.scrollIntoView({ block: "center" })`);
       },
       expect: [`${LENS} .conflict-view`],
       close: async () => {

@@ -14370,13 +14370,20 @@ textarea.screen-term-field {
   }
 }
 
-.review-act.is-discard:hover:not(:disabled) {
+.review-act.is-discard:hover:not([aria-disabled="true"]) {
   color: var(--red);
+}
+
+.review-act[aria-disabled="true"],
+.review-bulk[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .review-letter {
   flex: 0 0 auto;
   min-width: 12px;
+  margin: 0 4px;
   font-family: var(--mono);
   font-size: var(--fs-12);
   font-weight: 600;

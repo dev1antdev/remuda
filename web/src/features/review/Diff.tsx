@@ -89,12 +89,11 @@ export function FileRow({ file, look = {}, open, split, onToggle, load, loadSour
               <Icon name="message" size={12} /> {opinion.length}
             </span>
           )}
+          {look.conflict && <span className="review-conflict-kind">{look.conflict}</span>}
         </button>
         <span className={`review-slot${look.actions ? " has-actions" : ""}`}>
           <span className="review-slot-quiet">
-            {look.conflict ? (
-              <span className="review-conflict-kind">{look.conflict}</span>
-            ) : file.untracked ? (
+            {look.conflict ? null : file.untracked ? (
               <span className="review-tag">{t("new")}</span>
             ) : stat?.binary ? (
               <span className="review-counts">{t("binary")}</span>

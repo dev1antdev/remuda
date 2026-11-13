@@ -27,13 +27,14 @@ export function ChangeGroups({ layouts, tree, whyNot, writing, closed, onFolder,
   fileRow: (row: ChangeRow, look: RowLook) => ReactNode;
   conflictBody: (row: ChangeRow) => ReactNode;
 }) {
+  const held = !!whyNot || writing !== null; // the buttons stay where they are, their tips saying why they do nothing now
   const actionsOf = (row: ChangeRow) => (
     <>
       {rowActions(row).map((action) => {
         const words = whyNot || actionWords(action, row);
         return (
           <Tip key={action} text={words}>
-            <button type="button" className={`icon-btn sm review-act is-${action}`} aria-label={actionWords(action, row)} disabled={!!whyNot || writing !== null} onClick={() => onAction(row, action)}>
+            <button type="button" className={`icon-btn sm review-act is-${action}`} aria-label={actionWords(action, row)} aria-disabled={held || undefined} onClick={held ? undefined : () => onAction(row, action)}>
               <Icon name={ACTION_ICONS[action]} size={12} />
             </button>
           </Tip>
@@ -81,7 +82,7 @@ export function ChangeGroups({ layouts, tree, whyNot, writing, closed, onFolder,
               <span className="badge quiet">{layout.total}</span>
               {bulk && (
                 <Tip text={whyNot || bulkWords(bulk)}>
-                  <button type="button" className="linkish review-bulk" disabled={!!whyNot || writing !== null} onClick={() => onBulk(layout.group, bulk, bulkPaths(rows))}>
+                  <button type="button" className="linkish review-bulk" aria-disabled={held || undefined} onClick={held ? undefined : () => onBulk(layout.group, bulk, bulkPaths(rows))}>
                     <Icon name={bulk === "stage" ? "plus" : "minus"} size={12} /> {bulkWords(bulk)}
                   </button>
                 </Tip>
