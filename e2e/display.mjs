@@ -1097,6 +1097,7 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
     for (const session of machine.sessions ?? []) {
       if (session.id === app.id || session.id === tree.id) session.icon = { emoji: "🦊" }; // the icon is the folder's, the worktree's too
       if (session.id === desk?.id) session.concierge = true; // the page shows it in the concierge's place alone
+      if (session.id === notes?.id) session.asleep = { at: iso(now - 40 * 60e3), agents: 2 }; // put to sleep: its card dims, its menu offers Wake
       if (session.id === app.id) {
         session.jira = [{ key: "APP-12", summary: "Draw every screen", status: "In Review", category: "indeterminate", url: "https://example.atlassian.net/browse/APP-12" }];
         session.sync = { ahead: 2, behind: 1 }; // the selected card says how far it stands from its upstream
@@ -1112,11 +1113,106 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
       for (const tab of session.tabs ?? []) for (const pane of tab.panes ?? []) Object.assign(pane, DRESS[pane.id] ?? {});
     }
   }
+  if (dressStopped) for (const machine of roster.machines ?? []) if (machine.id === "local") machine.stopped = STOPPED; // a reboot's stopped chats, for Resume after restart
   roster.feed = FEED.id; // the activity's newest id as this run sets it: a page that saw an older one reads the feed
   roster.offers = [PLAN_OFFER.id]; // a queued card Claude's plan limit holds, offered on Codex (fakeOffers answers it)
   roster.server = SERVER_HOST; // the Server place a remuda -server draws: its host's vitals, the readings a Raspberry Pi gives
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(roster)).toString("base64") });
+}
+
+// STOPPED is what a reboot stopped on this machine while dressStopped is on: two chats in panes herdr does not have,
+// each with the folder and the command that brings it back; nothing is ever resumed (the dialog is left by Not now)
+let dressStopped = false;
+const STOPPED = [
+  { pane: "w90:p1", agent: "claude", title: "api", dir: "/srv/api", command: "claude --resume 0e2e0000-aaaa-4bbb-8ccc-0123456789ab" },
+  { pane: "w91:p1", agent: "codex", title: "web", dir: "/srv/web app", command: "codex resume 0e2e0000-dddd-4eee-8fff-0123456789ab" },
+];
+
+// sleepScreens: the sleeping card and its Wake, the confirm a sleep of busy agents asks first (cancelled, so nothing
+// sleeps), Resume after restart over a dressed reboot (left by Not now), and the switches in Settings
+async function sleepScreens() {
+  const menuItem = (en, ru) => `[...document.querySelectorAll("[role=menu] [role=menuitem]")].find((item) => item.textContent.includes(${JSON.stringify(pass.lang === "ru" ? ru : en)}))`;
+  // the vitals' popover a screen before stands over the cards: Esc takes it down, as closeAll leaves popovers be
+  const noPopover = async () => {
+    for (let i = 0; i < 3 && (await present(".popover")); i++) {
+      await key("Escape", "Escape");
+      await sleep(150);
+    }
+  };
+  await screen("card-asleep", {
+    open: async () => {
+      await noPopover();
+      await sidebarOpen();
+      if (!(await until(() => present(".ws-item.is-asleep"), 6))) return failed("the sleeping workspace's card is not drawn asleep");
+      await hover(await mark(`document.querySelector(".ws-item.is-asleep .ws-main")`, "card"));
+      await sleep(150);
+      await tap(await mark(`document.querySelector(".ws-item.is-asleep .ws-menu-btn")`, "card-menu"));
+      if (!(await until(() => evaluate(`!!${menuItem("Wake", "Разбудить")}`), 3))) failed("the sleeping workspace's menu offers no Wake");
+      check(!(await evaluate(`!!${menuItem("Sleep…", "Усыпить…")}`)), "a sleeping workspace is offered Sleep again");
+    },
+    expect: [".ws-item.is-asleep", "[role=menu].menu"],
+  });
+  await screen("sleep-confirm", {
+    open: async () => {
+      await noPopover();
+      await sidebarOpen();
+      await hover(await mark(firstCardOf("app") + "?.querySelector('.ws-main')", "card"));
+      await sleep(150);
+      await tap(await mark(firstCardOf("app") + "?.querySelector('.ws-menu-btn')", "card-menu"));
+      if (!(await until(() => evaluate(`!!${menuItem("Sleep…", "Усыпить…")}`), 3))) throw new Error("the busy workspace's menu offers no Sleep…");
+      await tap(await mark(menuItem("Sleep…", "Усыпить…"), "sleep-row"));
+      if (!(await until(() => present(".confirm-text"), 3))) throw new Error("a sleep of busy agents went without a confirm");
+      const text = await evaluate(`document.querySelector(".confirm-text")?.textContent ?? ""`);
+      check(text.includes("Claude Code") && text.includes("Codex"), `the confirm does not name the two busy agents: ${text}`);
+    },
+    expect: [".confirm-text", ".modal .modal-actions .btn.danger"],
+    close: async () => {
+      await tap(await mark(`[...document.querySelectorAll('.modal')].pop()?.querySelector('.modal-actions .btn:not(.danger)')`, "confirm-cancel"));
+      if (!(await until(async () => !(await present(".confirm-text")), 3))) failed("Cancel did not close the sleep's confirm");
+      await closeAll();
+    },
+  });
+  await screen("resume-toast", {
+    open: async () => {
+      dressStopped = true;
+      await api("PUT", "/api/mutes", { machine: "local", dir: notesDir, until: iso(Date.now() + 3600e3) });
+      await api("DELETE", "/api/mutes", { machine: "local", dir: notesDir });
+      if (!(await until(() => present('[data-toast="recover-local"] .btn.primary'), 20))) failed("no toast offers the chats a reboot stopped");
+    },
+    expect: ['[data-toast="recover-local"]'],
+    close: async () => {},
+  });
+  await screen("resume-after-restart", {
+    open: async () => {
+      if (await present('[data-toast="recover-local"] .btn.primary')) await tap('[data-toast="recover-local"] .btn.primary');
+      else await palette("resume-after-restart:local");
+      if (!(await until(async () => (await count(".resume-dialog .resume-row")) === 2, 6))) return failed(`Resume after restart lists ${await count(".resume-dialog .resume-row")} chats, not the two stopped`);
+      check(await evaluate(`[...document.querySelectorAll(".resume-dialog .resume-command")].some((c) => c.textContent === "cd '/srv/web app' && codex resume 0e2e0000-dddd-4eee-8fff-0123456789ab")`), "a row does not show the exact command, in its folder");
+      check((await count(".resume-dialog .modal-actions .btn")) === 2, "with every chat ticked the dialog offers more than Not now and Resume all");
+      await tap(".resume-dialog li:first-child .resume-row input");
+      if (!(await until(async () => (await count(".resume-dialog .modal-actions .btn")) === 3, 3))) failed("unticking a chat does not offer Resume 1");
+      check(await evaluate(`(() => { const box = document.querySelector(".resume-dialog").getBoundingClientRect(); return [...document.querySelectorAll(".resume-dialog .modal-actions .btn")].every((b) => { const r = b.getBoundingClientRect(); return r.left >= box.left - 1 && r.right <= box.right + 1; }); })()`), "the dialog's buttons run past its edge");
+      check(!(await evaluate(`document.querySelector(".resume-dialog .resume-auto input")?.checked`)), "Resume automatically next time starts on");
+    },
+    expect: [".resume-dialog .resume-command", ".resume-dialog .modal-actions .btn.primary"],
+    close: async () => {
+      await tap(".resume-dialog .modal-actions .btn:not(.primary)");
+      if (!(await until(async () => !(await present(".resume-dialog")), 3))) failed("Not now did not close Resume after restart");
+      if (!(await until(async () => !(await present('[data-toast="recover-local"]')), 3))) failed("the toast stays after Not now");
+      dressStopped = false;
+      await closeAll();
+    },
+  });
+  await screen("settings-sleep", {
+    open: async () => {
+      await palette("settings");
+      if (!(await until(() => present(".settings-dialog .sleep-settings input[type=checkbox]:not(:disabled)"), 6))) return failed("Settings shows no switches for sleep and resume");
+      await evaluate(`document.querySelector('.settings-dialog .sleep-settings')?.scrollIntoView({ block: "start" })`);
+      check((await count(".settings-dialog .sleep-settings input[type=checkbox]:checked")) === 0, "the sleep and resume switches do not start off");
+    },
+    expect: [".settings-dialog .sleep-settings"],
+  });
 }
 
 // dressCollisions has the repository and its worktree change the same lines of src/app.go — a lightning between their
@@ -2301,6 +2397,7 @@ async function runPass() {
     },
     expect: [".health-pop", ".health-pop .health-list li.bad"],
   });
+  await sleepScreens();
   await screen("tab-strip", { open: () => onAgents(), expect: [".tabstrip .tab", ".lens-pane:not([hidden]) .xterm-screen"] });
   await screen("shell-tab", {
     open: async () => {

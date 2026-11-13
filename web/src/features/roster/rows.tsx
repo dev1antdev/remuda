@@ -24,6 +24,7 @@ import { folderMenuItems, workspaceMenuItems } from "./WorkspaceMenu";
 import { AgentLines } from "./AgentLines";
 import { HeadSummary, MutedMark, StateMarks } from "./marks";
 import { syncTip, syncWords, tallyOf } from "./sidebarAgents";
+import { asleepTip } from "@/features/sleep/sleep";
 import { t, tn } from "@/lib/i18n";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
@@ -189,7 +190,7 @@ function WorkspaceView({ machine: m, item, group, primary, compact, current, pre
   // a hidden folder's card goes by what runs in it, the folder's neutral name standing above it
   const title = hidden ? (group ? (agent ? (VENDOR_NAME[agent] ?? agent) : t("terminal")) : share.folderName(m.id, folderOf(s), s.name)) : itemTitle(item, group);
   const branch = hidden ? "" : branchShown(item, title);
-  const words = hidden ? (agents ? "" : hiddenWords()) : cardWords(item);
+  const words = s.asleep ? t("Asleep") : hidden ? (agents ? "" : hiddenWords()) : cardWords(item);
   const sync = selected && !hidden ? syncWords(s.sync) : "";
   const target = agent && pane ? pane.id : (representative(s)?.id ?? "");
   const open = () => target && onSelect(m.id, target);
@@ -197,7 +198,7 @@ function WorkspaceView({ machine: m, item, group, primary, compact, current, pre
   const fill = usage && usage.window > 0 ? usage.context / usage.window : 0;
   const folder = s.dir || s.worktree?.checkout_path || pane?.cwd || "";
   const state = agent && pane ? `${agent} · ${hidden ? stateWords(d, pane.radar?.last_active, now, pane.radar?.since) : alert || stateWords(d, pane.radar?.last_active, now, pane.radar?.since)}` : "";
-  const tip = hidden
+  const ownTip = hidden
     ? [title, state].filter(Boolean).join("\n")
     : [
         `${s.name}${s.branch ? ` · ${s.branch}` : ""}`,
@@ -207,14 +208,15 @@ function WorkspaceView({ machine: m, item, group, primary, compact, current, pre
         collision ? markWords(collision, peerName(collision, m.id).full) : "",
         folder,
       ].filter(Boolean).join("\n");
+  const tip = s.asleep ? `${asleepTip(s.asleep.agents)}\n${ownTip}` : ownTip;
   const card = useCardHover({ machine: m, session: s, leadPaneId: pane?.id, hidden, editable: !!editable, name: s.name, tip });
   const badges = !!(card.details.note || card.details.ports.length || card.details.prs.length);
   const sub = branch || primary || sync || words || badges;
   return (
-    <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${limited(lead) ? " is-limit" : ""}${group ? " in-repo" : ""}`}>
+    <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${limited(lead) ? " is-limit" : ""}${group ? " in-repo" : ""}${s.asleep ? " is-asleep" : ""}`}>
       <div className="ws-main" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => rowKey(e, open)} title={card.hoverable ? undefined : tip} {...card.trigger}>
         <span className="ws-line">
-          {!agents && <span className="radar-mark">$</span>}
+          {!agents && <span className="radar-mark">{s.asleep ? <Icon name="moon" size={12} /> : "$"}</span>}
           <span className="ws-name">{title}</span>
           {s.review?.fresh ? (
             <span className="ws-badge" title={tn(s.review.fresh, "{n} file changed since you last reviewed", "{n} files changed since you last reviewed")}>

@@ -12,7 +12,6 @@ import { useSharing } from "./useSharing";
 import { actions, app } from "@/app/store";
 import { refreshHealth, type Health, type Latest, type Machine } from "./api";
 import { awakeBad, awakeWords } from "./awake";
-import { resumeStopped } from "@/features/updates/recover";
 import { forecastTone, limitLine, limitTone } from "@/features/usage/limits";
 import { concerns, updateLabel } from "./concerns";
 import { loginWords } from "./signin";
@@ -64,7 +63,7 @@ export function HealthButton({ machine: m, latest, serverVersion, viewOnly = fal
   const update = (what: string) => {
     setOpen(false);
     if (what === "recover") {
-      void resumeStopped(m.id, m.stopped?.length ?? 0); // the chats a reboot stopped: a job followed by toasts, no dialog
+      actions.openDialog({ kind: "resume-after-restart", machineId: m.id }); // the chats a reboot stopped, each with a tick
       return;
     }
     if (what === "signin") {

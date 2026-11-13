@@ -16,6 +16,7 @@ import ServerPanel from "@/features/roster/ServerPanel";
 import EverywhereDialog from "@/features/updates/EverywhereDialog";
 import FleetDialog from "@/features/updates/FleetDialog";
 import ReopenDialog from "@/features/reopen/ReopenDialog";
+import ResumeDialog from "@/features/sleep/ResumeDialog";
 import ArenaDialog from "@/features/arena/ArenaDialog";
 import ArenaPanel from "@/features/arena/ArenaPanel";
 import PRPanel from "@/features/pr/PRPanel";
@@ -153,6 +154,7 @@ export default function Overlays() {
         <PreviewsDialog machineId={previewsOn.id} machineLabel={previewsOn.label} workspace={dialog.workspace} workspaceName={dialog.name} onClose={actions.closeDialog} />
       )}
       {dialog?.kind === "reopen" && <ReopenDialog onClose={actions.closeDialog} />}
+      {dialog?.kind === "resume-after-restart" && !viewOnly && <ResumeDialog machineId={dialog.machineId} onClose={actions.closeDialog} />}
       {dialog?.kind === "arena" && <ArenaDialog taskId={dialog.taskId} title={dialog.title} prompt={dialog.prompt} at={dialog.at} lanes={dialog.lanes} onClose={actions.closeDialog} />}
       {dialog?.kind === "workspace" && (
         <NewWorkspaceDialog

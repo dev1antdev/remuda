@@ -3051,6 +3051,16 @@ body.is-resizing iframe {
   opacity: 0.55;
 }
 
+/* a workspace put to sleep (features/sleep): the moon for its mark, "Asleep" for its words, dimmed until woken */
+.ws-item.is-asleep > .ws-main {
+  opacity: 0.6;
+}
+
+.ws-item.is-asleep > .ws-main .radar-mark,
+.ws-item.is-asleep > .ws-main .ws-words {
+  color: var(--ctp-lavender);
+}
+
 .ws-item.is-alert > .ws-main .radar-mark,
 .ws-item.is-alert > .ws-main .ws-words {
   color: var(--amber);
@@ -4869,6 +4879,57 @@ ul.pick-list {
   flex-shrink: 0;
   font-size: var(--fs-12);
   color: var(--fg-dim);
+}
+
+/* ---- Resume after restart (features/sleep): a row per chat, its agent and place over the command in mono ---- */
+.modal label.resume-row {
+  align-items: flex-start;
+  padding: 8px 10px;
+}
+
+.resume-row input,
+.resume-row .radar-logo {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.resume-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.resume-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.resume-where,
+.resume-command {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-dim);
+}
+
+.resume-command {
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  background: none;
+  padding: 0;
+}
+
+.modal label.resume-auto {
+  margin-bottom: 10px;
+  font-size: var(--fs-12);
+}
+
+/* three buttons in a long language overrun a phone: they wrap, Not now above the two resumes */
+.resume-dialog .modal-actions {
+  flex-wrap: wrap;
 }
 
 /* ---- undoing a turn (features/undo): the files a row each, the commits to revert, the files in the way ---- */

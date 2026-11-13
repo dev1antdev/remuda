@@ -744,6 +744,7 @@ func Run(ctx context.Context, o Options) error {
 	go turns.Tracker.Loop(ctx.Done())
 
 	updater := &updates.Service{Health: vitals, Jobs: runner, Restart: restarter, Watch: watcher, Machines: fleet}
+	sleeps := sleeper(o.Dir, bus, fleet, watcher, runner, input, restarter, updater, activity, conciergeAgent.Is, hub.RosterChanged)
 	fleetSetup := &drift.Service{Fleet: fleet, Health: vitals, Updates: updater, Dirs: func(machineID string) []string {
 		if snap, _ := watcher.Snapshot(machineID); snap != nil {
 			return snap.WorkspaceDirs()
@@ -811,6 +812,7 @@ func Run(ctx context.Context, o Options) error {
 		Stage:      stageWrites(fleet, watcher, turns),
 		Scenes:     sceneSet,
 		Repos:      projectSettings,
+		Sleep:      sleeps,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

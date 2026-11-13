@@ -53,6 +53,7 @@ export type AppDialog =
   | { kind: "update-everywhere" } // every connected machine's updates, one after another, the page's own host last
   | { kind: "fleet-setup" } // how every machine is set up, side by side, the odd one out marked
   | { kind: "reopen" } // the agents whose panes went away, each to be started again on its session
+  | { kind: "resume-after-restart"; machineId: string } // the chats a reboot stopped on a machine, each with a tick and the command that brings it back
   | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string }; lanes?: { agent: string; model?: string }[] } // one prompt to several agents, each in a worktree of its own; lanes: the agents and models to start with
   | null;
 

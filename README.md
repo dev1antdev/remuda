@@ -742,13 +742,37 @@ workspaces and panes, but every pane is a bare shell again. remuda
 remembers which agent and which session each pane ran, so when a
 machine's herdr comes back with those panes empty, the machine's ⓘ
 turns amber — "3 chats stopped with the reboot: Claude Code in api,
-Codex in web, …" — with a **Resume** button, and a toast in the corner
-says the same once. Resume starts each chat again in its own pane on
-its session (`claude --resume`, `codex resume`, …), one job whose log
-sits under the machine's recent jobs; a pane whose folder or session
-file is gone, or that runs something else by then, is skipped with the
-reason. Nothing starts until you press the button, and a chat you left
+Codex in web, …" — with a **Resume…** button, and a toast in the corner
+says the same once. Either opens **Resume after restart**: a row per
+chat with a tick, the agent, its workspace and machine, and the exact
+command that brings it back (`cd ~/work/api && claude --resume …`), then
+**Not now**, **Resume N** for the ones ticked and **Resume all**. Each
+chat starts again in its own pane on its session (`claude --resume`,
+`codex resume`, …), one job whose log sits under the machine's recent
+jobs; a pane whose folder or session file is gone, or that runs
+something else by then, is skipped with the reason. The model and the
+arguments an agent was first started with are not carried over (herdr
+does not keep them). Nothing starts until you press a button — unless
+you tick **Resume automatically next time** (in the dialog, or in
+Settings › Sleep and resume): then the chats a reboot stopped come back
+by themselves, and the activity says what came back. A chat you left
 yourself is never offered back.
+
+**Put a workspace to sleep, wake it later.** "Sleep…" in a workspace's
+⋯ menu (or the palette) asks every agent in it to leave the way you
+would — its own `/exit` or `/quit`, an Esc first for one still at work
+— and keeps a note of each conversation; the shells, panes and tabs
+stay where they are, and the card in the sidebar dims and says
+**Asleep**. When an agent is still working or waiting for your answer,
+it asks first: "Sleep api? Still busy: Claude Code is working…
+Sleeping interrupts them. Waking resumes their conversations where they
+stopped." **Wake** in the same menu starts each agent again on its
+conversation in its own shell — never in a shell where something else
+runs — and in a new tab of the workspace when its pane was closed; what
+could not come back stays asleep and the toast says why. Switch on
+**Wake a sleeping workspace when I open it** in Settings and opening
+one of its panes is enough. A workspace asleep is not offered back
+after a reboot or as a closed agent: it waits for its own wake.
 
 **A tab closed by mistake comes back.** When a tab or a workspace with
 an agent in it closes — from remuda or anywhere else — remuda keeps the

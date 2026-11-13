@@ -22,6 +22,9 @@ import { folderOf as sessionFolder } from "@/features/roster/workspaces";
 import { noteDir } from "@/features/roster/cardFacts";
 import { canFork, forkLabel } from "@/features/chat/fork";
 import { forkPane } from "@/features/chat/forkPane";
+import { askSleep } from "@/features/sleep/flows";
+import { canSleep } from "@/features/sleep/sleep";
+import { sleepCommands } from "@/features/sleep/commands";
 import { keyWords } from "@/features/terminal/float/float";
 import { toggleFloat } from "@/features/terminal/float/useFloatKey";
 import { openTimelapse } from "@/features/terminal/timelapse/row";
@@ -141,6 +144,7 @@ function useCommands(): (query: string) => Entry[] {
         command(`previews:${m.id}`, t("Previews on {machine}…", { machine: m.label }), () => actions.openDialog({ kind: "previews", machineId: m.id }), { hint: t("what the agents serve there, opened in a tab of this browser"), icon: "external-link", keywords: ["preview", "port", "dev", "server", "localhost", "open", "browser", m.label] });
       for (const m of machines.filter((m) => m.state === "connected"))
         command(`leftovers:${m.id}`, t("Leftover worktrees on {machine}…", { machine: m.label }), () => actions.openDialog({ kind: "leftovers", machineId: m.id }), { hint: t("worktrees no workspace has open"), icon: "git-branch", keywords: ["cleanup", "clean", "worktree", "garbage", "disk", m.label] });
+      for (const entry of sleepCommands(machines)) command(entry.id, entry.title, entry.run, entry.more);
       if (current && !viewer) {
         const { machine, session, tab } = current;
         const named = `“${session.name}”`;
@@ -165,6 +169,7 @@ function useCommands(): (query: string) => Entry[] {
         }
         if (session.worktree?.linked && machine.state === "connected")
           command("remove-worktree", t("Close & remove worktree {workspace}…", { workspace: named }), () => actions.openDialog({ kind: "remove-worktree", machineId: machine.id, session }), { hint: t("its folder deleted, its branch kept unless you flip it"), icon: "trash", danger: true, keywords: ["remove", "delete", "worktree", "cleanup", "close"] });
+        if (!session.asleep && canSleep(session)) command("sleep", t("Sleep {workspace}…", { workspace: named }), () => askSleep(machine.id, session), { hint: t("its agents leave, their shells stay; waking resumes them"), icon: "moon", keywords: ["sleep", "hibernate", "pause", "suspend", "stop", "agents"] });
         command("close-workspace", t("Close workspace {workspace}", { workspace: named }), () => closeWorkspace(machine, session), { hint: t("its panes close and the agents in them stop"), icon: "x", danger: true, keywords: ["kill", "stop", "quit"] });
         if (popOutSupported) command("popout", t("Pop out this agent"), () => void popOut(selection!), { hint: t("a small window above every other app"), icon: "pip", keywords: ["picture", "window", "float"] });
         if (current.pane.agent) command("export", t("Export this conversation as Markdown"), () => void exportConversation(machine.id, current.pane.id, chatSession, folderOf(current), { agent: current.pane.agent, workspace: session.name, machine: machine.label }).catch(toastError), { hint: t("the session shown, as a file"), icon: "download", keywords: ["save", "download", "markdown", "transcript", "share", "file"] });

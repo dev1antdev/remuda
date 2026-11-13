@@ -63,6 +63,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/scratch"
 	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/sessions"
+	"github.com/dev1antdev/remuda/internal/sleep"
 	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/timelapse"
@@ -132,6 +133,7 @@ type Server struct {
 	Repos      *repos.Store        // each repository's project settings: worktree defaults, the setup script, the run actions
 	Ports      *ports.Tracker      // the ports the machines' processes listen on, matched to their workspaces
 	Resources  *resources.Service  // what the machines' herdr panes weigh on them, for the status bar
+	Sleep      *sleep.Service      // the workspaces put to sleep and woken at the person's press, and the resume switches
 
 	streams   termStreams
 	relayed   relays           // the terminals piped to a machine's own remuda, which holds their attach
@@ -202,6 +204,7 @@ func (s *Server) Handler() http.Handler {
 	s.undoRoutes(api)
 	s.sceneRoutes(api)
 	s.gitRoutes(api)
+	s.sleepRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard
