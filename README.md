@@ -729,7 +729,7 @@ Devices under a name — "the office TV", a colleague's — and open it where
 the viewing happens: that browser gets the Wall, the sidebar, the chats,
 the screens and their timelapses, the standup, the usage and Activity, and nothing that types or
 changes — no composer, no keys, no question buttons, no Changes lens, no
-tasks; the terminal lens shows the pane's screen as the Wall does, without
+tasks; the Git lens draws its graph and opens no menu; the terminal lens shows the pane's screen as the Wall does, without
 attaching, and the file viewer opens only files inside the machines'
 workspace folders. Every call past that is refused with "this link is for
 viewing only", a viewer's look marks nothing as seen, and the header says
@@ -1062,6 +1062,44 @@ them in all, the oldest going first; a turn whose changes weigh over
 16 MB is listed but cannot be undone. The turns are not in the nightly
 backups. A second remuda beside the real one keeps none unless it is
 given `-record`.
+
+## Git — the history as a graph
+
+An agent's pane has a fourth lens beside Chat, Terminal and Changes:
+**Git**, its checkout's history drawn the way VS Code's Git Graph draws
+it (after the git-graph mod for Herdr Desktop). Every branch is a lane
+in your theme's terminal colours, a fork or a merge a curve; each row
+carries its labels — the checked-out branch first, filled and ticked, a
+remote branch of the same name riding on it as `main | origin`, a remote
+branch alone with a cloud, tags, a detached HEAD — then the subject, the
+date (`now`, `12m`, `3h`, `6d`, `Oct 3`) and, when there is room, the
+author and the commit. HEAD is a ring on a tinted row, merge commits are
+muted, and while the tree is dirty **Uncommitted changes (N)** sits on
+top, joined to HEAD by a dashed line; a click on it opens the Changes
+lens. All branches or the current one, with or without the remotes,
+300 commits at a time and 300 more at the end. It follows the checkout
+by itself: a commit, a checkout or a new tag from any terminal redraws
+it within a few seconds, and reading it never touches your index.
+
+Click a commit for its details under the graph — hash, parents, author,
+date, the message's body and its files with their lines — and a file
+for its diff, coloured and with the changed words marked. Right-click a
+branch, a remote branch, a tag, a commit or the uncommitted row (a ⋯ or
+a tap on a label on a phone) for what git can do there: check out
+(a remote branch asks the local name first), create, rename or delete a
+branch, merge into the current branch, rebase it, cherry-pick, revert,
+reset soft, mixed or hard, add or delete a tag, copy a name or a hash;
+double-click a branch's label to check it out. Each asks first in a
+small dialog — only a local checkout with nothing uncommitted runs at
+once — red where it loses something: a hard reset names the files it
+discards, and deleting a branch git calls unmerged asks a second time.
+When git refuses, its own words stay in the dialog. A merge, rebase,
+cherry-pick or revert that stops on conflicts is left as it is, and the
+lens says so with **Abort** and a way to the Changes lens to resolve
+them. Nothing runs while an agent works or waits for an answer in that
+checkout — the refusal says who — nor when the branch moved since the
+graph was drawn; nothing here fetches, pulls or pushes, and nothing ever
+forces. A viewer link sees the graph and no menu.
 
 ## Agents and your tasks
 
@@ -1402,13 +1440,42 @@ row unfolds ten more from the file, "all N lines" the whole stretch up to
 the previous hunk, and the last hunk unfolds downward to the end of the
 file the same way — the unfolded lines walk and take comments like any
 other.
+**The files sit in git's own groups** — Conflicts (in red), Staged,
+Unstaged and Untracked, each with its count and Stage all or Unstage all —
+and a file you staged and changed again is in both, each side with its own
+counts and its own diff; someone who never stages sees the same lens with
+clearer groups. Under the pointer (always on a phone) a row's counts give
+way to `+` stage, `−` unstage and `↺` discard; a discard asks first,
+naming the file and what cannot come back (an untracked file's discard
+deletes that one file). The list can be a tree of folders — the button
+beside the columns' — a folder holding one folder folded into one row. At
+the foot of the files is the commit box: a message, **Commit staged** (or
+**Commit all**, which stages the listed files first) and **Amend** behind
+its chevron, which loads the last message into an empty box and refuses if
+the latest commit moved since. The secret check stands before a commit as
+before Approve & commit: findings hold the button back and **Commit
+anyway…** asks first. A failure keeps your message and shows git's own
+words. Nothing is written while an agent works, asks or ends a turn in that
+checkout — the lens names the agent — and every write is yours alone: a
+viewer link or an agent's key reaches none of them. Under the box,
+**Committed — not on origin/feature** lists what the remote does not have
+yet (for a branch never pushed, against origin's default branch), each
+commit opening its files and their diffs, and the head says how many
+commits there are to pull, as of the last fetch (remuda never fetches). The
+switch in the head reads the branch's whole work **vs its base** instead —
+the branch it was cut from, found by ancestry, with a pick to pin another —
+read only. A conflicted file opens on its conflict blocks alone, yours
+beside incoming at their real line numbers; you or an agent resolve it, and
+staging it marks it resolved. On every theme a colour too faint on a
+diff's green or red row is lifted just enough to read.
 **Approve** tells the agent the work is reviewed and it can carry on (a
 task it works on can move along) — pick *and ask the agent to commit* and
 it is **Approve & commit**: the agent commits the reviewed work and says
 so; pick *and ask it to commit, push and open a pull request* and it is
 **Approve & open PR**: the agent commits, pushes, opens the pull request
-with `gh` and names its link, which a task it works on picks up (remuda
-itself never writes into a repository); **Reject** tells it
+with `gh` and names its link, which a task it works on picks up (a
+verdict writes nothing itself; the lens's own Commit, below, does when you
+press it); **Reject** tells it
 what to fix and to end the answer that brings the work back with the line
 `READY FOR REVIEW` — when it does, the queue lists that workspace first,
 marked *ready again*, and a push says so; both take a note and carry

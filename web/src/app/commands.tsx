@@ -36,6 +36,7 @@ import { USAGE_TAB_KEY, type UsageTab } from "@/features/usage/scorecard";
 import { holdLockScreen } from "@/features/standup/lockScreen";
 import { primeSpeech, speechSupported } from "@/lib/speech";
 import { useScenes } from "@/features/scenes/api";
+import { isCheckout } from "@/features/git/checkout";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
 import { setDarkFlavorPref, setLightFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, useLightFlavorPref, useTextSize, useThemePref } from "./theme";
@@ -59,6 +60,7 @@ const LENSES: { lens: Lens; title: string; icon: IconName }[] = [
   { lens: "chat", title: t("Show the chat"), icon: "message" },
   { lens: "terminal", title: t("Show the terminal"), icon: "terminal" },
   { lens: "changes", title: t("Show the changes"), icon: "file" },
+  { lens: "git", title: t("Show the Git history"), icon: "git-branch" },
 ];
 
 export default function CommandPalette() {
@@ -117,7 +119,7 @@ function useCommands(): (query: string) => Entry[] {
       if (current && !viewer) {
         const folder = folderOf(current);
         for (const l of LENSES) {
-          if ((mode === "herdr" && l.lens === lens) || (l.lens === "changes" && !folder) || !lensesOf(current.pane.agent).includes(l.lens)) continue;
+          if ((mode === "herdr" && l.lens === lens) || (l.lens === "changes" && !folder) || (l.lens === "git" && !isCheckout(current.session)) || !lensesOf(current.pane.agent).includes(l.lens)) continue;
           const show = () => {
             actions.setMode("herdr");
             actions.setLens(l.lens);

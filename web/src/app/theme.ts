@@ -5,6 +5,7 @@
 // data-text, data-density and --mono on the same root. Started once from main.tsx before the first render; the hooks
 // follow every change of a pref or of the system.
 
+import { legibleFor } from "@/lib/legible";
 import { DENSITY_KEY, densityOf, MONO_KEY, monoOf, monoStack, TEXT_SIZE_KEY, textSizeOf, type Density, type Look, type MonoFont, type TextSize } from "@/lib/look";
 import { readPref, watchPref, writePref } from "@/lib/prefs";
 import { createStore } from "@/lib/store";
@@ -90,7 +91,22 @@ export function dressDocument(doc: Document, flavor: Flavor, accent: Accent): vo
   doc.documentElement.dataset.flavor = flavor;
   doc.documentElement.dataset.accent = accent;
   doc.querySelector('meta[name="theme-color"]')?.setAttribute("content", pageColor(flavor));
+  dressLegible(doc, flavor);
 }
+
+// dressLegible puts the theme's lifted colours for tinted diff rows (lib/legible.ts) on the document, after its stylesheets
+function dressLegible(doc: Document, flavor: Flavor): void {
+  let sheet = doc.getElementById(LEGIBLE_ID);
+  if (!sheet) {
+    sheet = doc.createElement("style");
+    sheet.id = LEGIBLE_ID;
+    doc.head.appendChild(sheet);
+  }
+  const rules = legibleFor(flavor);
+  if (sheet.textContent !== rules) sheet.textContent = rules;
+}
+
+const LEGIBLE_ID = "remuda-legible";
 
 // dressLook puts the text size, the density and the monospace stack on a document's root
 export function dressLook(doc: Document, look: Look): void {
