@@ -3967,7 +3967,42 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   its request was read as merged, else kept (`branch_kept`) — and the
   page's confirm says so (`closeAsk`, `madeWorktree` in
   `features/roster/tidy.ts`, tested) and its toast what became of it
-  (`tidyWords`). **Leftover worktrees** (the machine's ⋯ menu and the
+  (`tidyWords`) — the API's way and the e2e's; the page's own close of
+  such a workspace (its ⋯, the palette, its last tab's ×) opens the
+  remove dialog below instead. **A worktree removed as shown**
+  (`removal.go`, tested on real repositories: clean, dirty, a commit of
+  its own, a submodule with a commit pushed nowhere; after Orca's remove
+  dialog): `GET /api/worktrees/{id}/removal?machine` is `LookAt` — one
+  read-only script in the worktree (`--no-optional-locks`, fsmonitor
+  off): its branch and main checkout, every `git status --porcelain`
+  entry (`dirty`, `first`), the branch's commits on no remote
+  (`unpushed`) and of those the ones the main checkout's HEAD lacks too
+  (`unmerged`: lost with the branch), whether that HEAD holds the branch
+  (`merged`), a `.gitmodules`, and every submodule (`git submodule
+  foreach --recursive`) with a commit on no remote — plus, from the
+  server (`internal/server/worktree_remove.go`), the other workspaces on
+  the checkout or with a pane in it (`sharers`), an agent working or
+  asking there or a turn still ending (`busyIn`: `undo.Service.Working`
+  and `Tracker.Going`), a request read as merged (`mergedIn`), and the
+  `Stamp` of what it showed. `POST /api/worktrees/{id}/remove {machine,
+  delete_branch, stamp, keep_folder}` looks again: an agent at work is a
+  409, another workspace on the checkout or `keep_folder` closes this
+  workspace alone, a stamp that is not the fresh look's is a 409 ("it
+  changed since this opened"), else herdr closes the workspace and
+  `RemoveAsShown` runs `git worktree remove`, with `--force` only for the
+  uncommitted work or the submodules the dialog named (the person's
+  decision of 2026-11-13: git's writes at their press, a loss behind a
+  danger button that says it), and `git branch -D` when they flipped the
+  branch to Deleted (`RemoveTimeout` 10 min: a node_modules). The page:
+  `features/roster/worktree/RemoveWorktreeDialog.tsx` (dialog kind
+  `remove-worktree`: "Close & remove worktree…" in a linked worktree's ⋯
+  and the palette, and the close of a made one): a red trash tile, the
+  table — Folder *Deleted*, Branch *Kept* or *Deleted* (deleted by default
+  once merged, a click flips it) — the losses in red, *Remove* / *Remove
+  anyway* (`btn danger`), *Close, keep the folder* beside a loss, *Close
+  workspace* when shared, held back while an agent works; `removal.ts`
+  the pure part, tested: `rows`, `warnings`, `sharedWords`,
+  `buttonWords`, `blockedWords`, `branchGoesByDefault`. **Leftover worktrees** (the machine's ⋯ menu and the
   palette, dialog kind `leftovers` → `LeftoversDialog.tsx`): `GET
   /api/machines/{id}/leftovers` lists, in one script (`LeftoversScript`:
   du for the size), every folder two levels under the root that no
@@ -3978,7 +4013,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `Tidy`, the rest left alone and said so; the clean ones come ticked,
   the button says how much goes (`removedWords`, `leftoverWords`,
   `sizeWords`). The deletions remuda makes in a repository are these,
-  each at the person's word — a close, the menu row, the dialog's button;
+  each at the person's word — a close, the menu row, the dialog's button,
+  the remove dialog's *Remove anyway* past what it named;
   `Discard`
   (`git worktree remove --force` and `git branch -D`) is kept for an
   arena's lanes the person did not keep, their work saved as a patch
@@ -3999,6 +4035,104 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   by remuda, `included` / `include_error` on the worktree route's answer,
   which the page turns into a toast (`features/roster/included.ts`,
   tested: `includedWords`); a failure is a note, never a failed start.
+  **The New worktree dialog** (after Orca's Create worktree; `create.go`,
+  `setup.go`, tested on real repositories and a bare origin;
+  `internal/server/worktree.go`): `GET /api/worktrees/source?machine&dir`
+  is `repos.Read` — a repository's local branches and origin's (newest
+  commit first), the checkouts `git worktree list` keeps, origin's HEAD
+  (else the main checkout's branch) as the base, origin's address with no
+  user or token in it and `GitHub` owner/repo when it is on github.com,
+  and the team's setup script (`scripts.setup` of `herdr.yaml`, else
+  Orca's `orca.yaml`: `repos.YAMLScript`, a reader of that one shape) —
+  with the project's settings, the machine's home and herdr's root; `GET
+  /api/worktrees/github?machine&repo` the open issues and pull requests
+  through `gh issue list` / `gh pr list -R` on the machine (`repos.ListOpen`:
+  gh's stderr kept out of its JSON, its update notice and prompts off; a
+  pull request's `closes` from GitHub's closing references and a
+  "fixes #N" in its body; no gh, or one not signed in, a `trouble`
+  sentence rather than an error); `GET /api/worktrees/lookup` one number
+  through `gh api …/issues/N` and `gh pr view` (`repos.Lookup`); `POST
+  /api/worktrees/fetch {machine, root}` `git fetch --prune origin` at the
+  person's press, a 409 while an agent works or asks in that checkout
+  (`busyIn`). `POST /api/worktrees` with a `pick {kind branch | issue |
+  pr | new, branch, number, head, pr, cross_repo}` reads the repository
+  again and works out `MakePlan` (the page's `planOf` mirrors it): the
+  branch checked out in a checkout is `open` — the workspace standing on
+  it answered (`opened`, renamed when a name was typed), else herdr's
+  `worktree.open` — a local one `local`, one only on origin `remote`
+  (herdr's `worktree.create` from `origin/<b>`, then `git branch
+  --set-upstream-to`), a pull request's head not fetched yet fetched first
+  (`+refs/heads/<h>:refs/remotes/origin/<h>`; a fork's as
+  `+refs/pull/N/head:refs/heads/<b>`, a local branch tracking nothing),
+  anything else `new` from the picked branch or the base (`--unset-upstream`
+  when that is origin's, so its first push makes its own, as Orca's
+  `--no-track`); `BadBranch` refuses what check-ref-format would. herdr's
+  `WorktreeCreateAt` makes the checkout, in the project's location
+  (`FolderFor`: `<location>/<Slug>`, herdr's own naming: lower case, a dash
+  for every other run) or herdr's root; the issue and pull request it was
+  made for go into `git config branch.<b>.remuda-issue` / `remuda-pr`
+  (`owner/repo#N`) for other screens to read; `.worktreeinclude` as
+  always. **The setup**: `SetupScript` the team's then the project's local
+  one, `SetupFile` a file in the machine's temp folder (0600, removing
+  itself as it starts) that exports `HERDR_ROOT_PATH`,
+  `HERDR_WORKTREE_PATH`, `HERDR_WORKSPACE_NAME` and the `ORCA_*` /
+  `CONDUCTOR_ROOT_PATH` aliases, enters the worktree, runs the script in
+  the person's login shell (`"$SHELL" -lic` for bash, zsh or ksh, sh for
+  any other) and prints "Setup finished." or "Setup failed (exit N).";
+  the shell is handed one line, `sh '<file>'`, through
+  `sessions.Input.TypeLine` (`shellline.go`, tested: once the new pane's
+  shell holds its terminal and has drawn its prompt, under the pane's
+  lock, then Enter). With the project's "Wait for setup" or no agent it
+  runs in the worktree's own terminal (`setup: "first"`) and the agent
+  starts there once `AwaitSetup` read the line and the shell's prompt is
+  back (at most `SetupWait` 30 min, then a push); else the agent starts at
+  once and the setup runs in a "Setup" tab herdr makes beside it, the
+  agent's tab kept in front (`setup: "tab"`). When the project asks every
+  time, the request must say `run` or `skip`. Not on a Windows PC (its
+  panes run PowerShell): `setup_error` says so. **Project settings** are
+  `internal/repos` (`settings.go`, tested): `Settings{base, location,
+  issue_branch, agent, issue_prompt, pr_prompt, setup, setup_when ask | run
+  | skip, setup_wait, actions}` in `repos.json` on the cockpit by machine
+  and the repository's main folder as the sidebar names it
+  (`session.folder`), `Check` refusing what a worktree or a run could not
+  take; `GET /api/repos/settings?machine&root[&quick=1]` (with the
+  repository's own name, base and team script unless quick), `PUT` whole;
+  `Forget` on `events.MachineRemoved`. **Run actions** (after T3 Code's
+  run button): `Action{id, name, command, folder, icon, place tab |
+  right | down}`, one line each, a folder inside the checkout; `POST
+  /api/run {machine, workspace, pane, root, action}` runs the saved
+  action by its id — never a command the request carries — in a shell
+  herdr makes (`TabCreateIn` named after it in the workspace's checkout
+  and the action's folder, or `PaneSplit` of the pane on screen), the
+  command typed there by `TypeLine` in the background (a push when the
+  shell never came up) and noted as a "sent" row of the activity. None of
+  these routes is a viewer link's or an agent key's (tested). The page,
+  `features/roster/worktree/`: `NewWorktreeDialog.tsx` (dialog kind
+  `worktree`: the folder's "New workspace…" and the palette) — Project, the
+  tabs Branch · Issue · PR · New (pref `worktree.mode`, New the first
+  time) with "Create from [base]" kept in its room while unseen and ↻, the
+  search and its 42 px rows tagged Open, Local, Remote, Issue, PR or GitHub
+  (a pasted `#123` or link jumps to its tab, a number in neither list
+  looked up on Enter), the Details (`Details.tsx`: the branch in mono and
+  the live note under it, amber for an error, the workspace's name, the
+  agent — "None · just a terminal" or one, pref `worktree.agent`, the
+  project's own first — its first prompt filled from the project's
+  template for an issue or a pull request and kept once edited, the start
+  options, the setup's Run / Skip with the script on one line), the foot's
+  keys, Project settings…, Create worktree / Open worktree with ⌘↵ /
+  Ctrl+↵ once; `sources.ts` (`items`, `parseRef`, `jumpFor`, `prFor`,
+  `emptyWords`, `repositoriesOf`, `baseChoices`, `tilde`), `plan.ts`
+  (`planOf`, `pickOf`, `fill`, `slug`, `badBranch`, `folderFor`,
+  `createWords`) and `made.ts` the pure parts, tested. `features/roster/
+  project/`: `ProjectSettingsDialog.tsx` (dialog kind `project-settings`:
+  the folder's ⋯, the New worktree dialog's foot, the run menu's Edit
+  actions…, the palette; WORKTREES, WORKTREE SETUP with the variables'
+  chips and the team's script read-only, NEW WORKTREES START WITH, RUN
+  ACTIONS), `ActionDialog.tsx`, `RunButton.tsx` ("▶ Dev ▾" in the tab
+  strip's tools before the View menu for a repository's workspace, the
+  last used action per repository and device, pref `run.last:<machine>|
+  <root>`; "▶ Add action" while there is none; the name gone under 600 px
+  and under the screen-sharing mode), `project.ts` the pure part, tested.
   The page:
   `features/roster/prActions.ts` (tested: `canHandFailure` an open
   request with a failed check, `canSendReview` an open request,

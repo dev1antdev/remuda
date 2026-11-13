@@ -50,6 +50,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/recipes"
+	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/retire"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
@@ -124,6 +125,7 @@ type Server struct {
 	Scenes     *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
 	GitOps     *gitops.Service     // git's writes on a checkout at the person's press, refused while an agent works there
 	Stage      *gitstage.Service   // the Changes lens's git writes, each at the person's press; nil writes nothing
+	Repos      *repos.Store        // each repository's project settings: worktree defaults, the setup script, the run actions
 
 	streams   termStreams
 	relayed   relays           // the terminals piped to a machine's own remuda, which holds their attach
@@ -180,6 +182,8 @@ func (s *Server) Handler() http.Handler {
 	s.jiraRoutes(api)
 	s.backupRoutes(api)
 	s.leftoverRoutes(api)
+	s.worktreeRoutes(api)
+	s.repoRoutes(api)
 	s.previewRoutes(api)
 	s.opinionRoutes(api)
 	s.scorecardRoutes(api)

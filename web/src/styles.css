@@ -17163,3 +17163,588 @@ textarea.screen-term-field {
 .prompt-full .md p + p {
   margin-top: 6px;
 }
+
+/* ---- worktrees: the New worktree dialog, the remove dialog, a project's settings, the run button ---- */
+/* the base field rule is weighty (input and four :not()s): a mono field says so as weightily */
+.new-worktree .mono,
+.remove-worktree .mono,
+.repo-settings .mono,
+.action-editor .mono,
+:is(.new-worktree, .repo-settings, .action-editor) input.mono:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
+  font-family: var(--mono);
+}
+
+.nw-search input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
+  height: 100%;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rs-row-control > input,
+.rs-row-control > .sel {
+  width: 100%;
+}
+
+.nw-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nw-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nw-tabs {
+  display: flex;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.nw-base {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.nw-base .sel {
+  max-width: 190px;
+}
+
+/* the base pick keeps its room while the plan starts from no base, so the tabs and the fetch never move */
+.nw-base.is-vacant {
+  visibility: hidden;
+}
+
+.nw-tabs-row .icon-btn .spin {
+  animation: spin 0.9s linear infinite;
+}
+
+.nw-source {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nw-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--accent-ring);
+  border-radius: var(--r-md);
+  background: var(--bg-input);
+  color: var(--fg-dim);
+}
+
+.nw-search input {
+  flex: 1;
+  min-width: 0;
+}
+
+.nw-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  height: 214px; /* five rows: the list keeps its height while it fills, so the Details below never jump */
+  overflow-y: auto;
+}
+
+.btn.ghost.nw-row {
+  justify-content: flex-start;
+  gap: 10px;
+  height: 42px;
+  flex-shrink: 0;
+  padding: 0 10px;
+  border-radius: var(--r-md);
+  color: var(--fg);
+  text-align: left;
+  font-weight: 400;
+}
+
+.btn.ghost.nw-row.on {
+  background: var(--bg-active);
+  color: var(--fg);
+}
+
+.nw-row-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+
+.nw-row-label,
+.nw-row-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nw-row-label {
+  font-size: var(--fs-13);
+}
+
+.nw-row-sub {
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.nw-tag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-11);
+  color: var(--fg-dim);
+}
+
+.tone-open,
+.tone-issue,
+.tone-pr {
+  color: var(--green);
+}
+
+.tone-remote {
+  color: var(--blue);
+}
+
+.tone-local,
+.tone-github {
+  color: var(--fg-dim);
+}
+
+.nw-empty {
+  margin: 0;
+  padding: 10px;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.nw-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg-raised);
+}
+
+.nw-details-head {
+  font-size: var(--fs-11);
+  font-weight: 600;
+  color: var(--fg-faint);
+}
+
+.nw-note {
+  min-height: 1.45em; /* the line is there before it says anything, so nothing under it moves */
+  font-size: var(--fs-12);
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--fg-dim);
+  overflow-wrap: anywhere;
+}
+
+.nw-note.is-error {
+  color: var(--amber);
+}
+
+.nw-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: var(--fs-13);
+  font-weight: 500;
+  color: var(--fg-dim);
+}
+
+.nw-setup-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.nw-setup-script {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--fs-12) / 1.4 var(--mono);
+  color: var(--fg-faint);
+}
+
+.nw-foot {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.nw-keys,
+.rs-foot-hint,
+.rw-foot {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.nw-create kbd {
+  font: var(--fs-11) / 1 var(--mono);
+  opacity: 0.7;
+}
+
+.nw-create .spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--on-accent) 35%, transparent);
+  border-top-color: var(--on-accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@media (max-width: 600px) {
+  .nw-keys {
+    display: none;
+  }
+
+  .nw-tabs .btn {
+    padding: 0 8px;
+  }
+
+  /* the base on a line of its own under the tabs, kept while unseen so the Details never move */
+  .nw-tabs-row {
+    flex-wrap: wrap;
+  }
+
+  .nw-base {
+    order: 3;
+    width: 100%;
+  }
+
+  .nw-base .sel {
+    flex: 1;
+    max-width: none;
+  }
+}
+
+/* a project's settings: sections in capitals, a row a label and its control */
+.rs-section {
+  margin: 6px 0 0;
+  font-size: var(--fs-11);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.rs-row {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.rs-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-13);
+  color: var(--fg);
+}
+
+.rs-row-label small,
+.repo-settings label small,
+.repo-settings label.check-row small {
+  font-size: var(--fs-12);
+  font-weight: 400;
+  color: var(--fg-faint);
+}
+
+.repo-settings label.check-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rs-vars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.rs-vars code {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+  font: var(--fs-12) / 1.4 var(--mono);
+  color: var(--fg-dim);
+}
+
+.rs-team {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.rs-team pre {
+  margin: 0;
+  padding: 10px;
+  border-radius: var(--r-md);
+  background: var(--bg-input);
+  font: var(--fs-12) / 1.45 var(--mono);
+  color: var(--fg-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rs-when {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  font-size: var(--fs-13);
+  color: var(--fg-dim);
+}
+
+.rs-pills,
+.action-places,
+.action-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rs-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rs-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.rs-action-name {
+  font-weight: 500;
+}
+
+.rs-action-hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--fs-12) / 1.4 var(--mono);
+  color: var(--fg-faint);
+}
+
+.rs-add {
+  align-self: flex-start;
+}
+
+@media (max-width: 600px) {
+  .rs-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+}
+
+.action-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+}
+
+.action-choices > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.action-choice-label {
+  font-size: var(--fs-13);
+  font-weight: 500;
+  color: var(--fg-dim);
+}
+
+.action-delete {
+  margin-right: auto;
+}
+
+/* the run button: two quiet halves of one outline, the action's name at most a tab's width */
+.run-split {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 2px;
+}
+
+.run-split .btn.sm {
+  height: var(--ctl-xs, 26px);
+}
+
+.run-main {
+  max-width: 170px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.run-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn.sm.run-more {
+  padding: 0 6px;
+  border-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+@media (max-width: 600px) {
+  .run-name {
+    display: none;
+  }
+
+  .btn.sm.run-main {
+    padding: 0 8px;
+  }
+}
+
+/* the remove dialog: a red trash tile, a table of what goes and stays, the losses in red */
+.rw-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rw-tile {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--r-lg);
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.rw-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rw-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.rw-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg-raised);
+}
+
+.rw-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  color: var(--fg-dim);
+}
+
+.rw-line + .rw-line {
+  border-top: 1px solid var(--line);
+}
+
+.rw-label {
+  width: 56px;
+  flex-shrink: 0;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.rw-value {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+  color: var(--fg);
+  font-size: var(--fs-13);
+}
+
+.rw-value > span,
+.rw-value small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rw-value small {
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.rw-pill {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 99px;
+  font-size: var(--fs-12);
+  font-weight: 500;
+}
+
+.btn.sm.rw-pill {
+  height: 22px;
+  border: 0;
+  border-radius: 99px;
+}
+
+.rw-pill.is-deleted,
+.btn.sm.rw-pill.is-deleted {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.rw-pill.is-kept,
+.btn.sm.rw-pill.is-kept {
+  background: var(--green-soft);
+  color: var(--green);
+}

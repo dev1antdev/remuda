@@ -26,7 +26,10 @@ import { onWindows } from "./system";
 import { basename } from "@/lib/text";
 import { t, tn } from "@/lib/i18n";
 
+// closeWorkspace asks before a workspace closes; one on a worktree herdr or remuda made gets the remove dialog, which
+// says what of the worktree goes with it and what would be lost
 export function closeWorkspace(m: Machine, s: Session) {
+  if (madeWorktree(s.worktree) && m.state === "connected") return actions.openDialog({ kind: "remove-worktree", machineId: m.id, session: s });
   const n = s.tabs.reduce((a, t) => a + t.panes.length, 0);
   const agents = s.tabs.flatMap((tab) => tab.panes.filter((p) => p.agent).map((p) => p.id));
   const panes = tn(n, "Close “{name}”? {n} pane closes and the agent in it stops.", "Close “{name}”? {n} panes close and the agents in them stop.", { name: s.name });
@@ -52,10 +55,12 @@ function folderRows(m: Machine, folder: string, name: string, icon: Session["ico
   const connected = m.state === "connected";
   const hidden = markedFolder(sharingOf(readPref(SHARING_KEY, DEFAULT_SHARING)), m.id, folder);
   const newWorkspace: MenuItem = repository
-    ? { label: t("New workspace…"), icon: "git-branch", hint: t("a worktree of its own: a new folder and branch, an agent in it"), disabled: !connected, onSelect: () => actions.openDialog({ kind: "worktree", machineId: m.id, session: repository }) }
+    ? { label: t("New workspace…"), icon: "git-branch", hint: t("a worktree of its own: a branch, an issue, a pull request or a new branch"), disabled: !connected, onSelect: () => actions.openDialog({ kind: "worktree", machineId: m.id, session: repository }) }
     : { label: t("New workspace in this folder…"), icon: "plus", hint: shown.masked ? shown.name : name, disabled: !connected, onSelect: () => actions.openDialog({ kind: "workspace", machineId: m.id, dir: folder }) };
+  const settings: MenuItem[] = repository ? [{ label: t("Project settings…"), icon: "settings", hint: t("new worktrees, their setup script, the run actions"), onSelect: () => actions.openDialog({ kind: "project-settings", machineId: m.id, root: folder }) }] : [];
   return [
     newWorkspace,
+    ...settings,
     ...(shown.masked ? [] : [{ label: t("Folder icon…"), icon: "folder" as const, onSelect: () => actions.openDialog({ kind: "folder-icon", machineId: m.id, folder, name, icon }) }]),
     { label: t("Hide when sharing the screen"), icon: "eye-off", checked: hidden, onSelect: () => toggleSharingFolder(m.id, folder) },
     ...(onWindows(m) ? [] : [{ label: t("Open in the editor"), icon: "code" as const, hint: t("the Code mode on this folder"), disabled: !connected, onSelect: () => actions.openInCode(m.id, folder, folder) }]), // a Windows PC has no code-server
@@ -104,6 +109,8 @@ export function workspaceMenuItems(m: Machine, session: Session, shown: Shown): 
     if (muted) rows.push({ label: t("Unmute · {left}", { left: leftWords(muted) }), icon: "bell", onSelect: () => void act(unmuteWorkspace(m.id, dir)) });
     else for (const choice of muteChoices()) rows.push({ label: choice.label, icon: "bell-off", onSelect: () => void act(muteWorkspace(m.id, dir, choice.until)) });
   }
-  rows.push({ sep: true }, { label: t("Close workspace"), icon: "x", danger: true, onSelect: () => closeWorkspace(m, session) });
+  rows.push({ sep: true });
+  if (session.worktree?.linked) rows.push({ label: t("Close & remove worktree…"), icon: "trash", danger: true, disabled: !connected, onSelect: () => actions.openDialog({ kind: "remove-worktree", machineId: m.id, session }) });
+  rows.push({ label: t("Close workspace"), icon: "x", danger: true, onSelect: () => closeWorkspace(m, session) });
   return rows;
 }

@@ -506,6 +506,13 @@ type WorktreeCreateResult struct {
 
 // WorktreeCreate adds a git worktree to the workspace's repository and opens it as a workspace under it.
 func (c *Client) WorktreeCreate(workspaceID, branch, base, label string) (*WorktreeCreateResult, error) {
+	return c.WorktreeCreateAt(workspaceID, branch, base, label, "")
+}
+
+// WorktreeCreateAt is WorktreeCreate in a folder of the caller's choosing, "" for herdr's own
+// (~/.herdr/worktrees/<repository>/<the branch, lower case, every other run of characters a dash>). A branch that
+// exists is checked out there; a new one starts from base, herdr's source checkout's HEAD when base is "".
+func (c *Client) WorktreeCreateAt(workspaceID, branch, base, label, path string) (*WorktreeCreateResult, error) {
 	params := map[string]any{"workspace_id": workspaceID, "branch": branch, "focus": false}
 	if base != "" {
 		params["base"] = base
@@ -513,11 +520,61 @@ func (c *Client) WorktreeCreate(workspaceID, branch, base, label string) (*Workt
 	if label != "" {
 		params["label"] = label
 	}
+	if path != "" {
+		params["path"] = path
+	}
 	var out WorktreeCreateResult
-	if err := c.CallTimeout("worktree.create", params, &out, 60*time.Second); err != nil {
+	if err := c.CallTimeout("worktree.create", params, &out, 10*time.Minute); err != nil {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// WorktreeOpen opens a checkout of the workspace's repository as a workspace; one open on it already is answered.
+func (c *Client) WorktreeOpen(workspaceID, path, label string) (*WorktreeCreateResult, error) {
+	params := map[string]any{"workspace_id": workspaceID, "path": path, "focus": false}
+	if label != "" {
+		params["label"] = label
+	}
+	var out WorktreeCreateResult
+	if err := c.CallTimeout("worktree.open", params, &out, 60*time.Second); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// TabCreateIn opens another tab of the workspace in a folder of its own, with env set in its shell.
+func (c *Client) TabCreateIn(workspaceID, label, cwd string, env map[string]string) (*TabCreateResult, error) {
+	params := map[string]any{"workspace_id": workspaceID, "focus": false}
+	if label != "" {
+		params["label"] = label
+	}
+	if cwd != "" {
+		params["cwd"] = cwd
+	}
+	if len(env) > 0 {
+		params["env"] = env
+	}
+	var out TabCreateResult
+	if err := c.Call("tab.create", params, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PaneSplit opens a shell beside the pane, "right" or "down", in the folder given.
+func (c *Client) PaneSplit(paneID, direction, cwd string) (*PaneInfo, error) {
+	params := map[string]any{"target_pane_id": paneID, "direction": direction, "focus": false}
+	if cwd != "" {
+		params["cwd"] = cwd
+	}
+	var out struct {
+		Pane PaneInfo `json:"pane"`
+	}
+	if err := c.Call("pane.split", params, &out); err != nil {
+		return nil, err
+	}
+	return &out.Pane, nil
 }
 
 // AgentStart launches an agent (by herdr manifest kind) in a pane.

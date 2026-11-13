@@ -93,6 +93,8 @@ socket.onmessage = (message) => {
     else if (url.includes("/api/undo")) void fakeUndo(msg.params);
     else if (url.includes("/api/limits/offers")) void fakeOffers(msg.params);
     else if (url.includes("/api/question")) void fakeQuestion(msg.params);
+    else if (url.includes("/api/worktrees/github")) void fakeLists(msg.params);
+    else if (url.includes("/api/worktrees/source")) void dressSource(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
@@ -379,7 +381,7 @@ const made = [];
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 const sessions = async () => (await api("GET", "/api/roster")).machines.find((m) => m.id === "local")?.sessions ?? [];
-let app, tree, notes, desk, inbox, drawTask, paneA1, paneN, paneDesk, morningScene, eveningScene;
+let app, tree, notes, desk, inbox, drawTask, paneA1, paneN, paneDesk, paneTree, morningScene, eveningScene;
 let DRESS = {};
 // the morning's first step lays its tab out as two panes, the agent on the left and a dev server on the right
 const SCENE_LAYOUT = { agent: 0, root: { type: "split", direction: "right", ratio: 0.6, first: { type: "pane" }, second: { type: "pane", dir: "src", command: ["npm", "run", "dev"] } } };
@@ -469,6 +471,7 @@ async function seed() {
   paneDesk = ready.d.tabs[0].panes[0].id;
   const paneA2 = ready.a.tabs[1].panes[0].id;
   const paneB = ready.b.tabs[0].panes[0].id;
+  paneTree = paneB;
   DRESS = {
     [paneA1]: {
       agent: "claude",
@@ -1658,6 +1661,128 @@ async function previewFlow() {
   say(`preview flow: port ${devPort} listed in its workspace, opened on ${opened.local} for the signed-in caller only, shut`);
 }
 
+// fakeLists answers the New worktree dialog's open issues and pull requests, which gh would read on the machine: two
+// issues, one a pull request works on, and that pull request
+async function fakeLists({ requestId }) {
+  const body = {
+    issues: [{ number: 198, title: "Saved carts for signed-in shoppers" }, { number: 203, title: "Checkout redesign" }],
+    prs: [{ number: 212, title: "Add saved carts", head: "cart-saver", closes: [198] }],
+  };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
+// dressSource dresses the repository's read as one whose origin is on GitHub, so the Issue and PR tabs list; the server keeps its own
+async function dressSource({ requestId, responseStatusCode }) {
+  const reply = await send("Fetch.getResponseBody", { requestId });
+  if (responseStatusCode !== 200 || !reply.result) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const answer = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
+  answer.source.github = "example/app";
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(answer)).toString("base64") });
+}
+
+// worktreeScreens open the New worktree dialog on each tab, project settings, the run button's menu and the remove
+// dialog (cancelled), on the repository's main checkout and its linked worktree
+async function worktreeScreens() {
+  const tab = (mode) => tap(`.new-worktree .nw-tabs [data-mode="${mode}"]`);
+  const openDialog = async () => {
+    await palette("worktree");
+    if (!(await until(() => present(".new-worktree .nw-details"), 6))) throw new Error("the New worktree dialog did not open");
+  };
+  await screen("worktree-new", {
+    open: async () => {
+      await openDialog();
+      await tab("new");
+      if (!(await until(() => evaluate(`(() => { const note = document.querySelector('.new-worktree .nw-note'); return !!note && !note.classList.contains('is-error') && /\\/app\\/worktree-/.test(note.textContent); })()`), 8))) failed("the New tab's note does not say where the new branch's worktree goes");
+      check(await present(".new-worktree .nw-base:not(.is-vacant) .sel"), "a new branch offers no base to start from");
+    },
+    expect: [".new-worktree .nw-details .nw-note"],
+  });
+  await screen("worktree-branch", {
+    open: async () => {
+      await openDialog();
+      await tab("branch");
+      if (!(await until(() => present('.new-worktree .nw-row[data-tag="Open"]'), 8))) throw new Error("the linked worktree's branch is not listed as open");
+      await tap('.new-worktree .nw-row[data-tag="Open"]');
+      if (!(await until(() => evaluate(`/feature-x/.test(document.querySelector('.new-worktree .nw-note')?.textContent ?? "")`), 4))) failed("the note does not say the branch is checked out at feature-x already");
+      check(await evaluate(`!!document.querySelector(".new-worktree .nw-base.is-vacant")`), "the base shows for a branch that is opened, not made"); // kept in its room unseen, so present() would not see it
+    },
+    expect: [".new-worktree .nw-row"],
+  });
+  await screen("worktree-issue", {
+    open: async () => {
+      await openDialog();
+      await tab("issue");
+      if (!(await until(async () => (await count('.new-worktree .nw-row[data-tag="Issue"]')) === 2, 8))) throw new Error(`the Issue tab lists ${await count('.new-worktree .nw-row[data-tag="Issue"]')} issues, not 2`);
+      if (!(await until(() => evaluate(`(document.querySelector('.new-worktree .nw-details input.mono')?.value ?? "") === "cart-saver"`), 4))) failed("the issue a pull request works on does not take that pull request's branch");
+      check(await evaluate(`/#198/.test(document.querySelector('.new-worktree .nw-details textarea')?.value ?? "")`), "the agent's first prompt is not the issue template's");
+    },
+    expect: [".new-worktree .nw-row"],
+  });
+  await screen("worktree-pr", {
+    open: async () => {
+      await openDialog();
+      await tab("pr");
+      if (!(await until(() => present('.new-worktree .nw-row[data-tag="PR"]'), 8))) throw new Error("the PR tab lists no pull request");
+    },
+    expect: [".new-worktree .nw-row"],
+  });
+  await screen("worktree-project-settings", {
+    open: async () => {
+      await palette("project-settings");
+      if (!(await until(() => present(".repo-settings .rs-section"), 8))) throw new Error("the project settings did not open");
+    },
+    expect: [".repo-settings .rs-vars", ".repo-settings .rs-actions"],
+  });
+  await screen("worktree-run-menu", {
+    open: async () => {
+      await closeAll();
+      await tap(".run-split .run-more");
+    },
+    expect: ["[role=menu].menu"],
+  });
+  await screen("worktree-remove", {
+    open: async () => {
+      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneTree)}&lens=terminal` });
+      if (!(await until(() => present(".pane-area .tab"), 15))) throw new Error("the worktree's pane did not come up");
+      await palette("remove-worktree");
+      if (!(await until(() => present(".remove-worktree .rw-table"), 8))) throw new Error("the remove dialog did not open");
+      check((await count(".remove-worktree .rw-line")) === 2, "the remove dialog's table has not a folder and a branch");
+    },
+    expect: [".remove-worktree .rw-pill"],
+    close: async () => {
+      await closeAll();
+      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
+      await until(() => present(".pane-area .tab"), 15);
+    },
+  });
+}
+
+// newWorktreeFlow makes a worktree the way the dialog asks for it, the project's setup script run first in its terminal,
+// then a run action's command typed into a split beside it, then the worktree, made dirty, removed as its look showed it
+async function newWorktreeFlow() {
+  where = `${pass.name} › new-worktree-flow`;
+  const screenOf = async (pane) => (await api("GET", `/api/screen?machine=local&pane=${encodeURIComponent(pane)}`).catch(() => ({ text: "" }))).text ?? "";
+  const settings = await api("PUT", "/api/repos/settings", { machine: "local", root: appDir, settings: { setup: "echo e2e-setup-ran", actions: [{ name: "Echo", command: "echo e2e-run-ok", place: "right" }] } });
+  const action = settings.settings.actions[0];
+  const created = await api("POST", "/api/worktrees", { machine: "local", workspace: app.id, root: appDir, branch: "e2e-made", base: "main", name: "e2e-made", agent: "shell", pick: { kind: "new" }, setup: "run" });
+  made.push(created.id);
+  check(created.action === "new" && created.setup === "first", `the create answered ${JSON.stringify(created)}`);
+  if (!(await until(async () => (await screenOf(created.pane)).includes("Setup finished."), 40))) failed(`the setup did not finish in the worktree's terminal: ${(await screenOf(created.pane)).slice(-300)}`);
+  check((await screenOf(created.pane)).includes("e2e-setup-ran"), "the project's setup script did not run");
+  const ran = await api("POST", "/api/run", { machine: "local", workspace: created.id, pane: created.pane, root: appDir, action: action.id });
+  if (!(await until(async () => (await screenOf(ran.pane)).includes("e2e-run-ok"), 30))) failed("the run action's command did not run in its split");
+  writeFileSync(`${created.path}/draft.txt`, "not committed\n");
+  const look = await api("GET", `/api/worktrees/${encodeURIComponent(created.id)}/removal?machine=local`);
+  check(look.dirty === 1 && look.branch === "e2e-made", `the look is ${JSON.stringify(look)}`);
+  const gone = await api("POST", `/api/worktrees/${encodeURIComponent(created.id)}/remove`, { machine: "local", delete_branch: true, stamp: look.stamp, keep_folder: false });
+  check(gone.worktree?.removed === true && !existsSync(created.path), `the removal answered ${JSON.stringify(gone)}`);
+  made.splice(made.indexOf(created.id), 1);
+  await api("PUT", "/api/repos/settings", { machine: "local", root: appDir, settings: {} });
+}
+
 async function worktreeFlow() {
   where = `${pass.name} › worktree-flow`;
   const worktreeOf = async (id) => (await sessions()).find((s) => s.id === id)?.worktree?.checkout_path ?? "";
@@ -1914,6 +2039,7 @@ async function runPass() {
     },
     expect: [".modal"],
   });
+  await worktreeScreens();
   await screen("machine-menu", {
     open: async () => {
       await sidebarOpen();
@@ -2496,6 +2622,8 @@ try {
       { urlPattern: "*/api/undo*", requestStage: "Request" },
       { urlPattern: "*/api/limits/offers*", requestStage: "Request" },
       { urlPattern: "*/api/question*", requestStage: "Request" },
+      { urlPattern: "*/api/worktrees/github*", requestStage: "Request" },
+      { urlPattern: "*/api/worktrees/source*", requestStage: "Response" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
@@ -2503,6 +2631,7 @@ try {
   const started = Date.now();
   for (pass of PASSES) await runPass();
   await changesFlow().catch((error) => failed(`stopped: ${error.message}`));
+  await newWorktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
   await worktreeFlow().catch((error) => failed(`stopped: ${error.message}`));
   await previewFlow().catch((error) => failed(`stopped: ${error.message}`));
   say(`${shots} screens in ${Math.round((Date.now() - started) / 1000)} s, screenshots in ${out}/display`);
