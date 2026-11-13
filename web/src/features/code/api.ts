@@ -14,5 +14,5 @@ export const openInEditor = (machineId: string, path: string, line?: number): Pr
 // codeWorkspace writes the machine's workspaces into its one .code-workspace file for the editor and names it
 export const codeWorkspace = (machineId: string): Promise<{ path: string; folders: string[] }> => sendJSON("POST", `/api/code/${encodeURIComponent(machineId)}/workspace`, {});
 
-// codeTheme dresses the machine's editor in the page's Catppuccin flavour; the extension is installed on the way when missing
+// codeTheme dresses the machine's editor in the page's theme; the theme's extension is installed on the way when missing
 export const codeTheme = (machineId: string, theme: Flavor): Promise<{ theme: string; installed: boolean }> => sendJSON("POST", `/api/code/${encodeURIComponent(machineId)}/theme`, { theme });
