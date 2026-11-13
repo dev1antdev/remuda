@@ -3237,6 +3237,53 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   "waiting for your answer", the first line of what it answered, else its
   title — or "2 agents" with a small line per agent under the card, each
   its own click; a workspace of shells alone shows `$` and its tabs.
+  **The workspace card's badges and hover card** (after Orca and munza's
+  better-sidebar): the second line's right end (`CardBadges.tsx`,
+  `.ws-tail`, one call site in `rows.tsx`) holds, in Orca's order, the
+  note icon (its text the Tip, a click edits it), a plug while
+  `session.ports` lists any (its Tip "2 live ports: 3000, 5432"; the
+  status bar's reading puts them there) and the pull request as **one
+  icon and its number in the state's colour** (`cardPR.ts`, tested:
+  `prLook` — violet merged, red closed, conflicts (`mergeable`
+  CONFLICTING or `merge_state` DIRTY) or a failed check, dim draft, amber
+  changes requested, green open, and a ✓ once `merge_state` is CLEAN with
+  the review approved or none required, its room kept when there is none
+  so the number never moves — `prNumber` #212 or !9, `prRepo`, `prTip`
+  "owner/repo#212 · Open / its title / ⌘-click opens it on GitHub",
+  `cardPRs` every request the workspace's agents named, once, the one the
+  card speaks for first, the rest "+1" with them in its Tip): ⌘-click
+  (Ctrl-click off a Mac, `isLinkClick`) opens it on its site, a click
+  opens the PR menu with a mouse (`prMenuItems` and, for a merged linked
+  worktree, its removal; a viewer's Open alone) and the card's details on
+  a touch screen. A line with badges gives the room from its words first,
+  then the Jira chip (its status words go, the dot stays), then the
+  branch, and a workspace of several agents drops its "2 agents" there.
+  **The hover card** (`CardHover.tsx` over `ui/HoverCard.tsx`, the content
+  `CardDetails.tsx`, `cardFacts.ts` tested): resting on a card opens, 340
+  px beside it, its sections, each only when it has something — the card's
+  own tooltip lines quietly above them (the row then wears no `title`,
+  which would open over the card), the **Note** in full (a click edits
+  it), the **Pull request(s)** (state icon, title, "#212 · Open ·
+  owner/repo", the checks and review chips, copy the link, open it on its
+  site), the **Issue(s)** (the Jira issues the roster carries and the
+  GitHub issues the request closes, `cardIssues`), the **Live ports** (a
+  dot, the port in mono, the process, the address) and the freshness foot
+  (`freshWords`: "Refreshing from GitHub…" while a read runs, "Couldn't
+  reach GitHub · from 5 min ago" in amber with gh's words in its Tip,
+  "Updated 3 min ago", each by the oldest status shown); opening it asks
+  `POST /api/pr/refresh` for its requests, read again when their last read
+  is over 20 s old, so the open card follows the read live. A folder the
+  screen-sharing mode hides has no badges and no card (`detailsOf`). A
+  touch screen has no hover: the card's ⋯ menu leads with **Details** and
+  a tap on the PR opens the same content as a popover under the card
+  (`cardAsk.ts`), a tap outside or Esc closing it. **Notes**
+  (`internal/notes`): "Note…" in the card's and the folder's ⋯ menus
+  (`cardMenu.ts`; the folder's for its main checkout while a workspace
+  stands on it) and the palette's "Note on “x”…" (id `note`) open
+  `NoteDialog.tsx` (dialog kind `note`: "Note" and the workspace's name, a
+  7-row field "Anything to remember about this worktree", ⌘↵ / Ctrl+↵
+  saves, Esc leaves it, saving it empty removes it, the size said past
+  3 KB and refused past 4 KB); none for a hidden folder or a viewer.
   **The icon dialog** (`features/icons/IconDialog.tsx`, dialog kind
   `folder-icon`: the folder's icon button, "Folder icon…" in the
   workspace's ⋯ menu, a palette command; never for a viewer): first,
@@ -3390,13 +3437,24 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - `internal/prstatus/` — **the state of the pull request** an agent
   named: `Tracker` hears `events.PullRequestNamed` and, for a GitHub one
   (`/pull/`), runs `gh pr view <url> --json state,isDraft,mergeable,
-  reviewDecision,statusCheckRollup` on the pane's machine (`shell.Text`
+  reviewDecision,statusCheckRollup,title,mergeStateStatus,closingIssuesReferences`
+  on the pane's machine — asked again without the last two when a gh from
+  before them answers "Unknown JSON field" (`Script`, tested on a gh
+  stand-in) — (`shell.Text`
   over a `shell.Shell` the app finds through `fleet.Get`; the script from
   `internal/script`; `Parse` counts the rollup's check runs and status
-  contexts as pass / fail / pending / skipped, tested on `shell.Fake`) —
+  contexts as pass / fail / pending / skipped, and keeps the title, the
+  merge state (CLEAN: it merges now) and the issues it closes as
+  `closes [{number, url, repo}]`, tested on `shell.Fake`) —
   read when the link appears, then at most every `Every` (2 min) on
   `Touch`, which the roster handler calls, so a page nobody reads asks
-  GitHub nothing; one read in flight per machine; a pane gone
+  GitHub nothing, and at most every `FreshFor` (20 s) while a workspace
+  card's hover card shows it (`Fresh`, behind `POST /api/pr/refresh
+  {machine, panes}` in `internal/server/pr.go`, the person's alone); one
+  read in flight per machine; `OnChange` hears a read begin and end (the
+  live hub's `RosterChanged`), and `Seen` is what the roster carries — the
+  status as last read, `reading`, and the last read's `error` beside a
+  status from before; a pane gone
   (`events.PaneStatus` to `Gone`) or a machine removed is forgotten.
   **A GitLab merge request is read the same way through glab**
   (`gitlab.go`, tested on `shell.Fake` with GitLab's own answers):
@@ -3413,9 +3471,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and a manual job skipped, a cancel failed, as GitHub counts them);
   `Readable` / `Tool` say which command reads a link. No gh or glab, not
   signed in or a machine away leaves the status absent with its reason,
-  logged once an hour per machine. The roster's `pane.pr.status {state,
-  draft, mergeable, review, threads, checks {total, pass, fail, pending,
-  skipped}, at}`
+  logged once an hour per machine. The roster's `pane.pr.status {title,
+  state, draft, mergeable, merge_state, review, threads, checks {total,
+  pass, fail, pending, skipped}, closes, at}` beside `pane.pr.reading` and
+  `pane.pr.error` (a GitLab merge request's title too, and `merge_state`
+  CLEAN when GitLab calls it mergeable)
   (`rosterPR`, so the ETag moves with it); `features/roster/prStatus.ts`
   (tested: `checksWords` "2/2 checks" / "1 failed" / "3 running",
   `reviewWords` merged / closed / draft / conflicts / approved / changes
@@ -3428,7 +3488,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   under 920 px; a head with a PR or a Jira chip, in a tile under 800 px,
   keeps the title and the tile's buttons on its first line and puts the
   chip, the PR and the usage on a second, so the title is never squeezed
-  to nothing), in the sidebar row's tooltip and in the workspace
+  to nothing), on the sidebar's card as one icon and its number (see
+  "The workspace card's badges and hover card") and in the workspace
   menu's "Open PR #15" row. gh runs as the person on their own machine, like
   git does for the Changes lens: remuda itself still makes no request
   but the version checks. **The request is followed to its end.** Every
@@ -4662,6 +4723,22 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `{candidates: [{data, from, kind: file|github|gitlab}], looked,
   notes}` says where it looked and why no avatar came; nothing is kept
   until the person picks one, which `PUT /api/folder-icons` saves.
+- `internal/notes/` — **a note per checkout**, after Orca's worktree notes
+  (tested): one free-text note by machine and folder, kept in `notes.json`
+  in the state dir (0600, a damaged file logged once and read as none)
+  after the workspace closes, so a folder opened again finds it; the
+  folder cleaned in its machine's spelling (`Clean`, `rpath`: a Windows
+  folder spelt either way finds its note) and refused unless absolute;
+  `Text` keeps line breaks as `\n`, trims the ends and refuses past
+  `MaxText` 4 KB or any control character but a line break and a tab.
+  `Of` is what the roster carries as `session.note`; routes
+  (`internal/server/notes.go`, the person's alone — neither a viewer link
+  nor an agent key writes one): `PUT /api/notes {machine, dir, text}`
+  (saved empty, removed; the text as kept back), `DELETE /api/notes
+  {machine, dir}`, a 404 for a machine the fleet does not know, the
+  roster moved after either. The page: the card's note icon and hover
+  card section and the Note dialog (see the sidebar's bullet,
+  `internal/radar`).
 - `internal/jira/` — **the Jira issues the agents' work names** (tested on
   `httptest` with recorded Cloud and server answers): the person's site,
   account and token in `jira.json` in the state dir (0600; `Store`,
@@ -5476,7 +5553,19 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   for the composer's and the chat's, a Menu's or a
   Popover's `tip` counting for its trigger) — carries one, with an `aria-label` for the
   reader and no `title`, and a `Menu` takes a
-  `tip` for its trigger; `radix-ui` is the one dependency
+  `tip` for its trigger. `HoverCard.tsx` is **a card beside a row the
+  pointer rests on** (Radix's HoverCard, its timing ours: `hoverIntent.ts`,
+  tested — open `OPEN_AFTER` 450 ms after the pointer came to rest on the
+  row, closed `CLOSE_AFTER` 250 ms after it left the row and the card both,
+  nothing for a row a scroll slid under a still pointer: the entry counts
+  only when the pointer itself moved within `MOVED_WITHIN` 150 ms, heard
+  by one `pointermove` listener for every card; a touch never hovers):
+  `useHoverCard(enabled)` gives the row its pointer handlers, the row
+  holds the card in its React subtree so its enter and leave cover both,
+  the anchor is a `.hover-anchor` as large as the row that takes no
+  pointer, Radix's own hover timers are kept off, the card never takes
+  the keyboard (Radix makes its buttons untabbable), and `pin` opens it by
+  hand on a touch screen, where a tap outside or Esc closes it; `radix-ui` is the one dependency
   beside react and xterm (with its search addon, the find over the
   scrollback) and mermaid (the agents' diagrams, loaded only when one is
   on screen, `ui/Mermaid.tsx`), for the primitives whose keyboard and focus

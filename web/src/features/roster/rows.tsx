@@ -8,6 +8,8 @@ import { FolderIcon, Icon, Logo, Menu, Tip, type MenuItem } from "@/ui";
 import { VENDOR_NAME, brandColor } from "@/ui/brand";
 import type { Machine, Session } from "./api";
 import { branchNamesIssue } from "@/features/jira/jira";
+import { CardBadges } from "./CardBadges";
+import { useCardHover } from "./CardHover";
 import { CollisionMark, usePeerName } from "./CollisionMark";
 import { gravest, markWords } from "./collide";
 import { IssueChip } from "./IssueChip";
@@ -155,9 +157,10 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
         collision ? markWords(collision, peerName(collision, m.id).full) : "",
         folder,
       ].filter(Boolean).join("\n");
+  const card = useCardHover({ machine: m, session: s, leadPaneId: pane?.id, hidden, editable: !!editable, name: s.name, tip });
   return (
     <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${!several && limited(lead) ? " is-limit" : ""}${group ? " in-repo" : ""}`}>
-      <div className="ws-main" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => rowKey(e, open)} title={tip}>
+      <div className="ws-main" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => rowKey(e, open)} title={card.hoverable ? undefined : tip} {...card.trigger}>
         <span className="ws-line">
           <span className="radar-mark" style={markStyle}>
             {alert ? "!" : agent ? markOf(d, step) : "$"}
@@ -188,7 +191,9 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
           )}
           {!hidden && s.jira?.[0] && <IssueChip issue={s.jira[0]} />}
           <span className="ws-words">{words}</span>
+          <CardBadges machine={m} session={s} name={s.name} details={card.details} editable={!!editable} onDetails={card.ask} />
         </span>
+        {card.node}
       </div>
       {several && (
         <div className="ws-agents">

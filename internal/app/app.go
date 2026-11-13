@@ -35,6 +35,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/mirror"
+	"github.com/dev1antdev/remuda/internal/notes"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/placement"
 	"github.com/dev1antdev/remuda/internal/prefs"
@@ -230,6 +231,7 @@ func Run(ctx context.Context, o Options) error {
 		return mc, true
 	})
 	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
+	requests.OnChange = hub.RosterChanged // a read begun or ended moves an open hover card's freshness at once
 	// how many subagents each Claude Code pane's live conversation runs, read while a page reads the roster, for the Wall's zoo
 	subagentCounts := subagents.New(chats.RecentSubagents, func(machineID string) bool {
 		mc, err := fleet.Get(machineID)
@@ -777,6 +779,7 @@ func Run(ctx context.Context, o Options) error {
 		Live:      hub,
 		Awake:     keepAwake,
 		Icons:     icons.New(o.Dir),
+		Notes:     notes.Open(o.Dir),
 		Arena:     arenas,
 		Limits:    planLimits,
 		Scratch:   shells,

@@ -6,6 +6,7 @@ import machineMenu from "./MachineMenu.tsx?raw";
 import rows from "./rows.tsx?raw";
 import sidebar from "./Sidebar.tsx?raw";
 import tabStrip from "./TabStrip.tsx?raw";
+import cardDetails from "./CardDetails.tsx?raw";
 
 // openingTag is the `<button …>` starting at `from`, across lines, its braces (an arrow's `>` among them) skipped
 function openingTag(source: string, from: number): string {
@@ -31,7 +32,7 @@ function iconButtons(source: string): { tag: string; before: string[] }[] {
   return found;
 }
 
-const SOURCES = { dialogs, folderPicker, healthButton, machineMenu, rows, sidebar, tabStrip };
+const SOURCES = { dialogs, folderPicker, healthButton, machineMenu, rows, sidebar, tabStrip, cardDetails };
 
 describe("the sidebar's icon-only buttons", () => {
   it("say what they do through a Tip — their own, or their menu's or popover's — and an aria-label, never a title (AGENTS.md)", () => {

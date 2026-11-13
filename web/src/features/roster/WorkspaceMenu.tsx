@@ -15,6 +15,7 @@ import { killSession, muteWorkspace, unmuteWorkspace, type Machine, type Session
 import { leftWords, muteChoices, mutedUntil } from "./mute";
 import { actionLabel, actionsFor, canRemoveWorktree } from "./prActions";
 import { askRemoveWorktree, handPR } from "./prMenu";
+import { cardDetailsRows, cardNoteRows, folderNoteRows } from "./cardMenu";
 import { prWords } from "./prStatus";
 import { closeAsk, madeWorktree, tidyWords } from "./tidy";
 import { folderOf, repositoryOf, type Folder } from "./workspaces";
@@ -63,7 +64,8 @@ function folderRows(m: Machine, folder: string, name: string, icon: Session["ico
 
 // folderMenuItems is the folder line's ⋯
 export function folderMenuItems(m: Machine, folder: Folder, shown: Shown): MenuItem[] {
-  return folderRows(m, folder.path, folder.name, folder.icon, repositoryOf(folder), shown);
+  const rows = folderRows(m, folder.path, folder.name, folder.icon, repositoryOf(folder), shown);
+  return [...rows.slice(0, 1), ...folderNoteRows(m, folder, shown.masked), ...rows.slice(1)];
 }
 
 // workspaceMenuItems is a workspace card's ⋯: its own rows, then its folder's
@@ -75,10 +77,12 @@ export function workspaceMenuItems(m: Machine, session: Session, shown: Shown): 
   const muted = mutedUntil(session);
   const folder = folderOf(session);
   const rows: MenuItem[] = [
+    ...cardDetailsRows(m, session, shown.masked, chat?.id),
     { label: t("New tab…"), icon: "plus", hint: t("another agent or a terminal in the same folder"), disabled: !connected, onSelect: () => actions.openDialog({ kind: "tab", machineId: m.id, session }) },
     { label: t("Rename workspace…"), icon: "edit", onSelect: () => actions.openDialog({ kind: "rename", machineId: m.id, what: "workspace", id: session.id, label: session.name }) },
   ];
   if (tab) rows.push({ label: t("Rename tab {tab}…", { tab: tab.named && !shown.masked ? `“${tab.label}”` : tab.number }), icon: "tag", onSelect: () => actions.openDialog({ kind: "rename", machineId: m.id, what: "tab", id: tab.id, label: tab.named ? tab.label : "" }) });
+  rows.push(...cardNoteRows(m, session, shown.masked));
   if (folder) rows.push({ sep: true }, ...folderRows(m, folder, basename(folder), session.icon, session.worktree || session.branch ? session : null, shown));
   if (pr) {
     rows.push({ sep: true }, { label: t("Open {pr}", { pr: pr.label }), icon: "external-link", hint: pr.status ? prWords(pr.status) : undefined, onSelect: () => openUrl(pr.url) });

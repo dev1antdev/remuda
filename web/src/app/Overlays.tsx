@@ -5,6 +5,7 @@
 import { addMachine, createSession, createTab, createWorktree, renameMachine, renameSession, renameTab, type Created } from "@/features/roster/api";
 import IconDialog from "@/features/icons/IconDialog";
 import LeftoversDialog from "@/features/roster/LeftoversDialog";
+import NoteDialog from "@/features/roster/NoteDialog";
 import PreviewsDialog from "@/features/preview/PreviewsDialog";
 import TriggersDialog from "@/features/triggers/TriggersDialog";
 import ServerPanel from "@/features/roster/ServerPanel";
@@ -137,6 +138,7 @@ export default function Overlays() {
         />
       )}
       {dialog?.kind === "folder-icon" && <IconDialog machineId={dialog.machineId} folder={dialog.folder} name={dialog.name} icon={dialog.icon} onClose={actions.closeDialog} />}
+      {dialog?.kind === "note" && !viewOnly && <NoteDialog machineId={dialog.machineId} dir={dialog.dir} name={dialog.name} text={dialog.text} onClose={actions.closeDialog} />}
       {leftoversOn && <LeftoversDialog machine={leftoversOn} onClose={actions.closeDialog} />}
       {dialog?.kind === "triggers" && <TriggersDialog machineId={dialog.machineId} dir={dialog.dir} workspace={dialog.workspace} name={dialog.name} onClose={actions.closeDialog} />}
       {previewsOn && dialog?.kind === "previews" && (

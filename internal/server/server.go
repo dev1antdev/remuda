@@ -38,6 +38,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/mirror"
+	"github.com/dev1antdev/remuda/internal/notes"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/preview"
@@ -100,6 +101,7 @@ type Server struct {
 	Live       *live.Hub           // the page's event stream, nil without one
 	Awake      *awake.Service      // the machines kept awake while their agents work
 	Icons      *icons.Store        // the icon the person gave each folder of the sidebar
+	Notes      *notes.Store        // the note the person keeps on each checkout
 	Arena      *arena.Service      // one prompt to several agents side by side
 	Limits     *limits.Service     // the agents' subscription windows, the hits and the bookings to continue after a reset
 	Scratch    *scratch.Store      // the floating terminal's shell on each machine
@@ -164,6 +166,7 @@ func (s *Server) Handler() http.Handler {
 	s.viewerKeyRoutes(api)
 	s.completeRoutes(api)
 	s.iconRoutes(api)
+	s.noteRoutes(api)
 	s.teleportRoutes(api)
 	s.arenaRoutes(api)
 	s.limitRoutes(api)

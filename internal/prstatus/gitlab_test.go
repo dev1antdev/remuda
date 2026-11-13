@@ -2,6 +2,7 @@ package prstatus
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -89,8 +90,8 @@ func TestParseMergeSpeaksGhsWords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Status{State: "OPEN", Mergeable: "MERGEABLE", Review: "APPROVED", Threads: 2, Checks: Checks{Total: 1, Fail: 1}, At: now}
-	if status != want || pipeline != 9001 {
+	want := Status{Title: "Refresh the connection", State: "OPEN", Mergeable: "MERGEABLE", MergeState: "CLEAN", Review: "APPROVED", Threads: 2, Checks: Checks{Total: 1, Fail: 1}, At: now}
+	if !reflect.DeepEqual(status, want) || pipeline != 9001 {
 		t.Fatalf("status = %+v, pipeline %d", status, pipeline)
 	}
 
