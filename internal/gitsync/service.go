@@ -12,7 +12,7 @@ import (
 // FreshFor is how long a machine's read stands for another page asking; an action on the machine drops it.
 var FreshFor = 10 * time.Second
 
-// PerMachine is how many network actions run at once on one machine: each is a session of its ssh master, whose
+// PerMachine is how many actions run at once on one machine: each is a session of its ssh master at a time, whose
 // server allows ten by default.
 const PerMachine = 4
 

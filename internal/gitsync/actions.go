@@ -95,6 +95,9 @@ func (s *Service) act(action, machineID, dir string, do func(shell.Host, rpath.S
 		outcome.Output = err.Error()
 		return outcome
 	}
+	slot := s.slotOf(machineID) // the probe, a push's secret check and the git part are each a session of the machine
+	slot <- struct{}{}
+	defer func() { <-slot }()
 	style := rpath.For(host.Home())
 	p, err := readProbe(host, style, dir)
 	switch {
@@ -123,11 +126,8 @@ func (s *Service) act(action, machineID, dir string, do func(shell.Host, rpath.S
 	return do(host, style, p)
 }
 
-// network runs a fetch, pull or push, at most PerMachine at once on the machine, and reads what it came to.
+// network runs a fetch, pull or push and reads what it came to.
 func (s *Service) network(host shell.Host, style rpath.Style, p probe, outcome Outcome, action string) Outcome {
-	slot := s.slotOf(host.ID())
-	slot <- struct{}{}
-	defer func() { <-slot }()
 	output, after, err := run(host, style, p.top, action)
 	outcome.Repo = after
 	word, numbers := marker(output)

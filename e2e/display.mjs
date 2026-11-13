@@ -1025,7 +1025,9 @@ const mark = async (expression, attr) => {
 async function repoScreens() {
   const openPlace = async () => {
     await palette("repos");
-    if (!(await until(() => present(".modal.repos-panel .repo-row"), 10))) throw new Error("the Repositories place lists no repository");
+    // the rows of the first read stand in for the loading ones: this machine's e2e repository and GOG's dressed in
+    const read = () => evaluate(`(() => { const names = [...document.querySelectorAll(".modal.repos-panel .repo-row:not(.is-loading) .repo-name")].map((el) => el.textContent); return names.includes("app") && names.includes("web"); })()`);
+    if (!(await until(read, 15))) throw new Error("the Repositories place does not list this machine's repository and GOG's");
   };
   const row = async (name) => {
     const found = await evaluate(`(() => { const row = [...document.querySelectorAll(".repo-row")].find((r) => r.querySelector(".repo-name")?.textContent === ${JSON.stringify(name)}); row?.setAttribute("data-e2e", ${JSON.stringify(name)}); return !!row; })()`);
@@ -1040,7 +1042,6 @@ async function repoScreens() {
   await screen("repos", {
     open: async () => {
       await openPlace();
-      check(await evaluate(`[...document.querySelectorAll(".repo-row .repo-name")].some((el) => el.textContent === "app")`), "the e2e repository is not listed");
       check((await count(".repo-row .repo-ahead")) >= 2 && (await count(".repo-row .repo-behind")) >= 2, "the rows say nothing of ↑ and ↓");
       check((await present(".repo-word.is-unpushed")) && (await present(".repo-word.is-local")) && (await present(".repo-word.is-gone")), "a branch on no remote, a repository with none or an upstream gone is not said");
       check(await present(".repos-machine-words.is-away"), "the machine away is not said so");

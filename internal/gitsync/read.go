@@ -72,6 +72,9 @@ func ParseRead(style rpath.Style, home, output string) Read {
 			fields = append(fields, "")
 		}
 		path := style.Clean(header[2:])
+		if listed(style, result.Repos, path) {
+			continue // a Windows machine's pwd (/c/Users/me/app) and find (C:/Users/me/app) spell one folder two ways
+		}
 		repo := Repo{Path: path, Name: style.Base(path), Parent: homeWords(style, home, style.Dir(path)), Workspace: header[0] == 'w', Remote: fields[2] != ""}
 		if !repo.Workspace {
 			if scanned++; scanned > MaxScan {
@@ -100,6 +103,16 @@ func ParseRead(style rpath.Style, home, output string) Read {
 		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
 	})
 	return result
+}
+
+// listed says the repository at path is among those read already.
+func listed(style rpath.Style, repos []Repo, path string) bool {
+	for _, repo := range repos {
+		if style.Equal(repo.Path, path) {
+			return true
+		}
+	}
+	return false
 }
 
 // homeWords is a folder with the machine's home said as ~.

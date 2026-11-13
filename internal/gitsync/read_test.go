@@ -3,6 +3,7 @@ package gitsync
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -105,11 +106,21 @@ func TestOneScriptReadsTheWorkspacesAndTheScan(t *testing.T) {
 	}
 }
 
+func TestAWindowsMachinesRepositoryIsListedOnce(t *testing.T) {
+	record := func(kind, path string) string {
+		return "\x1d" + kind + " " + path + "\x1e# branch.head main\x00\x1e0\x1f\x1forigin\x1f\n"
+	}
+	read := ParseRead(rpath.Style{Windows: true}, `C:\Users\me`, record("w", "/c/Users/me/code/app")+record("s", "C:/Users/me/code/app")+record("s", "C:/Users/me/code/web"))
+	if len(read.Repos) != 2 || read.Repos[0].Path != `C:\Users\me\code\app` || !read.Repos[0].Workspace || read.Repos[0].Parent != "~/code" || read.Repos[1].Name != "web" {
+		t.Fatalf("%+v", read.Repos)
+	}
+}
+
 func TestTheScanStopsAtItsCount(t *testing.T) {
 	var b strings.Builder
 	b.WriteString("\x1dw /home/me/app\x1e# branch.head main\x00\x1e0\x1f\x1forigin\x1f\n")
 	for i := range MaxScan + 1 {
-		b.WriteString("\x1ds /home/me/code/r" + strings.Repeat("x", i%7) + string(rune('a'+i%26)) + "\x1e# branch.head main\x00\x1e0\x1f\x1f\x1f\n")
+		b.WriteString("\x1ds /home/me/code/r" + strconv.Itoa(i) + "\x1e# branch.head main\x00\x1e0\x1f\x1f\x1f\n")
 	}
 	read := ParseRead(rpath.Style{}, "/home/me", b.String())
 	workspaces := 0

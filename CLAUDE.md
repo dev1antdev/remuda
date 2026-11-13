@@ -884,7 +884,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   branch, detached, upstream, gone (set but no `branch.ab`), ahead, behind,
   dirty (every entry, untracked and conflicts too), staged, conflicts, remote,
   fetched, error (git's own line: a dubious ownership, a broken .git), initial}`,
-  sorted by folder then name. `Service.List(fresh)` reads every machine of
+  each path once by `rpath` (a Windows machine's `pwd` and `find` spell one
+  folder two ways), sorted by folder then name. `Service.List(fresh)` reads every machine of
   `Fleet` (`fleet.List()`: never a `-server` host) side by side, a machine
   away named with why (`Listed{away}` — "connecting" before its first answer),
   a read standing `FreshFor` 10 s for another page, one read of a machine at a
@@ -895,8 +896,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   script): a probe first (`probeScript`: the checkout's top, branch,
   `branch.<b>.remote` / `.merge`, `@{u}` and the counts, the remotes), then one
   action per checkout at a time (`running`, else `ReasonRunning`) and at most
-  `PerMachine` 4 network actions on a machine at once (a session of its ssh
-  master each, whose sshd allows ten), under `quietNetwork` —
+  `PerMachine` 4 actions on a machine at once (the probe, a push's check and
+  the git part are each a session of its ssh master, whose sshd allows ten),
+  under `quietNetwork` —
   `GCM_INTERACTIVE=0 GIT_TERMINAL_PROMPT=0 GIT_ASKPASS= SSH_ASKPASS=` and
   `GIT_SSH_COMMAND` the repository's or the person's ssh command with `-o
   BatchMode=yes` — `Timeout` 60 s, stdin `/dev/null`, git's last six lines
