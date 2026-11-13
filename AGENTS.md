@@ -18,7 +18,7 @@ once after cloning and after every change under `web/`.
 | Build the SPA (before any Go compile) | `make web` |
 | One binary with the SPA inside | `make build` → `bin/remuda` |
 | Develop | `make server` (API on :7317) and `make dev` (Vite on :5173, proxies `/api` and `/ws`) |
-| Go checks | `gofmt -l ./cmd ./internal` (must print nothing), `go vet ./...`, `go test ./...` |
+| Go checks | `gofmt -l ./cmd ./internal` (must print nothing), `go vet ./...`, `GOOS=windows GOARCH=amd64 go vet ./...` (remuda.exe, the helper on a Windows PC), `go test ./...` |
 | TypeScript check | `make typecheck` (`tsc --noEmit` + `go vet`) |
 | The page's unit tests (Vitest on the pure modules) | `make webtest` (`npm test` in `web/`; `make test` runs it too) |
 | Everything, as CI does (`.github/workflows/ci.yml`) | `make test && make typecheck`, or `docker build --target test .` |
