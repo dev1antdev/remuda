@@ -5567,7 +5567,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the anchor is a `.hover-anchor` as large as the row that takes no
   pointer, Radix's own hover timers are kept off, the card never takes
   the keyboard (Radix makes its buttons untabbable), and `pin` opens it by
-  hand on a touch screen, where a tap outside or Esc closes it; `radix-ui` is the one dependency
+  hand on a touch screen, where a tap outside or Esc closes it — opened so
+  (`takeFocus`), it takes the focus a beat after the menu that opened it
+  gave its button the focus back, whose tooltip would else hold the Esc; `radix-ui` is the one dependency
   beside react and xterm (with its search addon, the find over the
   scrollback) and mermaid (the agents' diagrams, loaded only when one is
   on screen, `ui/Mermaid.tsx`), for the primitives whose keyboard and focus

@@ -42,7 +42,7 @@ export function useCardHover({ machine, session, leadPaneId, hidden, editable, n
     dropDetails();
   };
   const node = details.any ? (
-    <HoverCard open={open} onClose={close} side={isTouch ? "bottom" : "right"}>
+    <HoverCard open={open} onClose={close} takeFocus={asked} side={isTouch ? "bottom" : "right"}>
       <CardDetails machine={machine} session={session} name={name} details={details} about={about} editable={editable} />
     </HoverCard>
   ) : null;

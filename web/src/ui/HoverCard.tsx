@@ -4,7 +4,7 @@
 // it opens only when asked (pin), and a tap outside or Esc closes it.
 
 import { HoverCard as Card } from "radix-ui";
-import { useEffect, useMemo, useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { hoverIntent, type Timers } from "./hoverIntent";
 import { usePortalHost } from "./portal";
 
@@ -61,10 +61,20 @@ export function useHoverCard(enabled: boolean): { open: boolean; pin: (open: boo
 // keepRadixOff stops Radix's own hover timers on the card: the row's handlers decide
 const keepRadixOff = (e: PointerEvent) => e.preventDefault();
 
+// TAKE_FOCUS_AFTER lets a menu that opened the card hand the focus back to its button first, whose tooltip would else
+// open on that focus and take the Esc meant for the card
+const TAKE_FOCUS_AFTER = 60;
+
 // HoverCard sits inside its row (position: relative): an anchor as large as the row, which takes no pointer, and the
-// card beside it in the page's portal
-export default function HoverCard({ open, onClose, side = "right", className, children }: { open: boolean; onClose: () => void; side?: "right" | "bottom"; className?: string; children: ReactNode }) {
+// card beside it in the page's portal. Opened by hand (takeFocus), it is a popover and takes the focus.
+export default function HoverCard({ open, onClose, takeFocus = false, side = "right", className, children }: { open: boolean; onClose: () => void; takeFocus?: boolean; side?: "right" | "bottom"; className?: string; children: ReactNode }) {
   const host = usePortalHost();
+  const content = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open || !takeFocus) return;
+    const timer = window.setTimeout(() => content.current?.focus({ preventScroll: true }), TAKE_FOCUS_AFTER);
+    return () => window.clearTimeout(timer);
+  }, [open, takeFocus]);
   return (
     <Card.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Card.Trigger asChild>
@@ -72,6 +82,8 @@ export default function HoverCard({ open, onClose, side = "right", className, ch
       </Card.Trigger>
       <Card.Portal container={host}>
         <Card.Content
+          ref={content}
+          tabIndex={-1}
           className={`popover hover-card${className ? ` ${className}` : ""}`}
           side={side}
           align="start"
