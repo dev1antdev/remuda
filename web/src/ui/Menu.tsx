@@ -5,6 +5,7 @@
 
 import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import Icon, { type IconName } from "./icons";
 import { usePortalHost } from "./portal";
 import Tip from "./Tip";
@@ -61,5 +62,27 @@ function MenuRows({ items }: { items: MenuItem[] }) {
         ),
       )}
     </>
+  );
+}
+
+// MenuAt is a menu at a point — where a right-click landed, or under a row's button on a touch screen — open from its
+// first render, closing on a pick, Esc or a click elsewhere; the point is an empty anchor laid over the page's body, so
+// no container of the caller's moves it.
+export function MenuAt({ at, items, label, onClose }: { at: { x: number; y: number }; items: MenuItem[]; label?: string; onClose: () => void }) {
+  const host = usePortalHost();
+  return (
+    <DropdownMenu.Root open modal={false} onOpenChange={(open) => !open && onClose()}>
+      {createPortal(
+        <DropdownMenu.Trigger asChild>
+          <span className="menu-anchor" style={{ left: at.x, top: at.y }} aria-hidden="true" />
+        </DropdownMenu.Trigger>,
+        host ?? document.body,
+      )}
+      <DropdownMenu.Portal container={host}>
+        <DropdownMenu.Content className="menu" align="start" side="bottom" sideOffset={2} collisionPadding={8} aria-label={label} onClick={(e) => e.stopPropagation()}>
+          <MenuRows items={items} />
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }

@@ -794,6 +794,7 @@ func Run(ctx context.Context, o Options) error {
 
 		Collisions: radarOfCollisions,
 		Undo:       turns,
+		GitOps:     gitWrites(watcher, turns.Tracker),
 		Stage:      stageWrites(fleet, watcher, turns),
 		Scenes:     sceneSet,
 	}
