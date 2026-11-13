@@ -3272,7 +3272,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   reach GitHub · from 5 min ago" in amber with gh's words in its Tip,
   "Updated 3 min ago", each by the oldest status shown); opening it asks
   `POST /api/pr/refresh` for its requests, read again when their last read
-  is over 20 s old, so the open card follows the read live. A folder the
+  is over 20 s old, so the open card follows the read live; it stands
+  down while a dialog, a panel, a confirm or the file viewer is open,
+  since it hangs above them (its note's click opens one). A folder the
   screen-sharing mode hides has no badges and no card (`detailsOf`). A
   touch screen has no hover: the card's ⋯ menu leads with **Details** and
   a tap on the PR opens the same content as a popover under the card

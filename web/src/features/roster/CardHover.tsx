@@ -3,6 +3,7 @@
 // touch screen has no hover: the card's ⋯ menu and a tap on its pull request open the same details as a popover.
 
 import { useEffect, useMemo, type ReactNode } from "react";
+import { app } from "@/app/store";
 import { isTouch } from "@/lib/prefs";
 import HoverCard, { useHoverCard } from "@/ui/HoverCard";
 import type { Machine, Session } from "./api";
@@ -24,8 +25,13 @@ export type CardHoverOf = {
 export function useCardHover({ machine, session, leadPaneId, hidden, editable, name, tip }: { machine: Machine; session: Session; leadPaneId?: string; hidden: boolean; editable: boolean; name: string; tip: string }): CardHoverOf {
   const details = useMemo(() => detailsOf(session, leadPaneId, hidden), [session, leadPaneId, hidden]);
   const asked = useDetailsAsked(machine.id, session.id);
-  const card = useHoverCard(details.any && !isTouch);
-  const open = details.any && (card.open || asked);
+  // a dialog, a panel or a confirm over the page closes the card: it hangs above them, and its note opens a dialog
+  const covered = app.use((s) => s.dialog !== null || s.panel !== null || s.confirm !== null || s.file !== null);
+  const card = useHoverCard(details.any && !isTouch && !covered);
+  const open = details.any && !covered && (card.open || asked);
+  useEffect(() => {
+    if (covered && asked) dropDetails();
+  }, [covered, asked]);
   const panes = details.prs.map((p) => p.paneId).join(" ");
   useEffect(() => {
     if (open && editable && panes) refreshPRs(machine.id, panes.split(" ")).catch(() => {}); // a card that could not ask shows the state it has, and how old it is
