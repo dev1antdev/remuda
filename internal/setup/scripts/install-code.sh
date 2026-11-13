@@ -24,6 +24,7 @@ PATH_FOR_SERVICE="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bi
 # checksums of the release assets this script knows (sha256, as GitHub
 # lists them for the release); another version needs CODE_SHA256 set by hand
 case "$(uname -s)-$(uname -m)" in
+MINGW* | MSYS* | CYGWIN*) echo "code-server has no Windows build, so the Code mode is not offered for a Windows machine; open its folders in VS Code there"; exit 1 ;;
 Darwin-arm64) ASSET="macos-arm64"; KNOWN="82c7144406ac31c373acfa786b6705c7c5463d895f728fde2cb94402b945b301" ;;
 Darwin-x86_64) ASSET="macos-amd64"; KNOWN="a5393b6eed4aa68b084e724c3c565f805abd996c609356043119f0323e40cf52" ;;
 Linux-aarch64 | Linux-arm64) ASSET="linux-arm64"; KNOWN="ae4b07153f2037b06d24749bc8004221fcbf3ffe317038401be0452f541bf200" ;;

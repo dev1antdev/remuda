@@ -15,7 +15,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
+
+	"github.com/dev1antdev/remuda/internal/proc"
+	"github.com/dev1antdev/remuda/internal/script"
 )
 
 //go:embed scripts/setup.sh
@@ -74,6 +76,17 @@ func Run(o Options, out io.Writer) error {
 	if o.Server && o.NoService {
 		return fmt.Errorf("setup: -server is a service that serves the page; -no-service would leave nothing to set up")
 	}
+	windows := false
+	if o.Host != "" {
+		system, err := remoteSystem(o.Host)
+		if err != nil {
+			return fmt.Errorf("setup: %w", err)
+		}
+		windows = system == "windows"
+	}
+	if windows && o.Server {
+		return fmt.Errorf("setup: %s is Windows, where remuda does not serve the page; a cockpit runs on a Mac or Linux", o.Host)
+	}
 	if o.Server {
 		env = append(env, "REMUDA_SERVER=1")
 		fmt.Fprintf(out, "— no herdr%s: a server serves the page only, the agents run on its machines\n", where(o.Host))
@@ -95,6 +108,10 @@ func Run(o Options, out io.Writer) error {
 		if err := run(o.Host, installEnv(o.Version), installScript, nil, out); err != nil {
 			return fmt.Errorf("install remuda there: %w (for a machine of this one's OS and CPU, \"Deploy this remuda there\" in the page's Updates copies this binary over ssh instead)", err)
 		}
+	}
+	if windows {
+		fmt.Fprintf(out, "— no service on %s: remuda.exe there is the helper this cockpit reaches over ssh, herdr's named pipe through remuda.exe bridge\n", o.Host)
+		return nil
 	}
 	fmt.Fprintf(out, "— the remuda service%s\n", where(o.Host))
 	if err := run(o.Host, env, serviceScript, []string{"install"}, out); err != nil {
@@ -154,7 +171,7 @@ func (r Removal) Plan(out io.Writer) (bool, error) {
 func (r Removal) Remove(out io.Writer) error {
 	cmd := command(r.Host, r.env(), uninstallScript, []string{"run"}, out)
 	if r.Host == "" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		proc.Detach(cmd)
 	}
 	return cmd.Run()
 }
@@ -174,13 +191,34 @@ func MCP(host, action string, out io.Writer) error {
 }
 
 // statuslineScript runs the machine's own remuda for the status line wrapper; one too old to have it says so.
-const statuslineScript = `r="$HOME/.local/bin/remuda"
+const statuslineScript = `r="$HOME/.local/bin/remuda"; [ -x "$r" ] || r="$r.exe"
 if ! "$r" statusline status >/dev/null 2>&1; then echo "the remuda on this machine is older than the status line wrapper: update it first"; exit 1; fi
 exec "$r" statusline "$1"`
 
 // Statusline runs `remuda statusline install|status|uninstall` on host, with that machine's own remuda.
 func Statusline(host, action string, out io.Writer) error {
 	return run(host, nil, statuslineScript, []string{action}, out)
+}
+
+// remoteSystem asks the host over ssh which system it runs: darwin, linux or windows (Git Bash says MINGW64_NT-…). A
+// Windows machine whose ssh runs commands in cmd.exe or PowerShell answers that uname "is not recognized": it is told
+// the one line that makes Git Bash its ssh shell.
+func remoteSystem(host string) (string, error) {
+	out, err := exec.Command("ssh", "-o", "BatchMode=yes", host, "uname -s").CombinedOutput()
+	answer := strings.TrimSpace(string(out))
+	if strings.Contains(answer, "is not recognized as") {
+		return "", fmt.Errorf("%s is Windows and its ssh runs commands in cmd.exe or PowerShell; remuda needs Git Bash there. Install Git for Windows, then in an administrator PowerShell on %s run: %s", host, host, script.WindowsDefaultShell)
+	}
+	if err != nil {
+		return "", fmt.Errorf("ssh %s: %v %s", host, err, answer)
+	}
+	switch {
+	case strings.HasPrefix(answer, "MINGW"), strings.HasPrefix(answer, "MSYS"), strings.HasPrefix(answer, "CYGWIN"):
+		return "windows", nil
+	case answer == "Darwin":
+		return "darwin", nil
+	}
+	return strings.ToLower(answer), nil
 }
 
 func where(host string) string {

@@ -49,10 +49,7 @@ if [ -d "$d" ]; then
   done
 fi
 printf '\036\n'
-case "$(uname -s)" in
-  Darwin) s="$HOME/Library/Application Support/remuda" ;;
-  *) s="${XDG_CONFIG_HOME:-$HOME/.config}/remuda" ;;
-esac
+` + script.StateDir("s") + `
 cat "$s/` + SnapshotFile + `" 2>/dev/null
 printf '\n\036\n'
 grep -q 'remuda[^"]*statusline' "$HOME/.claude/settings.json" 2>/dev/null && echo wrapped

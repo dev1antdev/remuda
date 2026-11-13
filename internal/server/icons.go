@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/icons"
+	"github.com/dev1antdev/remuda/internal/rpath"
 )
 
 // Folder icons: the emoji or picture the person gave a folder of the sidebar, set and cleared here and carried on
@@ -58,7 +59,7 @@ func (s *Server) iconTarget(w http.ResponseWriter, req iconReq) (string, string,
 		httpErr(w, 400, errors.New("a machine and a folder are required"))
 		return "", "", false
 	}
-	if !strings.HasPrefix(folder, "/") {
+	if !rpath.Absolute(folder) {
 		httpErr(w, 400, fmt.Errorf("the folder must be an absolute path: %q", folder))
 		return "", "", false
 	}

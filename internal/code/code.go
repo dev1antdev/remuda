@@ -67,8 +67,15 @@ func (s *Service) Status(mc *machines.Machine) Status {
 	return st
 }
 
+// NoCodeOnWindows is why a Windows machine has no Code mode: code-server ships no Windows build.
+const NoCodeOnWindows = "code-server has no Windows build, so the Code mode is not offered for a Windows machine; open its folders in VS Code there"
+
 func (s *Service) probe(mc *machines.Machine) Status {
 	st := Status{Port: s.Port}
+	if mc.Windows() {
+		st.Error = NoCodeOnWindows
+		return st
+	}
 	addr, err := mc.CodeAddr(s.Port)
 	if err != nil {
 		st.Error = err.Error()

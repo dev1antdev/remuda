@@ -7,7 +7,7 @@ import type { AgentKind, Machine } from "@/features/roster/api";
 import { sizeWords } from "@/features/roster/tidy";
 import { t, tn } from "@/lib/i18n";
 import { basename } from "@/lib/text";
-import { pathParts } from "@/lib/pathname";
+import { absolutePath, pathParts } from "@/lib/pathname";
 import type { Action, Item, Layout, LayoutNode, Run, Scene, Step, Tidy } from "./api";
 
 export const MAX_STEPS = 12;
@@ -228,7 +228,7 @@ export function whyNotSave(scene: Scene): string {
   const steps = scene.steps ?? [];
   if (steps.length === 0) return t("Add a step.");
   if (steps.length > MAX_STEPS) return t("At most {n} steps.", { n: MAX_STEPS });
-  const missing = steps.findIndex((s) => !s.dir.trim().startsWith("/"));
+  const missing = steps.findIndex((s) => !absolutePath(s.dir.trim()));
   return missing >= 0 ? t("Step {n} needs a folder.", { n: missing + 1 }) : "";
 }
 

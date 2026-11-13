@@ -37,10 +37,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (also `REMUDA_SERVER=1`; `app.Options.Server`, see "Server mode"
   below; without it the host is a machine of its own, there is no
   `-client` flag); subcommands
-  `search` and `usage` for the deployed binary on a remote machine, and
+  `search` and `usage` for the deployed binary on a remote machine,
+  `bridge` (hidden: `bridge.go`, stdin to the herdr server on this machine
+  and its answers to stdout — a Windows machine's herdr is a named pipe the
+  cockpit reaches only this way, see "A Windows PC of the fleet"), and
   `setup`, `uninstall` and `code` (see "Installing and uninstalling"
   below), `mcp` and `tasks` (the agents' door to the task list, see
-  `internal/mcp`); `remuda -h` lists them (`help` in main.go). `main.go`
+  `internal/mcp`); `remuda -h` lists them (`help` in main.go). On Windows
+  `remuda` with no subcommand exits with one sentence (`windowsServes`):
+  there it is the helper a cockpit reaches, never a server. `main.go`
   parses the flags and hands `app.Options` to `internal/app`; the
   subcommands are `commands.go`, with `mcp.go` and `tasks.go` for those two.
 - `internal/app/` — the composition root: `Run(ctx, Options)` builds every
@@ -48,12 +53,39 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   live), starts the loops and serves. Nothing here does work of its own.
 - `internal/script/` — every POSIX script remuda runs is built with it:
   `Quote`, the `PATH` line (`~/.local/bin`, Homebrew, Kimi Code's own
-  `~/.kimi-code/bin`), `InDir` / `InRepo` (cd, or answer nothing),
+  `~/.kimi-code/bin`; on a Windows machine, in Git Bash's spelling of the
+  profile, herdr's stable alias `~/AppData/Local/Programs/Herdr/bin` before
+  `$PATH` and npm's `~/AppData/Roaming/npm` after it — folders that are
+  not there elsewhere), `InDir` / `InRepo` (cd, or answer nothing),
   the portable `Stat`, `Remuda(home, version)` (a machine's own remuda
-  and the guard that it is this version), and the separators `GS` / `RS`
+  and the guard that it is this version; `RemudaPath(home)` —
+  `C:/Users/me/.local/bin/remuda.exe` for a Windows home), `StateDir(var)`
+  (the dir remuda keeps on the machine, as `state.Dir` reckons it there:
+  Application Support, `%APPDATA%\remuda` through `cygpath`, XDG — the door,
+  the limits, the backups' target, keep-awake and the concierge all use it),
+  `WindowsDefaultShell` (the one PowerShell line that makes Git Bash the
+  PC's ssh shell), and the separators `GS` / `RS`
   / `US` with `Sections` / `Lines` / `Fields` for reading an answer.
+- `internal/rpath/` — **a path on a machine of the fleet in that machine's
+  spelling** (tested): `Style{Windows}`, `For(home)` (a Windows machine's
+  home is `C:\Users\me`, so a home tells the spelling), `Clean` (Windows:
+  backslashes, the drive in capitals, Git Bash's `/c/…` read as `C:\`, no
+  separator at the end but a root's — herdr names a home `C:\Users\me\`),
+  `IsAbs`, `Join`, `Dir`, `Base`, `Equal` and `Within` / `Rel` (case and
+  separators ignored on Windows), `Slash` (`C:/Users/me`, which Git Bash and
+  git both read whole). The cockpit runs on a Mac or Linux, where Go's path
+  and filepath read everything as POSIX: every place that takes a remote
+  machine's path apart goes through here — the file viewer and uploads, the
+  folder picker, the review's main folders, the sidebar's `FolderOf`, the
+  worktrees' root and leftovers, a session path's roots, the viewer's
+  folders, a project's place, a new tab's name, `sshx.Conn.Put`.
+- `internal/proc/` — a child process's group (`Group`: its cancel ends the
+  whole group; the process alone on Windows) and a detached start
+  (`Detach`: a session of its own, `CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS`
+  on Windows), `_unix.go` / `_windows.go`, so remuda builds for Windows.
 - `internal/shell/` — the port scripts go through: `Shell` (`Run`,
-  `Stream`), `Host` (+ `ID`, `Label`, `Home`, `Local`), `ExitError`,
+  `Stream`), `Host` (+ `ID`, `Label`, `Home`, `Local`; a Windows machine's
+  `Home` is `C:\Users\me`, which `rpath.For` reads its spelling off), `ExitError`,
   `Text`. `shell.Local` runs here through `sh -c`, `sshx.Conn` is the
   adapter over the master, `shell.Fake` answers scripts in tests. review,
   jobs, search and usage take a `shell.Host` and know nothing of ssh or
@@ -64,14 +96,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   subscription order; the watcher and the jobs publish, push, the
   restarts, the radar, the review badges, the meter and the vitals
   subscribe — in `internal/app`.
-- `internal/state/` — the one state dir (`<user config dir>/remuda`, 0700,
+- `internal/state/` — the one state dir (`<user config dir>/remuda`, 0700 — `%APPDATA%\remuda` for remuda.exe on Windows,
   or `REMUDA_STATE_DIR` for a second instance beside the real one)
   and the one atomic 0600 writer (the file synced to disk before its
   rename and the folder after it, so a power cut on a Raspberry Pi's SD
   card leaves no name on an empty file); token, machines.json, vapid.json and
   push-subscriptions.json all live there. A serving remuda holds the dir's
   lock (`Hold` / `Held` in `lock.go`, a flock on `serve.lock` that goes
-  with the process however it ends, tested) so `remuda restore` can refuse.
+  with the process however it ends, tested; on Windows the file opened
+  shared with nobody, `lock_windows.go`) so `remuda restore` can refuse.
 - `internal/backup/` — **the cockpit's state copied to another machine**
   (tested on temp dirs, a live WAL database and `shell.Fake`), since a
   cockpit on a Raspberry Pi lives on an SD card. `Snapshot` packs the
@@ -136,7 +169,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   up now, the copies there; never for a viewer.
 - `internal/herdr/` — everything herdr. `client.go`: newline-JSON RPC over
   the Unix socket, **one request = one connection** (herdr closes the socket
-  after each response; never pool). **The one connection that stays**:
+  after each response; never pool) — dialled by `DialLocal` (`local_unix.go`;
+  `local_windows.go`: on Windows the socket is a named pipe named after its
+  path, `\\.\pipe\C:\Users\me\AppData\Roaming\herdr\herdr.sock` as herdr
+  0.9.5 listens, opened for overlapped I/O so `os.NewFile` puts it on the
+  runtime's completion port and a read waiting for the answer never holds
+  the request's write back, `ERROR_PIPE_BUSY` tried again; `PipeName`;
+  `OwnSocket` is herdr's own resolution, `$HERDR_SOCKET_PATH` else the
+  default session's, which `remuda bridge` takes). **The one connection that stays**:
   `events.go`, `Client.Subscribe(subs)` — herdr's `events.subscribe`,
   answered `subscription_started` and then one event a line on the same
   connection, the deadline cleared; its subscriptions are fixed for the
@@ -190,7 +230,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and prompt box of Claude Code vanish). A joiner gets a repaint instead —
   the PTY is resized by a row and back, herdr and the app redraw.
   `AttachManager.NewCommand` builds the attach process, so the same manager
-  serves a local herdr exec or an `ssh -tt` to a remote one. **Terminal
+  serves a local herdr exec or an `ssh -tt` to a remote one;
+  `AttachManager.Unavailable`, when set, refuses every attach at once with
+  its reason (a Windows machine's: herdr has no terminal attach there). **Terminal
   queries are answered at the server** (`queries.go`, tested): herdr asks
   the client at attach for the pixel mouse mode (DECRQM 1016) and the
   device attributes, and every viewer's xterm would answer — late, once per
@@ -248,6 +290,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   never consults): with the master gone ssh would connect by itself, a
   handshake per request, and a bridge answering that way never lets the
   machine notice (tested on the real ssh against the loopback's port 1).
+  `RemoteCommand(script)` is the one command line a script travels as,
+  `sh -c '<script>'` — Windows' OpenSSH hands it to Git Bash with its
+  quotes whole, while a line that begins with a quoted word is cut there
+  (seen on the Windows runner); `CommandConn` is an exec as a `net.Conn`
+  (the `nc -U` and `remuda bridge` transports, and the Windows tests);
+  `Put` cuts a Windows path at its own separator (`rpath.For`).
   remuda implements no SSH itself.
 - `internal/machines/` — the multi-PC registry: `manager.go` (the
   registry), `machine.go` (one machine: its state, the ssh master, the
@@ -320,7 +368,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   log line, not a failure of the connection. **Two RPC
   transports**: a forwarded unix socket when the sshd allows streamlocal
   forwarding, else one `ssh host nc -U <sock>` exec per request
-  (one sshd on :2222 answers "unknown channel type"). The watcher's event
+  (one sshd on :2222 answers "unknown channel type"); a Windows machine
+  has a third, `bridgeClient` (`transport.go`): every request one
+  `sh -c 'exec remuda.exe bridge <socket>'` exec (`BridgeCommand`). The watcher's event
   stream rides the same one as a connection that stays: through the
   forwarded socket like any request, or as one long-lived `nc -U` exec, a
   session of the master for as long as it stands, its dial deadline cleared
@@ -751,7 +801,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`stillPending`); `GET …/everywhere/{id}` is the run's `Batch` with
   each step's state, the last five kept in memory — a run gone with the
   page's own remuda, its release step started, reads on the page as
-  that restart, not as an error (`hostRestarting`, tested). `make release` writes `bin/checksums.txt`; `make
+  that restart, not as an error (`hostRestarting`, tested). `make release` writes the six binaries (two of them `remuda-windows-<arch>.exe`) and `bin/checksums.txt`; `make
   publish` (on `main` with `release` fast-forwarded in, a tag on HEAD, a
   clean tree, the checks green) pushes the tag, and
   `.github/workflows/release.yml` builds the binaries and makes the
@@ -949,6 +999,68 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   proxy probe) is 426 before anything attaches. A peer's requests carry
   the bearer token and no Origin, so csrfGuard lets them through. Never
   `--takeover`.
+- **A Windows PC of the fleet** (the remote side; the page's screen
+  terminal and `POST /api/input` are the page's): a Windows machine is a
+  remote reached over ssh like any other, the cockpit itself always a Mac
+  or Linux. Its ssh shell is **Git Bash** — the person sets Windows'
+  OpenSSH `DefaultShell` once (`script.WindowsDefaultShell`, which remuda
+  never writes and never elevates for) — so every POSIX script runs there
+  under MSYS2 as it is. The connection's probe (`machines/probe.go`,
+  `probeScript` / `parseProbe`, tested on the runner's recorded answer in
+  `machines/testdata/windows-probe.txt`) prints `home`, `os` (uname:
+  MINGW*/MSYS*/CYGWIN* is `windows`), and on Windows `winhome` (`cygpath
+  -w "$HOME"`, the machine's `Home()`), `%APPDATA%`, remuda.exe and
+  herdr's stable alias `%LOCALAPPDATA%\Programs\Herdr\bin\herdr.exe` (the
+  release on PATH moves with an update); a `cmd.exe` or PowerShell answer
+  ("is not recognized as") fails the connection naming the line to run,
+  and no remuda.exe fails it with `remuda setup -host`. herdr's socket
+  there is `%APPDATA%\herdr\herdr.sock`, a named pipe: no ssh forward or
+  nc reaches it, so the RPC and the watcher's event stream go through
+  `remuda.exe bridge` (`cmd/remuda/bridge.go`) — `Machine.OS()` /
+  `Windows()` / `Paths()`, the roster's machine `os` ("darwin" | "linux" |
+  "windows" | "" before a remote's first connect, the page's contract);
+  the attach manager refuses at once (`NoAttachOnWindows`), never an
+  `ssh -tt … herdr terminal attach`; herdr's server is started outside the
+  ssh session by PowerShell's `Start-Process -WindowStyle Hidden`
+  (`herdr.StartWindowsServerScript`, `StartServerScriptOn`): started from
+  the session it held the session open and died with it. What runs there
+  and how: the vitals (`health/winhost.go`: `winver` the registry's
+  edition and build as the model — Windows 11 still says "Windows 10"
+  there, the build tells — `winup` /proc's uptime and load for Git Bash's
+  missing `uptime`, MemFree as the available memory; tested on
+  `health/testdata/windows-vitals.txt`), keep-awake (`awake/windows.go`: a
+  hidden PowerShell holding `SetThreadExecutionState(ES_CONTINUOUS |
+  ES_SYSTEM_REQUIRED)` as an `-EncodedCommand`, its pid checked by
+  `tasklist`, ended by `taskkill`), the door (`script.StateDir`:
+  `%APPDATA%\remuda`, where remuda.exe's `state.Dir` reads it; the reverse
+  forward works with Windows' sshd), `remuda mcp install` (the agents told
+  remuda.exe by its Windows name), `remuda statusline` (written as
+  `C:/Users/me/.local/bin/remuda.exe`, Git Bash running it), the release
+  (`remuda-windows-amd64.exe` / `-arm64.exe`, `updates/winrelease.go`: the
+  running remuda.exe renamed aside first, no service to restart, the next
+  bridge runs the new one; never "Deploy this remuda there" from a Mac or
+  Linux), herdr's update without `--handoff`. Not there: the Code mode
+  (`code.NoCodeOnWindows`; `install-code.sh` refuses), previews
+  (`preview.NotOnWindows`: Windows names no listening process's folder),
+  teleport (`teleport.NotWithWindows`, both ends). **CI's windows job**
+  (`.github/workflows/ci.yml`, `windows-latest`) is the proof: herdr for
+  Windows installed, remuda.exe built into `~/.local/bin`, the runner's own
+  OpenSSH server given Git Bash and a key, then every `TestOnWindows…`
+  (build-tagged `windows`, gated on `REMUDA_WINDOWS_HERDR=1`, helpers in
+  `internal/wintest`: `Remote` runs a script as `sshx.RemoteCommand` words
+  it through Windows' ssh, `Host` is the runner as a remote `shell.Host`,
+  `Record` keeps an answer for the fixtures, uploaded as the job's
+  artifact) — the server started over ssh outliving its session, the pipe
+  taking a write while a read waits, the probe, the whole RPC and an event
+  stream through `remuda.exe bridge` over ssh, the door's files and its
+  reverse forward, the vitals, keep-awake, the file viewer's scripts, the
+  Changes lens with the secret check, a session found, read and searched
+  through remuda.exe, `remuda setup -host` and `mcp install -host` against
+  the runner, and a release's install beside a running remuda.exe. The
+  check job vets and builds for `GOOS=windows`. What the runner cannot
+  prove: a person's own PC, Windows on arm64, a cockpit's ControlMaster to
+  a Windows sshd (Windows' ssh client holds none; the tests run each exec
+  as its own connection).
 - **A throwaway herdr server for a test needs `HERDR_SOCKET_PATH`, never a
   changed `HOME` alone.** herdr ignores `HOME` for its socket: `HOME=/tmp/x herdr
   server stop` stops the user's real server (it happened). The env var is
@@ -963,7 +1075,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
 - **Installing and uninstalling need no checkout** (`internal/setup`: six
   embedded POSIX scripts, and `setup_test.go` drives them in a temp HOME
   with stand-ins for launchctl, systemctl, herdr, brew and ssh first on
-  PATH — never against the real machine). `install.sh` is the one line
+  PATH — never against the real machine; a Windows PC's way through
+  stand-ins for uname, cygpath and powershell.exe, `windows_test.go` and
+  `uninstall_win_test.go`, and against the CI runner itself in
+  `live_windows_test.go`). **A Windows host**: `setup -host` asks it
+  `uname -s` first (`remoteSystem`: Git Bash's MINGW…, or the
+  "is not recognized" of cmd.exe or PowerShell, answered with the
+  DefaultShell line), refuses `-server` there, and after setup.sh (herdr
+  for Windows through `irm https://herdr.dev/install.ps1 | iex`, its server
+  started by PowerShell's `Start-Process`) and install.sh (MINGW: the
+  `remuda-windows-<arch>.exe` asset at `~/.local/bin/remuda.exe`, a running
+  one renamed aside first) installs no service; `uninstall.sh` there takes
+  remuda.exe and `%APPDATA%\remuda`, and with `-herdr` the package under
+  `~/.herdr/packages` (never `~/.herdr/worktrees`), its folders and its
+  entry on the account's PATH. `install.sh` is the one line
   people pipe to sh, a release asset (`releases/latest/download/
   install.sh`, uploaded by release.yml): the binary for the OS and CPU,
   checked against `checksums.txt` (no match, no install), put at

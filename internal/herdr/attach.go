@@ -23,6 +23,8 @@ const (
 // Never pass --takeover: stealing herdr's attach slot is the user's call alone.
 type AttachManager struct {
 	NewCommand func(terminalID string) *exec.Cmd
+	// Unavailable, when set, is why this machine has no attach at all (herdr on Windows): every Subscribe is refused with it.
+	Unavailable string
 
 	mu       sync.Mutex
 	attaches map[string]*attach
@@ -140,6 +142,9 @@ func validSize(cols, rows int) bool {
 // Subscribe attaches (or joins the existing attach of) a terminal; the caller must call cancel when done.
 // A joiner is caught up by a repaint, never a byte tail: TUIs draw with cursor moves relative to where it was.
 func (m *AttachManager) Subscribe(termID string, cols, rows int) (ch chan []byte, cancel func(), err error) {
+	if m.Unavailable != "" {
+		return nil, nil, &RefusedError{Msg: m.Unavailable}
+	}
 	m.mu.Lock()
 	a := m.attaches[termID]
 	if a != nil {

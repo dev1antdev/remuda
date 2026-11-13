@@ -6,13 +6,13 @@ package worktrees
 
 import (
 	"errors"
-	"path"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
@@ -20,8 +20,11 @@ import (
 // LeftoverTimeout is how long the look over a machine's worktrees may take: du walks every folder.
 var LeftoverTimeout = 90 * time.Second
 
-// Root is where herdr and remuda make worktrees on a machine with this home.
+// Root is where herdr and remuda make worktrees on a machine with this home: %USERPROFILE%\.herdr\worktrees on Windows.
 func Root(home string) string {
+	if style := rpath.For(home); style.Windows {
+		return style.Join(home, ".herdr", "worktrees")
+	}
 	return strings.TrimRight(home, "/") + "/.herdr/worktrees"
 }
 
@@ -30,7 +33,7 @@ func Made(home, folder string) bool {
 	if home == "" || folder == "" {
 		return false
 	}
-	rest, ok := strings.CutPrefix(path.Clean(folder), Root(home)+"/")
+	rest, ok := rpath.For(home).Rel(Root(home), folder)
 	return ok && strings.Contains(rest, "/")
 }
 
@@ -96,18 +99,24 @@ func LeftoversScript(root string) string {
 		"done\n"
 }
 
-// ParseLeftovers reads the script's lines, leaving out every folder an open workspace or pane sits in.
+// ParseLeftovers reads the script's lines, leaving out every folder an open workspace or pane sits in; each path in
+// the machine's own spelling, whichever its Git Bash printed.
 func ParseLeftovers(root, out string, open []string) []Leftover {
+	style := rpath.For(root)
 	list := []Leftover{}
 	for _, line := range script.Lines(out) {
-		fields := script.Fields(line)
-		if len(fields) != 4 || !strings.HasPrefix(fields[0], root+"/") || inUse(fields[0], open) {
+		fields := script.Fields(strings.TrimRight(line, "\r"))
+		if len(fields) != 4 {
 			continue
 		}
-		rest := strings.TrimPrefix(fields[0], root+"/")
+		folder := style.Clean(fields[0])
+		rest, ok := style.Rel(root, folder)
+		if !ok || rest == "." || inUse(style, folder, open) {
+			continue
+		}
 		repo, name, _ := strings.Cut(rest, "/")
 		kb, _ := strconv.ParseInt(strings.TrimSpace(fields[3]), 10, 64)
-		left := Leftover{Path: fields[0], Repo: repo, Name: name, Branch: fields[1], Dirty: strings.TrimSpace(fields[2]), KB: kb}
+		left := Leftover{Path: folder, Repo: repo, Name: name, Branch: fields[1], Dirty: strings.TrimSpace(fields[2]), KB: kb}
 		switch left.Branch {
 		case "!":
 			left.Branch, left.Broken = "", "no linked worktree here any more"
@@ -123,10 +132,9 @@ func ParseLeftovers(root, out string, open []string) []Leftover {
 }
 
 // inUse says whether an open folder is the worktree or lies inside it.
-func inUse(folder string, open []string) bool {
+func inUse(style rpath.Style, folder string, open []string) bool {
 	for _, dir := range open {
-		dir = path.Clean(dir)
-		if dir == folder || strings.HasPrefix(dir, folder+"/") {
+		if dir != "" && style.Within(folder, dir) {
 			return true
 		}
 	}
@@ -136,7 +144,7 @@ func inUse(folder string, open []string) bool {
 // Leftovers lists the worktrees under the machine's root that none of the open folders is in.
 func Leftovers(host shell.Host, open []string) ([]Leftover, error) {
 	root := Root(host.Home())
-	out, err := shell.Text(host, LeftoversScript(root), LeftoverTimeout)
+	out, err := shell.Text(host, LeftoversScript(rpath.For(root).Slash(root)), LeftoverTimeout)
 	if err != nil {
 		return nil, errors.New(lastLine(out, err.Error()))
 	}

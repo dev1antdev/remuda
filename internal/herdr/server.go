@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/proc"
 	"github.com/dev1antdev/remuda/internal/script"
 )
 
@@ -81,7 +81,7 @@ func serverCommand(bin, socket, home string) *exec.Cmd {
 	if home != "" {
 		cmd.Dir = home
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // its own session: it stays when remuda exits
+	proc.Detach(cmd) // its own session: it stays when remuda exits
 	return cmd
 }
 
@@ -104,6 +104,15 @@ func cleanEnv() []string {
 		}
 	}
 	return out
+}
+
+// StartServerScriptOn is StartServerScript for a machine's system: on Windows the server is started outside the ssh
+// session (StartWindowsServerScript), elsewhere as StartServerScript does.
+func StartServerScriptOn(system, bin, socket string) string {
+	if system == "windows" {
+		return StartWindowsServerScript(bin, socket)
+	}
+	return StartServerScript(bin, socket)
 }
 
 // StartServerScript is the same start as a POSIX script over ssh: unless a server runs, start one and wait for it.

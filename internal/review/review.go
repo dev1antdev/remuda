@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/state"
@@ -482,7 +483,7 @@ func (store *Store) Badges(host shell.Host, dirs []string) {
 			lines = append(lines, "")
 		}
 		store.setBranch(storeKey, strings.TrimSpace(lines[0]))
-		store.setRoot(storeKey, strings.TrimSpace(lines[1]))
+		store.setRoot(storeKey, rpath.For(host.Home()).Clean(strings.TrimSpace(lines[1]))) // Git Bash says /c/Users/me/app for C:\Users\me\app
 		store.setRemote(storeKey, strings.TrimSpace(lines[2]))
 		blobLines := sections[0]
 		hasBaseline := !baseline.At.IsZero()

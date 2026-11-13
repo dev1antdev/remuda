@@ -78,6 +78,10 @@ func (s *Server) handleTeleportTargets(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, err)
 		return
 	}
+	if mc.Windows() {
+		httpErr(w, 400, errors.New(teleport.NotWithWindows))
+		return
+	}
 	src, err := teleport.Inspect(mc, dir)
 	if err != nil {
 		httpErr(w, 400, err)
@@ -96,6 +100,11 @@ func (s *Server) handleTeleportTargets(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			defer wg.Done()
 			target := teleportTarget{Machine: m.ID(), Label: m.Label(), Checkouts: []teleport.Checkout{}}
+			if m.Windows() {
+				target.Error = teleport.NotWithWindows
+				targets[i] = target
+				return
+			}
 			var dirs []string
 			if snap, _ := s.Watch.Snapshot(m.ID()); snap != nil {
 				dirs = snap.WorkspaceDirs()
@@ -163,6 +172,10 @@ func (s *Server) handleTeleport(w http.ResponseWriter, r *http.Request) {
 	target, err := s.Machines.Get(req.Target)
 	if err != nil {
 		httpErr(w, 404, err)
+		return
+	}
+	if mc.Windows() || target.Windows() {
+		httpErr(w, 400, errors.New(teleport.NotWithWindows))
 		return
 	}
 	client, _, err := target.Ready()

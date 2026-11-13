@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { basename, dirname, joinPath, pathCrumbs, pathParts, separatorOf, underFolder, windowsPath } from "./pathname";
+import { absolutePath, basename, dirname, joinPath, pathCrumbs, pathParts, separatorOf, underFolder, windowsPath } from "./pathname";
 
 describe("pathname", () => {
+  it("tells a path that starts at a root", () => {
+    for (const p of ["/a", "C:\\Users\\me", "c:/work", "\\\\nas\\share"]) expect(absolutePath(p)).toBe(true);
+    for (const p of ["", "a/b", "~/x", "C:", "src\\App.cs", "C:relative"]) expect(absolutePath(p)).toBe(false);
+  });
+
   it("tells a Windows path from a POSIX one", () => {
     for (const p of ["C:\\Users\\me\\app", "c:/work", "D:", "\\\\nas\\share\\x", "src\\App.xaml.cs"]) expect(windowsPath(p)).toBe(true);
     for (const p of ["/a/b", "~/x", "a/b\\c", "plain", "/tmp/C:\\odd"]) expect(windowsPath(p)).toBe(false);

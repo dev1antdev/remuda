@@ -42,6 +42,11 @@ jobs:
           if [ -n "$out" ]; then echo "not gofmt'ed:"; echo "$out"; exit 1; fi
       - name: go vet
         run: go vet ./...
+      - name: go vet and build for Windows
+        # remuda.exe is the helper a cockpit reaches on a Windows machine of the fleet
+        run: |
+          GOOS=windows GOARCH=amd64 go vet ./...
+          GOOS=windows GOARCH=arm64 go build -o /dev/null ./cmd/remuda
       - name: go test
         run: go test ./...
       - name: govulncheck
@@ -49,6 +54,65 @@ jobs:
       - name: npm audit
         working-directory: web
         run: npm audit --audit-level=high
+
+  windows:
+    name: a Windows machine of the fleet
+    # a real Windows with herdr for Windows, its OpenSSH server running commands in Git Bash as the person sets theirs:
+    # herdr reached through remuda.exe bridge, the remote scripts run as a cockpit runs them (internal/wintest)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      REMUDA_WINDOWS_HERDR: "1"
+      REMUDA_SSH_HOST: pc
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: herdr for Windows
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://herdr.dev/install.ps1 | iex"
+      - name: remuda.exe where remuda setup puts it
+        shell: bash
+        run: |
+          mkdir -p web/dist && printf '<!doctype html>\n' > web/dist/index.html
+          mkdir -p "$HOME/.local/bin"
+          go build -o "$HOME/.local/bin/remuda.exe" ./cmd/remuda
+          "$HOME/.local/bin/remuda.exe" -version
+          if "$HOME/.local/bin/remuda.exe" 2>err.txt; then echo "remuda.exe served"; exit 1; fi
+          cat err.txt
+          echo "REMUDA_EXE=$(cygpath -w "$HOME/.local/bin/remuda.exe")" >> "$GITHUB_ENV"
+          echo "REMUDA_RECORD_DIR=$(cygpath -w "$RUNNER_TEMP")\\recorded" >> "$GITHUB_ENV"
+          echo "REMUDA_SSH_CONFIG=$(cygpath -w "$RUNNER_TEMP")\\sshcfg" >> "$GITHUB_ENV"
+          /c/Windows/System32/OpenSSH/ssh-keygen.exe -q -t ed25519 -N "" -f "$RUNNER_TEMP\\k" < /dev/null
+          cat "$(cygpath -u "$RUNNER_TEMP")/k.pub" > /c/ProgramData/ssh/administrators_authorized_keys
+      - name: ssh to this machine, Git Bash its shell
+        shell: pwsh
+        run: |
+          icacls C:\ProgramData\ssh\administrators_authorized_keys /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F"
+          icacls "$env:RUNNER_TEMP\k" /inheritance:r /grant "${env:USERNAME}:F"
+          New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Program Files\Git\bin\bash.exe" -PropertyType String -Force | Out-Null
+          Restart-Service sshd
+          "Host pc`n  HostName 127.0.0.1`n  User $env:USERNAME`n  IdentityFile $env:RUNNER_TEMP\k`n  StrictHostKeyChecking no`n  UserKnownHostsFile $env:RUNNER_TEMP\kh`n  BatchMode yes" | Set-Content -Encoding ascii $env:REMUDA_SSH_CONFIG
+          & C:\Windows\System32\OpenSSH\ssh.exe -F $env:REMUDA_SSH_CONFIG pc 'uname -s'
+          # the same host for remuda setup -host pc, which runs plain ssh as a cockpit does
+          New-Item -ItemType Directory -Force "$HOME\.ssh" | Out-Null
+          (Get-Content $env:REMUDA_SSH_CONFIG) -replace '\\', '/' | Set-Content -Encoding ascii "$HOME\.ssh\config"
+      - name: go test on Windows
+        # one package at a time, herdr's first: its test starts the server the way a cockpit does
+        shell: bash
+        run: |
+          export PATH="/c/Windows/System32/OpenSSH:$PATH" # Windows' own ssh for remuda setup -host: Git's would refuse the key's permissions
+          go test -count=1 ./internal/rpath/
+          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/herdr/ ./internal/machines/ ./internal/health/ ./internal/awake/ ./internal/setup/ ./internal/updates/ ./internal/review/ ./internal/search/
+      - uses: actions/upload-artifact@v7
+        # the answers this Windows gave, the unit tests' fixtures
+        if: always()
+        with:
+          name: windows-answers
+          path: ${{ runner.temp }}/recorded
+          if-no-files-found: ignore
 
   e2e:
     name: end-to-end smoke

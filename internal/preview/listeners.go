@@ -17,6 +17,10 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
+// NotOnWindows is why a Windows machine offers no previews yet: Windows says which process listens on a port, but not
+// in which folder it runs, and a preview is matched to its workspace by that folder.
+const NotOnWindows = "previews are not offered for a Windows machine yet: Windows does not say which folder a listening process runs in, so no port can be matched to its workspace"
+
 // FindTimeout is how long the look over a machine's ports may take.
 var FindTimeout = 20 * time.Second
 

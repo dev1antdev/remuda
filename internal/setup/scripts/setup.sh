@@ -5,9 +5,13 @@
 #   2. its headless server, started if none answers
 #   3. herdr's agent integrations (the status hooks) for the agents found
 # The remuda service itself is installed by install-service.sh after this.
+# On Windows, under Git Bash (the PC's ssh shell): herdr for Windows through its
+# PowerShell installer, its server started hidden outside the ssh session, and
+# no service at all — remuda on Windows is the helper the cockpit reaches.
 # Env: HERDR_INSTALL=brew|installer (default: brew if present, else installer)
 set -e
-PATH="$HOME/.local/bin:$HOME/.kimi-code/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export PATH
+PATH="$HOME/.local/bin:$HOME/.kimi-code/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/AppData/Local/Programs/Herdr/bin:$PATH"; export PATH
+case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
 
 say() { printf '%s\n' "$*"; }
 
@@ -16,13 +20,19 @@ if command -v herdr >/dev/null 2>&1; then
     say "herdr: $(herdr --version 2>/dev/null | head -1) at $(command -v herdr)"
 else
     how="${HERDR_INSTALL:-}"
-    if [ -z "$how" ]; then
+    if [ -n "$windows" ]; then
+        how=windows
+    elif [ -z "$how" ]; then
         if command -v brew >/dev/null 2>&1; then how=brew; else how=installer; fi
     fi
     case "$how" in
     brew)
         say "herdr: installing with Homebrew…"
         brew install herdr
+        ;;
+    windows)
+        say "herdr: installing herdr for Windows with its PowerShell installer…"
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm https://herdr.dev/install.ps1 | iex" </dev/null
         ;;
     *)
         say "herdr: installing with herdr's installer into ~/.local/bin…"
@@ -42,6 +52,17 @@ fi
 sock="${HERDR_SOCKET:-$HOME/.config/herdr/herdr.sock}"
 if herdr status server 2>/dev/null | grep -q "status: running"; then
     say "herdr server: running"
+elif [ -n "$windows" ]; then
+    # started from the ssh session itself it would hold the session open and die with it: PowerShell starts it hidden
+    say "herdr server: starting…"
+    h=$(command -v herdr); case "$h" in *.exe) ;; *) h="$h.exe" ;; esac
+    w=$(cygpath -w "$h" | sed "s/'/''/g")
+    powershell.exe -NoProfile -NonInteractive -Command "Start-Process -WindowStyle Hidden -WorkingDirectory \$env:USERPROFILE -FilePath '$w' -ArgumentList 'server'" </dev/null
+    i=0; while [ $i -lt 30 ]; do
+        if herdr status server 2>/dev/null | grep -q "status: running"; then break; fi
+        sleep 0.5; i=$((i+1))
+    done
+    if herdr status server 2>/dev/null | grep -q "status: running"; then say "herdr server: running"; else say "herdr server did not come up; see herdr-server.log in $APPDATA\\herdr"; exit 1; fi
 else
     say "herdr server: starting…"
     mkdir -p "$(dirname "$sock")"

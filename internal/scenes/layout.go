@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/rpath"
 )
 
 // MaxPanes is the most panes a captured layout lays out.
@@ -46,7 +47,7 @@ func (n *Node) panes() []*Node {
 // Capture is a tab's layout as a step keeps it: the folders made relative to dir, the agent's pane found by its id
 // (the first pane when it is not in the tab).
 func Capture(desc *herdr.LayoutDescription, dir, agentPane string) Layout {
-	layout := Layout{Root: nodeOf(&desc.Root, path.Clean(dir))}
+	layout := Layout{Root: nodeOf(&desc.Root, cleanDir(dir))}
 	for i, pane := range desc.Root.Panes() {
 		if pane.PaneID == agentPane {
 			layout.Agent = i
@@ -64,10 +65,27 @@ func nodeOf(n *herdr.LayoutNode, dir string) Node {
 	return Node{Type: "pane", Dir: relativeTo(dir, n.CWD), Label: n.Label, Command: n.Command}
 }
 
+// cleanDir is a step's folder cleaned in its machine's spelling: path.Clean's on a Mac or Linux, Windows' own there.
+func cleanDir(dir string) string {
+	if style := rpath.For(dir); style.Windows {
+		return style.Clean(dir)
+	}
+	return path.Clean(dir)
+}
+
 // relativeTo is a folder as seen from dir: "" for dir itself, the path below it, else the folder as it is.
 func relativeTo(dir, folder string) string {
 	if folder == "" {
 		return ""
+	}
+	if style := rpath.For(dir); style.Windows { // a Windows machine's step: C:\Users\me\app and its folders
+		if rel, ok := style.Rel(dir, folder); ok {
+			if rel == "." {
+				return ""
+			}
+			return rel
+		}
+		return style.Clean(folder)
 	}
 	folder = path.Clean(folder)
 	switch {
@@ -83,7 +101,7 @@ func relativeTo(dir, folder string) string {
 
 // Tree is the layout as herdr's layout.apply takes it, every folder absolute again under dir.
 func (l Layout) Tree(dir string) herdr.LayoutNode {
-	return treeOf(&l.Root, path.Clean(dir))
+	return treeOf(&l.Root, cleanDir(dir))
 }
 
 func treeOf(n *Node, dir string) herdr.LayoutNode {
@@ -92,10 +110,10 @@ func treeOf(n *Node, dir string) herdr.LayoutNode {
 		return herdr.LayoutNode{Type: "split", Direction: n.Direction, Ratio: n.Ratio, First: &first, Second: &second}
 	}
 	folder := dir
-	if strings.HasPrefix(n.Dir, "/") {
+	if rpath.Absolute(n.Dir) {
 		folder = n.Dir
 	} else if n.Dir != "" {
-		folder = path.Join(dir, n.Dir)
+		folder = rpath.For(dir).Join(dir, n.Dir)
 	}
 	return herdr.LayoutNode{Type: "pane", CWD: folder, Label: n.Label, Command: n.Command}
 }
@@ -155,7 +173,7 @@ func checkNode(n *Node, depth int) error {
 		if n.First != nil || n.Second != nil || n.Direction != "" {
 			return errors.New("a pane holds no split")
 		}
-		if n.Dir != "" && !strings.HasPrefix(n.Dir, "/") && (path.Clean(n.Dir) != n.Dir || n.Dir == ".." || strings.HasPrefix(n.Dir, "../")) {
+		if n.Dir != "" && !rpath.Absolute(n.Dir) && (path.Clean(n.Dir) != n.Dir || n.Dir == ".." || strings.HasPrefix(n.Dir, "../")) {
 			return fmt.Errorf("a pane's folder %q climbs out of the step's", n.Dir)
 		}
 		if utf8.RuneCountInString(n.Label) > MaxTab || !plain(n.Label) {

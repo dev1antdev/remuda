@@ -4,13 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/text"
@@ -138,7 +138,7 @@ func firstPromptPlace(req *createReq, extra map[string]any) string {
 		return req.Name
 	}
 	if req.Dir != "" {
-		return filepath.Base(req.Dir)
+		return rpath.For(req.Dir).Base(req.Dir)
 	}
 	return "the new tab"
 }
@@ -232,7 +232,8 @@ func (s *Server) madeWorktree(mc *machines.Machine, id string) (string, bool) {
 
 // usedElsewhere says whether another workspace stands on the worktree or has a pane inside it.
 func usedElsewhere(snap *herdr.Snapshot, id, tree string) bool {
-	inside := func(dir string) bool { return dir == tree || strings.HasPrefix(dir, tree+"/") }
+	style := rpath.For(tree) // a Windows machine's herdr names it C:\Users\me\.herdr\worktrees\app\x
+	inside := func(dir string) bool { return dir != "" && style.Within(tree, dir) }
 	for i := range snap.Workspaces {
 		other := &snap.Workspaces[i]
 		if other.WorkspaceID != id && other.Worktree != nil && inside(other.Worktree.CheckoutPath) {

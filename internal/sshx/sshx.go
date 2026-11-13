@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
@@ -133,10 +134,21 @@ func (c *Conn) listening() bool {
 	return c.Alive()
 }
 
+// RemoteCommand is the command line a script travels as: through sh, since the remote login shell may be anything —
+// zsh, fish, or on a Windows machine Git Bash, which Windows' OpenSSH hands the line to as it is (its quotes kept).
+func RemoteCommand(command string) string {
+	return "sh -c " + script.Quote(command)
+}
+
+// CommandConn starts the command and exposes its stdin and stdout as a net.Conn that the deadline ends: the way an
+// exec over ssh (nc -U, remuda bridge) carries herdr's RPC.
+func CommandConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
+	return newCmdConn(cmd, timeout)
+}
+
 // run executes a remote command over the master with a deadline, stdin streamed to it when given.
 func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
-	// every script here is POSIX sh; the remote login shell may be anything
-	cmd := c.session(c.Host, "sh -c "+script.Quote(command))
+	cmd := c.session(c.Host, RemoteCommand(command))
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -164,7 +176,7 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 
 // Stream runs a remote command, handing sink its output (stdout and stderr) as it comes; the exit status is the error.
 func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) error {
-	cmd := c.session(c.Host, "sh -c "+script.Quote("exec 2>&1; "+command))
+	cmd := c.session(c.Host, RemoteCommand("exec 2>&1; "+command))
 	pr, pw := io.Pipe()
 	cmd.Stdout, cmd.Stderr = pw, pw
 	if err := cmd.Start(); err != nil {
@@ -217,8 +229,15 @@ func (c *Conn) Run(command string, timeout time.Duration) ([]byte, error) {
 
 // Put writes data to a remote file, creating its directory, through cat over the master.
 func (c *Conn) Put(path string, data []byte, timeout time.Duration) error {
-	_, err := c.run("mkdir -p "+script.Quote(filepath.Dir(path))+" && cat > "+script.Quote(path), timeout, bytes.NewReader(data))
+	_, err := c.run(PutScript(path), timeout, bytes.NewReader(data))
 	return err
+}
+
+// PutScript writes stdin to the file, its folder made first. A Windows path (C:\…) is cut at its own separator and
+// handed over with forward slashes, which mkdir -p walks one folder at a time under Git Bash.
+func PutScript(path string) string {
+	style := rpath.For(path)
+	return "mkdir -p " + script.Quote(style.Slash(style.Dir(path))) + " && cat > " + script.Quote(style.Slash(path))
 }
 
 // RunWithInput runs a script on the host with data on its stdin: the way for a secret that must not travel on a command line.

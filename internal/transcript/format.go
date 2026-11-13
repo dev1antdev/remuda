@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/dev1antdev/remuda/internal/rpath"
 )
 
 // Format is which agent wrote a session file, told by where the file lives: Claude Code's under
@@ -43,11 +45,16 @@ func FormatOfAgent(agent string) Format {
 }
 
 // SessionRoots are the folders a home keeps session files in, one per format.
+// A Windows machine's home (C:\Users\me) gives them in its own spelling.
 func SessionRoots(home string) map[Format]string {
+	join := filepath.Join
+	if style := rpath.For(home); style.Windows {
+		join = style.Join
+	}
 	return map[Format]string{
-		Claude: filepath.Join(home, ".claude", "projects"),
-		Codex:  filepath.Join(home, ".codex", "sessions"),
-		Gemini: filepath.Join(home, ".gemini", "tmp"),
+		Claude: join(home, ".claude", "projects"),
+		Codex:  join(home, ".codex", "sessions"),
+		Gemini: join(home, ".gemini", "tmp"),
 	}
 }
 
@@ -58,9 +65,9 @@ func homeDir() string {
 
 // UnderRoot says whether a session path the agent's own hooks reported sits under one of the roots of this home.
 func UnderRoot(home, path string) bool {
-	clean := filepath.Clean(path)
+	style := rpath.For(home)
 	for _, root := range SessionRoots(home) {
-		if strings.HasPrefix(clean, root+"/") {
+		if rel, ok := style.Rel(root, path); ok && rel != "." {
 			return true
 		}
 	}

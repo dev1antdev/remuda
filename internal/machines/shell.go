@@ -2,8 +2,10 @@ package machines
 
 import (
 	"os"
+	"runtime"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
@@ -14,6 +16,25 @@ func (mc *Machine) ID() string { return mc.Cfg.ID }
 
 // Local reports whether this is the machine remuda runs on.
 func (mc *Machine) Local() bool { return mc.local }
+
+// NoAttachOnWindows is why a Windows machine's terminal is never attached: herdr has no terminal attach there.
+const NoAttachOnWindows = "herdr has no terminal attach on Windows; the screen terminal stands in"
+
+// OS is the machine's system: darwin, linux or windows, "" for a remote before its first connect.
+func (mc *Machine) OS() string {
+	if mc.local {
+		return runtime.GOOS
+	}
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	return mc.os
+}
+
+// Windows says the machine is a Windows PC: its paths spelled C:\Users\me, its herdr reached through remuda.exe.
+func (mc *Machine) Windows() bool { return mc.OS() == "windows" }
+
+// Paths is how the machine spells its paths.
+func (mc *Machine) Paths() rpath.Style { return rpath.Style{Windows: mc.Windows()} }
 
 // Home is the user's home directory on this machine.
 func (mc *Machine) Home() string {

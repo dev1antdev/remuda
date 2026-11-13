@@ -33,10 +33,7 @@ Look before you answer: call the tools rather than guess. Answer briefly, in the
 // FolderScript makes the concierge's folder — under stateDir when that is the cockpit's own, else under the dir
 // remuda keeps on the machine — writes Memory into it, and prints the folder.
 func FolderScript(stateDir string) string {
-	locate := `case "$(uname -s)" in
-  Darwin) d="$HOME/Library/Application Support/remuda" ;;
-  *) d="${XDG_CONFIG_HOME:-$HOME/.config}/remuda" ;;
-esac`
+	locate := script.StateDir("d")
 	if stateDir != "" {
 		locate = "d=" + script.Quote(stateDir)
 	}
@@ -68,12 +65,12 @@ func (s *Service) Prepare(host shell.Shell, local bool) (string, error) {
 }
 
 // RemudaOn is the remuda binary the concierge's MCP server runs on a machine: this very one on the cockpit's own,
-// else the one setup puts under the machine's home.
+// else the one setup puts under the machine's home: remuda.exe on a Windows one.
 func RemudaOn(local bool, home string) string {
 	if local {
 		if bin, err := os.Executable(); err == nil {
 			return bin
 		}
 	}
-	return home + "/.local/bin/remuda"
+	return script.RemudaPath(home)
 }

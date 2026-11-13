@@ -46,8 +46,15 @@ func SocketPath() string {
 	if p := os.Getenv("HERDR_SOCKET"); p != "" {
 		return p
 	}
-	home, _ := os.UserHomeDir()
-	return DefaultSocket(home)
+	return localSocket()
+}
+
+// OwnSocket is the socket herdr's own CLI would reach on this machine: $HERDR_SOCKET_PATH, else the default session's.
+func OwnSocket() string {
+	if p := os.Getenv("HERDR_SOCKET_PATH"); p != "" {
+		return p
+	}
+	return localSocket()
 }
 
 // Error is a structured herdr RPC error: herdr answered, and said no.
@@ -82,7 +89,7 @@ func (c *Client) dial(timeout time.Duration) (net.Conn, error) {
 	if c.Dial != nil {
 		return c.Dial(timeout)
 	}
-	conn, err := net.DialTimeout("unix", c.Socket, timeout)
+	conn, err := DialLocal(c.Socket, timeout)
 	if err != nil {
 		return nil, fmt.Errorf("cannot reach herdr at %s: %w", c.Socket, err)
 	}

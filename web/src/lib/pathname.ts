@@ -4,6 +4,9 @@
 // windowsPath says a path is written the Windows way: a drive letter (C:\, C:/, C:), a \\share, or backslashes and no slash
 export const windowsPath = (p: string): boolean => /^[A-Za-z]:([\\/]|$)/.test(p) || p.startsWith("\\\\") || (p.includes("\\") && !p.includes("/"));
 
+// absolutePath says a path starts at a root: / on macOS and Linux, a drive (C:\ or C:/) or a \\share on Windows
+export const absolutePath = (p: string): boolean => p.startsWith("/") || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("\\\\");
+
 const SEPARATORS = /[\\/]/;
 
 // separatorOf is the separator a path's own machine joins with

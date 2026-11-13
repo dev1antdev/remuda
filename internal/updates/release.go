@@ -10,21 +10,24 @@ import (
 
 // remuda's own releases on GitHub, offered to a machine whose remuda is older; nothing is fetched until Run.
 
-// AssetName is the release asset a machine needs, remuda-<os>-<arch>; "" for a platform the releases do not cover.
+// AssetName is the release asset a machine needs, remuda-<os>-<arch>, remuda-windows-<arch>.exe for a Windows one; ""
+// for a platform the releases do not cover.
 func AssetName(os, arch string) string {
-	o := strings.ToLower(os)
+	o, ext := strings.ToLower(os), ""
 	switch {
 	case strings.HasPrefix(o, "macos") || strings.HasPrefix(o, "darwin"):
 		o = "darwin"
 	case strings.HasPrefix(o, "linux"):
 		o = "linux"
+	case strings.HasPrefix(o, "windows"):
+		o, ext = "windows", ".exe"
 	default:
 		return ""
 	}
 	if arch != "arm64" && arch != "amd64" {
 		return ""
 	}
-	return "remuda-" + o + "-" + arch
+	return "remuda-" + o + "-" + arch + ext
 }
 
 // ReleaseUpdate offers the release to a machine running have, when it is newer and has a binary for it.
@@ -44,7 +47,11 @@ func ReleaseUpdate(have, os, arch string, rel health.Release, local bool) (Updat
 	} else {
 		note += " (this release carries no checksums.txt, so the download is not verified)"
 	}
-	note += ", installs it as ~/.local/bin/remuda and restarts the service."
+	if windowsAsset(asset) {
+		note += ", and puts it in place as ~/.local/bin/remuda.exe; there is no service on Windows, the next connection runs it."
+	} else {
+		note += ", installs it as ~/.local/bin/remuda and restarts the service."
+	}
 	if local {
 		note += " This is the remuda serving this page: it restarts two seconds after the install, and the page offers a reload once the new version answers."
 	}
@@ -81,22 +88,13 @@ const restartLater = `if launchctl print "gui/$(id -u)/dev.mardeus.remuda" >/dev
 
 // ReleaseScript is what the machine runs: download, the checksum when the release has one, install, restart.
 func ReleaseScript(url, sums, asset string, local bool) string {
+	if windowsAsset(asset) {
+		return windowsReleaseScript(url, sums, asset)
+	}
 	var b strings.Builder
 	b.WriteString("set -e; " + script.PATH + "\n")
 	b.WriteString(`mkdir -p "$HOME/.local/bin"` + "\n")
-	b.WriteString(`echo downloading ` + script.Quote(url) + "\n")
-	b.WriteString(`curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.new" ` + script.Quote(url) + "\n")
-	if sums != "" {
-		b.WriteString(`if curl -fsSL --retry 3 -o "$HOME/.local/bin/remuda.sums" ` + script.Quote(sums) + `; then` + "\n")
-		b.WriteString(`  want=$(awk -v n=` + script.Quote(asset) + ` '{ f=$NF; sub(/^\*/, "", f); if (f == n) print $1 }' "$HOME/.local/bin/remuda.sums" | head -1)` + "\n")
-		b.WriteString(`  have=$( (shasum -a 256 "$HOME/.local/bin/remuda.new" 2>/dev/null || sha256sum "$HOME/.local/bin/remuda.new") | cut -d' ' -f1)` + "\n")
-		b.WriteString(`  rm -f "$HOME/.local/bin/remuda.sums"` + "\n")
-		b.WriteString(`  if [ -z "$want" ] || [ "$want" != "$have" ]; then echo "!! checksum mismatch: the download is not what the release says (want ${want:-?}, got $have)"; rm -f "$HOME/.local/bin/remuda.new"; exit 1; fi` + "\n")
-		b.WriteString(`  echo "checksum ok"` + "\n")
-		b.WriteString(`else echo "!! could not fetch the release's checksums.txt"; rm -f "$HOME/.local/bin/remuda.new"; exit 1; fi` + "\n")
-	} else {
-		b.WriteString(`echo "(this release carries no checksums.txt; the download is not verified)"` + "\n")
-	}
+	b.WriteString(downloadScript(url, sums, asset, "remuda.new"))
 	b.WriteString(InstallScript + "\n")
 	if local {
 		b.WriteString(restartLater)

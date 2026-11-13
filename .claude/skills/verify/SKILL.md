@@ -14,7 +14,9 @@ you skipped is reported as skipped, never as passed.
 2. `gofmt -l ./cmd ./internal` — must print nothing. Run `gofmt -w` on
    what it names. (In Claude Code a hook formats a Go file after each
    edit; this catches the rest.)
-3. `go vet ./...`
+3. `go vet ./...`, and `GOOS=windows GOARCH=amd64 go vet ./...`: remuda.exe is the
+   helper a cockpit reaches on a Windows PC, so a syscall of one system
+   goes in a `_unix.go` / `_windows.go` pair (`internal/proc`, `internal/state`).
 4. `go test ./...` — no herdr needed. The tests that start a throwaway
    herdr server skip when `herdr` is not on PATH; one that reaches the
    person's real socket is a bug in the test (`HERDR_SOCKET_PATH`, see

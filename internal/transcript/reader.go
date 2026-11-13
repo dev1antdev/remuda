@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/text"
@@ -236,7 +237,7 @@ func keepTail(tails map[string]*cachedTail, path string, tail *cachedTail, budge
 func (r *Reader) ResolveSession(agent, cwd, kind, value string) (string, error) {
 	// the agent's own hooks chose these: a path only under one of the session roots, an id only what looks like one
 	if kind == "path" {
-		clean := filepath.Clean(value)
+		clean := rpath.For(r.host.Home()).Clean(value)
 		if !(strings.HasSuffix(clean, ".jsonl") || strings.HasSuffix(clean, ".json")) || !UnderRoot(r.host.Home(), clean) {
 			return "", fmt.Errorf("session path %q is not a session file under ~/.claude/projects, ~/.codex/sessions or ~/.gemini/tmp", value)
 		}

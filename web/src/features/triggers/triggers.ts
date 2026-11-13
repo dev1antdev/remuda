@@ -3,6 +3,7 @@
 
 import type { Machine, ServeOffer } from "@/features/roster/api";
 import { t } from "@/lib/i18n";
+import { absolutePath } from "@/lib/pathname";
 import type { Action, Match, Rule } from "./api";
 
 export const MAX_PATTERN = 400;
@@ -75,7 +76,7 @@ export function draftCheck(rule: Rule): string {
   if (rule.pattern.length > MAX_PATTERN) return t("A pattern is {n} characters at most.", { n: MAX_PATTERN });
   if (/[\r\n]/.test(rule.pattern)) return t("herdr reads one line at a time: a pattern holds no line break.");
   if (rule.action === "task" && !rule.column?.trim()) return t("Name the column the task moves to.");
-  if (scopeOf(rule) === "folder" && !rule.dir?.startsWith("/")) return t("The folder is an absolute path.");
+  if (scopeOf(rule) === "folder" && !absolutePath(rule.dir ?? "")) return t("The folder is an absolute path.");
   return "";
 }
 

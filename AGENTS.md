@@ -18,7 +18,7 @@ once after cloning and after every change under `web/`.
 | Build the SPA (before any Go compile) | `make web` |
 | One binary with the SPA inside | `make build` → `bin/remuda` |
 | Develop | `make server` (API on :7317) and `make dev` (Vite on :5173, proxies `/api` and `/ws`) |
-| Go checks | `gofmt -l ./cmd ./internal` (must print nothing), `go vet ./...`, `go test ./...` |
+| Go checks | `gofmt -l ./cmd ./internal` (must print nothing), `go vet ./...`, `GOOS=windows GOARCH=amd64 go vet ./...` (remuda.exe, the helper on a Windows PC), `go test ./...` |
 | TypeScript check | `make typecheck` (`tsc --noEmit` + `go vet`) |
 | The page's unit tests (Vitest on the pure modules) | `make webtest` (`npm test` in `web/`; `make test` runs it too) |
 | Everything, as CI does (`.github/workflows/ci.yml`) | `make test && make typecheck`, or `docker build --target test .` |
@@ -207,6 +207,7 @@ not style.
 | How a screen reads the server | `web/src/lib/query.ts` (`useQuery`), the feature's `api.ts`; the roster through `web/src/features/roster/useRoster.tsx` |
 | herdr RPC, the attach PTY, starting herdr | `internal/herdr/` |
 | Remote machines, SSH, remote files | `internal/machines/`, `internal/sshx/` |
+| A Windows PC of the fleet: the probe, the bridge to herdr's named pipe, its paths | `internal/machines/probe.go`, `transport.go`, `cmd/remuda/bridge.go`, `internal/rpath/`; the tests on a real Windows: `internal/wintest/` and the `windows` job in ci.yml |
 | What the sidebar says about an agent | `internal/radar/`, `web/src/features/roster/` (`radar.ts` the model, `Sidebar.tsx`, `rows.tsx`) |
 | Pushes and their timing | `internal/push/`, `web/public/sw.js`, `web/src/features/alerts/push.ts` |
 | Transcript parsing, the conversation behind a pane | `internal/transcript/`, `internal/chat/`, `web/src/features/chat/` |

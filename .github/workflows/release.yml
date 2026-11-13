@@ -1,4 +1,5 @@
-# A tag vX.Y.Z pushed is a release: the four binaries built here with the
+# A tag vX.Y.Z pushed is a release: the six binaries built here (two of them
+# remuda.exe for a Windows PC of the fleet) with the
 # tag as their version, their sha256 sums, the installer people pipe to sh
 # (releases/latest/download/install.sh), and the GitHub release that every
 # running remuda then offers as "Download & install"
@@ -40,7 +41,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          files="bin/remuda-darwin-arm64 bin/remuda-darwin-amd64 bin/remuda-linux-amd64 bin/remuda-linux-arm64 bin/checksums.txt internal/setup/scripts/install.sh"
+          files="bin/remuda-darwin-arm64 bin/remuda-darwin-amd64 bin/remuda-linux-amd64 bin/remuda-linux-arm64 bin/remuda-windows-amd64.exe bin/remuda-windows-arm64.exe bin/checksums.txt internal/setup/scripts/install.sh"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" $files --clobber
           else

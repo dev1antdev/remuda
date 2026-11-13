@@ -10,6 +10,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/text"
 	"github.com/dev1antdev/remuda/internal/transcript"
@@ -53,7 +54,7 @@ type Swap struct {
 // command line is checked once the switch is known (Start).
 func checkAgent(s *Schedule) error {
 	s.Agent, s.Model, s.Args = strings.TrimSpace(s.Agent), strings.TrimSpace(s.Model), strings.TrimSpace(s.Args)
-	if s.Machine == "" || !strings.HasPrefix(s.Dir, "/") {
+	if s.Machine == "" || !rpath.Absolute(s.Dir) {
 		return errors.New("a machine and an absolute folder are required")
 	}
 	if s.Agent == "" || s.Agent == "shell" || !sessions.KnownAgent(s.Agent) {

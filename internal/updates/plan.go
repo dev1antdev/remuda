@@ -60,6 +60,12 @@ func MissingIntegrations(r *health.Report) []string {
 	return missing
 }
 
+// remudaThere sets $r to the machine's own remuda: ~/.local/bin/remuda, or remuda.exe there on Windows.
+const remudaThere = `r="$HOME/.local/bin/remuda"; [ -x "$r" ] || r="$r.exe"; `
+
+// windowsReport says the vitals are a Windows machine's.
+func windowsReport(r *health.Report) bool { return r != nil && strings.HasPrefix(r.OS, "Windows") }
+
 // Plan is the update for one thing on a machine with this report, run as the user and never with sudo.
 func Plan(what string, r *health.Report) (Update, error) {
 	path := script.PATH + "; "
@@ -82,6 +88,10 @@ func Plan(what string, r *health.Report) (Update, error) {
 		if r.HerdrVia == "brew" {
 			return Update{What: what, Title: "Update herdr", Command: path + brewUpdate + "brew upgrade herdr && herdr --version" + hooksStep + serverStep,
 				Note: "Installed with Homebrew: the formulae are refreshed first, then the upgrade. " + hooksNote + serverNote}, nil
+		}
+		if windowsReport(r) {
+			return Update{What: what, Title: "Update herdr", Command: path + "herdr update && herdr --version" + hooksStep + serverStep,
+				Note: "herdr's own updater, through its Windows installer: Windows has no live handoff, so the running server keeps its panes on the old version. " + hooksNote + serverNote}, nil
 		}
 		return Update{What: what, Title: "Update herdr", Command: path + "herdr update --handoff && herdr --version" + hooksStep + serverStep,
 			Note: "herdr's own updater, with a live handoff: the new server takes the running panes over. " + hooksNote + serverNote}, nil
@@ -127,12 +137,12 @@ func Plan(what string, r *health.Report) (Update, error) {
 		if r.Remuda == "" {
 			return Update{}, fmt.Errorf("remuda is not installed there to run its installer")
 		}
-		return Update{What: what, Title: "Update code-server", Command: path + `"$HOME/.local/bin/remuda" code install && readlink "$HOME/.local/opt/code-server"`, Note: "remuda's own installer: the pinned release, its checksum verified, the service restarted; an editor open on it reconnects (Reload the editor if it does not)."}, nil
+		return Update{What: what, Title: "Update code-server", Command: path + remudaThere + `"$r" code install && readlink "$HOME/.local/opt/code-server"`, Note: "remuda's own installer: the pinned release, its checksum verified, the service restarted; an editor open on it reconnects (Reload the editor if it does not)."}, nil
 	case "mcp":
 		if r == nil || r.Remuda == "" {
 			return Update{}, fmt.Errorf("remuda is not installed there to serve the tasks")
 		}
-		return Update{What: what, Title: "Connect the agents to your tasks (MCP)", Command: path + `"$HOME/.local/bin/remuda" mcp install`,
+		return Update{What: what, Title: "Connect the agents to your tasks (MCP)", Command: path + remudaThere + `"$r" mcp install`,
 			Note: "Registers remuda's MCP server with every coding agent on the machine through the agent's own command (claude mcp add, codex mcp add, gemini mcp add; Kimi when its CLI can): the agents can then list, create, move and comment on your tasks. Safe to run again; an agent already running sees the server once restarted."}, nil
 	case "statusline":
 		if r == nil || r.Claude == "" {
@@ -144,7 +154,7 @@ func Plan(what string, r *health.Report) (Update, error) {
 		if r.Statusline {
 			return Update{}, fmt.Errorf("Claude Code's status line already goes through remuda there")
 		}
-		return Update{What: what, Title: "Show Claude Code's plan limits", Command: path + `r="$HOME/.local/bin/remuda"; "$r" statusline status >/dev/null 2>&1 || { echo "this remuda is older than the status line wrapper: update remuda here first"; exit 1; }; "$r" statusline install`,
+		return Update{What: what, Title: "Show Claude Code's plan limits", Command: path + remudaThere + `"$r" statusline status >/dev/null 2>&1 || { echo "this remuda is older than the status line wrapper: update remuda here first"; exit 1; }; "$r" statusline install`,
 			Note: "Claude Code hands its status line the 5-hour and weekly limits of a Pro, Max or Ultra plan. This puts remuda in front of your status line in ~/.claude/settings.json (the file and the setting it replaces kept in remuda's state dir first): it notes the limits for the meter and the warnings, then runs your own status line as before. `remuda statusline uninstall` there puts it back."}, nil
 	case "claude":
 		if r == nil || r.Claude == "" {

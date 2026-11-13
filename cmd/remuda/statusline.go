@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -72,14 +73,19 @@ func statuslineHere(action string) (string, error) {
 	return limits.StatuslineStatus(home, dir)
 }
 
-// selfPath is the remuda the status line runs: the installed one, else this very binary
+// selfPath is the remuda the status line runs: the installed one, else this very binary.
+// On Windows it is remuda.exe, spelled with forward slashes: Claude Code runs its status line through Git Bash there,
+// which would read a backslash as an escape.
 func selfPath(home string) string {
-	installed := filepath.Join(home, ".local", "bin", "remuda")
-	if st, err := os.Stat(installed); err == nil && !st.IsDir() {
-		return installed
+	name := "remuda"
+	if runtime.GOOS == "windows" {
+		name = "remuda.exe"
 	}
-	if exe, err := os.Executable(); err == nil {
-		return exe
+	path := filepath.Join(home, ".local", "bin", name)
+	if st, err := os.Stat(path); err != nil || st.IsDir() {
+		if exe, err := os.Executable(); err == nil {
+			path = exe
+		}
 	}
-	return installed
+	return filepath.ToSlash(path)
 }

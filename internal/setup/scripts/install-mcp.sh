@@ -17,6 +17,12 @@ NAME=remuda
 BIN="$(command -v remuda 2>/dev/null || true)"
 [ -n "$BIN" ] || BIN="$HOME/.local/bin/remuda"
 [ -x "$BIN" ] || { echo "remuda is not installed here ($BIN is missing): curl -fsSL https://github.com/dev1antdev/remuda/releases/latest/download/install.sh | sh"; exit 1; }
+# on Windows the agents are native programs: they get remuda.exe by Windows' own name for it
+case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*)
+    case "$BIN" in *.exe) ;; *) BIN="$BIN.exe" ;; esac
+    BIN="$(cygpath -w "$BIN")"
+    ;;
+esac
 
 case "$ACTION" in
 install | status | uninstall) ;;

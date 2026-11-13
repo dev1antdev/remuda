@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"path"
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/budget"
@@ -11,6 +10,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
 	"github.com/dev1antdev/remuda/internal/radar"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/tasks"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
@@ -84,7 +84,7 @@ func taskQueue(store *tasks.Store, fleet *machines.Manager, watcher *watch.Watch
 func crossedBudget(budgets *budget.Service, machineID, dir string) string {
 	for _, st := range budgets.Status() {
 		b := st.Budget
-		covers := (b.Machine == "" || b.Machine == machineID) && (b.Dir == "" || path.Clean(b.Dir) == dir)
+		covers := (b.Machine == "" || b.Machine == machineID) && (b.Dir == "" || rpath.For(b.Dir).Equal(b.Dir, dir))
 		if covers && st.Collected != "" && b.Limit > 0 && st.Spent >= b.Limit {
 			return fmt.Sprintf("the budget %s is spent: $%.2f of $%.2f this %s", budgetScope(b), st.Spent, b.Limit, b.Period)
 		}
@@ -97,7 +97,7 @@ func budgetScope(b budget.Budget) string {
 	case strings.TrimSpace(b.Note) != "":
 		return "“" + strings.TrimSpace(b.Note) + "”"
 	case b.Dir != "":
-		return "for " + path.Base(b.Dir)
+		return "for " + rpath.For(b.Dir).Base(b.Dir)
 	case b.Machine != "":
 		return "for " + b.Machine
 	}

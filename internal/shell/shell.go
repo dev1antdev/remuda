@@ -15,6 +15,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/dev1antdev/remuda/internal/proc"
 )
 
 // Shell runs POSIX scripts on one machine.
@@ -93,8 +95,7 @@ func (Local) Stream(script string, timeout time.Duration, sink func([]byte)) err
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "sh", "-c", script)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // its own group: a timeout ends the children too
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
+	proc.Group(cmd, syscall.SIGTERM) // its own group: a timeout ends the children too
 	cmd.WaitDelay = 2 * time.Second
 	pipeReader, pipeWriter := io.Pipe()
 	cmd.Stdout, cmd.Stderr = pipeWriter, pipeWriter

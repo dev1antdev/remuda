@@ -363,8 +363,8 @@ func (s *Service) deployPlan(mc *machines.Machine, rep *health.Report) (Update, 
 	if mc.Local() || rep == nil || rep.Arch == "" || rep.Arch != runtime.GOARCH {
 		return Update{}, false
 	}
-	if (runtime.GOOS == "darwin") != strings.HasPrefix(rep.OS, "macOS") {
-		return Update{}, false
+	if (runtime.GOOS == "darwin") != strings.HasPrefix(rep.OS, "macOS") || mc.Windows() || strings.HasPrefix(rep.OS, "Windows") {
+		return Update{}, false // a Windows machine gets the release's remuda.exe instead
 	}
 	me := s.Health.Version
 	if me == "" || me == "dev" || rep.Remuda == me {
