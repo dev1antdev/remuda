@@ -27,11 +27,7 @@ type Door struct {
 // DoorScript writes the key read on stdin and the address into the machine's state dir, private to the user:
 // the dir remuda keeps there (`state.Dir()` computed in sh), the key never on a command line.
 func DoorScript(url string) string {
-	return `umask 077
-case "$(uname -s)" in
-  Darwin) d="$HOME/Library/Application Support/remuda" ;;
-  *) d="${XDG_CONFIG_HOME:-$HOME/.config}/remuda" ;;
-esac
+	return "umask 077\n" + script.StateDir("d") + `
 mkdir -p "$d" && chmod 700 "$d" && cat > "$d/agent-key.new" && mv -f "$d/agent-key.new" "$d/agent-key" && printf '%s\n' ` + script.Quote(url) + ` > "$d/agent-url" && chmod 600 "$d/agent-key" "$d/agent-url"`
 }
 

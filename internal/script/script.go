@@ -29,6 +29,16 @@ func Stat(file, gnuFormat, bsdFormat string) string {
 	return "stat -c " + Quote(gnuFormat) + " " + file + " 2>/dev/null || stat -f " + Quote(bsdFormat) + " " + file
 }
 
+// StateDir sets the shell variable to the dir remuda keeps on the machine, as state.Dir reckons it there: under
+// Application Support on a Mac, %APPDATA%\remuda on Windows (in Git Bash's spelling), $XDG_CONFIG_HOME/remuda elsewhere.
+func StateDir(variable string) string {
+	return `case "$(uname -s)" in
+  Darwin) ` + variable + `="$HOME/Library/Application Support/remuda" ;;
+  MINGW*|MSYS*|CYGWIN*) ` + variable + `="$(cygpath -u "$APPDATA")/remuda" ;;
+  *) ` + variable + `="${XDG_CONFIG_HOME:-$HOME/.config}/remuda" ;;
+esac`
+}
+
 // Remuda is the quoted path of a machine's own remuda, and the guard that it is this very version:
 // an older one would not know a subcommand, or would start a server instead.
 func Remuda(home, version string) (bin, guard string) {

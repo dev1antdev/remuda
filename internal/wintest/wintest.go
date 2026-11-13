@@ -97,6 +97,15 @@ func (s SSH) Stream(script string, timeout time.Duration, sink func([]byte)) err
 	return err
 }
 
+// ForwardingBack runs a script over the machine's ssh while its sshd forwards the machine's loopback remotePort back
+// to localPort here, as a cockpit's master does for the agents' door.
+func (s SSH) ForwardingBack(remotePort, localPort int, script string) (string, error) {
+	cmd := exec.Command(`C:\Windows\System32\OpenSSH\ssh.exe`, "-F", s.Config, "-o", "ExitOnForwardFailure=yes",
+		"-R", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", remotePort, localPort), s.Host, sshx.RemoteCommand(script))
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
 // Raw runs a command line over the machine's ssh as it is, no sh -c around it.
 func (s SSH) Raw(command string) (string, error) {
 	out, err := s.command(command).CombinedOutput()

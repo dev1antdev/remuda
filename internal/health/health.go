@@ -253,12 +253,12 @@ h=$(command -v herdr 2>/dev/null); if [ -n "$h" ]; then echo "herdr=$(herdr --ve
 if [ -n "$h" ]; then ` + OutdatedHooks + ` | sed 's/^/hook=/'; ` + GitHubPlugins + ` | sed 's/^/plugin=/'; ` + Integrations + ` | sed 's/^/integration=/'; fi
 echo "arch=$(uname -m)"
 echo "cores=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null)"
-if [ -x "$HOME/.local/bin/remuda" ]; then echo "remuda=$("$HOME/.local/bin/remuda" -version 2>/dev/null)"; fi
+r="$HOME/.local/bin/remuda"; [ -x "$r" ] || r="$r.exe"; if [ -x "$r" ]; then echo "remuda=$("$r" -version 2>/dev/null)"; fi
 cs=$(readlink "$HOME/.local/opt/code-server" 2>/dev/null); case "$cs" in *code-server-*) echo "code_server=${cs##*code-server-}";; esac
 grep -q 'remuda[^"]*statusline' "$HOME/.claude/settings.json" 2>/dev/null && echo "statusline=wrapped"
 ` + SettingsScript + `echo "df=$(df -kP "$HOME" 2>/dev/null | tail -1)"
 echo "uptime=$(uptime 2>/dev/null)"
-` + HostScript + `tf=""; for f in "$HOME/Library/Application Support/remuda/token" "$HOME/.config/remuda/token"; do [ -r "$f" ] && { tf="$f"; break; }; done
+` + HostScript + WindowsHostScript + `tf=""; for f in "$HOME/Library/Application Support/remuda/token" "$HOME/.config/remuda/token"; do [ -r "$f" ] && { tf="$f"; break; }; done
 if [ -n "$tf" ] && command -v curl >/dev/null 2>&1; then ph=$(curl -s -m 2 http://127.0.0.1:7317/api/health 2>/dev/null); case "$ph" in *'"ok":true'*) echo "peer=$ph"; echo "peer_token=$(cat "$tf")";; esac; fi
 `
 }
@@ -288,6 +288,9 @@ func Parse(out string) (Report, *machines.Peer) {
 		switch k {
 		case "os":
 			r.OS = strings.TrimSpace(v)
+			if name, ok := windowsName(r.OS); ok {
+				r.OS = name
+			}
 		case "claude":
 			r.Claude = semver.FindString(v)
 		case "claude_path":

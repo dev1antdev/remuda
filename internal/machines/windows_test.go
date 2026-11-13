@@ -80,7 +80,7 @@ func TestOnWindowsHerdrIsReachedThroughRemudaBridgeOverSSH(t *testing.T) {
 		t.Fatal("nothing heard on the event stream through the bridge")
 	}
 
-	if err := client.PaneSendText(pane, "echo remuda-was-here\r"); err != nil {
+	if err := client.PaneSendText(pane, "echo rmd-ok\r"); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(20 * time.Second)
@@ -89,7 +89,7 @@ func TestOnWindowsHerdrIsReachedThroughRemudaBridgeOverSSH(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Count(text, "remuda-was-here") >= 2 {
+		if strings.Contains(text, "\nrmd-ok") { // the echo answered on a line of its own; the pane is PowerShell
 			wintest.Record(t, "pane-read.txt", text)
 			break
 		}

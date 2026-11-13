@@ -101,7 +101,7 @@ jobs:
         shell: bash
         run: |
           go test -count=1 ./internal/rpath/
-          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/herdr/ ./internal/machines/
+          go test -p 1 -count=1 -v -run '^TestOnWindows' ./internal/herdr/ ./internal/machines/ ./internal/health/ ./internal/awake/
       - uses: actions/upload-artifact@v7
         # the answers this Windows gave, the unit tests' fixtures
         if: always()

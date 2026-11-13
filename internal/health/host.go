@@ -51,6 +51,7 @@ func ParseThrottle(word string) (*Throttle, bool) {
 // body gathers the lines a report is read from in more than one: the memory of a Mac, the thermal zones
 type body struct {
 	pageSize, pagesFree, memsize float64
+	memFreeKB                    int // /proc/meminfo's MemFree, what Windows calls available when no MemAvailable is given
 	sawVM                        bool
 	zone                         thermalZone
 	battery                      *Battery
@@ -89,6 +90,8 @@ func (b *body) parseHost(r *Report, k, v string) bool {
 			r.SwapTotalMB = kb / 1024
 		case "SwapFree":
 			r.SwapUsedMB = r.SwapTotalMB - kb/1024
+		case "MemFree":
+			b.memFreeKB = kb
 		}
 	case "memsize":
 		b.memsize, _ = strconv.ParseFloat(v, 64)
@@ -142,6 +145,10 @@ func (b *body) parseHost(r *Report, k, v string) bool {
 		}
 	case "model":
 		r.Model = strings.TrimSpace(v)
+	case "winver":
+		r.Model = windowsEdition(v)
+	case "winup":
+		parseWindowsUp(r, v)
 	case "throttled":
 		if t, ok := ParseThrottle(v); ok {
 			r.Throttle = t
@@ -170,6 +177,9 @@ func (b *body) finish(r *Report) {
 		if b.sawVM && b.pageSize > 0 {
 			r.MemAvailMB = int(b.pagesFree * b.pageSize / (1024 * 1024))
 		}
+	}
+	if r.MemAvailMB == 0 && r.MemTotalMB > 0 && b.memFreeKB > 0 {
+		r.MemAvailMB = b.memFreeKB / 1024
 	}
 	if b.zone.kind != "" {
 		r.TempC = float64(int(b.zone.temp*10)) / 10

@@ -48,10 +48,7 @@ func HostFolder(host string) string {
 // backups/<cockpit> — made private to the person first.
 func FolderScript(host string) string {
 	return `umask 077
-case "$(uname -s)" in
-  Darwin) d="$HOME/Library/Application Support/remuda" ;;
-  *) d="${XDG_CONFIG_HOME:-$HOME/.config}/remuda" ;;
-esac
+` + script.StateDir("d") + `
 d="$d/backups/"` + script.Quote(HostFolder(host)) + `
 mkdir -p "$d" && chmod 700 "$d" && printf '%s\n' "$d"
 `

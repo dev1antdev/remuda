@@ -33,10 +33,7 @@ Look before you answer: call the tools rather than guess. Answer briefly, in the
 // FolderScript makes the concierge's folder — under stateDir when that is the cockpit's own, else under the dir
 // remuda keeps on the machine — writes Memory into it, and prints the folder.
 func FolderScript(stateDir string) string {
-	locate := `case "$(uname -s)" in
-  Darwin) d="$HOME/Library/Application Support/remuda" ;;
-  *) d="${XDG_CONFIG_HOME:-$HOME/.config}/remuda" ;;
-esac`
+	locate := script.StateDir("d")
 	if stateDir != "" {
 		locate = "d=" + script.Quote(stateDir)
 	}
