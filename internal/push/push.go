@@ -4,6 +4,7 @@
 package push
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -66,6 +67,10 @@ type Payload struct {
 	Dialog  string   `json:"dialog,omitempty"`  // the question's dialog key, sent back with a choice so no later dialog is answered
 	Worked  int64    `json:"worked,omitempty"`  // a finish: the turn's seconds, so a page can apply a device's "long turns" itself
 	Offer   string   `json:"offer,omitempty"`   // a plan limit's offer to run the held work on the other vendor, its ActionOffer button's
+	// Withdraw names this device's notifications that no longer stand, for its service worker to close first
+	Withdraw []string `json:"withdraw,omitempty"`
+	// Topic is the push service's collapse key, which a newer push of the same replaces while undelivered; the tag when empty
+	Topic string `json:"-"`
 }
 
 // Delivery is the last push handed to a device: when, what, and what its push service answered ("" = taken).
@@ -111,6 +116,12 @@ type Service struct {
 	Folder func(machine, pane string) string
 	// Quiet names a pane whose alerts go nowhere at all: the concierge's, which the person reads in its own place.
 	Quiet func(machine, pane string) bool
+	// Looked says whether a pane's finish was looked at through remuda since it last worked: its push then goes nowhere.
+	Looked func(machine, pane string) bool
+	// OnWithdraw hears that alerts were taken back: the roster, which lists them for the pages, moved.
+	OnWithdraw func()
+
+	withdrawals *withdrawals
 }
 
 // Delays are variables so tests can shrink them.
@@ -124,7 +135,7 @@ var (
 // New loads or creates the VAPID keypair and the subscription store in dir.
 func New(dir string) (*Service, error) {
 	s := &Service{dir: dir, subs: map[string]*Subscription{}, timers: map[events.PaneRef][]*time.Timer{}, last: map[string]Delivery{},
-		subject: "https://github.com/dev1antdev/remuda"}
+		subject: "https://github.com/dev1antdev/remuda", withdrawals: newWithdrawals()}
 	s.send = s.Send
 	s.Webhooks = loadWebhooks(dir)
 	s.Sockets = newSockets()
@@ -232,6 +243,7 @@ func (s *Service) Unsubscribe(endpoint string) {
 	delete(s.subs, endpoint)
 	delete(s.last, endpoint)
 	s.mu.Unlock()
+	s.withdrawals.forget(endpoint)
 	s.saveSubs()
 }
 
@@ -265,7 +277,7 @@ func (s *Service) Send(sub *Subscription, p Payload) error {
 		VAPIDPrivateKey: s.priv,
 		TTL:             12 * 3600,
 		Urgency:         urgency,
-		Topic:           topic(p.Tag),
+		Topic:           topic(cmp.Or(p.Topic, p.Tag)),
 	})
 	if err != nil {
 		return err
@@ -322,19 +334,28 @@ func (s *Service) Broadcast(p Payload) {
 	s.deliver(s.list(), p)
 }
 
-// deliver sends one payload to each device, skipping the ones inside their quiet hours right now.
+// deliver sends one payload to each device, skipping the ones inside their quiet hours right now; an alert that may be
+// taken back later stands for the devices it reached.
 func (s *Service) deliver(targets []*Subscription, p Payload) {
 	now := time.Now()
+	var reached []string
 	for _, sub := range targets {
 		if muted(sub, now) {
 			continue
 		}
-		_ = s.sendNoted(sub, p)
+		if s.sendNoted(sub, p) == nil {
+			reached = append(reached, sub.Endpoint)
+		}
 	}
+	s.withdrawals.stand(p, reached, now)
 }
 
-// sendNoted sends one payload and keeps the outcome as the device's last delivery.
+// sendNoted sends one payload and keeps the outcome as the device's last delivery; a browser's push carries the tags
+// it is owed, so its service worker closes what no longer stands.
 func (s *Service) sendNoted(sub *Subscription, p Payload) error {
+	if !IsSocket(sub.Endpoint) {
+		p.Withdraw = s.withdrawals.owedTo(sub.Endpoint, p.Tag, time.Now())
+	}
 	err := s.send(sub, p)
 	delivery := Delivery{At: time.Now(), Kind: p.Kind, Title: p.Title}
 	if err != nil {
@@ -392,6 +413,8 @@ func (s *Service) SendTest(endpoint string) error {
 // herdr says nothing about whether a person is at the desk; "changed that fast" is the proxy for presence.
 func (s *Service) OnStatus(ev events.PaneStatus) {
 	key := ev.Pane
+	s.moved(key, ev.To)
+	began := time.Now()
 	// cancel and schedule under one lock: two changes of the same pane arriving together must not leave a timer the later one meant to kill
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -447,7 +470,7 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 				s.timers[key] = rest
 			}
 			s.mu.Unlock()
-			if !standing || s.silenced(p) {
+			if !standing || s.silenced(p) || p.Kind == "done" && s.Looked != nil && s.Looked(p.Machine, p.Pane) {
 				return
 			}
 			if note {
@@ -470,7 +493,8 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 			Machine: ev.Pane.Machine, Pane: ev.Pane.Pane, Kind: "input",
 			Title: label + " needs you",
 			Body:  agent + " is waiting for an answer" + paneLine(ev),
-			Tag:   key.String(),
+			Tag:   episodeTag(key, "input", began),
+			Topic: key.String(),
 		}, true, s.asked)
 	case herdr.StatusDone:
 		if ev.From != herdr.StatusWorking {
@@ -491,7 +515,8 @@ func (s *Service) OnStatus(ev events.PaneStatus) {
 			Machine: ev.Pane.Machine, Pane: ev.Pane.Pane, Kind: "done",
 			Title:  label + " finished",
 			Body:   agent + " is done after " + ev.Worked.Round(time.Second).String() + paneLine(ev),
-			Tag:    key.String(),
+			Tag:    episodeTag(key, "done", began),
+			Topic:  key.String(),
 			Worked: int64(ev.Worked / time.Second),
 		}
 		schedule(doneDelay, long, p, false, nil)

@@ -1243,6 +1243,26 @@ async function alertScreens() {
     expect: [".alerts-device .alerts-device-lines li"],
     close: async () => {},
   });
+  // the Sound row: the bell and the run picked from its choice, each sound's play button there and playing without a
+  // console error (WebAudio in headless Chrome rings into nothing)
+  await screen("alerts-sound", {
+    open: async () => {
+      const choice = ".alerts-opt:has(+ .alerts-sounds) .sel";
+      await evaluate(`document.querySelector(${JSON.stringify(choice)})?.scrollIntoView({ block: "center" })`);
+      await tap(choice);
+      if (!(await until(() => present(".sel-pop .sel-opt"), 3))) throw new Error("the Sound row's choice did not open");
+      await evaluate(`document.querySelectorAll('.sel-pop .sel-opt')[2]?.click()`);
+      await until(() => evaluate(`localStorage.getItem("remuda.alerts.sounds") === '"bell"'`), 3);
+      check((await evaluate(`localStorage.getItem("remuda.alerts.sounds")`)) === '"bell"', "the Sound row's pick, the bell and the run, was not kept");
+      await tap('.alerts-sounds .btn[data-sound="bell"]');
+      await tap('.alerts-sounds .btn[data-sound="run"]');
+      await sleep(400);
+    },
+    expect: [".alerts-sounds .btn", ".alerts-opt:has(+ .alerts-sounds) .sel"],
+    close: async () => {
+      await evaluate(`localStorage.removeItem("remuda.alerts.sounds")`);
+    },
+  });
   await screen("alerts-test", {
     open: async () => {
       await tap(".alerts-test");

@@ -216,6 +216,11 @@ func Run(ctx context.Context, o Options) error {
 	}
 	tracker := radar.New(o.Dir, chats.LastWriteOf)
 	defer tracker.Flush()
+	// a finish looked at through remuda is no push, and one already out comes down; a withdrawal moves the roster,
+	// which lists it for the pages to close
+	tracker.OnSeen = pushSvc.Seen
+	pushSvc.Looked = tracker.Looked
+	pushSvc.OnWithdraw = hub.RosterChanged
 	issues := jira.New(o.Dir)
 	issues.OnChange = hub.RosterChanged // an issue read from the site moves the chips on the page
 	// the issue keys a conversation names, read only once the person set a Jira site
