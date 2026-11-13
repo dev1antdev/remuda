@@ -1,12 +1,17 @@
 // The status bar's prefs, per device and synced with the look: whether it shows, and whether the plan limits say what
 // remains rather than what is used. It shows on a desk with a mouse only: a phone's rail lies where it would.
 
-import { readPref, usePref, writePref } from "@/lib/prefs";
+import { useMedia } from "@/lib/media";
+import { isTouch, readPref, usePref, writePref } from "@/lib/prefs";
 
 export const STATUS_BAR_KEY = "statusbar";
 
-// STATUS_BAR_QUERY is the screen the bar lives on: wider than a phone's, with a mouse
-export const STATUS_BAR_QUERY = "(min-width: 921px) and (pointer: fine)";
+// STATUS_BAR_QUERY is the screen the bar lives on: wider than a phone's
+export const STATUS_BAR_QUERY = "(min-width: 921px)";
+
+// useStatusBarScreen says the bar has its place: a wide screen that is no touch screen — the page's one rule for a
+// mouse (isTouch), as the split view's; a browser with no pointer at all, headless Chrome on Linux, is a desk too
+export const useStatusBarScreen = (): boolean => useMedia(STATUS_BAR_QUERY) && !isTouch;
 
 export type StatusBarPrefs = { on: boolean; remaining: boolean };
 
