@@ -52,7 +52,7 @@ type rosterPane struct {
 	PR    *rosterPR      `json:"pr,omitempty"`   // the last pull or merge request the agent named
 	// a subscription limit the agent stopped on, and the person's booking to continue it after the reset
 	Limit *limits.PaneLimit `json:"limit,omitempty"`
-	// how many of its live conversation's subagents work, for the Wall's zoo; nil for none
+	// how many of its live conversation's subagents work and the first of them by name, for the zoo and the sidebar; nil for none
 	Subagents *subagents.Count `json:"subagents,omitempty"`
 	// a dev server the pane announced and the previews found listening, offered as a preview
 	Serves *triggers.Offer `json:"serves,omitempty"`
@@ -98,6 +98,7 @@ type rosterSession struct {
 	Worktree    *rosterWorktree `json:"worktree,omitempty"`
 	Dir         string          `json:"dir,omitempty"`
 	Branch      string          `json:"branch,omitempty"` // the branch the folder has checked out, read with the review badges
+	Sync        *review.Sync    `json:"sync,omitempty"`   // that branch against its upstream as of the last fetch; none without an upstream
 	Folder      string          `json:"folder,omitempty"` // the folder the sidebar groups by: the repository's main checkout, else the workspace's own
 	Icon        *icons.Icon     `json:"icon,omitempty"`   // the folder's icon, an emoji or a stored picture's hash
 	Note        string          `json:"note,omitempty"`   // the person's note on this checkout, kept after the workspace closes
@@ -249,6 +250,9 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 		}
 		if session.Dir != "" {
 			session.Branch = s.Review.Branch(machineID, session.Dir)
+			if sync, ok := s.Review.Sync(machineID, session.Dir); ok {
+				session.Sync = &sync
+			}
 			session.Note = s.Notes.Of(machineID, session.Dir)
 		}
 		session.Jira = s.issuesOf(machineID, session)

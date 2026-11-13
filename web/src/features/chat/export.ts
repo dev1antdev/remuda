@@ -32,6 +32,11 @@ export function conversationMarkdown(turns: Turn[], meta: ExportMeta): string {
 
 function partMarkdown(part: Part): string[] {
   if (part.type === "text") return [part.text ?? ""];
+  if (part.type === "queued") {
+    const who = part.from ? t("{agent}, while it worked", { agent: part.from }) : t("You, while it worked");
+    const at = part.at ? ` · ${new Date(part.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "";
+    return [`**${who}**${at}`, "", part.text ?? ""];
+  }
   if (part.type === "thinking") return folded("Thinking", part.text ?? "", false);
   const { name, hint } = toolLabel(part);
   const title = [name, hint].filter(Boolean).join(" · ") + (part.is_error ? " · error" : "");

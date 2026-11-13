@@ -72,10 +72,21 @@ func Exchanges(turns []transcript.Turn) []Exchange {
 				}
 			case "tool":
 				last.Lines = append(last.Lines, callLine(p))
+			case "queued":
+				last.Lines = append(last.Lines, sentLine(p))
 			}
 		}
 	}
 	return out
+}
+
+// sentLine is a message sent to the agent while it worked, in its place among what the agent did: mine, or another agent's.
+func sentLine(p *transcript.Part) string {
+	who := "Me"
+	if p.From != "" {
+		who = p.From
+	}
+	return fmt.Sprintf("> %s, while you worked: %s", who, strings.ReplaceAll(strings.TrimSpace(p.Text), "\n", "\n> "))
 }
 
 func compose(from string, summary recap.Recap, exchanges []Exchange) string {
@@ -112,11 +123,11 @@ func compose(from string, summary recap.Recap, exchanges []Exchange) string {
 	return b.String()
 }
 
-// userText is what the person wrote in a turn of theirs, the text parts joined.
+// userText is what the person wrote in a turn of theirs, the text parts joined, a message sent mid-turn among them.
 func userText(t *transcript.Turn) string {
 	var texts []string
 	for _, p := range t.Parts {
-		if p.Type == "text" {
+		if p.Type == "text" || p.Type == "queued" {
 			if text := strings.TrimSpace(p.Text); text != "" {
 				texts = append(texts, text)
 			}

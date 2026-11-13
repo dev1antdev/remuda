@@ -205,7 +205,7 @@ func TestFailureHandsThePipelinesFailedJobsToTheAgent(t *testing.T) {
 		"CI failed on MR !613 (" + mrURL + "): unit, e2e.",
 		"- unit: https://gitlab.gog.com/gog-backend/games-db/-/jobs/77",
 		"Job unit (stage test), the end of its log:\n\n```\nRunning tests\nFAIL: TestRefresh (0.01s)\n    sync_test.go:42: connection gone\n```",
-		"Fix what the log shows, push the fix to the branch, and say when the checks are green again.",
+		"Find the cause and fix it on the branch, then say what you changed.\n\n" + GuardGitLab,
 	} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("message lacks %q:\n%s", want, msg)

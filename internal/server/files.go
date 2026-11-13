@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/auth"
+	"github.com/dev1antdev/remuda/internal/filetree"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/rpath"
 )
@@ -77,6 +78,7 @@ func realPath(path string, local bool) string {
 func (s *Server) fileRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/fs/stat", s.handleFsStat)
 	api.HandleFunc("GET /api/fs/dirs", s.handleFsDirs)
+	api.HandleFunc("GET /api/fs/tree", s.handleFsTree)
 	api.HandleFunc("GET /api/fs/file", s.handleFsFile)
 	api.HandleFunc("GET /api/fs/diff", s.handleFsDiff)
 	api.HandleFunc("POST /api/fs/upload", s.handleFsUpload)
@@ -141,6 +143,35 @@ func (s *Server) handleFsDirs(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, err)
 		return
 	}
+	writeJSON(w, listing)
+}
+
+// handleFsTree is GET /api/fs/tree?machine&dir&path: one folder of the project tree under the workspace folder dir —
+// path relative to it, "" the folder itself — its entries folders first with git's marks; a viewer's within the
+// workspaces alone.
+func (s *Server) handleFsTree(w http.ResponseWriter, r *http.Request) {
+	mc, err := s.machineFor(r, "")
+	if err != nil {
+		httpErr(w, 404, err)
+		return
+	}
+	q := r.URL.Query()
+	dir, rel := q.Get("dir"), q.Get("path")
+	folder, err := filetree.Folder(mc.Paths(), dir, rel)
+	if err != nil {
+		httpErr(w, 400, err)
+		return
+	}
+	if folders, viewer := s.viewerFolders(r.Context(), mc); viewer && !withinFolders(folder, folders, mc.Local()) {
+		httpErr(w, http.StatusForbidden, errViewerOutside)
+		return
+	}
+	listing, err := s.trees.List(mc, dir, rel)
+	if err != nil {
+		httpErr(w, 502, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, listing)
 }
 

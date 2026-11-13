@@ -3,12 +3,14 @@
 import type { Denial } from "@/features/agents/deny";
 import { check, getJSON, sendJSON } from "@/lib/http";
 
+// a queued part is a message sent to the agent while it worked, in the turn it was typed into: the person's, or with from another agent's
 export type Part = {
-  type: "text" | "thinking" | "tool";
+  type: "text" | "thinking" | "tool" | "queued";
   text?: string;
+  from?: string; // a queued message's sender when another agent sent it
   tool_name?: string;
   tool_id?: string; // the tool_use id
-  at?: string; // when the tool was called
+  at?: string; // when the tool was called, or the queued message sent
   took?: number; // seconds from the call to its result, absent while it runs
   input?: unknown;
   output?: string;
@@ -22,6 +24,7 @@ export type Turn = {
   parts: Part[];
   took?: number; // seconds from the prompt to the answer's last record
   tokens?: number; // input, output and cache tokens of the answer's API responses
+  output?: number; // its output tokens alone, what the CLI counts as ↓
   cost?: number; // USD at API prices
   model?: string;
 };
@@ -93,9 +96,13 @@ export type QuestionOption = { n: number; label: string; picked: boolean };
 export type Question = { text: string; options: QuestionOption[]; multi?: boolean };
 export const fetchQuestion = (machineId: string, paneId: string): Promise<Question | null> =>
   getJSON<{ question: Question | null }>(`/api/question?${new URLSearchParams({ machine: machineId, pane: paneId })}`).then((r) => r.question);
-// fetchMode is the permission mode Claude Code's footer names on the same screen read, null when no footer is on screen
-export const fetchMode = (machineId: string, paneId: string): Promise<string | null> =>
-  getJSON<{ mode?: string }>(`/api/question?${new URLSearchParams({ machine: machineId, pane: paneId })}`).then((r) => r.mode ?? null);
+// Progress is what Claude Code's spinner says while it works: "✻ Refactoring… (2m 14s · ↓ 6.8k tokens)"
+export type Progress = { verb: string; seconds?: number; tokens?: number };
+// ScreenRead is one read of the pane's screen: the dialog, the permission mode Claude Code's footer names, its spinner;
+// at is when the answer came, which the spinner's clock runs on from
+export type ScreenRead = { question: Question | null; mode?: string; progress?: Progress; at: number };
+export const fetchScreenRead = (machineId: string, paneId: string): Promise<ScreenRead> =>
+  getJSON<Omit<ScreenRead, "at">>(`/api/question?${new URLSearchParams({ machine: machineId, pane: paneId })}`).then((r) => ({ ...r, at: Date.now() }));
 
 export type QuickPrompt = { id?: string; label: string; text: string; dir?: string };
 export const fetchQuick = (): Promise<QuickPrompt[]> => getJSON("/api/quick");

@@ -67,7 +67,10 @@ func TestScriptAsksAgainWithoutTheFieldsAnOlderGhRefuses(t *testing.T) {
 func TestFreshReadsAgainOnlyAfterFreshForAndSaysWhatItHolds(t *testing.T) {
 	release := make(chan struct{})
 	var reads atomic.Int32
-	host := &shell.Fake{Name: "box", Answer: func(string) (string, error) {
+	host := &shell.Fake{Name: "box", Answer: func(script string) (string, error) {
+		if strings.Contains(script, "gh api -i") {
+			return "", nil // the conditional probe answers no headers at once: the read that follows is the one held
+		}
 		reads.Add(1)
 		<-release
 		return view, nil

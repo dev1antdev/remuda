@@ -25,9 +25,14 @@ export type Pane = {
   said?: string; // the first line of the agent's last answer, once it finished
   pr?: PullRequest; // the last pull or merge request the agent named, "PR #15" / "MR !9"
   limit?: PaneLimit; // a subscription limit the agent stopped on, and the person's booking to continue it after the reset
-  subagents?: { working?: number }; // how many of a Claude Code conversation's subagents work, for the zoo
+  subagents?: PaneSubagents; // the subagents a Claude Code conversation runs: the zoo's babies, the sidebar's tree
   serves?: ServeOffer; // a dev server the pane announced and the previews found listening, offered as a preview
 };
+
+// PaneSubagents is how many of a conversation's subagents work, the oldest few of them by name with the tool call each is
+// on, and the id of the conversation's file the transcript viewer opens one in
+export type PaneSubagents = { working?: number; session?: string; list?: WorkingSubagent[] };
+export type WorkingSubagent = { id: string; description: string; doing?: string };
 
 // ServeOffer is a dev server a pane announced: its port on the machine, the address as printed, what serves it, the
 // trigger that offered it when it was one of the person's, and when
@@ -127,6 +132,7 @@ export type Session = {
   worktree?: { repo_key: string; repo_name: string; linked: boolean; checkout_path: string };
   dir?: string;
   branch?: string; // the branch the folder has checked out, a short hash when detached; none outside git
+  sync?: { ahead: number; behind: number }; // that branch against its upstream as of the last fetch; none without one
   folder?: string; // the folder the sidebar groups by: the repository's main folder for a checkout, else the workspace's
   icon?: FolderIconRef; // the folder's icon, the person's own
   note?: string; // the person's note on this checkout, kept after the workspace closes

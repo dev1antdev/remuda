@@ -1,25 +1,29 @@
 // The rows under a machine, after Orca: every repository a folder — its icon, its name, how its agents stand — that a
-// click folds shut or open, and under it a card per workspace — its agent's mark and logo, its name or branch, its age,
-// and what the agent does — that opens the agent in one click, with a small line per agent when it runs more than one.
+// click folds shut or open, and under it a card per workspace — its name or branch, its age, what its agent needs or
+// said — that opens the agent in one click, with a line per agent under it (AgentLines.tsx). The orders by priority
+// and by ticket prefix draw sections in the folders' place.
 
-import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
+import type { KeyboardEvent, MouseEvent } from "react";
 import { fillClass } from "@/features/usage/format";
-import { FolderIcon, Icon, Logo, Menu, Tip, type MenuItem } from "@/ui";
-import { VENDOR_NAME, brandColor } from "@/ui/brand";
-import type { Machine, Session } from "./api";
+import { FolderIcon, Icon, Menu, Tip, type MenuItem } from "@/ui";
+import { VENDOR_NAME } from "@/ui/brand";
+import type { Machine } from "./api";
 import { branchNamesIssue } from "@/features/jira/jira";
 import { CardBadges } from "./CardBadges";
 import { useCardHover } from "./CardHover";
 import { CollisionMark, usePeerName } from "./CollisionMark";
 import { gravest, markWords } from "./collide";
 import { IssueChip } from "./IssueChip";
-import { muteWords, mutedUntil } from "./mute";
 import { prWords } from "./prStatus";
-import { displayOf, markOf, rowLabel, stateWords, type AgentRow, type Display, type RadarPrefs } from "./radar";
+import { displayOf, stateWords, type Display, type RadarPrefs } from "./radar";
 import { hiddenWords } from "./sharing";
 import type { Sharing } from "./useSharing";
-import { agentWords, branchShown, entries, folderCounts, folderOf, itemTitle, itemWords, limited, representative, shortAge, since, type Folder, type WorkspaceItem } from "./workspaces";
+import type { Section } from "./sections";
+import { branchShown, cardWords, entries, folderCounts, folderOf, itemTitle, limited, primaryOf, representative, shortAge, since, type Folder, type WorkspaceItem } from "./workspaces";
 import { folderMenuItems, workspaceMenuItems } from "./WorkspaceMenu";
+import { AgentLines } from "./AgentLines";
+import { HeadSummary, MutedMark, StateMarks } from "./marks";
+import { syncTip, syncWords, tallyOf } from "./sidebarAgents";
 import { t, tn } from "@/lib/i18n";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
@@ -32,10 +36,14 @@ export type RowProps = {
   now: number;
   onSelect: (machineId: string, paneId: string) => void;
   editable?: boolean; // the folders' and the workspaces' menus: none for a viewer
-  folded: Record<string, boolean>; // folders folded shut, by "machine|folder:<path>"
+  folded: Record<string, boolean>; // folders and sections folded shut, by "machine|folder:<path>" and "machine|section:<key>"
   onFold: (key: string) => void;
   onIcon?: (m: Machine, folder: Folder) => void; // none for a viewer: the icon is the person's to change
   share: Sharing; // the screen-sharing mode: what reads as a neutral name
+  pins: string[]; // the agents pinned to the top, by "machine|pane"
+  onPin?: (key: string) => void; // none for a viewer
+  subFolded: Record<string, boolean>; // the agents whose subagents are folded, by "machine|pane"
+  onFoldSubs: (key: string) => void;
 };
 
 // rowKey makes a div row a button: Enter or Space on the row itself picks it, on a button inside it they are that button's
@@ -49,14 +57,21 @@ export function Rows({ machine, ...rest }: RowProps) {
   return (
     <div className="ws-tree">
       {entries(machine, rest.prefs).map((entry) =>
-        entry.kind === "folder" ? <FolderView key={entry.folder.key} machine={machine} folder={entry.folder} {...rest} /> : <WorkspaceView key={entry.item.session.id} machine={machine} item={entry.item} {...rest} />,
+        entry.kind === "folder" ? (
+          <FolderView key={entry.folder.key} machine={machine} folder={entry.folder} {...rest} />
+        ) : entry.kind === "section" ? (
+          <SectionView key={entry.section.key} machine={machine} section={entry.section} {...rest} />
+        ) : (
+          <WorkspaceView key={entry.item.session.id} machine={machine} item={entry.item} {...rest} />
+        ),
       )}
     </div>
   );
 }
 
-// FolderView is a repository or a folder as Orca shows a project: its icon, its name and how its agents stand; a click
-// folds it shut or open, and open it lists its workspaces' cards
+// FolderView is a repository or a folder as Orca shows a project: its icon (glowing while an agent there works), its
+// name and how its agents stand; a click folds it shut or open, and open it lists its workspaces' cards. Folded, it
+// says how many need you and how many work, so folding never hides a question.
 function FolderView({ machine: m, folder, ...rest }: RowProps & { folder: Folder }) {
   const foldKey = `${m.id}|folder:${folder.key}`;
   const isFolded = !!rest.folded[foldKey];
@@ -67,10 +82,12 @@ function FolderView({ machine: m, folder, ...rest }: RowProps & { folder: Folder
   const hidden = rest.share.folderHidden(m.id, folder.path);
   const name = hidden ? rest.share.folderName(m.id, folder.path, folder.name) : folder.name;
   const icon = hidden ? undefined : folder.icon;
+  const tally = tallyOf(folder.items.map((item) => item.session));
+  const primary = primaryOf(folder);
   return (
     <div className={`ws-folder${isFolded ? " folded" : ""}`}>
       <div
-        className={`ws-folder-head${isFolded && inside ? " on" : ""}`}
+        className={`ws-folder-head${isFolded && inside ? " on" : ""}${n.working > 0 ? " is-working" : ""}`}
         role="button"
         tabIndex={0}
         aria-expanded={!isFolded}
@@ -105,7 +122,7 @@ function FolderView({ machine: m, folder, ...rest }: RowProps & { folder: Folder
           </span>
         )}
         <span className="machine-summary">
-          <StateMarks working={n.working} blocked={n.blocked} done={n.done} step={rest.step} />
+          {isFolded ? <HeadSummary tally={tally} step={rest.step} /> : <StateMarks working={n.working} blocked={n.blocked} done={n.done} step={rest.step} />}
           {quiet && isFolded && n.agents > 0 && <span className="machine-count">{n.agents}</span>}
         </span>
         {rest.editable && folder.path && (
@@ -115,7 +132,7 @@ function FolderView({ machine: m, folder, ...rest }: RowProps & { folder: Folder
       {!isFolded && (
         <div className="ws-folder-items">
           {folder.items.map((item) => (
-            <WorkspaceView key={item.session.id} machine={m} item={item} group={folder.name} {...rest} />
+            <WorkspaceView key={item.session.id} machine={m} item={item} group={folder.name} primary={item === primary} {...rest} />
           ))}
         </div>
       )}
@@ -123,8 +140,40 @@ function FolderView({ machine: m, folder, ...rest }: RowProps & { folder: Folder
   );
 }
 
-// WorkspaceView is one workspace: the two-line card that opens its agent, and the agents' own lines when it runs several
-function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onSelect, editable, share }: RowProps & { item: WorkspaceItem; group?: string }) {
+// SectionView is one section of the priority or the prefix order: its heading in the colour of the state it gathers,
+// how many workspaces it holds, and their cards; it folds like a folder, folded saying how its agents stand
+function SectionView({ machine: m, section, ...rest }: RowProps & { section: Section }) {
+  const foldKey = `${m.id}|section:${section.key}`;
+  const isFolded = !!rest.folded[foldKey];
+  const toggle = () => rest.onFold(foldKey);
+  const inside = rest.current?.machineId === m.id && section.items.some((item) => item.session.id === rest.current?.sessionId);
+  return (
+    <div className={`ws-section${isFolded ? " folded" : ""}${section.priority ? ` is-${section.priority}` : ""}`}>
+      <div className={`ws-section-head${isFolded && inside ? " on" : ""}`} role="button" tabIndex={0} aria-expanded={!isFolded} onClick={toggle} onKeyDown={(e) => rowKey(e, toggle)}>
+        <span className={`chevron${isFolded ? "" : " open"}`} aria-hidden="true">
+          <Icon name="chevron-right" size={12} />
+        </span>
+        <span className="ws-section-name">{section.title}</span>
+        <span className="badge quiet">{section.items.length}</span>
+        {isFolded && !section.priority && (
+          <span className="machine-summary">
+            <HeadSummary tally={tallyOf(section.items.map((item) => item.session))} step={rest.step} />
+          </span>
+        )}
+      </div>
+      {!isFolded && (
+        <div className="ws-section-items">
+          {section.items.map((item) => (
+            <WorkspaceView key={item.session.id} machine={m} item={item} compact={section.priority === "needs"} {...rest} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// WorkspaceView is one workspace: the two-line card that opens its agent, and under it a line per agent
+function WorkspaceView({ machine: m, item, group, primary, compact, current, prefs, step, now, onSelect, editable, share, ...lines }: RowProps & { item: WorkspaceItem; group?: string; primary?: boolean; compact?: boolean }) {
   const s = item.session;
   const lead = item.lead;
   const pane = lead?.pane;
@@ -133,16 +182,17 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
   const alert = pane?.radar?.alert;
   const selected = current?.machineId === m.id && current.sessionId === s.id;
   const several = item.rows.length > 1;
+  const agents = item.rows.some((r) => r.pane.agent);
   const hidden = share.sessionHidden(m.id, s);
   const peerName = usePeerName();
   const collision = gravest(s.collisions);
   // a hidden folder's card goes by what runs in it, the folder's neutral name standing above it
   const title = hidden ? (group ? (agent ? (VENDOR_NAME[agent] ?? agent) : t("terminal")) : share.folderName(m.id, folderOf(s), s.name)) : itemTitle(item, group);
   const branch = hidden ? "" : branchShown(item, title);
-  const words = hidden && !several ? hiddenWords() : itemWords(item, prefs);
+  const words = hidden ? (agents ? "" : hiddenWords()) : cardWords(item);
+  const sync = selected && !hidden ? syncWords(s.sync) : "";
   const target = agent && pane ? pane.id : (representative(s)?.id ?? "");
   const open = () => target && onSelect(m.id, target);
-  const markStyle: CSSProperties | undefined = d === "working" && agent && !alert ? { color: brandColor(agent) } : undefined;
   const usage = !several ? pane?.usage : undefined;
   const fill = usage && usage.window > 0 ? usage.context / usage.window : 0;
   const folder = s.dir || s.worktree?.checkout_path || pane?.cwd || "";
@@ -158,14 +208,13 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
         folder,
       ].filter(Boolean).join("\n");
   const card = useCardHover({ machine: m, session: s, leadPaneId: pane?.id, hidden, editable: !!editable, name: s.name, tip });
+  const badges = !!(card.details.note || card.details.ports.length || card.details.prs.length);
+  const sub = branch || primary || sync || words || badges;
   return (
-    <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${!several && limited(lead) ? " is-limit" : ""}${group ? " in-repo" : ""}`}>
+    <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${limited(lead) ? " is-limit" : ""}${group ? " in-repo" : ""}`}>
       <div className="ws-main" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => rowKey(e, open)} title={card.hoverable ? undefined : tip} {...card.trigger}>
         <span className="ws-line">
-          <span className="radar-mark" style={markStyle}>
-            {alert ? "!" : agent ? markOf(d, step) : "$"}
-          </span>
-          {agent && <Logo agent={agent} />}
+          {!agents && <span className="radar-mark">$</span>}
           <span className="ws-name">{title}</span>
           {s.review?.fresh ? (
             <span className="ws-badge" title={tn(s.review.fresh, "{n} file changed since you last reviewed", "{n} files changed since you last reviewed")}>
@@ -182,54 +231,46 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
           <span className="ws-age">{shortAge(since(lead), now)}</span>
           {editable && <RowMenu className="ws-menu-btn" what={t("Workspace actions")} items={() => workspaceMenuItems(m, s, { name: hidden ? share.folderName(m.id, folderOf(s), s.name) : "", masked: hidden })} />}
         </span>
-        <span className="ws-sub">
-          {branch && !branchNamesIssue(branch, s.jira?.[0]) && (
-            <span className="ws-branch">
-              <Icon name="git-branch" size={12} />
-              <span>{branch}</span>
-            </span>
-          )}
-          {!hidden && s.jira?.[0] && <IssueChip issue={s.jira[0]} />}
-          <span className="ws-words">{words}</span>
-          <CardBadges machine={m} session={s} name={s.name} details={card.details} editable={!!editable} onDetails={card.ask} />
-        </span>
+        {sub && (
+          <span className="ws-sub">
+            {branch && !branchNamesIssue(branch, s.jira?.[0]) && (
+              <span className="ws-branch">
+                <Icon name="git-branch" size={12} />
+                <span>{branch}</span>
+              </span>
+            )}
+            {primary && !hidden && (
+              <span className="primary-tag" title={t("The repository's main checkout; its worktrees are listed beside it")}>
+                {t("primary")}
+              </span>
+            )}
+            {sync && (
+              <span className="ws-sync" title={syncTip(s.sync)}>
+                {sync}
+              </span>
+            )}
+            {!hidden && s.jira?.[0] && <IssueChip issue={s.jira[0]} />}
+            {words && <span className="ws-words">{words}</span>}
+            <CardBadges machine={m} session={s} name={s.name} details={card.details} editable={!!editable} onDetails={card.ask} />
+          </span>
+        )}
         {card.node}
       </div>
-      {several && (
-        <div className="ws-agents">
-          {item.rows.map((r) => (
-            <AgentLine key={r.pane.id} machine={m} row={r} selected={current?.machineId === m.id && current.paneId === r.pane.id} prefs={prefs} step={step} now={now} onSelect={onSelect} hidden={hidden} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// AgentLine is one of several agents in a workspace: its mark, logo, what it does and its age, a click opening it
-function AgentLine({ machine: m, row: r, selected, prefs, step, now, onSelect, hidden }: { machine: Machine; row: AgentRow; selected: boolean; prefs: RadarPrefs; step: number; now: number; onSelect: RowProps["onSelect"]; hidden: boolean }) {
-  const p = r.pane;
-  const d: Display = p.agent ? displayOf(p, prefs, now) : "idle";
-  const alert = p.radar?.alert;
-  const style = d === "working" && p.agent && !alert ? { color: brandColor(p.agent) } : undefined;
-  const open = () => onSelect(m.id, p.id);
-  const label = hidden ? hiddenWords() : rowLabel(p, r.tab, r.session.name, prefs);
-  const words = hidden ? label : p.agent ? agentWords(r, prefs) : label;
-  return (
-    <div
-      className={`ws-agent-line is-${p.agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${limited(r) ? " is-limit" : ""}`}
-      role="button"
-      tabIndex={0}
-      onClick={open}
-      onKeyDown={(e) => rowKey(e, open)}
-      title={`${p.agent || t("shell")} · ${alert || stateWords(d, p.radar?.last_active, now, p.radar?.since)}\n${label}${words !== label ? `\n${words}` : ""}`}
-    >
-      <span className="radar-mark" style={style}>
-        {alert ? "!" : p.agent ? markOf(d, step) : "$"}
-      </span>
-      {p.agent && <Logo agent={p.agent} />}
-      <span className="ws-agent-words">{words}</span>
-      <span className="ws-age">{shortAge(since(r), now)}</span>
+      <AgentLines
+        rows={item.rows}
+        machine={m}
+        prefs={prefs}
+        step={step}
+        now={now}
+        selectedPane={current?.machineId === m.id ? current.paneId : null}
+        onSelect={onSelect}
+        pins={lines.pins}
+        onPin={lines.onPin}
+        subFolded={lines.subFolded}
+        onFoldSubs={lines.onFoldSubs}
+        hidden={hidden}
+        compact={compact}
+      />
     </div>
   );
 }
@@ -248,35 +289,5 @@ function RowMenu({ className, what, items }: { className: string; what: string; 
         </button>
       }
     />
-  );
-}
-
-// MutedMark is the small bell-off a muted workspace wears, with how long the silence holds in its tooltip
-export function MutedMark({ session }: { session: Session }) {
-  const until = mutedUntil(session);
-  if (!until) return null;
-  return (
-    <span className="radar-muted" title={muteWords(until)} aria-label={muteWords(until)}>
-      <Icon name="bell-off" size={12} />
-    </span>
-  );
-}
-
-// StateMarks are a machine's or a folder's counts: how many work, ask, finished
-export function StateMarks({ working, blocked, done, step }: { working: number; blocked: number; done: number; step: number }) {
-  return (
-    <>
-      {working > 0 && (
-        <span className="radar-mark working">
-          {markOf("working", step)} {working}
-        </span>
-      )}
-      {blocked > 0 && <span className="radar-mark blocked">? {blocked}</span>}
-      {done > 0 && (
-        <span className="radar-mark done">
-          <Icon name="check" size={12} /> {done}
-        </span>
-      )}
-    </>
   );
 }
