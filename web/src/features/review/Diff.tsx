@@ -1,10 +1,10 @@
 // One file of the review: its row, and its diff by hunks, in one column or two.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useQuery } from "@/lib/query";
 import { basename, dirname, errMsg, plural } from "@/lib/text";
 import { Icon, Notice, Tip } from "@/ui";
-import type { ReviewFile } from "./api";
+import type { DiffFrom, ReviewFile, Stat } from "./api";
 import { fileLines, surround, whyNotUnfold, type Unfold } from "./context";
 import { draftOnRow, type DraftComment } from "./draft";
 import { Hunk, Note, type NewComment } from "./Hunk";
@@ -27,12 +27,17 @@ export type Opinions = {
   onDismiss: (id: number) => void;
 };
 
-export function FileRow({ file, open, split, onToggle, load, loadSource, onLoaded, canComment, draft, onComment, onRemove, onOpen, onCode, opinion, reviewer, onAdopt, onDismissOpinion, secrets }: {
+// RowLook is how a row reads in a group: its key, its side's counts and git's letter, a conflict's words in their place,
+// the buttons the counts give way to, its name alone in a tree at its depth, and what opens in place of a diff
+export type RowLook = { key?: string; stat?: Stat | null; letter?: string; conflict?: string; actions?: ReactNode; depth?: number; name?: string; body?: () => ReactNode; from?: DiffFrom };
+
+export function FileRow({ file, look = {}, open, split, onToggle, load, loadSource, onLoaded, canComment, draft, onComment, onRemove, onOpen, onCode, opinion, reviewer, onAdopt, onDismissOpinion, secrets }: {
   file: ReviewFile;
+  look?: RowLook;
   open: boolean;
   split: boolean;
   onToggle: () => void;
-  load: (path: string) => Promise<string>;
+  load: (path: string, from: DiffFrom) => Promise<string>;
   loadSource: (path: string) => Promise<SourceRead>; // the file itself, for the lines around a hunk
   onLoaded?: (path: string) => void; // the diff is on screen
   canComment: boolean;
@@ -49,21 +54,25 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
 }) {
   const opinions = useMemo<Opinions>(() => ({ comments: opinion, reviewer, onAdopt, onDismiss: onDismissOpinion }), [opinion, reviewer, onAdopt, onDismissOpinion]);
   const [attempt, setAttempt] = useState(0);
-  const { data: diff, error } = useQuery(() => (open ? load(file.path) : Promise.resolve(undefined)), [open, load, file.path, attempt], { enabled: open, keep: true });
+  const { side, commit, base } = look.from ?? {};
+  const reads = !look.body && open;
+  const { data: diff, error } = useQuery(() => (reads ? load(file.path, { side, commit, base }) : Promise.resolve(undefined)), [reads, load, file.path, side, commit, base, attempt], { enabled: reads, keep: true });
+  const key = look.key ?? file.path;
   useEffect(() => {
-    if (open && diff !== null) onLoaded?.(file.path);
+    if (open && (look.body || diff !== null)) onLoaded?.(key);
   }, [open, diff]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stat = look.stat === undefined ? { added: file.added, removed: file.removed } : look.stat;
   return (
-    <div className={`review-file${file.fresh ? " fresh" : ""}${open ? " open" : ""}`}>
+    <div className={`review-file${file.fresh ? " fresh" : ""}${open ? " open" : ""}${look.conflict ? " conflict" : ""}`} data-key={key} style={look.depth ? ({ "--depth": look.depth } as CSSProperties) : undefined}>
       <div className="review-file-row">
         <button type="button" className="review-file-head" onClick={onToggle} aria-expanded={open}>
           <span className={`chevron${open ? " open" : ""}`}>
             <Icon name="chevron-right" size={12} />
           </span>
           {file.fresh && <span className="review-dot" title={t("Changed since you looked")} />}
-          <span className="review-path">
-            <span className="review-dir">{dirname(file.path)}</span>
-            {basename(file.path)}
+          <span className="review-path" title={look.name ? file.path : undefined}>
+            {!look.name && <span className="review-dir">{dirname(file.path)}</span>}
+            {look.name ?? basename(file.path)}
           </span>
           {draft.length > 0 && (
             <span className="review-tag review-tag-comments" title={t("{comments} in the draft", { comments: plural(draft.length, "comment") })}>
@@ -80,16 +89,26 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
               <Icon name="message" size={12} /> {opinion.length}
             </span>
           )}
-          {file.untracked ? (
-            <span className="review-tag">{t("new")}</span>
-          ) : (
-            <span className="review-counts">
-              +{file.added} −{file.removed}
-            </span>
-          )}
+          {look.letter && <span className={`review-letter is-${look.letter}`}>{look.letter}</span>}
         </button>
+        <span className={`review-slot${look.actions ? " has-actions" : ""}`}>
+          <span className="review-slot-quiet">
+            {look.conflict ? (
+              <span className="review-conflict-kind">{look.conflict}</span>
+            ) : file.untracked ? (
+              <span className="review-tag">{t("new")}</span>
+            ) : stat?.binary ? (
+              <span className="review-counts">{t("binary")}</span>
+            ) : stat ? (
+              <span className="review-counts">
+                +{stat.added} −{stat.removed}
+              </span>
+            ) : null}
+          </span>
+          {look.actions && <span className="review-row-actions">{look.actions}</span>}
+        </span>
         <Tip text={t("Open the file in the viewer")}>
-          <button type="button" className="icon-btn sm" aria-label={t("Open the file")} onClick={() => onOpen()}>
+          <button type="button" className="icon-btn sm review-open" aria-label={t("Open the file")} onClick={() => onOpen()}>
             <Icon name="external-link" size={12} />
           </button>
         </Tip>
@@ -101,7 +120,9 @@ export function FileRow({ file, open, split, onToggle, load, loadSource, onLoade
           </Tip>
         )}
       </div>
+      {open && look.body && look.body()}
       {open &&
+        !look.body &&
         (error ? (
           <Notice
             tone="error"

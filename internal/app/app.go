@@ -794,6 +794,7 @@ func Run(ctx context.Context, o Options) error {
 
 		Collisions: radarOfCollisions,
 		Undo:       turns,
+		Stage:      stageWrites(fleet, watcher, turns),
 		Scenes:     sceneSet,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}

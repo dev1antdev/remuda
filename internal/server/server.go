@@ -30,6 +30,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/feed"
+	"github.com/dev1antdev/remuda/internal/gitstage"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
@@ -119,6 +120,7 @@ type Server struct {
 	Undo       *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
 	Concierge  *concierge.Service  // the Claude Code agent the person asks what the others are doing, on the machine they pick
 	Scenes     *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
+	Stage      *gitstage.Service   // the Changes lens's git writes, each at the person's press; nil writes nothing
 
 	streams   termStreams
 	relayed   relays     // the terminals piped to a machine's own remuda, which holds their attach
@@ -144,6 +146,7 @@ func (s *Server) Handler() http.Handler {
 	s.prefsRoutes(api)
 	s.scheduleRoutes(api)
 	s.reviewRoutes(api)
+	s.changesRoutes(api)
 	s.codeRoutes(api)
 	s.updateRoutes(api)
 	s.recoverRoutes(api)

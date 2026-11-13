@@ -1474,7 +1474,8 @@ input[type="checkbox"]:hover:not(:checked) {
 .mode-switch,
 .lens-switch,
 .fv-tabs,
-.tasks-view {
+.tasks-view,
+.review-scope {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -1488,7 +1489,8 @@ input[type="checkbox"]:hover:not(:checked) {
 .mode-switch button,
 .lens-switch button,
 .fv-tabs button,
-.tasks-view button {
+.tasks-view button,
+.review-scope button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1507,13 +1509,15 @@ input[type="checkbox"]:hover:not(:checked) {
 .mode-switch button:hover,
 .lens-switch button:hover,
 .fv-tabs button:hover,
-.tasks-view button:hover {
+.tasks-view button:hover,
+.review-scope button:hover {
   color: var(--fg);
 }
 
 .lens-switch button.on,
 .fv-tabs button.on,
-.tasks-view button.on {
+.tasks-view button.on,
+.review-scope button.on {
   background: var(--bg-active);
   color: var(--fg);
   box-shadow: var(--inset-top), var(--shadow-sm);
@@ -14207,4 +14211,357 @@ textarea.screen-term-field {
 .zoo-bolt.is-lines {
   box-shadow: 0 0 0 2px var(--amber);
   color: var(--amber);
+}
+
+/* ---- the Changes lens as a client of the repository (features/review/ChangeGroups, CommitBox, OutgoingCommits,
+   ConflictView): the groups after better-changes, a row's counts giving way to its buttons, the tree, the commit box ---- */
+.review-title-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.review-scope {
+  padding: 2px;
+}
+
+.review-scope button {
+  height: 22px;
+  padding: 0 10px;
+  font-size: var(--fs-12);
+}
+
+.review-base-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.review-base-pick {
+  max-width: 220px;
+}
+
+.review-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-group + .review-group,
+.review-group + .commit-box,
+.commit-box + .review-group {
+  margin-top: 10px;
+}
+
+.review-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 2px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+
+.review-group-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-group.is-conflict .review-group-title {
+  color: var(--red);
+}
+
+.review-bulk {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-12);
+  font-weight: 500;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.review-bulk:disabled {
+  opacity: 0.5;
+}
+
+.review-group-more {
+  margin: 0 2px;
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+/* a tree row's depth: the head and a folder's row step in by it */
+.review-file-head,
+.review-folder {
+  padding-left: calc(8px + var(--depth, 0) * 16px);
+}
+
+.review-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding-right: 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--fg-dim);
+  font: var(--fs-13) var(--mono);
+  text-align: left;
+}
+
+.review-folder:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.review-folder-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* the counts and the buttons share one place: under the pointer, or always on a touch screen, the buttons take it */
+.review-slot {
+  display: inline-grid;
+  align-items: center;
+  justify-items: end;
+  flex-shrink: 0;
+  min-width: 52px;
+  margin-right: 2px;
+}
+
+.review-slot > * {
+  grid-area: 1 / 1;
+}
+
+.review-row-actions {
+  display: inline-flex;
+  gap: 2px;
+  visibility: hidden;
+}
+
+.review-file-row:hover .review-slot.has-actions .review-row-actions,
+.review-file-row:focus-within .review-slot.has-actions .review-row-actions {
+  visibility: visible;
+}
+
+.review-file-row:hover .review-slot.has-actions .review-slot-quiet,
+.review-file-row:focus-within .review-slot.has-actions .review-slot-quiet {
+  visibility: hidden;
+}
+
+@media (pointer: coarse) {
+  .review-slot.has-actions .review-row-actions {
+    visibility: visible;
+  }
+
+  .review-slot.has-actions .review-slot-quiet {
+    visibility: hidden;
+  }
+}
+
+.review-act.is-discard:hover:not(:disabled) {
+  color: var(--red);
+}
+
+.review-letter {
+  flex: 0 0 auto;
+  min-width: 12px;
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  text-align: center;
+  color: var(--amber);
+}
+
+.review-letter.is-A {
+  color: var(--green);
+}
+
+.review-letter.is-D {
+  color: var(--red);
+}
+
+.review-letter.is-T,
+.review-letter.is-R {
+  color: var(--blue);
+}
+
+.review-conflict-kind {
+  color: var(--red);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+
+.review-file.conflict {
+  border-color: var(--red-ring);
+}
+
+/* the commit box, at the foot of the files: a message growing to eight rows, Commit | ▾, its reason or its hint */
+.commit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.commit-message {
+  width: 100%;
+  resize: none;
+  font: var(--fs-13)/1.45 var(--mono);
+}
+
+.commit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.commit-split {
+  display: inline-flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.commit-split .commit-go {
+  flex: 1;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.commit-split .commit-mode {
+  padding: 0 8px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid color-mix(in srgb, var(--on-accent) 25%, transparent);
+}
+
+.commit-split .btn:not(.primary).commit-mode {
+  border-left-color: var(--line-strong);
+}
+
+.commit-hint {
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.commit-hint.is-amend {
+  color: var(--amber);
+}
+
+/* what is committed and not on the remote: subject, who and when, the short hash; a click opens its files */
+.review-outgoing {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.review-outgoing-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px 6px 8px;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  text-align: left;
+}
+
+.review-outgoing-head:hover {
+  background: var(--bg-hover);
+}
+
+.review-outgoing-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.review-outgoing-subject,
+.review-outgoing-by {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-outgoing-subject {
+  font-size: var(--fs-13);
+}
+
+.review-outgoing-by {
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.review-outgoing-sha {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  font: var(--fs-11) var(--mono);
+}
+
+.review-outgoing-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px 8px;
+  border-top: 1px solid var(--line);
+}
+
+.review-outgoing-message {
+  margin: 8px 2px 4px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  white-space: pre-wrap;
+}
+
+/* a conflict's blocks: yours tinted blue, incoming green, the markers on a raised band, the base dim */
+.fv-diff .yours {
+  background: var(--blue-soft);
+}
+
+.fv-diff .incoming {
+  background: var(--green-soft);
+}
+
+.fv-diff .marker {
+  background: var(--bg-active);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.fv-diff .base {
+  color: var(--fg-dim);
+}
+
+.conflict-view .conflict-heading {
+  color: var(--red);
+}
+
+.conflict-sides .fv-line {
+  padding-top: 4px;
+  color: var(--fg-dim);
+}
+
+.conflict-sentence {
+  padding: 14px 12px;
 }
