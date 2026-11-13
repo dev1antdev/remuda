@@ -1,22 +1,17 @@
-// useQuestions reads, for the creatures that ask the person something, what they ask — the dialog off the pane's screen
+// useQuestions reads, for the agents that ask the person something, what they ask — the dialog off the pane's screen
 // (`GET /api/question`), one pane after another every QUESTIONS_EVERY while the page is in view, at most MAX_ASKING of
-// them, a round never begun while the last is still out — so each holds it up in its bubble. Nothing is read for a zoo
-// where nobody asks, and a reading that says what the last one did draws nothing again.
+// them, a round never begun while the last is still out — for the zoo's bubbles and the sidebar's "Needs you". Nothing
+// is read while nobody asks (a caller off screen passes none), and a reading that says what the last one did draws
+// nothing again.
 
 import { useEffect, useState } from "react";
 import { fetchQuestion } from "@/features/chat/api";
-import { questionBubble, sameQuestions } from "@/features/roster/zooLife";
 import { pageVisible } from "@/lib/visibility";
-
-export const QUESTIONS_EVERY = 10_000;
-export const MAX_ASKING = 8;
-
-export type Asker = { key: string; machine: string; pane: string };
+import { QUESTIONS_EVERY, askedOf, questionBubble, sameQuestions, type Asker } from "./questions";
 
 export function useQuestions(askers: Asker[]): Map<string, string> {
   const [held, setHeld] = useState<Map<string, string>>(() => new Map());
-  const wanted = askers.slice(0, MAX_ASKING);
-  const signature = wanted.map((a) => a.key).join(" ");
+  const { wanted, signature } = askedOf(askers);
   useEffect(() => {
     if (!signature) {
       setHeld((was) => (was.size ? new Map() : was));

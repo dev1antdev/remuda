@@ -1,16 +1,14 @@
 // What happens between the zoo's creatures while the page watches: a finish has the resting ones clap, a merged pull
-// request sets off fireworks over the zoo, a compaction a puff, a question a chirp; the eyes follow the pointer; the
-// asking ones hold up what they ask; a line along the foot tells the day. Only changes seen on this page count — the
-// first reading seeds, so a reload replays nothing. The pure part; app/zoo plays it.
+// request sets off fireworks over the zoo, a compaction a puff, a question a chirp; the eyes follow the pointer; a line
+// along the foot tells the day (what the asking ones hold up is questions.ts's, shared with the sidebar). Only changes
+// seen on this page count — the first reading seeds, so a reload replays nothing. The pure part; app/zoo plays it.
 
-import type { Question } from "@/features/chat/api";
-import { questionLines } from "@/features/chat/question";
 import type { Standup } from "@/features/standup/api";
 import { usd } from "@/features/usage/format";
 import { t, tn } from "@/lib/i18n";
 import type { PaneUsage } from "./api";
 import type { Display } from "./radar";
-import { BUBBLE_MAX, cutAt, type Pose } from "./zoo";
+import type { Pose } from "./zoo";
 import { compacted } from "./zooBody";
 import type { Species } from "./zooWear";
 
@@ -74,23 +72,6 @@ export function gaze(center: { x: number; y: number }, pointer: { x: number; y: 
   if (distance < 1) return { x: 0, y: 0 };
   const pull = (GAZE_MAX * Math.min(1, distance / reach)) / distance;
   return { x: Math.round(dx * pull * 100) / 100, y: Math.round(dy * pull * 100) / 100 };
-}
-
-// questionBubble is what an asking creature holds up: the dialog's head and the first line of its detail ("Bash command ·
-// rm -rf build"), else the line that asks
-export function questionBubble(question: Question | null | undefined): string {
-  if (!question?.text) return "";
-  const { head, detail, ask } = questionLines(question.text);
-  const first = detail.split("\n")[0] ?? "";
-  const text = head ? (first ? `${head} · ${first}` : head) : ask;
-  return cutAt(text, BUBBLE_MAX);
-}
-
-// sameQuestions says whether two readings of what the asking creatures hold up say the same, so an unchanged one draws nothing
-export function sameQuestions(a: Map<string, string>, b: Map<string, string>): boolean {
-  if (a.size !== b.size) return false;
-  for (const [key, text] of a) if (b.get(key) !== text) return false;
-  return true;
 }
 
 // DAY_EVERY is how often the day along the foot is read: the standup reads every agent's conversation on every machine,

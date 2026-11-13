@@ -12,6 +12,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/usage"
 	"github.com/dev1antdev/remuda/internal/watch"
@@ -114,17 +115,19 @@ func (c *Service) ConversationVersion(machineID, paneID string) (string, bool) {
 }
 
 // RecentSubagents is what the pane's live conversation spawned that may still be at work at now (transcript.Reader's
-// RecentSubagents: the ones silent past QuietAfter are not read); none when the pane has no session file.
-func (c *Service) RecentSubagents(machineID, paneID string, now time.Time) ([]transcript.Subagent, error) {
+// RecentSubagents: the ones silent past QuietAfter are not read), and the id of the file they belong to, which the
+// transcript viewer opens a subagent of; none when the pane has no session file.
+func (c *Service) RecentSubagents(machineID, paneID string, now time.Time) (string, []transcript.Subagent, error) {
 	pane, _ := c.Pane(machineID, paneID)
 	if pane == nil {
-		return nil, nil
+		return "", nil, nil
 	}
 	mc, path, ok := c.SessionFile(machineID, pane)
 	if !ok {
-		return nil, nil
+		return "", nil, nil
 	}
-	return mc.Transcripts.RecentSubagents(path, now)
+	list, err := mc.Transcripts.RecentSubagents(path, now)
+	return strings.TrimSuffix(rpath.For(mc.Home()).Base(path), ".jsonl"), list, err
 }
 
 // LastWriteOfPane is LastWrite by pane id, for the watchdog.
