@@ -2,7 +2,8 @@
 // label, workspace · machine, the pull request it named, context % · cost — its state line (how long, and what it runs this second), then the
 // tail of its chat, or its terminal as it is, with a line to answer.
 
-import Tail, { TailAnswer, TileState } from "@/features/chat/Tail";
+import Tail, { TAIL_TURNS, TailAnswer, TileState } from "@/features/chat/Tail";
+import { ScreenRibbon } from "@/features/chat/ActivityRibbon";
 import { displayOf, markOf, rowLabel, stateWords, type RadarPrefs } from "@/features/roster/radar";
 import { hueStyle } from "@/features/roster/hue";
 import { CollisionMark } from "@/features/roster/CollisionMark";
@@ -162,6 +163,7 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
       ) : screen ? (
         <>
           <TileState words={words} said={said} />
+          {pane.agent && <ScreenRibbon machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} tailTurns={TAIL_TURNS} />}
           <Screen machineId={machine.id} paneId={pane.id} cols={pane.cols} busy={pane.status === "run" || pane.status === "input"} active onOpen={open} />
           <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} agent={pane.agent} active />
         </>

@@ -317,12 +317,21 @@ func (t *Tracker) Display(machineID, paneID string) (Display, bool) {
 
 // Script runs the report on a remote machine through its own remuda.
 func Script(home string, since time.Time, tz string) string {
+	return reportScript(home, since, tz, "")
+}
+
+// DaysScript is Script with every day broken down by folder (ScanHomeDays there).
+func DaysScript(home string, since time.Time, tz string) string {
+	return reportScript(home, since, tz, " -daily")
+}
+
+func reportScript(home string, since time.Time, tz, flags string) string {
 	q := script.Quote
 	bin, guard := script.Remuda(home, version.Build)
 	tzFlag := ""
 	if tz != "" {
 		tzFlag = " -tz " + q(tz)
 	}
-	return "if " + guard + "; then " + bin + " usage -since " + q(since.UTC().Format(time.RFC3339)) + tzFlag +
+	return "if " + guard + "; then " + bin + " usage -since " + q(since.UTC().Format(time.RFC3339)) + tzFlag + flags +
 		"; else echo 'no remuda of this version on the machine (make deploy)' >&2; exit 3; fi"
 }

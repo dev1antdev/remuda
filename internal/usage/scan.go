@@ -19,7 +19,8 @@ type Report struct {
 	Projects []ProjectTotals `json:"projects"`
 	Models   []ModelTotals   `json:"models"`
 	Sessions []SessionTotals `json:"sessions"`
-	Files    int             `json:"files"` // transcript files read
+	Files    int             `json:"files"`           // transcript files read
+	Daily    []Day           `json:"daily,omitempty"` // every day folder by folder, when asked for (ScanHomeDays)
 }
 
 type DayTotals struct {
@@ -54,7 +55,17 @@ const topSessions = 40
 
 // ScanHome sums every transcript under a home written since: Claude Code's project files and Codex's rollouts.
 func ScanHome(home string, since time.Time, loc *time.Location) (Report, error) {
+	return scanHome(newBuilder(since, loc), home)
+}
+
+// ScanHomeDays is ScanHome with every day broken down by folder, for the year's heatmap.
+func ScanHomeDays(home string, since time.Time, loc *time.Location) (Report, error) {
 	b := newBuilder(since, loc)
+	b.daily = map[string]map[string]*DayFolder{}
+	return scanHome(b, home)
+}
+
+func scanHome(b *builder, home string) (Report, error) {
 	roots := transcript.SessionRoots(home)
 	if err := b.walkClaude(roots[transcript.Claude]); err != nil {
 		return b.report(), err
@@ -82,7 +93,8 @@ type builder struct {
 	modelsT      map[string]*Totals
 	sessions     map[string]*SessionTotals
 	sessModels   map[string]map[string]int
-	seen         map[string]bool // the message ids summed so far: a continuation file repeats its predecessor's tail
+	seen         map[string]bool                  // the message ids summed so far: a continuation file repeats its predecessor's tail
+	daily        map[string]map[string]*DayFolder // date → project → its day; nil unless the days were asked for
 }
 
 func newBuilder(since time.Time, loc *time.Location) *builder {
@@ -167,6 +179,7 @@ func (b *builder) file(p, project, session string) {
 	b.rep.Files++
 	dir := ""
 	var first, last time.Time
+	days := map[string]*DayFolder{}
 	acc := Accumulator{OnCommit: func(r transcript.UsageRecord, t Totals) {
 		day := r.At.In(b.loc).Format("2006-01-02")
 		if b.days[day] == nil {
@@ -176,6 +189,12 @@ func (b *builder) file(p, project, session string) {
 		mk := r.Model
 		if m, ok := Lookup(r.Model); ok {
 			mk = m.ID
+		}
+		if b.daily != nil {
+			if days[day] == nil {
+				days[day] = &DayFolder{}
+			}
+			days[day].note(r, t, mk, session)
 		}
 		if b.modelsT[mk] == nil {
 			b.modelsT[mk] = &Totals{}
@@ -216,6 +235,9 @@ func (b *builder) file(p, project, session string) {
 	}
 	if project == "" {
 		project = transcript.EncodePath(dir)
+	}
+	if b.daily != nil {
+		b.addDays(days, project, dir)
 	}
 	if b.projs[project] == nil {
 		b.projs[project] = &ProjectTotals{Project: project, Dir: dir}
@@ -276,6 +298,9 @@ func (b *builder) report() Report {
 	sort.Slice(rep.Sessions, func(i, j int) bool { return rep.Sessions[i].Cost > rep.Sessions[j].Cost })
 	if len(rep.Sessions) > topSessions {
 		rep.Sessions = rep.Sessions[:topSessions]
+	}
+	if b.daily != nil {
+		rep.Daily = b.dailyReport()
 	}
 	return rep
 }

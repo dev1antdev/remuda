@@ -6189,6 +6189,189 @@ button.usage-row:hover {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
+/* the year on the Spend tab: a square a day from the empty well to the accent, today ringed, the figures under it */
+.usage-year {
+  --heat-0: var(--line-strong);
+  --heat-1: color-mix(in srgb, var(--accent) 32%, var(--line-strong));
+  --heat-2: color-mix(in srgb, var(--accent) 54%, var(--line-strong));
+  --heat-3: color-mix(in srgb, var(--accent) 77%, var(--line-strong));
+  --heat-4: var(--accent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg-input);
+}
+
+.usage-year-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.usage-year-head h3 {
+  margin: 0;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.usage-heat-metric button {
+  height: 22px;
+  padding: 0 10px;
+  font-size: var(--fs-12);
+}
+
+.usage-year-status {
+  margin-left: auto;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+
+.usage-heat-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.usage-heat-scroll:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.usage-heat {
+  display: block;
+  cursor: pointer;
+}
+
+.usage-heat-month,
+.usage-heat-weekday {
+  font-size: var(--fs-10);
+  fill: var(--fg-faint);
+}
+
+.usage-heat-l0 {
+  fill: var(--heat-0);
+  --swatch: var(--heat-0);
+}
+
+.usage-heat-l1 {
+  fill: var(--heat-1);
+  --swatch: var(--heat-1);
+}
+
+.usage-heat-l2 {
+  fill: var(--heat-2);
+  --swatch: var(--heat-2);
+}
+
+.usage-heat-l3 {
+  fill: var(--heat-3);
+  --swatch: var(--heat-3);
+}
+
+.usage-heat-l4 {
+  fill: var(--heat-4);
+  --swatch: var(--heat-4);
+}
+
+.usage-heat.is-reading path {
+  opacity: 0.55;
+}
+
+.usage-heat-today {
+  fill: none;
+  stroke: var(--fg-dim);
+  stroke-width: 1px;
+}
+
+.usage-heat-picked {
+  fill: none;
+  stroke: var(--fg);
+  stroke-width: 1.5px;
+}
+
+.usage-heat-line {
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--fs-12) * 1.6);
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.usage-heat-day {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.usage-heat-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--fg-faint);
+}
+
+.usage-heat-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--swatch);
+}
+
+.usage-year-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+.usage-year-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+
+.usage-year-label {
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.usage-year-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-15);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-year-unit {
+  font-size: var(--fs-12);
+  font-weight: 400;
+  color: var(--fg-dim);
+}
+
+.usage-year-note {
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.usage-year-note.is-error {
+  color: var(--red);
+}
+
 @media (max-width: 768px) {
   .usage-cards {
     grid-template-columns: 1fr 1fr;
@@ -6196,6 +6379,10 @@ button.usage-row:hover {
 
   .usage-tables {
     grid-template-columns: 1fr;
+  }
+
+  .usage-year-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .usage-pill-cost {
@@ -6442,6 +6629,206 @@ button.usage-row:hover {
 
 .timeline-chip.is-loop {
   color: var(--amber);
+}
+
+/* the activity ribbon: the agent's last half hour, a stretch per call in the colour of its kind over the gaps it thought
+   in, idle the surface, now at the right; the line under it names what is pointed at, its icon in the same colour */
+.ribbon {
+  --rb-think: var(--ctp-blue);
+  --rb-read: var(--ctp-sky);
+  --rb-write: var(--ctp-yellow);
+  --rb-shell: var(--ctp-mauve);
+  --rb-wait: var(--ctp-overlay1);
+  --rb-tool: var(--ctp-pink);
+  --rb-quiet: var(--ctp-maroon);
+  --rb-unread: var(--ctp-surface2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.tile-ribbon {
+  padding: 1px 12px 3px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tile-state:has(+ .tile-ribbon) {
+  border-bottom: 0;
+}
+
+.chat-ribbon {
+  padding: 8px 20px 0;
+}
+
+.ribbon-track {
+  border-radius: var(--r-xs);
+  outline: none;
+}
+
+.ribbon-track:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.ribbon-track svg {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border-radius: var(--r-xs);
+  background: var(--line);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.chat-ribbon .ribbon-track svg {
+  height: 10px;
+}
+
+.ribbon-s {
+  stroke-width: 2px;
+}
+
+.ribbon-s.is-think {
+  fill: color-mix(in srgb, var(--rb-think) 55%, var(--line));
+  stroke: color-mix(in srgb, var(--rb-think) 55%, var(--line));
+}
+
+.ribbon-s.is-read {
+  fill: var(--rb-read);
+  stroke: var(--rb-read);
+}
+
+.ribbon-s.is-write {
+  fill: var(--rb-write);
+  stroke: var(--rb-write);
+}
+
+.ribbon-s.is-shell {
+  fill: var(--rb-shell);
+  stroke: var(--rb-shell);
+}
+
+.ribbon-s.is-wait {
+  fill: var(--rb-wait);
+  stroke: var(--rb-wait);
+}
+
+.ribbon-s.is-tool {
+  fill: var(--rb-tool);
+  stroke: var(--rb-tool);
+}
+
+.ribbon-s.is-quiet {
+  fill: var(--rb-quiet);
+  stroke: var(--rb-quiet);
+}
+
+.ribbon-s.is-unread {
+  fill: var(--rb-unread);
+  opacity: 0.5;
+}
+
+.ribbon-track:has(.is-shown) .ribbon-s:not(.is-shown) {
+  opacity: 0.45;
+}
+
+rect.ribbon-s.is-shown {
+  stroke: var(--fg);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.ribbon-grid {
+  stroke: var(--bg);
+  stroke-width: 1px;
+  opacity: 0.7;
+}
+
+.ribbon-fail {
+  stroke: var(--red);
+  stroke-width: 2px;
+}
+
+.ribbon-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: calc(var(--fs-11) * 1.5);
+  font-size: var(--fs-11);
+  line-height: 1.5;
+  color: var(--fg-faint);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ribbon-turn,
+.ribbon-named {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ribbon-named {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ribbon-named > svg {
+  flex-shrink: 0;
+}
+
+.ribbon-named.is-think > svg {
+  color: var(--rb-think);
+}
+
+.ribbon-named.is-read > svg {
+  color: var(--rb-read);
+}
+
+.ribbon-named.is-write > svg {
+  color: var(--rb-write);
+}
+
+.ribbon-named.is-shell > svg {
+  color: var(--rb-shell);
+}
+
+.ribbon-named.is-wait > svg {
+  color: var(--rb-wait);
+}
+
+.ribbon-named.is-tool > svg {
+  color: var(--rb-tool);
+}
+
+.ribbon-named.is-quiet > svg {
+  color: var(--rb-quiet);
+}
+
+.ribbon-tone {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+}
+
+.ribbon-what {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-dim);
+}
+
+.ribbon-named.is-call .ribbon-what {
+  font-family: var(--mono);
+  color: var(--fg);
+}
+
+.ribbon-scale,
+.ribbon-jump {
+  flex-shrink: 0;
+  font-size: var(--fs-10);
 }
 
 /* the find bar's matches, painted over the text without touching a node */

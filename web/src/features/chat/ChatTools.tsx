@@ -14,6 +14,7 @@ import { forkPane } from "./forkPane";
 import { FindTool } from "./FindBar";
 import { pinKey, type Pin } from "./pins";
 import { useTimelineShown } from "./TimelineBar";
+import { useRibbonShown } from "./ActivityRibbon";
 import { timelapseRows } from "@/features/terminal/timelapse/row";
 import { t } from "@/lib/i18n";
 
@@ -26,6 +27,7 @@ export function ChatTools() {
 // useChatViewItems is the chat's part of the View menu; a shell pane has no conversation, so its rows are disabled
 export function useChatViewItems(place: ChatPlace): MenuItem[] {
   const [timeline, setTimeline] = useTimelineShown();
+  const [ribbonShown, setRibbonShown] = useRibbonShown();
   const { machineId, paneId, session, dir, agent, workspace, machine, model } = place;
   const chatLive = app.use((s) => s.chatLive);
   const { viewOnly } = useRoster();
@@ -34,6 +36,7 @@ export function useChatViewItems(place: ChatPlace): MenuItem[] {
   const save = () => void exportConversation(machineId, paneId, session, dir, { agent, workspace, machine }).catch((e) => actions.notify(errMsg(e), { error: true }));
   return [
     { label: t("Timeline"), icon: "clock", hint: t("every prompt and answer in time; the first error, the longest call, loops and questions marked"), checked: timeline, onSelect: () => setTimeline(!timeline) },
+    { label: t("Activity ribbon"), icon: "layers", hint: t("the last 30 minutes of the agent's work, coloured by what it did, here and on the Wall"), checked: ribbonShown, onSelect: () => setRibbonShown(!ribbonShown) },
     { sep: true },
     { label: t("Recap this conversation…"), icon: "sun", hint: t("prompts, answers, tools, files, cost"), disabled: !agent, onSelect: () => actions.openDialog({ kind: "recap", machineId, paneId, session, dir, title }) },
     { label: t("Export as Markdown"), icon: "download", hint: t("the conversation shown, as a file"), disabled: !agent, onSelect: save },

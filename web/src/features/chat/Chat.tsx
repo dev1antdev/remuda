@@ -22,6 +22,7 @@ import { PlanBar } from "./PlanBar";
 import { QuestionCard } from "./QuestionCard";
 import { quoteText } from "./quote";
 import { revealTurn } from "./reveal";
+import { Ribbon } from "./ActivityRibbon";
 import { TimelineBar } from "./TimelineBar";
 import { turnLink } from "./turnLink";
 import { TurnView } from "./TurnView";
@@ -233,6 +234,9 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
         </div>
       )}
       <TimelineBar turns={turns} machineId={machineId} paneId={paneId} session={chat?.session_id} />
+      {!readOnly && !older && chat?.session_id && (
+        <Ribbon turns={turns} status={status} dir={dir} cut={false} unread={t("Before the compaction: this file goes on from a summary of the one before")} onJump={(turn) => actions.jumpTo(machineId, paneId, chat.session_id ?? "", turn)} className="chat-ribbon" />
+      )}
       <PlanBar plan={chat?.plan} />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? t("Loading…") : readOnly ? t("This transcript is empty.") : t("No transcript for this pane's folder yet.")}</div>}

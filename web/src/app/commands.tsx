@@ -7,6 +7,7 @@ import Palette from "@/features/palette/Palette";
 import { paneEntries, paneTitle, tabName, type Entry } from "@/features/palette/rank";
 import { exportConversation } from "@/features/chat/export";
 import { useTimelineShown } from "@/features/chat/TimelineBar";
+import { useRibbonShown } from "@/features/chat/ActivityRibbon";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { closeWorkspace } from "@/features/roster/WorkspaceMenu";
 import { moving, useClock, useSpinner } from "@/features/roster/useClocks";
@@ -91,6 +92,7 @@ function useCommands(): (query: string) => Entry[] {
   const [focus, setFocus] = usePref<string>("wall.focus", "");
   const [office, setOffice] = usePref<boolean>("wall.office", false);
   const [timelineShown, setTimelineShown] = useTimelineShown();
+  const [ribbonShown, setRibbonShown] = useRibbonShown();
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
   const goNext = useNextNeedingMe();
@@ -183,6 +185,7 @@ function useCommands(): (query: string) => Entry[] {
         setWall({ ...wall, ...change });
         actions.setMode("wall");
       };
+      command("ribbon", ribbonShown ? t("Hide the activity ribbon") : t("Show the activity ribbon"), () => setRibbonShown(!ribbonShown), { hint: t("the last 30 minutes of each agent's work, coloured by what it did, on the Wall and over the chat"), icon: "layers", keywords: ["ribbon", "activity", "herd", "last 30 minutes", "what it did", "tools", "quiet"] });
       command("wall-needs", wall.needsMe ? t("Wall: every agent") : t("Wall: only the agents that need me"), onTheWall({ needsMe: !wall.needsMe }), { hint: wall.needsMe ? t("the filter off") : t("a question open, a watchdog note, a finish not looked at"), icon: "layers", keywords: ["wall", "needs", "attention", "waiting", "blocked", "filter"] });
       command("wall-idle", wall.hideIdle ? t("Wall: show the idle agents") : t("Wall: hide the idle agents"), onTheWall({ hideIdle: !wall.hideIdle }), { hint: t("idle for over {n} min", { n: radar.freshMinutes }), icon: "layers", keywords: ["wall", "idle", "hide", "filter"] });
       if (focus) command("wall-unfocus", t("Wall: back to the grid"), () => {
@@ -282,6 +285,6 @@ function useCommands(): (query: string) => Entry[] {
       const shown = share.on ? commands.map((entry) => ({ ...entry, title: share.redact(entry.title), hint: entry.hint && share.redact(entry.hint) })) : commands;
       return [...panes, ...(viewOnly ? shown.filter((entry) => viewerCommand(entry.id)) : shown)];
     },
-    [machines, viewOnly, jiraSite, server, scenes, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, lightFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
+    [machines, viewOnly, jiraSite, server, scenes, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, lightFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, ribbonShown, setRibbonShown, step, now, goNext, share],
   );
 }

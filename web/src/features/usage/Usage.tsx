@@ -17,6 +17,7 @@ import { t } from "@/lib/i18n";
 import ScorecardTab from "./ScorecardTab";
 import { DEFAULT_SCORE_PERIOD, SCORE_PERIOD_KEY, SCORE_PERIODS, USAGE_TAB_KEY, periodOf, type UsageTab } from "./scorecard";
 import { Budgets, PlanLimits } from "./UsageSections";
+import YearSection from "./YearSection";
 
 const PERIODS = [
   { value: "1", label: t("Today") },
@@ -194,6 +195,7 @@ export default function Usage({ machines, onClose, onOpenSession }: {
           </div>
         ))}
       </div>
+      {!viewOnly && <YearSection machines={machines} machine={machine} />}
       <div className="usage-tables">
         <section>
           <h3>{t("Projects")}</h3>

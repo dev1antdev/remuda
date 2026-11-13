@@ -65,6 +65,7 @@ func usageCmd(args []string) {
 	fs := flag.NewFlagSet("usage", flag.ExitOnError)
 	sinceS := fs.String("since", "", "records from this time on (RFC 3339); default: 7 days")
 	tz := fs.String("tz", "", "the zone days are cut in (IANA name); default: this machine's")
+	daily := fs.Bool("daily", false, "every day broken down by folder too, for the year's heatmap")
 	_ = fs.Parse(args)
 	since := time.Now().AddDate(0, 0, -7)
 	if *sinceS != "" {
@@ -81,7 +82,11 @@ func usageCmd(args []string) {
 		}
 	}
 	home, _ := os.UserHomeDir()
-	rep, err := usage.ScanHome(home, since, loc)
+	scan := usage.ScanHome
+	if *daily {
+		scan = usage.ScanHomeDays
+	}
+	rep, err := scan(home, since, loc)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
