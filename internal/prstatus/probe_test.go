@@ -63,6 +63,7 @@ func TestAProbeThatSaysNothingMovedKeepsTheReadWhileItStands(t *testing.T) {
 	advance(time.Second, "HTTP/2.0 304 Not Modified\r\n")
 	tr.TouchPane("box", "w1:p1")
 	waitFor(t, "the probe", func() bool { return len(host.Scripts()) >= 4 })
+	waitFor(t, "the read kept", func() bool { tr.mu.Lock(); defer tr.mu.Unlock(); return !tr.entries[ref].reading }) // a touch while it is kept would find a read in flight and leave it
 	if got := host.Scripts(); !strings.Contains(got[2], `If-None-Match: "one"`) {
 		t.Fatalf("the probe did not carry the ETag: %q", got[2])
 	}

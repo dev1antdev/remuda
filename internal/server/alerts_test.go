@@ -67,8 +67,11 @@ func TestAlertsSocketHandsOwedWithdrawalsToAConnectionThatTakesThem(t *testing.T
 	if json.Unmarshal(data, &frame) != nil || frame.Type != "withdraw" || len(frame.Tags) != 1 || frame.Tags[0] != tag {
 		t.Fatalf("first frame %q, want the stuck note taken back", data)
 	}
-	if owed := s.Push.OwedTo(endpoint); len(owed) != 0 {
-		t.Fatalf("still owed %v after the connection took them", owed)
+	// the frame reaches the page before its writer hears it went out: what is owed is let go of a moment later
+	for deadline := time.Now().Add(2 * time.Second); len(s.Push.OwedTo(endpoint)) != 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("still owed %v after the connection took them", s.Push.OwedTo(endpoint))
+		}
 	}
 }
 
