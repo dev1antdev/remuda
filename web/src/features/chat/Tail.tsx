@@ -20,6 +20,7 @@ import { useSpinner } from "./ProgressLine";
 import { TILE_SCREEN_EVERY, useScreenRead } from "./useScreenRead";
 import { counts, progressWords } from "./plan";
 import { QuestionCard } from "./QuestionCard";
+import { Ribbon, tailUnread } from "./ActivityRibbon";
 import { said } from "./said";
 import { subagentWords } from "./subagents";
 import { TurnView } from "./TurnView";
@@ -62,6 +63,7 @@ const Tail = memo(function Tail({ machineId, paneId, status, dir, agent = "", wo
   return (
     <div className="chat tail">
       <TileState words={words} doing={now} said={answered} plan={progress} subagents={subs} spinner={spinner} />
+      <Ribbon turns={turns} status={status} dir={dir} cut={turns.length >= TAIL_TURNS} unread={tailUnread(TAIL_TURNS)} className="tile-ribbon" />
       <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
         {turns.length === 0 && <div className="empty chat-empty">{chat === null ? t("Loading…") : t("No transcript yet.")}</div>}
         {turns.map((t, i) => (

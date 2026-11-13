@@ -28,7 +28,7 @@ type Part struct {
 	From     string          `json:"from,omitempty"` // a queued message another agent sent, by its name; "" for the person's
 	ToolName string          `json:"tool_name,omitempty"`
 	ToolID   string          `json:"tool_id,omitempty"` // the tool_use id: what its result and a subagent's meta name
-	At       string          `json:"at,omitempty"`      // when the tool was called or the queued message sent: the record's timestamp
+	At       string          `json:"at,omitempty"`      // the record's timestamp: when a tool was called, a queued message sent, or a text or a thought written
 	Took     float64         `json:"took,omitempty"`    // seconds from the call to its result, 0 while it runs
 	Input    json.RawMessage `json:"input,omitempty"`
 	Output   string          `json:"output,omitempty"`
@@ -468,12 +468,12 @@ func parseRecords(r io.Reader, keepSidechain bool) ([]Turn, error) {
 					if strings.TrimSpace(b.Text) == "" {
 						continue
 					}
-					appendPart("assistant", rec.Timestamp, rec.UUID, Part{Type: "text", Text: b.Text})
+					appendPart("assistant", rec.Timestamp, rec.UUID, Part{Type: "text", Text: b.Text, At: rec.Timestamp})
 				case "thinking":
 					if strings.TrimSpace(b.Thinking) == "" {
 						continue
 					}
-					appendPart("assistant", rec.Timestamp, rec.UUID, Part{Type: "thinking", Text: b.Thinking})
+					appendPart("assistant", rec.Timestamp, rec.UUID, Part{Type: "thinking", Text: b.Thinking, At: rec.Timestamp})
 				case "tool_use":
 					appendPart("assistant", rec.Timestamp, rec.UUID, Part{
 						Type: "tool", ToolName: b.Name, ToolID: b.ID, At: rec.Timestamp,

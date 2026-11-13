@@ -81,3 +81,15 @@ export type ScoreRow = {
 export type Scorecard = { since: string; days: number; min_sample: number; rows: ScoreRow[]; verdicts: number; unplaced: number };
 
 export const fetchScorecard = (days: number, tz: string): Promise<Scorecard> => getJSON(`/api/scorecard?${new URLSearchParams({ days: String(days), tz })}`);
+
+// ---- the year's heatmap: each machine's last 365 days, each day's spend folder by folder (internal/usage, book.go) ----
+
+// YearCell is one folder's day: its folder an index into the machine's folders
+export type YearCell = { f: number; c: number; t: number; n: number };
+// YearFolder is a folder over the year: its sessions, the longest of them in seconds, its tokens by model id
+export type YearFolder = { project: string; dir?: string; sessions: number; longest: number; models?: Record<string, number> };
+// YearMachine is one machine's year as far as it was read: reading is the ended days still being read, today_at when today was
+export type YearMachine = { id: string; label: string; reading?: number; busy?: boolean; today_at?: string; away?: boolean; error?: string; folders: YearFolder[]; days: { date: string; cells: YearCell[] }[] };
+export type UsageYear = { from: string; to: string; zone: string; names: Record<string, string>; machines: YearMachine[] };
+
+export const fetchUsageYear = (tz: string): Promise<UsageYear> => getJSON(`/api/usage/days?${new URLSearchParams({ tz })}`);

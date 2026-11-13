@@ -261,8 +261,8 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
 - **Settings that follow you** — "Sync these settings between devices",
   the last row of Settings › Look, keeps the theme, the dark and light ones, the
   accent, the density, the code font, the sidebar's settings, the Wall's,
-  the review's two columns, the files rail, the timeline, the tasks view,
-  the standup period, Code's Follow and the panels' widths in this remuda,
+  the review's two columns, the files rail, the timeline, the activity
+  ribbon, the tasks view, the standup period, the year's tone, Code's Follow and the panels' widths in this remuda,
   so the phone and the desk agree: a change on one device reaches the
   others within a minute (at once when they come back into view), the
   newer choice winning. Alerts, quiet hours, read-aloud, the text sizes
@@ -1795,6 +1795,18 @@ the handover and the export count it as yours. Each run of tool calls
 is one card, a line a call: done, failed or running, what it was about,
 how long it took, a chevron for its result; an answer's foot adds the
 tokens it wrote, "↓ 9.1k", as the CLI counts them.
+**The activity ribbon** (View › Activity ribbon, on by default) is what
+the agent did in the last half hour, now at the right, under the
+timeline and under every Wall tile's state line: a stretch per call in
+the colour of its kind — reading cyan, writing yellow, the shell purple,
+waiting on you or on its subagents grey, other tools pink — over the
+time it spent thinking in blue, and "Quiet" in light red once three
+minutes pass with no call running and nothing written. Point at a
+stretch, or tap it, and the line under it names it with its kind's icon
+— "Bash · go test ./... · 48 s · failed · 20 min ago"; otherwise the
+line says what the latest turn came to, "1 min 7 s, 18 tools, 1 failed".
+A Wall tile reads its last 12 turns, so when those began less than half
+an hour ago the time before them says "not read" rather than idle.
 **Plan** — when the agent keeps a task list (Claude Code's own
 TaskCreate / TaskUpdate, or TodoWrite), a quiet line over the chat says
 how far it is and what it is on, in the agent's own words — "Plan 3/7 ·
@@ -1964,7 +1976,14 @@ work needs no file opened. On the Wall a tile says how long the
 running command has gone on, amber past a minute. 📊 opens the report: by day, by
 project, by model, by machine, the sessions that cost the most — every
 machine reads its own transcripts, nothing is sent anywhere. On a
-subscription it is a measure of where the work went, not a bill.
+subscription it is a measure of where the work went, not a bill. Under
+the period's chart, **the last year**: a square a day toned by what it
+cost (or by its responses), and beside it the favourite model, the
+tokens, the sessions and the longest one, the active days and the
+streaks, the busiest day. A day that ended is read once and kept, so
+the first look on a long history reads in the background ("Reading
+365 days…") and every later one reads only today. While the screen is
+shared, a hidden folder is left out of the year.
 
 **Budgets:** at the top of that report, a limit per day, week or month
 on everything, on one machine or on one of its folders. The usage pill

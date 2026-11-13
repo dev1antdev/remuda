@@ -3,7 +3,7 @@ import { isShared, merge, plan } from "./syncKeys";
 
 describe("isShared", () => {
   it("names the keys that travel", () => {
-    for (const key of ["theme", "theme.dark", "theme.light", "theme.accent", "radar", "wall", "review.split", "chat.timeline", "footprint", "tasks.view", "standup.period", "code.follow", "sidebar.pins"]) expect(isShared(key), key).toBe(true);
+    for (const key of ["theme", "theme.dark", "theme.light", "theme.accent", "radar", "wall", "review.split", "chat.timeline", "ribbon", "footprint", "tasks.view", "standup.period", "usage.heat", "code.follow", "sidebar.pins"]) expect(isShared(key), key).toBe(true);
   });
   it("takes every panel width by its prefix, not the bare prefix", () => {
     expect(isShared("panel.sidebar")).toBe(true);

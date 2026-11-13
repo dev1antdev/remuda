@@ -94,6 +94,7 @@ type Server struct {
 	PRs        *prstatus.Tracker
 	Recap      *recap.Service
 	Usage      *usage.Tracker
+	UsageDays  *usage.Book // the year's days for the heatmap, each read once
 	Budgets    *budget.Service
 	Health     *health.Collector
 	Review     *review.Store

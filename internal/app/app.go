@@ -344,6 +344,8 @@ func Run(ctx context.Context, o Options) error {
 		}
 	}
 	meter := usage.NewTracker()
+	usageDays := usage.OpenBook(o.Dir)
+	events.Subscribe(bus, func(e events.MachineRemoved) { usageDays.Forget(e.Machine) })
 	budgets := budget.New(o.Dir, func() []shell.Host {
 		var hosts []shell.Host
 		for _, mc := range fleet.List() {
@@ -788,6 +790,7 @@ func Run(ctx context.Context, o Options) error {
 		Recap:     recaps,
 		Radar:     tracker,
 		Usage:     meter,
+		UsageDays: usageDays,
 		Budgets:   budgets,
 		Health:    vitals,
 		Review:    reviews,

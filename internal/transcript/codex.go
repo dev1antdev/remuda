@@ -250,7 +250,7 @@ func parseCodex(r io.Reader) ([]Turn, error) {
 				case "assistant":
 					for _, t := range codexTexts(p.Content) {
 						if strings.TrimSpace(t) != "" {
-							appendPart("assistant", rec.Timestamp, id, Part{Type: "text", Text: t})
+							appendPart("assistant", rec.Timestamp, id, Part{Type: "text", Text: t, At: rec.Timestamp})
 						}
 					}
 				}
@@ -262,7 +262,7 @@ func parseCodex(r io.Reader) ([]Turn, error) {
 					}
 				}
 				if len(texts) > 0 {
-					appendPart("assistant", rec.Timestamp, id, Part{Type: "thinking", Text: strings.Join(texts, "\n\n")})
+					appendPart("assistant", rec.Timestamp, id, Part{Type: "thinking", Text: strings.Join(texts, "\n\n"), At: rec.Timestamp})
 				}
 			case "function_call":
 				call(rec.Timestamp, id, Part{Type: "tool", ToolName: p.Name, ToolID: p.CallID, At: rec.Timestamp, Input: codexInput(p.Arguments)})

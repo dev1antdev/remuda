@@ -100,6 +100,7 @@ socket.onmessage = (message) => {
     else if (url.includes("/api/repos/settings")) void send("Fetch.continueRequest", { requestId: msg.params.requestId }); // a project's settings are the server's own
     else if (url.includes("/api/repos/")) void fakeRepoAction(msg.params);
     else if (/\/api\/repos(\?|$)/.test(url)) void dressRepos(msg.params);
+    else if (url.includes("/api/usage/days")) void fakeUsageYear(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
@@ -1030,6 +1031,67 @@ const PROMPTS_CHAT = [
   },
 ];
 let promptsChat = false;
+
+// ribbonTurns is the dressed Claude Code pane's last half hour for the activity ribbon, made at the moment it is asked
+// for, since a pass runs long: a read, edits, a failed test run, a subagent, five quiet minutes, a command still running
+let ribbonChat = false;
+function ribbonTurns() {
+  const at = (minutes) => iso(Date.now() - minutes * 60e3);
+  const call = (name, minutes, seconds, input, extra = {}) => ({ type: "tool", tool_name: name, tool_id: `toolu_rb_${name}_${minutes}`, at: at(minutes), input, ...(seconds === null ? {} : { output: "ok", took: seconds }), ...extra });
+  return [
+    { role: "user", ts: at(24), ids: ["e2e-rb-prompt"], parts: [{ type: "text", text: "Draw every screen of the page at two widths, and run the tests" }] },
+    {
+      role: "assistant",
+      ts: at(23.8),
+      ids: ["e2e-rb-answer"],
+      parts: [
+        { type: "thinking", text: "Where are the screens listed", at: at(23.8) },
+        call("Read", 23.3, 6, { file_path: `${appDir}/e2e/display.mjs` }),
+        call("Edit", 22, 12, { file_path: `${appDir}/src/app.go`, old_string: "a", new_string: "b" }),
+        call("Bash", 20, 48, { command: "go test ./..." }, { output: "--- FAIL: TestScreens", is_error: true }),
+        { type: "text", text: "One test fails; looking.", at: at(19) },
+        call("Agent", 18.5, 120, { description: "Find where the widths are set" }),
+        call("Edit", 16, 6, { file_path: `${appDir}/src/styles.css`, old_string: "a", new_string: "b" }),
+        call("Bash", 10.5, 42, { command: "go test ./..." }),
+        call("WebFetch", 8, 24, { url: "https://example.com/widths" }),
+        call("Bash", 1.2, null, { command: "make e2e" }),
+      ],
+    },
+  ];
+}
+
+// fakeUsageYear answers the Usage panel's year with a made-up one on this machine: three folders, most days busy, a
+// streak up to today, Opus the most used
+async function fakeUsageYear({ requestId }) {
+  const day = (back) => {
+    const d = new Date();
+    d.setDate(d.getDate() - back);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const days = [];
+  for (let back = 364; back >= 0; back--) {
+    if (back > 6 && (back * 7) % 10 < 3) continue;
+    const n = 4 + ((back * 13) % 90);
+    days.push({ date: day(back), cells: [{ f: back % 3, c: n * 0.04, t: n * 12000, n }] });
+  }
+  const folder = (dir, sessions, longest, models) => ({ project: dir.replace(/[^a-zA-Z0-9]/g, "-"), dir, sessions, longest, models });
+  const body = {
+    from: day(364),
+    to: day(0),
+    zone: "UTC",
+    names: { "claude-opus-5-5": "Opus 5.5", "claude-sonnet-4-5": "Sonnet 4.5" },
+    machines: [
+      {
+        id: "local",
+        label: "This Mac · e2e",
+        today_at: iso(Date.now() - 30e3),
+        folders: [folder(appDir, 140, 3 * 3600 + 20 * 60, { "claude-opus-5-5": 9e8, "claude-sonnet-4-5": 2e8 }), folder(notesDir, 60, 2400, { "claude-sonnet-4-5": 3e8 }), folder("/Users/someone/work/api", 90, 5400, { "claude-opus-5-5": 4e8 })],
+        days,
+      },
+    ],
+  };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
 // windowsLocal plays the local machine as a Windows PC in the dressed roster, for the screen terminal's screen alone
 let windowsLocal = false;
 function fakeUndoTurn() {
@@ -1334,6 +1396,11 @@ async function dressChat({ requestId, request, responseStatusCode, responseHeade
     await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(conciergeChat())).toString("base64") });
     return;
   }
+  if (ribbonChat && url.searchParams.get("pane") === paneA1) {
+    const chat = { session_id: "0e2e0000-bbbb-4ccc-8ddd-000000000002", sessions: [], turns: ribbonTurns(), ...(url.searchParams.has("last") ? {} : { denied: DENIED }) };
+    await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(chat)).toString("base64") });
+    return;
+  }
   const reply = responseStatusCode === 200 && url.searchParams.get("pane") === paneA1 && !url.searchParams.has("last") ? await send("Fetch.getResponseBody", { requestId }) : null;
   if (!reply?.result) {
     await send("Fetch.continueRequest", { requestId });
@@ -1596,7 +1663,7 @@ async function repoScreens() {
     expect: [".repos-fetch-all"],
     close: async () => {
       if (!(await until(() => present('[data-toast="notice"]'), 10))) failed("Fetch all said nothing once it ended");
-      check(repoFetches === 5, `Fetch all fetched ${repoFetches} repositories, not the 5 with a remote`);
+      check(repoFetches === 6, `Fetch all fetched ${repoFetches} repositories, not the 6 with a remote (the five faked and the app, whose origin is a bare repository)`);
       check(await evaluate(`[...document.querySelectorAll('[data-toast="notice"]')].some((t) => t.textContent.includes("docs"))`), "the failed fetch is not named in the toast");
       await closeAll();
     },
@@ -2759,6 +2826,21 @@ async function runPass() {
     expect: [".lens-pane:not([hidden]) .chat-denied .chat-denied-call", ".lens-pane:not([hidden]) .chat-denied .linkish"],
     close: async () => palette("lens:terminal"),
   });
+  // the activity ribbon under the timeline: a press names the stretch, with the way to its turn
+  await screen("chat-ribbon", {
+    open: async () => {
+      ribbonChat = true;
+      await palette("lens:chat");
+      if (!(await until(() => present('.lens-pane:not([hidden]) .chat-ribbon .ribbon-s[data-tone="shell"]'), 20))) throw new Error("the chat lens draws no ribbon of the agent's last half hour");
+      await tap(".lens-pane:not([hidden]) .chat-ribbon .ribbon-s.is-quiet");
+      if (!(await until(() => present(".lens-pane:not([hidden]) .chat-ribbon .ribbon-named.is-quiet"), 4))) return failed("a press on the lens's ribbon names no stretch");
+    },
+    expect: [".lens-pane:not([hidden]) .chat-ribbon .ribbon-jump"],
+    close: async () => {
+      ribbonChat = false;
+      await palette("lens:terminal");
+    },
+  });
   // an answer whose changes the cockpit kept offers Undo this turn on its foot, which opens the undo on that very turn
   await screen("chat-undo", {
     open: async () => {
@@ -2870,7 +2952,23 @@ async function runPass() {
     });
 
   await screen("wall-chat", { open: async () => palette("mode:wall"), expect: [".wall-bar", ".tile", ".tile .collide-mark"] });
-  await screen("wall-screen", { open: async () => palette("wall-view"), expect: [".wall-bar", ".tile"] });
+  // the activity ribbon on the working agent's tile: its last half hour in colours, a stretch named at a press
+  await screen("wall-ribbon", {
+    open: async () => {
+      ribbonChat = true; // the tile's next read of its tail, within a poll, brings the dressed half hour
+      if (!(await until(() => present('.tile .ribbon-s[data-tone="shell"]'), 25))) throw new Error("the working agent's tile draws no shell call on its ribbon");
+      check((await count(".tile .ribbon-s.is-quiet")) >= 1, "five minutes with nothing written do not read as quiet on the ribbon");
+      await tap('.tile .ribbon-s.is-write');
+      if (!(await until(() => present(".tile .ribbon-named.is-write"), 4))) return failed("a press on the ribbon names no stretch");
+      check((await evaluate(`document.querySelector('.tile .ribbon-named.is-write')?.textContent ?? ""`)).includes("Edit"), "the stretch pressed is not named by its call");
+    },
+    expect: [".tile .ribbon-named .ribbon-what", ".tile .ribbon-scale"],
+    close: async () => {
+      ribbonChat = false;
+      await closeAll();
+    },
+  });
+  await screen("wall-screen", { open: async () => palette("wall-view"), expect: [".wall-bar", ".tile", ".tile .ribbon-track"] });
   await screen("wall-zoo", {
     open: async () => {
       await palette("wall-zoo");
@@ -2990,6 +3088,20 @@ async function runPass() {
       if (!(await until(() => present('[data-toast="notice"]'), 4))) failed("the offer's run says nothing");
       await closeAll();
     },
+  });
+  // the year on the Spend tab: a square a day toned by spend, the figures under it, a day named at a press
+  await screen("usage-year", {
+    open: async () => {
+      await palette("usage");
+      if (!(await until(() => present(".usage-year .usage-heat path.usage-heat-l4"), 6))) throw new Error("the Usage panel draws no year");
+      check(await evaluate(`[...document.querySelectorAll('.usage-year-value')].every((el) => el.textContent.trim() !== "…")`), "the year's figures still read as being read");
+      check((await evaluate(`document.querySelector('.usage-year-figures')?.textContent ?? ""`)).includes("Opus 5.5"), "the year names no favourite model");
+      await evaluate(`document.querySelector('.usage-year')?.scrollIntoView({ block: "center" })`);
+      await tap(".usage-heat-today");
+      if (!(await until(() => present(".usage-heat-line .usage-heat-day"), 4))) failed("a press on a square names no day");
+    },
+    expect: [".usage-year .usage-heat-today", ".usage-year-figures"],
+    settle: 500,
   });
   // a new agent schedule: Claude Code, its switch on, the words under it
   await screen("schedule-agent", {
@@ -3251,6 +3363,7 @@ try {
       { urlPattern: "*/api/repos", requestStage: "Response" },
       { urlPattern: "*/api/repos?*", requestStage: "Response" },
       { urlPattern: "*/api/repos/*", requestStage: "Request" },
+      { urlPattern: "*/api/usage/days*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });

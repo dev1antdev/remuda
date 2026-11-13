@@ -2,6 +2,7 @@ package usage
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -27,24 +28,10 @@ func Collect(hosts []shell.Host, since time.Time, loc *time.Location, tz string)
 		go func(host shell.Host) {
 			defer wg.Done()
 			report := MachineReport{ID: host.ID(), Label: host.Label()}
-			if host.Local() {
-				rep, err := ScanHome(host.Home(), since, loc)
-				if err != nil {
-					report.Error = err.Error()
-				} else {
-					report.Report = &rep
-				}
+			if rep, err := ReadHost(host, since, loc, tz, false, 90*time.Second); err != nil {
+				report.Error = err.Error()
 			} else {
-				raw, err := shell.Text(host, Script(host.Home(), since, tz), 90*time.Second)
-				var rep Report
-				switch {
-				case err != nil:
-					report.Error = strings.TrimSpace(err.Error())
-				case json.Unmarshal([]byte(raw), &rep) != nil:
-					report.Error = "the machine's remuda gave no report"
-				default:
-					report.Report = &rep
-				}
+				report.Report = &rep
 			}
 			mu.Lock()
 			out = append(out, report)
@@ -53,4 +40,31 @@ func Collect(hosts []shell.Host, since time.Time, loc *time.Location, tz string)
 	}
 	wg.Wait()
 	return out
+}
+
+// errNoReport is a remote remuda that answered something other than a report.
+var errNoReport = errors.New("the machine's remuda gave no report")
+
+// ReadHost is one machine's report since a moment, its days by folder when daily: in process here, through the
+// machine's own remuda on a remote.
+func ReadHost(host shell.Host, since time.Time, loc *time.Location, tz string, daily bool, timeout time.Duration) (Report, error) {
+	if host.Local() {
+		if daily {
+			return ScanHomeDays(host.Home(), since, loc)
+		}
+		return ScanHome(host.Home(), since, loc)
+	}
+	run := Script
+	if daily {
+		run = DaysScript
+	}
+	raw, err := shell.Text(host, run(host.Home(), since, tz), timeout)
+	if err != nil {
+		return Report{}, errors.New(strings.TrimSpace(err.Error()))
+	}
+	var rep Report
+	if json.Unmarshal([]byte(raw), &rep) != nil {
+		return Report{}, errNoReport
+	}
+	return rep, nil
 }

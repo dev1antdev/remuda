@@ -83,6 +83,17 @@ export default function NewWorktreeDialog({ machine, session, agents, issue, tit
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answer.data]);
 
+  // the issue the issues panel asked for, filled in once its row stands: the open list may come after the source
+  const askedFilled = useRef(false);
+  useEffect(() => {
+    if (!issue || askedFilled.current) return;
+    const row = rows.find((r) => r.kind === "issue" && r.number === issue);
+    if (!row) return;
+    askedFilled.current = true;
+    setAt(rows.indexOf(row));
+    fillFrom(row);
+  });
+
   // the first row of a list chosen as it comes in, so the Details are never empty while there is something to pick
   useEffect(() => {
     if (mode !== "new" && rows[at] && (pick.kind === "new" || !rows.some((r) => sameSource(r, pick)))) choose(at);
@@ -290,7 +301,8 @@ const pasted = (before: string, after: string): boolean => after.length - before
 
 // withFound adds the numbers looked up to the open lists, so their rows say what they are from then on
 function withFound(lists: Lists | null, found: Found[]): Lists | null {
-  if (!lists || found.length === 0) return lists;
+  if (found.length === 0) return lists;
+  if (!lists) lists = { issues: [], prs: [] }; // the issue asked for stands before the open list is read
   const issues = [...found.filter((f) => f.kind === "issue" && !lists.issues.some((i) => i.number === f.number)).map((f) => ({ number: f.number, title: f.title })), ...lists.issues];
   const prs = [...found.filter((f) => f.kind === "pr" && !lists.prs.some((p) => p.number === f.number)).map((f) => ({ number: f.number, title: f.title, head: f.head ?? "", cross_repo: f.cross_repo })), ...lists.prs];
   return { ...lists, issues, prs };

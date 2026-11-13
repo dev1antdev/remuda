@@ -223,7 +223,7 @@ func parseGemini(data []byte) ([]Turn, error) {
 		case "gemini":
 			for _, th := range m.Thoughts {
 				if t := strings.TrimSpace(strings.TrimSpace(th.Subject) + "\n\n" + strings.TrimSpace(th.Description)); t != "" {
-					appendPart("assistant", m.Timestamp, m.ID, Part{Type: "thinking", Text: t})
+					appendPart("assistant", m.Timestamp, m.ID, Part{Type: "thinking", Text: t, At: m.Timestamp})
 				}
 			}
 			placed := map[string]bool{}
@@ -240,7 +240,7 @@ func parseGemini(data []byte) ([]Turn, error) {
 					placed[call.ID] = true
 					appendPart("assistant", m.Timestamp, m.ID, geminiToolPart(call, m.Timestamp))
 				case strings.TrimSpace(p.Text) != "":
-					appendPart("assistant", m.Timestamp, m.ID, Part{Type: "text", Text: p.Text})
+					appendPart("assistant", m.Timestamp, m.ID, Part{Type: "text", Text: p.Text, At: m.Timestamp})
 				}
 			}
 			for _, tc := range m.ToolCalls {
