@@ -14667,8 +14667,8 @@ textarea.screen-term-field {
 }
 
 .prompt-sent-text {
+  flex: 1;
   min-width: 0;
-  white-space: pre-wrap;
   word-break: break-word;
 }
 
@@ -14724,4 +14724,13 @@ textarea.screen-term-field {
   .prompts {
     width: 290px;
   }
+}
+
+.prompt-full .md p,
+.prompt-sent-text .md p {
+  margin: 0;
+}
+
+.prompt-full .md p + p {
+  margin-top: 6px;
 }

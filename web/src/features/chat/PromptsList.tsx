@@ -39,23 +39,26 @@ export function PromptsList({ turns, live, usage, machineId, paneId, session, di
   const [, setShown] = usePromptsShown();
   const oldest = useMemo(() => promptCards(turns), [turns]);
   const cards = useMemo(() => oldest.slice().reverse(), [oldest]);
-  const [walked, setWalked] = useState<Walk>({ at: 0, open: null });
+  // the pick and the open card by their numbers, which a new prompt at the top leaves where they are
+  const [chosen, setChosen] = useState<{ pick: number | null; open: number | null }>({ pick: null, open: null });
   const heads = useRef<(HTMLButtonElement | null)[]>([]);
-  const at = Math.min(walked.at, Math.max(0, cards.length - 1));
+  const indexOf = (n: number | null) => (n === null ? -1 : cards.findIndex((card) => card.n === n));
+  const walked: Walk = { at: Math.max(0, indexOf(chosen.pick)), open: indexOf(chosen.open) >= 0 ? indexOf(chosen.open) : null };
+  const at = walked.at;
   const jump = (card: PromptCard | undefined) => {
     if (card?.id && session) actions.jumpTo(machineId, paneId, session, card.id);
   };
-  const move = (next: Walk) => {
+  const choose = (next: Walk) => {
     if (next.open !== null && next.open !== walked.open) jump(cards[next.open]);
-    setWalked(next);
-    heads.current[next.at]?.focus();
+    setChosen({ pick: cards[next.at]?.n ?? null, open: next.open !== null ? (cards[next.open]?.n ?? null) : null });
   };
   const onKey = (e: KeyboardEvent) => {
-    const next = walk({ at, open: walked.open }, e.key, cards.length);
+    const next = walk(walked, e.key, cards.length);
     if (!next) return;
     e.preventDefault();
     e.stopPropagation();
-    move(next);
+    choose(next);
+    heads.current[next.at]?.focus();
   };
   const liveTokens = live?.progress?.tokens;
   const output = totalOutput(oldest, live ? { seconds: null, tokens: liveTokens } : null);
@@ -90,11 +93,7 @@ export function PromptsList({ turns, live, usage, machineId, paneId, session, di
                 dir={dir}
                 onOpenFile={onOpenFile}
                 headRef={(el) => (heads.current[i] = el)}
-                onPick={() => {
-                  const opening = walked.open !== i;
-                  if (opening) jump(card);
-                  setWalked({ at: i, open: opening ? i : null });
-                }}
+                onPick={() => choose({ at: i, open: walked.open === i ? null : i })}
               />
             ))}
           </ol>
@@ -160,16 +159,18 @@ function LiveFacts({ card, live }: { card: PromptCard; live: LiveRead }) {
 function Opened({ card, live, dir, onOpenFile }: { card: PromptCard; live: boolean; dir: string; onOpenFile: OpenFile }) {
   return (
     <div className="prompt-body">
-      <div className="prompt-full part-text">{card.text}</div>
+      <div className="prompt-full">
+        <Markdown text={card.text} onOpenFile={onOpenFile} />
+      </div>
       {card.also.length > 0 && (
         <ul className="prompt-sent">
           {card.also.map((m, i) => (
             <li key={i}>
               <span className="prompt-sent-at">{m.at ? whenShort(m.at) : ""}</span>
-              <span className="prompt-sent-text">
-                {m.from && <b>{m.from}: </b>}
-                {m.text}
-              </span>
+              <div className="prompt-sent-text">
+                {m.from && <b>{m.from}</b>}
+                <Markdown text={m.text} onOpenFile={onOpenFile} />
+              </div>
             </li>
           ))}
         </ul>

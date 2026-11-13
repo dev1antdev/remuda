@@ -1624,8 +1624,20 @@ async function runPass() {
       await palette("lens:terminal");
     },
   });
-  // the chat's own: an answer's calls as one card, a message sent while the agent worked in its turn, the spinner's
-  // progress over the composer, and the prompts list beside the log (a sheet on a phone) with a card opened in place
+  // the chat's own: an answer's calls as one card, a message sent while the agent worked in its turn, its last call
+  // still running and the spinner's progress over the composer — then the prompts list beside the log (a sheet on a
+  // phone) with a card opened in place
+  await screen("chat-working", {
+    open: async () => {
+      promptsChat = true;
+      await palette("lens:chat");
+      if (!(await until(() => present(".lens-pane:not([hidden]) .part-sent"), 20))) throw new Error("the message sent while the agent worked is not in its turn");
+      await evaluate(`(() => { const log = document.querySelector(".lens-pane:not([hidden]) .chat-log"); if (log) log.scrollTop = log.scrollHeight; })()`);
+      if (!(await until(() => evaluate(`!!document.querySelector(".lens-pane:not([hidden]) .chat-progress")?.textContent.includes("Refactoring")`), 10))) failed("the progress line does not say what the spinner says");
+    },
+    expect: [".lens-pane:not([hidden]) .tool-card .tool-spin", ".lens-pane:not([hidden]) .part-sent .part-sent-mark", ".lens-pane:not([hidden]) .chat-progress"],
+    close: async () => {},
+  });
   await screen("chat-prompts", {
     open: async () => {
       promptsChat = true;
@@ -1635,18 +1647,10 @@ async function runPass() {
       if (!(await until(() => present(".prompts .prompt"), 10))) throw new Error("the prompts list did not open");
       await tap(".prompts .prompt:nth-child(2) .prompt-head");
       if (!(await until(() => present(".prompts .prompt.is-open .prompt-reply"), 5))) failed("a card of the prompts list did not open in place");
-      if (!(await until(() => evaluate(`!!document.querySelector(".lens-pane:not([hidden]) .chat-progress")?.textContent.includes("Refactoring")`), 10))) failed("the progress line does not say what the spinner says");
     },
-    expect: [
-      ".lens-pane:not([hidden]) .tool-card .tool-mark.is-failed",
-      ".lens-pane:not([hidden]) .tool-card .tool-spin",
-      ".lens-pane:not([hidden]) .part-sent",
-      ".lens-pane:not([hidden]) .chat-progress",
-      ".prompts .prompt.is-live .prompt-working",
-      ".prompts .prompt.is-open .prompt-reply",
-    ],
+    expect: [".lens-pane:not([hidden]) .tool-card .tool-mark.is-failed", ".prompts .prompt.is-live .prompt-working", ".prompts .prompt.is-open .prompt-reply"],
     close: async () => {
-      await palette("prompts");
+      if (await present(".prompts")) await palette("prompts");
       promptsChat = false;
       await palette("lens:terminal");
     },

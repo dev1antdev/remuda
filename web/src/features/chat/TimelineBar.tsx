@@ -29,9 +29,9 @@ export function TimelineBar({ turns, machineId, paneId, session }: { turns: Turn
   };
   const row = chips(line);
   return (
-    <div className="timeline" title={summary(line)}>
+    <div className="timeline">
       <div className="timeline-row">
-        <div className="timeline-bar">
+        <div className="timeline-bar" title={summary(line)}>
           {line.segments.map((s, i) => (
             <button
               key={s.id || i}
