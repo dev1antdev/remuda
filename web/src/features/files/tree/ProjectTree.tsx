@@ -19,7 +19,7 @@ import { absoluteOf, CHAT_PAUSE, fileMessage, REFRESH_EVERY, relativeOf, rowActi
 // the folders open in each tree, kept while the page stands so a tab switched away and back opens where it was
 const opened = new Map<string, Set<string>>();
 
-type Sending = { entry: TreeEntry; path: string; rel: string };
+type Sending = { entry: TreeEntry; path: string };
 
 export default function ProjectTree({ machineId, paneId, dir, active, viewOnly, editor, onOpenFile }: {
   machineId: string;
@@ -56,7 +56,7 @@ export default function ProjectTree({ machineId, paneId, dir, active, viewOnly, 
       else if (action === "editor") actions.openInCode(machineId, dir, path);
       else if (action === "copy-relative") copy(relativeOf(dir, rel));
       else if (action === "copy-full") copy(path);
-      else setSending({ entry, path, rel });
+      else setSending({ entry, path });
     },
     [dir, machineId, onOpenFile],
   );
