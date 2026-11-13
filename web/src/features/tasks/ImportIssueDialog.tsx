@@ -10,19 +10,21 @@ import { isIssueURL } from "./issue";
 import { projectOption } from "./pieces";
 import { t } from "@/lib/i18n";
 
-export default function ImportIssueDialog({ projectId, onClose, onCreated }: {
+export default function ImportIssueDialog({ projectId, url: given = "", machineId, onClose, onCreated }: {
   projectId?: number; // the project picked on screen, if any
+  url?: string; // the issue, when the dialog opens on one (the issues panel's New task)
+  machineId?: string; // the machine whose gh reads it, when the issue came from one
   onClose: () => void;
   onCreated: (task: Task, start: boolean) => void; // start: the person wants the agent dialog on it next
 }) {
   const { machines } = useRoster();
   const connected = machines.filter((m) => m.state === "connected");
-  const [machine, setMachine] = useState(() => (connected.find((m) => m.id === "local") ?? connected[0])?.id ?? "local");
+  const [machine, setMachine] = useState(() => (connected.find((m) => m.id === machineId) ?? connected.find((m) => m.id === "local") ?? connected[0])?.id ?? "local");
   const projects = useQuery(() => listProjects().then((all) => all.filter((p) => !p.is_archived)), []);
   const list = projects.data ?? [];
   const [picked, setPicked] = useState(projectId ?? 0);
   const project = list.some((p) => p.id === picked) ? picked : (list.find((p) => p.title === "Inbox") ?? list[0])?.id ?? 0;
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(given);
   const ready = isIssueURL(url) && project > 0 && !!machine;
   const { busy, err, run } = useSubmit(async (start: boolean) => {
     const task = await importIssue(machine, project, url.trim());

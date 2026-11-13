@@ -23,7 +23,7 @@ export type AppDialog =
   | { kind: "rename"; machineId: string; what: "tab" | "workspace"; id: string; label: string }
   | { kind: "workspace"; machineId: string; dir?: string } // dir: the folder it opens on, from a folder's own menu
   | { kind: "tab"; machineId: string; session: Session }
-  | { kind: "worktree"; machineId: string; session: Session }
+  | { kind: "worktree"; machineId: string; session: Session; issue?: number; repo?: string; title?: string; prompt?: string } // issue: a GitHub issue of repo the worktree is for (the issues panel's Start)
   | { kind: "machine" }
   | { kind: "broadcast" } // one message to several agents
   | { kind: "keys" } // the keyboard sheet
@@ -31,7 +31,7 @@ export type AppDialog =
   | { kind: "renameMachine"; machine: Machine }
   | { kind: "recap"; machineId: string; paneId: string; session: string | null; dir: string; title: string } // one conversation's recap; paneId "" = a transcript on its own
   | { kind: "budget"; budget: BudgetStatus | null } // a spending limit, new or the one given
-  | { kind: "import-issue"; projectId?: number } // a task from a GitHub issue, into the project named or the one picked in the dialog
+  | { kind: "import-issue"; projectId?: number; url?: string; machineId?: string } // a task from a GitHub issue, into the project named or the one picked in the dialog; url: the issue, already given
   | { kind: "import-jira"; projectId?: number } // a task from a Jira issue, read from the person's site
   | { kind: "handover"; machineId: string; paneId: string; session: string | null; agent: string; workspace: string } // this conversation continued by another agent in a new tab
   | { kind: "recipes" } // the saved ways to start an agent, edited as a list
@@ -57,7 +57,7 @@ export type NoticeMsg = { text: string; error?: boolean; brief?: boolean };
 export type Confirm = { text: string; label: string; run: () => void };
 // a jump names its pane ("" = the transcript viewer): a Chat gets it only when it is that pane's
 export type Jump = { machineId: string; paneId: string; session: string; turn: string; n: number };
-export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | "arena" | "server" | "concierge" | null; // server: the host's vitals, in server mode; concierge: the agent asked what the others are doing
+export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | "arena" | "server" | "concierge" | "issues" | null; // server: the host's vitals, in server mode; concierge: the agent asked what the others are doing; issues: a GitHub repository's issues
 // what the transcript viewer shows, read-only: a session by folder and id, or one of its subagents
 export type Viewer = Pick<SearchHit, "machine" | "dir" | "session"> & { subagent?: { id: string; description: string } };
 // the find bar over the conversation shown: the bar writes the query and the step, the chat writes the count;
@@ -96,6 +96,8 @@ export type AppState = {
   split: boolean; // the chat beside the terminal, asked for by a per-device pref; shown only on a wide screen with a mouse (app/split.ts)
   float: { machineId: string } | null; // the floating terminal's drawer, open on that machine's scratch shell; null while hidden
   listen: boolean; // the standup panel is asked to read the day aloud once its report is in (the palette's Listen to the day)
+  issuesAt: { machineId: string; dir: string } | null; // the folder the issues panel was opened on (a folder's ⋯), else it follows the pane
+  issueClosed: { machineId: string; repo: string; number: number; reason: "completed" | "not_planned" } | null; // an issue just closed from the page: a toast offers Reopen
 };
 
 const fromURL = readURL();
@@ -134,6 +136,8 @@ export const app = createStore<AppState>({
   split: readPref("split", false),
   float: null,
   listen: false,
+  issuesAt: null,
+  issueClosed: null,
 });
 
 let jumps = linked ? 1 : 0;
@@ -317,6 +321,13 @@ export const actions = {
   },
   listened() {
     app.set({ listen: false });
+  },
+  // openIssues opens the GitHub issues panel on a folder's repository, or following the pane on screen
+  openIssues(at: AppState["issuesAt"] = null) {
+    app.set({ panel: "issues", issuesAt: at });
+  },
+  setIssueClosed(issueClosed: AppState["issueClosed"]) {
+    app.set({ issueClosed });
   },
   // the chat beside the terminal, on or off; a pref per device, since a width suits a screen
   toggleSplit() {

@@ -5,6 +5,7 @@ import { fetchRecipes, type Recipe } from "@/features/recipes/api";
 import { draftOf, recipeOf, recipeWords } from "@/features/recipes/recipes";
 import RecipeMark from "@/features/recipes/RecipeMark";
 import RecipesDialog from "@/features/recipes/RecipesDialog";
+import { issueBranch } from "@/features/issues/prompt";
 import { readPref, writePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { dirname } from "@/lib/text";
@@ -47,9 +48,9 @@ function AgentSelect({ agents, value, onChange }: { agents: AgentKind[]; value: 
 
 // useStart is the agent a dialog starts and the person's choices for it: the model last used for the kind comes back
 // from this device's prefs, a pick of another kind brings that kind's; what the create route takes comes out of options()
-function useStart(initial: string) {
+function useStart(initial: string, prompt = "") {
   const [agent, setAgent] = useState(initial);
-  const [draft, setDraft] = useState<Draft>(() => ({ ...EMPTY_DRAFT, ...choiceFor(initial, readPref(lastModelKey(initial), "")) }));
+  const [draft, setDraft] = useState<Draft>(() => ({ ...EMPTY_DRAFT, prompt, ...choiceFor(initial, readPref(lastModelKey(initial), "")) }));
   const pickAgent = (kind: string) => {
     setAgent(kind);
     setDraft((d) => ({ ...d, ...choiceFor(kind, readPref(lastModelKey(kind), "")) }));
@@ -72,7 +73,7 @@ function useStart(initial: string) {
 // prompt, and at the fold's end the ways to save them as a recipe and to manage the recipes; a shell keeps the pick alone.
 // A model or mode being retired is said above the fold, folded or not.
 function StartOptionsFields({ kind, draft, agents, machine = "", onChange, onRecipe }: { kind: string; draft: Draft; agents: AgentKind[]; machine?: string; onChange: (d: Draft) => void; onRecipe: (r: Recipe) => void }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => draft.prompt !== ""); // a first prompt given to the dialog is shown, not folded away
   const [picked, setPicked] = useState("");
   const [managing, setManaging] = useState<{ initial?: Recipe } | null>(null);
   const recipes = useQuery(fetchRecipes, []);
@@ -248,17 +249,21 @@ export function NewTabDialog({ session, machine, agents, onCreate, onClose }: {
   );
 }
 
-export function NewWorktreeDialog({ session, machine, agents, onCreate, onClose }: {
+export function NewWorktreeDialog({ session, machine, agents, issue, title = "", prompt = "", onCreate, onClose }: {
   session: Session;
   machine: string; // the repository's machine, where the agent starts
   agents: AgentKind[];
+  issue?: number; // a GitHub issue the worktree is for (the issues panel's Start): its branch, its name and the agent's first prompt
+  repo?: string;
+  title?: string;
+  prompt?: string;
   onCreate: (branch: string, base: string, name: string, agent: string, extras: StartExtras) => Promise<void>;
   onClose: () => void;
 }) {
-  const [branch, setBranch] = useState(suggestBranch);
+  const [branch, setBranch] = useState(() => (issue ? issueBranch(issue) : suggestBranch()));
   const [base, setBase] = useState("");
-  const [name, setName] = useState("");
-  const { agent, pickAgent, draft, setDraft, options, applyRecipe } = useStart(defaultAgent(agents, "claude"));
+  const [name, setName] = useState(() => (issue ? `#${issue} ${title}`.trim().slice(0, 60) : ""));
+  const { agent, pickAgent, draft, setDraft, options, applyRecipe } = useStart(defaultAgent(agents, "claude"), prompt);
   const submit = useSubmit(async () => {
     if (!branch.trim()) throw new Error(t("Branch name is required"));
     await onCreate(branch.trim(), base.trim(), name.trim(), agent, options());

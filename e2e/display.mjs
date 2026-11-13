@@ -88,6 +88,7 @@ socket.onmessage = (message) => {
     else if (url.includes("/api/fleet-setup")) void fakeFleet(msg.params);
     else if (url.includes("/api/undo")) void fakeUndo(msg.params);
     else if (url.includes("/api/limits/offers")) void fakeOffers(msg.params);
+    else if (url.includes("/api/issues")) void fakeIssues(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
@@ -810,6 +811,82 @@ async function fakeUndo({ requestId, request }) {
   await send("Fetch.fulfillRequest", { requestId, responseCode: code, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
 
+// fakeIssues answers the issues panel as gh would for a repository acme/widgets the app folder and its worktree are
+// checkouts of, the worktree's branch linked to issue #41: thirty issues to page through, labels in their own colours,
+// one issue whole with a timeline of every kind; a write goes through. Nothing reaches gh: every /api/issues call stops here.
+// Forty issues, thirty-two open: two pages of them, eight assigned to the account gh is signed in as
+let issueWrites = 0;
+const issueLabels = [
+  { name: "bug", color: "d73a4a", description: "Something isn't working" },
+  { name: "good first issue", color: "7057ff" },
+  { name: "docs", color: "0075ca" },
+  { name: "ui", color: "fbca04" },
+];
+function fakeIssueItems() {
+  const people = ["alice", "bob", "carol", "e2e"];
+  return Array.from({ length: 40 }, (_, i) => {
+    const number = 41 - i;
+    const closed = i % 5 === 3;
+    return {
+      number,
+      title: i === 0 ? "Crash on start when the config is missing" : `Issue number ${number}: a longer title that has to be cut where the row ends on a phone`,
+      author: { login: people[i % 3], ...(i === 4 ? { bot: true } : {}) },
+      state: closed ? "closed" : "open",
+      ...(closed ? { reason: i % 2 ? "not_planned" : "completed" } : {}),
+      labels: issueLabels.filter((_, k) => (i + k) % 3 === 0),
+      assignees: i % 4 === 0 ? [{ login: "e2e" }, { login: "alice" }] : i % 4 === 1 ? [{ login: "bob" }] : [],
+      updated: iso(now - (i * 37 + 3) * 60e3),
+      url: `https://github.com/acme/widgets/issues/${number}`,
+    };
+  });
+}
+function fakeIssueDetail(number) {
+  const item = fakeIssueItems().find((it) => it.number === number) ?? fakeIssueItems()[0];
+  const at = (minutes) => iso(now - minutes * 60e3);
+  return {
+    ...item,
+    body: "It crashes on start. See #40 and `config.yaml`.\n\n```\npanic: no config\n```",
+    role: "CONTRIBUTOR",
+    created: at(3000),
+    milestone: { title: "v1.2", url: "https://github.com/acme/widgets/milestone/3" },
+    reactions: [{ content: "+1", count: 3 }, { content: "eyes", count: 1 }],
+    comments: 2,
+    timeline: [
+      { kind: "labels", actor: { login: "alice" }, at: at(2900), added: issueLabels.slice(0, 2), removed: [{ name: "triage", color: "ededed" }] },
+      { kind: "comment", actor: { login: "carol" }, at: at(2000), body: "I see it too on **main**.", role: "MEMBER", url: "https://github.com/acme/widgets/issues/41#issuecomment-1", reactions: [{ content: "heart", count: 2 }] },
+      { kind: "renamed", actor: { login: "bob" }, at: at(1900), from: "Crash", to: item.title },
+      { kind: "assign", actor: { login: "e2e" }, at: at(1800), who: "e2e", on: true },
+      { kind: "mention", actor: { login: "alice" }, at: at(1500), ref: { repo: "acme/widgets", number: 43, title: "Fix the crash on start", state: "open", url: "https://github.com/acme/widgets/pull/43", pull: true } },
+      { kind: "commit", actor: { login: "alice" }, at: at(1400), sha: "0123456789abcdef0123456789abcdef01234567", url: "https://github.com/acme/widgets/commit/0123456789abcdef0123456789abcdef01234567" },
+      { kind: "closed", actor: { login: "bob" }, at: at(1000), reason: "not_planned" },
+      { kind: "reopened", actor: { login: "carol" }, at: at(900) },
+      { kind: "comment", actor: { login: "bob" }, at: at(60), body: "Reopened: it is not a duplicate of other/lib#7.", role: "CONTRIBUTOR" },
+    ],
+    pulls: [{ repo: "acme/widgets", number: 43, title: "Fix the crash on start", url: "https://github.com/acme/widgets/pull/43", state: "OPEN", draft: true }],
+    participants: [{ login: "bob" }, { login: "alice" }, { login: "carol" }, { login: "e2e" }],
+    me: "e2e",
+    at: iso(now - 30e3),
+    source: "read",
+  };
+}
+async function fakeIssues({ requestId, request }) {
+  const url = new URL(request.url);
+  let body;
+  if (request.method === "POST") {
+    issueWrites++;
+    body = { ok: true };
+  } else if (url.pathname === "/api/issues/repos") {
+    const dirs = (await sessions()).filter((s) => s.id === app.id || s.id === tree.id).map((s) => s.dir).filter(Boolean);
+    const entry = { repo: "acme/widgets", folder: appDir, dirs: dirs.length ? dirs : [appDir], links: [{ branch: "feature-x", number: 41 }] };
+    body = { repos: [entry], here: { dir: url.searchParams.get("dir") ?? appDir, repo: "acme/widgets", folder: appDir } };
+  } else if (url.pathname === "/api/issues") {
+    const q = url.searchParams.get("q") ?? "";
+    const items = fakeIssueItems().filter((it) => (!/is:open/.test(q) || it.state === "open") && (!/assignee:@me/.test(q) || it.assignees.some((a) => a.login === "e2e")));
+    body = { items, more: false, me: "e2e", at: iso(now - 90e3), source: "read" };
+  } else body = fakeIssueDetail(Number(url.pathname.split("/").at(-1)));
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
   const reply = await send("Fetch.getResponseBody", { requestId });
   if (responseStatusCode !== 200 || !reply.result) {
@@ -843,6 +920,7 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
     };
     for (const session of machine.sessions ?? []) {
       if (session.id === app.id || session.id === tree.id) session.icon = { emoji: "🦊" }; // the icon is the folder's, the worktree's too
+      if (session.id === tree.id) session.branch ??= "feature-x"; // the branch the issues panel finds linked to issue #41
       if (session.id === desk?.id) session.concierge = true; // the page shows it in the concierge's place alone
       if (session.id === app.id) {
         session.jira = [{ key: "APP-12", summary: "Draw every screen", status: "In Review", category: "indeterminate", url: "https://example.atlassian.net/browse/APP-12" }];
@@ -1079,6 +1157,81 @@ async function sceneScreens() {
     },
     expect: [".modal .scene-outcome.is-ok", ".modal .scene-outcome.is-bad", ".modal .scene-outcome.is-quiet"],
   });
+}
+
+// issueScreens draws the GitHub issues panel on fakeIssues' answers: the table with its filters, a row's status menu,
+// one issue's timeline, the comment box's preview, and Start opening the New worktree dialog on the issue
+async function issueScreens() {
+  const rows = ".issues-panel .issue-row[data-issue]";
+  const openIssues = async () => {
+    await palette("issues");
+    if (!(await until(async () => (await count(rows)) === 25, 10))) failed(`the issues panel lists ${await count(rows)} rows, not a page of 25`);
+  };
+  const openIssue = async (number) => {
+    await openIssues();
+    await tap(`.issues-panel .issue-row[data-issue="${number}"] .issue-title`);
+    if (!(await until(() => present(".issues-panel .issue-viewer .issue-card"), 6))) failed(`issue #${number} did not open`);
+  };
+  await screen("issues", {
+    open: async () => {
+      await openIssues();
+      check(await evaluate(`document.querySelector(".issues-panel .issue-crumb.is-last")?.textContent === "acme/widgets"`), "the breadcrumb does not name acme/widgets");
+      check(await present('.issues-panel .issue-row[data-issue="41"] .btn.primary.issue-go'), "the issue the worktree's branch is linked to offers no Open");
+      check(await present('.issues-panel .issue-row[data-issue="40"] .btn.issue-go:not(.primary)'), "an issue no workspace works on offers no Start");
+      check(await present(".issues-panel .issue-row .issue-label"), "no label is drawn");
+      check(await present(".issues-panel .issue-pager"), "thirty-two open issues have no second page");
+    },
+    expect: [rows, ".issues-panel .issue-search input", ".issues-panel .issue-repo-btn"],
+  });
+  await screen("issues-filters", {
+    open: async () => {
+      await openIssues();
+      await tap(".issues-panel .issue-chips .btn:nth-child(2)");
+      if (!(await until(() => evaluate(`document.querySelector(".issues-panel .issue-search input")?.value === "is:issue is:open assignee:@me"`), 4))) failed("Assigned to me did not write assignee:@me into the search");
+      if (!(await until(async () => (await count(rows)) === 8, 6))) failed(`Assigned to me lists ${await count(rows)} issues, not 8`);
+      await tap(".issues-panel .issue-filters");
+    },
+    expect: ["[role=menu].menu .menu-item.checked", "[role=menu].menu .menu-heading"],
+  });
+  await screen("issues-status-menu", {
+    open: async () => {
+      await openIssues();
+      await tap('.issues-panel .issue-row[data-issue="40"] .issue-state-btn');
+      if (!(await until(async () => (await count("[role=menu].menu .menu-item")) === 2, 3))) failed("an open issue's status menu does not offer the two closes");
+    },
+    expect: ["[role=menu].menu"],
+  });
+  await screen("issues-viewer", {
+    open: async () => {
+      await openIssue(41);
+      check((await count(".issues-panel .issue-event")) === 7, `the timeline draws ${await count(".issues-panel .issue-event")} events, not 7`);
+      check((await count(".issues-panel .issue-card")) === 3, `the timeline draws ${await count(".issues-panel .issue-card")} cards, not the issue and its two comments`);
+      check(await present(".issues-panel .issue-viewer-sub .issue-state.is-filled"), "the issue's state is no filled pill");
+      check(await present(".issues-panel .issue-side .issue-label"), "the right column has no labels");
+      check(await present(".issues-panel .issue-event-line s"), "the rename shows no old title struck through");
+    },
+    expect: [".issues-panel .issue-timeline", ".issues-panel .issue-composer", ".issues-panel .issue-side"],
+  });
+  await screen("issues-preview", {
+    open: async () => {
+      await openIssue(41);
+      await evaluate(`document.querySelector(".issues-panel .issue-composer-text")?.focus()`);
+      await send("Input.insertText", { text: "Fixed in #43, **thanks**." });
+      await tap(".issues-panel .issue-composer-tabs button:nth-child(2)");
+      if (!(await until(() => present(".issues-panel .issue-composer-preview .md a"), 4))) failed("the preview does not draw the comment's Markdown with #43 as a link");
+    },
+    expect: [".issues-panel .issue-composer-preview strong"],
+  });
+  await screen("issues-start", {
+    open: async () => {
+      await openIssues();
+      await tap('.issues-panel .issue-row[data-issue="40"] .issue-go');
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".modal input")].some((i) => i.value === "dev/feat/40")`), 4))) failed("Start did not open the New worktree dialog on the issue's branch");
+      check(await evaluate(`[...document.querySelectorAll(".modal textarea")].some((t) => t.value.startsWith("You are being given background only."))`), "the agent's first prompt is not the issue as background only");
+    },
+    expect: [".modal"],
+  });
+  check(issueWrites === 0, `the issue screens wrote ${issueWrites} times to GitHub`);
 }
 
 const onAgents = async () => {
@@ -1598,6 +1751,7 @@ async function runPass() {
     expect: [".modal .trigger-form", ".modal .trigger-try"],
   });
   await sceneScreens();
+  await issueScreens();
   await screen("float-terminal", {
     open: async () => {
       await key("`", "Backquote", 2);
@@ -2001,6 +2155,7 @@ try {
       { urlPattern: "*/api/fleet-setup*", requestStage: "Request" },
       { urlPattern: "*/api/undo*", requestStage: "Request" },
       { urlPattern: "*/api/limits/offers*", requestStage: "Request" },
+      { urlPattern: "*/api/issues*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });

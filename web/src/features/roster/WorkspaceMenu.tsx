@@ -55,6 +55,7 @@ function folderRows(m: Machine, folder: string, name: string, icon: Session["ico
     : { label: t("New workspace in this folder…"), icon: "plus", hint: shown.masked ? shown.name : name, disabled: !connected, onSelect: () => actions.openDialog({ kind: "workspace", machineId: m.id, dir: folder }) };
   return [
     newWorkspace,
+    ...(repository ? [{ label: t("Issues…"), icon: "circle-dot" as const, hint: t("its GitHub issues, read and written with gh as you"), disabled: !connected, onSelect: () => actions.openIssues({ machineId: m.id, dir: folder }) }] : []),
     ...(shown.masked ? [] : [{ label: t("Folder icon…"), icon: "folder" as const, onSelect: () => actions.openDialog({ kind: "folder-icon", machineId: m.id, folder, name, icon }) }]),
     { label: t("Hide when sharing the screen"), icon: "eye-off", checked: hidden, onSelect: () => toggleSharingFolder(m.id, folder) },
     ...(onWindows(m) ? [] : [{ label: t("Open in the editor"), icon: "code" as const, hint: t("the Code mode on this folder"), disabled: !connected, onSelect: () => actions.openInCode(m.id, folder, folder) }]), // a Windows PC has no code-server

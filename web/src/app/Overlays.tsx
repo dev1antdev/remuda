@@ -34,6 +34,7 @@ import TeleportDialog from "@/features/teleport/TeleportDialog";
 import ModelDialog from "@/features/chat/ModelDialog";
 import { handedOverWords } from "@/features/chat/handover";
 import ImportIssueDialog from "@/features/tasks/ImportIssueDialog";
+import IssuesPanel from "@/features/issues/IssuesPanel";
 import ImportJiraDialog from "@/features/tasks/ImportJiraDialog";
 import RecipesDialog from "@/features/recipes/RecipesDialog";
 import StartFromRecipeDialog from "@/features/recipes/StartFromRecipeDialog";
@@ -110,6 +111,7 @@ export default function Overlays() {
       {panel === "standup" && <Standup onClose={actions.closePanel} />}
       {panel === "arena" && <ArenaPanel onClose={actions.closePanel} />}
       {panel === "concierge" && !viewOnly && <Concierge onClose={actions.closePanel} />}
+      {panel === "issues" && !viewOnly && <IssuesPanel onClose={actions.closePanel} />}
       {panel === "usage" && (
         <Usage machines={machines} onClose={actions.closePanel} onOpenSession={(machine, project, session, dir) => openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" })} />
       )}
@@ -168,6 +170,10 @@ export default function Overlays() {
           session={dialog.session}
           machine={dialog.machineId}
           agents={agents}
+          issue={dialog.issue}
+          repo={dialog.repo}
+          title={dialog.title}
+          prompt={dialog.prompt}
           onClose={actions.closeDialog}
           onCreate={async (branch, base, name, agent, extras) =>
             landOn(dialog.machineId, await createWorktree({ machine: dialog.machineId, workspace: dialog.session.id, branch, base, name, agent, ...extras }))
@@ -190,6 +196,8 @@ export default function Overlays() {
       {dialog?.kind === "import-issue" && (
         <ImportIssueDialog
           projectId={dialog.projectId}
+          url={dialog.url}
+          machineId={dialog.machineId}
           onClose={actions.closeDialog}
           onCreated={(task, start) => {
             actions.closeDialog();

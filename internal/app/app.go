@@ -26,6 +26,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/feed"
+	"github.com/dev1antdev/remuda/internal/ghissues"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
@@ -230,6 +231,15 @@ func Run(ctx context.Context, o Options) error {
 		return mc, true
 	})
 	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
+	// a repository's issues, read and written through gh on the machine of one of its checkouts, as the person
+	githubIssues := ghissues.New(func(machineID string) (ghissues.Host, error) {
+		mc, err := fleet.Get(machineID)
+		if err != nil {
+			return nil, err
+		}
+		return mc, nil
+	})
+	events.Subscribe(bus, func(e events.MachineRemoved) { githubIssues.Forget(e.Machine) })
 	// how many subagents each Claude Code pane's live conversation runs, read while a page reads the roster, for the Wall's zoo
 	subagentCounts := subagents.New(chats.RecentSubagents, func(machineID string) bool {
 		mc, err := fleet.Get(machineID)
@@ -795,6 +805,7 @@ func Run(ctx context.Context, o Options) error {
 		Collisions: radarOfCollisions,
 		Undo:       turns,
 		Scenes:     sceneSet,
+		Issues:     githubIssues,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews
