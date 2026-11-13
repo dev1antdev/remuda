@@ -14,7 +14,8 @@ func (s *Server) questionRoutes(api *http.ServeMux) {
 }
 
 // handleQuestion is GET /api/question?machine&pane: the dialog on the pane's screen with its choices, null when the screen shows
-// none, and the permission mode Claude Code's footer names, left out when no footer is on screen.
+// none, the permission mode Claude Code's footer names and what its spinner says while it works ({verb, seconds,
+// tokens}), each left out when the screen does not show it — one read of the screen for all three.
 func (s *Server) handleQuestion(w http.ResponseWriter, r *http.Request) {
 	paneID := r.URL.Query().Get("pane")
 	if paneID == "" {
@@ -37,6 +38,9 @@ func (s *Server) handleQuestion(w http.ResponseWriter, r *http.Request) {
 	}
 	if mode, ok := chat.ParseMode(screen); ok {
 		answer["mode"] = mode
+	}
+	if progress, ok := chat.ParseProgress(screen); ok {
+		answer["progress"] = progress
 	}
 	writeJSON(w, answer)
 }

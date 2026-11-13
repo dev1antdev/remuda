@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import composer from "./Composer.tsx?raw";
 import findBar from "./FindBar.tsx?raw";
 import pinsDialog from "./PinsDialog.tsx?raw";
+import promptsList from "./PromptsList.tsx?raw";
 import queueList from "./QueueList.tsx?raw";
 import quickPrompts from "./QuickPrompts.tsx?raw";
+import timelineBar from "./TimelineBar.tsx?raw";
 import turnView from "./TurnView.tsx?raw";
 
 // openingTag is the `<button …>` starting at `from`, across lines, its braces (an arrow's `>` among them) skipped
@@ -30,7 +32,7 @@ function iconButtons(source: string): { tag: string; before: string[] }[] {
   return found;
 }
 
-const SOURCES = { composer, findBar, pinsDialog, queueList, quickPrompts, turnView };
+const SOURCES = { composer, findBar, pinsDialog, promptsList, queueList, quickPrompts, timelineBar, turnView };
 
 describe("the chat's icon-only buttons", () => {
   it("say what they do through a Tip — their own, or their menu's — and an aria-label, never a title (AGENTS.md)", () => {

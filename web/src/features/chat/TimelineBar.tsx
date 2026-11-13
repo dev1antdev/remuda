@@ -1,12 +1,15 @@
 // TimelineBar is the thin bar over a conversation: its prompts and answers laid out in time, the moments worth a
-// look marked, every one a jump to its turn; a row of the View menu switches it (useTimelineShown, pref chat.timeline).
+// look marked, every one a jump to its turn, and at its end the switch of the prompts list; a row of the View menu
+// switches it (useTimelineShown, pref chat.timeline).
 
 import { useMemo } from "react";
 import { actions } from "@/app/store";
+import { t } from "@/lib/i18n";
 import { isTouch, usePref } from "@/lib/prefs";
 import { spent, whenShort } from "@/lib/time";
-import { Icon } from "@/ui";
+import { Icon, Tip } from "@/ui";
 import type { Turn } from "./api";
+import { usePromptsShown } from "./PromptsList";
 import { chips, summary, timeline } from "./timeline";
 
 export const TIMELINE_PREF = "chat.timeline";
@@ -18,6 +21,7 @@ const pct = (x: number) => `${(100 * x).toFixed(3)}%`;
 
 export function TimelineBar({ turns, machineId, paneId, session }: { turns: Turn[]; machineId: string; paneId: string; session?: string }) {
   const [shown] = useTimelineShown();
+  const [prompts, setPrompts] = usePromptsShown();
   const line = useMemo(() => (shown && turns.length >= 2 ? timeline(turns) : null), [shown, turns]);
   if (!line || !session || line.segments.length === 0) return null;
   const go = (id: string) => {
@@ -26,21 +30,28 @@ export function TimelineBar({ turns, machineId, paneId, session }: { turns: Turn
   const row = chips(line);
   return (
     <div className="timeline" title={summary(line)}>
-      <div className="timeline-bar">
-        {line.segments.map((s, i) => (
-          <button
-            key={s.id || i}
-            type="button"
-            className="linkish timeline-seg"
-            style={{ left: pct(s.x), width: pct(s.w) }}
-            title={`${whenShort(s.start)} · ${s.prompt}${s.took ? ` · ${spent(s.took)}` : ""}`}
-            aria-label={s.prompt || "a prompt"}
-            onClick={() => go(s.id)}
-          />
-        ))}
-        {line.highlights.map((h, i) => (
-          <button key={`${h.kind}${i}`} type="button" className={`linkish timeline-mark is-${h.kind}`} style={{ left: pct(h.x) }} title={`${h.label}: ${h.detail}`} aria-label={h.label} onClick={() => go(h.id)} />
-        ))}
+      <div className="timeline-row">
+        <div className="timeline-bar">
+          {line.segments.map((s, i) => (
+            <button
+              key={s.id || i}
+              type="button"
+              className="linkish timeline-seg"
+              style={{ left: pct(s.x), width: pct(s.w) }}
+              title={`${whenShort(s.start)} · ${s.prompt}${s.took ? ` · ${spent(s.took)}` : ""}`}
+              aria-label={s.prompt || "a prompt"}
+              onClick={() => go(s.id)}
+            />
+          ))}
+          {line.highlights.map((h, i) => (
+            <button key={`${h.kind}${i}`} type="button" className={`linkish timeline-mark is-${h.kind}`} style={{ left: pct(h.x) }} title={`${h.label}: ${h.detail}`} aria-label={h.label} onClick={() => go(h.id)} />
+          ))}
+        </div>
+        <Tip text={prompts ? t("Close the prompts list") : t("Prompts: the conversation prompt by prompt, newest first")}>
+          <button type="button" className={`icon-btn sm timeline-prompts${prompts ? " on" : ""}`} aria-label={t("Prompts list")} aria-pressed={prompts} onClick={() => setPrompts(!prompts)}>
+            <Icon name="list" size={14} />
+          </button>
+        </Tip>
       </div>
       {row.length > 0 && (
         <div className="timeline-chips">

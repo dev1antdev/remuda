@@ -6,6 +6,7 @@ import { useCallback } from "react";
 import Palette from "@/features/palette/Palette";
 import { paneEntries, paneTitle, tabName, type Entry } from "@/features/palette/rank";
 import { exportConversation } from "@/features/chat/export";
+import { usePromptsShown } from "@/features/chat/PromptsList";
 import { useTimelineShown } from "@/features/chat/TimelineBar";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { closeWorkspace } from "@/features/roster/WorkspaceMenu";
@@ -91,6 +92,7 @@ function useCommands(): (query: string) => Entry[] {
   const [focus, setFocus] = usePref<string>("wall.focus", "");
   const [office, setOffice] = usePref<boolean>("wall.office", false);
   const [timelineShown, setTimelineShown] = useTimelineShown();
+  const [promptsShown, setPromptsShown] = usePromptsShown();
   const step = useSpinner(moving(machines));
   const now = useClock(machines);
   const goNext = useNextNeedingMe();
@@ -169,6 +171,11 @@ function useCommands(): (query: string) => Entry[] {
           actions.setLens("chat");
           setTimelineShown(!timelineShown);
         }, { hint: t("prompts and answers in time over the chat; the first error, the longest call, loops and questions marked"), icon: "clock", keywords: ["timeline", "history", "highlights", "errors", "loop", "overview", "map", "time"] });
+        if (current.pane.agent) command("prompts", promptsShown ? t("Hide the prompts list") : t("Show the prompts list"), () => {
+          actions.setMode("herdr");
+          actions.setLens("chat");
+          setPromptsShown(!promptsShown);
+        }, { hint: t("prompt by prompt, newest first: what each took, wrote and changed"), icon: "list", keywords: ["prompts", "timeline", "history", "turns", "messages", "tokens"] });
       }
       if (viewer) {
         const machine = machines.find((m) => m.id === viewer.machine);
@@ -176,6 +183,7 @@ function useCommands(): (query: string) => Entry[] {
         command("find-viewer", t("Find in this transcript"), () => actions.openFind(), { hint: `${FIND_KEY}: ${t("every match marked, Enter walks them")}`, icon: "search", keywords: ["search", "text", "match", "highlight", "where"] });
         command("recap-viewer", t("Recap this transcript"), () => actions.openDialog({ kind: "recap", machineId: viewer.machine, paneId: "", session: viewer.session, dir: viewer.dir, title: basename(viewer.dir) || viewer.dir }), { hint: t("prompts, answers, tools, files, cost — Copy as Markdown"), icon: "sun", keywords: ["recap", "summary", "report", "standup", "digest"] });
         command("timeline-viewer", timelineShown ? t("Hide the session timeline") : t("Show the session timeline"), () => setTimelineShown(!timelineShown), { hint: t("prompts and answers in time over the transcript; the first error, the longest call, loops and questions marked"), icon: "clock", keywords: ["timeline", "history", "highlights", "errors", "loop", "overview", "map", "time"] });
+        command("prompts-viewer", promptsShown ? t("Hide the prompts list") : t("Show the prompts list"), () => setPromptsShown(!promptsShown), { hint: t("prompt by prompt, newest first: what each took, wrote and changed"), icon: "list", keywords: ["prompts", "timeline", "history", "turns", "messages", "tokens"] });
       }
 
       const screens = wall.view === "screen";
@@ -282,6 +290,6 @@ function useCommands(): (query: string) => Entry[] {
       const shown = share.on ? commands.map((entry) => ({ ...entry, title: share.redact(entry.title), hint: entry.hint && share.redact(entry.hint) })) : commands;
       return [...panes, ...(viewOnly ? shown.filter((entry) => viewerCommand(entry.id)) : shown)];
     },
-    [machines, viewOnly, jiraSite, server, scenes, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, lightFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
+    [machines, viewOnly, jiraSite, server, scenes, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, lightFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, promptsShown, setPromptsShown, step, now, goNext, share],
   );
 }

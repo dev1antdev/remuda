@@ -176,8 +176,8 @@ func (c *Service) PullRequest(machineID, paneID string) (transcript.Link, bool) 
 	return transcript.PullRequest(turns)
 }
 
-// Texts is the last n texts of the pane's conversation, the person's prompts and the agent's answers alike, newest
-// first: what an issue key the work is about is read from.
+// Texts is the last n texts of the pane's conversation, the person's prompts (those sent while the agent worked too)
+// and the agent's answers alike, newest first: what an issue key the work is about is read from.
 func (c *Service) Texts(machineID, paneID string, n int) []string {
 	turns, ok := c.paneTurns(machineID, paneID)
 	if !ok {
@@ -187,7 +187,7 @@ func (c *Service) Texts(machineID, paneID string, n int) []string {
 	for i := len(turns) - 1; i >= 0 && len(out) < n; i-- {
 		parts := turns[i].Parts
 		for j := len(parts) - 1; j >= 0 && len(out) < n; j-- {
-			if parts[j].Type == "text" && parts[j].Text != "" {
+			if (parts[j].Type == "text" || parts[j].Type == "queued") && parts[j].Text != "" {
 				out = append(out, parts[j].Text)
 			}
 		}

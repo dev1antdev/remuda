@@ -19,6 +19,9 @@ import { DeniedNotice } from "./DeniedNotice";
 import { ALL_REVEALED, anchorsItself, hiddenCount, idle, nextReveal } from "./mount";
 import { isPinned, pinKey, pinOf, togglePin, type Pin } from "./pins";
 import { PlanBar } from "./PlanBar";
+import { promptedAt, type LiveRead } from "./progress";
+import { ProgressLine } from "./ProgressLine";
+import { PromptsList, usePromptsShown } from "./PromptsList";
 import { QuestionCard } from "./QuestionCard";
 import { quoteText } from "./quote";
 import { revealTurn } from "./reveal";
@@ -29,7 +32,9 @@ import { useChat } from "./useChat";
 import { useFind } from "./useFind";
 import { useFollowBottom } from "./useFollowBottom";
 import { useQuote } from "./useQuote";
+import { useScreenRead } from "./useScreenRead";
 import { useUndoTurns } from "./useUndoTurns";
+import { useMedia } from "@/lib/media";
 import { t } from "@/lib/i18n";
 
 export default function Chat({ machineId, paneId, status, origin, dir, usage, workspaceId, agent, active = true, subagent, session, viewOnly = false, focused = true, notice }: {
@@ -119,6 +124,14 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
   }, []);
   const quotePop = useQuote(logRef, !readOnly && !viewOnly && active && focused, onQuote);
   const undo = useUndoTurns({ machineId, paneId, dir, turns, status, enabled: active && !readOnly && !viewOnly });
+  // the pane's screen, read for Claude Code's permission mode and, while it works, its spinner: one read for both
+  const working = status === "run";
+  const claude = agent === "claude" && !readOnly;
+  const screen = useScreenRead(machineId, paneId, { enabled: active && claude, working });
+  const since = useMemo(() => promptedAt(turns), [turns]);
+  const underWay = useMemo<LiveRead | null>(() => (working ? { progress: claude ? screen.read?.progress : undefined, readAt: screen.read?.at ?? 0, since } : null), [working, claude, screen.read, since]);
+  const [promptsShown] = usePromptsShown();
+  const phone = useMedia("(max-width: 919px)");
 
   // a search hit: scroll to its turn once that session is on screen, or say it is older than the loaded tail
   const pendingTurn = useRef<string | null>(jump?.turn ?? null);
@@ -234,25 +247,29 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
       )}
       <TimelineBar turns={turns} machineId={machineId} paneId={paneId} session={chat?.session_id} />
       <PlanBar plan={chat?.plan} />
-      <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
-        {turns.length === 0 && <div className="empty chat-empty">{chat === null ? t("Loading…") : readOnly ? t("This transcript is empty.") : t("No transcript for this pane's folder yet.")}</div>}
-        {turns.slice(hidden).map((t, i) => (
-          <TurnView
-            key={t.ids?.[0] || hidden + i}
-            turn={t}
-            machineId={machineId}
-            onOpenFile={onOpenFile}
-            onForward={others ? onForward : undefined}
-            onLink={readOnly ? undefined : onLink}
-            onPin={readOnly ? undefined : onPin}
-            pinned={!!t.ids?.[0] && pinnedIds.has(t.ids[0])}
-            subagents={chat?.subagents}
-            onOpenSubagent={onOpenSubagent}
-            diffs
-            undo={t.ids?.[0] ? undo.byAnswer.get(t.ids[0]) : undefined}
-            onUndo={undo.onUndo}
-          />
-        ))}
+      <div className="chat-main">
+        <div className="chat-log" ref={logRef} onScroll={follow.onScroll}>
+          {turns.length === 0 && <div className="empty chat-empty">{chat === null ? t("Loading…") : readOnly ? t("This transcript is empty.") : t("No transcript for this pane's folder yet.")}</div>}
+          {turns.slice(hidden).map((t, i) => (
+            <TurnView
+              key={t.ids?.[0] || hidden + i}
+              turn={t}
+              machineId={machineId}
+              onOpenFile={onOpenFile}
+              onForward={others ? onForward : undefined}
+              onLink={readOnly ? undefined : onLink}
+              onPin={readOnly ? undefined : onPin}
+              pinned={!!t.ids?.[0] && pinnedIds.has(t.ids[0])}
+              subagents={chat?.subagents}
+              onOpenSubagent={onOpenSubagent}
+              diffs
+              undo={t.ids?.[0] ? undo.byAnswer.get(t.ids[0]) : undefined}
+              onUndo={undo.onUndo}
+              live={working && hidden + i === turns.length - 1}
+            />
+          ))}
+        </div>
+        {promptsShown && active && <PromptsList turns={turns} live={underWay} usage={usage} machineId={machineId} paneId={paneId} session={chat?.session_id} dir={dir} onOpenFile={onOpenFile} sheet={phone} />}
       </div>
       {!readOnly && !viewOnly && status === "input" && (
         <Notice tone="warn" icon="alert-triangle" className="chat-notice">
@@ -299,7 +316,8 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
           <Icon name="message" size={12} /> {t("Quote")}
         </button>
       )}
-      {!readOnly && !viewOnly && <Composer machineId={machineId} paneId={paneId} working={status === "run"} dir={dir} agent={agent} onScreen={active} quote={quote} />}
+      {underWay && <ProgressLine live={underWay} />}
+      {!readOnly && !viewOnly && <Composer machineId={machineId} paneId={paneId} working={working} dir={dir} agent={agent} quote={quote} screen={claude ? { mode: screen.read?.mode, reread: screen.reload } : undefined} />}
       {!readOnly && viewOnly && <div className="chat-viewonly">{t("Viewing only")}</div>}
       {forwarded && (
         <Notice tone="success" icon="check" className="chat-notice" onDismiss={clearForwarded}>

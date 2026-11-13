@@ -88,6 +88,7 @@ socket.onmessage = (message) => {
     else if (url.includes("/api/fleet-setup")) void fakeFleet(msg.params);
     else if (url.includes("/api/undo")) void fakeUndo(msg.params);
     else if (url.includes("/api/limits/offers")) void fakeOffers(msg.params);
+    else if (url.includes("/api/question")) void fakeQuestion(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
@@ -791,6 +792,53 @@ const UNDO_CHAT = [
   { role: "assistant", ts: iso(now - 11 * 60e3), ids: ["e2e-undo-answer"], parts: [{ type: "text", text: "Drew them, and committed the screens." }], took: 150 },
 ];
 let undoChat = false;
+// PROMPTS_CHAT is the dressed pane's conversation for the chat's own screens: an answer whose calls make one card — a
+// read, an edit with its change, a test that failed and passed again — then a turn under way, a message the person sent
+// while it worked inside it, its last call still running; the question route says what Claude Code's spinner says
+const PROMPTS_SESSION = "0e2e0000-7777-4000-8000-0000000000aa";
+const PROMPTS_CHAT = [
+  { role: "user", ts: iso(now - 14 * 60e3), ids: ["e2e-p1"], parts: [{ type: "text", text: "Draw the **prompts list** beside the chat, newest first." }] },
+  {
+    role: "assistant",
+    ts: iso(now - 14 * 60e3 + 3e3),
+    ids: ["e2e-p1a"],
+    took: 252,
+    tokens: 38000,
+    output: 9100,
+    cost: 0.42,
+    parts: [
+      { type: "text", text: "I'll start with the cards." },
+      { type: "tool", tool_name: "Read", tool_id: "toolu_e2e_p1", at: iso(now - 14 * 60e3 + 4e3), took: 0.2, input: { file_path: `${appDir}/src/app.go` }, output: "package main" },
+      { type: "tool", tool_name: "Edit", tool_id: "toolu_e2e_p2", at: iso(now - 14 * 60e3 + 9e3), took: 0.4, input: { file_path: `${appDir}/src/app.go`, old_string: 'fmt.Println("hello")', new_string: 'fmt.Println("hello, prompts")' }, output: "The file was updated." },
+      { type: "thinking", text: "The test should cover the newest-first order." },
+      { type: "tool", tool_name: "Bash", tool_id: "toolu_e2e_p3", at: iso(now - 13 * 60e3), took: 3.1, input: { command: "go test ./..." }, output: "--- FAIL: TestPrompts", is_error: true },
+      { type: "tool", tool_name: "Bash", tool_id: "toolu_e2e_p4", at: iso(now - 12 * 60e3), took: 2.7, input: { command: "go test ./..." }, output: "ok" },
+      { type: "text", text: "Drew the list and its sheet on a phone. The tests pass now; the card opens in place and the log jumps to its turn." },
+    ],
+  },
+  { role: "user", ts: iso(now - 6 * 60e3), ids: ["e2e-p2"], parts: [{ type: "text", text: "Now show the spinner's progress over the composer." }] },
+  {
+    role: "assistant",
+    ts: iso(now - 6 * 60e3 + 2e3),
+    ids: ["e2e-p2a", "e2e-p2m"],
+    output: 2100,
+    parts: [
+      { type: "tool", tool_name: "Read", tool_id: "toolu_e2e_p5", at: iso(now - 5 * 60e3), took: 0.1, input: { file_path: `${appDir}/README.md` }, output: "# app" },
+      { type: "queued", text: "Show it in the **wall tile** too.", at: iso(now - 4 * 60e3) },
+      { type: "tool", tool_name: "Bash", tool_id: "toolu_e2e_p6", at: iso(now - 20e3), input: { command: "npm test -- progress" } },
+    ],
+  },
+];
+let promptsChat = false;
+// fakeQuestion answers the dressed pane's screen read with Claude Code's spinner while the chat's own screens are up
+async function fakeQuestion({ requestId, request }) {
+  if (!promptsChat || new URL(request.url).searchParams.get("pane") !== paneA1) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const body = { question: null, mode: "acceptEdits", progress: { verb: "Refactoring", seconds: 134, tokens: 6800 } };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
 // windowsLocal plays the local machine as a Windows PC in the dressed roster, for the screen terminal's screen alone
 let windowsLocal = false;
 function fakeUndoTurn() {
@@ -904,6 +952,10 @@ async function dressChat({ requestId, request, responseStatusCode, responseHeade
   const chat = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
   chat.denied = DENIED;
   if (undoChat) chat.turns = [...(chat.turns ?? []), ...UNDO_CHAT];
+  if (promptsChat) {
+    chat.turns = PROMPTS_CHAT;
+    chat.session_id ||= PROMPTS_SESSION;
+  }
   const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
   await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(chat)).toString("base64") });
 }
@@ -1572,6 +1624,33 @@ async function runPass() {
       await palette("lens:terminal");
     },
   });
+  // the chat's own: an answer's calls as one card, a message sent while the agent worked in its turn, the spinner's
+  // progress over the composer, and the prompts list beside the log (a sheet on a phone) with a card opened in place
+  await screen("chat-prompts", {
+    open: async () => {
+      promptsChat = true;
+      await palette("lens:chat");
+      if (!(await until(() => present(".lens-pane:not([hidden]) .tool-card"), 20))) throw new Error("the answer's calls are not one card");
+      await palette("prompts");
+      if (!(await until(() => present(".prompts .prompt"), 10))) throw new Error("the prompts list did not open");
+      await tap(".prompts .prompt:nth-child(2) .prompt-head");
+      if (!(await until(() => present(".prompts .prompt.is-open .prompt-reply"), 5))) failed("a card of the prompts list did not open in place");
+      if (!(await until(() => evaluate(`!!document.querySelector(".lens-pane:not([hidden]) .chat-progress")?.textContent.includes("Refactoring")`), 10))) failed("the progress line does not say what the spinner says");
+    },
+    expect: [
+      ".lens-pane:not([hidden]) .tool-card .tool-mark.is-failed",
+      ".lens-pane:not([hidden]) .tool-card .tool-spin",
+      ".lens-pane:not([hidden]) .part-sent",
+      ".lens-pane:not([hidden]) .chat-progress",
+      ".prompts .prompt.is-live .prompt-working",
+      ".prompts .prompt.is-open .prompt-reply",
+    ],
+    close: async () => {
+      await palette("prompts");
+      promptsChat = false;
+      await palette("lens:terminal");
+    },
+  });
   if (!pass.phone)
     await screen("split-view", {
       open: async () => palette("split"),
@@ -2001,6 +2080,7 @@ try {
       { urlPattern: "*/api/fleet-setup*", requestStage: "Request" },
       { urlPattern: "*/api/undo*", requestStage: "Request" },
       { urlPattern: "*/api/limits/offers*", requestStage: "Request" },
+      { urlPattern: "*/api/question*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
