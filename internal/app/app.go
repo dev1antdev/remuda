@@ -741,6 +741,8 @@ func Run(ctx context.Context, o Options) error {
 		return nil
 	}}
 	events.Subscribe(bus, func(e events.MachineRemoved) { fleetSetup.Forget(e.Machine) })
+	repos := repositories(o.Dir, fleet, watcher, reviews, turns.Tracker)
+	events.Subscribe(bus, func(e events.MachineRemoved) { repos.Forget(e.Machine, true) })
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {
 			d, _ := meter.Display(machineID, paneID)
@@ -795,6 +797,7 @@ func Run(ctx context.Context, o Options) error {
 		Collisions: radarOfCollisions,
 		Undo:       turns,
 		Scenes:     sceneSet,
+		Repos:      repos,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews

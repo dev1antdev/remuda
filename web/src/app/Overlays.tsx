@@ -41,6 +41,7 @@ import RunSceneDialog from "@/features/scenes/RunSceneDialog";
 import ScenesDialog from "@/features/scenes/ScenesDialog";
 import Standup from "@/features/standup/StandupPanel";
 import Concierge from "./Concierge";
+import ReposPanel from "@/features/repos/ReposPanel";
 import UpdatesDialog from "@/features/updates/Updates";
 import BudgetDialog from "@/features/usage/BudgetDialog";
 import Usage from "@/features/usage/Usage";
@@ -110,6 +111,7 @@ export default function Overlays() {
       {panel === "standup" && <Standup onClose={actions.closePanel} />}
       {panel === "arena" && <ArenaPanel onClose={actions.closePanel} />}
       {panel === "concierge" && !viewOnly && <Concierge onClose={actions.closePanel} />}
+      {panel === "repos" && !viewOnly && <ReposPanel onClose={actions.closePanel} />}
       {panel === "usage" && (
         <Usage machines={machines} onClose={actions.closePanel} onOpenSession={(machine, project, session, dir) => openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" })} />
       )}

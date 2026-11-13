@@ -30,6 +30,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/feed"
+	"github.com/dev1antdev/remuda/internal/gitsync"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
@@ -119,6 +120,7 @@ type Server struct {
 	Undo       *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
 	Concierge  *concierge.Service  // the Claude Code agent the person asks what the others are doing, on the machine they pick
 	Scenes     *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
+	Repos      *gitsync.Service    // every repository at a glance, fetched, pulled and pushed at the person's press
 
 	streams   termStreams
 	relayed   relays     // the terminals piped to a machine's own remuda, which holds their attach
@@ -181,6 +183,7 @@ func (s *Server) Handler() http.Handler {
 	s.driftRoutes(api)
 	s.undoRoutes(api)
 	s.sceneRoutes(api)
+	s.repoRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

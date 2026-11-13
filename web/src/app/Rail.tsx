@@ -30,6 +30,7 @@ const PANELS: (Place & { panel: Panel })[] = [
   { panel: "standup", label: t("Standup"), icon: "sun", about: t("What every agent did today, in one report") },
   { panel: "usage", label: t("Usage"), icon: "chart", about: t("What the agents cost, by day, project and session") },
   { panel: "schedules", label: t("Schedules"), short: tc("rail", "Schedules"), icon: "calendar", about: t("Prompts sent to agents on a timetable") },
+  { panel: "repos", label: t("Repositories"), short: t("Repos"), icon: "folder-git", about: t("Every repository on every machine at a glance: what is not pushed or not pulled; fetch, pull and push") },
   { panel: "activity", label: t("Activity"), short: tc("rail", "Activity"), icon: "bell", about: t("What happened across the agents while you were away; the alert settings are inside") },
 ];
 const SETTINGS: Place = { label: t("Settings"), icon: "sliders", about: t("The theme, the sidebar, the panels, the alerts, the keys") };

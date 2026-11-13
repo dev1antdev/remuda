@@ -88,6 +88,8 @@ socket.onmessage = (message) => {
     else if (url.includes("/api/fleet-setup")) void fakeFleet(msg.params);
     else if (url.includes("/api/undo")) void fakeUndo(msg.params);
     else if (url.includes("/api/limits/offers")) void fakeOffers(msg.params);
+    else if (url.includes("/api/repos/")) void fakeRepoAction(msg.params);
+    else if (/\/api\/repos(\?|$)/.test(url)) void dressRepos(msg.params);
     else if (/\/api\/feed/.test(url)) void dressFeed(msg.params);
     else if (/\/api\/chat\?/.test(url)) void dressChat(msg.params);
     else void dressRoster(msg.params);
@@ -1017,6 +1019,115 @@ const mark = async (expression, attr) => {
 // onAgents comes back to the Agents mode on the seeded agent's pane
 // sceneScreens are the Scenes dialog with the seeded morning and evening, each one's form, and a run of each: what it
 // will do first, then its outcome as the fake answers it
+// repoScreens draws the Repositories place on every pass: this machine's e2e repository with two machines dressed in
+// beside it (fakeRepos), a row's menu in the order its arrows suggest, Fetch all counting through a faked answer, and a
+// push the secret check holds — every action answered in the browser, so nothing reaches a remote
+async function repoScreens() {
+  const openPlace = async () => {
+    await palette("repos");
+    if (!(await until(() => present(".modal.repos-panel .repo-row"), 10))) throw new Error("the Repositories place lists no repository");
+  };
+  const row = async (name) => {
+    const found = await evaluate(`(() => { const row = [...document.querySelectorAll(".repo-row")].find((r) => r.querySelector(".repo-name")?.textContent === ${JSON.stringify(name)}); row?.setAttribute("data-e2e", ${JSON.stringify(name)}); return !!row; })()`);
+    if (!found) throw new Error(`no row ${name}`);
+    for (let i = 0; i < 3 && !(await present(".menu .menu-item")); i++) {
+      await tap(`.repo-row[data-e2e=${JSON.stringify(name)}]`);
+      await sleep(300);
+    }
+    if (!(await present(".menu .menu-item"))) throw new Error(`${name}'s menu did not open`);
+  };
+  const firstItem = () => evaluate(`document.querySelector(".menu .menu-item .menu-text")?.firstChild?.textContent ?? ""`);
+  await screen("repos", {
+    open: async () => {
+      await openPlace();
+      check(await evaluate(`[...document.querySelectorAll(".repo-row .repo-name")].some((el) => el.textContent === "app")`), "the e2e repository is not listed");
+      check((await count(".repo-row .repo-ahead")) >= 2 && (await count(".repo-row .repo-behind")) >= 2, "the rows say nothing of ↑ and ↓");
+      check((await present(".repo-word.is-unpushed")) && (await present(".repo-word.is-local")) && (await present(".repo-word.is-gone")), "a branch on no remote, a repository with none or an upstream gone is not said");
+      check(await present(".repos-machine-words.is-away"), "the machine away is not said so");
+    },
+    expect: [".modal.repos-panel .repos-machine-head", ".repo-dirty", ".repos-group-head"],
+  });
+  await screen("repos-menu", {
+    open: async () => {
+      await openPlace();
+      await row("web");
+      check((await firstItem()) === "Pull", `a row behind its upstream offers ${await firstItem()} first, not Pull`);
+    },
+    expect: [".menu .menu-item"],
+  });
+  await screen("repos-fetch-all", {
+    open: async () => {
+      await openPlace();
+      repoFetches = 0;
+      await tap(".modal.repos-panel .repos-fetch-all");
+      if (!(await until(() => evaluate(`/\\d+\\/\\d+/.test(document.querySelector(".repos-fetch-all")?.textContent ?? "")`), 3))) failed("Fetch all shows no count while it runs");
+    },
+    expect: [".repos-fetch-all"],
+    close: async () => {
+      if (!(await until(() => present('[data-toast="notice"]'), 10))) failed("Fetch all said nothing once it ended");
+      check(repoFetches === 5, `Fetch all fetched ${repoFetches} repositories, not the 5 with a remote`);
+      check(await evaluate(`[...document.querySelectorAll('[data-toast="notice"]')].some((t) => t.textContent.includes("docs"))`), "the failed fetch is not named in the toast");
+      await closeAll();
+    },
+  });
+  await screen("repos-held-push", {
+    open: async () => {
+      await openPlace();
+      await row("api");
+      const pushed = await evaluate(`(() => { const item = [...document.querySelectorAll(".menu .menu-item")].find((i) => i.querySelector(".menu-text")?.firstChild?.textContent === "Push"); item?.setAttribute("data-e2e", "push"); return !!item; })()`);
+      if (!pushed) throw new Error("api's menu has no Push");
+      await tap('.menu .menu-item[data-e2e="push"]');
+    },
+    expect: [".modal.push-held .push-held-finding", ".modal.push-held .btn.danger"],
+  });
+}
+
+// fakeRepos dresses the place's answer: this machine's real rows, then GOG with a row in every state and Pi away
+const fakeRepo = (name, parent, extra = {}) => ({ path: `/home/me/${parent.slice(2)}/${name}`, name, parent, workspace: parent === "~/code", branch: "main", upstream: "origin/main", ahead: 0, behind: 0, dirty: 0, remote: true, fetched: iso(now - 3 * 3600e3), ...extra });
+const FAKE_REPOS = [
+  {
+    id: "gog",
+    label: "GOG",
+    scan: { folder: "/home/me/code", depth: 3 },
+    scan_where: "~/code",
+    repos: [
+      fakeRepo("api", "~/code", { ahead: 2, dirty: 3, staged: 1 }),
+      fakeRepo("docs", "~/code", { ahead: 1, behind: 2 }),
+      fakeRepo("web", "~/code", { behind: 4 }),
+      fakeRepo("cli", "~/code/tools", { branch: "feature/flags", upstream: undefined }),
+      fakeRepo("notes", "~/code/tools", { remote: false, upstream: undefined, fetched: undefined }),
+      fakeRepo("scratch", "~/code/tools", { branch: "gone", upstream: "origin/gone", gone: true }),
+    ],
+  },
+  { id: "pi", label: "Pi", away: "ssh: connect to host pi port 22: Operation timed out", repos: [] },
+];
+let repoFetches = 0;
+async function dressRepos({ requestId, responseStatusCode, responseHeaders = [] }) {
+  const reply = await send("Fetch.getResponseBody", { requestId });
+  if (responseStatusCode !== 200 || !reply.result) {
+    await send("Fetch.continueRequest", { requestId });
+    return;
+  }
+  const listed = JSON.parse(reply.result.base64Encoded ? Buffer.from(reply.result.body, "base64").toString("utf8") : reply.result.body);
+  listed.machines = [...(listed.machines ?? []).filter((m) => !FAKE_REPOS.some((fake) => fake.id === m.id)), ...FAKE_REPOS];
+  const headers = responseHeaders.filter((h) => !/^(etag|content-length|content-encoding)$/i.test(h.name));
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(listed)).toString("base64") });
+}
+// fakeRepoAction answers a fetch (slowly, so Fetch all's count shows; docs failing), a pull and a push the secret check holds
+async function fakeRepoAction({ requestId, request }) {
+  const action = new URL(request.url).pathname.split("/").pop();
+  const { dir = "" } = JSON.parse(request.postData ?? "{}");
+  const repo = FAKE_REPOS.flatMap((m) => m.repos).find((r) => r.path === dir);
+  let body = { scan: null };
+  if (action === "fetch") {
+    repoFetches++;
+    await sleep(2500);
+    body = repo?.name === "docs" ? { action, state: "failed", remote: "origin", output: "fatal: could not read Username for 'https://github.com': terminal prompts disabled" } : { action, state: "done", remote: "origin", repo: { ...repo, fetched: iso(Date.now()) } };
+  } else if (action === "pull") body = { action, state: "done", remote: "origin", count: repo?.behind ?? 0, repo: { ...repo, behind: 0 } };
+  else if (action === "push") body = { action, state: "held", reason: "secrets", remote: "origin", branch: repo?.branch, scan: { findings: [{ file: "deploy.go", line: 3, rule: "aws-access-key", excerpt: 'const deployKey = "AKIA••••••••"', commit: "0b6fea3" }], files: 1, commits: 1, push: true, at: iso(now) } };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
+}
+
 async function sceneScreens() {
   // a long line of a scene's words is cut at its column, never pushing the dialog into a sideways scroll
   const flat = async () => check(await evaluate(`[...document.querySelectorAll(".modal")].every((m) => m.scrollWidth <= m.clientWidth + 1)`), "the dialog scrolls sideways");
@@ -1598,6 +1709,7 @@ async function runPass() {
     expect: [".modal .trigger-form", ".modal .trigger-try"],
   });
   await sceneScreens();
+  await repoScreens();
   await screen("float-terminal", {
     open: async () => {
       await key("`", "Backquote", 2);
@@ -2001,6 +2113,9 @@ try {
       { urlPattern: "*/api/fleet-setup*", requestStage: "Request" },
       { urlPattern: "*/api/undo*", requestStage: "Request" },
       { urlPattern: "*/api/limits/offers*", requestStage: "Request" },
+      { urlPattern: "*/api/repos", requestStage: "Response" },
+      { urlPattern: "*/api/repos?*", requestStage: "Response" },
+      { urlPattern: "*/api/repos/*", requestStage: "Request" },
     ],
   });
   await send("Page.navigate", { url: `${base}/?token=${encodeURIComponent(token)}&machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });

@@ -14208,3 +14208,245 @@ textarea.screen-term-field {
   box-shadow: 0 0 0 2px var(--amber);
   color: var(--amber);
 }
+
+/* ---- the Repositories place (features/repos): a machine's head, a folder's line, a 34 px row per repository ---- */
+.repos-fetch-all {
+  min-width: 11.5em; /* "Fetching 12/34…" takes the room "Fetch all" keeps, so the head moves nothing */
+  justify-content: center;
+}
+
+.repos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.repos-machine {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.repos-machine-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: var(--ctl);
+  padding: 0 6px 4px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg-dim);
+}
+
+.repos-machine-name {
+  flex: 0 1 auto;
+  min-width: 4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+  font-size: var(--fs-13);
+  font-weight: 600;
+}
+
+.repos-machine-words,
+.repos-machine-scan {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-12);
+}
+
+.repos-machine-words {
+  flex: 0 0 auto;
+  max-width: 60%;
+}
+
+.repos-machine-scan {
+  flex: 0 1000 auto; /* the scan's words give way first, the machine's name and its count keep their room */
+}
+
+.repos-machine-words.is-away {
+  color: var(--amber);
+}
+
+.repos-machine-scan {
+  color: var(--fg-faint);
+}
+
+.repos-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.repos-group-head {
+  height: 26px;
+  padding: 9px 8px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.repo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  flex: none;
+  padding: 0 8px 0 20px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--fs-12);
+  text-align: left;
+  cursor: pointer;
+}
+
+.repo-row:hover,
+.repo-row[aria-expanded="true"] {
+  background: var(--bg-hover);
+}
+
+.repo-row:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -2px;
+}
+
+.repo-row.is-loading {
+  cursor: default;
+  color: var(--fg-faint);
+}
+
+.repo-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-row.is-here .repo-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.repo-state {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.repo-dirty {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 2px;
+  color: var(--amber);
+}
+
+.repo-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--amber);
+}
+
+.repo-ahead {
+  color: var(--green);
+}
+
+.repo-behind,
+.repo-word.is-failed,
+.repo-word.is-error,
+.repo-word.is-unpushed,
+.repo-word.is-gone,
+.repo-problem {
+  color: var(--red);
+}
+
+.repo-word.is-reading,
+.repo-word.is-local {
+  color: var(--fg-faint);
+}
+
+.repo-fill {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.repo-branch {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 40%;
+  color: var(--fg-dim);
+  font-size: var(--fs-11);
+}
+
+.repo-branch-name,
+.repo-problem {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-problem {
+  flex: 0 1 auto;
+  max-width: 45%;
+  font-size: var(--fs-11);
+}
+
+.repo-fetched {
+  flex: none;
+  width: 6.5ch; /* "now", "12m", "сейчас", "59 мин": the branch beside it never moves */
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.repo-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.repos-empty {
+  margin: 0;
+  padding: 8px 20px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.push-held-finding {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 4px 6px;
+}
+
+@media (max-width: 600px) {
+  .repo-row {
+    padding-left: 12px;
+  }
+
+  .repos-machine-scan,
+  .repos-read-again {
+    display: none;
+  }
+}

@@ -51,6 +51,7 @@ The contexts are the bounded contexts of the product, in its own words:
 | Schedules | prompts on a timetable | `schedule` |
 | Recipes | the saved ways to start an agent | `recipes` |
 | Scenes | the morning set-up in one press, the evening tidy in another | `scenes` |
+| Repositories | every repository at a glance, and fetch, pull and push on one at the person's press | `gitsync` |
 
 ## The rules
 

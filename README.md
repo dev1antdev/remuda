@@ -280,6 +280,23 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   config, sign-in or permissions code, possible secrets the last secret
   check found in this very work, failing checks or conflicts on its pull
   request, or another workspace changing the same lines.
+- **Repositories** — Repositories in the rail (More on a phone, or the
+  palette) lists every repository your workspaces stand on, on every
+  machine, each once, and those in a folder you ask a machine to scan
+  (1 to 5 folders deep, hidden and build folders skipped, never your home
+  folder itself), grouped by machine and folder, after Manygit: the
+  branch, a dot with the uncommitted count, ↑ commits not pushed in green
+  and ↓ not pulled in red, "not pushed" for a branch on no remote yet,
+  "no remote", "upstream gone", and how long ago it was last fetched. A
+  click on a row offers Fetch, Pull and Push in the order its arrows
+  suggest, a new agent or terminal there, its Changes and the editor;
+  **Fetch all** fetches eight at a time. A pull is a fast-forward only
+  (a branch that diverged is said so and left alone) and waits while an
+  agent works or asks in that checkout; a push is never forced and never
+  carries tags, and the secret check stands before it as before Approve &
+  open PR — Push anyway… asks first. Nothing waits for a login: git runs
+  with its prompts off and ssh in batch mode, sixty seconds at most, and
+  a failure shows git's own words.
 - **Collision radar** — two agents on one repository, in different
   worktrees or clones on different machines, are told apart before the
   merge does it for you. Once a minute remuda reads each checkout's work
