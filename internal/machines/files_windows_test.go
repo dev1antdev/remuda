@@ -11,8 +11,8 @@ import (
 	"github.com/dev1antdev/remuda/internal/wintest"
 )
 
-// TestOnWindowsTheFileViewersScriptsReadAWindowsFolder runs the viewer's stat, its search by suffix, an upload's write and the folder
-// picker's listing over the runner's OpenSSH on a folder in Windows' spelling.
+// TestOnWindowsTheFileViewersScriptsReadAWindowsFolder runs the viewer's stat, its search by suffix, an upload's write
+// and the folder picker's listing over the runner's OpenSSH on a folder in Windows' spelling.
 func TestOnWindowsTheFileViewersScriptsReadAWindowsFolder(t *testing.T) {
 	wintest.Live(t)
 	remote := wintest.Remote(t)
