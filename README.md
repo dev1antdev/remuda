@@ -499,7 +499,7 @@ curl -fsSL https://github.com/dev1antdev/remuda/releases/latest/download/install
 
 The script ([`internal/setup/scripts/install.sh`](internal/setup/scripts/install.sh):
 read it first if you like) downloads the release binary for the machine's
-OS and CPU (macOS and Linux, arm64 and amd64), checks it against the
+OS and CPU (macOS and Linux, arm64 and amd64; on Windows, under Git Bash, `remuda.exe` alone — see *A Windows PC*), checks it against the
 release's `checksums.txt` and refuses a download that does not match, puts
 it at `~/.local/bin/remuda` and runs `remuda setup`: herdr installed if
 missing, its headless server started, the status hooks for the agents it
@@ -648,7 +648,7 @@ seconds after its install, and the page offers a reload. Pull requests land
 on the `release` branch, which is built and tried as a whole; a release
 fast-forwards it into `main` — so `main` is always what is out — and
 `make publish` there pushes the tag, and the Release workflow
-(`.github/workflows/release.yml`) builds the four binaries and
+(`.github/workflows/release.yml`) builds the six binaries (two of them `remuda.exe` for a Windows PC) and
 `checksums.txt` and publishes them under it. CI
 (`.github/workflows/ci.yml`) runs the build, the tests, the TypeScript
 check, `govulncheck`, `npm audit` and a secret scan of the whole history
@@ -658,7 +658,14 @@ its own and headless Chrome, a scratch workspace typed into and read
 back, then every screen drawn at a desk's width and a phone's in English
 and Russian and checked for its place on the screen — nothing past an
 edge, nothing sideways, no console error (`make e2e` runs the same thing
-on your machine, touching nothing of yours).
+on your machine, touching nothing of yours). A job on GitHub's Windows
+runner is the Windows PC of the fleet: herdr for Windows installed and its
+server started, the runner's own OpenSSH server running commands in Git
+Bash, and the cockpit's side driven against it — herdr reached through
+`remuda.exe bridge` over ssh, the connection's probe, the vitals, the
+door, keep-awake, the Changes lens, the file viewer, the search,
+`remuda setup -host` and a release's install beside a running
+`remuda.exe` — its answers kept as the unit tests' fixtures.
 
 The long way, piece by piece:
 
@@ -716,6 +723,70 @@ viewing only", a viewer's look marks nothing as seen, and the header says
 *Viewing only*. The link is shown once; revoking it signs every screen it
 opened out at once, and the pairing link opened on such a screen makes it
 a device of your own.
+
+### A Windows PC
+
+Claude Code (or Codex, Kimi Code) running natively on a Windows PC — to
+build Windows apps — is a machine of the fleet like any other: the cockpit
+on your Mac, Linux box or Raspberry Pi reaches it over ssh, and you open it
+from the Mac and the phone as usual. remuda never serves the page from
+Windows; on the PC it is `remuda.exe`, the helper the cockpit runs there.
+
+Once, on the PC:
+
+1. **Git for Windows** (<https://git-scm.com/download/win>) — Claude Code
+   needs it anyway (its Bash tool is Git Bash), and remuda's scripts run in
+   it too. Then **Claude Code**: `irm https://claude.ai/install.ps1 | iex`
+   in PowerShell, and sign in.
+2. **The OpenSSH server**, a Windows optional feature: Settings › System ›
+   Optional features › Add a feature › *OpenSSH Server*, or in an
+   administrator PowerShell
+   `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0`, then
+   `Start-Service sshd; Set-Service sshd -StartupType Automatic`.
+3. **Git Bash as the shell ssh runs commands in** — one line, in an
+   administrator PowerShell:
+
+   ```powershell
+   New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Program Files\Git\bin\bash.exe" -PropertyType String -Force
+   ```
+
+   remuda never writes this itself and never elevates. Without it, the
+   cockpit says so and names this line.
+4. **The cockpit's key**: the public key of the machine remuda runs on goes
+   into `C:\Users\<you>\.ssh\authorized_keys` — or, for an account in the
+   Administrators group (most home PCs), into
+   `C:\ProgramData\ssh\administrators_authorized_keys`, readable by
+   Administrators and SYSTEM alone:
+   `icacls C:\ProgramData\ssh\administrators_authorized_keys /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F"`.
+5. **A way to reach it**: Tailscale on the PC is the easy one; add it to the
+   cockpit's `~/.ssh/config` as a `Host pc` with its address and user.
+
+Then, from the cockpit: `remuda setup -host pc`. It installs herdr for
+Windows through herdr's own PowerShell installer when it is missing,
+starts herdr's server hidden (it outlives the ssh session and your
+logout), installs herdr's hooks for the agents it finds, and puts
+`remuda.exe` at `~\.local\bin\remuda.exe` — no service: there is nothing
+on Windows for it to serve. Add the PC in herdr (`herdr machine add`) or
+with **+ PC** in the sidebar, and it connects like the others.
+`remuda mcp install -host pc` connects its agents to your tasks, and the
+Updates panel offers herdr's update, the agents', and a newer
+`remuda.exe` from the release.
+
+What works on a Windows PC: its agents in the sidebar, the Wall and the
+zoo, the chat with its composer and question card, the Changes lens and
+the review, the file viewer and uploads, the vitals (memory, disk, load,
+the Windows edition), keep-awake while agents work, the search and the
+usage report, its agents' door to your tasks, the restarts after an
+update, the worktrees and their leftovers. What does not: **no live
+terminal** — herdr has no terminal attach on Windows, so the terminal lens
+is the pane's screen with a key bar, refreshed as it changes; for a live
+one, `herdr --remote pc` from the Mac's terminal. **No Code mode**
+(code-server has no Windows build: open the folder in VS Code there),
+**no previews** yet (Windows does not say which folder a listening
+process runs in), and the work is not moved to or from a Windows machine
+with *Move the work to another machine*. herdr's server reaches the
+cockpit through `remuda.exe bridge`, one exec over ssh per request:
+herdr listens on a named pipe there, which ssh cannot forward.
 
 ## As a background service on a Mac or Linux box
 

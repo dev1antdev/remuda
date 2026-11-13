@@ -65,12 +65,12 @@ func (s *Service) Prepare(host shell.Shell, local bool) (string, error) {
 }
 
 // RemudaOn is the remuda binary the concierge's MCP server runs on a machine: this very one on the cockpit's own,
-// else the one setup puts under the machine's home.
+// else the one setup puts under the machine's home: remuda.exe on a Windows one.
 func RemudaOn(local bool, home string) string {
 	if local {
 		if bin, err := os.Executable(); err == nil {
 			return bin
 		}
 	}
-	return home + "/.local/bin/remuda"
+	return script.RemudaPath(home)
 }
