@@ -38,12 +38,12 @@ import { primeSpeech, speechSupported } from "@/lib/speech";
 import { useScenes } from "@/features/scenes/api";
 import { popOut, popOutSupported } from "./pip";
 import { actions, app, type Lens, type Mode } from "./store";
-import { setDarkFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, useTextSize, useThemePref } from "./theme";
+import { setDarkFlavorPref, setLightFlavorPref, setTextSizePref, setThemePref, useDarkFlavorPref, useLightFlavorPref, useTextSize, useThemePref } from "./theme";
 import { TEXT_SIZE_NAMES, TEXT_SIZES } from "@/lib/look";
 import { currentLang, english, LANGS, t } from "@/lib/i18n";
 import { setLangPref } from "./lang";
 import { viewerCommand } from "./viewOnly";
-import { DARK_FLAVORS, FLAVOR_NAMES } from "@/lib/theme";
+import { themeCommands } from "./themeCommands";
 
 const FIND_KEY = isMac ? "⌘F" : "Ctrl+F";
 
@@ -82,6 +82,7 @@ function useCommands(): (query: string) => Entry[] {
   const themePref = useThemePref();
   const openLens = openLensOf(usePref<OpenLens>(OPEN_LENS_KEY, DEFAULT_OPEN_LENS)[0]);
   const darkFlavor = useDarkFlavorPref();
+  const lightFlavor = useLightFlavorPref();
   const textSize = useTextSize();
   const current = useCurrent();
   const lens = lensOn(app.use((s) => s.lens), current?.pane.agent ?? ""); // a shell has its terminal alone
@@ -244,9 +245,6 @@ function useCommands(): (query: string) => Entry[] {
       command("open-lens-terminal", t("Notifications open: the terminal"), () => writePref(OPEN_LENS_KEY, "terminal"), { hint: `${openLens === "terminal" ? t("now · ") : ""}${t("a tapped notification, the Mac app's menu, an Activity row or Alt+N shows the pane's terminal")}`, icon: "terminal", keywords: ["notification", "alert", "open", "terminal", "lens"] });
       command("open-lens-chat", t("Notifications open: the chat"), () => writePref(OPEN_LENS_KEY, "chat"), { hint: `${openLens === "chat" ? t("now · ") : ""}${t("the same openings show the pane's chat")}`, icon: "message", keywords: ["notification", "alert", "open", "chat", "lens"] });
       command("open-lens-keep", t("Notifications open: the lens it was on"), () => writePref(OPEN_LENS_KEY, "keep"), { hint: `${openLens === "keep" ? t("now · ") : ""}${t("the same openings keep whichever lens the page was on")}`, icon: "columns", keywords: ["notification", "alert", "open", "keep", "lens"] });
-      command("theme-system", t("Theme: follow the system"), () => setThemePref("system"), { hint: `${themePref === "system" ? t("now · ") : ""}${t("your dark flavour when the system is dark, Latte when it is light")}`, icon: "monitor", keywords: ["theme", "dark", "light", "catppuccin", "system", "auto"] });
-      command("theme-dark", t("Theme: {flavor} (dark)", { flavor: FLAVOR_NAMES[darkFlavor] }), () => setThemePref("dark"), { hint: `${themePref === "dark" ? t("now · ") : ""}${t("Catppuccin {flavor}, whatever the system says", { flavor: FLAVOR_NAMES[darkFlavor] })}`, icon: "moon", keywords: ["theme", "dark", "catppuccin", "frappe", "macchiato", "mocha"] });
-      command("theme-light", t("Theme: Latte (light)"), () => setThemePref("light"), { hint: `${themePref === "light" ? t("now · ") : ""}${t("Catppuccin Latte, whatever the system says")}`, icon: "sun", keywords: ["theme", "light", "catppuccin", "latte"] });
       command("settings", t("Settings"), () => actions.openDialog({ kind: "settings" }), { hint: t("the theme, the sidebar, the panels, the alerts, the keys"), icon: "sliders", keywords: ["settings", "preferences", "theme", "options"] });
       command("keys", t("Keyboard shortcuts"), () => actions.openDialog({ kind: "keys" }), { hint: t("? · every key the page answers"), icon: "keyboard", keywords: ["keys", "shortcuts", "help", "hotkeys", "bindings", "keyboard"] });
       command("float-terminal", float ? t("Hide the floating terminal") : t("Floating terminal"), () => toggleFloat(machines, current?.machine.id ?? null), {
@@ -257,9 +255,7 @@ function useCommands(): (query: string) => Entry[] {
       command("machine", t("Add a PC…"), () => actions.openDialog({ kind: "machine" }), { hint: t("a remote machine over SSH"), icon: "monitor", keywords: ["machine", "remote", "ssh", "host"] });
       command("budgets", t("Budgets…"), usageOn("spend"), { hint: t("a spending limit per day, week or month, with a push when it is near"), icon: "chart", keywords: ["budget", "limit", "cost", "spend", "money"] });
       if (current && !viewer && current.pane.agent === "claude") command("model", t("Switch this agent's model…"), () => actions.openDialog({ kind: "model", machineId: current.machine.id, paneId: current.pane.id, current: current.pane.usage?.name }), { hint: t("Opus, Sonnet, Haiku or an id, through Claude Code's own /model"), icon: "sparkles", keywords: ["model", "opus", "sonnet", "haiku", "switch", "cheaper", "faster"] });
-      for (const flavor of DARK_FLAVORS) {
-        command(`flavor-${flavor}`, t("Dark flavour: {flavor}", { flavor: FLAVOR_NAMES[flavor] }), () => setDarkFlavorPref(flavor), { hint: `${darkFlavor === flavor ? t("now · ") : ""}${t("Catppuccin {flavor} whenever the theme is dark", { flavor: FLAVOR_NAMES[flavor] })}`, icon: "moon", keywords: ["theme", "dark", "flavour", "flavor", "catppuccin", flavor] });
-      }
+      for (const row of themeCommands({ mode: themePref, dark: darkFlavor, light: lightFlavor }, { mode: setThemePref, dark: setDarkFlavorPref, light: setLightFlavorPref })) command(row.id, row.title, row.run, row.meta);
       for (const size of TEXT_SIZES) {
         command(`text-${size}`, t("Text size: {size}", { size: TEXT_SIZE_NAMES[size] }), () => setTextSizePref(size), { hint: `${textSize === size ? t("now · ") : ""}${size === "normal" ? t("the page's type scale as designed; the terminal keeps its own size") : t("the page's type scale, {size}; the terminal keeps its own size", { size: TEXT_SIZE_NAMES[size].toLowerCase() })}`, icon: size === "small" ? "text-smaller" : "text-larger", keywords: ["text", "size", "font", "zoom", "bigger", "smaller", size] });
       }
@@ -286,6 +282,6 @@ function useCommands(): (query: string) => Entry[] {
       const shown = share.on ? commands.map((entry) => ({ ...entry, title: share.redact(entry.title), hint: entry.hint && share.redact(entry.hint) })) : commands;
       return [...panes, ...(viewOnly ? shown.filter((entry) => viewerCommand(entry.id)) : shown)];
     },
-    [machines, viewOnly, jiraSite, server, scenes, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
+    [machines, viewOnly, jiraSite, server, scenes, mode, lens, viewer, chatSession, chatLive, footprint, split, full, float, themePref, openLens, darkFlavor, lightFlavor, textSize, current, radar, wall, setWall, focus, setFocus, office, setOffice, timelineShown, setTimelineShown, step, now, goNext, share],
   );
 }

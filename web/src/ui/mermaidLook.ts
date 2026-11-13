@@ -1,8 +1,8 @@
 // What makes a fence or a file a Mermaid diagram, which view a file opens in, and the configuration a diagram is drawn
 // with: strict security, labels as SVG text (no HTML in a foreignObject, so the answer parses as XML), the colours of
-// the page's Catppuccin flavour and accent. The pure part of ui/Mermaid.tsx.
+// the page's theme and accent. The pure part of ui/Mermaid.tsx.
 
-import { ACCENTS, FLAVORS, accentOf, type Accent, type Flavor } from "@/lib/theme";
+import { ACCENTS, DEFAULT_DARK, FLAVORS, accentOf, isFlavor, themeOf, type Accent, type Flavor } from "@/lib/theme";
 
 // isMermaid says whether a fence's info string names a Mermaid diagram: its first word mermaid (or mmd), any case
 export const isMermaid = (info: string): boolean => /^(mermaid|mmd)$/i.test(info.trim().split(/\s+/)[0] ?? "");
@@ -32,9 +32,9 @@ export function unsafeAttribute(name: string, value: string): boolean {
   return SCRIPT_URL.test(value.replace(URL_NOISE, "").toLowerCase());
 }
 
-// flavorOf reads the root's data-flavor, Frappé when it names none of the four
+// flavorOf reads the root's data-flavor, Frappé when it names none of the twenty
 export function flavorOf(value: string | undefined): Flavor {
-  return value === "latte" || value === "macchiato" || value === "mocha" ? value : "frappe";
+  return isFlavor(value) ? value : DEFAULT_DARK;
 }
 
 // lookOf turns the root's "flavor|accent" into the two, each kept to a known value
@@ -43,12 +43,12 @@ export function lookOf(look: string): { flavor: Flavor; accent: Accent } {
   return { flavor: flavorOf(flavor), accent: accentOf(accent) };
 }
 
-// mermaidConfig is the configuration a diagram is drawn with in a flavour, with the accent on the shapes' edges
+// mermaidConfig is the configuration a diagram is drawn with in a theme, with the accent on the shapes' edges
 export function mermaidConfig(flavor: Flavor, accent: Accent, fontFamily: string) {
   const c = FLAVORS[flavor];
   const pies = Object.fromEntries(ACCENTS.filter((a) => a !== "rosewater" && a !== "flamingo").map((a, i) => [`pie${i + 1}`, c[a]]));
   const themeVariables: Record<string, string | boolean> = {
-    darkMode: flavor !== "latte",
+    darkMode: themeOf(flavor) === "dark",
     fontFamily,
     fontSize: "14px",
     background: c.base,

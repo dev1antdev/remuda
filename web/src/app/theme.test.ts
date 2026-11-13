@@ -20,7 +20,8 @@ describe("the look on another document", () => {
     const main = fakeDocument();
     g.document = main.doc;
     try {
-      const { startTheme, dressAlso, setThemePref, setDarkFlavorPref, setTextSizePref } = await import("./theme");
+      stored.set("remuda.theme.light", JSON.stringify("sepia"));
+      const { startTheme, dressAlso, setThemePref, setDarkFlavorPref, setLightFlavorPref, setTextSizePref } = await import("./theme");
       startTheme();
       const popped = fakeDocument();
       const undress = dressAlso(popped.doc);
@@ -29,7 +30,11 @@ describe("the look on another document", () => {
       setThemePref("light");
       expect(main.root.dataset.flavor).toBe("latte");
       expect(popped.root.dataset).toMatchObject({ theme: "light", flavor: "latte" });
+      setLightFlavorPref("solarized-light");
+      expect(popped.root.dataset).toMatchObject({ theme: "light", flavor: "solarized-light" });
       setThemePref("dark");
+      setDarkFlavorPref("nord");
+      expect(popped.root.dataset).toMatchObject({ theme: "dark", flavor: "nord" });
       setDarkFlavorPref("mocha");
       expect(popped.root.dataset.flavor).toBe("mocha");
       setTextSizePref("large");

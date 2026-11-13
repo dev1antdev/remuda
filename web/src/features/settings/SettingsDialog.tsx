@@ -1,9 +1,10 @@
-// Settings: the few things the page keeps per device, in one place — the theme, its flavour and accent, the text size,
-// the density and the monospace font, how the sidebar reads, the panels' widths, whether those follow the person to
-// their other devices, the way to the alerts and the keys, which remuda this is, what it shows inside herdr, and the
-// devices signed in to it; and, kept on the cockpit, the Jira site, the backups and the agents' timelapses.
+// Settings: the few things the page keeps per device, in one place — the theme's mode, its dark and light themes and the
+// accent, the text size, the density and the monospace font, how the sidebar reads, the panels' widths, whether those
+// follow the person to their other devices, the way to the alerts and the keys, which remuda this is, what it shows
+// inside herdr, and the devices signed in to it; and, kept on the cockpit, the Jira site, the backups and the agents'
+// timelapses.
 
-import { setAccentPref, setDarkFlavorPref, setDensityPref, setMonoPref, setTextSizePref, setThemePref, useAccent, useDarkFlavorPref, useDensity, useFlavor, useMono, useTextSize, useThemePref } from "@/app/theme";
+import { setAccentPref, setDarkFlavorPref, setDensityPref, setLightFlavorPref, setMonoPref, setTextSizePref, setThemePref, useAccent, useDarkFlavorPref, useDensity, useFlavor, useLightFlavorPref, useMono, useTextSize, useThemePref } from "@/app/theme";
 import { actions } from "@/app/store";
 import BackupSection from "./BackupSection";
 import TimelapseSection from "./TimelapseSection";
@@ -15,7 +16,8 @@ import { RadarFields } from "@/features/roster/RadarSettings";
 import { DEFAULT_RADAR, type RadarPrefs } from "@/features/roster/radar";
 import { DENSITY_NAMES, MONO_FONTS, monoName, monoStack, TEXT_SIZE_NAMES, TEXT_SIZES, type Density, type MonoFont } from "@/lib/look";
 import { usePref } from "@/lib/prefs";
-import { ACCENTS, accentName, DARK_FLAVORS, FLAVOR_NAMES, FLAVORS, swatches, themeChoiceName } from "@/lib/theme";
+import { ACCENTS, accentName, DARK_FLAVORS, LIGHT_FLAVORS, swatches, themeChoiceName } from "@/lib/theme";
+import { ThemePicker } from "./ThemePicker";
 import { Dialog, Icon, resetPanels, Select, Tip } from "@/ui";
 import { SYNC_PREF } from "./useSyncPrefs";
 import { LANG_NAMES, LANGS, t } from "@/lib/i18n";
@@ -27,6 +29,7 @@ const MONO_CHOICES: MonoFont[] = ["", ...MONO_FONTS];
 export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const themePref = useThemePref();
   const darkFlavor = useDarkFlavorPref();
+  const lightFlavor = useLightFlavorPref();
   const flavor = useFlavor();
   const accent = useAccent();
   const textSize = useTextSize();
@@ -47,29 +50,32 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         <label className="settings-row">
           <span>
             {t("Theme")}
-            <small>{t("Catppuccin: your dark flavour by night, Latte by day")}</small>
+            <small>{t("Following the system, the page wears your dark theme when it is dark and your light theme when it is light")}</small>
           </span>
           <Select
             value={themePref}
             onChange={setThemePref}
             options={[
-              { value: "system", label: themeChoiceName("system", darkFlavor), icon: <Icon name="monitor" size={14} /> },
-              { value: "dark", label: themeChoiceName("dark", darkFlavor), icon: <Icon name="moon" size={14} /> },
-              { value: "light", label: themeChoiceName("light", darkFlavor), icon: <Icon name="sun" size={14} /> },
+              { value: "system", label: themeChoiceName("system", darkFlavor, lightFlavor), icon: <Icon name="monitor" size={14} /> },
+              { value: "dark", label: themeChoiceName("dark", darkFlavor, lightFlavor), icon: <Icon name="moon" size={14} /> },
+              { value: "light", label: themeChoiceName("light", darkFlavor, lightFlavor), icon: <Icon name="sun" size={14} /> },
             ]}
           />
         </label>
-        <label className="settings-row">
+        <div className="settings-row settings-themes">
           <span>
-            {t("Dark flavour")}
-            <small>{t("Frappé is the softest, Mocha the deepest")}</small>
+            {t("Dark theme")}
+            <small>{t("The page, the terminal, the diagrams and the editor wear it whenever the page is dark")}</small>
           </span>
-          <Select
-            value={darkFlavor}
-            onChange={setDarkFlavorPref}
-            options={DARK_FLAVORS.map((f) => ({ value: f, label: FLAVOR_NAMES[f], icon: <span className="swatch" style={{ background: FLAVORS[f].base, borderColor: FLAVORS[f].surface2 }} /> }))}
-          />
-        </label>
+          <ThemePicker label={t("Dark theme")} flavors={DARK_FLAVORS} value={darkFlavor} accent={accent} onPick={setDarkFlavorPref} />
+        </div>
+        <div className="settings-row settings-themes">
+          <span>
+            {t("Light theme")}
+            <small>{t("…and this one whenever it is light")}</small>
+          </span>
+          <ThemePicker label={t("Light theme")} flavors={LIGHT_FLAVORS} value={lightFlavor} accent={accent} onPick={setLightFlavorPref} />
+        </div>
         <div className="settings-row">
           <span>
             {t("Accent")}

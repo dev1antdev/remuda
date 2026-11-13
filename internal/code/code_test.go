@@ -60,7 +60,53 @@ func TestWithThemeSetsTheColourTheme(t *testing.T) {
 	if !strings.HasPrefix(got, "{\n  \"workbench.colorTheme\": \"Catppuccin Frappé\",\n") {
 		t.Fatalf("added: %s", got)
 	}
-	if ThemeName("latte") != "Catppuccin Latte" || ThemeName("light") != "Catppuccin Latte" || ThemeName("frappe") != "Catppuccin Frappé" || ThemeName("macchiato") != "Catppuccin Macchiato" || ThemeName("mocha") != "Catppuccin Mocha" || ThemeName("dark") != "Catppuccin Frappé" || ThemeName("") != "Catppuccin Frappé" {
-		t.Fatal("names")
+}
+
+func TestEveryThemeOfThePageHasItsEditorTheme(t *testing.T) {
+	want := map[string]EditorTheme{
+		"latte":            {"Catppuccin.catppuccin-vsc", "Catppuccin Latte"},
+		"frappe":           {"Catppuccin.catppuccin-vsc", "Catppuccin Frappé"},
+		"macchiato":        {"Catppuccin.catppuccin-vsc", "Catppuccin Macchiato"},
+		"mocha":            {"Catppuccin.catppuccin-vsc", "Catppuccin Mocha"},
+		"dracula":          {"dracula-theme.theme-dracula", "Dracula Theme"},
+		"nord":             {"arcticicestudio.nord-visual-studio-code", "Nord"},
+		"gruvbox-dark":     {"jdinhlife.gruvbox", "Gruvbox Dark Medium"},
+		"tokyo-night":      {"enkia.tokyo-night", "Tokyo Night"},
+		"rose-pine":        {"mvllow.rose-pine", "Rosé Pine"},
+		"one-dark":         {"zhuangtongfa.material-theme", "One Dark Pro"},
+		"kanagawa":         {"metaphore.kanagawa-vscode-color-theme", "Kanagawa Wave"},
+		"solarized-light":  {"", "Solarized Light"},
+		"gruvbox-light":    {"jdinhlife.gruvbox", "Gruvbox Light Medium"},
+		"rose-pine-dawn":   {"mvllow.rose-pine", "Rosé Pine Dawn"},
+		"tokyo-night-day":  {"enkia.tokyo-night", "Tokyo Night Light"},
+		"github-light":     {"GitHub.github-vscode-theme", "GitHub Light Default"},
+		"one-light":        {"akamud.vscode-theme-onelight", "Atom One Light"},
+		"everforest-light": {"sainnhe.everforest", "Everforest Light"},
+		"ayu-light":        {"teabyii.ayu", "Ayu Light Bordered"},
+		"flexoki-light":    {"", "Default Light Modern"},
+	}
+	for theme, editor := range want {
+		if got := EditorThemeOf(theme); got != editor || !KnownTheme(theme) || ThemeName(theme) != editor.Name {
+			t.Errorf("%s: %+v, want %+v", theme, got, editor)
+		}
+	}
+	if len(editorThemes) != len(want) {
+		t.Errorf("%d editor themes, want the page's %d", len(editorThemes), len(want))
+	}
+	if ThemeName("light") != "Catppuccin Latte" || ThemeName("dark") != "Catppuccin Frappé" || !KnownTheme("dark") || !KnownTheme("light") {
+		t.Error("the bare dark and light a page from before sends")
+	}
+	if KnownTheme("monokai") || KnownTheme("") || ThemeName("monokai") != "Default Dark Modern" {
+		t.Error("an unknown word")
+	}
+}
+
+func TestThemeReadScriptInstallsOnlyAnExtension(t *testing.T) {
+	got := ThemeReadScript("teabyii.ayu")
+	if !strings.Contains(got, `grep -qixF 'teabyii.ayu'`) || !strings.Contains(got, `--install-extension 'teabyii.ayu'`) || !strings.Contains(got, installedMark) || !strings.Contains(got, `cat "$f"`) {
+		t.Fatalf("script: %s", got)
+	}
+	if got := ThemeReadScript(""); strings.Contains(got, "--install-extension") || !strings.Contains(got, `cat "$f"`) {
+		t.Fatalf("a built-in theme installs nothing: %s", got)
 	}
 }
