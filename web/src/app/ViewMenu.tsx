@@ -9,7 +9,7 @@ import { toggleSharing, useSharing } from "@/features/roster/useSharing";
 import { SHARING_KEY_NAME } from "./sharingKey";
 import { enterFull, leaveFull } from "./full";
 import { SPLIT_QUERY, canSplit } from "./split";
-import { STATUS_BAR_QUERY, toggleStatusBar, useStatusBarPrefs } from "@/features/statusbar/prefs";
+import { toggleStatusBar, useStatusBarPrefs, useStatusBarScreen } from "@/features/statusbar/prefs";
 import { actions, app } from "./store";
 import { t } from "@/lib/i18n";
 
@@ -20,7 +20,7 @@ export default function ViewMenu({ items, shell = false, page = true }: { items:
   const may = canSplit(useMedia(SPLIT_QUERY), isTouch);
   const sharing = useSharing().on;
   const [statusBar] = useStatusBarPrefs();
-  const desk = useMedia(STATUS_BAR_QUERY);
+  const desk = useStatusBarScreen();
   // a shell has its terminal alone: no transcript for the files rail, no chat to put beside it
   const agentRows: MenuItem[] = shell
     ? []

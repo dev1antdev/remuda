@@ -11,8 +11,7 @@ import Limits from "@/features/statusbar/LimitsSegment";
 import Load from "@/features/statusbar/LoadSegment";
 import Place from "@/features/statusbar/PlaceSegment";
 import Ports from "@/features/statusbar/PortsSegment";
-import { STATUS_BAR_QUERY, useStatusBarPrefs } from "@/features/statusbar/prefs";
-import { useMedia } from "@/lib/media";
+import { useStatusBarPrefs, useStatusBarScreen } from "@/features/statusbar/prefs";
 import { t } from "@/lib/i18n";
 import { Tip } from "@/ui";
 import { useCurrent } from "./current";
@@ -20,7 +19,7 @@ import { actions, app } from "./store";
 
 export default function StatusBar() {
   const [prefs] = useStatusBarPrefs();
-  const desk = useMedia(STATUS_BAR_QUERY);
+  const desk = useStatusBarScreen();
   const full = app.use((s) => s.full);
   const mode = app.use((s) => s.mode);
   const current = useCurrent();

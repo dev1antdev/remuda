@@ -2924,9 +2924,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `openOn`, `hostOf`.
 - **The status bar** (`web/src/app/StatusBar.tsx`, after Orca's status bar
   and over9k's usage rows): 28 px along the foot of `.app-main` on a desk
-  with a mouse (`STATUS_BAR_QUERY`, `(min-width: 921px) and (pointer:
-  fine)`: rendered only there, so nothing polls on a phone, where the rail
-  lies at the bottom), gone in full screen, the pref `statusbar {on,
+  (`useStatusBarScreen`: `STATUS_BAR_QUERY`, `(min-width: 921px)`, on no
+  touch screen — `isTouch`, the page's one rule for a mouse; a browser with
+  no pointer at all, headless Chrome on CI's Linux, is a desk too — rendered
+  only there, so nothing polls on a phone, where the rail lies at the
+  bottom), gone in full screen, the pref `statusbar {on,
   remaining}` (`features/statusbar/prefs.ts`, on the sync allow-list) a row
   of the View menu and two of Settings › Look; the floating terminal's
   drawer and the toasts sit above it. Segments of fixed room with tabular
