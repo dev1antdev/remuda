@@ -35,7 +35,7 @@ export const prpanel: Dictionary = {
   Dismissed: "Отклонено",
   Draft: "Черновик",
   "Every author": "Все авторы",
-  Failed: "Упала",
+  "check|Failed": "Упала",
   "Failed step output": "Вывод упавших шагов",
   "Finding the repository…": "Ищу репозиторий…",
   "Fix with agent": "Починить агентом",

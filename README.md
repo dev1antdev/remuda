@@ -55,15 +55,35 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   the pane**, a ring that cools with the time since the last turn — fresh,
   plain, then the whole card dims after two hours — and how long it has
   been so ("12m", "3h"). Under the name, the branch the folder has checked
-  out and what the agent is doing, or, once it finished, the first line of
-  what it answered, so the sidebar reads like a list of results. A
-  workspace running several agents lists them in small lines under its
-  card, each a click to open. Each agent wears its vendor's logo and hue
+  out — `primary` on a main checkout beside its worktrees, and on the card
+  you are on how far its branch stands from its upstream as of the last
+  fetch, "↑2 ↓1" — and, once the agent finished, the first line of what it
+  answered, so the sidebar reads like a list of results. Under every card
+  a line per agent, after the Orca and Better Sidebar mods for Herdr
+  Desktop: its logo, its title, how long it has been in
+  its state ("<1m", "8m", "3h") and its state as a shape that reads
+  without colour — a spinner while it works, a red **Needs you** while it
+  asks, a dot once it finished, a hollow ring at rest — each a click to
+  open; the subagents a Claude Code agent runs hang under its line on thin
+  tree lines, each a click to read its own conversation, and a chevron
+  folds them, the count left in sight. On top of the sidebar, **Needs
+  you** lists every agent waiting on you, the longest wait first, with
+  what it asks read off its screen ("Bash command · rm -rf build") or the
+  watchdog's note; a click opens it, nothing is answered from there. Under
+  the pointer an agent's age gives way to a pin (always there on a phone):
+  pinned agents stand in their own group at the top, on every device. A
+  folded folder or machine still says "2 need you · 1 working", so
+  folding never hides a question, a folder's icon glows softly while its
+  agents work, and the foot says "5 agents · 2 need you", the second part
+  a way to the one that waited longest. **Alt+]** and **Alt+[** walk every
+  agent in the sidebar's order. Each agent wears its vendor's logo and hue
   (27 vendors), the busiest folder sorts first; the sidebar's ⋯ flips to a
-  flat list by activity or herdr's own order, its settings hold the
-  thresholds and the label. Above the pane each tab says what it runs —
-  the agent by its logo and name, a shell as "terminal" — and + opens a
-  terminal in the workspace's folder at once, or an agent.
+  flat list by activity, herdr's own order, sections by priority (needs
+  you, done, working, idle) or by ticket prefix (`PR-12`, `INS-4`, after
+  `feature/` too), its settings hold the thresholds and the label. Above
+  the pane each tab says what it runs — the agent by its logo and name, a
+  shell as "terminal" — and + opens a terminal in the workspace's folder
+  at once, or an agent.
 - **Folder icons** — click a folder's icon (or "Folder icon…" in a
   workspace's ⋯ menu, or the palette) to give it a face: first the ones
   the project already has — its favicon, logo or app icon, found in the
@@ -763,7 +783,7 @@ Devices under a name — "the office TV", a colleague's — and open it where
 the viewing happens: that browser gets the Wall, the sidebar, the chats,
 the screens and their timelapses, the standup, the usage and Activity, and nothing that types or
 changes — no composer, no keys, no question buttons, no Changes lens, no
-tasks; the terminal lens shows the pane's screen as the Wall does, without
+tasks; the Git lens draws its graph and opens no menu; the terminal lens shows the pane's screen as the Wall does, without
 attaching, and the file viewer opens only files inside the machines'
 workspace folders. Every call past that is refused with "this link is for
 viewing only", a viewer's look marks nothing as seen, and the header says
@@ -1097,6 +1117,44 @@ them in all, the oldest going first; a turn whose changes weigh over
 backups. A second remuda beside the real one keeps none unless it is
 given `-record`.
 
+## Git — the history as a graph
+
+An agent's pane has a fourth lens beside Chat, Terminal and Changes:
+**Git**, its checkout's history drawn the way VS Code's Git Graph draws
+it (after the git-graph mod for Herdr Desktop). Every branch is a lane
+in your theme's terminal colours, a fork or a merge a curve; each row
+carries its labels — the checked-out branch first, filled and ticked, a
+remote branch of the same name riding on it as `main | origin`, a remote
+branch alone with a cloud, tags, a detached HEAD — then the subject, the
+date (`now`, `12m`, `3h`, `6d`, `Oct 3`) and, when there is room, the
+author and the commit. HEAD is a ring on a tinted row, merge commits are
+muted, and while the tree is dirty **Uncommitted changes (N)** sits on
+top, joined to HEAD by a dashed line; a click on it opens the Changes
+lens. All branches or the current one, with or without the remotes,
+300 commits at a time and 300 more at the end. It follows the checkout
+by itself: a commit, a checkout or a new tag from any terminal redraws
+it within a few seconds, and reading it never touches your index.
+
+Click a commit for its details under the graph — hash, parents, author,
+date, the message's body and its files with their lines — and a file
+for its diff, coloured and with the changed words marked. Right-click a
+branch, a remote branch, a tag, a commit or the uncommitted row (a ⋯ or
+a tap on a label on a phone) for what git can do there: check out
+(a remote branch asks the local name first), create, rename or delete a
+branch, merge into the current branch, rebase it, cherry-pick, revert,
+reset soft, mixed or hard, add or delete a tag, copy a name or a hash;
+double-click a branch's label to check it out. Each asks first in a
+small dialog — only a local checkout with nothing uncommitted runs at
+once — red where it loses something: a hard reset names the files it
+discards, and deleting a branch git calls unmerged asks a second time.
+When git refuses, its own words stay in the dialog. A merge, rebase,
+cherry-pick or revert that stops on conflicts is left as it is, and the
+lens says so with **Abort** and a way to the Changes lens to resolve
+them. Nothing runs while an agent works or waits for an answer in that
+checkout — the refusal says who — nor when the branch moved since the
+graph was drawn; nothing here fetches, pulls or pushes, and nothing ever
+forces. A viewer link sees the graph and no menu.
+
 ## Agents and your tasks
 
 Any coding agent remuda runs — Claude Code, Codex, Gemini CLI, Kimi Code —
@@ -1268,7 +1326,11 @@ strip above the pane, machines mirrored from `herdr machine list`, and a
 **file viewer** — click any path the agent prints in the terminal or chat to
 open the file where it lives (local or remote), its code coloured in its
 language, with a **Changes** tab showing its uncommitted `git diff`, coloured
-the same way. A path is a link when it names a file
+the same way. The File tab marks what changed since the last commit at the
+rows' edge — green for lines added, amber for lines changed, a thin red line
+where lines were removed — and a click on an amber row or the red line shows
+the old lines in place, in red, above the new ones; again hides them. A file
+deleted since the last commit opens on its removal. A path is a link when it names a file
 (`main.go`, `docs/plan.md`, `.env`), not a folder. A picture the agent
 read or wrote — a screenshot it looked at, an icon it drew — shows as a
 thumbnail under the call in the chat; a click opens it. **Subagents**: an
@@ -1278,14 +1340,25 @@ is on this second or the first line of its report, how many tool calls —
 and *Open* reads its own conversation; a tile's state line says "waiting
 on 2 subagents" or "2 subagents working" while they run.
 
-**Files the agent touched:** a rail beside the chat and the terminal (View ›
-Files the agent touched) lists every file the agent edited or read
+**The files rail:** a rail beside the chat and the terminal (View ›
+Files the agent touched), in two tabs. **Agent** lists every file the agent edited or read
 in this conversation, from its own tool calls — newest first, with how
 many edits, when it last touched the file and a mark when that last edit
 failed. A click opens the file with its uncommitted diff; the code button
 opens it in the Code mode, VS Code on that machine. Edits an agent made
 through shell commands are not its tool calls: the Changes lens shows
-those. Hidden on a phone.
+those. **Project** is the workspace's folder as a tree, each folder read
+when you open it, folders first: a changed file is coloured and lettered by
+what git says of it (green new or added, amber modified, red deleted or in
+conflict), a folder holding changes is amber with a dot, what git ignores is
+dimmed, a link wears a link mark, and every file and folder its icon from
+VS Code's Material Icon Theme (the light ones on a light theme). It reads
+itself again every ten seconds while on screen and soon after the agent did
+something. A row's ⋯ or a right-click: Open, Open in the editor, Show
+changes, Copy relative path, Copy full path, and **Send to agent…** — pick
+an agent, say what it should do, and it gets that with the file's path (not
+its text, so it reads the file as it is by then). A folder lists its first
+500 entries. Nothing in the tree writes a file. Hidden on a phone.
 
 **Full screen** (View › Full screen, or the palette): the header,
 the sidebar and the rail go and the lens takes the whole screen — a
@@ -1421,13 +1494,42 @@ row unfolds ten more from the file, "all N lines" the whole stretch up to
 the previous hunk, and the last hunk unfolds downward to the end of the
 file the same way — the unfolded lines walk and take comments like any
 other.
+**The files sit in git's own groups** — Conflicts (in red), Staged,
+Unstaged and Untracked, each with its count and Stage all or Unstage all —
+and a file you staged and changed again is in both, each side with its own
+counts and its own diff; someone who never stages sees the same lens with
+clearer groups. Under the pointer (always on a phone) a row's counts give
+way to `+` stage, `−` unstage and `↺` discard; a discard asks first,
+naming the file and what cannot come back (an untracked file's discard
+deletes that one file). The list can be a tree of folders — the button
+beside the columns' — a folder holding one folder folded into one row. At
+the foot of the files is the commit box: a message, **Commit staged** (or
+**Commit all**, which stages the listed files first) and **Amend** behind
+its chevron, which loads the last message into an empty box and refuses if
+the latest commit moved since. The secret check stands before a commit as
+before Approve & commit: findings hold the button back and **Commit
+anyway…** asks first. A failure keeps your message and shows git's own
+words. Nothing is written while an agent works, asks or ends a turn in that
+checkout — the lens names the agent — and every write is yours alone: a
+viewer link or an agent's key reaches none of them. Under the box,
+**Committed — not on origin/feature** lists what the remote does not have
+yet (for a branch never pushed, against origin's default branch), each
+commit opening its files and their diffs, and the head says how many
+commits there are to pull, as of the last fetch (remuda never fetches). The
+switch in the head reads the branch's whole work **vs its base** instead —
+the branch it was cut from, found by ancestry, with a pick to pin another —
+read only. A conflicted file opens on its conflict blocks alone, yours
+beside incoming at their real line numbers; you or an agent resolve it, and
+staging it marks it resolved. On every theme a colour too faint on a
+diff's green or red row is lifted just enough to read.
 **Approve** tells the agent the work is reviewed and it can carry on (a
 task it works on can move along) — pick *and ask the agent to commit* and
 it is **Approve & commit**: the agent commits the reviewed work and says
 so; pick *and ask it to commit, push and open a pull request* and it is
 **Approve & open PR**: the agent commits, pushes, opens the pull request
-with `gh` and names its link, which a task it works on picks up (remuda
-itself never writes into a repository); **Reject** tells it
+with `gh` and names its link, which a task it works on picks up (a
+verdict writes nothing itself; the lens's own Commit, below, does when you
+press it); **Reject** tells it
 what to fix and to end the answer that brings the work back with the line
 `READY FOR REVIEW` — when it does, the queue lists that workspace first,
 marked *ready again*, and a push says so; both take a note and carry
@@ -1539,6 +1641,23 @@ flatten the day — with the moments worth a look marked and named under
 it: the first failed call, the longest call, a loop of identical calls,
 the questions the agent asked, a compaction. A click on any of them
 jumps to that turn. It works on a transcript opened from the search too.
+**The prompts list** (the switch at the timeline's end, View › Prompts,
+or the palette) reads the conversation prompt by prompt, newest first —
+a column beside the chat at a desk, a sheet on a phone: when each prompt
+went, the messages you sent while the agent worked on it, what it came
+to ("done 16:02 · 4 min · ↓ 9.1k tokens · 3 files · 6 commands run",
+the turn under way saying "working" and ticking), and the start of the
+reply. Open a card (a click, or ↑ ↓ and Enter) to read the prompt and the
+reply whole with the files it changed; the chat jumps to that turn.
+**While Claude Code works**, the line over the composer says what its
+own spinner says — "Refactoring… 2 min 14 s · ↓ 6.8k" — read off the
+pane's screen with the permission mode, and a wall tile's state line
+says the same. A message you typed while the agent worked shows in the
+turn it reached, marked "Sent while it worked"; the search, the recap,
+the handover and the export count it as yours. Each run of tool calls
+is one card, a line a call: done, failed or running, what it was about,
+how long it took, a chevron for its result; an answer's foot adds the
+tokens it wrote, "↓ 9.1k", as the CLI counts them.
 **Plan** — when the agent keeps a task list (Claude Code's own
 TaskCreate / TaskUpdate, or TodoWrite), a quiet line over the chat says
 how far it is and what it is on, in the agent's own words — "Plan 3/7 ·
@@ -1752,7 +1871,9 @@ conversation for what you typed. **?** opens the keyboard sheet: every
 key the page answers, in groups. **Alt+N** goes to the next agent that
 needs you — a question open, a watchdog note, a finish you have not
 looked at — round and round in the sidebar's order; on the Wall that
-tile takes the wall, elsewhere the agent opens on its chat. The browser
+tile takes the wall, elsewhere the agent opens on its chat. **Alt+]** and
+**Alt+[** step through every agent, one after another as the sidebar
+draws them, the pinned ones first. The browser
 tab counts them too: its title reads "(2) remuda" and the favicon wears
 a dot in the colour of the most pressing one — red for a question,
 amber for a watchdog note, green for a finish — so another tab or the

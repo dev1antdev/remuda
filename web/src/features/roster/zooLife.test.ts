@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Standup } from "@/features/standup/api";
-import { DAY_EVERY, GAZE_MAX, PUFF_MS, TUNES, carried, dayDue, gaze, happenings, joinsApplause, questionBubble, sameQuestions, tickerFacts, voiceOf, withPuffs, workedWords, type Seen } from "./zooLife";
+import { DAY_EVERY, GAZE_MAX, PUFF_MS, TUNES, carried, dayDue, gaze, happenings, joinsApplause, tickerFacts, voiceOf, withPuffs, workedWords, type Seen } from "./zooLife";
 
 const seen = (entries: [string, Seen][]) => new Map(entries);
 
@@ -68,17 +68,6 @@ describe("gaze", () => {
   });
 });
 
-describe("questionBubble", () => {
-  it("holds up the dialog's head and the first line of its detail", () => {
-    expect(questionBubble({ text: "Bash command\nrm -rf build\nclean the build\nDo you want to proceed?", options: [] })).toBe("Bash command · rm -rf build");
-  });
-
-  it("holds the asking line when the dialog has no head, nothing without a dialog", () => {
-    expect(questionBubble({ text: "Which database?", options: [] })).toBe("Which database?");
-    expect(questionBubble(null)).toBe("");
-  });
-});
-
 describe("tickerFacts", () => {
   const item = (pane: string, over: Partial<Standup["items"][number]["recap"]> = {}, state: Standup["items"][number]["state"] = "done") => ({
     machine: "gog",
@@ -127,16 +116,6 @@ describe("dayDue", () => {
     expect(dayDue(0, 1_000)).toBe(true);
     expect(dayDue(1_000, 1_000 + 60_000)).toBe(false);
     expect(dayDue(1_000, 1_000 + DAY_EVERY)).toBe(true);
-  });
-});
-
-describe("sameQuestions", () => {
-  it("tells an unchanged reading of the questions from a new one", () => {
-    const a = new Map([["local|w1:p1", "Bash command · rm -rf build"]]);
-    expect(sameQuestions(a, new Map(a))).toBe(true);
-    expect(sameQuestions(a, new Map([["local|w1:p1", "Bash command · ls"]]))).toBe(false);
-    expect(sameQuestions(a, new Map())).toBe(false);
-    expect(sameQuestions(new Map(), new Map())).toBe(true);
   });
 });
 

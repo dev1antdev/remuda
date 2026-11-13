@@ -1,11 +1,14 @@
-// Package subagents keeps how many of every Claude Code agent's subagents are at work in its live conversation, for the
-// roster and so the Wall's zoo: read off the request path, one pane at a time per machine, only the subagents that moved
-// lately (a long session's finished ones are never read), and only while a page keeps reading the roster.
+// Package subagents keeps how many of every Claude Code agent's subagents are at work in its live conversation, and the
+// first of them by name, for the roster — the Wall's zoo and the sidebar's tree: read off the request path, one pane at
+// a time per machine, only the subagents that moved lately (a long session's finished ones are never read), and only
+// while a page keeps reading the roster.
 package subagents
 
 import (
 	"log"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,26 +29,88 @@ var (
 	ComplainEvery = time.Hour
 )
 
-// Count is how many of a conversation's subagents are at work: the zoo's babies. The quiet and the finished ones are
-// not counted, since telling them apart would mean reading every subagent a long session ever spawned.
+// MaxListed is how many of the subagents at work the roster names, the oldest first: the sidebar's tree under an agent.
+const MaxListed = 5
+
+// Count is how many of a conversation's subagents are at work — the zoo's babies — and the first MaxListed of them by
+// name, with the id of the conversation's file the transcript viewer opens one of them in. The quiet and the finished
+// ones are not counted, since telling them apart would mean reading every subagent a long session ever spawned.
 type Count struct {
-	Working int `json:"working,omitempty"`
+	Working int       `json:"working,omitempty"`
+	Session string    `json:"session,omitempty"`
+	List    []Working `json:"list,omitempty"`
 }
 
-// CountOf counts the subagents at work.
-func CountOf(list []transcript.Subagent) Count {
-	var count Count
+// Working is one subagent at work as the sidebar draws it: what it was asked to do, and the tool call it is on.
+type Working struct {
+	ID          string `json:"id"`
+	Description string `json:"description"`
+	Doing       string `json:"doing,omitempty"`
+}
+
+// CountOf counts the subagents at work in the session's file and names the oldest MaxListed of them.
+func CountOf(session string, list []transcript.Subagent) Count {
+	var working []transcript.Subagent
 	for _, agent := range list {
 		if agent.Status == transcript.SubagentWorking {
-			count.Working++
+			working = append(working, agent)
 		}
+	}
+	if len(working) == 0 {
+		return Count{}
+	}
+	sort.SliceStable(working, func(i, j int) bool {
+		if working[i].Started != working[j].Started {
+			return working[i].Started < working[j].Started
+		}
+		return working[i].ID < working[j].ID
+	})
+	count := Count{Working: len(working), Session: session}
+	for _, agent := range working[:min(len(working), MaxListed)] {
+		description := agent.Description
+		if description == "" {
+			description = agent.Kind
+		}
+		count.List = append(count.List, Working{ID: agent.ID, Description: oneLine(description, 80), Doing: doingOf(agent.Doing)})
 	}
 	return count
 }
 
+// same says whether two counts read the same.
+func same(a, b Count) bool {
+	return a.Working == b.Working && a.Session == b.Session && slices.Equal(a.List, b.List)
+}
+
+// doingOf is a tool call in a few words: its tool and what it is about — the file's name, else its command, pattern or
+// description — "" for none.
+func doingOf(part *transcript.Part) string {
+	if part == nil || part.ToolName == "" {
+		return ""
+	}
+	about := transcript.InputField(part.Input, "file_path", "notebook_path", "path")
+	if about != "" {
+		about = about[strings.LastIndexAny(about, `/\`)+1:]
+	} else {
+		about = transcript.InputField(part.Input, "command", "cmd", "pattern", "description", "query", "url")
+	}
+	if about = oneLine(about, 60); about == "" {
+		return part.ToolName
+	}
+	return part.ToolName + " · " + about
+}
+
+// oneLine is a text on one line cut to n runes, an ellipsis when cut.
+func oneLine(text string, n int) string {
+	text = strings.Join(strings.Fields(text), " ")
+	if runes := []rune(text); len(runes) > n {
+		return string(runes[:n-1]) + "…"
+	}
+	return text
+}
+
 // Read lists the subagents of a pane's live conversation that may be at work at now (transcript.Reader's
-// RecentSubagents); none when the pane has no conversation file.
-type Read func(machineID, paneID string, now time.Time) ([]transcript.Subagent, error)
+// RecentSubagents) and the id of that conversation's file; none when the pane has no conversation file.
+type Read func(machineID, paneID string, now time.Time) (string, []transcript.Subagent, error)
 
 // Ready says whether a machine is connected, so its files can be read.
 type Ready func(machineID string) bool
@@ -92,7 +157,7 @@ func New(read Read, ready Ready) *Tracker {
 	return &Tracker{read: read, ready: ready, now: time.Now, panes: map[events.PaneRef]*pane{}, sweeping: map[string]bool{}, complained: map[string]time.Time{}}
 }
 
-// Count is the pane's subagents at work as last read; nil when none works or nothing was read yet.
+// Count is the pane's subagents at work as last read, a copy; nil when none works or nothing was read yet.
 func (t *Tracker) Count(machineID, paneID string) *Count {
 	if t == nil {
 		return nil
@@ -100,10 +165,11 @@ func (t *Tracker) Count(machineID, paneID string) *Count {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	p := t.panes[events.PaneRef{Machine: machineID, Pane: paneID}]
-	if p == nil || p.count == (Count{}) {
+	if p == nil || p.count.Working == 0 {
 		return nil
 	}
 	count := p.count
+	count.List = slices.Clone(count.List)
 	return &count
 }
 
@@ -223,7 +289,7 @@ func (t *Tracker) run(machineID string, due []dueRead) {
 	}
 	for _, d := range due {
 		now := t.now()
-		list, err := t.read(machineID, d.ref.Pane, now)
+		session, list, err := t.read(machineID, d.ref.Pane, now)
 		t.mu.Lock()
 		if t.panes[d.ref] != d.pane {
 			t.mu.Unlock()
@@ -236,7 +302,7 @@ func (t *Tracker) run(machineID string, due []dueRead) {
 			if complain {
 				t.complained[machineID] = now
 			}
-		} else if count := CountOf(list); count != d.pane.count {
+		} else if count := CountOf(session, list); !same(count, d.pane.count) {
 			d.pane.count = count
 			changed = true
 		}

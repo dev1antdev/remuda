@@ -3,7 +3,7 @@
 // and the search the Repo list sends.
 
 import type { IconName } from "@/ui/icons";
-import { t, tn } from "@/lib/i18n";
+import { t, tc, tn } from "@/lib/i18n";
 import type { Card, Check, Detail, Problem } from "./api";
 
 // Tone is how a figure or a state is coloured: red, amber, green, the quiet colour, or nothing to say
@@ -37,7 +37,7 @@ export function kindOf(check: { conclusion?: string; status?: string }): CheckKi
 
 // kindWords is how a check stands, in words
 export function kindWords(kind: CheckKind): string {
-  return { failure: t("Failed"), running: t("In progress"), pending: t("Queued"), success: t("Passed"), skipped: t("Skipped") }[kind];
+  return { failure: tc("check", "Failed"), running: t("In progress"), pending: t("Queued"), success: t("Passed"), skipped: t("Skipped") }[kind];
 }
 
 export const kindIcon = (kind: CheckKind): IconName => KIND_ICON[kind];

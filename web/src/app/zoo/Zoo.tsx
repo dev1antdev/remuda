@@ -27,7 +27,7 @@ import { Boxes, Fireworks, Sky, WeatherMarks } from "./Sky";
 import { ZooCreature, type Life } from "./ZooCreature";
 import { ZooFoot, useDay } from "./ZooFoot";
 import { useGaze } from "./useGaze";
-import { useQuestions } from "./useQuestions";
+import { useQuestions } from "@/features/roster/useQuestions";
 import { useTell } from "./useTell";
 import { useZooLife } from "./useZooLife";
 import { useVoices, wakeVoices } from "./voices";
