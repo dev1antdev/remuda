@@ -4,13 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/sent"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/text"
@@ -138,7 +138,7 @@ func firstPromptPlace(req *createReq, extra map[string]any) string {
 		return req.Name
 	}
 	if req.Dir != "" {
-		return filepath.Base(req.Dir)
+		return rpath.For(req.Dir).Base(req.Dir)
 	}
 	return "the new tab"
 }

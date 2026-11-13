@@ -14,6 +14,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/auth"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/rpath"
 )
 
 // Files the agent wrote: resolved, served, diffed, uploaded.
@@ -40,6 +41,14 @@ func (s *Server) viewerFolders(ctx context.Context, mc *machines.Machine) ([]str
 // withinFolders says whether a path lies in one of the folders; on this machine symlinks are followed on both sides,
 // so a link out of a workspace reaches nothing and /tmp and /private/tmp are one folder.
 func withinFolders(path string, folders []string, local bool) bool {
+	if style := rpath.For(path); !local && style.Windows { // a Windows machine's: case and separators its own
+		for _, folder := range folders {
+			if folder != "" && style.Within(folder, path) {
+				return true
+			}
+		}
+		return false
+	}
 	path = realPath(path, local)
 	for _, folder := range folders {
 		folder = strings.TrimSuffix(realPath(folder, local), "/")

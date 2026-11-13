@@ -7,9 +7,9 @@ package tasks
 import (
 	"encoding/json"
 	"fmt"
-	"path"
 	"strings"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/sessions"
 )
 
@@ -103,10 +103,11 @@ func (a *Automation) normalize(statuses []Status) error {
 	a.Machine, a.Dir = strings.TrimSpace(a.Machine), strings.TrimSpace(a.Dir)
 	a.Agent, a.Model, a.Args = strings.TrimSpace(a.Agent), strings.TrimSpace(a.Model), strings.TrimSpace(a.Args)
 	if a.Dir != "" {
-		if !path.IsAbs(a.Dir) {
+		style := rpath.For(a.Dir) // a Windows machine's folder is C:\Users\me\app
+		if !style.IsAbs(a.Dir) {
 			return invalid("the repository folder must be an absolute path")
 		}
-		a.Dir = path.Clean(a.Dir)
+		a.Dir = style.Clean(a.Dir)
 	}
 	if (a.Machine == "") != (a.Dir == "") {
 		return invalid("where agents work needs both the machine and the repository folder")

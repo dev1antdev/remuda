@@ -34,6 +34,9 @@ func (s *Server) previewSkip() map[int]bool {
 
 // listeners is the machine's ports worth a preview, each with the workspace whose folder holds its server
 func (s *Server) listeners(mc *machines.Machine) ([]preview.Listener, error) {
+	if mc.Windows() {
+		return nil, errors.New(preview.NotOnWindows)
+	}
 	list, err := preview.Find(mc, s.previewSkip())
 	if err != nil {
 		return nil, err

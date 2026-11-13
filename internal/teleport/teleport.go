@@ -19,6 +19,10 @@ import (
 	"github.com/dev1antdev/remuda/internal/shell"
 )
 
+// NotWithWindows is why no work moves to or from a Windows machine: the way a move packs, lands and starts the agent
+// has not been tried on a Windows machine's Git Bash and herdr.
+const NotWithWindows = "moving the work to or from a Windows machine is not offered yet"
+
 // Host is a machine the work leaves or lands on: its shell, and a file put there whole.
 type Host interface {
 	shell.Host
