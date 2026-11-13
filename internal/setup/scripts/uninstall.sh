@@ -13,6 +13,9 @@
 #                      it ends), the binary, its folders
 # Nothing needs sudo; what would is named and left where it is. There is
 # no `set -e`: a step that fails is said and the rest still goes.
+# On Windows, under Git Bash: no service was ever made there; remuda.exe, its
+# state in %APPDATA%\remuda, and with -herdr herdr for Windows' package, its
+# folders in %APPDATA% and %LOCALAPPDATA%, and its entry on the account's PATH.
 
 ACTION="${1:-plan}"
 PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -33,6 +36,20 @@ Darwin)
     EXT=".plist"
     LOG="$HOME/Library/Logs/remuda.log"
     CODE_LOG="$HOME/Library/Logs/code-server.log"
+    ;;
+MINGW* | MSYS* | CYGWIN*)
+    OS=Windows
+    APPDATA_U="$(cygpath -u "$APPDATA")"
+    LOCALAPPDATA_U="$(cygpath -u "$LOCALAPPDATA")"
+    STATE="${REMUDA_STATE_DIR:-$APPDATA_U/remuda}"
+    OLD_STATE=""
+    SVC_DIR=""
+    SVC=""
+    OLD_SVC=""
+    CODE_SVC=""
+    EXT=""
+    LOG=""
+    CODE_LOG=""
     ;;
 Linux)
     STATE="${REMUDA_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/remuda}"
@@ -81,6 +98,7 @@ fail() {
 svc_file() { printf '%s' "$SVC_DIR/$1$EXT"; }
 svc_up() {
     case "$OS" in
+    Windows) return 1 ;;
     Darwin) launchctl print "gui/$UID_NUM/$1" >/dev/null 2>&1 ;;
     *) systemctl --user is-active "$1.service" >/dev/null 2>&1 ;;
     esac
@@ -97,6 +115,7 @@ svc_remove() {
 # svc_pid is the process a service runs, nothing when it runs none.
 svc_pid() {
     case "$OS" in
+    Windows) ;;
     Darwin) launchctl print "gui/$UID_NUM/$1" 2>/dev/null | sed -n 's/^[[:space:]]*pid = \([0-9]*\).*/\1/p' | head -1 ;;
     *) systemctl --user show -p MainPID --value "$1.service" 2>/dev/null | grep -v '^0$' ;;
     esac
@@ -139,6 +158,7 @@ by_hand_part() {
 remuda_part() {
     SVC_PID="$(svc_pid "$SVC")"
     for s in "$SVC" "$OLD_SVC"; do
+        [ -n "$s" ] || continue # Windows has none
         up=""
         if svc_up "$s"; then up=" (running)"; fi
         if [ -e "$(svc_file "$s")" ] || [ -n "$up" ]; then
@@ -150,7 +170,8 @@ remuda_part() {
             fi
         fi
     done
-    for f in "$HOME/.local/bin/remuda" "$HOME/.local/bin/remuda.new" "$HOME/.local/bin/remuda.sums" "$HOME/.local/bin/herdr-ui" "$LOG"; do
+    for f in "$HOME/.local/bin/remuda" "$HOME/.local/bin/remuda.new" "$HOME/.local/bin/remuda.sums" "$HOME/.local/bin/herdr-ui" "$LOG" \
+        "$HOME/.local/bin/remuda.exe" "$HOME/.local/bin/remuda.new.exe" "$HOME/.local/bin"/remuda.exe.old.*; do
         [ -f "$f" ] || continue # an empty name too
         if [ "$ACTION" = plan ]; then
             will "$(tilde "$f")"
@@ -188,8 +209,8 @@ remuda_part() {
 # deleted: REMUDA_STATE_DIR can name anything.
 data_part() {
     for d in "$STATE" "$OLD_STATE"; do
-        [ -d "$d" ] || continue
-        if [ ! -f "$d/token" ] && [ ! -f "$d/tasks.db" ] && [ ! -f "$d/vapid.json" ] && [ ! -f "$d/activity.json" ] && [ -n "$(ls -A "$d" 2>/dev/null)" ]; then
+        [ -n "$d" ] && [ -d "$d" ] || continue
+        if [ ! -f "$d/token" ] && [ ! -f "$d/tasks.db" ] && [ ! -f "$d/vapid.json" ] && [ ! -f "$d/activity.json" ] && [ ! -f "$d/agent-key" ] && [ -n "$(ls -A "$d" 2>/dev/null)" ]; then
             keep "$(tilde "$d"): none of remuda's files in it, so not for this to delete"
             continue
         fi
@@ -214,6 +235,7 @@ data_part() {
 # code-server as install-code.sh put it. A systemd unit of that name is
 # ours only when it says so; ~/.config/code-server only with our config.
 code_part() {
+    [ "$OS" != Windows ] || return 0 # code-server has no Windows build: setup never put one there
     f="$(svc_file "$CODE_SVC")"
     ours=0
     if [ "$OS" = Darwin ]; then
@@ -243,6 +265,10 @@ code_part() {
 # running in one. The hooks first (they call the binary), then the server,
 # the binary by the way it came, the folders.
 herdr_part() {
+    if [ "$OS" = Windows ]; then
+        windows_herdr_part
+        return
+    fi
     hb="$(command -v herdr 2>/dev/null || true)"
     if [ -z "$hb" ] && [ ! -d "$HOME/.config/herdr" ] && [ ! -d "$HOME/.local/state/herdr" ]; then
         return 0
@@ -295,6 +321,50 @@ herdr_part() {
         esac
     fi
     if rm -rf "$HOME/.config/herdr" "$HOME/.local/state/herdr"; then gone "$(tilde "$HOME/.config/herdr")"; else fail "could not remove herdr's folders"; fi
+}
+
+# herdr for Windows as its PowerShell installer put it: the hooks, the server, the package under ~/.herdr/packages (never
+# ~/.herdr/worktrees, which holds work), its folders in %APPDATA% and %LOCALAPPDATA%, its entry on the account's PATH.
+windows_herdr_part() {
+    hb="$(command -v herdr 2>/dev/null || true)"
+    if [ -z "$hb" ] && [ ! -d "$HOME/.herdr/packages" ] && [ ! -d "$LOCALAPPDATA_U/Programs/Herdr" ]; then
+        return 0
+    fi
+    if [ "${REMUDA_RM_HERDR:-0}" != 1 ]; then
+        keep "herdr for Windows${hb:+ at $(tilde "$hb")}, its server and the agents running in it  (-herdr removes it)"
+        return 0
+    fi
+    up=0
+    hooks=""
+    if [ -n "$hb" ]; then
+        if herdr status server 2>/dev/null | grep -q "status: running"; then up=1; fi
+        hooks=$(herdr integration status 2>/dev/null | grep -v "not installed" | sed -n 's/^\([a-z0-9_-]*\):.*/\1/p' | tr '\n' ' ' | sed 's/ *$//')
+    fi
+    if [ "$ACTION" = plan ]; then
+        will "herdr for Windows: ~/.herdr/packages, %LOCALAPPDATA%\\Programs\\Herdr, %APPDATA%\\herdr${hooks:+, its hooks for: $hooks}, its entry on your PATH (~/.herdr/worktrees stays)"
+        if [ "$up" = 1 ]; then say "          its server is running: every agent and shell in its panes ends"; fi
+        return 0
+    fi
+    for a in $hooks; do
+        if herdr integration uninstall "$a" >/dev/null 2>&1; then gone "herdr's hook for $a"; else fail "could not remove herdr's hook for $a: herdr integration uninstall $a"; fi
+    done
+    if [ "$up" = 1 ]; then
+        herdr server stop >/dev/null 2>&1
+        i=0
+        while [ "$i" -lt 20 ] && herdr status server 2>/dev/null | grep -q "status: running"; do
+            sleep 0.5
+            i=$((i + 1))
+        done
+        if herdr status server 2>/dev/null | grep -q "status: running"; then fail "herdr's server did not stop"; else gone "herdr's server"; fi
+    fi
+    if rm -rf "$HOME/.herdr/packages" "$LOCALAPPDATA_U/Programs/Herdr" "$APPDATA_U/herdr" "$LOCALAPPDATA_U/herdr"; then gone "herdr for Windows and its folders"; else fail "could not remove all of herdr's folders (a herdr still running holds its own)"; fi
+    rmdir "$HOME/.herdr" 2>/dev/null
+    # shellcheck disable=SC2016 # PowerShell's own variables
+    if powershell.exe -NoProfile -NonInteractive -Command '$p = [Environment]::GetEnvironmentVariable("Path", "User"); $n = ($p -split ";" | Where-Object { $_ -and $_ -notlike "*\.herdr\packages\*" }) -join ";"; [Environment]::SetEnvironmentVariable("Path", $n, "User")' </dev/null >/dev/null 2>&1; then
+        gone "herdr's entry on your PATH"
+    else
+        fail "herdr's entry on your PATH stays: take it out in Settings › System › About › Advanced system settings › Environment Variables"
+    fi
 }
 
 case "$ACTION" in

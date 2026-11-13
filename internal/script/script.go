@@ -36,6 +36,10 @@ func Stat(file, gnuFormat, bsdFormat string) string {
 	return "stat -c " + Quote(gnuFormat) + " " + file + " 2>/dev/null || stat -f " + Quote(bsdFormat) + " " + file
 }
 
+// WindowsDefaultShell is the one line, in an administrator PowerShell on a Windows PC, that makes Git Bash the shell its
+// OpenSSH server runs a command in, so every script here runs there as it does on a Mac or Linux.
+const WindowsDefaultShell = `New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Program Files\Git\bin\bash.exe" -PropertyType String -Force`
+
 // StateDir sets the shell variable to the dir remuda keeps on the machine, as state.Dir reckons it there: under
 // Application Support on a Mac, %APPDATA%\remuda on Windows (in Git Bash's spelling), $XDG_CONFIG_HOME/remuda elsewhere.
 func StateDir(variable string) string {

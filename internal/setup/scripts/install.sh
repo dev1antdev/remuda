@@ -18,6 +18,9 @@
 #      REMUDA_INSTALL_BASE=https://…  where remuda-<os>-<arch> and checksums.txt
 #                                     are served from (a mirror, a test)
 # `remuda setup -host H` runs this very script on H when no remuda is there.
+# On Windows, under Git Bash, it puts remuda-windows-<arch>.exe at
+# ~/.local/bin/remuda.exe and stops there: remuda on Windows is the helper a
+# cockpit on a Mac or Linux reaches over ssh (`remuda setup -host <this PC>`).
 set -e
 
 REPO="dev1antdev/remuda"
@@ -49,21 +52,24 @@ sha256() {
 # Everything happens in main, called on the last line: a download cut off
 # half way defines half a function and runs nothing.
 main() {
+    exe=""
     case "$(uname -s)" in
     Darwin) os=darwin ;;
     Linux) os=linux ;;
-    *) die "no release for $(uname -s): macOS and Linux only" ;;
+    MINGW* | MSYS* | CYGWIN*) os=windows exe=.exe ;;
+    *) die "no release for $(uname -s): macOS, Linux and Windows (under Git Bash) only" ;;
     esac
     case "$(uname -m)" in
     arm64 | aarch64) arch=arm64 ;;
     x86_64 | amd64) arch=amd64 ;;
     *) die "no release for a $(uname -m) CPU: arm64 and amd64 only" ;;
     esac
-    asset="remuda-$os-$arch"
+    asset="remuda-$os-$arch$exe"
     bin="$HOME/.local/bin"
+    target="$bin/remuda$exe"
 
-    if [ "${REMUDA_INSTALL_MISSING:-0}" = "1" ] && [ -x "$bin/remuda" ]; then
-        say "remuda: $("$bin/remuda" -version 2>/dev/null || echo "there already") at $bin/remuda"
+    if [ "${REMUDA_INSTALL_MISSING:-0}" = "1" ] && [ -x "$target" ]; then
+        say "remuda: $("$target" -version 2>/dev/null || echo "there already") at $target"
         return 0
     fi
 
@@ -77,7 +83,7 @@ main() {
     fi
 
     mkdir -p "$bin"
-    new="$bin/remuda.new"
+    new="$bin/remuda.new$exe"
     sums="$bin/remuda.sums"
     trap 'rm -f "$new" "$sums"' EXIT
     say "remuda: downloading $base/$asset"
@@ -92,12 +98,19 @@ main() {
     say "remuda: checksum ok"
     chmod +x "$new"
     version=$("$new" -version) || die "the downloaded binary does not run here"
-    mv "$new" "$bin/remuda" # a rename: safe while an older one runs
+    # a rename: safe while an older one runs; Windows renames a running .exe but writes over none
+    if [ -n "$exe" ] && [ -f "$target" ]; then mv -f "$target" "$target.old.$$"; fi
+    mv "$new" "$target"
     rm -f "$sums"
+    rm -f "$target".old.* 2>/dev/null || true # one still running stays until the next time
     trap - EXIT
-    say "remuda: $version at $bin/remuda"
+    say "remuda: $version at $target"
 
     if [ "${REMUDA_INSTALL_ONLY:-0}" = "1" ]; then
+        return 0
+    fi
+    if [ "$os" = windows ]; then
+        say "remuda on Windows is the helper your cockpit reaches over ssh: on the cockpit, run remuda setup -host <this PC>"
         return 0
     fi
     say ""

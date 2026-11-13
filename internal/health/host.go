@@ -10,7 +10,7 @@ import (
 )
 
 // HostScript prints the body's lines; every probe is silent where its file or tool is missing.
-const HostScript = `grep -E '^(MemTotal|MemAvailable|SwapTotal|SwapFree):' /proc/meminfo 2>/dev/null | sed 's/^/meminfo=/'
+const HostScript = `grep -E '^(MemTotal|MemAvailable|MemFree|SwapTotal|SwapFree):' /proc/meminfo 2>/dev/null | sed 's/^/meminfo=/'
 if command -v vm_stat >/dev/null 2>&1; then echo "memsize=$(sysctl -n hw.memsize 2>/dev/null)"; vm_stat 2>/dev/null | sed 's/^/vmstat=/'; echo "swapusage=$(sysctl -n vm.swapusage 2>/dev/null)"; fi
 for z in /sys/class/thermal/thermal_zone*; do [ -r "$z/temp" ] && echo "thermal=$(cat "$z/type" 2>/dev/null) $(cat "$z/temp" 2>/dev/null) $(cat "$z"/trip_point_*_temp 2>/dev/null | sort -n | tail -1)"; done
 f=/sys/devices/system/cpu/cpu0/cpufreq; [ -r "$f/scaling_cur_freq" ] && echo "cpufreq=$(cat "$f/scaling_cur_freq") $(cat "$f/cpuinfo_max_freq" 2>/dev/null)"

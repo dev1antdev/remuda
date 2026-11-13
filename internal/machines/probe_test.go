@@ -1,15 +1,19 @@
 package machines
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
 
+// TestAWindowsProbeIsReadInWindowsSpelling reads the probe's answer as GitHub's Windows Server 2025 runner gave it
+// through its OpenSSH, Git Bash its shell, herdr 0.9.5 and remuda.exe installed (CI's windows job records it).
 func TestAWindowsProbeIsReadInWindowsSpelling(t *testing.T) {
-	answer := "home=/c/Users/runneradmin\nos=MINGW64_NT-10.0-26100\nwinhome=C:\\Users\\runneradmin\nappdata=C:\\Users\\runneradmin\\AppData\\Roaming\n" +
-		"remuda=/c/Users/runneradmin/.local/bin/remuda.exe\nherdr=/c/Users/runneradmin/AppData/Local/Programs/Herdr/bin/herdr.exe\n" +
-		"herdr=/c/Users/runneradmin/.herdr/packages/standalone/releases/0.9.5-x86_64-pc-windows-msvc/herdr\n"
-	found := parseProbe(answer)
+	recorded, err := os.ReadFile("testdata/windows-probe.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := parseProbe(string(recorded))
 	if found.os != "windows" || found.home != `C:\Users\runneradmin` || found.appData != `C:\Users\runneradmin\AppData\Roaming` {
 		t.Fatalf("read %+v", found)
 	}

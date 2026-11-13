@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/script"
 )
 
 // What a remote says about itself when its connection is made, in one round trip.
@@ -85,7 +86,7 @@ func osOf(uname string) string {
 }
 
 // DefaultShellLine is what makes Git Bash the shell Windows' OpenSSH runs a command in, once, in an administrator PowerShell.
-const DefaultShellLine = `New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Program Files\Git\bin\bash.exe" -PropertyType String -Force`
+const DefaultShellLine = script.WindowsDefaultShell
 
 // windowsShell says a probe failed because the machine is Windows whose ssh runs commands in cmd.exe or PowerShell:
 // both answer that sh "is not recognized".
