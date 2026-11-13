@@ -4,12 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/sshx"
 	"github.com/dev1antdev/remuda/internal/wintest"
 )
 
-// TestOnWindowsTheFileViewersScriptsReadAWindowsFolder runs the viewer's stat, its search by suffix and the folder
+// TestOnWindowsTheFileViewersScriptsReadAWindowsFolder runs the viewer's stat, its search by suffix, an upload's write and the folder
 // picker's listing over the runner's OpenSSH on a folder in Windows' spelling.
 func TestOnWindowsTheFileViewersScriptsReadAWindowsFolder(t *testing.T) {
 	wintest.Live(t)
@@ -40,6 +42,13 @@ func TestOnWindowsTheFileViewersScriptsReadAWindowsFolder(t *testing.T) {
 	listing, err := readListing(wintest.Text(t, remote, listDirsScript(dir, false, true)), true)
 	if err != nil || len(listing.Dirs) != 2 || !rpath.IsWindows(listing.Path) || !rpath.IsWindows(listing.Home) {
 		t.Fatalf("the listing: %+v, %v", listing, err)
+	}
+	upload := windows.Join(dir, uploadDir, uploadSubdir, "20261113-000000-abcdef-shot.png")
+	if out, err := remote.RunWithInput(sshx.PutScript(upload), []byte("\x89PNG"), 30*time.Second); err != nil {
+		t.Fatalf("an upload into folders not there yet: %v\n%s", err, out)
+	}
+	if got, err := os.ReadFile(upload); err != nil || string(got) != "\x89PNG" {
+		t.Fatalf("the upload at %s: %q, %v", upload, got, err)
 	}
 	same, _ := os.Stat(dir)
 	there, err := os.Stat(listing.Path)

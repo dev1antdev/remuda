@@ -227,10 +227,17 @@ func (c *Conn) Run(command string, timeout time.Duration) ([]byte, error) {
 	return c.run(command, timeout, nil)
 }
 
-// Put writes data to a remote file, creating its directory, through cat over the master; a Windows path (C:\…) is cut at its own separator.
+// Put writes data to a remote file, creating its directory, through cat over the master.
 func (c *Conn) Put(path string, data []byte, timeout time.Duration) error {
-	_, err := c.run("mkdir -p "+script.Quote(rpath.For(path).Dir(path))+" && cat > "+script.Quote(path), timeout, bytes.NewReader(data))
+	_, err := c.run(PutScript(path), timeout, bytes.NewReader(data))
 	return err
+}
+
+// PutScript writes stdin to the file, its folder made first. A Windows path (C:\…) is cut at its own separator and
+// handed over with forward slashes, which mkdir -p walks one folder at a time under Git Bash.
+func PutScript(path string) string {
+	style := rpath.For(path)
+	return "mkdir -p " + script.Quote(style.Slash(style.Dir(path))) + " && cat > " + script.Quote(style.Slash(path))
 }
 
 // RunWithInput runs a script on the host with data on its stdin: the way for a secret that must not travel on a command line.
