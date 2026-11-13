@@ -152,7 +152,7 @@ func (s *Server) handleFsFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := r.URL.Query().Get("path")
-	if !strings.HasPrefix(path, "/") {
+	if !rpath.Absolute(path) {
 		httpErr(w, 400, fmt.Errorf("absolute path required (resolve it with /api/fs/stat first)"))
 		return
 	}
@@ -232,7 +232,7 @@ func (s *Server) handleFsDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := r.URL.Query().Get("path")
-	if !strings.HasPrefix(path, "/") {
+	if !rpath.Absolute(path) {
 		httpErr(w, 400, fmt.Errorf("absolute path required"))
 		return
 	}

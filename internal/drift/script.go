@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/dev1antdev/remuda/internal/review"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 )
 
@@ -148,7 +149,7 @@ func Parse(out string) Facts {
 			facts.MCP[fields[1]] = fields[2] == "yes"
 		case fields[0] == "global" && len(fields) == 4 && knownAgent[fields[1]]:
 			facts.Instructions[fields[1]] = fileOf(fields[2], fields[3])
-		case fields[0] == "repo" && len(fields) == 9 && strings.HasPrefix(fields[1], "/"):
+		case fields[0] == "repo" && len(fields) == 9 && rpath.Absolute(fields[1]):
 			if _, seen := byRoot[fields[1]]; seen {
 				continue
 			}

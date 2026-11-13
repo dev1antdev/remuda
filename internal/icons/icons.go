@@ -17,6 +17,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -154,7 +155,7 @@ func checkPlace(machine, folder string) error {
 	if machine == "" || folder == "" {
 		return errors.New("a machine and a folder are required")
 	}
-	if !strings.HasPrefix(folder, "/") {
+	if !rpath.Absolute(folder) {
 		return fmt.Errorf("the folder must be an absolute path: %q", folder)
 	}
 	return nil

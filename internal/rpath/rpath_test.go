@@ -82,6 +82,14 @@ func TestAWindowsPathIsAbsoluteFromItsDrive(t *testing.T) {
 	}
 }
 
+func TestAFolderTheRoutesTakeIsAbsoluteOnEitherMachine(t *testing.T) {
+	for p, want := range map[string]bool{"/home/me/app": true, `C:\Users\me\app`: true, "D:/work": true, `\\nas\share`: true, "app": false, "": false, "~/app": false, `src\main.go`: false} {
+		if got := Absolute(p); got != want {
+			t.Errorf("Absolute(%q) = %v, want %v", p, got, want)
+		}
+	}
+}
+
 func TestWithinIgnoresCaseAndSeparatorsOnWindows(t *testing.T) {
 	root := `C:\Users\me\.herdr\worktrees`
 	cases := []struct {

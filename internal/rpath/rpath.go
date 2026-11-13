@@ -75,6 +75,12 @@ func (s Style) IsAbs(p string) bool {
 	return IsWindows(p) || msysDrive(strings.ReplaceAll(p, `\`, "/"))
 }
 
+// Absolute says p names its place whole on the machine it spells: from / on a Mac or Linux, from its drive or share on
+// Windows. The routes take a folder as the page sends it, herdr's spelling, with no machine needed to tell.
+func Absolute(p string) bool {
+	return strings.HasPrefix(p, "/") || IsWindows(p)
+}
+
 // Join is the elements joined by the machine's separator and cleaned.
 func (s Style) Join(elem ...string) string {
 	var parts []string

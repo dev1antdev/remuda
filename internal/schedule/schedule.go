@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/push"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/sessions"
 	"github.com/dev1antdev/remuda/internal/state"
 	"github.com/dev1antdev/remuda/internal/text"
@@ -164,7 +165,7 @@ func (st *Store) Put(s Schedule) (Schedule, error) {
 	}
 	switch s.Kind {
 	case KindPrompt:
-		if s.Machine == "" || !strings.HasPrefix(s.Dir, "/") {
+		if s.Machine == "" || !rpath.Absolute(s.Dir) {
 			return s, errors.New("a machine and an absolute folder are required")
 		}
 		if s.Prompt == "" {

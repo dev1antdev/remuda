@@ -7,6 +7,7 @@ import (
 
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/review"
+	"github.com/dev1antdev/remuda/internal/rpath"
 )
 
 // The Changes lens: a folder's uncommitted work, the diff of one file, the baseline moved by a look.
@@ -42,7 +43,7 @@ func (s *Server) reviewTarget(w http.ResponseWriter, r *http.Request, bodyMachin
 		httpErr(w, 404, err)
 		return nil, false
 	}
-	if !strings.HasPrefix(dir, "/") {
+	if !rpath.Absolute(dir) {
 		httpErr(w, 400, errors.New("an absolute folder is required"))
 		return nil, false
 	}
@@ -67,7 +68,7 @@ func (s *Server) handleReviewDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// a path starting with "-" would reach git as an option
-	if path == "" || strings.HasPrefix(path, "/") || strings.HasPrefix(path, "-") || strings.Contains(path, "..") {
+	if path == "" || rpath.Absolute(path) || strings.HasPrefix(path, "-") || strings.Contains(path, "..") {
 		httpErr(w, 400, errors.New("a path relative to the folder is required"))
 		return
 	}

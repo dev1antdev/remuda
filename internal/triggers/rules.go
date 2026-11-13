@@ -8,12 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"path"
 	"strings"
 	"sync"
 	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/herdr"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -87,13 +87,13 @@ func Check(r *Rule) error {
 		return fmt.Errorf("trigger %q: unknown action %q", r.Name, r.Action)
 	}
 	if r.Dir != "" {
-		if !strings.HasPrefix(r.Dir, "/") {
+		if !rpath.Absolute(r.Dir) {
 			return fmt.Errorf("trigger %q: the folder is an absolute path", r.Name)
 		}
 		if r.Machine == "" {
 			return fmt.Errorf("trigger %q: a folder belongs to a machine", r.Name)
 		}
-		r.Dir = path.Clean(r.Dir)
+		r.Dir = rpath.For(r.Dir).Clean(r.Dir)
 	}
 	return nil
 }
@@ -170,5 +170,8 @@ func (r Rule) Covers(machine, dir, cwd string) bool {
 }
 
 func within(p, dir string) bool {
+	if style := rpath.For(dir); style.Windows {
+		return p != "" && style.Within(dir, p)
+	}
 	return p != "" && (p == dir || strings.HasPrefix(p, strings.TrimSuffix(dir, "/")+"/"))
 }

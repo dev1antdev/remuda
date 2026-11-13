@@ -10,13 +10,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"path"
 	"strings"
 	"sync"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/dev1antdev/remuda/internal/recipes"
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/state"
 )
 
@@ -193,10 +193,10 @@ func CheckStep(step Step, recipeKnown func(string) bool) (Step, error) {
 	if step.Machine == "" {
 		return step, errors.New("a machine is required")
 	}
-	if !strings.HasPrefix(step.Dir, "/") {
+	if !rpath.Absolute(step.Dir) {
 		return step, errors.New("an absolute folder is required")
 	}
-	step.Dir = path.Clean(step.Dir)
+	step.Dir = rpath.For(step.Dir).Clean(step.Dir)
 	switch {
 	case step.Recipe != "":
 		if step.Agent != "" || step.Model != "" || step.Args != "" || step.Prompt != "" {
