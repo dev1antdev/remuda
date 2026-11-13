@@ -7,15 +7,17 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/rpath"
+	"github.com/dev1antdev/remuda/internal/server"
 	"github.com/dev1antdev/remuda/internal/shell"
 	"github.com/dev1antdev/remuda/internal/undo"
 	"github.com/dev1antdev/remuda/internal/watch"
 )
 
-// repositories is the Repositories place over the fleet: the main folders of every machine's workspaces as the review
-// sweep read them, a pull held back while the watcher sees an agent at work or asking in the checkout or the undo's
-// tracker a turn still ending there, and the secret check before a push.
-func repositories(dir string, fleet *machines.Manager, watcher *watch.Watcher, reviews *review.Store, turns *undo.Tracker) *gitsync.Service {
+// repositories is the Repositories place over the fleet: the main folder of every machine's workspace as the sidebar
+// groups it (server.FolderOf: herdr's repo_root, else the review sweep's root), never the floating terminal's or the
+// concierge's; a pull held back while the watcher sees an agent at work or asking in the checkout or the undo's tracker
+// a turn still ending there; and the secret check before a push.
+func repositories(dir string, fleet *machines.Manager, watcher *watch.Watcher, reviews *review.Store, turns *undo.Tracker, own func(machineID, workspaceID string) bool) *gitsync.Service {
 	return &gitsync.Service{
 		Fleet: func() []gitsync.Machine {
 			var out []gitsync.Machine
@@ -41,10 +43,13 @@ func repositories(dir string, fleet *machines.Manager, watcher *watch.Watcher, r
 			}
 			var folders []string
 			seen := map[string]bool{}
-			for _, folder := range snap.WorkspaceDirs() {
-				if root := reviews.Root(machineID, folder); root != "" {
-					folder = root
+			for i := range snap.Workspaces {
+				ws := &snap.Workspaces[i]
+				workspaceDir := snap.WorkspaceDir(ws)
+				if workspaceDir == "" || own(machineID, ws.WorkspaceID) {
+					continue
 				}
+				folder := server.FolderOf(ws.Worktree, reviews.Root(machineID, workspaceDir), workspaceDir)
 				if !seen[folder] {
 					seen[folder] = true
 					folders = append(folders, folder)

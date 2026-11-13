@@ -741,7 +741,9 @@ func Run(ctx context.Context, o Options) error {
 		return nil
 	}}
 	events.Subscribe(bus, func(e events.MachineRemoved) { fleetSetup.Forget(e.Machine) })
-	repos := repositories(o.Dir, fleet, watcher, reviews, turns.Tracker)
+	repos := repositories(o.Dir, fleet, watcher, reviews, turns.Tracker, func(machineID, workspaceID string) bool {
+		return shells.Is(machineID, workspaceID) || conciergeAgent.Is(machineID, workspaceID)
+	})
 	events.Subscribe(bus, func(e events.MachineRemoved) { repos.Forget(e.Machine, true) })
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {

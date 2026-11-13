@@ -20,10 +20,11 @@ type Read struct {
 }
 
 // ReadScript lists a machine's repositories and reads each one, in one script: the main folder of each folder given
-// (a workspace's; for a linked worktree, its repository's), then the repositories the scan finds — a .git a folder down
-// from each, -H following the scan's folder when it is a link and no link below it, hidden and build folders pruned —
-// each once, a record per repository: its git status as porcelain v2, git's own line when that failed, whether it has a
-// remote, and FETCH_HEAD's time.
+// (a workspace's; for a linked worktree, its repository's; nothing for one outside git, where MainFolderScript alone
+// would answer the folder itself), then the repositories the scan finds — a .git a folder down from each, -H following
+// the scan's folder when it is a link and no link below it, hidden and build folders pruned — each once by its physical
+// path (a Mac's /tmp is /private/tmp), a record per repository: its git status as porcelain v2, git's own line when
+// that failed, whether it has a remote, and FETCH_HEAD's time.
 func ReadScript(style rpath.Style, folders []string, scan *Scan) string {
 	var b strings.Builder
 	b.WriteString(`mtime() { ` + script.Stat(`"$1"`, "%Y", "%m") + ` 2>/dev/null; }; `)
@@ -35,7 +36,7 @@ func ReadScript(style rpath.Style, folders []string, scan *Scan) string {
 	}
 	b.WriteString(`{ `)
 	for _, folder := range folders {
-		b.WriteString(`r=$(cd ` + script.Quote(style.Slash(folder)) + ` 2>/dev/null && { ` + review.MainFolderScript + `; }); [ -n "$r" ] && printf 'w %s\n' "$r"; `)
+		b.WriteString(`r=$(cd ` + script.Quote(style.Slash(folder)) + ` 2>/dev/null && git rev-parse --show-toplevel >/dev/null 2>&1 && { ` + review.MainFolderScript + `; }); [ -n "$r" ] && printf 'w %s\n' "$r"; `)
 	}
 	if scan != nil {
 		prune := `-name '.*'`
@@ -45,12 +46,14 @@ func ReadScript(style rpath.Style, folders []string, scan *Scan) string {
 		b.WriteString(`find -H ` + root + ` -mindepth 1 -maxdepth ` + strconv.Itoa(scan.Depth+1) + ` \( -name .git -print -prune \) -o \( -type d \( ` + prune + ` \) -prune \) 2>/dev/null | ` +
 			`sed -n 's|/\.git$||p' | head -n ` + strconv.Itoa(MaxScan+1) + ` | sed 's|^|s |'; `)
 	}
-	b.WriteString(`:; } | awk '!seen[substr($0, 3)]++' | while IFS= read -r line; do p=${line#??}; case $line in w\ *) k=w ;; *) k=s ;; esac; ( cd "$p" 2>/dev/null || exit 0; ` +
+	b.WriteString(`:; } | awk '!seen[substr($0, 3)]++' | { nl='
+'; seen=$nl; while IFS= read -r line; do p=${line#??}; case $line in w\ *) k=w ;; *) k=s ;; esac; ` +
+		`real=$(cd "$p" 2>/dev/null && pwd -P) || continue; case $seen in *"$nl$real$nl"*) continue ;; esac; seen=$seen$real$nl; ( cd "$p" 2>/dev/null || exit 0; ` +
 		`printf '\035%s %s\036' "$k" "$p"; ` +
 		read + ` status --porcelain=v2 --branch -z --no-renames --untracked-files=normal 2>"$e" </dev/null; rc=$?; printf '\036%s\037' "$rc"; ` +
 		`if [ "$rc" -ne 0 ]; then { grep -m 1 -e '^fatal:' -e '^error:' "$e" || tail -n 1 "$e"; } | tr -d '\n'; fi; printf '\037'; ` +
 		`git remote 2>/dev/null | head -n 1 | tr -d '\n'; printf '\037'; ` +
-		`f=$(git rev-parse --git-path FETCH_HEAD 2>/dev/null); if [ -f "$f" ]; then mtime "$f" | tr -d '\n'; fi; printf '\n' ); done`)
+		`f=$(git rev-parse --git-path FETCH_HEAD 2>/dev/null); if [ -f "$f" ]; then mtime "$f" | tr -d '\n'; fi; printf '\n' ); done; }`)
 	return b.String()
 }
 

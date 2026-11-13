@@ -70,9 +70,18 @@ func TestOneScriptReadsTheWorkspacesAndTheScan(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	plain := filepath.Join(home, "plain") // a workspace's folder outside git is no repository
+	if err := os.MkdirAll(plain, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	linked := filepath.Join(home, "linked") // the same checkout spelled through a link reads once
+	if err := os.Symlink(ahead, linked); err != nil {
+		t.Fatal(err)
+	}
+
 	host := shell.Local{Name: "local"}
 	style := rpath.For(host.Home())
-	out, err := shell.Text(host, ReadScript(style, []string{filepath.Join(ahead, "sub"), ahead, worktree, behind, filepath.Join(home, "no-repo")}, &Scan{Folder: projects, Depth: 3}), Timeout)
+	out, err := shell.Text(host, ReadScript(style, []string{filepath.Join(ahead, "sub"), ahead, worktree, behind, filepath.Join(home, "no-repo"), plain, linked}, &Scan{Folder: projects, Depth: 3}), Timeout)
 	if err != nil {
 		t.Fatal(err)
 	}

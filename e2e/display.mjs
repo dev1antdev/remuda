@@ -1032,9 +1032,10 @@ async function repoScreens() {
   const row = async (name) => {
     const found = await evaluate(`(() => { const row = [...document.querySelectorAll(".repo-row")].find((r) => r.querySelector(".repo-name")?.textContent === ${JSON.stringify(name)}); row?.setAttribute("data-e2e", ${JSON.stringify(name)}); return !!row; })()`);
     if (!found) throw new Error(`no row ${name}`);
-    for (let i = 0; i < 3 && !(await present(".menu .menu-item")); i++) {
+    // a second press closes a menu still opening, so each try waits for it
+    for (let i = 0; i < 2 && !(await present(".menu .menu-item")); i++) {
       await tap(`.repo-row[data-e2e=${JSON.stringify(name)}]`);
-      await sleep(300);
+      await until(() => present(".menu .menu-item"), 3);
     }
     if (!(await present(".menu .menu-item"))) throw new Error(`${name}'s menu did not open`);
   };
@@ -1045,6 +1046,9 @@ async function repoScreens() {
       check((await count(".repo-row .repo-ahead")) >= 2 && (await count(".repo-row .repo-behind")) >= 2, "the rows say nothing of ↑ and ↓");
       check((await present(".repo-word.is-unpushed")) && (await present(".repo-word.is-local")) && (await present(".repo-word.is-gone")), "a branch on no remote, a repository with none or an upstream gone is not said");
       check(await present(".repos-machine-words.is-away"), "the machine away is not said so");
+      const apps = await evaluate(`[...document.querySelectorAll(".repo-row .repo-name")].filter((el) => el.textContent === "app").length`);
+      check(apps === 1, `the e2e repository and its worktree are listed ${apps} times, not once`);
+      check(!(await present(".repo-word.is-error")), "a workspace's folder outside git is listed as a repository");
     },
     expect: [".modal.repos-panel .repos-machine-head", ".repo-dirty", ".repos-group-head"],
   });

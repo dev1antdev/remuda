@@ -867,9 +867,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   and push at the person's press** (tested on temp repositories with a bare
   remote made in the test, a HOME and no system config of their own, and on
   `shell.Fake`), after gitgraph's Manygit. **The reads**: `ReadScript` is one
-  script per machine — the main folder (`review.MainFolderScript`) of every
-  folder `Service.Folders` names (the watcher's workspace folders, each its
-  `review.Store.Root` once the badge sweep read it), then what the machine's
+  script per machine — the main folder (`review.MainFolderScript`, only for a
+  folder in git: alone it answers a plain folder itself) of every folder
+  `Service.Folders` names (each workspace's folder as the sidebar groups it,
+  `server.FolderOf`: herdr's repo_root, else `review.Store.Root`, else the
+  folder; never the floating terminal's or the concierge's), then what the machine's
   scan finds (`Scan{Folder, Depth 1–5}`, `repos.json` in the state dir,
   `Scans`; `CheckScan` reads `~/` against the machine's home and refuses a
   relative folder, `/`, `/root`, `/home`, `/Users`, any home or a folder above
@@ -877,7 +879,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   Downloads): `find -H <folder> -mindepth 1 -maxdepth depth+1` for a `.git`,
   every hidden folder and node_modules, vendor, venv, __pycache__, dist, build,
   target, site-packages and Library pruned, at most `MaxScan` 500 (the rest
-  `More`) — each once (awk), each read with `git --no-optional-locks -c
+  `More`) — each once by its physical path (`pwd -P`: a Mac's /tmp is
+  /private/tmp, a checkout and its worktree's main folder may come spelled
+  both ways), each read with `git --no-optional-locks -c
   core.fsmonitor=false status --porcelain=v2 --branch -z --no-renames`, its
   `git remote`, and FETCH_HEAD's mtime (`--git-path`, so a linked worktree's
   own); `ParseRead` makes `Repo{path, name, parent (~ for home), workspace,
