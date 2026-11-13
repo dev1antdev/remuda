@@ -83,6 +83,10 @@ describe("ribbon", () => {
   it("leaves what came before the window out, and what came before the turns read as not read", () => {
     const old = [user(50), answer(49, [call("Read", 49, 5)], 60)];
     expect(ribbon(old, { now: NOW, live: null, cut: false }).stretches).toEqual([]);
+    const long = [...Array.from({ length: 300 }, (_, i) => [user(3000 - i * 5), answer(2999.9 - i * 5, [call("Read", 2999.5 - i * 5, 2)], 60)]).flat(), user(12), answer(11.9, [call("Edit", 11, 3)], 120)];
+    const recent = ribbon(long, { now: NOW, live: null, cut: false });
+    expect(recent.stretches.filter((s) => s.call).map((s) => s.call!.name)).toEqual(["Edit"]);
+    expect(recent.turn).toMatchObject({ took: 120, tools: 1 });
     const tail = [answer(12, [call("Edit", 12, 3)], 900)];
     const cut = ribbon(tail, { now: NOW, live: null, cut: true });
     expect(cut.stretches[0]).toMatchObject({ tone: "unread", from: NOW - RIBBON_MS, to: NOW - min(12) });

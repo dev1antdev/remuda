@@ -144,6 +144,8 @@ export function ribbon(turns: Turn[], { now, live, cut }: { now: number; live: L
   let figures: TurnFigures | null = null;
   exchanges.forEach((x, i) => {
     const last = i === exchanges.length - 1;
+    // a long conversation in the lens: the exchanges long over before the window are not laid out at all
+    if (!last && exchanges[i + 1]!.start < from && exchanges[i + 1]!.start >= x.start + (x.took ?? 0) * 1000) return;
     const laid = stretchesOf(x, live, last, now);
     if (last) {
       const tools = laid.calls.length;
@@ -166,9 +168,6 @@ export function ribbon(turns: Turn[], { now, live, cut }: { now: number; live: L
   const shown = [...stretches.filter((s) => s.to > from && s.to - s.from > 0).map(clip), ...calls.map(clip)];
   return { from, now, stretches: shown.filter((s) => s.to >= s.from), turn: figures };
 }
-
-// isBase says a stretch fills a gap between calls rather than being one
-export const isBase = (s: Stretch) => !s.call;
 
 // stretchAt is the stretch under a point a share `at` along the ribbon, `width` px wide: a call over the gap it lies in,
 // a narrow call found within HIT_PX, the nearest of several
