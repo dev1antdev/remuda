@@ -206,7 +206,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   colours kept (the wall's screen view); `PaneRecent` is the pane's last n
   rows, the screen and herdr's scrollback above it (source `recent`),
   `PaneScroll` moves its viewport (`pane.scroll`, every viewer's) and
-  `PaneInfo.Scroll` is where it stands. `PaneInfo` has
+  `PaneInfo.Scroll` is where it stands; `PaneSendInput` is `pane.send_input`
+  (text, then keys, in one call — herdr brackets its text as a paste while
+  the app asked for bracketed paste, where `pane.send_text` stays raw:
+  seen on a throwaway 0.9.5), the screen terminal's way in. `PaneInfo` has
   `Dir()`, `AgentName()`, `DisplayTitle()`; status vocabularies are the
   `Status*`/`UI*` constants with `UIStatus(status, hasAgent)` as the one
   mapping. **What a client writes into herdr's own UI** (`metadata.go`,
@@ -479,7 +482,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   files, no `repo` outside git). `ListDirs(path, hidden)` lists a folder's
   subfolders (repositories marked by a `.git`; `""`/`~` is home) for the
   folder picker behind the New workspace dialog's browse button
-  (`web/src/features/roster/FolderPicker.tsx`: crumbs, subfolders, the machine's known
+  (`web/src/features/roster/FolderPicker.tsx`: crumbs from / or from a drive on a Windows PC (`pathCrumbs`), subfolders, the machine's known
   workspaces as quick picks, hidden on request). Routes: `/api/fs/dirs`,
   `/api/fs/stat` (resolve + kind; `dir=` stands in for the pane's folder
   when there is no pane — a transcript on its own, a task's comments),
@@ -765,7 +768,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   headless Chrome — driving `e2e/smoke.mjs` over the
   DevTools protocol with no dependency: sign in, a scratch shell
   workspace through the API, a command typed into the terminal lens and
-  read back through `/api/screen`, the shell's lens switch vacant (a
+  read back through `/api/screen` and once more through the screen terminal
+  with the browser's roster saying the machine is a Windows PC (`os`
+  dressed through CDP's `Fetch`), the shell's lens switch vacant (a
   shell has its terminal alone), the Wall, Review, Activity,
   the palette, the workspace closed, no console errors — then
   `e2e/display.mjs`, **the display checks**: a repository with two tabs
@@ -778,7 +783,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   some), each opening every screen the way a person does — the sidebar,
   a folded folder, the card's, the machine's and the vitals' menus, the
   tab strip and its + menu, the View menu, the chat lens, the split
-  view, the floating terminal, the screen-sharing chip, the icon
+  view, the screen terminal (the notes shell played as a Windows PC's,
+  a command typed into it and its answer read off it), the floating
+  terminal, the screen-sharing chip, the icon
   dialog's four tabs, the Wall's chat, screen, zoo and office views,
   the Tasks board, list and detail, Review, Code, every panel, each
   section of Settings, the palette, the keys sheet and the dialogs (new
@@ -800,7 +807,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`features/roster/HealthButton.tsx`; the rules in `concerns.ts`) turns amber on an update, a lagging
   remote remuda, a nearly full disk, Claude Code's sign-in running out (`internal/signin`) or a
   setting there on a model being retired (`internal/retire`; `concerns(…, more)` takes the
-  machine's name, its `retiring`, the roster's `retirements` its hits name and the clock).
+  machine's name, its `retiring`, the roster's `retirements` its hits name and the clock); a Windows PC's ⓘ opens on a System row, "Windows · the terminal is the pane's screen, no Code mode".
 - `internal/drift/` — **Fleet setup: how every machine is set up, side
   by side, the odd one out marked** (tested: the script on this
   machine's sh, awk, sed and git in a temp HOME with anonymized config
@@ -1252,7 +1259,13 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a media query as a hook, for a piece the stylesheet hides that would
   otherwise poll unseen), `clock.ts` (`useNow`: the time, refreshed every
   so many ms, for a counter on screen), `text.ts` (`errMsg`,
-  `basename` / `dirname`, `plural`, `shellQuote`), `time.ts`, `paths.ts`,
+  `basename` / `dirname`, `plural`, `shellQuote`), `pathname.ts` (a path's
+  parts the way its machine writes them, tested: `windowsPath` — a drive
+  letter, a `\\share`, or backslashes and no slash — `basename` / `dirname`
+  by either separator on such a path and by `/` alone on a POSIX one, where
+  a backslash is a character of the name, `pathParts`, `joinPath` with the
+  folder's own separator, `underFolder` case-blind on Windows, `pathCrumbs`
+  from `/` or from a drive; `text.ts` re-exports the two), `time.ts`, `paths.ts`,
   `host.ts` (`copyText`: Clipboard API, else execCommand; `saveText`: a
   file for the browser to keep, `saveBlob` any other — a timelapse's GIF; `openUrl`: a
   new tab — nothing embeds remuda any more, the JetBrains plugin and its
@@ -2098,7 +2111,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   before; the page's host when the probe found none), or the editor
   answers "Unable to resolve resource"; the frame's address is settled once per request, so
   coming back to the folder later does not open the file again; a path that is the folder itself opens no file (the rail can name it after a Read of the directory). **Follow** (the Code bar's button, pref `code.follow`): while the pane on screen in Agents runs an agent on this machine, its tail is polled at a tile's pace (`useChat`, `last=4`) and every edit it finishes — `newestEdit` in `code/follow.ts`, tested: the Edit / Write / MultiEdit / NotebookEdit with no error whose result came last (its call's `at` plus `took`, since calls made side by side finish out of order; the order made where a time is missing), named by `tool_id` — opens in the editor the same way; what was already there when Follow began is not news. The flag `-code-port`
-  changes the port on every machine at once.
+  changes the port on every machine at once. **A Windows PC has no
+  code-server** (`features/roster/system.ts`, tested: `onWindows` by the
+  roster's machine `os`, `editorOption`): the Code mode lists it in the
+  machine pick, disabled, "no code-server for Windows", and never picks it
+  (`live` leaves it out; with no other machine the page says so); the
+  folder's and the card's "Open in the editor", the files rail's code
+  button, the Changes lens's per-file one (`Review`'s `editor`) and the
+  file viewer's are absent for its panes.
 - `internal/preview/` — **previews of what the agents serve** (tested):
   `Script` is one POSIX script per machine — `ss -ltnpH` and `/proc` on
   Linux, `lsof -iTCP -sTCP:LISTEN -Fpcn` and `ps` elsewhere — printing
@@ -2153,6 +2173,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a wide character or a surrogate pair before or inside a link leaves the
   underline on the link's own cells; tested) and the chat linkifier; keeps a
   `:line` suffix, drops trailing punctuation, never a path inside a URL.
+  On a Windows machine's pane (`findPaths(text, true)`; the Markdown hears
+  it through the `WindowsPaths` context of `ui/Markdown.tsx`, which
+  `PaneArea` and a wall tile set from the roster's `os`) a path may also
+  start at a drive (`C:\Users\me\Form1.cs:12`, `C:/work/x.cs`) or go by
+  backslashes (`src\App.xaml.cs`), those alternatives tried first; a POSIX
+  pane's text reads as it always did.
   A link needs a name a file would have — a dotfile (`.env`, `.gitignore`;
   the dot kept on `.mcp.json`) or a name with an extension, in any
   alphabet — so a folder (`internal/server`) or a slashed phrase
@@ -2173,6 +2199,54 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   release within 4px) as a press+release report at its cell, sent after
   xterm's mouseup so a click that opened a link is not also an app click.
   Drags never reach the app.
+- **The screen terminal** (`web/src/features/terminal/screen/`;
+  `internal/server/screen.go`): herdr has **no `herdr terminal attach` on
+  Windows**, so a pane of a machine whose roster `os` is `windows`
+  (`onWindows` in `features/roster/system.ts`) never gets the live
+  terminal: the terminal lens (`TerminalLens`'s `screen`), the split view's
+  terminal side and the floating terminal's drawer show `ScreenTerminal`
+  instead — never a WebSocket attach, never a resize of the pane (the pop-out
+  and the Wall never attached). `useLiveScreen` reads `GET /api/screen`
+  (ANSI, an ETag 304 when unchanged) every `FAST_MS` 400 ms while its field
+  has the focus, `SLOW_MS` 1.5 s while it is only on screen, nothing while
+  hidden or while a selection lies on it (`useSelectionHeld`: the rows stay
+  put while they are copied), and at once and `ECHO_MS` 150 ms after every
+  send; the rows are the Wall's `parseAnsi` / `ScreenLines`, at the font
+  that fits the pane's columns up to the text size picked and never under
+  `MIN_FONT` 8 (`screenFont` in `engine/geometry.ts`, through `useFitFont`'s
+  fit rule), drawn from the top and kept at the bottom while followed,
+  scrolling either way when the grid is larger. No cursor: `pane.read`
+  names none. `useTyping` is the keyboard: a hidden `textarea` takes what is
+  typed — characters as text, through an input method (composition) and a
+  phone's keyboard (`beforeinput` for its Backspace and Enter) too, a paste
+  as a paste — and a keydown on it or on the screen the keys herdr names
+  (`keyOf` in `strokes.ts`, tested: Enter with Shift, Alt or Ctrl, Esc,
+  Tab and Shift+Tab, Backspace, Delete, the arrows with their modifiers,
+  Home / End / PageUp / PageDown, Ctrl and a letter or digit by key code,
+  Ctrl+[ as Esc, Alt and a letter off a Mac — a Mac's Option types its
+  character; never ⌘, Ctrl+V off a Mac, Ctrl+Shift+…, the find key, nor
+  Ctrl/⌘+C over a selection, which copies); the key bar types through the
+  same path (`strokeOf` reads its sequences, `withModifier` spends its
+  one-shot Ctrl or Alt); `createSender` (`sender.ts`, tested) sends the
+  first stroke at once and coalesces what is typed while a request is out
+  (`takeBatch`: typed text then the keys after it, a paste alone, at most
+  `MAX_TEXT` 4096 characters and `MAX_KEYS` 64), never two requests in
+  flight, a refusal a toast that drops what was queued behind it. `POST
+  /api/input {machine, pane, text?, paste?, keys?}` (`handleInput`, the
+  person's only — neither a viewer link's GET routes nor an agent key's,
+  tested in `internal/auth`) is `sessions.Input.SendInput` under the pane's
+  lock, and a row of the activity per line (`sent.Lines`). The find over
+  the scrollback works as on the live terminal: `useTerminalFind` moves
+  herdr's viewport, the screen read again shows it, `markLines` marks the
+  query and the row asked for; the find closed scrolls the pane back to
+  the bottom, the screen terminal having no wheel of its own. The View
+  menu keeps the text size and the key bar alone (`useTerminalViewItems`'s
+  `screen`); a quiet line under the screen, with a `Tip`, says why it is a
+  screen and that `herdr --remote <pc>` gives a live terminal. `.screen-term`
+  counts as a terminal for the page's keys (Ctrl+K and Esc stay the pane's,
+  Alt+N / Alt+H / Alt+Z pass it by, `app/escape.ts`). Measured on a throwaway
+  herdr here: a keystroke on the screen in about 15 ms, a command's output
+  about 50 ms after Enter.
 - **The floating terminal** (`internal/scratch`, tested;
   `internal/server/scratch.go`; `web/src/features/terminal/float/`): a
   shell on a key over every mode. `scratch.Store` keeps, per machine in
@@ -2930,7 +3004,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (`Restarter.Typed`, wired in app.go) add a `quiet` entry — "iPhone sent
   «yes» to api · w3:p1", the device's name from `auth.Devices.Name`, an
   agent key's name, else "an API client"; the text one line cut at 80
-  runes, keys by their names — that `feed.LastID` skips, so the bell stays
+  runes, keys by their names (a combination by its parts, "Ctrl+A",
+  "Alt+Enter") — and the screen terminal's `/api/input` one per line it
+  sends, not per keystroke (`sent.Lines`, tested: per device and pane, the
+  text typed since the last row when Enter ends it, a backspace taking a
+  character off and Ctrl+U the line, else the keys pressed before the Enter
+  — "↓ ↓ Enter", a menu answered — and Ctrl+C as a row of its own; the
+  last 512 runes of a line kept, at most 256 lines, the one typed into
+  longest ago going first) — that `feed.LastID` skips, so the bell stays
   dark and `feed.seen` does not move for it; the panel draws it in the quiet
   colour. `features/activity/Activity.tsx` is the panel behind
   the bell (store panel `activity`): by day (`group.ts`, tested), a row
@@ -5042,9 +5123,20 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   with what to put in it, since remuda adds to no file of theirs; the
   agent schedules, a project's queue and stages and a Claude Code second
   opinion ask for it — `Keys`
-  (herdr's `send_keys` grammar), `RefOK` (a branch name git gets as an
+  (herdr's `send_keys` grammar as remuda allows it, `typing.go`, tested:
+  `ctrl`, `alt` and `shift`, each once, before a named key — enter, esc,
+  tab, space, backspace, the arrows — or `ctrl` / `alt` before a letter or
+  digit; a printable key alone is text), `RefOK` (a branch name git gets as an
   argument), and `Input`: one lock per pane, `Submit` (`agent.prompt`, else
-  `send_text` + Enter; `ErrAgentBusy` while a menu is open), `SendKeys`,
+  `send_text` + Enter; `ErrAgentBusy` while a menu is open), `SendKeys`
+  (herdr 0.9.5 refuses `home`, `end`, `pageup`, `pagedown` and `delete` as
+  `invalid_key`, so those go as a terminal's bytes through `send_text`:
+  `ESC O H`, `ESC O F`, `ESC [5~`, `ESC [6~`, `ESC [3~`), `SendInput` (the
+  screen terminal's typing, a `Typed{Text, Paste, Keys}` checked by
+  `NewTyped` — some text or keys, the text `MaxTypedText` 64 KB at most,
+  any characters: typed text goes raw through `send_text`, keystroke for
+  keystroke, a paste through `send_input` with the keys after it, which
+  herdr brackets while the app asked for it; tested on a throwaway herdr),
   `SubmitToAgent` (`agent.prompt` alone: a pane whose agent left is
   `ErrNoAgent`, never typed into its shell — the schedules, the pull
   requests' hand-offs and a booked continue), `SubmitToFolder` (the
@@ -5363,8 +5455,11 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   a repaint (see attach.go), never a byte replay.
 - herdr `pane.send_keys` grammar is lowercase with `+` modifiers: `enter`,
   `esc`, `up`, `down`, `tab`, `shift+tab`, `backspace`, `ctrl+c`… (verified
-  live on 0.9.1; the server lowercases and allowlists). The REST `/api/keys`
-  path is for the chat lens only. The terminal lens key bar never uses it:
+  live on 0.9.1; the server lowercases and checks it, `sessions.Keys`; 0.9.5
+  has no word for home, end, the page keys and delete, which go as their
+  bytes). The REST `/api/keys`
+  path is for the chat lens only, `/api/input` for the screen terminal's
+  typing. The live terminal lens's key bar never uses either:
   it types raw sequences through the live terminal's own input path
   (`TermApi.input`), so ⏎ = `ESC CR` (Alt+Enter → newline in Claude Code,
   verified), arrows follow DECCKM, and Ctrl/Alt are one-shot modifiers.

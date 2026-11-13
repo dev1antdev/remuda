@@ -11037,6 +11037,7 @@ textarea.screen-term-field {
   border-top: 1px solid var(--line);
   color: var(--fg-faint);
   font-size: var(--fs-11);
+  line-height: 1.4;
 }
 
 .screen-term-note span {

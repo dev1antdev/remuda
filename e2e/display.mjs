@@ -790,6 +790,8 @@ const UNDO_CHAT = [
   { role: "assistant", ts: iso(now - 11 * 60e3), ids: ["e2e-undo-answer"], parts: [{ type: "text", text: "Drew them, and committed the screens." }], took: 150 },
 ];
 let undoChat = false;
+// windowsLocal plays the local machine as a Windows PC in the dressed roster, for the screen terminal's screen alone
+let windowsLocal = false;
 function fakeUndoTurn() {
   const file = (path, was, extra = {}) => ({ path, was, dirty_at: false, dirty_to: true, ...extra });
   return {
@@ -823,6 +825,7 @@ async function dressRoster({ requestId, responseStatusCode, responseHeaders = []
   }
   for (const machine of roster.machines ?? []) {
     if (machine.id !== "local") continue;
+    if (windowsLocal) machine.os = "windows"; // the screen terminal's screen: this machine played as a Windows PC
     // Claude Code's sign-in there ends in a day and a half at the latest, so it may end at any time: a red concern with a shell to sign in again from;
     // its settings keep fast mode on Opus 4.8 as the default, so every dialog that starts Claude Code on its default model says it goes on 30 Nov
     const health = machine.health ?? { at: iso(now), disk_free_gb: 120, disk_used_pct: 30, load1: 0.4 };
@@ -1485,6 +1488,28 @@ async function runPass() {
     close: async () => {
       await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
       if (!(await until(() => present(".pane-area .tab"), 15))) failed("the Agents page did not come back");
+    },
+  });
+  // a Windows PC's pane: herdr has no terminal attach there, so the lens is the pane's screen read again and typed into —
+  // the notes shell played as a Windows machine's by the dressed roster, its screen and its typing the throwaway herdr's own
+  await screen("screen-terminal", {
+    open: async () => {
+      windowsLocal = true;
+      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneN)}&lens=terminal` });
+      if (!(await until(() => present(".lens-pane:not([hidden]) .screen-term .screen-line"), 15))) throw new Error("the screen terminal did not come up");
+      check(!(await present(".xterm")), "a Windows machine's pane attached a live terminal");
+      const word = `screen-${pass.name}`;
+      await tap(".lens-pane:not([hidden]) .screen-term-screen");
+      await send("Input.insertText", { text: `echo ${word}` });
+      await key("Enter", "Enter");
+      const typed = () => evaluate(`[...document.querySelectorAll(".lens-pane:not([hidden]) .screen-term .screen-line")].some((line) => line.textContent.trim() === ${JSON.stringify(word)})`);
+      if (!(await until(typed, 10))) failed("what was typed into the screen terminal did not come back on its screen");
+    },
+    expect: [".lens-pane:not([hidden]) .screen-term-note"],
+    close: async () => {
+      windowsLocal = false;
+      await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=terminal` });
+      if (!(await until(() => present(".lens-pane:not([hidden]) .xterm-screen"), 15))) failed("the live terminal did not come back");
     },
   });
   // an agent appearing in a pane: started at a shell's prompt, the terminal stays; an agent's pane a restart passed
