@@ -23,6 +23,7 @@ type Removal struct {
 	Working   string   `json:"working,omitempty"`
 	MergedPR  bool     `json:"merged_pr,omitempty"` // a pull request its agents named was read as merged
 	Stamp     string   `json:"stamp"`
+	Home      string   `json:"home"` // the machine's, for the paths the dialog says with ~
 }
 
 // removal looks at the workspace's worktree; a workspace on no linked worktree is a 400.
@@ -43,7 +44,7 @@ func (s *Server) removal(mc *machines.Machine, id string) (*Removal, int, error)
 	if err != nil {
 		return nil, http.StatusBadGateway, err
 	}
-	rm := &Removal{Look: look, Workspace: id, Name: ws.Label, RepoName: ws.Worktree.RepoName, Made: worktrees.Made(mc.Home(), tree), Shared: sharers(snap, id, tree)}
+	rm := &Removal{Look: look, Workspace: id, Name: ws.Label, RepoName: ws.Worktree.RepoName, Made: worktrees.Made(mc.Home(), tree), Shared: sharers(snap, id, tree), Home: mc.Home()}
 	rm.Working = s.busyIn(mc.ID(), tree)
 	rm.MergedPR = s.mergedIn(mc, id)
 	rm.Stamp = look.Stamp()

@@ -23,7 +23,9 @@ export type AppDialog =
   | { kind: "rename"; machineId: string; what: "tab" | "workspace"; id: string; label: string }
   | { kind: "workspace"; machineId: string; dir?: string } // dir: the folder it opens on, from a folder's own menu
   | { kind: "tab"; machineId: string; session: Session }
-  | { kind: "worktree"; machineId: string; session: Session }
+  | { kind: "worktree"; machineId: string; session: Session } // a new worktree of the session's repository, from a branch, an issue, a pull request or a new branch
+  | { kind: "project-settings"; machineId: string; root: string } // a repository's worktree defaults, setup script and run actions
+  | { kind: "remove-worktree"; machineId: string; session: Session } // the workspace's linked worktree removed, with what goes and what would be lost
   | { kind: "machine" }
   | { kind: "broadcast" } // one message to several agents
   | { kind: "keys" } // the keyboard sheet

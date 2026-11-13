@@ -45,7 +45,7 @@ func (s *Server) handleWorktreeSource(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{
 		"source":   src,
-		"settings": s.repoSettings(mc.ID(), src.Root),
+		"settings": s.repoSettings(mc.ID(), r.URL.Query().Get("dir")), // by the folder the sidebar names the repository by, as the run button and the settings read it,
 		"home":     mc.Home(),
 		"root":     worktrees.Root(mc.Home()),
 		"setup":    !mc.Windows(), // a Windows PC's panes run PowerShell: no setup script is typed there
@@ -185,7 +185,7 @@ func (s *Server) newWorktree(w http.ResponseWriter, r *http.Request, req *newWor
 		httpErr(w, http.StatusBadGateway, err)
 		return
 	}
-	settings := s.repoSettings(mc.ID(), src.Root)
+	settings := s.repoSettings(mc.ID(), req.Root)
 	base := strings.TrimSpace(req.Base)
 	if base == "" {
 		base = settings.Base

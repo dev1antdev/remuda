@@ -18,6 +18,8 @@ import { ChatTools, useChatViewItems } from "@/features/chat/ChatTools";
 import { FindTool } from "@/features/chat/FindBar";
 import TabStrip from "@/features/roster/TabStrip";
 import { closeTabAsk } from "@/features/roster/tabs";
+import { madeWorktree } from "@/features/roster/tidy";
+import RunButton from "@/features/roster/project/RunButton";
 import Chat from "@/features/chat/Chat";
 import FilesRail from "@/features/chat/FilesRail";
 import Review from "@/features/review/Review";
@@ -175,6 +177,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
             {lens === "terminal" && !viewOnly && <FindTool what={tr("in the scrollback")} shortcut={isMac ? "⌘F" : "Ctrl+Shift+F"} />}
             {lens === "terminal" && !viewOnly && <TerminalTools />}
             {lens === "chat" && <ChatTools />}
+            {!viewOnly && (session.worktree || session.branch) && session.folder && <RunButton machineId={machine.id} workspace={session.id} pane={pane.id} root={session.folder} masked={share.sessionHidden(machine.id, session)} />}
             <ViewMenu items={lens === "terminal" && !viewOnly ? terminalItems : lens === "chat" ? chatItems : []} shell={!pane.agent} />
           </>
         }
@@ -183,6 +186,8 @@ export default function PaneArea({ current }: { current: Located | null }) {
         onNewTerminal={() => void act(createTab({ machine: machine.id, workspace: session.id, name: "", agent: "" }).then((made) => actions.selectPane(machine.id, made.pane)))}
         onRename={(t, label) => void act(renameTab(machine.id, t.id, label))}
         onCloseTab={(t) => {
+          // a made worktree's last tab takes its workspace with it: the remove dialog says what of the worktree goes too
+          if (session.tabs.length === 1 && madeWorktree(session.worktree) && machine.state === "connected") return actions.openDialog({ kind: "remove-worktree", machineId: machine.id, session });
           const msg = closeTabAsk(session.tabs, t, share.sessionHidden(machine.id, session), share.redact(session.name));
           const agents = t.panes.filter((p) => p.agent).map((p) => p.id);
           actions.ask(msg, tr("Close tab"), () => void act(closeTab(machine.id, t.id)).then(() => offerReopen(machine.id, agents)));

@@ -37,13 +37,16 @@ func (s *Server) handleRepoSettings(w http.ResponseWriter, r *http.Request) {
 		"defaults": map[string]string{"issue_branch": repos.DefaultIssueBranch, "issue_prompt": repos.DefaultIssuePrompt, "pr_prompt": repos.DefaultPRPrompt},
 		"icons":    repos.Icons, "setup": !mc.Windows(),
 	}
+	if r.URL.Query().Get("quick") == "1" {
+		writeJSON(w, answer) // the run button's read: the settings alone, nothing run on the machine
+		return
+	}
 	if _, _, err := mc.Ready(); err != nil {
 		answer["trouble"] = err.Error()
 	} else if src, err := repos.Read(mc, root); err != nil {
 		answer["trouble"] = err.Error()
 	} else {
-		answer["root"], answer["name"], answer["base"], answer["team"] = src.Root, src.Name, src.Base, src.Team
-		answer["settings"] = s.repoSettings(mc.ID(), src.Root)
+		answer["name"], answer["base"], answer["team"] = src.Name, src.Base, src.Team
 	}
 	writeJSON(w, answer)
 }
