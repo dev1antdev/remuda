@@ -80,5 +80,6 @@ export const statusbar: Dictionary = {
     "Остановить {process}, слушающий порт {port} на {machine}? Он получит SIGTERM, как от Ctrl+C в своём терминале; всё, что он отдавал, пропадёт вместе с ним.",
   "{process} on port {port} was told to stop": "{process} на порту {port} получил команду остановиться",
   "Read {ago} on {machine}": "Прочитано {ago} на {machine}",
+  "{machine} is away: its ports are read once it answers again": "{machine} не на связи: порты прочитаем, когда она снова ответит",
   "Not on Windows yet: Windows does not say which folder a listening process runs in": "На Windows пока нет: Windows не говорит, в какой папке работает слушающий процесс",
 };

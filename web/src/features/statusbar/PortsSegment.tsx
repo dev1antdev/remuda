@@ -13,17 +13,20 @@ import { errMsg } from "@/lib/text";
 import { ago } from "@/lib/time";
 import { Icon, Popover, Tip } from "@/ui";
 import { fetchPorts, stopPort } from "./api";
+import { useFocused } from "./useFocused";
 import { paneToOpen } from "./load";
 import { portGroups, portsTip, processWithPid, processWords, stopAsk, stoppedWords, workspacePorts, type MachinePort } from "./ports";
 
 export default function Ports({ machine, windows, viewOnly }: { machine: Machine; windows: boolean; viewOnly: boolean }) {
   const [open, setOpen] = useState(false);
+  const focused = useFocused();
   const { machineLabel } = useSharing();
-  const count = workspacePorts(machine.sessions);
-  const reading = useQuery(() => fetchPorts(machine.id), [machine.id], { every: 5000, enabled: open && !windows });
-  if (windows) {
+  const reading = useQuery(() => fetchPorts(machine.id), [machine.id], { every: focused || open ? 5000 : 30000, enabled: !windows && machine.state === "connected" });
+  // the roster carries the workspaces' ports, but not whether they were read yet: until the first reading the count is "…"
+  const count = reading.data?.read ? workspacePorts(machine.sessions) : null;
+  if (windows || machine.state !== "connected") {
     return (
-      <Tip text={t("Not on Windows yet: Windows does not say which folder a listening process runs in")} side="top">
+      <Tip text={windows ? t("Not on Windows yet: Windows does not say which folder a listening process runs in") : t("{machine} is away: its ports are read once it answers again", { machine: machineLabel(machine) })} side="top">
         <span className="status-item status-ports is-off" tabIndex={0}>
           <Icon name="plug" size={12} />
           <span className="status-num">—</span>
@@ -40,15 +43,15 @@ export default function Ports({ machine, windows, viewOnly }: { machine: Machine
       align="end"
       className="ports-pop"
       label={t("Ports on {machine}", { machine: machineLabel(machine) })}
-      tip={portsTip(count, other)}
+      tip={count === null ? t("Looking at the ports…") : portsTip(count, other)}
       trigger={
         <button type="button" className={`btn ghost sm status-item status-ports${count ? " has-ports" : ""}`} aria-label={t("Ports on {machine}", { machine: machineLabel(machine) })}>
           <Icon name="plug" size={12} />
-          <span className="status-num">{count}</span>
+          <span className="status-num">{count ?? "…"}</span>
         </button>
       }
     >
-      <PortsList machine={machine} ports={reading.data?.ports ?? null} at={reading.data?.at} error={reading.data?.error || reading.error} viewOnly={viewOnly} onClose={() => setOpen(false)} onStopped={reading.reload} />
+      <PortsList machine={machine} ports={reading.data?.read ? reading.data.ports : null} at={reading.data?.at} error={reading.data?.error || reading.error} viewOnly={viewOnly} onClose={() => setOpen(false)} onStopped={reading.reload} />
     </Popover>
   );
 }

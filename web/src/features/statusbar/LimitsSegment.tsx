@@ -3,6 +3,7 @@
 // gone and the verdict on the pace, the forecast, the reset, how old the reading is — and a click opens the Usage panel.
 
 import type { Machine } from "@/features/roster/api";
+import { useSharing } from "@/features/roster/useSharing";
 import { accountWindows, agentName, forecastTone, forecastWords, limitTone, resetTime, type AccountWindow } from "@/features/usage/limits";
 import { useNow } from "@/lib/clock";
 import { t } from "@/lib/i18n";
@@ -15,7 +16,7 @@ export default function Limits({ machines, remaining, onOpen }: { machines: Mach
   const groups = byAgent(accountWindows(machines, now));
   return (
     <div className="status-limits">
-      <span className="status-quiet">{remaining ? t("Remaining") : t("Used")}</span>
+      {groups.length > 0 && <span className="status-quiet">{remaining ? t("Remaining") : t("Used")}</span>}
       {groups.length === 0 && (
         <Tip text={t("No plan limits read yet: Codex reports its own after its next answer, Claude Code's through its status line once remuda reads it.")} side="top">
           <button type="button" className="btn ghost sm status-item" onClick={onOpen}>
@@ -44,6 +45,7 @@ const toneClass = (tone: string) => (tone ? ` is-${tone}` : "");
 
 // LimitsCard is one agent's every window in full, the hover card of its segment
 function LimitsCard({ group, now, remaining }: { group: AgentLimits; now: number; remaining: boolean }) {
+  const { redact } = useSharing();
   const old = stale(group.at, now);
   return (
     <div className="limits-card">
@@ -57,7 +59,7 @@ function LimitsCard({ group, now, remaining }: { group: AgentLimits; now: number
           <WindowRow key={w.name} w={w} now={now} remaining={remaining} />
         ))}
       </div>
-      <div className="limits-card-foot">{t("Read on {machine}. A click opens the Usage panel.", { machine: group.windows[0]?.machineLabel ?? "" })}</div>
+      <div className="limits-card-foot">{t("Read on {machine}. A click opens the Usage panel.", { machine: redact(group.windows[0]?.machineLabel ?? "") })}</div>
     </div>
   );
 }

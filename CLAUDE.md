@@ -221,8 +221,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   tree out as a new tab of the workspace or, with a tab id, in place of
   that tab (its panes, and what ran in them, go; the focus stays),
   `PaneClose` (herdr closes the tab with its last pane and the workspace
-  with its last tab) and `PaneAtPrompt` (`pane.process_info`: the shell's
-  own process group holds the terminal). `attach.go`: ref-counted
+  with its last tab), `PaneAtPrompt` (`pane.process_info`: the shell's
+  own process group holds the terminal) and `PaneShellPID` (the same
+  call's `shell_pid`, the root of a pane's processes, which the snapshot
+  does not carry; `internal/resources`). `attach.go`: ref-counted
   `herdr terminal attach` PTYs (creack/pty), one per terminal shared by all
   viewers, 45s linger after the last viewer leaves. **No byte replay** for a
   viewer joining a live attach: TUIs draw with relative cursor moves, so a
@@ -840,7 +842,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   view, the screen terminal (the notes shell played as a Windows PC's,
   a command typed into it and its answer read off it), the floating
   terminal, the screen-sharing chip, the icon
-  dialog's four tabs, the Wall's chat, screen, zoo and office views,
+  dialog's four tabs, the status bar with its limits card and its load's
+  and ports' popups, the Wall's chat, screen, zoo and office views,
   the Tasks board, list and detail, Review, Code, every panel, each
   section of Settings, the palette, the keys sheet and the dialogs (new
   workspace, the two imports, arena, teleport, reopen, recipes, budget,
@@ -2282,7 +2285,15 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   the machine reaches it (`Dial`: 127.0.0.1 for a wildcard, ::1 for an
   IPv6 one — a Mac's Vite listens on `[::1]` alone — else the address);
   `Match` names the deepest workspace folder holding it (a Mac's
-  `/private/tmp` read as `/tmp`). `Service.Open` (after the dial reached
+  `/private/tmp` read as `/tmp` on both sides, `unprivate`: herdr names a
+  shell's folder by its real path too). `ScriptKnowing(known)` is `Script`
+  that looks nothing more up of the pids given — a server's folder does not
+  change while it runs, and the lookups are most of the script's time (1.3 s
+  for 21 listeners on a Mac, 35 ms once they are known) — answering `Known`
+  (`=`) for their folders and arguments; `Recall(out, seen)` puts back what
+  an earlier look learnt (`Seen`), drops a line whose pid another program
+  took since, and forgets the pids that listen no more (tested on fixtures
+  and on a server the test starts). `Service.Open` (after the dial reached
   the machine) opens a listener of the cockpit's own: `Listen` is the
   tailnet node's TLS port on its name (`tsnetx.Node.ListenTLS`, 80 and
   443 refused) with `-tailscale`, else a port of the `-addr` host
@@ -2318,6 +2329,94 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   folders go through `useSharing().redact`), `previews.ts`
   the pure part, tested: `listenerWords`, `whereWords`, `split`,
   `openOn`, `hostOf`.
+- **The status bar** (`web/src/app/StatusBar.tsx`, after Orca's status bar
+  and over9k's usage rows): 28 px along the foot of `.app-main` on a desk
+  with a mouse (`STATUS_BAR_QUERY`, `(min-width: 921px) and (pointer:
+  fine)`: rendered only there, so nothing polls on a phone, where the rail
+  lies at the bottom), gone in full screen, the pref `statusbar {on,
+  remaining}` (`features/statusbar/prefs.ts`, on the sync allow-list) a row
+  of the View menu and two of Settings › Look; the floating terminal's
+  drawer and the toasts sit above it. Segments of fixed room with tabular
+  figures, so nothing moves when a value does. **Plan limits** (left,
+  `LimitsSegment.tsx` over `pace.ts`, tested): "Used" or "Remaining", then
+  per agent whose windows remuda reads (`accountWindows`) its logo and "5h
+  38% · wk 54%" in `limitTone` (amber from 80 %, red at the limit — the
+  colour keyed to what is used when what remains is shown); hovering one is
+  a `Tip` dressed as a card (`Tip`'s `className`, `.tip-card`): each
+  window's 96 px bar with a tick at the share of its time gone
+  (`elapsedShare` over `windowMs`, 5 h or a week), the verdict (`verdict`,
+  ±`PACE_MARGIN` 10 points: "you are using it faster than the time passes" /
+  "on pace" / "under pace") and `timeGone`, the reset, remuda's forecast,
+  and "last reading 12 min ago" faded past `STALE_MS` 15 min; a click opens
+  the Usage panel. **The pane's place** (middle, `PlaceSegment.tsx` over
+  `place.ts`, tested): the workspace's branch, the pane's pull request
+  (else the workspace's first) with its icon in its state's colour
+  (`prTone`: open green, a draft dim, merged mauve, closed red) and the
+  first Jira issue, quiet; nothing for a folder the screen-sharing mode
+  hides. **The machine's load** (right, `LoadSegment.tsx` over `load.ts`,
+  tested): the pane's machine's "CPU 12 % · 3.8 GB" — `GET
+  /api/resources?machine` every 5 s while the window has the focus
+  (`useFocused`) or the popup is open, 30 s while it only shows, never two
+  at once — amber and red where Orca puts them (`cpuLevel` 30 / 60 % of all
+  the cores, `memLevel` 30 / 50 % of the RAM); its popup is the machine's
+  workspaces by memory, each "node 512 MB · 3 terminals" and unfolding to
+  its terminals (`terminalName`), a click opening it (`paneToOpen`), herdr's
+  own row, and the foot "CPU is a share of all 8 cores · 16 GB"; "not on
+  Windows yet" for a Windows PC. **Live ports** (`PortsSegment.tsx` over
+  `ports.ts`, tested): the count of the pane's machine's workspaces' ports
+  off the roster's `session.ports`; its popup (`GET /api/ports?machine`,
+  every 5 s while open) groups them by workspace in the sidebar's order
+  (`portGroups`), each the port in mono, what listens over where, Preview
+  (`previewServed`, the previews' own Open) and **Stop** behind the page's
+  confirm naming the process, its pid, the port and the machine (`stopAsk`)
+  → `POST /api/ports/stop`, the machine's other listeners folded. Then the
+  machine's name with its hue's dot. A viewer link sees the limits, the
+  place and the name alone. The display suite dresses the roster with ports,
+  fakes the load and the ports, opens the bar, the card with its tick, both
+  popups and a stop's confirm, cancelled, and checks the phones have no bar;
+  its ports flow lists the dev server on the roster, reads the real load
+  and stops a server it started.
+- `internal/resources/` — **what a machine's herdr panes weigh on it**
+  (tested on a Mac's and a Linux's recorded tables, and on this machine's
+  own): `Script` prints the cores and memory then a line per process — ps
+  on a Mac (whose `pcpu` is a recent average), `/proc/[0-9]*/stat` through
+  awk on Linux (whose ps tells a process's CPU over its whole life:
+  cumulative ticks instead); `Parse` the `Table`; `Measure` sums each pane's
+  tree from its shell (`Root`, `herdr.Client.PaneShellPID`) into its
+  workspace, each process once, then the herdr server's own processes
+  (`Usage{cores, mem_kb, total, cpu_known, workspaces, herdr, unread}`, CPU
+  as a share of all the cores, the heaviest process of each tree as its
+  `top`). `Service.Read` is one read at a time per machine, a reading
+  answering every asker for `Fresh` 4 s; a Linux machine's ticks are told
+  against the reading before (a process born since spent all of its own in
+  between), and a read with no baseline younger than `BaselineFor` samples
+  twice `FirstGap` 1 s apart; a pane's shell is asked of herdr once, again
+  only when the table lacks it, at most every `AskAgainAfter` 30 s.
+  `NotOnWindows`: Git Bash's ps names no CPU or memory. Route `GET
+  /api/resources?machine` (`internal/server/resources.go`, the person's: no
+  viewer route, no agent key), which also hurries the ports.
+- `internal/ports/` — **the live ports of the workspaces** (tested on
+  `shell.Fake` and on a server the test starts and stops): `Tracker` reads
+  every connected machine's listeners but a Windows PC's
+  (`Server.PortTargets`: `preview.ScriptKnowing` with the pids it knows,
+  `Recall`, `Parse` with `Server.PreviewSkip`, `Match` against
+  `previewFolders`, the floating terminal's and the concierge's left out)
+  every `Every` 15 s while the roster was read within `WatchedFor` a minute
+  (`Touch`, from the roster handler) and every `QuickEvery` 5 s while the
+  status bar asked within `QuickFor` 20 s (`Hurry`, from `/api/resources`
+  and `/api/ports`); one read at a time per machine, a failed read keeping
+  the ports before it with its reason (logged once an hour), `OnChange` the
+  live hub's `RosterChanged`. `For` is a workspace's `[]Port{port, process,
+  label, pid, address}` — `AddressOf`: localhost:5173, *:8080 — the
+  roster's `session.ports` (nothing once a reading is older than
+  `StaleAfter` 2 min), the contract the sidebar's card shares; `Of` the
+  machine's whole reading, its other listeners too. `Stop(host, skip, pid,
+  port)` looks afresh and sends `kill -TERM` only to that very pid on that
+  very port among the listeners the person may stop — never remuda's,
+  herdr's, ssh's, Tailscale's, a skipped port's or another user's
+  (`ErrNotListening`, a 404). Routes `GET /api/ports?machine` and `POST
+  /api/ports/stop {machine, pid, port}`, the person's only, at the page's
+  press after its confirm.
 - `web/src/lib/paths.ts` — `findPaths` / `findUrls`, shared by the terminal link
   provider (`terminal/engine/links.ts`, which reads its row cell by cell, so
   a wide character or a surrogate pair before or inside a link leaves the

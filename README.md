@@ -149,6 +149,18 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   bottom under the thumb, with Code, the panels and Settings behind
   More. The sidebar's head keeps two buttons: + (a workspace, a PC) and
   ⋯ (message several agents, the order, the settings).
+- **The status bar** — a thin line along the foot of the page at a desk:
+  each agent's plan limits ("5h 38% · wk 54%", amber from 80 %), whose
+  card on hover puts a tick on every window's bar at the share of its time
+  already gone and says whether you are using it faster than the time
+  passes, on pace or under it, with the forecast and when it resets; the
+  pane's branch, its pull request in the colour of its state and its Jira
+  issue; and for the pane's machine what its herdr panes weigh on it ("CPU
+  12 % · 3.8 GB", a click lists its workspaces by memory), the ports their
+  processes listen on (a click lists them by workspace, each with Preview
+  and Stop — a SIGTERM to that process after you confirm) and its name.
+  View › Status bar or Settings › Look hides it; Settings can make the
+  limits say what remains. Not on a phone, where the rail lies there.
 - **Twenty themes, ten dark and ten light** — Catppuccin Frappé,
   Macchiato and Mocha, Dracula, Nord, Gruvbox Dark, Tokyo Night, Rosé
   Pine, One Dark and Kanagawa; Catppuccin Latte, Solarized Light, Gruvbox
@@ -1192,6 +1204,10 @@ once, then "Add to Home Screen" — it installs as a PWA.
   turn** and confirm: the files the turn changed are put back and its
   commits reverted with new commits — never a reset, never a force. Taking
   the turns' checkpoints writes nothing into the repository.
+- remuda signals a process only when you press **Stop** on a port in the
+  status bar and confirm: a SIGTERM to the pid that listens there now,
+  looked up afresh — never remuda's, herdr's, ssh's or Tailscale's own, nor
+  another user's.
 
 A second copy beside the real one (to try `-tailscale`, say) gets its own
 token, tasks and push subscriptions with `REMUDA_STATE_DIR=/some/dir`, and
