@@ -931,6 +931,7 @@ async function sleepScreens() {
       check((await count(".resume-dialog .modal-actions .btn")) === 2, "with every chat ticked the dialog offers more than Not now and Resume all");
       await tap(".resume-dialog li:first-child .resume-row input");
       if (!(await until(async () => (await count(".resume-dialog .modal-actions .btn")) === 3, 3))) failed("unticking a chat does not offer Resume 1");
+      check(await evaluate(`(() => { const box = document.querySelector(".resume-dialog").getBoundingClientRect(); return [...document.querySelectorAll(".resume-dialog .modal-actions .btn")].every((b) => { const r = b.getBoundingClientRect(); return r.left >= box.left - 1 && r.right <= box.right + 1; }); })()`), "the dialog's buttons run past its edge");
       check(!(await evaluate(`document.querySelector(".resume-dialog .resume-auto input")?.checked`)), "Resume automatically next time starts on");
     },
     expect: [".resume-dialog .resume-command", ".resume-dialog .modal-actions .btn.primary"],

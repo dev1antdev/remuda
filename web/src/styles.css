@@ -4044,6 +4044,11 @@ ul.pick-list {
   font-size: var(--fs-12);
 }
 
+/* three buttons in a long language overrun a phone: they wrap, Not now above the two resumes */
+.resume-dialog .modal-actions {
+  flex-wrap: wrap;
+}
+
 /* ---- undoing a turn (features/undo): the files a row each, the commits to revert, the files in the way ---- */
 .undo-files .pick-row {
   cursor: default;
