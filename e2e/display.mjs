@@ -627,7 +627,7 @@ async function statusBarScreens() {
     open: async () => {
       await tap(".status-ports");
       if (!(await until(() => present(".ports-pop .port-row"), 6))) throw new Error("the ports' popup did not open");
-      await tap(".ports-pop .port-group:last-of-type .port-group-head");
+      await tap(".ports-pop .port-group.is-other .port-group-head");
       if (!(await until(() => evaluate(`[...document.querySelectorAll(".ports-pop .port-number")].some((n) => n.textContent === "8888")`), 4))) failed("the other processes do not unfold");
     },
     expect: [".ports-pop .port-group-head", ".ports-pop .port-stop"],
@@ -642,7 +642,7 @@ async function statusBarScreens() {
     },
     expect: [".modal"],
     close: async () => {
-      check(await evaluate(`[...document.querySelectorAll(".modal")].some((m) => m.textContent.includes("4242") && m.textContent.includes("SIGTERM"))`), "the stop's confirm does not name the process and the signal");
+      check(await evaluate(`[...document.querySelectorAll(".modal")].some((m) => m.textContent.includes("PID 4100") && m.textContent.includes("5173") && m.textContent.includes("SIGTERM"))`), "the stop's confirm does not name the process and the signal");
       const before = portStops;
       await key("Escape", "Escape");
       await sleep(300);

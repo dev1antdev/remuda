@@ -30,13 +30,17 @@ export function portGroups(sessions: Session[], ports: MachinePort[]): { groups:
 // processWords is what listens: the server's name with its program, "vite (node)", else the program
 export const processWords = (p: ListeningPort): string => (p.label && p.label !== p.process ? `${p.label} (${p.process})` : p.process || t("PID {pid}", { pid: p.pid }));
 
+// processWithPid names what listens with its pid: "vite (node, PID 4100)", "python3 (PID 50)"
+export const processWithPid = (p: ListeningPort): string =>
+  p.label && p.label !== p.process ? t("{label} ({process}, PID {pid})", { label: p.label, process: p.process, pid: p.pid }) : t("{process} (PID {pid})", { process: p.process || "?", pid: p.pid });
+
 // portsTip is the segment's tooltip: the workspaces' ports and the others
 export const portsTip = (inWorkspaces: number, other: number | null): string =>
   other === null ? tn(inWorkspaces, "{n} port in the workspaces", "{n} ports in the workspaces") : t("{workspaces} · {other}", { workspaces: tn(inWorkspaces, "{n} port in the workspaces", "{n} ports in the workspaces"), other: tn(other, "{n} other", "{n} others") });
 
 // stopAsk is the confirm before a stop, naming the process, its pid, the port and the machine
 export const stopAsk = (p: ListeningPort, machine: string): string =>
-  t("Stop {process} (PID {pid}), listening on port {port} of {machine}? It gets SIGTERM, the way Ctrl+C in its terminal would end it; whatever it was serving goes with it.", { process: processWords(p), pid: p.pid, port: p.port, machine });
+  t("Stop {process}, listening on port {port} of {machine}? It gets SIGTERM, the way Ctrl+C in its terminal would end it; whatever it was serving goes with it.", { process: processWithPid(p), port: p.port, machine });
 
 // stoppedWords is the toast after a stop
 export const stoppedWords = (p: ListeningPort): string => t("{process} on port {port} was told to stop", { process: processWords(p), port: p.port });

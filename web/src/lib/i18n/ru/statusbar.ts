@@ -72,10 +72,12 @@ export const statusbar: Dictionary = {
   "Other processes": "Другие процессы",
   "PID {pid}": "PID {pid}",
   "Open it through this cockpit, in a tab of its own": "Открыть через этот кокпит в отдельной вкладке",
-  "Stop {process} (PID {pid})": "Остановить {process} (PID {pid})",
+  "{label} ({process}, PID {pid})": "{label} ({process}, PID {pid})",
+  "{process} (PID {pid})": "{process} (PID {pid})",
+  "Stop {process}": "Остановить {process}",
   "Stop it": "Остановить",
-  "Stop {process} (PID {pid}), listening on port {port} of {machine}? It gets SIGTERM, the way Ctrl+C in its terminal would end it; whatever it was serving goes with it.":
-    "Остановить {process} (PID {pid}), который слушает порт {port} на {machine}? Он получит SIGTERM, как от Ctrl+C в своём терминале; всё, что он отдавал, пропадёт вместе с ним.",
+  "Stop {process}, listening on port {port} of {machine}? It gets SIGTERM, the way Ctrl+C in its terminal would end it; whatever it was serving goes with it.":
+    "Остановить {process}, слушающий порт {port} на {machine}? Он получит SIGTERM, как от Ctrl+C в своём терминале; всё, что он отдавал, пропадёт вместе с ним.",
   "{process} on port {port} was told to stop": "{process} на порту {port} получил команду остановиться",
   "Read {ago} on {machine}": "Прочитано {ago} на {machine}",
   "Not on Windows yet: Windows does not say which folder a listening process runs in": "На Windows пока нет: Windows не говорит, в какой папке работает слушающий процесс",

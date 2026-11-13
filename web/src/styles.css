@@ -7298,7 +7298,7 @@ body:has(.status-bar) .toasts {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 300px;
+  width: 320px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -7492,12 +7492,12 @@ body:has(.status-bar) .toasts {
 
 .load-row.is-terminal {
   min-height: 30px;
-  padding-left: 34px;
+  padding-left: 36px;
   background: var(--bg-raised);
 }
 
 .load-row.is-herdr {
-  padding-left: 40px;
+  padding-left: 36px;
   background: var(--bg-raised);
 }
 

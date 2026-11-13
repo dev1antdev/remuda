@@ -240,16 +240,14 @@ func labelOf(command, args string) string {
 }
 
 // Match names each listener's workspace: the one whose folder holds the listener's, the deepest when folders nest
-// (a worktree under its repository's folder). A Mac names a process's folder by its real path, /private/tmp for /tmp.
+// (a worktree under its repository's folder). A Mac names a process's folder by its real path, /private/tmp for /tmp,
+// and herdr a shell's folder the same way, while a workspace made on /tmp keeps the path it was given: both read as /tmp.
 func Match(list []Listener, folders map[string]string) []Listener {
 	for i := range list {
-		dir := list[i].Dir
-		if rest, ok := strings.CutPrefix(dir, "/private"); ok && (strings.HasPrefix(rest, "/tmp/") || strings.HasPrefix(rest, "/var/")) {
-			dir = rest
-		}
+		dir := unprivate(list[i].Dir)
 		best, deepest := "", 0
 		for id, folder := range folders {
-			folder = path.Clean(folder)
+			folder = unprivate(path.Clean(folder))
 			if folder == "/" || folder == "." {
 				continue
 			}
@@ -260,4 +258,12 @@ func Match(list []Listener, folders map[string]string) []Listener {
 		list[i].Workspace = best
 	}
 	return list
+}
+
+// unprivate reads a Mac's real path of a temporary folder, /private/tmp or /private/var, the way it is usually written
+func unprivate(dir string) string {
+	if rest, ok := strings.CutPrefix(dir, "/private"); ok && (strings.HasPrefix(rest, "/tmp/") || strings.HasPrefix(rest, "/var/")) {
+		return rest
+	}
+	return dir
 }

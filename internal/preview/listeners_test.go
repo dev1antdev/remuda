@@ -75,9 +75,9 @@ func TestMatchNamesTheDeepestWorkspace(t *testing.T) {
 	if got[3000] != "w1" || got[5173] != "w2" || got[8000] != "" || got[9100] != "w1" {
 		t.Fatalf("workspaces %v", got)
 	}
-	real := Match([]Listener{{Port: 1, Dir: "/private/tmp/e2e/app"}, {Port: 2, Dir: "/private/etc/x"}}, map[string]string{"w1": "/tmp/e2e/app", "w2": "/etc"})
-	if real[0].Workspace != "w1" || real[1].Workspace != "" {
-		t.Fatalf("a Mac's real /private/tmp path: %+v", real)
+	real := Match([]Listener{{Port: 1, Dir: "/private/tmp/e2e/app"}, {Port: 2, Dir: "/private/etc/x"}, {Port: 3, Dir: "/tmp/e2e/notes"}}, map[string]string{"w1": "/tmp/e2e/app", "w2": "/etc", "w3": "/private/tmp/e2e/notes"})
+	if real[0].Workspace != "w1" || real[1].Workspace != "" || real[2].Workspace != "w3" {
+		t.Fatalf("a Mac's real /private/tmp path, on either side: %+v", real)
 	}
 }
 

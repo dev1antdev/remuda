@@ -14,7 +14,7 @@ import { ago } from "@/lib/time";
 import { Icon, Popover, Tip } from "@/ui";
 import { fetchPorts, stopPort } from "./api";
 import { paneToOpen } from "./load";
-import { portGroups, portsTip, processWords, stopAsk, stoppedWords, workspacePorts, type MachinePort } from "./ports";
+import { portGroups, portsTip, processWithPid, processWords, stopAsk, stoppedWords, workspacePorts, type MachinePort } from "./ports";
 
 export default function Ports({ machine, windows, viewOnly }: { machine: Machine; windows: boolean; viewOnly: boolean }) {
   const [open, setOpen] = useState(false);
@@ -85,7 +85,7 @@ function PortsList({ machine, ports, at, error, viewOnly, onClose, onStopped }: 
               {t("Preview")}
             </button>
           </Tip>
-          <Tip text={t("Stop {process} (PID {pid})", { process: processWords(port), pid: port.pid })} side="top">
+          <Tip text={t("Stop {process}", { process: processWithPid(port) })} side="top">
             <button type="button" className="btn ghost sm port-stop" onClick={() => stop(port)}>
               <Icon name="square" size={12} />
               {t("Stop")}
@@ -128,7 +128,7 @@ function PortsList({ machine, ports, at, error, viewOnly, onClose, onStopped }: 
         );
       })}
       {other.length > 0 && (
-        <div className="port-group">
+        <div className="port-group is-other">
           <button type="button" className="btn ghost sm port-group-head" aria-expanded={showOther} onClick={() => setShowOther(!showOther)}>
             <Icon name={showOther ? "chevron-down" : "chevron-right"} size={12} />
             <span className="port-group-name">{t("Other processes")}</span>
