@@ -158,6 +158,7 @@ func (s *Server) Handler() http.Handler {
 	s.handoverRoutes(api)
 	s.forkRoutes(api)
 	s.prRoutes(api)
+	s.ghprRoutes(api)
 	s.liveRoutes(api)
 	s.deviceRoutes(api)
 	s.agentKeyRoutes(api)

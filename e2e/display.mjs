@@ -9,6 +9,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { fakePullRequests, prScreens } from "./fake-pr.mjs";
 
 const base = process.env.E2E_URL;
 const cdp = process.env.E2E_CDP;
@@ -78,6 +79,7 @@ socket.onmessage = (message) => {
   if (msg.method === "Fetch.requestPaused") {
     const url = msg.params.request?.url ?? "";
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
+    else if (url.includes("/api/pr/")) void fakePullRequests(msg.params, send);
     else if (url.includes("/api/concierge")) void fakeConcierge(msg.params);
     else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
     else if (/\/api\/(scenes\/|scene-runs\/)/.test(url)) void fakeScenes(msg.params);
@@ -1598,6 +1600,7 @@ async function runPass() {
     expect: [".modal .trigger-form", ".modal .trigger-try"],
   });
   await sceneScreens();
+  await prScreens({ screen, palette, tap, present, until, evaluate, count, failed, check, onAgents, sleep });
   await screen("float-terminal", {
     open: async () => {
       await key("`", "Backquote", 2);
@@ -1996,6 +1999,7 @@ try {
       { urlPattern: "*/api/review/secrets*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/recordings*", requestStage: "Request" },
       { urlPattern: "*/api/standup*", requestStage: "Request" },
+      { urlPattern: "*/api/pr/*", requestStage: "Request" },
       { urlPattern: "*/api/recap*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/search*", requestStage: "Request" },
       { urlPattern: "*/api/fleet-setup*", requestStage: "Request" },

@@ -15,6 +15,7 @@ import { terminal } from "./ru/terminal";
 import { webhooks } from "./ru/webhooks";
 import { awake } from "./ru/awake";
 import { pr } from "./ru/pr";
+import { prpanel } from "./ru/prpanel";
 import { complete } from "./ru/complete";
 import { macshell } from "./ru/macshell";
 import { tablecopy } from "./ru/tablecopy";
@@ -76,4 +77,4 @@ import { undo } from "./ru/undo";
 import { concierge } from "./ru/concierge";
 import { scenes } from "./ru/scenes";
 
-export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...wake, ...activity, ...viewonly, ...splitview, ...shellwords, ...sidebar, ...worktreeinclude, ...quote, ...reopen, ...forkchat, ...autoicon, ...gitlab, ...teleport, ...arena, ...limits, ...floatterm, ...screenshare, ...jira, ...mermaid, ...zoo, ...auditchat, ...sidebarmenus, ...auditpanels, ...tidy, ...notify, ...backup, ...preview, ...opinion, ...autonomy, ...server, ...audit3transcripts, ...audit3webpanels, ...audit3webchat, ...audit3alerts, ...audit3webcore, ...schedulewindow, ...signin, ...unattended, ...scorecard, ...secretguard, ...mirror, ...timelapse, ...triggers, ...podcast, ...screensearch, ...fleet, ...collisions, ...undo, ...concierge, ...scenes, ...queuefleet, ...themes, ...windows };
+export const ru: Dictionary = { ...pieces, ...shell, ...agents, ...chat, ...terminal, ...review, ...tasks, ...settings, ...panels, ...webhooks, ...awake, ...pr, ...prpanel, ...complete, ...recover, ...macshell, ...tablecopy, ...machineaway, ...modechip, ...mute, ...bulkstart, ...wake, ...activity, ...viewonly, ...splitview, ...shellwords, ...sidebar, ...worktreeinclude, ...quote, ...reopen, ...forkchat, ...autoicon, ...gitlab, ...teleport, ...arena, ...limits, ...floatterm, ...screenshare, ...jira, ...mermaid, ...zoo, ...auditchat, ...sidebarmenus, ...auditpanels, ...tidy, ...notify, ...backup, ...preview, ...opinion, ...autonomy, ...server, ...audit3transcripts, ...audit3webpanels, ...audit3webchat, ...audit3alerts, ...audit3webcore, ...schedulewindow, ...signin, ...unattended, ...scorecard, ...secretguard, ...mirror, ...timelapse, ...triggers, ...podcast, ...screensearch, ...fleet, ...collisions, ...undo, ...concierge, ...scenes, ...queuefleet, ...themes, ...windows };
