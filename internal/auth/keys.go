@@ -34,11 +34,11 @@ const ScopeViewer = "viewer"
 var readRoutes = map[string]bool{"/api/roster": true, "/api/recap": true, "/api/standup": true}
 
 // viewerRoutes is what a viewer may GET: the roster, the conversations, the screens, their timelapses and the search
-// over them, the reports and the event stream the page draws from, and the folders' icons (viewerPrefixes); the pane's
+// over them, the project tree and the files under the workspaces, the reports and the event stream the page draws from, and the folders' icons (viewerPrefixes); the pane's
 // terminal socket, every submit and key, the tasks, the timelapses' switch and every change stay out.
 var viewerRoutes = map[string]bool{
 	"/api/roster": true, "/api/chat": true, "/api/screen": true, "/api/scrollback": true, "/api/recap": true, "/api/standup": true,
-	"/api/feed": true, "/api/fs/file": true, "/api/fs/stat": true, "/api/health": true, "/api/push": true, "/api/question": true,
+	"/api/feed": true, "/api/fs/file": true, "/api/fs/stat": true, "/api/fs/tree": true, "/api/health": true, "/api/push": true, "/api/question": true,
 	"/api/usage": true, "/api/scorecard": true, "/ws/events": true, "/api/timelapse/recordings": true, "/api/timelapse/search": true,
 }
 

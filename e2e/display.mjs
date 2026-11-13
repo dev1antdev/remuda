@@ -8,7 +8,7 @@
 // there, no console error. Every failure is collected and named by pass, screen and element; any one fails the run.
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:net";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 
 const base = process.env.E2E_URL;
 const cdp = process.env.E2E_CDP;
@@ -327,6 +327,10 @@ writeFileSync(`${appDir}/README.md`, "# app\n");
 writeFileSync(`${appDir}/src/app.go`, goLines("hello", 41));
 writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\n");
 writeFileSync(`${appDir}/old.txt`, "an old file\n");
+// for the project tree: a folder git ignores, a link, a file whose icon has a light theme's own
+writeFileSync(`${appDir}/.gitignore`, "build/\n");
+writeFileSync(`${appDir}/app.toml`, 'name = "app"\n');
+symlinkSync("README.md", `${appDir}/latest.md`);
 // Claude Code's own approvals committed by mistake, one of them carrying a token: the lens head warns of it. The token
 // is made here, its letters in another order, so no secret sits in this file
 const shuffledKey = (n) => Array.from({ length: n }, (_, i) => "Zq8vK2mWp4Lr7Tb9Xs3Nd6Hc1JyQe5Gu0"[(i * 7 + 3) % 33]).join("");
@@ -340,6 +344,8 @@ writeFileSync(`${appDir}/docs/notes.md`, "# Notes\n\nThe first note.\nA second n
 git(appDir, "add", "docs/notes.md");
 git(appDir, "rm", "-q", "old.txt");
 writeFileSync(`${appDir}/src/new.ts`, 'export const fresh = "a new file";\n');
+mkdirSync(`${appDir}/build`, { recursive: true });
+writeFileSync(`${appDir}/build/out.txt`, "built\n");
 const CHANGED = ["docs/notes.md", "old.txt", "src/app.go", "src/new.ts"];
 // the "dev server" an agent would start in the repository, for the previews: python3's http.server on a free port
 const freePort = () =>
@@ -1258,6 +1264,95 @@ async function changesScreens() {
   await palette("lens:terminal");
 }
 
+// ---- the project's files: the files rail's tree, a row's menu, the file viewer's changed lines ----
+
+const RAIL = ".footprint";
+const treeRow = (path) => `[...document.querySelectorAll('${RAIL} .tree-open')].find((b) => b.title.split("\\n")[0] === ${JSON.stringify(path)})?.closest('.tree-row')`;
+const treeMenu = async (path) => {
+  await hover(await mark(`${treeRow(path)}?.querySelector('.tree-open')`, "tree-row"));
+  await tap(await mark(`${treeRow(path)}?.querySelector('.tree-more')`, "tree-more"));
+  if (!(await until(() => present(".menu .menu-item"), 4))) throw new Error(`the menu of ${path} did not open`);
+};
+
+// filesScreens draws the Project tab of the files rail on the repository, with git's marks, a folder opened, a row's
+// menu, Send to agent (nothing sent) and the light theme's icons — the rail is a desk's — then, on every pass, the file
+// viewer's changed lines with the old ones shown in place, opened from the tree at a desk and from the Changes lens on a phone
+async function filesScreens() {
+  await onAgents();
+  if (!pass.phone) {
+    await screen("files-tree", {
+      open: async () => {
+        await palette("lens:chat");
+        await tap(`${RAIL} .footprint-tabs button:last-child`);
+        if (!(await until(() => evaluate(`!!(${treeRow("src")})`), 10))) throw new Error("the Project tab lists no src folder");
+        check(await evaluate(`!!${treeRow("src")}?.querySelector('.tree-dot.on')`), "src, holding changes, wears no dot");
+        check(await evaluate(`!!${treeRow("old.txt")}?.classList.contains('is-gone')`), "the deleted old.txt is not listed as gone");
+        check(await evaluate(`!!${treeRow("build")}?.classList.contains('is-ignored')`), "the ignored build folder is not dimmed");
+        check(await evaluate(`!!${treeRow("latest.md")}?.querySelector('.tree-link')`), "the link latest.md wears no link mark");
+        check((await count(`${RAIL} .file-icon[data-icon="folder-src"]`)) === 1, "src wears no src folder icon");
+      },
+      expect: [`${RAIL} .tree-row.tone-changed`],
+      close: async () => {},
+    });
+    await screen("files-tree-folder", {
+      open: async () => {
+        await tap(await mark(`${treeRow("src")}?.querySelector('.tree-open')`, "tree-src"));
+        if (!(await until(() => evaluate(`!!(${treeRow("src/app.go")})`), 6))) throw new Error("src did not open");
+        check(await evaluate(`!!${treeRow("src/app.go")}?.classList.contains('tone-changed') && !!${treeRow("src/new.ts")}?.classList.contains('tone-added')`), "src's files do not wear their marks");
+      },
+      expect: [`${RAIL} .tree-group.nested .tree-row`],
+      close: async () => {},
+    });
+    await screen("files-tree-menu", {
+      open: async () => {
+        await treeMenu("src/app.go");
+        check((await count(".menu .menu-item")) === 6, `the row's menu has ${await count(".menu .menu-item")} rows, not 6`);
+      },
+      expect: [".menu"],
+    });
+    await screen("files-tree-send", {
+      open: async () => {
+        await treeMenu("src/app.go");
+        await tap(await mark(`[...document.querySelectorAll(".menu .menu-item")].pop()`, "send-row"));
+        if (!(await until(() => present(".modal .send-about"), 4))) throw new Error("Send to agent did not open its dialog");
+        check(await evaluate(`document.querySelector(".modal .send-about")?.textContent.endsWith(${JSON.stringify(`${appDir}/src/app.go`)})`), "the dialog does not name the file's path");
+      },
+      expect: [".modal textarea", ".modal .send-about"],
+    });
+    await screen("files-tree-light", {
+      open: async () => {
+        await palette("theme-light");
+        if (!(await until(() => evaluate(`document.documentElement.dataset.theme === "light"`), 4))) throw new Error("the page did not turn light");
+        if (!(await until(async () => (await count(`${RAIL} .file-icon[data-icon="toml_light"]`)) === 1, 4))) failed("app.toml does not wear the light theme's icon");
+      },
+      expect: [`${RAIL} .tree-row`],
+      close: async () => {
+        await palette("theme-dark");
+        if (!(await until(() => evaluate(`document.documentElement.dataset.theme === "dark"`), 4))) failed("the page did not turn dark again");
+      },
+    });
+  }
+  await screen("file-lines", {
+    open: async () => {
+      if (pass.phone) {
+        await palette("lens:changes");
+        await until(async () => (await count(`${LENS} .review-file`)) > 0, 8);
+        await tap(await mark(`${fileHead("src/app.go")}?.parentElement.querySelector('.icon-btn')`, "open-file"));
+      } else await tap(await mark(`${treeRow("src/app.go")}?.querySelector('.tree-open')`, "tree-file"));
+      if (!(await until(() => present(".fv .fv-gutter .fv-line.is-changed"), 6))) throw new Error("the file viewer marks no changed line");
+      await tap(".fv .fv-toggle");
+      if (!(await until(() => evaluate(`[...document.querySelectorAll(".fv .fv-line.is-old")].some((l) => l.textContent.includes('"hello"'))`), 4))) failed("the old line does not show in place");
+    },
+    expect: [".fv .fv-line.is-old"],
+    close: async () => {
+      await key("Escape", "Escape");
+      if (!(await until(async () => !(await present(".fv")), 3))) failed("Esc did not close the file viewer");
+      if (!pass.phone) await tap(`${RAIL} .footprint-tabs button:first-child`);
+      await palette("lens:terminal");
+    },
+  });
+}
+
 // changesFlow runs once, after the passes: the Review mode lists the repository, Mark reviewed moves the baseline,
 // an edit after the look is fresh again, a commit is listed, and a commit of reviewed work reads as reviewed
 async function changesFlow() {
@@ -1579,6 +1674,7 @@ async function runPass() {
       close: async () => palette("split"),
     });
   await changesScreens();
+  await filesScreens();
   await screen("previews", {
     open: async () => {
       await onAgents();

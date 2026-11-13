@@ -1234,7 +1234,11 @@ strip above the pane, machines mirrored from `herdr machine list`, and a
 **file viewer** — click any path the agent prints in the terminal or chat to
 open the file where it lives (local or remote), its code coloured in its
 language, with a **Changes** tab showing its uncommitted `git diff`, coloured
-the same way. A path is a link when it names a file
+the same way. The File tab marks what changed since the last commit at the
+rows' edge — green for lines added, amber for lines changed, a thin red line
+where lines were removed — and a click on an amber row or the red line shows
+the old lines in place, in red, above the new ones; again hides them. A file
+deleted since the last commit opens on its removal. A path is a link when it names a file
 (`main.go`, `docs/plan.md`, `.env`), not a folder. A picture the agent
 read or wrote — a screenshot it looked at, an icon it drew — shows as a
 thumbnail under the call in the chat; a click opens it. **Subagents**: an
@@ -1244,14 +1248,25 @@ is on this second or the first line of its report, how many tool calls —
 and *Open* reads its own conversation; a tile's state line says "waiting
 on 2 subagents" or "2 subagents working" while they run.
 
-**Files the agent touched:** a rail beside the chat and the terminal (View ›
-Files the agent touched) lists every file the agent edited or read
+**The files rail:** a rail beside the chat and the terminal (View ›
+Files the agent touched), in two tabs. **Agent** lists every file the agent edited or read
 in this conversation, from its own tool calls — newest first, with how
 many edits, when it last touched the file and a mark when that last edit
 failed. A click opens the file with its uncommitted diff; the code button
 opens it in the Code mode, VS Code on that machine. Edits an agent made
 through shell commands are not its tool calls: the Changes lens shows
-those. Hidden on a phone.
+those. **Project** is the workspace's folder as a tree, each folder read
+when you open it, folders first: a changed file is coloured and lettered by
+what git says of it (green new or added, amber modified, red deleted or in
+conflict), a folder holding changes is amber with a dot, what git ignores is
+dimmed, a link wears a link mark, and every file and folder its icon from
+VS Code's Material Icon Theme (the light ones on a light theme). It reads
+itself again every ten seconds while on screen and soon after the agent did
+something. A row's ⋯ or a right-click: Open, Open in the editor, Show
+changes, Copy relative path, Copy full path, and **Send to agent…** — pick
+an agent, say what it should do, and it gets that with the file's path (not
+its text, so it reads the file as it is by then). A folder lists its first
+500 entries. Nothing in the tree writes a file. Hidden on a phone.
 
 **Full screen** (View › Full screen, or the palette): the header,
 the sidebar and the rail go and the lens takes the whole screen — a
