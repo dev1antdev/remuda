@@ -269,7 +269,7 @@ export default function Chat({ machineId, paneId, status, origin, dir, usage, wo
             />
           ))}
         </div>
-        {promptsShown && active && <PromptsList turns={turns} live={underWay} usage={usage} machineId={machineId} paneId={paneId} session={chat?.session_id} dir={dir} onOpenFile={onOpenFile} sheet={phone} />}
+        {promptsShown && active && <PromptsList turns={turns} loading={chat === null} live={underWay} usage={usage} machineId={machineId} paneId={paneId} session={chat?.session_id} dir={dir} onOpenFile={onOpenFile} sheet={phone} />}
       </div>
       {!readOnly && !viewOnly && status === "input" && (
         <Notice tone="warn" icon="alert-triangle" className="chat-notice">

@@ -25,8 +25,9 @@ export const PROMPTS_PREF = "chat.prompts";
 export const usePromptsShown = () => usePref<boolean>(PROMPTS_PREF, false);
 
 
-export function PromptsList({ turns, live, usage, machineId, paneId, session, dir, onOpenFile, sheet }: {
+export function PromptsList({ turns, loading, live, usage, machineId, paneId, session, dir, onOpenFile, sheet }: {
   turns: Turn[];
+  loading: boolean; // the conversation is not read yet
   live: LiveRead | null; // the agent works: the newest card is the turn under way
   usage?: PaneUsage;
   machineId: string;
@@ -78,7 +79,7 @@ export function PromptsList({ turns, live, usage, machineId, paneId, session, di
           </Tip>
         </div>
         {cards.length === 0 ? (
-          <div className="empty prompts-empty">{t("No prompts yet.")}</div>
+          <div className="empty prompts-empty">{loading ? t("Loading…") : t("No prompts yet.")}</div>
         ) : (
           <ol className="prompts-list" onKeyDown={onKey}>
             {cards.map((card, i) => (

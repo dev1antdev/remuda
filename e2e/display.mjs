@@ -1641,7 +1641,7 @@ async function runPass() {
   await screen("chat-prompts", {
     open: async () => {
       promptsChat = true;
-      await palette("lens:chat");
+      if (!(await present(".lens-pane:not([hidden]) .chat-log"))) await palette("lens:chat"); // the screen before left it on
       if (!(await until(() => present(".lens-pane:not([hidden]) .tool-card"), 20))) throw new Error("the answer's calls are not one card");
       await palette("prompts");
       if (!(await until(() => present(".prompts .prompt"), 10))) throw new Error("the prompts list did not open");
