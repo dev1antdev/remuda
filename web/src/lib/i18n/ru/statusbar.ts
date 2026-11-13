@@ -1,0 +1,82 @@
+// The Russian words of the status bar: the plan limits and their hover card with the pace, the pane's place, the
+// machine's load and its popup, the live ports and their stop, its View menu row and its Settings rows.
+
+import type { Dictionary } from "../../i18n";
+
+export const statusbar: Dictionary = {
+  "Status bar": "Строка состояния",
+  "the plan limits, the pane's branch, its machine's load and ports along the foot of the page": "лимиты плана, ветка панели, нагрузка и порты её машины внизу страницы",
+  "on a screen wider than a phone's, with a mouse": "на экране шире телефонного, с мышью",
+  "The plan limits, the pane's branch, its machine's load and ports along the foot of the page, on a desk with a mouse":
+    "Лимиты плана, ветка панели, нагрузка и порты её машины внизу страницы — на большом экране с мышью",
+  "Plan limits: what remains": "Лимиты плана: сколько осталось",
+  "The status bar says what is left of each window instead of what is used; the colours still follow what is used":
+    "Строка состояния показывает, сколько осталось в каждом окне, а не сколько израсходовано; цвета по-прежнему следуют израсходованному",
+
+  Used: "Израсходовано",
+  Remaining: "Осталось",
+  "no plan limits read": "лимиты плана не прочитаны",
+  "No plan limits read yet: Codex reports its own after its next answer, Claude Code's through its status line once remuda reads it.":
+    "Лимиты плана ещё не прочитаны: Codex сообщит свои после следующего ответа, Claude Code — через свою строку состояния, когда remuda начнёт её читать.",
+  "{agent}'s plan limits: open the Usage panel": "Лимиты плана {agent}: открыть панель «Расходы»",
+  "5h": "5ч",
+  wk: "нед",
+  "5-hour": "5 часов",
+  Weekly: "Неделя",
+  "<1m": "<1м",
+  "{m}m": "{m}м",
+  "{h}h {m}m": "{h}ч {m}м",
+  "{d}d {h}h": "{d}д {h}ч",
+  "{n} %": "{n} %",
+  "{n} % left": "осталось {n} %",
+  "{n} % of the time gone": "прошло {n} % времени",
+  "{n} % of the time left": "осталось {n} % времени",
+  "you are using it faster than the time passes": "вы расходуете быстрее, чем идёт время",
+  "on pace": "в темпе времени",
+  "under pace": "с запасом",
+  "The tick: {time} % of the time has passed. You have used {used} %: {verdict}.": "Отметка: прошло {time} % времени. Вы израсходовали {used} %: {verdict}.",
+  "The tick: {time} % of the time is left. You have {left} % left: {verdict}.": "Отметка: осталось {time} % времени. У вас осталось {left} %: {verdict}.",
+  "last reading {ago}": "последнее чтение {ago}",
+  "read {ago}": "прочитано {ago}",
+  "Read on {machine}. A click opens the Usage panel.": "Прочитано на {machine}. Щелчок открывает панель «Расходы».",
+
+  "The branch {branch} is checked out in this workspace": "В этом рабочем пространстве выбрана ветка {branch}",
+  "Open {label}": "Открыть {label}",
+  "Open {key}": "Открыть {key}",
+  "{label} · {state}": "{label} · {state}",
+
+  "CPU {cpu}": "ЦП {cpu}",
+  "CPU {cpu} · {mem} of {total}": "ЦП {cpu} · {mem} из {total}",
+  "CPU is a share of all {cores} cores · {mem}": "ЦП — доля всех ядер, их {cores} · {mem}",
+  "herdr's panes on {machine}: CPU {cpu} of {cores} cores · {mem} of {total}": "Панели herdr на {machine}: ЦП {cpu} от {cores} ядер · {mem} из {total}",
+  "The load on {machine}": "Нагрузка на {machine}",
+  "What herdr's panes weigh on {machine}": "Чем панели herdr нагружают {machine}",
+  "Measuring…": "Измеряем…",
+  "No pane of herdr's runs anything on this machine now.": "Ни в одной панели herdr на этой машине сейчас ничего не запущено.",
+  "Show its terminals": "Показать его терминалы",
+  "Hide its terminals": "Скрыть его терминалы",
+  "{n} terminals": ["{n} терминал", "{n} терминала", "{n} терминалов"],
+  "the server itself and its attaches": "сам сервер и его подключения",
+  "remuda's own": "собственные remuda",
+  "Not on Windows yet: Git Bash's ps says nothing of a process's CPU or memory": "На Windows пока нет: ps из Git Bash ничего не говорит о процессоре и памяти процесса",
+  "not on Windows yet": "на Windows пока нет",
+  "{machine} is away: its load is read once it answers again": "{machine} не на связи: нагрузку прочитаем, когда она снова ответит",
+  connecting: "подключается",
+
+  Ports: "Порты",
+  "Ports on {machine}": "Порты на {machine}",
+  "{n} ports in the workspaces": ["{n} порт в рабочих пространствах", "{n} порта в рабочих пространствах", "{n} портов в рабочих пространствах"],
+  "{n} others": ["ещё {n}", "ещё {n}", "ещё {n}"],
+  "{workspaces} · {other}": "{workspaces} · {other}",
+  "No ports listening in your workspaces.": "В ваших рабочих пространствах никто не слушает порты.",
+  "Other processes": "Другие процессы",
+  "PID {pid}": "PID {pid}",
+  "Open it through this cockpit, in a tab of its own": "Открыть через этот кокпит в отдельной вкладке",
+  "Stop {process} (PID {pid})": "Остановить {process} (PID {pid})",
+  "Stop it": "Остановить",
+  "Stop {process} (PID {pid}), listening on port {port} of {machine}? It gets SIGTERM, the way Ctrl+C in its terminal would end it; whatever it was serving goes with it.":
+    "Остановить {process} (PID {pid}), который слушает порт {port} на {machine}? Он получит SIGTERM, как от Ctrl+C в своём терминале; всё, что он отдавал, пропадёт вместе с ним.",
+  "{process} on port {port} was told to stop": "{process} на порту {port} получил команду остановиться",
+  "Read {ago} on {machine}": "Прочитано {ago} на {machine}",
+  "Not on Windows yet: Windows does not say which folder a listening process runs in": "На Windows пока нет: Windows не говорит, в какой папке работает слушающий процесс",
+};

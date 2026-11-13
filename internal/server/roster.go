@@ -17,6 +17,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/ports"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/restart"
@@ -104,6 +105,7 @@ type rosterSession struct {
 	// the other checkouts of its repository changing the same files against the main branch, the same lines first
 	Collisions []collisions.Collision `json:"collisions,omitempty"`
 	Concierge  bool                   `json:"concierge,omitempty"` // the concierge's own workspace: its place shows it, the sidebar, the wall and the pickers do not
+	Ports      []ports.Port           `json:"ports,omitempty"`     // the ports its processes listen on, as last read while a page looks
 	Tabs       []rosterTab            `json:"tabs"`
 }
 
@@ -247,6 +249,7 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			session.Branch = s.Review.Branch(machineID, session.Dir)
 		}
 		session.Jira = s.issuesOf(machineID, session)
+		session.Ports = s.Ports.For(machineID, ws.WorkspaceID)
 		if session.Dir != "" {
 			session.Collisions = s.Collisions.For(machineID, session.Dir)
 			badge, ok := s.Review.Badge(machineID, session.Dir)
@@ -309,6 +312,7 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 	s.PRs.Touch()       // somebody is looking: the pull requests named are worth reading again
 	s.Jira.Touch()      // and the Jira issues the workspaces name
 	s.Subagents.Touch() // and the subagents the conversations run
+	s.Ports.Touch()     // and the ports the workspaces' processes listen on
 	body, etag := s.rosterBody()
 	w.Header().Set("X-Remuda-Version", buildversion.Build) // a page older than the server offers a reload
 	if auth.IsViewer(r.Context()) {

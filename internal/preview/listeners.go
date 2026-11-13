@@ -48,10 +48,24 @@ type Listener struct {
 // Script prints a line per listening TCP port above 1023: port, address, pid, command, the process's working folder,
 // its parent's, and its arguments; ss and /proc on Linux, lsof and ps elsewhere. Only the person's own processes
 // answer with a folder, so another user's server is never named.
-func Script() string {
+func Script() string { return ScriptKnowing(nil) }
+
+// ScriptKnowing is Script that looks up nothing more of the pids given — a server's folder does not change while it
+// runs, and the lookups are most of the script's time — answering Known for their folders and arguments instead, for
+// Recall to put back.
+func ScriptKnowing(known []int) string {
+	pids := make([]string, len(known))
+	for i, pid := range known {
+		pids[i] = strconv.Itoa(pid)
+	}
 	return script.PATH + `
+known=" ` + strings.Join(pids, " ") + ` "
 emit() {
   [ "$1" -ge 1024 ] 2>/dev/null || return 0
+  case $known in *" $3 "*)
+    printf '%s\037%s\037%s\037%s\037=\037=\037=\n' "$1" "$2" "$3" "$4"
+    return 0 ;;
+  esac
   if [ -r "/proc/$3/cwd" ] || [ -L "/proc/$3/cwd" ]; then
     cwd=$(readlink "/proc/$3/cwd" 2>/dev/null)
     ppid=$(awk '{print $4}' "/proc/$3/stat" 2>/dev/null)
@@ -80,6 +94,50 @@ else
   done
 fi
 `
+}
+
+// Known is what ScriptKnowing answers for each field it did not look up again.
+const Known = "="
+
+// Seen is what an earlier look learnt of a listening process: its name, its folder, its parent's and its arguments.
+type Seen struct{ Command, Dir, ParentDir, Args string }
+
+// Recall puts back what seen holds for the lines a ScriptKnowing answered with Known — dropping one whose process is
+// no longer the one seen, the pid taken by another program since, and forgetting it so the next look asks again —
+// notes every line it looked up, and forgets the pids that listen no more.
+func Recall(out string, seen map[int]Seen) string {
+	var b strings.Builder
+	listening := map[int]bool{}
+	for _, line := range script.Lines(out) {
+		f := script.Fields(line)
+		if len(f) != 7 {
+			continue
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(f[2]))
+		if err != nil {
+			continue
+		}
+		listening[pid] = true
+		command := strings.TrimSpace(f[3])
+		if f[4] == Known {
+			had, ok := seen[pid]
+			if !ok || had.Command != command {
+				delete(seen, pid)
+				continue
+			}
+			f[4], f[5], f[6] = had.Dir, had.ParentDir, had.Args
+		} else {
+			seen[pid] = Seen{Command: command, Dir: f[4], ParentDir: f[5], Args: f[6]}
+		}
+		b.WriteString(strings.Join(f, script.US))
+		b.WriteByte('\n')
+	}
+	for pid := range seen {
+		if !listening[pid] {
+			delete(seen, pid)
+		}
+	}
+	return b.String()
 }
 
 // infrastructure is the processes whose ports are never anyone's app: remuda, herdr, ssh and Tailscale's own

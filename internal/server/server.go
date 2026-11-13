@@ -39,6 +39,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/mirror"
 	"github.com/dev1antdev/remuda/internal/opinion"
+	"github.com/dev1antdev/remuda/internal/ports"
 	"github.com/dev1antdev/remuda/internal/prefs"
 	"github.com/dev1antdev/remuda/internal/preview"
 	"github.com/dev1antdev/remuda/internal/prstatus"
@@ -47,6 +48,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/recipes"
+	"github.com/dev1antdev/remuda/internal/resources"
 	"github.com/dev1antdev/remuda/internal/retire"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/said"
@@ -119,6 +121,8 @@ type Server struct {
 	Undo       *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
 	Concierge  *concierge.Service  // the Claude Code agent the person asks what the others are doing, on the machine they pick
 	Scenes     *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
+	Ports      *ports.Tracker      // the ports the machines' processes listen on, matched to their workspaces
+	Resources  *resources.Service  // what the machines' herdr panes weigh on them, for the status bar
 
 	streams   termStreams
 	relayed   relays     // the terminals piped to a machine's own remuda, which holds their attach
@@ -130,6 +134,7 @@ type Server struct {
 func (s *Server) Handler() http.Handler {
 	api := http.NewServeMux()
 	s.rosterRoutes(api)
+	s.resourceRoutes(api)
 	s.machineRoutes(api)
 	s.awakeRoutes(api)
 	s.sessionRoutes(api)

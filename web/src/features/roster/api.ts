@@ -125,8 +125,13 @@ export type Session = {
   scratch?: boolean; // the floating terminal's own shell: the drawer shows it, the sidebar and the palette leave it out
   concierge?: boolean; // the concierge's own workspace: the roster provider takes it out of the machines, its place shows it
   jira?: JiraIssue[]; // the Jira issues its branch and its agents name, once the person set a site
+  ports?: ListeningPort[]; // the ports its processes listen on, as last read while a page looks (internal/ports)
   tabs: Tab[];
 };
+
+// ListeningPort is a port a workspace's process listens on: its program, what it serves (vite, next…) when its arguments
+// say, its pid, and where it listens as a person writes it — localhost:5173, *:8080
+export type ListeningPort = { port: number; process: string; label?: string; pid: number; address: string };
 
 // a machine's vitals, read by internal/health a few minutes apart
 // one probe's load and the disk's free percentage
