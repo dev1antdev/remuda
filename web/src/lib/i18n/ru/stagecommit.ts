@@ -62,6 +62,11 @@ export const stagecommit: Dictionary = {
   Detected: "Найденная",
   "Detected: {base}": "Найденная: {base}",
   "the branch this one left most recently": "ветка, от которой эта отошла последней",
+  "The branch to compare with": "Ветка для сравнения",
+  "Pin the branch to compare with": "Закрепить ветку для сравнения",
+  change: "сменить",
+  pinned: "закреплена",
+  "Changed against {base}": "Изменено против {base}",
 
   Commit: "Коммит",
   Amend: "Исправить",

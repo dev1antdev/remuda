@@ -34,10 +34,23 @@ export function BaseFiles({ view, error, tree, closed, onFolder, fileRow }: {
   if (view.files.length === 0) return <div className="empty">{t("Nothing here differs from {base}.", { base: view.base })}</div>;
   const files = view.files.map((file) => ({ ...file, fresh: false }));
   const look = (file: ReviewFile, depth?: number, name?: string): RowLook => ({ key: baseKey(file.path), depth, name, from: { base: view.merge_base } });
-  if (!tree) return <section className="review-group is-base">{files.map((file) => fileRow(file, look(file)))}</section>;
+  const head = (
+    <div className="review-group-head">
+      <span className="review-group-title">{t("Changed against {base}", { base: view.base })}</span>
+      <span className="badge quiet">{files.length}</span>
+    </div>
+  );
+  if (!tree)
+    return (
+      <section className="review-group is-base">
+        {head}
+        {files.map((file) => fileRow(file, look(file)))}
+      </section>
+    );
   const shut = closedHere(closed);
   return (
     <section className="review-group is-base">
+      {head}
       {treeRows(files, (file) => file.path, shut).map((row) =>
         row.kind === "folder" ? (
           <button key={`folder:${row.path}`} type="button" className="review-folder" aria-expanded={!shut.has(row.path)} style={{ "--depth": row.depth } as CSSProperties} onClick={() => onFolder(FOLDER + row.path)}>

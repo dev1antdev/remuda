@@ -89,7 +89,6 @@ export function FileRow({ file, look = {}, open, split, onToggle, load, loadSour
               <Icon name="message" size={12} /> {opinion.length}
             </span>
           )}
-          {look.letter && <span className={`review-letter is-${look.letter}`}>{look.letter}</span>}
         </button>
         <span className={`review-slot${look.actions ? " has-actions" : ""}`}>
           <span className="review-slot-quiet">
@@ -106,6 +105,9 @@ export function FileRow({ file, look = {}, open, split, onToggle, load, loadSour
             ) : null}
           </span>
           {look.actions && <span className="review-row-actions">{look.actions}</span>}
+        </span>
+        <span className={`review-letter${look.letter ? ` is-${look.letter}` : ""}`} aria-hidden={!look.letter || undefined}>
+          {look.letter}
         </span>
         <Tip text={t("Open the file in the viewer")}>
           <button type="button" className="icon-btn sm review-open" aria-label={t("Open the file")} onClick={() => onOpen()}>

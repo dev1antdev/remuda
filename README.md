@@ -1387,13 +1387,42 @@ row unfolds ten more from the file, "all N lines" the whole stretch up to
 the previous hunk, and the last hunk unfolds downward to the end of the
 file the same way — the unfolded lines walk and take comments like any
 other.
+**The files sit in git's own groups** — Conflicts (in red), Staged,
+Unstaged and Untracked, each with its count and Stage all or Unstage all —
+and a file you staged and changed again is in both, each side with its own
+counts and its own diff; someone who never stages sees the same lens with
+clearer groups. Under the pointer (always on a phone) a row's counts give
+way to `+` stage, `−` unstage and `↺` discard; a discard asks first,
+naming the file and what cannot come back (an untracked file's discard
+deletes that one file). The list can be a tree of folders — the button
+beside the columns' — a folder holding one folder folded into one row. At
+the foot of the files is the commit box: a message, **Commit staged** (or
+**Commit all**, which stages the listed files first) and **Amend** behind
+its chevron, which loads the last message into an empty box and refuses if
+the latest commit moved since. The secret check stands before a commit as
+before Approve & commit: findings hold the button back and **Commit
+anyway…** asks first. A failure keeps your message and shows git's own
+words. Nothing is written while an agent works, asks or ends a turn in that
+checkout — the lens names the agent — and every write is yours alone: a
+viewer link or an agent's key reaches none of them. Under the box,
+**Committed — not on origin/feature** lists what the remote does not have
+yet (for a branch never pushed, against origin's default branch), each
+commit opening its files and their diffs, and the head says how many
+commits there are to pull, as of the last fetch (remuda never fetches). The
+switch in the head reads the branch's whole work **vs its base** instead —
+the branch it was cut from, found by ancestry, with a pick to pin another —
+read only. A conflicted file opens on its conflict blocks alone, yours
+beside incoming at their real line numbers; you or an agent resolve it, and
+staging it marks it resolved. On every theme a colour too faint on a
+diff's green or red row is lifted just enough to read.
 **Approve** tells the agent the work is reviewed and it can carry on (a
 task it works on can move along) — pick *and ask the agent to commit* and
 it is **Approve & commit**: the agent commits the reviewed work and says
 so; pick *and ask it to commit, push and open a pull request* and it is
 **Approve & open PR**: the agent commits, pushes, opens the pull request
-with `gh` and names its link, which a task it works on picks up (remuda
-itself never writes into a repository); **Reject** tells it
+with `gh` and names its link, which a task it works on picks up (a
+verdict writes nothing itself; the lens's own Commit, below, does when you
+press it); **Reject** tells it
 what to fix and to end the answer that brings the work back with the line
 `READY FOR REVIEW` — when it does, the queue lists that workspace first,
 marked *ready again*, and a push says so; both take a note and carry

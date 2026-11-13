@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { plural } from "@/lib/text";
-import { Icon, Notice, Select, Tip } from "@/ui";
+import { Icon, Menu, Notice, Tip } from "@/ui";
 import type { BaseView, Review } from "./api";
 import { KEYS } from "./keys";
 import { baseChoices, baseWords, pullWords, type Scope } from "./scope";
@@ -66,8 +66,19 @@ export function ReviewHead({ review, scope, onScope, base, pinned, onPin, lastLo
           </span>
         ) : (
           <span className="review-sub review-base-line">
-            <span>{baseWords(base)}</span>
-            {base && base.refs.length > 0 && <Select className="sm review-base-pick" value={pinned} options={baseChoices(base)} onChange={onPin} />}
+            {baseWords(base)}
+            {base && base.refs.length > 0 && (
+              <Menu
+                label={t("The branch to compare with")}
+                tip={t("Pin the branch to compare with")}
+                trigger={
+                  <button type="button" className="linkish review-base-pick">
+                    {pinned ? t("pinned") : t("change")} <Icon name="chevron-down" size={12} />
+                  </button>
+                }
+                items={() => baseChoices(base).map((choice) => ({ label: choice.label, hint: choice.hint, checked: choice.value === pinned, onSelect: () => onPin(choice.value) }))}
+              />
+            )}
           </span>
         )}
       </div>

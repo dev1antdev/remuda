@@ -1404,8 +1404,8 @@ async function stagingScreens() {
     });
   } finally {
     DRESS = atWork;
-    await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}` });
-    await until(() => present(".tabstrip"), 15);
+    await send("Page.navigate", { url: `${base}/?machine=local&pane=${encodeURIComponent(paneA1)}&lens=changes` });
+    await until(() => present(`${LENS} .review-head`), 15);
   }
 }
 
