@@ -63,9 +63,13 @@ func New(hosts func(machineID string) (Host, error)) *Service {
 	return &Service{Hosts: hosts, now: time.Now, lists: map[string]*listEntry{}, details: map[string]*detailEntry{}, logins: map[string]loginEntry{}, origins: map[string]originsEntry{}, locks: map[string]*sync.Mutex{}}
 }
 
-// lock is one read of a key at a time: a second asker waits and is served what the first read.
+// lock is one read of a key at a time: a second asker waits and is served what the first read. The locks are let go
+// of past a bound, every search typed being a key of its own: at worst two reads of one key then run side by side.
 func (s *Service) lock(key string) func() {
 	s.mu.Lock()
+	if len(s.locks) > 4*(MaxLists+MaxDetails) {
+		s.locks = map[string]*sync.Mutex{}
+	}
 	l := s.locks[key]
 	if l == nil {
 		l = &sync.Mutex{}

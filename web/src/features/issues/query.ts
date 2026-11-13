@@ -2,7 +2,7 @@
 // qualifiers (is:open, assignee:@me, author:@me, no:assignee, label:, sort:) written into the visible text, so what is
 // asked is always what is on screen.
 
-import { t } from "@/lib/i18n";
+import { t, tc } from "@/lib/i18n";
 
 export const OPEN_QUERY = "is:issue is:open";
 export const MINE_QUERY = "is:issue is:open assignee:@me";
@@ -88,8 +88,8 @@ export function filterRows(q: string, labels: string[]): FilterRow[] {
   const sort = sortOf(q);
   const rows: FilterRow[] = [
     { heading: t("State") },
-    { id: "open", label: t("Open"), checked: state === "open", query: withState(q, state === "open" ? "all" : "open") },
-    { id: "closed", label: t("Closed"), checked: state === "closed", query: withState(q, state === "closed" ? "all" : "closed") },
+    { id: "open", label: tc("issues", "Open"), checked: state === "open", query: withState(q, state === "open" ? "all" : "open") },
+    { id: "closed", label: tc("issues", "Closed"), checked: state === "closed", query: withState(q, state === "closed" ? "all" : "closed") },
     { heading: t("People") },
     { id: "mine", label: t("Assigned to me"), hint: "assignee:@me", checked: hasToken(q, "assignee:@me"), query: toggleToken(q, "assignee:@me") },
     { id: "author", label: t("Created by me"), hint: "author:@me", checked: hasToken(q, "author:@me"), query: toggleToken(q, "author:@me") },

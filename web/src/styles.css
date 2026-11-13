@@ -14233,10 +14233,19 @@ textarea.screen-term-field {
   font-weight: 500;
 }
 
+/* the machine's name gives way first, down to a few letters; the repository keeps its room */
 .issue-crumb {
+  flex-shrink: 0;
   color: var(--fg-dim);
   white-space: nowrap;
   line-height: 1.4;
+}
+
+.issue-crumb:nth-child(2) {
+  flex-shrink: 1;
+  min-width: 3.5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .issue-crumb + .issue-crumb::before {
@@ -14246,7 +14255,8 @@ textarea.screen-term-field {
 }
 
 .issue-crumb.is-last {
-  min-width: 0;
+  flex-shrink: 0;
+  max-width: 70%;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--fg);
@@ -14301,11 +14311,20 @@ textarea.screen-term-field {
   border-color: var(--accent-ring);
 }
 
-.issue-search input {
+.issue-search input,
+.issue-repos-filter input {
   flex: 1;
   min-width: 0;
-  font: var(--fs-13) / 1.4 var(--mono);
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
   color: var(--fg);
+}
+
+.issue-search input {
+  font: var(--fs-13) / 1.4 var(--mono);
 }
 
 .issue-table {
@@ -14775,11 +14794,6 @@ textarea.screen-term-field {
   color: var(--fg-dim);
 }
 
-.issue-repos-filter input {
-  flex: 1;
-  min-width: 0;
-}
-
 .issue-repos-list {
   display: flex;
   flex-direction: column;
@@ -15231,6 +15245,14 @@ textarea.screen-term-field {
 @media (max-width: 720px) {
   .modal.issues-panel {
     padding: 16px 14px;
+  }
+
+  .issue-crumb:first-child {
+    display: none;
+  }
+
+  .issue-crumb:nth-child(2)::before {
+    content: none;
   }
 
   .issue-row {

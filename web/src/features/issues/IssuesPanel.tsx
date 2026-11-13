@@ -36,7 +36,8 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
   const machineId = choice?.machine ?? follow?.machineId ?? machines.find((m) => m.state === "connected")?.id ?? "local";
   const machine = machines.find((m) => m.id === machineId);
   const machineLabel = (id: string) => machines.find((m) => m.id === id)?.label ?? id;
-  const repos = useQuery(() => fetchRepos(machineId, choice ? undefined : follow?.dir || undefined), [machineId, choice ? "" : (follow?.dir ?? "")], { keep: true });
+  const followDir = follow && follow.machineId === machineId ? follow.dir : ""; // the pane's folder, asked about on its own machine only
+  const repos = useQuery(() => fetchRepos(machineId, followDir || undefined), [machineId, followDir], { keep: true });
   const following = repos.data?.here?.repo ?? "";
   const repo = choice?.repo ?? following;
   const entry: Repo | undefined = repos.data?.repos.find((r) => r.repo.toLowerCase() === repo.toLowerCase());
@@ -153,7 +154,7 @@ export default function IssuesPanel({ onClose }: { onClose: () => void }) {
         <IssueViewer
           key={`${at.repo}#${at.number}`}
           machineId={machineId}
-          folder={entry?.folder ?? ""}
+          folder={at.repo.toLowerCase() === repo.toLowerCase() ? (entry?.folder ?? "") : ""}
           at={at}
           back={viewing.length > 1 ? `#${viewing[viewing.length - 2]!.number}` : t("Issues")}
           onBack={() => setViewing(viewing.slice(0, -1))}

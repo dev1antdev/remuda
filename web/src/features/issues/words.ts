@@ -2,16 +2,16 @@
 // planned grey), a comment's role badges, a reaction's emoji (GitHub's content, as a label's text is), a reference.
 
 import type { IconName } from "@/ui/icons";
-import { t } from "@/lib/i18n";
+import { t, tc } from "@/lib/i18n";
 import type { Here, Item, Person } from "./api";
 
 export type Tone = "open" | "done" | "skipped";
 export type StateLook = { label: string; tone: Tone; icon: IconName; title: string };
 
 export function stateLook(issue: Pick<Item, "state" | "reason">): StateLook {
-  if (issue.state === "open") return { label: t("Open"), tone: "open", icon: "circle-dot", title: t("Open") };
-  if (issue.reason === "not_planned") return { label: t("Closed"), tone: "skipped", icon: "circle-slash", title: t("Closed as not planned") };
-  return { label: t("Closed"), tone: "done", icon: "circle-check", title: t("Closed as completed") };
+  if (issue.state === "open") return { label: tc("issue", "Open"), tone: "open", icon: "circle-dot", title: tc("issue", "Open") };
+  if (issue.reason === "not_planned") return { label: tc("issue", "Closed"), tone: "skipped", icon: "circle-slash", title: t("Closed as not planned") };
+  return { label: tc("issue", "Closed"), tone: "done", icon: "circle-check", title: t("Closed as completed") };
 }
 
 const ROLES: Record<string, string> = { OWNER: "Owner", MEMBER: "Member", COLLABORATOR: "Collaborator", CONTRIBUTOR: "Contributor" };

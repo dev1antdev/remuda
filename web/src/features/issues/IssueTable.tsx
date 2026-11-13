@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useNow } from "@/lib/clock";
 import { agoWords } from "@/lib/time";
 import { Icon, Menu, Tip, type MenuItem } from "@/ui";
-import { t, tn } from "@/lib/i18n";
+import { t, tc, tn } from "@/lib/i18n";
 import type { List } from "./api";
 import { HeadRow, IssueRow, SkeletonRows, type RowActions } from "./IssueRow";
 import { chipOf, filterRows, labelsIn, MINE_QUERY, OPEN_QUERY, pageCount, pageOf, pagerPages, PER_PAGE } from "./query";
@@ -42,7 +42,7 @@ export default function IssueTable({ query, onQuery, list, loading, repo, isLink
         {picker}
         <div className="issue-chips" role="group" aria-label={t("Show")}>
           <button type="button" className={`btn sm${chip === "open" ? " on" : ""}`} aria-pressed={chip === "open"} onClick={() => onQuery(OPEN_QUERY)}>
-            {t("Open")}
+            {tc("issues", "Open")}
           </button>
           <button type="button" className={`btn sm${chip === "mine" ? " on" : ""}`} aria-pressed={chip === "mine"} onClick={() => onQuery(MINE_QUERY)}>
             {t("Assigned to me")}

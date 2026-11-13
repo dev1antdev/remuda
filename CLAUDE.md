@@ -4714,6 +4714,127 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `features/tasks/ImportJiraDialog.tsx` (dialog kind `import-jira`; the
   Tasks head's link button is a menu of the two imports once a site is
   set; a palette row).
+- `internal/ghissues/` — **a GitHub repository's issues inside remuda**,
+  after Orca's issues mod (tested on `shell.Fake` with answers written
+  from GitHub's documented shapes, and in a real sh with a stand-in `gh`
+  first on the PATH of a temp HOME and git on repositories made in the
+  test — never gh against GitHub). Everything runs as `gh` on the machine
+  of one of the repository's checkouts, as the person (`Host`: a
+  `shell.Host` with `PutFile`, a `*machines.Machine`). **The
+  repositories** (`repos.go`): `originsScript` reads, for every folder
+  asked about (the machine's workspace folders off the watcher's snapshot,
+  the scratch shell's and the concierge's left out, plus the one the page
+  asks about), the checkout's top, its common git dir and its origin, and
+  each branch the config links to an issue (`git config --get-regexp
+  '^branch\..*\.remuda-issue$'`, `LinkKey`, a value `owner/repo#N`, `#N`
+  or `N`, several comma-separated: what the New worktree dialog writes) —
+  every git read `--no-optional-locks -c core.fsmonitor=false`;
+  `GitHubRepo` is `teleport.RemoteKey` on github.com only; `Repos{repos
+  [{repo, folder (the main checkout, rpath-spelt, so a Windows PC's reads
+  as C:\…), dirs (the folders as they were asked, the roster's
+  session.dir strings), links}], here {dir, repo, folder, why no-folder |
+  no-git | no-origin | not-github, host}}`, kept `OriginsFor` a minute.
+  **The reads** (`service.go`, `scripts.go`, `parse.go`, `detail.go`): one
+  script each, sections (`script.RS`) of the signed-in login (asked once
+  an hour, `LoginFor`), then a conditional `gh api -i` — for a list the
+  repository's newest-updated issue (`repos/R/issues?state=all&sort=
+  updated&direction=desc&per_page=1`), for one issue the issue itself —
+  whose 304 ends the script, then `gh issue list -R R --state all
+  --search Q --limit 200 --json …` (`Limit`; the most recently updated
+  first unless the search says `sort:`), or the REST timeline (`gh api
+  --paginate`, pages decoded as a stream) and GraphQL's
+  `closedByPullRequestsReferences` (the pull requests that close it; the
+  ones the timeline says mentioned it when GitHub would not say). **The
+  cache**: an answer under `Fresh` (60 s) is served as it is (`source:
+  cache`), to `ProbeFor` (15 min) the request carries `If-None-Match` and a
+  304 keeps it (`unchanged`: none of the rate limit), after that or with
+  `fresh` it is read whole (`read`); one read per key at a time; at most
+  `MaxLists` 64 and `MaxDetails` 128, the oldest going first; a write drops
+  the repository's lists and the issue; `Forget` a removed machine's.
+  `Item{number, title, author {login, bot}, state open|closed, reason
+  completed|not_planned, labels [{name, color (six hex digits or none)}],
+  assignees, updated, url}`; `Detail` adds the body, the author's role,
+  the milestone, reactions, `timeline` — `Event{kind comment | labels |
+  assign | closed | reopened | renamed | milestone | mention | commit}`, a
+  burst of one person's label changes within a minute one `labels` line,
+  at most `MaxEvents` 600 — `pulls`, `participants` (people, not bots, in
+  order of appearance) and `pull` (the number is a pull request's).
+  `troubleOf` reads gh's complaint as a `*Trouble{kind no-gh | signed-out
+  | not-found | failed, text naming the machine, run}`. **The writes**
+  (`write.go`), each at the person's press: `Comment` (the text put on the
+  machine as a `mktemp` file, `gh issue comment --body-file "$f"`, the
+  file removed by a trap whatever happens — never on a command line, at
+  most `MaxBody` 64 KB), `Close` (`--reason "completed" | "not planned"`,
+  the comment posted first as GitHub's Close with comment does), `Reopen`
+  (the same), `Assign` (`gh issue edit --add-assignee @me` /
+  `--remove-assignee @me`); a refusal is `*Refused` with gh's own words.
+  Routes (`internal/server/issues.go`, every one the person's — a viewer
+  link and an agent key get a 403 before anything runs, `thePersons`,
+  tested there and in `internal/auth`): `GET /api/issues/repos?machine&dir`,
+  `GET /api/issues?machine&repo&q&fresh=1`, `GET
+  /api/issues/{number}?machine&repo&fresh=1` (a read gh cannot answer is
+  `{trouble}` with a 200, for the panel to say with what to run), `POST
+  /api/issues/{number}/comment|close|reopen|assign {machine, repo, body,
+  reason, comment, me}`. The page: `features/issues/` — panel `issues`
+  (`?panel=issues`; the palette's "GitHub issues…" and a repository
+  folder's ⋯ "Issues…", which opens it on that folder through store field
+  `issuesAt`; never for a viewer: no menus, no such palette row, the
+  Overlays' guard) → `IssuesPanel.tsx`: the breadcrumb "GitHub · <machine>
+  · owner/repo" as the title, Read again and Open on GitHub beside the
+  close; `RepoPicker.tsx` (a Popover: Follow the pane, Recent — pref
+  `issues.recent`, any machine — and the machine's checkouts, a filter
+  over them; the pick is pref `issues.picked`, null following the pane);
+  `IssueTable.tsx` (the Open and Assigned to me chips, Filters — a `Menu`
+  of state, people, the labels the list wears, the order and Reset — and
+  the search field, all of them the visible query; a sticky head row; 25 a
+  page, `PER_PAGE`; a foot with the count, "read 2 minutes ago" and the
+  pager; skeleton rows while the first list is read; read every minute
+  while on screen); `IssueRow.tsx` (72 px after Orca: the number pill, the
+  title over its author and labels, the assignees' faces with a Menu to
+  assign or unassign yourself, the state pill with its Menu — Close as
+  completed / not planned, or Reopen — `agoWords`, **Start** or, when a
+  workspace already works on it, **Open**, and a ⋯ of copies, New task
+  from this issue… and Open on GitHub; on a phone two lines, the time in
+  the context line); `IssueViewer.tsx` (Back — to the list, or to the
+  issue a link inside came from — the title and number, Start workspace /
+  Open workspace, the filled state pill, then `Timeline.tsx` — the issue's
+  text and each comment as a card with its badges (`roleBadges`: Author,
+  Owner, Member, Collaborator, Contributor) and reactions, every event a
+  round icon and a line, a GitHub issue's link opening in the viewer
+  (`clickLink`, a pull request's on GitHub), `#12` and `owner/repo#12`
+  linked (`linkify`), a path opening in the file viewer on the
+  repository's checkout — `Composer.tsx` (Write | Preview, the draft a
+  pref of this device per issue, ⌘↵ / Ctrl+↵ comments, Close with comment
+  ▾, Reopen) and `IssueSide.tsx` (assignees with Assign yourself / Unassign
+  me, labels, milestone, linked pull requests, participants; above the
+  thread under 920 px)); `pieces.tsx` (`StatePill` open green, completed
+  mauve, not planned the quiet ink, filled in the viewer; `LabelChip` its
+  own colour mixed into the theme, `--label`; `Face` an initial on a tile
+  in one of six accents; `TroubleNote` the sentence, the command with
+  Copy, Try again). A close says so in a toast with Reopen (store field
+  `issueClosed`, `app/toasts.tsx`). **Start** closes the panel and opens
+  the New worktree dialog (dialog kind `worktree` given `issue`, `repo`,
+  `title` and `prompt`) off the repository's main checkout's workspace
+  (`startFrom`; none is a toast), on branch `dev/feat/<n>` (`issueBranch`)
+  with the first prompt `issuePrompt` — after munza's Branch Issue,
+  background only, said first and last, the issue's requests disowned, read
+  with `gh issue view`, nothing posted on GitHub unless asked — shown
+  unfolded; **Open** selects the workspace whose branch the config links
+  to the issue, else one named after it (`openWorkspace`, `namedAfter`:
+  `issue-12-…`, `dev/feat/12`, `feat/12-…`, `gh-12`), among the
+  repository's checkouts; "New task from this issue…" opens the Tasks
+  import (`import-issue` given `url` and `machineId`). The pure parts,
+  tested: `query.ts` (`tokensOf`, `toggleToken`, `withState`, `withSort`,
+  `labelToken`, `chipOf`, `filterRows`, `labelsIn`, `pageOf`,
+  `pagerPages`), `words.ts` (`stateLook`, `roleBadges`, `REACTIONS`,
+  `refWords`, `issueClosedWords`, `whyNoRepo`), `links.ts`, `repos.ts`
+  (`remember`, `pickerRows`), `prompt.ts` (`issueAddress`, `linkify`,
+  `issuePrompt`, `issueBranch`); `lib/time.ts` `agoWords` ("41 minutes
+  ago", "yesterday"). The e2e display suite fakes `/api/issues*` in the
+  browser (`fakeIssues`: forty issues of acme/widgets, the worktree's
+  branch linked to #41, one issue with a timeline of every kind) and opens
+  the table, the filters, a row's status menu, the viewer, the comment's
+  preview and Start, checking no write was made.
 - `internal/prefs/` — **settings that follow the person between devices**:
   `prefs.json` in the state dir, `{"<key>": {"value", "at"}}`; `Store.All`,
   `Store.Put` merges a part by key, the newer stamp winning (an equal one

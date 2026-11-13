@@ -6,9 +6,9 @@ import { useRef, useState } from "react";
 import { actions } from "@/app/store";
 import { openUrl } from "@/lib/host";
 import { useQuery } from "@/lib/query";
-import { ago } from "@/lib/time";
+import { ago, agoWords } from "@/lib/time";
 import { errMsg } from "@/lib/text";
-import { Icon, Tip } from "@/ui";
+import { Icon } from "@/ui";
 import { t, tn } from "@/lib/i18n";
 import { assignIssue, closeIssue, commentIssue, fetchIssue, reopenIssue, troubleOf, type Detail } from "./api";
 import Composer from "./Composer";
@@ -70,14 +70,9 @@ export default function IssueViewer({ machineId, folder, at, back, onBack, onGo,
           <Icon name="arrow-left" size={14} /> {back}
         </button>
         <span className="issue-grow" />
-        {query.fetching && <span className="issue-reading">{t("Reading…")}</span>}
-        {issue && (
-          <Tip text={t("Open on GitHub")}>
-            <button type="button" className="icon-btn" aria-label={t("Open on GitHub")} onClick={() => openUrl(issue.url)}>
-              <Icon name="external-link" size={14} />
-            </button>
-          </Tip>
-        )}
+        <span className="issue-reading" aria-live="polite">
+          {query.fetching ? t("Reading…") : issue ? t("read {ago}", { ago: agoWords(issue.at) }) : ""}
+        </span>
       </div>
       {query.error && <TroubleNote trouble={{ kind: "failed", text: query.error }} onRetry={again} />}
       {trouble && <TroubleNote trouble={trouble} onRetry={again} />}

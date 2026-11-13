@@ -1063,6 +1063,39 @@ them in all, the oldest going first; a turn whose changes weigh over
 backups. A second remuda beside the real one keeps none unless it is
 given `-record`.
 
+## GitHub issues — the repository's issues in the cockpit
+
+**GitHub issues…** in the palette, or **Issues…** in a repository
+folder's ⋯ menu, opens a repository's issues the way GitHub lists them:
+"GitHub · GOG · owner/repo" over a repository picker (the pane's own
+repository by default, the ones you picked lately, the machine's other
+checkouts), the **Open** and **Assigned to me** chips, a **Filters**
+menu and a search field that both write GitHub's own qualifiers
+(`assignee:@me`, `author:@me`, `no:assignee`, `label:`, `sort:`) into
+the query you see, 25 issues a page. A row shows the number, the title
+with its author and labels in their own colours, the assignees (assign or
+unassign yourself from there), the state (close as completed or not
+planned, or reopen, from there), how long ago it moved, and **Start** —
+the New worktree dialog on a branch named after the issue, its agent
+told the issue as background only and to wait for your word — or
+**Open**, when a workspace's branch is linked to the issue (`git config
+branch.<b>.remuda-issue owner/repo#N`) or named after it. The ⋯ copies its
+link or reference and makes a task of it. A click opens the issue
+itself: its timeline — comments with their writer's badge and reactions,
+labels added and removed in one line, a rename, a mention, a commit, a
+close — a comment box with Write and Preview, **Comment**, **Close with
+comment ▾** and **Reopen**, and beside it the assignees, labels,
+milestone, the pull requests that close it and everyone who took part; a
+link to another issue opens there too, with Back.
+
+Everything goes through `gh` on the machine of one of the repository's
+checkouts, as you, and only when you press it: remuda keeps what GitHub
+answered for a minute, then asks with a conditional request (a 304 costs
+none of GitHub's rate limit) for a quarter of an hour, and only then
+reads it whole. Without `gh`, signed out, or with an origin elsewhere,
+the panel says so in a sentence with what to run. A viewer link and an
+agent's key cannot reach it.
+
 ## Agents and your tasks
 
 Any coding agent remuda runs — Claude Code, Codex, Gemini CLI, Kimi Code —
