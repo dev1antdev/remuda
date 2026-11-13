@@ -55,7 +55,7 @@ export default function IssueTable({ query, onQuery, list, loading, repo, isLink
           align="start"
           items={filters}
           trigger={
-            <button type="button" className="btn sm issue-filters">
+            <button type="button" className="btn issue-filters">
               <Icon name="filter" size={14} /> {t("Filters")}
             </button>
           }
@@ -69,7 +69,7 @@ export default function IssueTable({ query, onQuery, list, loading, repo, isLink
           }}
         >
           <Icon name="search" size={14} />
-          <input className="bare" value={draft} spellCheck={false} aria-label={t("Search the issues")} placeholder={OPEN_QUERY} onChange={(e) => setDraft(e.target.value)} />
+          <input value={draft} spellCheck={false} aria-label={t("Search the issues")} placeholder={OPEN_QUERY} onChange={(e) => setDraft(e.target.value)} />
           {query !== OPEN_QUERY && (
             <Tip text={t("Back to the open issues")}>
               <button type="button" className="icon-btn sm" aria-label={t("Back to the open issues")} onClick={() => onQuery(OPEN_QUERY)}>

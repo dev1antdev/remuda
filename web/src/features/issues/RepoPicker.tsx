@@ -44,7 +44,6 @@ export default function RepoPicker({ repo, picked, machine, following, recent, r
         <Icon name="search" size={14} />
         <input
           autoFocus
-          className="bare"
           value={filter}
           placeholder={t("Search repositories")}
           aria-label={t("Search repositories")}

@@ -14293,38 +14293,20 @@ textarea.screen-term-field {
   line-height: 1.4;
 }
 
+/* the search is a field of the design system's own, its icon beside it as the palette's is */
 .issue-search {
   display: flex;
   flex: 1 1 240px;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  height: var(--ctl-sm);
-  padding: 0 6px 0 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-md);
-  background: var(--bg-input);
-  color: var(--fg-dim);
-}
-
-.issue-search:focus-within {
-  border-color: var(--accent-ring);
+  color: var(--fg-faint);
 }
 
 .issue-search input,
 .issue-repos-filter input {
   flex: 1;
   min-width: 0;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-  color: var(--fg);
-}
-
-.issue-search input {
-  font: var(--fs-13) / 1.4 var(--mono);
 }
 
 .issue-table {
@@ -14788,10 +14770,9 @@ textarea.screen-term-field {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
-  padding: 0 12px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--line);
-  color: var(--fg-dim);
+  color: var(--fg-faint);
 }
 
 .issue-repos-list {

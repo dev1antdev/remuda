@@ -1183,6 +1183,14 @@ async function issueScreens() {
     },
     expect: [rows, ".issues-panel .issue-search input", ".issues-panel .issue-repo-btn"],
   });
+  await screen("issues-repos", {
+    open: async () => {
+      await openIssues();
+      await tap(".issues-panel .issue-repo-btn");
+      if (!(await until(async () => (await count(".popover.issue-repos .issue-repos-row")) === 2, 4))) failed(`the repository picker offers ${await count(".popover.issue-repos .issue-repos-row")} rows, not Follow the pane and acme/widgets`);
+    },
+    expect: [".popover.issue-repos input", ".popover.issue-repos .issue-repos-heading"],
+  });
   await screen("issues-filters", {
     open: async () => {
       await openIssues();
