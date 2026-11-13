@@ -106,6 +106,15 @@ func cleanEnv() []string {
 	return out
 }
 
+// StartServerScriptOn is StartServerScript for a machine's system: on Windows the server is started outside the ssh
+// session (StartWindowsServerScript), elsewhere as StartServerScript does.
+func StartServerScriptOn(system, bin, socket string) string {
+	if system == "windows" {
+		return StartWindowsServerScript(bin, socket)
+	}
+	return StartServerScript(bin, socket)
+}
+
 // StartServerScript is the same start as a POSIX script over ssh: unless a server runs, start one and wait for it.
 func StartServerScript(bin, socket string) string {
 	q := script.Quote(bin)

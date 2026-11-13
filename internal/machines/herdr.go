@@ -53,7 +53,7 @@ func (mc *Machine) StartServer() error {
 	mc.mu.Lock()
 	mc.serverStart = time.Now()
 	mc.mu.Unlock()
-	_, err = conn.Run(herdr.StartServerScript(bin, sock), 25*time.Second)
+	_, err = conn.Run(herdr.StartServerScriptOn(mc.OS(), bin, sock), 25*time.Second)
 	return err
 }
 

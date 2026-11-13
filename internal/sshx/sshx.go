@@ -133,10 +133,21 @@ func (c *Conn) listening() bool {
 	return c.Alive()
 }
 
+// RemoteCommand is the command line a script travels as: through sh, since the remote login shell may be anything —
+// zsh, fish, or on a Windows machine Git Bash, which Windows' OpenSSH hands the line to as it is (its quotes kept).
+func RemoteCommand(command string) string {
+	return "sh -c " + script.Quote(command)
+}
+
+// CommandConn starts the command and exposes its stdin and stdout as a net.Conn that the deadline ends: the way an
+// exec over ssh (nc -U, remuda bridge) carries herdr's RPC.
+func CommandConn(cmd *exec.Cmd, timeout time.Duration) (net.Conn, error) {
+	return newCmdConn(cmd, timeout)
+}
+
 // run executes a remote command over the master with a deadline, stdin streamed to it when given.
 func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]byte, error) {
-	// every script here is POSIX sh; the remote login shell may be anything
-	cmd := c.session(c.Host, "sh -c "+script.Quote(command))
+	cmd := c.session(c.Host, RemoteCommand(command))
 	var out, errb bytes.Buffer
 	cmd.Stdin = stdin
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -164,7 +175,7 @@ func (c *Conn) run(command string, timeout time.Duration, stdin io.Reader) ([]by
 
 // Stream runs a remote command, handing sink its output (stdout and stderr) as it comes; the exit status is the error.
 func (c *Conn) Stream(command string, timeout time.Duration, sink func([]byte)) error {
-	cmd := c.session(c.Host, "sh -c "+script.Quote("exec 2>&1; "+command))
+	cmd := c.session(c.Host, RemoteCommand("exec 2>&1; "+command))
 	pr, pw := io.Pipe()
 	cmd.Stdout, cmd.Stderr = pw, pw
 	if err := cmd.Start(); err != nil {

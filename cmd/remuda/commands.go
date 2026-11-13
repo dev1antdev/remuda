@@ -30,6 +30,7 @@ var commands = map[string]func(args []string){
 	"statusline": statuslineCmd,
 	"backup":     backupCmd,
 	"restore":    restoreCmd,
+	"bridge":     bridgeCmd,
 }
 
 // searchCmd is the scanner a remote machine's remuda runs for the search lens.
