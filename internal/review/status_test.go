@@ -102,7 +102,7 @@ func TestTheSummaryListsTheCommitsNotOnTheRemote(t *testing.T) {
 		t.Fatalf("outgoing: %+v", out)
 	}
 	other := t.TempDir()
-	for _, args := range [][]string{{"clone", "-q", origin, other}, {"-C", other, "-c", "user.email=o@o", "-c", "user.name=o", "commit", "-q", "--allow-empty", "-m", "elsewhere"}, {"-C", other, "push", "-q"}} {
+	for _, args := range [][]string{{"clone", "-q", "-b", "main", origin, other}, {"-C", other, "-c", "user.email=o@o", "-c", "user.name=o", "commit", "-q", "--allow-empty", "-m", "elsewhere"}, {"-C", other, "push", "-q"}} {
 		if output, err := exec.Command("git", args...).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v %s", args, err, output)
 		}
