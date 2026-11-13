@@ -10,6 +10,7 @@ import { t, tn } from "@/lib/i18n";
 import { Icon, Notice } from "@/ui";
 import { fetchFiles, type Detail, type PRFile } from "./api";
 import { filesURL } from "./links";
+import { problemWords } from "./model";
 import { fileTotals, fileTree } from "./tree";
 import Patch from "./Patch";
 
@@ -21,6 +22,7 @@ export default function Files({ at, pr }: { at: PRAt; pr: Detail }) {
   const [picked, setPicked] = useState("");
   if (files.loading) return <p className="pr-empty">{t("Reading the files…")}</p>;
   if (files.error) return <Notice tone="error">{files.error}</Notice>;
+  if (files.data?.problem) return <Notice tone="error">{problemWords(files.data.problem)}</Notice>;
   const list = files.data?.files ?? [];
   if (list.length === 0) return <p className="pr-empty">{t("No file changed.")}</p>;
   const totals = fileTotals(list);

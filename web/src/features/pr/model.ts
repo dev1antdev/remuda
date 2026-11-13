@@ -4,7 +4,7 @@
 
 import type { IconName } from "@/ui/icons";
 import { t, tn } from "@/lib/i18n";
-import type { Card, Check, Detail } from "./api";
+import type { Card, Check, Detail, Problem } from "./api";
 
 // Tone is how a figure or a state is coloured: red, amber, green, the quiet colour, or nothing to say
 export type Tone = "bad" | "warn" | "good" | "dim" | "none";
@@ -199,6 +199,11 @@ export function splitMessage(text: string): { subject: string; body: string } {
   const trimmed = text.trim();
   const nl = trimmed.indexOf("\n");
   return nl < 0 ? { subject: trimmed, body: "" } : { subject: trimmed.slice(0, nl).trim(), body: trimmed.slice(nl + 1).trim() };
+}
+
+// problemWords is a gh that cannot be used on the machine, in one sentence
+export function problemWords(p: Problem): string {
+  return p.kind === "missing" ? t("The GitHub CLI is not installed on {machine}", { machine: p.machine }) : t("The GitHub CLI is not signed in on {machine}", { machine: p.machine });
 }
 
 // searchText is what the Repo list sends: three characters at least, or a number, any length; "" sends nothing new

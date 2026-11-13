@@ -12257,7 +12257,8 @@ button.pr-line:hover {
   }
 
   .pr-tabs button {
-    padding: 0 7px;
+    gap: 4px;
+    padding: 0 5px;
     font-size: var(--fs-12);
   }
 }

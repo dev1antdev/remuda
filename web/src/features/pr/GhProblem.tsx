@@ -6,6 +6,7 @@ import { t } from "@/lib/i18n";
 import { actions } from "@/app/store";
 import { Icon, Tip } from "@/ui";
 import type { Problem } from "./api";
+import { problemWords } from "./model";
 
 export default function GhProblem({ problem, busy, onRetry }: { problem: Problem; busy: boolean; onRetry: () => void }) {
   const missing = problem.kind === "missing";
@@ -13,7 +14,7 @@ export default function GhProblem({ problem, busy, onRetry }: { problem: Problem
   return (
     <div className="pr-problem">
       <Icon name="git-pull-request" size={20} />
-      <b>{missing ? t("The GitHub CLI is not installed on {machine}", { machine: problem.machine }) : t("The GitHub CLI is not signed in on {machine}", { machine: problem.machine })}</b>
+      <b>{problemWords(problem)}</b>
       <p className="modal-hint">{missing ? t("The panel reads and writes GitHub through gh, as you. Install it there, sign in, then try again.") : t("The panel uses gh's sign-in. Run this in a terminal on that machine, then try again.")}</p>
       <div className="pr-command">
         <code>{problem.command}</code>

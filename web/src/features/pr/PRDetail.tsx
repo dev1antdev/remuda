@@ -12,6 +12,7 @@ import { fetchDetail, type Detail } from "./api";
 import { actionLabel, actions as actionsOf, checkCounts, kindIcon, kindTone, prLook, stats, type Action, type Section } from "./model";
 import { entries } from "./conversation";
 import ConfirmCard from "./ConfirmCard";
+import GhProblem from "./GhProblem";
 import Overview from "./Overview";
 import Comments from "./Comments";
 import Checks from "./Checks";
@@ -35,6 +36,13 @@ export default function PRDetail({ at, repo, number, stamp, onBack, onClose }: {
       <div className="pr-detail">
         {back}
         <Notice tone="error">{detail.error}</Notice>
+      </div>
+    );
+  if (pr?.problem)
+    return (
+      <div className="pr-detail">
+        {back}
+        <GhProblem problem={pr.problem} busy={detail.fetching} onRetry={detail.reload} />
       </div>
     );
   if (!pr)

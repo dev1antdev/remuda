@@ -16,7 +16,7 @@ import { took } from "@/lib/time";
 import { t } from "@/lib/i18n";
 import { Icon, Menu, Notice, Tip, type MenuItem } from "@/ui";
 import { fetchJob, fetchLog, fixCheck, type Check, type Detail } from "./api";
-import { checkGroups, kindIcon, kindOf, kindTone, kindWords, type CheckKind } from "./model";
+import { checkGroups, kindIcon, kindOf, kindTone, kindWords, problemWords, type CheckKind } from "./model";
 import { agentsOn } from "./tree";
 
 const seconds = (from?: string, to?: string) => (from && to ? Math.max(0, (Date.parse(to) - Date.parse(from)) / 1000) : null);
@@ -87,7 +87,8 @@ function CheckBody({ at, pr, check }: { at: PRAt; pr: Detail; check: Check }) {
       {!check.job && <p className="pr-empty">{t("Its steps are not GitHub Actions'; its page has them.")}</p>}
       {check.job && job.loading && <p className="pr-empty">{t("Reading the job's steps…")}</p>}
       {job.error && <Notice tone="error">{job.error}</Notice>}
-      {job.data?.steps.map((s) => {
+      {job.data?.problem && <Notice tone="error">{problemWords(job.data.problem)}</Notice>}
+      {job.data?.steps?.map((s) => {
         const time = seconds(s.started_at, s.completed_at);
         return (
           <div key={s.number} className="pr-step">
@@ -110,6 +111,7 @@ function FailedLog({ at, pr, job }: { at: PRAt; pr: Detail; job: number }) {
   const log = useQuery(() => fetchLog(at.machineId, pr.repository, job), [at.machineId, pr.repository, job]);
   if (log.loading) return <p className="pr-empty">{t("Reading the failed steps' output…")}</p>;
   if (log.error) return <Notice tone="error">{log.error}</Notice>;
+  if (log.data?.problem) return <Notice tone="error">{problemWords(log.data.problem)}</Notice>;
   return (
     <>
       {log.data?.cut && <p className="pr-empty">{t("The end of the output:")}</p>}
