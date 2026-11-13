@@ -75,6 +75,19 @@ describe("a push", () => {
     await sw.push({ ...alert, actions: [{ action: "choice-0", title: "Yes" }], choices: ["Yes", "No"], dialog: "the-bash-dialog" });
     expect(sw.shown).toMatchObject([{ options: { data: { machine: "local", pane: "w1:p1", choices: ["Yes", "No"], dialog: "the-bash-dialog" } } }]);
   });
+  it("closes first the notifications it names as no longer standing, and never the one it brings", async () => {
+    const sw = worker({ ok: true, status: 200 });
+    const asked = { ...alert, tag: "local|w1:p1|input|1800000000000" };
+    const elsewhere = { ...alert, tag: "local|w2:p1|input|1800000000500", pane: "w2:p1" };
+    await sw.push(asked);
+    await sw.push(elsewhere);
+    await sw.push({ ...alert, kind: "done", title: "api finished", tag: "local|w1:p1|done|1800000060000", withdraw: [asked.tag, "local|w1:p1|done|1800000060000", 42] });
+    expect(sw.shown.map((shown) => [shown.options.tag, shown.closed])).toEqual([
+      [asked.tag, true],
+      [elsewhere.tag, false],
+      ["local|w1:p1|done|1800000060000", false],
+    ]);
+  });
   it("keeps a test push even over a focused window: it is what the person asked to see", async () => {
     const posted: unknown[] = [];
     const sw = worker({ ok: true, status: 200 }, [page("visible", true, posted)]);

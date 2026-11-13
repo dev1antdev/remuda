@@ -18,7 +18,7 @@ import { leftAfterSend } from "./history";
 import { useHistory } from "./useHistory";
 import { applyPick, listFor, stillDismissed, tokenAt, type Dismissed, type Item } from "./complete";
 import { CompletionList, useCompletion } from "./Completion";
-import { ModeChip } from "./ModeChip";
+import { ModeChip, type ScreenMode } from "./ModeChip";
 import { addNote, numbered, queueKey, removeNote, sentAway, type QueuedNote } from "./queue";
 import { QueueList } from "./QueueList";
 import { withQuote } from "./quote";
@@ -27,7 +27,7 @@ import { t } from "@/lib/i18n";
 const NO_NOTES: QueuedNote[] = [];
 const noteId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-export default function Composer({ machineId, paneId, working, dir, agent = "", compact = false, bare = false, onScreen = true, quote, fill, placeholder }: {
+export default function Composer({ machineId, paneId, working, dir, agent = "", compact = false, bare = false, quote, fill, placeholder, screen }: {
   machineId: string;
   paneId: string;
   working: boolean;
@@ -35,10 +35,10 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
   agent?: string;
   compact?: boolean;
   bare?: boolean; // no attachments, no permission mode
-  onScreen?: boolean;
   quote?: { text: string; n: number }; // a quote of the answer to put in the box; n moves with every new one
   fill?: { text: string; n: number }; // a text to put in the box in place of what is there, the caret after it; n moves with every new one
   placeholder?: string;
+  screen?: ScreenMode; // the chat's read of the pane's screen, for the permission mode chip of a Claude Code pane
 }) {
   // the insertions read the draft through a ref: a state updater must stay free of side effects
   const [draft, setDraftState] = useState("");
@@ -264,7 +264,7 @@ export default function Composer({ machineId, paneId, working, dir, agent = "", 
         />
         {!compact && (
           <>
-            {agent === "claude" && !bare && <ModeChip machineId={machineId} paneId={paneId} active={onScreen} />}
+            {agent === "claude" && !bare && screen && <ModeChip machineId={machineId} paneId={paneId} screen={screen} />}
             {!bare && (
               <Tip text={t("Attach files (up to {n}): they are uploaded into the pane's folder", { n: MAX_ATTACHMENTS })}>
                 <button type="button" className="icon-btn lg composer-attach" aria-label={t("Attach files")} disabled={att.items.length >= MAX_ATTACHMENTS} onClick={() => picker.current?.click()}>

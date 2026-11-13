@@ -75,13 +75,16 @@ func TestMatchNamesTheDeepestWorkspace(t *testing.T) {
 	if got[3000] != "w1" || got[5173] != "w2" || got[8000] != "" || got[9100] != "w1" {
 		t.Fatalf("workspaces %v", got)
 	}
-	real := Match([]Listener{{Port: 1, Dir: "/private/tmp/e2e/app"}, {Port: 2, Dir: "/private/etc/x"}}, map[string]string{"w1": "/tmp/e2e/app", "w2": "/etc"})
-	if real[0].Workspace != "w1" || real[1].Workspace != "" {
-		t.Fatalf("a Mac's real /private/tmp path: %+v", real)
+	real := Match([]Listener{{Port: 1, Dir: "/private/tmp/e2e/app"}, {Port: 2, Dir: "/private/etc/x"}, {Port: 3, Dir: "/tmp/e2e/notes"}}, map[string]string{"w1": "/tmp/e2e/app", "w2": "/etc", "w3": "/private/tmp/e2e/notes"})
+	if real[0].Workspace != "w1" || real[1].Workspace != "" || real[2].Workspace != "w3" {
+		t.Fatalf("a Mac's real /private/tmp path, on either side: %+v", real)
 	}
 }
 
-func TestTheScriptFindsAServerRunningHere(t *testing.T) {
+// serveHere starts python3's http.server in a folder of its own on a free loopback port, skipping the test where
+// neither python3 nor a way to list the ports is here
+func serveHere(t *testing.T) (port, pid int, dir string) {
+	t.Helper()
 	python, err := exec.LookPath("python3")
 	if err != nil {
 		t.Skip("no python3")
@@ -91,7 +94,7 @@ func TestTheScriptFindsAServerRunningHere(t *testing.T) {
 	if lsofErr != nil && ssErr != nil {
 		t.Skip("neither lsof nor ss")
 	}
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err = filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,14 +102,14 @@ func TestTheScriptFindsAServerRunningHere(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	port := probe.Addr().(*net.TCPAddr).Port
+	port = probe.Addr().(*net.TCPAddr).Port
 	probe.Close()
 	server := exec.Command(python, "-m", "http.server", strconv.Itoa(port), "--bind", "127.0.0.1")
 	server.Dir = dir
 	if err := server.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = server.Process.Kill(); _ = server.Wait() }()
+	t.Cleanup(func() { _ = server.Process.Kill(); _ = server.Wait() })
 	for i := 0; i < 50; i++ {
 		if c, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(port)); err == nil {
 			c.Close()
@@ -114,13 +117,18 @@ func TestTheScriptFindsAServerRunningHere(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+	return port, server.Process.Pid, dir
+}
+
+func TestTheScriptFindsAServerRunningHere(t *testing.T) {
+	port, pid, dir := serveHere(t)
 	list, err := Find(shell.Local{Name: "local"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, l := range list {
 		if l.Port == port {
-			if l.Dir != dir || l.Label != "http.server" || l.Dial != "127.0.0.1" || l.PID != server.Process.Pid {
+			if l.Dir != dir || l.Label != "http.server" || l.Dial != "127.0.0.1" || l.PID != pid {
 				t.Fatalf("found %+v, want the folder %s", l, dir)
 			}
 			return

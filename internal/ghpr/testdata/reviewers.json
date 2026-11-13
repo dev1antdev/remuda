@@ -1,0 +1,1 @@
+{"data":{"repository":{"pullRequest":{"reviewRequests":{"nodes":[{"requestedReviewer":{"__typename":"User","login":"lee"}},{"requestedReviewer":{"__typename":"Team","combinedSlug":"octo/mobile"}}]},"latestOpinionatedReviews":{"nodes":[{"state":"CHANGES_REQUESTED","author":{"login":"priya"}},{"state":"APPROVED","author":{"login":"noor"}}]}}}}}

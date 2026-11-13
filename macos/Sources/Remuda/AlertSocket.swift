@@ -1,8 +1,10 @@
 import Foundation
 
 // AlertSocket is the app as a device of remuda's push service: registered with /api/push/socket, then every alert
-// the phone would get arrives over /ws/alerts; the socket comes back by itself with a growing pause. Every callback
-// of the session lands on the main queue, so the task, the backoff and the stop flag are only ever touched there.
+// the phone would get arrives over /ws/alerts, and — asked for with withdraw=1 — the tags of the ones that no longer
+// stand, a question answered elsewhere or a finish looked at, so they come down; the socket comes back by itself with
+// a growing pause. Every callback of the session lands on the main queue, so the task, the backoff and the stop flag
+// are only ever touched there.
 final class AlertSocket {
     private static let endpointKey = "alerts.endpoint"
     private let server: Server
@@ -15,6 +17,7 @@ final class AlertSocket {
     private var minted: String?
     private var prefs: [String: Any]? // the page's alert switches and quiet hours, which the server sends this device by
     var onAlert: ((Alert, String) -> Void)?
+    var onWithdraw: (([String]) -> Void)?
     var onState: ((String, String) -> Void)?
 
     // init: the app remembers its device between launches so its prefs stay; a probe keeps its own for the run only.
@@ -113,7 +116,7 @@ final class AlertSocket {
     private func connect() {
         guard !stopped else { return }
         guard let endpoint else { return retry() }
-        var request = URLRequest(url: server.socketURL("/ws/alerts", query: [URLQueryItem(name: "endpoint", value: endpoint)]))
+        var request = URLRequest(url: server.socketURL("/ws/alerts", query: [URLQueryItem(name: "endpoint", value: endpoint), URLQueryItem(name: "withdraw", value: "1")]))
         request.setValue("Bearer " + server.token, forHTTPHeaderField: "Authorization")
         let socket = session.webSocketTask(with: request)
         task = socket
@@ -145,8 +148,15 @@ final class AlertSocket {
         }
     }
 
+    // heard is one frame: the tags of alerts taken back, or an alert.
     private func heard(_ text: String) {
-        guard let alert = Alert(json: Data(text.utf8)) else { return }
+        let data = Data(text.utf8)
+        if let frame = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], frame["type"] as? String == "withdraw" {
+            let tags = frame["tags"] as? [String] ?? []
+            DispatchQueue.main.async { self.onWithdraw?(tags) }
+            return
+        }
+        guard let alert = Alert(json: data) else { return }
         DispatchQueue.main.async { self.onAlert?(alert, text) }
     }
 

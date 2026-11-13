@@ -2,9 +2,11 @@
 // remuda ever deletes from a repository, and only when asked: once the work's pull request is merged, when the
 // workspace on a worktree herdr or remuda made is closed (Tidy, tidy.go), or for an arena's lanes the person did not keep. A look first (Inspect) refuses a worktree with uncommitted changes before anything is
 // closed; the removal (Remove) never passes --force to git, and deletes a branch that git does not see as merged only
-// when the caller says the request was. Discard is the one exception, an arena's losing lane: its work saved as a
-// patch by the caller first, after a confirm that says so, then git's --force and -D.
-// A worktree remuda makes gets the ignored files its repository's .worktreeinclude lists (Include, include.go).
+// when the caller says the request was. Discard is one exception, an arena's losing lane: its work saved as a
+// patch by the caller first, after a confirm that says so, then git's --force and -D; the remove dialog's removal is
+// the other (RemoveAsShown, removal.go): --force past exactly what the person was shown and confirmed.
+// A worktree remuda makes gets the ignored files its repository's .worktreeinclude lists (Include, include.go), and is
+// made the way the New worktree dialog asks (create.go), its setup script run in its terminal (setup.go).
 package worktrees
 
 import (

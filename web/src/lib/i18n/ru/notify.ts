@@ -40,7 +40,6 @@ export const notify: Dictionary = {
   "not asked yet": "ещё не спрашивали",
   "no notifications here": "уведомлений здесь нет",
   "While this page is in front, every alert below shows in its corner as well.": "Пока эта страница на переднем плане, каждое уведомление ниже показывается и в её углу.",
-  "A chime": "Звук",
   "with an alert shown on the page": "при уведомлении на странице",
   "Every finish 10 s after it; or only turns that worked a minute or more, a minute after.": "Каждое завершение — через 10 с; или только ходы дольше минуты — через минуту.",
   "every finish": "каждое завершение",

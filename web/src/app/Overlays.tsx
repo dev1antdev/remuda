@@ -2,9 +2,14 @@
 // panels (the palette, search, alerts, schedules, usage, the release install) and the file viewer. Each reads what it
 // needs from the store and closes itself through the actions.
 
-import { addMachine, createSession, createTab, createWorktree, renameMachine, renameSession, renameTab, type Created } from "@/features/roster/api";
+import { addMachine, createSession, createTab, renameMachine, renameSession, renameTab, type Created } from "@/features/roster/api";
+import NewWorktreeDialog from "@/features/roster/worktree/NewWorktreeDialog";
+import RemoveWorktreeDialog from "@/features/roster/worktree/RemoveWorktreeDialog";
+import { madeWords } from "@/features/roster/worktree/made";
+import ProjectSettingsDialog from "@/features/roster/project/ProjectSettingsDialog";
 import IconDialog from "@/features/icons/IconDialog";
 import LeftoversDialog from "@/features/roster/LeftoversDialog";
+import NoteDialog from "@/features/roster/NoteDialog";
 import PreviewsDialog from "@/features/preview/PreviewsDialog";
 import TriggersDialog from "@/features/triggers/TriggersDialog";
 import ServerPanel from "@/features/roster/ServerPanel";
@@ -14,9 +19,10 @@ import ReopenDialog from "@/features/reopen/ReopenDialog";
 import ResumeDialog from "@/features/sleep/ResumeDialog";
 import ArenaDialog from "@/features/arena/ArenaDialog";
 import ArenaPanel from "@/features/arena/ArenaPanel";
+import PRPanel from "@/features/pr/PRPanel";
 import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
-import { AddMachineDialog, NewTabDialog, NewWorkspaceDialog, NewWorktreeDialog, RenameDialog, RenameMachineDialog } from "@/features/roster/dialogs";
+import { AddMachineDialog, NewTabDialog, NewWorkspaceDialog, RenameDialog, RenameMachineDialog } from "@/features/roster/dialogs";
 import Activity from "@/features/activity/Activity";
 import BroadcastDialog from "@/features/agents/BroadcastDialog";
 import PinsDialog from "@/features/chat/PinsDialog";
@@ -68,6 +74,8 @@ export default function Overlays() {
   const panes = useAllPanes();
   const leftoversOn = dialog?.kind === "leftovers" ? machines.find((m) => m.id === dialog.machineId) : undefined;
   const previewsOn = dialog?.kind === "previews" ? machines.find((m) => m.id === dialog.machineId) : undefined;
+  const worktreeOn = dialog?.kind === "worktree" ? machines.find((m) => m.id === dialog.machineId) : undefined;
+  const removeOn = dialog?.kind === "remove-worktree" ? machines.find((m) => m.id === dialog.machineId) : undefined;
 
   // the dialog closes even on a warning: the container exists although its agent did not start, and a second submit would make another
   const landOn = async (machineId: string, made: Created) => {
@@ -111,6 +119,7 @@ export default function Overlays() {
       {panel === "standup" && <Standup onClose={actions.closePanel} />}
       {panel === "arena" && <ArenaPanel onClose={actions.closePanel} />}
       {panel === "concierge" && !viewOnly && <Concierge onClose={actions.closePanel} />}
+      {panel === "pr" && !viewOnly && <PRPanel onClose={actions.closePanel} />}
       {panel === "usage" && (
         <Usage machines={machines} onClose={actions.closePanel} onOpenSession={(machine, project, session, dir) => openHit({ machine, project, session, dir, uuid: "", ts: "", role: "assistant", snippet: "" })} />
       )}
@@ -138,6 +147,7 @@ export default function Overlays() {
         />
       )}
       {dialog?.kind === "folder-icon" && <IconDialog machineId={dialog.machineId} folder={dialog.folder} name={dialog.name} icon={dialog.icon} onClose={actions.closeDialog} />}
+      {dialog?.kind === "note" && !viewOnly && <NoteDialog machineId={dialog.machineId} dir={dialog.dir} name={dialog.name} text={dialog.text} onClose={actions.closeDialog} />}
       {leftoversOn && <LeftoversDialog machine={leftoversOn} onClose={actions.closeDialog} />}
       {dialog?.kind === "triggers" && <TriggersDialog machineId={dialog.machineId} dir={dialog.dir} workspace={dialog.workspace} name={dialog.name} onClose={actions.closeDialog} />}
       {previewsOn && dialog?.kind === "previews" && (
@@ -165,17 +175,32 @@ export default function Overlays() {
           onCreate={async (name, agent, extras) => landOn(dialog.machineId, await createTab({ machine: dialog.machineId, workspace: dialog.session.id, name, agent, ...extras }))}
         />
       )}
-      {dialog?.kind === "worktree" && (
+      {dialog?.kind === "worktree" && worktreeOn && (
         <NewWorktreeDialog
+          machine={worktreeOn}
           session={dialog.session}
-          machine={dialog.machineId}
           agents={agents}
           onClose={actions.closeDialog}
-          onCreate={async (branch, base, name, agent, extras) =>
-            landOn(dialog.machineId, await createWorktree({ machine: dialog.machineId, workspace: dialog.session.id, branch, base, name, agent, ...extras }))
-          }
+          onMade={(made) => {
+            actions.closeDialog();
+            refresh();
+            if (made.pane) actions.selectPane(worktreeOn.id, made.pane);
+            for (const text of madeWords(made)) actions.notify(text, { error: !!made.warning && text === made.warning });
+          }}
         />
       )}
+      {dialog?.kind === "remove-worktree" && removeOn && (
+        <RemoveWorktreeDialog
+          machine={removeOn}
+          session={dialog.session}
+          onClose={actions.closeDialog}
+          onDone={() => {
+            actions.closeDialog();
+            refresh();
+          }}
+        />
+      )}
+      {dialog?.kind === "project-settings" && <ProjectSettingsDialog machineId={dialog.machineId} root={dialog.root} onClose={actions.closeDialog} />}
       {dialog?.kind === "renameMachine" && (
         <RenameMachineDialog
           machine={dialog.machine}

@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,5 +98,23 @@ func TestAViewerReadsFilesInTheWorkspacesOnly(t *testing.T) {
 		if code, body := fileCall(h, path, true); code != http.StatusForbidden || strings.Contains(body, token) {
 			t.Fatalf("a viewer at %s: %d %q", path, code, body)
 		}
+	}
+}
+
+func TestTheTreeListsAFolderAndAViewerOnlyTheWorkspaces(t *testing.T) {
+	h := fileServer(t)
+	state := t.TempDir()
+	if err := os.WriteFile(filepath.Join(state, "token"), []byte("t\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	listed := "/api/fs/tree?dir=" + url.QueryEscape(state)
+	if code, body := fileCall(h, listed, false); code != 200 || !strings.Contains(body, `"name":"token"`) {
+		t.Fatalf("the person lists the folder: %d %q", code, body)
+	}
+	if code, body := fileCall(h, listed, true); code != http.StatusForbidden || strings.Contains(body, `"name"`) {
+		t.Fatalf("a viewer lists a folder outside the workspaces: %d %q", code, body)
+	}
+	if code, _ := fileCall(h, listed+"&path=..", false); code != 400 {
+		t.Fatalf("a path climbing out answered %d", code)
 	}
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/jira"
 	"github.com/dev1antdev/remuda/internal/limits"
 	"github.com/dev1antdev/remuda/internal/machines"
+	"github.com/dev1antdev/remuda/internal/ports"
 	"github.com/dev1antdev/remuda/internal/prstatus"
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/restart"
@@ -53,16 +54,19 @@ type rosterPane struct {
 	PR    *rosterPR      `json:"pr,omitempty"`   // the last pull or merge request the agent named
 	// a subscription limit the agent stopped on, and the person's booking to continue it after the reset
 	Limit *limits.PaneLimit `json:"limit,omitempty"`
-	// how many of its live conversation's subagents work, for the Wall's zoo; nil for none
+	// how many of its live conversation's subagents work and the first of them by name, for the zoo and the sidebar; nil for none
 	Subagents *subagents.Count `json:"subagents,omitempty"`
 	// a dev server the pane announced and the previews found listening, offered as a preview
 	Serves *triggers.Offer `json:"serves,omitempty"`
 }
 
-// rosterPR is the request the agent named and, once gh on the machine read it, how it stands.
+// rosterPR is the request the agent named and, once gh on the machine read it, how it stands; whether a read is under
+// way and why the last one failed, so a hover card says how fresh the status is.
 type rosterPR struct {
 	transcript.Link
-	Status *prstatus.Status `json:"status,omitempty"`
+	Status  *prstatus.Status `json:"status,omitempty"`
+	Reading bool             `json:"reading,omitempty"`
+	Error   string           `json:"error,omitempty"`
 }
 
 type rosterTab struct {
@@ -96,8 +100,10 @@ type rosterSession struct {
 	Worktree    *rosterWorktree `json:"worktree,omitempty"`
 	Dir         string          `json:"dir,omitempty"`
 	Branch      string          `json:"branch,omitempty"` // the branch the folder has checked out, read with the review badges
+	Sync        *review.Sync    `json:"sync,omitempty"`   // that branch against its upstream as of the last fetch; none without an upstream
 	Folder      string          `json:"folder,omitempty"` // the folder the sidebar groups by: the repository's main checkout, else the workspace's own
 	Icon        *icons.Icon     `json:"icon,omitempty"`   // the folder's icon, an emoji or a stored picture's hash
+	Note        string          `json:"note,omitempty"`   // the person's note on this checkout, kept after the workspace closes
 	Review      *rosterReview   `json:"review,omitempty"`
 	Jira        []jira.Issue    `json:"jira,omitempty"`        // the Jira issues its branch and its agents name, as last read from the person's site
 	MutedUntil  *time.Time      `json:"muted_until,omitempty"` // the folder is silenced until then: no push, no webhook, no feed row
@@ -105,6 +111,7 @@ type rosterSession struct {
 	// the other checkouts of its repository changing the same files against the main branch, the same lines first
 	Collisions []collisions.Collision `json:"collisions,omitempty"`
 	Concierge  bool                   `json:"concierge,omitempty"` // the concierge's own workspace: its place shows it, the sidebar, the wall and the pickers do not
+	Ports      []ports.Port           `json:"ports,omitempty"`     // the ports its processes listen on, as last read while a page looks
 	Asleep     *sleep.Status          `json:"asleep,omitempty"`    // put to sleep by the person: since when, and how many agents wait to be woken
 	Tabs       []rosterTab            `json:"tabs"`
 }
@@ -180,8 +187,8 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			entry.Said = s.Said.Line(machineID, pane.PaneID)
 			if link, ok := s.Said.Link(machineID, pane.PaneID); ok {
 				entry.PR = &rosterPR{Link: link}
-				if status, ok := s.PRs.Status(machineID, pane.PaneID); ok {
-					entry.PR.Status = &status
+				if seen, ok := s.PRs.Seen(machineID, pane.PaneID); ok {
+					entry.PR.Status, entry.PR.Reading, entry.PR.Error = seen.Status, seen.Reading, seen.Reason
 				}
 			}
 			if meter, ok := s.Usage.Display(machineID, pane.PaneID); ok {
@@ -251,8 +258,13 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 		}
 		if session.Dir != "" {
 			session.Branch = s.Review.Branch(machineID, session.Dir)
+			if sync, ok := s.Review.Sync(machineID, session.Dir); ok {
+				session.Sync = &sync
+			}
+			session.Note = s.Notes.Of(machineID, session.Dir)
 		}
 		session.Jira = s.issuesOf(machineID, session)
+		session.Ports = s.Ports.For(machineID, ws.WorkspaceID)
 		if session.Dir != "" {
 			session.Collisions = s.Collisions.For(machineID, session.Dir)
 			badge, ok := s.Review.Badge(machineID, session.Dir)
@@ -315,6 +327,7 @@ func (s *Server) handleRoster(w http.ResponseWriter, r *http.Request) {
 	s.PRs.Touch()       // somebody is looking: the pull requests named are worth reading again
 	s.Jira.Touch()      // and the Jira issues the workspaces name
 	s.Subagents.Touch() // and the subagents the conversations run
+	s.Ports.Touch()     // and the ports the workspaces' processes listen on
 	body, etag := s.rosterBody()
 	w.Header().Set("X-Remuda-Version", buildversion.Build) // a page older than the server offers a reload
 	if auth.IsViewer(r.Context()) {
@@ -388,6 +401,11 @@ func (s *Server) rosterBody() ([]byte, string) {
 	}
 	if s.Feed != nil {
 		roster["feed"] = s.Feed.LastID() // the newest activity entry: the bell knows there is news without asking
+	}
+	if s.Push != nil {
+		if tags := s.Push.Withdrawn(); len(tags) > 0 {
+			roster["withdrawn"] = tags // the notifications taken back within a day: every page closes them in its browser
+		}
 	}
 	if s.Tailscale != nil {
 		roster["tailscale"] = s.Tailscale()

@@ -1,0 +1,6 @@
+{"data":{"viewer":{"login":"sam"},"repository":{"nameWithOwner":"octo/trips","mergeCommitAllowed":true,"squashMergeAllowed":true,"rebaseMergeAllowed":false,"autoMergeAllowed":true,
+"pullRequest":{"id":"PR_kwDOAbc123","number":482,"title":"Save trips for offline use","url":"https://github.com/octo/trips/pull/482","body":"","state":"OPEN","isDraft":false,"headRefName":"offline-trips","baseRefName":"main","headRefOid":"0123456789abcdef0123456789abcdef01234567","changedFiles":3,"additions":120,"deletions":14,"author":{"login":"sam"},"reviewDecision":"CHANGES_REQUESTED","mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","autoMergeRequest":null,
+"comments":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"IC_2","body":"Second page","url":"u","createdAt":"2026-11-13T11:00:00Z","author":{"login":"lee"}}]},
+"reviews":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PRR_1","body":"again","url":"u","submittedAt":"2026-11-13T10:00:00Z","state":"CHANGES_REQUESTED","author":{"login":"priya"}}]},
+"reviewThreads":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]},
+"commits":{"nodes":[]}}}}}

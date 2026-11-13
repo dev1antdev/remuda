@@ -14,7 +14,9 @@ import (
 )
 
 // A socket device's alerts: the Mac app registers as a device that hears its alerts over a WebSocket instead of
-// Web Push, so the push service's rules, prefs, quiet hours and action buttons apply to it as to a phone.
+// Web Push, so the push service's rules, prefs, quiet hours and action buttons apply to it as to a phone. A
+// connection asking with withdraw=1 also hears which of its alerts no longer stand, the ones owed since it was away
+// first, so it takes them down.
 
 func (s *Server) alertRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/push/socket", s.handleSocketDevice)
@@ -39,7 +41,8 @@ func (s *Server) handleSocketDevice(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"endpoint": endpoint})
 }
 
-// handleAlertsWS streams a socket device's alerts as JSON text frames for as long as the connection stands.
+// handleAlertsWS streams a socket device's alerts — and, when it takes them, its withdrawals — as JSON text frames for
+// as long as the connection stands.
 func (s *Server) handleAlertsWS(w http.ResponseWriter, r *http.Request) {
 	endpoint := r.URL.Query().Get("endpoint")
 	if !s.Push.HasSocket(endpoint) {
@@ -55,10 +58,17 @@ func (s *Server) handleAlertsWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer c.CloseNow()
-	alerts, detach := s.Push.Sockets.Attach(endpoint)
+	withdraws := r.URL.Query().Get("withdraw") == "1"
+	alerts, detach := s.Push.Sockets.Attach(endpoint, withdraws)
 	defer detach()
 	ctx := r.Context()
 	c.SetReadLimit(16 << 10)
+	if owed := s.Push.OwedTo(endpoint); withdraws && len(owed) > 0 { // taken back while the device was away
+		body, _ := json.Marshal(push.Frame{Withdraw: owed})
+		if c.Write(ctx, websocket.MessageText, body) == nil {
+			s.Push.Settle(endpoint, owed)
+		}
+	}
 
 	// the writer is stopped by hand when the read loop ends: on a hijacked connection r.Context() lives until the handler returns
 	wctx, wcancel := context.WithCancel(ctx)
@@ -70,7 +80,7 @@ func (s *Server) handleAlertsWS(w http.ResponseWriter, r *http.Request) {
 		defer ping.Stop()
 		for {
 			select {
-			case p, ok := <-alerts:
+			case frame, ok := <-alerts:
 				if !ok {
 					if s.Push.Sockets.Closed() {
 						c.Close(websocket.StatusGoingAway, "remuda is stopping")
@@ -79,7 +89,7 @@ func (s *Server) handleAlertsWS(w http.ResponseWriter, r *http.Request) {
 					}
 					return
 				}
-				body, _ := json.Marshal(p)
+				body, _ := json.Marshal(frame)
 				if err := c.Write(wctx, websocket.MessageText, body); err != nil {
 					return
 				}

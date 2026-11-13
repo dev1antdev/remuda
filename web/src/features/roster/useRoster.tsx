@@ -26,6 +26,7 @@ export type RosterState = {
   host?: Machine; // the machine that serves the page, in the fleet or not: its own updates (a release) are offered on it
   retirements: Retirement[]; // the models and modes being retired, the server's table, for a form that edits a model
   offers?: string[]; // the plan limits' open offers by id: a card or schedule the limit held, to run on the other vendor
+  withdrawn?: string[]; // the tags of the notifications taken back within a day: this browser closes them where they show
   offline: boolean;
   stale: string | null; // the server's version when this page is older
   viewOnly: boolean; // a viewer link signed this page in: it draws, and hides every control that would type or change
@@ -74,6 +75,7 @@ export function RosterProvider({ children }: { children: ReactNode }) {
       jiraSite: data?.jira,
       retirements: data?.retirements ?? [],
       offers: data?.offers,
+      withdrawn: data?.withdrawn,
       offline: !!error,
       stale,
       viewOnly,

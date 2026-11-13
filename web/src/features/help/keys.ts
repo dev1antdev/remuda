@@ -23,6 +23,7 @@ function allGroups(mac: boolean): KeyGroup[] {
         { keys: [`${mod} K`], what: t("the command palette: any agent, any command") },
         { keys: ["?"], what: t("this sheet") },
         { keys: ["Alt N"], what: t("the next agent that needs you") },
+        { keys: ["Alt ]", "Alt ["], what: t("the next or previous agent in the sidebar's order, the pinned ones first") },
         { keys: ["Alt Z"], what: t("reopen an agent whose tab or workspace closed"), viewer: false },
         { keys: [mac ? "⌃ `" : "Ctrl `"], what: t("the floating terminal: a shell of its own over any screen, shown or hidden; from a terminal too"), viewer: false },
         { keys: ["Alt H"], what: t("screen-sharing mode: the folders and machines you marked read as neutral names") },

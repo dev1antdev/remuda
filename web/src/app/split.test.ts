@@ -7,10 +7,11 @@ describe("split view", () => {
     expect(canSplit(false, false)).toBe(false);
     expect(canSplit(true, true)).toBe(false);
   });
-  it("shows both sides only when asked, possible and not on the Changes lens", () => {
+  it("shows both sides only when asked, possible and not on the Changes or Git lens", () => {
     expect(splitOn(true, true, false, "chat")).toBe(true);
     expect(splitOn(true, true, false, "terminal")).toBe(true);
     expect(splitOn(true, true, false, "changes")).toBe(false);
+    expect(splitOn(true, true, false, "git")).toBe(false);
     expect(splitOn(false, true, false, "chat")).toBe(false);
     expect(splitOn(true, false, false, "chat")).toBe(false);
   });

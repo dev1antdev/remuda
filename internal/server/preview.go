@@ -19,9 +19,9 @@ func (s *Server) previewRoutes(api *http.ServeMux) {
 	api.HandleFunc("DELETE /api/previews", s.handlePreviewClose)
 }
 
-// previewSkip is the ports never offered: the cockpit's own, the door a remote machine's agents reach it by, a remuda's
+// PreviewSkip is the ports never offered: the cockpit's own, the door a remote machine's agents reach it by, a remuda's
 // usual one (a peer), the code-server's
-func (s *Server) previewSkip() map[int]bool {
+func (s *Server) PreviewSkip() map[int]bool {
 	skip := map[int]bool{7317: true, machines.DoorPort: true}
 	if s.Code != nil {
 		skip[s.Code.Port] = true
@@ -37,23 +37,11 @@ func (s *Server) listeners(mc *machines.Machine) ([]preview.Listener, error) {
 	if mc.Windows() {
 		return nil, errors.New(preview.NotOnWindows)
 	}
-	list, err := preview.Find(mc, s.previewSkip())
+	list, err := preview.Find(mc, s.PreviewSkip())
 	if err != nil {
 		return nil, err
 	}
-	folders := map[string]string{}
-	if snap, _ := s.Watch.Snapshot(mc.ID()); snap != nil {
-		for i := range snap.Workspaces {
-			ws := &snap.Workspaces[i]
-			if s.ownWorkspace(mc.ID(), ws.WorkspaceID) {
-				continue
-			}
-			if dir := snap.WorkspaceDir(ws); dir != "" {
-				folders[ws.WorkspaceID] = dir
-			}
-		}
-	}
-	return preview.Match(list, folders), nil
+	return preview.Match(list, s.previewFolders(mc.ID())), nil
 }
 
 // Listening says whether a process of the person's listens on the machine's port now — what the previews would offer —
