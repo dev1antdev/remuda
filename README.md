@@ -1277,9 +1277,17 @@ VAPID keys — the only third party is your browser vendor's push service.
 remuda watches every machine's agents itself, so alerts arrive with the
 app closed: *needs you* 10 s after an agent blocks on a question, *finished*
 after every turn or only the long ones, as you choose. Answer at the desk
-first and nothing is sent. While the page is in front the same alerts show
-in its corner, with Open and an optional chime, so you see them whatever
-the system's notification settings say. The alerts panel says what this
+first and nothing is sent, and a finish you were looking at in remuda is
+not sent either. **A notification takes itself back** once it no longer
+stands — the question answered at the desk or on another device, the
+finish looked at, the agent moved on: the Mac app removes it at once,
+every open page of remuda closes it in its browser, and a phone with the
+page closed has it closed by the next push it gets (a browser takes no
+silent push, so nothing else can reach it). While the page is in front the
+same alerts show in its corner, with Open and a sound of your choice — a
+chime, or a doorbell when an agent needs you and a short rising run when
+one finishes — so you see them whatever the system's notification
+settings say. The alerts panel says what this
 browser is and where it stands: notifications allowed or blocked (and
 where to allow them, in the browser and in macOS or Windows), whether it
 is subscribed to this cockpit, the last push sent and the last one

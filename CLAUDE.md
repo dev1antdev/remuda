@@ -2917,7 +2917,35 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   scheduler is the point: `blocked` alerts after 10s, `done` (only from
   `working`) after 60s for turns ≥ 60s or 10s with `done:"always"`; **any
   status change on the pane cancels its pending alerts** — answered at the
-  desk means no push. Delays are vars so `push_test.go` can shrink them.
+  desk means no push — and a finish looked at through remuda before its
+  push goes (`Service.Looked` = `radar.Tracker.Looked`: its chat, its
+  terminal, a seen mark; herdr's own focus does not count) is never
+  pushed. Delays are vars so `push_test.go` can shrink them.
+  **Notifications take themselves back** (`withdraw.go`, tested in
+  `withdraw_test.go`, after Orca's desktop-notifications): an alert's tag
+  names its episode — `machine|pane|kind|<moment it began>`, unix ms for
+  a question or a finish (`episodeTag`), the watchdog's own episode key
+  for its notes, so a reminder replaces its note and a later episode's
+  never — while `Payload.Topic` stays the pane's, so a newer push still
+  replaces an undelivered one at the push service. Every alert of a kind
+  `standsWhile` knows (input and waiting while blocked, done while done,
+  stuck and loop while working) is kept as standing with the devices it
+  reached (`deliver`: never one inside its quiet hours), the newest
+  `maxStanding` 500 for a day (`keepFor`); it is taken back
+  (`withdrawals.take`) when the pane's status leaves the one it told of
+  or the pane closes (`Service.moved`, first thing in `OnStatus`) and
+  when its finish is looked at (`Service.Seen`, heard from
+  `radar.Tracker.OnSeen`). Then a socket device that takes withdrawals
+  hears `{"type": "withdraw", "tags": [...]}` at once, else as it next
+  connects (`OwedTo` / `Settle`); a browser is owed the tags for a day,
+  the newest `maxOwed` 20 riding on every push it gets as
+  `Payload.Withdraw` (Web Push carries nothing silent, so there is no
+  withdraw push of its own); and the roster lists the day's withdrawals
+  as `withdrawn` (`Service.Withdrawn`, the newest `maxWithdrawn` 50) for
+  every page to close in its browser, `OnWithdraw` moving it. A tag
+  raised again after it was taken back (a task's "asks first" note, no
+  episode's) stands again, out of both lists. Nothing is kept on disk: a
+  restart forgets what stands.
   **Quiet hours** (`quiet.go`): a device's prefs may carry `quiet {from,
   to, tz}` — "HH:MM" by its own IANA zone, the zone database embedded so
   it loads on any host; `Normalize` drops a window that does not parse;
@@ -2965,9 +2993,25 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   rest `LINGER_MS` 15 s, an `input` alert whose pane was never seen asking
   (a first prompt not delivered) among them; under the screen-sharing mode a hidden folder's
   alert says "hidden while sharing" for its words, as an Activity row;
-  an optional chime, pref `alerts.sound`, off, silent inside the device's
-  quiet hours); the first roster only seeds, and neither the Mac app nor
-  a viewer link shows them. A window on screen without the focus gets the
+  and a sound, the device's pick in the panel's Sound row — none, a
+  chime for every alert, or, after Orchi's, a two-tone bell when an
+  agent needs you (a question, the watchdog's three) and a short rising
+  run when one finishes, the chime for the rest — at most one per
+  `SOUND_GAP_MS` 1.5 s, the most pressing of a burst, silent inside the
+  device's quiet hours: `features/alerts/sounds.ts` (tested on a
+  stand-in context: `choiceOf` — pref `alerts.sounds`, the old switch
+  `alerts.sound` read as the chime — `soundFor`, `due`, `notesOf` the
+  scores, `play` each partial an oscillator through its own gain),
+  `player.ts` (the audio context made or resumed inside a click or a
+  key, `armSounds` as the zoo's `armVoices`, `ring`, `preview` for the
+  row's play buttons, which are the gesture too), `SoundRow.tsx`,
+  `useSoundChoice.ts`); the first roster only seeds, and neither the Mac app nor
+  a viewer link shows them. **The notifications taken back come down here
+  too** (`withdraw.ts`, tested: `staleOf`; `useWithdrawn.ts` from Shell):
+  as the roster's `withdrawn` moves, and once as the page opens, the page
+  closes every notification shown under those tags through the service
+  worker's registration, so the morning's page clears the night's stale
+  questions; not in the Mac app or for a viewer. A window on screen without the focus gets the
   toast and the system's notification, the latter quiet. **The alerts panel tells the truth about this device**
   (`DeviceStatus.tsx` over `device.ts`, tested: `browserOf`, `systemOf`,
   `blockedHelp` per browser, `systemHelp` per system — macOS's System
@@ -3085,7 +3129,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   bell-off on the sidebar row and the wall tile's head with the time
   left in its tooltip.
 - `web/public/sw.js` shows every push (Safari, Firefox and Chrome take a
-  push that shows none for a silent one), quietly beside a visible window
+  push that shows none for a silent one), after closing the notifications
+  the push names in `withdraw` (the ones that no longer stand, see
+  `internal/push`; never its own tag), quietly beside a visible window
   and taken down again at once (`getNotifications({tag})`) when a window
   of ours has the focus, which shows the alert itself as a toast — never a
   test push, which stays; a window of ours is one on the page itself
@@ -3179,7 +3225,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   blink through idle within 2.5s of working is still working; **done is held
   until seen** (herdr focused the pane, or a client opened its terminal /
   chat, or `POST /api/seen` — a tile's tail, `GET /api/chat?last=N` on the
-  Wall or in the pop-out, is not a look) — and a seen finish stays seen until the agent works again, because herdr itself keeps reporting `done` for hours, until the pane is focused in herdr; **a question is held until the agent works
+  Wall or in the pop-out, is not a look; a look through remuda — `Seen`, never
+  herdr's focus — is `Looked` until the agent works again and tells
+  `OnSeen` as the tick comes down, for `internal/push` to take the finish's
+  notification back and push none) — and a seen finish stays seen until the agent works again, because herdr itself keeps reporting `done` for hours, until the pane is focused in herdr; **a question is held until the agent works
   again** (unless it never had worked — then the dialog simply closed);
   `last_active` is the last moment herdr said working, recovered for panes
   older than remuda from the session file's mtime (`chat.Service.LastWriteOf`:
@@ -3892,7 +3941,9 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   `watchdog_test.go` drives the rules without herdr. A note goes on the
   pane (`radar.SetAlert` → `pane.radar.alert`, an amber `!` in the
   sidebar, cleared when the state moves on) and one push per episode
-  (`push.Notify`, pref `watchdog`, default on) with a reminder every 30
+  (`push.Notify`, pref `watchdog`, default on, tagged with the episode's
+  key `machine|pane|kind|<since>` so it is taken back once the pane's
+  state moves on) with a reminder every 30
   min; the notification carries `actions` — Open, and **Send Esc**, which
   the service worker posts to `/api/keys` itself — refused or unreachable,
   it opens the page on the pane instead, as a choice does
@@ -5521,11 +5572,14 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   (the menu bar item: the mark with a tone dot and the count, the menu
   of agents that need the person, Open with the hotkey set, Wall, Tasks, Standup,
   Settings…, Quit), `Badge` (the Dock count), `AlertSocket` (the app as
-  a push device: `POST /api/push/socket` then `/ws/alerts`, reconnect
+  a push device: `POST /api/push/socket` then `/ws/alerts?withdraw=1`, reconnect
   1 s → 30 s, the endpoint kept per server address so going back to a
-  remuda finds its device and prefs again), `Notifier` (`UNUserNotificationCenter`: a category per
+  remuda finds its device and prefs again; a `{"type": "withdraw", tags}`
+  frame goes to `onWithdraw`), `Notifier` (`UNUserNotificationCenter`: a category per
   set of buttons and their words, so a question's buttons read its own
-  choices, the newest 32 kept, Esc → `/api/keys`, a choice → `/api/question/answer`, a plan
+  choices, the newest 32 kept, each notification under its tag as its
+  identifier and in a thread per agent (`machine|pane`), `withdraw(tags)`
+  removing the delivered and pending ones a withdrawal names, Esc → `/api/keys`, a choice → `/api/question/answer`, a plan
   limit's offer-run → `/api/limits/offers/{id}/run`, else
   the window on the pane; refused outside a bundle), `Hotkey` (Carbon
   `RegisterEventHotKey`, `opt+cmd+r` by default; the one before is let

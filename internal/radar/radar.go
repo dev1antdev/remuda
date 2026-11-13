@@ -44,6 +44,7 @@ type pane struct {
 	lastWork  time.Time
 	doneHeld  bool // the tick is up until the pane is seen
 	doneSeen  bool // this finish was looked at; herdr may go on saying done for hours
+	looked    bool // it was looked at through remuda — its chat, its terminal, a seen mark — not by herdr's own focus
 	blocked   bool // the question mark is up until the agent works again
 	recovered bool
 	since     time.Time
@@ -55,6 +56,9 @@ type pane struct {
 type Tracker struct {
 	dir     string
 	recover Recover
+
+	// OnSeen hears a finish looked at through remuda as its tick comes down: the notification it raised goes too.
+	OnSeen func(machineID, paneID string)
 
 	mu       sync.Mutex
 	panes    map[string]*pane // "machine|pane"
@@ -167,7 +171,7 @@ func (t *Tracker) observe(p *herdr.PaneInfo, st *pane, now time.Time) {
 		if st.doneSeen || st.doneHeld {
 			t.dirty = true
 		}
-		st.doneSeen, st.doneHeld = false, false
+		st.doneSeen, st.doneHeld, st.looked = false, false, false
 	} else if !st.doneSeen && (p.AgentStatus == herdr.StatusDone || (st.status == herdr.StatusWorking && status == herdr.StatusIdle)) {
 		if !st.doneHeld {
 			t.dirty = true
@@ -207,11 +211,25 @@ func (t *Tracker) Forget(machineID string) {
 // Seen records that someone looked at the pane: the held tick comes down.
 func (t *Tracker) Seen(machineID, paneID string) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	if st := t.panes[key(machineID, paneID)]; st != nil && st.doneHeld {
-		st.doneHeld, st.doneSeen = false, true
+	st := t.panes[key(machineID, paneID)]
+	cameDown := st != nil && st.doneHeld
+	if cameDown {
+		st.doneHeld, st.doneSeen, st.looked = false, true, true
 		t.dirty = true
 	}
+	t.mu.Unlock()
+	if cameDown && t.OnSeen != nil {
+		t.OnSeen(machineID, paneID)
+	}
+}
+
+// Looked says whether the pane's finish was looked at through remuda since the agent last worked: a push of it would
+// tell the person what they saw.
+func (t *Tracker) Looked(machineID, paneID string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	st := t.panes[key(machineID, paneID)]
+	return st != nil && st.looked
 }
 
 // Display reads the pane as a person would; one not observed yet is read from herdr's status alone.

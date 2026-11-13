@@ -382,6 +382,11 @@ func (s *Server) rosterBody() ([]byte, string) {
 	if s.Feed != nil {
 		roster["feed"] = s.Feed.LastID() // the newest activity entry: the bell knows there is news without asking
 	}
+	if s.Push != nil {
+		if tags := s.Push.Withdrawn(); len(tags) > 0 {
+			roster["withdrawn"] = tags // the notifications taken back within a day: every page closes them in its browser
+		}
+	}
 	if s.Tailscale != nil {
 		roster["tailscale"] = s.Tailscale()
 	}

@@ -215,7 +215,7 @@ export type AgentKind = { id: string; label: string };
 // ServerHost is the host of a remuda serving the page only (remuda -server): no machine of the fleet, its vitals behind the Server place
 export type ServerHost = { id: string; label: string; health?: Health };
 
-export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[]; jira?: string; server?: ServerHost; retirements?: Retirement[]; offers?: string[] }; // feed: the newest activity entry's id; budgets: the spending limits with their spend so far; jira: the Jira site, when set; retirements: the models and modes being retired; offers: the plan limits' open offers, by id
+export type Roster = { machines: Machine[]; agents: AgentKind[]; version?: string; latest?: Latest; tailscale?: Tailscale; feed?: number; budgets?: BudgetStatus[]; jira?: string; server?: ServerHost; retirements?: Retirement[]; offers?: string[]; withdrawn?: string[] }; // feed: the newest activity entry's id; withdrawn: the tags of the notifications taken back within a day; budgets: the spending limits with their spend so far; jira: the Jira site, when set; retirements: the models and modes being retired; offers: the plan limits' open offers, by id
 
 // fetchRoster returns null when the roster is unchanged (304 via ETag); viewOnly says a viewer link signed this page in.
 export async function fetchRoster(etag: string | null): Promise<{ roster: Roster | null; etag: string | null; version: string | null; viewOnly: boolean }> {

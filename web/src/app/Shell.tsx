@@ -2,8 +2,8 @@
 // floating terminal's drawer over all of them (Ctrl+`), and the overlays. It also
 // keeps the address in step with the selection, hears the service worker, ⌘K (the palette), ⌘F (the find bar), ? (the keyboard
 // sheet) and Alt+N (the next agent that needs you), reads the roster aloud when asked, keeps the browser tab's title and
-// favicon counting the agents that need you, says what the agents did while the page was away, and tells the server when
-// a finished pane is being looked at.
+// favicon counting the agents that need you, says what the agents did while the page was away, takes down the
+// notifications that no longer stand, and tells the server when a finished pane is being looked at.
 
 import { useEffect, useRef } from "react";
 import { isMac } from "@/lib/prefs";
@@ -14,6 +14,7 @@ import { resyncPush } from "@/features/alerts/push";
 import { readAlertPrefs, tellAppPrefs } from "@/features/alerts/prefs";
 import { useVoice } from "@/features/alerts/useVoice";
 import { useOnPageAlerts } from "@/features/alerts/useOnPageAlerts";
+import { useWithdrawn } from "@/features/alerts/useWithdrawn";
 import { useSyncPrefs } from "@/features/settings/useSyncPrefs";
 import { useWelcomeBack } from "@/features/standup/useWelcomeBack";
 import ReviewQueue from "@/features/review/ReviewQueue";
@@ -60,6 +61,7 @@ export default function Shell() {
   useSharingKey();
   useVoice();
   useOnPageAlerts();
+  useWithdrawn();
   useSyncPrefs(!viewOnly);
   useWelcomeBack();
   useBadge();

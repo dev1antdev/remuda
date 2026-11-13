@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let socket = AlertSocket(server: next, label: "remuda on " + (Host.current().localizedName ?? "this Mac"))
         socket.onAlert = { [weak self] alert, _ in self?.notifier?.post(alert) }
+        socket.onWithdraw = { [weak self] tags in self?.notifier?.withdraw(tags) }
         var lastTrouble = ""
         socket.onState = { state, detail in
             let trouble = state == "error" ? detail : ""

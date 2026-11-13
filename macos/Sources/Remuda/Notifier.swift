@@ -55,14 +55,22 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let content = UNMutableNotificationContent()
         content.title = alert.title
         content.body = alert.body
-        content.threadIdentifier = alert.tag.isEmpty ? alert.kind : alert.tag
+        content.threadIdentifier = alert.pane.isEmpty ? (alert.tag.isEmpty ? alert.kind : alert.tag) : alert.machine + "|" + alert.pane // a group per agent
         content.categoryIdentifier = category
         content.sound = .default
         content.userInfo = ["machine": alert.machine, "pane": alert.pane, "panel": alert.panel, "choices": alert.choices, "dialog": alert.dialog, "kind": alert.kind, "offer": alert.offer]
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        // the tag is the identifier: a withdrawal names it, and a newer alert under the same tag replaces the older
+        let request = UNNotificationRequest(identifier: alert.tag.isEmpty ? UUID().uuidString : alert.tag, content: content, trigger: nil)
         center.add(request) { error in
             if let error { NSLog("remuda: notification: %@", error.localizedDescription) }
         }
+    }
+
+    // withdraw takes down the notifications of alerts that no longer stand: answered elsewhere, looked at, moved on.
+    func withdraw(_ tags: [String]) {
+        guard !tags.isEmpty else { return }
+        center.removeDeliveredNotifications(withIdentifiers: tags)
+        center.removePendingNotificationRequests(withIdentifiers: tags)
     }
 
     // ensure registers the category before its notification goes out, from the app's own list so two alerts in a row
