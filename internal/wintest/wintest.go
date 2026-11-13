@@ -97,6 +97,12 @@ func (s SSH) Stream(script string, timeout time.Duration, sink func([]byte)) err
 	return err
 }
 
+// Raw runs a command line over the machine's ssh as it is, no sh -c around it.
+func (s SSH) Raw(command string) (string, error) {
+	out, err := s.command(command).CombinedOutput()
+	return string(out), err
+}
+
 // Dial is one exec over the machine's ssh as a connection: what sshx.Conn.DialExec does over the master.
 func (s SSH) Dial(command string, timeout time.Duration) (net.Conn, error) {
 	return sshx.CommandConn(s.command(command), timeout)

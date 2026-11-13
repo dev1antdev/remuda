@@ -19,7 +19,7 @@ func TestAWindowsProbeIsReadInWindowsSpelling(t *testing.T) {
 	if got := windowsSocket(found.appData); got != `C:\Users\runneradmin\AppData\Roaming\herdr\herdr.sock` {
 		t.Fatalf("the socket herdr names, and its pipe after it: %q", got)
 	}
-	if got := BridgeCommand(found.remuda, windowsSocket(found.appData)); got != `'/c/Users/runneradmin/.local/bin/remuda.exe' bridge 'C:\Users\runneradmin\AppData\Roaming\herdr\herdr.sock'` {
+	if got := BridgeCommand(found.remuda, windowsSocket(found.appData)); !strings.HasPrefix(got, "sh -c ") || !strings.Contains(got, `/c/Users/runneradmin/.local/bin/remuda.exe'\'' bridge '\''C:\Users\runneradmin\AppData\Roaming\herdr\herdr.sock`) {
 		t.Fatalf("the bridge's exec: %s", got)
 	}
 }

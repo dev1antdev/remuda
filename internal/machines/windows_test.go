@@ -36,6 +36,8 @@ func TestOnWindowsHerdrIsReachedThroughRemudaBridgeOverSSH(t *testing.T) {
 	remote := wintest.Remote(t)
 	found := parseProbe(wintest.Text(t, remote, probeScript(true)))
 	sock := windowsSocket(found.appData)
+	raw, _ := remote.Raw(`'/usr/bin/printf' '<%s>\n' bridge 'C:\Users\x\herdr.sock'`)
+	t.Logf("a bare command line starting with a quoted path, as Git Bash got it: %q", raw)
 	client := herdr.NewClient(sock)
 	client.Dial = func(timeout time.Duration) (net.Conn, error) {
 		return remote.Dial(BridgeCommand(found.remuda, sock), timeout)

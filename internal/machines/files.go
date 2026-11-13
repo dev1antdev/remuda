@@ -10,11 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 )
 
@@ -59,26 +59,28 @@ func classify(p string, sniffBinary func() bool) (kind, mime string) {
 	return "text", "text/plain; charset=utf-8"
 }
 
-// ResolvePath turns what an agent printed (absolute, ~/…, or relative to the pane's folder) into a real path.
-// A relative miss is searched under the pane folder by suffix: agents say "demo.mp4" for "docs/demo.mp4".
+// ResolvePath turns what an agent printed (absolute, ~/…, or relative to the pane's folder) into a real path, spelled
+// the machine's way (C:\Users\me\app\x.go on Windows). A relative miss is searched under the pane folder by suffix:
+// agents say "demo.mp4" for "docs/demo.mp4".
 func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
+	style := mc.Paths()
 	p := strings.TrimSpace(raw)
 	if p == "" {
 		return FileInfo{}, fmt.Errorf("path required")
 	}
-	if strings.HasPrefix(p, "~/") || p == "~" {
-		p = mc.Home() + strings.TrimPrefix(p, "~")
+	if p == "~" || strings.HasPrefix(p, "~/") || style.Windows && strings.HasPrefix(p, `~\`) {
+		p = style.Join(mc.Home(), p[1:])
 	}
-	if !strings.HasPrefix(p, "/") && cwd != "" {
-		p = cwd + "/" + p
+	if !style.IsAbs(p) && cwd != "" {
+		p = style.Join(cwd, p)
 	}
-	p = cleanPath(p)
+	p = cleanPath(style, p)
 	info, err := mc.stat(p)
 	if err == nil {
 		return info, nil
 	}
-	if !strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "~") && cwd != "" {
-		found := mc.findBySuffix(cwd, strings.TrimPrefix(strings.TrimPrefix(raw, "./"), "/"))
+	if !style.IsAbs(raw) && !strings.HasPrefix(raw, "~") && cwd != "" {
+		found := mc.findBySuffix(cwd, strings.TrimPrefix(strings.TrimPrefix(style.Slash(raw), "./"), "/"))
 		if len(found) == 1 {
 			if info, err := mc.stat(found[0]); err == nil {
 				return info, nil
@@ -91,7 +93,11 @@ func (mc *Machine) ResolvePath(cwd, raw string) (FileInfo, error) {
 	return FileInfo{Path: p, Kind: "missing"}, nil
 }
 
-func cleanPath(p string) string {
+// cleanPath is an absolute path in the machine's spelling: from / on a Mac or Linux, from its drive on Windows.
+func cleanPath(style rpath.Style, p string) string {
+	if style.Windows {
+		return style.Clean(p)
+	}
 	c := filepath.ToSlash(filepath.Clean(p))
 	if !strings.HasPrefix(c, "/") {
 		c = "/" + c
@@ -178,14 +184,15 @@ func (mc *Machine) findBySuffix(root, rel string) []string {
 	for d := range skipDirs {
 		prune = append(prune, "-name "+script.Quote(d)+" -prune -o")
 	}
-	out, err := mc.text(`find `+script.Quote(root)+` `+strings.Join(prune, " ")+
+	style := mc.Paths()
+	out, err := mc.text(`find `+script.Quote(style.Slash(root))+` `+strings.Join(prune, " ")+
 		` -type f -path `+script.Quote("*/"+rel)+` -print 2>/dev/null | head -`+strconv.Itoa(maxFind), 20*time.Second)
 	if err != nil {
 		return nil
 	}
 	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
-		if l != "" {
-			found = append(found, l)
+		if l = strings.TrimRight(l, "\r"); l != "" {
+			found = append(found, cleanPath(style, l))
 		}
 	}
 	return found
@@ -254,13 +261,14 @@ func (mc *Machine) SaveUpload(cwd, name string, data []byte) (Upload, error) {
 	if cwd == "" {
 		return Upload{}, fmt.Errorf("the pane has no folder to upload into")
 	}
+	style := mc.Paths()
 	stored := storedName(name)
 	rel := uploadDir + "/" + uploadSubdir + "/" + stored
-	abs := cleanPath(cwd + "/" + rel)
-	ignore := cleanPath(cwd + "/" + uploadDir + "/.gitignore")
+	abs := cleanPath(style, style.Join(cwd, rel))
+	ignore := cleanPath(style, style.Join(cwd, uploadDir, ".gitignore"))
 
 	// the pane's folder is the agent's: a .remuda or uploads it made a symlink would send the file wherever it pointed
-	holder, folder := cleanPath(cwd+"/"+uploadDir), filepath.Dir(abs)
+	holder, folder := cleanPath(style, style.Join(cwd, uploadDir)), style.Dir(abs)
 	if mc.local {
 		for _, p := range []string{holder, folder} {
 			if fi, err := os.Lstat(p); err == nil && fi.Mode()&os.ModeSymlink != 0 {
@@ -310,8 +318,9 @@ type Diff struct {
 
 // GitDiff is the file's uncommitted change against HEAD in its repository, or marks it untracked / outside any repo.
 func (mc *Machine) GitDiff(p string) (Diff, error) {
+	style := mc.Paths()
 	q := script.Quote(p)
-	diff := script.InRepo(filepath.Dir(p)) +
+	diff := script.InRepo(style.Dir(p)) +
 		`printf '%s\n' "$root"; if git ls-files --error-unmatch -- ` + q + ` >/dev/null 2>&1; then echo tracked; ` +
 		`git -c color.ui=never diff HEAD -- ` + q + ` | head -c 400000; else echo untracked; fi`
 	out, err := mc.text(diff, 30*time.Second)
@@ -320,59 +329,5 @@ func (mc *Machine) GitDiff(p string) (Diff, error) {
 	}
 	root, rest, _ := strings.Cut(out, "\n")
 	state, diff, _ := strings.Cut(rest, "\n")
-	return Diff{Repo: strings.TrimSpace(root), Untracked: strings.TrimSpace(state) == "untracked", Diff: diff}, nil
-}
-
-// ---- browsing folders ----
-
-// DirEntry is one subfolder of a listed folder.
-type DirEntry struct {
-	Name string `json:"name"`
-	Git  bool   `json:"git"` // a repository (a .git inside)
-}
-
-// DirListing is a folder and its subfolders, for the folder picker.
-type DirListing struct {
-	Path   string     `json:"path"`             // resolved, absolute
-	Parent string     `json:"parent,omitempty"` // "" at the root
-	Home   string     `json:"home,omitempty"`
-	Dirs   []DirEntry `json:"dirs"`
-}
-
-// ListDirs lists the subfolders of path on the machine ("" or "~" is home), hidden ones only when asked.
-func (mc *Machine) ListDirs(path string, hidden bool) (DirListing, error) {
-	q := script.Quote(path)
-	glob := "*/"
-	if hidden {
-		glob = "*/ .*/"
-	}
-	listing := `p=` + q + `; [ -z "$p" ] && p="$HOME"; case "$p" in "~") p="$HOME";; "~/"*) p="$HOME/${p#"~/"}";; esac; ` +
-		`cd "$p" 2>/dev/null || { printf 'ERR\037not a folder: %s\n' "$p"; exit 0; }; printf '%s\n' "$(pwd -P)"; printf '%s\n' "$HOME"; printf '\036\n'; ` +
-		`for d in ` + glob + `; do case "$d" in ./|../) continue;; esac; [ -d "$d" ] || continue; n=${d%/}; g=0; [ -e "$d.git" ] && g=1; printf '%s\037%s\n' "$n" "$g"; done`
-	out, err := mc.text(listing, 30*time.Second)
-	if err != nil {
-		return DirListing{}, err
-	}
-	if strings.HasPrefix(out, "ERR\x1f") {
-		return DirListing{}, fmt.Errorf("%s", strings.TrimSpace(strings.TrimPrefix(out, "ERR\x1f")))
-	}
-	head, rest, _ := strings.Cut(out, "\x1e\n")
-	lines := strings.Split(strings.TrimRight(head, "\n"), "\n")
-	l := DirListing{Dirs: []DirEntry{}}
-	if len(lines) > 0 {
-		l.Path = lines[0]
-	}
-	if len(lines) > 1 {
-		l.Home = lines[1]
-	}
-	if l.Path != "" && l.Path != "/" {
-		l.Parent = filepath.Dir(l.Path)
-	}
-	for _, line := range strings.Split(strings.TrimRight(rest, "\n"), "\n") {
-		if n, g, ok := strings.Cut(line, "\x1f"); ok && n != "" {
-			l.Dirs = append(l.Dirs, DirEntry{Name: n, Git: g == "1"})
-		}
-	}
-	sort.Slice(l.Dirs, func(i, j int) bool { return strings.ToLower(l.Dirs[i].Name) < strings.ToLower(l.Dirs[j].Name) })
-	return l, nil
+	return Diff{Repo: style.Clean(strings.TrimSpace(root)), Untracked: strings.TrimSpace(state) == "untracked", Diff: diff}, nil
 }

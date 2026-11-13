@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
-	"path"
 	"strings"
 	"time"
 
@@ -113,6 +112,7 @@ type rosterMachine struct {
 	Label    string            `json:"label"`
 	Host     string            `json:"host,omitempty"`
 	Source   string            `json:"source,omitempty"`
+	OS       string            `json:"os"`    // darwin | linux | windows as its connection read it, "" before a remote's first; a Windows machine has no live attach
 	State    string            `json:"state"` // connected | connecting | error
 	Error    string            `json:"error,omitempty"`
 	Sessions []rosterSession   `json:"sessions"`
@@ -139,8 +139,10 @@ func FolderOf(worktree *herdr.WorktreeInfo, root, dir string) string {
 		if worktree.RepoRoot != "" {
 			return worktree.RepoRoot
 		}
-		if strings.HasSuffix(worktree.RepoKey, "/.git") {
-			return path.Dir(worktree.RepoKey)
+		for _, sep := range []string{"/", `\`} { // a Windows machine's herdr names it C:\Users\me\app\.git
+			if folder, ok := strings.CutSuffix(worktree.RepoKey, sep+".git"); ok && folder != "" {
+				return folder
+			}
 		}
 	}
 	if root != "" {
@@ -335,7 +337,7 @@ func (s *Server) rosterBody() ([]byte, string) {
 	for _, mc := range list {
 		state, errMsg := mc.State()
 		entry := rosterMachine{
-			ID: mc.ID(), Label: mc.Label(), Host: mc.Cfg.Host, Source: mc.Cfg.Source,
+			ID: mc.ID(), Label: mc.Label(), Host: mc.Cfg.Host, Source: mc.Cfg.Source, OS: mc.OS(),
 			State: state, Error: errMsg, Sessions: []rosterSession{},
 		}
 		if state == machines.StateConnected {

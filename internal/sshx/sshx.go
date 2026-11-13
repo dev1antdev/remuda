@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/rpath"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/shell"
 )
@@ -226,9 +227,9 @@ func (c *Conn) Run(command string, timeout time.Duration) ([]byte, error) {
 	return c.run(command, timeout, nil)
 }
 
-// Put writes data to a remote file, creating its directory, through cat over the master.
+// Put writes data to a remote file, creating its directory, through cat over the master; a Windows path (C:\…) is cut at its own separator.
 func (c *Conn) Put(path string, data []byte, timeout time.Duration) error {
-	_, err := c.run("mkdir -p "+script.Quote(filepath.Dir(path))+" && cat > "+script.Quote(path), timeout, bytes.NewReader(data))
+	_, err := c.run("mkdir -p "+script.Quote(rpath.For(path).Dir(path))+" && cat > "+script.Quote(path), timeout, bytes.NewReader(data))
 	return err
 }
 

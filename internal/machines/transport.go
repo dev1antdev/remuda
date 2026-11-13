@@ -55,7 +55,8 @@ func bridgeClient(conn *sshx.Conn, remudaBin, sock string) (*herdr.Client, error
 	return client, nil
 }
 
-// BridgeCommand is the exec that carries one connection to herdr on a Windows machine, as its Git Bash reads it.
+// BridgeCommand is the exec that carries one connection to herdr on a Windows machine: through sh -c like every
+// script, the way a command line reaches Git Bash there whole.
 func BridgeCommand(remudaBin, sock string) string {
-	return script.Quote(remudaBin) + " bridge " + script.Quote(sock)
+	return sshx.RemoteCommand("exec " + script.Quote(remudaBin) + " bridge " + script.Quote(sock))
 }
