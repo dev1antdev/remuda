@@ -4833,8 +4833,8 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   ago", "yesterday"). The e2e display suite fakes `/api/issues*` in the
   browser (`fakeIssues`: forty issues of acme/widgets, the worktree's
   branch linked to #41, one issue with a timeline of every kind) and opens
-  the table, the filters, a row's status menu, the viewer, the comment's
-  preview and Start, checking no write was made.
+  the table, the repository picker, the filters, a row's status menu, the
+  viewer, the comment's preview and Start, checking no write was made.
 - `internal/prefs/` — **settings that follow the person between devices**:
   `prefs.json` in the state dir, `{"<key>": {"value", "at"}}`; `Store.All`,
   `Store.Put` merges a part by key, the newer stamp winning (an equal one
