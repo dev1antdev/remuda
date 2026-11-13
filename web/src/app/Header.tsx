@@ -8,8 +8,9 @@ import { useRoster } from "@/features/roster/useRoster";
 import { folderOf } from "@/features/roster/workspaces";
 import { useSharing } from "@/features/roster/useSharing";
 import { budgetTone, budgetWords, budgetsFor, graver, ratio, tightest, toneClass, type BudgetTone } from "@/features/usage/budgets";
-import { fillClass, tok, usd } from "@/features/usage/format";
+import { fillClass, tokFine, usd } from "@/features/usage/format";
 import { accountWindows, gravest, limitLine, type AccountWindow } from "@/features/usage/limits";
+import { gitLensTip, isCheckout } from "@/features/git/checkout";
 import { FolderIcon, Icon, Tip } from "@/ui";
 import type { Located } from "./current";
 import { popOut, popOutSupported } from "./pip";
@@ -92,7 +93,7 @@ function UsagePill({ usage, budget, limits }: { usage: NonNullable<Located["pane
   const tone = graver(budget ? graver(contextTone, budgetTone(ratio(budget))) : contextTone, gravest(limits));
   const cls = budget || limits.length ? toneClass(tone) : fillClass(fill);
   const planWords = limits.map((w) => limitLine(w, Date.now())).join("; ");
-  const told = t("{model}: context {used} of {window} ({pct}%) · {responses} · {cost} API-equivalent so far.", { model: usage.name, used: tok(usage.context), window: tok(usage.window), pct: percent, responses: plural(usage.turns, "response"), cost: usd(usage.cost) });
+  const told = t("{model}: context {used} of {window} ({pct}%) · {responses} · {cost} API-equivalent so far.", { model: usage.name, used: tokFine(usage.context), window: tokFine(usage.window), pct: percent, responses: plural(usage.turns, "response"), cost: usd(usage.cost) });
   return (
     <button
       type="button"
@@ -108,7 +109,7 @@ function UsagePill({ usage, budget, limits }: { usage: NonNullable<Located["pane
   );
 }
 
-// LensSwitch is the pane's three lenses; a shell has its terminal alone, so the switch keeps its room unseen and
+// LensSwitch is the pane's four lenses; a shell has its terminal alone, so the switch keeps its room unseen and
 // going from an agent's tab to a shell's moves nothing in the header
 function LensSwitch({ lens, current, viewOnly }: { lens: Lens; current: Located; viewOnly: boolean }) {
   const vacant = !current.pane.agent;
@@ -131,6 +132,7 @@ function LensSwitch({ lens, current, viewOnly }: { lens: Lens; current: Located;
         title: viewOnly ? t("Viewing only") : t("What changed in this workspace's folder since you last looked"),
         badge: current.session.review?.fresh,
       })}
+      {tab("git", t("Git"), { disabled: !isCheckout(current.session), title: gitLensTip(isCheckout(current.session)) })}
     </nav>
   );
 }

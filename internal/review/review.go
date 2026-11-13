@@ -49,13 +49,19 @@ type Commit struct {
 	Seen     bool   `json:"seen,omitempty"` // every blob it brought is one the viewer reviewed
 }
 
-// File is one uncommitted file: changed against HEAD, or untracked.
+// File is one uncommitted file: changed against HEAD, or untracked. Added and Removed count HEAD against the working
+// tree; Staged and Unstaged are git's two sides of it, a file partly staged holding both.
 type File struct {
 	Path      string `json:"path"`
 	Added     int    `json:"added"`
 	Removed   int    `json:"removed"`
 	Untracked bool   `json:"untracked,omitempty"`
-	Fresh     bool   `json:"fresh"` // changed since the viewer looked
+	Fresh     bool   `json:"fresh"`              // changed since the viewer looked
+	Index     string `json:"index,omitempty"`    // git's letter for the index against HEAD: M, A, D, T; "" when they agree
+	Work      string `json:"work,omitempty"`     // git's letter for the working tree against the index
+	Conflict  string `json:"conflict,omitempty"` // an unmerged file's two letters: UU both edited, AA, DD, AU, UA, DU, UD
+	Staged    *Stat  `json:"staged,omitempty"`
+	Unstaged  *Stat  `json:"unstaged,omitempty"`
 }
 
 // Summary is the review of one folder.
@@ -72,6 +78,8 @@ type Summary struct {
 	Files        []File          `json:"files"`
 	Fresh        int             `json:"fresh"`
 	Settings     []SettingsAudit `json:"settings,omitempty"` // Claude Code's settings files there, audited for secrets and tracking
+	Outgoing     *Outgoing       `json:"outgoing,omitempty"` // the commits the remote does not have yet; none without a remote
+	Busy         string          `json:"busy,omitempty"`     // the agent at work in the checkout, under whose feet a write would land: the route's to say
 	Error        string          `json:"error,omitempty"`
 	At           time.Time       `json:"at"`
 }
@@ -96,6 +104,7 @@ type Store struct {
 	works     map[string]work       // each folder's uncommitted work as the sweeps weigh it, for the queue's risk
 	remotes   map[string]string     // each folder's origin, which every checkout of one repository shares
 	scans     map[string]scanNote   // the last secret check of each folder
+	bases     map[string]baseRead   // the fork base detected for each folder, kept while its HEAD stays
 	syncs     map[string]Sync       // each folder's branch against its upstream, as of the last fetch
 }
 
@@ -110,7 +119,7 @@ func key(machineID, dir string) string { return machineID + "|" + dir }
 // New loads the baselines kept in dir.
 func New(dir string) *Store {
 	store := &Store{dir: dir, baselines: map[string]Baseline{}, badges: map[string]Badge{}, branches: map[string]string{}, roots: map[string]string{}, sweeps: map[string]badgeSweep{},
-		works: map[string]work{}, remotes: map[string]string{}, scans: map[string]scanNote{}, syncs: map[string]Sync{}}
+		works: map[string]work{}, remotes: map[string]string{}, scans: map[string]scanNote{}, bases: map[string]baseRead{}, syncs: map[string]Sync{}}
 	if err := state.LoadJSON(dir, baselineFile, &store.baselines); err != nil {
 		log.Printf("%s is unreadable (%v): every folder counts as never reviewed", baselineFile, err)
 	}
@@ -173,7 +182,7 @@ func (store *Store) setBranch(storeKey, branch string) {
 }
 
 // summaryScript gathers everything Summary needs in one shell, sections separated by a line of \x1e and fields by \x1f:
-// repo/branch/HEAD, the newest maxCommits first-parent commits since the baseline, the numstat against HEAD, the untracked files, every uncommitted file's blob, per commit the blobs it left (none for a merge) — one git log, never a process per commit: a repository pulled after weeks has hundreds — how many commits there are in all, and Claude Code's settings files there (settingsScript).
+// repo/branch/HEAD, the newest maxCommits first-parent commits since the baseline, the numstat against HEAD, the untracked files, every uncommitted file's blob, per commit the blobs it left (none for a merge) — one git log, never a process per commit: a repository pulled after weeks has hundreds — how many commits there are in all, git's status of what is staged and what is not (statusScript), the commits not on the remote (outgoingScript), and Claude Code's settings files there (settingsScript).
 func summaryScript(dir, baselineHead string) string {
 	return script.InRepo(dir) +
 		`printf '%s\n' "$root"; git rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null; printf '\036\n'; ` +
@@ -184,6 +193,7 @@ func summaryScript(dir, baselineHead string) string {
 		blobsScript() + `; printf '\036\n'; ` +
 		`if [ "$base" != HEAD ]; then git -c core.quotepath=off log --first-parent -n ` + strconv.Itoa(maxCommits) + ` --raw --no-renames --no-abbrev --relative --format='%H' "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
 		`if [ "$base" != HEAD ]; then git rev-list --count --first-parent "$base"..HEAD 2>/dev/null; fi; printf '\036\n'; ` +
+		statusScript + `; printf '\n\036\n'; ` + outgoingScript + `; printf '\036\n'; ` +
 		settingsScript
 }
 
@@ -307,7 +317,18 @@ func (store *Store) Summary(host shell.Host, dir string) Summary {
 		}
 	}
 	if len(sections) > 7 {
-		summary.Settings = readSettings(sections[7])
+		statuses, staged, unstaged := readStatus(sections[7])
+		listed := len(summary.Files)
+		summary.Files = withStatus(summary.Files, statuses, staged, unstaged)
+		for i := listed; i < len(summary.Files); i++ {
+			summary.Files[i].Fresh = isFresh(summary.Files[i].Path)
+		}
+	}
+	if len(sections) > 8 {
+		summary.Outgoing = readOutgoing(sections[8])
+	}
+	if len(sections) > 9 {
+		summary.Settings = readSettings(sections[9])
 	}
 	sort.Slice(summary.Files, func(i, j int) bool {
 		if summary.Files[i].Fresh != summary.Files[j].Fresh {

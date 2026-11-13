@@ -6,7 +6,7 @@
 import { readTurnLink, type TurnLinkTarget } from "@/features/chat/turnLink";
 import type { Lens, Mode, Panel, Selection } from "./store";
 
-const LENSES: Lens[] = ["chat", "terminal", "changes"];
+const LENSES: Lens[] = ["chat", "terminal", "changes", "git"];
 const MODES: Mode[] = ["herdr", "wall", "tasks", "code", "review"];
 const PANELS: Panel[] = ["search", "alerts", "activity", "schedules", "usage", "standup", "concierge"];
 
