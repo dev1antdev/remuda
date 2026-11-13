@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/proc"
 	"github.com/dev1antdev/remuda/internal/script"
 	"github.com/dev1antdev/remuda/internal/state"
 )
@@ -48,8 +49,7 @@ func RunStatusline(stdin io.Reader, stdout io.Writer, stateDir string, now time.
 	cmd.Stdout = stdout
 	// the status line's own children (a sleep, a slow npx) would keep the output pipe open past the timeout: the
 	// whole process group goes, and Run stops waiting for the pipe soon after
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	proc.Group(cmd, syscall.SIGKILL)
 	cmd.WaitDelay = 500 * time.Millisecond
 	_ = cmd.Run()
 }

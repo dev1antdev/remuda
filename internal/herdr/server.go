@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/dev1antdev/remuda/internal/proc"
 	"github.com/dev1antdev/remuda/internal/script"
 )
 
@@ -81,7 +81,7 @@ func serverCommand(bin, socket, home string) *exec.Cmd {
 	if home != "" {
 		cmd.Dir = home
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // its own session: it stays when remuda exits
+	proc.Detach(cmd) // its own session: it stays when remuda exits
 	return cmd
 }
 

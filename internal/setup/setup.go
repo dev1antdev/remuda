@@ -15,7 +15,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
+
+	"github.com/dev1antdev/remuda/internal/proc"
 )
 
 //go:embed scripts/setup.sh
@@ -154,7 +155,7 @@ func (r Removal) Plan(out io.Writer) (bool, error) {
 func (r Removal) Remove(out io.Writer) error {
 	cmd := command(r.Host, r.env(), uninstallScript, []string{"run"}, out)
 	if r.Host == "" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		proc.Detach(cmd)
 	}
 	return cmd.Run()
 }

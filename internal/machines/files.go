@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/dev1antdev/remuda/internal/script"
@@ -271,11 +270,11 @@ func (mc *Machine) SaveUpload(cwd, name string, data []byte) (Upload, error) {
 		if err := os.MkdirAll(folder, 0o755); err != nil {
 			return Upload{}, err
 		}
-		if f, err := os.OpenFile(ignore, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o644); err == nil {
+		if f, err := os.OpenFile(ignore, os.O_WRONLY|os.O_CREATE|os.O_EXCL|noFollow, 0o644); err == nil {
 			f.WriteString("*\n")
 			f.Close()
 		}
-		f, err := os.OpenFile(abs, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o644)
+		f, err := os.OpenFile(abs, os.O_WRONLY|os.O_CREATE|os.O_EXCL|noFollow, 0o644)
 		if err != nil {
 			return Upload{}, err
 		}
