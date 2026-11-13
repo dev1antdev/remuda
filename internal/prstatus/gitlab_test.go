@@ -2,6 +2,7 @@ package prstatus
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -89,8 +90,8 @@ func TestParseMergeSpeaksGhsWords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Status{State: "OPEN", Mergeable: "MERGEABLE", Review: "APPROVED", Threads: 2, Checks: Checks{Total: 1, Fail: 1}, At: now}
-	if status != want || pipeline != 9001 {
+	want := Status{Title: "Refresh the connection", State: "OPEN", Mergeable: "MERGEABLE", MergeState: "CLEAN", Review: "APPROVED", Threads: 2, Checks: Checks{Total: 1, Fail: 1}, At: now}
+	if !reflect.DeepEqual(status, want) || pipeline != 9001 {
 		t.Fatalf("status = %+v, pipeline %d", status, pipeline)
 	}
 
@@ -204,7 +205,7 @@ func TestFailureHandsThePipelinesFailedJobsToTheAgent(t *testing.T) {
 		"CI failed on MR !613 (" + mrURL + "): unit, e2e.",
 		"- unit: https://gitlab.gog.com/gog-backend/games-db/-/jobs/77",
 		"Job unit (stage test), the end of its log:\n\n```\nRunning tests\nFAIL: TestRefresh (0.01s)\n    sync_test.go:42: connection gone\n```",
-		"Fix what the log shows, push the fix to the branch, and say when the checks are green again.",
+		"Find the cause and fix it on the branch, then say what you changed.\n\n" + GuardGitLab,
 	} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("message lacks %q:\n%s", want, msg)

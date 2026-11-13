@@ -23,7 +23,7 @@ export const statusbar: Dictionary = {
   wk: "нед",
   "5-hour": "5 часов",
   Weekly: "Неделя",
-  "<1m": "<1м",
+  "statusbar|<1m": "<1м",
   "{m}m": "{m}м",
   "{h}h {m}m": "{h}ч {m}м",
   "{d}d {h}h": "{d}д {h}ч",

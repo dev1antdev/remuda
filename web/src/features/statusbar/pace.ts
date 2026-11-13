@@ -5,7 +5,7 @@
 
 import type { AccountWindow, LimitTone } from "@/features/usage/limits";
 import { limitTone } from "@/features/usage/limits";
-import { t } from "@/lib/i18n";
+import { t, tc } from "@/lib/i18n";
 
 // PACE_MARGIN is how many points the use may run ahead of or behind the time before the verdict says so
 export const PACE_MARGIN = 10;
@@ -85,7 +85,7 @@ export function segmentText(w: Pick<AccountWindow, "name" | "used">, remaining: 
 // timeLeft is the time to a reset in a few characters: "<1m", "42m", "2h 10m", "3d 4h"
 export function timeLeft(resetsAt: string, now: number): string {
   const s = Math.max(0, Math.floor((Date.parse(resetsAt) - now) / 1000));
-  if (s < 60) return t("<1m");
+  if (s < 60) return tc("statusbar", "<1m");
   const days = Math.floor(s / 86400);
   const hours = Math.floor((s % 86400) / 3600);
   const minutes = Math.floor((s % 3600) / 60);

@@ -30,6 +30,9 @@ import (
 	"github.com/dev1antdev/remuda/internal/concierge"
 	"github.com/dev1antdev/remuda/internal/drift"
 	"github.com/dev1antdev/remuda/internal/feed"
+	"github.com/dev1antdev/remuda/internal/filetree"
+	"github.com/dev1antdev/remuda/internal/gitops"
+	"github.com/dev1antdev/remuda/internal/gitstage"
 	"github.com/dev1antdev/remuda/internal/health"
 	"github.com/dev1antdev/remuda/internal/herdr"
 	"github.com/dev1antdev/remuda/internal/icons"
@@ -38,6 +41,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/mirror"
+	"github.com/dev1antdev/remuda/internal/notes"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/ports"
 	"github.com/dev1antdev/remuda/internal/prefs"
@@ -48,6 +52,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/recipes"
+	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/resources"
 	"github.com/dev1antdev/remuda/internal/retire"
 	"github.com/dev1antdev/remuda/internal/review"
@@ -102,6 +107,7 @@ type Server struct {
 	Live       *live.Hub           // the page's event stream, nil without one
 	Awake      *awake.Service      // the machines kept awake while their agents work
 	Icons      *icons.Store        // the icon the person gave each folder of the sidebar
+	Notes      *notes.Store        // the note the person keeps on each checkout
 	Arena      *arena.Service      // one prompt to several agents side by side
 	Limits     *limits.Service     // the agents' subscription windows, the hits and the bookings to continue after a reset
 	Scratch    *scratch.Store      // the floating terminal's shell on each machine
@@ -121,13 +127,17 @@ type Server struct {
 	Undo       *undo.Service       // the agents' turns kept to be undone, and the undo at the person's word
 	Concierge  *concierge.Service  // the Claude Code agent the person asks what the others are doing, on the machine they pick
 	Scenes     *scenes.Service     // the morning set-ups and the evening tidies, run at the person's press
+	GitOps     *gitops.Service     // git's writes on a checkout at the person's press, refused while an agent works there
+	Stage      *gitstage.Service   // the Changes lens's git writes, each at the person's press; nil writes nothing
+	Repos      *repos.Store        // each repository's project settings: worktree defaults, the setup script, the run actions
 	Ports      *ports.Tracker      // the ports the machines' processes listen on, matched to their workspaces
 	Resources  *resources.Service  // what the machines' herdr panes weigh on them, for the status bar
 
 	streams   termStreams
-	relayed   relays     // the terminals piped to a machine's own remuda, which holds their attach
-	typed     sent.Lines // the screen terminal's lines being typed, a row of the activity once Enter sends one
-	teleports sync.Map   // the moves of work to another machine, by job id: where the agent carrying on is
+	relayed   relays           // the terminals piped to a machine's own remuda, which holds their attach
+	typed     sent.Lines       // the screen terminal's lines being typed, a row of the activity once Enter sends one
+	trees     filetree.Service // the project tree's folders, each checkout's git status read once for a few seconds
+	teleports sync.Map         // the moves of work to another machine, by job id: where the agent carrying on is
 }
 
 // Handler mounts every route: each context registers its own, the static page comes last, and the guard wraps all but two.
@@ -149,6 +159,7 @@ func (s *Server) Handler() http.Handler {
 	s.prefsRoutes(api)
 	s.scheduleRoutes(api)
 	s.reviewRoutes(api)
+	s.changesRoutes(api)
 	s.codeRoutes(api)
 	s.updateRoutes(api)
 	s.recoverRoutes(api)
@@ -163,12 +174,14 @@ func (s *Server) Handler() http.Handler {
 	s.handoverRoutes(api)
 	s.forkRoutes(api)
 	s.prRoutes(api)
+	s.ghprRoutes(api)
 	s.liveRoutes(api)
 	s.deviceRoutes(api)
 	s.agentKeyRoutes(api)
 	s.viewerKeyRoutes(api)
 	s.completeRoutes(api)
 	s.iconRoutes(api)
+	s.noteRoutes(api)
 	s.teleportRoutes(api)
 	s.arenaRoutes(api)
 	s.limitRoutes(api)
@@ -177,6 +190,8 @@ func (s *Server) Handler() http.Handler {
 	s.jiraRoutes(api)
 	s.backupRoutes(api)
 	s.leftoverRoutes(api)
+	s.worktreeRoutes(api)
+	s.repoRoutes(api)
 	s.previewRoutes(api)
 	s.opinionRoutes(api)
 	s.scorecardRoutes(api)
@@ -186,6 +201,7 @@ func (s *Server) Handler() http.Handler {
 	s.driftRoutes(api)
 	s.undoRoutes(api)
 	s.sceneRoutes(api)
+	s.gitRoutes(api)
 	api.Handle("GET /", s.staticHandler())
 
 	// the only two routes outside the token guard

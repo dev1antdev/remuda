@@ -15,8 +15,9 @@ import (
 // A red check handed to the agent: the request's checks read with gh, the failed ones' run logs, one message; a merge
 // request's failed jobs and their logs come through glab in the same shape (gitlab.go).
 
-// LogTail is how much of a failed run's log goes to the agent: its end, where the failure is.
-const LogTail = 8 * 1024
+// LogTail is how much of a failed run's log goes to the agent: a short end, where the failure is; the message names the
+// command that reads the rest.
+const LogTail = 2 * 1024
 
 // LogRead is how much of a log the machine sends at all, its end: a CI log runs to tens of megabytes, and LogTail is cut
 // from what arrives.
@@ -44,8 +45,35 @@ func (c Check) Failed() bool { return c.Bucket == "fail" || c.Bucket == "cancel"
 
 var (
 	runLink = regexp.MustCompile(`/actions/runs/(\d+)`)
+	jobLink = regexp.MustCompile(`/actions/runs/\d+/jobs?/(\d+)`)
 	runRepo = regexp.MustCompile(`^https?://([^/\s]+)/([^/\s]+)/([^/\s]+)/actions/runs/\d+`)
 )
+
+// JobID is the Actions job a check's link points at, "" when it names none.
+func (c Check) JobID() string {
+	m := jobLink.FindStringSubmatch(c.Link)
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
+
+// ReadCommand is what the agent runs to read a failed Actions check's log itself, "" for a check from elsewhere.
+func (c Check) ReadCommand() string {
+	run := c.RunID()
+	if run == "" {
+		return ""
+	}
+	cmd := "gh run view " + run
+	if job := c.JobID(); job != "" {
+		cmd += " --job " + job
+	}
+	cmd += " --log-failed"
+	if repo := c.RunRepo(); repo != "" {
+		cmd += " -R " + repo
+	}
+	return cmd
+}
 
 // RunID is the GitHub Actions run a check's link points into, "" for a check from elsewhere.
 func (c Check) RunID() string {
@@ -172,6 +200,9 @@ func failureMessage(label, url string, checks []Check, logs []runLog) (string, e
 		if c.Link != "" {
 			fmt.Fprintf(&b, "- %s: %s\n", c.Name, c.Link)
 		}
+		if cmd := c.ReadCommand(); cmd != "" {
+			fmt.Fprintf(&b, "  Read its failed steps with: %s\n", cmd)
+		}
 	}
 	for _, l := range logs {
 		tail := Tail(l.text)
@@ -180,6 +211,6 @@ func failureMessage(label, url string, checks []Check, logs []runLog) (string, e
 		}
 		fmt.Fprintf(&b, "\n%s\n\n```\n%s\n```\n", l.heading, tail)
 	}
-	b.WriteString("\nFix what the log shows, push the fix to the branch, and say when the checks are green again.")
+	b.WriteString("\nFind the cause and fix it on the branch, then say what you changed.\n\n" + GuardOf(url))
 	return b.String(), nil
 }

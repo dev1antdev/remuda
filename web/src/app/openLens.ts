@@ -3,7 +3,7 @@
 // keeps whichever lens the page was on. The sidebar, the tabs and the Wall keep their own ways.
 
 export type OpenLens = "terminal" | "chat" | "keep";
-export type PaneLens = "terminal" | "chat" | "changes";
+export type PaneLens = "terminal" | "chat" | "changes" | "git";
 
 export const OPEN_LENS_KEY = "open.lens";
 export const DEFAULT_OPEN_LENS: OpenLens = "terminal";

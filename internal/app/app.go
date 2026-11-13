@@ -35,6 +35,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/live"
 	"github.com/dev1antdev/remuda/internal/machines"
 	"github.com/dev1antdev/remuda/internal/mirror"
+	"github.com/dev1antdev/remuda/internal/notes"
 	"github.com/dev1antdev/remuda/internal/opinion"
 	"github.com/dev1antdev/remuda/internal/placement"
 	"github.com/dev1antdev/remuda/internal/ports"
@@ -46,6 +47,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/radar"
 	"github.com/dev1antdev/remuda/internal/recap"
 	"github.com/dev1antdev/remuda/internal/recipes"
+	"github.com/dev1antdev/remuda/internal/repos"
 	"github.com/dev1antdev/remuda/internal/resources"
 	"github.com/dev1antdev/remuda/internal/restart"
 	"github.com/dev1antdev/remuda/internal/review"
@@ -232,6 +234,7 @@ func Run(ctx context.Context, o Options) error {
 		return mc, true
 	})
 	requests.OnState = func(e events.PullRequestState) { events.Publish(bus, e) }
+	requests.OnChange = hub.RosterChanged // a read begun or ended moves an open hover card's freshness at once
 	// how many subagents each Claude Code pane's live conversation runs, read while a page reads the roster, for the Wall's zoo
 	subagentCounts := subagents.New(chats.RecentSubagents, func(machineID string) bool {
 		mc, err := fleet.Get(machineID)
@@ -743,6 +746,8 @@ func Run(ctx context.Context, o Options) error {
 		return nil
 	}}
 	events.Subscribe(bus, func(e events.MachineRemoved) { fleetSetup.Forget(e.Machine) })
+	projectSettings := repos.Open(o.Dir) // each repository's worktree defaults, setup script and run actions
+	events.Subscribe(bus, func(e events.MachineRemoved) { projectSettings.Forget(e.Machine) })
 	arenas := &arena.Service{Store: arena.Open(o.Dir), Machines: fleet, Watch: watcher, Input: input, Tasks: taskStore, Notify: pushSvc.Notify, Dir: o.Dir,
 		ModelOf: func(machineID, paneID string) string {
 			d, _ := meter.Display(machineID, paneID)
@@ -779,6 +784,7 @@ func Run(ctx context.Context, o Options) error {
 		Live:      hub,
 		Awake:     keepAwake,
 		Icons:     icons.New(o.Dir),
+		Notes:     notes.Open(o.Dir),
 		Arena:     arenas,
 		Limits:    planLimits,
 		Scratch:   shells,
@@ -796,7 +802,10 @@ func Run(ctx context.Context, o Options) error {
 
 		Collisions: radarOfCollisions,
 		Undo:       turns,
+		GitOps:     gitWrites(watcher, turns.Tracker),
+		Stage:      stageWrites(fleet, watcher, turns),
 		Scenes:     sceneSet,
+		Repos:      projectSettings,
 	}
 	previews := &preview.Service{Allow: srv.Guard.SignedIn, IdleAfter: 30 * time.Minute, Listen: preview.LoopbackListen(o.Addr)}
 	srv.Previews = previews
