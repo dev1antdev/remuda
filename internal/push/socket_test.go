@@ -68,7 +68,7 @@ func TestSocketHubHandsAlertsToTheLiveConnection(t *testing.T) {
 	endpoint, _ := s.SubscribeSocket("", nil, "app")
 	s.Sockets.Deliver(endpoint, Payload{Kind: "input"}) // nobody connected: dropped, no panic
 
-	ch, detach := s.Sockets.Attach(endpoint)
+	ch, detach := s.Sockets.Attach(endpoint, false)
 	if !s.Sockets.Connected(endpoint) {
 		t.Fatal("not connected after Attach")
 	}
@@ -76,9 +76,9 @@ func TestSocketHubHandsAlertsToTheLiveConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	select {
-	case p := <-ch:
-		if p.Kind != "test" || p.Title != "remuda" {
-			t.Fatalf("got %+v", p)
+	case f := <-ch:
+		if f.Alert == nil || f.Alert.Kind != "test" || f.Alert.Title != "remuda" {
+			t.Fatalf("got %+v", f)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("the test alert never arrived")
@@ -91,15 +91,15 @@ func TestSocketHubHandsAlertsToTheLiveConnection(t *testing.T) {
 		t.Fatalf("buffered %d, want %d (the rest dropped)", n, socketBuffer)
 	}
 
-	second, detachSecond := s.Sockets.Attach(endpoint)
+	second, detachSecond := s.Sockets.Attach(endpoint, false)
 	if _, open := <-ch; open {
 		// the buffered alerts drain first; the channel must be closed behind them
 		for range ch {
 		}
 	}
 	s.Sockets.Deliver(endpoint, Payload{Kind: "input", Body: "to the second"})
-	if p := <-second; p.Body != "to the second" {
-		t.Fatalf("the second connection got %+v", p)
+	if f := <-second; f.Alert == nil || f.Alert.Body != "to the second" {
+		t.Fatalf("the second connection got %+v", f)
 	}
 	detach() // the first connection's detach must not take the second one down
 	if !s.Sockets.Connected(endpoint) {
@@ -116,18 +116,18 @@ func TestSocketHubHandsAlertsToTheLiveConnection(t *testing.T) {
 
 func TestSocketHubCloseEndsEveryConnection(t *testing.T) {
 	h := newSockets()
-	a, _ := h.Attach(SocketPrefix + "a")
-	b, _ := h.Attach(SocketPrefix + "b")
+	a, _ := h.Attach(SocketPrefix+"a", false)
+	b, _ := h.Attach(SocketPrefix+"b", true)
 	h.Close()
 	if !h.Closed() {
 		t.Fatal("not closed")
 	}
-	for _, ch := range []<-chan Payload{a, b} {
+	for _, ch := range []<-chan Frame{a, b} {
 		if _, open := <-ch; open {
 			t.Fatal("a channel stayed open after Close")
 		}
 	}
-	late, _ := h.Attach(SocketPrefix + "c")
+	late, _ := h.Attach(SocketPrefix+"c", true)
 	if _, open := <-late; open {
 		t.Fatal("an Attach after Close got a live channel")
 	}
@@ -141,13 +141,13 @@ func TestSocketDeviceHearsScheduledAlertsAndKeepsQuietHours(t *testing.T) {
 		t.Fatal(err)
 	}
 	endpoint, _ := s.SubscribeSocket("", &Prefs{Input: true}, "app")
-	ch, detach := s.Sockets.Attach(endpoint)
+	ch, detach := s.Sockets.Attach(endpoint, false)
 	defer detach()
 	s.OnStatus(blockedEvent())
 	select {
-	case p := <-ch:
-		if p.Kind != "input" {
-			t.Fatalf("got %+v", p)
+	case f := <-ch:
+		if f.Alert == nil || f.Alert.Kind != "input" {
+			t.Fatalf("got %+v", f)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("the question never reached the socket device")
@@ -159,8 +159,8 @@ func TestSocketDeviceHearsScheduledAlertsAndKeepsQuietHours(t *testing.T) {
 	}
 	s.OnStatus(blockedEvent())
 	select {
-	case p := <-ch:
-		t.Fatalf("quiet hours ignored: %+v", p)
+	case f := <-ch:
+		t.Fatalf("quiet hours ignored: %+v", f)
 	case <-time.After(3 * inputDelay):
 	}
 }

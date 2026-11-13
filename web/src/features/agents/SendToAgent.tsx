@@ -1,8 +1,10 @@
 // One dialog for anything that goes to an agent as a prompt — a task, a message
-// forwarded from another agent: pick the agent (every running one, by machine,
-// the last used for this key preselected), edit the text, send through the chat's own path.
+// forwarded from another agent, a file to work on: pick the agent (every running one, by machine,
+// the last used for this key preselected), edit the text, send through the chat's own path. A
+// caller that asks a question (ask) has the answer put into its message by compose, with what it
+// is about shown under the box (about).
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { targetKey, targetWords, type AgentTarget } from "./targets";
 import { useSharing } from "@/features/roster/useSharing";
 import { usePref } from "@/lib/prefs";
@@ -11,9 +13,12 @@ import Logo from "@/ui/Logo";
 import { Dialog, Notice, useSubmit } from "@/ui";
 import { t } from "@/lib/i18n";
 
-export default function SendToAgent({ title, text: initialText, agents, currentPane, rememberKey, exclude, onClose, onSend }: {
+export default function SendToAgent({ title, text: initialText, agents, currentPane, rememberKey, exclude, onClose, onSend, ask, about, compose = (text) => text }: {
   title: string;
   text: string;
+  ask?: string; // the box's label, "Message" unless the caller asks something
+  about?: ReactNode; // what the message is about, under the box
+  compose?: (text: string) => string; // what goes to the agent for the text typed
   agents: AgentTarget[];
   currentPane: { machineId: string; paneId: string } | null;
   rememberKey: string; // the last target for this key is offered first
@@ -35,7 +40,7 @@ export default function SendToAgent({ title, text: initialText, agents, currentP
   const { busy, err, run } = useSubmit(async () => {
     if (!chosen || !text.trim()) return;
     setRemembered({ ...remembered, [rememberKey]: target }); // before the dialog goes away
-    await onSend(chosen, text);
+    await onSend(chosen, compose(text));
   });
   return (
     <Dialog
@@ -70,9 +75,10 @@ export default function SendToAgent({ title, text: initialText, agents, currentP
       )}
       {chosen && masked(chosen) === null && <p className="modal-hint tasks-send-cwd">{chosen.cwd}</p>}
       <label>
-        {t("Message")}
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={9} />
+        {ask ?? t("Message")}
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={ask ? 4 : 9} autoFocus={!!ask} />
       </label>
+      {about && <p className="modal-hint send-about">{about}</p>}
       {err && <Notice tone="error">{err}</Notice>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose}>

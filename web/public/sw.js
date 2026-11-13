@@ -76,7 +76,9 @@ async function pages() {
 // revoke the subscription or show their own. A window of ours that has the focus shows the alert itself, as a toast
 // in its corner, so there the notification is taken down again at once; a visible one that lacks the focus (behind
 // another window, on a second screen) gets it quietly. A test push always stays: it is what the person asked to see.
-// The last push is noted for the alerts panel, and told to the open windows.
+// The last push is noted for the alerts panel, and told to the open windows. A push names the notifications of this
+// device that no longer stand — a question answered elsewhere, a finish looked at — and they are closed first: there
+// is no silent push to take one back by itself, so they ride on the next one.
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -90,6 +92,8 @@ self.addEventListener("push", (event) => {
       const visible = wins.some((w) => w.visibilityState === "visible");
       const focused = wins.some((w) => w.focused);
       const tag = data.tag || "remuda";
+      const stale = Array.isArray(data.withdraw) ? data.withdraw.filter((t) => typeof t === "string" && t && t !== tag).slice(0, 32) : [];
+      for (const old of stale) for (const shown of await self.registration.getNotifications({ tag: old })) shown.close();
       await self.registration.showNotification(data.title || "remuda", {
         body: data.body || "",
         tag,

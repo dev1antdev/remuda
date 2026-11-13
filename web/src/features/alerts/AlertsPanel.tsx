@@ -8,6 +8,7 @@ import { speak, useVoices, voiceSupported } from "@/features/alerts/useVoice";
 import { DEFAULT_VOICE, type VoicePrefs } from "@/features/alerts/voice";
 import WebhooksSection from "@/features/alerts/WebhooksSection";
 import DeviceStatus from "@/features/alerts/DeviceStatus";
+import SoundRow from "@/features/alerts/SoundRow";
 import { testAlert } from "@/features/alerts/onpage";
 import { actions } from "@/app/store";
 import { alertSections } from "@/features/alerts/sections";
@@ -170,6 +171,7 @@ export default function AlertsPanel({ onClose }: { onClose: () => void }) {
           </div>
         </>
       )}
+      {shown.sounds && <SoundRow />}
 
       <label className="alerts-opt">
         <input type="checkbox" checked={voice.on} disabled={!voiceSupported} onChange={(e) => setVoice({ ...voice, on: e.target.checked })} />

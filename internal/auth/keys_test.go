@@ -104,13 +104,27 @@ func TestKeyAllowsTasksAndReadsOnly(t *testing.T) {
 			t.Errorf("a write to %s allowed", path)
 		}
 	}
-	for _, path := range []string{"/api/roster/", "/api/tasks2", "/api/keys", "/api/submit", "/api/input", "/api/recap/x", "/ws/pane", "/", "/api/health"} {
+	for _, path := range []string{"/api/roster/", "/api/tasks2", "/api/keys", "/api/submit", "/api/input", "/api/recap/x", "/ws/pane", "/", "/api/health", "/api/sleep/settings"} {
 		if key.Allows("GET", path) {
 			t.Errorf("%s allowed", path)
 		}
 	}
 	if (Key{}).Allows("GET", "/api/tasks") {
 		t.Error("a key without a scope opens nothing")
+	}
+}
+
+func TestTheGitHubIssuesAreThePersonsOnly(t *testing.T) {
+	tasks, viewer := Key{Scope: ScopeTasks}, Key{Scope: ScopeViewer}
+	for _, path := range []string{"/api/issues", "/api/issues/repos", "/api/issues/41", "/api/issues/41/comment", "/api/issues/41/close", "/api/issues/41/reopen", "/api/issues/41/assign"} {
+		for _, method := range []string{"GET", "POST"} {
+			if tasks.Allows(method, path) {
+				t.Errorf("an agent's key reaches %s %s", method, path)
+			}
+			if viewer.Allows(method, path) || ViewerAllows(method, path) {
+				t.Errorf("a viewer reaches %s %s", method, path)
+			}
+		}
 	}
 }
 

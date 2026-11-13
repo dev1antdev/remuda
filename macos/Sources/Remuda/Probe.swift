@@ -78,6 +78,10 @@ struct Probe {
             guard !finished else { return }
             say(["alert": (try? JSONSerialization.jsonObject(with: Data(text.utf8))) ?? text])
         }
+        alerts.onWithdraw = { tags in
+            guard !finished else { return }
+            say(["withdraw": tags])
+        }
         alerts.onState = { state, detail in
             guard !finished else { return }
             say(["socket": state, "detail": detail])

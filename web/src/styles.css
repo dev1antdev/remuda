@@ -1474,7 +1474,8 @@ input[type="checkbox"]:hover:not(:checked) {
 .mode-switch,
 .lens-switch,
 .fv-tabs,
-.tasks-view {
+.tasks-view,
+.review-scope {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -1488,7 +1489,8 @@ input[type="checkbox"]:hover:not(:checked) {
 .mode-switch button,
 .lens-switch button,
 .fv-tabs button,
-.tasks-view button {
+.tasks-view button,
+.review-scope button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1507,13 +1509,15 @@ input[type="checkbox"]:hover:not(:checked) {
 .mode-switch button:hover,
 .lens-switch button:hover,
 .fv-tabs button:hover,
-.tasks-view button:hover {
+.tasks-view button:hover,
+.review-scope button:hover {
   color: var(--fg);
 }
 
 .lens-switch button.on,
 .fv-tabs button.on,
-.tasks-view button.on {
+.tasks-view button.on,
+.review-scope button.on {
   background: var(--bg-active);
   color: var(--fg);
   box-shadow: var(--inset-top), var(--shadow-sm);
@@ -2248,13 +2252,13 @@ body.is-resizing iframe {
   font-variant-numeric: tabular-nums;
 }
 
-/* the second line sits under the name: past the mark, the logo and their gaps */
+/* the second line sits under the name; a shell's card, under the name past its "$" */
 .ws-sub {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  padding-left: 44px;
+  padding-left: 0;
   color: var(--fg-faint);
   font-size: var(--fs-12);
   line-height: 1.35;
@@ -2340,22 +2344,400 @@ body.is-resizing iframe {
   color: var(--fg-faint);
 }
 
-/* an agent's own line, when its workspace runs several */
+/* ---- the card's badges and its hover card, after Orca (CardBadges.tsx, CardDetails.tsx) ---- */
+
+/* the right end of the second line: the note, a plug while ports listen, the pull request; the words before them give way */
+.ws-tail {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* a line with badges at its right gives the room first from its words, then from the Jira chip, whose status words go
+   (the dot keeps its colour, the tooltip and the hover card say them), then from the branch; with a branch, a chip and
+   badges all on it, the words go too — the hover card says them */
+.ws-sub:has(> .ws-tail) > .ws-words {
+  min-width: 2em;
+}
+
+.ws-sub:has(> .ws-tail) .jira-status {
+  display: none;
+}
+
+.ws-sub:has(> .ws-tail) > .jira-chip,
+.ws-sub:has(> .ws-tail) > .ws-branch {
+  min-width: 3em;
+  overflow: hidden;
+}
+
+.ws-sub:has(> .ws-tail) .jira-key {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-sub:has(> .ws-tail):has(> .ws-branch):has(> .jira-chip) > .ws-words,
+.ws-item:has(> .ws-agents) .ws-sub:has(> .ws-tail) > .ws-words {
+  display: none; /* "2 agents" beside badges: the agents' own lines under the card say it */
+}
+
+.ws-note,
+.ws-ports {
+  display: inline-grid;
+  place-items: center;
+  height: 16px;
+  color: var(--fg-dim);
+}
+
+.linkish.ws-note {
+  padding: 0 1px;
+}
+
+.ws-pr-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.linkish.ws-pr {
+  gap: 3px;
+  height: 16px;
+  padding: 0 2px;
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-pr.tone-green,
+.ws-pr.tone-green:hover {
+  color: var(--green);
+}
+
+.ws-pr.tone-red,
+.ws-pr.tone-red:hover {
+  color: var(--red);
+}
+
+.ws-pr.tone-amber,
+.ws-pr.tone-amber:hover {
+  color: var(--amber);
+}
+
+.ws-pr.tone-violet,
+.ws-pr.tone-violet:hover {
+  color: var(--violet);
+}
+
+.ws-pr.tone-dim,
+.ws-pr.tone-dim:hover {
+  color: var(--fg-faint);
+}
+
+/* the ✓ of a request ready to merge keeps its room, so the number does not move when it comes */
+.ws-pr-ready.is-vacant {
+  visibility: hidden;
+}
+
+.ws-pr-more {
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.tip-line {
+  display: block;
+}
+
+/* the card's anchor is the card itself: the hover card hangs beside it, the anchor takes no pointer */
+.ws-main {
+  position: relative;
+}
+
+.hover-anchor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.popover.hover-card {
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  max-height: var(--radix-hover-card-content-available-height, 80vh);
+  padding: 5px;
+}
+
+.hc {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hc-about {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 8px 6px;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  line-height: 1.4;
+}
+
+.hc-about > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.hc > * + .hc-section,
+.hc > * + .hc-foot {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.hc-label {
+  margin: 0;
+  padding: 4px 8px 3px;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  font-weight: 500;
+}
+
+.linkish.hc-note,
+.hc-note {
+  display: block;
+  width: 100%;
+  max-height: 12em;
+  margin: 0;
+  padding: 5px 8px;
+  overflow-y: auto;
+  color: var(--fg);
+  font-size: var(--fs-12);
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.hc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+}
+
+.hc-item:hover {
+  background: var(--bg-hover);
+}
+
+.hc-icon {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 18px;
+  color: var(--fg-dim);
+}
+
+.hc .tone-green {
+  color: var(--green);
+}
+
+.hc .tone-red {
+  color: var(--red);
+}
+
+.hc .tone-amber {
+  color: var(--amber);
+}
+
+.hc .tone-violet {
+  color: var(--violet);
+}
+
+.hc .tone-dim {
+  color: var(--fg-faint);
+}
+
+.hc-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hc-title {
+  overflow: hidden;
+  color: var(--fg);
+  font-size: var(--fs-13);
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hc-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.hc-meta > span + span::before {
+  content: "·";
+  margin-right: 5px;
+  color: var(--fg-faint);
+}
+
+.hc-where {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.hc-links {
+  display: flex;
+  flex-shrink: 0;
+  gap: 1px;
+  margin: -3px -4px 0 0;
+}
+
+.hc-port {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--r-md);
+  font-size: var(--fs-12);
+  line-height: 1.4;
+}
+
+.hc-port-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.hc-port-num {
+  flex-shrink: 0;
+  width: 44px;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-weight: 500;
+}
+
+.hc-port-proc {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+}
+
+.hc-port-addr {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hc-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 3px;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.hc-foot.is-failed {
+  color: var(--amber);
+}
+
+.hc-foot .spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+/* the Note dialog (NoteDialog.tsx): the workspace beside the title, the keys and the size under the field */
+.note-dialog .note-where {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-weight: 400;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-dialog .note-text {
+  width: 100%;
+  min-height: 9em;
+  resize: vertical;
+}
+
+.note-hint {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--fs-12);
+}
+
+.note-size {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.note-size.over {
+  color: var(--red);
+}
+
+/* a line per agent under its card, after Orca: its logo, its title (muted at rest), the time in its state, its shape */
 .ws-agents {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 0 4px 4px 30px;
+  padding: 0 4px 4px 10px;
 }
 
 .ws-agent-line {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 22px;
+  gap: 7px;
+  min-height: 24px;
   padding: 1px 6px;
   border-radius: var(--r-sm);
-  color: var(--fg-dim);
+  color: var(--fg);
   font-size: var(--fs-12);
   cursor: pointer;
   transition: background var(--fast) var(--ease), opacity var(--base) var(--ease);
@@ -2367,17 +2749,11 @@ body.is-resizing iframe {
 
 .ws-agent-line.on {
   background: var(--bg-active);
-  color: var(--fg);
 }
 
 .ws-agent-line .radar-mark {
-  width: 12px;
+  width: 14px;
   font-size: var(--fs-11);
-}
-
-.ws-agent-line .radar-logo {
-  width: 12px;
-  height: 12px;
 }
 
 .ws-agent-words {
@@ -2388,53 +2764,570 @@ body.is-resizing iframe {
   text-overflow: ellipsis;
 }
 
+/* an agent at rest is drawn muted, as Orca draws an idle one */
+.ws-agent-line.shape-idle .ws-agent-words {
+  color: var(--fg-dim);
+}
+
+.ws-agent-line.is-idle_stale {
+  opacity: 0.55;
+}
+
+/* a pinned agent's workspace and machine, quietly after its title, the first to give way */
+.ws-agent-line:has(> .agent-line-where) .ws-agent-words {
+  flex: 0 1 auto;
+}
+
+.agent-line-where {
+  flex: 1 6 auto;
+  min-width: 4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+/* the pin takes the age's place under the pointer, as munza's better-sidebar has it; a touch screen shows both */
+.ws-agent-line .agent-pin {
+  display: none;
+  width: 20px;
+  height: 20px;
+  margin: -2px -2px -2px 0;
+  color: var(--fg-faint);
+}
+
+.ws-agent-line .agent-pin.on {
+  color: var(--accent);
+}
+
+.ws-agent-line:hover .agent-pin,
+.ws-agent-line:focus-within .agent-pin {
+  display: inline-grid;
+}
+
+.ws-agent-line:hover .ws-age,
+.ws-agent-line:focus-within .ws-age {
+  display: none;
+}
+
+/* the chevron that folds an agent's subagents, folded the count in the colour of work */
+.subagents-fold.icon-btn.sm {
+  width: auto;
+  min-width: 20px;
+  height: 18px;
+  gap: 2px;
+  padding: 0 3px;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+.subagents-fold.is-folded {
+  color: var(--accent);
+}
+
+/* an agent's shape: four that read without colour — the spinner, the "Needs you" pill, a filled dot, a hollow ring —
+   and the watchdog's "!"; each in a box of its own width, so the line does not jump as the spinner turns */
+.agent-shape {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  line-height: 1;
+  color: var(--fg-faint);
+}
+
+.agent-shape.is-working {
+  color: var(--accent);
+}
+
+.agent-shape.is-done::before,
+.agent-shape.is-idle::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  box-sizing: border-box;
+}
+
+.agent-shape.is-done::before {
+  background: var(--green);
+}
+
+.agent-shape.is-idle::before {
+  border: 1.5px solid var(--fg-faint);
+}
+
+.agent-shape.is-asking-square,
+.agent-shape.is-note {
+  border-radius: var(--r-xs);
+  font-family: inherit;
+  font-size: var(--fs-10);
+  font-weight: 700;
+}
+
+.agent-shape.is-asking-square {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.agent-shape.is-note {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.needs-pill,
+.needs-chip {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: var(--fs-10);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.needs-chip {
+  height: 16px;
+  padding: 0 5px;
+}
+
+/* a folded head's line after Orca: "2 need you", then a spinner and "1 working", then the finished; where the head is too
+   narrow for all three the last ones wrap out of sight whole, never cut mid-word, and the name keeps a few letters */
+.head-summary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 7px;
+  min-width: 0;
+  height: 18px;
+  overflow: hidden;
+  font-weight: 500;
+}
+
+.machine-summary:has(> .head-summary) {
+  min-width: min-content;
+  flex-shrink: 1;
+}
+
+/* a head narrower than the words holds the spinner and the count alone */
+.ws-folder-head,
+.machine-head {
+  container-type: inline-size;
+}
+
+.head-working-count {
+  display: none;
+}
+
+@container (max-width: 300px) {
+  .head-working-words {
+    display: none;
+  }
+
+  .head-working-count {
+    display: inline;
+  }
+}
+
+.ws-folder.folded .ws-folder-name,
+.machine.folded .machine-label {
+  min-width: 3em;
+}
+
+.head-working {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.head-summary .radar-mark {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* the subagents at work under their agent, on Orca's thin tree lines: an elbow each, the last one's corner rounded */
+.sub-tree {
+  display: flex;
+  flex-direction: column;
+  padding-left: 12px;
+}
+
+.sub-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  padding: 0 6px 0 0;
+  border-radius: var(--r-sm);
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  cursor: pointer;
+}
+
+.sub-line:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.sub-line.is-more {
+  cursor: default;
+  color: var(--fg-faint);
+}
+
+.sub-line.is-more:hover {
+  background: none;
+}
+
+.sub-elbow {
+  position: relative;
+  align-self: stretch;
+  flex-shrink: 0;
+  width: 10px;
+}
+
+.sub-elbow::before,
+.sub-elbow.goes-on::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  border-left: 1.5px solid var(--line-strong);
+}
+
+.sub-elbow::before {
+  top: 0;
+  width: 8px;
+  height: 50%;
+  border-bottom: 1.5px solid var(--line-strong);
+  border-bottom-left-radius: 6px;
+}
+
+.sub-elbow.goes-on::after {
+  top: 0;
+  bottom: 0;
+}
+
+.sub-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* a state wears its colour on the mark, and on the words where they say why it needs you */
 .ws-item.is-blocked > .ws-main .radar-mark,
 .ws-item.is-blocked > .ws-main .ws-words,
-.ws-agent-line.is-blocked .radar-mark,
-.ws-agent-line.is-blocked .ws-agent-words,
 .radar-mark.blocked {
   color: var(--red);
 }
 
 .ws-item.is-done > .ws-main .radar-mark,
-.ws-agent-line.is-done .radar-mark,
 .radar-mark.done {
   color: var(--green);
 }
 
-.ws-item.is-idle_fresh > .ws-main .radar-mark,
-.ws-agent-line.is-idle_fresh .radar-mark {
+.ws-item.is-idle_fresh > .ws-main .radar-mark {
   color: var(--green-dim);
 }
 
-.ws-item.is-unknown > .ws-main .radar-mark,
-.ws-agent-line.is-unknown .radar-mark {
+.ws-item.is-unknown > .ws-main .radar-mark {
   color: var(--violet);
 }
 
-.ws-item.is-idle_stale > .ws-main,
-.ws-agent-line.is-idle_stale {
+.ws-item.is-idle_stale > .ws-main {
   opacity: 0.55;
 }
 
-.ws-item.is-alert > .ws-main .radar-mark,
-.ws-item.is-alert > .ws-main .ws-words,
-.ws-agent-line.is-alert .radar-mark,
-.ws-agent-line.is-alert .ws-agent-words {
-  color: var(--amber);
+/* a workspace put to sleep (features/sleep): the moon for its mark, "Asleep" for its words, dimmed until woken */
+.ws-item.is-asleep > .ws-main {
+  opacity: 0.6;
+}
+
+.ws-item.is-asleep > .ws-main .radar-mark,
+.ws-item.is-asleep > .ws-main .ws-words {
+  color: var(--ctp-lavender);
 }
 
 .ws-item.is-alert > .ws-main .radar-mark,
-.ws-agent-line.is-alert .radar-mark {
+.ws-item.is-alert > .ws-main .ws-words {
+  color: var(--amber);
+}
+
+.ws-item.is-alert > .ws-main .radar-mark {
   font-weight: 700;
   animation: pulse 1.6s ease-in-out infinite;
 }
 
 /* an agent stopped on its plan limit says so in amber until it works again */
-.ws-item.is-limit > .ws-main .ws-words,
-.ws-agent-line.is-limit .ws-agent-words {
+.ws-item.is-limit > .ws-main .ws-words {
   color: var(--amber);
+}
+
+/* the groups over the machines: "Needs you", the oldest wait first, and the pinned agents */
+.sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 2px 8px 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sidebar-group .ws-agents {
+  padding: 0;
+}
+
+.sidebar-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 6px;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sidebar-group-head .badge {
+  margin-left: 0;
+}
+
+.sidebar-group-head.is-needs {
+  color: var(--red);
+}
+
+.sidebar-group-head.is-needs .badge {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.inbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 3px 6px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background var(--fast) var(--ease);
+}
+
+.inbox-row:hover {
+  background: var(--bg-hover);
+}
+
+.inbox-row.on {
+  background: var(--bg-input);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.inbox-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+
+.inbox-where {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.inbox-workspace {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+  font-size: var(--fs-13);
+  font-weight: 500;
+}
+
+.inbox-machine {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.inbox-ask {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--red);
+  font-size: var(--fs-12);
+}
+
+.inbox-row.is-note .inbox-ask {
+  color: var(--amber);
+}
+
+/* the sidebar's foot: how many agents run and how many need you, the second part a way to the one that waited longest */
+/* the foot stands at the bottom however short the list, and stays there over a long one */
+.sidebar:has(> .sidebar-foot) {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+}
+
+.sidebar:has(> .sidebar-foot) > * {
+  flex-shrink: 0;
+}
+
+.sidebar-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  margin-top: auto;
+  padding: 0 14px env(safe-area-inset-bottom);
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+.sidebar-foot .sidebar-foot-needs {
+  padding: 2px 4px;
+  color: var(--red);
+  font-weight: 600;
+}
+
+/* a priority or prefix section's heading, in the colour of the state it gathers */
+.ws-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ws-section + .ws-section {
+  margin-top: 4px;
+}
+
+.ws-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 6px 0 2px;
+  border-radius: var(--r-sm);
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ws-section-head:hover,
+.ws-section-head.on {
+  background: var(--bg-hover);
+}
+
+.ws-section-head .badge {
+  margin-left: 0;
+}
+
+.ws-section-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-section-head .machine-summary {
+  margin-left: auto;
+}
+
+.ws-section.is-needs .ws-section-name {
+  color: var(--red);
+}
+
+.ws-section.is-done .ws-section-name {
+  color: var(--green);
+}
+
+.ws-section.is-working .ws-section-name {
+  color: var(--accent);
+}
+
+.ws-section-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* the main checkout beside its worktrees, and the selected card's distance from its upstream */
+.primary-tag {
+  flex-shrink: 0;
+  padding: 0 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  color: var(--fg-faint);
+  font-size: var(--fs-10);
+  line-height: 14px;
+}
+
+.ws-sync {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+/* beside those tags an issue's chip keeps its key and its dot, its status in the tooltip, and the words a few letters */
+.ws-sub:has(> .primary-tag, > .ws-sync) .jira-status {
+  display: none;
+}
+
+.ws-sub:has(> .primary-tag, > .ws-sync) .ws-words {
+  min-width: 2.5em;
+}
+
+/* a folder's icon glows softly while one of its agents works; under reduced motion it holds a still ring */
+.ws-folder-head.is-working .folder-icon {
+  animation: icon-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes icon-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--accent-soft);
+  }
+  50% {
+    box-shadow: 0 0 6px 2px var(--accent-ring);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-folder-head.is-working .folder-icon {
+    animation: none !important;
+    box-shadow: 0 0 0 1px var(--accent-ring);
+  }
 }
 
 /* a plan window in the machine's ⓘ, in the tone its use earns */
@@ -3988,6 +4881,57 @@ ul.pick-list {
   color: var(--fg-dim);
 }
 
+/* ---- Resume after restart (features/sleep): a row per chat, its agent and place over the command in mono ---- */
+.modal label.resume-row {
+  align-items: flex-start;
+  padding: 8px 10px;
+}
+
+.resume-row input,
+.resume-row .radar-logo {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.resume-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.resume-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.resume-where,
+.resume-command {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-dim);
+}
+
+.resume-command {
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  background: none;
+  padding: 0;
+}
+
+.modal label.resume-auto {
+  margin-bottom: 10px;
+  font-size: var(--fs-12);
+}
+
+/* three buttons in a long language overrun a phone: they wrap, Not now above the two resumes */
+.resume-dialog .modal-actions {
+  flex-wrap: wrap;
+}
+
 /* ---- undoing a turn (features/undo): the files a row each, the commits to revert, the files in the way ---- */
 .undo-files .pick-row {
   cursor: default;
@@ -4068,6 +5012,21 @@ ul.pick-list {
 .alerts-voice .sel {
   min-width: 0;
   flex: 1 1 auto;
+}
+
+/* the Sound row's choice keeps the width of its longest pick, so the words beside it never wrap anew on a change */
+.alerts-opt > .sel.alerts-sound-pick {
+  min-width: 11em;
+}
+
+/* a play button per sound under the Sound row, its words beside the icon; they wrap rather than run past the dialog */
+.alerts-sounds {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.alerts-sounds .btn {
+  gap: 6px;
 }
 
 
@@ -4268,6 +5227,77 @@ ul.pick-list {
 
 .fv-diff .meta {
   color: var(--fg-faint);
+}
+
+/* the File tab's changed lines: a bar at the row's edge, the old lines shown in place */
+.fv-gutter .fv-line.is-added {
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--green);
+}
+.fv-gutter .fv-line.is-changed {
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+.fv-gutter .fv-line.is-old {
+  background: color-mix(in srgb, var(--red) 16%, transparent);
+  box-shadow: inset 3px 0 0 var(--red);
+  color: var(--red);
+  cursor: pointer;
+}
+.fv-gutter .fv-line.is-old .fv-ln {
+  color: var(--red);
+}
+.fv-gutter .fv-line.opens {
+  cursor: pointer;
+}
+.fv-gutter .fv-line.hit {
+  box-shadow: inset 2px 0 0 var(--amber);
+}
+.fv-toggle.linkish {
+  display: block;
+  height: auto;
+  border-radius: 0;
+  padding: 0 14px 0 0;
+  font: inherit;
+  text-align: right;
+  color: var(--amber);
+}
+.fv-line.is-added .fv-toggle.linkish {
+  color: var(--green);
+}
+.fv-toggle.linkish:hover {
+  background: none;
+  color: var(--fg);
+  text-decoration: underline;
+}
+.fv-removed.linkish {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 8px;
+  padding: 0;
+  border-radius: 0;
+  cursor: pointer;
+}
+.fv-removed-mark {
+  width: 100%;
+  height: 2px;
+  background: var(--red);
+}
+.fv-removed.linkish:hover .fv-removed-mark,
+.fv-removed.linkish:focus-visible .fv-removed-mark {
+  height: 4px;
+}
+.fv-title:has(.fv-icon) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
+}
+.fv-title .fv-icon {
+  grid-row: 1 / span 2;
+  width: 20px;
+  height: 20px;
 }
 
 /* ---- modal ---- */
@@ -7029,13 +8059,19 @@ button.usage-row:hover {
     opacity: 1;
   }
 
-  /* no hover to reveal them on a touch screen: the card's and the folder's menus stand */
+  /* no hover to reveal them on a touch screen: the card's and the folder's menus stand, and an agent's pin beside its age */
   .ws-main .ws-menu-btn,
-  .ws-folder-head .ws-folder-menu {
+  .ws-folder-head .ws-folder-menu,
+  .ws-agent-line .agent-pin {
     display: inline-grid;
     visibility: visible;
     width: var(--ctl-sm);
     height: var(--ctl-sm);
+  }
+
+  .ws-agent-line:hover .ws-age,
+  .ws-agent-line:focus-within .ws-age {
+    display: inline;
   }
 
   .icon-btn {
@@ -7060,7 +8096,9 @@ button.usage-row:hover {
   }
 
   .ws-agent-line,
-  .ws-folder-head {
+  .ws-folder-head,
+  .ws-section-head,
+  .sub-line {
     min-height: var(--ctl);
   }
 
@@ -7099,6 +8137,535 @@ button.usage-row:hover {
   .tabs-tools .kb-font {
     display: none;
   }
+}
+
+/* ---- the status bar: the plan limits, the pane's place, its machine's load and ports, along the foot of the main
+   area on a desk with a mouse (app/StatusBar.tsx); every segment keeps its room and its figures are tabular, so
+   nothing moves when a value does ---- */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 8px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.app-main:has(> .status-bar) .float-term {
+  bottom: 28px;
+}
+
+body:has(.status-bar) .toasts {
+  bottom: 44px;
+}
+
+.btn.ghost.status-item,
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.status-item:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -2px;
+}
+
+.status-item .radar-logo {
+  width: 13px;
+  height: 13px;
+}
+
+.status-quiet {
+  color: var(--fg-faint);
+}
+
+.status-sep {
+  padding: 0 2px;
+  color: var(--fg-faint);
+}
+
+.status-num {
+  display: inline-flex;
+  align-items: center;
+  color: var(--fg);
+}
+
+.status-num .is-amber,
+.status-num.is-amber,
+.status-load.is-amber > .icon {
+  color: var(--amber);
+}
+
+.status-num .is-red,
+.status-num.is-red,
+.status-load.is-red > .icon {
+  color: var(--red);
+}
+
+.status-limits {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.status-window {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* a window's figure keeps the room of "wk 100%": a reading that grows by a digit moves nothing after it */
+.status-window .status-num {
+  min-width: 6.5ch;
+}
+
+.status-agent.is-stale {
+  opacity: 0.55;
+}
+
+.status-place {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.status-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  color: var(--fg-dim);
+}
+
+.status-branch-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.status-pr.is-green > .icon {
+  color: var(--green);
+}
+
+.status-pr.is-mauve > .icon {
+  color: var(--violet);
+}
+
+.status-pr.is-red > .icon {
+  color: var(--red);
+}
+
+.status-pr.is-dim > .icon {
+  color: var(--fg-faint);
+}
+
+.status-machine-side {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* "CPU 100 % · 99.9 GB" fits, so a busier machine moves nothing beside it */
+.status-load .status-num {
+  min-width: 17ch;
+}
+
+.status-load.is-off .status-num,
+.status-ports.is-off .status-num {
+  min-width: 0;
+  color: var(--fg-faint);
+}
+
+.status-ports .status-num {
+  min-width: 2.5ch;
+  color: var(--fg-dim);
+}
+
+.status-ports.has-ports .status-num {
+  color: var(--fg);
+}
+
+.status-host-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: hsl(var(--machine-hue, 0) 55% 58%);
+}
+
+.status-host-dot.is-local {
+  background: var(--fg-faint);
+}
+
+.status-host-name {
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+/* the plan limits' hover card: a window a row, its bar with the tick at the share of its time gone */
+.tip.tip-card {
+  max-width: 340px;
+  padding: 10px 12px;
+}
+
+.limits-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 320px;
+  font-variant-numeric: tabular-nums;
+}
+
+.limits-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.limits-card-head .radar-logo {
+  width: 14px;
+  height: 14px;
+}
+
+.limits-card-age {
+  margin-left: auto;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.limits-card-age.is-old {
+  color: var(--amber);
+}
+
+.limits-card-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.limits-card-rows.is-stale {
+  opacity: 0.55;
+}
+
+.limits-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.limits-row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.limits-row-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg-dim);
+}
+
+.limits-bar {
+  position: relative;
+  flex-shrink: 0;
+  width: 96px;
+  height: 6px;
+  border-radius: var(--r-xs);
+  background: var(--bg-active);
+}
+
+.limits-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: var(--r-xs);
+  background: var(--green);
+}
+
+.limits-bar.is-amber .limits-bar-fill {
+  background: var(--amber);
+}
+
+.limits-bar.is-red .limits-bar-fill {
+  background: var(--red);
+}
+
+.limits-bar-tick {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 10px;
+  margin-left: -1px;
+  background: var(--fg);
+  opacity: 0.8;
+}
+
+.limits-row-pct {
+  min-width: 6ch;
+  text-align: right;
+  color: var(--fg);
+}
+
+.limits-row-pct.is-amber {
+  color: var(--amber);
+}
+
+.limits-row-pct.is-red {
+  color: var(--red);
+}
+
+.limits-row-left {
+  min-width: 6ch;
+  text-align: right;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.limits-row-pace,
+.limits-row-sub {
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.limits-verdict.is-ahead {
+  color: var(--amber);
+}
+
+.limits-verdict.is-on {
+  color: var(--fg-dim);
+}
+
+.limits-verdict.is-under {
+  color: var(--green);
+}
+
+.limits-row-forecast.is-amber {
+  color: var(--amber);
+}
+
+.limits-card-foot {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+/* the load's and the ports' popups above the bar */
+.load-pop {
+  width: 420px;
+}
+
+.ports-pop {
+  width: 400px;
+}
+
+.load-list,
+.ports-list {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-13);
+  font-variant-numeric: tabular-nums;
+}
+
+.load-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.load-head-sum {
+  margin-left: auto;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.load-empty {
+  padding: 12px 14px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.load-empty.is-error {
+  color: var(--red);
+}
+
+.load-ws {
+  border-bottom: 1px solid var(--line);
+}
+
+.load-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 46px;
+  padding: 0 14px 0 6px;
+}
+
+.load-row.is-terminal {
+  min-height: 30px;
+  padding-left: 36px;
+  background: var(--bg-raised);
+}
+
+.load-row.is-herdr {
+  padding-left: 36px;
+  background: var(--bg-raised);
+}
+
+.btn.ghost.load-ws-name,
+.load-ws-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  min-height: 34px;
+  padding: 3px 6px;
+  color: var(--fg);
+  text-align: left;
+}
+
+.load-ws-title,
+.load-ws-line {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.load-ws-line {
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.load-nums {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+
+.load-nums > span {
+  min-width: 7ch;
+  text-align: right;
+}
+
+.load-nums .is-amber {
+  color: var(--amber);
+}
+
+.load-nums .is-red {
+  color: var(--red);
+}
+
+.load-foot {
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+.port-group {
+  border-bottom: 1px solid var(--line);
+}
+
+.btn.ghost.port-group-head {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 0;
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+
+.port-group-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.port-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 10px 0 14px;
+}
+
+.port-number {
+  min-width: 5ch;
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.port-what {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.port-process,
+.port-address {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.port-process {
+  color: var(--fg-dim);
+}
+
+.port-address {
+  color: var(--fg-faint);
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+
+.port-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.btn.ghost.port-stop:hover:not(:disabled) {
+  color: var(--red);
 }
 
 /* ---- toasts: status in a corner, never in a bar ---- */
@@ -7169,6 +8736,649 @@ button.usage-row:hover {
     flex: 1 1 auto;
     padding: 0 8px;
   }
+}
+
+/* ---- the Git lens: a checkout's history as a graph, after git-graph (features/git) ---- */
+
+/* a phone's header holds four lenses beside the usage pill: the pill keeps its number and its tone, the buttons a little
+   less padding, so the row never runs past the screen in a language with long words */
+@media (max-width: 480px) {
+  .usage-pill-bar {
+    display: none;
+  }
+
+  .lens-switch > button {
+    padding: 0 6px;
+  }
+}
+
+.git-lens {
+  container: git-lens / inline-size;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-13);
+}
+
+.git-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+.git-where {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: min(40%, 280px);
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+
+.git-where > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.git-where .icon {
+  flex: none;
+}
+
+.git-remotes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+
+/* the count, the spinner and the reread keep to the right, on the head's second line too when it wraps */
+.git-count {
+  margin-left: auto;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* the spinner's place is kept whether a read is out or not, so nothing beside it moves */
+.git-spin {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: var(--fg-faint);
+}
+
+.git-stopped {
+  align-items: center;
+  margin: 8px 12px 0;
+}
+
+.git-stopped-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.git-table {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.git-rows {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.git-row {
+  --lane: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding-right: 10px;
+  white-space: nowrap;
+  cursor: default;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 24px;
+}
+
+.git-rows .git-row:hover {
+  background: var(--bg-hover);
+}
+
+.git-row.is-head {
+  background: color-mix(in srgb, var(--lane) 9%, transparent);
+}
+
+.git-row.on,
+.git-rows .git-row.on:hover {
+  background: var(--bg-active);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.git-row.is-merge .git-subject,
+.git-row.is-uncommitted .git-subject {
+  color: var(--fg-faint);
+}
+
+.git-row.is-head .git-subject {
+  font-weight: 600;
+}
+
+.git-row.is-uncommitted {
+  cursor: pointer;
+}
+
+.git-cols {
+  flex: none;
+  height: 26px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+  content-visibility: visible;
+}
+
+/* the lanes: as wide as they need, never past 40 % of the row, clipped beyond */
+.git-graph {
+  flex: none;
+  width: min(var(--git-lanes-w, 48px), 40%);
+  min-width: 48px; /* room for its heading, a lane or two */
+  height: 100%;
+  overflow: hidden;
+}
+
+.git-cols .git-graph {
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+}
+
+.git-lanes {
+  display: block;
+}
+
+.git-desc {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.git-subject {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.5;
+}
+
+.git-date,
+.git-author,
+.git-hash {
+  flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.5;
+  color: var(--fg-faint);
+}
+
+.git-date {
+  width: 56px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.git-author,
+.git-hash {
+  display: none;
+}
+
+.git-author {
+  width: 120px;
+  color: var(--fg-dim);
+}
+
+.git-hash {
+  width: 70px;
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+}
+
+@container git-lens (min-width: 600px) {
+  .git-author,
+  .git-hash {
+    display: block;
+  }
+}
+
+.git-row-more {
+  flex: none;
+  width: var(--ctl-xs);
+}
+
+.git-label {
+  flex: none;
+  display: inline-flex;
+  align-items: stretch;
+  height: 18px;
+  border: 1px solid var(--lane);
+  border-radius: var(--r-xs);
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  line-height: 16px;
+  user-select: none; /* a double-click checks the branch out, it selects no word */
+}
+
+.git-label-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  color: var(--fg);
+}
+
+.git-label-part .icon {
+  flex: none;
+}
+
+.git-label-part.is-rider {
+  border-left: 1px solid var(--lane);
+  background: color-mix(in srgb, var(--lane) 14%, transparent);
+  color: var(--fg-dim);
+}
+
+.git-label.is-tag .git-label-part {
+  color: var(--amber);
+}
+
+.git-label.is-current,
+.git-label.is-head {
+  background: var(--lane);
+}
+
+.git-label.is-current > .git-label-part:first-child,
+.git-label.is-head > .git-label-part {
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.git-label.is-current > .git-label-part.is-rider {
+  background: color-mix(in srgb, var(--bg) 22%, transparent);
+  color: var(--bg);
+}
+
+.git-more {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 14px;
+}
+
+.git-details {
+  flex: 0 0 min(46%, 440px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+}
+
+.git-details-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.git-details-title,
+.git-details-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.git-details-path {
+  font-family: var(--mono);
+  color: var(--fg);
+}
+
+.git-details-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 14px 16px;
+}
+
+.git-details-body:has(> .git-diff) {
+  padding: 0;
+}
+
+.git-details-subject {
+  margin: 0 0 8px;
+  font-size: var(--fs-13-5);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.git-meta {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 3px 10px;
+  margin: 0;
+  font-size: var(--fs-12);
+}
+
+.git-meta dt {
+  color: var(--fg-faint);
+}
+
+.git-meta dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--fg-dim);
+}
+
+.git-meta .mono {
+  font-family: var(--mono);
+}
+
+.git-meta dd.git-meta-hash {
+  color: var(--accent);
+}
+
+.git-message {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.git-files-head {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 4px;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.git-add {
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+
+.git-del {
+  color: var(--red);
+  font-variant-numeric: tabular-nums;
+}
+
+.git-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* a file of the commit: a row of the list, its whole width the button */
+.git-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--fs-12);
+  text-align: left;
+  cursor: pointer;
+}
+
+.git-file:hover {
+  background: var(--bg-hover);
+}
+
+.git-file:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.git-file-status {
+  flex: none;
+  width: 12px;
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  color: var(--amber);
+}
+
+.git-file-status.is-add {
+  color: var(--green);
+}
+
+.git-file-status.is-del {
+  color: var(--red);
+}
+
+.git-file-status.is-ren {
+  color: var(--blue);
+}
+
+.git-file-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.git-file-dir {
+  color: var(--fg-faint);
+}
+
+.git-diff {
+  min-width: max-content;
+  padding: 0 0 16px;
+}
+
+.git-empty-note,
+.git-error-note {
+  margin: 8px 0;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.git-error-note {
+  color: var(--red);
+}
+
+.git-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 28px 48px;
+  text-align: center;
+}
+
+.git-empty p {
+  margin: 0;
+  max-width: 320px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
+}
+
+.git-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg-raised);
+  color: var(--fg-dim);
+}
+
+/* a loading state shaped like the rows and the files it waits for */
+.git-loading {
+  padding: 6px 0;
+}
+
+.git-loading-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 24px;
+  padding: 0 12px;
+}
+
+.git-loading-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bg-active);
+}
+
+.git-loading-bar,
+.git-skeleton > span {
+  height: 8px;
+  border-radius: var(--r-xs);
+  background: var(--bg-active);
+  animation: pulse 1.6s var(--ease) infinite;
+}
+
+.git-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0;
+}
+
+.git-skeleton > span {
+  display: block;
+}
+
+.modal.git-dialog {
+  width: min(94vw, 420px);
+}
+
+.git-dialog-detail {
+  margin: 0;
+  color: var(--fg-dim);
+  overflow-wrap: anywhere;
+}
+
+.git-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.git-choice legend {
+  margin-bottom: 6px;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.modal label.git-choice-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.modal label.git-choice-row.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.modal label.git-choice-row.on.is-danger {
+  border-color: var(--red);
+  background: var(--red-soft);
+}
+
+.git-choice-row > span {
+  font-weight: 400;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.git-choice-row.is-danger > span {
+  color: var(--red);
+}
+
+.git-lose {
+  margin: 0;
+  color: var(--red);
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
+}
+
+.git-dialog-error {
+  margin: 0;
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: var(--red-soft);
+  color: var(--red);
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* a menu at a point: an empty anchor laid over the page where the press landed */
+.menu-anchor {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
 }
 
 /* ---- a machine's vitals ---- */
@@ -7354,10 +9564,6 @@ button.usage-row:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.picker-git {
-  color: var(--accent);
 }
 
 .picker-tag {
@@ -8640,6 +10846,163 @@ body.popout {
 }
 .fp-fold > .linkish {
   align-self: flex-start;
+}
+
+/* ---- the files rail's two tabs, and the project tree ---- */
+.footprint-head:has(.footprint-tabs) {
+  padding-left: 6px;
+}
+.footprint-tabs {
+  padding: 2px;
+}
+.footprint-tabs button {
+  height: 24px;
+  padding: 0 10px;
+  font-size: var(--fs-12);
+}
+.footprint-head .footprint-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fp-path .fp-icon {
+  align-self: center;
+}
+.file-icon {
+  flex-shrink: 0;
+  display: block;
+  user-select: none;
+}
+.footprint-list.tree {
+  gap: 0;
+  padding: 4px;
+}
+.tree-group {
+  position: relative;
+}
+.tree-group.nested::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--guide);
+  border-left: 1px solid var(--line);
+  pointer-events: none;
+}
+.tree-row {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding-right: 2px;
+  border-radius: var(--r-sm);
+  transition: background var(--fast) var(--ease);
+}
+.tree-row:hover,
+.tree-row:focus-within,
+.tree-row.is-menu {
+  background: var(--bg-hover);
+}
+.tree-open {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  gap: 6px;
+  padding: 0 4px 0 0;
+  color: var(--fg);
+  font-size: var(--fs-12);
+  font-weight: 400;
+  text-align: left;
+}
+.tree-open:hover {
+  background: none;
+  color: var(--fg);
+}
+.tree-chevron {
+  display: inline-flex;
+  justify-content: center;
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+.tree-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-link {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+.tree-mark {
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  font-weight: 600;
+  line-height: 1;
+}
+.tree-dot {
+  width: 6px;
+  height: 6px;
+  margin: 0 4px 0 2px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.tree-dot.on {
+  background: var(--amber);
+}
+.tree-more {
+  flex-shrink: 0;
+  visibility: hidden;
+}
+.tree-row:hover .tree-more,
+.tree-row:focus-within .tree-more,
+.tree-row.is-menu .tree-more {
+  visibility: visible;
+}
+.tree-row.tone-added :is(.tree-name, .tree-mark) {
+  color: var(--green);
+}
+.tree-row.tone-changed :is(.tree-name, .tree-mark) {
+  color: var(--amber);
+}
+.tree-row.tone-deleted :is(.tree-name, .tree-mark),
+.tree-row.tone-conflict :is(.tree-name, .tree-mark) {
+  color: var(--red);
+}
+.tree-row.is-gone .tree-name {
+  text-decoration: line-through;
+}
+.tree-row.is-ignored :is(.tree-icon, .tree-name, .tree-link, .tree-chevron) {
+  opacity: 0.5;
+}
+.tree-note {
+  padding: 4px 6px 6px;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+.tree-note.is-error {
+  color: var(--red);
+}
+.tree-skeleton {
+  height: 10px;
+  margin: 8px 0;
+  max-width: calc(100% - 40px);
+  border-radius: var(--r-xs);
+  background: var(--bg-hover);
+}
+@media (pointer: coarse) {
+  .tree-more {
+    visibility: visible;
+  }
+}
+.send-about code {
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
 }
 @media (pointer: coarse) {
   .fp-code {
@@ -11575,6 +13938,695 @@ body.popout {
   outline-offset: 2px;
 }
 
+/* ---- the pull request panel: Branch and Repo, one pull request in full (features/pr/) ---- */
+.modal.pr-panel {
+  height: min(84dvh, 820px);
+  overflow: hidden;
+  gap: 10px;
+}
+
+.pr-panel .is-good {
+  color: var(--green);
+}
+.pr-panel .is-bad {
+  color: var(--red);
+}
+.pr-panel .is-warn {
+  color: var(--amber);
+}
+.pr-panel .is-dim,
+.pr-panel .is-none {
+  color: var(--fg-dim);
+}
+.pr-panel .is-merged {
+  color: var(--violet);
+}
+
+.pr-panel .icon-btn.is-busy .icon,
+.pr-panel .icon.is-spinning {
+  animation: spin 1.2s linear infinite;
+}
+
+.pr-views {
+  display: flex;
+  gap: 6px;
+}
+
+.pr-views .badge {
+  min-width: 22px;
+}
+
+.pr-body {
+  flex: 1 1 auto;
+  flex-shrink: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.pr-foot {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+.pr-foot-branch {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+
+.pr-foot-when {
+  flex-shrink: 0;
+  min-width: 9ch;
+  text-align: right;
+}
+
+.pr-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pr-filter-row,
+.pr-comment-filters,
+.pr-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pr-filler {
+  flex: 1;
+}
+
+.pr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pr-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-areas: "state title checks" ". meta number";
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: center;
+  width: 100%;
+  min-height: 46px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--fg);
+  text-align: left;
+}
+
+.pr-row:hover,
+.pr-row:focus-visible {
+  background: var(--bg-hover);
+}
+
+.pr-row.is-ghost {
+  background: var(--bg-raised);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.pr-row > .pr-state-icon {
+  grid-area: state;
+}
+.pr-row-title {
+  grid-area: title;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.pr-row-checks {
+  grid-area: checks;
+  display: inline-flex;
+  width: 14px;
+}
+.pr-row-meta {
+  grid-area: meta;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+.pr-row-number {
+  grid-area: number;
+  color: var(--fg-faint);
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+
+.pr-state-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.pr-more {
+  align-self: center;
+  margin-top: 4px;
+}
+
+.pr-empty {
+  margin: 4px 0;
+  color: var(--fg-dim);
+  font-size: var(--fs-13);
+  line-height: 1.5;
+}
+
+.pr-problem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: auto;
+  max-width: 420px;
+  padding: 24px 8px;
+  text-align: center;
+  color: var(--fg);
+}
+
+.pr-problem > .icon {
+  color: var(--fg-faint);
+}
+
+.pr-command {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+  font-family: var(--mono);
+  font-size: var(--fs-13);
+}
+
+.pr-problem-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pr-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pr-about {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pr-title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-15);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.pr-number {
+  color: var(--fg-faint);
+  font-family: var(--mono);
+  font-weight: 400;
+}
+
+.pr-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--ctl-sm);
+}
+
+.pr-branches {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+
+.pr-actions .icon {
+  margin-left: 2px;
+}
+
+.pr-merged {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--ctl-sm);
+  padding: 0 10px;
+  border: 1px solid var(--violet);
+  border-radius: var(--r-sm);
+  color: var(--violet);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+
+.pr-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  padding: 4px 6px;
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.pr-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--fg-dim);
+  font-size: var(--fs-13);
+}
+
+.pr-stat:not(:disabled):hover {
+  background: var(--bg-hover);
+}
+
+.pr-stat + .pr-stat::before {
+  content: "·";
+  margin-right: 4px;
+  color: var(--fg-faint);
+}
+
+.pr-stat b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.pr-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+}
+
+.pr-confirm p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.pr-confirm .pr-in-the-way {
+  color: var(--red);
+}
+
+.pr-confirm label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.pr-tabs {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.pr-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pr-group + .pr-group {
+  border-top: 1px solid var(--line);
+}
+
+.pr-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+
+.pr-group-head:hover {
+  color: var(--fg);
+}
+
+.pr-group-aside {
+  margin-left: auto;
+  font-weight: 500;
+}
+
+.pr-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 0 10px;
+}
+
+.pr-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--fg);
+  text-align: left;
+}
+
+button.pr-line:hover {
+  background: var(--bg-hover);
+}
+
+.pr-line-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pr-line-aside {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.pr-line-room {
+  width: 22px;
+  flex-shrink: 0;
+}
+
+.pr-markdown {
+  padding: 0 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pr-entry + .pr-entry {
+  border-top: 1px solid var(--line);
+}
+
+.pr-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  text-align: left;
+}
+
+.pr-entry.is-open .pr-entry-kind {
+  color: var(--amber);
+}
+
+.pr-entry-where {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+  font-family: var(--mono);
+}
+
+.pr-entry-who {
+  margin-left: auto;
+}
+
+.pr-entry-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 0 12px;
+  min-width: 0;
+}
+
+.pr-patch {
+  max-height: 260px;
+  overflow: auto;
+  border-radius: var(--r-md);
+  font-size: var(--fs-12);
+}
+
+.pr-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pr-comment-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  min-height: 22px;
+}
+
+.pr-comment-head b {
+  font-size: var(--fs-13);
+}
+
+.pr-comment-head b.is-picked {
+  color: var(--accent);
+}
+
+.pr-comment-head .icon-btn {
+  margin-left: auto;
+}
+
+.pr-new {
+  color: var(--accent);
+  font-size: var(--fs-11);
+  font-weight: 600;
+}
+
+.pr-when {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+.pr-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pr-new-comment {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.pr-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.pr-check-name {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--fg);
+  text-align: left;
+}
+
+.pr-check-name > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pr-check-name:hover {
+  background: var(--bg-hover);
+}
+
+.pr-check-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0 0 8px 28px;
+}
+
+.pr-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 24px;
+  font-size: var(--fs-13);
+}
+
+.pr-step > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pr-log {
+  align-self: stretch;
+  max-height: 320px;
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-input);
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pr-files {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pr-files-head {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px 6px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.pr-file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  padding-right: 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--fg);
+  text-align: left;
+}
+
+.pr-file-row:hover {
+  background: var(--bg-hover);
+}
+
+.pr-file-row.on {
+  background: var(--bg-active);
+}
+
+.pr-file-gap {
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.pr-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pr-add,
+.pr-del {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+}
+
+.pr-add {
+  color: var(--green);
+}
+
+.pr-del {
+  color: var(--red);
+}
+
+.pr-ghost-line {
+  flex: 1;
+  height: 18px;
+  border-radius: var(--r-sm);
+  background: var(--bg-raised);
+}
+
+.pr-ghost-block {
+  height: 160px;
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@media (max-width: 600px) {
+  .modal.pr-panel {
+    height: calc(100dvh - 24px);
+    margin-top: 12px;
+  }
+
+  .pr-tabs button {
+    gap: 4px;
+    padding: 0 5px;
+    font-size: var(--fs-12);
+  }
+}
+
 /* ---- the composer's completion: a slash's commands or an @'s files, listed over the field ---- */
 .composer {
   position: relative;
@@ -14207,6 +17259,2535 @@ textarea.screen-term-field {
 .zoo-bolt.is-lines {
   box-shadow: 0 0 0 2px var(--amber);
   color: var(--amber);
+}
+
+/* ---- the Changes lens as a client of the repository (features/review/ChangeGroups, CommitBox, OutgoingCommits,
+   ConflictView): the groups after better-changes, a row's counts giving way to its buttons, the tree, the commit box ---- */
+.review-title-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.review-scope {
+  padding: 2px;
+}
+
+.review-scope button {
+  height: 22px;
+  padding: 0 10px;
+  font-size: var(--fs-12);
+}
+
+.review-base-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.review-base-pick {
+  max-width: 220px;
+}
+
+.review-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-group + .review-group,
+.review-group + .commit-box,
+.commit-box + .review-group {
+  margin-top: 10px;
+}
+
+.review-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 2px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+
+.review-group-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-group.is-conflict .review-group-title {
+  color: var(--red);
+}
+
+.review-bulk {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-12);
+  font-weight: 500;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.review-bulk:disabled {
+  opacity: 0.5;
+}
+
+.review-group-more {
+  margin: 0 2px;
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+/* a tree row's depth: the head and a folder's row step in by it */
+.review-file-head,
+.review-folder {
+  padding-left: calc(8px + var(--depth, 0) * 16px);
+}
+
+.review-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding-right: 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--fg-dim);
+  font: var(--fs-13) var(--mono);
+  text-align: left;
+}
+
+.review-folder:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.review-folder-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* the counts and the buttons share one place: under the pointer, or always on a touch screen, the buttons take it */
+.review-slot {
+  display: inline-grid;
+  align-items: center;
+  justify-items: end;
+  flex-shrink: 0;
+  min-width: 52px;
+  margin-right: 2px;
+}
+
+.review-slot > * {
+  grid-area: 1 / 1;
+}
+
+.review-row-actions {
+  display: inline-flex;
+  gap: 2px;
+  visibility: hidden;
+}
+
+.review-file-row:hover .review-slot.has-actions .review-row-actions,
+.review-file-row:focus-within .review-slot.has-actions .review-row-actions {
+  visibility: visible;
+}
+
+.review-file-row:hover .review-slot.has-actions .review-slot-quiet,
+.review-file-row:focus-within .review-slot.has-actions .review-slot-quiet {
+  visibility: hidden;
+}
+
+@media (pointer: coarse) {
+  .review-slot.has-actions .review-row-actions {
+    visibility: visible;
+  }
+
+  .review-slot.has-actions .review-slot-quiet {
+    visibility: hidden;
+  }
+}
+
+.review-act.is-discard:hover:not([aria-disabled="true"]) {
+  color: var(--red);
+}
+
+.review-act[aria-disabled="true"],
+.review-bulk[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.review-letter {
+  flex: 0 0 auto;
+  min-width: 12px;
+  margin: 0 4px;
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  text-align: center;
+  color: var(--amber);
+}
+
+.review-letter.is-A {
+  color: var(--green);
+}
+
+.review-letter.is-D {
+  color: var(--red);
+}
+
+.review-letter.is-T,
+.review-letter.is-R {
+  color: var(--blue);
+}
+
+.review-conflict-kind {
+  color: var(--red);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+
+.review-file.conflict {
+  border-color: var(--red-ring);
+}
+
+/* the commit box, at the foot of the files: a message growing to eight rows, Commit | ▾, its reason or its hint */
+.commit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.commit-message {
+  width: 100%;
+  resize: none;
+  font: var(--fs-13)/1.45 var(--mono);
+}
+
+.commit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.commit-split {
+  display: inline-flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.commit-split .commit-go {
+  flex: 1;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.commit-split .commit-mode {
+  padding: 0 8px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid color-mix(in srgb, var(--on-accent) 25%, transparent);
+}
+
+.commit-split .btn:not(.primary).commit-mode {
+  border-left-color: var(--line-strong);
+}
+
+.commit-hint {
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.commit-hint.is-amend {
+  color: var(--amber);
+}
+
+/* what is committed and not on the remote: subject, who and when, the short hash; a click opens its files */
+.review-outgoing {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.review-outgoing-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px 6px 8px;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  text-align: left;
+}
+
+.review-outgoing-head:hover {
+  background: var(--bg-hover);
+}
+
+.review-outgoing-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.review-outgoing-subject,
+.review-outgoing-by {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-outgoing-subject {
+  font-size: var(--fs-13);
+}
+
+.review-outgoing-by {
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.review-outgoing-sha {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  font: var(--fs-11) var(--mono);
+}
+
+.review-outgoing-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px 8px;
+  border-top: 1px solid var(--line);
+}
+
+.review-outgoing-message {
+  margin: 8px 2px 4px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  white-space: pre-wrap;
+}
+
+/* a conflict's blocks: yours tinted blue, incoming green, the markers on a raised band, the base dim */
+.fv-diff .yours {
+  background: var(--blue-soft);
+}
+
+.fv-diff .incoming {
+  background: var(--green-soft);
+}
+
+.fv-diff .marker {
+  background: var(--bg-active);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.fv-diff .base {
+  color: var(--fg-dim);
+}
+
+.conflict-view .conflict-heading {
+  color: var(--red);
+}
+
+.conflict-sides .fv-line {
+  padding-top: 4px;
+  color: var(--fg-dim);
+}
+
+.conflict-sentence {
+  padding: 14px 12px;
+}
+
+/* ---- the chat: messages sent while the agent worked, the prompts list, the live progress, the tool cards ---- */
+.chat {
+  position: relative;
+}
+
+.chat-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-main > .chat-log {
+  min-width: 0;
+}
+
+/* a message the person (or another agent) sent while the agent worked, in its place in the turn */
+.part-sent {
+  align-self: flex-end;
+  max-width: min(620px, 78%);
+  padding: 7px 12px 8px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: var(--r-xl) var(--r-xl) var(--r-xs) var(--r-xl);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.part-sent.is-peer {
+  border-color: color-mix(in srgb, var(--violet) 45%, transparent);
+  background: color-mix(in srgb, var(--violet) 10%, transparent);
+}
+
+.turn-user .part-sent {
+  align-self: stretch;
+  max-width: none;
+  margin-top: 4px;
+}
+
+.part-sent-mark {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+  font-size: var(--fs-11);
+  color: var(--fg-dim);
+}
+
+.part-sent .md p {
+  margin: 0;
+}
+
+/* a run of tool calls: one card, a 30 px line a call */
+.tool-card {
+  display: flex;
+  flex-direction: column;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--bg-raised) 70%, transparent);
+}
+
+.tool-call {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tool-row > summary,
+.tool-plan {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--r-md);
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+  list-style: none;
+}
+
+.tool-row > summary {
+  cursor: pointer;
+  transition: background var(--fast) var(--ease);
+}
+
+.tool-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-row > summary:hover {
+  background: var(--bg-hover);
+}
+
+.tool-row > summary:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -2px;
+}
+
+.tool-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+.tool-mark.is-done {
+  color: var(--green);
+}
+
+.tool-mark.is-failed {
+  color: var(--red);
+}
+
+.tool-dot {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--fg-faint);
+  border-radius: 99px;
+}
+
+.tool-spin {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--green);
+  border-radius: 99px;
+  animation: spin 0.8s linear infinite;
+}
+
+.tool-name {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.tool-target {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  color: var(--fg-faint);
+  text-align: left;
+}
+
+.tool-row .tool-target.path-link {
+  flex: 0 1 auto;
+}
+
+.tool-every {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+.tool-took {
+  margin-left: auto;
+  flex-shrink: 0;
+  min-width: 3.2em;
+  text-align: right;
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-faint);
+}
+
+.tool-call.is-failed .tool-took,
+.tool-call.is-failed .tool-name {
+  color: var(--red);
+}
+
+.tool-chevron {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  transition: transform var(--fast) var(--ease);
+}
+
+.tool-row[open] > summary .tool-chevron {
+  transform: rotate(90deg);
+}
+
+.tool-row > .tool-io,
+.tool-row > .tool-thought {
+  margin: 2px 8px 6px 31px;
+}
+
+.tool-thought {
+  color: var(--fg-dim);
+  font-style: italic;
+  font-size: var(--fs-13);
+}
+
+.tool-plan.is-failed {
+  color: var(--red);
+}
+
+.tool-call > :not(.tool-row) {
+  margin-left: 31px;
+  margin-right: 8px;
+}
+
+.tool-call > .part-image {
+  margin-bottom: 4px;
+}
+
+/* the turn under way, over the composer: what Claude Code's spinner says */
+.chat-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 18px 6px 20px;
+  min-height: 20px;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-progress-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile-tokens {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the switch of the prompts list at the timeline bar's end */
+.timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.timeline-row > .timeline-bar {
+  flex: 1;
+  min-width: 0;
+}
+
+/* the prompts list: a column beside the log at a desk, a sheet from the bottom on a phone */
+.prompts {
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  flex-shrink: 0;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.prompts-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.prompts-title {
+  font-weight: 600;
+  font-size: var(--fs-13);
+}
+
+.prompts-meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.prompts-empty {
+  margin: 16px;
+}
+
+.prompts-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px 8px 10px;
+  list-style: none;
+}
+
+.prompt {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.prompt-rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.prompt-rail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 6px;
+  width: 2px;
+  background: var(--line);
+}
+
+.prompt.is-first .prompt-rail::before {
+  top: 18px;
+}
+
+.prompt.is-last .prompt-rail::before {
+  bottom: calc(100% - 18px);
+}
+
+.prompt.is-first.is-last .prompt-rail::before {
+  display: none;
+}
+
+.prompt-dot {
+  position: relative;
+  margin-top: 13px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--line-strong);
+  border-radius: 99px;
+  background: var(--bg);
+}
+
+.prompt.is-picked .prompt-dot,
+.prompt.is-open .prompt-dot {
+  border-color: var(--accent);
+}
+
+.prompt.is-live .prompt-dot {
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.prompt-card {
+  flex: 1;
+  min-width: 0;
+  margin: 3px 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+}
+
+.prompt.is-picked .prompt-card {
+  background: var(--bg-raised);
+  border-color: var(--line);
+}
+
+.prompt.is-open .prompt-card {
+  background: var(--bg-raised);
+  border-color: var(--accent-ring);
+}
+
+.prompt-head.linkish {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  width: 100%;
+  padding: 7px 10px;
+  text-align: left;
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.prompt-head.linkish:hover {
+  background: var(--bg-hover);
+}
+
+.prompt-head > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-when {
+  font-size: var(--fs-10);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.prompt-text {
+  font-size: var(--fs-13);
+  color: var(--fg);
+}
+
+.prompt-also,
+.prompt-facts {
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.prompt-working {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.prompt-gist {
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.prompt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 10px 10px;
+  font-size: var(--fs-13);
+}
+
+.prompt-full {
+  color: var(--fg);
+}
+
+.prompt-sent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 0 8px;
+  list-style: none;
+  border-left: 2px solid var(--line-strong);
+}
+
+.prompt-sent li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.prompt-sent-at {
+  flex-shrink: 0;
+  font-size: var(--fs-10);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.prompt-sent-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.prompt-reply {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  user-select: text;
+}
+
+.prompt-files {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  font-size: var(--fs-11);
+}
+
+.prompt-files-head {
+  color: var(--fg-faint);
+}
+
+.prompt-files .path-link {
+  max-width: 100%;
+  padding: 1px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+
+.prompts-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-drawer);
+  background: var(--scrim);
+}
+
+.prompts.is-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-drawer);
+  width: auto;
+  max-height: 72%;
+  border-left: 0;
+  border-top: 1px solid var(--line-strong);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  box-shadow: var(--shadow-lg);
+}
+
+@media (max-width: 1180px) and (min-width: 920px) {
+  .prompts {
+    width: 290px;
+  }
+}
+
+.prompt-full .md p,
+.prompt-sent-text .md p {
+  margin: 0;
+}
+
+.prompt-full .md p + p {
+  margin-top: 6px;
+}
+
+/* ---- worktrees: the New worktree dialog, the remove dialog, a project's settings, the run button ---- */
+/* the base field rule is weighty (input and four :not()s): a mono field says so as weightily */
+.new-worktree .mono,
+.remove-worktree .mono,
+.repo-settings .mono,
+.action-editor .mono,
+:is(.new-worktree, .repo-settings, .action-editor) input.mono:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
+  font-family: var(--mono);
+}
+
+.nw-search input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
+  height: 100%;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rs-row-control > input,
+.rs-row-control > .sel {
+  width: 100%;
+}
+
+.nw-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nw-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nw-tabs {
+  display: flex;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.nw-base {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.nw-base .sel {
+  max-width: 190px;
+}
+
+/* the base pick keeps its room while the plan starts from no base, so the tabs and the fetch never move */
+.nw-base.is-vacant {
+  visibility: hidden;
+}
+
+.nw-tabs-row .icon-btn .spin {
+  animation: spin 0.9s linear infinite;
+}
+
+.nw-source {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nw-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--accent-ring);
+  border-radius: var(--r-md);
+  background: var(--bg-input);
+  color: var(--fg-dim);
+}
+
+.nw-search input {
+  flex: 1;
+  min-width: 0;
+}
+
+.nw-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  height: 214px; /* five rows: the list keeps its height while it fills, so the Details below never jump */
+  overflow-y: auto;
+}
+
+.btn.ghost.nw-row {
+  justify-content: flex-start;
+  gap: 10px;
+  height: 42px;
+  flex-shrink: 0;
+  padding: 0 10px;
+  border-radius: var(--r-md);
+  color: var(--fg);
+  text-align: left;
+  font-weight: 400;
+}
+
+.btn.ghost.nw-row.on {
+  background: var(--bg-active);
+  color: var(--fg);
+}
+
+.nw-row-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+
+.nw-row-label,
+.nw-row-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nw-row-label {
+  font-size: var(--fs-13);
+}
+
+.nw-row-sub {
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.nw-tag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-11);
+  color: var(--fg-dim);
+}
+
+.tone-open,
+.tone-issue,
+.tone-pr {
+  color: var(--green);
+}
+
+.tone-remote {
+  color: var(--blue);
+}
+
+.tone-local,
+.tone-github {
+  color: var(--fg-dim);
+}
+
+.nw-empty {
+  margin: 0;
+  padding: 10px;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.nw-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg-raised);
+}
+
+.nw-details-head {
+  font-size: var(--fs-11);
+  font-weight: 600;
+  color: var(--fg-faint);
+}
+
+.nw-note {
+  min-height: 1.45em; /* the line is there before it says anything, so nothing under it moves */
+  font-size: var(--fs-12);
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--fg-dim);
+  overflow-wrap: anywhere;
+}
+
+.nw-note.is-error {
+  color: var(--amber);
+}
+
+.nw-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: var(--fs-13);
+  font-weight: 500;
+  color: var(--fg-dim);
+}
+
+.nw-setup-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.nw-setup-script {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--fs-12) / 1.4 var(--mono);
+  color: var(--fg-faint);
+}
+
+.nw-foot {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.nw-keys,
+.rs-foot-hint,
+.rw-foot {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.nw-create kbd {
+  font: var(--fs-11) / 1 var(--mono);
+  opacity: 0.7;
+}
+
+.nw-create .spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--on-accent) 35%, transparent);
+  border-top-color: var(--on-accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@media (max-width: 600px) {
+  .nw-keys {
+    display: none;
+  }
+
+  .nw-tabs .btn {
+    padding: 0 8px;
+  }
+
+  /* the base on a line of its own under the tabs, kept while unseen so the Details never move */
+  .nw-tabs-row {
+    flex-wrap: wrap;
+  }
+
+  .nw-base {
+    order: 3;
+    width: 100%;
+  }
+
+  .nw-base .sel {
+    flex: 1;
+    max-width: none;
+  }
+}
+
+/* a project's settings: sections in capitals, a row a label and its control */
+.rs-section {
+  margin: 6px 0 0;
+  font-size: var(--fs-11);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.rs-row {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.rs-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-13);
+  color: var(--fg);
+}
+
+.rs-row-label small,
+.repo-settings label small,
+.repo-settings label.check-row small {
+  font-size: var(--fs-12);
+  font-weight: 400;
+  color: var(--fg-faint);
+}
+
+.repo-settings label.check-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rs-vars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.rs-vars code {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+  font: var(--fs-12) / 1.4 var(--mono);
+  color: var(--fg-dim);
+}
+
+.rs-team {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.rs-team pre {
+  margin: 0;
+  padding: 10px;
+  border-radius: var(--r-md);
+  background: var(--bg-input);
+  font: var(--fs-12) / 1.45 var(--mono);
+  color: var(--fg-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rs-when {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  font-size: var(--fs-13);
+  color: var(--fg-dim);
+}
+
+.rs-pills,
+.action-places,
+.action-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rs-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rs-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.rs-action-name {
+  font-weight: 500;
+}
+
+.rs-action-hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--fs-12) / 1.4 var(--mono);
+  color: var(--fg-faint);
+}
+
+.rs-add {
+  align-self: flex-start;
+}
+
+@media (max-width: 600px) {
+  .rs-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+}
+
+.action-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+}
+
+.action-choices > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.action-choice-label {
+  font-size: var(--fs-13);
+  font-weight: 500;
+  color: var(--fg-dim);
+}
+
+.action-delete {
+  margin-right: auto;
+}
+
+/* the run button: two quiet halves of one outline, the action's name at most a tab's width */
+.run-split {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 2px;
+}
+
+.run-split .btn.sm {
+  height: var(--ctl-xs, 26px);
+}
+
+.run-main {
+  max-width: 170px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.run-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn.sm.run-more {
+  padding: 0 6px;
+  border-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+@media (max-width: 600px) {
+  .run-name {
+    display: none;
+  }
+
+  .btn.sm.run-main {
+    padding: 0 8px;
+  }
+}
+
+/* the remove dialog: a red trash tile, a table of what goes and stays, the losses in red */
+.rw-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rw-tile {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--r-lg);
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.rw-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rw-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-12);
+  color: var(--fg-dim);
+}
+
+.rw-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg-raised);
+}
+
+.rw-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  color: var(--fg-dim);
+}
+
+.rw-line + .rw-line {
+  border-top: 1px solid var(--line);
+}
+
+.rw-label {
+  width: 56px;
+  flex-shrink: 0;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+
+.rw-value {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+  color: var(--fg);
+  font-size: var(--fs-13);
+}
+
+.rw-value > span,
+.rw-value small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rw-value small {
+  font-size: var(--fs-11);
+  color: var(--fg-faint);
+}
+
+.rw-pill {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 99px;
+  font-size: var(--fs-12);
+  font-weight: 500;
+}
+
+.btn.sm.rw-pill {
+  height: 22px;
+  border: 0;
+  border-radius: 99px;
+}
+
+.rw-pill.is-deleted,
+.btn.sm.rw-pill.is-deleted {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.rw-pill.is-kept,
+.btn.sm.rw-pill.is-kept {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+/* ---- GitHub issues: the panel, its table and one issue's viewer (features/issues), after Orca's issues mod. GitHub's
+   own state colours in the theme's hues: open green, closed as completed mauve, not planned the quiet ink ---- */
+.modal.issues-panel {
+  width: min(96vw, 1180px);
+  height: 84dvh;
+  overflow: hidden;
+  gap: 12px;
+}
+
+.issues-panel > .issue-list,
+.issues-panel > .issue-viewer {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.issue-crumbs {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+}
+
+/* the machine's name gives way first, down to a few letters; the repository keeps its room */
+.issue-crumb {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.issue-crumb:nth-child(2) {
+  flex-shrink: 1;
+  min-width: 3.5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.issue-crumb + .issue-crumb::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--fg-faint);
+}
+
+.issue-crumb.is-last {
+  flex-shrink: 0;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.issue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.issue-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.issue-chips {
+  display: flex;
+  gap: 6px;
+}
+
+.issue-repo-btn {
+  max-width: 260px;
+}
+
+.issue-repo-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+/* the search is a field of the design system's own, its icon beside it as the palette's is */
+.issue-search {
+  display: flex;
+  flex: 1 1 240px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--fg-faint);
+}
+
+.issue-search input,
+.issue-repos-filter input {
+  flex: 1;
+  min-width: 0;
+}
+
+.issue-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+}
+
+.issue-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 104px 118px 124px 116px;
+  grid-template-areas: "id main people status updated actions";
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  transition: background var(--fast) var(--ease);
+}
+
+.issue-row:last-child {
+  border-bottom: 0;
+}
+
+.issue-row:hover:not(.is-head, .is-skeleton) {
+  background: var(--bg-hover);
+}
+
+.issue-row.is-busy {
+  opacity: 0.6;
+}
+
+.issue-row.is-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 34px;
+  padding-block: 0;
+  background: var(--bg-raised);
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: default;
+}
+
+.issue-cell {
+  min-width: 0;
+}
+
+.issue-id {
+  grid-area: id;
+}
+
+.issue-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.issue-people {
+  grid-area: people;
+}
+
+.issue-status {
+  grid-area: status;
+}
+
+.issue-updated {
+  grid-area: updated;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.issue-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.issue-head-hint {
+  display: inline-grid;
+  place-items: center;
+  color: var(--fg-faint);
+}
+
+.issue-id-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--fg-dim);
+  font: var(--fs-12) / 1 var(--mono);
+}
+
+.linkish.issue-title {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  color: var(--fg);
+  font-size: var(--fs-13-5);
+  line-height: 1.4;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linkish.issue-title:hover {
+  background: none;
+  text-decoration: underline;
+}
+
+.issue-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+
+.issue-author {
+  flex-shrink: 0;
+}
+
+.issue-labels {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.issue-labels.is-wrap {
+  flex-wrap: wrap;
+}
+
+.issue-label {
+  --label: var(--fg-faint);
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--label) 45%, transparent);
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--label) 18%, transparent);
+  color: color-mix(in srgb, var(--label) 60%, var(--fg));
+  font-size: var(--fs-11);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.issue-label.is-plain {
+  border-color: var(--line-strong);
+  background: var(--bg-active);
+  color: var(--fg-dim);
+}
+
+.issue-more,
+.issue-dim,
+.issue-when {
+  color: var(--fg-faint);
+}
+
+.issue-when {
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+
+.issue-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 99px;
+  color: var(--fg-dim);
+  font-size: var(--fs-11);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.issue-face {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--hue) 24%, var(--bg-raised));
+  color: color-mix(in srgb, var(--hue) 70%, var(--fg));
+  font-size: var(--fs-10);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.issue-face.is-16 {
+  width: 16px;
+  height: 16px;
+}
+
+.issue-face.is-24 {
+  width: 24px;
+  height: 24px;
+  font-size: var(--fs-11);
+}
+
+.issue-face.is-hue-0 {
+  --hue: var(--blue);
+}
+
+.issue-face.is-hue-1 {
+  --hue: var(--violet);
+}
+
+.issue-face.is-hue-2 {
+  --hue: var(--ctp-teal);
+}
+
+.issue-face.is-hue-3 {
+  --hue: var(--ctp-peach);
+}
+
+.issue-face.is-hue-4 {
+  --hue: var(--ctp-pink);
+}
+
+.issue-face.is-hue-5 {
+  --hue: var(--green);
+}
+
+.issue-when-inline {
+  display: none;
+}
+
+.btn.issue-faces {
+  gap: 0;
+  padding: 0 6px;
+}
+
+.issue-faces .issue-face + .issue-face {
+  margin-left: -6px;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.issue-faces .icon {
+  margin-left: 4px;
+  color: var(--fg-faint);
+}
+
+.issue-nobody {
+  padding: 0 4px;
+  color: var(--fg-faint);
+}
+
+.issue-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.issue-state {
+  --tone: var(--green);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--tone) 55%, transparent);
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+  color: var(--tone);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.issue-state.is-done {
+  --tone: var(--violet);
+}
+
+.issue-state.is-skipped {
+  --tone: var(--fg-faint);
+}
+
+.issue-state.is-filled {
+  height: 28px;
+  padding: 0 12px;
+  border-color: transparent;
+  background: var(--tone);
+  color: var(--ctp-on-green);
+  font-size: var(--fs-13);
+}
+
+.issue-state.is-filled.is-done {
+  color: var(--ctp-on-mauve);
+}
+
+.issue-state.is-filled.is-skipped {
+  background: var(--ctp-overlay1);
+  color: var(--ctp-base);
+}
+
+.btn.issue-state-btn {
+  padding: 0 2px;
+  border-color: transparent;
+  background: none;
+}
+
+.btn.issue-state-btn:hover:not(:disabled) {
+  border-color: transparent;
+  background: none;
+  filter: brightness(1.1);
+}
+
+.icon.is-open {
+  color: var(--green);
+}
+
+.icon.is-done {
+  color: var(--violet);
+}
+
+.icon.is-skipped {
+  color: var(--fg-faint);
+}
+
+.btn.issue-go {
+  min-width: 78px;
+}
+
+.issue-empty {
+  margin: 0;
+  padding: 36px 16px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+.issue-row.is-skeleton {
+  cursor: default;
+}
+
+.issue-bone {
+  display: block;
+  height: 10px;
+  border-radius: var(--r-xs);
+  background: var(--bg-active);
+  animation: issue-breathe 1.4s var(--ease) infinite alternate;
+}
+
+.issue-bone.is-pill {
+  width: 44px;
+  height: 22px;
+}
+
+.issue-bone.is-title {
+  width: 52%;
+  height: 13px;
+}
+
+.issue-bone.is-line {
+  width: 28%;
+}
+
+.issue-bone.is-heading {
+  width: 60%;
+  height: 22px;
+}
+
+.issue-bone.is-card {
+  width: 100%;
+  height: 120px;
+}
+
+@keyframes issue-breathe {
+  to {
+    opacity: 0.45;
+  }
+}
+
+.issue-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.issue-count {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.issue-pager {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.btn.issue-page {
+  min-width: var(--ctl-sm);
+  padding: 0 6px;
+}
+
+.btn.ghost.issue-page.on {
+  background: var(--bg-active);
+  color: var(--fg);
+}
+
+.issue-per-page {
+  color: var(--fg-faint);
+}
+
+.issue-trouble .notice-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.issue-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.issue-run code {
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  background: var(--bg-input);
+  font: var(--fs-12) / 1.4 var(--mono);
+}
+
+/* the repository picker */
+.popover.issue-repos {
+  width: min(380px, calc(100vw - 16px));
+  padding: 0;
+}
+
+.issue-repos-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg-faint);
+}
+
+.issue-repos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 360px;
+  padding: 6px;
+  overflow-y: auto;
+}
+
+.issue-repos-heading {
+  padding: 8px 8px 3px;
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.btn.ghost.issue-repos-row {
+  justify-content: flex-start;
+  gap: 8px;
+  height: auto;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.issue-repos-check {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 14px;
+  color: var(--accent);
+}
+
+.issue-repos-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+}
+
+.issue-repos-text small,
+.issue-repos-hint {
+  color: var(--fg-faint);
+  font-size: var(--fs-11);
+}
+
+.issue-repos-none {
+  margin: 0;
+  padding: 8px;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+/* one issue */
+.issue-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.issue-viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.issue-grow {
+  flex: 1;
+}
+
+.issue-reading {
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+.issue-viewer-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.issue-viewer-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.issue-viewer-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-20);
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.issue-viewer-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-13);
+}
+
+.issue-viewer-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  gap: 24px;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.issue-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding-bottom: 16px;
+}
+
+.issue-timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+.issue-step {
+  position: relative;
+  padding-top: 14px;
+}
+
+.issue-step::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 18px;
+  width: 2px;
+  height: 14px;
+  background: var(--line);
+}
+
+.issue-card {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.issue-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 8px 4px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-raised);
+  font-size: var(--fs-13);
+}
+
+.issue-card-body {
+  padding: 12px 14px;
+  overflow-wrap: anywhere;
+}
+
+.issue-nothing {
+  margin: 0;
+  color: var(--fg-faint);
+  font-style: italic;
+}
+
+.issue-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 14px 12px;
+}
+
+.issue-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 99px;
+  background: var(--bg-raised);
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+}
+
+.issue-emoji {
+  font-size: var(--fs-13);
+}
+
+.issue-event {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-left: 7px;
+}
+
+.issue-event-icon {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--bg-raised);
+  color: var(--fg-dim);
+}
+
+.issue-event-icon.is-open {
+  border-color: transparent;
+  background: var(--green);
+  color: var(--ctp-on-green);
+}
+
+.issue-event-icon.is-done {
+  border-color: transparent;
+  background: var(--violet);
+  color: var(--ctp-on-mauve);
+}
+
+.issue-event-icon.is-skipped {
+  border-color: transparent;
+  background: var(--ctp-overlay1);
+  color: var(--ctp-base);
+}
+
+.issue-event-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.issue-event-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  color: var(--fg-dim);
+  font-size: var(--fs-13);
+}
+
+.issue-event-line b,
+.issue-event-line s {
+  color: var(--fg);
+}
+
+.issue-event-line s {
+  color: var(--fg-faint);
+}
+
+.linkish.issue-ref {
+  gap: 6px;
+  max-width: 100%;
+  font-size: var(--fs-13);
+  text-align: left;
+}
+
+.linkish.issue-ref b {
+  color: var(--fg);
+}
+
+.linkish.issue-sha {
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  font: var(--fs-12) / 1.4 var(--mono);
+}
+
+.issue-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.issue-composer-title {
+  margin: 0;
+  font-size: var(--fs-15);
+  font-weight: 600;
+}
+
+.issue-composer-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--bg-raised);
+}
+
+.issue-composer-tabs {
+  align-self: flex-start;
+}
+
+.issue-composer-text {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+}
+
+.issue-composer-preview {
+  min-height: 110px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+}
+
+.issue-composer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.issue-composer-hint {
+  flex: 1 1 160px;
+  min-width: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+.issue-split {
+  display: inline-flex;
+}
+
+.issue-split > .btn:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.btn.issue-split-more {
+  padding: 0 8px;
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.btn.issue-comment-btn {
+  min-width: 96px;
+}
+
+.issue-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.issue-side-part {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.issue-side-part:first-child {
+  padding-top: 0;
+}
+
+.issue-side-part h4 {
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+
+.issue-side-none {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-12);
+}
+
+.issue-side-people,
+.issue-side-pulls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-width: 100%;
+}
+
+.linkish.issue-side-line {
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 100%;
+  padding-left: 0;
+  font-size: var(--fs-13);
+  text-align: left;
+}
+
+.issue-side-pull {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.issue-side-faces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+@media (max-width: 920px) {
+  .issue-viewer-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .issue-side {
+    order: -1;
+    flex-flow: row wrap;
+    gap: 0 18px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .issue-side-part {
+    padding: 8px 0;
+    border-bottom: 0;
+  }
+
+  .issue-side-part:first-child {
+    padding-top: 8px;
+  }
+}
+
+@media (max-width: 720px) {
+  .modal.issues-panel {
+    padding: 16px 14px;
+  }
+
+  .issue-crumb:first-child {
+    display: none;
+  }
+
+  .issue-crumb:nth-child(2)::before {
+    content: none;
+  }
+
+  .issue-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "id main main" "people status actions";
+    gap: 8px 10px;
+    padding: 10px 12px;
+  }
+
+  .issue-row.is-head,
+  .issue-updated,
+  .issue-per-page {
+    display: none;
+  }
+
+  .issue-status {
+    justify-self: start;
+  }
+
+  .issue-when-inline {
+    display: inline;
+  }
+
+  .issue-viewer-head {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .issue-repo-btn {
+    max-width: 100%;
+  }
 }
 
 /* ---- the Repositories place (features/repos): a machine's head, a folder's line, a 34 px row per repository ---- */

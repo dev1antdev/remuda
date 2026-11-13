@@ -11,16 +11,24 @@ import { INLINE } from "@/ui/cellText";
 import { Mermaid } from "@/ui/Mermaid";
 import { isMermaid } from "@/ui/mermaidLook";
 
-// links open in a new tab — never by navigating this page
-const link = (url: string) => (e: MouseEvent) => {
+// links open in a new tab — never by navigating this page — unless the screen follows some itself (follow answers true:
+// a pull request's address opens the pull request panel); ⌘ or Ctrl with the click always opens the tab
+const link = (url: string, follow?: Follow | null) => (e: MouseEvent) => {
   e.preventDefault();
+  if (follow && !e.metaKey && !e.ctrlKey && follow(url)) return;
   openUrl(url);
 };
-const anchor = (url: string, children: ReactNode, key: string) => (
-  <a key={key} href={url} target="_blank" rel="noopener noreferrer" onClick={link(url)}>
+const anchor = (url: string, children: ReactNode, key: string, follow?: Follow | null) => (
+  <a key={key} href={url} target="_blank" rel="noopener noreferrer" onClick={link(url, follow)}>
     {children}
   </a>
 );
+
+// Follow is a screen's own way with a link: true when it took the link
+export type Follow = (url: string) => boolean;
+
+// FollowLinks is set over a conversation whose links a screen follows itself (the chat lens: a pull request's panel)
+export const FollowLinks = createContext<Follow | null>(null);
 
 // A small Markdown renderer for agent answers: React nodes directly, no HTML
 // string, nothing to sanitize. Headings, paragraphs, nested lists (task lists
@@ -219,7 +227,7 @@ function renderInline(text: string, links: Links | null, key = "i"): ReactNode[]
     const k = `${key}${n++}`;
     if (m[2] !== undefined) out.push(<code key={k} className="md-code">{m[2]}</code>);
     else if (m[3] !== undefined) {
-      if (links) out.push(anchor(m[4]!, renderInline(m[3], null, k), k));
+      if (links) out.push(anchor(m[4]!, renderInline(m[3], null, k), k, links.follow));
       else out.push(<Fragment key={k}>{m[0]}</Fragment>);
     } else if (m[5] !== undefined || m[6] !== undefined)
       out.push(<strong key={k}>{renderInline((m[5] ?? m[6])!, links, k)}</strong>);
@@ -228,7 +236,7 @@ function renderInline(text: string, links: Links | null, key = "i"): ReactNode[]
     else if (m[9] !== undefined) out.push(<s key={k}>{renderInline(m[9], links, k)}</s>);
     else if (m[10] !== undefined) {
       const url = m[10].replace(/[.,;:!?]+$/, "");
-      out.push(links ? anchor(url, url, k) : <Fragment key={k}>{url}</Fragment>);
+      out.push(links ? anchor(url, url, k, links.follow) : <Fragment key={k}>{url}</Fragment>);
       if (url.length < m[10].length) out.push(m[10].slice(url.length));
     }
     at = idx + m[0].length;
@@ -238,7 +246,7 @@ function renderInline(text: string, links: Links | null, key = "i"): ReactNode[]
 }
 
 // Links is how a text's paths open: the file viewer, and whether the text is a Windows machine's (its paths by backslashes)
-type Links = { open: OpenFile; windows: boolean };
+type Links = { open: OpenFile; windows: boolean; follow?: Follow | null };
 
 // WindowsPaths is set over a Windows machine's conversation, so its answers' C:\…\Form1.cs and src\App.xaml.cs link
 export const WindowsPaths = createContext(false);
@@ -268,7 +276,8 @@ function plain(text: string, links: Links | null, key: string): ReactNode[] {
 export function Markdown({ text, onOpenFile, diagrams = false }: { text: string; onOpenFile: OpenFile; diagrams?: boolean }) {
   const blocks = useMemo(() => parseBlocks(text), [text]);
   const windows = useContext(WindowsPaths);
-  const links = useMemo(() => ({ open: onOpenFile, windows }), [onOpenFile, windows]);
+  const follow = useContext(FollowLinks);
+  const links = useMemo(() => ({ open: onOpenFile, windows, follow }), [onOpenFile, windows, follow]);
   return <div className="md">{renderBlocks(blocks, links, "b", diagrams)}</div>;
 }
 

@@ -11,8 +11,66 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/dev1antdev/remuda/internal/events"
 	"github.com/dev1antdev/remuda/internal/push"
 )
+
+// The Mac app away when an alert was taken back hears it as it connects again, asking for withdrawals; a connection
+// that does not ask (an app from before them) never gets a frame it would show as a blank alert.
+func TestAlertsSocketHandsOwedWithdrawalsToAConnectionThatTakesThem(t *testing.T) {
+	s, mux := alertsServer(t)
+	_, out := taskCall(mux, "POST", "/api/push/socket", "", `{"label":"app"}`)
+	endpoint := out["endpoint"].(string)
+	const tag = "local|w1:p1|stuck|1800000000"
+	s.Push.Notify(push.Payload{Machine: "local", Pane: "w1:p1", Kind: "stuck", Title: "api looks stuck", Tag: tag})
+	s.Push.OnStatus(events.PaneStatus{Pane: events.PaneRef{Machine: "local", Pane: "w1:p1"}, To: events.Gone})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	base := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/alerts?endpoint=" + endpoint
+
+	before, _, err := websocket.Dial(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quiet, stop := context.WithTimeout(ctx, 200*time.Millisecond)
+	if _, data, err := before.Read(quiet); err == nil {
+		t.Fatalf("a connection that takes no withdrawals heard %q", data)
+	}
+	stop()
+	before.CloseNow()
+	// a handler let go of has ended its writer: the next test's pings are its own
+	gone := func() {
+		for deadline := time.Now().Add(2 * time.Second); s.Push.Sockets.Connected(endpoint); time.Sleep(10 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				t.Fatal("the connection was never let go of")
+			}
+		}
+	}
+	gone()
+
+	c, _, err := websocket.Dial(ctx, base+"&withdraw=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gone()
+	defer c.CloseNow()
+	_, data, err := c.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var frame struct {
+		Type string   `json:"type"`
+		Tags []string `json:"tags"`
+	}
+	if json.Unmarshal(data, &frame) != nil || frame.Type != "withdraw" || len(frame.Tags) != 1 || frame.Tags[0] != tag {
+		t.Fatalf("first frame %q, want the stuck note taken back", data)
+	}
+	if owed := s.Push.OwedTo(endpoint); len(owed) != 0 {
+		t.Fatalf("still owed %v after the connection took them", owed)
+	}
+}
 
 func alertsServer(t *testing.T) (*Server, http.Handler) {
 	t.Helper()

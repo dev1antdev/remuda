@@ -1,15 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-type Root = { dataset: Record<string, string | undefined>; style: Map<string, string> };
+type Root = { dataset: Record<string, string | undefined>; style: Map<string, string>; sheets: { id: string; textContent: string }[] };
 
-// a document as far as the look touches it: the root's data attributes and custom properties, no theme-color meta
+// a document as far as the look touches it: the root's data attributes and custom properties, the head's style
+// elements, no theme-color meta
 function fakeDocument(): { doc: Document; root: Root } {
-  const root: Root = { dataset: {}, style: new Map() };
+  const root: Root = { dataset: {}, style: new Map(), sheets: [] };
   const documentElement = {
     dataset: root.dataset,
     style: { setProperty: (name: string, value: string) => root.style.set(name, value), removeProperty: (name: string) => root.style.delete(name) },
   };
-  return { doc: { documentElement, querySelector: () => null } as unknown as Document, root };
+  const head = { appendChild: (sheet: { id: string; textContent: string }) => root.sheets.push(sheet) };
+  const doc = { documentElement, head, querySelector: () => null, getElementById: (id: string) => root.sheets.find((sheet) => sheet.id === id) ?? null, createElement: () => ({ id: "", textContent: "" }) };
+  return { doc: doc as unknown as Document, root };
 }
 
 describe("the look on another document", () => {
@@ -37,6 +40,8 @@ describe("the look on another document", () => {
       expect(popped.root.dataset).toMatchObject({ theme: "dark", flavor: "nord" });
       setDarkFlavorPref("mocha");
       expect(popped.root.dataset.flavor).toBe("mocha");
+      const { legibleFor } = await import("@/lib/legible");
+      expect(popped.root.sheets.map((sheet) => sheet.textContent)).toEqual([legibleFor("mocha")]); // one sheet, the theme's own lifted rows
       setTextSizePref("large");
       expect(popped.root.dataset.text).toBe("large");
 

@@ -65,7 +65,12 @@ answer and asks again when it was never answered.
   app is one more device of remuda's push service (`POST /api/push/socket`,
   then `/ws/alerts`), so the alert settings and quiet hours in the page's
   alerts panel apply to it like to a phone; it is one device per remuda,
-  found again with its settings when you switch back to that one.
+  found again with its settings when you switch back to that one. A
+  notification **takes itself back** once it no longer stands — the
+  question answered at the desk or on the phone, the finish looked at, the
+  agent moved on: the socket (`/ws/alerts?withdraw=1`) says which, at once
+  or as the app connects again, and it leaves Notification Centre. Each
+  agent's notifications sit in a group of their own.
 - **The hotkey** ⌥⌘R shows and hides the window from any app; another
   combination goes into Settings… as `ctrl+opt+r` or `⌃⌥R`, and Settings
   says so when the system refuses it because another app holds it.
@@ -93,7 +98,7 @@ bin/remuda.app/Contents/MacOS/remuda --probe [--server http://127.0.0.1:7526] [-
 
 No window, no menu bar item, no notification: the page is loaded off
 screen and every message it posts over the bridge, every alert frame and
-every change of the socket's state is printed as one JSON line. It stops
+every withdrawal and every change of the socket's state is printed as one JSON line. It stops
 as soon as it has heard what a working app hears — the page's `ready`,
 `badge` and `menu` and the socket `open` — and exits 0; otherwise it
 stops when `--seconds` run out, 0 when the page said `ready` by then and

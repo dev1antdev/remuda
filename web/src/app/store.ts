@@ -14,7 +14,7 @@ import { keepNewest, type OnPageAlert } from "@/features/alerts/onpage";
 import { readURL } from "./url";
 import { DEFAULT_OPEN_LENS, OPEN_LENS_KEY, lensToOpen, openLensOf } from "./openLens";
 
-export type Lens = "chat" | "terminal" | "changes";
+export type Lens = "chat" | "terminal" | "changes" | "git";
 export type Mode = "herdr" | "wall" | "tasks" | "code" | "review";
 export type Selection = { machineId: string; paneId: string };
 
@@ -23,7 +23,9 @@ export type AppDialog =
   | { kind: "rename"; machineId: string; what: "tab" | "workspace"; id: string; label: string }
   | { kind: "workspace"; machineId: string; dir?: string } // dir: the folder it opens on, from a folder's own menu
   | { kind: "tab"; machineId: string; session: Session }
-  | { kind: "worktree"; machineId: string; session: Session }
+  | { kind: "worktree"; machineId: string; session: Session; issue?: number; repo?: string; title?: string; prompt?: string } // a new worktree of the session's repository, from a branch, an issue, a pull request or a new branch; issue: a GitHub issue of repo it is for (the issues panel's Start)
+  | { kind: "project-settings"; machineId: string; root: string } // a repository's worktree defaults, setup script and run actions
+  | { kind: "remove-worktree"; machineId: string; session: Session } // the workspace's linked worktree removed, with what goes and what would be lost
   | { kind: "machine" }
   | { kind: "broadcast" } // one message to several agents
   | { kind: "keys" } // the keyboard sheet
@@ -31,7 +33,7 @@ export type AppDialog =
   | { kind: "renameMachine"; machine: Machine }
   | { kind: "recap"; machineId: string; paneId: string; session: string | null; dir: string; title: string } // one conversation's recap; paneId "" = a transcript on its own
   | { kind: "budget"; budget: BudgetStatus | null } // a spending limit, new or the one given
-  | { kind: "import-issue"; projectId?: number } // a task from a GitHub issue, into the project named or the one picked in the dialog
+  | { kind: "import-issue"; projectId?: number; url?: string; machineId?: string } // a task from a GitHub issue, into the project named or the one picked in the dialog; url: the issue, already given
   | { kind: "import-jira"; projectId?: number } // a task from a Jira issue, read from the person's site
   | { kind: "handover"; machineId: string; paneId: string; session: string | null; agent: string; workspace: string } // this conversation continued by another agent in a new tab
   | { kind: "recipes" } // the saved ways to start an agent, edited as a list
@@ -44,12 +46,14 @@ export type AppDialog =
   | { kind: "undo-turn"; machineId: string; dir: string; turn?: string } // an agent's turn taken back in its folder: the newest one, or the one named
   | { kind: "teleport"; machineId: string; paneId: string; tabId: string; workspace: string; agent: string } // the pane's work moved to another machine, an agent carrying on there
   | { kind: "folder-icon"; machineId: string; folder: string; name: string; icon?: FolderIconRef } // a folder's icon: an emoji, a site's favicon or a picture
+  | { kind: "note"; machineId: string; dir: string; name: string; text: string } // a checkout's note, written or edited; saved empty, removed
   | { kind: "leftovers"; machineId: string } // the machine's worktrees no workspace has open, the clean ones to remove
   | { kind: "previews"; machineId: string; workspace?: string; name?: string } // what the machine's processes serve, the workspace's first, each opened on the cockpit
   | { kind: "triggers"; machineId?: string; dir?: string; workspace?: string; name?: string } // what a pane prints and what it sets off: the rules a folder sees, or every rule
   | { kind: "update-everywhere" } // every connected machine's updates, one after another, the page's own host last
   | { kind: "fleet-setup" } // how every machine is set up, side by side, the odd one out marked
   | { kind: "reopen" } // the agents whose panes went away, each to be started again on its session
+  | { kind: "resume-after-restart"; machineId: string } // the chats a reboot stopped on a machine, each with a tick and the command that brings it back
   | { kind: "arena"; taskId?: number; title?: string; prompt?: string; at?: { machineId: string; workspaceId: string }; lanes?: { agent: string; model?: string }[] } // one prompt to several agents, each in a worktree of its own; lanes: the agents and models to start with
   | null;
 
@@ -57,7 +61,10 @@ export type NoticeMsg = { text: string; error?: boolean; brief?: boolean };
 export type Confirm = { text: string; label: string; run: () => void };
 // a jump names its pane ("" = the transcript viewer): a Chat gets it only when it is that pane's
 export type Jump = { machineId: string; paneId: string; session: string; turn: string; n: number };
-export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | "arena" | "server" | "concierge" | "repos" | null; // server: the host's vitals, in server mode; concierge: the agent asked what the others are doing; repos: every repository at a glance
+export type Panel = "palette" | "search" | "alerts" | "activity" | "schedules" | "usage" | "standup" | "release" | "arena" | "server" | "concierge" | "pr" | "issues" | "repos" | null; // server: the host's vitals, in server mode; concierge: the agent asked what the others are doing; pr: the pull request panel
+// where the pull request panel looks: a checkout on a machine, the pane it was opened from, and the pull request asked
+// for (a chip's, a link's); null opens it on the pane on screen
+export type PRAt = { machineId: string; dir: string; paneId?: string; url?: string; n: number };
 // what the transcript viewer shows, read-only: a session by folder and id, or one of its subagents
 export type Viewer = Pick<SearchHit, "machine" | "dir" | "session"> & { subagent?: { id: string; description: string } };
 // the find bar over the conversation shown: the bar writes the query and the step, the chat writes the count;
@@ -96,6 +103,9 @@ export type AppState = {
   split: boolean; // the chat beside the terminal, asked for by a per-device pref; shown only on a wide screen with a mouse (app/split.ts)
   float: { machineId: string } | null; // the floating terminal's drawer, open on that machine's scratch shell; null while hidden
   listen: boolean; // the standup panel is asked to read the day aloud once its report is in (the palette's Listen to the day)
+  prAt: PRAt | null; // where the pull request panel looks, null for the pane on screen
+  issuesAt: { machineId: string; dir: string } | null; // the folder the issues panel was opened on (a folder's ⋯), else it follows the pane
+  issueClosed: { machineId: string; repo: string; number: number; reason: "completed" | "not_planned" } | null; // an issue just closed from the page: a toast offers Reopen
 };
 
 const fromURL = readURL();
@@ -134,6 +144,9 @@ export const app = createStore<AppState>({
   split: readPref("split", false),
   float: null,
   listen: false,
+  prAt: null,
+  issuesAt: null,
+  issueClosed: null,
 });
 
 let jumps = linked ? 1 : 0;
@@ -201,6 +214,10 @@ export const actions = {
   },
   closePanel() {
     app.set({ panel: null });
+  },
+  // the pull request panel on a checkout, a pull request asked for by its address
+  openPRPanel(at: Omit<PRAt, "n">) {
+    app.set((s) => ({ panel: "pr", prAt: { ...at, n: (s.prAt?.n ?? 0) + 1 } }));
   },
   // the search panel, with a query already typed
   openSearch(query = "") {
@@ -317,6 +334,13 @@ export const actions = {
   },
   listened() {
     app.set({ listen: false });
+  },
+  // openIssues opens the GitHub issues panel on a folder's repository, or following the pane on screen
+  openIssues(at: AppState["issuesAt"] = null) {
+    app.set({ panel: "issues", issuesAt: at });
+  },
+  setIssueClosed(issueClosed: AppState["issueClosed"]) {
+    app.set({ issueClosed });
   },
   // the chat beside the terminal, on or off; a pref per device, since a width suits a screen
   toggleSplit() {

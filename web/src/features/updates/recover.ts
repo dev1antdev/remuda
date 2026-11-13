@@ -7,9 +7,10 @@ import { t, tn } from "@/lib/i18n";
 import { recoverChats } from "./api";
 import { untilDone } from "./restartPane";
 
-export async function resumeStopped(machineId: string, count: number): Promise<void> {
+// resumeStopped resumes the chats in the panes picked, every one for none; count is how many that is
+export async function resumeStopped(machineId: string, count: number, panes?: string[]): Promise<void> {
   try {
-    const { job } = await recoverChats(machineId);
+    const { job } = await recoverChats(machineId, panes);
     actions.notify(tn(count, "Resuming {n} chat…", "Resuming {n} chats…"));
     const ended = await untilDone(job);
     if (ended.ok) actions.notify(tn(count, "The chat is back on its session", "The chats are back on their sessions"));
