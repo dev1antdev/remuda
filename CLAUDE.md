@@ -3038,7 +3038,10 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   its payloads as JSON text frames (`internal/server/alerts.go`: 404
   before the upgrade for an unknown device, 426 without one, pings every
   30 s, "remuda is stopping" on close, "another connection took this
-  device" when replaced), `DELETE /api/push/subscribe` removes it.
+  device" when replaced; with `withdraw=1` the hub's `Frame`s carry the
+  withdrawals too, the ones owed while it was away first — a connection
+  without it, an app from before them, never gets one, which it would
+  show as a blank alert), `DELETE /api/push/subscribe` removes it.
   **A question is answered from the notification**
   (`asked.go`, tested): when the `input` push fires, `Service.Question`
   (wired in `internal/app`: the pane's screen through the machine's herdr
