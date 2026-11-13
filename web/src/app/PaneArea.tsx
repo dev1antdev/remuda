@@ -19,7 +19,7 @@ import { FindTool } from "@/features/chat/FindBar";
 import TabStrip from "@/features/roster/TabStrip";
 import { closeTabAsk } from "@/features/roster/tabs";
 import Chat from "@/features/chat/Chat";
-import FilesRail from "@/features/chat/FilesRail";
+import FilesRail from "./FilesRail";
 import Review from "@/features/review/Review";
 import { GitLens } from "@/features/git/GitLens";
 import { TerminalLens, TerminalTools, useTerminalViewItems } from "@/features/terminal/TerminalLens";
@@ -241,6 +241,8 @@ export default function PaneArea({ current }: { current: Located | null }) {
             status={pane.status}
             dir={folder}
             active={!narrow}
+            viewOnly={viewOnly}
+            editor={!viewOnly && !onWindows(machine)}
             onOpenFile={(target) => actions.openFile(machine.id, pane.id, target, folder)}
             onOpenInCode={onWindows(machine) ? undefined : (path) => (viewOnly ? actions.openFile(machine.id, pane.id, { path }, folder) : actions.openInCode(machine.id, folder, path))} // a viewer has no Code mode: the file viewer reads it; a Windows PC has no editor
           />

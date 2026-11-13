@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { listDirs } from "@/features/files/api";
 import type { Machine } from "@/features/roster/api";
 import Icon from "@/ui/icons";
+import { FileIcon } from "@/ui/FileIcon";
 import { folderOptions } from "@/features/roster/options";
 import { basename } from "@/lib/text";
 import { joinPath, pathCrumbs } from "@/lib/pathname";
@@ -74,7 +75,7 @@ export default function FolderPicker({ machine, machines, start, onPick, onClose
           return (
             <div key={d.name} className="picker-row">
               <button type="button" className="picker-open" onClick={() => go(full)} title={full}>
-                <Icon name={d.git ? "git-branch" : "folder"} size={14} className={d.git ? "picker-git" : undefined} />
+                <FileIcon path={d.name} dir size={16} />
                 <span className="picker-name">{d.name}</span>
                 {d.git && <span className="picker-tag">{t("repo")}</span>}
               </button>

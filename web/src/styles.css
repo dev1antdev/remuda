@@ -4274,6 +4274,77 @@ ul.pick-list {
   color: var(--fg-faint);
 }
 
+/* the File tab's changed lines: a bar at the row's edge, the old lines shown in place */
+.fv-gutter .fv-line.is-added {
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--green);
+}
+.fv-gutter .fv-line.is-changed {
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+.fv-gutter .fv-line.is-old {
+  background: color-mix(in srgb, var(--red) 16%, transparent);
+  box-shadow: inset 3px 0 0 var(--red);
+  color: var(--red);
+  cursor: pointer;
+}
+.fv-gutter .fv-line.is-old .fv-ln {
+  color: var(--red);
+}
+.fv-gutter .fv-line.opens {
+  cursor: pointer;
+}
+.fv-gutter .fv-line.hit {
+  box-shadow: inset 2px 0 0 var(--amber);
+}
+.fv-toggle.linkish {
+  display: block;
+  height: auto;
+  border-radius: 0;
+  padding: 0 14px 0 0;
+  font: inherit;
+  text-align: right;
+  color: var(--amber);
+}
+.fv-line.is-added .fv-toggle.linkish {
+  color: var(--green);
+}
+.fv-toggle.linkish:hover {
+  background: none;
+  color: var(--fg);
+  text-decoration: underline;
+}
+.fv-removed.linkish {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 8px;
+  padding: 0;
+  border-radius: 0;
+  cursor: pointer;
+}
+.fv-removed-mark {
+  width: 100%;
+  height: 2px;
+  background: var(--red);
+}
+.fv-removed.linkish:hover .fv-removed-mark,
+.fv-removed.linkish:focus-visible .fv-removed-mark {
+  height: 4px;
+}
+.fv-title:has(.fv-icon) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
+}
+.fv-title .fv-icon {
+  grid-row: 1 / span 2;
+  width: 20px;
+  height: 20px;
+}
+
 /* ---- modal ---- */
 .modal-scrim,
 .scrim {
@@ -8003,10 +8074,6 @@ button.usage-row:hover {
   white-space: nowrap;
 }
 
-.picker-git {
-  color: var(--accent);
-}
-
 .picker-tag {
   font-size: var(--fs-11);
   color: var(--fg-faint);
@@ -9287,6 +9354,163 @@ body.popout {
 }
 .fp-fold > .linkish {
   align-self: flex-start;
+}
+
+/* ---- the files rail's two tabs, and the project tree ---- */
+.footprint-head:has(.footprint-tabs) {
+  padding-left: 6px;
+}
+.footprint-tabs {
+  padding: 2px;
+}
+.footprint-tabs button {
+  height: 24px;
+  padding: 0 10px;
+  font-size: var(--fs-12);
+}
+.footprint-head .footprint-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fp-path .fp-icon {
+  align-self: center;
+}
+.file-icon {
+  flex-shrink: 0;
+  display: block;
+  user-select: none;
+}
+.footprint-list.tree {
+  gap: 0;
+  padding: 4px;
+}
+.tree-group {
+  position: relative;
+}
+.tree-group.nested::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--guide);
+  border-left: 1px solid var(--line);
+  pointer-events: none;
+}
+.tree-row {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding-right: 2px;
+  border-radius: var(--r-sm);
+  transition: background var(--fast) var(--ease);
+}
+.tree-row:hover,
+.tree-row:focus-within,
+.tree-row.is-menu {
+  background: var(--bg-hover);
+}
+.tree-open {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  gap: 6px;
+  padding: 0 4px 0 0;
+  color: var(--fg);
+  font-size: var(--fs-12);
+  font-weight: 400;
+  text-align: left;
+}
+.tree-open:hover {
+  background: none;
+  color: var(--fg);
+}
+.tree-chevron {
+  display: inline-flex;
+  justify-content: center;
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+.tree-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-link {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+.tree-mark {
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: var(--fs-11);
+  font-weight: 600;
+  line-height: 1;
+}
+.tree-dot {
+  width: 6px;
+  height: 6px;
+  margin: 0 4px 0 2px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.tree-dot.on {
+  background: var(--amber);
+}
+.tree-more {
+  flex-shrink: 0;
+  visibility: hidden;
+}
+.tree-row:hover .tree-more,
+.tree-row:focus-within .tree-more,
+.tree-row.is-menu .tree-more {
+  visibility: visible;
+}
+.tree-row.tone-added :is(.tree-name, .tree-mark) {
+  color: var(--green);
+}
+.tree-row.tone-changed :is(.tree-name, .tree-mark) {
+  color: var(--amber);
+}
+.tree-row.tone-deleted :is(.tree-name, .tree-mark),
+.tree-row.tone-conflict :is(.tree-name, .tree-mark) {
+  color: var(--red);
+}
+.tree-row.is-gone .tree-name {
+  text-decoration: line-through;
+}
+.tree-row.is-ignored :is(.tree-icon, .tree-name, .tree-link, .tree-chevron) {
+  opacity: 0.5;
+}
+.tree-note {
+  padding: 4px 6px 6px;
+  font-size: var(--fs-12);
+  color: var(--fg-faint);
+}
+.tree-note.is-error {
+  color: var(--red);
+}
+.tree-skeleton {
+  height: 10px;
+  margin: 8px 0;
+  max-width: calc(100% - 40px);
+  border-radius: var(--r-xs);
+  background: var(--bg-hover);
+}
+@media (pointer: coarse) {
+  .tree-more {
+    visibility: visible;
+  }
+}
+.send-about code {
+  font-family: var(--mono);
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
 }
 @media (pointer: coarse) {
   .fp-code {

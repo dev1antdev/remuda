@@ -17,11 +17,12 @@ export type MenuItem =
 
 // items may be a function: a row's menu then works its rows out only when it opens, not at every redraw of the row. A
 // click in the menu stays there: React carries a portal's events up its own tree, into the row the button sits in.
-export default function Menu({ trigger, tip, items, align = "end", side = "bottom", label }: { trigger: ReactNode; tip?: ReactNode; items: MenuItem[] | (() => MenuItem[]); align?: "start" | "center" | "end"; side?: "top" | "bottom" | "left" | "right"; label?: string }) {
+// open and onOpenChange hold it from outside, for a row that opens its menu on a right-click too.
+export default function Menu({ trigger, tip, items, align = "end", side = "bottom", label, open, onOpenChange }: { trigger: ReactNode; tip?: ReactNode; items: MenuItem[] | (() => MenuItem[]); align?: "start" | "center" | "end"; side?: "top" | "bottom" | "left" | "right"; label?: string; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const opener = <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>;
   const host = usePortalHost();
   return (
-    <DropdownMenu.Root modal={false}>
+    <DropdownMenu.Root modal={false} open={open} onOpenChange={onOpenChange}>
       {tip ? <Tip text={tip}>{opener}</Tip> : opener}
       <DropdownMenu.Portal container={host}>
         <DropdownMenu.Content className="menu" align={align} side={side} sideOffset={6} collisionPadding={8} hideWhenDetached aria-label={label} onClick={(e) => e.stopPropagation()}>
