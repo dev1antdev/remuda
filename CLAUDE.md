@@ -843,7 +843,7 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   dialog's four tabs, the Wall's chat, screen, zoo and office views,
   the Tasks board, list and detail, Review, Code, every panel, each
   section of Settings, the palette, the keys sheet and the dialogs (new
-  workspace, the two imports, arena, teleport, reopen, recipes, budget,
+  workspace, the two imports, arena, teleport, reopen, resume after restart, the sleep's confirm, recipes, budget,
   broadcast, the triggers with a rule's form, Fleet setup with every fact
   and its Run… into Updates) — the palette by its rows' `data-entry` ids, so either
   language finds them; every screen checked for a sideways scroll, a
@@ -1227,23 +1227,47 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   or closed the pane; `Restarter.Server` pauses the memory for its
   machine while it restarts herdr itself; a workspace `Memory.Skip`
   names (the concierge's) is never remembered, so neither list offers
-  it back. The roster carries
-  `machine.stopped [{pane, agent, title}]`: the ⓘ's first concern
+  it back, nor is a pane `Memory.Asleep` names (`sleep.Store.Holds`: a
+  workspace the person put to sleep, its agents left at their word and
+  the sleep's to wake — neither stopped by a reboot nor closed). The
+  roster carries `machine.stopped [{pane, agent, title, dir, command}]`
+  (`stoppedOf`: the folder and `Resume(kind, session)`) and
+  `machine.resuming` while a recovery runs there (`Restarter.Recovering`,
+  one at a time per machine, `claimRecovery`): the ⓘ's first concern
   ("2 chats stopped with the reboot: Claude Code in api, Codex in web",
-  `features/roster/stopped.ts`, tested) with a **Resume** button, and one
+  `features/roster/stopped.ts`, tested) with a **Resume…** button, and one
   toast per machine and episode (`episodeKey`, pref `recover.seen`, the
-  last eight dismissed) with the same button. Resume is
-  `POST /api/panes/recover {machine}` → `updates.Service.RecoverChats` →
+  last eight dismissed, none while resuming) with the same button; both
+  open **Resume after restart** (dialog kind `resume-after-restart`,
+  `features/sleep/ResumeDialog.tsx`, after Orca's hibernate mod — the
+  palette's "Resume after restart on <machine>…" too): a row per chat
+  with a tick (all ticked), its agent's logo and name, "workspace ·
+  machine", and the exact command in mono (`commandLine` in
+  `features/sleep/resume.ts`, tested: `cd <dir> && claude --resume <id>`,
+  the folder left out under the screen-sharing mode), the line that the
+  model and the person's own arguments are not carried over, the switch
+  **Resume automatically next time**, then Not now, Resume N (only while
+  some but not every chat is ticked, `someLabel`) and Resume all; any
+  other close is Not now (the episode marked seen). Resume is
+  `POST /api/panes/recover {machine, panes}` (none for every one,
+  `Restarter.Picked`) → `updates.Service.RecoverChats` →
   a job (`features/updates/recover.ts` follows it with toasts; the log
   under the machine's recent jobs) running `Restarter.Recover`: each
   pane under its lock, a fresh look — gone, another agent, the shell in
   another folder, the agent back already by hand — then the folder
   (`Machine.ResolvePath`) and, for Claude Code, the session file
-  (`Transcripts.ResolveSession`) checked, then `agent.start` with the
+  (`Transcripts.ResolveSession`) checked (`CanResume`, which the wake
+  shares), then `agent.start` with the
   kind's resume arguments under a name of the pane's own; a start that
   fails leaves the pane on the list, a pane that will not come back is
   forgotten; a feed row (kind `recover`) says what came back. Nothing
-  starts by itself.
+  starts by itself — unless the person switched on "Resume
+  automatically next time" (`sleep.Settings.ResumeAutomatically`, in the
+  dialog and in Settings, off by default): then `Memory.OnStopped`,
+  heard outside the memory's lock whenever a machine's stopped list
+  gains a pane, starts `updates.Service.AutoRecoverChats` →
+  `Restarter.AutoRecover` by itself (wired in `internal/app/sleep.go`),
+  its feed row "N chats resumed by itself after the reboot on X".
   **The agents whose panes went away** (restart/closed.go, tested): the
   same memory notes, when a remembered agent pane is gone from its
   machine's snapshot — its tab or workspace closed, through remuda or
@@ -1273,6 +1297,80 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   over the terminal or a dialog, nor a field on a Mac) open the dialog
   kind `reopen`, the list newest first, ↑ ↓ and Enter or a click to
   reopen, the new pane selected; never for a viewer.
+  **The leave** (restart/leave.go, tested): `Leave(client, pane, kind,
+  typed, say)` is the agent's own exit through `agent.prompt`, twelve
+  looks `LeavePoll` (1 s) apart for the shell under it, Ctrl-C twice and
+  eight more when it lingers, answering `Left` — shell, gone (the pane
+  closed with it), still, other, unseen; `swap` and the sleep share it.
+- `internal/sleep/` — **a workspace put to sleep and woken**, after
+  Orca's hibernate mod (tested on a fake herdr: `fake_test.go`; the
+  routes' refusals on a throwaway herdr). `Plan(snap, workspace)` is
+  every agent pane of the workspace remuda can bring back on a session
+  (`restart.Knows`, `restart.SessionOf`) as an `Agent{pane, tab,
+  tab_name, kind, session, dir, title}`, the ones at work or asking as
+  `Busy`, and the agents with no session (or of a kind remuda cannot
+  resume) left running, named. **Sleep** (`Service.Sleep(mc, workspace,
+  anyway)`): the concierge's workspace never sleeps (`Skip`); nothing to
+  record is refused; busy agents are a `*BusyError` (409 with `busy`,
+  Orca's words: "Sleep api? Still busy: Claude Code is working…
+  Sleeping interrupts them. Waking resumes their conversations where
+  they stopped.") unless the person said anyway; then the record goes
+  into `<state>/asleep.json` at once (`Store`, by machine and workspace,
+  merged with what an earlier sleep of it still holds) — so the roster
+  says asleep and the restart memory skips its panes from the next
+  snapshot — and a job ("Sleep api") makes every agent leave side by side,
+  each under its pane's lock: a fresh look (a pane gone stays asleep, a
+  wake opens a tab for it; another conversation there is left), an Esc
+  for one at work or asking (`interrupt`, a quiet "sent" row of the
+  activity like the exit, `Typed`) and a wait for it to rest, then
+  `restart.Leave` (an `agent_blocked` exit gets one more Esc); shells,
+  panes and tabs stay. An agent that would not leave stays awake and off
+  the record ("api is asleep, but 1 agent did not stop: …"; none left,
+  the record goes). **Wake** (`Service.Wake`): a job ("Wake api"), one
+  agent after another under its pane's lock: back already (the same
+  kind and session) counts as woken; another agent in the pane, a shell
+  in another folder, a shell `PaneAtPrompt` says is busy, or a start
+  herdr refused stay asleep — never typed into a busy shell; a folder or
+  Claude Code session file gone (`restart.CanResume`) is forgotten,
+  said; a pane gone gets a new tab of the workspace on its folder
+  (`TabCreate` under the tab's own name, else `sessions.StartIn` on the
+  agent's folder), and a start that fails there is tried in that same
+  tab next time; every start is `sessions.StartAgentResumed` (the kind's
+  resume arguments only — the model and the person's own arguments are
+  not carried, herdr's snapshot names none). What stays asleep is
+  `Store.keep`'s; a partial wake is the job's error, "api is still partly
+  asleep · not restarted (busy or gone): Codex in w1:p2 (something runs
+  in its shell)". One sleep or wake per workspace at a time (`claim`).
+  `Store.Observe` (every snapshot, `internal/app/sleep.go`) forgets a
+  workspace a watched snapshot no longer shows (never on a machine's
+  first), `Forget` a removed machine's. **The switches**
+  (`sleep-settings.json`, `Settings{wake_on_open, resume_automatically}`,
+  both off): routes `GET/PUT /api/sleep/settings`; `POST
+  /api/sessions/{id}/sleep {machine, anyway}` and `…/wake {machine}`
+  answer `{job, agents}` (`internal/server/sleep.go`, the person's only:
+  neither a viewer link nor an agent key, tested in `internal/auth`).
+  The roster's `session.asleep {at, agents}`. The page
+  (`features/sleep/`): `sleep.ts` (tested: `canSleep`, `busyOf` off the
+  radar, `sleepAsk`, `sleptWords` "api is asleep · 3 agents stopped.
+  Wake it from its menu.", `wokeWords`, `asleepTip`, `wakeKey`),
+  `flows.ts` (`askSleep` — the confirm with **Sleep anyway** when busy,
+  and again when the server's 409 says the roster was behind — and
+  `wake`, each following its job with toasts; exported for any other
+  place that offers Sleep beside a workspace), `menu.ts` (the workspace
+  ⋯ menu's Sleep… or Wake), `commands.ts` (the palette's "Wake “x”" per
+  workspace asleep, "Resume after restart on <machine>…"; "Sleep “x”…"
+  for the workspace on screen in `app/commands.tsx`), `useWakeOnOpen.ts`
+  (from Shell: with **Wake a sleeping workspace when I open it** on, the
+  pane on screen in the Agents mode being one of a sleeping workspace's
+  wakes it, once per sleep), `SleepSection.tsx` (Settings › Sleep and
+  resume, never for a viewer), `ResumeDialog.tsx` (above). The sidebar
+  card of a workspace asleep (`rows.tsx`) wears the moon for its mark and
+  "Asleep" for its words, `.is-asleep` dimmed, its tip "Asleep · 3 agents
+  stopped · Wake from the menu". The e2e display suite dresses the notes
+  workspace asleep and a reboot's two stopped chats (`STOPPED`, while
+  `dressStopped`), and opens the sleeping card's menu, the sleep's
+  confirm (cancelled), the toast, Resume after restart (left by Not now)
+  and the switches.
 - `internal/tsnetx` — `-tailscale` joins the tailnet as a tsnet node
   (userspace, no tailscaled) named `-tailscale-hostname`, serves the same
   handler over HTTPS on :443 with the tailnet's certificate (:80
@@ -5588,6 +5686,12 @@ tooling in `.claude/` (hooks, `/verify`, `/live-check`, `/herdr`): @AGENTS.md
   opinion's review request (`opinion.Prompt`) — go only
   to the agent it just started in a new tab, and only because the person
   pressed that dialog's button; never to a pane that was already there.
+  A sleep (`internal/sleep`) types each agent's own exit, and an Esc for
+  one at work or asking, only when the person pressed Sleep (and Sleep
+  anyway for busy agents); a wake, a wake on opening and a resume after a
+  reboot start agents through herdr's `agent.start` alone, never typing
+  into a shell, and a resume runs by itself only once the person switched
+  on "Resume automatically next time".
   The concierge (`internal/concierge`) is started when the person opens
   its place or presses New conversation, with remuda's own MCP server
   alone and settings that deny every tool but its reads, `task_create`

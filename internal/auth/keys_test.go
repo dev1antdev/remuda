@@ -104,7 +104,7 @@ func TestKeyAllowsTasksAndReadsOnly(t *testing.T) {
 			t.Errorf("a write to %s allowed", path)
 		}
 	}
-	for _, path := range []string{"/api/roster/", "/api/tasks2", "/api/keys", "/api/submit", "/api/input", "/api/recap/x", "/ws/pane", "/", "/api/health"} {
+	for _, path := range []string{"/api/roster/", "/api/tasks2", "/api/keys", "/api/submit", "/api/input", "/api/recap/x", "/ws/pane", "/", "/api/health", "/api/sleep/settings"} {
 		if key.Allows("GET", path) {
 			t.Errorf("%s allowed", path)
 		}

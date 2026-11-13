@@ -55,7 +55,7 @@ func TestViewerKeyReadsAndNeverTypes(t *testing.T) {
 	if code, body, _ := call(h, "GET", "/api/roster", nil, key); code != 200 || body != "device= viewer=yes" {
 		t.Fatalf("roster with the key: %d %s", code, body)
 	}
-	for _, try := range []struct{ method, path string }{{"POST", "/api/keys"}, {"POST", "/api/submit"}, {"POST", "/api/input"}, {"GET", "/ws/pane"}, {"GET", "/api/tasks"}, {"GET", "/api/devices"}, {"DELETE", "/api/sessions/w1"}, {"GET", "/code/local/"}, {"POST", "/"}, {"GET", "/api/timelapse"}, {"PUT", "/api/timelapse"}, {"DELETE", "/api/timelapse/recordings/20261112T140000Z-abcdef"}, {"POST", "/api/timelapse/search"}} {
+	for _, try := range []struct{ method, path string }{{"POST", "/api/keys"}, {"POST", "/api/submit"}, {"POST", "/api/input"}, {"GET", "/ws/pane"}, {"GET", "/api/tasks"}, {"GET", "/api/devices"}, {"DELETE", "/api/sessions/w1"}, {"GET", "/code/local/"}, {"POST", "/"}, {"GET", "/api/timelapse"}, {"PUT", "/api/timelapse"}, {"DELETE", "/api/timelapse/recordings/20261112T140000Z-abcdef"}, {"POST", "/api/timelapse/search"}, {"POST", "/api/sessions/w1/sleep"}, {"POST", "/api/sessions/w1/wake"}, {"GET", "/api/sleep/settings"}, {"PUT", "/api/sleep/settings"}, {"POST", "/api/panes/recover"}} {
 		if code, body, _ := call(h, try.method, try.path, nil, key); code != 403 || body != "this link is for viewing only" {
 			t.Fatalf("%s %s with the key: %d %s", try.method, try.path, code, body)
 		}

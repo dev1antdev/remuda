@@ -77,4 +77,4 @@ function hookNames(hooks: { agent: string }[]): string {
 
 // updateLabel is the button's word for what an update does
 export const updateLabel = (what: string) =>
-  what === "remuda" ? t("Deploy") : what === "remuda-release" ? t("Download & install") : what === "recover" ? t("Resume") : what === "signin" ? t("Open a shell there") : what.startsWith("restart-") ? t("Restart") : t("Update");
+  what === "remuda" ? t("Deploy") : what === "remuda-release" ? t("Download & install") : what === "recover" ? t("Resume…") : what === "signin" ? t("Open a shell there") : what.startsWith("restart-") ? t("Restart") : t("Update");

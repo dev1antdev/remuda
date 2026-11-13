@@ -125,6 +125,7 @@ export type Session = {
   scratch?: boolean; // the floating terminal's own shell: the drawer shows it, the sidebar and the palette leave it out
   concierge?: boolean; // the concierge's own workspace: the roster provider takes it out of the machines, its place shows it
   jira?: JiraIssue[]; // the Jira issues its branch and its agents name, once the person set a site
+  asleep?: Asleep; // put to sleep by the person: its agents left, waking resumes them (features/sleep)
   tabs: Tab[];
 };
 
@@ -205,10 +206,15 @@ export type Machine = {
   mac?: string; // the address a wake-up packet names, when the person set one
   limits?: MachineLimits; // the agents' plan limits as the machine last reported them
   retiring?: RetiringHit[]; // what starts or runs there on a model or mode being retired
+  resuming?: boolean; // the stopped chats are being resumed there now, pressed or by themselves: no Resume offered meanwhile
 };
 
 // StoppedChat is a chat whose pane came back from a reboot as a bare shell: the agent it ran and the pane's title
-export type StoppedChat = { pane: string; agent: string; title: string };
+// dir and command: the folder it lived in and the command that brings it back, as "Resume after restart" shows them
+export type StoppedChat = { pane: string; agent: string; title: string; dir?: string; command?: string };
+
+// Asleep is a workspace the person put to sleep: since when, and how many agents wait to be woken
+export type Asleep = { at: string; agents: number };
 
 export type AgentKind = { id: string; label: string };
 

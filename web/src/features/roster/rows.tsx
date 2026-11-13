@@ -18,6 +18,7 @@ import { hiddenWords } from "./sharing";
 import type { Sharing } from "./useSharing";
 import { agentWords, branchShown, entries, folderCounts, folderOf, itemTitle, itemWords, limited, representative, shortAge, since, type Folder, type WorkspaceItem } from "./workspaces";
 import { folderMenuItems, workspaceMenuItems } from "./WorkspaceMenu";
+import { asleepTip } from "@/features/sleep/sleep";
 import { t, tn } from "@/lib/i18n";
 
 export type Current = { machineId: string; sessionId: string; paneId: string } | null;
@@ -137,7 +138,7 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
   // a hidden folder's card goes by what runs in it, the folder's neutral name standing above it
   const title = hidden ? (group ? (agent ? (VENDOR_NAME[agent] ?? agent) : t("terminal")) : share.folderName(m.id, folderOf(s), s.name)) : itemTitle(item, group);
   const branch = hidden ? "" : branchShown(item, title);
-  const words = hidden && !several ? hiddenWords() : itemWords(item, prefs);
+  const words = s.asleep ? t("Asleep") : hidden && !several ? hiddenWords() : itemWords(item, prefs);
   const target = agent && pane ? pane.id : (representative(s)?.id ?? "");
   const open = () => target && onSelect(m.id, target);
   const markStyle: CSSProperties | undefined = d === "working" && agent && !alert ? { color: brandColor(agent) } : undefined;
@@ -156,11 +157,11 @@ function WorkspaceView({ machine: m, item, group, current, prefs, step, now, onS
         folder,
       ].filter(Boolean).join("\n");
   return (
-    <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${!several && limited(lead) ? " is-limit" : ""}${group ? " in-repo" : ""}`}>
-      <div className="ws-main" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => rowKey(e, open)} title={tip}>
+    <div className={`ws-item is-${agent ? d : "shell"}${selected ? " on" : ""}${alert ? " is-alert" : ""}${!several && limited(lead) ? " is-limit" : ""}${group ? " in-repo" : ""}${s.asleep ? " is-asleep" : ""}`}>
+      <div className="ws-main" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => rowKey(e, open)} title={s.asleep ? `${asleepTip(s.asleep.agents)}\n${tip}` : tip}>
         <span className="ws-line">
           <span className="radar-mark" style={markStyle}>
-            {alert ? "!" : agent ? markOf(d, step) : "$"}
+            {alert ? "!" : agent ? markOf(d, step) : s.asleep ? <Icon name="moon" size={12} /> : "$"}
           </span>
           {agent && <Logo agent={agent} />}
           <span className="ws-name">{title}</span>

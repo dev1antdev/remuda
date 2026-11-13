@@ -1,7 +1,7 @@
 // The workspace's ⋯ menu and the folder's: a tab, a workspace in the same folder, a worktree, the renames, the folder's
 // icon and its screen-sharing mark, the pull request the agent named with what its state allows — its failed checks or
 // its review handed to the agent, a merged worktree removed — the agent forked, restarted on its session or moved to
-// another machine, the mutes, close. Rows for `ui/Menu`, worked out when a menu opens.
+// another machine, put to sleep or woken, the mutes, close. Rows for `ui/Menu`, worked out when a menu opens.
 
 import { act } from "@/app/act";
 import { actions } from "@/app/store";
@@ -9,6 +9,7 @@ import { offerReopen } from "@/features/reopen/offer";
 import { agentTitle, askRestart } from "@/features/updates/restartPane";
 import { canFork, forkLabel } from "@/features/chat/fork";
 import { forkPane } from "@/features/chat/forkPane";
+import { sleepRows } from "@/features/sleep/menu";
 import { openUrl } from "@/lib/host";
 import type { MenuItem } from "@/ui";
 import { killSession, muteWorkspace, unmuteWorkspace, type Machine, type Session } from "./api";
@@ -92,6 +93,7 @@ export function workspaceMenuItems(m: Machine, session: Session, shown: Shown): 
   if (chat && canFork(chat.agent)) rows.push({ label: forkLabel(chat.agent), icon: "copy", disabled: !connected, onSelect: () => void forkPane(m.id, chat.id, chat.agent) });
   if (chat) rows.push({ label: t("Restart {agent} on its session…", { agent: agentTitle(chat.agent) }), icon: "refresh-cw", disabled: !connected, onSelect: () => askRestart(m.id, chat.id, chat.agent) });
   if (tab && pane) rows.push({ label: t("Move the work to another machine…"), icon: "monitor", disabled: !connected, onSelect: () => actions.openDialog({ kind: "teleport", machineId: m.id, paneId: pane.id, tabId: tab.id, workspace: session.name, agent: chat?.agent ?? "" }) });
+  rows.push(...sleepRows(m, session));
   if (session.dir) {
     rows.push({ sep: true });
     const dir = session.dir;

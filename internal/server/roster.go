@@ -23,6 +23,7 @@ import (
 	"github.com/dev1antdev/remuda/internal/retire"
 	"github.com/dev1antdev/remuda/internal/review"
 	"github.com/dev1antdev/remuda/internal/sessions"
+	"github.com/dev1antdev/remuda/internal/sleep"
 	"github.com/dev1antdev/remuda/internal/subagents"
 	"github.com/dev1antdev/remuda/internal/transcript"
 	"github.com/dev1antdev/remuda/internal/triggers"
@@ -104,6 +105,7 @@ type rosterSession struct {
 	// the other checkouts of its repository changing the same files against the main branch, the same lines first
 	Collisions []collisions.Collision `json:"collisions,omitempty"`
 	Concierge  bool                   `json:"concierge,omitempty"` // the concierge's own workspace: its place shows it, the sidebar, the wall and the pickers do not
+	Asleep     *sleep.Status          `json:"asleep,omitempty"`    // put to sleep by the person: since when, and how many agents wait to be woken
 	Tabs       []rosterTab            `json:"tabs"`
 }
 
@@ -122,6 +124,7 @@ type rosterMachine struct {
 	MAC      string            `json:"mac,omitempty"`      // the address a wake-up packet names, when the person set one
 	Limits   *limits.Reading   `json:"limits,omitempty"`   // the agents' subscription windows as the machine last reported them
 	Retiring []retire.Hit      `json:"retiring,omitempty"` // what starts or runs there on a model or mode being retired
+	Resuming bool              `json:"resuming,omitempty"` // a recovery of the stopped chats runs there now, pressed or by itself: no Resume offered meanwhile
 }
 
 // rosterServer is the host of a remuda serving the page only: its name and vitals, for the Server place, never a machine of the fleet.
@@ -224,6 +227,9 @@ func (s *Server) sessionsFromSnapshot(machineID string, snap *herdr.Snapshot) []
 			Tabs:        tabs,
 			Scratch:     s.Scratch != nil && s.Scratch.Is(machineID, ws.WorkspaceID),
 			Concierge:   s.Concierge != nil && s.Concierge.Is(machineID, ws.WorkspaceID),
+		}
+		if s.Sleep != nil {
+			session.Asleep = s.Sleep.Store.Status(machineID, ws.WorkspaceID)
 		}
 		if ws.Worktree != nil {
 			session.Worktree = &rosterWorktree{
@@ -356,6 +362,7 @@ func (s *Server) rosterBody() ([]byte, string) {
 		}
 		if s.Updates != nil && s.Updates.Restart != nil {
 			entry.Stopped = s.Updates.Restart.Stopped(mc.ID())
+			entry.Resuming = s.Updates.Restart.Recovering(mc.ID())
 		}
 		entry.MAC = s.Machines.MAC(mc.ID())
 		if s.Retire != nil {

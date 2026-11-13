@@ -3,7 +3,7 @@
 // keeps the address in step with the selection, hears the service worker, ⌘K (the palette), ⌘F (the find bar), ? (the keyboard
 // sheet) and Alt+N (the next agent that needs you), reads the roster aloud when asked, keeps the browser tab's title and
 // favicon counting the agents that need you, says what the agents did while the page was away, and tells the server when
-// a finished pane is being looked at.
+// a finished pane is being looked at, and wakes a sleeping workspace opened when the person asked for that.
 
 import { useEffect, useRef } from "react";
 import { isMac } from "@/lib/prefs";
@@ -32,6 +32,7 @@ import { folderOf, useCurrent } from "./current";
 import { useFullKeys } from "./full";
 import { useNextKey, useNextNeedingMe } from "./next";
 import { useReopenKey } from "@/features/reopen/useReopenKey";
+import { useWakeOnOpen } from "@/features/sleep/useWakeOnOpen";
 import { useSharingKey } from "./SharingChip";
 import { handShell, inShell } from "@/lib/shell";
 import { modeOf } from "./shellFeed";
@@ -64,6 +65,7 @@ export default function Shell() {
   useWelcomeBack();
   useBadge();
   useShellFeed();
+  useWakeOnOpen(current, mode === "herdr" && !viewOnly);
   useFloatKey(machines, current?.machine.id ?? null, !viewOnly);
 
   useEffect(() => {
