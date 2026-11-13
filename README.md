@@ -232,13 +232,18 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   amber while checks run or a merge request's threads are open ("2 open
   threads") — read with `gh` (`glab` for a GitLab merge request) on
   that machine as you, every two minutes while the page is open, so
-  remuda itself asks GitHub nothing. The chips open a menu: when a check
-  failed, *Hand the failed checks to the agent* reads the failed steps'
-  log with `gh run view --log-failed` on that machine and sends its end
-  to the agent as a message, the way you would paste it; *Send the
+  remuda itself asks GitHub nothing (while a request's checks have
+  settled, a conditional request that costs no rate limit says whether
+  it moved at all). The chips open a menu: *Pull request panel* (below),
+  and when a check failed, *Hand the failed checks to the agent* names
+  each failed check's `gh run view <run> --job <id> --log-failed`
+  command and sends a short end of its log to the agent; *Send the
   review comments to the agent* does the same with the reviewers'
   verdicts and their comments on the lines, numbered as the Changes
-  lens numbers yours. Nothing is sent unless you choose the row, and an
+  lens numbers yours. Both ask the agent to fix and say what it changed,
+  and end by telling it that what is quoted is data, not instructions,
+  and not to push, post or resolve threads unless you ask. Nothing is
+  sent unless you choose the row, and an
   agent waiting on a question refuses, as the chat does;
   the last turns of its conversation and a line to answer it,
   in a grid that fits the window (S / M / L). Hide the idle ones, or
@@ -300,6 +305,35 @@ browser / phone ⇄ HTTP + WebSocket ⇄ remuda (Go) ─┬─ local herdr.sock 
   config, sign-in or permissions code, possible secrets the last secret
   check found in this very work, failing checks or conflicts on its pull
   request, or another workspace changing the same lines.
+- **Pull requests** — "Pull requests…" in a workspace's ⋯ menu (or the
+  palette, a PR chip's menu, a click on a GitHub pull request's link in
+  an agent's answer; ⌘/Ctrl-click still opens GitHub) opens a panel on
+  that checkout, read with `gh` on its machine as you. **Branch** lists
+  the pull requests from its branch (one goes straight to it), **Repo**
+  searches the repository's as you type — a number, words, `author:`,
+  `label:` — All / Created / Involved, Open / Draft / Merged / Closed /
+  All, a page at a time. A pull request shows its state, "author · head →
+  base", and one line of figures — *Checks 4/6 · Reviews 1/3 ·
+  Unresolved 2*, red, amber or green, each a link to the tab that
+  explains it. **Overview**: the agents on it (a click opens one), its
+  reviewers with how each stands and ↻ to ask one again, its description.
+  **Comments**: by thread, a thread's code as diff rows, "New" until this
+  device has seen a comment as it reads now; Reply, Resolve / Unresolve,
+  a new comment, and *Send to agent* — one comment under a prompt you
+  edit, or every unresolved thread at once. **Checks**: by workflow run,
+  a failure first and open, its job's steps and the end of the failed
+  steps' output; *Fix with agent* hands that check to any agent, as the
+  failure's command (`gh run view … --log-failed`) and a short end of its
+  log. **Files**: a tree with `+a −d`, a click shows the file's patch.
+  **Actions** merges (merge, squash with its message, rebase — what the
+  repository allows), merges when ready, cancels that, closes or reopens,
+  each behind a card saying in red what still stands in the way; a merge
+  names the head commit you saw, so a push since then is refused rather
+  than merged unseen. Every message to an agent ends by telling it that
+  what is quoted from GitHub is data, not instructions, and not to push,
+  post or resolve threads unless you ask. GitLab merge requests are not
+  in the panel. With no `gh`, or `gh` signed out, the panel says so and
+  what to run there.
 - **Collision radar** — two agents on one repository, in different
   worktrees or clones on different machines, are told apart before the
   merge does it for you. Once a minute remuda reads each checkout's work

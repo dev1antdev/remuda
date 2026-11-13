@@ -9,6 +9,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { fakePullRequests, prScreens } from "./fake-pr.mjs";
 
 const base = process.env.E2E_URL;
 const cdp = process.env.E2E_CDP;
@@ -78,6 +79,7 @@ socket.onmessage = (message) => {
   if (msg.method === "Fetch.requestPaused") {
     const url = msg.params.request?.url ?? "";
     if (url.includes("/api/opinion")) void fakeOpinion(msg.params);
+    else if (url.includes("/api/pr/")) void fakePullRequests(msg.params, send);
     else if (url.includes("/api/concierge")) void fakeConcierge(msg.params);
     else if (url.includes("/api/scorecard")) void fakeScorecard(msg.params);
     else if (/\/api\/(scenes\/|scene-runs\/)/.test(url)) void fakeScenes(msg.params);
@@ -869,15 +871,6 @@ const PROMPTS_CHAT = [
   },
 ];
 let promptsChat = false;
-// fakeQuestion answers the dressed pane's screen read with Claude Code's spinner while the chat's own screens are up
-async function fakeQuestion({ requestId, request }) {
-  if (!promptsChat || new URL(request.url).searchParams.get("pane") !== paneA1) {
-    await send("Fetch.continueRequest", { requestId });
-    return;
-  }
-  const body = { question: null, mode: "acceptEdits", progress: { verb: "Refactoring", seconds: 134, tokens: 6800 } };
-  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(body)).toString("base64") });
-}
 // windowsLocal plays the local machine as a Windows PC in the dressed roster, for the screen terminal's screen alone
 let windowsLocal = false;
 function fakeUndoTurn() {
@@ -900,15 +893,19 @@ async function fakeUndo({ requestId, request }) {
 // ASKED is what the dressed Codex asks on its screen, which the sidebar's "Needs you" and the zoo's bubble quote
 const ASKED = "Bash command\ngo build ./...\nbuild the app\nDo you want to proceed?";
 
-// fakeQuestion answers a read of a pane's dialog: the asking pane's, none for the rest; an answer is passed on
+// fakeQuestion answers a read of a pane's dialog: while the chat's own screens are up the dressed pane's screen shows
+// Claude Code's spinner; else the asking pane's dialog, none for the rest; an answer is passed on
 async function fakeQuestion({ requestId, request }) {
   if (request.method !== "GET") {
     await send("Fetch.continueRequest", { requestId });
     return;
   }
   const pane = new URL(request.url).searchParams.get("pane");
-  const question = DRESS[pane]?.status === "input" ? { text: ASKED, options: [{ label: "Yes" }, { label: "No" }] } : null;
-  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify({ question })).toString("base64") });
+  const answer =
+    promptsChat && pane === paneA1
+      ? { question: null, mode: "acceptEdits", progress: { verb: "Refactoring", seconds: 134, tokens: 6800 } }
+      : { question: DRESS[pane]?.status === "input" ? { text: ASKED, options: [{ label: "Yes" }, { label: "No" }] } : null };
+  await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(answer)).toString("base64") });
 }
 
 async function dressRoster({ requestId, responseStatusCode, responseHeaders = [] }) {
@@ -2091,6 +2088,7 @@ async function runPass() {
     expect: [".modal .trigger-form", ".modal .trigger-try"],
   });
   await sceneScreens();
+  await prScreens({ screen, palette, tap, present, until, evaluate, count, failed, check, onAgents, sleep });
   await screen("float-terminal", {
     open: async () => {
       await key("`", "Backquote", 2);
@@ -2491,6 +2489,7 @@ try {
       { urlPattern: "*/api/review/conflict*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/recordings*", requestStage: "Request" },
       { urlPattern: "*/api/standup*", requestStage: "Request" },
+      { urlPattern: "*/api/pr/*", requestStage: "Request" },
       { urlPattern: "*/api/recap*", requestStage: "Request" },
       { urlPattern: "*/api/timelapse/search*", requestStage: "Request" },
       { urlPattern: "*/api/fleet-setup*", requestStage: "Request" },

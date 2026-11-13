@@ -16,6 +16,7 @@ import { leftWords, muteChoices, mutedUntil } from "./mute";
 import { actionLabel, actionsFor, canRemoveWorktree } from "./prActions";
 import { askRemoveWorktree, handPR } from "./prMenu";
 import { prWords } from "./prStatus";
+import { isPullURL } from "@/features/pr/links";
 import { closeAsk, madeWorktree, tidyWords } from "./tidy";
 import { folderOf, repositoryOf, type Folder } from "./workspaces";
 import { markedFolder, sharingOf, SHARING_KEY, DEFAULT_SHARING } from "./sharing";
@@ -84,6 +85,11 @@ export function workspaceMenuItems(m: Machine, session: Session, shown: Shown): 
     rows.push({ sep: true }, { label: t("Open {pr}", { pr: pr.label }), icon: "external-link", hint: pr.status ? prWords(pr.status) : undefined, onSelect: () => openUrl(pr.url) });
     if (chat) for (const action of actionsFor(pr)) rows.push({ label: actionLabel(action, pr.label), icon: "send", onSelect: () => void handPR(action, m.id, chat.id, pr.label) });
     if (canRemoveWorktree(session, pr)) rows.push({ label: t("Remove the worktree and its branch…"), icon: "trash", danger: true, onSelect: () => askRemoveWorktree(m, session) });
+  }
+  const checkout = session.dir ?? folder;
+  if (session.branch && checkout && connected) {
+    if (!pr) rows.push({ sep: true });
+    rows.push({ label: t("Pull requests…"), icon: "git-pull-request", hint: t("its branch's and its repository's: comments, checks, files, merge"), onSelect: () => actions.openPRPanel({ machineId: m.id, dir: checkout, paneId: chat?.id, url: pr && isPullURL(pr.url) ? pr.url : undefined }) });
   }
   rows.push({ sep: true }, { label: t("Previews…"), icon: "external-link", hint: t("what its agents serve, opened in a tab of this browser"), disabled: !connected, onSelect: () => actions.openDialog({ kind: "previews", machineId: m.id, workspace: session.id, name: shown.masked ? shown.name : session.name }) });
   rows.push({ label: t("Triggers…"), icon: "zap", hint: t("what its panes print, and what that sets off"), onSelect: () => actions.openDialog({ kind: "triggers", machineId: m.id, dir: session.dir ?? folder ?? "", workspace: session.id, name: shown.masked ? shown.name : session.name }) });

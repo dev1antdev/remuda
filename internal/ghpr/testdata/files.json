@@ -1,0 +1,2 @@
+[{"sha":"a1","filename":"src/offline/sync.ts","status":"modified","additions":40,"deletions":4,"changes":44,"patch":"@@ -38,4 +38,6 @@\n   const trip = await load(id);\n+  await upload(trip);\n+  markSynced(id);"},{"sha":"a2","filename":"assets/logo.png","status":"added","additions":0,"deletions":0,"changes":0}]
+[{"sha":"a3","filename":"docs/offline.md","previous_filename":"docs/cache.md","status":"renamed","additions":2,"deletions":1,"changes":3,"patch":"@@ -1 +1,2 @@\n-# Cache\n+# Offline\n+Trips stay."}]

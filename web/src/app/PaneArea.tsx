@@ -29,6 +29,7 @@ import { LimitNotice } from "@/features/usage/LimitNotice";
 import { accountWindows } from "@/features/usage/limits";
 import { Icon, Notice, PANELS, Resizer } from "@/ui";
 import { WindowsPaths } from "@/ui/Markdown";
+import FollowPRLinks from "@/features/pr/FollowPRLinks";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
 import { actions, app, type Lens } from "./store";
@@ -190,6 +191,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
         }}
       />
       <WindowsPaths.Provider value={onWindows(machine)}>
+      <FollowPRLinks machineId={machine.id} dir={folder} paneId={pane.id} off={viewOnly}>
       <div className={`pane-body${split ? " is-split" : ""}${covered ? " is-covered" : ""}`} ref={body}>
         {covered && <SharingVeil onShow={() => setRevealed(paneKey)} />}
         {seen("changes") && (
@@ -248,6 +250,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
           />
         )}
       </div>
+      </FollowPRLinks>
       </WindowsPaths.Provider>
     </main>
   );

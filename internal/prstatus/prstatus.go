@@ -55,6 +55,17 @@ type entry struct {
 	reason  string // why there is no status: gh or glab missing, not signed in, the machine away
 	readAt  time.Time
 	reading bool
+	etag    string    // the last probe's, for a GitHub pull request (probe.go)
+	fullAt  time.Time // when the request was last read in full
+}
+
+// reading is what one read came to: the status (nil and why when there is none), whether it was read in full, and the
+// probe's ETag to keep.
+type reading struct {
+	status *Status
+	reason string
+	full   bool
+	etag   string
 }
 
 // Tracker holds one request per pane and reads one at a time per machine.
@@ -181,14 +192,13 @@ func (t *Tracker) start(ref events.PaneRef) {
 }
 
 func (t *Tracker) read(ref events.PaneRef, url string) {
-	status, reason := t.fetch(ref.Machine, url)
-	if moved, ok := t.note(ref, url, status, reason); ok && t.OnState != nil {
+	if moved, ok := t.note(ref, url, t.fetch(ref, url)); ok && t.OnState != nil {
 		t.OnState(moved)
 	}
 }
 
 // note keeps what a read came to and says whether the request's state is news: its first read, or a move since.
-func (t *Tracker) note(ref events.PaneRef, url string, status *Status, reason string) (events.PullRequestState, bool) {
+func (t *Tracker) note(ref events.PaneRef, url string, got reading) (events.PullRequestState, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.inflight, ref.Machine)
@@ -196,9 +206,16 @@ func (t *Tracker) note(ref events.PaneRef, url string, status *Status, reason st
 	if e == nil || e.url != url {
 		return events.PullRequestState{}, false
 	}
+	status, reason := got.status, got.reason
 	e.reading = false
 	e.readAt = t.now()
 	e.reason = reason
+	if got.etag != "" {
+		e.etag = got.etag
+	}
+	if got.full && status != nil {
+		e.fullAt = t.now()
+	}
 	if reason != "" && t.now().Sub(t.complained[ref.Machine]) >= ComplainEvery {
 		t.complained[ref.Machine] = t.now()
 		log.Printf("prstatus: %s: %s cannot be read: %s", ref.Machine, url, reason)
@@ -217,17 +234,41 @@ func (t *Tracker) note(ref events.PaneRef, url string, status *Status, reason st
 	return events.PullRequestState{Pane: ref, URL: url, State: status.State, Was: was}, true
 }
 
-// fetch runs gh, or glab for a merge request, on the machine and parses its answer.
-func (t *Tracker) fetch(machineID, url string) (*Status, string) {
-	host, ok := t.hosts(machineID)
+// fetch reads the request on the machine: a GitHub pull request probed first, its last full read kept while the probe
+// says nothing moved and the read still stands (probe.go), else gh's (or glab's) answer parsed.
+func (t *Tracker) fetch(ref events.PaneRef, url string) reading {
+	host, ok := t.hosts(ref.Machine)
 	if !ok {
-		return nil, "the machine is not connected"
+		return reading{reason: "the machine is not connected"}
 	}
 	if GitLab(url) {
-		return fetchMerge(host, url, t.now())
+		status, reason := fetchMerge(host, url, t.now())
+		return reading{status: status, reason: reason, full: true}
 	}
+	t.mu.Lock()
+	var last *Status
+	var etag string
+	var fullAt time.Time
+	if e := t.entries[ref]; e != nil && e.url == url {
+		last, etag, fullAt = e.status, e.etag, e.fullAt
+	}
+	t.mu.Unlock()
+	code, tag := probe(host, url, etag)
+	if code == 304 && last != nil && t.now().Sub(fullAt) < standFor(last) {
+		kept := *last
+		return reading{status: &kept}
+	}
+	if code != 200 {
+		tag = ""
+	}
+	status, reason := fetchPull(host, url, t.now())
+	return reading{status: status, reason: reason, full: true, etag: tag}
+}
+
+// fetchPull runs gh pr view on the machine and parses its answer.
+func fetchPull(host shell.Shell, url string, now time.Time) (*Status, string) {
 	out, err := shell.Text(host, Script(url), Timeout)
-	status, perr := Parse(out, t.now())
+	status, perr := Parse(out, now)
 	if perr == nil {
 		return &status, ""
 	}
