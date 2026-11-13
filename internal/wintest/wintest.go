@@ -117,6 +117,29 @@ func (s SSH) Dial(command string, timeout time.Duration) (net.Conn, error) {
 	return sshx.CommandConn(s.command(command), timeout)
 }
 
+// Machine is this Windows seen as a cockpit sees a remote one: a shell.Host whose scripts go over ssh, its home in
+// Windows' own spelling, as the connection reads it.
+type Machine struct {
+	SSH
+	home string
+}
+
+// Host is the job's Windows as a remote shell.Host.
+func Host(t *testing.T) Machine {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Machine{SSH: Remote(t), home: home}
+}
+
+func (m Machine) ID() string    { return "pc" }
+func (m Machine) Label() string { return "PC" }
+func (m Machine) Home() string  { return m.home }
+func (m Machine) Local() bool   { return false }
+func (m Machine) OS() string    { return "windows" }
+
 // Record keeps an answer of this Windows under REMUDA_RECORD_DIR, which the job uploads: the unit tests' fixtures come from there.
 func Record(t *testing.T, name, answer string) {
 	t.Helper()

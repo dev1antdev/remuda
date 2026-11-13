@@ -49,18 +49,20 @@ docker-test:
 
 # Binaries for every host you run herdr on (the SPA is embedded, so one file
 # each), and their sha256 sums — what a machine checks a release download
-# against (internal/health/release.go).
+# against (internal/health/release.go). The two Windows ones are remuda.exe,
+# the helper a cockpit reaches on a Windows PC (herdr's named pipe there).
+RELEASE_ASSETS = remuda-darwin-arm64 remuda-darwin-amd64 remuda-linux-amd64 remuda-linux-arm64 remuda-windows-amd64.exe remuda-windows-arm64.exe
 release: web
-	@for t in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64; do \
-	  os=$${t%/*}; arch=$${t#*/}; \
+	@for t in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64 windows/arm64; do \
+	  os=$${t%/*}; arch=$${t#*/}; ext=""; [ "$$os" = windows ] && ext=.exe; \
 	  echo "building $$os/$$arch"; \
 	  CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" \
-	    -o bin/remuda-$$os-$$arch ./cmd/remuda; \
+	    -o bin/remuda-$$os-$$arch$$ext ./cmd/remuda; \
 	done
-	@cd bin && shasum -a 256 remuda-darwin-arm64 remuda-darwin-amd64 remuda-linux-amd64 remuda-linux-arm64 > checksums.txt && echo "bin/checksums.txt written"
+	@cd bin && shasum -a 256 $(RELEASE_ASSETS) > checksums.txt && echo "bin/checksums.txt written"
 
 # make publish — a release: the tag on HEAD is pushed, and the Release
-# workflow (.github/workflows/release.yml) builds the four binaries and
+# workflow (.github/workflows/release.yml) builds the six binaries and
 # checksums.txt there and makes the GitHub release — with install.sh, the
 # one-line installer — that every remuda out there then offers as
 # "Download & install". Tag first:

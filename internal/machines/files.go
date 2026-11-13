@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -117,13 +118,23 @@ func (mc *Machine) stat(p string) (FileInfo, error) {
 		kind, mime := classify(p, func() bool { return sniffLocal(p) })
 		return FileInfo{Path: p, Kind: kind, MIME: mime, Size: fi.Size()}, nil
 	}
-	q := script.Quote(p)
-	out, err := mc.text(`if [ -d `+q+` ]; then echo dir; elif [ -f `+q+` ]; then `+
-		`printf 'file %s ' "$(`+script.Stat(q, "%s", "%z")+`)"; `+
-		`head -c 8192 `+q+` | tr -d -c '\000' | wc -c; else echo missing; fi`, 15*time.Second)
+	out, err := mc.text(statScript(p), 15*time.Second)
 	if err != nil {
 		return FileInfo{}, err
 	}
+	return readStat(p, out)
+}
+
+// statScript prints dir, missing, or "file <size> <NULs in the first 8 KB>".
+func statScript(p string) string {
+	q := script.Quote(p)
+	return `if [ -d ` + q + ` ]; then echo dir; elif [ -f ` + q + ` ]; then ` +
+		`printf 'file %s ' "$(` + script.Stat(q, "%s", "%z") + `)"; ` +
+		`head -c 8192 ` + q + ` | tr -d -c '\000' | wc -c; else echo missing; fi`
+}
+
+// readStat reads statScript's answer.
+func readStat(p, out string) (FileInfo, error) {
 	f := strings.Fields(out)
 	switch {
 	case len(f) == 0 || f[0] == "missing":
@@ -180,16 +191,29 @@ func (mc *Machine) findBySuffix(root, rel string) []string {
 		})
 		return found
 	}
+	style := mc.Paths()
+	out, err := mc.text(findScript(style, root, rel), 20*time.Second)
+	if err != nil {
+		return nil
+	}
+	return readFound(style, out)
+}
+
+// findScript prints the files under root whose path ends in rel, past the folders nobody means; root in forward
+// slashes, so Git Bash on Windows prints every path one way.
+func findScript(style rpath.Style, root, rel string) string {
 	var prune []string
 	for d := range skipDirs {
 		prune = append(prune, "-name "+script.Quote(d)+" -prune -o")
 	}
-	style := mc.Paths()
-	out, err := mc.text(`find `+script.Quote(style.Slash(root))+` `+strings.Join(prune, " ")+
-		` -type f -path `+script.Quote("*/"+rel)+` -print 2>/dev/null | head -`+strconv.Itoa(maxFind), 20*time.Second)
-	if err != nil {
-		return nil
-	}
+	sort.Strings(prune)
+	return `find ` + script.Quote(style.Slash(root)) + ` ` + strings.Join(prune, " ") +
+		` -type f -path ` + script.Quote("*/"+rel) + ` -print 2>/dev/null | head -` + strconv.Itoa(maxFind)
+}
+
+// readFound reads findScript's answer, each path in the machine's spelling.
+func readFound(style rpath.Style, out string) []string {
+	var found []string
 	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
 		if l = strings.TrimRight(l, "\r"); l != "" {
 			found = append(found, cleanPath(style, l))
