@@ -8,6 +8,6 @@ export const SHARING_KEY_NAME = "Alt+H";
 
 export function sharingKeyAsked(press: KeyPress, dialogOpen: boolean, mac: boolean): boolean {
   if (press.code !== "KeyH" || !press.altKey || press.metaKey || press.ctrlKey || press.shiftKey) return false;
-  if (dialogOpen || press.target?.closest?.(".xterm")) return false;
+  if (dialogOpen || press.target?.closest?.(".xterm, .screen-term")) return false;
   return !(mac && press.target?.closest?.(FIELDS));
 }

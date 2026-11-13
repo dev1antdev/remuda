@@ -5,6 +5,7 @@
 
 import type { Machine } from "@/features/roster/api";
 import { t } from "@/lib/i18n";
+import { basename } from "@/lib/text";
 import type { Automation, Project, Run, Stage, Status } from "./api";
 import { nextWords, noRoomWords } from "./fleet";
 
@@ -72,7 +73,7 @@ export function repositories(machines: Machine[], machineId: string): { value: s
   for (const s of m?.sessions ?? []) {
     if (!s.dir || s.worktree?.linked || seen.has(s.dir)) continue;
     seen.add(s.dir);
-    out.push({ value: s.dir, label: s.dir.split("/").filter(Boolean).pop() ?? s.dir, hint: s.dir });
+    out.push({ value: s.dir, label: basename(s.dir), hint: s.dir });
   }
   return out;
 }

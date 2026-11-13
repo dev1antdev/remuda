@@ -15,6 +15,10 @@ export function scrollPane(machineId: string, paneId: string, offset: number): P
   return sendJSON("POST", "/api/scroll", { machine: machineId, pane: paneId, offset });
 }
 
+// sendInput types into a pane with no attach — the screen terminal's typing: text (typed, or a paste), then keys in herdr's words
+export const sendInput = (machineId: string, paneId: string, input: { text: string; paste: boolean; keys: string[] }): Promise<void> =>
+  sendJSON("POST", "/api/input", { machine: machineId, pane: paneId, ...input });
+
 type ScreenResponse = { text: string; truncated: boolean };
 
 // fetchScreen returns null when unchanged (304 via ETag).

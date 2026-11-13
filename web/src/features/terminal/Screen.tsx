@@ -78,9 +78,12 @@ const styleOf = (span: Span) => (!span.mark && (span.fg || span.bg) ? { color: s
 // widthOf is the columns a screen is drawn at: the pane's grid, or the longest row when there is none or a row runs past it
 export const widthOf = (cols: number, lines: Line[]) => Math.max(cols, 1, ...lines.map((line) => line.reduce((n, span) => n + span.text.length, 0)));
 
+// FitRule is the font size for cols columns in avail pixels, given a cell's width at the base size
+export type FitRule = (avail: number, cols: number, cellWidth: number, baseSize: number) => number;
+
 // useFitFont is the font size at which cols columns fill the box's width, measured in the box's own document (the
-// pop-out has one of its own) and followed as the box resizes
-export function useFitFont(box: RefObject<HTMLDivElement | null>, cols: number): number {
+// pop-out has one of its own) and followed as the box resizes; the screen terminal fits by a rule of its own
+export function useFitFont(box: RefObject<HTMLDivElement | null>, cols: number, fit: FitRule = thumbFont): number {
   const [avail, setAvail] = useState(0);
   const [cell, setCell] = useState(0);
   useLayoutEffect(() => {
@@ -103,5 +106,5 @@ export function useFitFont(box: RefObject<HTMLDivElement | null>, cols: number):
     measure();
     return () => observer.disconnect();
   }, [box]);
-  return avail && cell ? thumbFont(avail, cols, cell, BASE_FONT) : BASE_FONT;
+  return avail && cell ? fit(avail, cols, cell, BASE_FONT) : BASE_FONT;
 }

@@ -16,6 +16,7 @@ describe("nextKeyAsked", () => {
       expect(nextKeyAsked(press({ metaKey: true }), false, mac)).toBe(false);
       expect(nextKeyAsked(press(), true, mac)).toBe(false);
       expect(nextKeyAsked(press({ target: inside(".xterm") }), false, mac)).toBe(false);
+      expect(nextKeyAsked(press({ target: inside(".screen-term") }), false, mac)).toBe(false);
       expect(nextKeyAsked(press({ target: inside("button") }), false, mac)).toBe(true);
       expect(nextKeyAsked(press({ target: null }), false, mac)).toBe(true);
     }

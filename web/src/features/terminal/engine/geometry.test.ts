@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { keepFont, MIN_FONT, thumbFont } from "./geometry";
+import { keepFont, MIN_FONT, screenFont, thumbFont } from "./geometry";
 
 describe("keepFont", () => {
   it("keeps the preferred size when the grid fits", () => {
@@ -20,5 +20,13 @@ describe("thumbFont", () => {
     expect(thumbFont(300, 200, 7.8, 13)).toBe(2.5);
     expect(thumbFont(10, 200, 7.8, 13)).toBe(2);
     expect(thumbFont(100, 0, 7.8, 13)).toBe(13);
+  });
+});
+
+describe("screenFont", () => {
+  it("fills the width up to the text size picked, never under the minimum", () => {
+    expect(screenFont(1600, 80, 7.8, 13, 15)).toBe(15);
+    expect(screenFont(1000, 120, 7.8, 13, 15)).toBe(13.5);
+    expect(screenFont(390, 120, 7.8, 13, 12)).toBe(MIN_FONT);
   });
 });

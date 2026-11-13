@@ -21,6 +21,7 @@ import { folderOf, repositoryOf, type Folder } from "./workspaces";
 import { markedFolder, sharingOf, SHARING_KEY, DEFAULT_SHARING } from "./sharing";
 import { toggleSharingFolder } from "./useSharing";
 import { readPref } from "@/lib/prefs";
+import { onWindows } from "./system";
 import { basename } from "@/lib/text";
 import { t, tn } from "@/lib/i18n";
 
@@ -56,7 +57,7 @@ function folderRows(m: Machine, folder: string, name: string, icon: Session["ico
     newWorkspace,
     ...(shown.masked ? [] : [{ label: t("Folder icon…"), icon: "folder" as const, onSelect: () => actions.openDialog({ kind: "folder-icon", machineId: m.id, folder, name, icon }) }]),
     { label: t("Hide when sharing the screen"), icon: "eye-off", checked: hidden, onSelect: () => toggleSharingFolder(m.id, folder) },
-    { label: t("Open in the editor"), icon: "code", hint: t("the Code mode on this folder"), disabled: !connected, onSelect: () => actions.openInCode(m.id, folder, folder) },
+    ...(onWindows(m) ? [] : [{ label: t("Open in the editor"), icon: "code" as const, hint: t("the Code mode on this folder"), disabled: !connected, onSelect: () => actions.openInCode(m.id, folder, folder) }]), // a Windows PC has no code-server
   ];
 }
 

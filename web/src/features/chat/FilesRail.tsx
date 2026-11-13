@@ -21,7 +21,7 @@ export default function FilesRail({ machineId, paneId, status, dir, active, onOp
   dir: string;
   active: boolean;
   onOpenFile: OpenFile;
-  onOpenInCode: (path: string) => void;
+  onOpenInCode?: (path: string) => void; // absent on a machine with no editor (a Windows PC): no code button
 }) {
   const busy = status === "run" || status === "input";
   const { data: chat, error } = useChat({ machineId, paneId, sessionId: null, dir, every: busy ? 3000 : 15000, active });
@@ -35,7 +35,7 @@ export default function FilesRail({ machineId, paneId, status, dir, active, onOp
       dir={dir}
       now={now}
       onOpen={() => onOpenFile({ path: touch.path, prefer: touch.edits > 0 ? "changes" : "file" })}
-      onCode={() => onOpenInCode(touch.path)}
+      onCode={onOpenInCode && (() => onOpenInCode(touch.path))}
     />
   );
   return (
@@ -65,7 +65,7 @@ export default function FilesRail({ machineId, paneId, status, dir, active, onOp
   );
 }
 
-function Row({ touch, dir, now, onOpen, onCode }: { touch: Touch; dir: string; now: number; onOpen: () => void; onCode: () => void }) {
+function Row({ touch, dir, now, onOpen, onCode }: { touch: Touch; dir: string; now: number; onOpen: () => void; onCode?: () => void }) {
   const shown = shownPath(touch.path, dir);
   const recent = touch.at > 0 && now - touch.at < RECENT_MS;
   return (
@@ -83,11 +83,13 @@ function Row({ touch, dir, now, onOpen, onCode }: { touch: Touch; dir: string; n
           {touch.at > 0 && ` · ${ago(touch.at, now)}`}
         </span>
       </button>
-      <Tip text={t("Open in Code (VS Code on this machine)")}>
-        <button type="button" className="icon-btn sm fp-code" aria-label={t("Open in Code")} onClick={onCode}>
-          <Icon name="code" size={12} />
-        </button>
-      </Tip>
+      {onCode && (
+        <Tip text={t("Open in Code (VS Code on this machine)")}>
+          <button type="button" className="icon-btn sm fp-code" aria-label={t("Open in Code")} onClick={onCode}>
+            <Icon name="code" size={12} />
+          </button>
+        </Tip>
+      )}
     </div>
   );
 }

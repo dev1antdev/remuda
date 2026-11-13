@@ -4,7 +4,7 @@
 
 export type EscapePress = { key: string; defaultPrevented: boolean; target: { closest?: (selector: string) => unknown } | null };
 
-export const KEEPS_ESCAPE = "input, textarea, select, [contenteditable], .xterm, [role=menu], .modal-scrim, .fv-scrim, .sel-pop";
+export const KEEPS_ESCAPE = "input, textarea, select, [contenteditable], .xterm, .screen-term, [role=menu], .modal-scrim, .fv-scrim, .sel-pop";
 
 // escapeIsFree says whether the page may act on this press: an Escape nothing else took, with no overlay open
 export function escapeIsFree(press: EscapePress, overlayOpen: boolean): boolean {

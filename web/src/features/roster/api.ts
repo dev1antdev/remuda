@@ -197,6 +197,7 @@ export type Machine = {
   source?: "herdr";
   state: "connected" | "connecting" | "error";
   error?: string;
+  os?: string; // "darwin" | "linux" | "windows", absent while unknown: a Windows PC's panes have the screen terminal (features/roster/system.ts)
   sessions: Session[];
   health?: Health;
   awake?: Awake;

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { findPaths } from "@/lib/paths";
 import { closesFence, highlightLines, langOf } from "@/lib/highlight";
 import type { OpenFile } from "@/features/files/target";
@@ -207,46 +207,52 @@ function cells(line: string): string[] {
 // ---- inline ----
 
 
-// renderInline; inside a link's text nothing else is clickable (onOpenFile null): an interactive element inside another is invalid markup
-function renderInline(text: string, onOpenFile: OpenFile | null, key = "i"): ReactNode[] {
+// renderInline; inside a link's text nothing else is clickable (links null): an interactive element inside another is invalid markup
+function renderInline(text: string, links: Links | null, key = "i"): ReactNode[] {
   if (text.length > LONG_LINE) return [<Fragment key={key}>{text}</Fragment>];
   const out: ReactNode[] = [];
   let at = 0;
   let n = 0;
   for (const m of text.matchAll(INLINE)) {
     const idx = m.index ?? 0;
-    if (idx > at) out.push(...plain(text.slice(at, idx), onOpenFile, `${key}${n++}`));
+    if (idx > at) out.push(...plain(text.slice(at, idx), links, `${key}${n++}`));
     const k = `${key}${n++}`;
     if (m[2] !== undefined) out.push(<code key={k} className="md-code">{m[2]}</code>);
     else if (m[3] !== undefined) {
-      if (onOpenFile) out.push(anchor(m[4]!, renderInline(m[3], null, k), k));
+      if (links) out.push(anchor(m[4]!, renderInline(m[3], null, k), k));
       else out.push(<Fragment key={k}>{m[0]}</Fragment>);
     } else if (m[5] !== undefined || m[6] !== undefined)
-      out.push(<strong key={k}>{renderInline((m[5] ?? m[6])!, onOpenFile, k)}</strong>);
+      out.push(<strong key={k}>{renderInline((m[5] ?? m[6])!, links, k)}</strong>);
     else if (m[7] !== undefined || m[8] !== undefined)
-      out.push(<em key={k}>{renderInline((m[7] ?? m[8])!, onOpenFile, k)}</em>);
-    else if (m[9] !== undefined) out.push(<s key={k}>{renderInline(m[9], onOpenFile, k)}</s>);
+      out.push(<em key={k}>{renderInline((m[7] ?? m[8])!, links, k)}</em>);
+    else if (m[9] !== undefined) out.push(<s key={k}>{renderInline(m[9], links, k)}</s>);
     else if (m[10] !== undefined) {
       const url = m[10].replace(/[.,;:!?]+$/, "");
-      out.push(onOpenFile ? anchor(url, url, k) : <Fragment key={k}>{url}</Fragment>);
+      out.push(links ? anchor(url, url, k) : <Fragment key={k}>{url}</Fragment>);
       if (url.length < m[10].length) out.push(m[10].slice(url.length));
     }
     at = idx + m[0].length;
   }
-  if (at < text.length) out.push(...plain(text.slice(at), onOpenFile, `${key}${n++}`));
+  if (at < text.length) out.push(...plain(text.slice(at), links, `${key}${n++}`));
   return out;
 }
 
+// Links is how a text's paths open: the file viewer, and whether the text is a Windows machine's (its paths by backslashes)
+type Links = { open: OpenFile; windows: boolean };
+
+// WindowsPaths is set over a Windows machine's conversation, so its answers' C:\…\Form1.cs and src\App.xaml.cs link
+export const WindowsPaths = createContext(false);
+
 // plain text: file paths become buttons (none inside a link's text)
-function plain(text: string, onOpenFile: OpenFile | null, key: string): ReactNode[] {
-  const matches = onOpenFile ? findPaths(text) : [];
+function plain(text: string, links: Links | null, key: string): ReactNode[] {
+  const matches = links ? findPaths(text, links.windows) : [];
   if (matches.length === 0) return [<Fragment key={key}>{text}</Fragment>];
   const out: ReactNode[] = [];
   let at = 0;
   matches.forEach((m, i) => {
     if (m.start > at) out.push(<Fragment key={`${key}t${i}`}>{text.slice(at, m.start)}</Fragment>);
     out.push(
-      <button key={`${key}p${i}`} type="button" className="path-link" onClick={() => onOpenFile!({ path: m.path, line: m.line })}>
+      <button key={`${key}p${i}`} type="button" className="path-link" onClick={() => links!.open({ path: m.path, line: m.line })}>
         {m.text}
       </button>,
     );
@@ -261,10 +267,12 @@ function plain(text: string, onOpenFile: OpenFile | null, key: string): ReactNod
 // diagrams draws a mermaid fence as its diagram (the chat lens, the viewer, a task's comments); a wall tile leaves it code
 export function Markdown({ text, onOpenFile, diagrams = false }: { text: string; onOpenFile: OpenFile; diagrams?: boolean }) {
   const blocks = useMemo(() => parseBlocks(text), [text]);
-  return <div className="md">{renderBlocks(blocks, onOpenFile, "b", diagrams)}</div>;
+  const windows = useContext(WindowsPaths);
+  const links = useMemo(() => ({ open: onOpenFile, windows }), [onOpenFile, windows]);
+  return <div className="md">{renderBlocks(blocks, links, "b", diagrams)}</div>;
 }
 
-function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string, diagrams: boolean): ReactNode[] {
+function renderBlocks(blocks: Block[], links: Links, key: string, diagrams: boolean): ReactNode[] {
   return blocks.map((b, i) => {
     const k = `${key}${i}`;
     switch (b.t) {
@@ -274,19 +282,19 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string, diagra
             {b.lines.map((l, j) => (
               <Fragment key={j}>
                 {j > 0 && <br />}
-                {renderInline(l, onOpenFile, `${k}l${j}`)}
+                {renderInline(l, links, `${k}l${j}`)}
               </Fragment>
             ))}
           </p>
         );
       case "h": {
         const Tag = `h${Math.min(6, b.level + 2)}` as "h3" | "h4" | "h5" | "h6";
-        return <Tag key={k} className={`md-h md-h${b.level}`}>{renderInline(b.text, onOpenFile, k)}</Tag>;
+        return <Tag key={k} className={`md-h md-h${b.level}`}>{renderInline(b.text, links, k)}</Tag>;
       }
       case "code":
         return diagrams && isMermaid(b.lang) ? <MermaidBlock key={k} lang={b.lang} code={b.code} /> : <CodeBlock key={k} lang={b.lang} code={b.code} />;
       case "quote":
-        return <blockquote key={k}>{renderBlocks(b.blocks, onOpenFile, k, diagrams)}</blockquote>;
+        return <blockquote key={k}>{renderBlocks(b.blocks, links, k, diagrams)}</blockquote>;
       case "hr":
         return <hr key={k} />;
       case "table":
@@ -297,7 +305,7 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string, diagra
                 <tr>
                   {b.head.map((c, j) => (
                     <TableCell key={j} as="th" source={c}>
-                      {renderInline(c, onOpenFile, `${k}h${j}`)}
+                      {renderInline(c, links, `${k}h${j}`)}
                     </TableCell>
                   ))}
                 </tr>
@@ -307,7 +315,7 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string, diagra
                   <tr key={ri}>
                     {b.head.map((_, j) => (
                       <TableCell key={j} as="td" source={r[j] ?? ""}>
-                        {renderInline(r[j] ?? "", onOpenFile, `${k}r${ri}c${j}`)}
+                        {renderInline(r[j] ?? "", links, `${k}r${ri}c${j}`)}
                       </TableCell>
                     ))}
                   </tr>
@@ -323,7 +331,7 @@ function renderBlocks(blocks: Block[], onOpenFile: OpenFile, key: string, diagra
             {b.items.map(({ blocks, checked }, j) => (
               <li key={j} className={checked === null ? undefined : checked ? "task done" : "task"}>
                 {checked !== null && <input type="checkbox" checked={checked} disabled />}
-                {renderBlocks(blocks, onOpenFile, `${k}i${j}`, diagrams)}
+                {renderBlocks(blocks, links, `${k}i${j}`, diagrams)}
               </li>
             ))}
           </Tag>

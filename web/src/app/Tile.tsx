@@ -12,6 +12,8 @@ import { prMenuItems } from "@/features/roster/prMenu";
 import { checksTone, checksWords, prWords, reviewTone, reviewWords } from "@/features/roster/prStatus";
 import type { Tile, WallView } from "@/features/roster/wall";
 import { Screen } from "@/features/terminal/Screen";
+import { onWindows } from "@/features/roster/system";
+import { WindowsPaths } from "@/ui/Markdown";
 import { fillClass, usd } from "@/features/usage/format";
 import { openUrl } from "@/lib/host";
 import { FolderIcon, Icon, Logo, Menu, Tip } from "@/ui";
@@ -164,7 +166,9 @@ export function TileView({ tile, view = "chat", radar, step, now, brief = false,
           <TailAnswer machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} agent={pane.agent} active />
         </>
       ) : (
-        <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} agent={pane.agent} words={words} settled={settled} said={said} active />
+        <WindowsPaths.Provider value={onWindows(machine)}>
+          <Tail machineId={machine.id} paneId={pane.id} status={pane.status} dir={dir} agent={pane.agent} words={words} settled={settled} said={said} active />
+        </WindowsPaths.Provider>
       )}
     </section>
   );

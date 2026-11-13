@@ -11,6 +11,7 @@ import { basename } from "@/lib/text";
 import { closeTab, createTab, renameTab } from "@/features/roster/api";
 import { offerReopen } from "@/features/reopen/offer";
 import { NO_MACHINES, startOn } from "@/features/roster/server";
+import { onWindows } from "@/features/roster/system";
 import { useRoster } from "@/features/roster/useRoster";
 import { useSharing } from "@/features/roster/useSharing";
 import { ChatTools, useChatViewItems } from "@/features/chat/ChatTools";
@@ -26,6 +27,7 @@ import { Screen } from "@/features/terminal/Screen";
 import { LimitNotice } from "@/features/usage/LimitNotice";
 import { accountWindows } from "@/features/usage/limits";
 import { Icon, Notice, PANELS, Resizer } from "@/ui";
+import { WindowsPaths } from "@/ui/Markdown";
 import { act } from "./act";
 import { folderOf, type Located } from "./current";
 import { actions, app, type Lens } from "./store";
@@ -97,7 +99,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
       ? { machineId: current.machine.id, paneId: current.pane.id, session: chatSession, dir: folderOf(current), agent: current.pane.agent, workspace: current.session.name, machine: current.machine.label, model: current.pane.usage?.name }
       : { machineId: "", paneId: "", session: null, dir: "", agent: "", workspace: "", machine: "" };
   const chatItems = useChatViewItems(place);
-  const terminalItems = [...useTerminalViewItems(current?.pane ?? { cols: 0, rows: 0 } as Located["pane"]), ...timelapseRows(place)];
+  const terminalItems = [...useTerminalViewItems(current?.pane ?? { cols: 0, rows: 0 } as Located["pane"], onWindows(current?.machine)), ...timelapseRows(place)];
 
   if (viewer) {
     const sub = viewer.subagent;
@@ -128,16 +130,18 @@ export default function PaneArea({ current }: { current: Located | null }) {
         {covered ? (
           <SharingVeil onShow={() => setRevealed(viewerKey)} />
         ) : (
-          <Chat
-            key={`viewer|${viewer.machine}|${viewer.session}|${sub?.id ?? ""}`}
-          machineId={viewer.machine}
-          paneId=""
-          status=""
-          origin={sub ? `${sub.description} (a subagent of ${basename(viewer.dir)})` : `${basename(viewer.dir)} (an old transcript)`}
-          dir={viewer.dir}
-          session={viewer.session}
-          subagent={sub?.id}
-          />
+          <WindowsPaths.Provider value={onWindows(machines.find((m) => m.id === viewer.machine))}>
+            <Chat
+              key={`viewer|${viewer.machine}|${viewer.session}|${sub?.id ?? ""}`}
+              machineId={viewer.machine}
+              paneId=""
+              status=""
+              origin={sub ? `${sub.description} (a subagent of ${basename(viewer.dir)})` : `${basename(viewer.dir)} (an old transcript)`}
+              dir={viewer.dir}
+              session={viewer.session}
+              subagent={sub?.id}
+            />
+          </WindowsPaths.Provider>
         )}
       </main>
     );
@@ -184,11 +188,12 @@ export default function PaneArea({ current }: { current: Located | null }) {
           actions.ask(msg, tr("Close tab"), () => void act(closeTab(machine.id, t.id)).then(() => offerReopen(machine.id, agents)));
         }}
       />
+      <WindowsPaths.Provider value={onWindows(machine)}>
       <div className={`pane-body${split ? " is-split" : ""}${covered ? " is-covered" : ""}`} ref={body}>
         {covered && <SharingVeil onShow={() => setRevealed(paneKey)} />}
         {seen("changes") && (
           <div className="lens-pane" hidden={!shown("changes")}>
-            <Review key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} paneId={pane.id} dir={folder} agent={pane.agent} onSeen={refresh} active={shown("changes")} />
+            <Review key={`${machine.id}|${session.id}|${folder}`} machineId={machine.id} paneId={pane.id} dir={folder} agent={pane.agent} onSeen={refresh} active={shown("changes")} editor={!onWindows(machine)} />
           </div>
         )}
         {seen("chat") && (
@@ -218,7 +223,7 @@ export default function PaneArea({ current }: { current: Located | null }) {
         )}
         {seen("terminal") && !viewOnly && (
           <div className={`lens-pane${split ? " split-terminal" : ""}`} hidden={!shown("terminal")} onFocusCapture={() => focusSide("terminal")} onPointerDownCapture={() => focusSide("terminal")}>
-            <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={shown("terminal")} focused={lens === "terminal"} />
+            <TerminalLens key={`${machine.id}|${pane.id}`} machineId={machine.id} paneId={pane.id} cols={pane.cols} rows={pane.rows} agent={pane.agent !== ""} active={shown("terminal")} focused={lens === "terminal"} screen={onWindows(machine)} host={machine.host ?? machine.label} />
           </div>
         )}
         {footprint && pane.agent && <Resizer spec={PANELS.rail} edge="left" label={tr("Files rail width")} />}
@@ -231,10 +236,11 @@ export default function PaneArea({ current }: { current: Located | null }) {
             dir={folder}
             active={!narrow}
             onOpenFile={(target) => actions.openFile(machine.id, pane.id, target, folder)}
-            onOpenInCode={(path) => (viewOnly ? actions.openFile(machine.id, pane.id, { path }, folder) : actions.openInCode(machine.id, folder, path))} // a viewer has no Code mode: the file viewer reads it
+            onOpenInCode={onWindows(machine) ? undefined : (path) => (viewOnly ? actions.openFile(machine.id, pane.id, { path }, folder) : actions.openInCode(machine.id, folder, path))} // a viewer has no Code mode: the file viewer reads it; a Windows PC has no editor
           />
         )}
       </div>
+      </WindowsPaths.Provider>
     </main>
   );
 }

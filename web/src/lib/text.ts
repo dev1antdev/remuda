@@ -6,12 +6,8 @@ export function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-// basename is the last path segment, a trailing slash ignored.
-export const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
-export const dirname = (p: string) => {
-  const i = p.lastIndexOf("/");
-  return i < 0 ? "" : p.slice(0, i + 1);
-};
+// a path's last segment and the folder before it, a Windows machine's path too (pathname.ts)
+export { basename, dirname } from "./pathname";
 
 // plural says "3 files", "1 file" — in another language the forms the dictionary keeps under "{n} files".
 export const plural = (count: number, word: string) => tn(count, `{n} ${word}`, `{n} ${word}s`);

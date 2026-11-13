@@ -50,3 +50,28 @@ describe("findPaths", () => {
     expect(performance.now() - started).toBeLessThan(500); // the square took seconds
   });
 });
+
+describe("findPaths on a Windows machine's pane", () => {
+  const win = (text: string) => findPaths(text, true).map((m) => [m.path, m.line]);
+  it("finds a path from a drive and one by backslashes, the :line kept", () => {
+    expect(win("fixed C:\\Users\\me\\app\\Form1.cs:12 and src\\App.xaml.cs.")).toEqual([
+      ["C:\\Users\\me\\app\\Form1.cs", 12],
+      ["src\\App.xaml.cs", undefined],
+    ]);
+    expect(win("see C:/work/app/Program.cs and src/Main.cs")).toEqual([
+      ["C:/work/app/Program.cs", undefined],
+      ["src/Main.cs", undefined],
+    ]);
+    expect(win("Обновил docs\\заметки.md")).toEqual([["docs\\заметки.md", undefined]]);
+  });
+  it("links no folder, and a POSIX pane's text reads as it did", () => {
+    expect(win("in C:\\Users\\me\\app and bin\\Debug")).toEqual([]);
+    expect(paths("fixed C:\\Users\\me\\app\\Form1.cs and src\\App.xaml.cs")).toEqual(["Form1.cs", "App.xaml.cs"]);
+  });
+  it("costs a long token its length there too", () => {
+    const blob = Array.from({ length: 64000 }, (_, i) => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_\\"[(i * 7) % 65]).join("");
+    const started = performance.now();
+    findPaths(`C:\\${blob} ${blob}`, true);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+});

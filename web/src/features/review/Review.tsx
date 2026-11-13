@@ -11,6 +11,7 @@ import { submitPrompt } from "@/features/roster/api";
 import { isTouch, usePref } from "@/lib/prefs";
 import { useQuery } from "@/lib/query";
 import { basename, errMsg, plural } from "@/lib/text";
+import { joinPath } from "@/lib/pathname";
 import { ago } from "@/lib/time";
 import { Icon, Notice, useTimedNotice } from "@/ui";
 import { fetchReview, fetchReviewDiff, markReviewed, type Review as ReviewData, type ReviewFile, type Verdict } from "./api";
@@ -36,13 +37,14 @@ const NO_COMMENTS: DraftComment[] = []; // one empty list for every file without
 const NO_OPINION: OpinionComment[] = [];
 const NO_SECRETS: SecretFinding[] = [];
 
-export default function Review({ machineId, paneId, dir, agent, onSeen, active = true }: {
+export default function Review({ machineId, paneId, dir, agent, onSeen, active = true, editor = true }: {
   machineId: string;
   paneId: string;
   dir: string;
   agent: string; // "" for a shell pane
   onSeen?: () => void;
   active?: boolean; // the lens on screen: its keys listen
+  editor?: boolean; // the machine has code-server for the per-file button (a Windows PC has none)
 }) {
   const agents = useAgentTargets();
   const currentPane = { machineId, paneId };
@@ -176,8 +178,8 @@ export default function Review({ machineId, paneId, dir, agent, onSeen, active =
       onAdopt={second.adopt}
       onDismissOpinion={second.dismissOne}
       secrets={check.marks.get(file.path) ?? NO_SECRETS}
-      onOpen={(line) => onOpenFile(`${dir}/${file.path}`, line)}
-      onCode={() => actions.openInCode(machineId, dir, `${dir.replace(/\/+$/, "")}/${file.path}`)}
+      onOpen={(line) => onOpenFile(joinPath(dir, file.path), line)}
+      onCode={editor ? () => actions.openInCode(machineId, dir, joinPath(dir, file.path)) : undefined}
     />
   );
 
